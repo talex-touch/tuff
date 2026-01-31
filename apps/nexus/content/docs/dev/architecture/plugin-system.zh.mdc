@@ -1,0 +1,70 @@
+# 插件系统落地图
+
+本页聚焦插件系统的加载链路、Provider/Adapter、Widget 管线与关键文件。
+
+## 1. 核心职责
+
+- 插件发现与安装（本地/远端）
+- Manifest → Prelude → Surface 三层运行
+- 权限校验与 SDK 版本门槛
+- 插件 IPC 隔离与 UI 视图挂载
+
+## 2. 主要入口
+
+- PluginModule：`apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Plugin runtime：`apps/core-app/src/main/modules/plugin/plugin.ts`
+- Plugin index：`apps/core-app/src/main/modules/plugin/index.ts`
+- SDK 版本：`packages/utils/plugin/sdk-version.ts`
+
+## 3. Provider（插件来源）
+
+| Provider | 说明 | 文件 |
+| --- | --- | --- |
+| Local Provider | 本地插件 | `apps/core-app/src/main/modules/plugin/providers/local-provider.ts` |
+| File Provider | 文件路径插件 | `apps/core-app/src/main/modules/plugin/providers/file-provider.ts` |
+| GitHub Provider | GitHub 拉取 | `apps/core-app/src/main/modules/plugin/providers/github-provider.ts` |
+| NPM Provider | NPM 安装 | `apps/core-app/src/main/modules/plugin/providers/npm-provider.ts` |
+| TPEX Provider | 内部/第三方市场源 | `apps/core-app/src/main/modules/plugin/providers/tpex-provider.ts` |
+| Registry | Provider 注册表 | `apps/core-app/src/main/modules/plugin/providers/registry.ts` |
+
+## 4. Adapter（插件特性转译）
+
+| Adapter | 说明 | 文件 |
+| --- | --- | --- |
+| Plugin Features Adapter | 将插件特性接入 CoreBox 搜索 | `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts` |
+| Feature Search Tokens | 特性检索字段/分词 | `apps/core-app/src/main/modules/plugin/adapters/feature-search-tokens.ts` |
+
+## 5. Runtime 与视图
+
+- 运行时加载：`apps/core-app/src/main/modules/plugin/runtime/plugin-require.ts`
+- Prelude 编译：`apps/core-app/src/main/modules/plugin/runtime/plugin-prelude-compiler.ts`
+- 运行时追踪：`apps/core-app/src/main/modules/plugin/runtime/plugin-runtime-tracker.ts`
+- 视图加载：`apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts`
+
+## 6. Widget 管线
+
+| 模块 | 说明 | 文件 |
+| --- | --- | --- |
+| Widget Manager | Widget 生命周期 | `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+| Widget Compiler | 编译/构建 | `apps/core-app/src/main/modules/plugin/widget/widget-compiler.ts` |
+| Widget Loader | 加载器 | `apps/core-app/src/main/modules/plugin/widget/widget-loader.ts` |
+| Widget Processor | 处理器入口 | `apps/core-app/src/main/modules/plugin/widget/widget-processor.ts` |
+| Processors | 具体处理器 | `apps/core-app/src/main/modules/plugin/widget/processors/` |
+
+## 7. 关键流程（Mermaid）
+
+```mermaid
+flowchart TB
+  discover["Providers (Local/NPM/GitHub/TPEX)"] --> install["Installer/Resolver"]
+  install --> runtime["Plugin Runtime"]
+  runtime --> manifest["Manifest.json"]
+  manifest --> prelude["Prelude (index.js)"]
+  prelude --> surface["Surface UI (attachUIView)"]
+  prelude --> adapter["Feature Adapter"]
+  adapter --> corebox["CoreBox Search Items"]
+```
+
+## 8. 相关文档
+
+- CoreBox 行为：`apps/nexus/content/docs/dev/architecture/corebox-and-views.zh.mdc`
+- 通道事件表：`apps/nexus/content/docs/dev/architecture/transport-events.zh.mdc`

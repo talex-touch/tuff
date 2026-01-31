@@ -38,4 +38,28 @@ export interface MarketplacePluginDetail extends MarketplacePluginSummary {
   versions?: MarketplacePluginVersion[]
 }
 
+export type MarketplacePluginReviewStatus = 'pending' | 'approved' | 'rejected'
+
+export interface MarketplacePluginReviewAuthor {
+  name: string
+  avatarUrl?: string | null
+}
+
+export interface MarketplacePluginReview {
+  id: string
+  pluginId: string
+  rating: number
+  title?: string | null
+  content: string
+  author: MarketplacePluginReviewAuthor
+  status?: MarketplacePluginReviewStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MarketplacePluginRatingSummary {
+  average: number
+  count: number
+}
+
 export type FilterCategory = PluginCategoryId | 'all'

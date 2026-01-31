@@ -25,7 +25,7 @@ const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
 </div>
 </ClientOnly>
 
-:::: details Show Code
+::: details Show Code
 ```vue
 <script setup lang="ts">
 const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
@@ -41,7 +41,7 @@ const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
   </TxVirtualList>
 </template>
 ```
-::::
+:::
 
 ## API
 

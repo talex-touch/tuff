@@ -1,0 +1,373 @@
+# Markdown Inventory
+
+Generated: 2026-01-31
+
+## 根目录
+- README.md
+- README.zh-CN.md
+- AGENTS.md
+- CLAUDE.md
+
+## .github
+- .github/workflows/README.md
+- .github/docs/contribution/CONTRIBUTING.md
+- .github/docs/contribution/CONTRIBUTING_zh.md
+- .github/PULL_REQUEST_TEMPLATE/en.md
+- .github/PULL_REQUEST_TEMPLATE/zh-CN.md
+- .github/ISSUE_TEMPLATE/bug_report.md
+- .github/ISSUE_TEMPLATE/help_wanted.md
+
+## apps/core-app
+- apps/core-app/README.md
+- apps/core-app/AGENTS.md
+
+## apps/core-app/plan
+- apps/core-app/plan/2026-01-21_13-21-43-script-python-dll-cross-platform.md
+- apps/core-app/plan/2026-01-21_14-50-21-requirements-consolidation.md
+- apps/core-app/plan/2026-01-21_13-31-08-auto-update-plan.md
+
+## apps/core-app/docs
+- apps/core-app/docs/compatibility-legacy-scan.md
+- apps/core-app/docs/compatibility-legacy-scan-classification.md
+- apps/core-app/docs/compatibility-legacy-scan-initial-hits.md
+- apps/core-app/docs/compatibility-legacy-scan-summary.md
+- apps/core-app/docs/compatibility-legacy-scan-hidden-compat.md
+- apps/core-app/docs/compatibility-legacy-scan-review.md
+- apps/core-app/docs/script-native-bridge.md
+- apps/core-app/docs/requirements/requirements-sources.md
+- apps/core-app/docs/requirements/requirements-template.md
+- apps/core-app/docs/requirements/requirements-review.md
+- apps/core-app/docs/requirements/requirements-extract.md
+- apps/core-app/docs/requirements/requirements-conflicts.md
+- apps/core-app/docs/requirements/requirements-maintenance.md
+- apps/core-app/docs/requirements/requirements-grouping.md
+- apps/core-app/docs/requirements/requirements-master.md
+- apps/core-app/docs/requirements/requirements-sequence.md
+- apps/core-app/docs/requirements/requirements-coverage.md
+
+## apps/core-app/src/renderer
+- apps/core-app/src/renderer/src/components/download/IMPLEMENTATION_SUMMARY.md
+- apps/core-app/src/renderer/src/components/download/UpdatePromptDialog.README.md
+- apps/core-app/src/renderer/src/components/download/UpdatePromptDialog.VISUAL.md
+- apps/core-app/src/renderer/src/components/download/DOCS.md
+- apps/core-app/src/renderer/src/components/tuff/template/DESIGN_EXTENSIONS.md
+- apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplate.md
+- apps/core-app/src/renderer/src/modules/storage/README.md
+- apps/core-app/src/renderer/src/modules/lang/I18N_IMPLEMENTATION.md
+- apps/core-app/src/renderer/src/assets/docs/license.md
+- apps/core-app/src/renderer/src/assets/docs/protocol.md
+
+## apps/core-app/src/main
+- apps/core-app/src/main/modules/box-tool/search-engine/README.md
+- apps/core-app/src/main/modules/box-tool/search-engine/TUFF_USAGE_TRACKING_PRD.md
+- apps/core-app/src/main/modules/box-tool/search-engine/USAGE_LOGGING_PLAN.md
+- apps/core-app/src/main/modules/system/TUFF_DASHBOARD_PERF.md
+- apps/core-app/src/main/modules/download/API.md
+- apps/core-app/src/main/modules/download/PROGRESS_TRACKER_USAGE.md
+- apps/core-app/src/main/modules/download/README.md
+- apps/core-app/src/main/modules/download/MIGRATION_GUIDE.md
+- apps/core-app/src/main/modules/download/PERFORMANCE_OPTIMIZATIONS.md
+- apps/core-app/src/main/modules/download/PERFORMANCE_QUICK_REFERENCE.md
+- apps/core-app/src/main/modules/ai/capability-testers/README.md
+- apps/core-app/src/main/modules/ai/README.md
+- apps/core-app/src/main/modules/analytics/README.md
+
+## apps/nexus
+- apps/nexus/SETUP.md
+- apps/nexus/README.md
+- apps/nexus/NEXUS-ISSUES-ANALYSIS.md
+- apps/nexus/app/layouts/README.md
+- apps/nexus/content/app/license.md
+- apps/nexus/content/app/protocol.md
+
+## docs
+- docs/INDEX.md
+- docs/updates-module.md
+- docs/script-native-test-plan.md
+- docs/search-logger-lifecycle-analysis.md
+- docs/clipboard-mechanism-analysis.md
+- docs/everything-integration.md
+- docs/nexus-everything-integration.md
+- docs/script-native-python-runtime.md
+- docs/script-native-native-integration.md
+- docs/script-native-provider-examples.md
+- docs/script-native-build-distribution.md
+- docs/analytics-data-prd.md
+- docs/script-native-capability-matrix.md
+- docs/script-native-constraints.md
+- docs/incident-2026-01-16-longterm-fixes.md
+
+## docs/engineering
+- docs/engineering/monorepo-standards.md
+- docs/engineering/todo.md
+- docs/engineering/optimization/OPTIMIZATION_SUMMARY.md
+- docs/engineering/audits/260114-CODE-SCAN.md
+- docs/engineering/audits/260109-LOGANALY.md
+- docs/engineering/notes/notification-sdk.md
+- docs/engineering/notes/left.md
+- docs/engineering/notes/widget-render-flow.md
+- docs/engineering/typecheck/TYPECHECK_FIXES.md
+- docs/engineering/ci-cd/CI_CD_OPTIMIZATION.md
+- docs/engineering/reports/report-scroll-followup.md
+- docs/engineering/reports/report.md
+- docs/engineering/reports/report-widget-render-empty.md
+
+## docs/plan-prd
+- docs/plan-prd/README.md
+- docs/plan-prd/TODO.md
+- docs/plan-prd/ISSUES.md
+
+## docs/plan-prd/01-project
+- docs/plan-prd/01-project/DESIGN_IMPROVEMENTS.md
+- docs/plan-prd/01-project/CHANGES.md
+- docs/plan-prd/01-project/CALENDAR-PRD.md
+
+## docs/plan-prd/02-architecture
+- docs/plan-prd/02-architecture/intelligence-agents-system-prd.md
+- docs/plan-prd/02-architecture/intelligence-power-generic-api-prd.md
+- docs/plan-prd/02-architecture/telemetry-error-reporting-system-prd.md
+- docs/plan-prd/02-architecture/module-logging-system-prd.md
+- docs/plan-prd/02-architecture/platform-capabilities-prd.md
+
+## docs/plan-prd/03-features
+- docs/plan-prd/03-features/flow-transfer-prd.md
+- docs/plan-prd/03-features/flow-transfer-detailed-prd.md
+- docs/plan-prd/03-features/corebox-clipboard-transport-migration.md
+- docs/plan-prd/03-features/SEARCH-REFACTOR-PRD.md
+- docs/plan-prd/03-features/division-box-prd.md
+- docs/plan-prd/03-features/meta-overlay/META-OVERLAY-PRD.md
+- docs/plan-prd/03-features/tuff-ui/TUFF-UI-MIGRATION-PRD.md
+
+## docs/plan-prd/03-features/search
+- docs/plan-prd/03-features/search/quick-launch-and-search-optimization-prd.md
+- docs/plan-prd/03-features/search/WINDOWS-FILE-SEARCH-PRD.md
+- docs/plan-prd/03-features/search/SEARCH-DSL-PRD.md
+- docs/plan-prd/03-features/search/intelligent-recommendation-system-prd.md
+- docs/plan-prd/03-features/search/EVERYTHING-SDK-INTEGRATION-PRD.md
+
+## docs/plan-prd/03-features/plugin
+- docs/plan-prd/03-features/plugin/widget-dynamic-loading-plan.md
+- docs/plan-prd/03-features/plugin/plugin-market-provider-frontend-plan.md
+- docs/plan-prd/03-features/plugin/permission-center-prd.md
+
+## docs/plan-prd/03-features/nexus
+- docs/plan-prd/03-features/nexus/NEXUS-TEAM-INVITE-PRD.md
+- docs/plan-prd/03-features/nexus/NEXUS-TUFFEX-COMPONENTS-PRD.md
+- docs/plan-prd/03-features/nexus/NEXUS-SUBSCRIPTION-PRD.md
+- docs/plan-prd/03-features/nexus/nexus-tuffexui-migration-prd.md
+- docs/plan-prd/03-features/nexus/nexus-tuffexui-style-conflicts.md
+
+## docs/plan-prd/03-features/tuff-transport
+- docs/plan-prd/03-features/tuff-transport/IMPLEMENTATION-GUIDE.md
+- docs/plan-prd/03-features/tuff-transport/TUFF-TRANSPORT-PRD.md
+- docs/plan-prd/03-features/tuff-transport/API-REFERENCE.md
+
+## docs/plan-prd/03-features/download-update
+- docs/plan-prd/03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md
+- docs/plan-prd/03-features/download-update/github-auto-update-prd.md
+
+## docs/plan-prd/03-features/view
+- docs/plan-prd/03-features/view/attach-view-cache-prd.md
+- docs/plan-prd/03-features/view/multi-attach-view-prd.md
+- docs/plan-prd/03-features/view/view-mode-prd.md
+
+## docs/plan-prd/03-features/build
+- docs/plan-prd/03-features/build/build-integrity-verification-prd.md
+- docs/plan-prd/03-features/build/build-signature-system-prd.md
+
+## docs/plan-prd/04-implementation
+- docs/plan-prd/04-implementation/StorageUnified260111.md
+- docs/plan-prd/04-implementation/TuffTransportMigration260111.md
+- docs/plan-prd/04-implementation/QualityAnalysis260111.md
+- docs/plan-prd/04-implementation/CoreAppRefactor260111.md
+- docs/plan-prd/04-implementation/TuffTransportPortPlan260111.md
+- docs/plan-prd/04-implementation/TaskScheduler260111.md
+- docs/plan-prd/04-implementation/FileWorkerIdlePlan260111.md
+- docs/plan-prd/04-implementation/config-storage-unification.md
+- docs/plan-prd/04-implementation/PerformanceLag260111.md
+- docs/plan-prd/04-implementation/Quality260111.md
+- docs/plan-prd/04-implementation/performance/PERFORMANCE_REFERENCE.md
+- docs/plan-prd/04-implementation/performance/direct-preview-calculation-prd.md
+
+## docs/plan-prd/05-archive
+- docs/plan-prd/05-archive/plugin-loading-refactor.md
+- docs/plan-prd/05-archive/MIGRATION_SUMMARY.md
+- docs/plan-prd/05-archive/PROJECT_DOCS_INDEX.md
+
+## docs/plan-prd/06-ecosystem
+- docs/plan-prd/06-ecosystem/README.md
+- docs/plan-prd/06-ecosystem/TUFFCLI-INVENTORY.md
+- docs/plan-prd/06-ecosystem/TUFFCLI-PRD.md
+
+## docs/plan-prd/docs
+- docs/plan-prd/docs/build-strategy.md
+- docs/plan-prd/docs/DIVISION_BOX_GUIDE.md
+- docs/plan-prd/docs/DIVISION_BOX_API.md
+- docs/plan-prd/docs/DIVISION_BOX_INDEX.md
+- docs/plan-prd/docs/AISDK_GUIDE.md
+- docs/plan-prd/docs/github-automation.zh-CN.md
+- docs/plan-prd/docs/DIVISION_BOX_MANIFEST.md
+
+## docs/plan-prd/next-edit
+- docs/plan-prd/next-edit/next-edit-2.md
+- docs/plan-prd/next-edit/需求汇总-PRD状态梳理-下载链路统一-SDK优先-文档落地.md
+
+## plan
+- plan/2026-01-19_11-10-40-perf-log-analysis.md
+- plan/2026-01-20_18-47-35-config-storage-sqlite-json-sync.md
+- plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md
+- plan/2026-01-20_18-48-52-plugin-cli-refine.md
+- plan/2026-01-20_18-50-26-touchsdk-window-hooks-migration.md
+- plan/2026-01-20_18-55-03-context-requirements.md
+- plan/2026-01-20_21-16-53-tuffex-components-34578.md
+- plan/2026-01-20_21-17-14-stash-pop-recovery.md
+- plan/2026-01-21_01-29-05-transport-migration-async.md
+- plan/2026-01-21_03-01-57-transport-message-port.md
+- plan/2026-01-21_13-22-14-nexus-examples-section.md
+- plan/2026-01-21_13-25-00-nexus-homepage-revamp.md
+- plan/2026-01-21_13-25-11-download-internal-visibility.md
+- plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md
+- plan/2026-01-22_10-00-00-file-search-scope-permission.md
+- plan/planprd-app-indexing.md
+- plan/planprd-net-sdk-proxy.md
+- plan/planprd-release-pipeline.md
+
+## examples
+- examples/README.md
+- examples/division-box/README.md
+- examples/util-pkg/tuff-test/docs/introduce.zh.md
+- examples/util-pkg/tuff-test/docs/introduce.en.md
+- examples/util-pkg/tuff-test/package-info.md
+- examples/util-pkg/tuff-utils/docs/introduce.zh.md
+- examples/util-pkg/tuff-utils/docs/introduce.en.md
+- examples/util-pkg/tuff-utils/package-info.md
+- examples/util-pkg/tuff-help/docs/introduce.zh.md
+- examples/util-pkg/tuff-help/docs/introduce.en.md
+- examples/util-pkg/tuff-help/package-info.md
+
+## packages/utils
+- packages/utils/plugin/sdk/README.md
+- packages/utils/plugin/sdk/meta/README.md
+
+## packages/unplugin-export-plugin
+- packages/unplugin-export-plugin/README.md
+- packages/unplugin-export-plugin/docs/index-folder-indexjs.md
+- packages/unplugin-export-plugin/docs/INDEX-FOLDER-BUNDLING.md
+
+## packages/tuffex
+- packages/tuffex/README.md
+- packages/tuffex/README_ZHCN.md
+- packages/tuffex/CHANGELOG.md
+- packages/tuffex/CONTRIBUTING.md
+- packages/tuffex/packages/utils/README.md
+- packages/tuffex/packages/components/src/button/README.md
+- packages/tuffex/packages/components/src/button/DESIGN.md
+- packages/tuffex/docs/index.md
+- packages/tuffex/docs/icons/index.md
+- packages/tuffex/docs/playground/index.md
+- packages/tuffex/docs/guide/components/card.md
+- packages/tuffex/docs/design/index.md
+- packages/tuffex/docs/design/colors.md
+- packages/tuffex/docs/design/typography.md
+- packages/tuffex/docs/design/spacing.md
+- packages/tuffex/docs/design/iconography.md
+- packages/tuffex/docs/design/tokens.md
+- packages/tuffex/docs/design/motion.md
+- packages/tuffex/docs/design/glassmorphism.md
+- packages/tuffex/docs/components/index.md
+- packages/tuffex/docs/components/agents.md
+- packages/tuffex/docs/components/auto-sizer.md
+- packages/tuffex/docs/components/avatar.md
+- packages/tuffex/docs/components/avatar-variants.md
+- packages/tuffex/docs/components/blank-slate.md
+- packages/tuffex/docs/components/button.md
+- packages/tuffex/docs/components/card.md
+- packages/tuffex/docs/components/card-item.md
+- packages/tuffex/docs/components/cascader.md
+- packages/tuffex/docs/components/chat.md
+- packages/tuffex/docs/components/chat-composer.md
+- packages/tuffex/docs/components/checkbox.md
+- packages/tuffex/docs/components/command-palette.md
+- packages/tuffex/docs/components/container.md
+- packages/tuffex/docs/components/contextMenu.md
+- packages/tuffex/docs/components/context-menu.md
+- packages/tuffex/docs/components/corner-overlay.md
+- packages/tuffex/docs/components/data-table.md
+- packages/tuffex/docs/components/date-picker.md
+- packages/tuffex/docs/components/dialog.md
+- packages/tuffex/docs/components/drawer.md
+- packages/tuffex/docs/components/dropdown-menu.md
+- packages/tuffex/docs/components/empty.md
+- packages/tuffex/docs/components/empty-state.md
+- packages/tuffex/docs/components/file-uploader.md
+- packages/tuffex/docs/components/flex.md
+- packages/tuffex/docs/components/form.md
+- packages/tuffex/docs/components/fusion.md
+- packages/tuffex/docs/components/glass-surface.md
+- packages/tuffex/docs/components/glow-text.md
+- packages/tuffex/docs/components/gradual-blur.md
+- packages/tuffex/docs/components/gradient-border.md
+- packages/tuffex/docs/components/grid.md
+- packages/tuffex/docs/components/grid-layout.md
+- packages/tuffex/docs/components/group-block.md
+- packages/tuffex/docs/components/icon.md
+- packages/tuffex/docs/components/image-gallery.md
+- packages/tuffex/docs/components/image-uploader.md
+- packages/tuffex/docs/components/input.md
+- packages/tuffex/docs/components/layout-skeleton.md
+- packages/tuffex/docs/components/loading-overlay.md
+- packages/tuffex/docs/components/loading-state.md
+- packages/tuffex/docs/components/markdown-view.md
+- packages/tuffex/docs/components/nav-bar.md
+- packages/tuffex/docs/components/no-data.md
+- packages/tuffex/docs/components/no-selection.md
+- packages/tuffex/docs/components/offline-state.md
+- packages/tuffex/docs/components/outline-border.md
+- packages/tuffex/docs/components/permission-state.md
+- packages/tuffex/docs/components/picker.md
+- packages/tuffex/docs/components/popover.md
+- packages/tuffex/docs/components/progress.md
+- packages/tuffex/docs/components/progress-bar.md
+- packages/tuffex/docs/components/radio.md
+- packages/tuffex/docs/components/search-empty.md
+- packages/tuffex/docs/components/search-input.md
+- packages/tuffex/docs/components/search-select.md
+- packages/tuffex/docs/components/segmented-slider.md
+- packages/tuffex/docs/components/select.md
+- packages/tuffex/docs/components/skeleton.md
+- packages/tuffex/docs/components/slider.md
+- packages/tuffex/docs/components/sortable-list.md
+- packages/tuffex/docs/components/spinner.md
+- packages/tuffex/docs/components/splitter.md
+- packages/tuffex/docs/components/stack.md
+- packages/tuffex/docs/components/stagger.md
+- packages/tuffex/docs/components/stat-card.md
+- packages/tuffex/docs/components/status-badge.md
+- packages/tuffex/docs/components/switch.md
+- packages/tuffex/docs/components/tab-bar.md
+- packages/tuffex/docs/components/tabs.md
+- packages/tuffex/docs/components/tag.md
+- packages/tuffex/docs/components/tag-input.md
+- packages/tuffex/docs/components/text-transformer.md
+- packages/tuffex/docs/components/toast.md
+- packages/tuffex/docs/components/tooltip.md
+- packages/tuffex/docs/components/transition.md
+- packages/tuffex/docs/components/tree.md
+- packages/tuffex/docs/components/tree-select.md
+- packages/tuffex/docs/components/typing-indicator.md
+- packages/tuffex/docs/components/virtual-list.md
+- packages/tuffex/docs/components/scroll.md
+
+## packages/tuff-intelligence
+- packages/tuff-intelligence/README.md
+
+## plugins
+- plugins/touch-image/README.md
+- plugins/touch-music/README.md
+- plugins/touch-translation/README.md
+- plugins/touch-translation/index/README.md
+- plugins/touch-translation/src/components/README.md
+- plugins/touch-translation/src/pages/README.md
+
+## reports
+- reports/coreapp-button-migration.md

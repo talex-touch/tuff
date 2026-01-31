@@ -23,6 +23,8 @@ import type {
   PluginApiOpenPathResponse,
   PluginApiRevealPathRequest,
   PluginApiRevealPathResponse,
+  PluginApiRegisterWidgetRequest,
+  PluginApiRegisterWidgetResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
   PluginApiSaveManifestRequest,
@@ -57,6 +59,7 @@ export interface PluginSdk {
   uninstall: (request: PluginApiOperationRequest) => Promise<PluginApiOperationResponse>
 
   triggerFeature: (request: PluginApiTriggerFeatureRequest) => Promise<unknown>
+  registerWidget: (request: PluginApiRegisterWidgetRequest) => Promise<PluginApiRegisterWidgetResponse>
   featureInputChanged: (request: PluginApiFeatureInputChangedRequest) => Promise<void>
 
   openFolder: (request: PluginApiOpenFolderRequest) => Promise<void>
@@ -97,6 +100,7 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     uninstall: async request => transport.send(PluginEvents.api.uninstall, request),
 
     triggerFeature: async request => transport.send(PluginEvents.api.triggerFeature, request),
+    registerWidget: async request => transport.send(PluginEvents.api.registerWidget, request),
     featureInputChanged: async request => transport.send(PluginEvents.api.featureInputChanged, request),
 
     openFolder: async request => transport.send(PluginEvents.api.openFolder, request),

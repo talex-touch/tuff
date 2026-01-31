@@ -15,6 +15,7 @@
  */
 
 import { nextTick } from 'vue'
+import { isDevEnv } from '@talex-touch/utils/env'
 import {
   createRouter,
   createWebHashHistory,
@@ -26,6 +27,7 @@ import { reportPerfToMain } from '~/modules/perf/perf-report'
 
 const ROUTE_NAVIGATE_WARN_MS = 200
 const ROUTE_RENDER_WARN_MS = 350
+const isDev = isDevEnv()
 const ROUTE_COMPONENT_LOAD_WARN_MS = 150
 
 function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
@@ -35,6 +37,10 @@ function resolveRoutePattern(route: RouteLocationNormalizedLoaded): string {
 }
 
 function withRouteComponentPerf<T>(label: string, loader: () => Promise<T>): () => Promise<T> {
+  if (isDev) {
+    return loader
+  }
+
   return async () => {
     const startedAt = performance.now()
     const stack = new Error().stack
@@ -299,6 +305,11 @@ const routeNavigationStarts = new Map<
 >()
 
 router.beforeEach((to, from, next) => {
+  if (isDev) {
+    next()
+    return
+  }
+
   const toPattern = resolveRoutePattern(to)
   const fromPattern = resolveRoutePattern(from)
   routeNavigationStarts.set(to.fullPath, {
@@ -310,6 +321,10 @@ router.beforeEach((to, from, next) => {
 })
 
 router.afterEach((to, from) => {
+  if (isDev) {
+    return
+  }
+
   const record = routeNavigationStarts.get(to.fullPath)
   if (!record) {
     return

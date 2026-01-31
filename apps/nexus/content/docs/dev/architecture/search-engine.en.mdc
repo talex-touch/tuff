@@ -1,0 +1,73 @@
+# SearchEngine Module Map
+
+This page documents the SearchEngine subsystem: core flow, provider list, recommendations, and file locations.
+
+## 1. Core Responsibilities
+
+- Parse query (including `@file` filter)
+- Aggregate multi-source provider results
+- Score, sort, and merge
+- Emit CoreBox render results and recommendations
+
+## 2. Entry Points and Directories
+
+**Main entry**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/types.ts`
+
+**Telemetry/Logging**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-summary-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-queue.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-cache.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/time-stats-aggregator.ts`
+
+**Indexing/Completion**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/query-completion-service.ts`
+
+**Sorting/Aggregation**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-utils.ts`
+
+## 3. Providers (Files)
+
+| Provider | Purpose | File |
+| --- | --- | --- |
+| Intelligence Provider | model/intelligence results | `apps/core-app/src/main/modules/box-tool/search-engine/providers/intelligence-provider.ts` |
+| File Provider | macOS/Linux file index | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` |
+| Everything Provider | Windows Everything search | `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts` |
+| App Provider | app index/app search | `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` |
+
+**Supporting directories**:
+- File search support: `apps/core-app/src/main/modules/box-tool/addon/files/` (`types.ts`, `constants.ts`, `utils.ts`, `workers/`)
+- App search support: `apps/core-app/src/main/modules/box-tool/addon/apps/` (`app-scanner.ts`, `search-processing-service.ts`, `highlighting-service.ts`, etc.)
+- File system watcher: `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+
+## 4. Recommendation System
+
+| Submodule | Purpose | File |
+| --- | --- | --- |
+| Recommendation Engine | orchestration/scoring | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` |
+| Context Provider | context-aware signals | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/context-provider.ts` |
+| Item Rebuilder | convert to CoreBox items | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/item-rebuilder.ts` |
+
+## 5. Main Flow (Mermaid)
+
+```mermaid
+flowchart LR
+  input["CoreBox Input"] --> parser["Query Parser (@file)"]
+  parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
+  providers --> score["Scoring + Sort"]
+  score --> merge["Merge & Rank"]
+  merge --> output["CoreBox Results"]
+  merge --> rec["Recommendation Engine"]
+  rec --> output
+```
+
+## 6. Related Docs
+
+- CoreBox behavior: `apps/nexus/content/docs/dev/architecture/corebox-and-views.en.mdc`
+- Module overview: `apps/nexus/content/docs/dev/architecture/module-map.en.mdc`

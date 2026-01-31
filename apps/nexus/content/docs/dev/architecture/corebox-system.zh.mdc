@@ -1,0 +1,57 @@
+# CoreBox 系统落地图
+
+本页专注 CoreBox 系统在主进程/渲染进程的落地文件与运行路径。
+
+## 1. 核心职责
+
+- 统一搜索入口与 UI 窗口管理
+- 与 SearchEngine 联动产出结果
+- 管理 UI View 缓存与模式切换（UI Mode）
+- 与 DivisionBox/插件 UI 互通
+
+## 2. 主进程文件落地
+
+**CoreBox 模块**：
+- 模块入口：`apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- Window：`apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- Manager：`apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- IPC：`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Input/Key Transport：`apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`、`apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- Meta Overlay：`apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- View Cache：`apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`
+- Transport：`apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+
+**SearchEngine 关联**：
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/`
+
+**与 DivisionBox 互通**：
+- `apps/core-app/src/main/modules/division-box/`（详见 DivisionBox 文档）
+
+## 3. 渲染进程文件落地
+
+**CoreBox UI**：
+- 入口视图：`apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- 网格渲染：`apps/core-app/src/renderer/src/components/render/BoxGrid.vue`
+- 网格项：`apps/core-app/src/renderer/src/components/render/BoxGridItem.vue`
+
+**CoreBox 适配层**：
+- 适配入口：`apps/core-app/src/renderer/src/modules/box/adapter/index.ts`
+- 输入/键盘：`apps/core-app/src/renderer/src/modules/box/adapter/transport/input-transport.ts`、`apps/core-app/src/renderer/src/modules/box/adapter/transport/key-transport.ts`
+- Hooks：`apps/core-app/src/renderer/src/modules/box/adapter/hooks/`（搜索、焦点、尺寸、可见性等）
+
+## 4. 关键流程（Mermaid）
+
+```mermaid
+flowchart LR
+  renderer["Renderer CoreBox UI"] --> ipc["CoreBox IPC"]
+  ipc --> corebox["CoreBox Module (Main)"]
+  corebox --> engine["SearchEngine"]
+  engine --> providers["Providers"]
+  providers --> engine --> corebox --> renderer
+```
+
+## 5. 相关事件与处理
+
+- CoreBox 事件清单：`apps/nexus/content/docs/dev/architecture/ipc-events-detail.zh.mdc`
+- CoreBox 行为说明：`apps/nexus/content/docs/dev/architecture/corebox-and-views.zh.mdc`

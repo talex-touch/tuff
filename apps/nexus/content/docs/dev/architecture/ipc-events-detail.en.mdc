@@ -1,0 +1,1153 @@
+# IPC Event List (Event-Name Level)
+
+This page enumerates **core module** events with names and main handler locations.
+
+## 0. Event Name Rule
+
+`defineEvent(namespace).module(module).event(action)` → `namespace:module:action`.  
+`defineRawEvent('xxx:yyy')` uses the string directly.
+
+Implementation: `packages/utils/transport/event/builder.ts`
+
+## 1. CoreBox Events
+
+**Main handlers**:
+- Main: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- SearchEngine: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- CoreBox module: `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| CoreBoxEvents.ui.show | `core-box:show` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.hide | `core-box:hide` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.expand | `core-box:expand` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.focusWindow | `core-box:focus-window` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.forwardKeyEvent | `core-box:forward-key-event` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.getUIViewState | `core-box:get-ui-view-state` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.ui.shortcutTriggered | `core-box:shortcut-triggered` | send: `apps/core-app/src/main/modules/box-tool/core-box/window.ts` |
+| CoreBoxEvents.ui.uiModeExited | `core-box:ui-mode-exited` | send: `apps/core-app/src/main/modules/box-tool/core-box/manager.ts` |
+| CoreBoxEvents.layout.update | `core-box:layout:update` | on: `apps/core-app/src/main/modules/box-tool/core-box/index.ts` |
+| CoreBoxEvents.search.query | `core-box:query` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.search.cancel | `core-box:cancel-search` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.search.update | `core-box:search-update` | send: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| CoreBoxEvents.search.end | `core-box:search-end` | send: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| CoreBoxEvents.search.noResults | `core-box:no-results` | send: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| CoreBoxEvents.input.get | `core-box:get-input` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.input.set | `core-box:set-input` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.input.clear | `core-box:clear-input` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.input.setVisibility | `core-box:set-input-visibility` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.input.change | `core-box:input-change` | send: `apps/core-app/src/renderer/src/modules/box/adapter/transport/input-transport.ts` |
+| CoreBoxEvents.input.requestValue | `core-box:request-input-value` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.input.setQuery | `core-box:set-query` | send: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.item.execute | `core-box:execute` | on: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| CoreBoxEvents.item.clear | `core-box:clear-items` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| CoreBoxEvents.item.togglePin | `core-box:toggle-pin` | on: `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| CoreBoxEvents.provider.deactivate | `core-box:deactivate-provider` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.provider.deactivateAll | `core-box:deactivate-providers` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.provider.getActivated | `core-box:get-activated-providers` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.provider.getDetails | `core-box:get-provider-details` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.uiMode.enter | `core-box:enter-ui-mode` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.uiMode.exit | `core-box:exit-ui-mode` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.clipboard.allow | `core-box:allow-clipboard` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.inputMonitoring.allow | `core-box:input-monitoring:allow` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/transport/input-transport.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/transport/key-transport.ts`
+
+## 2. DivisionBox Events
+
+**Main handler**: `apps/core-app/src/main/modules/division-box/ipc.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| DivisionBoxEvents.open | `division-box:session:open` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.close | `division-box:session:close` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.getState | `division-box:session:get-state` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.updateState | `division-box:session:update-state` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.getActiveSessions | `division-box:session:get-active-sessions` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.stateChanged | `division-box:session:state-changed` | send: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.sessionDestroyed | `division-box:session:session-destroyed` | send: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.togglePin | `division-box:window:toggle-pin` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.setOpacity | `division-box:window:set-opacity` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.toggleDevTools | `division-box:window:toggle-devtools` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.getWindowState | `division-box:window:get-window-state` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.inputChange | `division-box:ui:input-change` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| DivisionBoxEvents.flowTrigger | `division-box:flow:trigger` | on: `apps/core-app/src/main/modules/division-box/ipc.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+
+## 3. Storage Events
+
+**Main handler**: `apps/core-app/src/main/modules/storage/index.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| StorageEvents.app.get | `storage:app:get` | on: `apps/core-app/src/main/modules/storage/index.ts` |
+| StorageEvents.app.getVersioned | `storage:app:get-versioned` | on: `apps/core-app/src/main/modules/storage/index.ts` |
+| StorageEvents.app.set | `storage:app:set` | on: `apps/core-app/src/main/modules/storage/index.ts` |
+| StorageEvents.app.save | `storage:app:save` | on: `apps/core-app/src/main/modules/storage/index.ts` |
+| StorageEvents.app.delete | `storage:app:delete` | on: `apps/core-app/src/main/modules/storage/index.ts` |
+| StorageEvents.app.updated | `storage:app:updated` | on: `apps/core-app/src/main/modules/storage/index.ts` (stream) |
+| StorageEvents.plugin.get | `storage:plugin:get` | no main handler found (add if used) |
+| StorageEvents.plugin.set | `storage:plugin:set` | no main handler found (add if used) |
+| StorageEvents.plugin.delete | `storage:plugin:delete` | no main handler found (add if used) |
+| StorageEvents.legacy.update | `storage:update` | send: `apps/core-app/src/main/modules/storage/index.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/channel/storage/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingMessages.vue`
+
+## 4. Plugin Events
+
+**Main handler**: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+
+### 4.1 Lifecycle
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.lifecycle.load | `plugin:lifecycle:load` | no main handler found (reserved) |
+| PluginEvents.lifecycle.unload | `plugin:lifecycle:unload` | no main handler found (reserved) |
+| PluginEvents.lifecycle.reload | `plugin:lifecycle:reload` | no main handler found (reserved) |
+| PluginEvents.lifecycle.enable | `plugin:lifecycle:enable` | no main handler found (reserved) |
+| PluginEvents.lifecycle.disable | `plugin:lifecycle:disable` | no main handler found (reserved) |
+
+### 4.2 Lifecycle Signal (to plugin processes)
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.lifecycleSignal.active | `plugin:lifecycle:active` | send: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.lifecycleSignal.inactive | `plugin:lifecycle:inactive` | send: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.lifecycleSignal.enabled | `plugin:lifecycle:enabled` | send: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| PluginEvents.lifecycleSignal.disabled | `plugin:lifecycle:disabled` | send: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| PluginEvents.lifecycleSignal.crashed | `plugin:lifecycle:crashed` | send: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+
+### 4.3 Push/Broadcast
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.push.stateChanged | `plugin:state-changed` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.push.statusUpdated | `plugin-status-updated` | broadcast: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| PluginEvents.push.reloadReadme | `plugin:reload-readme` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.push.reload | `plugin:reload` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.push.crashed | `plugin-crashed` | broadcast: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+
+### 4.4 Widget
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.widget.register | `plugin:widget:register` | on: `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+| PluginEvents.widget.update | `plugin:widget:update` | on: `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+| PluginEvents.widget.unregister | `plugin:widget:unregister` | on: `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+
+### 4.5 API
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.api.list | `plugin:api:list` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.get | `plugin:api:get` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getStatus | `plugin:api:get-status` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.enable | `plugin:api:enable` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.disable | `plugin:api:disable` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.reload | `plugin:api:reload` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.install | `plugin:api:install` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.uninstall | `plugin:api:uninstall` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.triggerFeature | `plugin:api:trigger-feature` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.registerWidget | `plugin:api:register-widget` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.featureInputChanged | `plugin:api:feature-input-changed` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.openFolder | `plugin:api:open-folder` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getOfficialList | `plugin:api:get-official-list` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getManifest | `plugin:api:get-manifest` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.saveManifest | `plugin:api:save-manifest` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.saveWidgetFile | `plugin:api:save-widget-file` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getPaths | `plugin:api:get-paths` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.openPath | `plugin:api:open-path` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.revealPath | `plugin:api:reveal-path` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getPerformance | `plugin:api:get-performance` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.api.getRuntimeStats | `plugin:api:get-runtime-stats` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+### 4.6 Install / DevServer
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.install.progress | `plugin:install-progress` | send: `apps/core-app/src/main/modules/plugin/install-queue.ts` |
+| PluginEvents.install.confirm | `plugin:install-confirm` | send: `apps/core-app/src/main/modules/plugin/install-queue.ts` |
+| PluginEvents.install.confirmResponse | `plugin:install-confirm-response` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.install.source | `plugin:install-source` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.devServer.reconnect | `plugin:reconnect-dev-server` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.devServer.status | `plugin:dev-server-status` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+### 4.7 Storage / Performance / Feature / Log
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PluginEvents.storage.getFile | `plugin:storage:get-file` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.setFile | `plugin:storage:set-file` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.deleteFile | `plugin:storage:delete-file` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.listFiles | `plugin:storage:list-files` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.getStats | `plugin:storage:get-stats` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.getTree | `plugin:storage:get-tree` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.getFileDetails | `plugin:storage:get-file-details` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.clear | `plugin:storage:clear` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.openFolder | `plugin:storage:open-folder` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.openInEditor | `plugin:storage:open-in-editor` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.storage.update | `plugin:storage:update` | send: `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| PluginEvents.performance.getMetrics | `plugin:performance:get-metrics` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.performance.getPaths | `plugin:performance:get-paths` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.feature.trigger | `plugin:feature:trigger` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| PluginEvents.log.write | `plugin:log:write` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+**Renderer / SDK usage (examples)**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `packages/utils/transport/sdk/domains/plugin.ts`
+
+## 5. Notification Events
+
+**Main handler**: `apps/core-app/src/main/modules/notification.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| NotificationEvents.api.notify | `notification:api:notify` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.api.update | `notification:api:update` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.api.dismiss | `notification:api:dismiss` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.api.action | `notification:api:action` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.inbox.list | `notification:inbox:list` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.inbox.markRead | `notification:inbox:mark-read` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.inbox.archive | `notification:inbox:archive` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.inbox.delete | `notification:inbox:delete` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.inbox.clear | `notification:inbox:clear` | on: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.push.notify | `notification:push:notify` | broadcast: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.push.update | `notification:push:update` | broadcast: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.push.dismiss | `notification:push:dismiss` | broadcast: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.push.action | `notification:push:action` | broadcast: `apps/core-app/src/main/modules/notification.ts` |
+| NotificationEvents.push.inboxUpdated | `notification:push:inbox-updated` | broadcast: `apps/core-app/src/main/modules/notification.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/notification/notification-hub.ts`
+
+## 6. Clipboard Events
+
+**Main handler**: `apps/core-app/src/main/modules/clipboard.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| ClipboardEvents.change | `clipboard:monitor:change` | stream: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.getHistory | `clipboard:history:get` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.getLatest | `clipboard:history:latest` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.apply | `clipboard:action:apply` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.delete | `clipboard:history:delete` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.setFavorite | `clipboard:history:set-favorite` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+| ClipboardEvents.write | `clipboard:action:write` | on: `apps/core-app/src/main/modules/clipboard.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/transport/clipboard-transport.ts`
+- `apps/core-app/src/renderer/src/components/render/custom/CoreIntelligenceAnswer.vue`
+
+## 7. MetaOverlay Events
+
+**Main handler**: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| MetaOverlayEvents.ui.show | `meta-overlay:ui:show` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| MetaOverlayEvents.ui.hide | `meta-overlay:ui:hide` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| MetaOverlayEvents.ui.isVisible | `meta-overlay:ui:is-visible` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| MetaOverlayEvents.action.execute | `meta-overlay:action:execute` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| MetaOverlayEvents.action.register | `meta-overlay:action:register` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| MetaOverlayEvents.action.unregister | `meta-overlay:action:unregister` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+
+## 8. Market Events
+
+**Main handler**: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| MarketEvents.api.checkUpdates | `market:check-updates` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.api.search | `market:search` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.api.getPlugin | `market:get-plugin` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.api.httpRequest | `market:http-request` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.api.featured | `market:featured` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.api.npmList | `market:npm-list` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| MarketEvents.push.updatesAvailable | `market:updates-available` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+**SDK usage**: `packages/utils/transport/sdk/domains/market.ts`
+
+## 9. Permission Events
+
+**Main handler**: `apps/core-app/src/main/modules/permission/index.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PermissionEvents.api.getPlugin | `permission:get-plugin` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.getStatus | `permission:get-status` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.grant | `permission:grant` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.revoke | `permission:revoke` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.grantMultiple | `permission:grant-multiple` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.grantSession | `permission:grant-session` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.revokeAll | `permission:revoke-all` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.check | `permission:check` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.getAll | `permission:get-all` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.getRegistry | `permission:get-registry` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.getAuditLogs | `permission:get-audit-logs` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.clearAuditLogs | `permission:clear-audit-logs` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.getPerformance | `permission:get-performance` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.api.resetPerformance | `permission:reset-performance` | on: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.push.updated | `permission:updated` | broadcast: `apps/core-app/src/main/modules/permission/index.ts` |
+| PermissionEvents.push.startupRequest | `permission:startup-request` | send: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/composables/usePluginPermission.ts`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+
+## 10. Tray Events
+
+**Main handler**: `apps/core-app/src/main/modules/tray/tray-manager.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| TrayEvents.autostart.update | `tray:autostart:update` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| TrayEvents.autostart.get | `tray:autostart:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| TrayEvents.show.get | `tray:show:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| TrayEvents.show.set | `tray:show:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| TrayEvents.hideDock.set | `tray:hidedock:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+
+## 11. Sentry Events
+
+**Main handler**: `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| SentryEvents.api.updateUser | `sentry:update-user` | on: `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| SentryEvents.api.getConfig | `sentry:get-config` | on: `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| SentryEvents.api.getSearchCount | `sentry:get-search-count` | on: `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| SentryEvents.api.getTelemetryStats | `sentry:get-telemetry-stats` | on: `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| SentryEvents.api.recordPerformance | `sentry:record-performance` | on: `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/sentry/sentry-renderer.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSentry.vue`
+
+## 12. Download Events
+
+**Main handler**: `apps/core-app/src/main/modules/download/download-center.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| DownloadEvents.task.add | `download:task:add` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.pause | `download:task:pause` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.resume | `download:task:resume` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.cancel | `download:task:cancel` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.retry | `download:task:retry` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.remove | `download:task:remove` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.getStatus | `download:task:get-status` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.updatePriority | `download:task:update-priority` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.pauseAll | `download:task:pause-all` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.resumeAll | `download:task:resume-all` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.task.cancelAll | `download:task:cancel-all` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.list.getAll | `download:list:get` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.list.getByStatus | `download:list:get-by-status` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.config.get | `download:config:get` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.config.update | `download:config:update` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.config.getNotification | `download:config:get-notification` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.config.updateNotification | `download:config:update-notification` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.history.get | `download:history:get` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.history.clear | `download:history:clear` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.history.clearItem | `download:history:clear-item` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.file.open | `download:file:open` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.file.showInFolder | `download:file:show-in-folder` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.file.delete | `download:file:delete` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.maintenance.cleanupTemp | `download:maintenance:cleanup-temp` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.logs.get | `download:logs:get` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.logs.getErrorStats | `download:logs:get-error-stats` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.logs.clear | `download:logs:clear` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.temp.getStats | `download:temp:get-stats` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.stats.get | `download:stats:get` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.migration.checkNeeded | `download:migration:check-needed` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.migration.start | `download:migration:start` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.migration.retry | `download:migration:retry` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.migration.status | `download:migration:status` | on: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskAdded | `download:push:task-added` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskProgress | `download:push:task-progress` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskCompleted | `download:push:task-completed` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskFailed | `download:push:task-failed` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskUpdated | `download:push:task-updated` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.taskRetrying | `download:push:task-retrying` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+| DownloadEvents.push.notificationClicked | `download:push:notification-clicked` | broadcast: `apps/core-app/src/main/modules/download/download-center.ts` |
+
+**SDK usage**: `packages/utils/transport/sdk/domains/download.ts`
+
+## 13. Update Events
+
+**Main handler**: `apps/core-app/src/main/modules/update/UpdateService.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| UpdateEvents.check | `update:service:check` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.getSettings | `update:service:get-settings` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.updateSettings | `update:service:update-settings` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.getStatus | `update:service:get-status` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.clearCache | `update:service:clear-cache` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.getCachedRelease | `update:service:get-cached-release` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.recordAction | `update:service:record-action` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.download | `update:service:download` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.install | `update:service:install` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.ignoreVersion | `update:service:ignore-version` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.setAutoDownload | `update:service:set-auto-download` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.setAutoCheck | `update:service:set-auto-check` | on: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| UpdateEvents.available | `update:push:available` | broadcast: `apps/core-app/src/main/modules/update/UpdateService.ts` |
+
+**Renderer usage (examples)**: `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
+
+## 14. Flow Events
+
+**Main handler**: `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| FlowEvents.dispatch | `flow:bus:dispatch` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.getTargets | `flow:bus:get-targets` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.cancel | `flow:bus:cancel` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.acknowledge | `flow:bus:acknowledge` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.reportError | `flow:bus:report-error` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.selectTarget | `flow:bus:select-target` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.checkConsent | `flow:consent:check` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.grantConsent | `flow:consent:grant` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.sessionUpdate | `flow:session:update` | broadcast: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| FlowEvents.deliver | `flow:session:deliver` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.triggerTransfer | `flow:ui:trigger-transfer` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.triggerDetach | `flow:ui:trigger-detach` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.registerTargets | `flow:plugin:register-targets` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.unregisterTargets | `flow:plugin:unregister-targets` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.setPluginEnabled | `flow:plugin:set-plugin-enabled` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.setPluginHandler | `flow:plugin:set-plugin-handler` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.nativeShare | `flow:native:share` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/components/flow/FlowSelector.vue`
+
+## 15. App Events
+
+**Main handlers**: `apps/core-app/src/main/channel/common.ts`, `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+
+**Window**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.window.close | `app:window:close` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.window.minimize | `app:window:minimize` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.window.hide | `app:window:hide` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.window.focus | `app:window:focus` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.window.navigate | `app:window:navigate` | send: `apps/core-app/src/main/modules/tray/tray-menu-builder.ts` |
+| AppEvents.window.openDownloadCenter | `app:window:open-download-center` | send: `apps/core-app/src/main/modules/tray/tray-menu-builder.ts` |
+
+**Lifecycle / i18n**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.lifecycle.beforeQuit | `app:lifecycle:before-quit` | broadcast: `apps/core-app/src/main/core/precore.ts` |
+| AppEvents.i18n.setLocale | `app:i18n:set-locale` | on: `apps/core-app/src/main/channel/common.ts` |
+
+**System**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.system.getOS | `app:system:get-os` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.getPackage | `app:system:get-package` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.openExternal | `app:system:open-external` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.showInFolder | `app:system:show-in-folder` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.openApp | `app:system:open-app` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.executeCommand | `app:system:execute-command` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.getCwd | `app:system:get-cwd` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.getPath | `app:system:get-path` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.readFile | `app:system:read-file` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.startup | `app:system:startup` | on: `apps/core-app/src/main/channel/common.ts` |
+
+**Power / File Index / Device Idle / App Index**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.power.batteryStatus | `power:battery-status` | broadcast: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.fileIndex.status | `app:file-index:status` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.fileIndex.stats | `app:file-index:stats` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.fileIndex.rebuild | `app:file-index:rebuild` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.fileIndex.batteryLevel | `app:file-index:battery-level` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.fileIndex.progress | `app:file-index:progress` | stream: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.deviceIdle.getSettings | `app:device-idle:settings.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.deviceIdle.updateSettings | `app:device-idle:settings.update` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.appIndex.getSettings | `app:app-index:settings.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.appIndex.updateSettings | `app:app-index:settings.update` | on: `apps/core-app/src/main/channel/common.ts` |
+
+**Debug / Build**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.debug.openDevTools | `app:debug:open-devtools` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.build.getVerificationStatus | `app:build:get-verification-status` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.build.getVerificationStatusLegacy | `build:get-verification-status` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.build.statusUpdated | `build:verification-status` | broadcast: `apps/core-app/src/main/modules/build-verification/index.ts` |
+
+**Analytics**
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AppEvents.analytics.getSnapshot | `app:analytics:get-snapshot` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.getRange | `app:analytics:get-range` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.export | `app:analytics:export` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.toggleReporting | `app:analytics:toggle-reporting` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.messages.list | `app:analytics:messages.list` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.messages.mark | `app:analytics:messages.mark` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.trackEvent | `app:analytics:sdk.track-event` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.trackDuration | `app:analytics:sdk.track-duration` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.getStats | `app:analytics:sdk.get-stats` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.getFeatureStats | `app:analytics:sdk.get-feature-stats` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.getTopFeatures | `app:analytics:sdk.get-top-features` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.incrementCounter | `app:analytics:sdk.increment-counter` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.setGauge | `app:analytics:sdk.set-gauge` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.sdk.recordHistogram | `app:analytics:sdk.record-histogram` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.getCurrent | `app:analytics:get-current` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.getHistory | `app:analytics:get-history` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.getSummary | `app:analytics:get-summary` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.report | `app:analytics:report` | on: `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| AppEvents.analytics.perfReport | `app:analytics:perf-report` | on: `apps/core-app/src/main/channel/common.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+
+## 16. Platform Events
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| PlatformEvents.capabilities.list | `platform:capabilities:list` | on: `apps/core-app/src/main/channel/common.ts` |
+
+**SDK usage**: `packages/utils/transport/sdk/domains/platform.ts`
+
+## 17. Agents Events
+
+**Main handler**: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| AgentsEvents.api.list | `agents:list` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.listAll | `agents:list-all` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.get | `agents:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.execute | `agents:execute` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.executeImmediate | `agents:execute-immediate` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.cancel | `agents:cancel` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.taskStatus | `agents:task-status` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.stats | `agents:stats` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.tools.list | `agents:tools:list` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.api.tools.get | `agents:tools:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.search | `agents:market:search` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.get | `agents:market:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.featured | `agents:market:featured` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.installed | `agents:market:installed` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.categories | `agents:market:categories` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.install | `agents:market:install` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.uninstall | `agents:market:uninstall` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.market.checkUpdates | `agents:market:check-updates` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+
+**Renderer usage (examples)**:
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceAgentsPage.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/agents/AgentDetail.vue`
+
+## 18. Transport Events
+
+**Main handler**: `packages/utils/transport/sdk/main-transport.ts`
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| TransportEvents.port.upgrade | `transport:port:upgrade` | on: `packages/utils/transport/sdk/main-transport.ts` |
+| TransportEvents.port.confirm | `transport:port:confirm` | on: `packages/utils/transport/sdk/main-transport.ts` |
+| TransportEvents.port.close | `transport:port:close` | on: `packages/utils/transport/sdk/main-transport.ts` |
+| TransportEvents.port.error | `transport:port:error` | on: `packages/utils/transport/sdk/main-transport.ts` |
+
+## 19. BoxItem Events
+
+| Event Key | Event Name | Main handler / emitter |
+| --- | --- | --- |
+| BoxItemEvents.crud.create | `box-item:crud:create` | no main handler found (reserved) |
+| BoxItemEvents.crud.update | `box-item:crud:update` | no main handler found (reserved) |
+| BoxItemEvents.crud.upsert | `box-item:crud:upsert` | no main handler found (reserved) |
+| BoxItemEvents.crud.delete | `box-item:crud:delete` | no main handler found (reserved) |
+| BoxItemEvents.batch.upsert | `box-item:batch:upsert` | no main handler found (reserved) |
+| BoxItemEvents.batch.delete | `box-item:batch:delete` | no main handler found (reserved) |
+| BoxItemEvents.batch.clear | `box-item:batch:clear` | no main handler found (reserved) |
+| BoxItemEvents.sync.request | `box-item:sync:request` | no main handler found (reserved) |
+| BoxItemEvents.sync.response | `box-item:sync:response` | no main handler found (reserved) |
+
+## 20. Other Event Groups
+
+See: `apps/nexus/content/docs/dev/architecture/transport-events.en.mdc`
+
+## Appendix A. Function-Level Handler Index (by Module)
+
+> Note: This index goes down to the **method/function level**. For send/broadcast-only events, the sender method is listed.
+
+### A1. CoreBox
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `core-box:show` | `IpcManager.registerTransportHandlers -> coreBoxManager.trigger(true)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:hide` | `IpcManager.registerTransportHandlers -> coreBoxManager.trigger(false)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:expand` | `IpcManager.registerTransportHandlers -> handleExpandRequest` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:focus-window` | `IpcManager.registerTransportHandlers (inline focus)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:forward-key-event` | `CoreBoxKeyTransport.register -> handleKeyEvent` | `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts` |
+| `core-box:get-ui-view-state` | `CoreBoxKeyTransport.register -> getUIViewState` | `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts` |
+| `core-box:shortcut-triggered` | `CoreBoxWindowManager.show (triggeredByShortcut)` | `apps/core-app/src/main/modules/box-tool/core-box/window.ts` |
+| `core-box:ui-mode-exited` | `CoreBoxManager.exitUIMode` | `apps/core-app/src/main/modules/box-tool/core-box/manager.ts` |
+| `core-box:layout:update` | `CoreBoxModule.registerTransportHandlers -> queueLayoutUpdate -> applyLayoutUpdate` | `apps/core-app/src/main/modules/box-tool/core-box/index.ts` |
+| `core-box:query` | `IpcManager.registerTransportHandlers -> coreBoxManager.search` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:cancel-search` | `IpcManager.registerTransportHandlers -> searchEngineCore.cancelSearch` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:search-update` | `SearchEngineCore.search -> sendUpdateToFrontend` | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| `core-box:search-end` | `SearchEngineCore.search / cancelSearch` | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| `core-box:no-results` | `SearchEngineCore.search (no-results branch)` | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| `core-box:get-input` | `IpcManager.registerTransportHandlers -> requestInputValue` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:set-input` | `IpcManager.registerTransportHandlers -> sendInputValueToRenderer` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:clear-input` | `IpcManager.registerTransportHandlers -> sendInputValueToRenderer('')` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:set-input-visibility` | `IpcManager.registerTransportHandlers -> setInputVisibility` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:input-change` | `createCoreBoxInputTransport.broadcast` | `apps/core-app/src/renderer/src/modules/box/adapter/transport/input-transport.ts` |
+| `core-box:request-input-value` | `useChannel -> transport.on` | `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useChannel.ts` |
+| `core-box:set-query` | `IpcManager.sendInputValueToRenderer` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:execute` | `SearchEngineCore.init -> provider.onExecute` | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| `core-box:clear-items` | `PluginModule.start -> TouchPlugin.clearCoreBoxItems` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `core-box:toggle-pin` | `SearchEngineCore.init -> dbUtils.togglePin` | `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts` |
+| `core-box:deactivate-provider` | `IpcManager.registerTransportHandlers -> searchEngineCore.deactivateProvider` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:deactivate-providers` | `IpcManager.registerTransportHandlers -> searchEngineCore.deactivateProviders` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:get-activated-providers` | `IpcManager.registerTransportHandlers -> getActiveProvidersState` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:get-provider-details` | `IpcManager.registerTransportHandlers (resolve native+plugin providers)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:enter-ui-mode` | `IpcManager.registerTransportHandlers -> coreBoxManager.enterUIMode` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:exit-ui-mode` | `IpcManager.registerTransportHandlers -> coreBoxManager.exitUIMode` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:allow-clipboard` | `IpcManager.registerTransportHandlers -> windowManager.enableClipboardMonitoring` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:input-monitoring:allow` | `IpcManager.registerTransportHandlers -> windowManager.enableInputMonitoring` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+
+### A2. DivisionBox
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `division-box:session:open` | `DivisionBoxIPC.registerTransportHandlers -> manager.createSession` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:close` | `DivisionBoxIPC.registerTransportHandlers -> manager.destroySession` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:get-state` | `DivisionBoxIPC.registerTransportHandlers -> session.getState/getSessionState` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:update-state` | `DivisionBoxIPC.registerTransportHandlers -> session.setSessionState` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:get-active-sessions` | `DivisionBoxIPC.registerTransportHandlers -> manager.getActiveSessionsInfo` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:state-changed` | `DivisionBoxIPC.broadcastStateChanged` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:session:session-destroyed` | `DivisionBoxIPC.broadcastSessionDestroyed` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:window:toggle-pin` | `DivisionBoxIPC.registerTransportHandlers -> session.toggleAlwaysOnTop` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:window:set-opacity` | `DivisionBoxIPC.registerTransportHandlers -> session.setOpacity` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:window:toggle-devtools` | `DivisionBoxIPC.registerTransportHandlers -> session.openDevTools/closeDevTools` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:window:get-window-state` | `DivisionBoxIPC.registerTransportHandlers -> session.isAlwaysOnTop/getOpacity/isDevToolsOpen` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:ui:input-change` | `DivisionBoxIPC.registerTransportHandlers -> transport.sendToPlugin(CoreBoxEvents.input.change)` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+| `division-box:flow:trigger` | `DivisionBoxIPC.registerTransportHandlers -> flowTriggerManager.handleFlow` | `apps/core-app/src/main/modules/division-box/ipc.ts` |
+
+### A3. Storage
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `storage:app:get` | `StorageModule.registerTransportHandlers -> getConfig` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:app:get-versioned` | `StorageModule.registerTransportHandlers -> getConfigWithVersion` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:app:set` | `StorageModule.registerTransportHandlers -> saveConfig` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:app:save` | `StorageModule.registerTransportHandlers -> saveConfig` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:app:delete` | `StorageModule.registerTransportHandlers -> saveConfig(clear)` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:app:updated` | `StorageModule.registerTransportHandlers -> updateStreams.add` | `apps/core-app/src/main/modules/storage/index.ts` |
+| `storage:plugin:get` | No handler found | — |
+| `storage:plugin:set` | No handler found | — |
+| `storage:plugin:delete` | No handler found | — |
+| `storage:update` | `broadcastUpdate` | `apps/core-app/src/main/modules/storage/index.ts` |
+
+### A4. Plugin
+
+#### A4.1 Lifecycle Signal / Push
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `plugin:lifecycle:active` | `createPluginManager -> setActivePlugin (sendToPlugin)` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:lifecycle:inactive` | `createPluginManager -> setActivePlugin (sendToPlugin)` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:lifecycle:enabled` | `TouchPlugin.enable -> transport.sendToPlugin` | `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| `plugin:lifecycle:disabled` | `TouchPlugin.disable -> transport.sendToPlugin` | `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| `plugin:lifecycle:crashed` | No sender found | — |
+| `plugin:state-changed` | `createPluginManager (load/enable/disable/reload paths) -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin-status-updated` | `TouchPlugin.status setter -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| `plugin:reload-readme` | `PluginModule.start (reloadReadme handler) -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:reload` | `PluginModule.start (reload handler) -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin-crashed` | No sender found | — |
+
+#### A4.2 Widget
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `plugin:widget:register` | `WidgetManager.emitPayload -> broadcastToWindow` | `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+| `plugin:widget:update` | `WidgetManager.emitPayload -> broadcastToWindow` | `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+| `plugin:widget:unregister` | `WidgetManager.emitPayload` | `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts` |
+
+#### A4.3 API / DevServer
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `plugin:api:list` | `PluginModule.start -> manager.plugins filter/list` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get` | `PluginModule.start -> manager.plugins.get` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-status` | `PluginModule.start -> manager.plugins.get.status` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:enable` | `PluginModule.start -> manager.enablePlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:disable` | `PluginModule.start -> manager.disablePlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:reload` | `PluginModule.start -> manager.reloadPlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:install` | `PluginModule.start -> pluginInstaller.install` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:uninstall` | `PluginModule.start -> manager.uninstallPlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:trigger-feature` | `PluginModule.start -> manager.triggerFeature` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:register-widget` | `PluginModule.start -> widgetManager.registerWidget` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:feature-input-changed` | `PluginModule.start -> manager.featureInputChanged` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:open-folder` | `PluginModule.start -> shell.openPath` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-official-list` | `PluginModule.start -> getOfficialList` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-manifest` | `PluginModule.start -> readManifest` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:save-manifest` | `PluginModule.start -> saveManifest` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:save-widget-file` | `PluginModule.start -> saveWidgetFile` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-paths` | `PluginModule.start -> resolvePluginPaths` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:open-path` | `PluginModule.start -> shell.openPath` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:reveal-path` | `PluginModule.start -> shell.showItemInFolder` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-performance` | `PluginModule.start -> plugin.getPerformanceMetrics` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:api:get-runtime-stats` | `PluginModule.start -> plugin.getRuntimeStats` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:reconnect-dev-server` | `PluginModule.start -> healthMonitor.reconnectDevServer` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:dev-server-status` | `PluginModule.start -> healthMonitor.getStatus` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+#### A4.4 Storage / Performance / Feature / Log
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `plugin:storage:get-file` | `PluginModule.start -> plugin.getPluginFile` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:set-file` | `PluginModule.start -> plugin.savePluginFile` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:delete-file` | `PluginModule.start -> plugin.deletePluginFile` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:list-files` | `PluginModule.start -> plugin.listPluginFiles` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:get-stats` | `PluginModule.start -> plugin.getStorageStats` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:get-tree` | `PluginModule.start -> plugin.getStorageTree` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:get-file-details` | `PluginModule.start -> plugin.getFileDetails` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:clear` | `PluginModule.start -> plugin.clearStorage` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:open-folder` | `PluginModule.start -> shell.openPath` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:open-in-editor` | `PluginModule.start -> exec/shell.openPath` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:storage:update` | `TouchPlugin.broadcastStorageUpdate` | `apps/core-app/src/main/modules/plugin/plugin.ts` |
+| `plugin:performance:get-metrics` | `PluginModule.start -> plugin.getPerformanceMetrics` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:performance:get-paths` | `PluginModule.start -> plugin.get*Path` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:feature:trigger` | `PluginModule.start -> manager.triggerFeature` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:log:write` | `PluginModule.start -> plugin.log.write` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+#### A4.5 Install
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `plugin:install-progress` | `PluginInstallQueue.emitProgress` | `apps/core-app/src/main/modules/plugin/install-queue.ts` |
+| `plugin:install-confirm` | `PluginInstallQueue.requestConfirmation` | `apps/core-app/src/main/modules/plugin/install-queue.ts` |
+| `plugin:install-confirm-response` | `PluginModule.start -> installQueue.handleConfirmResponse` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `plugin:install-source` | `PluginModule.start -> installQueue.enqueue` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+### A5. Notification
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `notification:api:notify` | `NotificationModule.registerTransportHandlers -> handleNotify` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:api:update` | `NotificationModule.registerTransportHandlers -> handleUpdate` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:api:dismiss` | `NotificationModule.registerTransportHandlers -> handleDismiss` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:api:action` | `NotificationModule.registerTransportHandlers -> handleAction` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:inbox:list` | `NotificationModule.registerTransportHandlers -> inbox.list` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:inbox:mark-read` | `NotificationModule.registerTransportHandlers -> handleInboxMarkRead` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:inbox:archive` | `NotificationModule.registerTransportHandlers -> handleInboxArchive` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:inbox:delete` | `NotificationModule.registerTransportHandlers -> inbox.delete` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:inbox:clear` | `NotificationModule.registerTransportHandlers -> inbox.clear` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:push:notify` | `NotificationModule.handleNotify -> transport.broadcast` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:push:update` | `NotificationModule.handleUpdate -> transport.broadcast` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:push:dismiss` | `NotificationModule.handleDismiss -> transport.broadcast` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:push:action` | `NotificationModule.handleAction -> transport.broadcast` | `apps/core-app/src/main/modules/notification.ts` |
+| `notification:push:inbox-updated` | `NotificationModule.handleInbox* -> transport.broadcast` | `apps/core-app/src/main/modules/notification.ts` |
+
+### A6. Clipboard
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `clipboard:monitor:change` | `ClipboardModule.registerTransportHandlers -> transport.onStream` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:history:get` | `ClipboardModule.registerTransportHandlers -> getHistory` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:history:latest` | `ClipboardModule.registerTransportHandlers -> getLatestItem` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:action:apply` | `ClipboardModule.registerTransportHandlers -> applyToActiveApp/writeItemToClipboard` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:history:delete` | `ClipboardModule.registerTransportHandlers -> delete + notifyTransportChange` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:history:set-favorite` | `ClipboardModule.registerTransportHandlers -> update favorite` | `apps/core-app/src/main/modules/clipboard.ts` |
+| `clipboard:action:write` | `ClipboardModule.registerTransportHandlers -> writePayload` | `apps/core-app/src/main/modules/clipboard.ts` |
+
+### A7. MetaOverlay
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `meta-overlay:ui:show` | `IpcManager.registerTransportHandlers -> metaOverlayManager.show` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `meta-overlay:ui:hide` | `IpcManager.registerTransportHandlers -> metaOverlayManager.hide` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `meta-overlay:ui:is-visible` | `IpcManager.registerTransportHandlers -> metaOverlayManager.getVisible` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `meta-overlay:action:execute` | `IpcManager.registerTransportHandlers -> metaOverlayManager.executeAction` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `meta-overlay:action:register` | `IpcManager.registerTransportHandlers -> metaOverlayManager.registerPluginAction` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `meta-overlay:action:unregister` | `IpcManager.registerTransportHandlers -> metaOverlayManager.unregisterPluginAction(s)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+
+### A8. Market
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `market:check-updates` | `PluginModule.start -> triggerUpdateCheck` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:search` | `PluginModule.start -> searchMarket` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:get-plugin` | `PluginModule.start -> getMarketPlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:http-request` | `PluginModule.start -> performMarketHttpRequest` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:featured` | `PluginModule.start -> featured` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:npm-list` | `PluginModule.start -> npmList` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `market:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+### A9. Permission
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `permission:get-plugin` | `PermissionModule.registerChannels -> store.getPluginPermissions` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:get-status` | `PermissionModule.registerChannels -> store.getPluginPermissionStatus` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:grant` | `PermissionModule.registerChannels -> store.grant + broadcastUpdate` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:revoke` | `PermissionModule.registerChannels -> store.revoke + broadcastUpdate` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:grant-multiple` | `PermissionModule.registerChannels -> store.grant (loop)` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:grant-session` | `PermissionModule.registerChannels -> store.grantSession` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:revoke-all` | `PermissionModule.registerChannels -> store.revokeAll + broadcastUpdate` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:check` | `PermissionModule.registerChannels -> store.check` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:get-all` | `PermissionModule.registerChannels -> store.getAllPermissions` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:get-registry` | `PermissionModule.registerChannels -> permissionRegistry.list` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:get-audit-logs` | `PermissionModule.registerChannels -> store.getAuditLogs` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:clear-audit-logs` | `PermissionModule.registerChannels -> store.clearAuditLogs` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:get-performance` | `PermissionModule.registerChannels -> store.getPerformanceStats` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:reset-performance` | `PermissionModule.registerChannels -> store.resetPerformanceStats` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:updated` | `PermissionModule.broadcastUpdate -> transport.broadcast` | `apps/core-app/src/main/modules/permission/index.ts` |
+| `permission:startup-request` | `PluginModule.start -> transport.sendToWindow` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+
+### A10. Tray
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `tray:autostart:update` | `TrayManager.registerEventListeners -> updateAutoStart` | `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| `tray:autostart:get` | `TrayManager.registerEventListeners -> getAutoStartStatus` | `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| `tray:show:get` | `TrayManager.setupChannels -> hasTray` | `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| `tray:show:set` | `TrayManager.setupChannels -> initializeTray/destroyTray` | `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| `tray:hidedock:set` | `TrayManager.setupChannels -> updateDockVisibility` | `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+
+### A11. Sentry
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `sentry:update-user` | `SentryService.setupIPCChannels -> updateUserContext` | `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| `sentry:get-config` | `SentryService.setupIPCChannels -> getConfig` | `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| `sentry:get-search-count` | `SentryService.setupIPCChannels -> getSearchCountFromDb` | `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| `sentry:get-telemetry-stats` | `SentryService.setupIPCChannels -> getTelemetryStatsFromDb` | `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+| `sentry:record-performance` | `SentryService.setupIPCChannels -> recordRendererPerformance` | `apps/core-app/src/main/modules/sentry/sentry-service.ts` |
+
+### A12. Download
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `download:task:add` | `DownloadCenter.registerTransportHandlers -> addTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:pause` | `DownloadCenter.registerTransportHandlers -> pauseTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:resume` | `DownloadCenter.registerTransportHandlers -> resumeTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:cancel` | `DownloadCenter.registerTransportHandlers -> cancelTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:retry` | `DownloadCenter.registerTransportHandlers -> retryTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:remove` | `DownloadCenter.registerTransportHandlers -> removeTask` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:update-priority` | `DownloadCenter.registerTransportHandlers -> updateTaskPriority` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:pause-all` | `DownloadCenter.registerTransportHandlers -> pauseAllTasks` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:resume-all` | `DownloadCenter.registerTransportHandlers -> resumeAllTasks` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:cancel-all` | `DownloadCenter.registerTransportHandlers -> cancelAllTasks` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:list:get` | `DownloadCenter.registerTransportHandlers -> getAllTasks` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:list:get-by-status` | `DownloadCenter.registerTransportHandlers -> getTasksByStatus` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:task:get-status` | `DownloadCenter.registerTransportHandlers -> getTaskStatus` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:config:get` | `DownloadCenter.registerTransportHandlers -> getConfig` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:config:update` | `DownloadCenter.registerTransportHandlers -> updateConfig` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:config:get-notification` | `DownloadCenter.registerTransportHandlers -> getNotificationConfig` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:config:update-notification` | `DownloadCenter.registerTransportHandlers -> updateNotificationConfig` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:history:get` | `DownloadCenter.registerTransportHandlers -> getTaskHistory` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:history:clear` | `DownloadCenter.registerTransportHandlers -> clearHistory` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:history:clear-item` | `DownloadCenter.registerTransportHandlers -> clearHistoryItem` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:file:open` | `DownloadCenter.registerTransportHandlers -> openFile` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:file:show-in-folder` | `DownloadCenter.registerTransportHandlers -> showInFolder` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:file:delete` | `DownloadCenter.registerTransportHandlers -> deleteFile` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:maintenance:cleanup-temp` | `DownloadCenter.registerTransportHandlers -> cleanupTempFiles` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:logs:get` | `DownloadCenter.registerTransportHandlers -> getLogs` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:logs:get-error-stats` | `DownloadCenter.registerTransportHandlers -> getErrorStats` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:logs:clear` | `DownloadCenter.registerTransportHandlers -> clearLogs` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:temp:get-stats` | `DownloadCenter.registerTransportHandlers -> getTempStats` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:stats:get` | `DownloadCenter.registerTransportHandlers -> getStats` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:migration:check-needed` | `DownloadCenter.registerTransportHandlers -> checkMigrationNeeded` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:migration:start` | `DownloadCenter.registerTransportHandlers -> startMigration` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:migration:retry` | `DownloadCenter.registerTransportHandlers -> retryMigration` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:migration:status` | `DownloadCenter.registerTransportHandlers -> getMigrationStatus` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-added` | `DownloadCenter.broadcastTaskAdded` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-progress` | `DownloadCenter.broadcastTaskProgress` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-completed` | `DownloadCenter.broadcastTaskCompleted` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-failed` | `DownloadCenter.broadcastTaskFailed` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-updated` | `DownloadCenter.broadcastTaskUpdated` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:task-retrying` | `DownloadCenter.startDownloadTask (retryStrategy callback)` | `apps/core-app/src/main/modules/download/download-center.ts` |
+| `download:push:notification-clicked` | `DownloadCenter.handleNotificationClick` | `apps/core-app/src/main/modules/download/download-center.ts` |
+
+### A13. Update
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `update:service:check` | `UpdateService.registerTransportHandlers -> checkForUpdates/getQuickUpdateCheckResult` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:get-settings` | `UpdateService.registerTransportHandlers -> getSettings` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:update-settings` | `UpdateService.registerTransportHandlers -> updateSettings` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:get-status` | `UpdateService.registerTransportHandlers -> getUpdateStatus` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:clear-cache` | `UpdateService.registerTransportHandlers -> clearCache` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:get-cached-release` | `UpdateService.registerTransportHandlers -> getCachedRelease` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:record-action` | `UpdateService.registerTransportHandlers -> recordAction` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:download` | `UpdateService.registerTransportHandlers -> downloadUpdate` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:install` | `UpdateService.registerTransportHandlers -> installUpdate` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:ignore-version` | `UpdateService.registerTransportHandlers -> ignoreVersion` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:set-auto-download` | `UpdateService.registerTransportHandlers -> setAutoDownload` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:service:set-auto-check` | `UpdateService.registerTransportHandlers -> setAutoCheck` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+| `update:push:available` | `UpdateService.notifyRendererAboutUpdate` | `apps/core-app/src/main/modules/update/UpdateService.ts` |
+
+### A14. Flow
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `flow:bus:dispatch` | `FlowBusIPC.registerTransportHandlers -> flowBus.dispatch` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:bus:get-targets` | `FlowBusIPC.registerTransportHandlers -> flowBus.getAvailableTargets` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:bus:cancel` | `FlowBusIPC.registerTransportHandlers -> flowBus.cancel` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:bus:acknowledge` | `FlowBusIPC.registerTransportHandlers -> flowBus.acknowledge` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:bus:report-error` | `FlowBusIPC.registerTransportHandlers -> flowBus.reportError` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:bus:select-target` | `FlowBusIPC.registerTransportHandlers -> flowBus.selectTarget` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:consent:check` | `FlowBusIPC.registerTransportHandlers -> consentService.checkConsent` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:consent:grant` | `FlowBusIPC.registerTransportHandlers -> consentService.grantConsent` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:session:update` | `FlowBusIPC.broadcastSessionUpdate` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
+| `flow:session:deliver` | `FlowBusModule.registerTransportHandlers -> flowBus.registerDeliveryHandler -> sendToPlugin` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:ui:trigger-transfer` | `FlowBusModule.triggerTransfer -> sendToWindow` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:ui:trigger-detach` | `FlowBusModule.triggerDetach -> sendToWindow` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:plugin:register-targets` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.registerPluginTargets` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:plugin:unregister-targets` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.unregisterPluginTargets` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:plugin:set-plugin-enabled` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.setPluginEnabled` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:plugin:set-plugin-handler` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.setPluginFlowHandler` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:native:share` | `FlowBusModule.registerTransportHandlers -> handleNativeShare` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+
+### A15. App / Platform / Analytics
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `app:window:close` | `CommonChannel.registerTransportHandlers -> closeApp` | `apps/core-app/src/main/channel/common.ts` |
+| `app:window:minimize` | `CommonChannel.registerTransportHandlers -> touchApp.window.minimize` | `apps/core-app/src/main/channel/common.ts` |
+| `app:window:hide` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.hide` | `apps/core-app/src/main/channel/common.ts` |
+| `app:window:focus` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.focus` | `apps/core-app/src/main/channel/common.ts` |
+| `app:debug:open-devtools` | `CommonChannel.registerTransportHandlers -> touchApp.window.openDevTools` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:get-cwd` | `CommonChannel.registerTransportHandlers -> process.cwd()` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:get-os` | `CommonChannel.registerTransportHandlers -> getOSInformation` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:get-package` | `CommonChannel.registerTransportHandlers -> packageJson` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:get-path` | `CommonChannel.registerTransportHandlers -> electronApp.getPath` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:open-external` | `CommonChannel.registerTransportHandlers -> shell.openExternal` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:show-in-folder` | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:open-app` | `CommonChannel.registerTransportHandlers -> shell.openPath/openApp` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:execute-command` | `CommonChannel.registerTransportHandlers -> exec` | `apps/core-app/src/main/channel/common.ts` |
+| `app:system:read-file` | `CommonChannel.registerTransportHandlers -> readFile` | `apps/core-app/src/main/channel/common.ts` |
+| `app:i18n:set-locale` | `CommonChannel.registerTransportHandlers -> i18n.setLocale` | `apps/core-app/src/main/channel/common.ts` |
+| `app:file-index:status` | `CommonChannel.registerTransportHandlers -> fileProvider.getIndexingStatus` | `apps/core-app/src/main/channel/common.ts` |
+| `app:file-index:stats` | `CommonChannel.registerTransportHandlers -> fileProvider.getIndexStats` | `apps/core-app/src/main/channel/common.ts` |
+| `app:file-index:rebuild` | `CommonChannel.registerTransportHandlers -> fileProvider.rebuildIndex` | `apps/core-app/src/main/channel/common.ts` |
+| `app:file-index:battery-level` | `CommonChannel.registerTransportHandlers -> fileProvider.getBatteryLevel` | `apps/core-app/src/main/channel/common.ts` |
+| `app:file-index:progress` | `CommonChannel.registerTransportHandlers -> transport.onStream` | `apps/core-app/src/main/channel/common.ts` |
+| `app:device-idle:settings.get` | `CommonChannel.registerTransportHandlers -> deviceIdleService.getSettings` | `apps/core-app/src/main/channel/common.ts` |
+| `app:device-idle:settings.update` | `CommonChannel.registerTransportHandlers -> deviceIdleService.updateSettings` | `apps/core-app/src/main/channel/common.ts` |
+| `app:app-index:settings.get` | `CommonChannel.registerTransportHandlers -> appProvider.getAppIndexSettings` | `apps/core-app/src/main/channel/common.ts` |
+| `app:app-index:settings.update` | `CommonChannel.registerTransportHandlers -> appProvider.updateAppIndexSettings` | `apps/core-app/src/main/channel/common.ts` |
+| `app:analytics:get-snapshot` | `AnalyticsModule.registerHandlers -> core.getSnapshot` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:get-range` | `AnalyticsModule.registerHandlers -> core.getRange` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:export` | `AnalyticsModule.registerHandlers -> core.exportSnapshots` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:toggle-reporting` | `AnalyticsModule.registerHandlers -> core.setReporting` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:messages.list` | `AnalyticsModule.registerHandlers -> messageStore.list` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:messages.mark` | `AnalyticsModule.registerHandlers -> messageStore.updateStatus` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.track-event` | `AnalyticsModule.registerHandlers -> core.trackPluginEvent` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.track-duration` | `AnalyticsModule.registerHandlers -> core.trackPluginDuration` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.get-stats` | `AnalyticsModule.registerHandlers -> core.getPluginStats` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.get-feature-stats` | `AnalyticsModule.registerHandlers -> core.getPluginFeatureStats` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.get-top-features` | `AnalyticsModule.registerHandlers -> core.getTopFeatures` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.increment-counter` | `AnalyticsModule.registerHandlers -> core.incrementCounter` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.set-gauge` | `AnalyticsModule.registerHandlers -> core.setGauge` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:sdk.record-histogram` | `AnalyticsModule.registerHandlers -> core.recordHistogram` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:get-current` | `AnalyticsModule.registerHandlers -> core.getCurrent` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:get-history` | `AnalyticsModule.registerHandlers -> core.getHistory` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:get-summary` | `AnalyticsModule.registerHandlers -> core.getSummary` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:report` | `AnalyticsModule.registerHandlers -> core.report` | `apps/core-app/src/main/modules/analytics/analytics-module.ts` |
+| `app:analytics:perf-report` | `CommonChannel.registerTransportHandlers -> perfReport` | `apps/core-app/src/main/channel/common.ts` |
+| `platform:capabilities:list` | `CommonChannel.registerTransportHandlers -> platformCapabilityRegistry.list` | `apps/core-app/src/main/channel/common.ts` |
+
+### A16. Agents
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `agents:list` | `registerAgentChannels -> agentManager.getAvailableAgents` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:list-all` | `registerAgentChannels -> agentManager.getAllAgents` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:get` | `registerAgentChannels -> agentManager.getAgent` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:execute` | `registerAgentChannels -> agentManager.executeTask` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:execute-immediate` | `registerAgentChannels -> agentManager.executeTaskImmediate` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:cancel` | `registerAgentChannels -> agentManager.cancelTask` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:task-status` | `registerAgentChannels -> agentManager.getTaskStatus` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:stats` | `registerAgentChannels -> agentManager.getStats` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:tools:list` | `registerAgentChannels -> agentManager.getTools` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:tools:get` | `registerAgentChannels -> agentManager.getTool` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:search` | `registerAgentChannels -> agentMarket.search` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:get` | `registerAgentChannels -> agentMarket.get` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:featured` | `registerAgentChannels -> agentMarket.featured` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:installed` | `registerAgentChannels -> agentMarket.installed` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:categories` | `registerAgentChannels -> agentMarket.categories` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:install` | `registerAgentChannels -> agentMarket.install` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:uninstall` | `registerAgentChannels -> agentMarket.uninstall` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:market:check-updates` | `registerAgentChannels -> agentMarket.checkUpdates` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+
+### A17. Transport
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `transport:port:upgrade` | `registerPortHandlers -> onUpgrade` | `packages/utils/transport/sdk/main-transport.ts` |
+| `transport:port:confirm` | `registerPortHandlers -> onConfirm` | `packages/utils/transport/sdk/main-transport.ts` |
+| `transport:port:close` | `registerPortHandlers -> onClose` | `packages/utils/transport/sdk/main-transport.ts` |
+| `transport:port:error` | `registerPortHandlers -> onError` | `packages/utils/transport/sdk/main-transport.ts` |
+
+### A18. BoxItem
+
+| Event Name | Function-Level Handler | File |
+| --- | --- | --- |
+| `box-item:*` | No handler found (reserved) | — |
+
+## Appendix B. SDK → Event → Handler Index
+
+> Note: Mapping from `packages/utils/transport/sdk/domains/*` to main-process handlers.
+
+### B1. App SDK (`packages/utils/transport/sdk/domains/app.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `close()` | `app:window:close` | `CommonChannel.registerTransportHandlers -> closeApp` |
+| `hide()` | `app:window:hide` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.hide` |
+| `minimize()` | `app:window:minimize` | `CommonChannel.registerTransportHandlers -> touchApp.window.minimize` |
+| `focus()` | `app:window:focus` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.focus` |
+| `openDevTools()` | `app:debug:open-devtools` | `CommonChannel.registerTransportHandlers -> touchApp.window.openDevTools` |
+| `getCwd()` | `app:system:get-cwd` | `CommonChannel.registerTransportHandlers -> process.cwd()` |
+| `getOS()` | `app:system:get-os` | `CommonChannel.registerTransportHandlers -> getOSInformation` |
+| `getPackage()` | `app:system:get-package` | `CommonChannel.registerTransportHandlers -> packageJson` |
+| `getPath(name)` | `app:system:get-path` | `CommonChannel.registerTransportHandlers -> electronApp.getPath` |
+| `openExternal(url)` | `app:system:open-external` | `CommonChannel.registerTransportHandlers -> shell.openExternal` |
+| `showInFolder(path)` | `app:system:show-in-folder` | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder` |
+| `openApp(options)` | `app:system:open-app` | `CommonChannel.registerTransportHandlers -> shell.openPath/openApp` |
+| `executeCommand(options)` | `app:system:execute-command` | `CommonChannel.registerTransportHandlers -> exec` |
+| `readFile(path)` | `app:system:read-file` | `CommonChannel.registerTransportHandlers -> readFile` |
+
+### B2. Platform SDK (`packages/utils/transport/sdk/domains/platform.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `listCapabilities()` | `platform:capabilities:list` | `CommonChannel.registerTransportHandlers -> platformCapabilityRegistry.list` |
+
+### B3. Download SDK (`packages/utils/transport/sdk/domains/download.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `addTask()` | `download:task:add` | `DownloadCenter.registerTransportHandlers -> addTask` |
+| `pauseTask()` | `download:task:pause` | `DownloadCenter.registerTransportHandlers -> pauseTask` |
+| `resumeTask()` | `download:task:resume` | `DownloadCenter.registerTransportHandlers -> resumeTask` |
+| `cancelTask()` | `download:task:cancel` | `DownloadCenter.registerTransportHandlers -> cancelTask` |
+| `retryTask()` | `download:task:retry` | `DownloadCenter.registerTransportHandlers -> retryTask` |
+| `removeTask()` | `download:task:remove` | `DownloadCenter.registerTransportHandlers -> removeTask` |
+| `updatePriority()` | `download:task:update-priority` | `DownloadCenter.registerTransportHandlers -> updateTaskPriority` |
+| `pauseAll()` | `download:task:pause-all` | `DownloadCenter.registerTransportHandlers -> pauseAllTasks` |
+| `resumeAll()` | `download:task:resume-all` | `DownloadCenter.registerTransportHandlers -> resumeAllTasks` |
+| `cancelAll()` | `download:task:cancel-all` | `DownloadCenter.registerTransportHandlers -> cancelAllTasks` |
+| `getAllTasks()` | `download:list:get` | `DownloadCenter.registerTransportHandlers -> getAllTasks` |
+| `getTasksByStatus()` | `download:list:get-by-status` | `DownloadCenter.registerTransportHandlers -> getTasksByStatus` |
+| `getTaskStatus()` | `download:task:get-status` | `DownloadCenter.registerTransportHandlers -> getTaskStatus` |
+| `getConfig()` | `download:config:get` | `DownloadCenter.registerTransportHandlers -> getConfig` |
+| `updateConfig()` | `download:config:update` | `DownloadCenter.registerTransportHandlers -> updateConfig` |
+| `getNotificationConfig()` | `download:config:get-notification` | `DownloadCenter.registerTransportHandlers -> getNotificationConfig` |
+| `updateNotificationConfig()` | `download:config:update-notification` | `DownloadCenter.registerTransportHandlers -> updateNotificationConfig` |
+| `getHistory()` | `download:history:get` | `DownloadCenter.registerTransportHandlers -> getTaskHistory` |
+| `clearHistory()` | `download:history:clear` | `DownloadCenter.registerTransportHandlers -> clearHistory` |
+| `clearHistoryItem()` | `download:history:clear-item` | `DownloadCenter.registerTransportHandlers -> clearHistoryItem` |
+| `openFile()` | `download:file:open` | `DownloadCenter.registerTransportHandlers -> openFile` |
+| `showInFolder()` | `download:file:show-in-folder` | `DownloadCenter.registerTransportHandlers -> showInFolder` |
+| `deleteFile()` | `download:file:delete` | `DownloadCenter.registerTransportHandlers -> deleteFile` |
+| `cleanupTemp()` | `download:maintenance:cleanup-temp` | `DownloadCenter.registerTransportHandlers -> cleanupTempFiles` |
+| `getTempStats()` | `download:temp:get-stats` | `DownloadCenter.registerTransportHandlers -> getTempStats` |
+| `getLogs()` | `download:logs:get` | `DownloadCenter.registerTransportHandlers -> getLogs` |
+| `getErrorStats()` | `download:logs:get-error-stats` | `DownloadCenter.registerTransportHandlers -> getErrorStats` |
+| `clearLogs()` | `download:logs:clear` | `DownloadCenter.registerTransportHandlers -> clearLogs` |
+| `getStats()` | `download:stats:get` | `DownloadCenter.registerTransportHandlers -> getStats` |
+| `checkMigrationNeeded()` | `download:migration:check-needed` | `DownloadCenter.registerTransportHandlers -> checkMigrationNeeded` |
+| `startMigration()` | `download:migration:start` | `DownloadCenter.registerTransportHandlers -> startMigration` |
+| `retryMigration()` | `download:migration:retry` | `DownloadCenter.registerTransportHandlers -> retryMigration` |
+| `getMigrationStatus()` | `download:migration:status` | `DownloadCenter.registerTransportHandlers -> getMigrationStatus` |
+| `onTaskAdded()` | `download:push:task-added` | `DownloadCenter.broadcastTaskAdded` |
+| `onTaskProgress()` | `download:push:task-progress` | `DownloadCenter.broadcastTaskProgress` |
+| `onTaskCompleted()` | `download:push:task-completed` | `DownloadCenter.broadcastTaskCompleted` |
+| `onTaskFailed()` | `download:push:task-failed` | `DownloadCenter.broadcastTaskFailed` |
+| `onTaskUpdated()` | `download:push:task-updated` | `DownloadCenter.broadcastTaskUpdated` |
+| `onTaskRetrying()` | `download:push:task-retrying` | `DownloadCenter.startDownloadTask (retryStrategy callback)` |
+| `onNotificationClicked()` | `download:push:notification-clicked` | `DownloadCenter.handleNotificationClick` |
+
+### B4. Notification SDK (`packages/utils/transport/sdk/domains/notification.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `notify()` | `notification:api:notify` | `NotificationModule.registerTransportHandlers -> handleNotify` |
+| `update()` | `notification:api:update` | `NotificationModule.registerTransportHandlers -> handleUpdate` |
+| `dismiss()` | `notification:api:dismiss` | `NotificationModule.registerTransportHandlers -> handleDismiss` |
+| `reportAction()` | `notification:api:action` | `NotificationModule.registerTransportHandlers -> handleAction` |
+| `listInbox()` | `notification:inbox:list` | `NotificationModule.registerTransportHandlers -> inbox.list` |
+| `markRead()` | `notification:inbox:mark-read` | `NotificationModule.registerTransportHandlers -> handleInboxMarkRead` |
+| `archive()` | `notification:inbox:archive` | `NotificationModule.registerTransportHandlers -> handleInboxArchive` |
+| `delete()` | `notification:inbox:delete` | `NotificationModule.registerTransportHandlers -> inbox.delete` |
+| `clear()` | `notification:inbox:clear` | `NotificationModule.registerTransportHandlers -> inbox.clear` |
+| `onNotify()` | `notification:push:notify` | `NotificationModule.handleNotify -> transport.broadcast` |
+| `onUpdate()` | `notification:push:update` | `NotificationModule.handleUpdate -> transport.broadcast` |
+| `onDismiss()` | `notification:push:dismiss` | `NotificationModule.handleDismiss -> transport.broadcast` |
+| `onAction()` | `notification:push:action` | `NotificationModule.handleAction -> transport.broadcast` |
+| `onInboxUpdated()` | `notification:push:inbox-updated` | `NotificationModule.handleInbox* -> transport.broadcast` |
+
+### B5. Market SDK (`packages/utils/transport/sdk/domains/market.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `checkUpdates()` | `market:check-updates` | `PluginModule.start -> triggerUpdateCheck` |
+| `search()` | `market:search` | `PluginModule.start -> searchMarket` |
+| `getPlugin()` | `market:get-plugin` | `PluginModule.start -> getMarketPlugin` |
+| `httpRequest()` | `market:http-request` | `PluginModule.start -> performMarketHttpRequest` |
+| `featured()` | `market:featured` | `PluginModule.start -> featured` |
+| `npmList()` | `market:npm-list` | `PluginModule.start -> npmList` |
+| `onUpdatesAvailable()` | `market:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` |
+
+### B6. Plugin SDK (`packages/utils/transport/sdk/domains/plugin.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `list()` | `plugin:api:list` | `PluginModule.start -> manager.plugins list` |
+| `get()` | `plugin:api:get` | `PluginModule.start -> manager.plugins.get` |
+| `getStatus()` | `plugin:api:get-status` | `PluginModule.start -> plugin.status` |
+| `enable()` | `plugin:api:enable` | `PluginModule.start -> manager.enablePlugin` |
+| `disable()` | `plugin:api:disable` | `PluginModule.start -> manager.disablePlugin` |
+| `reload()` | `plugin:api:reload` | `PluginModule.start -> manager.reloadPlugin` |
+| `install()` | `plugin:api:install` | `PluginModule.start -> pluginInstaller.install` |
+| `uninstall()` | `plugin:api:uninstall` | `PluginModule.start -> manager.uninstallPlugin` |
+| `triggerFeature()` | `plugin:api:trigger-feature` | `PluginModule.start -> manager.triggerFeature` |
+| `registerWidget()` | `plugin:api:register-widget` | `PluginModule.start -> widgetManager.registerWidget` |
+| `featureInputChanged()` | `plugin:api:feature-input-changed` | `PluginModule.start -> manager.featureInputChanged` |
+| `openFolder()` | `plugin:api:open-folder` | `PluginModule.start -> shell.openPath` |
+| `getOfficialList()` | `plugin:api:get-official-list` | `PluginModule.start -> getOfficialList` |
+| `getManifest()` | `plugin:api:get-manifest` | `PluginModule.start -> readManifest` |
+| `saveManifest()` | `plugin:api:save-manifest` | `PluginModule.start -> saveManifest` |
+| `saveWidgetFile()` | `plugin:api:save-widget-file` | `PluginModule.start -> saveWidgetFile` |
+| `getPaths()` | `plugin:api:get-paths` | `PluginModule.start -> resolvePluginPaths` |
+| `openPath()` | `plugin:api:open-path` | `PluginModule.start -> shell.openPath` |
+| `revealPath()` | `plugin:api:reveal-path` | `PluginModule.start -> shell.showItemInFolder` |
+| `getPerformance()` | `plugin:api:get-performance` | `PluginModule.start -> plugin.getPerformanceMetrics` |
+| `getRuntimeStats()` | `plugin:api:get-runtime-stats` | `PluginModule.start -> plugin.getRuntimeStats` |
+| `reconnectDevServer()` | `plugin:reconnect-dev-server` | `PluginModule.start -> healthMonitor.reconnectDevServer` |
+| `getDevServerStatus()` | `plugin:dev-server-status` | `PluginModule.start -> healthMonitor.getStatus` |
+| `onStateChanged()` | `plugin:state-changed` | `createPluginManager -> transport.broadcast` |
+| `onStatusUpdated()` | `plugin-status-updated` | `TouchPlugin.status setter -> transport.broadcast` |
+| `onInstallProgress()` | `plugin:install-progress` | `PluginInstallQueue.emitProgress` |
+| `onInstallConfirm()` | `plugin:install-confirm` | `PluginInstallQueue.requestConfirmation` |
+| `sendInstallConfirmResponse()` | `plugin:install-confirm-response` | `PluginModule.start -> installQueue.handleConfirmResponse` |
+| `installFromSource()` | `plugin:install-source` | `PluginModule.start -> installQueue.enqueue` |

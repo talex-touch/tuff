@@ -1,0 +1,44 @@
+{
+  "id": "com.tuffex.snipaste",
+  "name": "touch-snipaste",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "Snipaste 快捷控制：截图、贴图、取色",
+  "main": "index.js",
+  "permissions": {
+    "required": [],
+    "optional": []
+  },
+  "features": [
+    {
+      "id": "snipaste.quick",
+      "name": "Snipaste",
+      "desc": "截图 / 贴图 / 取色",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["snipaste", "snip", "截图", "贴图", "取色"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["snipaste", "snip", "截图", "贴图", "取色", "贴图管理"]
+        }
+      ]
+    }
+  ]
+}

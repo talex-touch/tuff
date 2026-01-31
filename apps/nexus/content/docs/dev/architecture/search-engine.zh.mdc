@@ -1,0 +1,73 @@
+# SearchEngine（搜索引擎）落地图
+
+本页聚焦 SearchEngine 子系统，覆盖核心流程、Provider 列表、推荐体系与关键文件定位。
+
+## 1. 核心职责
+
+- 解析查询（含 `@file` 过滤器）
+- 聚合多源 Provider 结果
+- 评分、排序、合并
+- 产出 CoreBox 渲染结果与推荐
+
+## 2. 核心入口与目录
+
+**主入口**：
+- `apps/core-app/src/main/modules/box-tool/search-engine/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/types.ts`
+
+**统计/日志/性能**：
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-summary-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-queue.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-cache.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/time-stats-aggregator.ts`
+
+**索引/补全**：
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/query-completion-service.ts`
+
+**排序/聚合**：
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-utils.ts`
+
+## 3. Provider 清单（落地文件）
+
+| Provider | 作用 | 文件 |
+| --- | --- | --- |
+| Intelligence Provider | 智能推荐/模型能力结果 | `apps/core-app/src/main/modules/box-tool/search-engine/providers/intelligence-provider.ts` |
+| File Provider | macOS/Linux 文件索引检索 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` |
+| Everything Provider | Windows Everything 搜索 | `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts` |
+| App Provider | 应用索引/应用搜索 | `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` |
+
+**相关支撑目录**：
+- 文件检索配套：`apps/core-app/src/main/modules/box-tool/addon/files/`（`types.ts`、`constants.ts`、`utils.ts`、`workers/`）
+- 应用检索配套：`apps/core-app/src/main/modules/box-tool/addon/apps/`（`app-scanner.ts`、`search-processing-service.ts`、`highlighting-service.ts` 等）
+- 文件系统监听：`apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+
+## 4. 推荐系统（Recommendation）
+
+| 子模块 | 作用 | 文件 |
+| --- | --- | --- |
+| Recommendation Engine | 推荐调度/评分合并 | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` |
+| Context Provider | 构建上下文/场景推荐 | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/context-provider.ts` |
+| Item Rebuilder | 将推荐转为 CoreBox Item | `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/item-rebuilder.ts` |
+
+## 5. 关键流程（Mermaid）
+
+```mermaid
+flowchart LR
+  input["CoreBox Input"] --> parser["Query Parser (@file)"]
+  parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
+  providers --> score["Scoring + Sort"]
+  score --> merge["Merge & Rank"]
+  merge --> output["CoreBox Results"]
+  merge --> rec["Recommendation Engine"]
+  rec --> output
+```
+
+## 6. 相关文档
+
+- CoreBox 窗口与 UI 行为：`apps/nexus/content/docs/dev/architecture/corebox-and-views.zh.mdc`
+- 核心模块总览：`apps/nexus/content/docs/dev/architecture/module-map.zh.mdc`

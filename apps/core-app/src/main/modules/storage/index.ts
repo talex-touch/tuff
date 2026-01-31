@@ -48,9 +48,7 @@ const storageLegacySaveAllEvent = defineRawEvent<void, void>('storage:saveall')
 const storageLegacySaveSyncEvent = defineRawEvent<StorageSaveRequest, StorageSaveResult>(
   'storage:save-sync'
 )
-const storageLegacyUpdateEvent = defineRawEvent<{ name: string; version: number }, void>(
-  'storage:update'
-)
+const storageLegacyUpdateEvent = StorageEvents.legacy.update
 
 let pluginConfigPath: string
 
@@ -85,7 +83,7 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
         if (sourceWebContentsId && win.webContents.id === sourceWebContentsId) {
           continue
         }
-        void transport.sendTo(win.webContents, storageLegacyUpdateEvent, { name, version })
+        transport.broadcastToWindow(win.id, storageLegacyUpdateEvent, { name, version })
       }
     }
     storageUpdateEmitter?.(name, version)

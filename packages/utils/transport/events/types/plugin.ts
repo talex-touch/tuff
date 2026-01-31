@@ -25,6 +25,7 @@ import type {
   InputChangedRequest,
   PluginFilters,
   PluginStateEvent,
+  RegisterWidgetRequest,
   TriggerFeatureRequest,
 } from '../../../plugin/sdk/types'
 
@@ -352,6 +353,9 @@ export type PluginApiUninstallResponse = PluginApiOperationResponse
 
 export type PluginApiTriggerFeatureRequest = TriggerFeatureRequest
 export type PluginApiTriggerFeatureResponse = unknown
+
+export type PluginApiRegisterWidgetRequest = RegisterWidgetRequest
+export type PluginApiRegisterWidgetResponse = PluginApiOperationResponse
 
 export type PluginApiFeatureInputChangedRequest = InputChangedRequest
 

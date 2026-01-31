@@ -291,6 +291,18 @@ export interface BuildVerificationStatus {
   hasOfficialKey: boolean
 }
 
+export interface BatteryStatusPayload {
+  /**
+   * Whether the device is on battery power.
+   */
+  onBattery?: boolean
+
+  /**
+   * Battery percentage (null if unavailable).
+   */
+  percent?: number | null
+}
+
 // ============================================================================
 // Analytics Types
 // ============================================================================

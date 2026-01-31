@@ -1,0 +1,196 @@
+# 核心模块落地图（含 SearchEngine 等大板块）
+
+本文将主进程/渲染进程/插件体系中的核心模块“落地到具体目录与文件”，便于按模块快速定位实现与改动点。
+
+## 1. 入口与模块体系
+
+**职责**：应用启动、模块编排、通道初始化、事件总线。
+
+**代码落地**：
+- 入口：`apps/core-app/src/main/index.ts`
+- TouchApp：`apps/core-app/src/main/core/touch-app.ts`
+- 工厂：`apps/core-app/src/main/core/index.ts`
+- ModuleManager：`apps/core-app/src/main/core/module-manager.ts`
+- ChannelCore：`apps/core-app/src/main/core/channel-core.ts`
+- EventBus：`apps/core-app/src/main/core/eventbus/touch-event.ts`
+- BaseModule：`apps/core-app/src/main/modules/abstract-base-module.ts`
+
+```mermaid
+flowchart TB
+  entry["apps/core-app/src/main/index.ts"]
+  gen["apps/core-app/src/main/core/index.ts"]
+  app["TouchApp"]
+  manager["ModuleManager"]
+  channel["ChannelCore"]
+  modules["Modules (BaseModule)"]
+
+  entry --> gen --> app --> manager --> modules
+  manager --> channel
+```
+
+## 2. 模块加载顺序（Main）
+
+**职责**：在 Electron ready 后按顺序启动核心模块。
+
+**代码落地（顺序与文件）**：
+1. DatabaseModule → `apps/core-app/src/main/modules/database/index.ts`
+2. StorageModule → `apps/core-app/src/main/modules/storage/index.ts`
+3. ShortcutModule → `apps/core-app/src/main/modules/global-shortcon.ts`
+4. ExtensionLoaderModule → `apps/core-app/src/main/modules/extension-loader.ts`
+5. CommonChannelModule → `apps/core-app/src/main/channel/common.ts`
+6. PluginModule → `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+7. PluginLogModule → `apps/core-app/src/main/service/plugin-log.service.ts`
+8. CoreBoxModule → `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+9. TrayHolderModule → `apps/core-app/src/main/modules/tray-holder.ts`
+10. AddonOpenerModule → `apps/core-app/src/main/modules/addon-opener.ts`
+11. ClipboardModule → `apps/core-app/src/main/modules/clipboard.ts`
+12. TuffDashboardModule → `apps/core-app/src/main/modules/system/tuff-dashboard.ts`
+13. FileSystemWatcherModule → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+14. FileProtocolModule → `apps/core-app/src/main/modules/file-protocol/index.ts`
+15. TerminalModule → `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
+
+```mermaid
+flowchart TB
+  m1["Database"] --> m2["Storage"] --> m3["Shortcut"] --> m4["ExtensionLoader"] --> m5["CommonChannel"]
+  m5 --> m6["Plugin"] --> m7["PluginLog"] --> m8["CoreBox"] --> m9["TrayHolder"]
+  m9 --> m10["AddonOpener"] --> m11["Clipboard"] --> m12["TuffDashboard"]
+  m12 --> m13["FileSystemWatcher"] --> m14["FileProtocol"] --> m15["Terminal"]
+```
+
+## 3. CoreBox & SearchEngine
+
+**职责**：统一搜索入口、结果聚合、窗口行为与 UI 交互。
+
+**CoreBox 代码落地**：
+- 模块入口：`apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- Window 逻辑：`apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- Manager：`apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- IPC：`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- Input/Key Transport：`apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`、`apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- Meta Overlay：`apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- CoreBox Transport：`apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+- Item SDK：`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+
+**SearchEngine 代码落地**：
+- Search Core：`apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- Engine 入口：`apps/core-app/src/main/modules/box-tool/search-engine/index.ts`
+- 排序/评分：`apps/core-app/src/main/modules/box-tool/search-engine/sort/index.ts`
+- Providers：`apps/core-app/src/main/modules/box-tool/search-engine/providers/`
+- 推荐系统：`apps/core-app/src/main/modules/box-tool/search-engine/recommendation/`
+- 类型定义：`apps/core-app/src/main/modules/box-tool/search-engine/types.ts`
+- 搜索日志：`apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts`
+
+**文件类 Provider（SearchEngine 子系统）**：
+- Everything Provider（Windows）→ `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`
+- File Provider（macOS/Linux）→ `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- App Provider → `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- FileSystemWatcher → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
+
+```mermaid
+flowchart LR
+  input["CoreBox Input"] --> parser["Query Parser (@file)"]
+  parser --> providers["Providers (Everything/File/App/Plugin/Intelligence)"]
+  providers --> score["Scoring + Sort"]
+  score --> merge["Merge & Rank"]
+  merge --> output["CoreBox Results UI"]
+```
+
+## 4. 插件系统（Manifest/Prelude/Surface）
+
+**职责**：插件加载、权限校验、IPC 通道隔离、UI 视图挂载。
+
+**代码落地**：
+- PluginModule：`apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- Plugin runtime：`apps/core-app/src/main/modules/plugin/plugin.ts`
+- Provider Registry：`apps/core-app/src/main/modules/plugin/providers/registry.ts`
+- Dev Server Monitor：`apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
+- Features Adapter：`apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- Widget Manager：`apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- UI Utils：`apps/core-app/src/main/modules/plugin/plugin-ui-utils.ts`
+- 内置插件：`apps/core-app/src/main/plugins/internal/`
+- SDK 版本门槛：`packages/utils/plugin/sdk-version.ts`
+- Plugin SDK：`packages/utils/plugin/sdk/`
+- Plugin Types/Helpers：`packages/utils/plugin/`
+- 示例插件：`plugins/touch-translation/`、`plugins/touch-music/`、`plugins/touch-image/`
+
+```mermaid
+flowchart TB
+  manifest["Manifest (manifest.json)"] --> prelude["Prelude (index.js)"]
+  prelude --> surface["Surface UI (attachUIView)"]
+  prelude --> ipc["Plugin Channel (isolated)"]
+```
+
+## 5. 通道 / Transport
+
+**职责**：主进程 ↔ 渲染进程 ↔ 插件进程的通信抽象。
+
+**代码落地**：
+- 主进程通道：`apps/core-app/src/main/core/channel-core.ts`
+- 通用通道模块：`apps/core-app/src/main/channel/common.ts`
+- 渲染进程通道：`apps/core-app/src/renderer/src/modules/channel/channel-core.ts`
+- Renderer 主/插件通道：`apps/core-app/src/renderer/src/modules/channel/main/`、`apps/core-app/src/renderer/src/modules/channel/plugin-core/`
+- Storage 通道：`apps/core-app/src/renderer/src/modules/channel/storage/`
+- Transport 事件定义：`packages/utils/transport/events/`、`packages/utils/transport/event/`
+- 通道类型：`packages/utils/channel/`
+
+## 6. 存储与配置
+
+**职责**：配置持久化、缓存/LRU、广播更新、插件存储隔离。
+
+**代码落地**：
+- 主存储模块：`apps/core-app/src/main/modules/storage/index.ts`
+- Storage 子模块：`apps/core-app/src/main/modules/storage/storage-cache.ts`、`storage-lru-manager.ts`、`storage-frequency-monitor.ts`、`storage-polling-service.ts`
+- 主存储注册表：`apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- 通用存储实体：`packages/utils/common/storage/`
+- Renderer 存储通道：`apps/core-app/src/renderer/src/modules/channel/storage/`
+
+## 7. 数据库
+
+**职责**：结构化数据存储与调度写入。
+
+**代码落地**：
+- DatabaseModule：`apps/core-app/src/main/modules/database/index.ts`
+- Schema：`apps/core-app/src/main/db/schema.ts`
+- 写入调度：`apps/core-app/src/main/db/db-write-scheduler.ts`
+- SQLite 重试：`apps/core-app/src/main/db/sqlite-retry.ts`
+- DB 工具：`apps/core-app/src/main/db/utils.ts`
+
+## 8. 渲染进程结构
+
+**职责**：Vue 3 应用入口、状态管理、UI 组件与页面渲染。
+
+**代码落地**：
+- 入口：`apps/core-app/src/renderer/src/main.ts`
+- 根组件：`apps/core-app/src/renderer/src/App.vue`
+- 视图：`apps/core-app/src/renderer/src/views/`
+- 组件：`apps/core-app/src/renderer/src/components/`
+- 状态：`apps/core-app/src/renderer/src/stores/`
+- 模块：`apps/core-app/src/renderer/src/modules/`
+
+## 9. 系统能力/服务模块
+
+**职责**：权限、日志、通知、托盘、AI/Intelligence 等系统能力。
+
+**代码落地**：
+- 权限：`apps/core-app/src/main/modules/permission/index.ts`、`permission-guard.ts`、`permission-store.ts`
+- 日志：`apps/core-app/src/main/service/plugin-log.service.ts`
+- 通知：`apps/core-app/src/main/modules/notification.ts`
+- 托盘：`apps/core-app/src/main/modules/tray-holder.ts`、`apps/core-app/src/main/modules/tray/`
+- AI/Intelligence：`apps/core-app/src/main/modules/ai/`
+- Sentry：`apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- Analytics：`apps/core-app/src/main/modules/analytics/`
+- DivisionBox：`apps/core-app/src/main/modules/division-box/`
+
+## 10. UI 组件与国际化
+
+**职责**：统一 UI 组件库与多语言消息解析。
+
+**代码落地**：
+- Tuffex 组件库：`packages/tuffex/packages/components/`
+- TuffIcon：`packages/tuffex/packages/components/src/icon/src/TxIcon.vue`
+- i18n 核心：`packages/utils/i18n/`
+- Renderer 语言包：`apps/core-app/src/renderer/src/locales/`
+
+## 相关文档
+
+- Everything 集成：`docs/everything-integration.md`

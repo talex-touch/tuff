@@ -65,7 +65,7 @@ function safeSerializeMetadata(
       if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
         safe[key] = value
       } else if (Array.isArray(value) && value.every((entry) => typeof entry === 'string')) {
-        safe[key] = value
+        safe[key] = [...value]
       }
     }
     return Object.keys(safe).length > 0 ? safe : undefined

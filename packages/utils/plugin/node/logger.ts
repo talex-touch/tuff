@@ -4,6 +4,15 @@ import process from 'node:process'
 import { inspect } from 'node:util'
 import chalk from 'chalk'
 
+const pluginLogStdout =
+  process.env.TALEX_PLUGIN_LOG_STDOUT === '1' || process.env.TALEX_PLUGIN_LOG_STDOUT === 'true'
+const defaultStdoutLevels = new Set<LogLevelString>(['WARN', 'ERROR'])
+
+function shouldWriteToStdout(level: LogLevelString): boolean {
+  if (pluginLogStdout) return true
+  return defaultStdoutLevels.has(level)
+}
+
 /**
  * PluginLogger provides structured logging capabilities for individual plugins.
  */
@@ -96,10 +105,12 @@ export class PluginLogger implements IPluginLogger<PluginLoggerManager> {
     }
     this.manager.append(log)
 
-    const baseMessage = `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`
-    const extra = data.length
-      ? ` ${data.map(item => (typeof item === 'string' ? item : inspect(item))).join(' ')}`
-      : ''
-    process.stdout.write(`${baseMessage}${extra}\n`)
+    if (shouldWriteToStdout(resolvedLevel)) {
+      const baseMessage = `${chalk.bgMagenta('[PluginLog]')} ${colorize(resolvedLevel)} ${this.pluginName} - ${message}`
+      const extra = data.length
+        ? ` ${data.map(item => (typeof item === 'string' ? item : inspect(item))).join(' ')}`
+        : ''
+      process.stdout.write(`${baseMessage}${extra}\n`)
+    }
   }
 }

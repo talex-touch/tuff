@@ -14,6 +14,7 @@ catalog:
   gsap: ^3.12.5
   jszip: ^3.10.1
   markdown-it: ^14.1.0
+  mermaid: ^11.12.2
   motion-v: ^1.7.2
   ogl: ^1.0.11
   react: ^19.2.1

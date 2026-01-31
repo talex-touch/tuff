@@ -1,4 +1,4 @@
-import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/channel/storage'
 
 export const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
@@ -6,7 +6,7 @@ export const APP_AUTH_STORAGE_KEY = 'tuff-app-auth-token'
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 export function isLocalAuthMode(): boolean {
-  return import.meta.env.DEV && appSetting?.dev?.authServer === 'local'
+  return isDevEnv() && appSetting?.dev?.authServer === 'local'
 }
 
 export function getAuthBaseUrl(): string {

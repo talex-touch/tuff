@@ -18,6 +18,7 @@ export default defineComponent({
     navMaxWidth: { type: Number, default: 320 },
     contentPadding: { type: Number, default: 12 },
     contentScrollable: { type: Boolean, default: true },
+    borderless: { type: Boolean, default: false },
     autoHeight: { type: Boolean, default: false },
     autoWidth: { type: Boolean, default: false },
     indicatorVariant: { type: String, default: 'line' },
@@ -591,6 +592,7 @@ export default defineComponent({
             {
               'tx-tabs--auto-height': heightAnimEnabled.value,
               'tx-tabs--auto-width': !!props.autoWidth,
+              'tx-tabs--borderless': props.borderless,
               'tx-tabs--indicator-anim': animationIndicator.value.enabled,
               'tx-tabs--nav-anim': animationNav.value.enabled,
               'tx-tabs--content-anim': animationContent.value.enabled,
@@ -621,6 +623,15 @@ export default defineComponent({
   border-radius: 12px;
   overflow: hidden;
   background: var(--tx-bg-color, #fff);
+}
+
+.tx-tabs--borderless {
+  border: none;
+  background: transparent;
+}
+
+.tx-tabs--borderless .tx-tabs__nav {
+  border: none;
 }
 
 .tx-tabs--auto-width {

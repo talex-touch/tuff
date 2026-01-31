@@ -1,0 +1,59 @@
+{
+  "id": "com.tuffex.text-tools",
+  "name": "touch-text-tools",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "文本转换工具：Base64/URL 编解码、JSON 美化、Hash",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "clipboard.write": "将转换结果复制到剪贴板"
+  },
+  "features": [
+    {
+      "id": "text-tools.convert",
+      "name": "文本工具",
+      "desc": "Base64 / URL / JSON / Hash / 大小写",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": [
+        "base64",
+        "url",
+        "encode",
+        "decode",
+        "json",
+        "hash",
+        "md5",
+        "sha",
+        "大小写",
+        "文本转换",
+        "编解码"
+      ],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["b64", "base64", "url", "encode", "decode", "json", "hash", "文本", "转换"]
+        }
+      ]
+    }
+  ]
+}

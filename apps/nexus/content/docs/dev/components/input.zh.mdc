@@ -5,79 +5,208 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [input, field, search]
+syncStatus: migrated
 ---
 
 # Input 输入
 
-> 更轻的输入框，更克制的边界，强调可读性与聚焦态。  
+> Input 输入框组件用于接收用户输入，支持多种类型和状态，具有流畅的动画效果和现代化的设计风格。  
 > **状态**：Beta
 
-
 ## 基础用法
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TuffInput v-model="value" placeholder="输入内容..." />
-    <TxSearchInput v-model="keyword" placeholder="搜索..." />
-  </template>
----
-::
 
-## Demo
-::TuffDemo{title="Focus State" description="聚焦态更轻，避免夺目。" code-lang="vue"}
+:::TuffDemo{title="基础输入" description="最常见的文本输入用法。" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffInput model-value="" placeholder="输入内容..." />
-    <TxSearchInput model-value="" placeholder="搜索..." />
+    <TuffInput v-model="value" placeholder="请输入内容" />
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
-  <tuff-input model-value="" placeholder="输入内容..." />
-  <tx-search-input model-value="" placeholder="搜索..." />
+  <tuff-input v-model="value" placeholder="请输入内容" />
 </div>
-::
+:::
 
-## 状态
+## 输入框类型
+
+目前支持：`text` / `password` / `textarea`。
+
+:::TuffDemo{title="Input Types" description="文本、密码与多行文本。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="text" placeholder="文本输入" />
+    <TuffInput v-model="password" type="password" placeholder="密码输入" />
+    <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
+  </template>
+---
+#preview
+<div style="display: flex; flex-direction: column; gap: 10px;">
+  <div class="tuff-demo-row">
+    <tuff-input v-model="text" placeholder="文本输入" />
+    <tuff-input v-model="password" type="password" placeholder="密码输入" />
+  </div>
+  <div class="tuff-demo-row">
+    <tuff-input v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
+  </div>
+</div>
+:::
+
+## 只读 / 禁用
+
+:::TuffDemo{title="Readonly / Disabled" description="只读与禁用状态。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="readonlyValue" readonly placeholder="只读" />
+    <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="readonlyValue" readonly placeholder="只读" />
+  <tuff-input v-model="disabledValue" disabled placeholder="禁用" />
+</div>
+:::
+
+## 可清空
+
+:::TuffDemo{title="Clearable" description="支持一键清空内容。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="clearableValue" clearable placeholder="可清空" />
+</div>
+:::
+
+## 前后缀插槽
+
+:::TuffDemo{title="Prefix / Suffix" description="使用图标增强提示。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="withPrefix" placeholder="Search">
+      <template #prefix>
+        <TxIcon icon="i-carbon-search" />
+      </template>
+    </TuffInput>
+    <TuffInput v-model="withSuffix" placeholder="User">
+      <template #suffix>
+        <TxIcon icon="i-carbon-user" />
+      </template>
+    </TuffInput>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="withPrefix" placeholder="Search">
+    <template #prefix>
+      <tx-icon icon="i-carbon-search" />
+    </template>
+  </tuff-input>
+  <tuff-input v-model="withSuffix" placeholder="User">
+    <template #suffix>
+      <tx-icon icon="i-carbon-user" />
+    </template>
+  </tuff-input>
+</div>
+:::
+
+## API
+
+### Props
+
 ::TuffPropsTable
 ---
 rows:
-  - name: disabled
-    description: '禁用态'
-  - name: error
-    description: '错误态'
-  - name: loading
-    description: '加载态'
----
-::
-
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: modelValue
+  - name: modelValue / v-model
+    description: '绑定值'
     type: 'string'
     default: "''"
-    description: '输入值'
   - name: placeholder
+    description: '占位文本'
     type: 'string'
     default: "''"
-    description: '占位文案'
+  - name: type
+    description: '类型'
+    type: "'text' | 'password' | 'textarea'"
+    default: "'text'"
   - name: disabled
+    description: '是否禁用'
     type: 'boolean'
     default: 'false'
-    description: '禁用状态'
+  - name: readonly
+    description: '是否只读'
+    type: 'boolean'
+    default: 'false'
+  - name: clearable
+    description: '是否可清空'
+    type: 'boolean'
+    default: 'false'
+  - name: rows
+    description: '文本域行数（仅 textarea）'
+    type: 'number'
+    default: '3'
 ---
-::
+:::
+
+### Events
+
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    description: 'v-model 更新'
+    type: '(value: string) => void'
+    default: '-'
+  - name: input
+    description: '输入时触发'
+    type: '(value: string) => void'
+    default: '-'
+  - name: focus
+    description: '聚焦'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: blur
+    description: '失焦'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: clear
+    description: '点击清空'
+    type: '() => void'
+    default: '-'
+---
+:::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: prefix
+    description: '前缀内容'
+    type: '-'
+    default: '-'
+  - name: suffix
+    description: '后缀内容'
+    type: '-'
+    default: '-'
+---
+:::
 
 ## Design Notes
 - 聚焦态优先通过边框与阴影的细微变化体现。  
 - 搜索态更轻，适合工具栏与列表筛选。
 
 ## 组合示例
-::TuffDemo{title="搜索行" description="输入框配合按钮完成快速检索。" code-lang="vue"}
+
+:::TuffDemo{title="搜索行" description="输入框配合按钮完成快速检索。" code-lang="vue"}
 ---
 code: |
   <template>
@@ -90,4 +219,18 @@ code: |
   <tuff-input placeholder="搜索..." />
   <tx-button size="sm">搜索</tx-button>
 </div>
-::
+:::
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const value = ref('')
+const text = ref('')
+const password = ref('')
+const content = ref('')
+const readonlyValue = ref('readonly')
+const disabledValue = ref('disabled')
+const clearableValue = ref('hello')
+const withPrefix = ref('')
+const withSuffix = ref('')
+</script>

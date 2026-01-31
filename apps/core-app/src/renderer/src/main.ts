@@ -20,6 +20,8 @@ import { createApp } from 'vue'
 import { registerDefaultCustomRenderers } from '~/modules/box/custom-render'
 import type { I18nInstance } from '~/modules/lang/i18n'
 import { setupI18n } from '~/modules/lang/i18n'
+import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
+import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
 
 import { usePluginStore } from '~/stores/plugin'
@@ -43,10 +45,14 @@ setRuntimeEnv(import.meta.env as Record<string, string | undefined>)
 
 const transport = useTuffTransport()
 
-registerNotificationHub(transport)
-
 let router: Router | null = null
 let routerEventsRegistered = false
+let lifecycleEventsRegistered = false
+
+registerNotificationHub(transport)
+registerBuildVerificationListener(transport)
+registerBatteryStatusListener()
+registerLifecycleEvents()
 
 function initializeRendererStorage(): void {
   const channel = tryUseChannel()
@@ -77,6 +83,23 @@ function registerRouterEvents(instance: Router): void {
 
   transport.on(AppEvents.window.openDownloadCenter, () => {
     instance.push('/downloads').catch(() => {})
+  })
+}
+
+function registerLifecycleEvents(): void {
+  if (lifecycleEventsRegistered) {
+    return
+  }
+  lifecycleEventsRegistered = true
+
+  transport.on(AppEvents.lifecycle.beforeQuit, async () => {
+    try {
+      await transport.flush()
+    } catch {
+      // ignore flush failures during shutdown
+    } finally {
+      transport.destroy()
+    }
   })
 }
 

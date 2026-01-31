@@ -290,13 +290,24 @@ export class PollingService {
   }
 
   public getDiagnostics(): {
-    activeTasks: Array<{ id: string, startedAt: number, ageMs: number }>
+    activeTasks: Array<{
+      id: string
+      startedAt: number
+      ageMs: number
+      intervalMs?: number
+      nextRunMs?: number
+      lastDurationMs?: number
+      maxDurationMs?: number
+      count?: number
+    }>
     recentTasks: Array<{
       id: string
       lastDurationMs: number
       lastEndAt: number
       count: number
       maxDurationMs: number
+      intervalMs?: number
+      nextRunMs?: number
     }>
     startAttempts: Array<{ caller: string, count: number, ageMs: number }>
   } {
@@ -306,6 +317,11 @@ export class PollingService {
         id,
         startedAt,
         ageMs: Math.max(0, now - startedAt),
+        intervalMs: this.tasks.get(id)?.intervalMs,
+        nextRunMs: this.tasks.get(id)?.nextRunMs,
+        lastDurationMs: this.taskStats.get(id)?.lastDurationMs,
+        maxDurationMs: this.taskStats.get(id)?.maxDurationMs,
+        count: this.taskStats.get(id)?.count,
       }))
       .sort((a, b) => b.ageMs - a.ageMs)
       .slice(0, 6)
@@ -316,6 +332,8 @@ export class PollingService {
         lastEndAt: stat.lastEndAt,
         count: stat.count,
         maxDurationMs: stat.maxDurationMs,
+        intervalMs: this.tasks.get(id)?.intervalMs,
+        nextRunMs: this.tasks.get(id)?.nextRunMs,
       }))
       .sort((a, b) => b.lastEndAt - a.lastEndAt)
       .slice(0, 6)

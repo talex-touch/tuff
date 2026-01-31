@@ -151,6 +151,8 @@ declare module 'vue' {
     PluginCard: typeof import('./src/components/plugin/layout/PluginCard.vue')['default']
     PluginDetails: typeof import('./src/components/plugin/tabs/PluginDetails.vue')['default']
     PluginEmptyState: typeof import('./src/components/plugin/layout/PluginEmptyState.vue')['default']
+    PluginFeatureDetailCard: typeof import('./src/components/plugin/tabs/PluginFeatureDetailCard.vue')['default']
+    PluginFeatureEmptyState: typeof import('./src/components/plugin/tabs/PluginFeatureEmptyState.vue')['default']
     PluginFeatures: typeof import('./src/components/plugin/tabs/PluginFeatures.vue')['default']
     PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
     PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
@@ -249,6 +251,7 @@ declare module 'vue' {
     VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
     ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
     VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+    WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
   }
 }
 
@@ -393,6 +396,8 @@ declare global {
   const PluginCard: typeof import('./src/components/plugin/layout/PluginCard.vue')['default']
   const PluginDetails: typeof import('./src/components/plugin/tabs/PluginDetails.vue')['default']
   const PluginEmptyState: typeof import('./src/components/plugin/layout/PluginEmptyState.vue')['default']
+  const PluginFeatureDetailCard: typeof import('./src/components/plugin/tabs/PluginFeatureDetailCard.vue')['default']
+  const PluginFeatureEmptyState: typeof import('./src/components/plugin/tabs/PluginFeatureEmptyState.vue')['default']
   const PluginFeatures: typeof import('./src/components/plugin/tabs/PluginFeatures.vue')['default']
   const PluginIcon: typeof import('./src/components/plugin/PluginIcon.vue')['default']
   const PluginInfo: typeof import('./src/components/plugin/PluginInfo.vue')['default']
@@ -491,4 +496,5 @@ declare global {
   const VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
   const ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
   const VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+  const WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
 }

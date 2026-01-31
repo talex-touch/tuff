@@ -1,0 +1,114 @@
+# App Technical Principles
+
+## Scope
+This repository is a pnpm workspace monorepo. The **desktop app** is the core, with a **developer docs site**, **shared packages**, and **plugin examples**. The runtime is Electron (main process) + Vue 3 (renderer), and plugins follow the Manifest/Prelude/Surface model.
+
+## Runtime Architecture
+- **Process model**: the main process owns windows, modules, and system capabilities; the renderer (Vue 3) owns UI; preload scripts bridge the two safely.
+- **Module system**: `ModuleManager` orchestrates lifecycle via `BaseModule` (`created/onInit/start/stop/onDestroy`).
+- **Core entry**: CoreBox is the main search/execute entry, aggregating providers and rendering results.
+
+## Messaging & Events
+- **Channel system**: abstracts IPC across `ChannelType.MAIN` and `ChannelType.PLUGIN`.
+- **Event bus**: `TouchEventBus` dispatches app-level events (e.g. `APP_READY`, `ALL_MODULES_LOADED`, `PLUGIN_STORAGE_UPDATED`).
+- **Plugin isolation**: per-plugin channels prevent cross-plugin interference.
+
+## Data & Storage
+- **App config**: `StorageModule` persists to `config/` and broadcasts updates to windows.
+- **Plugin storage**: isolated storage with size limits and safe file naming.
+- **Structured data**: Drizzle ORM + LibSQL in `database/`.
+
+## Search & CoreBox
+- **Pipeline**: input → provider filtering → scoring → merged results.
+- **Platform split**: Everything Provider on Windows; File Provider on macOS/Linux.
+- **UI behavior**: renderer drives CoreBox height; main process schedules updates and animations.
+
+## Build & Release
+- **Toolchain**: Electron-Vite + Vite + TypeScript.
+- **Release configs**: `electron-builder.yml` and `dev-app-update.yml`.
+- **Scripts**: `scripts/` contains version sync, permission fixes, and debug utilities.
+
+## Repository Layout (Root)
+- `apps/`: application and site subprojects.
+- `packages/`: shared libraries and component kits.
+- `plugins/`: plugin examples and standalone plugins.
+- `docs/`: engineering/PRD/analysis documents.
+- `examples/`: SDK and feature usage samples.
+- `scripts/`: CI and maintenance scripts.
+- `build/`: build config outputs (small set of files).
+- `plan/`, `issues/`, `reports/`, `shots/`: planning, issue tracking, reports, screenshots.
+- `.github/`, `.husky/`, `.workflow/`, `.spec-workflow/`, `.vscode/`, `.idea/`: collaboration/tooling configs.
+- Key files: `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `eslint.config.js`, `commitlint.config.cts`, `README.md`, `README.zh-CN.md`, `AGENTS.md`, `CLAUDE.md`.
+
+## Subproject Details
+
+### apps/core-app (Electron Desktop App)
+- **Source**
+  - `src/main/`: main process (core/modules/channel/db/service).
+  - `src/renderer/`: Vue 3 UI (`components/`, `views/`, `stores/`, `modules/`, `styles/`).
+  - `src/preload/`: preload scripts and bridge typings.
+  - `src/shared/`: cross-process types.
+- **Resources & config**
+  - `resources/`, `public/`, `scripts/`.
+  - Key files: `electron.vite.config.ts`, `electron-builder.yml`, `dev-app-update.yml`, `drizzle.config.ts`, `tsconfig*.json`, `package.json`.
+
+### apps/nexus (Docs / Developer Center)
+- **Content & pages**
+  - `content/`: docs content (`docs/`, `app/`).
+  - `app/`: Nuxt App routes/pages.
+  - `server/`: server APIs.
+  - `public/`: static assets.
+  - `i18n/`, `types/`.
+- **Key configs**
+  - `nuxt.config.ts`, `content.config.ts`, `i18n.config.ts`, `uno.config.ts`, `sentry.*.config.ts`, `package.json`, `SETUP.md`, `README.md`.
+
+### packages/utils (Shared Utilities)
+- **Layers**
+  - `base/`, `common/`.
+  - `channel/`, `transport/`.
+  - `plugin/`, `core-box/`, `renderer/`.
+  - `i18n/`, `eventbus/`, `account/`, `permission/`, `analytics/`.
+- **Testing & entry**
+  - `__tests__/`, `index.ts`, `vitest.config.ts`, `package.json`.
+
+### packages/tuffex (UI Component Kit)
+- **Components & tools**
+  - `packages/components/`, `packages/utils/`, `packages/script/`.
+  - `docs/`.
+- **Configs**
+  - `components.json`, `tsconfig.json`, `vitest.config.ts`, `package.json`, `CHANGELOG.md`.
+
+### packages/tuff-intelligence (AI/Intelligence)
+- `src/`: `index.ts`, `graph.ts`, `storage.ts`, `types.ts`, `langchain-bridge.ts`.
+- `package.json`, `tsconfig.json`, `eslint.config.js`.
+
+### packages/unplugin-export-plugin (Build/Export Plugin)
+- `src/`: `core/`, `cli/`, `bin/`, `__tests__/`, build adapters (`vite.ts`, `rollup.ts`, `esbuild.ts`, `webpack.ts`, `nuxt.ts`).
+- `tsup.config.ts`, `package.json`, `README.md`.
+
+### packages/help (Helpers)
+- `tree-generator.ts`: directory/structure generator.
+
+### packages/test (Testing)
+- `src/`: `core-box/`, `download/`, `aisdk/`, `common/`.
+- `vitest.config.ts`, `tsconfig.json`, `package.json`.
+
+### plugins/touch-translation (Translation Plugin)
+- `manifest.json`, `index.js`.
+- `src/`: `pages/`, `components/`, `providers/`, `router/`, `styles/`.
+- `widgets/`, `shared/`.
+
+### plugins/touch-music (Music Plugin)
+- `init.json`, `preload.js`.
+- `src/`: `components/`, `modules/`, `styles/`, `assets/`.
+
+### plugins/touch-image (Image Plugin)
+- `src/`: `App.vue`, `main.ts`, `assets/`.
+- `public/`: static assets.
+
+### examples (Samples)
+- `basic-usage.js`, `complete-example.js`, `message-system-example.js`, etc.
+- `util-pkg/`, `division-box/` sample apps.
+
+## Excluded (Generated/Cache)
+For clarity, the following are not expanded by default: `node_modules/`, `.git/`, `.pnpm-store/`, `.venv/`, `.nuxt/`, `dist/`, `out/`, `.data/`, `.eslintcache`, `.DS_Store`, and other build/cache artifacts.

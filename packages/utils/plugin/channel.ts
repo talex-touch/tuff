@@ -10,6 +10,7 @@ import {
   DataCode,
 } from '../channel'
 import { getLogger } from '../common/logger'
+import { findCloneIssue, isCloneError, summarizeClonePayload } from '../common/utils/clone-diagnostics'
 import { formatPayloadPreview } from '../common/utils/payload-preview'
 import { hasWindow } from '../env'
 
@@ -244,13 +245,20 @@ class TouchChannel implements ITouchClientChannel {
       }
       catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
-        channelLog.error(`Failed to send "${eventName}": ${errorMessage}`, {
-          meta: { payloadPreview: this.formatPayloadPreview(arg) },
+        const meta: Record<string, unknown> = {
+          payloadPreview: this.formatPayloadPreview(arg)
+        }
+        if (isCloneError(error)) {
+          meta.cloneIssue = findCloneIssue(arg)
+          meta.payloadSummary = summarizeClonePayload(arg)
+        }
+        channelLog.error(`Failed to send \"${eventName}\": ${errorMessage}`, {
+          meta,
           error,
         })
         reject(
           Object.assign(
-            new Error(`Failed to send plugin channel message "${eventName}": ${errorMessage}`),
+            new Error(`Failed to send plugin channel message \"${eventName}\": ${errorMessage}`),
             { code: 'plugin_channel_send_failed' },
           ),
         )
@@ -263,7 +271,7 @@ class TouchChannel implements ITouchClientChannel {
           return
         this.pendingMap.delete(uniqueId)
         const timeoutError = Object.assign(
-          new Error(`Plugin channel request "${eventName}" timed out after ${timeoutMs}ms`),
+          new Error(`Plugin channel request \"${eventName}\" timed out after ${timeoutMs}ms`),
           { code: 'plugin_channel_timeout' },
         )
         channelLog.warn(timeoutError.message)
@@ -304,14 +312,19 @@ class TouchChannel implements ITouchClientChannel {
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      const meta: Record<string, unknown> = {
+        eventName,
+        payloadPreview: this.formatPayloadPreview(arg),
+      }
+      if (isCloneError(error)) {
+        meta.cloneIssue = findCloneIssue(arg)
+        meta.payloadSummary = summarizeClonePayload(arg)
+      }
       channelLog.error('Failed to sendSync message', {
-        meta: {
-          eventName,
-          payloadPreview: this.formatPayloadPreview(arg),
-        },
+        meta,
         error,
       })
-      throw new Error(`Failed to sendSync plugin channel message "${eventName}": ${errorMessage}`)
+      throw new Error(`Failed to sendSync plugin channel message \"${eventName}\": ${errorMessage}`)
     }
   }
 }

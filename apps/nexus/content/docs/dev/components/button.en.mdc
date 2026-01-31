@@ -5,11 +5,12 @@ category: Basic
 status: beta
 since: 1.0.0
 tags: [action, tactile, primary]
+syncStatus: migrated
 ---
 
 # Button
 
-> A tactile button system focused on press feedback and controlled damping.  
+> Buttons trigger actions such as submitting forms. The styling references core-app **TuffButton(TButton)**: pill shape, supports `variant` / `type` / `size` / `block` / `loading` / `disabled`, and provides `plain` / `round` / `circle` / `dashed` appearances.  
 > **Status**: Beta
 
 <div class="tuff-doc-canvas">
@@ -20,80 +21,226 @@ tags: [action, tactile, primary]
   </TuffComponentCanvas>
 </div>
 
-## Basic Usage
-::TuffCodeBlock{lang="vue"}
+## Usage
+
+Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
+
+- Keep a single primary button per view to avoid hierarchy conflicts
+- Use `variant` and `size` to convey action priority
+- Async actions should show `loading` to avoid repeated triggers
+
+## Variants
+
+### Appearance
+
+Base visuals and semantic variants.
+
+:::TuffDemo{title="Appearance" description="Default, primary, and semantic variants." code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton>Primary</TxButton>
-    <TuffFlatButton>Flat</TuffFlatButton>
-  </template>
----
-::
-
-## States & Variants
-::TuffPropsTable
----
-rows:
-  - name: loading
-    type: 'boolean'
-    default: 'false'
-    description: 'Loading state'
-  - name: disabled
-    type: 'boolean'
-    default: 'false'
-    description: 'Disabled state'
-  - name: size
-    values: ['sm', 'md', 'lg']
-    description: 'Scales visuals and tactile response'
----
-::
-
-## Composition
-::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxButton icon="i-ri-add-line">Create</TxButton>
+    <TxButton>Default</TxButton>
+    <TxButton variant="primary">Primary</TxButton>
+    <TxButton variant="secondary">Secondary</TxButton>
     <TxButton variant="ghost">Ghost</TxButton>
-  </template>
----
-::
-
-## Demo
-::TuffDemo{title="Primary / Flat" description="Tactile primary and restrained flat styles." code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton>Primary</TxButton>
-    <TuffFlatButton>Flat</TuffFlatButton>
-    <TxButton variant="ghost">Ghost</TxButton>
+    <TxButton variant="danger">Danger</TxButton>
+    <TxButton variant="success">Success</TxButton>
+    <TxButton variant="warning">Warning</TxButton>
+    <TxButton variant="info">Info</TxButton>
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
-  <tx-button>Primary</tx-button>
-  <tuff-flat-button>Flat</tuff-flat-button>
+  <tx-button>Default</tx-button>
+  <tx-button variant="primary">Primary</tx-button>
+  <tx-button variant="secondary">Secondary</tx-button>
   <tx-button variant="ghost">Ghost</tx-button>
+  <tx-button variant="danger">Danger</tx-button>
+  <tx-button variant="success">Success</tx-button>
+  <tx-button variant="warning">Warning</tx-button>
+  <tx-button variant="info">Info</tx-button>
 </div>
-::
+:::
+
+### Disabled
+
+Disabled states.
+
+:::TuffDemo{title="Disabled" description="Disabled button variants." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton disabled>Default</TxButton>
+    <TxButton variant="primary" disabled>Primary</TxButton>
+    <TxButton variant="secondary" disabled>Secondary</TxButton>
+    <TxButton variant="ghost" disabled>Ghost</TxButton>
+    <TxButton variant="danger" disabled>Danger</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button disabled>Default</tx-button>
+  <tx-button variant="primary" disabled>Primary</tx-button>
+  <tx-button variant="secondary" disabled>Secondary</tx-button>
+  <tx-button variant="ghost" disabled>Ghost</tx-button>
+  <tx-button variant="danger" disabled>Danger</tx-button>
+</div>
+:::
+
+### Loading
+
+Show loading feedback during async actions.
+
+:::TuffDemo{title="Loading" description="Async loading feedback." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" loading>Loading</TxButton>
+    <TxButton variant="secondary" loading>Loading</TxButton>
+    <TxButton circle icon="i-carbon-edit" loading />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button variant="primary" :loading="loading" @click="handleClick">
+    {{ loading ? 'Loading' : 'Click to load' }}
+  </tx-button>
+  <tx-button variant="secondary" :loading="loading" @click="handleClick">
+    {{ loading ? 'Loading' : 'Click to load' }}
+  </tx-button>
+  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+</div>
+:::
+
+### Sizes
+
+Buttons provide three sizes beyond the default.
+
+:::TuffDemo{title="Sizes" description="Size affects density and tactile feel." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton size="lg">Large</TxButton>
+    <TxButton size="md">Medium</TxButton>
+    <TxButton size="sm">Small</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button size="lg">Large</tx-button>
+  <tx-button size="md">Medium</tx-button>
+  <tx-button size="sm">Small</tx-button>
+</div>
+:::
+
+### Block
+
+Block buttons fill the container width.
+
+:::TuffDemo{title="Block" description="Full-width primary action." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton block variant="primary">Block Button</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row" style="width: 260px;">
+  <tx-button block variant="primary">Block Button</tx-button>
+</div>
+:::
+
+### Shapes
+
+Adjust shapes with `plain` / `round` / `circle` / `dashed`.
+
+:::TuffDemo{title="Shapes" description="Shape and border treatments." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton dashed>Dashed</TxButton>
+    <TxButton plain variant="primary">Plain</TxButton>
+    <TxButton round variant="primary">Round</TxButton>
+    <TxButton circle icon="i-carbon-edit" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button dashed>Dashed</tx-button>
+  <tx-button plain variant="primary">Plain</tx-button>
+  <tx-button round variant="primary">Round</tx-button>
+  <tx-button circle icon="i-carbon-edit" />
+</div>
+:::
+
+### Haptics
+
+Haptic feedback for mobile interactions.
+
+:::TuffDemo{title="Haptics" description="Haptic intensity options." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" vibrate-type="light">Light</TxButton>
+    <TxButton variant="primary" vibrate-type="medium">Medium</TxButton>
+    <TxButton variant="primary" vibrate-type="heavy">Heavy</TxButton>
+    <TxButton variant="danger" vibrate-type="error">Error</TxButton>
+    <TxButton variant="secondary" :vibrate="false">No Haptics</TxButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button variant="primary" vibrate-type="light">Light</tx-button>
+  <tx-button variant="primary" vibrate-type="medium">Medium</tx-button>
+  <tx-button variant="primary" vibrate-type="heavy">Heavy</tx-button>
+  <tx-button variant="danger" vibrate-type="error">Error</tx-button>
+  <tx-button variant="secondary" :vibrate="false">No Haptics</tx-button>
+</div>
+:::
 
 ## Demo Conventions
 - Wrap interactive demos in `client-only`.  
 - Demos must be copyable and runnable (no screenshot-only blocks).
 
-## API (Lite)
+## API Specifications
+
+### Button Attributes
+
 ::TuffPropsTable
 ---
 rows:
   - name: variant
-    type: "'primary' | 'secondary' | 'ghost' | 'danger'"
-    default: 'primary'
-    description: 'Visual style'
+    type: "'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'"
+    default: '-'
+    description: 'Visual variant'
+  - name: type
+    type: "'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'"
+    default: '-'
+    description: 'Shortcut semantic type (legacy)'
   - name: size
-    type: "'sm' | 'md' | 'lg'"
-    default: 'md'
-    description: 'Size'
+    type: "'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'"
+    default: "'md'"
+    description: 'Button size'
+  - name: block
+    type: 'boolean'
+    default: 'false'
+    description: 'Block-level (full width)'
+  - name: plain
+    type: 'boolean'
+    default: 'false'
+    description: 'Plain style'
+  - name: dashed
+    type: 'boolean'
+    default: 'false'
+    description: 'Dashed style'
+  - name: round
+    type: 'boolean'
+    default: 'false'
+    description: 'Rounded style'
+  - name: circle
+    type: 'boolean'
+    default: 'false'
+    description: 'Circular button'
   - name: loading
     type: 'boolean'
     default: 'false'
@@ -102,6 +249,38 @@ rows:
     type: 'boolean'
     default: 'false'
     description: 'Disabled state'
+  - name: icon
+    type: 'string'
+    default: '-'
+    description: 'Icon class name'
+  - name: autofocus
+    type: 'boolean'
+    default: 'false'
+    description: 'Autofocus'
+  - name: native-type
+    type: "'button' | 'submit' | 'reset'"
+    default: "'button'"
+    description: 'Native type attribute'
+  - name: vibrate
+    type: 'boolean'
+    default: 'true'
+    description: 'Enable haptics'
+  - name: vibrate-type
+    type: "'light' | 'medium' | 'heavy' | 'bit' | 'success' | 'warning' | 'error'"
+    default: "'light'"
+    description: 'Haptic type'
+---
+::
+
+### Button Events
+
+::TuffPropsTable
+---
+rows:
+  - name: click
+    type: '(event: MouseEvent) => void'
+    default: '-'
+    description: 'Triggered on click'
 ---
 ::
 
@@ -115,30 +294,118 @@ code: |
 ---
 ::
 
-## Design Notes
-- Emphasize press feedback with smooth rebound.  
-- Translucent surfaces need proper background contrast.  
-- Keep icon/text spacing consistent to avoid visual drift.
+## Composition Notes
 
-## Composite Patterns
+### Split Button
+
+A combined button for “primary action + more actions” (e.g., RUN + …).
+
+::TuffDemo{title="Split Button" description="Primary action with menu actions." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxSplitButton
+      variant="primary"
+      size="sm"
+      icon="i-ri-play-fill"
+      :loading="splitLoading"
+      @click="handleRun"
+    >
+      RUN
+      <template #menu="{ close }">
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          <TxButton size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+            Settings
+          </TxButton>
+          <TxButton size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+            Open Folder
+          </TxButton>
+        </div>
+      </template>
+    </TxSplitButton>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-split-button
+    variant="primary"
+    size="sm"
+    icon="i-ri-play-fill"
+    :loading="splitLoading"
+    @click="handleRun"
+  >
+    RUN
+    <template #menu="{ close }">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <tx-button size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
+          Settings
+        </tx-button>
+        <tx-button size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
+          Open Folder
+        </tx-button>
+      </div>
+    </template>
+  </tx-split-button>
+</div>
+::
+
+### Primary + Ghost
+
+Pair primary with ghost for clear hierarchy.
+
 ::TuffDemo{title="Composite Actions" description="Primary + ghost pairing for command bars." code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton icon="i-ri-add-line">Create Project</TxButton>
-    <TxButton variant="ghost">Ghost Variant</TxButton>
+    <TxButton variant="ghost">Learn More</TxButton>
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
   <tx-button icon="i-ri-add-line">Create Project</tx-button>
-  <tx-button variant="ghost">Ghost Variant</tx-button>
+  <tx-button variant="ghost">Learn More</tx-button>
 </div>
 ::
+
+## Design Principles
+- Keep a single primary button to avoid hierarchy conflicts.  
+- Keep `variant` consistent within similar actions.  
+- Async actions must use `loading` to avoid duplicate triggers.  
+- Prefer `vibrate` on mobile to enhance tactile feedback.
+
+## Design Notes
+- Emphasize press feedback with smooth rebound.  
+- Translucent surfaces need proper background contrast.  
+- Keep icon/text spacing consistent to avoid visual drift.
 
 ## Source
 
 <TuffDocSourceLink label="View source" />
+
+<script setup>
+import { ref } from 'vue'
+
+const loading = ref(false)
+const splitLoading = ref(false)
+
+async function handleClick() {
+  loading.value = true
+
+  setTimeout(() => {
+    loading.value = false
+  }, 3000)
+}
+
+async function handleRun() {
+  if (splitLoading.value) return
+  splitLoading.value = true
+
+  setTimeout(() => {
+    splitLoading.value = false
+  }, 1200)
+}
+</script>
 
 <style scoped>
 .tuff-doc-canvas {

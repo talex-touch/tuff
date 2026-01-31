@@ -1,0 +1,12 @@
+{
+  "snipastePath": "<Snipaste 可执行文件路径>",
+  "actions": [
+    {
+      "id": "custom-snip",
+      "title": "自定义截图",
+      "subtitle": "snip --your-args",
+      "args": ["snip", "--your-args"],
+      "keywords": ["custom", "自定义"]
+    }
+  ]
+}

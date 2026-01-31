@@ -143,6 +143,7 @@ const { data: navigationTree } = await useAsyncData(
 const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
+const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
 function extractDocText(value: any): string {
   if (!value)
     return ''
@@ -161,19 +162,33 @@ function extractDocText(value: any): string {
   return ''
 }
 
-const heroBreadcrumbs = computed(() => {
+const docScope = computed(() => {
   const path = doc.value?.path ?? docPath.value
-  const isComponentDoc = typeof path === 'string' && path.includes('/docs/dev/components')
-  const prefix = isComponentDoc
+  const normalized = normalizeContentPath(path) ?? docPath.value
+  const normalizedPath = typeof normalized === 'string' ? normalized : ''
+  return {
+    path: normalizedPath,
+    isComponent: normalizedPath.includes('/docs/dev/components'),
+    isExtension: normalizedPath.includes('/docs/dev/extensions'),
+    isGuide: normalizedPath.startsWith('/docs/guide'),
+    isDev: normalizedPath.startsWith('/docs/dev'),
+  }
+})
+
+const heroBreadcrumbs = computed(() => {
+  const isComponentDoc = docScope.value.isComponent
+  const prefixLabel = isComponentDoc
     ? (locale.value === 'zh' ? '组件' : 'Components')
     : (locale.value === 'zh' ? '文档' : 'Docs')
+  const prefixPath = isComponentDoc ? '/docs/dev/components' : '/docs'
   const title = doc.value?.title ? String(doc.value.title) : ''
   const category = docMeta.value.category ? String(docMeta.value.category) : ''
-  if (title)
-    return [prefix, title]
-  if (category)
-    return [prefix, category]
-  return [prefix]
+  const label = title || category
+  const normalized = docScope.value.path
+  const crumbs = [{ label: prefixLabel, path: prefixPath }]
+  if (label)
+    crumbs.push({ label, path: normalized ?? undefined })
+  return crumbs
 })
 const heroReadTimeLabel = computed(() => {
   const text = extractDocText(doc.value?.body).replace(/\s+/g, ' ').trim()
@@ -190,14 +205,34 @@ const heroReadTimeLabel = computed(() => {
 })
 const heroSinceLabel = computed(() => {
   const raw = docMeta.value?.since
-  const fallback = locale.value === 'zh' ? '通用组件' : 'Universal Component'
+  const fallback = (() => {
+    if (locale.value === 'zh') {
+      if (docScope.value.isComponent)
+        return '通用组件'
+      if (docScope.value.isExtension)
+        return '通用扩展'
+      if (docScope.value.isGuide)
+        return '通用教程'
+      if (docScope.value.isDev)
+        return '通用开发'
+      return '通用文档'
+    }
+    if (docScope.value.isComponent)
+      return 'Universal Component'
+    if (docScope.value.isExtension)
+      return 'Universal Extension'
+    if (docScope.value.isGuide)
+      return 'Universal Tutorial'
+    if (docScope.value.isDev)
+      return 'Universal Developer'
+    return 'Universal Docs'
+  })()
   if (!raw)
     return fallback
   const value = String(raw).trim()
   if (!value)
     return fallback
-  const normalized = value.toLowerCase().startsWith('v') ? value : `v${value}`
-  return locale.value === 'zh' ? `自 ${normalized}` : `Since ${normalized}`
+  return locale.value === 'zh' ? `自 ${value}` : `Since ${value}`
 })
 const showDocHero = computed(() => {
   const heroFlag = docMeta.value?.hero
@@ -354,6 +389,7 @@ const heroUpdatedLabel = computed(() => {
     ? `更新于 ${heroUpdatedAgo.value}`
     : `Updated ${heroUpdatedAgo.value}`
 })
+const heroVerifiedLabel = computed(() => (docMeta.value?.verified ? 'Verified' : ''))
 
 const formattedLastUpdated = computed(() => {
   if (!lastUpdatedDate.value)
@@ -389,17 +425,20 @@ watchEffect(() => {
     outlineState.value = doc.value.body?.toc?.links ?? []
     docTitleState.value = doc.value.seo?.title ?? doc.value.title ?? ''
     docLocaleState.value = resolveDocLocale(doc.value)
+    docMetaState.value = doc.value as Record<string, any>
   }
   else {
     outlineState.value = []
     docTitleState.value = ''
     docLocaleState.value = locale.value
+    docMetaState.value = {}
   }
 })
 
 onBeforeUnmount(() => {
   outlineState.value = []
   docTitleState.value = ''
+  docMetaState.value = {}
 })
 
 // View tracking (admin only display)
@@ -623,12 +662,21 @@ watch(
         >
           <div v-if="showDocHero" class="docs-hero-block">
             <div v-if="heroBreadcrumbs.length" class="docs-hero-breadcrumb">
-              <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb}-${index}`">
+              <template v-for="(crumb, index) in heroBreadcrumbs" :key="`${crumb.label}-${index}`">
+                <NuxtLink
+                  v-if="crumb.path && index < heroBreadcrumbs.length - 1"
+                  :to="localePath({ path: crumb.path })"
+                  class="docs-hero-crumb"
+                >
+                  {{ crumb.label }}
+                </NuxtLink>
                 <span
+                  v-else
                   class="docs-hero-crumb"
                   :class="{ 'is-current': index === heroBreadcrumbs.length - 1 }"
+                  :aria-current="index === heroBreadcrumbs.length - 1 ? 'page' : undefined"
                 >
-                  {{ crumb }}
+                  {{ crumb.label }}
                 </span>
                 <span v-if="index < heroBreadcrumbs.length - 1" class="docs-hero-crumb-sep">/</span>
               </template>
@@ -639,6 +687,7 @@ watch(
               :since-label="heroSinceLabel"
               :read-time-label="heroReadTimeLabel"
               :updated-label="heroUpdatedLabel"
+              :verified-label="heroVerifiedLabel"
             />
           </div>
           <ContentRenderer
@@ -798,17 +847,24 @@ watch(
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 0 32px;
-  font-size: 12px;
+  gap: 6px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: rgba(100, 116, 139, 0.7);
 }
 
 .docs-hero-crumb {
   color: var(--docs-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a.docs-hero-crumb:hover {
+  color: var(--docs-ink);
 }
 
 .docs-hero-crumb.is-current {
@@ -832,6 +888,11 @@ watch(
 
 ::global(.dark .docs-hero-crumb.is-current),
 ::global([data-theme='dark'] .docs-hero-crumb.is-current) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+::global(.dark a.docs-hero-crumb:hover),
+::global([data-theme='dark'] a.docs-hero-crumb:hover) {
   color: rgba(248, 250, 252, 0.95);
 }
 
@@ -1015,6 +1076,21 @@ watch(
 :deep(.docs-prose pre:not(.tuff-code-block__pre) .docs-code-copy:disabled) {
   opacity: 0.5;
   cursor: default;
+}
+
+:deep(.docs-prose .docs-mermaid) {
+  margin: 1.2rem 0;
+  padding: 1rem;
+  border-radius: 8px;
+  background: var(--docs-code-bg);
+  border: 1px solid var(--docs-code-border);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+:deep(.docs-prose .docs-mermaid svg) {
+  max-width: 100%;
+  height: auto;
 }
 
 :deep(.docs-prose blockquote) {

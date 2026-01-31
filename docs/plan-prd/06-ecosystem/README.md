@@ -9,6 +9,7 @@
 命令行工具，用于插件开发、构建和发布。整合了 `unplugin-export-plugin` 的核心功能。
 
 - **文档**: [TUFFCLI-PRD.md](./TUFFCLI-PRD.md)
+- **分包提案**: [TUFFCLI-SPLIT-PLAN.md](./TUFFCLI-SPLIT-PLAN.md)
 - **核心包**: `packages/unplugin-export-plugin/` (底层实现)
 - **功能**:
   - 插件脚手架创建 (`tuff create`)

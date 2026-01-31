@@ -48,6 +48,7 @@ import type {
   AnalyticsSnapshot,
   AnalyticsSnapshotRequest,
   AnalyticsToggleRequest,
+  BatteryStatusPayload,
   BuildVerificationStatus,
   CounterPayload,
   CurrentMetrics,
@@ -357,6 +358,8 @@ import type {
   PluginApiRevealPathResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
+  PluginApiRegisterWidgetRequest,
+  PluginApiRegisterWidgetResponse,
   PluginApiSaveManifestRequest,
   PluginApiSaveManifestResponse,
   PluginApiSaveWidgetFileRequest,
@@ -398,6 +401,8 @@ import type {
   PluginUnloadRequest,
 } from './types/plugin'
 
+import type { WidgetRegistrationPayload } from '../../plugin/widget'
+
 // ============================================================================
 // Tray Events
 // ============================================================================
@@ -425,6 +430,7 @@ import type {
   StorageSaveRequest,
   StorageSaveResult,
   StorageSetRequest,
+  StorageLegacyUpdatePayload,
   StorageUpdateNotification,
 } from './types/storage'
 
@@ -542,6 +548,19 @@ export const AppEvents = {
   },
 
   /**
+   * App lifecycle events.
+   */
+  lifecycle: {
+    /**
+     * Fired before the app begins shutdown.
+     */
+    beforeQuit: defineEvent('app')
+      .module('lifecycle')
+      .event('before-quit')
+      .define<void, void>(),
+  },
+
+  /**
    * I18n / locale events.
    */
   i18n: {
@@ -637,6 +656,16 @@ export const AppEvents = {
       .module('system')
       .event('startup')
       .define<StartupRequest, StartupResponse>(),
+  },
+
+  /**
+   * Power / battery events.
+   */
+  power: {
+    /**
+     * Battery status broadcast.
+     */
+    batteryStatus: defineRawEvent<BatteryStatusPayload, void>('power:battery-status'),
   },
 
   /**
@@ -752,6 +781,20 @@ export const AppEvents = {
       .module('build')
       .event('get-verification-status')
       .define<void, BuildVerificationStatus>(),
+
+    /**
+     * Legacy build verification status request.
+     */
+    getVerificationStatusLegacy: defineRawEvent<void, BuildVerificationStatus>(
+      'build:get-verification-status',
+    ),
+
+    /**
+     * Build verification status broadcast.
+     */
+    statusUpdated: defineRawEvent<BuildVerificationStatus, void>(
+      'build:verification-status',
+    ),
   },
 
   /**
@@ -1687,6 +1730,16 @@ export const StorageEvents = {
       .event('delete')
       .define<PluginStorageDeleteRequest, void>(),
   },
+
+  /**
+   * Legacy storage events (raw channels).
+   */
+  legacy: {
+    /**
+     * Legacy storage update broadcast.
+     */
+    update: defineRawEvent<StorageLegacyUpdatePayload, void>('storage:update'),
+  },
 } as const
 
 /**
@@ -1780,6 +1833,15 @@ export const PluginEvents = {
   },
 
   /**
+   * Plugin widget events.
+   */
+  widget: {
+    register: defineRawEvent<WidgetRegistrationPayload, void>('plugin:widget:register'),
+    update: defineRawEvent<WidgetRegistrationPayload, void>('plugin:widget:update'),
+    unregister: defineRawEvent<{ widgetId: string }, void>('plugin:widget:unregister'),
+  },
+
+  /**
    * Plugin management APIs (renderer/main).
    */
   api: {
@@ -1827,6 +1889,11 @@ export const PluginEvents = {
       .module('api')
       .event('trigger-feature')
       .define<PluginApiTriggerFeatureRequest, PluginApiTriggerFeatureResponse>(),
+
+    registerWidget: defineEvent('plugin')
+      .module('api')
+      .event('register-widget')
+      .define<PluginApiRegisterWidgetRequest, PluginApiRegisterWidgetResponse>(),
 
     featureInputChanged: defineEvent('plugin')
       .module('api')

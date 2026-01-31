@@ -150,6 +150,11 @@ description: 塔芙组件库的组件展示中心
 |------|----------|----------|
 | 基础 | Button / Icon / Avatar | 进行中 |
 | 表单 | Input / Select / Switch | 进行中 |
+
+## 同步状态
+迁移进度以此表为准：✅ 表示已迁移或已确认，未标记则为未迁移。
+
+<DocsComponentSyncTable />
 | 反馈 | Dialog / Toast / Tooltip / ProgressBar | 规划中 |
 | 布局 | Grid / Flex / LayoutSkeleton / Container | 规划中 |
 | 状态 | Empty / Skeleton / Loading | 规划中 |

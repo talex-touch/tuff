@@ -1,3 +1,4 @@
+import { isDevEnv } from '@talex-touch/utils/env'
 import { useStartupInfo } from '../hooks/useStartupInfo'
 
 export type AppEntranceMode = 'CoreBox' | 'MainApp' | 'DivisionBox'
@@ -8,7 +9,7 @@ const printedOnceKeys = new Set<string>()
 const { startupInfo } = useStartupInfo()
 
 function shouldLogEntrance(): boolean {
-  if (import.meta.env.DEV) return true
+  if (isDevEnv()) return true
 
   return Boolean(startupInfo.value?.isDev) || window.location.search.includes('debug-entrance')
 }

@@ -12,6 +12,7 @@ import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { DataCode } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
@@ -231,8 +232,8 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      const transport = this.getTransport()
-      void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
+      const channel = this.touchApp.channel
+      channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
         id: window.window.webContents.id,
         show: window.window.isVisible()
       })
@@ -255,8 +256,8 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        const transport = this.getTransport()
-        void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
+        const channel = this.touchApp.channel
+        channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
           id: window.window.webContents.id,
           show: true
         })
@@ -594,13 +595,14 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    const transport = this.getTransport()
-    void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
+    const channel = this.touchApp.channel
+    channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
       id: window.window.webContents.id,
       show: true
     })
 
     if (triggeredByShortcut) {
+      const transport = this.getTransport()
       void transport
         .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
         .catch(() => {})
@@ -621,8 +623,8 @@ export class WindowManager {
     if (!window) return
 
     this.stopBoundsAnimation()
-    const transport = this.getTransport()
-    void transport.sendTo(window.window.webContents, coreBoxTriggerEvent, {
+    const channel = this.touchApp.channel
+    channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
       id: window.window.webContents.id,
       show: false
     })

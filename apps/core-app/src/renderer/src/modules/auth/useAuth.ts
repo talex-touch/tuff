@@ -30,6 +30,7 @@ let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null
 let focusPromptCleanup: (() => void) | null = null
 let isInitialized = false
+import { isDevEnv } from '@talex-touch/utils/env'
 let activeConsumers = 0
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
@@ -826,7 +827,7 @@ function setupAuthCallbackListener(): void {
   })
 
   // Dev mode: listen for manual token input via custom event
-  if (import.meta.env.DEV) {
+  if (isDevEnv()) {
     const devTokenHandler = (e: CustomEvent<string>) => {
       if (e.detail) {
         console.log('[useAuth] Dev mode: received manual token')

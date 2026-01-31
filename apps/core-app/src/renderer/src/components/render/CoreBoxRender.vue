@@ -4,6 +4,7 @@ import type { PreviewCardPayload } from '@talex-touch/utils/core-box'
 import { computed } from 'vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import BoxItem from './BoxItem.vue'
+import WidgetFrame from './WidgetFrame.vue'
 
 const props = defineProps<{
   active: boolean
@@ -28,11 +29,16 @@ const quickKey = computed(() => {
   return `⌘${key}`
 })
 
-const customRenderer = computed(() => {
+const customRendererId = computed(() => {
   if (render.value?.mode !== 'custom') return null
   const custom = render.value?.custom
   if (!custom || custom.type !== 'vue') return null
-  return getCustomRenderer(custom.content) ?? null
+  return custom.content
+})
+
+const hasCustomRenderer = computed(() => {
+  if (!customRendererId.value) return false
+  return Boolean(getCustomRenderer(customRendererId.value))
 })
 
 const customPayload = computed<PreviewCardPayload | undefined>(() => {
@@ -59,10 +65,10 @@ function handleCopyPrimary(): void {
     <template v-if="render?.mode === 'default'">
       <BoxItem :item="item" :active="active" :render="render" :quick-key="quickKey" />
     </template>
-    <template v-else-if="render?.mode === 'custom' && customRenderer">
+    <template v-else-if="render?.mode === 'custom' && hasCustomRenderer">
       <div class="CoreBoxRender-Custom" :class="{ active }">
-        <component
-          :is="customRenderer"
+        <WidgetFrame
+          :renderer-id="customRendererId!"
           :item="item"
           :payload="customPayload"
           @show-history="handleShowHistory"

@@ -1,0 +1,51 @@
+# DivisionBox 落地图
+
+DivisionBox 用于分离 CoreBox UI View，形成独立窗口与会话级管理。
+
+## 1. 核心职责
+
+- 管理多会话窗口（Session）
+- 与 CoreBox 之间的 UI View 转移
+- UI 状态同步、窗口状态与快捷触发
+
+## 2. 目录与文件
+
+- 模块入口：`apps/core-app/src/main/modules/division-box/module.ts`
+- IPC 处理：`apps/core-app/src/main/modules/division-box/ipc.ts`
+- Manager：`apps/core-app/src/main/modules/division-box/manager.ts`
+- Session：`apps/core-app/src/main/modules/division-box/session.ts`
+- Window Pool：`apps/core-app/src/main/modules/division-box/window-pool.ts`
+- 状态同步：`apps/core-app/src/main/modules/division-box/state-sync.ts`
+- Flow Trigger：`apps/core-app/src/main/modules/division-box/flow-trigger.ts`
+- Shortcut Trigger：`apps/core-app/src/main/modules/division-box/shortcut-trigger.ts`
+- Command Provider：`apps/core-app/src/main/modules/division-box/command-provider.ts`
+- Manifest Parser：`apps/core-app/src/main/modules/division-box/manifest-parser.ts`
+- LRU Cache：`apps/core-app/src/main/modules/division-box/lru-cache.ts`
+- Error Logger：`apps/core-app/src/main/modules/division-box/error-logger.ts`
+- 索引：`apps/core-app/src/main/modules/division-box/index.ts`
+
+## 3. 渲染侧入口
+
+- Shell 组件：`apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxShell.vue`
+- Store：`apps/core-app/src/renderer/src/modules/division-box/store/division-box.ts`
+- Header：`apps/core-app/src/renderer/src/views/box/DivisionBoxHeader.vue`
+
+## 4. 事件与处理
+
+- 事件定义：`packages/utils/transport/events/index.ts`（DivisionBoxEvents）
+- 主进程处理：`apps/core-app/src/main/modules/division-box/ipc.ts`
+- Renderer 订阅：`apps/core-app/src/renderer/src/modules/division-box/`、`apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+
+## 5. 关键流程（Mermaid）
+
+```mermaid
+flowchart LR
+  corebox["CoreBox UI View"] --> transfer["Transfer View"]
+  transfer --> division["DivisionBox Session"]
+  division --> window["TouchWindow + WebContentsView"]
+```
+
+## 6. 相关文档
+
+- IPC 事件清单：`apps/nexus/content/docs/dev/architecture/ipc-events-detail.zh.mdc`
+- CoreBox 系统：`apps/nexus/content/docs/dev/architecture/corebox-system.zh.mdc`

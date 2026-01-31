@@ -2,7 +2,7 @@ import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, BrowserWindow } from 'electron'
 import fse from 'fs-extra'
@@ -23,14 +23,7 @@ type BuildReleaseInfo = {
   assets?: BuildReleaseAsset[]
 }
 
-const buildVerificationStatusEvent = defineRawEvent<
-  {
-    isOfficialBuild: boolean
-    verificationFailed: boolean
-    hasOfficialKey: boolean
-  },
-  void
->('build:verification-status')
+const buildVerificationStatusEvent = AppEvents.build.statusUpdated
 
 /**
  * 构建完整性验证模块
@@ -285,11 +278,13 @@ export class BuildVerificationModule extends BaseModule {
       hasOfficialKey: this.isVerified
     }
 
-    transport.sendToWindow(window.id, buildVerificationStatusEvent, payload).catch((error) => {
+    try {
+      transport.broadcastToWindow(window.id, buildVerificationStatusEvent, payload)
+    } catch (error) {
       this.log.warn('[BuildVerification] Failed to push verification status.', {
         error: error instanceof Error ? error.message : String(error)
       })
-    })
+    }
   }
 
   private setVerificationStatus(isOfficial: boolean, verificationFailed: boolean): void {

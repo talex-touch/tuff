@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { config as loadEnv } from 'dotenv'
 import { pwa } from './app/config/pwa'
 import { appDescription } from './app/constants/index'
+import { remarkMermaid } from './app/utils/remark-mermaid'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
@@ -66,6 +67,7 @@ export default defineNuxtConfig({
     },
     build: {
       markdown: {
+        remarkPlugins: [remarkMermaid],
         highlight: {
           theme: {
             default: 'github-light',

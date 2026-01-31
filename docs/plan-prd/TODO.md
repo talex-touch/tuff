@@ -35,6 +35,13 @@
 - [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（renderer 仍保留旧 Channel）（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
 - [ ] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验待补（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
 
+### 🧰 Tuff CLI 分包与迁移
+- [ ] 抽出 `@talex-touch/tuff-cli-core`（core/types 迁移与依赖关系整理）（`docs/plan-prd/06-ecosystem/TUFFCLI-SPLIT-PLAN.md`）
+- [ ] 新建 `@talex-touch/tuff-cli` 接管 `tuff` bin（旧包保留 shim + 提示迁移）
+- [ ] 兼容包 `@talex-touch/tuffcli` 对外导出 `defineConfig`/types（对齐 PRD 示例）
+- [ ] 文档与示例统一新包名（PRD + Nexus docs + README）
+- [ ] CLI 回归验证：help/create/build/dev/publish + dry-run
+
 ### 📝 待实现
 - [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）

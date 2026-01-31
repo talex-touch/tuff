@@ -5,79 +5,208 @@ category: Form
 status: beta
 since: 1.0.0
 tags: [input, field, search]
+syncStatus: migrated
 ---
 
 # Input
 
-> Lighter inputs, restrained borders, and focused readability.  
+> Input fields capture user input with multiple types and states, paired with smooth animations and modern styling.  
 > **Status**: Beta
 
-
 ## Basic Usage
-::TuffCodeBlock{lang="vue"}
+
+:::TuffDemo{title="Basic Input" description="The most common text input usage." code-lang="vue"}
 ---
 code: |
   <template>
     <TuffInput v-model="value" placeholder="Type here..." />
-    <TxSearchInput v-model="keyword" placeholder="Search..." />
-  </template>
----
-::
-
-## Demo
-::TuffDemo{title="Focus State" description="Lighter focus that stays readable." code-lang="vue"}
----
-code: |
-  <template>
-    <TuffInput model-value="" placeholder="Type here..." />
-    <TxSearchInput model-value="" placeholder="Search..." />
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
-  <tuff-input model-value="" placeholder="Type here..." />
-  <tx-search-input model-value="" placeholder="Search..." />
+  <tuff-input v-model="value" placeholder="Type here..." />
 </div>
-::
+:::
 
-## States
+## Input Types
+
+Supported: `text` / `password` / `textarea`.
+
+:::TuffDemo{title="Input Types" description="Text, password, and textarea." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="text" placeholder="Text input" />
+    <TuffInput v-model="password" type="password" placeholder="Password input" />
+    <TuffInput v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
+  </template>
+---
+#preview
+<div style="display: flex; flex-direction: column; gap: 10px;">
+  <div class="tuff-demo-row">
+    <tuff-input v-model="text" placeholder="Text input" />
+    <tuff-input v-model="password" type="password" placeholder="Password input" />
+  </div>
+  <div class="tuff-demo-row">
+    <tuff-input v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
+  </div>
+</div>
+:::
+
+## Readonly / Disabled
+
+:::TuffDemo{title="Readonly / Disabled" description="Readonly and disabled states." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="readonlyValue" readonly placeholder="Readonly" />
+    <TuffInput v-model="disabledValue" disabled placeholder="Disabled" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="readonlyValue" readonly placeholder="Readonly" />
+  <tuff-input v-model="disabledValue" disabled placeholder="Disabled" />
+</div>
+:::
+
+## Clearable
+
+:::TuffDemo{title="Clearable" description="One-click clear for content." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="clearableValue" clearable placeholder="Clearable" />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="clearableValue" clearable placeholder="Clearable" />
+</div>
+:::
+
+## Prefix / Suffix Slots
+
+:::TuffDemo{title="Prefix / Suffix" description="Icons help reinforce context." code-lang="vue"}
+---
+code: |
+  <template>
+    <TuffInput v-model="withPrefix" placeholder="Search">
+      <template #prefix>
+        <TxIcon icon="i-carbon-search" />
+      </template>
+    </TuffInput>
+    <TuffInput v-model="withSuffix" placeholder="User">
+      <template #suffix>
+        <TxIcon icon="i-carbon-user" />
+      </template>
+    </TuffInput>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tuff-input v-model="withPrefix" placeholder="Search">
+    <template #prefix>
+      <tx-icon icon="i-carbon-search" />
+    </template>
+  </tuff-input>
+  <tuff-input v-model="withSuffix" placeholder="User">
+    <template #suffix>
+      <tx-icon icon="i-carbon-user" />
+    </template>
+  </tuff-input>
+</div>
+:::
+
+## API
+
+### Props
+
 ::TuffPropsTable
 ---
 rows:
+  - name: modelValue / v-model
+    description: 'Bound value'
+    type: 'string'
+    default: "''"
+  - name: placeholder
+    description: 'Placeholder text'
+    type: 'string'
+    default: "''"
+  - name: type
+    description: 'Input type'
+    type: "'text' | 'password' | 'textarea'"
+    default: "'text'"
   - name: disabled
     description: 'Disabled state'
-  - name: error
-    description: 'Error state'
-  - name: loading
-    description: 'Loading state'
----
-::
-
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: 'string'
-    default: "''"
-    description: 'Input value'
-  - name: placeholder
-    type: 'string'
-    default: "''"
-    description: 'Placeholder'
-  - name: disabled
     type: 'boolean'
     default: 'false'
-    description: 'Disabled state'
+  - name: readonly
+    description: 'Readonly state'
+    type: 'boolean'
+    default: 'false'
+  - name: clearable
+    description: 'Clearable content'
+    type: 'boolean'
+    default: 'false'
+  - name: rows
+    description: 'Textarea rows (only textarea)'
+    type: 'number'
+    default: '3'
 ---
-::
+:::
+
+### Events
+
+::TuffPropsTable
+---
+rows:
+  - name: update:modelValue
+    description: 'v-model update'
+    type: '(value: string) => void'
+    default: '-'
+  - name: input
+    description: 'Triggered on input'
+    type: '(value: string) => void'
+    default: '-'
+  - name: focus
+    description: 'Focus event'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: blur
+    description: 'Blur event'
+    type: '(event: FocusEvent) => void'
+    default: '-'
+  - name: clear
+    description: 'Clear action'
+    type: '() => void'
+    default: '-'
+---
+:::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: prefix
+    description: 'Prefix content'
+    type: '-'
+    default: '-'
+  - name: suffix
+    description: 'Suffix content'
+    type: '-'
+    default: '-'
+---
+:::
 
 ## Design Notes
 - Use subtle border/shadow shifts to express focus.  
 - Search states should feel lighter for toolbars and lists.
 
 ## Composite Patterns
-::TuffDemo{title="Search Row" description="Input paired with action button." code-lang="vue"}
+
+:::TuffDemo{title="Search Row" description="Input paired with an action button." code-lang="vue"}
 ---
 code: |
   <template>
@@ -90,4 +219,18 @@ code: |
   <tuff-input placeholder="Search..." />
   <tx-button size="sm">Go</tx-button>
 </div>
-::
+:::
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const value = ref('')
+const text = ref('')
+const password = ref('')
+const content = ref('')
+const readonlyValue = ref('readonly')
+const disabledValue = ref('disabled')
+const clearableValue = ref('hello')
+const withPrefix = ref('')
+const withSuffix = ref('')
+</script>

@@ -7,6 +7,7 @@ export interface TabsProps {
   navMaxWidth?: number
   contentPadding?: number
   contentScrollable?: boolean
+  borderless?: boolean
   autoHeight?: boolean
   autoWidth?: boolean
   indicatorVariant?: 'line' | 'pill' | 'block' | 'dot' | 'outline'

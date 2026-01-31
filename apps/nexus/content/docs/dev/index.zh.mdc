@@ -16,7 +16,17 @@
 
 ## 运行时行为
 - **[CoreBox 窗口与 UI View 缓存](./architecture/corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
+- **[CoreBox 系统落地图](./architecture/corebox-system.zh.md)** — CoreBox 组件/IPC/渲染层落地文件。
 - **[DeviceIdleService 与后台扫描调度](./architecture/device-idle-service.zh.md)** — 空闲与电量策略统一入口。
+- **[APP 技术原理](./architecture/app-tech-principles.zh.md)** — 进程模型、模块体系与工程目录结构。
+- **[核心模块落地图（含 SearchEngine）](./architecture/module-map.zh.md)** — CoreBox/SearchEngine/插件/通道/存储等模块落地到目录文件。
+- **[SearchEngine 落地图](./architecture/search-engine.zh.md)** — Provider 清单、推荐系统与关键流程。
+- **[插件系统落地图](./architecture/plugin-system.zh.md)** — Provider/Adapter/Widget 管线与加载链路。
+- **[通道与 IPC 事件表](./architecture/transport-events.zh.md)** — 事件分组与定义文件定位。
+- **[IPC 事件清单（事件名级别）](./architecture/ipc-events-detail.zh.md)** — 逐事件枚举与处理入口。
+- **[DivisionBox 落地图](./architecture/division-box.zh.md)** — 会话、窗口与 IPC 结构。
+- **[AI/Intelligence 模块落地图](./architecture/intelligence-module.zh.md)** — 能力、配额与 Agent 结构。
+- **[Storage & Database 落地图](./architecture/storage-and-db.zh.md)** — 存储/数据库模块与更新链路。
 
 ## 开发工具
 - **[TUFF CLI](./tools/tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
