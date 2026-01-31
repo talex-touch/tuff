@@ -56,6 +56,10 @@ import {
   loadPluginFeatureContextFromContent,
   PluginFeature
 } from './plugin-feature'
+import {
+  bundlePluginPreludeFromContent,
+  bundlePluginPreludeFromFile
+} from './runtime/plugin-prelude-compiler'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
 
@@ -565,28 +569,66 @@ export class TouchPlugin implements ITouchPlugin {
     this.issues.length = 0
 
     try {
+      const shouldBundlePrelude = !app.isPackaged && this.dev.enable
+
       if (this.dev.enable && this.dev.source && this.dev.address) {
         // Dev mode: load from remote
         const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
         this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
         const response = await axios.get(remoteIndexUrl, { timeout: 5000, proxy: false })
         const scriptContent = response.data
+        const bundledContent = shouldBundlePrelude
+          ? await bundlePluginPreludeFromContent(
+              this.name,
+              this.pluginPath,
+              this.getTempPath(),
+              scriptContent,
+              this.logger
+            )
+          : null
+        const executableContent = bundledContent ?? scriptContent
         this.pluginLifecycle = loadPluginFeatureContextFromContent(
           this,
-          scriptContent,
+          executableContent,
           this.getFeatureUtil()
         ) as IFeatureLifeCycle
+        if (bundledContent) {
+          this.logger.info('[Dev] Prelude bundled successfully.')
+        }
         this.logger.info(`[Dev] Remote script executed successfully.`)
       } else {
         // Prod mode: load from local file
         const featureIndex = path.resolve(this.pluginPath, 'index.js')
         pluginSystemLog.debug(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
         if (fse.existsSync(featureIndex)) {
-          this.pluginLifecycle = loadPluginFeatureContext(
-            this,
-            featureIndex,
-            this.getFeatureUtil()
-          ) as IFeatureLifeCycle
+          if (shouldBundlePrelude) {
+            const bundledContent = await bundlePluginPreludeFromFile(
+              this.name,
+              this.pluginPath,
+              this.getTempPath(),
+              featureIndex,
+              this.logger
+            )
+            if (bundledContent) {
+              this.pluginLifecycle = loadPluginFeatureContextFromContent(
+                this,
+                bundledContent,
+                this.getFeatureUtil()
+              ) as IFeatureLifeCycle
+            } else {
+              this.pluginLifecycle = loadPluginFeatureContext(
+                this,
+                featureIndex,
+                this.getFeatureUtil()
+              ) as IFeatureLifeCycle
+            }
+          } else {
+            this.pluginLifecycle = loadPluginFeatureContext(
+              this,
+              featureIndex,
+              this.getFeatureUtil()
+            ) as IFeatureLifeCycle
+          }
         } else {
           this.logger.info(
             `No index.js found for plugin '${this.name}', running without lifecycle.`

@@ -21,6 +21,8 @@ import type {
   PluginApiOpenFolderRequest,
   PluginApiOpenPathRequest,
   PluginApiOpenPathResponse,
+  PluginApiRevealPathRequest,
+  PluginApiRevealPathResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
   PluginApiSaveManifestRequest,
@@ -65,6 +67,7 @@ export interface PluginSdk {
   saveWidgetFile: (request: PluginApiSaveWidgetFileRequest) => Promise<PluginApiSaveWidgetFileResponse>
   getPaths: (request: PluginApiGetPathsRequest) => Promise<PluginApiGetPathsResponse>
   openPath: (request: PluginApiOpenPathRequest) => Promise<PluginApiOpenPathResponse>
+  revealPath: (request: PluginApiRevealPathRequest) => Promise<PluginApiRevealPathResponse>
   getPerformance: (request: PluginApiGetPerformanceRequest) => Promise<PluginApiGetPerformanceResponse>
   getRuntimeStats: (request: PluginApiGetRuntimeStatsRequest) => Promise<PluginApiGetRuntimeStatsResponse>
 
@@ -104,6 +107,7 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     saveWidgetFile: async request => transport.send(PluginEvents.api.saveWidgetFile, request),
     getPaths: async request => transport.send(PluginEvents.api.getPaths, request),
     openPath: async request => transport.send(PluginEvents.api.openPath, request),
+    revealPath: async request => transport.send(PluginEvents.api.revealPath, request),
     getPerformance: async request => transport.send(PluginEvents.api.getPerformance, request),
     getRuntimeStats: async request => transport.send(PluginEvents.api.getRuntimeStats, request),
 

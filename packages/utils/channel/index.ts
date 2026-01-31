@@ -120,6 +120,16 @@ export interface ITouchChannel {
   broadcast: (type: ChannelType, eventName: string, arg?: any) => void
 
   /**
+   * Broadcast a message to a specific window without waiting for a response.
+   * @deprecated Use `transport.broadcastToWindow(windowId, event, payload)` from TuffTransport instead.
+   * @param win - The target BrowserWindow
+   * @param type - The channel type
+   * @param eventName - The event name
+   * @param arg - The message payload
+   */
+  broadcastTo: (win: Electron.BrowserWindow, type: ChannelType, eventName: string, arg?: any) => void
+
+  /**
    * Broadcast a message to a plugin without waiting for a response.
    * @param pluginName - The target plugin name
    * @param eventName - The event name

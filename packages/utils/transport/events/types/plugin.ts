@@ -420,6 +420,17 @@ export interface PluginApiOpenPathResponse {
   error?: string
 }
 
+export interface PluginApiRevealPathRequest {
+  name: string
+  path: string
+}
+
+export interface PluginApiRevealPathResponse {
+  success: boolean
+  path?: string
+  error?: string
+}
+
 export interface PluginApiGetPerformanceRequest {
   name: string
 }

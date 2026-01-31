@@ -353,6 +353,8 @@ import type {
   PluginApiOpenFolderRequest,
   PluginApiOpenPathRequest,
   PluginApiOpenPathResponse,
+  PluginApiRevealPathRequest,
+  PluginApiRevealPathResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
   PluginApiSaveManifestRequest,
@@ -1865,6 +1867,11 @@ export const PluginEvents = {
       .module('api')
       .event('open-path')
       .define<PluginApiOpenPathRequest, PluginApiOpenPathResponse>(),
+
+    revealPath: defineEvent('plugin')
+      .module('api')
+      .event('reveal-path')
+      .define<PluginApiRevealPathRequest, PluginApiRevealPathResponse>(),
 
     getPerformance: defineEvent('plugin')
       .module('api')
