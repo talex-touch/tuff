@@ -175,7 +175,9 @@ export class WidgetLoader {
     }
 
     const resolvedPath = path.posix.extname(candidate) ? candidate : `${candidate}.vue`
-    return new URL(resolvedPath, devAddress).toString()
+    const url = new URL(resolvedPath, devAddress)
+    url.searchParams.set('raw', '1')
+    return url.toString()
   }
 
   private resolveWidgetFile(pluginPath: string, rawPath: string): string | null {

@@ -6,12 +6,23 @@ import type { WidgetCompilationContext } from './widget-processor'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import path from 'node:path'
 import chokidar from 'chokidar'
+import fse from 'fs-extra'
 import { genTouchApp } from '../../../core'
 import { compileWidgetSource } from './widget-compiler'
 import { pluginWidgetLoader } from './widget-loader'
 
 type WidgetEvent = 'plugin:widget:register' | 'plugin:widget:update'
+
+function resolveWidgetCompiledOutputPath(plugin: ITouchPlugin, widgetId: string): string | null {
+  const getTempPath = (plugin as { getTempPath?: () => string }).getTempPath
+  if (typeof getTempPath !== 'function') return null
+  const tempPath = getTempPath()
+  if (!tempPath) return null
+  const safeId = widgetId.replace(/[^a-zA-Z0-9._-]/g, '_')
+  return path.join(tempPath, 'widgets', `${safeId}.cjs`)
+}
 const pluginWidgetRegisterEvent = defineRawEvent<WidgetRegistrationPayload, void>(
   'plugin:widget:register'
 )
@@ -79,6 +90,19 @@ export class WidgetManager {
     // Check if compilation returned null (validation failed)
     if (!compiled) {
       return null
+    }
+
+    const compiledOutputPath = resolveWidgetCompiledOutputPath(plugin, source.widgetId)
+    if (compiledOutputPath) {
+      try {
+        await fse.ensureDir(path.dirname(compiledOutputPath))
+        await fse.writeFile(compiledOutputPath, compiled.code, 'utf-8')
+      } catch (error) {
+        plugin.logger.warn(
+          `[WidgetManager] Failed to persist compiled widget output: ${compiledOutputPath}`,
+          error as Error
+        )
+      }
     }
 
     const payload: WidgetRegistrationPayload = {

@@ -2297,6 +2297,56 @@ export class PluginModule extends BaseModule {
     )
 
     /**
+     * Reveal a specific plugin file in file explorer
+     */
+    this.transportDisposers.push(
+      transport.on(PluginEvents.api.revealPath, async (payload) => {
+        try {
+          const name = payload?.name
+          const targetPath = payload?.path
+          if (!name) {
+            return { success: false, error: 'Plugin name is required' }
+          }
+          if (!targetPath) {
+            return { success: false, error: 'Path is required' }
+          }
+
+          const plugin = manager.plugins.get(name) as TouchPlugin
+          if (!plugin) {
+            return { success: false, error: `Plugin ${name} not found` }
+          }
+
+          const resolvedTarget = path.resolve(targetPath)
+          const allowedRoots = [
+            plugin.pluginPath,
+            plugin.getDataPath(),
+            plugin.getConfigPath(),
+            plugin.getLogsPath(),
+            plugin.getTempPath()
+          ].map((root) => path.resolve(root))
+
+          const isAllowed = allowedRoots.some(
+            (root) => resolvedTarget === root || resolvedTarget.startsWith(`${root}${path.sep}`)
+          )
+
+          if (!isAllowed) {
+            return { success: false, error: 'Path is not allowed' }
+          }
+
+          if (!(await fse.pathExists(resolvedTarget))) {
+            return { success: false, error: 'Path does not exist' }
+          }
+
+          shell.showItemInFolder(resolvedTarget)
+          return { success: true, path: resolvedTarget }
+        } catch (error) {
+          console.error('Error in plugin:api:reveal-path handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    /**
      * Get plugin performance metrics
      */
     this.transportDisposers.push(

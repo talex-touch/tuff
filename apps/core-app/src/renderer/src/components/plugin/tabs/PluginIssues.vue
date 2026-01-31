@@ -1,5 +1,7 @@
 <script lang="ts" name="PluginIssues" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
+import { i18nResolver, resolveI18nMessage } from '@talex-touch/utils/i18n'
+import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 
@@ -11,7 +13,22 @@ const emit = defineEmits<{
   (event: 'scroll', info: { scrollTop: number; scrollLeft: number }): void
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+watch(
+  () => locale.value,
+  (value) => {
+    if (value) {
+      const resolvedLocale = value.startsWith('zh') ? 'zh' : 'en'
+      i18nResolver.setLocale(resolvedLocale)
+    }
+  },
+  { immediate: true }
+)
+
+function resolveIssueMessage(message: string): string {
+  return resolveI18nMessage(message)
+}
 </script>
 
 <template>
@@ -42,7 +59,7 @@ const { t } = useI18n()
               {{ t('plugin.issues.source') }}: {{ issue.source }}
             </p>
             <p class="mt-1 text-sm text-gray-700 dark:text-gray-300">
-              {{ issue.message }}
+              {{ resolveIssueMessage(issue.message) }}
             </p>
             <pre
               v-if="issue.meta"

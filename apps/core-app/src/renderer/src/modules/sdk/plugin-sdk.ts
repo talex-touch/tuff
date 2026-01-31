@@ -444,6 +444,16 @@ class PluginSDK {
     }
   }
 
+  async revealPath(name: string, path: string): Promise<{ success: boolean; path?: string }> {
+    try {
+      const response = await pluginTransportSdk.revealPath({ name, path })
+      return { success: response?.success ?? false, path: response?.path }
+    } catch (error) {
+      console.error('[PluginSDK] Failed to reveal plugin path:', error)
+      return { success: false }
+    }
+  }
+
   /**
    * Get plugin performance metrics
    * @param name - Plugin name
