@@ -7,15 +7,12 @@ import type {
 } from '@talex-touch/utils'
 import {
   AppPreviewChannel,
-  DownloadModule,
-  DownloadPriority,
   UpdateProviderType,
   UPDATE_GITHUB_RELEASES_API,
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import { h, ref } from 'vue'
@@ -23,7 +20,6 @@ import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
-import { useDownloadCenter } from './useDownloadCenter'
 import { useStartupInfo } from './useStartupInfo'
 
 export interface GithubAuthor {
@@ -56,8 +52,6 @@ export interface AppVersion {
   minor: number
   patch: number
 }
-
-type ReleaseAsset = GitHubRelease['assets'][number]
 
 type UpdateTransportResponse<T> = { success: true; data: T } | { success: false; error?: string }
 
@@ -191,53 +185,10 @@ export class AppUpdate {
    * @returns Promise that resolves when download is started
    */
   public async downloadUpdate(release: GitHubRelease): Promise<void> {
-    const { addDownloadTask } = useDownloadCenter()
-    const appSdk = useAppSdk()
-
-    // 获取当前平台的下载资源
-    const assets = release.assets
-    const currentPlatform = process.platform
-    const currentArch = process.arch
-
-    const asset = assets.find((a: ReleaseAsset) => {
-      const name = a.name.toLowerCase()
-      const platformMatch =
-        (currentPlatform === 'win32' && (name.includes('win') || name.includes('.exe'))) ||
-        (currentPlatform === 'darwin' && (name.includes('mac') || name.includes('.dmg'))) ||
-        (currentPlatform === 'linux' && (name.includes('linux') || name.includes('.AppImage')))
-
-      const archMatch =
-        (currentArch === 'x64' && (name.includes('x64') || name.includes('amd64'))) ||
-        (currentArch === 'arm64' && (name.includes('arm64') || name.includes('aarch64')))
-
-      return platformMatch && archMatch
-    })
-
-    if (!asset) {
-      throw new Error('No suitable download asset found for current platform')
+    const response = await this.sendRequest<{ taskId?: string }>('update:download', release)
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to start update download')
     }
-
-    // 创建下载任务
-    const destination = await appSdk.getPath('downloads')
-    if (!destination) {
-      throw new Error('Failed to resolve downloads path')
-    }
-
-    await addDownloadTask({
-      url: asset.url,
-      destination,
-      filename: asset.name,
-      priority: DownloadPriority.CRITICAL,
-      module: DownloadModule.APP_UPDATE,
-      metadata: {
-        releaseTag: release.tag_name,
-        releaseName: release.name,
-        releaseNotes: release.body,
-        platform: currentPlatform,
-        arch: currentArch
-      },
-      checksum: asset.checksum
-    })
   }
 
   /**
@@ -437,6 +388,16 @@ export class AppUpdate {
           const requestPayload = payload as UpdateRecordActionPayload
           return (await withTimeout(
             this.transport.send(UpdateEvents.recordAction, requestPayload),
+            AppUpdate.CHANNEL_TIMEOUT
+          )) as UpdateTransportResponse<T>
+        }
+        case 'update:download': {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Invalid update download payload')
+          }
+          const requestPayload = payload as GitHubRelease
+          return (await withTimeout(
+            this.transport.send(UpdateEvents.download, requestPayload),
             AppUpdate.CHANNEL_TIMEOUT
           )) as UpdateTransportResponse<T>
         }
