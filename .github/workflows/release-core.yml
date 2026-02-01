@@ -1,0 +1,228 @@
+name: Release Core Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v2.4.7-beta.11)
+        required: true
+        type: string
+      channel:
+        description: Release channel (snapshot/beta/release)
+        required: true
+        type: choice
+        options:
+          - snapshot
+          - beta
+          - release
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+      build_type: ${{ steps.meta.outputs.build_type }}
+    steps:
+      - id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            if [[ "$VERSION" == *"-snapshot"* ]]; then
+              CHANNEL="snapshot"
+            elif [[ "$VERSION" == *"-beta"* ]]; then
+              CHANNEL="beta"
+            else
+              CHANNEL="release"
+            fi
+          else
+            CHANNEL="${{ github.event.inputs.channel }}"
+          fi
+
+          if [ "$CHANNEL" = "snapshot" ]; then
+            BUILD_TYPE="snapshot"
+          else
+            BUILD_TYPE="release"
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "build_type=$BUILD_TYPE" >> "$GITHUB_OUTPUT"
+
+  build-core:
+    name: Build Core (${{ matrix.os }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python (native deps)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm install -g pnpm
+          pnpm i
+          pnpm approve-builds
+
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y squashfs-tools fakeroot dpkg-dev
+
+      - name: Build core app
+        shell: bash
+        env:
+          BUILD_TYPE: ${{ needs.prepare.outputs.build_type }}
+        run: |
+          case "${{ matrix.os }}" in
+            windows-latest) TARGET="win" ;;
+            macos-latest) TARGET="mac" ;;
+            ubuntu-latest) TARGET="linux" ;;
+            *) echo "Unsupported runner: ${{ matrix.os }}" && exit 1 ;;
+          esac
+          pnpm -F @talex-touch/core-app run build:${BUILD_TYPE}:${TARGET}
+
+      - name: Rename core artifacts
+        id: rename
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          DIST_DIR="apps/core-app/dist"
+          mkdir -p "$DIST_DIR/release"
+          case "${{ matrix.os }}" in
+            windows-latest)
+              SRC=$(ls "$DIST_DIR"/*-setup.exe | head -n 1)
+              DEST="$DIST_DIR/release/tuff-core-${VERSION}-win32-x64-setup.exe"
+              mv "$SRC" "$DEST"
+              ;;
+            macos-latest)
+              SRC=$(ls "$DIST_DIR"/*.dmg | head -n 1)
+              DEST="$DIST_DIR/release/tuff-core-${VERSION}-darwin-arm64.dmg"
+              mv "$SRC" "$DEST"
+              ;;
+            ubuntu-latest)
+              APPIMAGE_SRC=$(ls "$DIST_DIR"/*.AppImage 2>/dev/null | head -n 1 || true)
+              if [ -n "$APPIMAGE_SRC" ]; then
+                mv "$APPIMAGE_SRC" "$DIST_DIR/release/tuff-core-${VERSION}-linux-x64.AppImage"
+              fi
+              DEB_SRC=$(ls "$DIST_DIR"/*.deb 2>/dev/null | head -n 1 || true)
+              if [ -n "$DEB_SRC" ]; then
+                mv "$DEB_SRC" "$DIST_DIR/release/tuff-core-${VERSION}-linux-x64.deb"
+              fi
+              ;;
+          esac
+
+      - name: Upload core artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-${{ matrix.os }}
+          path: apps/core-app/dist/release/*
+          if-no-files-found: error
+
+  release:
+    name: Publish Core Release
+    needs: [prepare, build-core]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download core artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Create manifest
+        shell: bash
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          CHANNEL: ${{ needs.prepare.outputs.channel }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const crypto = require('crypto')
+          const releaseDir = path.resolve('release')
+          const files = fs.readdirSync(releaseDir, { withFileTypes: true })
+          const artifacts = []
+
+          const flattenFiles = []
+          for (const entry of files) {
+            const fullPath = path.join(releaseDir, entry.name)
+            if (entry.isDirectory()) {
+              for (const sub of fs.readdirSync(fullPath)) {
+                flattenFiles.push(path.join(fullPath, sub))
+              }
+            } else {
+              flattenFiles.push(fullPath)
+            }
+          }
+
+          for (const filePath of flattenFiles) {
+            const name = path.basename(filePath)
+            const content = fs.readFileSync(filePath)
+            const sha256 = crypto.createHash('sha256').update(content).digest('hex')
+
+            const platformMatch = name.match(/-(win32|darwin|linux)-/)
+            const archMatch = name.match(/-(x64|arm64)-/)
+            artifacts.push({
+              component: 'core',
+              name,
+              platform: platformMatch ? platformMatch[1] : undefined,
+              arch: archMatch ? archMatch[1] : undefined,
+              sha256
+            })
+          }
+
+          const manifest = {
+            schemaVersion: 1,
+            release: {
+              version: process.env.VERSION,
+              channel: process.env.CHANNEL.toUpperCase(),
+              tag: process.env.TAG
+            },
+            artifacts
+          }
+          fs.writeFileSync(
+            path.join(releaseDir, 'tuff-release-manifest.json'),
+            JSON.stringify(manifest, null, 2)
+          )
+          NODE
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: |
+            release/**/*

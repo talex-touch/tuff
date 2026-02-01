@@ -15,6 +15,19 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Builds the application for multiple platforms
   - Creates releases and uploads artifacts
 
+- **`release-core.yml`** - Core app release workflow (GitHub Releases)
+  - Builds core app per OS matrix
+  - Renames artifacts to core naming convention
+  - Generates `tuff-release-manifest.json` and uploads assets
+
+- **`release-renderer.yml`** - Renderer assets release workflow
+  - Builds renderer bundle
+  - Packages `tuff-renderer-<version>.zip` and uploads to Release
+
+- **`release-extensions.yml`** - Extensions bundle release workflow
+  - Packages `plugins/` as `tuff-extensions-<version>.zip`
+  - Uploads bundle to Release
+
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
 
