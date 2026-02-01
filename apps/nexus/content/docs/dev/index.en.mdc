@@ -24,6 +24,8 @@
 - **[Plugin System Map](./architecture/plugin-system.en.md)** — providers/adapters/widget pipeline and load flow.
 - **[Channel & IPC Event Map](./architecture/transport-events.en.md)** — event groups and definition files.
 - **[IPC Event List (Event Names)](./architecture/ipc-events-detail.en.md)** — per-event listing and handlers.
+- **[IPC Handler Index (Function Level)](./architecture/ipc-events-handlers.en.md)** — event → concrete handler methods.
+- **[SDK -> Event -> Handler Index](./architecture/ipc-events-sdk-map.en.md)** — SDK call chain plus internal/private transport.
 - **[DivisionBox Map](./architecture/division-box.en.md)** — sessions, windowing, IPC.
 - **[AI/Intelligence Module Map](./architecture/intelligence-module.en.md)** — capabilities, quota, agents.
 - **[Storage & Database Map](./architecture/storage-and-db.en.md)** — storage/db modules and update flow.

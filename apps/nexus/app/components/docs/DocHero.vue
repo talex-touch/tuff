@@ -6,6 +6,7 @@ interface DocHeroProps {
   title?: string
   description?: string
   sinceLabel?: string
+  betaLabel?: string
   readTimeLabel?: string
   updatedLabel?: string
   verifiedLabel?: string
@@ -15,6 +16,7 @@ const props = withDefaults(defineProps<DocHeroProps>(), {
   title: '',
   description: '',
   sinceLabel: '',
+  betaLabel: '',
   readTimeLabel: '',
   updatedLabel: '',
   verifiedLabel: '',
@@ -37,10 +39,11 @@ const tagItems = computed(() => ([
   props.verifiedLabel
     ? { label: props.verifiedLabel, icon: 'i-carbon-checkmark-filled', variant: 'badge' }
     : null,
-  props.sinceLabel ? { label: props.sinceLabel } : null,
+  props.sinceLabel ? { label: props.sinceLabel, variant: 'since' } : null,
+  props.betaLabel ? { label: props.betaLabel, variant: 'beta' } : null,
   props.readTimeLabel ? { label: props.readTimeLabel, icon: 'i-carbon-time' } : null,
   props.updatedLabel ? { label: props.updatedLabel, icon: 'i-carbon-calendar' } : null,
-].filter(Boolean) as Array<{ label: string, icon?: string, variant?: 'badge' }>))
+].filter(Boolean) as Array<{ label: string, icon?: string, variant?: 'badge' | 'beta' | 'since' }>))
 const hasTags = computed(() => tagItems.value.length > 0)
 </script>
 
@@ -58,7 +61,11 @@ const hasTags = computed(() => tagItems.value.length > 0)
           v-for="(tag, index) in tagItems"
           :key="`${tag.label}-${index}`"
           class="docs-hero__tag"
-          :class="{ 'docs-hero__badge': tag.variant === 'badge' }"
+          :class="{
+            'docs-hero__badge': tag.variant === 'badge',
+            'docs-hero__beta': tag.variant === 'beta',
+            'docs-hero__since': tag.variant === 'since',
+          }"
         >
           <span v-if="tag.icon" :class="tag.icon" class="docs-hero__tag-icon" aria-hidden="true" />
           <span>{{ tag.label }}</span>
@@ -130,6 +137,20 @@ const hasTags = computed(() => tagItems.value.length > 0)
   border-color: rgba(56, 189, 248, 0.25);
   background: rgba(56, 189, 248, 0.12);
   color: rgba(14, 116, 144, 0.92);
+}
+
+.docs-hero__beta {
+  border-color: rgba(251, 146, 60, 0.45);
+  background: rgba(251, 146, 60, 0.18);
+  color: rgba(154, 52, 18, 0.98);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.docs-hero__since {
+  border-color: rgba(94, 234, 212, 0.4);
+  background: rgba(94, 234, 212, 0.14);
+  color: rgba(15, 118, 110, 0.95);
 }
 
 .docs-hero__tag-icon {
@@ -205,6 +226,20 @@ const hasTags = computed(() => tagItems.value.length > 0)
   border-color: rgba(125, 211, 252, 0.3);
   background: rgba(56, 189, 248, 0.16);
   color: rgba(226, 232, 240, 0.9);
+}
+
+::global(.dark .docs-hero__beta),
+::global([data-theme='dark'] .docs-hero__beta) {
+  border-color: rgba(251, 191, 36, 0.55);
+  background: rgba(251, 191, 36, 0.2);
+  color: rgba(254, 249, 195, 0.95);
+}
+
+::global(.dark .docs-hero__since),
+::global([data-theme='dark'] .docs-hero__since) {
+  border-color: rgba(94, 234, 212, 0.55);
+  background: rgba(45, 212, 191, 0.2);
+  color: rgba(153, 246, 228, 0.95);
 }
 
 @media (max-width: 768px) {

@@ -10,17 +10,6 @@ syncStatus: migrated
 
 # Button 按钮
 
-> 按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `type` / `size` / `block` / `loading` / `disabled`，并提供 `plain` / `round` / `circle` / `dashed` 等外观。  
-> **状态**：Beta
-
-<div class="tuff-doc-canvas">
-  <TuffComponentCanvas name="Button">
-    <TxButton variant="primary" size="lg">
-      Action Label
-    </TxButton>
-  </TuffComponentCanvas>
-</div>
-
 ## Usage
 
 按钮用于触发明确的动作，建议在界面里保持主次层级清晰：
@@ -35,7 +24,7 @@ syncStatus: migrated
 
 基础外观与主次层级组合。
 
-:::TuffDemo{title="Appearance" description="默认、主色与语义色状态。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -66,7 +55,7 @@ code: |
 
 按钮不可用状态。
 
-:::TuffDemo{title="Disabled" description="禁用态样式。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -91,32 +80,17 @@ code: |
 
 点击按钮后进行数据加载操作，在按钮上显示加载状态。
 
-:::TuffDemo{title="Loading" description="异步加载与交互反馈。" code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton variant="primary" loading>加载中</TxButton>
-    <TxButton variant="secondary" loading>加载中</TxButton>
-    <TxButton circle icon="i-carbon-edit" loading />
+<TuffDemo :code="ButtonLoadingDemoSource" code-lang="vue">
+  <template #preview>
+    <ButtonLoadingDemo loading-label="加载中" idle-label="点击加载" />
   </template>
----
-#preview
-<div class="tuff-demo-row">
-  <tx-button variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? '加载中' : '点击加载' }}
-  </tx-button>
-  <tx-button variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? '加载中' : '点击加载' }}
-  </tx-button>
-  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</div>
-:::
+</TuffDemo>
 
 ### Sizes
 
-Button 组件提供除了默认值以外的三种尺寸，可以在不同场景下选择合适的按钮尺寸。
+Button 组件提供除了默认值以外的三种尺寸，可以在不同场景下选择合适的按钮尺寸，尺寸会影响触感与密度。
 
-:::TuffDemo{title="Sizes" description="尺寸决定触感与密度。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -135,9 +109,9 @@ code: |
 
 ### Block
 
-在卡片或表单中使用块级按钮。
+在卡片或表单中使用块级按钮，用于撑满容器的主操作。
 
-:::TuffDemo{title="Block" description="撑满容器的主操作。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -154,7 +128,7 @@ code: |
 
 通过 `plain` / `round` / `circle` / `dashed` 调整形态。
 
-:::TuffDemo{title="Shapes" description="不同形态与边界表现。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -175,9 +149,9 @@ code: |
 
 ### Haptics
 
-移动端触觉反馈强化按下感。
+移动端触觉反馈强化按下感，支持不同震动强度。
 
-:::TuffDemo{title="Haptics" description="不同震动反馈强度。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -296,7 +270,7 @@ code: |
 
 用于“主操作 + 更多操作”的组合按钮（例如 RUN + …）。
 
-:::TuffDemo{title="Split Button" description="主操作与菜单操作组合。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -349,7 +323,7 @@ code: |
 
 主动作 + 次动作组合时使用 `primary + ghost` 保持层级清晰。
 
-:::TuffDemo{title="组合动作" description="主要动作与幽灵按钮组合使用。" code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -380,17 +354,10 @@ code: |
 
 <script setup>
 import { ref } from 'vue'
+import ButtonLoadingDemo from '~/components/content/demos/ButtonLoadingDemo.vue'
+import ButtonLoadingDemoSource from '~/components/content/demos/ButtonLoadingDemo.vue?raw'
 
-const loading = ref(false)
 const splitLoading = ref(false)
-
-async function handleClick() {
-  loading.value = true
-
-  setTimeout(() => {
-    loading.value = false
-  }, 3000)
-}
 
 async function handleRun() {
   if (splitLoading.value) return
@@ -401,9 +368,3 @@ async function handleRun() {
   }, 1200)
 }
 </script>
-
-<style scoped>
-.tuff-doc-canvas {
-  margin: 18px 0 32px;
-}
-</style>

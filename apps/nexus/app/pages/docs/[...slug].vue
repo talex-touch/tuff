@@ -144,6 +144,24 @@ const outlineState = useState<any[]>('docs-toc', () => [])
 const docTitleState = useState<string>('docs-title', () => '')
 const docLocaleState = useState<string>('docs-locale', () => locale.value)
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+
+watch(
+  () => requestKey.value,
+  () => {
+    outlineState.value = []
+    docTitleState.value = ''
+    docLocaleState.value = locale.value
+    docMetaState.value = {}
+  },
+)
+
+interface TocEntry {
+  id: string
+  text: string
+  depth: number
+  children?: TocEntry[]
+}
+
 function extractDocText(value: any): string {
   if (!value)
     return ''
@@ -160,6 +178,58 @@ function extractDocText(value: any): string {
       return value.children.map(extractDocText).join(' ')
   }
   return ''
+}
+
+function buildTocTree(entries: TocEntry[]) {
+  const root: TocEntry[] = []
+  const stack: TocEntry[] = []
+  for (const entry of entries) {
+    const node: TocEntry = { ...entry, children: [] }
+    while (stack.length && stack[stack.length - 1].depth >= node.depth)
+      stack.pop()
+    const parent = stack[stack.length - 1]
+    if (parent)
+      parent.children?.push(node)
+    else
+      root.push(node)
+    stack.push(node)
+  }
+  return root
+}
+
+function collectDomToc(): TocEntry[] {
+  if (import.meta.server)
+    return []
+  const headings = Array.from(document.querySelectorAll<HTMLElement>(
+    '.docs-prose h1, .docs-prose h2, .docs-prose h3, .docs-prose h4',
+  ))
+  const entries = headings
+    .map((heading) => {
+      const text = heading.textContent?.trim() ?? ''
+      const depth = Number(heading.tagName.slice(1))
+      return { id: heading.id, text, depth }
+    })
+    .filter(entry => entry.id && entry.text)
+  return buildTocTree(entries)
+}
+
+async function scheduleOutlineSync(delay = 0) {
+  if (import.meta.server)
+    return
+  if (delay > 0) {
+    window.setTimeout(() => {
+      void scheduleOutlineSync()
+    }, delay)
+    return
+  }
+  await nextTick()
+  requestAnimationFrame(() => {
+    if (outlineState.value.length)
+      return
+    const toc = collectDomToc()
+    if (toc.length)
+      outlineState.value = toc
+  })
 }
 
 const docScope = computed(() => {
@@ -204,7 +274,7 @@ const heroReadTimeLabel = computed(() => {
   return `${minutes} min read`
 })
 const heroSinceLabel = computed(() => {
-  const raw = docMeta.value?.since
+  const raw = docMeta.value?.since ?? docMeta.value?.meta?.since
   const fallback = (() => {
     if (locale.value === 'zh') {
       if (docScope.value.isComponent)
@@ -233,6 +303,15 @@ const heroSinceLabel = computed(() => {
   if (!value)
     return fallback
   return locale.value === 'zh' ? `自 ${value}` : `Since ${value}`
+})
+const heroBetaLabel = computed(() => {
+  const raw = docMeta.value?.status ?? docMeta.value?.meta?.status
+  if (!raw)
+    return ''
+  const value = String(raw).trim().toLowerCase()
+  if (value !== 'beta')
+    return ''
+  return 'BETA'
 })
 const showDocHero = computed(() => {
   const heroFlag = docMeta.value?.hero
@@ -426,6 +505,8 @@ watchEffect(() => {
     docTitleState.value = doc.value.seo?.title ?? doc.value.title ?? ''
     docLocaleState.value = resolveDocLocale(doc.value)
     docMetaState.value = doc.value as Record<string, any>
+    if (!outlineState.value.length)
+      void scheduleOutlineSync(120)
   }
   else {
     outlineState.value = []
@@ -643,6 +724,8 @@ watch(
       return
     if (value === 'content')
       scheduleCodeEnhance(260)
+    if (value === 'content')
+      void scheduleOutlineSync(280)
   },
 )
 </script>
@@ -685,6 +768,7 @@ watch(
               :title="doc?.title"
               :description="doc?.description"
               :since-label="heroSinceLabel"
+              :beta-label="heroBetaLabel"
               :read-time-label="heroReadTimeLabel"
               :updated-label="heroUpdatedLabel"
               :verified-label="heroVerifiedLabel"
@@ -896,9 +980,7 @@ a.docs-hero-crumb:hover {
   color: rgba(248, 250, 252, 0.95);
 }
 
-:deep(.docs-prose--hero > h1:first-of-type),
-:deep(.docs-prose--hero > h1:first-of-type + blockquote),
-:deep(.docs-prose--hero > h1:first-of-type + blockquote + p) {
+:deep(.docs-prose--hero > h1:first-of-type) {
   display: none;
 }
 

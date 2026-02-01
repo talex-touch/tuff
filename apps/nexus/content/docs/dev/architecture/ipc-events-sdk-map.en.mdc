@@ -1,0 +1,167 @@
+# SDK -> Event -> Handler Index
+
+This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers, and lists internal/private transport events that are not wrapped by the SDK.
+
+## B1. App SDK (`packages/utils/transport/sdk/domains/app.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `close()` | `app:window:close` | `CommonChannel.registerTransportHandlers -> closeApp` |
+| `hide()` | `app:window:hide` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.hide` |
+| `minimize()` | `app:window:minimize` | `CommonChannel.registerTransportHandlers -> touchApp.window.minimize` |
+| `focus()` | `app:window:focus` | `CommonChannel.registerTransportHandlers -> touchApp.window.window.focus` |
+| `openDevTools()` | `app:debug:open-devtools` | `CommonChannel.registerTransportHandlers -> touchApp.window.openDevTools` |
+| `getCwd()` | `app:system:get-cwd` | `CommonChannel.registerTransportHandlers -> process.cwd()` |
+| `getOS()` | `app:system:get-os` | `CommonChannel.registerTransportHandlers -> getOSInformation` |
+| `getPackage()` | `app:system:get-package` | `CommonChannel.registerTransportHandlers -> packageJson` |
+| `getPath(name)` | `app:system:get-path` | `CommonChannel.registerTransportHandlers -> electronApp.getPath` |
+| `openExternal(url)` | `app:system:open-external` | `CommonChannel.registerTransportHandlers -> shell.openExternal` |
+| `showInFolder(path)` | `app:system:show-in-folder` | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder` |
+| `openApp(options)` | `app:system:open-app` | `CommonChannel.registerTransportHandlers -> shell.openPath/openApp` |
+| `executeCommand(options)` | `app:system:execute-command` | `CommonChannel.registerTransportHandlers -> exec` |
+| `readFile(path)` | `app:system:read-file` | `CommonChannel.registerTransportHandlers -> readFile` |
+
+## B2. Platform SDK (`packages/utils/transport/sdk/domains/platform.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `listCapabilities()` | `platform:capabilities:list` | `CommonChannel.registerTransportHandlers -> platformCapabilityRegistry.list` |
+
+## B3. Download SDK (`packages/utils/transport/sdk/domains/download.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `addTask()` | `download:task:add` | `DownloadCenter.registerTransportHandlers -> addTask` |
+| `pauseTask()` | `download:task:pause` | `DownloadCenter.registerTransportHandlers -> pauseTask` |
+| `resumeTask()` | `download:task:resume` | `DownloadCenter.registerTransportHandlers -> resumeTask` |
+| `cancelTask()` | `download:task:cancel` | `DownloadCenter.registerTransportHandlers -> cancelTask` |
+| `retryTask()` | `download:task:retry` | `DownloadCenter.registerTransportHandlers -> retryTask` |
+| `removeTask()` | `download:task:remove` | `DownloadCenter.registerTransportHandlers -> removeTask` |
+| `updatePriority()` | `download:task:update-priority` | `DownloadCenter.registerTransportHandlers -> updateTaskPriority` |
+| `pauseAll()` | `download:task:pause-all` | `DownloadCenter.registerTransportHandlers -> pauseAllTasks` |
+| `resumeAll()` | `download:task:resume-all` | `DownloadCenter.registerTransportHandlers -> resumeAllTasks` |
+| `cancelAll()` | `download:task:cancel-all` | `DownloadCenter.registerTransportHandlers -> cancelAllTasks` |
+| `getAllTasks()` | `download:list:get` | `DownloadCenter.registerTransportHandlers -> getAllTasks` |
+| `getTasksByStatus()` | `download:list:get-by-status` | `DownloadCenter.registerTransportHandlers -> getTasksByStatus` |
+| `getTaskStatus()` | `download:task:get-status` | `DownloadCenter.registerTransportHandlers -> getTaskStatus` |
+| `getConfig()` | `download:config:get` | `DownloadCenter.registerTransportHandlers -> getConfig` |
+| `updateConfig()` | `download:config:update` | `DownloadCenter.registerTransportHandlers -> updateConfig` |
+| `getNotificationConfig()` | `download:config:get-notification` | `DownloadCenter.registerTransportHandlers -> getNotificationConfig` |
+| `updateNotificationConfig()` | `download:config:update-notification` | `DownloadCenter.registerTransportHandlers -> updateNotificationConfig` |
+| `getHistory()` | `download:history:get` | `DownloadCenter.registerTransportHandlers -> getTaskHistory` |
+| `clearHistory()` | `download:history:clear` | `DownloadCenter.registerTransportHandlers -> clearHistory` |
+| `clearHistoryItem()` | `download:history:clear-item` | `DownloadCenter.registerTransportHandlers -> clearHistoryItem` |
+| `openFile()` | `download:file:open` | `DownloadCenter.registerTransportHandlers -> openFile` |
+| `showInFolder()` | `download:file:show-in-folder` | `DownloadCenter.registerTransportHandlers -> showInFolder` |
+| `deleteFile()` | `download:file:delete` | `DownloadCenter.registerTransportHandlers -> deleteFile` |
+| `cleanupTemp()` | `download:maintenance:cleanup-temp` | `DownloadCenter.registerTransportHandlers -> cleanupTempFiles` |
+| `getTempStats()` | `download:temp:get-stats` | `DownloadCenter.registerTransportHandlers -> getTempStats` |
+| `getLogs()` | `download:logs:get` | `DownloadCenter.registerTransportHandlers -> getLogs` |
+| `getErrorStats()` | `download:logs:get-error-stats` | `DownloadCenter.registerTransportHandlers -> getErrorStats` |
+| `clearLogs()` | `download:logs:clear` | `DownloadCenter.registerTransportHandlers -> clearLogs` |
+| `getStats()` | `download:stats:get` | `DownloadCenter.registerTransportHandlers -> getStats` |
+| `checkMigrationNeeded()` | `download:migration:check-needed` | `DownloadCenter.registerTransportHandlers -> checkMigrationNeeded` |
+| `startMigration()` | `download:migration:start` | `DownloadCenter.registerTransportHandlers -> startMigration` |
+| `retryMigration()` | `download:migration:retry` | `DownloadCenter.registerTransportHandlers -> retryMigration` |
+| `getMigrationStatus()` | `download:migration:status` | `DownloadCenter.registerTransportHandlers -> getMigrationStatus` |
+| `onTaskAdded()` | `download:push:task-added` | `DownloadCenter.broadcastTaskAdded` |
+| `onTaskProgress()` | `download:push:task-progress` | `DownloadCenter.broadcastTaskProgress` |
+| `onTaskCompleted()` | `download:push:task-completed` | `DownloadCenter.broadcastTaskCompleted` |
+| `onTaskFailed()` | `download:push:task-failed` | `DownloadCenter.broadcastTaskFailed` |
+| `onTaskUpdated()` | `download:push:task-updated` | `DownloadCenter.broadcastTaskUpdated` |
+| `onTaskRetrying()` | `download:push:task-retrying` | `DownloadCenter.startDownloadTask (retryStrategy callback)` |
+| `onNotificationClicked()` | `download:push:notification-clicked` | `DownloadCenter.handleNotificationClick` |
+
+## B4. Notification SDK (`packages/utils/transport/sdk/domains/notification.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `notify()` | `notification:api:notify` | `NotificationModule.registerTransportHandlers -> handleNotify` |
+| `update()` | `notification:api:update` | `NotificationModule.registerTransportHandlers -> handleUpdate` |
+| `dismiss()` | `notification:api:dismiss` | `NotificationModule.registerTransportHandlers -> handleDismiss` |
+| `reportAction()` | `notification:api:action` | `NotificationModule.registerTransportHandlers -> handleAction` |
+| `listInbox()` | `notification:inbox:list` | `NotificationModule.registerTransportHandlers -> inbox.list` |
+| `markRead()` | `notification:inbox:mark-read` | `NotificationModule.registerTransportHandlers -> handleInboxMarkRead` |
+| `archive()` | `notification:inbox:archive` | `NotificationModule.registerTransportHandlers -> handleInboxArchive` |
+| `delete()` | `notification:inbox:delete` | `NotificationModule.registerTransportHandlers -> inbox.delete` |
+| `clear()` | `notification:inbox:clear` | `NotificationModule.registerTransportHandlers -> inbox.clear` |
+| `onNotify()` | `notification:push:notify` | `NotificationModule.handleNotify -> transport.broadcast` |
+| `onUpdate()` | `notification:push:update` | `NotificationModule.handleUpdate -> transport.broadcast` |
+| `onDismiss()` | `notification:push:dismiss` | `NotificationModule.handleDismiss -> transport.broadcast` |
+| `onAction()` | `notification:push:action` | `NotificationModule.handleAction -> transport.broadcast` |
+| `onInboxUpdated()` | `notification:push:inbox-updated` | `NotificationModule.handleInbox* -> transport.broadcast` |
+
+## B5. Market SDK (`packages/utils/transport/sdk/domains/market.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `checkUpdates()` | `market:check-updates` | `PluginModule.start -> triggerUpdateCheck` |
+| `search()` | `market:search` | `PluginModule.start -> searchMarket` |
+| `getPlugin()` | `market:get-plugin` | `PluginModule.start -> getMarketPlugin` |
+| `httpRequest()` | `market:http-request` | `PluginModule.start -> performMarketHttpRequest` |
+| `featured()` | `market:featured` | `PluginModule.start -> featured` |
+| `npmList()` | `market:npm-list` | `PluginModule.start -> npmList` |
+| `onUpdatesAvailable()` | `market:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` |
+
+## B6. Plugin SDK (`packages/utils/transport/sdk/domains/plugin.ts`)
+
+| SDK Method | Event Name | Main Handler (function-level) |
+| --- | --- | --- |
+| `list()` | `plugin:api:list` | `PluginModule.start -> manager.plugins list` |
+| `get()` | `plugin:api:get` | `PluginModule.start -> manager.plugins.get` |
+| `getStatus()` | `plugin:api:get-status` | `PluginModule.start -> plugin.status` |
+| `enable()` | `plugin:api:enable` | `PluginModule.start -> manager.enablePlugin` |
+| `disable()` | `plugin:api:disable` | `PluginModule.start -> manager.disablePlugin` |
+| `reload()` | `plugin:api:reload` | `PluginModule.start -> manager.reloadPlugin` |
+| `install()` | `plugin:api:install` | `PluginModule.start -> pluginInstaller.install` |
+| `uninstall()` | `plugin:api:uninstall` | `PluginModule.start -> manager.uninstallPlugin` |
+| `triggerFeature()` | `plugin:api:trigger-feature` | `PluginModule.start -> manager.triggerFeature` |
+| `registerWidget()` | `plugin:api:register-widget` | `PluginModule.start -> widgetManager.registerWidget` |
+| `featureInputChanged()` | `plugin:api:feature-input-changed` | `PluginModule.start -> manager.featureInputChanged` |
+| `openFolder()` | `plugin:api:open-folder` | `PluginModule.start -> shell.openPath` |
+| `getOfficialList()` | `plugin:api:get-official-list` | `PluginModule.start -> getOfficialList` |
+| `getManifest()` | `plugin:api:get-manifest` | `PluginModule.start -> readManifest` |
+| `saveManifest()` | `plugin:api:save-manifest` | `PluginModule.start -> saveManifest` |
+| `saveWidgetFile()` | `plugin:api:save-widget-file` | `PluginModule.start -> saveWidgetFile` |
+| `getPaths()` | `plugin:api:get-paths` | `PluginModule.start -> resolvePluginPaths` |
+| `openPath()` | `plugin:api:open-path` | `PluginModule.start -> shell.openPath` |
+| `revealPath()` | `plugin:api:reveal-path` | `PluginModule.start -> shell.showItemInFolder` |
+| `getPerformance()` | `plugin:api:get-performance` | `PluginModule.start -> plugin.getPerformanceMetrics` |
+| `getRuntimeStats()` | `plugin:api:get-runtime-stats` | `PluginModule.start -> plugin.getRuntimeStats` |
+| `reconnectDevServer()` | `plugin:reconnect-dev-server` | `PluginModule.start -> healthMonitor.reconnectDevServer` |
+| `getDevServerStatus()` | `plugin:dev-server-status` | `PluginModule.start -> healthMonitor.getStatus` |
+| `onStateChanged()` | `plugin:state-changed` | `createPluginManager -> transport.broadcast` |
+| `onStatusUpdated()` | `plugin-status-updated` | `TouchPlugin.status setter -> transport.broadcast` |
+| `onInstallProgress()` | `plugin:install-progress` | `PluginInstallQueue.emitProgress` |
+| `onInstallConfirm()` | `plugin:install-confirm` | `PluginInstallQueue.requestConfirmation` |
+| `sendInstallConfirmResponse()` | `plugin:install-confirm-response` | `PluginModule.start -> installQueue.handleConfirmResponse` |
+| `installFromSource()` | `plugin:install-source` | `PluginModule.start -> installQueue.enqueue` |
+
+## C. Internal / Private Transport (Non-SDK)
+
+> Note: these events are usually called directly from renderer/plugin processes without SDK wrappers.
+
+### C1. CoreBox raw events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `core-box:trigger` | `CoreBoxWindowManager.show/hide -> channel.broadcastTo` (`apps/core-app/src/main/modules/box-tool/core-box/window.ts`) | `useVisibility -> transport.on` (`apps/core-app/src/renderer/src/modules/box/adapter/hooks/useVisibility.ts`) |
+| `core-box:ui-resume` | `CoreBoxWindowManager.attachUIView -> sendToPlugin` (`apps/core-app/src/main/modules/box-tool/core-box/window.ts`) | Plugin UI view process (not in repo) |
+| `core-box:hide-input` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> setInputVisibility(false)` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:show-input` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> setInputVisibility(true)` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:allow-input` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> windowManager.enableInputMonitoring` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:set-height` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> windowManager.setHeight` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:get-bounds` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> window.getBounds` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:set-position-offset` | Caller: plugin/renderer raw event | `IpcManager.registerTransportHandlers -> windowManager.setPositionOffset` (`apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`) |
+| `core-box:get-recommendations` | Caller: renderer/background | `SearchEngineCore.init -> recommendationEngine.recommend` (`apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`) |
+| `core-box:aggregate-time-stats` | Caller: renderer/background | `SearchEngineCore.init -> timeStatsAggregator.aggregateTimeStats` (`apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`) |
+| `core-box:is-pinned` | Caller: renderer | `SearchEngineCore.init -> dbUtils.isPinned` (`apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`) |
+| `core-box:clipboard-change` | `ClipboardModule.checkClipboard -> sendToPlugin` (`apps/core-app/src/main/modules/clipboard.ts`) | Plugin UI view process (not in repo) |
+| `core-box:clipboard-meta-updated` | `OcrService.broadcastMetaUpdate -> sendToPlugin` (`apps/core-app/src/main/modules/ocr/ocr-service.ts`) | Plugin UI view process (not in repo) |
+
+### C2. Plugin-process raw events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `window:new` | Plugin process (Prelude) | `PluginModule.start -> transport.on(defineRawEvent('window:new'))` (`apps/core-app/src/main/modules/plugin/plugin-module.ts`) |
+| `window:visible` | Plugin process (Prelude) | `PluginModule.start -> transport.on(defineRawEvent('window:visible'))` (`apps/core-app/src/main/modules/plugin/plugin-module.ts`) |

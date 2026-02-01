@@ -12,6 +12,7 @@ loadEnv({ path: '.env.local', override: true })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override: true })
 
 const isDev = process.env.NODE_ENV !== 'production'
+const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
@@ -30,7 +31,7 @@ export default defineNuxtConfig({
     '@nuxtjs/i18n',
     '@clerk/nuxt',
     '@sentry/nuxt/module',
-    ...(isDev ? ['nitro-cloudflare-dev'] : []),
+    ...(useCloudflareDev ? ['nitro-cloudflare-dev'] : []),
   ],
 
   devtools: {
@@ -55,7 +56,7 @@ export default defineNuxtConfig({
     },
   },
 
-  css: ['@talex-touch/tuffex/style.css', 'vue-sonner/style.css'],
+  css: ['@talex-touch/tuffex/style.css', 'vue-sonner/style.css', '~/styles/tuffex-theme.css'],
 
   colorMode: {
     classSuffix: '',
@@ -67,7 +68,12 @@ export default defineNuxtConfig({
     },
     build: {
       markdown: {
-        remarkPlugins: [remarkMermaid],
+        remarkPlugins: {
+          'remark-mermaid': {
+            src: resolve(currentDir, './app/utils/remark-mermaid'),
+            instance: remarkMermaid,
+          },
+        },
         highlight: {
           theme: {
             default: 'github-light',
@@ -76,8 +82,8 @@ export default defineNuxtConfig({
           },
         },
         toc: {
-          depth: 3,
-          searchDepth: 3,
+          depth: 4,
+          searchDepth: 4,
         },
       },
     },
@@ -125,8 +131,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-08-14',
 
   nitro: {
-    preset: 'cloudflare-pages',
-    ...(isDev
+    preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
+    ...(useCloudflareDev
       ? {
           cloudflareDev: {
             environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,

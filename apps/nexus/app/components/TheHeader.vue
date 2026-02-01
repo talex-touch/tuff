@@ -26,7 +26,7 @@ const links = computed(() => [
   // { to: '/#developer', label: t('nav.developer') },
   { to: '/updates', label: t('nav.download') },
   // { to: '/#blog', label: t('nav.blog') },
-  { to: '/pricing', label: t('nav.pricing') },
+  // { to: '/pricing', label: t('nav.pricing') },
 ])
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
@@ -218,7 +218,7 @@ const headerRevealStyle = computed(() => {
   left: 50%;
 
   width: 100%;
-  max-width: 1200px;
+  max-width: 1320px;
 
   border-radius: 24px;
   transform: translateX(-50%);

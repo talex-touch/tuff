@@ -9,6 +9,10 @@ interface TocLink {
   children?: TocLink[]
 }
 
+interface TocFlatLink extends TocLink {
+  parentId?: string
+}
+
 const { t } = useI18n()
 const route = useRoute()
 
@@ -47,6 +51,15 @@ function setActiveHash(hash?: string | null) {
   activeHash.value = normalizeHash(hash)
 }
 
+function syncUrlHash(id: string) {
+  if (!import.meta.client)
+    return
+  const encoded = encodeURIComponent(id)
+  const next = `#${encoded}`
+  if (window.location.hash !== next)
+    history.replaceState(null, '', next)
+}
+
 function updateMarker() {
   if (!navRef.value || !activeHash.value) {
     hasActive.value = false
@@ -67,15 +80,15 @@ function updateMarker() {
   markerTop.value = linkRect.top - navRect.top + (activeLink.offsetHeight - markerHeight.value) / 2
 }
 
-function scrollToHeading(id: string) {
+function scrollToHeading(id: string, behavior: ScrollBehavior = 'smooth') {
   const element = document.getElementById(id)
   if (element) {
     const top = element.getBoundingClientRect().top + window.scrollY - SCROLL_OFFSET
     window.scrollTo({
       top,
-      behavior: 'smooth',
+      behavior,
     })
-    history.replaceState(null, '', `#${id}`)
+    syncUrlHash(id)
     setActiveHash(`#${id}`)
   }
 }
@@ -84,7 +97,7 @@ function refreshHeadingElements() {
   if (!import.meta.client)
     return
   const nextMap: Record<string, HTMLElement> = {}
-  for (const entry of outlineEntries.value) {
+  for (const entry of flatLinks.value) {
     const element = document.getElementById(entry.id)
     if (element instanceof HTMLElement)
       nextMap[entry.id] = element
@@ -92,14 +105,14 @@ function refreshHeadingElements() {
   headingElements.value = nextMap
 }
 
-const updateActiveFromScroll = useThrottleFn(() => {
+const updateActiveFromScroll = useThrottleFn((fromScroll = false) => {
   if (!import.meta.client)
     return
-  if (!outlineEntries.value.length)
+  if (!flatLinks.value.length)
     return
 
   let current: TocLink | null = null
-  for (const entry of outlineEntries.value) {
+  for (const entry of flatLinks.value) {
     const element = headingElements.value[entry.id] ?? document.getElementById(entry.id)
     if (!(element instanceof HTMLElement))
       continue
@@ -111,8 +124,18 @@ const updateActiveFromScroll = useThrottleFn(() => {
       current = entry
   }
 
-  if (current)
+  const isNearBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+  if (isNearBottom) {
+    const last = flatLinks.value[flatLinks.value.length - 1]
+    if (last)
+      current = last
+  }
+
+  if (current && activeHash.value !== current.id) {
     activeHash.value = current.id
+    if (fromScroll)
+      syncUrlHash(current.id)
+  }
 }, 100)
 
 if (import.meta.client) {
@@ -120,18 +143,25 @@ if (import.meta.client) {
     setActiveHash(window.location.hash)
     nextTick(() => {
       refreshHeadingElements()
-      updateActiveFromScroll()
+      const initialHash = normalizeHash(window.location.hash)
+      if (initialHash)
+        scrollToHeading(initialHash, 'auto')
+      else
+        updateActiveFromScroll()
       updateMarker()
     })
   })
   useEventListener(window, 'hashchange', () => {
     setActiveHash(window.location.hash)
+    const hash = normalizeHash(window.location.hash)
+    if (hash)
+      scrollToHeading(hash, 'smooth')
   })
   useEventListener(
     window,
     'scroll',
     () => {
-      updateActiveFromScroll()
+      updateActiveFromScroll(true)
     },
     { passive: true },
   )
@@ -140,26 +170,73 @@ if (import.meta.client) {
     updateActiveFromScroll()
     updateMarker()
   })
+  useEventListener(navRef, 'scroll', () => {
+    updateMarker()
+  }, { passive: true })
 }
 
-function flattenLinks(links: TocLink[] | undefined, bucket: TocLink[] = []) {
+function flattenLinks(links: TocLink[] | undefined, bucket: TocFlatLink[] = [], parentId?: string) {
   if (!Array.isArray(links))
     return bucket
   for (const link of links) {
-    bucket.push(link)
+    bucket.push({ ...link, parentId })
     if (link.children?.length)
-      flattenLinks(link.children, bucket)
+      flattenLinks(link.children, bucket, link.id)
   }
   return bucket
 }
 
+const flatLinks = computed(() => flattenLinks(tocState.value))
+
+const linkMap = computed(() => {
+  const map = new Map<string, TocFlatLink>()
+  for (const link of flatLinks.value)
+    map.set(link.id, link)
+  return map
+})
+
+const baseDepth = computed(() => {
+  if (!flatLinks.value.length)
+    return 1
+  return flatLinks.value.reduce((minDepth, link) => Math.min(minDepth, link.depth), Number.POSITIVE_INFINITY)
+})
+
+function findAncestorId(id: string | undefined, targetDepth: number, map: Map<string, TocFlatLink>) {
+  if (!id)
+    return ''
+  let current = map.get(id)
+  while (current && current.depth > targetDepth)
+    current = current.parentId ? map.get(current.parentId) : undefined
+  if (current?.depth === targetDepth)
+    return current.id
+  return ''
+}
+
+const activeLink = computed(() => linkMap.value.get(activeHash.value))
+const activeLevel1Id = computed(() => findAncestorId(activeLink.value?.id, baseDepth.value, linkMap.value))
+const activeLevel2Id = computed(() => findAncestorId(activeLink.value?.id, baseDepth.value + 1, linkMap.value))
+
 const outlineEntries = computed(() => {
-  const links = flattenLinks(tocState.value)
-  return links
-    .filter(link => link.depth <= 2)
+  if (!flatLinks.value.length)
+    return []
+  const base = baseDepth.value
+  const level2Depth = base + 1
+  const level3Depth = base + 2
+  const activeLevel1 = activeLevel1Id.value
+  const activeLevel2 = activeLevel2Id.value
+  return flatLinks.value
+    .filter((link) => {
+      if (link.depth === base)
+        return true
+      if (link.depth === level2Depth)
+        return !!activeLevel1 && link.parentId === activeLevel1
+      if (link.depth === level3Depth)
+        return !!activeLevel2 && link.parentId === activeLevel2
+      return false
+    })
     .map(link => ({
       ...link,
-      indent: Math.min(1, Math.max(0, link.depth - 1)),
+      indent: Math.min(2, Math.max(0, link.depth - base)),
     }))
 })
 
@@ -167,7 +244,7 @@ const hasOutline = computed(() => outlineEntries.value.length > 0)
 const showSkeleton = computed(() => outlineLoadingState.value && !hasOutline.value)
 
 watch(
-  outlineEntries,
+  flatLinks,
   () => {
     if (!import.meta.client)
       return
@@ -199,7 +276,11 @@ watch(
     nextTick(() => {
       setTimeout(() => {
         refreshHeadingElements()
-        updateActiveFromScroll()
+        const nextHash = normalizeHash(window.location.hash)
+        if (nextHash)
+          scrollToHeading(nextHash, 'auto')
+        else
+          updateActiveFromScroll()
         setActiveHash(window.location.hash)
         updateMarker()
       }, 100)
@@ -280,6 +361,10 @@ watch(
 
 .outline-nav {
   padding-left: 6px;
+  padding-right: 6px;
+  max-height: min(420px, calc(100vh - 16rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .outline-skeleton {
