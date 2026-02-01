@@ -1,0 +1,79 @@
+name: Release Renderer Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v2.4.7-beta.11)
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - id: meta
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG="${{ github.ref_name }}"
+          else
+            TAG="${{ github.event.inputs.tag }}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-renderer:
+    name: Build Renderer
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          npm install -g pnpm
+          pnpm i
+
+      - name: Build renderer bundle
+        shell: bash
+        run: |
+          pnpm -F @talex-touch/core-app run build
+
+      - name: Package renderer assets
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          RENDERER_DIR="apps/core-app/out/renderer"
+          if [ ! -d "$RENDERER_DIR" ]; then
+            echo "Renderer output not found: $RENDERER_DIR"
+            exit 1
+          fi
+          mkdir -p "apps/core-app/dist"
+          ZIP_NAME="tuff-renderer-${VERSION}.zip"
+          cd "$RENDERER_DIR"
+          zip -r "../../dist/${ZIP_NAME}" .
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          files: apps/core-app/dist/tuff-renderer-${{ needs.prepare.outputs.version }}.zip
