@@ -4,7 +4,14 @@ import type { NotificationService } from '../download/notification-service'
 import * as crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
-import { AppPreviewChannel, DownloadModule, DownloadPriority } from '@talex-touch/utils'
+import {
+  AppPreviewChannel,
+  DownloadModule,
+  DownloadPriority,
+  UPDATE_GITHUB_RELEASES_API,
+  resolveUpdateChannelLabel,
+  splitUpdateTag
+} from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import axios from 'axios'
 import { app, shell } from 'electron'
@@ -399,7 +406,7 @@ export class UpdateSystem {
    */
   private async fetchGitHubReleases(): Promise<GitHubRelease[]> {
     try {
-      const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
+      const response = await axios.get(UPDATE_GITHUB_RELEASES_API, {
         timeout: 10000,
         headers: {
           Accept: 'application/vnd.github.v3+json',
@@ -422,10 +429,8 @@ export class UpdateSystem {
    * Parse version string to version object
    */
   private parseVersion(versionStr: string): VersionInfo {
-    const version = versionStr.replace(/^v/, '')
-    const parts = version.split('-')
-    const versionNum = parts[0]
-    const channelLabel = parts.length >= 2 ? parts[1] : undefined
+    const { version, channelLabel } = splitUpdateTag(versionStr)
+    const versionNum = version
 
     const [major, minor, patch] = versionNum.split('.').map((n) => Number.parseInt(n, 10))
 
@@ -442,19 +447,7 @@ export class UpdateSystem {
    * Parse channel label to enum
    */
   private parseChannelLabel(label?: string): AppPreviewChannel {
-    const normalized = (label || '').toUpperCase()
-
-    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
-      return AppPreviewChannel.SNAPSHOT
-    }
-    if (normalized.startsWith(AppPreviewChannel.BETA)) {
-      return AppPreviewChannel.BETA
-    }
-    if (normalized === 'MASTER' || normalized.startsWith(AppPreviewChannel.RELEASE)) {
-      return AppPreviewChannel.RELEASE
-    }
-
-    return AppPreviewChannel.RELEASE
+    return resolveUpdateChannelLabel(label)
   }
 
   /**

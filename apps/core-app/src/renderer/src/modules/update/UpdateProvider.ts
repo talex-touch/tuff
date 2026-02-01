@@ -5,7 +5,7 @@ import type {
   UpdateProviderType,
   UpdateSourceConfig
 } from '@talex-touch/utils'
-import { AppPreviewChannel, UpdateErrorType } from '@talex-touch/utils'
+import { AppPreviewChannel, UpdateErrorType, parseUpdateTag } from '@talex-touch/utils'
 
 // 更新源抽象基类
 export abstract class UpdateProvider {
@@ -104,19 +104,8 @@ export abstract class UpdateProvider {
     channel: AppPreviewChannel
   ): GitHubRelease[] {
     return releases.filter((release) => {
-      const tagName = release.tag_name.toLowerCase()
-
-      if (channel === AppPreviewChannel.SNAPSHOT) {
-        return tagName.includes('snapshot') || tagName.includes('beta') || tagName.includes('alpha')
-      }
-
-      if (channel === AppPreviewChannel.BETA) {
-        return tagName.includes('beta') && !tagName.includes('snapshot')
-      }
-
-      return (
-        !tagName.includes('snapshot') && !tagName.includes('beta') && !tagName.includes('alpha')
-      )
+      const parsed = parseUpdateTag(release.tag_name)
+      return parsed.channel === channel
     })
   }
 
@@ -160,24 +149,10 @@ export abstract class UpdateProvider {
 
   // 解析版本标签
   protected parseVersionTag(tagName: string): { version: string; channel: AppPreviewChannel } {
-    const tag = tagName.toLowerCase()
-
-    if (tag.includes('snapshot') || tag.includes('alpha')) {
-      return {
-        version: tagName,
-        channel: AppPreviewChannel.SNAPSHOT
-      }
-    }
-    if (tag.includes('beta')) {
-      return {
-        version: tagName,
-        channel: AppPreviewChannel.BETA
-      }
-    }
-
+    const parsed = parseUpdateTag(tagName)
     return {
       version: tagName,
-      channel: AppPreviewChannel.RELEASE
+      channel: parsed.channel
     }
   }
 

@@ -9,7 +9,10 @@ import {
   AppPreviewChannel,
   DownloadModule,
   DownloadPriority,
-  UpdateProviderType
+  UpdateProviderType,
+  UPDATE_GITHUB_RELEASES_API,
+  resolveUpdateChannelLabel,
+  splitUpdateTag
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
 import { useAppSdk } from '@talex-touch/utils/renderer'
@@ -103,12 +106,8 @@ export class AppUpdate {
    * @returns Parsed version object
    */
   _versionResolver(_versionStr: string): AppVersion {
-    const versionStr = _versionStr.replaceAll('v', '')
-
-    // 1.0.0-SNAPSHOT
-    const versionArr = versionStr.split('-')
-    const version = versionArr[0]
-    const channel = this.normalizeChannelLabel(versionArr.length === 2 ? versionArr[1] : undefined)
+    const { version, channelLabel } = splitUpdateTag(_versionStr)
+    const channel = this.normalizeChannelLabel(channelLabel)
 
     const versionNumArr = version.split('.')
 
@@ -121,19 +120,7 @@ export class AppUpdate {
   }
 
   private normalizeChannelLabel(label?: string): AppPreviewChannel {
-    const normalized = (label || '').toUpperCase()
-
-    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
-      return AppPreviewChannel.SNAPSHOT
-    }
-    if (normalized.startsWith(AppPreviewChannel.BETA)) {
-      return AppPreviewChannel.BETA
-    }
-    if (normalized === 'MASTER') {
-      return AppPreviewChannel.RELEASE
-    }
-
-    return AppPreviewChannel.RELEASE
+    return resolveUpdateChannelLabel(label)
   }
 
   private normalizeFrequencyLabel(value?: string): UpdateSettings['frequency'] {
@@ -269,7 +256,7 @@ export class AppUpdate {
       source: {
         type: UpdateProviderType.GITHUB,
         name: 'GitHub Releases',
-        url: 'https://api.github.com/repos/talex-touch/tuff/releases',
+        url: UPDATE_GITHUB_RELEASES_API,
         enabled: true,
         priority: 1
       },
