@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError, getHeader } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
 
 const TELEMETRY_TABLE = 'telemetry_events'
@@ -388,7 +388,8 @@ export async function recordTelemetryEvent(
 ): Promise<void> {
   const db = getD1Database(event)
   if (!db) {
-    console.warn('Telemetry: Database not available')
+    if (shouldUseCloudflareBindings())
+      console.warn('Telemetry: Database not available')
     return
   }
 

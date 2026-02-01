@@ -49,7 +49,8 @@ function toggleCode() {
 </script>
 
 <template>
-  <section class="tuff-demo">
+  <ClientOnly>
+    <section class="tuff-demo">
     <header v-if="props.title || props.description" class="tuff-demo__header">
       <h3 v-if="props.title" class="tuff-demo__title">
         {{ props.title }}
@@ -110,7 +111,8 @@ function toggleCode() {
         </button>
       </div>
     </div>
-  </section>
+    </section>
+  </ClientOnly>
 </template>
 
 <style scoped>

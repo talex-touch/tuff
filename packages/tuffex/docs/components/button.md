@@ -2,12 +2,6 @@
 
 按钮用于触发一个操作，如提交表单。该组件风格参考 core-app 的 **TuffButton(TButton)**：圆角 pill 形态，支持 `variant` / `type` / `size` / `block` / `loading` / `disabled`，并提供 `plain` / `round` / `circle` / `dashed` 等外观。
 
-<ComponentCanvas name="Button">
-  <TxButton variant="primary" size="lg">
-    Action Label
-  </TxButton>
-</ComponentCanvas>
-
 ## Usage
 
 按钮是最常用的触发器，建议用于触发明确的主操作或状态切换：

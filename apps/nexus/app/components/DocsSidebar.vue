@@ -86,6 +86,8 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/architecture/plugin-system',
     '/docs/dev/architecture/transport-events',
     '/docs/dev/architecture/ipc-events-detail',
+    '/docs/dev/architecture/ipc-events-handlers',
+    '/docs/dev/architecture/ipc-events-sdk-map',
     '/docs/dev/architecture/storage-and-db',
     '/docs/dev/architecture/division-box',
     '/docs/dev/architecture/intelligence-system',

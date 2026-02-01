@@ -40,9 +40,11 @@ function detectBrowserLocale(): SupportedLocale {
   return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
-const immediatePreference = getPreferredLocale()
-if (immediatePreference && immediatePreference !== locale.value)
-  setLocale(immediatePreference)
+if (import.meta.server) {
+  const immediatePreference = getPreferredLocale()
+  if (immediatePreference && immediatePreference !== locale.value)
+    setLocale(immediatePreference)
+}
 
 function bootstrapLocalePreference() {
   const storedPreference = getPreferredLocale()
@@ -172,11 +174,6 @@ html.dark {
 .cubic-transition,
 .transition-cubic {
   transition: 0.25s cubic-bezier(0.785, 0.135, 0.15, 0.86);
-}
-
-button {
-  outline: none !important;
-  border: none !important;
 }
 
 * {

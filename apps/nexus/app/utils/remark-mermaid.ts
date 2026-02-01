@@ -39,3 +39,5 @@ export function remarkMermaid() {
     transformMermaidBlocks(tree)
   }
 }
+
+export default remarkMermaid

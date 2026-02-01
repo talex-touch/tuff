@@ -101,7 +101,7 @@ preview_bucket_name = "tuff-nexus-assets-preview"
 pnpm dev
 ```
 
-> 借助新增的 `nitro-cloudflare-dev` 模块，开发服务器会通过 Wrangler 注入 Cloudflare 的运行时绑定（含 D1/R2），因此本地也会直连远端数据库。首次运行若提示未登录，请执行 `npx wrangler login`。如需切换到特定 Pages 环境，可在启动前设置 `CLOUDFLARE_DEV_ENVIRONMENT=<env>`。
+> 默认本地不启用 Cloudflare 运行时绑定；如需启用 D1/R2，请设置 `NUXT_USE_CLOUDFLARE_DEV=true`（或 `NITRO_PRESET=cloudflare-pages`），开发服务器会通过 Wrangler 注入 Cloudflare 的运行时绑定，因此本地也会直连远端数据库。首次运行若提示未登录，请执行 `npx wrangler login`。如需切换到特定 Pages 环境，可在启动前设置 `CLOUDFLARE_DEV_ENVIRONMENT=<env>`。
 
 ### 5.2 模拟 Cloudflare Pages
 ```bash

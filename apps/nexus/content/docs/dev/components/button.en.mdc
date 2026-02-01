@@ -10,17 +10,6 @@ syncStatus: migrated
 
 # Button
 
-> Buttons trigger actions such as submitting forms. The styling references core-app **TuffButton(TButton)**: pill shape, supports `variant` / `type` / `size` / `block` / `loading` / `disabled`, and provides `plain` / `round` / `circle` / `dashed` appearances.  
-> **Status**: Beta
-
-<div class="tuff-doc-canvas">
-  <TuffComponentCanvas name="Button">
-    <TxButton variant="primary" size="lg">
-      Action Label
-    </TxButton>
-  </TuffComponentCanvas>
-</div>
-
 ## Usage
 
 Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
@@ -35,7 +24,7 @@ Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
 
 Base visuals and semantic variants.
 
-:::TuffDemo{title="Appearance" description="Default, primary, and semantic variants." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -66,7 +55,7 @@ code: |
 
 Disabled states.
 
-:::TuffDemo{title="Disabled" description="Disabled button variants." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -91,32 +80,17 @@ code: |
 
 Show loading feedback during async actions.
 
-:::TuffDemo{title="Loading" description="Async loading feedback." code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton variant="primary" loading>Loading</TxButton>
-    <TxButton variant="secondary" loading>Loading</TxButton>
-    <TxButton circle icon="i-carbon-edit" loading />
+<TuffDemo :code="ButtonLoadingDemoSource" code-lang="vue">
+  <template #preview>
+    <ButtonLoadingDemo />
   </template>
----
-#preview
-<div class="tuff-demo-row">
-  <tx-button variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </tx-button>
-  <tx-button variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </tx-button>
-  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</div>
-:::
+</TuffDemo>
 
 ### Sizes
 
-Buttons provide three sizes beyond the default.
+Buttons provide three sizes beyond the default, affecting density and tactile feel.
 
-:::TuffDemo{title="Sizes" description="Size affects density and tactile feel." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -135,9 +109,9 @@ code: |
 
 ### Block
 
-Block buttons fill the container width.
+Block buttons fill the container width for full-width primary actions.
 
-:::TuffDemo{title="Block" description="Full-width primary action." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -154,7 +128,7 @@ code: |
 
 Adjust shapes with `plain` / `round` / `circle` / `dashed`.
 
-:::TuffDemo{title="Shapes" description="Shape and border treatments." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -175,9 +149,9 @@ code: |
 
 ### Haptics
 
-Haptic feedback for mobile interactions.
+Haptic feedback for mobile interactions, with multiple intensity options.
 
-:::TuffDemo{title="Haptics" description="Haptic intensity options." code-lang="vue"}
+:::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -199,7 +173,7 @@ code: |
 :::
 
 ## Demo Conventions
-- Wrap interactive demos in `client-only`.  
+- Wrap interactive demos in `client-only`.
 - Demos must be copyable and runnable (no screenshot-only blocks).
 
 ## API Specifications
@@ -300,7 +274,7 @@ code: |
 
 A combined button for “primary action + more actions” (e.g., RUN + …).
 
-::TuffDemo{title="Split Button" description="Primary action with menu actions." code-lang="vue"}
+::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -353,7 +327,7 @@ code: |
 
 Pair primary with ghost for clear hierarchy.
 
-::TuffDemo{title="Composite Actions" description="Primary + ghost pairing for command bars." code-lang="vue"}
+::TuffDemo{code-lang="vue"}
 ---
 code: |
   <template>
@@ -369,14 +343,14 @@ code: |
 ::
 
 ## Design Principles
-- Keep a single primary button to avoid hierarchy conflicts.  
-- Keep `variant` consistent within similar actions.  
-- Async actions must use `loading` to avoid duplicate triggers.  
+- Keep a single primary button to avoid hierarchy conflicts.
+- Keep `variant` consistent within similar actions.
+- Async actions must use `loading` to avoid duplicate triggers.
 - Prefer `vibrate` on mobile to enhance tactile feedback.
 
 ## Design Notes
-- Emphasize press feedback with smooth rebound.  
-- Translucent surfaces need proper background contrast.  
+- Emphasize press feedback with smooth rebound.
+- Translucent surfaces need proper background contrast.
 - Keep icon/text spacing consistent to avoid visual drift.
 
 ## Source
@@ -385,17 +359,10 @@ code: |
 
 <script setup>
 import { ref } from 'vue'
+import ButtonLoadingDemo from '~/components/content/demos/ButtonLoadingDemo.vue'
+import ButtonLoadingDemoSource from '~/components/content/demos/ButtonLoadingDemo.vue?raw'
 
-const loading = ref(false)
 const splitLoading = ref(false)
-
-async function handleClick() {
-  loading.value = true
-
-  setTimeout(() => {
-    loading.value = false
-  }, 3000)
-}
 
 async function handleRun() {
   if (splitLoading.value) return
@@ -408,10 +375,6 @@ async function handleRun() {
 </script>
 
 <style scoped>
-.tuff-doc-canvas {
-  margin: 18px 0 32px;
-}
-
 ::global(.docs-background) {
   display: none;
 }

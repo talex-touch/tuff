@@ -32,3 +32,9 @@ export function requireCloudflareBindings(event: H3Event) {
 
   return bindings
 }
+
+export function shouldUseCloudflareBindings() {
+  return process.env.NODE_ENV === 'production'
+    || process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
+    || process.env.NITRO_PRESET === 'cloudflare-pages'
+}

@@ -24,6 +24,8 @@
 - **[插件系统落地图](./architecture/plugin-system.zh.md)** — Provider/Adapter/Widget 管线与加载链路。
 - **[通道与 IPC 事件表](./architecture/transport-events.zh.md)** — 事件分组与定义文件定位。
 - **[IPC 事件清单（事件名级别）](./architecture/ipc-events-detail.zh.md)** — 逐事件枚举与处理入口。
+- **[IPC 事件处理器索引（函数级）](./architecture/ipc-events-handlers.zh.md)** — 事件 → 具体处理方法。
+- **[SDK -> 事件 -> 处理器索引](./architecture/ipc-events-sdk-map.zh.md)** — SDK 调用链与内部/私有 transport。
 - **[DivisionBox 落地图](./architecture/division-box.zh.md)** — 会话、窗口与 IPC 结构。
 - **[AI/Intelligence 模块落地图](./architecture/intelligence-module.zh.md)** — 能力、配额与 Agent 结构。
 - **[Storage & Database 落地图](./architecture/storage-and-db.zh.md)** — 存储/数据库模块与更新链路。

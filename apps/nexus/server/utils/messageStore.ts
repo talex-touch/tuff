@@ -1,6 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { readCloudflareBindings } from './cloudflare'
+import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 
 const MESSAGE_TABLE = 'telemetry_messages'
 
@@ -80,7 +80,8 @@ export async function recordTelemetryMessages(
 ): Promise<number> {
   const db = getD1Database(event)
   if (!db) {
-    console.warn('Telemetry messages: Database not available')
+    if (shouldUseCloudflareBindings())
+      console.warn('Telemetry messages: Database not available')
     return 0
   }
 
@@ -133,7 +134,8 @@ export async function listTelemetryMessages(
 ): Promise<TelemetryMessageRecord[]> {
   const db = getD1Database(event)
   if (!db) {
-    console.warn('Telemetry messages: Database not available')
+    if (shouldUseCloudflareBindings())
+      console.warn('Telemetry messages: Database not available')
     return []
   }
 
