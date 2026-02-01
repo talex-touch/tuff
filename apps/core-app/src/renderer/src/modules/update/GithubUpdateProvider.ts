@@ -5,7 +5,14 @@ import type {
   UpdateSourceConfig
 } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
-import { UpdateErrorType, UpdateProviderType, UPDATE_GITHUB_RELEASES_API } from '@talex-touch/utils'
+import {
+  UpdateErrorType,
+  UpdateProviderType,
+  UPDATE_GITHUB_RELEASES_API,
+  UPDATE_RELEASE_MANIFEST_NAME,
+  type UpdateReleaseArtifact,
+  type UpdateReleaseManifest
+} from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
 
@@ -107,7 +114,7 @@ export class GithubUpdateProvider extends UpdateProvider {
         // 验证Release数据
         this.validateRelease(latestRelease)
 
-        return latestRelease
+        return await this.attachReleaseManifest(latestRelease)
       } catch (error) {
         attempt++
 
@@ -214,21 +221,111 @@ export class GithubUpdateProvider extends UpdateProvider {
     return assets
       .filter((asset) => {
         const name = asset.name ?? ''
-        return name.length > 0 && !this.isSignatureAsset(name) && !this.isChecksumAsset(name)
+        return (
+          name.length > 0 &&
+          !this.isSignatureAsset(name) &&
+          !this.isChecksumAsset(name) &&
+          this.normalizeAssetKey(name) !== UPDATE_RELEASE_MANIFEST_NAME
+        )
       })
       .map((asset) => {
         const name = asset.name ?? ''
         const signatureUrl = signatureMap.get(this.normalizeAssetKey(name))
+        const manifestChecksum = (asset as { sha256?: string; checksum?: string }).sha256
+        const checksum =
+          typeof manifestChecksum === 'string'
+            ? manifestChecksum
+            : typeof (asset as { checksum?: string }).checksum === 'string'
+              ? (asset as { checksum?: string }).checksum
+              : this.extractChecksum(asset)
         return {
           name,
           url: asset.browser_download_url || asset.url || '',
           size: asset.size || 0,
           platform: this.detectPlatform(name),
           arch: this.detectArch(name),
-          checksum: this.extractChecksum(asset),
+          checksum,
           signatureUrl
         }
       })
+  }
+
+  private async attachReleaseManifest(release: GitHubRelease): Promise<GitHubRelease> {
+    const manifest = await this.fetchReleaseManifest(release.assets as GitHubApiAsset[])
+    if (!manifest) {
+      return release
+    }
+
+    const manifestMap = new Map<string, UpdateReleaseArtifact>()
+    for (const artifact of manifest.artifacts) {
+      if (artifact?.name) {
+        manifestMap.set(this.normalizeAssetKey(artifact.name), artifact)
+      }
+    }
+
+    const releaseAssets = release.assets as (GitHubApiAsset & {
+      sha256?: string
+      checksum?: string
+    })[]
+    for (const asset of releaseAssets) {
+      const name = String(asset?.name || '')
+      if (!name) {
+        continue
+      }
+      const manifestEntry = manifestMap.get(this.normalizeAssetKey(name))
+      if (!manifestEntry) {
+        continue
+      }
+
+      asset.sha256 = manifestEntry.sha256
+      asset.checksum = manifestEntry.sha256
+    }
+
+    return release
+  }
+
+  private async fetchReleaseManifest(
+    assets: GitHubApiAsset[]
+  ): Promise<UpdateReleaseManifest | null> {
+    const manifestAsset = assets.find(
+      (asset) => this.normalizeAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
+    )
+    if (!manifestAsset) {
+      return null
+    }
+
+    const manifestUrl = manifestAsset.browser_download_url || manifestAsset.url
+    if (!manifestUrl) {
+      return null
+    }
+
+    try {
+      const response = await axios.get(manifestUrl, { timeout: this.timeout })
+      const manifest = response.data
+
+      if (!this.isReleaseManifest(manifest)) {
+        console.warn('[GithubUpdateProvider] Invalid release manifest format')
+        return null
+      }
+
+      return manifest
+    } catch (error) {
+      console.warn('[GithubUpdateProvider] Failed to fetch release manifest:', error)
+      return null
+    }
+  }
+
+  private isReleaseManifest(payload: unknown): payload is UpdateReleaseManifest {
+    if (!payload || typeof payload !== 'object') {
+      return false
+    }
+
+    const candidate = payload as { schemaVersion?: unknown; artifacts?: unknown }
+    if (candidate.schemaVersion !== 1) {
+      return false
+    }
+
+    return Array.isArray(candidate.artifacts)
   }
 
   // 健康检查

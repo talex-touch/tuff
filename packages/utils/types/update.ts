@@ -130,6 +130,7 @@ export interface UpdateSettings {
 export const UPDATE_GITHUB_REPO = 'talex-touch/tuff'
 export const UPDATE_GITHUB_RELEASES_API = `https://api.github.com/repos/${UPDATE_GITHUB_REPO}/releases`
 export const UPDATE_TAG_PREFIX = 'v'
+export const UPDATE_RELEASE_MANIFEST_NAME = 'tuff-release-manifest.json'
 
 /**
  * Safe defaults used when no user configuration exists yet.
@@ -197,6 +198,29 @@ export function splitUpdateTag(tag: string): { version: string; channelLabel?: s
 export function parseUpdateTag(tag: string): { version: string; channel: AppPreviewChannel } {
   const { version, channelLabel } = splitUpdateTag(tag)
   return { version, channel: resolveUpdateChannelLabel(channelLabel) }
+}
+
+export type UpdateArtifactComponent = 'core' | 'renderer' | 'extensions'
+
+export interface UpdateReleaseArtifact {
+  name: string
+  component: UpdateArtifactComponent
+  platform?: 'win32' | 'darwin' | 'linux'
+  arch?: 'x64' | 'arm64'
+  sha256: string
+  signature?: string
+  signatureKey?: string
+  coreRange?: string
+}
+
+export interface UpdateReleaseManifest {
+  schemaVersion: 1
+  release: {
+    version: string
+    channel: AppPreviewChannel
+    tag: string
+  }
+  artifacts: UpdateReleaseArtifact[]
 }
 
 /**
