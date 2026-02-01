@@ -1,8 +1,7 @@
 <script setup lang="ts" name="SettingUpdate">
 import type { CachedUpdateRecord, DownloadAsset, UpdateSettings } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
-import { AppPreviewChannel, DownloadModule, DownloadPriority } from '@talex-touch/utils'
-import { useAppSdk } from '@talex-touch/utils/renderer'
+import { AppPreviewChannel } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -12,22 +11,20 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
-import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
-const appSdk = useAppSdk()
 const buildInfo = getBuildInfo()
 const buildChannel = normalizeBuildChannel(buildInfo.channel)
 const isSnapshotBuild = buildChannel === AppPreviewChannel.SNAPSHOT
 const githubProvider = new GithubUpdateProvider()
 
 const { appStates } = useAppState()
-const { addDownloadTask } = useDownloadCenter()
 const {
   checkApplicationUpgrade,
+  handleDownloadUpdate,
   getUpdateSettings,
   updateSettings,
   clearUpdateCache,
@@ -102,7 +99,10 @@ const cachedAssets = computed(() => {
   if (!cachedRelease.value?.release) {
     return [] as DownloadAsset[]
   }
-  return githubProvider.getDownloadAssets(cachedRelease.value.release)
+  const assets = githubProvider.getDownloadAssets(cachedRelease.value.release)
+  const platform = process.platform
+  const arch = process.arch
+  return assets.filter((asset) => asset.platform === platform && asset.arch === arch)
 })
 
 onMounted(async () => {
@@ -261,36 +261,14 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
     toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
     return
   }
+  if (!cachedRelease.value?.release) {
+    toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
+    return
+  }
   try {
-    const release = cachedRelease.value?.release
-    const destination = await appSdk.getPath('downloads')
-    if (!destination) {
-      toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
-      return
-    }
-    await addDownloadTask({
-      url: asset.url,
-      destination,
-      filename: asset.name,
-      priority: DownloadPriority.NORMAL,
-      module: DownloadModule.APP_UPDATE,
-      metadata: {
-        releaseTag: release?.tag_name,
-        releaseName: release?.name,
-        platform: asset.platform,
-        arch: asset.arch,
-        source: 'github'
-      }
-    })
-    toast.success(t('settings.settingUpdate.assets.messages.downloadStarted'))
+    await handleDownloadUpdate(cachedRelease.value.release)
   } catch (error) {
-    console.error('[SettingUpdate] Failed to download asset:', error)
-    const message = error instanceof Error ? error.message : String(error)
-    toast.error(
-      message
-        ? t('settings.settingUpdate.assets.messages.downloadFailedWithReason', { reason: message })
-        : t('settings.settingUpdate.assets.messages.downloadFailed')
-    )
+    console.error('[SettingUpdate] Failed to download update:', error)
   }
 }
 
