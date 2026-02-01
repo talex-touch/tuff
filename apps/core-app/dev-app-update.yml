@@ -1,3 +1,5 @@
-provider: generic
-url: https://example.com/auto-updates
+provider: github
+owner: talex-touch
+repo: tuff
+channel: snapshot
 updaterCacheDirName: core-app-updater

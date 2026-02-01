@@ -126,5 +126,6 @@ forceCodeSigning: false
 # Fix for pnpm workspace dependency resolution issues with electron-builder
 # Skip automatic dependency detection and use only what's in out/package.json
 publish:
-  provider: generic
-  url: https://publish.talex-touch.tagzxia.com/auto-updates
+  provider: github
+  owner: talex-touch
+  repo: tuff
