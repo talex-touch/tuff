@@ -14,6 +14,8 @@ import {
   type UpdateReleaseManifest
 } from '@talex-touch/utils'
 import axios from 'axios'
+import { compareVersions } from '~/composables/market/useVersionCompare'
+import { getBuildInfo } from '~/utils/build-info'
 import { UpdateProvider } from './UpdateProvider'
 
 type GitHubApiAsset = {
@@ -245,9 +247,12 @@ export class GithubUpdateProvider extends UpdateProvider {
           platform: this.detectPlatform(name),
           arch: this.detectArch(name),
           checksum,
-          signatureUrl
+          signatureUrl,
+          component: (asset as { component?: UpdateReleaseArtifact['component'] }).component,
+          coreRange: (asset as { coreRange?: string }).coreRange
         }
       })
+      .filter((asset) => !asset.coreRange || this.satisfiesCoreRange(asset.coreRange))
   }
 
   private async attachReleaseManifest(release: GitHubRelease): Promise<GitHubRelease> {
@@ -279,6 +284,8 @@ export class GithubUpdateProvider extends UpdateProvider {
 
       asset.sha256 = manifestEntry.sha256
       asset.checksum = manifestEntry.sha256
+      asset.coreRange = manifestEntry.coreRange
+      asset.component = manifestEntry.component
     }
 
     return release
@@ -425,6 +432,55 @@ export class GithubUpdateProvider extends UpdateProvider {
 
   private normalizeAssetKey(filename: string): string {
     return filename.toLowerCase()
+  }
+
+  private resolveCoreVersion(): string {
+    const info = getBuildInfo()
+    return info.version || '0.0.0'
+  }
+
+  private satisfiesCoreRange(coreRange: string): boolean {
+    const version = this.resolveCoreVersion()
+    const normalized = coreRange.trim()
+    if (!normalized) return false
+
+    const orGroups = normalized
+      .split('||')
+      .map((part) => part.trim())
+      .filter(Boolean)
+
+    if (!orGroups.length) return false
+
+    return orGroups.some((group) => {
+      const tokens = group.split(/\s+/).filter(Boolean)
+      if (!tokens.length) return false
+      return tokens.every((token) => this.evaluateRangeToken(version, token))
+    })
+  }
+
+  private evaluateRangeToken(version: string, token: string): boolean {
+    const match = token.match(/^(>=|<=|>|<|=)?\s*(.+)$/)
+    if (!match) return false
+
+    const operator = match[1] ?? '='
+    const target = match[2]?.trim()
+    if (!target) return false
+
+    const comparison = compareVersions(version, target)
+
+    switch (operator) {
+      case '>':
+        return comparison === 1
+      case '>=':
+        return comparison === 1 || comparison === 0
+      case '<':
+        return comparison === -1
+      case '<=':
+        return comparison === -1 || comparison === 0
+      case '=':
+      default:
+        return comparison === 0
+    }
   }
 
   // 获取发布说明摘要

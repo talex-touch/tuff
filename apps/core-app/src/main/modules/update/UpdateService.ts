@@ -137,7 +137,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
-      updateChannel: this.settings.updateChannel
+      updateChannel: this.settings.updateChannel,
+      storageRoot: ctx.app.rootPath
     })
     updateLog.success('UpdateSystem initialized with DownloadCenter integration')
     return true
