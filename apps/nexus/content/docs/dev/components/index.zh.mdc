@@ -190,3 +190,6 @@ description: 塔芙组件库的组件展示中心
 
 ## 贡献与维护
 组件文档统一落在 `apps/nexus/content/docs/dev/components/`，以 Nexus 为唯一来源，避免双维护。
+
+## 设计基础
+- [设计基础](./foundations) — 统一字体与颜色变量，保持 Nexus 与 Tuffex 体验一致。

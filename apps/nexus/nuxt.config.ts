@@ -56,7 +56,7 @@ export default defineNuxtConfig({
     },
   },
 
-  css: ['@talex-touch/tuffex/style.css', 'vue-sonner/style.css', '~/styles/tuffex-theme.css'],
+  css: ['@talex-touch/tuffex/style.css', 'vue-sonner/style.css'],
 
   colorMode: {
     classSuffix: '',

@@ -1,0 +1,114 @@
+---
+title: 设计基础
+description: 与 Tuffex variables 对齐的字体与颜色体系
+category: 基础
+status: beta
+since: 1.0.0
+tags: [design, tokens, typography, color]
+syncStatus: migrated
+---
+
+本页与 Tuffex 变量体系保持一致，确保 Nexus 文档渲染出来的视觉与 Tuffex 相同。
+
+单一来源：`packages/tuffex/packages/components/style/variables.scss`  
+加载入口：`@talex-touch/tuffex/style.css`
+
+## 字体
+
+**主字体栈**
+
+```css
+font-family:
+  'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',
+  'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
+```
+
+**字号与字重**
+
+```css
+--tx-font-size-base: 14px;
+--tx-font-size-small: 12px;
+--tx-font-size-large: 16px;
+--tx-font-weight-primary: 500;
+```
+
+## 颜色体系
+
+### 品牌色与语义色
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | 主操作 |
+| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | 成功状态 |
+| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | 警告状态 |
+| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | 错误状态 |
+| `--tx-color-info` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | 信息提示 |
+
+### 主色阶梯
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-color-primary-light-3` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#79bbff;"></span><code>#79bbff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3375b9;"></span><code>#3375b9</code></span> | 悬停/聚焦 |
+| `--tx-color-primary-light-5` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a0cfff;"></span><code>#a0cfff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2a598a;"></span><code>#2a598a</code></span> | 轻度背景 |
+| `--tx-color-primary-light-7` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c6e2ff;"></span><code>#c6e2ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#213d5b;"></span><code>#213d5b</code></span> | 微弱背景 |
+| `--tx-color-primary-light-9` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ecf5ff;"></span><code>#ecf5ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#18222c;"></span><code>#18222c</code></span> | 面层底色 |
+| `--tx-color-primary-dark-2` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#337ecc;"></span><code>#337ecc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#66b1ff;"></span><code>#66b1ff</code></span> | 激活态 |
+
+### 文本颜色
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-text-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303133;"></span><code>#303133</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e5eaf3;"></span><code>#e5eaf3</code></span> | 主文本 |
+| `--tx-text-color-regular` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#606266;"></span><code>#606266</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#cfd3dc;"></span><code>#cfd3dc</code></span> | 正文 |
+| `--tx-text-color-secondary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a3a6ad;"></span><code>#a3a6ad</code></span> | 次级文本 |
+| `--tx-text-color-placeholder` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a8abb2;"></span><code>#a8abb2</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#8d9095;"></span><code>#8d9095</code></span> | 占位文本 |
+| `--tx-text-color-disabled` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c0c4cc;"></span><code>#c0c4cc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#6c6e72;"></span><code>#6c6e72</code></span> | 禁用文本 |
+
+### 背景与边框
+
+| Token | Light | Dark | 用途 |
+| --- | --- | --- | --- |
+| `--tx-bg-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#141414;"></span><code>#141414</code></span> | 应用背景 |
+| `--tx-bg-color-page` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f3f5;"></span><code>#f2f3f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#0a0a0a;"></span><code>#0a0a0a</code></span> | 页面画布 |
+| `--tx-bg-color-overlay` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1e1f;"></span><code>#1d1e1f</code></span> | 浮层 |
+| `--tx-fill-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f0f2f5;"></span><code>#f0f2f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303030;"></span><code>#303030</code></span> | 弱填充 |
+| `--tx-fill-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f5f7fa;"></span><code>#f5f7fa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#262727;"></span><code>#262727</code></span> | 更浅填充 |
+| `--tx-fill-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fafafa;"></span><code>#fafafa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1d1d;"></span><code>#1d1d1d</code></span> | 最浅填充 |
+| `--tx-fill-color-darker` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3a3a3a;"></span><code>#3a3a3a</code></span> | 更深填充 |
+| `--tx-fill-color-blank` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip tuff-swatch__chip--transparent" style="--swatch:transparent;"></span><code>transparent</code></span> | 透明填充 |
+| `--tx-border-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#dcdfe6;"></span><code>#dcdfe6</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4c4d4f;"></span><code>#4c4d4f</code></span> | 默认边框 |
+| `--tx-border-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e4e7ed;"></span><code>#e4e7ed</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#414243;"></span><code>#414243</code></span> | 浅边框 |
+| `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | 更浅边框 |
+| `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | 最浅边框 |
+
+## 说明
+
+- 变量全部以 Tuffex 默认值为准。
+- 暗色模式兼容 `[data-theme='dark']` 与 `.dark`。
+
+<style scoped>
+.tuff-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuff-swatch__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.tuff-swatch__chip--transparent {
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+</style>

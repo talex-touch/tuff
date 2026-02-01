@@ -190,7 +190,7 @@ if (props.autofocus) {
   <button
     ref="buttonRef"
     v-wave
-    class="tx-button fake-background transition-cubic"
+    class="tx-button fake-background isolate transition-cubic"
     :class="classList"
     :type="nativeType"
     :disabled="disabled || loading"

@@ -1,0 +1,114 @@
+---
+title: Design Foundations
+description: Typography and color tokens aligned with Tuffex variables
+category: Foundation
+status: beta
+since: 1.0.0
+tags: [design, tokens, typography, color]
+syncStatus: migrated
+---
+
+This page mirrors the Tuffex variable system so Nexus docs render the same visual tokens.
+
+Source of truth: `packages/tuffex/packages/components/style/variables.scss`  
+Loaded by: `@talex-touch/tuffex/style.css`
+
+## Typography
+
+**Primary font stack**
+
+```css
+font-family:
+  'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',
+  'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
+```
+
+**Sizing + weight**
+
+```css
+--tx-font-size-base: 14px;
+--tx-font-size-small: 12px;
+--tx-font-size-large: 16px;
+--tx-font-weight-primary: 500;
+```
+
+## Color System
+
+### Brand + semantic
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#409eff;"></span><code>#409eff</code></span> | Primary actions |
+| `--tx-color-success` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#67c23a;"></span><code>#67c23a</code></span> | Success states |
+| `--tx-color-warning` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e6a23c;"></span><code>#e6a23c</code></span> | Warning states |
+| `--tx-color-danger` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f56c6c;"></span><code>#f56c6c</code></span> | Error states |
+| `--tx-color-info` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | Informational states |
+
+### Primary ramps
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-color-primary-light-3` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#79bbff;"></span><code>#79bbff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3375b9;"></span><code>#3375b9</code></span> | Hover / focus tint |
+| `--tx-color-primary-light-5` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a0cfff;"></span><code>#a0cfff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2a598a;"></span><code>#2a598a</code></span> | Soft tint |
+| `--tx-color-primary-light-7` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c6e2ff;"></span><code>#c6e2ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#213d5b;"></span><code>#213d5b</code></span> | Subtle tint |
+| `--tx-color-primary-light-9` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ecf5ff;"></span><code>#ecf5ff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#18222c;"></span><code>#18222c</code></span> | Surface tint |
+| `--tx-color-primary-dark-2` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#337ecc;"></span><code>#337ecc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#66b1ff;"></span><code>#66b1ff</code></span> | Active tint |
+
+### Text colors
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-text-color-primary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303133;"></span><code>#303133</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e5eaf3;"></span><code>#e5eaf3</code></span> | Primary text |
+| `--tx-text-color-regular` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#606266;"></span><code>#606266</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#cfd3dc;"></span><code>#cfd3dc</code></span> | Body text |
+| `--tx-text-color-secondary` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#909399;"></span><code>#909399</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a3a6ad;"></span><code>#a3a6ad</code></span> | Secondary text |
+| `--tx-text-color-placeholder` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#a8abb2;"></span><code>#a8abb2</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#8d9095;"></span><code>#8d9095</code></span> | Placeholder text |
+| `--tx-text-color-disabled` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#c0c4cc;"></span><code>#c0c4cc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#6c6e72;"></span><code>#6c6e72</code></span> | Disabled text |
+
+### Surface + borders
+
+| Token | Light | Dark | Usage |
+| --- | --- | --- | --- |
+| `--tx-bg-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#141414;"></span><code>#141414</code></span> | App background |
+| `--tx-bg-color-page` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f3f5;"></span><code>#f2f3f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#0a0a0a;"></span><code>#0a0a0a</code></span> | Page canvas |
+| `--tx-bg-color-overlay` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1e1f;"></span><code>#1d1e1f</code></span> | Overlays |
+| `--tx-fill-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f0f2f5;"></span><code>#f0f2f5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#303030;"></span><code>#303030</code></span> | Subtle fills |
+| `--tx-fill-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f5f7fa;"></span><code>#f5f7fa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#262727;"></span><code>#262727</code></span> | Lighter fill |
+| `--tx-fill-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#fafafa;"></span><code>#fafafa</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#1d1d1d;"></span><code>#1d1d1d</code></span> | Lightest fill |
+| `--tx-fill-color-darker` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#3a3a3a;"></span><code>#3a3a3a</code></span> | Darker fill |
+| `--tx-fill-color-blank` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ffffff;"></span><code>#ffffff</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip tuff-swatch__chip--transparent" style="--swatch:transparent;"></span><code>transparent</code></span> | Blank fill |
+| `--tx-border-color` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#dcdfe6;"></span><code>#dcdfe6</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#4c4d4f;"></span><code>#4c4d4f</code></span> | Default borders |
+| `--tx-border-color-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#e4e7ed;"></span><code>#e4e7ed</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#414243;"></span><code>#414243</code></span> | Light borders |
+| `--tx-border-color-lighter` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#ebeef5;"></span><code>#ebeef5</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#363637;"></span><code>#363637</code></span> | Lighter borders |
+| `--tx-border-color-extra-light` | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#f2f6fc;"></span><code>#f2f6fc</code></span> | <span class="tuff-swatch"><span class="tuff-swatch__chip" style="--swatch:#2b2b2c;"></span><code>#2b2b2c</code></span> | Extra light borders |
+
+## Notes
+
+- Tokens follow the Tuffex default palette.
+- Dark mode uses `[data-theme='dark']` or `.dark`.
+
+<style scoped>
+.tuff-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tuff-swatch__chip {
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: var(--swatch);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.tuff-swatch__chip--transparent {
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.45) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.45) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 0 4px, 4px -4px, -4px 0;
+}
+</style>
