@@ -80,11 +80,30 @@ code: |
 
 Show loading feedback during async actions.
 
-<TuffDemo :code="ButtonLoadingDemoSource" code-lang="vue">
-  <template #preview>
-    <ButtonLoadingDemo />
+::::TuffDemo{code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton variant="secondary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
   </template>
-</TuffDemo>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button variant="primary" :loading="loading" @click="handleClick">
+    {{ loading ? 'Loading' : 'Click to load' }}
+  </tx-button>
+  <tx-button variant="secondary" :loading="loading" @click="handleClick">
+    {{ loading ? 'Loading' : 'Click to load' }}
+  </tx-button>
+  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+</div>
+::::
 
 ### Sizes
 
@@ -359,10 +378,17 @@ code: |
 
 <script setup>
 import { ref } from 'vue'
-import ButtonLoadingDemo from '~/components/content/demos/ButtonLoadingDemo.vue'
-import ButtonLoadingDemoSource from '~/components/content/demos/ButtonLoadingDemo.vue?raw'
 
+const loading = ref(false)
 const splitLoading = ref(false)
+
+async function handleClick() {
+  if (loading.value) return
+  loading.value = true
+  setTimeout(() => {
+    loading.value = false
+  }, 1200)
+}
 
 async function handleRun() {
   if (splitLoading.value) return
