@@ -10,6 +10,7 @@ import { TalexTouch } from '../types'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
+import { getAppVersionSafe } from '../utils/version-util'
 import { genTouchChannel } from './channel-core'
 import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 import {
@@ -22,6 +23,17 @@ import { ModuleManager } from './module-manager'
 import { innerRootPath } from './precore'
 import { TouchConfig } from './touch-config'
 import { TouchWindow } from './touch-window'
+
+interface RendererOverrideState {
+  version: string
+  path: string
+  coreRange?: string
+  enabled: boolean
+  updatedAt: number
+  lastError?: string
+  sourceTag?: string
+  sha256?: string
+}
 
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = innerRootPath
@@ -61,6 +73,189 @@ export class TouchApp implements TalexTouch.TouchApp {
       mainLog.warn('Failed to read app-setting.ini from disk', { error })
     }
     return {}
+  }
+
+  private resolveRendererOverrideStatePath(): string {
+    return path.join(this.rootPath, 'config', 'renderer-override.json')
+  }
+
+  private readRendererOverrideState(): RendererOverrideState | null {
+    const statePath = this.resolveRendererOverrideStatePath()
+    try {
+      if (!fse.existsSync(statePath)) {
+        return null
+      }
+      const content = fse.readFileSync(statePath, 'utf-8')
+      const parsed = JSON.parse(content) as RendererOverrideState
+      if (parsed && typeof parsed === 'object') {
+        return parsed
+      }
+      return null
+    } catch (error) {
+      mainLog.warn('Failed to read renderer override state', { error })
+      return null
+    }
+  }
+
+  private disableRendererOverride(state: RendererOverrideState, reason: string): void {
+    const updated: RendererOverrideState = {
+      ...state,
+      enabled: false,
+      lastError: reason,
+      updatedAt: Date.now()
+    }
+    try {
+      fse.ensureDirSync(path.dirname(this.resolveRendererOverrideStatePath()))
+      fse.writeFileSync(this.resolveRendererOverrideStatePath(), JSON.stringify(updated, null, 2))
+      mainLog.warn('Renderer override disabled', {
+        meta: { reason, path: state.path }
+      })
+    } catch (error) {
+      mainLog.warn('Failed to persist renderer override state', { error })
+    }
+  }
+
+  private resolveRendererOverridePath(): string | null {
+    const state = this.readRendererOverrideState()
+    if (!state?.enabled) {
+      return null
+    }
+
+    const indexPath = path.join(state.path, 'index.html')
+    if (!fse.existsSync(indexPath)) {
+      this.disableRendererOverride(state, 'override index.html missing')
+      return null
+    }
+
+    if (state.coreRange && !this.isCoreRangeCompatible(state.coreRange)) {
+      this.disableRendererOverride(state, `coreRange mismatch: ${state.coreRange}`)
+      return null
+    }
+
+    return indexPath
+  }
+
+  private isCoreRangeCompatible(coreRange: string): boolean {
+    const version = getAppVersionSafe()
+    return this.satisfiesVersionRange(version, coreRange)
+  }
+
+  private satisfiesVersionRange(version: string, range: string): boolean {
+    const normalized = range.trim()
+    if (!normalized) return false
+
+    const orGroups = normalized
+      .split('||')
+      .map((part) => part.trim())
+      .filter(Boolean)
+
+    if (!orGroups.length) return false
+
+    return orGroups.some((group) => {
+      const tokens = group.split(/\s+/).filter(Boolean)
+      if (!tokens.length) return false
+      return tokens.every((token) => this.evaluateRangeToken(version, token))
+    })
+  }
+
+  private evaluateRangeToken(version: string, token: string): boolean {
+    const match = token.match(/^(>=|<=|>|<|=)?\s*(.+)$/)
+    if (!match) return false
+
+    const operator = match[1] ?? '='
+    const target = match[2]?.trim()
+    if (!target) return false
+
+    const comparison = this.compareVersions(version, target)
+
+    switch (operator) {
+      case '>':
+        return comparison === 1
+      case '>=':
+        return comparison === 1 || comparison === 0
+      case '<':
+        return comparison === -1
+      case '<=':
+        return comparison === -1 || comparison === 0
+      case '=':
+      default:
+        return comparison === 0
+    }
+  }
+
+  private compareVersions(a: string | undefined, b: string | undefined): -1 | 0 | 1 {
+    if (!a && !b) return 0
+    if (!a) return -1
+    if (!b) return 1
+
+    const parsedA = this.parseComparableVersion(a)
+    const parsedB = this.parseComparableVersion(b)
+
+    if (parsedA.major !== parsedB.major) {
+      return parsedA.major < parsedB.major ? -1 : 1
+    }
+    if (parsedA.minor !== parsedB.minor) {
+      return parsedA.minor < parsedB.minor ? -1 : 1
+    }
+    if (parsedA.patch !== parsedB.patch) {
+      return parsedA.patch < parsedB.patch ? -1 : 1
+    }
+
+    return this.comparePrereleases(parsedA.prerelease, parsedB.prerelease)
+  }
+
+  private parseComparableVersion(version: string): {
+    major: number
+    minor: number
+    patch: number
+    prerelease: string[]
+  } {
+    const cleaned = version.replace(/^v/i, '').trim()
+    const [main, prerelease] = cleaned.split('-', 2)
+    const [major = 0, minor = 0, patch = 0] = (main || '')
+      .split('.')
+      .map((value) => Number.parseInt(value, 10) || 0)
+
+    return {
+      major,
+      minor,
+      patch,
+      prerelease: prerelease ? prerelease.split('.') : []
+    }
+  }
+
+  private comparePrereleases(a: string[], b: string[]): -1 | 0 | 1 {
+    if (a.length === 0 && b.length > 0) return 1
+    if (a.length > 0 && b.length === 0) return -1
+    if (a.length === 0 && b.length === 0) return 0
+
+    const maxLen = Math.max(a.length, b.length)
+    for (let index = 0; index < maxLen; index += 1) {
+      const aPart = a[index]
+      const bPart = b[index]
+
+      if (aPart === undefined) return -1
+      if (bPart === undefined) return 1
+
+      const aNum = Number.parseInt(aPart, 10)
+      const bNum = Number.parseInt(bPart, 10)
+      const aIsNum = !Number.isNaN(aNum)
+      const bIsNum = !Number.isNaN(bNum)
+
+      if (aIsNum && !bIsNum) return -1
+      if (!aIsNum && bIsNum) return 1
+
+      if (aIsNum && bIsNum) {
+        if (aNum < bNum) return -1
+        if (aNum > bNum) return 1
+        continue
+      }
+
+      if (aPart < bPart) return -1
+      if (aPart > bPart) return 1
+    }
+
+    return 0
   }
 
   private resolveInitialMainWindowBounds(
@@ -236,7 +431,9 @@ export class TouchApp implements TalexTouch.TouchApp {
 
       // Try multiple paths for index.html
       const appPath = app.getAppPath()
+      const overridePath = this.resolveRendererOverridePath()
       const possiblePaths = [
+        ...(overridePath ? [overridePath] : []),
         path.join(__dirname, '..', 'renderer', 'index.html'),
         path.join(appPath, 'renderer', 'index.html'),
         ...(process.resourcesPath
@@ -263,8 +460,15 @@ export class TouchApp implements TalexTouch.TouchApp {
         }
       })
 
-      let url = possiblePaths[0]
-      let found = false
+      if (!startSilent) {
+        this.window.window.show()
+      } else {
+        mainLog.info('Starting in silent mode (hidden to tray)')
+      }
+
+      let loaded = false
+      let lastTriedPath = possiblePaths[0] ?? ''
+      let lastError: unknown
 
       for (const testPath of possiblePaths) {
         const exists = fse.existsSync(testPath)
@@ -272,15 +476,37 @@ export class TouchApp implements TalexTouch.TouchApp {
           meta: { exists }
         })
 
-        if (exists) {
-          url = testPath
-          found = true
+        if (!exists) continue
+
+        lastTriedPath = testPath
+        mainLog.info('Loading renderer from file', {
+          meta: { url: testPath }
+        })
+
+        try {
+          await this.window.loadFile(testPath, {
+            devtools: this.version === TalexTouch.AppVersion.DEV
+          })
+          loaded = true
           mainLog.info(`Found index.html at: ${testPath}`)
           break
+        } catch (error) {
+          lastError = error
+          const errorMsg = error instanceof Error ? error.message : String(error)
+          mainLog.error('Failed to load renderer file', {
+            meta: { url: testPath, error: errorMsg }
+          })
+
+          if (overridePath && testPath === overridePath) {
+            const state = this.readRendererOverrideState()
+            if (state?.enabled) {
+              this.disableRendererOverride(state, 'override load failed')
+            }
+          }
         }
       }
 
-      if (!found) {
+      if (!loaded) {
         // Log all debug information before showing dialog
         mainLog.error('[TouchApp] index.html not found!')
         mainLog.error('[TouchApp] __dirname:', { meta: { __dirname: String(__dirname) } })
@@ -299,35 +525,13 @@ export class TouchApp implements TalexTouch.TouchApp {
             triedPaths: possiblePaths.join(', '),
             appPath: app.getAppPath(),
             __dirname: String(__dirname),
-            resourcesPath: process.resourcesPath || 'N/A'
+            resourcesPath: process.resourcesPath || 'N/A',
+            lastError: lastError instanceof Error ? lastError.message : undefined
           }
         })
 
-        await this.showFileNotFoundDialog(url, possiblePaths)
+        await this.showFileNotFoundDialog(lastTriedPath, possiblePaths)
         throw new Error(errorMsg)
-      }
-
-      if (!startSilent) {
-        this.window.window.show()
-      } else {
-        mainLog.info('Starting in silent mode (hidden to tray)')
-      }
-      mainLog.info('Loading renderer from file', {
-        meta: { url }
-      })
-
-      try {
-        await this.window.loadFile(url, {
-          devtools: this.version === TalexTouch.AppVersion.DEV
-        })
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error)
-        mainLog.error('Failed to load renderer file', {
-          meta: { url, error: errorMsg }
-        })
-
-        await this.showFileNotFoundDialog(url, possiblePaths)
-        throw error
       }
     } else {
       const url = process.env.ELECTRON_RENDERER_URL as string
