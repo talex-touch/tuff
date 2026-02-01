@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "version": "2.4.7-beta.11",
+    "channel": "BETA",
+    "tag": "v2.4.7-beta.11"
+  },
+  "artifacts": [
+    {
+      "component": "core",
+      "name": "tuff-core-2.4.7-beta.11-win32-x64-setup.exe",
+      "platform": "win32",
+      "arch": "x64",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "component": "renderer",
+      "name": "tuff-renderer-2.4.7-beta.11.zip",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "coreRange": ">=2.4.0"
+    },
+    {
+      "component": "extensions",
+      "name": "tuff-extensions-2.4.7-beta.11.zip",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "coreRange": ">=2.4.0"
+    }
+  ]
+}
