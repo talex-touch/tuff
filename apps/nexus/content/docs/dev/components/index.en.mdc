@@ -190,3 +190,6 @@ Each component page follows a consistent layout:
 
 ## Contributing
 Component docs live in `apps/nexus/content/docs/dev/components/` and Nexus is the single source of truth.
+
+## Foundations
+- [Design Foundations](./foundations) — Typography and color tokens that keep Nexus docs aligned with Tuffex.

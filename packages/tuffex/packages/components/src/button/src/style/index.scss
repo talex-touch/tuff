@@ -17,6 +17,7 @@
 
   color: var(--tx-text-color);
   border-radius: 12px;
+  background-color: transparent;
   --fake-radius: var(--tx-button-radius, 12px);
   border: 1px solid var(--tx-button-border-color);
 

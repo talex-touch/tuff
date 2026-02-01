@@ -118,6 +118,7 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
   '/docs/dev/components': [
     '/docs/dev/components/index',
+    '/docs/dev/components/foundations',
     '/docs/dev/components/button',
     '/docs/dev/components/icon',
     '/docs/dev/components/input',
