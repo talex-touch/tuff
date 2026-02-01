@@ -5,7 +5,7 @@ import type {
   UpdateSourceConfig
 } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
-import { UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
+import { UpdateErrorType, UpdateProviderType, UPDATE_GITHUB_RELEASES_API } from '@talex-touch/utils'
 import axios from 'axios'
 import { UpdateProvider } from './UpdateProvider'
 
@@ -19,7 +19,7 @@ type GitHubApiAsset = {
 export class GithubUpdateProvider extends UpdateProvider {
   readonly name = 'GitHub Releases'
   readonly type = UpdateProviderType.GITHUB
-  private readonly apiUrl = 'https://api.github.com/repos/talex-touch/tuff/releases'
+  private readonly apiUrl = UPDATE_GITHUB_RELEASES_API
   private readonly timeout = 8000
 
   // 检查是否可以处理该配置

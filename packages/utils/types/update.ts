@@ -127,6 +127,10 @@ export interface UpdateSettings {
   retryDelay?: number
 }
 
+export const UPDATE_GITHUB_REPO = 'talex-touch/tuff'
+export const UPDATE_GITHUB_RELEASES_API = `https://api.github.com/repos/${UPDATE_GITHUB_REPO}/releases`
+export const UPDATE_TAG_PREFIX = 'v'
+
 /**
  * Safe defaults used when no user configuration exists yet.
  */
@@ -136,7 +140,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   source: {
     type: UpdateProviderType.GITHUB,
     name: 'GitHub Releases',
-    url: 'https://api.github.com/repos/talex-touch/tuff/releases',
+    url: UPDATE_GITHUB_RELEASES_API,
     enabled: true,
     priority: 1,
   },
@@ -150,6 +154,49 @@ export const defaultUpdateSettings: UpdateSettings = {
   rateLimitEnabled: true,
   maxRetries: 3,
   retryDelay: 2000,
+}
+
+const UPDATE_CHANNEL_LABELS = {
+  snapshot: ['SNAPSHOT', 'ALPHA'],
+  beta: ['BETA'],
+  release: ['RELEASE', 'MASTER'],
+}
+
+/**
+ * Resolve a release channel from the tag suffix label.
+ */
+export function resolveUpdateChannelLabel(label?: string): AppPreviewChannel {
+  const normalized = (label || '').trim().toUpperCase()
+
+  if (UPDATE_CHANNEL_LABELS.snapshot.some((value) => normalized.startsWith(value))) {
+    return AppPreviewChannel.SNAPSHOT
+  }
+  if (UPDATE_CHANNEL_LABELS.beta.some((value) => normalized.startsWith(value))) {
+    return AppPreviewChannel.BETA
+  }
+  if (UPDATE_CHANNEL_LABELS.release.some((value) => normalized.startsWith(value))) {
+    return AppPreviewChannel.RELEASE
+  }
+
+  return AppPreviewChannel.RELEASE
+}
+
+/**
+ * Split an update tag into the numeric version part and optional channel label.
+ * Expected format: v<major>.<minor>.<patch>[-<channel>]
+ */
+export function splitUpdateTag(tag: string): { version: string; channelLabel?: string } {
+  const trimmed = tag.trim()
+  const cleaned = trimmed.toLowerCase().startsWith(UPDATE_TAG_PREFIX)
+    ? trimmed.slice(UPDATE_TAG_PREFIX.length)
+    : trimmed
+  const [version, channelLabel] = cleaned.split('-', 2)
+  return { version, channelLabel }
+}
+
+export function parseUpdateTag(tag: string): { version: string; channel: AppPreviewChannel } {
+  const { version, channelLabel } = splitUpdateTag(tag)
+  return { version, channel: resolveUpdateChannelLabel(channelLabel) }
 }
 
 /**

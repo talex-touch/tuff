@@ -13,7 +13,11 @@ import {
   AppPreviewChannel,
   DownloadModule,
   DownloadStatus,
-  UpdateProviderType
+  UpdateProviderType,
+  UPDATE_GITHUB_RELEASES_API,
+  UPDATE_GITHUB_REPO,
+  resolveUpdateChannelLabel,
+  splitUpdateTag
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -586,6 +590,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (usedNetwork) {
         this.recordCheckTimestamp()
       }
+      updateLog.info('Update check fetched', {
+        meta: {
+          source: result.source,
+          channel: targetChannel,
+          hasUpdate: result.hasUpdate,
+          tag: result.release?.tag_name ?? null
+        }
+      })
 
       if (result.hasUpdate && result.release) {
         await this.persistRelease(targetChannel, result.release, result.source)
@@ -844,7 +856,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Get cache key for current configuration
    */
   private getCacheKey(channel: AppPreviewChannel): string {
-    return `releases:talex-touch/tuff:${channel}`
+    return `releases:${UPDATE_GITHUB_REPO}:${channel}`
   }
 
   private async handleUserAction(tag: string, action: UpdateUserAction): Promise<void> {
@@ -944,7 +956,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           headers['If-Modified-Since'] = cacheEntry.lastModified
         }
 
-        const response = await axios.get('https://api.github.com/repos/talex-touch/tuff/releases', {
+        const response = await axios.get(UPDATE_GITHUB_RELEASES_API, {
           timeout: 8000,
           headers,
           validateStatus: (status) => status === 200 || status === 304
@@ -1161,10 +1173,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     minor: number
     patch: number
   } {
-    const version = versionStr.replaceAll('v', '')
-    const versionArr = version.split('-')
-    const versionNum = versionArr[0]
-    const channelLabel = versionArr.length >= 2 ? versionArr[1] : undefined
+    const { version, channelLabel } = splitUpdateTag(versionStr)
+    const versionNum = version
 
     const versionNumArr = versionNum.split('.')
 
@@ -1180,19 +1190,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Normalize channel text to the enum.
    */
   private parseChannelLabel(label?: string): AppPreviewChannel {
-    const normalized = (label || '').toUpperCase()
-
-    if (normalized.startsWith(AppPreviewChannel.SNAPSHOT)) {
-      return AppPreviewChannel.SNAPSHOT
-    }
-    if (normalized.startsWith(AppPreviewChannel.BETA)) {
-      return AppPreviewChannel.BETA
-    }
-    if (normalized === 'MASTER' || normalized.startsWith(AppPreviewChannel.RELEASE)) {
-      return AppPreviewChannel.RELEASE
-    }
-
-    return AppPreviewChannel.RELEASE
+    return resolveUpdateChannelLabel(label)
   }
 
   private getChannelPriority(channel: AppPreviewChannel): number {
@@ -1248,8 +1246,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private getCurrentChannel(): AppPreviewChannel {
     const version = this.getCurrentVersion()
-    const versionArr = version.split('-')
-    const channelLabel = versionArr.length >= 2 ? versionArr[1] : undefined
+    const { channelLabel } = splitUpdateTag(version)
     return this.parseChannelLabel(channelLabel)
   }
 
@@ -1299,7 +1296,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       source: {
         type: UpdateProviderType.GITHUB,
         name: 'GitHub Releases',
-        url: 'https://api.github.com/repos/talex-touch/tuff/releases',
+        url: UPDATE_GITHUB_RELEASES_API,
         enabled: true,
         priority: 1
       },
