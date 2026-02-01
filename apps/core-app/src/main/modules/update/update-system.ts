@@ -9,6 +9,9 @@ import {
   DownloadModule,
   DownloadPriority,
   UPDATE_GITHUB_RELEASES_API,
+  UPDATE_RELEASE_MANIFEST_NAME,
+  type UpdateReleaseArtifact,
+  type UpdateReleaseManifest,
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
@@ -190,8 +193,9 @@ export class UpdateSystem {
    */
   async downloadUpdate(release: GitHubRelease): Promise<string> {
     try {
+      const resolvedRelease = await this.attachReleaseManifest(release)
       // Find appropriate asset for current platform
-      const asset = this.findAssetForPlatform(release.assets)
+      const asset = this.findAssetForPlatform(resolvedRelease.assets)
 
       if (!asset) {
         throw new Error('No compatible asset found for current platform')
@@ -205,8 +209,8 @@ export class UpdateSystem {
         priority: DownloadPriority.CRITICAL,
         module: DownloadModule.APP_UPDATE,
         metadata: {
-          version: release.tag_name,
-          releaseDate: release.published_at,
+          version: resolvedRelease.tag_name,
+          releaseDate: resolvedRelease.published_at,
           checksum: asset.checksum,
           signatureUrl: asset.signatureUrl,
           signatureKeyUrl: asset.signatureKeyUrl
@@ -218,7 +222,7 @@ export class UpdateSystem {
       const taskId = await this.downloadCenterModule.addTask(request)
 
       // Set up listener for download completion
-      this.setupDownloadCompletionListener(taskId, release.tag_name)
+      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
 
       console.log(`[UpdateSystem] Update download started: ${taskId}`)
       return taskId
@@ -425,6 +429,104 @@ export class UpdateSystem {
     }
   }
 
+  private async attachReleaseManifest(release: GitHubRelease): Promise<GitHubRelease> {
+    const manifest = await this.fetchReleaseManifest(release.assets)
+    if (!manifest) {
+      return release
+    }
+
+    const assetMap = new Map<string, ReleaseAsset>()
+    for (const asset of release.assets as ReleaseAsset[]) {
+      const name = String(asset?.name || '')
+      if (name) {
+        assetMap.set(this.normalizeAssetKey(name), asset)
+      }
+    }
+
+    const manifestMap = new Map<string, UpdateReleaseArtifact>()
+    for (const artifact of manifest.artifacts) {
+      if (artifact?.name) {
+        manifestMap.set(this.normalizeAssetKey(artifact.name), artifact)
+      }
+    }
+
+    for (const asset of release.assets as ReleaseAsset[]) {
+      const name = String(asset?.name || '')
+      if (!name) {
+        continue
+      }
+      const manifestEntry = manifestMap.get(this.normalizeAssetKey(name))
+      if (!manifestEntry) {
+        continue
+      }
+
+      asset.sha256 = manifestEntry.sha256
+      asset.checksum = manifestEntry.sha256
+
+      if (manifestEntry.signature) {
+        const signatureAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signature))
+        const signatureUrl = signatureAsset?.browser_download_url || signatureAsset?.url
+        if (signatureUrl) {
+          asset.signatureUrl = signatureUrl
+        }
+      }
+
+      if (manifestEntry.signatureKey) {
+        const signatureKeyAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signatureKey))
+        const signatureKeyUrl = signatureKeyAsset?.browser_download_url || signatureKeyAsset?.url
+        if (signatureKeyUrl) {
+          asset.signatureKeyUrl = signatureKeyUrl
+        }
+      }
+    }
+
+    return release
+  }
+
+  private async fetchReleaseManifest(
+    assets: ReleaseAsset[]
+  ): Promise<UpdateReleaseManifest | null> {
+    const manifestAsset = assets.find(
+      (asset) => this.normalizeAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
+    )
+    if (!manifestAsset) {
+      return null
+    }
+
+    const manifestUrl = manifestAsset.browser_download_url || manifestAsset.url
+    if (!manifestUrl) {
+      return null
+    }
+
+    try {
+      const response = await axios.get(manifestUrl, { timeout: 8000 })
+      const manifest = response.data
+
+      if (!this.isReleaseManifest(manifest)) {
+        console.warn('[UpdateSystem] Invalid release manifest format')
+        return null
+      }
+
+      return manifest
+    } catch (error) {
+      console.warn('[UpdateSystem] Failed to fetch release manifest:', error)
+      return null
+    }
+  }
+
+  private isReleaseManifest(payload: unknown): payload is UpdateReleaseManifest {
+    if (!payload || typeof payload !== 'object') {
+      return false
+    }
+
+    const candidate = payload as { schemaVersion?: unknown; artifacts?: unknown }
+    if (candidate.schemaVersion !== 1) {
+      return false
+    }
+
+    return Array.isArray(candidate.artifacts)
+  }
+
   /**
    * Parse version string to version object
    */
@@ -498,14 +600,13 @@ export class UpdateSystem {
     const platform = process.platform
     const arch = process.arch
 
-    // Map platform names
-    const platformMap: Record<string, string> = {
-      darwin: 'mac',
-      win32: 'win',
-      linux: 'linux'
+    const platformTokensMap: Record<string, string[]> = {
+      darwin: ['darwin', 'mac', 'macos'],
+      win32: ['win32', 'win', 'windows'],
+      linux: ['linux']
     }
 
-    const platformName = platformMap[platform] || platform
+    const platformTokens = platformTokensMap[platform] || [platform]
     const signatureMap = new Map<string, string>()
 
     for (const asset of assets) {
@@ -536,7 +637,7 @@ export class UpdateSystem {
       const normalizedName = name.toLowerCase()
 
       // Check platform match
-      if (!normalizedName.includes(platformName)) {
+      if (!platformTokens.some((token) => normalizedName.includes(token))) {
         continue
       }
 
@@ -561,7 +662,7 @@ export class UpdateSystem {
         name: asset.name,
         url: asset.browser_download_url || asset.url,
         size: asset.size,
-        platform: platformName,
+        platform,
         arch,
         checksum,
         signatureUrl,
