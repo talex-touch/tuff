@@ -80,30 +80,33 @@ code: |
 
 点击按钮后进行数据加载操作，在按钮上显示加载状态。
 
-::::TuffDemo{code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton variant="primary" :loading="loading" @click="handleClick">
-      {{ loading ? '加载中' : '点击加载' }}
-    </TxButton>
-    <TxButton variant="secondary" :loading="loading" @click="handleClick">
-      {{ loading ? '加载中' : '点击加载' }}
-    </TxButton>
-    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-  </template>
----
-#preview
+<DemoBlock>
+<template #preview>
 <div class="tuff-demo-row">
-  <tx-button variant="primary" :loading="loading" @click="handleClick">
+  <TxButton variant="primary" :loading="loading" @click="handleClick">
     {{ loading ? '加载中' : '点击加载' }}
-  </tx-button>
-  <tx-button variant="secondary" :loading="loading" @click="handleClick">
+  </TxButton>
+  <TxButton variant="secondary" :loading="loading" @click="handleClick">
     {{ loading ? '加载中' : '点击加载' }}
-  </tx-button>
-  <tx-button circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+  </TxButton>
+  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
 </div>
-::::
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxButton variant="primary" :loading="loading" @click="handleClick">
+    {{ loading ? '加载中' : '点击加载' }}
+  </TxButton>
+  <TxButton variant="secondary" :loading="loading" @click="handleClick">
+    {{ loading ? '加载中' : '点击加载' }}
+  </TxButton>
+  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+</template>
+```
+</template>
+</DemoBlock>
 
 ### Sizes
 
