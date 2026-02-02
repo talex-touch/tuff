@@ -218,8 +218,6 @@ export default defineComponent({
     const contentRootElRef = ref<HTMLElement | null>(null)
 
     let contentResizeObserver: ResizeObserver | null = null
-    let autoSizerRefreshMicrotask: Promise<void> | null = null
-
     let pointerAnimTimer: number | null = null
 
     onBeforeUnmount(() => {
@@ -231,26 +229,13 @@ export default defineComponent({
         contentResizeObserver.disconnect()
         contentResizeObserver = null
       }
-      autoSizerRefreshMicrotask = null
     })
-
-    function scheduleAutoSizerRefresh() {
-      if (!sizeAnimEnabled.value)
-        return
-      if (autoSizerRefreshMicrotask)
-        return
-
-      autoSizerRefreshMicrotask = Promise.resolve().then(() => {
-        autoSizerRefreshMicrotask = null
-        autoSizerRef.value?.refresh?.()
-      })
-    }
 
     // Disabled continuous content ResizeObserver to avoid flicker loops
     // AutoSizer will only refresh on manual tab switches, not content changes
     watch(
       () => [contentRootElRef.value, sizeAnimEnabled.value] as const,
-      ([el, enabled]) => {
+      () => {
         if (contentResizeObserver) {
           contentResizeObserver.disconnect()
           contentResizeObserver = null

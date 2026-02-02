@@ -1,11 +1,11 @@
 import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
-import TxFlipOverlay from './src/TxFlipOverlay.vue'
+import TxFlipOverlayComponent from './src/TxFlipOverlay.vue'
 
-const FlipOverlay = withInstall(TxFlipOverlay)
+const FlipOverlay = withInstall(TxFlipOverlayComponent)
 
-export { FlipOverlay, TxFlipOverlay }
+export { FlipOverlay, TxFlipOverlayComponent as TxFlipOverlay }
 export type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps }
-export type TxFlipOverlayInstance = InstanceType<typeof TxFlipOverlay> & { close: () => void }
+export type TxFlipOverlayInstance = InstanceType<typeof TxFlipOverlayComponent> & { close: () => void }
 
 export default FlipOverlay

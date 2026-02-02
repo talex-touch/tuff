@@ -31,7 +31,7 @@ function move<T extends SortableListItem>(arr: T[], from: number, to: number): T
   return next
 }
 
-function canDrag(e: DragEvent, id: string): boolean {
+function canDrag(e: DragEvent): boolean {
   if (props.disabled)
     return false
   if (!props.handle)
@@ -45,7 +45,7 @@ function canDrag(e: DragEvent, id: string): boolean {
 }
 
 function onDragStart(e: DragEvent, id: string): void {
-  if (!canDrag(e, id)) {
+  if (!canDrag(e)) {
     e.preventDefault()
     return
   }

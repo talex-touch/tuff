@@ -33,6 +33,7 @@ const { vWave } = VWave.createLocalWaveDirective()
 
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const innerRef = ref<HTMLElement | null>(null)
+void innerRef.value
 const slots = useSlots()
 
 const autoWidthEnabled = computed(() => {
