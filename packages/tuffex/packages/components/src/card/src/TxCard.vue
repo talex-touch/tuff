@@ -38,8 +38,6 @@ const {
   loading,
   disabled,
   inertial,
-  inertialMaxOffset,
-  inertialRebound,
   glassBlur,
   glassBlurAmount,
   glassOverlay,

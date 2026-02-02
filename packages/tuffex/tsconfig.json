@@ -17,7 +17,10 @@
     "types": ["vite/client"],
     "baseUrl": ".",
     "paths": {
-      "@tuffex/*": ["./*"]
+      "@tuffex/*": ["./*"],
+      "@talex-touch/tuffex": ["./packages/components/src/index.ts"],
+      "@talex-touch/tuffex/style.css": ["./packages/components/style/index.scss"],
+      "@talex-touch/tuffex/utils": ["./packages/utils/index.ts"]
     }
   },
   "include": [

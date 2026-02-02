@@ -42,6 +42,7 @@ const value = computed({
 })
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+void textareaRef.value
 
 function trySend(): void {
   if (props.disabled || props.submitting)

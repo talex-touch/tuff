@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GlassSurfaceProps } from '../index'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hasDocument, hasNavigator, hasWindow } from '../../../../utils/env'
 
 defineOptions({
@@ -209,6 +209,13 @@ onMounted(() => {
       resizeObserver.observe(containerRef.value)
     }
   })
+})
+
+onBeforeUnmount(() => {
+  cleanupDarkMode?.()
+  cleanupDarkMode = undefined
+  resizeObserver?.disconnect()
+  resizeObserver = null
 })
 
 watch(

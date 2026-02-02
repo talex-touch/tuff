@@ -502,7 +502,7 @@ function openSearch(): boolean {
   const view = viewRef.value
   if (!view || !props.search)
     return false
-  openSearchPanel(view)
+  openSearchPanel(view as EditorView)
   view.focus()
   return true
 }
@@ -511,14 +511,14 @@ function foldAllLines(): boolean {
   const view = viewRef.value
   if (!view)
     return false
-  return foldAll(view)
+  return foldAll(view as EditorView)
 }
 
 function unfoldAllLines(): boolean {
   const view = viewRef.value
   if (!view)
     return false
-  return unfoldAll(view)
+  return unfoldAll(view as EditorView)
 }
 
 async function copyToClipboard(): Promise<boolean> {
@@ -726,7 +726,7 @@ defineExpose({
   unfoldAll: () => unfoldAllLines(),
   copy: () => copyToClipboard(),
   getValue: () => getValue(),
-  getView: () => viewRef.value,
+  getView: () => viewRef.value as unknown,
 })
 </script>
 

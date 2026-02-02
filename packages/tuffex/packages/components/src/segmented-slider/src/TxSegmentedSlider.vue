@@ -17,6 +17,7 @@ const props = withDefaults(defineProps<SegmentedSliderProps>(), {
 const emit = defineEmits<SegmentedSliderEmits>()
 
 const sliderRef = ref<HTMLDivElement | null>(null)
+void sliderRef.value
 
 const currentIndex = computed(() => {
   const index = props.segments.findIndex(seg => seg.value === props.modelValue)
