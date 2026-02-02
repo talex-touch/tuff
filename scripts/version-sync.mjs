@@ -32,8 +32,13 @@ const log = {
   },
 }
 
-function runCommand(command) {
-  execSync(command, { stdio: 'inherit', cwd: rootDir })
+if (process.env.TALEX_VERSION_SYNC_CHILD === '1') {
+  log.warn('Detected recursive version script call. Skipping.')
+  process.exit(0)
+}
+
+function runCommand(command, options = {}) {
+  execSync(command, { stdio: 'inherit', cwd: rootDir, ...options })
 }
 
 function getGitStatusLines() {
@@ -149,7 +154,9 @@ async function runVersionSync() {
   log.info('Running bumpp (no commit/tag)...')
   try {
     const finalArgs = [...bumppArgs, '--yes', '--no-commit', '--no-tag', '--no-push']
-    runCommand(`bumpp ${finalArgs.join(' ')}`)
+    runCommand(`bumpp ${finalArgs.join(' ')}`, {
+      env: { ...process.env, TALEX_VERSION_SYNC_CHILD: '1' },
+    })
   }
   catch (error) {
     log.error('bumpp failed.')
@@ -226,7 +233,10 @@ async function runVersionSync() {
   log.info('Creating tag...')
   runCommand(`git tag ${tagName}`)
 
-  log.success(`Version sync completed. Tag ${tagName} created (not pushed).`)
+  log.info('Pushing commits and tags...')
+  runCommand('git push --follow-tags')
+
+  log.success(`Version sync completed. Tag ${tagName} created and pushed.`)
 }
 
 // 执行主流程
