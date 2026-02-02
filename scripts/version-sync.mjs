@@ -158,9 +158,18 @@ async function runVersionSync() {
 
   const versionAfter = readRootVersion()
 
-  log.info('Running pnpm install --lockfile-only...')
+  log.info('Syncing core package version...')
   try {
-    runCommand('pnpm install --lockfile-only')
+    runCommand('node scripts/sync-core-package.mjs')
+  }
+  catch (error) {
+    log.error('sync-core-package failed.')
+    process.exit(1)
+  }
+
+  log.info('Running pnpm install --lockfile-only --ignore-scripts...')
+  try {
+    runCommand('pnpm install --lockfile-only --ignore-scripts')
   }
   catch (error) {
     log.error('pnpm install failed.')
