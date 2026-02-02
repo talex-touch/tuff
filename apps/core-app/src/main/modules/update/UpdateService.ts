@@ -24,7 +24,8 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { and, desc, eq } from 'drizzle-orm'
-import { app } from 'electron'
+import { app, Notification } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
 import { downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
@@ -104,10 +105,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private autoDownloadTasks: Map<string, string> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
+  private macAutoUpdaterInitialized = false
+  private macAutoUpdaterDownloadInFlight = false
+  private macUpdateDownloadedVersion: string | null = null
+  private macUpdateReadyNotifiedVersion: string | null = null
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
     [AppPreviewChannel.SNAPSHOT]: 2
+  }
+  private readonly onMacUpdateDownloaded = (info: { version?: string }): void => {
+    const version = info?.version || 'unknown'
+    this.macUpdateDownloadedVersion = version
+    this.showMacUpdateReadyNotification(version)
+  }
+  private readonly onMacUpdaterError = (error: unknown): void => {
+    updateLog.error('Mac autoUpdater error', { error })
   }
 
   constructor() {
@@ -169,6 +182,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     // Load settings
     this.loadSettings()
     await this.loadReleaseCache()
+    this.setupMacAutoUpdater()
 
     if (!this.tryInitUpdateSystem(ctx)) {
       touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, () => {
@@ -227,6 +241,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
     this.transportDisposers = []
     this.transport = null
+    if (this.macAutoUpdaterInitialized) {
+      autoUpdater.removeListener('update-downloaded', this.onMacUpdateDownloaded)
+      autoUpdater.removeListener('error', this.onMacUpdaterError)
+      this.macAutoUpdaterInitialized = false
+    }
 
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
@@ -298,6 +317,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
             this.settings = { ...this.settings, ...sanitizedSettings }
             this.saveSettings()
+            this.setupMacAutoUpdater()
 
             if (this.updateSystem) {
               if (typeof sanitizedSettings.autoDownload === 'boolean') {
@@ -313,6 +333,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               }
               if (sanitizedSettings.updateChannel) {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
+                this.syncMacAutoUpdaterChannel()
               }
             }
 
@@ -414,6 +435,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       tx.on(UpdateEvents.download, async (release) => {
         try {
+          if (this.isMacAutoUpdaterEnabled()) {
+            if (this.updateSystem) {
+              await this.updateSystem.scheduleRendererOverride(release)
+            }
+            await this.downloadMacUpdate(release)
+            return { success: true }
+          }
           if (!this.updateSystem) {
             throw new Error('UpdateSystem not initialized')
           }
@@ -430,6 +458,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       tx.on(UpdateEvents.install, async (payload) => {
         try {
+          if (this.isMacAutoUpdaterEnabled()) {
+            await this.installMacUpdate()
+            return { success: true }
+          }
           if (!this.updateSystem) {
             throw new Error('UpdateSystem not initialized')
           }
@@ -506,6 +538,89 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
       })
     )
+  }
+
+  private isMacAutoUpdaterEnabled(): boolean {
+    return app.isPackaged && process.platform === 'darwin'
+  }
+
+  private setupMacAutoUpdater(): void {
+    if (this.macAutoUpdaterInitialized || !this.isMacAutoUpdaterEnabled()) {
+      return
+    }
+    this.macAutoUpdaterInitialized = true
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = false
+    autoUpdater.allowPrerelease = this.getEffectiveChannel() !== AppPreviewChannel.RELEASE
+    autoUpdater.on('update-downloaded', this.onMacUpdateDownloaded)
+    autoUpdater.on('error', this.onMacUpdaterError)
+  }
+
+  private syncMacAutoUpdaterChannel(): void {
+    if (!this.isMacAutoUpdaterEnabled() || !this.macAutoUpdaterInitialized) {
+      return
+    }
+    autoUpdater.allowPrerelease = this.getEffectiveChannel() !== AppPreviewChannel.RELEASE
+  }
+
+  private async downloadMacUpdate(release: GitHubRelease): Promise<void> {
+    this.setupMacAutoUpdater()
+    if (this.macUpdateDownloadedVersion) {
+      updateLog.info('macOS update already downloaded', {
+        meta: { version: this.macUpdateDownloadedVersion }
+      })
+      return
+    }
+    if (this.macAutoUpdaterDownloadInFlight) {
+      return
+    }
+    this.macAutoUpdaterDownloadInFlight = true
+    try {
+      this.syncMacAutoUpdaterChannel()
+      updateLog.info('macOS autoUpdater checking for updates', {
+        meta: { tag: release.tag_name }
+      })
+      await autoUpdater.checkForUpdates()
+      await autoUpdater.downloadUpdate()
+      updateLog.info('macOS autoUpdater download started', {
+        meta: { tag: release.tag_name }
+      })
+    } catch (error) {
+      updateLog.error('macOS autoUpdater download failed', { error })
+      throw error
+    } finally {
+      this.macAutoUpdaterDownloadInFlight = false
+    }
+  }
+
+  private async installMacUpdate(): Promise<void> {
+    if (!this.macUpdateDownloadedVersion) {
+      throw new Error('macOS update has not been downloaded')
+    }
+    autoUpdater.quitAndInstall()
+  }
+
+  private showMacUpdateReadyNotification(version: string): void {
+    if (!this.isMacAutoUpdaterEnabled()) {
+      return
+    }
+    if (this.macUpdateReadyNotifiedVersion === version) {
+      return
+    }
+    this.macUpdateReadyNotifiedVersion = version
+    const notification = new Notification({
+      title: 'Update Ready',
+      body: `Version ${version} is ready. Click to restart and finish updating.`,
+      silent: false,
+      urgency: 'critical',
+      timeoutType: 'never'
+    })
+    notification.on('click', () => {
+      void this.installMacUpdate().catch((error) => {
+        updateLog.error('Failed to install macOS update', { error })
+      })
+    })
+    notification.show()
   }
 
   /**
@@ -671,15 +786,30 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!this.settings.autoDownload) {
       return
     }
-    if (!this.updateSystem) {
-      return
-    }
     if (!app.isPackaged) {
       return
     }
 
     const tag = release.tag_name
     if (this.autoDownloadTasks.has(tag)) {
+      return
+    }
+
+    if (this.isMacAutoUpdaterEnabled()) {
+      try {
+        if (this.updateSystem) {
+          await this.updateSystem.scheduleRendererOverride(release)
+        }
+        await this.downloadMacUpdate(release)
+        this.autoDownloadTasks.set(tag, 'macos-auto-updater')
+        updateLog.info(`Auto download started for ${tag} (macOS autoUpdater)`)
+      } catch (error) {
+        updateLog.warn('Auto download failed (macOS autoUpdater)', { error, meta: { tag } })
+      }
+      return
+    }
+
+    if (!this.updateSystem) {
       return
     }
 
