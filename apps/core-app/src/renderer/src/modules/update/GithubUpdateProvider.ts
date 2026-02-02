@@ -271,6 +271,8 @@ export class GithubUpdateProvider extends UpdateProvider {
     const releaseAssets = release.assets as (GitHubApiAsset & {
       sha256?: string
       checksum?: string
+      coreRange?: string
+      component?: UpdateReleaseArtifact['component']
     })[]
     for (const asset of releaseAssets) {
       const name = String(asset?.name || '')

@@ -25,7 +25,9 @@ const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src',
 const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 // Disable sourcemap in production/release builds to reduce package size
-const isProduction = process.env.BUILD_TYPE === 'release' || process.env.NODE_ENV === 'production'
+const isProduction =
+  process.env.BUILD_TYPE === 'release' ||
+  (!process.env.BUILD_TYPE && process.env.NODE_ENV === 'production')
 const enableSourcemap = !isProduction
 const tuffexAliases = isProduction
   ? []
