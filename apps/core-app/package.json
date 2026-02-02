@@ -11,7 +11,7 @@
     "lint": "eslint --cache . --quiet",
     "lint:fix": "eslint --cache --fix .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "start": "electron-vite preview",
     "dev": "pnpm exec electron-vite dev",

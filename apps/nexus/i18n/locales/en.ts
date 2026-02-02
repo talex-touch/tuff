@@ -591,21 +591,49 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             meta: 'Slack · Thread with design-pod',
           },
         },
-        highlights: {
-          context: {
-            title: 'Understands context',
-            copy: 'Intent parsing links people, tools, and time so you never sift through tabs again.',
+      highlights: {
+        context: {
+          title: 'Understands context',
+          copy: 'Intent parsing links people, tools, and time so you never sift through tabs again.',
+        },
+        silo: {
+          title: 'Breaks every silo',
+          copy: 'Designs, files, conversations, and tasks flow back in one continuous pane.',
+        },
+        breathe: {
+          title: 'Breathes with you',
+          copy: 'Animations stay measured and calm, keeping attention on what matters most.',
+        },
+      },
+      corebox: {
+        tagAll: 'All',
+        hints: {
+          open: 'Open',
+          actions: 'Actions',
+          quickSelect: 'Quick Select',
+        },
+        slides: {
+          search: {
+            label: 'Search',
+            focus: 'Apps / Local',
+            query: 'QQMiniApp',
+            alt: 'CoreBox search results for apps',
           },
-          silo: {
-            title: 'Breaks every silo',
-            copy: 'Designs, files, conversations, and tasks flow back in one continuous pane.',
+          file: {
+            label: 'Files',
+            focus: 'Files / Recent',
+            query: 'Roadmap',
+            alt: 'CoreBox search results for files',
           },
-          breathe: {
-            title: 'Breathes with you',
-            copy: 'Animations stay measured and calm, keeping attention on what matters most.',
+          tool: {
+            label: 'Tools',
+            focus: 'AI / Built-in',
+            query: 'Translate',
+            alt: 'CoreBox tools results',
           },
         },
       },
+    },
       plugins: {
         eyebrow: 'Plugins Center',
         headline: 'Extend Tuff to your tools.',

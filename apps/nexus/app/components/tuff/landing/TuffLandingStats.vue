@@ -44,7 +44,7 @@ const aiSpotlight = computed(() => ({
     :title="aiSpotlight.headline"
     :subtitle="aiSpotlight.subheadline"
     section-class="min-h-screen flex flex-col justify-center"
-    container-class="max-w-6xl w-full flex flex-col gap-12"
+    container-class="max-w-6xl w-full flex flex-col gap-8"
     title-class="text-[clamp(.7rem,1vw+1.4rem,1.2rem)] font-bold leading-tight"
     subtitle-class="mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70"
     :reveal-options="{
@@ -52,6 +52,8 @@ const aiSpotlight = computed(() => ({
       from: {
         opacity: 0,
         y: 48,
+        scale: 1.08,
+        filter: 'blur(0px)',
         duration: 1.05,
         ease: 'power3.out',
       },
@@ -72,11 +74,11 @@ const aiSpotlight = computed(() => ({
         </TuffVortexBackground>
       </TuffShowcaseContainer>
 
-      <p>
+      <!-- <p>
         <span class="block text-sm text-neutral-500/80 font-medium tracking-wide dark:text-neutral-300/70">
           {{ aiSpotlight.highlights[0]?.copy ?? 'Precision insights orchestrated for your next launch.' }}
         </span>
-      </p>
+      </p> -->
     </div>
   </TuffLandingSection>
 </template>

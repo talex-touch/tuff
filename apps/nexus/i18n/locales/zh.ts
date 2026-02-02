@@ -602,6 +602,34 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
             copy: '动画克制而有节奏，始终把注意力留给真正重要的内容。',
           },
         },
+        corebox: {
+          tagAll: '全部',
+          hints: {
+            open: '打开',
+            actions: '操作',
+            quickSelect: '快速选择',
+          },
+          slides: {
+            search: {
+              label: '搜索',
+              focus: '应用 / 本地',
+              query: 'QQMiniApp',
+              alt: 'CoreBox 应用搜索动图',
+            },
+            file: {
+              label: '文件',
+              focus: '文件 / 最近',
+              query: 'Roadmap',
+              alt: 'CoreBox 文件搜索动图',
+            },
+            tool: {
+              label: '工具',
+              focus: 'AI / 内置',
+              query: '翻译',
+              alt: 'CoreBox 工具与翻译动图',
+            },
+          },
+        },
       },
       plugins: {
         eyebrow: '插件中心',
