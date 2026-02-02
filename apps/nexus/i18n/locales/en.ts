@@ -911,6 +911,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         subheadline: 'Join the Tuff Pioneer Program. Get early access, shape the development, and define the next generation of productivity.',
         formTitle: 'Email',
         cta: 'Request Pioneer Access',
+        ctaPrimary: 'Sign in to enable Pioneer Testing',
         benefitsTitle: 'Your Pioneer perks',
         benefits: {
           early: {
@@ -926,7 +927,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             copy: 'Access private sessions, office hours, and recognition across the platform.',
           },
         },
-        privacy: 'We use your email only to coordinate Pioneer access and updates.',
+        guidance: 'After signing in, open Updates → Pioneer Testing and subscribe to Beta to receive push notifications.',
       },
     },
     features: {
