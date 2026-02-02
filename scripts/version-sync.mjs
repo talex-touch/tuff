@@ -2,13 +2,35 @@
 
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { stdin as input, stdout as output } from 'node:process'
+import { createInterface } from 'node:readline/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import chalk from 'chalk'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const rootDir = join(__dirname, '..')
 const VERSION_FILES = ['package.json', 'apps/core-app/package.json']
+const isInteractive = Boolean(input.isTTY && output.isTTY)
+
+const log = {
+  title(message) {
+    console.log(chalk.bold.cyan(message))
+  },
+  info(message) {
+    console.log(chalk.cyan(`INFO  ${message}`))
+  },
+  success(message) {
+    console.log(chalk.green(`DONE  ${message}`))
+  },
+  warn(message) {
+    console.warn(chalk.yellow(`WARN  ${message}`))
+  },
+  error(message) {
+    console.error(chalk.red(`ERROR ${message}`))
+  },
+}
 
 function runCommand(command) {
   execSync(command, { stdio: 'inherit', cwd: rootDir })
@@ -37,13 +59,17 @@ function readRootVersion() {
   return data.version
 }
 
-function ensureTagNotExists(tag) {
+function tagExists(tag) {
   const existing = execSync(`git tag -l "${tag}"`, {
     encoding: 'utf-8',
     cwd: rootDir,
   }).trim()
-  if (existing) {
-    console.error(`❌ Tag 已存在: ${tag}`)
+  return Boolean(existing)
+}
+
+function ensureTagNotExists(tag) {
+  if (tagExists(tag)) {
+    log.error(`Tag already exists: ${tag}`)
     process.exit(1)
   }
 }
@@ -56,6 +82,27 @@ function stageFiles(files) {
   execSync(`git add -- ${args}`, { stdio: 'inherit', cwd: rootDir })
 }
 
+function formatFileList(files) {
+  if (!files.length) return ''
+  return files.map((file) => `  - ${file}`).join('\n')
+}
+
+async function confirmAction(question) {
+  if (!isInteractive) {
+    log.warn('No TTY detected. Skipping interactive confirmation.')
+    return false
+  }
+  const rl = createInterface({ input, output })
+  try {
+    const answer = await rl.question(`${question} (y/N): `)
+    const normalized = answer.trim().toLowerCase()
+    return normalized === 'y' || normalized === 'yes'
+  }
+  finally {
+    rl.close()
+  }
+}
+
 /**
  * 检查是否有未提交的更改
  * 注意：bumpp 会修改 package.json 和 apps/core-app/package.json，这是预期的
@@ -66,17 +113,16 @@ function checkUncommittedChanges() {
     // 检查是否有未暂存的更改或已暂存但未提交的更改
     const lines = getGitStatusLines()
     if (lines.length) {
-      console.error('❌ 错误: 检测到未提交的更改')
-      console.error('\n请先提交所有更改后再执行版本更新')
-      console.error('\n当前未提交的文件:')
-      console.error(lines.join('\n'))
+      log.error('Working tree is not clean.')
+      log.error('Please commit or stash changes before running version sync.')
+      console.error(formatFileList(lines))
       process.exit(1)
     }
 
-    console.log('✅ Git 工作区干净，可以继续')
+    log.success('Git working tree is clean.')
   }
   catch (error) {
-    console.error('❌ 检查 git 状态时出错:', error.message)
+    log.error(`Failed to read git status: ${error.message}`)
     process.exit(1)
   }
 }
@@ -86,60 +132,96 @@ function checkUncommittedChanges() {
  * 注意：bumpp 已经配置为同时更新 package.json 和 apps/core-app/package.json
  * 先检查 git 状态，再运行 bumpp、更新 lockfile，最后提交并打 tag
  */
-function runVersionSync() {
+async function runVersionSync() {
   // 获取命令行参数（bumpp 的参数）
   const bumppArgs = process.argv.slice(2)
 
-  console.log('🚀 开始版本同步流程...\n')
+  log.title('Version sync')
 
   // 1. 检查未提交的更改（只在开始时检查一次）
-  console.log('📋 检查 git 状态...')
+  log.info('Checking git status...')
   checkUncommittedChanges()
+
+  const versionBefore = readRootVersion()
 
   // 2. 运行 bumpp
   // bumpp 会根据 .bumpprc.json 配置自动更新 package.json 和 apps/core-app/package.json
-  console.log('\n📦 运行 bumpp 更新版本（暂不提交/打 tag）...')
+  log.info('Running bumpp (no commit/tag)...')
   try {
-    const finalArgs = [...bumppArgs, '--no-commit', '--no-tag', '--no-push']
+    const finalArgs = [...bumppArgs, '--yes', '--no-commit', '--no-tag', '--no-push']
     runCommand(`bumpp ${finalArgs.join(' ')}`)
   }
   catch (error) {
-    console.error('❌ bumpp 执行失败')
+    log.error('bumpp failed.')
     process.exit(1)
   }
 
-  console.log('\n📦 运行 pnpm install 更新 lockfile...')
+  const versionAfter = readRootVersion()
+
+  log.info('Running pnpm install --lockfile-only...')
   try {
-    runCommand('pnpm install')
+    runCommand('pnpm install --lockfile-only')
   }
   catch (error) {
-    console.error('❌ pnpm install 执行失败')
+    log.error('pnpm install failed.')
     process.exit(1)
   }
-
-  const version = readRootVersion()
-  const tagName = `v${version}`
-  ensureTagNotExists(tagName)
 
   const changedFiles = getChangedFiles()
-  if (!changedFiles.length) {
-    console.error('❌ 未检测到版本或 lockfile 变更，终止提交')
-    process.exit(1)
+  if (versionAfter === versionBefore) {
+    const tagName = `v${versionAfter}`
+    if (tagExists(tagName)) {
+      log.info(`Tag ${tagName} already exists. Nothing to do.`)
+      return
+    }
+
+    if (changedFiles.length) {
+      log.warn('Uncommitted changes detected after pnpm install:')
+      console.warn(formatFileList(changedFiles))
+    }
+
+    const shouldTag = await confirmAction(`Tag and push ${tagName} from current HEAD?`)
+    if (!shouldTag) {
+      log.info('Cancelled.')
+      return
+    }
+
+    try {
+      runCommand(`git tag ${tagName}`)
+      runCommand(`git push origin ${tagName}`)
+    }
+    catch (error) {
+      log.error('Failed to create or push tag.')
+      process.exit(1)
+    }
+
+    log.success(`Tag ${tagName} created and pushed.`)
+    return
   }
+
+  if (!changedFiles.length) {
+    log.warn('No changes detected after bump. Nothing to commit.')
+    return
+  }
+
+  const tagName = `v${versionAfter}`
+  ensureTagNotExists(tagName)
 
   const lockfiles = changedFiles.filter((file) => file.endsWith('pnpm-lock.yaml'))
   const filesToCommit = Array.from(new Set([...VERSION_FILES, ...lockfiles]))
   stageFiles(filesToCommit)
 
-  console.log('\n🧾 提交版本变更...')
+  log.info('Committing version update...')
   runCommand(`git commit -m "release: ${tagName}"`)
 
-  console.log('\n🏷️ 创建 tag...')
+  log.info('Creating tag...')
   runCommand(`git tag ${tagName}`)
 
-  console.log('\n✨ 版本同步完成!')
-  console.log('📝 已提交并创建 tag（未 push）')
+  log.success(`Version sync completed. Tag ${tagName} created (not pushed).`)
 }
 
 // 执行主流程
-runVersionSync()
+runVersionSync().catch((error) => {
+  log.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+})
