@@ -570,6 +570,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         eyebrow: 'AI Spotlight',
         headline: 'One search. Everything, connected.',
         subheadline: 'It doesn\'t just find. It understands.',
+        summaryHighlight: 'Tuff interprets intent',
         summary: 'Tuff interprets intent, then fuses every relevant surface into one calm, living result set.',
         queryLabel: 'Natural language query',
         queryText: '“Show me the design draft Sarah shared last week.”',

@@ -521,4 +521,9 @@ onBeforeUnmount(() => {
 .TuffHome-SmoothSection {
   position: relative;
 }
+
+.TuffHome-SmoothSection :deep(button) {
+  border: none;
+  outline: none;
+}
 </style>
