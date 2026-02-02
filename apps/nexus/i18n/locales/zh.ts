@@ -908,6 +908,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         subheadline: '加入 Tuff 先锋计划。抢先体验、共同构建，定义下一代效率工具。',
         formTitle: '邮箱',
         cta: '申请先锋资格',
+        ctaPrimary: 'Sign in to enable Pioneer Testing',
         benefitsTitle: '专属先锋权益',
         benefits: {
           early: {
@@ -923,7 +924,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
             copy: '参加专属交流、办公时段，并在平台内获得身份标识。',
           },
         },
-        privacy: '你的邮箱仅用于先锋计划的邀请与更新通知。',
+        guidance: 'After signing in, open Updates → Pioneer Testing and subscribe to Beta to receive push notifications.',
       },
     },
     features: {
