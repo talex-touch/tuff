@@ -16,25 +16,51 @@ const aiResultIcons = {
 
 const aiHighlightKeys = ['context', 'silo', 'breathe'] as const
 
-const aiSpotlight = computed(() => ({
-  eyebrow: t('landing.os.aiSpotlight.eyebrow'),
-  headline: t('landing.os.aiSpotlight.headline'),
-  subheadline: t('landing.os.aiSpotlight.subheadline'),
-  demo: {
-    summary: t('landing.os.aiSpotlight.summary'),
-    queryLabel: t('landing.os.aiSpotlight.queryLabel'),
-    queryText: t('landing.os.aiSpotlight.queryText'),
-    results: aiResultKeys.map(key => ({
-      icon: aiResultIcons[key],
-      title: t(`landing.os.aiSpotlight.results.${key}.title`),
-      meta: t(`landing.os.aiSpotlight.results.${key}.meta`),
+const buildSummaryParts = (summary: string, highlight: string) => {
+  if (!summary) {
+    return []
+  }
+
+  if (!highlight || !summary.includes(highlight)) {
+    return [{ text: summary, highlight: false }]
+  }
+
+  const marker = '__SUMMARY_HIGHLIGHT__'
+  const replaced = summary.replace(highlight, `${marker}${highlight}${marker}`)
+
+  return replaced
+    .split(marker)
+    .filter(part => part.length > 0)
+    .map(part => ({
+      text: part,
+      highlight: part === highlight,
+    }))
+}
+
+const aiSpotlight = computed(() => {
+  const summary = t('landing.os.aiSpotlight.summary')
+  const summaryHighlight = t('landing.os.aiSpotlight.summaryHighlight')
+
+  return {
+    eyebrow: t('landing.os.aiSpotlight.eyebrow'),
+    headline: t('landing.os.aiSpotlight.headline'),
+    subheadline: t('landing.os.aiSpotlight.subheadline'),
+    demo: {
+      summaryParts: buildSummaryParts(summary, summaryHighlight),
+      queryLabel: t('landing.os.aiSpotlight.queryLabel'),
+      queryText: t('landing.os.aiSpotlight.queryText'),
+      results: aiResultKeys.map(key => ({
+        icon: aiResultIcons[key],
+        title: t(`landing.os.aiSpotlight.results.${key}.title`),
+        meta: t(`landing.os.aiSpotlight.results.${key}.meta`),
+      })),
+    },
+    highlights: aiHighlightKeys.map(key => ({
+      title: t(`landing.os.aiSpotlight.highlights.${key}.title`),
+      copy: t(`landing.os.aiSpotlight.highlights.${key}.copy`),
     })),
-  },
-  highlights: aiHighlightKeys.map(key => ({
-    title: t(`landing.os.aiSpotlight.highlights.${key}.title`),
-    copy: t(`landing.os.aiSpotlight.highlights.${key}.copy`),
-  })),
-}))
+  }
+})
 </script>
 
 <template>
@@ -60,10 +86,6 @@ const aiSpotlight = computed(() => ({
       stagger: 0.16,
     }"
   >
-    <p data-reveal class="mx-auto my-0 max-w-3xl text-sm text-neutral-500 font-medium tracking-wide dark:text-neutral-300/80">
-      {{ aiSpotlight.demo.summary }}
-    </p>
-
     <div
       data-reveal
       class="flex flex-col items-center gap-8 text-center"
@@ -74,11 +96,18 @@ const aiSpotlight = computed(() => ({
         </TuffVortexBackground>
       </TuffShowcaseContainer>
 
-      <!-- <p>
-        <span class="block text-sm text-neutral-500/80 font-medium tracking-wide dark:text-neutral-300/70">
-          {{ aiSpotlight.highlights[0]?.copy ?? 'Precision insights orchestrated for your next launch.' }}
+      <p
+        data-reveal
+        class="mx-auto my-0 max-w-3xl text-sm text-neutral-500 font-medium tracking-wide dark:text-neutral-300/80"
+      >
+        <span
+          v-for="(part, index) in aiSpotlight.demo.summaryParts"
+          :key="index"
+          :class="part.highlight ? 'text-white font-bold' : undefined"
+        >
+          {{ part.text }}
         </span>
-      </p> -->
+      </p>
     </div>
   </TuffLandingSection>
 </template>
