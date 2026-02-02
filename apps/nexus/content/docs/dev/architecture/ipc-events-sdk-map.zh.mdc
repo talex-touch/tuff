@@ -165,3 +165,204 @@
 | --- | --- | --- |
 | `window:new` | 插件进程（Prelude） | `PluginModule.start -> transport.on(defineRawEvent('window:new'))`（`apps/core-app/src/main/modules/plugin/plugin-module.ts`） |
 | `window:visible` | 插件进程（Prelude） | `PluginModule.start -> transport.on(defineRawEvent('window:visible'))`（`apps/core-app/src/main/modules/plugin/plugin-module.ts`） |
+
+### C3. CommonChannel 兼容/遗留事件（App/System）
+
+#### C3.1 App/System
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `close` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> closeApp`（`apps/core-app/src/main/channel/common.ts`） |
+| `hide` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> touchApp.window.window.hide`（`apps/core-app/src/main/channel/common.ts`） |
+| `minimize` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> touchApp.window.minimize`（`apps/core-app/src/main/channel/common.ts`） |
+| `dev-tools` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> touchApp.window.openDevTools`（`apps/core-app/src/main/channel/common.ts`） |
+| `get-package` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> packageJson`（`apps/core-app/src/main/channel/common.ts`） |
+| `open-external` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> shell.openExternal`（`apps/core-app/src/main/channel/common.ts`） |
+| `get-os` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> getOSInformation`（`apps/core-app/src/main/channel/common.ts`） |
+| `common:cwd` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> process.cwd()`（`apps/core-app/src/main/channel/common.ts`） |
+| `common:get-path` | 调用方：渲染器/插件（raw event） | `CommonChannel.registerTransportHandlers -> touchApp.app.getPath`（`apps/core-app/src/main/channel/common.ts`） |
+| `folder:open` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder`（`apps/core-app/src/main/channel/common.ts`） |
+| `app:open-prompts-folder` | 渲染器（`apps/core-app/src/renderer/src/components/intelligence/IntelligencePrompts.vue`） | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder/shell.openPath`（`apps/core-app/src/main/channel/common.ts`） |
+| `module:folder` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> shell.openPath`（`apps/core-app/src/main/channel/common.ts`） |
+| `execute:cmd` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> shell.openPath`（`apps/core-app/src/main/channel/common.ts`） |
+| `app:open` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> shell.openPath`（`apps/core-app/src/main/channel/common.ts`） |
+| `url:open` | 渲染器（`apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`） | `CommonChannel.registerTransportHandlers -> onOpenUrl`（`apps/core-app/src/main/channel/common.ts`） |
+| `files:index-progress` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> fileProvider.getIndexingProgress`（`apps/core-app/src/main/channel/common.ts`） |
+| `system:get-active-app` | 调用方：渲染器/插件（raw event） | `CommonChannel.registerTransportHandlers -> activeAppService.getActiveApp`（`apps/core-app/src/main/channel/common.ts`） |
+| `system:get-storage-usage` | 渲染器（`apps/core-app/src/renderer/src/views/storage/Storagable.vue`） | `CommonChannel.registerTransportHandlers -> getStorageUsageReport`（`apps/core-app/src/main/channel/common.ts`） |
+| `build:get-verification-status` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> resolveBuildVerificationStatus`（`apps/core-app/src/main/channel/common.ts`） |
+
+#### C3.2 Temp File / Storage Cleanup
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `temp-file:create` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> tempFileService.createFile`（`apps/core-app/src/main/channel/common.ts`） |
+| `temp-file:delete` | 渲染器（legacy touch-sdk：`packages/utils/renderer/touch-sdk/index.ts`） | `CommonChannel.registerTransportHandlers -> tempFileService.deleteFile`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:clipboard` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupClipboard`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:file-index` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupFileIndex`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:logs` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupLogs`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:temp` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupTemp`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:analytics` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupAnalytics`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:usage` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupUsage`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:ocr` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupOcr`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:downloads` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupDownloads`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:intelligence` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupIntelligence`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:config` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupConfig`（`apps/core-app/src/main/channel/common.ts`） |
+| `storage:cleanup:updates` | 调用方：渲染器（raw event） | `CommonChannel.registerTransportHandlers -> cleanupUpdates`（`apps/core-app/src/main/channel/common.ts`） |
+
+### C4. Storage 兼容/遗留事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `storage:get` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> getConfig`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:get-versioned` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> getConfigWithVersion`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:save` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> saveConfig`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:reload` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> reloadConfig + broadcastUpdate`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:saveall` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> StoragePollingService.forceSave`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:save-sync` | 调用方：渲染器（legacy raw event） | `StorageModule.registerTransportHandlers -> saveConfig + sync write`（`apps/core-app/src/main/modules/storage/index.ts`） |
+| `storage:update` | `StorageModule.broadcastUpdate -> transport.broadcastToWindow`（`apps/core-app/src/main/modules/storage/index.ts`） | 渲染器（storage 订阅者） |
+
+### C5. Clipboard 兼容/遗留事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `clipboard:get-history` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> history query`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:set-favorite` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> setFavorite`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:delete-item` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> delete item`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:clear-history` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> clear history`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:apply-to-active-app` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> applyToActiveApp`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:write-text` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> writePayload(text)`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:write` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> writePayload`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:read` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> clipboard.read*`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:read-image` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> clipboard.readImage`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:read-files` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> clipboardHelper.readClipboardFiles`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:clear` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> clipboard.clear()`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:copy-and-paste` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> applyToActiveApp`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:query` | 调用方：渲染器（legacy raw event） | `ClipboardModule.registerTransportHandlers -> queryHistoryByMeta`（`apps/core-app/src/main/modules/clipboard.ts`） |
+| `clipboard:new-item` | `ClipboardModule.checkClipboard -> transport.sendTo`（`apps/core-app/src/main/modules/clipboard.ts`） | 渲染器（clipboard 订阅者） |
+
+### C6. BoxItem SDK 内部通道（CoreBox Item）
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `box-item:create` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> create`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:update` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> update`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:upsert` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> upsert`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:delete` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> delete`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:batch-upsert` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> batchUpsert`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:batch-delete` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> batchDelete`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:clear` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> clear`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:sync` | 渲染器（BoxItem SDK） | `BoxItemManager.registerTransportHandlers -> handleSyncRequest`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） |
+| `box-item:sync-response` | `BoxItemManager.handleSyncRequest -> emitToRenderer`（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`） | 渲染器（BoxItem SDK） |
+
+### C7. Shortcut（shortcon）内部事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `shortcon:update` | 渲染器（`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`） | `ShortcutModule.setupIpcListeners -> updateShortcut`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
+| `shortcon:disable-all` | 渲染器（`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`） | `ShortcutModule.setupIpcListeners -> disableAll`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
+| `shortcon:enable-all` | 渲染器（`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`） | `ShortcutModule.setupIpcListeners -> enableAll`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
+| `shortcon:get-all` | 渲染器（`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`） | `ShortcutModule.setupIpcListeners -> buildShortcutSnapshot`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
+| `shortcon:reg` | 插件进程（Prelude） | `ShortcutModule.setupIpcListeners -> registerRendererShortcut`（`apps/core-app/src/main/modules/global-shortcon.ts`） |
+| `shortcon:trigger` | `ShortcutModule.handleTrigger -> transport.sendToPlugin/sendToWindow`（`apps/core-app/src/main/modules/global-shortcon.ts`） | 渲染器/插件（快捷键订阅方） |
+
+### C8. Intelligence / Agents raw 事件
+
+#### C8.1 Intelligence
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `intelligence:invoke` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:chat-langchain` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.invoke('text.chat')`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:test-provider` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.testProvider`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-capability-test-meta` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> capabilityTesterRegistry.get`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:test-capability` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:fetch-models` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> fetchProviderModels`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-audit-logs` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.queryAuditLogs`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-today-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getTodayStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-month-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getMonthStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-usage-stats` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> ai.getUsageStats`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:set-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:delete-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-all-quotas` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:check-quota` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+| `intelligence:get-current-usage` | 调用方：渲染器/插件（raw event） | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage`（`apps/core-app/src/main/modules/ai/intelligence-module.ts`） |
+
+#### C8.2 Agents
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `agents:update-priority` | 渲染器（raw event） | `registerAgentChannels -> agentManager.updateTaskPriority`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） |
+| `agents:task-started` | `agentManager.on('task:started') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
+| `agents:task-progress` | `agentManager.on('task:progress') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
+| `agents:task-completed` | `agentManager.on('task:completed') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
+| `agents:task-failed` | `agentManager.on('task:failed') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
+| `agents:task-cancelled` | `agentManager.on('task:cancelled') -> transport.broadcast`（`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`） | 渲染器（Agent 状态订阅者） |
+
+### C9. Analytics 兼容/遗留事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `analytics:get-summary` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
+| `analytics:export` | 渲染器（`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`） | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics`（`apps/core-app/src/main/modules/analytics/analytics-module.ts`） |
+
+### C10. AddonOpener / Drop raw 事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `auth:external-callback` | `AddonOpenerModule.schemaHandlers -> transport.sendTo`（`apps/core-app/src/main/modules/addon-opener.ts`） | 渲染器（授权回调接收方） |
+| `@open-plugin` | `AddonOpenerModule.open-file -> transport.sendTo`（`apps/core-app/src/main/modules/addon-opener.ts`） | 渲染器（`apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`） |
+| `@install-plugin` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/action/mention/PluginApplyInstall.vue`） | `AddonOpenerModule.on(installPluginEvent) -> PluginResolver`（`apps/core-app/src/main/modules/addon-opener.ts`） |
+| `drop:plugin` | 渲染器（`apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`） | `AddonOpenerModule.on(dropPluginEvent) -> PluginResolver`（`apps/core-app/src/main/modules/addon-opener.ts`） |
+| `drop` | 渲染器（raw event） | `DropManager.init -> transport.sendToPlugin`（`apps/core-app/src/main/modules/drop-manager.ts`） |
+
+### C11. 文件 Provider raw 事件
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `everything:status` | 渲染器（Everything 设置页） | `EverythingProvider.registerChannels -> status`（`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`） |
+| `everything:toggle` | 渲染器（Everything 设置页） | `EverythingProvider.registerChannels -> toggle`（`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`） |
+| `everything:test` | 渲染器（Everything 设置页） | `EverythingProvider.registerChannels -> test`（`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`） |
+| `openers:resolve` | 渲染器（`apps/core-app/src/renderer/src/modules/openers/index.ts`） | `FileProvider.registerOpenersChannel -> getOpenerForExtension`（`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`） |
+| `file-index:failed` | `FileProvider.notifyIndexingFailure -> transport.broadcast`（`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`） | 渲染器（索引状态订阅者） |
+
+### C12. 系统服务 raw 事件（Permission/Terminal/Logs/Dashboard）
+
+#### C12.1 Permission
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `system:permission:check` | 渲染器（`apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`） | `PermissionChecker.setupChannels -> checker.checkAccessibility/checkNotifications/...`（`apps/core-app/src/main/modules/system/permission-checker.ts`） |
+| `system:permission:request` | 渲染器（`apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`） | `PermissionChecker.setupChannels -> requestPermission`（`apps/core-app/src/main/modules/system/permission-checker.ts`） |
+| `system:permission:open-settings` | 调用方：渲染器（raw event） | `PermissionChecker.setupChannels -> openSystemSettings`（`apps/core-app/src/main/modules/system/permission-checker.ts`） |
+
+#### C12.2 Terminal
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `terminal:create` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> create`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
+| `terminal:write` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> write`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
+| `terminal:kill` | 渲染器（`packages/utils/renderer/touch-sdk/terminal.ts`） | `TerminalModule.onInit -> kill`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） |
+| `terminal:data` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端输出订阅者） |
+| `terminal:exit` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端退出订阅者） |
+
+#### C12.3 Plugin Logs
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `plugin-log:subscribe` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> subscribe`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:unsubscribe` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> unsubscribe`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:get-sessions` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> getSessions`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:open-session-file` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> openSessionFile`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:open-log-directory` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> openLogDirectory`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:get-buffer` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> getBuffer`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log:get-session-log` | 渲染器（`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`） | `PluginLogModule -> getSessionLog`（`apps/core-app/src/main/service/plugin-log.service.ts`） |
+| `plugin-log-stream` | `PluginLogModule -> transport.sendTo`（`apps/core-app/src/main/service/plugin-log.service.ts`） | 渲染器（日志流订阅者） |
+
+#### C12.4 Dashboard / OCR
+
+| 事件名 | 发送端 | 处理端 |
+| --- | --- | --- |
+| `tuff:dashboard` | 调用方：渲染器（raw event） | `TuffDashboardModule.onInit -> buildSnapshot`（`apps/core-app/src/main/modules/system/tuff-dashboard.ts`） |
+| `ocr:dashboard` | 调用方：渲染器（raw event） | `OcrService.registerChannels -> getDashboardSnapshot`（`apps/core-app/src/main/modules/ocr/ocr-service.ts`） |
