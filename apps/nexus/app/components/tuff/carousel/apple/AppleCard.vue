@@ -18,6 +18,7 @@ interface Props {
   card: Card
   index: number
   layout?: boolean
+  onCardClick?: (card: Card, index: number) => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -60,6 +61,10 @@ watch(open, (newVal) => {
 onClickOutside(containerRef, () => handleClose())
 
 function handleOpen() {
+  if (props.onCardClick) {
+    props.onCardClick(props.card, props.index)
+    return
+  }
   open.value = true
 }
 

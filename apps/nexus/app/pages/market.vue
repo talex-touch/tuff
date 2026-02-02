@@ -6,7 +6,7 @@ import type {
   MarketplacePluginReview,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
 import Button from '~/components/ui/Button.vue'
@@ -30,12 +30,27 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const route = useRoute()
 const toast = useToast()
 
 const filters = reactive({
   search: '',
   category: 'all' as FilterCategory,
 })
+
+const searchQuery = computed(() => {
+  const value = route.query.query
+  if (Array.isArray(value))
+    return value[0] ?? ''
+  if (typeof value === 'string')
+    return value
+  return ''
+})
+
+watch(searchQuery, (value) => {
+  if (value !== filters.search)
+    filters.search = value
+}, { immediate: true })
 
 const selectedSlug = ref<string | null>(null)
 const selectedPlugin = ref<MarketplacePluginDetail | null>(null)
@@ -205,6 +220,8 @@ const filteredPlugins = computed(() => {
     const haystack = [
       plugin.name,
       plugin.summary,
+      plugin.slug,
+      plugin.id,
       plugin.latestVersion?.version ?? '',
       plugin.latestVersion?.channel ?? '',
       plugin.author?.name ?? '',

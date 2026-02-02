@@ -12,6 +12,7 @@ import PluginCardTranslate from './plugins/cards/PluginCardTranslate.vue'
 import PluginCardVSCode from './plugins/cards/PluginCardVSCode.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const capabilityKeys = ['notion', 'figma', 'github', 'vscode', 'calendar', 'spotify'] as const
 const capabilityIcons = {
@@ -53,6 +54,17 @@ const cards = computed(() => (plugins.value.extensions ?? []).map((item, index) 
   title: item.description,
   component: index < 5 ? components[index] : components[5],
 })))
+
+function handleCardClick(card: { id?: string }) {
+  if (!card?.id)
+    return
+  router.push({
+    path: '/market',
+    query: {
+      query: card.id,
+    },
+  })
+}
 </script>
 
 <template>
@@ -84,6 +96,7 @@ const cards = computed(() => (plugins.value.extensions ?? []).map((item, index) 
             :card="card"
             :index="index"
             :layout="true"
+            :on-card-click="handleCardClick"
           >
             <div
               :key="`dummy-content${index}`"
@@ -113,3 +126,31 @@ const cards = computed(() => (plugins.value.extensions ?? []).map((item, index) 
     </div>
   </TuffLandingSection>
 </template>
+
+<style scoped>
+.TuffLandingPlugins-Main {
+  position: relative;
+}
+
+:deep(.AppleCardCarousel-Track) {
+  --edge-mask-size: clamp(24px, 6vw, 120px);
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    black var(--edge-mask-size),
+    black calc(100% - var(--edge-mask-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0,
+    black var(--edge-mask-size),
+    black calc(100% - var(--edge-mask-size)),
+    transparent 100%
+  );
+  mask-size: 100% 100%;
+  -webkit-mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+</style>
