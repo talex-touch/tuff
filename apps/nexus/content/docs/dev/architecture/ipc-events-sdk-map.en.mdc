@@ -165,3 +165,204 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 | --- | --- | --- |
 | `window:new` | Plugin process (Prelude) | `PluginModule.start -> transport.on(defineRawEvent('window:new'))` (`apps/core-app/src/main/modules/plugin/plugin-module.ts`) |
 | `window:visible` | Plugin process (Prelude) | `PluginModule.start -> transport.on(defineRawEvent('window:visible'))` (`apps/core-app/src/main/modules/plugin/plugin-module.ts`) |
+
+### C3. CommonChannel legacy/compat events (App/System)
+
+#### C3.1 App/System
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `close` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> closeApp` (`apps/core-app/src/main/channel/common.ts`) |
+| `hide` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> touchApp.window.window.hide` (`apps/core-app/src/main/channel/common.ts`) |
+| `minimize` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> touchApp.window.minimize` (`apps/core-app/src/main/channel/common.ts`) |
+| `dev-tools` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> touchApp.window.openDevTools` (`apps/core-app/src/main/channel/common.ts`) |
+| `get-package` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> packageJson` (`apps/core-app/src/main/channel/common.ts`) |
+| `open-external` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.openExternal` (`apps/core-app/src/main/channel/common.ts`) |
+| `get-os` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> getOSInformation` (`apps/core-app/src/main/channel/common.ts`) |
+| `common:cwd` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> process.cwd()` (`apps/core-app/src/main/channel/common.ts`) |
+| `common:get-path` | Caller: renderer/plugin (raw event) | `CommonChannel.registerTransportHandlers -> touchApp.app.getPath` (`apps/core-app/src/main/channel/common.ts`) |
+| `folder:open` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder` (`apps/core-app/src/main/channel/common.ts`) |
+| `app:open-prompts-folder` | Renderer (`apps/core-app/src/renderer/src/components/intelligence/IntelligencePrompts.vue`) | `CommonChannel.registerTransportHandlers -> shell.showItemInFolder/shell.openPath` (`apps/core-app/src/main/channel/common.ts`) |
+| `module:folder` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.openPath` (`apps/core-app/src/main/channel/common.ts`) |
+| `execute:cmd` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.openPath` (`apps/core-app/src/main/channel/common.ts`) |
+| `app:open` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> shell.openPath` (`apps/core-app/src/main/channel/common.ts`) |
+| `url:open` | Renderer (`apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`) | `CommonChannel.registerTransportHandlers -> onOpenUrl` (`apps/core-app/src/main/channel/common.ts`) |
+| `files:index-progress` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> fileProvider.getIndexingProgress` (`apps/core-app/src/main/channel/common.ts`) |
+| `system:get-active-app` | Caller: renderer/plugin (raw event) | `CommonChannel.registerTransportHandlers -> activeAppService.getActiveApp` (`apps/core-app/src/main/channel/common.ts`) |
+| `system:get-storage-usage` | Renderer (`apps/core-app/src/renderer/src/views/storage/Storagable.vue`) | `CommonChannel.registerTransportHandlers -> getStorageUsageReport` (`apps/core-app/src/main/channel/common.ts`) |
+| `build:get-verification-status` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> resolveBuildVerificationStatus` (`apps/core-app/src/main/channel/common.ts`) |
+
+#### C3.2 Temp File / Storage Cleanup
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `temp-file:create` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> tempFileService.createFile` (`apps/core-app/src/main/channel/common.ts`) |
+| `temp-file:delete` | Renderer (legacy touch-sdk: `packages/utils/renderer/touch-sdk/index.ts`) | `CommonChannel.registerTransportHandlers -> tempFileService.deleteFile` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:clipboard` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupClipboard` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:file-index` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupFileIndex` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:logs` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupLogs` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:temp` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupTemp` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:analytics` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupAnalytics` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:usage` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupUsage` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:ocr` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupOcr` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:downloads` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupDownloads` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:intelligence` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupIntelligence` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:config` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupConfig` (`apps/core-app/src/main/channel/common.ts`) |
+| `storage:cleanup:updates` | Caller: renderer (raw event) | `CommonChannel.registerTransportHandlers -> cleanupUpdates` (`apps/core-app/src/main/channel/common.ts`) |
+
+### C4. Storage legacy events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `storage:get` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> getConfig` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:get-versioned` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> getConfigWithVersion` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:save` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> saveConfig` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:reload` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> reloadConfig + broadcastUpdate` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:saveall` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> StoragePollingService.forceSave` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:save-sync` | Caller: renderer (legacy raw event) | `StorageModule.registerTransportHandlers -> saveConfig + sync write` (`apps/core-app/src/main/modules/storage/index.ts`) |
+| `storage:update` | `StorageModule.broadcastUpdate -> transport.broadcastToWindow` (`apps/core-app/src/main/modules/storage/index.ts`) | Renderer (storage subscribers) |
+
+### C5. Clipboard legacy events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `clipboard:get-history` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> history query` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:set-favorite` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> setFavorite` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:delete-item` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> delete item` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:clear-history` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> clear history` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:apply-to-active-app` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> applyToActiveApp` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:write-text` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> writePayload(text)` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:write` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> writePayload` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:read` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> clipboard.read*` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:read-image` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> clipboard.readImage` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:read-files` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> clipboardHelper.readClipboardFiles` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:clear` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> clipboard.clear()` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:copy-and-paste` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> applyToActiveApp` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:query` | Caller: renderer (legacy raw event) | `ClipboardModule.registerTransportHandlers -> queryHistoryByMeta` (`apps/core-app/src/main/modules/clipboard.ts`) |
+| `clipboard:new-item` | `ClipboardModule.checkClipboard -> transport.sendTo` (`apps/core-app/src/main/modules/clipboard.ts`) | Renderer (clipboard subscribers) |
+
+### C6. BoxItem SDK internal channels (CoreBox Item)
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `box-item:create` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> create` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:update` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> update` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:upsert` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> upsert` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:delete` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> delete` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:batch-upsert` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> batchUpsert` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:batch-delete` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> batchDelete` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:clear` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> clear` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:sync` | Renderer (BoxItem SDK) | `BoxItemManager.registerTransportHandlers -> handleSyncRequest` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) |
+| `box-item:sync-response` | `BoxItemManager.handleSyncRequest -> emitToRenderer` (`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`) | Renderer (BoxItem SDK) |
+
+### C7. Shortcut (shortcon) internal events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `shortcon:update` | Renderer (`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`) | `ShortcutModule.setupIpcListeners -> updateShortcut` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
+| `shortcon:disable-all` | Renderer (`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`) | `ShortcutModule.setupIpcListeners -> disableAll` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
+| `shortcon:enable-all` | Renderer (`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`) | `ShortcutModule.setupIpcListeners -> enableAll` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
+| `shortcon:get-all` | Renderer (`apps/core-app/src/renderer/src/modules/channel/main/shortcon.ts`) | `ShortcutModule.setupIpcListeners -> buildShortcutSnapshot` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
+| `shortcon:reg` | Plugin process (Prelude) | `ShortcutModule.setupIpcListeners -> registerRendererShortcut` (`apps/core-app/src/main/modules/global-shortcon.ts`) |
+| `shortcon:trigger` | `ShortcutModule.handleTrigger -> transport.sendToPlugin/sendToWindow` (`apps/core-app/src/main/modules/global-shortcon.ts`) | Renderer/plugin (shortcut subscribers) |
+
+### C8. Intelligence / Agents raw events
+
+#### C8.1 Intelligence
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `intelligence:invoke` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:chat-langchain` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.invoke('text.chat')` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:test-provider` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.testProvider` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-capability-test-meta` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> capabilityTesterRegistry.get` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:test-capability` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> tester.generateTestPayload + ai.invoke` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:fetch-models` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> fetchProviderModels` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-audit-logs` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.queryAuditLogs` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-today-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getTodayStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-month-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getMonthStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-usage-stats` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> ai.getUsageStats` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:set-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.setQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:delete-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.deleteQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-all-quotas` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getAllQuotas` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:check-quota` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.checkQuota` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+| `intelligence:get-current-usage` | Caller: renderer/plugin (raw event) | `IntelligenceModule.onInit -> intelligenceQuotaManager.getCurrentUsage` (`apps/core-app/src/main/modules/ai/intelligence-module.ts`) |
+
+#### C8.2 Agents
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `agents:update-priority` | Renderer (raw event) | `registerAgentChannels -> agentManager.updateTaskPriority` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) |
+| `agents:task-started` | `agentManager.on('task:started') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
+| `agents:task-progress` | `agentManager.on('task:progress') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
+| `agents:task-completed` | `agentManager.on('task:completed') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
+| `agents:task-failed` | `agentManager.on('task:failed') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
+| `agents:task-cancelled` | `agentManager.on('task:cancelled') -> transport.broadcast` (`apps/core-app/src/main/modules/ai/agents/agent-channels.ts`) | Renderer (agent status subscribers) |
+
+### C9. Analytics legacy events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `analytics:get-summary` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.getPerformanceSummary` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
+| `analytics:export` | Renderer (`apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`) | `AnalyticsModule.registerTransportHandlers -> startupAnalytics.exportMetrics` (`apps/core-app/src/main/modules/analytics/analytics-module.ts`) |
+
+### C10. AddonOpener / Drop raw events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `auth:external-callback` | `AddonOpenerModule.schemaHandlers -> transport.sendTo` (`apps/core-app/src/main/modules/addon-opener.ts`) | Renderer (auth callback consumer) |
+| `@open-plugin` | `AddonOpenerModule.open-file -> transport.sendTo` (`apps/core-app/src/main/modules/addon-opener.ts`) | Renderer (`apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`) |
+| `@install-plugin` | Renderer (`apps/core-app/src/renderer/src/components/plugin/action/mention/PluginApplyInstall.vue`) | `AddonOpenerModule.on(installPluginEvent) -> PluginResolver` (`apps/core-app/src/main/modules/addon-opener.ts`) |
+| `drop:plugin` | Renderer (`apps/core-app/src/renderer/src/modules/hooks/dropper-resolver.ts`) | `AddonOpenerModule.on(dropPluginEvent) -> PluginResolver` (`apps/core-app/src/main/modules/addon-opener.ts`) |
+| `drop` | Renderer (raw event) | `DropManager.init -> transport.sendToPlugin` (`apps/core-app/src/main/modules/drop-manager.ts`) |
+
+### C11. File provider raw events
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `everything:status` | Renderer (Everything settings) | `EverythingProvider.registerChannels -> status` (`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`) |
+| `everything:toggle` | Renderer (Everything settings) | `EverythingProvider.registerChannels -> toggle` (`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`) |
+| `everything:test` | Renderer (Everything settings) | `EverythingProvider.registerChannels -> test` (`apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts`) |
+| `openers:resolve` | Renderer (`apps/core-app/src/renderer/src/modules/openers/index.ts`) | `FileProvider.registerOpenersChannel -> getOpenerForExtension` (`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`) |
+| `file-index:failed` | `FileProvider.notifyIndexingFailure -> transport.broadcast` (`apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`) | Renderer (index status subscribers) |
+
+### C12. System services raw events (Permission/Terminal/Logs/Dashboard)
+
+#### C12.1 Permission
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `system:permission:check` | Renderer (`apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`) | `PermissionChecker.setupChannels -> checker.checkAccessibility/checkNotifications/...` (`apps/core-app/src/main/modules/system/permission-checker.ts`) |
+| `system:permission:request` | Renderer (`apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`) | `PermissionChecker.setupChannels -> requestPermission` (`apps/core-app/src/main/modules/system/permission-checker.ts`) |
+| `system:permission:open-settings` | Caller: renderer (raw event) | `PermissionChecker.setupChannels -> openSystemSettings` (`apps/core-app/src/main/modules/system/permission-checker.ts`) |
+
+#### C12.2 Terminal
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `terminal:create` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> create` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
+| `terminal:write` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> write` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
+| `terminal:kill` | Renderer (`packages/utils/renderer/touch-sdk/terminal.ts`) | `TerminalModule.onInit -> kill` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) |
+| `terminal:data` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal output subscribers) |
+| `terminal:exit` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal exit subscribers) |
+
+#### C12.3 Plugin Logs
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `plugin-log:subscribe` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> subscribe` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:unsubscribe` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> unsubscribe` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:get-sessions` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> getSessions` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:open-session-file` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> openSessionFile` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:open-log-directory` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> openLogDirectory` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:get-buffer` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> getBuffer` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log:get-session-log` | Renderer (`apps/core-app/src/renderer/src/components/plugin/tabs/PluginLogs.vue`) | `PluginLogModule -> getSessionLog` (`apps/core-app/src/main/service/plugin-log.service.ts`) |
+| `plugin-log-stream` | `PluginLogModule -> transport.sendTo` (`apps/core-app/src/main/service/plugin-log.service.ts`) | Renderer (log stream subscribers) |
+
+#### C12.4 Dashboard / OCR
+
+| Event Name | Sender | Handler |
+| --- | --- | --- |
+| `tuff:dashboard` | Caller: renderer (raw event) | `TuffDashboardModule.onInit -> buildSnapshot` (`apps/core-app/src/main/modules/system/tuff-dashboard.ts`) |
+| `ocr:dashboard` | Caller: renderer (raw event) | `OcrService.registerChannels -> getDashboardSnapshot` (`apps/core-app/src/main/modules/ocr/ocr-service.ts`) |

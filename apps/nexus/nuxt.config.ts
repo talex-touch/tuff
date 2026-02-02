@@ -8,6 +8,7 @@ import { remarkMermaid } from './app/utils/remark-mermaid'
 
 loadEnv({ path: '.env' })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}` })
+loadEnv({ path: '.env.sentry-build-plugin' })
 loadEnv({ path: '.env.local', override: true })
 loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override: true })
 
@@ -18,6 +19,8 @@ const workspaceRoot = resolve(currentDir, '../..')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
+const enableSentrySourceMaps = Boolean(sentryAuthToken)
 
 export default defineNuxtConfig({
   modules: [
@@ -215,11 +218,17 @@ export default defineNuxtConfig({
   pwa,
 
   sentry: {
-    sourceMapsUploadOptions: {
-      org: 'quotawish',
-      project: 'tuff-nexus',
-      // store your auth token in an environment variable
-      authToken: process.env.SENTRY_AUTH_TOKEN,
+    sourcemaps: {
+      disable: !enableSentrySourceMaps,
     },
+    sourceMapsUploadOptions: enableSentrySourceMaps
+      ? {
+          org: 'QuotaWish',
+          project: 'tuff-nexus',
+          authToken: sentryAuthToken,
+        }
+      : {
+          enabled: false,
+        },
   },
 })

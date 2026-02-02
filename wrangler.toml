@@ -13,6 +13,7 @@ bucket_name = "tuff-nexus-imgable-prod"
 preview_bucket_name = "tuff-nexus-imgable-dev"
 
 [vars]
+NODE_OPTIONS = "--max-old-space-size=6144"
 NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsudHVmZi50YWd6eGlhLmNvbSQ"
 NUXT_PUBLIC_CLERK_SIGN_IN_URL = "/sign-in"
 NUXT_PUBLIC_CLERK_SIGN_UP_URL = "/sign-up"

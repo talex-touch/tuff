@@ -6,7 +6,7 @@
   "packageManager": "pnpm@10.13.1",
   "description": "Documentation for Tuff project",
   "scripts": {
-    "build": "nuxt build",
+    "build": "node -e \"const os=require('os'); const v8=require('v8'); const gb=n=> (n/1024/1024/1024).toFixed(2); console.log('[build] totalmem_gb', gb(os.totalmem())); console.log('[build] heap_limit_gb', gb(v8.getHeapStatistics().heap_size_limit));\" && nuxt build",
     "dev:pwa": "VITE_PLUGIN_PWA=true nuxt dev",
     "dev": "nuxt dev --port 3200",
     "content:reset": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('.data/content', { recursive: true, force: true })\"",
