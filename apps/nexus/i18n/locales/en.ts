@@ -667,9 +667,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       aiOverview: {
-        eyebrow: 'AI Specialization',
-        headline: 'Specialized intelligence crafted for your operating rhythm.',
-        subheadline: 'Agents, retrieval, and automation compose together inside Tuff.',
+        eyebrow: 'AI',
+        headline: 'Your Mac just got smarter.',
+        subheadline: 'AI where it\'s most useful - on your OS.',
         hero: {
           title: 'AI that lives inside your command surfaces.',
           copy: 'Summon context-aware copilots that read your screen, plan the next move, and execute when you say go.',
@@ -695,6 +695,52 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             copy: 'Retrieval index mirrors your systems for fast summaries, comparisons, and follow-up actions.',
           },
         },
+        demo: {
+          chat: {
+            label: 'AI Chat',
+            placeholder: 'Ask me anything...',
+            thinking: 'Thinking...',
+          },
+          assist: {
+            label: 'AI Assist',
+            originalText: 'Original Text',
+            result: 'Result',
+            actions: {
+              ask: 'Ask AI',
+              fixSpelling: 'Fix Spelling',
+              translate: 'Translate',
+            },
+          },
+          preview: {
+            label: 'Quick Preview',
+            placeholder: 'Enter expression...',
+            copyResult: 'Copy Result',
+            types: {
+              expression: 'Quick Expression',
+              currency: 'Currency Conversion',
+              time: 'Time Conversion',
+              unit: 'Unit Conversion',
+              color: 'Color Parser',
+              constant: 'Constant Query',
+              text: 'Text Statistics',
+            },
+          },
+        },
+        cards: {
+          chat: {
+            title: 'Ask AI Anything',
+            copy: 'Ask anything, anytime, anywhere. AI answers instantly.',
+          },
+          assist: {
+            title: 'Smart Text Actions',
+            copy: 'Intelligently process selected text: fix spelling, translate, or ask questions.',
+          },
+          preview: {
+            title: 'Instant Preview',
+            copy: 'Smart recognition instantly previews calculations and conversions.',
+          },
+        },
+        cta: 'More about AI →',
       },
       builtForYou: {
         eyebrow: 'Built for You',
