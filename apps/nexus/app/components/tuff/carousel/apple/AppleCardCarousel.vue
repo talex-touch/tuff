@@ -79,7 +79,7 @@ provide(CarouselKey, {
   <div class="relative w-full">
     <div
       ref="carouselRef"
-      class="[scrollbar-width:none] w-full flex overflow-x-scroll overscroll-x-auto scroll-smooth py-10 md:py-20"
+      class="[scrollbar-width:none] AppleCardCarousel-Track w-full flex overflow-x-scroll overscroll-x-auto scroll-smooth py-10 md:py-20"
       @scroll="checkScrollability"
     >
       <div
