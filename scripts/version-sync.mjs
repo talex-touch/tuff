@@ -203,7 +203,9 @@ async function runVersionSync() {
     }
 
     try {
-      runCommand(`git tag ${tagName}`)
+      log.info('Creating annotated tag...')
+      runCommand(`git tag -a ${tagName} -m "release: ${tagName}"`)
+      log.info(`Pushing tag ${tagName}...`)
       runCommand(`git push origin ${tagName}`)
     }
     catch (error) {
@@ -230,11 +232,14 @@ async function runVersionSync() {
   log.info('Committing version update...')
   runCommand(`git commit -m "release: ${tagName}"`)
 
-  log.info('Creating tag...')
-  runCommand(`git tag ${tagName}`)
+  log.info('Creating annotated tag...')
+  runCommand(`git tag -a ${tagName} -m "release: ${tagName}"`)
 
-  log.info('Pushing commits and tags...')
-  runCommand('git push --follow-tags')
+  log.info('Pushing commits...')
+  runCommand('git push')
+
+  log.info(`Pushing tag ${tagName}...`)
+  runCommand(`git push origin ${tagName}`)
 
   log.success(`Version sync completed. Tag ${tagName} created and pushed.`)
 }
