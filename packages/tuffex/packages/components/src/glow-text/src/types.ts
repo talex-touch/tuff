@@ -8,6 +8,8 @@ export interface GlowTextProps {
   color?: string
   opacity?: number
   blendMode?: string
+  mode?: 'classic' | 'adaptive'
+  backdrop?: string
   radius?: number
   repeat?: boolean
 }
