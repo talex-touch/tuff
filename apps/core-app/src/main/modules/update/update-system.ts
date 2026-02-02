@@ -261,6 +261,15 @@ export class UpdateSystem {
     }
   }
 
+  async scheduleRendererOverride(release: GitHubRelease): Promise<void> {
+    try {
+      const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
+      await this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest)
+    } catch (error) {
+      console.warn('[UpdateSystem] Failed to schedule renderer override:', error)
+    }
+  }
+
   /**
    * Set up listener for download completion to show notification
    * @private
