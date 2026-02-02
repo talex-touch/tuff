@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-统一 core/renderer/extensions 的 Release 资产命名与校验规则，确保 UpdateSystem 与 GithubUpdateProvider 可在无需隐式猜测的情况下解析平台/架构/sha256/签名信息，并支持向后兼容旧资产。
+统一 core/renderer 的 Release 资产命名与校验规则，extensions bundle 由 market system 负责分发与更新（UpdateSystem 不下载/安装），确保 UpdateSystem 与 GithubUpdateProvider 可在无需隐式猜测的情况下解析平台/架构/sha256/签名信息，并支持向后兼容旧资产。
 
 ## 2. 资产命名规则
 
@@ -39,6 +39,7 @@ tuff-extensions-{version}.zip
 ```
 
 - 平台无关，必须通过 manifest 的 `coreRange` 指定兼容的 core 版本范围
+- 由 market system 使用，UpdateSystem 会忽略该资产
 
 ## 3. 校验与签名
 
@@ -81,7 +82,7 @@ Release 资产中必须包含 `tuff-release-manifest.json`，用于声明所有�
 - `release.channel`：`RELEASE` | `BETA` | `SNAPSHOT`
 - `release.tag`：Release tag（例如 `v2.4.7-beta.11`）
 - `artifacts[]`：
-  - `component`：`core` | `renderer` | `extensions`
+  - `component`：`core` | `renderer` | `extensions`（extensions 仅供 market system，UpdateSystem 忽略）
   - `name`：资产文件名（与 Release 资产一致）
   - `platform` / `arch`：仅 core 资产必填
   - `sha256`：必填
