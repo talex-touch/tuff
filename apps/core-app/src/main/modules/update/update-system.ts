@@ -26,7 +26,6 @@ import axios from 'axios'
 import compressing from 'compressing'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
-import { pluginModule } from '../plugin/plugin-module'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 
@@ -55,7 +54,6 @@ interface UpdateSystemConfig {
 
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
-const EXTENSIONS_BACKUP_DIR = 'extensions-backup'
 
 interface RendererOverrideState {
   version: string
@@ -254,9 +252,6 @@ export class UpdateSystem {
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
         console.warn('[UpdateSystem] Renderer override scheduling failed:', error)
       })
-      void this.maybeScheduleExtensionsDownload(resolvedRelease, manifest).catch((error) => {
-        console.warn('[UpdateSystem] Extensions update scheduling failed:', error)
-      })
 
       console.log(`[UpdateSystem] Update download started: ${taskId}`)
       return taskId
@@ -372,66 +367,6 @@ export class UpdateSystem {
     const taskId = await this.downloadCenterModule.addTask(request)
     this.setupAuxDownloadListener(taskId, async (task) => {
       await this.installRendererOverride(task, artifact, release, manifest)
-    })
-  }
-
-  private async maybeScheduleExtensionsDownload(
-    release: GitHubRelease,
-    manifest: UpdateReleaseManifest | null
-  ): Promise<void> {
-    const artifact = this.resolveManifestArtifact(manifest, 'extensions')
-    if (!artifact) {
-      return
-    }
-
-    if (!artifact.coreRange) {
-      console.warn('[UpdateSystem] Extensions artifact missing coreRange, skipping.')
-      return
-    }
-    if (!artifact.sha256) {
-      console.warn('[UpdateSystem] Extensions artifact missing sha256, skipping.')
-      return
-    }
-
-    if (!this.isCoreRangeCompatible(artifact.coreRange)) {
-      console.info(
-        `[UpdateSystem] Extensions coreRange "${artifact.coreRange}" not satisfied by current core, skipping.`
-      )
-      return
-    }
-
-    const asset = this.resolveAssetByName(release.assets as ReleaseAsset[], artifact.name)
-    if (!asset) {
-      console.warn('[UpdateSystem] Extensions asset not found in release:', artifact.name)
-      return
-    }
-
-    const url = this.resolveAssetUrl(asset)
-    if (!url) {
-      console.warn('[UpdateSystem] Extensions asset missing download url:', artifact.name)
-      return
-    }
-
-    const request: DownloadRequest = {
-      url,
-      destination: await this.getUpdateDownloadPath(),
-      filename: asset.name,
-      priority: DownloadPriority.HIGH,
-      module: DownloadModule.PLUGIN_INSTALL,
-      metadata: {
-        component: 'extensions',
-        releaseTag: release.tag_name,
-        coreRange: artifact.coreRange,
-        checksum: artifact.sha256,
-        signatureUrl: asset.signatureUrl,
-        signatureKeyUrl: asset.signatureKeyUrl
-      },
-      checksum: artifact.sha256
-    }
-
-    const taskId = await this.downloadCenterModule.addTask(request)
-    this.setupAuxDownloadListener(taskId, async (task) => {
-      await this.installExtensionsBundle(task, artifact, release, manifest)
     })
   }
 
@@ -568,168 +503,6 @@ export class UpdateSystem {
     }
   }
 
-  private async installExtensionsBundle(
-    task: { destination: string; filename: string; metadata?: Record<string, unknown> },
-    artifact: UpdateReleaseArtifact,
-    release: GitHubRelease,
-    manifest: UpdateReleaseManifest | null
-  ): Promise<void> {
-    const filePath = path.join(task.destination, task.filename)
-
-    if (artifact.sha256) {
-      const valid = await this.verifyChecksum(filePath, artifact.sha256)
-      if (!valid) {
-        throw new Error('Extensions bundle checksum verification failed')
-      }
-    }
-
-    const signatureUrl = task.metadata?.signatureUrl
-    if (typeof signatureUrl === 'string' && signatureUrl.length > 0) {
-      const verifyResult = await this.signatureVerifier.verifyFileSignature(
-        filePath,
-        signatureUrl,
-        typeof task.metadata?.signatureKeyUrl === 'string'
-          ? task.metadata?.signatureKeyUrl
-          : undefined
-      )
-      if (!verifyResult.valid) {
-        console.warn('[UpdateSystem] Extensions bundle signature verification failed:', {
-          reason: verifyResult.reason
-        })
-      }
-    }
-
-    const tempDir = path.join(os.tmpdir(), `talex-touch-extensions-${Date.now()}`)
-    try {
-      await fse.ensureDir(tempDir)
-      await compressing.zip.uncompress(filePath, tempDir)
-
-      const bundleRoot = await this.resolveExtensionsRoot(tempDir)
-      if (!bundleRoot) {
-        throw new Error('Extensions bundle missing plugins directory')
-      }
-
-      const updated = await this.applyExtensionsUpdate(bundleRoot)
-      console.log('[UpdateSystem] Extensions updated', {
-        count: updated.length,
-        version: this.resolveReleaseVersionToken(release, manifest)
-      })
-    } finally {
-      await fse.remove(tempDir).catch(() => null)
-    }
-  }
-
-  private async applyExtensionsUpdate(sourceRoot: string): Promise<string[]> {
-    const targetRoot = this.resolvePluginRoot()
-    await fse.ensureDir(targetRoot)
-
-    const entries = await fse.readdir(sourceRoot, { withFileTypes: true })
-    const pluginDirs = entries.filter((entry) => entry.isDirectory())
-    if (!pluginDirs.length) {
-      throw new Error('No plugin directories found in extensions bundle')
-    }
-
-    const updatedPlugins: string[] = []
-    const createdPlugins: string[] = []
-    const backupRoot = path.join(
-      this.storageRoot,
-      'modules',
-      EXTENSIONS_BACKUP_DIR,
-      `${Date.now()}`
-    )
-    let backupReady = false
-
-    try {
-      for (const entry of pluginDirs) {
-        const sourcePath = path.join(sourceRoot, entry.name)
-        const manifestPath = path.join(sourcePath, 'manifest.json')
-        if (!(await fse.pathExists(manifestPath))) {
-          console.warn('[UpdateSystem] Skip extensions entry without manifest:', entry.name)
-          continue
-        }
-
-        let pluginName = entry.name
-        try {
-          const manifest = await fse.readJson(manifestPath)
-          if (manifest?.name) {
-            pluginName = String(manifest.name)
-          }
-        } catch (error) {
-          console.warn('[UpdateSystem] Failed to parse plugin manifest:', {
-            plugin: entry.name,
-            error
-          })
-        }
-
-        const targetPath = path.join(targetRoot, pluginName)
-        const exists = await fse.pathExists(targetPath)
-
-        if (exists) {
-          if (!backupReady) {
-            await fse.ensureDir(backupRoot)
-            backupReady = true
-          }
-          await fse.copy(targetPath, path.join(backupRoot, pluginName))
-        } else {
-          createdPlugins.push(pluginName)
-        }
-
-        await fse.copy(sourcePath, targetPath, { overwrite: true })
-        updatedPlugins.push(pluginName)
-      }
-
-      if (pluginModule.pluginManager) {
-        for (const pluginName of updatedPlugins) {
-          if (pluginModule.pluginManager.getPluginByName(pluginName)) {
-            await pluginModule.pluginManager.reloadPlugin(pluginName)
-          } else {
-            await pluginModule.pluginManager.loadPlugin(pluginName)
-          }
-        }
-      }
-
-      return updatedPlugins
-    } catch (error) {
-      await this.rollbackExtensionsUpdate({
-        backupRoot,
-        updatedPlugins,
-        createdPlugins,
-        targetRoot
-      })
-      throw error
-    }
-  }
-
-  private async rollbackExtensionsUpdate({
-    backupRoot,
-    updatedPlugins,
-    createdPlugins,
-    targetRoot
-  }: {
-    backupRoot: string
-    updatedPlugins: string[]
-    createdPlugins: string[]
-    targetRoot: string
-  }): Promise<void> {
-    const hasBackup = await fse.pathExists(backupRoot)
-    if (hasBackup) {
-      for (const pluginName of updatedPlugins) {
-        const backupPath = path.join(backupRoot, pluginName)
-        const targetPath = path.join(targetRoot, pluginName)
-        if (await fse.pathExists(backupPath)) {
-          await fse.copy(backupPath, targetPath, { overwrite: true }).catch(() => null)
-        }
-      }
-    }
-
-    for (const pluginName of createdPlugins) {
-      const targetPath = path.join(targetRoot, pluginName)
-      if (await fse.pathExists(targetPath)) {
-        await fse.remove(targetPath).catch(() => null)
-      }
-    }
-  }
-
   private resolveReleaseVersionToken(
     release: GitHubRelease,
     manifest?: UpdateReleaseManifest | null
@@ -769,10 +542,6 @@ export class UpdateSystem {
     await fs.writeFile(statePath, JSON.stringify(state, null, 2))
   }
 
-  private resolvePluginRoot(): string {
-    return pluginModule.filePath ?? path.join(this.storageRoot, 'modules', 'plugins')
-  }
-
   private async resolveRendererBundleRoot(tempDir: string): Promise<string | null> {
     const directIndex = path.join(tempDir, 'index.html')
     if (await fse.pathExists(directIndex)) {
@@ -784,34 +553,6 @@ export class UpdateSystem {
       if (!entry.isDirectory()) continue
       const candidate = path.join(tempDir, entry.name)
       if (await fse.pathExists(path.join(candidate, 'index.html'))) {
-        return candidate
-      }
-    }
-
-    return null
-  }
-
-  private async resolveExtensionsRoot(tempDir: string): Promise<string | null> {
-    const pluginsDir = path.join(tempDir, 'plugins')
-    if (await fse.pathExists(pluginsDir)) {
-      return pluginsDir
-    }
-
-    const entries = await fse.readdir(tempDir, { withFileTypes: true })
-    const hasManifest = await Promise.all(
-      entries
-        .filter((entry) => entry.isDirectory())
-        .map(async (entry) => fse.pathExists(path.join(tempDir, entry.name, 'manifest.json')))
-    )
-
-    if (hasManifest.some(Boolean)) {
-      return tempDir
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      const candidate = path.join(tempDir, entry.name, 'plugins')
-      if (await fse.pathExists(candidate)) {
         return candidate
       }
     }
