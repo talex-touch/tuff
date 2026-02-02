@@ -664,9 +664,9 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         },
       },
       aiOverview: {
-        eyebrow: 'AI 专项',
-        headline: '为你的工作节奏量身打造的智能核心。',
-        subheadline: '代理、检索与自动化在 Tuff 内部自然编排。',
+        eyebrow: 'AI',
+        headline: '让你的电脑更智能',
+        subheadline: 'AI 就在你最需要的地方 - 触手可及',
         hero: {
           title: '嵌入指令面的智能助手。',
           copy: '唤起情境感知的 copilots，读取屏幕、规划下一步，并在你确认后执行。',
@@ -692,6 +692,52 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
             copy: '检索索引映射你的系统，快速生成总结、对比与后续动作。',
           },
         },
+        demo: {
+          chat: {
+            label: 'AI Chat',
+            placeholder: '输入问题，体验 AI...',
+            thinking: '思考中...',
+          },
+          assist: {
+            label: 'AI Assist',
+            originalText: '原始文本',
+            result: '处理结果',
+            actions: {
+              ask: 'Ask AI',
+              fixSpelling: 'Fix Spelling',
+              translate: 'Translate',
+            },
+          },
+          preview: {
+            label: 'Quick Preview',
+            placeholder: '输入表达式...',
+            copyResult: '复制结果',
+            types: {
+              expression: '快速算式',
+              currency: '汇率换算',
+              time: '时间转换',
+              unit: '单位换算',
+              color: '颜色解析',
+              constant: '常量查询',
+              text: '文本统计',
+            },
+          },
+        },
+        cards: {
+          chat: {
+            title: 'Ask AI Anything',
+            copy: '随时随地提问，AI 即时回答任何问题',
+          },
+          assist: {
+            title: 'Smart Text Actions',
+            copy: '对选中文本智能处理，修正拼写、翻译、询问',
+          },
+          preview: {
+            title: 'Instant Preview',
+            copy: '智能识别输入，即时预览计算、转换结果',
+          },
+        },
+        cta: '了解更多 AI 功能 →',
       },
       builtForYou: {
         eyebrow: '为你而生',
