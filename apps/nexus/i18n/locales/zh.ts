@@ -1072,6 +1072,9 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           },
         },
       },
+      extensibility: {
+        copied: '已复制',
+      },
       pioneer: {
         eyebrow: '先锋计划',
         headline: '未来的工作方式，即将到来。成为第一位塑造者。',
