@@ -27,7 +27,6 @@
     "@iconify-json/cib": "catalog:",
     "@sentry/nuxt": "catalog:",
     "@talex-touch/tuffex": "workspace:*",
-    "vue-sonner": "catalog:",
     "@talex-touch/utils": "workspace:*",
     "fighting-design": "catalog:",
     "gsap": "catalog:",
@@ -36,7 +35,9 @@
     "motion-v": "catalog:",
     "ogl": "catalog:",
     "simplex-noise": "catalog:",
-    "typeit": "catalog:"
+    "theme-colors": "^0.1.0",
+    "typeit": "catalog:",
+    "vue-sonner": "catalog:"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",

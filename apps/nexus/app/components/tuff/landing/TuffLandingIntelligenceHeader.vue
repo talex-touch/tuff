@@ -2,24 +2,28 @@
 import TuffLandingIntelligenceTitle from './TuffLandingIntelligenceTitle.vue'
 
 withDefaults(defineProps<{
-  title: string
-  description: string
+  title?: string
+  description?: string
   betaLabel?: string
+  displayTitle?: boolean
+  fullScreen?: boolean
 }>(), {
   betaLabel: 'Beta',
+  displayTitle: true,
+  fullScreen: false,
 })
 </script>
 
 <template>
-  <div class="TuffLandingIntelligenceHeader">
+  <div class="TuffLandingIntelligenceHeader" :class="{ 'full-screen': fullScreen }">
     <div class="TuffLandingIntelligenceHeader-Glow" />
 
     <div class="TuffLandingIntelligenceHeader-Main">
-      <h1>
-        <TuffLandingIntelligenceTitle :title="title" :beta-label="betaLabel" />
+      <h1 v-if="displayTitle">
+        <TuffLandingIntelligenceTitle v-if="title" :title="title" :beta-label="betaLabel" />
       </h1>
 
-      <div class="header-text">
+      <div v-if="description" class="header-text">
         <p>{{ description }}</p>
       </div>
     </div>
@@ -53,7 +57,6 @@ withDefaults(defineProps<{
   }
 
   position: relative;
-  margin: 0.5rem 0;
   width: 100%;
   height: 180px;
   clear: both;
@@ -61,6 +64,18 @@ withDefaults(defineProps<{
   user-select: none;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);
+
+  &.full-screen {
+    &::after {
+      display: none;
+    }
+    position: absolute;
+
+    width: 100%;
+    height: 100%;
+
+    border-radius: 0;
+  }
 
   &::after {
     z-index: -1;

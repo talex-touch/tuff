@@ -591,6 +591,9 @@ importers:
       simplex-noise:
         specifier: 'catalog:'
         version: 4.0.3
+      theme-colors:
+        specifier: ^0.1.0
+        version: 0.1.0
       typeit:
         specifier: 'catalog:'
         version: 8.8.7
@@ -13690,6 +13693,9 @@ packages:
 
   text-table@0.2.0:
     resolution: {integrity: sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==}
+
+  theme-colors@0.1.0:
+    resolution: {integrity: sha512-6gTEHQqWlQNiOEGHCSSQmU//E5SnXHJ4H7oHQOD8x77CvNYNQAmt73dqR71mzw5ULV87zaHLxK5pIBnsToFuZw==}
 
   thenify-all@1.6.0:
     resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
@@ -31761,6 +31767,8 @@ snapshots:
   text-extensions@2.4.0: {}
 
   text-table@0.2.0: {}
+
+  theme-colors@0.1.0: {}
 
   thenify-all@1.6.0:
     dependencies:

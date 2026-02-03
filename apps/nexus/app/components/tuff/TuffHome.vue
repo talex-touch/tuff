@@ -520,6 +520,9 @@ onBeforeUnmount(() => {
 
 .TuffHome-SmoothSection {
   position: relative;
+
+  min-height: 100dvh;
+  overflow: hidden;
 }
 
 .TuffHome-SmoothSection :deep(button) {
