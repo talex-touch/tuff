@@ -8,3 +8,4 @@ export * from './storage'
 
 export * from './touch-sdk'
 export * from './touch-sdk/utils'
+export * from './shared'
