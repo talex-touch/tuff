@@ -22,6 +22,7 @@
 
 ## 待确认 / 待处理
 
+- legacy 权限类型兼容层（`packages/utils/permission/legacy.ts`）去留评估与迁移清理（从 `TYPECHECK_FIXES` 转入）。
 - 【P0/发版前】启动期日志与性能问题治理（基于 `docs/engineering/audits/260109-LOGANALY.md`）：event-loop 卡顿、StartupAnalytics 刷屏、`file-index:*` no-handler、renderer `sendSync.slow`、AppProvider 扫描/DB 更新偏重；需复测并验证日志收敛。
 - 体验走查：插件详情页各 Tab（尤其 `Logs`）内部滚动时，头部收缩是否符合预期（当前 `Issues/Storage` 已回传滚动；`Logs` 若内部自带滚动，可能也需要回传）
 - 嵌套滚动策略：`TouchScroll` 套 `TouchScroll` 时的滚轮/触控板事件传递（是否需要 `scrollChaining` 或统一只保留一层滚动容器）
