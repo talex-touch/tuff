@@ -1,13 +1,6 @@
 export default {
   nav: {
-    home: 'Home',
-    docs: 'Developer',
     tutorial: 'Tutorial',
-    api: 'API',
-    marketplace: 'Marketplace',
-    about: 'About',
-    qa: 'Q & A',
-    developers: 'Developers',
     login: 'Log in',
     dashboard: 'Dashboard',
     pricing: 'Pricing',
@@ -27,8 +20,6 @@ export default {
   },
   auth: {
     callbackProcessing: 'Processing your sign-in callback…',
-    linuxdoWaitlistNotice:
-      'LinuxDo level 2 and 3 members can join the waitlist immediately without waiting. Sign in with the same email you use on LinuxDo so we can verify your status quickly.',
     backToHome: 'Back to homepage',
     // App callback translations
     notSignedIn: 'You are not signed in.',
@@ -49,9 +40,6 @@ export default {
     badge: 'Release cadence',
     title: 'Updates & downloads',
     subtitle: 'Pick the channel that matches your risk tolerance and explore the latest builds.',
-    channelSelector: {
-      label: 'Release channels',
-    },
     channels: {
       release: {
         badge: 'Stable',
@@ -76,77 +64,21 @@ export default {
       heading: 'Latest build',
       releaseDate: 'Released {date}',
       releaseDateFallback: 'Pending release',
-      highlightsHeading: 'Highlights',
-      notesCta: 'View release notes',
     },
-    channelSummary: {
-      title: 'Channel expectations',
-      description: 'You are viewing the {channel} track. Everything here matches the guardrails listed above.',
-      refreshHint: 'We publish channel updates after smoke, regression, and sync checks pass across supported platforms.',
-      feedback: 'Notice something odd? Let us know through the dashboard feedback panel.',
-    },
+    loading: 'Loading releases…',
     empty: 'We have not shipped builds for this channel yet. Check back soon.',
     table: {
       title: 'Release history',
-      description: 'Every build published to the {channel} track.',
       toggleLabel: 'View history',
       hideLabel: 'Hide history',
-      latestBadge: 'Latest',
-      viewNotes: 'Notes',
-      columns: {
-        version: 'Version',
-        date: 'Released',
-        summary: 'Key changes',
-        actions: 'Links',
-      },
     },
     downloads: {
+      downloadFor: 'Download for',
+      otherPlatforms: 'Other platforms',
       previewPortal: 'Preview portal',
       previewPortalDescription: 'Includes experimental builds, validation notes, and rollback steps.',
       releasePortal: 'Release portal',
       releasePortalDescription: 'Official installers and signature fingerprints for production teams.',
-    },
-    entries: {
-      v2_0_0_preview: {
-        summary: 'Prepares the workspace redesign and FlowScript runtime ahead of the 2.0 rollout.',
-        highlights: [
-          'Ships a unified workspace canvas with adaptive glassmorphism surfaces.',
-          'Adds a FlowScript realtime debugger with timeline playback support.',
-          'Introduces a handbook sidebar that syncs with command palette context.',
-        ],
-      },
-      v2_0_0_dev5: {
-        summary: 'Extends preview builds with tighter automation feedback loops.',
-        highlights: [
-          'Improves FlowScript hot reload speed for large orchestrations.',
-          'Expands extension sandbox logging with streaming traces.',
-          'Refines multi-device session handoff reliability during live demos.',
-        ],
-      },
-      v1_2_0: {
-        summary: 'Brings the curated plugin market and modernizes navigation.',
-        highlights: [
-          'Launches a signed plugin marketplace with verified badges.',
-          'Refactors PluginManager, PluginList, and FileTree for stability gains.',
-          'Fixes upgrade prompts, navigation layout, and TTabs regressions.',
-        ],
-      },
-      v1_1_0: {
-        summary: 'Lays the groundwork for the marketplace and upgrade flows.',
-        highlights: [
-          'Introduces plugin store foundations, including install and upgrade modules.',
-          'Adds upgrade reminders, richer input components, and export progress UI.',
-          'Resolves layout inconsistencies, double prompts, and mention errors.',
-        ],
-      },
-      v1_0_0: {
-        summary: 'First public release that unifies automation, plugins, and analytics.',
-        highlights: [
-          'Delivers plugin marketplace integration with a signed publishing pipeline.',
-          'Adds account onboarding, statistics dashboard, and layout refinements.',
-          'Stabilizes plugin parsing, upgrade notifications, and preview tooling.',
-        ],
-      },
     },
   },
   plugins: {
@@ -167,7 +99,6 @@ export default {
   },
   market: {
     hero: {
-      badge: 'Official marketplace',
       title: 'Discover verified plugins',
       subtitle: 'Browse curated categories and install trusted plugins for your workspace.',
     },
@@ -176,13 +107,10 @@ export default {
       placeholder: 'Search official plugins',
     },
     filters: {
-      heading: 'Browse by category',
       all: 'All categories',
     },
-    actions: {
-      viewDetails: 'View details',
-    },
     detail: {
+      title: 'Plugin Details',
       loading: 'Loading plugin details…',
       error: 'Unable to load plugin details.',
       readme: 'Plugin README',
@@ -225,7 +153,16 @@ export default {
     },
     badges: {
       official: 'Official',
-      community: 'Community',
+    },
+  },
+  team: {
+    join: {
+      title: 'Join Team',
+      desc: 'Enter an invite code to join a team',
+      joining: 'Joining...',
+      join: 'Join',
+      success: 'Joined successfully',
+      back: 'Back to Team',
     },
   },
   dashboard: {
@@ -265,16 +202,17 @@ export default {
       },
       menu: {
         title: 'Workspace menu',
+        accountTitle: 'Account',
         overview: 'Overview',
-        nextSteps: 'Next steps',
-        shortcuts: 'Shortcuts',
         plugins: 'Plugins',
         team: 'Teams',
+        apiKeys: 'API Keys',
         updates: 'Updates',
+        releases: 'Release Notes',
         images: 'Resources',
-        betaHeading: 'Preview cadence',
-        betaDescription:
-          'Plugins and teams features evolve weekly. Use the navigation to jump into the surfaces that are live today.',
+        codes: 'Activation Codes',
+        analytics: 'Analytics',
+        privacy: 'Privacy',
       },
       plugins: {
         title: 'Plugins',
@@ -290,19 +228,11 @@ export default {
           size: 'Size',
         },
         updatedOn: 'Updated {date}',
-        badges: {
-          featured: 'Featured',
-          stable: 'Stable',
-          beta: 'Beta',
-          community: 'Community',
-        },
-        manageTitle: 'Plugin management',
         manageSubtitle: 'Publish new plugins or revise entries before they ship to everyone.',
         addButton: 'Create plugin',
-        closeButton: 'Close',
-        closeVersionButton: 'Cancel version',
         createSubmit: 'Create plugin',
         updateSubmit: 'Save changes',
+        createSuccess: 'Plugin created successfully',
         confirmDelete: 'Remove {name}? This action cannot be undone.',
         form: {
           identifier: 'Plugin identifier',
@@ -316,6 +246,7 @@ export default {
           isOfficial: 'Mark as official build',
           icon: 'Plugin icon',
           iconHelp: 'PNG, JPG, WebP, or GIF up to 5 MB.',
+          iconFromPackage: 'Icon from package (click to override)',
           iconRemove: 'Remove icon',
           packageUpload: 'Plugin package (.tpex)',
           packageHelp: 'Upload a .tpex archive to prefill manifest details. This file is only stored after you submit.',
@@ -334,17 +265,14 @@ export default {
         },
         channels: {
           RELEASE: {
-            name: 'Release',
             description: 'Visible to all users. For stable versions, pushed to all users who have the plugin installed.',
             visibility: '✓ Visible to all users',
           },
           BETA: {
-            name: 'Beta',
             description: 'Visible to team members only. For internal testing, only team members can see and install.',
             visibility: '✓ Visible to team members only',
           },
           SNAPSHOT: {
-            name: 'Snapshot',
             description: 'Visible to advanced users only. For experimental features, only available to advanced users who opted into the snapshot channel.',
             visibility: '✓ Visible to users who opted into snapshot channel',
           },
@@ -408,12 +336,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         publishVersion: 'New version',
         editMetadata: 'Edit metadata',
         delete: 'Delete plugin',
-        deleteVersion: 'Delete version',
         confirmDeleteVersion: 'Delete version {version}?',
         homepage: 'Homepage',
-        installs: 'installs',
         versionHistory: 'Version history',
-        versionDescription: 'Published builds and their signatures.',
         signature: 'Signature',
         downloadPackage: 'Download package',
         readmePreview: 'README preview',
@@ -433,19 +358,16 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         noVersions: 'No versions published yet.',
         errors: {
+          createFailed: 'Failed to create plugin',
           invalidCategory: 'Please choose a category from the list.',
           missingPlugin: 'Select a plugin before publishing a version.',
-          missingVersion: 'Provide a version tag before publishing.',
-          missingPackage: 'Upload a .tpex package before publishing.',
           missingIdentifier: 'Provide a unique plugin identifier.',
           invalidIdentifierFormat: 'Use at least two dot-separated segments (e.g. alpha.beta.plugin).',
           restrictedIdentifier: 'Identifier or name uses reserved terms. Mark it as official to continue.',
           missingName: 'Plugin name is required.',
           missingReadme: 'Provide a README for your plugin.',
-          missingChangelog: 'Provide a changelog for this version.',
           unknown: 'Something went wrong while saving the plugin.',
         },
-        versionReviewedAt: 'Reviewed {date}',
         pendingReviews: 'Pending Reviews',
         pendingReviewsCount: '{count} items pending',
         reviewPlugin: 'Plugin review',
@@ -475,19 +397,31 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
       team: {
         title: 'Team preview',
-        subtitle: 'Private teams unlock shared automations, audit history, and scoped secrets.',
-        waitlistCta: 'Join teams waitlist',
-        pending: 'Loading team preview…',
-        seatUsage: '{used} of {total} seats in use',
-        organizationLabel: 'Clerk Organization',
-        activeStatus: 'Active',
-        planLabel: 'Plan',
-        emptyMembers: 'No teammates yet — invitations will appear here once the preview opens.',
-        statusLabel: 'Preview status',
-        previewStatus: 'Private preview',
-        upcomingLabel: 'Next milestone',
-        notesLabel: 'What to expect',
-        notesPlaceholder: 'Roadmap updates and invite controls will surface here during the preview.',
+        currentPlan: 'Current Plan',
+        activate: 'Activate',
+        createTeam: 'Create Team',
+        invite: 'Invite',
+        emptyState: 'Create a team to collaborate with others',
+        disband: 'Disband',
+        weeklyUsage: 'Team Usage (Weekly)',
+        buyMore: 'Buy more',
+        aiRequests: 'AI Requests',
+        aiTokens: 'AI Tokens',
+        pendingInvites: 'Pending Invites',
+        modal: {
+          createTitle: 'Create Team',
+          createDesc: 'Start collaborating with your team members',
+          cancel: 'Cancel',
+          creating: 'Creating...',
+          create: 'Create',
+          inviteTitle: 'Invite Member',
+          inviteDesc: 'Add someone to your team',
+          createInvite: 'Create Invite',
+          disbandTitle: 'Disband Team',
+          disbandDesc: 'This action cannot be undone. All members will be removed and team data will be deleted.',
+          disbanding: 'Disbanding...',
+          disbandConfirm: 'Disband Team',
+        },
         memberStatus: {
           active: 'Active',
           automation: 'Automation pilot',
@@ -497,13 +431,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       updates: {
         title: 'Official updates',
         subtitle: 'Latest releases, marketplace signals, and roadmap pulses.',
-        cta: 'Open changelog',
-        loading: 'Fetching updates…',
         empty: 'No official updates yet. Check again soon.',
-        readMore: 'Read update',
-        manageTitle: 'Update management',
-        manageSubtitle: 'Publish changelog notes and announcements for everyone in your workspace.',
         addButton: 'New update',
+        editButton: 'Edit update',
         closeButton: 'Close',
         createSubmit: 'Publish update',
         updateSubmit: 'Save changes',
@@ -519,11 +449,86 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           unknown: 'Something went wrong while saving the update.',
         },
       },
+      analytics: {
+        title: 'Analytics Dashboard',
+        subtitle: 'Usage statistics and insights',
+        last7Days: 'Last 7 days',
+        last30Days: 'Last 30 days',
+        last90Days: 'Last 90 days',
+      },
+      codes: {
+        title: 'Activation Codes',
+        subtitle: 'Generate and manage activation codes',
+        generateTitle: 'Generate New Codes',
+        generating: 'Generating...',
+        generateButton: 'Generate Codes',
+        listTitle: 'All Codes',
+        refresh: 'Refresh',
+        loading: 'Loading...',
+        empty: 'No activation codes yet. Generate some above.',
+        table: {
+          code: 'Code',
+          plan: 'Plan',
+          duration: 'Duration',
+          uses: 'Uses',
+          status: 'Status',
+          created: 'Created',
+          expires: 'Expires',
+        },
+        copy: 'Copy',
+        days: 'days',
+      },
+    },
+    account: {
+      title: 'Account settings',
+      description: 'Manage your profile and account information',
+    },
+    devices: {
+      unknown: 'Unknown',
+      types: {
+        desktop: 'Desktop',
+        mobile: 'Mobile',
+        tablet: 'Tablet',
+        unknown: 'Unknown device',
+      },
+      justNow: 'Just now',
+      minutesAgo: '{n} minutes ago',
+      hoursAgo: '{n} hours ago',
+      daysAgo: '{n} days ago',
+      title: 'Device management',
+      description: 'View and manage your signed-in devices',
+      activeSessions: 'Active sessions',
+      currentDevice: 'Current device',
+      revoke: 'Revoke',
+      noSessions: 'No active sessions',
+      securityTips: 'Security tips',
+      tip1: 'Review signed-in devices regularly and revoke access if anything looks off.',
+      tip2: 'If you spot an unknown device, reset your password right away.',
+      tip3: 'Enable two-factor authentication to strengthen account security.',
+    },
+    privacy: {
+      title: 'Privacy settings',
+      description: 'Control how your data is collected and used',
+      dataCollection: 'Data collection',
+      dataCollectionDesc: 'Choose what data you allow us to collect',
+      analytics: 'Usage analytics',
+      analyticsDesc: 'Help us understand feature usage',
+      crashReports: 'Crash reports',
+      crashReportsDesc: 'Automatically send crash reports to improve stability',
+      usageData: 'Detailed usage data',
+      usageDataDesc: 'Includes search history and usage habits (optional)',
+      personalization: 'Personalized experience',
+      personalizationDesc: 'Provide a tailored experience based on usage',
+      dataManagement: 'Data management',
+      exportData: 'Export my data',
+      deleteData: 'Delete my data',
+      learnMore: 'Learn more',
+      privacyPolicy: 'Privacy policy',
+      termsOfService: 'Terms of service',
     },
   },
   landing: {
     hero: {
-      badge: 'Beta Preview',
       description:
         'A strong adaptation more platform all-tool program that elevates your desktop into a responsive, intelligent control center.',
       heading: 'Profoundly Powerful. Deceptively Simple.',
@@ -534,7 +539,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
       primaryCta: 'Join waitlist',
       secondaryCta: 'Developer docs',
-      offlineNotice: 'You are offline. Search and live previews will resume when the network is back.',
       stats: {
         commands: {
           value: '2M+',
@@ -549,7 +553,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           label: 'Workspace layouts',
         },
       },
-      highlightLabel: 'Platform Highlights',
       highlights: {
         integrations: {
           title: 'Native integrations',
@@ -607,34 +610,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       corebox: {
-        tagAll: 'All',
-        hints: {
-          open: 'Open',
-          actions: 'Actions',
-          quickSelect: 'Quick Select',
-        },
-        commands: {
-          launch: {
-            label: 'Quick launch',
-            description: 'Open apps, files, and URLs.',
-          },
-          search: {
-            label: 'Smart search',
-            description: 'Search across local + cloud.',
-          },
-          clipboard: {
-            label: 'Clipboard vault',
-            description: 'History, snippets, and paste.',
-          },
-          flows: {
-            label: 'Flow actions',
-            description: 'Chain multi-step automations.',
-          },
-          ai: {
-            label: 'AI assist',
-            description: 'Summaries, rewrite, extract.',
-          },
-        },
         slides: {
           search: {
             label: 'Search',
@@ -692,34 +667,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         eyebrow: 'AI Specialization',
         headline: 'Specialized intelligence crafted for your operating rhythm.',
         subheadline: 'Agents, retrieval, and automation compose together inside Tuff.',
-        hero: {
-          title: 'AI that lives inside your command surfaces.',
-          copy: 'Summon context-aware copilots that read your screen, plan the next move, and execute when you say go.',
-          primaryCta: 'Explore AI blueprints',
-          secondaryCta: 'Review agent APIs',
-          bullets: {
-            understand: 'Understands what is on your screen and how it connects to teammates, docs, and data.',
-            instant: 'Responds in under 40 ms with recommended next steps you can trigger immediately.',
-            privacy: 'Runs primarily on-device with zero-knowledge sync when you invite collaborators.',
-          },
-        },
-        highlights: {
-          orchestrate: {
-            title: 'Orchestrated sequences',
-            copy: 'Hand off between agents, scripts, and human review without losing state or intent.',
-          },
-          copilot: {
-            title: 'Copilots for every surface',
-            copy: 'Bring writing, debugging, and design copilots into the same command palette.',
-          },
-          memory: {
-            title: 'Long-term memory',
-            copy: 'Retrieval index mirrors your systems for fast summaries, comparisons, and follow-up actions.',
-          },
-        },
         demo: {
           chat: {
-            label: 'AI Chat',
             placeholder: 'Ask me anything...',
             thinking: 'Thinking...',
             send: 'Send',
@@ -779,32 +728,19 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             },
           },
           assist: {
-            label: 'AI Assist',
-            originalText: 'Original Text',
-            result: 'Result',
-            docTitle: 'Top 10 Ski Destinations in Europe',
             searchPlaceholder: 'Search AI Commands',
             resultsTitle: 'Results',
             processing: 'Processing...',
-            correctedText: 'Corrected Text',
             commands: {
               changeToneConfident: 'Change Tone to Confident',
               changeToneCasual: 'Change Tone to Casual',
               fixSpelling: 'Fix Spelling and Grammar',
               translate: 'Translate Text',
               summarize: 'Summarize Key Points',
-              explainCode: 'Explain Code Step by Step',
-              findBugs: 'Find Bugs in Code',
-            },
-            actions: {
-              ask: 'Ask AI',
-              fixSpelling: 'Fix Spelling',
-              translate: 'Translate',
             },
           },
           preview: {
             label: 'Quick Preview',
-            placeholder: 'Enter expression...',
             copyResult: 'Copy Result',
             types: {
               expression: 'Quick Expression',
@@ -833,7 +769,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             copy: 'Smart recognition instantly previews calculations and conversions.',
           },
         },
-        cta: 'More about AI →',
       },
       builtForYou: {
         eyebrow: 'Built for You',
@@ -1004,6 +939,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         eyebrow: 'Capabilities Center',
         headline: 'Free everything, powerful tools.',
         subheadline: 'TuffFamilyKit offers a suite of tools to extend Tuff\'s capabilities to every tool you use.',
+        copied: 'Copied',
       },
       openFoundation: {
         eyebrow: 'Open by Design',
@@ -1057,23 +993,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         eyebrow: 'Craftsmanship & Utility',
         headline: 'Every detail, elevated.',
         subheadline: 'Because a seamless experience is built on a foundation of flawless fundamentals.',
-        clips: {
-          system: {
-            tag: 'System control',
-            title: '“Dark mode” switches everything instantly.',
-            copy: 'Animations stay buttery-smooth at 120 fps, even when orchestrating OS-level changes.',
-          },
-          clipboard: {
-            tag: 'Clipboard vault',
-            title: 'History, reimagined as a cinematic reel.',
-            copy: 'Images, palettes, and text previews hover with gentle parallax so you find the right item at a glance.',
-          },
-          performance: {
-            tag: 'Latency lab',
-            title: 'Invoke Tuff. Zero lag. Zero wasted motion.',
-            copy: 'Keystroke to render averages 18 ms across devices, tuned in the same rig we use for docs transitions.',
-          },
-        },
       },
       corebox: {
         placeholder: 'Everything in Tuff.',
@@ -1100,9 +1019,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           },
         },
       },
-      extensibility: {
-        copied: 'Copied',
-      },
       pioneer: {
         eyebrow: 'Pioneer Program',
         headline: 'The future of work is coming. Be the first to build it.',
@@ -1110,7 +1026,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         formTitle: 'Email',
         cta: 'Request Pioneer Access',
         ctaPrimary: 'Sign in to enable Pioneer Testing',
-        benefitsTitle: 'Your Pioneer perks',
         benefits: {
           early: {
             title: 'Early Access',
@@ -1129,10 +1044,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
     },
     features: {
-      badge: 'Why Choose Tuff',
-      title: 'More than imagination.',
-      description:
-        'Depend on smart orchestration, responsive visuals, and tooling that scales with your ambitions.',
       items: {
         innovativeDesign: {
           title: 'Innovative Design',
@@ -1167,11 +1078,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
     },
     extensions: {
-      badge: 'Extensible Platform',
-      title: 'Scale from lightweight to full workspace plugins.',
-      description:
-        'Polyglot tooling to grow from helpers to deep integrations. Every capability is designed for composability, performance, and effortless deployment across Tuff environments.',
-      cta: 'Explore Marketplace',
       items: {
         lightweight: {
           title: 'Lightweight Plugins',
@@ -1196,10 +1102,6 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       },
     },
     testing: {
-      badge: 'Pioneer Testing',
-      title: 'Join the early access community shaping Tuff.',
-      description:
-        'Validate new integrations, stress-test automation, and keep every release stable with the Pioneer Testing Program.',
       items: {
         alpha: {
           tag: 'Alpha Flight',
@@ -1221,17 +1123,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
     },
-    finalCta: {
-      title: 'Ready to explore the Tuff ecosystem?',
-      description:
-        'Build immersive desktop experiences with a platform that amplifies creators, operators, and teams who ship fast.',
-      primary: 'Browse Documentation',
-      secondary: 'Talk with the team',
-    },
     footer: {
       tagline: 'Your brain, smarter and infinitely extensible.',
-      primaryCta: 'Download Beta',
-      secondaryCta: 'View Docs',
       rights: 'All rights reserved.',
       privacy: 'Privacy',
       terms: 'Terms',
@@ -1252,10 +1145,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     redirecting: 'Redirecting to the docs landing…',
     outlineLabel: 'Outline',
     sidebarLabel: 'Navigation',
-    defaultTitle: 'Documentation',
     noOutline: 'Headings will appear here once added to this document.',
     lastUpdatedLabel: 'Last edited on',
-    editOnGitHub: 'Edit this page on GitHub',
     previousChapter: 'Previous chapter',
     nextChapter: 'Next chapter',
   },
