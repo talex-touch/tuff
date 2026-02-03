@@ -4,6 +4,7 @@ import { computed } from 'vue'
 interface ShowcaseSearchScenario {
   media?: {
     src: string
+    poster?: string
     alt: string
   }
 }
@@ -17,6 +18,27 @@ const props = withDefaults(defineProps<{
 })
 
 const media = computed(() => props.scenario?.media ?? null)
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
+
+function getMediaExtension(src: string): string | null {
+  const cleanSrc = src.split('?')[0]?.split('#')[0]
+  const match = cleanSrc?.match(/\.([a-z0-9]+)$/i)
+  return match ? match[1].toLowerCase() : null
+}
+
+const isVideo = computed(() => {
+  const src = media.value?.src
+  if (!src)
+    return false
+  const extension = getMediaExtension(src)
+  return extension ? VIDEO_EXTENSIONS.has(extension) : false
+})
+
+const mediaGlowSrc = computed(() => {
+  if (!media.value?.src)
+    return null
+  return isVideo.value ? (media.value.poster ?? null) : media.value.src
+})
 </script>
 
 <template>
@@ -27,17 +49,28 @@ const media = computed(() => props.scenario?.media ?? null)
     <div class="corebox-mock">
       <div class="corebox-mock__media">
         <img
-          v-if="media?.src"
+          v-if="mediaGlowSrc"
           class="corebox-mock__media-glow"
-          :src="media.src"
+          :src="mediaGlowSrc"
           alt=""
           aria-hidden="true"
           loading="lazy"
           decoding="async"
         >
         <div class="corebox-mock__media-frame">
+          <video
+            v-if="media?.src && isVideo"
+            class="corebox-mock__media-image"
+            :src="media.src"
+            :poster="media.poster"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="metadata"
+          />
           <img
-            v-if="media?.src"
+            v-else-if="media?.src"
             class="corebox-mock__media-image"
             :src="media.src"
             :alt="media.alt"
