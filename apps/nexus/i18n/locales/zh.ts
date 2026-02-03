@@ -610,6 +610,28 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
             actions: '操作',
             quickSelect: '快速选择',
           },
+          commands: {
+            launch: {
+              label: '快速启动',
+              description: '打开应用、文件与链接。',
+            },
+            search: {
+              label: '智能搜索',
+              description: '本地与云端同时搜索。',
+            },
+            clipboard: {
+              label: '剪贴板保险库',
+              description: '历史、片段与一键粘贴。',
+            },
+            flows: {
+              label: 'Flow 动作',
+              description: '串联多步自动化。',
+            },
+            ai: {
+              label: 'AI 辅助',
+              description: '总结、改写、提取。',
+            },
+          },
           slides: {
             search: {
               label: '搜索',
@@ -999,6 +1021,8 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           },
         },
         footnote: '我们构建的一切均有文档与版本记录，随时欢迎你的 Pull Request。',
+        cta: '打开 Tuffex Design',
+        ctaHref: '/docs/dev/components/foundations',
       },
       proactive: {
         eyebrow: '情境智能',
