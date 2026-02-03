@@ -1,7 +1,7 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { readonly, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
-import { loadLocaleMessages, setI18nLanguage } from './i18n'
+import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'
 
 export const SUPPORTED_LANGUAGES = [
   { key: 'zh-CN', name: '简体中文' },
@@ -91,10 +91,10 @@ export function useLanguage() {
    * 获取全局 i18n 实例
    */
   function getI18nInstance() {
-    const i18n = window.$i18n
+    const i18n = getGlobalI18nInstance()
     if (!i18n) {
       throw new Error(
-        '[useLanguage] i18n instance not initialized. Make sure window.$i18n is set before using useLanguage.'
+        '[useLanguage] i18n instance not initialized. Make sure setupI18n is called before using useLanguage.'
       )
     }
     return i18n

@@ -18,6 +18,7 @@ import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
+import { useI18nText } from '~/modules/lang'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
 import { useStartupInfo } from './useStartupInfo'
@@ -420,6 +421,7 @@ export class AppUpdate {
 export function useApplicationUpgrade() {
   const appUpdate = AppUpdate.getInstance()
   const { appStates } = useAppState()
+  const { t } = useI18nText()
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -446,7 +448,7 @@ export function useApplicationUpgrade() {
 
         if (result.release) {
           const currentRelease = result.release
-          await blowMention('New Version Available', () => {
+          await blowMention(t('update.new_version_available'), () => {
             return h(AppUpdateView, {
               release: currentRelease as unknown as Record<string, unknown>,
               onUpdateNow: () => handleUpdateAcknowledged(currentRelease),
@@ -482,13 +484,17 @@ export function useApplicationUpgrade() {
   async function handleDownloadUpdate(release: GitHubRelease): Promise<void> {
     try {
       await appUpdate.downloadUpdate(release)
-      toast.success('更新包下载已开始，请查看下载中心')
+      toast.success(t('update.download_started'))
 
       // 可以在这里打开下载中心
       // openDownloadCenter()
     } catch (err) {
       console.error('[useApplicationUpgrade] Download failed:', err)
-      toast.error(`下载失败: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      toast.error(
+        t('update.download_failed_with_reason', {
+          reason: err instanceof Error ? err.message : 'Unknown error'
+        })
+      )
     }
   }
 
@@ -506,13 +512,13 @@ export function useApplicationUpgrade() {
   async function handleRemindLaterSelection(release: GitHubRelease): Promise<void> {
     try {
       await appUpdate.recordAction(release.tag_name, 'remind-later')
-      toast.success('已为您延后提醒，8小时后再次提示')
+      toast.success(t('update.remind_later_success', { hours: 8 }))
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = true
       clearUpdateErrorMessage()
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to set remind later:', err)
-      toast.error('设置稍后提醒失败，请稍后重试')
+      toast.error(t('update.remind_later_failed'))
     }
   }
 
@@ -530,13 +536,15 @@ export function useApplicationUpgrade() {
         updatedList = true
       }
       await appUpdate.recordAction(release.tag_name, 'skip')
-      toast.success(updatedList ? '已忽略此版本' : '已跳过此版本')
+      toast.success(
+        updatedList ? t('update.ignore_version_success') : t('update.skip_version_success')
+      )
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = true
       clearUpdateErrorMessage()
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to ignore version:', err)
-      toast.error('忽略版本失败')
+      toast.error(t('update.ignore_version_failed'))
     }
   }
 
@@ -563,12 +571,12 @@ export function useApplicationUpgrade() {
       return ''
     }
     if (lowerCaseMessage.includes('network') || lowerCaseMessage.includes('timeout')) {
-      return '网络连接失败，请检查网络设置'
+      return t('update.error.network')
     }
     if (lowerCaseMessage.includes('rate limit')) {
-      return 'API请求频率过高，请稍后重试'
+      return t('update.error.rate_limit')
     }
-    return `更新检查失败: ${errorMessage}`
+    return t('update.error.generic', { reason: errorMessage })
   }
 
   /**
@@ -593,10 +601,10 @@ export function useApplicationUpgrade() {
   async function clearUpdateCache(): Promise<void> {
     try {
       await appUpdate.clearCache()
-      toast.success('更新缓存已清空')
+      toast.success(t('settings.settingUpdate.messages.cacheCleared'))
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to clear cache:', err)
-      toast.error('清空缓存失败')
+      toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
     }
   }
 
@@ -625,7 +633,7 @@ export function useApplicationUpgrade() {
         if (data.hasUpdate && data.release) {
           appStates.hasUpdate = true
 
-          blowMention('New Version Available', () => {
+          blowMention(t('update.new_version_available'), () => {
             return h(AppUpdateView, {
               release: data.release as unknown as Record<string, unknown>
             })

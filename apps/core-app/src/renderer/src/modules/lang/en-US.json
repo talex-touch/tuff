@@ -1141,7 +1141,20 @@
     "install_success": "Installation Successful",
     "restart_required": "Restart Required",
     "restart_now": "Restart Now",
-    "restart_later": "Restart Later"
+    "restart_later": "Restart Later",
+    "no_release_notes": "No release notes available",
+    "download_started": "Update download started. Check the Download Center for progress.",
+    "download_failed_with_reason": "Download failed: {reason}",
+    "remind_later_success": "We'll remind you again in {hours} hours.",
+    "remind_later_failed": "Failed to set a reminder. Please try again later.",
+    "ignore_version_success": "Version ignored",
+    "skip_version_success": "Version skipped",
+    "ignore_version_failed": "Failed to ignore version",
+    "error": {
+      "network": "Network connection failed. Please check your settings.",
+      "rate_limit": "API rate limit exceeded. Please try again later.",
+      "generic": "Update check failed: {reason}"
+    }
   },
   "settings": {
     "platformTags": {
