@@ -559,7 +559,17 @@ function handleSelect(index: number) {
     return
 
   stopRotation()
-  transitionTo(index, undefined, { resume: !isPointerInside.value })
+  if (isAnimating.value) {
+    transitionTimeline?.kill()
+    transitionTimeline = null
+    queuedIndex = null
+    queuedResume = false
+    isAnimating.value = false
+    outgoingSlideId.value = null
+    incomingSlideId.value = null
+    syncRenderedSlides()
+  }
+  transitionTo(index, undefined, { resume: false })
 }
 
 function handleMouseEnter() {

@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<{
   stickyClass: '',
   titleTag: 'h2',
   headerClass: '',
-  titleClass: 'text-[clamp(.7rem,1vw+1.4rem,1.2rem)] font-bold leading-tight',
+  titleClass: 'text-[clamp(.75rem,1vw+1.5rem,1.3rem)] font-bold leading-[1.1] tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60',
   subtitleClass: 'mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70',
 })
 

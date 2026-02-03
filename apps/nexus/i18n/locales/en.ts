@@ -667,9 +667,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
       },
       aiOverview: {
-        eyebrow: 'AI',
-        headline: 'Your Mac just got smarter.',
-        subheadline: 'AI where it\'s most useful - on your OS.',
+        eyebrow: 'AI Specialization',
+        headline: 'Specialized intelligence crafted for your operating rhythm.',
+        subheadline: 'Agents, retrieval, and automation compose together inside Tuff.',
         hero: {
           title: 'AI that lives inside your command surfaces.',
           copy: 'Summon context-aware copilots that read your screen, plan the next move, and execute when you say go.',
@@ -700,11 +700,80 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             label: 'AI Chat',
             placeholder: 'Ask me anything...',
             thinking: 'Thinking...',
+            send: 'Send',
+            commandsTitle: 'Commands',
+            footer: 'Powered by Tuff Intelligence · Reference only',
+            commands: {
+              ask: {
+                label: 'Ask ChatGPT',
+                description: 'Get a direct answer with examples',
+              },
+              summarize: {
+                label: 'Summarize',
+                description: 'Lead with the key takeaways',
+              },
+              explain: {
+                label: 'Explain Differences',
+                description: 'Break down Composition vs Options',
+              },
+            },
+            prompts: {
+              composition: {
+                question: 'What is the difference between Composition API and Options API in Vue 3?',
+                intro: 'Vue 3 supports both Composition and Options APIs, with the key differences in organization and reuse.',
+                bullets: {
+                  first: 'Composition API is better for complex logic and cross-component reuse.',
+                  second: 'Options API shines with clear structure and classic workflows.',
+                },
+                note: 'As the project grows, Composition API tends to scale better.',
+              },
+              whenUse: {
+                question: 'When should I use the Composition API?',
+                intro: 'Use Composition API when you need to split complex logic and improve reuse.',
+                bullets: {
+                  first: 'Share logic across components by extracting composables.',
+                  second: 'Large projects benefit from more cohesive logic grouping.',
+                },
+                note: 'Smaller pages can stay on Options API; migration can be incremental.',
+              },
+              reuse: {
+                question: 'How do I organize reusable logic in Vue 3?',
+                intro: 'Composables are the recommended way to package state and behavior.',
+                bullets: {
+                  first: 'Move state and side effects into standalone composables.',
+                  second: 'Keep naming consistent so intent is obvious.',
+                },
+                note: 'The Composition API makes reuse feel natural and easier to test.',
+              },
+              reactivity: {
+                question: 'What are the core concepts of Vue 3 reactivity?',
+                intro: 'Vue 3 reactivity is powered by Proxy with ref / reactive / computed.',
+                bullets: {
+                  first: 'Use ref for primitive or single-value state.',
+                  second: 'Use reactive for objects or richer state.',
+                },
+                note: 'Understanding dependency tracking helps avoid performance traps.',
+              },
+            },
           },
           assist: {
             label: 'AI Assist',
             originalText: 'Original Text',
             result: 'Result',
+            docTitle: 'Top 10 Ski Destinations in Europe',
+            searchPlaceholder: 'Search AI Commands',
+            resultsTitle: 'Results',
+            processing: 'Processing...',
+            correctedText: 'Corrected Text',
+            commands: {
+              changeToneConfident: 'Change Tone to Confident',
+              changeToneCasual: 'Change Tone to Casual',
+              fixSpelling: 'Fix Spelling and Grammar',
+              translate: 'Translate Text',
+              summarize: 'Summarize Key Points',
+              explainCode: 'Explain Code Step by Step',
+              findBugs: 'Find Bugs in Code',
+            },
             actions: {
               ask: 'Ask AI',
               fixSpelling: 'Fix Spelling',
@@ -723,6 +792,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
               color: 'Color Parser',
               constant: 'Constant Query',
               text: 'Text Statistics',
+              hash: 'Hash Calculator',
+              encode: 'Encoding Converter',
             },
           },
         },
