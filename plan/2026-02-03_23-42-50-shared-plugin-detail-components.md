@@ -34,3 +34,46 @@ created_at: 2026-02-03T23:42:58+08:00
 - `apps/core-app/src/renderer/src/composables/market/useMarketReadme.ts`
 - `packages/utils/renderer/index.ts`
 - `apps/nexus/nuxt.config.ts`
+
+## 字段映射与缺口（SPDC-010）
+
+### 详情字段映射（UI 使用）
+
+| Shared 字段（建议） | Nexus（MarketplacePluginDetail / 详情 API） | Core-app（MarketPlugin） | 备注 / 缺口 |
+| --- | --- | --- | --- |
+| name | `name` | `name` | 共同字段 |
+| summary | `summary` | `description` | 语义一致但命名不同 |
+| authorName | `author.name` | `author` | Core-app 为纯字符串 |
+| category | `category` + `resolveCategoryLabel` | `category` | Core-app 详情页暂未展示 |
+| official | `isOfficial` | `official` + `providerTrustLevel` | Core-app 有可信等级样式 |
+| badges | `badges[]` | `tags[]`(未使用) | Core-app 详情缺展示 |
+| installs | `installs` | 缺失 | Core-app 详情缺展示 |
+| latestVersion | `latestVersion.version` | `version` | 语义一致 |
+| latestUpdatedAt | `latestVersion.createdAt` | `timestamp` | 时间来源不同 |
+| readmeMarkdown | `readmeMarkdown` | 缺失 | Core-app 使用 `readmeUrl` 拉取 |
+| readmeUrl | 缺失 | `readmeUrl` | Nexus 直接下发 Markdown |
+| versions[] | `versions[]`（version/channel/createdAt/packageSize/changelog/packageUrl/signature） | 缺失 | Core-app 详情缺版本列表 |
+| pluginId | `id` | `id` | Core-app 详情侧边栏展示 |
+| provider | 缺失 | `providerId/providerName/providerType` | Nexus 详情缺来源字段 |
+| icon | `iconUrl` | `icon` / `iconUrl` | Core-app 使用 MarketIcon |
+| rating | `ratingSummary` + reviews API | `useMarketRating` | 两端来源与字段不同 |
+| reviews | `reviews[]` | 缺失 | Core-app 详情无评论列表 |
+
+### i18n Key 对照（详情相关）
+
+- Nexus（`apps/nexus/app/pages/market.vue`）
+  - `market.detail.*`：title/loading/error/author/readme/noReadme/versions/download/noVersions
+  - `market.detail.reviews.*`：title/count/tag/helper/writeTitle/ratingLabel/titlePlaceholder/contentPlaceholder/submitHint/submit/loading/empty/anonymous/status.*
+  - `market.badges.official`
+  - `dashboard.sections.plugins.stats.installs`
+- Core-app（`apps/core-app/src/renderer/src/views/base/MarketDetail.vue` + `useMarketReadme.ts`）
+  - `market.detailDialog.*`：information/author/version/updateTime/provider/pluginId/readmeError
+  - `market.rating.*`：title/loading/loginRequired/loginRequiredTitle/invalid/httpError/submitFailedTitle
+  - 非 i18n 文案：`Loading README...`、`No README`、`Official Plugin`（title）
+
+### 缺口汇总（用于后续共享数据模型）
+
+- Core-app 详情缺少：`installs`、`badges/tags`、`versions[]`、`readmeMarkdown`（仅 `readmeUrl`）。
+- Nexus 详情缺少：`providerId/providerName/providerType`、`providerTrustLevel`、`timestamp`（Core-app meta 需要）。
+- README 数据形态不一致：Nexus 直传 Markdown，Core-app 需从 URL 拉取并渲染。
+- 评分/评论来源差异大：Nexus 有 reviews + rating summary；Core-app 仅评分（无评论列表）。
