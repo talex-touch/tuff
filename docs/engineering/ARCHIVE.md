@@ -95,6 +95,13 @@
   - 官网 Intelligence 页面（若仍需）。
   - R2/S3 与发布相关事项按需要推进。
 
+## docs/search-logger-lifecycle-analysis.md
+- 状态：已处理（2026-02-03）
+- 摘要：
+  1. SearchLogger 已移出构造期副作用，改为 `init()`/`destroy()`。
+  2. `CoreBoxModule` 在 `onInit`/`onDestroy` 调用 `searchLogger.init/destroy`。
+  3. 避免 storage 未就绪时触发 `useMainStorage()` 报错。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：
