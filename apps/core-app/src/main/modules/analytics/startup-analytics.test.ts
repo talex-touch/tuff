@@ -10,9 +10,13 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:os')>()
-  return {
+  const patched = {
     ...actual,
     uptime: () => 123
+  }
+  return {
+    ...patched,
+    default: patched
   }
 })
 
