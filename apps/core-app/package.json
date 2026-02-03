@@ -10,6 +10,7 @@
     "format": "prettier --write .",
     "lint": "eslint --cache . --quiet",
     "lint:fix": "eslint --cache --fix .",
+    "test": "vitest run",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",

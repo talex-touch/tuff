@@ -1,6 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { StartupMetrics } from './types'
-import { StartupAnalytics } from './startup-analytics'
 
 vi.mock('electron', () => ({
   app: {
@@ -8,6 +7,14 @@ vi.mock('electron', () => ({
     isPackaged: false
   }
 }))
+
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>()
+  return {
+    ...actual,
+    uptime: () => 123
+  }
+})
 
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({ entries: [], maxEntries: 10, lastUpdated: Date.now() })),
@@ -22,16 +29,26 @@ vi.mock('../database', () => ({
   }
 }))
 
-vi.mock('@talex-touch/utils/env', () => ({
-  getBooleanEnv: () => true,
-  getEnvOrDefault: (_key: string, fallback: string) => fallback,
-  getTelemetryApiBase: () => 'http://example.test',
-  normalizeBaseUrl: (value: string) => value
-}))
+vi.mock('@talex-touch/utils/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@talex-touch/utils/env')>()
+  return {
+    ...actual,
+    getBooleanEnv: () => true,
+    getEnvOrDefault: (_key: string, fallback: string) => fallback,
+    getTelemetryApiBase: () => 'http://example.test',
+    normalizeBaseUrl: (value: string) => value
+  }
+})
 
 vi.mock('./telemetry-client', () => ({
   getOrCreateTelemetryClientId: () => 'client-1'
 }))
+
+let StartupAnalytics: typeof import('./startup-analytics').StartupAnalytics
+
+beforeAll(async () => {
+  ;({ StartupAnalytics } = await import('./startup-analytics'))
+})
 
 const makeMetrics = (params: {
   sessionId: string
