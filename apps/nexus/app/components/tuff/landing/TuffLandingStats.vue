@@ -87,13 +87,15 @@ const aiSpotlight = computed(() => {
   >
     <div
       data-reveal
-      class="flex flex-col items-center gap-8 text-center"
+      class="tuff-stats-body flex flex-col items-center gap-8 text-center"
     >
-      <TuffShowcaseContainer>
-        <TuffVortexBackground>
-          <TuffShowcase />
-        </TuffVortexBackground>
-      </TuffShowcaseContainer>
+      <div class="tuff-stats-showcase">
+        <TuffShowcaseContainer>
+          <TuffVortexBackground>
+            <TuffShowcase />
+          </TuffVortexBackground>
+        </TuffShowcaseContainer>
+      </div>
 
       <p
         data-reveal
@@ -110,3 +112,26 @@ const aiSpotlight = computed(() => {
     </div>
   </TuffLandingSection>
 </template>
+
+<style scoped>
+.tuff-stats-body {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.tuff-stats-showcase {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tuff-stats-showcase :deep(.tuff-showcase) {
+  max-width: 100%;
+  max-height: 100%;
+}
+</style>

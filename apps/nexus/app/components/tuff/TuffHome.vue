@@ -193,9 +193,8 @@ useHead({
   position: relative;
 
   min-height: 100dvh;
-  max-height: 100dvh;
   height: 100dvh;
-  min-height: 0;
+  max-height: 100dvh;
   overflow: hidden;
   box-sizing: content-box;
 }

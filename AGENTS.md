@@ -39,6 +39,7 @@
 - 多步任务（≥2 步）使用计划追踪（如 `update_plan`）并随进度更新。
 - 命令规范：路径始终使用双引号包裹；优先使用正斜杠 `/`；内容搜索优先 `rg`。
 - SDK 优先：优先使用封装好的 SDK，只有在缺少 SDK 或能力不足时才直接使用 transport 通道。
+- i18n：统一使用 hooks（`useI18n` / `useLanguage` / `useI18nText`），禁止直接访问 `window.$t` / `window.$i18n`；发现类似用法需先 warning 提醒用户。
 - 未经用户主动要求，不要执行 git 提交/推送/创建分支等操作。
 - 提交信息（commit message）必须使用英文，避免中文提交。
 - 修改完成后按需运行最贴近改动的校验（lint/typecheck/test/build），不修复无关失败项。
