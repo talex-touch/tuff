@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import CoreBoxMock from './CoreBoxMock.vue'
+import gsap from 'gsap'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import Logo from '../../../icon/Logo.vue'
 import type { PreviewScenario } from './types'
 
 const props = withDefaults(defineProps<{
@@ -85,16 +86,14 @@ const scenarios: PreviewScenario[] = [
 ]
 
 const currentIndex = ref(0)
-const currentScenario = computed(() => scenarios[currentIndex.value])
+const currentScenario = computed(() => scenarios[currentIndex.value]!)
 const showPreview = ref(false)
-const previewListRef = ref<HTMLDivElement | null>(null)
-const listRef = ref<HTMLDivElement | null>(null)
+const trackRef = ref<HTMLDivElement | null>(null)
+const cardRefs = ref<HTMLDivElement[]>([])
 
-const TIME_SCALE = 2
-const ROTATION_INTERVAL = 3500 * TIME_SCALE
-const SELECT_DELAY = 200 * TIME_SCALE
-const RESUME_DELAY = 3000 * TIME_SCALE
-const START_DELAY = 2500 * TIME_SCALE
+const ROTATION_INTERVAL = 5000
+const RESUME_DELAY = 4000
+const START_DELAY = 1500
 
 let rotationTimer: ReturnType<typeof setInterval> | null = null
 
@@ -103,8 +102,8 @@ function startRotation() {
     return
   stopRotation()
   rotationTimer = setInterval(() => {
-    currentIndex.value = (currentIndex.value + 1) % scenarios.length
-  }, ROTATION_INTERVAL) // 增加时长，让用户有更多时间查看
+    goToIndex((currentIndex.value + 1) % scenarios.length)
+  }, ROTATION_INTERVAL)
 }
 
 function stopRotation() {
@@ -114,42 +113,80 @@ function stopRotation() {
   }
 }
 
-function scrollActiveIntoView(behavior: ScrollBehavior = 'smooth') {
-  if (typeof window === 'undefined')
+function goToIndex(index: number) {
+  if (index === currentIndex.value)
     return
-  const previewList = previewListRef.value
-  if (previewList) {
-    const activePreview = previewList.querySelector<HTMLElement>('.ai-preview-demo__preview-item.is-active')
-    if (activePreview)
-      activePreview.scrollIntoView({ behavior, inline: 'center', block: 'nearest' })
-  }
-  const list = listRef.value
-  if (list) {
-    const activeItem = list.querySelector<HTMLElement>('.ai-preview-demo__list-item.is-active')
-    if (activeItem)
-      activeItem.scrollIntoView({ behavior, inline: 'center', block: 'nearest' })
-  }
+
+  const track = trackRef.value
+  if (!track)
+    return
+
+  const cards = cardRefs.value
+  const cardWidth = cards[0]?.offsetWidth || 0
+  const gap = 24
+  const offset = index * (cardWidth + gap)
+
+  // 使用 GSAP 动画移动 track
+  gsap.to(track, {
+    x: -offset,
+    duration: 0.6,
+    ease: 'power2.out',
+  })
+
+  // 更新卡片状态
+  cards.forEach((card, i) => {
+    if (i === index) {
+      gsap.to(card, {
+        scale: 1,
+        opacity: 1,
+        duration: 0.5,
+        ease: 'power2.out',
+      })
+    }
+    else {
+      gsap.to(card, {
+        scale: 0.88,
+        opacity: 0.4,
+        duration: 0.5,
+        ease: 'power2.out',
+      })
+    }
+  })
+
+  currentIndex.value = index
 }
 
 function selectScenario(index: number) {
   stopRotation()
-  setTimeout(() => {
-    currentIndex.value = index
-    // 选择后重新开始自动轮播
-    if (props.autoPlay) {
-      setTimeout(() => startRotation(), RESUME_DELAY)
+  goToIndex(index)
+  if (props.autoPlay) {
+    setTimeout(() => startRotation(), RESUME_DELAY)
+  }
+}
+
+function initCards() {
+  const cards = cardRefs.value
+  cards.forEach((card, i) => {
+    if (i === currentIndex.value) {
+      gsap.set(card, { scale: 1, opacity: 1 })
     }
-  }, SELECT_DELAY)
+    else {
+      gsap.set(card, { scale: 0.88, opacity: 0.4 })
+    }
+  })
 }
 
 watch(() => props.active, (newVal) => {
   if (newVal) {
     currentIndex.value = 0
     showPreview.value = true
+    // 重置位置
+    if (trackRef.value) {
+      gsap.set(trackRef.value, { x: 0 })
+    }
+    initCards()
     if (props.autoPlay) {
-      setTimeout(() => {
-        startRotation()
-      }, START_DELAY)
+      setTimeout(() => startRotation(), START_DELAY)
     }
   }
   else {
@@ -158,20 +195,14 @@ watch(() => props.active, (newVal) => {
   }
 }, { immediate: true })
 
-watch(currentIndex, () => {
-  nextTick(() => scrollActiveIntoView())
-})
-
 onMounted(() => {
   if (props.active) {
     showPreview.value = true
+    initCards()
     if (props.autoPlay) {
-      setTimeout(() => {
-        startRotation()
-      }, START_DELAY)
+      setTimeout(() => startRotation(), START_DELAY)
     }
   }
-  scrollActiveIntoView('auto')
 })
 
 onBeforeUnmount(() => {
@@ -181,116 +212,121 @@ onBeforeUnmount(() => {
 function resolveTypeLabel(type: PreviewScenario['type']) {
   return t(`landing.os.aiOverview.demo.preview.types.${type}`)
 }
+
+function setCardRef(el: any, index: number) {
+  if (el)
+    cardRefs.value[index] = el
+}
 </script>
 
 <template>
   <div class="ai-preview-demo">
-    <div class="ai-preview-demo__layout">
-      <div class="ai-preview-demo__main">
-        <CoreBoxMock
-          class="ai-preview-demo__corebox"
-          :input-text="currentScenario.input"
-          :show-results="false"
-          :show-logo="true"
-        >
-          <div class="ai-preview-demo__panel">
+    <div class="ai-preview-demo__wrapper">
+      <!-- CoreBox 外壳 -->
+      <div class="ai-preview-demo__corebox">
+        <!-- 输入栏 -->
+        <div class="ai-preview-demo__input">
+          <div class="ai-preview-demo__logo">
+            <Logo />
+          </div>
+          <div class="ai-preview-demo__input-text">
+            {{ currentScenario.input }}
+          </div>
+        </div>
+
+        <!-- 卡片轮播区域 - 这个区域允许溢出 -->
+        <div class="ai-preview-demo__viewport">
+          <div
+            ref="trackRef"
+            class="ai-preview-demo__track"
+            :class="{ 'is-visible': showPreview }"
+          >
             <div
-              ref="previewListRef"
-              class="ai-preview-demo__preview-list"
-              :class="{ 'is-visible': showPreview }"
+              v-for="(scenario, index) in scenarios"
+              :key="index"
+              :ref="(el) => setCardRef(el, index)"
+              class="ai-preview-demo__card-wrapper"
+              @click="selectScenario(index)"
             >
-              <button
-                v-for="(scenario, index) in scenarios"
-                :key="index"
-                type="button"
-                class="ai-preview-demo__preview-item"
-                :class="{ 'is-active': currentIndex === index }"
-                @click="selectScenario(index)"
-              >
-                <div
-                  class="ai-preview-demo__card"
-                  :class="`ai-preview-demo__card--${scenario.type}`"
-                >
-                  <div class="ai-preview-demo__card-header">
-                    <div class="ai-preview-demo__card-type">
-                      <span v-if="scenario.icon" :class="scenario.icon" class="mr-2" />
-                      {{ resolveTypeLabel(scenario.type) }}
-                    </div>
-                    <div class="ai-preview-demo__card-badge">
-                      instant.{{ scenario.type }}
-                    </div>
+              <div class="ai-preview-demo__card">
+                <div class="ai-preview-demo__card-header">
+                  <div class="ai-preview-demo__card-type">
+                    <span v-if="scenario.icon" :class="scenario.icon" class="mr-2" />
+                    {{ resolveTypeLabel(scenario.type) }}
                   </div>
-
-                  <div class="ai-preview-demo__card-body">
-                    <!-- 特殊处理颜色预览 -->
-                    <template v-if="scenario.type === 'color'">
-                      <div class="ai-preview-demo__color-preview">
-                        <div
-                          class="ai-preview-demo__color-swatch"
-                          :style="{ backgroundColor: scenario.result }"
-                        />
-                        <div class="ai-preview-demo__color-value">
-                          {{ scenario.result }}
-                        </div>
-                      </div>
-                    </template>
-                    <template v-else>
-                      <div class="ai-preview-demo__card-result">
-                        {{ scenario.result }}
-                      </div>
-                    </template>
-                    <div v-if="scenario.extra" class="ai-preview-demo__card-extra">
-                      {{ scenario.extra }}
-                    </div>
-                  </div>
-
-                  <div v-if="scenario.details" class="ai-preview-demo__card-details">
-                    <div
-                      v-for="(value, key) in scenario.details"
-                      :key="key"
-                      class="ai-preview-demo__card-detail-item"
-                    >
-                      <span class="ai-preview-demo__card-detail-label">{{ key.toUpperCase() }}</span>
-                      <span class="ai-preview-demo__card-detail-value">{{ value }}</span>
-                    </div>
-                  </div>
-
-                  <div class="ai-preview-demo__card-footer">
-                    <button type="button" class="ai-preview-demo__card-action-btn">
-                      <span class="i-carbon-copy" />
-                      <span>{{ t('landing.os.aiOverview.demo.preview.copyResult') }}</span>
-                    </button>
-                    <div class="ai-preview-demo__card-powered">
-                      TuffIntelligence
-                    </div>
+                  <div class="ai-preview-demo__card-badge">
+                    instant.{{ scenario.type }}
                   </div>
                 </div>
-              </button>
+
+                <div class="ai-preview-demo__card-body">
+                  <template v-if="scenario.type === 'color'">
+                    <div class="ai-preview-demo__color-preview">
+                      <div
+                        class="ai-preview-demo__color-swatch"
+                        :style="{ backgroundColor: scenario.result }"
+                      />
+                      <div class="ai-preview-demo__color-value">
+                        {{ scenario.result }}
+                      </div>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="ai-preview-demo__card-result">
+                      {{ scenario.result }}
+                    </div>
+                  </template>
+                  <div v-if="scenario.extra" class="ai-preview-demo__card-extra">
+                    {{ scenario.extra }}
+                  </div>
+                </div>
+
+                <div v-if="scenario.details" class="ai-preview-demo__card-details">
+                  <div
+                    v-for="(value, key) in scenario.details"
+                    :key="key"
+                    class="ai-preview-demo__card-detail-item"
+                  >
+                    <span class="ai-preview-demo__card-detail-label">{{ key.toUpperCase() }}</span>
+                    <span class="ai-preview-demo__card-detail-value">{{ value }}</span>
+                  </div>
+                </div>
+
+                <div class="ai-preview-demo__card-footer">
+                  <button type="button" class="ai-preview-demo__card-action-btn">
+                    <span class="i-carbon-copy" />
+                    <span>{{ t('landing.os.aiOverview.demo.preview.copyResult') }}</span>
+                  </button>
+                  <div class="ai-preview-demo__card-powered">
+                    TuffIntelligence
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </CoreBoxMock>
+        </div>
       </div>
 
-      <!-- 下方：场景轮播 -->
-      <div class="ai-preview-demo__carousel">
-        <div class="ai-preview-demo__carousel-title">
+      <!-- 下方选择器 -->
+      <div class="ai-preview-demo__selector">
+        <div class="ai-preview-demo__selector-title">
           {{ t('landing.os.aiOverview.demo.preview.label') }}
         </div>
-        <div ref="listRef" class="ai-preview-demo__list">
+        <div class="ai-preview-demo__selector-list">
           <button
             v-for="(scenario, index) in scenarios"
             :key="index"
             type="button"
-            class="ai-preview-demo__list-item"
+            class="ai-preview-demo__selector-item"
             :class="{ 'is-active': currentIndex === index }"
             @click="selectScenario(index)"
           >
-            <span v-if="scenario.icon" :class="scenario.icon" class="ai-preview-demo__list-icon" />
-            <div class="ai-preview-demo__list-content">
-              <div class="ai-preview-demo__list-input">
+            <span v-if="scenario.icon" :class="scenario.icon" class="ai-preview-demo__selector-icon" />
+            <div class="ai-preview-demo__selector-content">
+              <div class="ai-preview-demo__selector-input">
                 {{ scenario.input }}
               </div>
-              <div class="ai-preview-demo__list-extra">
+              <div class="ai-preview-demo__selector-extra">
                 {{ scenario.extra }}
               </div>
             </div>
@@ -309,199 +345,124 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  overflow: hidden;
 }
 
+.ai-preview-demo__wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 800px;
+  overflow: hidden;
+}
+
+/* CoreBox 外壳 */
 .ai-preview-demo__corebox {
   width: 100%;
-  max-width: 760px;
-}
-
-.ai-preview-demo__corebox :deep(.corebox-mock__input) {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.ai-preview-demo__corebox :deep(.corebox-mock__input-value) {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-weight: 500;
-}
-
-.ai-preview-demo__panel {
-  position: relative;
-  padding: 1.25rem 0.5rem 1.25rem;
-  background: linear-gradient(180deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
-  overflow: hidden;
-}
-
-.ai-preview-demo__layout {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  width: 100%;
-  max-width: 980px;
-}
-
-.ai-preview-demo__main {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  min-width: 0;
-  overflow: visible;
-}
-
-/* 下方轮播 */
-.ai-preview-demo__carousel {
-  width: 100%;
-  max-width: 760px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.ai-preview-demo__carousel-title {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0 0.5rem;
-}
-
-.ai-preview-demo__list {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 180px;
-  gap: 0.75rem;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.25rem 1rem 0.75rem;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 1rem;
-  overscroll-behavior-x: contain;
-}
-
-.ai-preview-demo__list::-webkit-scrollbar {
-  height: 4px;
-}
-
-.ai-preview-demo__list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.ai-preview-demo__list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 2px;
-}
-
-.ai-preview-demo__list-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
-  padding: 0.65rem 0.75rem 0.7rem;
-  background: rgba(15, 15, 20, 0.55);
+  background: rgba(20, 20, 25, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  scroll-snap-align: center;
-}
-
-.ai-preview-demo__list-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-.ai-preview-demo__list-item.is-active {
-  background: rgba(139, 92, 246, 0.16);
-  border-color: rgba(139, 92, 246, 0.35);
-  box-shadow: 0 6px 16px rgba(139, 92, 246, 0.25);
-}
-
-.ai-preview-demo__list-icon {
-  font-size: 1.05rem;
-  color: rgba(255, 255, 255, 0.6);
-  flex-shrink: 0;
-}
-
-.ai-preview-demo__list-item.is-active .ai-preview-demo__list-icon {
-  color: #fff;
-}
-
-.ai-preview-demo__list-content {
-  width: 100%;
-}
-
-.ai-preview-demo__list-input {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-  line-height: 1.3;
+  border-radius: 14px;
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    0 20px 50px -10px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.ai-preview-demo__list-item.is-active .ai-preview-demo__list-input {
-  color: #fff;
-}
-
-.ai-preview-demo__list-extra {
-  font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.35);
-  margin-top: 0.125rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 搜索框 */
-.ai-preview-demo__input-area {
-  width: 100%;
-}
-
-.ai-preview-demo__input-wrapper {
+.ai-preview-demo__input {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: 0.75rem;
   padding: 0.875rem 1rem;
-  background: rgba(30, 30, 35, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.ai-preview-demo__input-icon {
-  display: flex;
-  align-items: center;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 1.125rem;
+.ai-preview-demo__logo {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .ai-preview-demo__input-text {
   flex: 1;
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 1rem;
-  line-height: 1.4;
-  font-weight: 400;
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.9);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-weight: 500;
+}
+
+/* 卡片轮播视口 - 关键：这里裁剪溢出 */
+.ai-preview-demo__viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  padding: 1.25rem 0;
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.02));
+}
+
+/* 两侧渐变遮罩 */
+.ai-preview-demo__viewport::before,
+.ai-preview-demo__viewport::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 80px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.ai-preview-demo__viewport::before {
+  left: 0;
+  background: linear-gradient(90deg, rgba(20, 20, 25, 1), transparent);
+}
+
+.ai-preview-demo__viewport::after {
+  right: 0;
+  background: linear-gradient(-90deg, rgba(20, 20, 25, 1), transparent);
+}
+
+/* 卡片轨道 - 允许溢出，但被 viewport 裁剪 */
+.ai-preview-demo__track {
+  display: flex;
+  gap: 24px;
+  padding: 0.5rem 1rem;
+  padding-left: calc(50% - 200px);
+  will-change: transform;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.ai-preview-demo__track.is-visible {
+  opacity: 1;
+}
+
+/* 卡片包装器 */
+.ai-preview-demo__card-wrapper {
+  flex-shrink: 0;
+  width: 400px;
+  cursor: pointer;
+  will-change: transform, opacity;
+  transform-origin: center center;
 }
 
 /* 预览卡片 */
 .ai-preview-demo__card {
   width: 100%;
+  height: 100%;
+  min-height: 280px;
   padding: 1.25rem;
-  background: rgba(30, 30, 35, 0.85);
+  background: rgba(30, 30, 35, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
-  backdrop-filter: blur(24px);
+  backdrop-filter: blur(20px);
   position: relative;
   overflow: hidden;
-  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.4);
-  backface-visibility: hidden;
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
 }
 
 .ai-preview-demo__card::before {
@@ -510,28 +471,11 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   inset: 0;
   border-radius: 14px;
   padding: 1px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(59, 130, 246, 0.3), rgba(6, 182, 212, 0.15));
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.25), transparent);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
-}
-
-.ai-preview-demo__card::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.06), transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.ai-preview-demo__card > * {
-  position: relative;
-  z-index: 1;
 }
 
 .ai-preview-demo__card-header {
@@ -552,20 +496,21 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
 }
 
 .ai-preview-demo__card-badge {
-  font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.625rem;
+  color: rgba(255, 255, 255, 0.3);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  padding: 0.25rem 0.5rem;
+  padding: 0.2rem 0.5rem;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
 }
 
 .ai-preview-demo__card-body {
-  margin-bottom: 1.25rem;
+  flex: 1;
+  margin-bottom: 1rem;
 }
 
 .ai-preview-demo__card-result {
-  font-size: 2.25rem;
+  font-size: 2.5rem;
   font-weight: 700;
   color: #fff;
   line-height: 1.1;
@@ -579,7 +524,6 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   line-height: 1.4;
 }
 
-/* 颜色预览特殊样式 */
 .ai-preview-demo__color-preview {
   display: flex;
   align-items: center;
@@ -595,7 +539,7 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
 }
 
 .ai-preview-demo__color-value {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
   color: #fff;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -605,9 +549,9 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .ai-preview-demo__card-detail-item {
@@ -617,12 +561,12 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
 }
 
 .ai-preview-demo__card-detail-label {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
   font-weight: 500;
 }
 
 .ai-preview-demo__card-detail-value {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.8);
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -631,7 +575,8 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   align-items: center;
   justify-content: space-between;
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: auto;
 }
 
 .ai-preview-demo__card-action-btn {
@@ -640,9 +585,9 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
   gap: 0.375rem;
   padding: 0.5rem 0.875rem;
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
@@ -651,69 +596,102 @@ function resolveTypeLabel(type: PreviewScenario['type']) {
 
 .ai-preview-demo__card-action-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
   color: #fff;
 }
 
 .ai-preview-demo__card-powered {
   font-size: 0.6875rem;
-  color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.2);
   font-weight: 500;
 }
 
-/* 预览横向卡片 */
-.ai-preview-demo__preview-list {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(520px, 1fr);
-  gap: 1.5rem;
+/* 下方选择器 */
+.ai-preview-demo__selector {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.ai-preview-demo__selector-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0 0.25rem;
+}
+
+.ai-preview-demo__selector-list {
+  display: flex;
+  gap: 0.5rem;
   overflow-x: auto;
-  overflow-y: hidden;
-  padding: 0.5rem 1rem 0.75rem;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 1rem;
-  opacity: 0;
-  transform: translateY(6px);
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
 }
 
-.ai-preview-demo__preview-list.is-visible {
-  opacity: 1;
-  transform: translateY(0);
+.ai-preview-demo__selector-list::-webkit-scrollbar {
+  display: none;
 }
 
-.ai-preview-demo__preview-list::-webkit-scrollbar {
-  height: 0;
-}
-
-.ai-preview-demo__preview-item {
-  border: none;
-  background: transparent;
-  padding: 0;
+.ai-preview-demo__selector-item {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(15, 15, 20, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
   text-align: left;
   cursor: pointer;
-  scroll-snap-align: center;
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: all 0.2s ease;
+  min-width: 120px;
 }
 
-.ai-preview-demo__preview-item.is-active {
-  transform: translateY(-2px);
+.ai-preview-demo__selector-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-.ai-preview-demo__preview-item:not(.is-active) .ai-preview-demo__card {
-  opacity: 0.7;
-  box-shadow: 0 10px 24px -10px rgba(0, 0, 0, 0.4);
+.ai-preview-demo__selector-item.is-active {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.3);
 }
 
-@media (max-width: 960px) {
-  .ai-preview-demo__preview-list {
-    grid-auto-columns: minmax(460px, 1fr);
-  }
+.ai-preview-demo__selector-icon {
+  font-size: 0.9375rem;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-@media (max-width: 720px) {
-  .ai-preview-demo__preview-list {
-    grid-auto-columns: minmax(320px, 1fr);
-  }
+.ai-preview-demo__selector-item.is-active .ai-preview-demo__selector-icon {
+  color: rgba(139, 92, 246, 0.9);
+}
+
+.ai-preview-demo__selector-content {
+  width: 100%;
+}
+
+.ai-preview-demo__selector-input {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-preview-demo__selector-item.is-active .ai-preview-demo__selector-input {
+  color: #fff;
+}
+
+.ai-preview-demo__selector-extra {
+  font-size: 0.625rem;
+  color: rgba(255, 255, 255, 0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

@@ -259,7 +259,6 @@ onBeforeUnmount(() => {
 .ai-assist-demo__stage {
   position: relative;
   width: 100%;
-  max-width: 700px;
   min-height: 320px;
 }
 
@@ -324,6 +323,7 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 50%;
   right: 0;
+  width: min(55%, 720px);
   transform: translateY(-50%);
   z-index: 10;
 }
@@ -345,7 +345,7 @@ onBeforeUnmount(() => {
 }
 
 .ai-assist-demo__panel {
-  width: 340px;
+  width: 100%;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.08),
     0 25px 60px -12px rgba(0, 0, 0, 0.6);
