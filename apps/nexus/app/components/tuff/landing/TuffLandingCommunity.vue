@@ -60,40 +60,39 @@ const community = computed(() => ({
     </template>
 
     <div
-      class="grid gap-6 lg:grid-cols-3"
+      class="grid gap-7 lg:grid-cols-3"
       data-reveal
     >
       <article
         v-for="channel in community.channels"
         :key="channel.id"
-        class="group relative h-full flex flex-col justify-between gap-6 overflow-hidden border border-white/12 rounded-[28px] bg-white/5 p-8 text-left text-white shadow-[0_24px_90px_rgba(6,18,52,0.38)] transition duration-300 hover:border-white/25 hover:bg-white/9 hover:-translate-y-1"
+        class="group relative h-full min-h-[320px] flex flex-col justify-between gap-7 overflow-hidden border border-white/12 rounded-[30px] bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-8 text-center text-white shadow-[0_26px_95px_rgba(6,18,52,0.4)] backdrop-blur-[6px] transition duration-300 hover:border-white/30 hover:bg-[linear-gradient(160deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))] hover:-translate-y-1"
       >
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_transparent_70%)] opacity-70 transition duration-300 group-hover:opacity-100" />
-        <div class="relative space-y-4">
-          <span class="size-12 inline-flex items-center justify-center rounded-2xl bg-white/15 text-white shadow-[0_18px_40px_rgba(4,16,52,0.36)]">
-            <span :class="channel.icon" class="text-xl" aria-hidden="true" />
+        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.2),_transparent_72%)] opacity-70 transition duration-300 group-hover:opacity-100" />
+        <div class="relative flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.32em] text-white/50">
+          <span>{{ channel.meta }}</span>
+          <span class="i-carbon-arrow-up-right text-base text-white/40 transition group-hover:text-white/70" aria-hidden="true" />
+        </div>
+        <div class="relative flex flex-col items-center gap-5">
+          <span class="size-14 inline-flex items-center justify-center rounded-[22px] bg-white/15 text-white shadow-[0_20px_45px_rgba(4,16,52,0.38)]">
+            <span :class="channel.icon" class="text-2xl" aria-hidden="true" />
           </span>
           <div class="space-y-2">
-            <h3 class="text-xl font-semibold">
+            <h3 class="text-2xl font-semibold">
               {{ channel.title }}
             </h3>
-            <p class="text-sm text-white/60 font-semibold tracking-[0.3em] uppercase">
-              {{ channel.meta }}
-            </p>
             <p class="text-sm text-white/70 leading-relaxed">
               {{ channel.description }}
             </p>
           </div>
         </div>
-        <div class="relative">
-          <NuxtLink
-            :to="channel.href"
-            class="inline-flex items-center gap-2 text-sm text-white font-semibold transition hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-          >
-            {{ channel.cta }}
-            <span class="i-carbon-arrow-up-right text-base" aria-hidden="true" />
-          </NuxtLink>
-        </div>
+        <NuxtLink
+          :to="channel.href"
+          class="relative inline-flex items-center justify-center gap-2 text-sm text-white font-semibold transition hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+        >
+          {{ channel.cta }}
+          <span class="i-carbon-arrow-right text-base" aria-hidden="true" />
+        </NuxtLink>
       </article>
     </div>
 
