@@ -70,6 +70,13 @@
   3. 仍有若干 renderer 组件类型问题需另行处理（PermissionList/PluginPermissions/SettingPermission）。
 - 备注：legacy 权限类型兼容项已转入 `docs/engineering/todo.md` 跟踪。
 
+## docs/engineering/ci-cd/CI_CD_OPTIMIZATION.md
+- 状态：已处理（2026-02-03）
+- 摘要：
+  1. 已落地可复用工作流 `package-ci.yml`（输入可控、条件步骤、缓存、产物上传）。
+  2. 包级 workflow 已存在：`package-utils-ci.yml` / `package-tuffex-ci.yml` / `package-unplugin-ci.yml`。
+  3. `.github/workflows/README.md` 已记录 inputs 与接入步骤。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：

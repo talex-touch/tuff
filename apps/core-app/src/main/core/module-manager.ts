@@ -19,6 +19,17 @@ import type { TalexEvents } from './eventbus/touch-event'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { moduleLog } from '../utils/logger'
+import { getSentryService } from '../modules/sentry/sentry-service'
+
+type ModuleLifecyclePhase = 'created' | 'init' | 'start' | 'stop' | 'destroy'
+type ModuleLifecycleStatus = 'success' | 'failed'
+type ModuleLifecycleMeta = {
+  moduleKey: ModuleKey
+  moduleName: string
+  reason?: ModuleStopContext<TalexEvents>['reason']
+  rollback?: { stopAttempted?: boolean; destroyAttempted?: boolean }
+  errorMessage?: string
+}
 
 /**
  * Minimal file system-backed implementation of the `ModuleDirectory` interface.
@@ -304,16 +315,31 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     moduleOrCtor: ModuleRegistrant<T, TalexEvents>
   ): Promise<boolean> {
     const isCtor = typeof moduleOrCtor === 'function'
-    const instance: T = isCtor
-      ? new (moduleOrCtor as ModuleCtor<T, TalexEvents>)(
-          this.makeCreateContext(
-            (moduleOrCtor as ModuleCtor<T, TalexEvents>).key ?? Symbol('anonymous-module'),
-            { create: false },
-            undefined,
-            undefined
-          )
-        )
-      : (moduleOrCtor as T)
+    let instance: T
+
+    if (isCtor) {
+      const ctor = moduleOrCtor as ModuleCtor<T, TalexEvents>
+      const ctorKey = ctor.key ?? Symbol('anonymous-module')
+      const createCtx = this.makeCreateContext(ctorKey, { create: false }, undefined, undefined)
+      try {
+        instance = new ctor(createCtx)
+      } catch (error) {
+        const moduleName = ctorKey.description ?? ctorKey.toString()
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        moduleLog.error('Failed to construct module', {
+          meta: { module: moduleName, error: errorMessage },
+          error
+        })
+        this.queueModuleLifecycleTelemetry('created', 'failed', 0, {
+          moduleKey: ctorKey,
+          moduleName,
+          errorMessage
+        })
+        return false
+      }
+    } else {
+      instance = moduleOrCtor as T
+    }
 
     const key = instance.name
     if (this.modules.has(key)) {
@@ -336,13 +362,77 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     const createCtx = this.makeCreateContext(key, fileCfg, directory, resolvedPath)
     const initCtx = this.makeInitContext(key, fileCfg, directory)
     const startCtx = this.makeStartContext(key, fileCfg, directory)
+    const stopCtx = this.makeStopContext(key, fileCfg, directory, 'error')
+    const destroyCtx = this.makeDestroyContext(key, fileCfg, directory, false)
+    const baseMeta: ModuleLifecycleMeta = { moduleKey: key, moduleName }
+
+    let createdCalled = false
+    let initCalled = false
+    let initOk = false
+    let startCalled = false
 
     if (typeof instance.created === 'function') {
-      await instance.created(createCtx)
+      createdCalled = true
+      const createdResult = await this.runLifecyclePhase(
+        'created',
+        () => instance.created?.(createCtx),
+        baseMeta
+      )
+      if (!createdResult.ok) {
+        await this.rollbackLifecycle(instance, stopCtx, destroyCtx, baseMeta, {
+          createdCalled,
+          initCalled,
+          initOk,
+          startCalled
+        })
+        timer.end('Module failed', {
+          level: 'error',
+          meta: { module: moduleName, phase: 'created' },
+          error: createdResult.error
+        })
+        return false
+      }
     }
-    await instance.init(initCtx)
+
+    initCalled = true
+    const initResult = await this.runLifecyclePhase('init', () => instance.init(initCtx), baseMeta)
+    if (!initResult.ok) {
+      await this.rollbackLifecycle(instance, stopCtx, destroyCtx, baseMeta, {
+        createdCalled,
+        initCalled,
+        initOk,
+        startCalled
+      })
+      timer.end('Module failed', {
+        level: 'error',
+        meta: { module: moduleName, phase: 'init' },
+        error: initResult.error
+      })
+      return false
+    }
+    initOk = true
+
     if (typeof instance.start === 'function') {
-      await instance.start(startCtx)
+      startCalled = true
+      const startResult = await this.runLifecyclePhase(
+        'start',
+        () => instance.start?.(startCtx),
+        baseMeta
+      )
+      if (!startResult.ok) {
+        await this.rollbackLifecycle(instance, stopCtx, destroyCtx, baseMeta, {
+          createdCalled,
+          initCalled,
+          initOk,
+          startCalled
+        })
+        timer.end('Module failed', {
+          level: 'error',
+          meta: { module: moduleName, phase: 'start' },
+          error: startResult.error
+        })
+        return false
+      }
     }
 
     this.modules.set(key, instance)
@@ -378,12 +468,23 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     const destroyCtx = this.makeDestroyContext(moduleKey, fileCfg, directory, false)
 
     const run = async () => {
+      const moduleName = moduleKey.description ?? moduleKey.toString()
+      const baseMeta: ModuleLifecycleMeta = { moduleKey, moduleName, reason }
+      let stopOk = true
+
       if (typeof mod.stop === 'function') {
-        await mod.stop(stopCtx)
+        const stopResult = await this.runLifecyclePhase('stop', () => mod.stop?.(stopCtx), baseMeta)
+        stopOk = stopResult.ok
       }
-      await mod.destroy(destroyCtx)
+
+      const destroyResult = await this.runLifecyclePhase(
+        'destroy',
+        () => mod.destroy(destroyCtx),
+        baseMeta
+      )
+
       this.modules.delete(moduleKey)
-      return true
+      return stopOk && destroyResult.ok
     }
 
     return run()
@@ -430,6 +531,128 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   public getAllModules(): IterableIterator<ModuleKey> {
     return this.modules.keys()
+  }
+
+  private async rollbackLifecycle(
+    module: TalexTouch.IModule<TalexEvents>,
+    stopCtx: ModuleStopContext<TalexEvents>,
+    destroyCtx: ModuleDestroyContext<TalexEvents>,
+    meta: ModuleLifecycleMeta,
+    state: {
+      createdCalled: boolean
+      initCalled: boolean
+      initOk: boolean
+      startCalled: boolean
+    }
+  ): Promise<void> {
+    let stopAttempted = false
+    let destroyAttempted = false
+
+    if (state.startCalled && typeof module.stop === 'function') {
+      stopAttempted = true
+      await this.runLifecyclePhase('stop', () => module.stop?.(stopCtx), {
+        ...meta,
+        reason: 'error',
+        rollback: { stopAttempted: true, destroyAttempted: false }
+      })
+    }
+
+    if (
+      (state.createdCalled || state.initCalled || state.initOk) &&
+      typeof module.destroy === 'function'
+    ) {
+      destroyAttempted = true
+      await this.runLifecyclePhase('destroy', () => module.destroy(destroyCtx), {
+        ...meta,
+        reason: 'error',
+        rollback: { stopAttempted, destroyAttempted: true }
+      })
+    }
+  }
+
+  private async runLifecyclePhase(
+    phase: ModuleLifecyclePhase,
+    fn: () => void | Promise<void>,
+    meta: ModuleLifecycleMeta
+  ): Promise<{ ok: boolean; durationMs: number; error?: unknown }> {
+    const startedAt = performance.now()
+    try {
+      await fn()
+      const durationMs = Math.round(performance.now() - startedAt)
+      this.queueModuleLifecycleTelemetry(phase, 'success', durationMs, meta)
+      const logMeta: Record<string, string | number | boolean | undefined> = {
+        module: meta.moduleName,
+        moduleKey: meta.moduleKey.description ?? meta.moduleKey.toString(),
+        phase,
+        durationMs,
+        status: 'success',
+        reason: meta.reason
+      }
+      if (meta.rollback) {
+        logMeta.rollbackStop = Boolean(meta.rollback.stopAttempted)
+        logMeta.rollbackDestroy = Boolean(meta.rollback.destroyAttempted)
+      }
+      moduleLog.debug('Module lifecycle ok', {
+        meta: logMeta
+      })
+      return { ok: true, durationMs }
+    } catch (error) {
+      const durationMs = Math.round(performance.now() - startedAt)
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const logMeta: Record<string, string | number | boolean | undefined> = {
+        module: meta.moduleName,
+        moduleKey: meta.moduleKey.description ?? meta.moduleKey.toString(),
+        phase,
+        durationMs,
+        status: 'failed',
+        reason: meta.reason,
+        error: errorMessage
+      }
+      if (meta.rollback) {
+        logMeta.rollbackStop = Boolean(meta.rollback.stopAttempted)
+        logMeta.rollbackDestroy = Boolean(meta.rollback.destroyAttempted)
+      }
+      moduleLog.error('Module lifecycle failed', {
+        meta: logMeta,
+        error
+      })
+      this.queueModuleLifecycleTelemetry(phase, 'failed', durationMs, {
+        ...meta,
+        errorMessage
+      })
+      return { ok: false, durationMs, error }
+    }
+  }
+
+  private queueModuleLifecycleTelemetry(
+    phase: ModuleLifecyclePhase,
+    status: ModuleLifecycleStatus,
+    durationMs: number,
+    meta: ModuleLifecycleMeta
+  ): void {
+    try {
+      const sentryService = getSentryService()
+      if (!sentryService.isTelemetryEnabled()) {
+        return
+      }
+      const moduleKeyLabel = meta.moduleKey.description ?? meta.moduleKey.toString()
+      sentryService.queueNexusTelemetry({
+        eventType: status === 'success' ? 'performance' : 'error',
+        metadata: {
+          kind: 'module-lifecycle',
+          phase,
+          moduleKey: moduleKeyLabel,
+          moduleName: meta.moduleName,
+          durationMs,
+          status,
+          reason: meta.reason,
+          rollback: meta.rollback,
+          errorMessage: meta.errorMessage
+        }
+      })
+    } catch {
+      // ignore nexus telemetry failures
+    }
   }
 
   /**
