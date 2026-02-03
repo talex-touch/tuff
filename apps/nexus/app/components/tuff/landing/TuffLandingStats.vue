@@ -69,7 +69,6 @@ const aiSpotlight = computed(() => {
     :sticky="aiSpotlight.eyebrow"
     :title="aiSpotlight.headline"
     :subtitle="aiSpotlight.subheadline"
-    section-class="min-h-screen flex flex-col justify-center"
     container-class="max-w-6xl w-full flex flex-col gap-8"
     title-class="text-[clamp(.7rem,1vw+1.4rem,1.2rem)] font-bold leading-tight"
     subtitle-class="mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70"

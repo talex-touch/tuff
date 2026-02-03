@@ -18,22 +18,43 @@ const isExpanded = ref(false)
 const coreboxWrapRef = ref<HTMLElement | null>(null)
 
 let resultsTween: gsap.core.Tween | null = null
+let heightTween: gsap.core.Tween | null = null
+let hoverToken = 0
 
 function handleHover(active: boolean) {
+  const token = ++hoverToken
+  const coreboxEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock')
   if (active) {
+    if (!coreboxEl) {
+      isExpanded.value = true
+      return
+    }
+    const startHeight = coreboxEl.offsetHeight
+    gsap.set(coreboxEl, { height: startHeight })
     isExpanded.value = true
     nextTick(() => {
+      if (token !== hoverToken || !isExpanded.value)
+        return
       const resultsEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock__results')
       if (!resultsEl)
         return
+      const endHeight = startHeight + resultsEl.scrollHeight
       resultsTween?.kill()
-      gsap.set(resultsEl, { autoAlpha: 0, y: -8, scaleY: 0.92, transformOrigin: 'top' })
+      heightTween?.kill()
+      heightTween = gsap.to(coreboxEl, {
+        height: endHeight,
+        duration: 0.45,
+        ease: 'power2.out',
+        clearProps: 'height',
+        overwrite: 'auto',
+      })
+      gsap.set(resultsEl, { autoAlpha: 0, y: -8, scaleY: 0.92, transformOrigin: 'top', maxHeight: 'none' })
       resultsTween = gsap.to(resultsEl, {
         autoAlpha: 1,
         y: 0,
         scaleY: 1,
-        duration: 0.72,
-        ease: 'expo.out',
+        duration: 0.45,
+        ease: 'power2.out',
         overwrite: 'auto',
       })
     })
@@ -41,21 +62,35 @@ function handleHover(active: boolean) {
   }
 
   const resultsEl = coreboxWrapRef.value?.querySelector<HTMLElement>('.corebox-mock__results')
-  if (!resultsEl) {
+  if (!resultsEl || !coreboxEl) {
+    if (coreboxEl)
+      gsap.set(coreboxEl, { clearProps: 'height' })
     isExpanded.value = false
     return
   }
+  const startHeight = coreboxEl.offsetHeight
+  const endHeight = Math.max(0, startHeight - resultsEl.scrollHeight)
   resultsTween?.kill()
+  heightTween?.kill()
+  gsap.set(coreboxEl, { height: startHeight })
+  heightTween = gsap.to(coreboxEl, {
+    height: endHeight,
+    duration: 0.28,
+    ease: 'power2.in',
+    clearProps: 'height',
+    overwrite: 'auto',
+    onComplete: () => {
+      if (token === hoverToken)
+        isExpanded.value = false
+    },
+  })
   resultsTween = gsap.to(resultsEl, {
     autoAlpha: 0,
     y: -6,
     scaleY: 0.96,
-    duration: 0.4,
-    ease: 'expo.in',
+    duration: 0.28,
+    ease: 'power2.in',
     overwrite: 'auto',
-    onComplete: () => {
-      isExpanded.value = false
-    },
   })
 }
 
@@ -126,8 +161,7 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
           <CoreBoxMock
             class="landing-integrations__corebox"
             :commands="coreBoxCommands"
-            input-text="Everything in tuff."
-            placeholder="Everything in tuff."
+            :placeholder="t('landing.os.corebox.placeholder')"
             results-title="COREBOX"
             :show-results="isExpanded"
             :show-logo="true"
@@ -201,6 +235,81 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
 .landing-integrations__corebox :deep(.corebox-mock__logo) {
   width: 28px;
   height: 28px;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__results) {
+  padding: 0.4rem 0.4rem 0.5rem;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 4px 8px;
+  padding: 6px 8px;
+  width: calc(100% - 1rem);
+  height: 44px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item:hover) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item.is-selected) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item.is-selected)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  width: 3px;
+  height: 50%;
+  border-radius: 999px;
+  background: #8b5cf6;
+  box-shadow: 0 0 4px rgba(139, 92, 246, 0.6);
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item-icon) {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item-content) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item-label) {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.landing-integrations__corebox :deep(.corebox-mock__item-desc) {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .landing-integrations__rainbow {

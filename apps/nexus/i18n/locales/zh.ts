@@ -1072,6 +1072,31 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           },
         },
       },
+      corebox: {
+        placeholder: 'Everything in Tuff.',
+        commands: {
+          launch: {
+            label: '快速启动',
+            description: '打开应用、文件与链接。',
+          },
+          search: {
+            label: '智能搜索',
+            description: '跨本地与云端检索。',
+          },
+          clipboard: {
+            label: '剪贴板库',
+            description: '历史、片段与粘贴。',
+          },
+          flows: {
+            label: '流程动作',
+            description: '串联多步自动化。',
+          },
+          ai: {
+            label: 'AI 助手',
+            description: '总结、改写、抽取。',
+          },
+        },
+      },
       extensibility: {
         copied: '已复制',
       },

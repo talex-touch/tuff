@@ -35,7 +35,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
   <section
     :id="props.id"
     ref="sectionRef"
-    class="isolate overflow-hidden bg-black text-white" :class="[
+    class="TuffLandingSection isolate overflow-hidden bg-black text-white" :class="[
       props.sectionClass,
     ]"
   >
@@ -47,7 +47,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
     </div>
 
     <div
-      class="relative mx-auto w-full px-6"
+      class="TuffLandingSection-Container flex flex-col min-h-0 relative mx-auto w-full h-full flex flex-col justify-center items-center"
       :class="props.containerClass"
     >
       <template v-if="slots.sticky">
@@ -91,7 +91,36 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
         </p>
       </header>
 
-      <slot />
+      <div class="TuffLandingSection-Content">
+        <slot />
+      </div>
     </div>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.TuffLandingSection {
+  --tuff-landing-header-height: 64px;
+  --tuff-landing-header-gap: 16px;
+  --tuff-landing-sticky-height: 56px;
+  --tuff-landing-sticky-gap: 2.5vh;
+  --tuff-landing-safe-top: calc(var(--tuff-landing-header-height) + var(--tuff-landing-header-gap));
+  --tuff-landing-safe-bottom: calc(var(--tuff-landing-sticky-height) + var(--tuff-landing-sticky-gap));
+}
+
+.TuffLandingSection header {
+  flex-shrink: 0;
+}
+
+.TuffLandingSection-Container {
+  padding-top: var(--tuff-landing-safe-top);
+  padding-bottom: var(--tuff-landing-safe-bottom);
+  box-sizing: border-box;
+}
+
+.TuffLandingSection-Content {
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+</style>

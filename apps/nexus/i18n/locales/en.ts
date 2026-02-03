@@ -1075,6 +1075,31 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           },
         },
       },
+      corebox: {
+        placeholder: 'Everything in Tuff.',
+        commands: {
+          launch: {
+            label: 'Quick launch',
+            description: 'Open apps, files, and URLs.',
+          },
+          search: {
+            label: 'Smart search',
+            description: 'Search across local + cloud.',
+          },
+          clipboard: {
+            label: 'Clipboard vault',
+            description: 'History, snippets, and paste.',
+          },
+          flows: {
+            label: 'Flow actions',
+            description: 'Chain multi-step automations.',
+          },
+          ai: {
+            label: 'AI assist',
+            description: 'Summaries, rewrite, extract.',
+          },
+        },
+      },
       extensibility: {
         copied: 'Copied',
       },
