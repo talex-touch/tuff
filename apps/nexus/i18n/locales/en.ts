@@ -1075,6 +1075,9 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           },
         },
       },
+      extensibility: {
+        copied: 'Copied',
+      },
       pioneer: {
         eyebrow: 'Pioneer Program',
         headline: 'The future of work is coming. Be the first to build it.',
