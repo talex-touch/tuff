@@ -84,6 +84,9 @@ export interface NotificationSDK {
    - `channel=user`: persist + push to message center, optionally broadcast.
    - `channel=app`: forward to renderer via broadcast (active window).
 3. **Renderer hub** receives `app.*` payloads and uses presentation providers.
+4. **多窗口策略**：
+   - 默认仅投递给主窗口（main window）。
+   - 若主窗口不可用，fallback 到最近活跃窗口；仍不可用则缓存或降级为 system 通知（需显式策略）。
 
 ## Providers (Mapping to Current Implementations)
 - System provider:
@@ -100,6 +103,14 @@ export interface NotificationSDK {
 - User provider:
   - Nexus message center (list + archive)
   - Server-to-client push reserved (SSE/WebSocket/IPC bridge)
+
+## Fallback & Rate Limit
+- **降级策略**：
+  - `dialog/mention/popup` 不可用时，降级为 `toast`（需保留原 `dedupeKey`）。
+  - renderer 不可用时，`channel=app` 可降级到 `channel=system`（需用户授权）。
+- **限流策略（建议）**：
+  - per-plugin / per-channel 速率限制（如 5/min），超过后合并为摘要消息。
+  - 同 `dedupeKey` 在窗口期内合并更新（仅更新 message/count）。
 
 ## Persistence (User Notifications)
 Define a local inbox to support "message center list + archive":
@@ -122,10 +133,17 @@ Suggested persistence:
 - Provide CRUD: list, markRead, archive, delete, clear.
 - Allow sync merge (server ID -> local ID) and dedupe by `dedupeKey`.
 
+## Security & Action Handling
+- `onAction` 回调需在主进程做 payload 校验（action id、来源、权限）。
+- 插件仅能收到“自己触发的通知”的 action 回执，禁止跨插件回调。
+
 ## Permissions
-- `system.notification` required only for `channel=system`.
-- `channel=app` and `channel=user` do not require `system.notification`.
-- If needed, introduce `notification.user` later for fine-grained control.
+- **每个 channel 单独权限**（缺一不可）：  
+  - `channel=system` → `system.notification`（已存在）  
+  - `channel=app` → `notification.app`（新增）  
+  - `channel=user` → `notification.user`（新增）
+- Router 在主进程做权限校验：缺权限则拒绝并返回明确错误（可选降级策略需在文档中单列说明）。
+- 插件侧默认不授予 `notification.app` / `notification.user`，需显式申请与用户确认。
 
 ## Transport & Events (Suggested Additions)
 Add `NotificationEvents` in `packages/utils/transport/events/index.ts`:
