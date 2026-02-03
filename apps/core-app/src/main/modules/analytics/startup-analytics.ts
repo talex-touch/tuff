@@ -409,6 +409,86 @@ export class StartupAnalytics {
     })
   }
 
+  private computeStartupAverages(entries: StartupMetrics[]): {
+    startupSummary: {
+      samples: number
+      avgTotalStartupTime: number
+      avgModulesLoadTime: number
+      avgRendererReadyTime: number
+    }
+    moduleSummary: Record<string, { avgLoadTime: number; count: number }>
+  } {
+    if (!entries.length) {
+      return {
+        startupSummary: {
+          samples: 0,
+          avgTotalStartupTime: 0,
+          avgModulesLoadTime: 0,
+          avgRendererReadyTime: 0
+        },
+        moduleSummary: {}
+      }
+    }
+
+    let totalStartupSum = 0
+    let totalStartupCount = 0
+    let modulesLoadSum = 0
+    let modulesLoadCount = 0
+    let rendererReadySum = 0
+    let rendererReadyCount = 0
+    const moduleTotals = new Map<string, { total: number; count: number }>()
+
+    for (const entry of entries) {
+      if (typeof entry.totalStartupTime === 'number') {
+        totalStartupSum += entry.totalStartupTime
+        totalStartupCount += 1
+      }
+
+      const modulesLoadTime = entry.mainProcess?.modulesLoadTime
+      if (typeof modulesLoadTime === 'number') {
+        modulesLoadSum += modulesLoadTime
+        modulesLoadCount += 1
+      }
+
+      if (
+        entry.renderer &&
+        typeof entry.renderer.readyTime === 'number' &&
+        typeof entry.renderer.startTime === 'number'
+      ) {
+        rendererReadySum += entry.renderer.readyTime - entry.renderer.startTime
+        rendererReadyCount += 1
+      }
+
+      for (const detail of entry.mainProcess?.moduleDetails ?? []) {
+        if (!detail?.name) continue
+        const record = moduleTotals.get(detail.name) ?? { total: 0, count: 0 }
+        record.total += detail.loadTime
+        record.count += 1
+        moduleTotals.set(detail.name, record)
+      }
+    }
+
+    const avg = (sum: number, count: number) => (count ? Math.round(sum / count) : 0)
+    const moduleSummary: Record<string, { avgLoadTime: number; count: number }> = {}
+
+    for (const [name, record] of moduleTotals.entries()) {
+      moduleSummary[name] = {
+        avgLoadTime: avg(record.total, record.count),
+        count: record.count
+      }
+    }
+
+    return {
+      startupSummary: {
+        samples: entries.length,
+        avgTotalStartupTime: avg(totalStartupSum, totalStartupCount),
+        avgModulesLoadTime: avg(modulesLoadSum, modulesLoadCount),
+        avgRendererReadyTime: avg(rendererReadySum, rendererReadyCount)
+      },
+      moduleSummary
+    }
+  }
+
   /**
    * Report metrics to endpoint (anonymous)
    */
@@ -445,6 +525,14 @@ export class StartupAnalytics {
       return
     }
 
+    const history = this.getHistory()
+    const entries = [
+      metrics,
+      ...history.entries.filter((entry) => entry.sessionId !== metrics.sessionId)
+    ]
+    const limitedEntries = entries.slice(0, this.config.maxHistory)
+    const { startupSummary, moduleSummary } = this.computeStartupAverages(limitedEntries)
+
     try {
       analyticsLog.info('Reporting metrics (anonymous)', {
         meta: { endpoint: url }
@@ -480,6 +568,8 @@ export class StartupAnalytics {
           totalStartupTime: metrics.totalStartupTime,
           mainProcess: metrics.mainProcess,
           renderer: metrics.renderer,
+          startupSummary,
+          moduleSummary,
           memory,
           cpu,
           uptime: os.uptime(),
@@ -523,6 +613,8 @@ export class StartupAnalytics {
             totalStartupTime: metrics.totalStartupTime,
             mainProcess: metrics.mainProcess,
             renderer: metrics.renderer,
+            startupSummary,
+            moduleSummary,
             memory: {
               total: os.totalmem(),
               free: os.freemem()
