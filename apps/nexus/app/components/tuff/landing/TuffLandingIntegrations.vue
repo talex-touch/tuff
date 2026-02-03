@@ -186,6 +186,7 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
   justify-items: center;
   width: 100%;
   max-width: min(1100px, 100%);
+  margin-inline: auto;
   min-height: clamp(420px, 52vw, 580px);
   padding: clamp(3.5rem, 9vw, 7rem) 0 clamp(3.2rem, 9vw, 5rem);
   row-gap: clamp(1.4rem, 4vw, 2.6rem);

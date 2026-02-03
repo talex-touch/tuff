@@ -24,19 +24,19 @@ export class PluginViewLoader {
     let viewUrl: string
 
     if (plugin.dev.enable && plugin.dev.source && plugin.dev.address) {
-      // // Production environment: block http/https protocol for security
-      // if (app.isPackaged) {
-      //   viewLog.error(`Security: http protocol blocked in production for plugin ${plugin.name}`)
-      //   plugin.issues.push({
-      //     type: 'error',
-      //     code: 'PROTOCOL_NOT_ALLOWED',
-      //     message: 'HTTP protocol is not allowed in production environment',
-      //     suggestion: 'Disable dev.source in manifest.json for production builds',
-      //     source: `feature:${feature.id}`,
-      //     timestamp: Date.now(),
-      //   })
-      //   return null
-      // }
+      // Production environment: block http/https protocol for security
+      if (app.isPackaged) {
+        viewLog.error(`Security: http protocol blocked in production for plugin ${plugin.name}`)
+        plugin.issues.push({
+          type: 'error',
+          code: 'PROTOCOL_NOT_ALLOWED',
+          message: 'HTTP protocol is not allowed in production environment',
+          suggestion: 'Disable dev.source in manifest.json for production builds',
+          source: `feature:${feature.id}`,
+          timestamp: Date.now()
+        })
+        return null
+      }
       // Dev mode: load from remote dev server
       viewUrl = new URL(interactionPath, plugin.dev.address).toString()
     } else {
