@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import Logo from '../../../icon/Logo.vue'
 
 export interface CoreBoxCommand {
   id: string
@@ -66,7 +67,8 @@ function handleSelect(command: CoreBoxCommand, index: number) {
     <div v-if="showInput" class="corebox-mock__input">
       <!-- Logo -->
       <div v-if="showLogo" class="corebox-mock__logo">
-        <svg viewBox="0 0 24 24" fill="none" class="corebox-mock__logo-icon">
+        <Logo />
+        <!-- <svg viewBox="0 0 24 24" fill="none" class="corebox-mock__logo-icon">
           <defs>
             <linearGradient id="tuff-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#0894ff" />
@@ -82,7 +84,7 @@ function handleSelect(command: CoreBoxCommand, index: number) {
             stroke-linecap="round"
             stroke-linejoin="round"
           />
-        </svg>
+        </svg> -->
       </div>
       <!-- 输入文本 -->
       <div class="corebox-mock__input-text">
@@ -161,8 +163,8 @@ function handleSelect(command: CoreBoxCommand, index: number) {
 }
 
 .corebox-mock__logo {
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 
