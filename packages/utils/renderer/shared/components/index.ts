@@ -1,0 +1,5 @@
+export { default as SharedPluginDetailContent } from './SharedPluginDetailContent.vue'
+export { default as SharedPluginDetailHeader } from './SharedPluginDetailHeader.vue'
+export { default as SharedPluginDetailMetaList } from './SharedPluginDetailMetaList.vue'
+export { default as SharedPluginDetailReadme } from './SharedPluginDetailReadme.vue'
+export { default as SharedPluginDetailVersions } from './SharedPluginDetailVersions.vue'
