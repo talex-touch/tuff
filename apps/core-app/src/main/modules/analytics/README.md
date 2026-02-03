@@ -51,6 +51,9 @@ await analytics.getStats()
 5) SDK：插件/渲染通过 `analytics.sdk.*` 上报事件/耗时/计数/直方图等。
 6) 导出：`analytics.export` 支持 json/csv，返回 { format, content, payload, exportedAt }。
 7) 上报：保留 legacy `analytics.report`（StartupAnalytics），后续可插入 batch reporter 调用 Nexus。
+   - StartupAnalytics 上报 payload `metadata` 追加：
+     - `startupSummary`: { samples, avgTotalStartupTime, avgModulesLoadTime, avgRendererReadyTime }
+     - `moduleSummary`: { [moduleName]: { avgLoadTime, count } }
 
 ## 兼容性
 - 保留 StartupAnalytics 输出（getCurrent/getHistory/getSummary/report）供旧通道使用。
