@@ -130,7 +130,6 @@ async function bootstrap() {
   const i18n = await runBootStep('Loading localization resources...', 0.05, () =>
     setupI18n({ locale: initialLanguage })
   )
-  window.$i18n = i18n
 
   const app = await runBootStep('Creating Vue application instance', 0.05, () => createApp(App))
 

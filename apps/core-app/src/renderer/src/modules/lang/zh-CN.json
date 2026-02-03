@@ -1141,7 +1141,20 @@
     "install_success": "安装成功",
     "restart_required": "需要重启应用",
     "restart_now": "立即重启",
-    "restart_later": "稍后重启"
+    "restart_later": "稍后重启",
+    "no_release_notes": "暂无更新说明",
+    "download_started": "更新包下载已开始，请查看下载中心",
+    "download_failed_with_reason": "下载失败：{reason}",
+    "remind_later_success": "已为您延后提醒，{hours}小时后再次提示",
+    "remind_later_failed": "设置稍后提醒失败，请稍后重试",
+    "ignore_version_success": "已忽略此版本",
+    "skip_version_success": "已跳过此版本",
+    "ignore_version_failed": "忽略版本失败",
+    "error": {
+      "network": "网络连接失败，请检查网络设置",
+      "rate_limit": "API请求频率过高，请稍后重试",
+      "generic": "更新检查失败：{reason}"
+    }
   },
   "settings": {
     "platformTags": {

@@ -11,10 +11,10 @@ import {
 } from '@element-plus/icons-vue'
 import { DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
 
-const translate = (key: string): string | undefined =>
-  (window as Window & { $t?: (key: string) => string }).$t?.(key)
+const { t } = useI18n()
 
 interface DownloadProgress {
   percentage: number
@@ -55,12 +55,12 @@ const visible = computed({
 
 const dialogTitle = computed(() => {
   if (isDownloadComplete.value) {
-    return `🎉 ${translate('update.update_ready') || 'Update Ready'}`
+    return `🎉 ${t('update.update_ready')}`
   }
   if (isDownloading.value) {
-    return `⏬ ${translate('update.downloading_update') || 'Downloading Update'}`
+    return `⏬ ${t('update.downloading_update')}`
   }
-  return `🎉 ${translate('update.new_version_available') || 'New Version Available'}`
+  return `🎉 ${t('update.new_version_available')}`
 })
 
 const isDownloading = computed(() => {
@@ -82,7 +82,7 @@ const downloadSize = computed(() => {
 // Markdown rendering
 const renderedMarkdown = computed(() => {
   if (!props.release?.body) {
-    return '<p>No release notes available.</p>'
+    return `<p>${t('update.no_release_notes')}</p>`
   }
 
   // Simple markdown to HTML conversion
@@ -196,7 +196,7 @@ function handleCancelDownload() {
       <!-- Version Comparison -->
       <div class="version-section">
         <div class="version-item">
-          <span class="version-label">{{ $t('update.current_version') }}</span>
+          <span class="version-label">{{ t('update.current_version') }}</span>
           <el-tag type="info" size="large">
             {{ currentVersion }}
           </el-tag>
@@ -207,7 +207,7 @@ function handleCancelDownload() {
           </el-icon>
         </div>
         <div class="version-item">
-          <span class="version-label">{{ $t('update.new_version') }}</span>
+          <span class="version-label">{{ t('update.new_version') }}</span>
           <el-tag type="success" size="large">
             {{ release.tag_name }}
           </el-tag>
@@ -230,7 +230,7 @@ function handleCancelDownload() {
       <div class="release-notes-section">
         <h3 class="section-title">
           <el-icon><Document /></el-icon>
-          {{ $t('update.release_notes') }}
+          {{ t('update.release_notes') }}
         </h3>
         <!-- eslint-disable-next-line vue/no-v-html -->
         <div class="release-notes-content" v-html="renderedMarkdown" />
@@ -240,7 +240,7 @@ function handleCancelDownload() {
       <div v-if="isDownloading && downloadProgress" class="download-progress-section">
         <h3 class="section-title">
           <el-icon><Loading /></el-icon>
-          {{ $t('update.downloading') }}
+          {{ t('update.downloading') }}
         </h3>
         <ProgressBar
           :percentage="downloadProgress.percentage"
@@ -254,14 +254,9 @@ function handleCancelDownload() {
 
       <!-- Install Ready (when download complete) -->
       <div v-if="isDownloadComplete" class="install-ready-section">
-        <el-alert
-          :title="$t('update.download_complete')"
-          type="success"
-          :closable="false"
-          show-icon
-        >
+        <el-alert :title="t('update.download_complete')" type="success" :closable="false" show-icon>
           <template #default>
-            {{ $t('update.ready_to_install') }}
+            {{ t('update.ready_to_install') }}
           </template>
         </el-alert>
       </div>
@@ -271,12 +266,12 @@ function handleCancelDownload() {
       <div class="dialog-footer">
         <div class="footer-left">
           <el-button v-if="!isDownloading && !isDownloadComplete" text @click="handleIgnoreVersion">
-            {{ $t('update.ignore_version') }}
+            {{ t('update.ignore_version') }}
           </el-button>
         </div>
         <div class="footer-right">
           <el-button v-if="!isDownloading && !isDownloadComplete" @click="handleRemindLater">
-            {{ $t('update.remind_later') }}
+            {{ t('update.remind_later') }}
           </el-button>
           <el-button
             v-if="!isDownloading && !isDownloadComplete"
@@ -284,15 +279,15 @@ function handleCancelDownload() {
             @click="handleDownload"
           >
             <el-icon><Download /></el-icon>
-            {{ $t('update.download_now') }}
+            {{ t('update.download_now') }}
           </el-button>
           <el-button v-if="isDownloadComplete" type="success" @click="handleInstall">
             <el-icon><Upload /></el-icon>
-            {{ $t('update.install_now') }}
+            {{ t('update.install_now') }}
           </el-button>
           <el-button v-if="isDownloading" type="warning" @click="handleCancelDownload">
             <el-icon><Close /></el-icon>
-            {{ $t('update.cancel_download') }}
+            {{ t('update.cancel_download') }}
           </el-button>
         </div>
       </div>

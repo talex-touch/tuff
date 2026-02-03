@@ -6,6 +6,7 @@ import type {
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { computed, reactive } from 'vue'
+import { useI18nText } from '~/modules/lang'
 import { forTouchTip } from '~/modules/mention/dialog-mention'
 
 interface InstallTaskState extends PluginInstallProgressEvent {
@@ -37,13 +38,7 @@ let initialized = false
 const transportDisposers: Array<() => void> = []
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
-  const i18n = (
-    window as Window & {
-      $i18n?: { global?: { t?: (key: string, params?: Record<string, unknown>) => string } }
-    }
-  ).$i18n
-  if (i18n?.global?.t) return i18n.global.t.bind(i18n.global)
-  return (key: string, params?: Record<string, unknown>) => {
+  const { t } = useI18nText((key: string, params?: Record<string, unknown>) => {
     if (key === 'market.installation.confirmTitle') {
       return '是否安装插件？'
     }
@@ -60,7 +55,8 @@ function getTranslator(): (key: string, params?: Record<string, unknown>) => str
       return '仍有插件安装进行中，确认要退出吗？'
     }
     return key
-  }
+  })
+  return t
 }
 
 function scheduleCleanup(taskId: string): void {

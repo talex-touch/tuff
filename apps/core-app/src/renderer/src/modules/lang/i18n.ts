@@ -8,6 +8,12 @@ type MessageMap = Record<string, unknown>
 type LocaleKey = string
 export type I18nInstance = I18n<MessageMap, MessageMap, MessageMap, LocaleKey, false>
 
+let globalI18nInstance: I18nInstance | null = null
+
+export function getGlobalI18nInstance(): I18nInstance | null {
+  return globalI18nInstance
+}
+
 /**
  * Setup i18n instance with provided options
  * @param options - i18n options with default locale
@@ -25,6 +31,7 @@ export async function setupI18n(
   await loadLocaleMessages(i18n, options.locale)
 
   setI18nLanguage(i18n, options.locale)
+  globalI18nInstance = i18n
   return i18n
 }
 

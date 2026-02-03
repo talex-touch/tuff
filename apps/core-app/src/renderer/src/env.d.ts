@@ -50,7 +50,6 @@ declare global {
   export interface Window {
     $argMapper: import('@talex-touch/utils/electron').IArgMapperOptions
     $channel: import('@talex-touch/utils/channel').ITouchClientChannel
-    $i18n: import('vue-i18n').I18n<Messages, DateTimeFormats, NumberFormats, OptionLocale, Legacy>
     __VUE_ROUTER__?: import('vue-router').Router
     __devAuthToken?: (token: string) => void
     $startupInfo: IStartupInfo
