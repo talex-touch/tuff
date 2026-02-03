@@ -73,7 +73,7 @@ const builtForYou = computed(() => ({
       <TuffLandingTetrisBackground
         class="absolute left-1/2 top-[46%] inset-0 z-10 -translate-x-1/2 -translate-y-1/2 opacity-60 mix-blend-screen"
         square-color="#00C16A"
-        :base="45"
+        :base="50"
       />
       <div class="tuff-persona-decoration tuff-persona-decoration--left" />
       <div class="tuff-persona-decoration tuff-persona-decoration--right" />
@@ -172,6 +172,7 @@ const builtForYou = computed(() => ({
   position: relative;
   width: 100%;
   align-self: stretch;
+  margin: 0;
   padding: 0.95rem 1.1rem;
   border-radius: 14px;
   color: rgba(255, 255, 255, 0.78);

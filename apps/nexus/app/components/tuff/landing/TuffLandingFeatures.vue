@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import ChromaGrid from '../ChromaGrid.vue'
+import { computed, ref } from 'vue'
 
 interface ExtensibilityContent {
   eyebrow: string
@@ -8,222 +7,291 @@ interface ExtensibilityContent {
   subheadline: string
 }
 
-interface ShowcaseProfile {
-  image: string
-  title: string
-  subtitle: string
-  handle: string
-  borderColor: string
-  gradient: string
-  url: string
-}
-
 const { t } = useI18n()
 
-function toDomId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+interface SdkItem {
+  id: string
+  title: string
+  description: string
+  tag: string
+  color: string
+  icon: string
 }
 
-function createIcon(label: string, startColor: string, endColor: string, elements: string) {
-  const gradientId = `grad-${toDomId(label)}`
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 160 160">
-      <defs>
-        <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="${startColor}"/>
-          <stop offset="100%" stop-color="${endColor}"/>
-        </linearGradient>
-      </defs>
-      <rect width="160" height="160" rx="32" fill="url(#${gradientId})"/>
-      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-        ${elements}
-      </g>
-    </svg>
-  `
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
-
-const showcaseItems: ShowcaseProfile[] = [
+const sdkItems: SdkItem[] = [
   {
-    image: createIcon(
-      'Flow Transfer',
-      '#06B6D4',
-      '#0F172A',
-      `
-        <path d="M44 56h44" stroke="#F8FAFC" stroke-width="8" opacity="0.85"/>
-        <path d="M88 40l32 40-32 40" stroke="#F8FAFC" stroke-width="10"/>
-        <path d="M44 104h60" stroke="#E0F2FE" stroke-width="6" opacity="0.7"/>
-        <circle cx="44" cy="80" r="9" fill="#F8FAFC" opacity="0.82" stroke="none"/>
-      `,
-    ),
-    title: 'Flow Transfer',
-    subtitle: 'Standardized cross-plugin flow handoff.',
-    handle: '@FlowBus',
-    borderColor: '#06B6D4',
-    gradient: 'linear-gradient(145deg, #06B6D4, #0F172A)',
-    url: 'https://launcher.tuff.dev/capabilities/flow-transfer',
+    id: 'box-sdk',
+    title: 'Box SDK',
+    description: 'CoreBox window control.',
+    tag: 'useBox()',
+    color: '#60a5fa',
+    icon: 'i-carbon-rectangle-vertical',
   },
   {
-    image: createIcon(
-      'Search Engine',
-      '#EC4899',
-      '#0F172A',
-      `
-        <circle cx="70" cy="70" r="30" stroke="#FDF2F8" stroke-width="8"/>
-        <path d="M92 92l28 28" stroke="#FBCFE8" stroke-width="10"/>
-        <path d="M54 62c10-10 22-10 32 0" stroke="#FCE7F3" stroke-width="6" opacity="0.75"/>
-        <circle cx="120" cy="120" r="14" fill="#BE185D" stroke="none" opacity="0.65"/>
-      `,
-    ),
-    title: 'Search Engine',
-    subtitle: 'Multi-source instruction search.',
-    handle: '@QueryMesh',
-    borderColor: '#EC4899',
-    gradient: 'linear-gradient(145deg, #EC4899, #0F172A)',
-    url: 'https://launcher.tuff.dev/capabilities/search-engine',
+    id: 'clipboard-sdk',
+    title: 'Clipboard SDK',
+    description: 'Clipboard read/write & history.',
+    tag: 'useClipboard()',
+    color: '#fbbf24',
+    icon: 'i-carbon-copy',
   },
   {
-    image: createIcon(
-      'Core Contextual Memory',
-      '#10B981',
-      '#1F2937',
-      `
-        <path d="M44 64h72" stroke="#DCFCE7" stroke-width="10" opacity="0.7"/>
-        <path d="M40 80h80" stroke="#DCFCE7" stroke-width="10" opacity="0.9"/>
-        <path d="M44 96h72" stroke="#DCFCE7" stroke-width="10" opacity="0.7"/>
-        <rect x="34" y="48" width="92" height="64" rx="16" stroke="#BBF7D0" stroke-width="8"/>
-        <circle cx="80" cy="80" r="18" stroke="#22C55E" stroke-width="6" opacity="0.8"/>
-      `,
-    ),
-    title: 'Core Contextual Memory',
-    subtitle: 'Shared context cache and intent engine.',
-    handle: '@ContextCore',
-    borderColor: '#10B981',
-    gradient: 'linear-gradient(160deg, #10B981, #1F2937)',
-    url: 'https://launcher.tuff.dev/capabilities/core-context',
+    id: 'tempfile-sdk',
+    title: 'TempFile SDK',
+    description: 'Temporary file lifecycle.',
+    tag: 'useTempPluginFiles()',
+    color: '#34d399',
+    icon: 'i-carbon-document-attachment',
   },
   {
-    image: createIcon(
-      'Division Box Layout',
-      '#3B82F6',
-      '#0F172A',
-      `
-        <rect x="36" y="36" width="88" height="88" rx="12" stroke="#DBEAFE" stroke-width="8"/>
-        <path d="M80 36v88" stroke="#BFDBFE" stroke-width="6"/>
-        <path d="M36 80h88" stroke="#BFDBFE" stroke-width="6"/>
-        <rect x="44" y="44" width="32" height="32" rx="8" fill="#2563EB" opacity="0.7" stroke="none"/>
-        <rect x="84" y="44" width="32" height="52" rx="8" fill="#60A5FA" opacity="0.75" stroke="none"/>
-        <rect x="44" y="84" width="32" height="40" rx="8" fill="#1D4ED8" opacity="0.65" stroke="none"/>
-      `,
-    ),
-    title: 'Division Box Layout',
-    subtitle: 'Multi-pane workspace layouts.',
-    handle: '@LayoutOS',
-    borderColor: '#3B82F6',
-    gradient: 'linear-gradient(165deg, #3B82F6, #0F172A)',
-    url: 'https://launcher.tuff.dev/capabilities/division-box',
+    id: 'storage-sdk',
+    title: 'Storage SDK',
+    description: 'Plugin persistence layer.',
+    tag: 'usePluginStorage()',
+    color: '#a78bfa',
+    icon: 'i-carbon-data-base',
   },
   {
-    image: createIcon(
-      'Automation Scenes',
-      '#FB7185',
-      '#111827',
-      `
-        <circle cx="54" cy="54" r="12" stroke="#FFE4E6" stroke-width="6" fill="#FDA4AF" opacity="0.85"/>
-        <circle cx="106" cy="54" r="12" stroke="#FFE4E6" stroke-width="6" fill="#FB7185" opacity="0.85"/>
-        <circle cx="80" cy="106" r="14" stroke="#FFE4E6" stroke-width="6" fill="#FEE2E2" opacity="0.85"/>
-        <path d="M66 60l14 34 26-34" stroke="#FDE68A" stroke-width="6" opacity="0.7"/>
-        <path d="M54 54h52" stroke="#FFE4E6" stroke-width="6" opacity="0.6"/>
-      `,
-    ),
-    title: 'Automation Scenes',
-    subtitle: 'Cross-plugin automation triggers.',
-    handle: '@SceneFlow',
-    borderColor: '#FB7185',
-    gradient: 'linear-gradient(155deg, #FB7185, #111827)',
-    url: 'https://launcher.tuff.dev/capabilities/automation-scenes',
+    id: 'download-sdk',
+    title: 'Download SDK',
+    description: 'Managed download tasks.',
+    tag: 'useDownloadSdk()',
+    color: '#f97316',
+    icon: 'i-carbon-download',
   },
   {
-    image: createIcon(
-      'Permission Matrix',
-      '#6366F1',
-      '#111827',
-      `
-        <path d="M80 34l44 18v28c0 28-18 44-44 56-26-12-44-28-44-56V52l44-18z" stroke="#C7D2FE" stroke-width="8" fill="rgba(99,102,241,0.35)"/>
-        <path d="M80 72l16 16-16 16-16-16 16-16z" stroke="#E0E7FF" stroke-width="6" fill="rgba(226,232,240,0.35)"/>
-        <path d="M80 64v56" stroke="#E0E7FF" stroke-width="6" opacity="0.6"/>
-        <path d="M56 88h48" stroke="#E0E7FF" stroke-width="6" opacity="0.6"/>
-      `,
-    ),
-    title: 'Permission Matrix',
-    subtitle: 'Policy-driven permission sandbox.',
-    handle: '@TrustGrid',
-    borderColor: '#6366F1',
-    gradient: 'linear-gradient(175deg, #6366F1, #111827)',
-    url: 'https://launcher.tuff.dev/capabilities/permission-matrix',
+    id: 'platform-capabilities-sdk',
+    title: 'Platform Capabilities SDK',
+    description: 'Capability catalog & status.',
+    tag: 'usePlatformSdk()',
+    color: '#38bdf8',
+    icon: 'i-carbon-chip',
   },
   {
-    image: createIcon(
-      'Developer Sandbox',
-      '#2DD4BF',
-      '#0F172A',
-      `
-        <path d="M52 58l28-14 28 14v44l-28 14-28-14V58z" stroke="#CCFBF1" stroke-width="8" fill="rgba(45,212,191,0.25)"/>
-        <path d="M80 44v44" stroke="#99F6E4" stroke-width="6" opacity="0.7"/>
-        <path d="M52 82l28 14 28-14" stroke="#A5F3FC" stroke-width="6" opacity="0.7"/>
-      `,
-    ),
-    title: 'Developer Sandbox',
-    subtitle: 'Isolated environment for plugin debugging.',
-    handle: '@DevSand',
-    borderColor: '#2DD4BF',
-    gradient: 'linear-gradient(145deg, #2DD4BF, #0F172A)',
-    url: 'https://launcher.tuff.dev/capabilities/developer-sandbox',
+    id: 'account-sdk',
+    title: 'Account SDK',
+    description: 'Profile, plan & quota.',
+    tag: 'useAccountSDK()',
+    color: '#f472b6',
+    icon: 'i-carbon-user-avatar',
   },
   {
-    image: createIcon(
-      'Telemetry Console',
-      '#F59E0B',
-      '#111827',
-      `
-        <path d="M40 112l18-28 16 20 20-36 18 24 10-16" stroke="#FFFBEB" stroke-width="8"/>
-        <rect x="36" y="36" width="88" height="88" rx="18" stroke="#FDE68A" stroke-width="8" opacity="0.7"/>
-        <path d="M54 54h56" stroke="#FEF3C7" stroke-width="6" opacity="0.6"/>
-      `,
-    ),
-    title: 'Telemetry Console',
-    subtitle: 'Live metrics and anomaly alerts.',
-    handle: '@MetricsOps',
-    borderColor: '#F59E0B',
-    gradient: 'linear-gradient(155deg, #F59E0B, #111827)',
-    url: 'https://launcher.tuff.dev/capabilities/telemetry-console',
+    id: 'channel-sdk',
+    title: 'Channel SDK',
+    description: 'Legacy IPC channel.',
+    tag: 'useChannel()',
+    color: '#c084fc',
+    icon: 'i-carbon-connection-signal',
   },
   {
-    image: createIcon(
-      'Edge Scheduler',
-      '#C084FC',
-      '#312E81',
-      `
-        <circle cx="80" cy="80" r="40" stroke="#EDE9FE" stroke-width="8"/>
-        <path d="M80 48v32l24 12" stroke="#DDD6FE" stroke-width="8"/>
-        <circle cx="80" cy="80" r="60" stroke="#C084FC" stroke-width="6" opacity="0.3"/>
-        <circle cx="80" cy="80" r="12" fill="#F5F3FF" stroke="none" opacity="0.8"/>
-      `,
-    ),
-    title: 'Edge Scheduler',
-    subtitle: 'Edge task orchestration and resource control.',
-    handle: '@EdgeFlow',
-    borderColor: '#C084FC',
-    gradient: 'linear-gradient(165deg, #C084FC, #312E81)',
-    url: 'https://launcher.tuff.dev/capabilities/edge-scheduler',
+    id: 'feature-sdk',
+    title: 'Feature SDK',
+    description: 'Search result management.',
+    tag: 'useFeature()',
+    color: '#22c55e',
+    icon: 'i-carbon-search',
+  },
+  {
+    id: 'divisionbox-sdk',
+    title: 'DivisionBox SDK',
+    description: 'Independent window control.',
+    tag: 'useDivisionBox()',
+    color: '#fb7185',
+    icon: 'i-carbon-screen',
+  },
+  {
+    id: 'flow-sdk',
+    title: 'Flow SDK',
+    description: 'Cross-plugin flow transfer.',
+    tag: 'useFlowSDK()',
+    color: '#4ade80',
+    icon: 'i-carbon-flow',
+  },
+  {
+    id: 'intelligence-sdk',
+    title: 'Intelligence SDK',
+    description: 'Unified AI capabilities.',
+    tag: 'useIntelligence()',
+    color: '#facc15',
+    icon: 'i-carbon-bot',
+  },
+  {
+    id: 'boxitem-sdk',
+    title: 'BoxItem SDK',
+    description: 'CoreBox item lifecycle.',
+    tag: 'useBoxItems()',
+    color: '#2dd4bf',
+    icon: 'i-carbon-list-boxes',
+  },
+  {
+    id: 'features-sdk',
+    title: 'Features SDK',
+    description: 'Plugin feature manager.',
+    tag: 'useFeatures()',
+    color: '#bef264',
+    icon: 'i-carbon-task',
+  },
+  {
+    id: 'meta-sdk',
+    title: 'Meta SDK',
+    description: 'MetaOverlay global actions.',
+    tag: 'useMetaSDK()',
+    color: '#818cf8',
+    icon: 'i-carbon-idea',
+  },
+  {
+    id: 'notification-sdk',
+    title: 'Notification SDK',
+    description: 'Notification workflow.',
+    tag: 'useNotificationSdk()',
+    color: '#f87171',
+    icon: 'i-carbon-notification',
+  },
+  {
+    id: 'performance-sdk',
+    title: 'Performance SDK',
+    description: 'Storage & perf metrics.',
+    tag: 'usePerformance()',
+    color: '#fda4af',
+    icon: 'i-carbon-speedometer',
+  },
+  {
+    id: 'system-sdk',
+    title: 'System SDK',
+    description: 'Active app snapshots.',
+    tag: 'useSystemSDK()',
+    color: '#94a3b8',
+    icon: 'i-carbon-desktop',
+  },
+  {
+    id: 'service-sdk',
+    title: 'Service SDK',
+    description: 'Plugin service registry.',
+    tag: 'useServiceSDK()',
+    color: '#e879f9',
+    icon: 'i-carbon-service-id',
+  },
+  {
+    id: 'window-sdk',
+    title: 'Window SDK',
+    description: 'Plugin window control.',
+    tag: 'useWindowSDK()',
+    color: '#5eead4',
+    icon: 'i-carbon-application',
+  },
+  {
+    id: 'touch-sdk',
+    title: 'Touch SDK',
+    description: 'Runtime bridge helpers.',
+    tag: 'useTouchSDK()',
+    color: '#8b5cf6',
+    icon: 'i-carbon-touch-1',
+  },
+  {
+    id: 'app-sdk',
+    title: 'App SDK',
+    description: 'App lifecycle & info.',
+    tag: 'useAppSDK()',
+    color: '#3b82f6',
+    icon: 'i-carbon-app-switcher',
+  },
+  {
+    id: 'platform-sdk',
+    title: 'Platform SDK',
+    description: 'Platform integrations.',
+    tag: 'usePlatformSDK()',
+    color: '#0ea5e9',
+    icon: 'i-carbon-ibm-cloud',
+  },
+  {
+    id: 'market-sdk',
+    title: 'Market SDK',
+    description: 'Marketplace operations.',
+    tag: 'useMarketSDK()',
+    color: '#f59e0b',
+    icon: 'i-carbon-store',
+  },
+  {
+    id: 'plugin-sdk',
+    title: 'Plugin SDK',
+    description: 'Plugin transport domain.',
+    tag: 'usePluginSDK()',
+    color: '#10b981',
+    icon: 'i-carbon-plug',
+  },
+  {
+    id: 'disposable-sdk',
+    title: 'Disposable SDK',
+    description: 'Disposable resources.',
+    tag: 'useDisposableSDK()',
+    color: '#f43f5e',
+    icon: 'i-carbon-trash-can',
+  },
+  {
+    id: 'tuff-transport-sdk',
+    title: 'TuffTransport SDK',
+    description: 'Unified transport client.',
+    tag: 'useTuffTransport()',
+    color: '#22d3ee',
+    icon: 'i-carbon-transportation',
+  },
+  {
+    id: 'analytics-sdk',
+    title: 'Analytics SDK',
+    description: 'Plugin analytics events.',
+    tag: 'useAnalyticsSDK()',
+    color: '#84cc16',
+    icon: 'i-carbon-analytics',
   },
 ]
+
+const marqueeDurations = ['46s', '54s', '62s']
 
 const extensibility = computed<ExtensibilityContent>(() => ({
   eyebrow: t('landing.os.extensibility.eyebrow'),
   headline: t('landing.os.extensibility.headline'),
   subheadline: t('landing.os.extensibility.subheadline'),
 }))
+
+const sdkRows = computed(() => {
+  const rows: SdkItem[][] = [[], [], []]
+  sdkItems.forEach((item, index) => {
+    rows[index % rows.length].push(item)
+  })
+  return rows
+})
+
+const copiedId = ref<string | null>(null)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copySdkCode(item: SdkItem) {
+  const text = item.tag
+  if (!text)
+    return
+
+  try {
+    await navigator.clipboard.writeText(text)
+  }
+  catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.top = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+
+  copiedId.value = item.id
+  if (copiedTimer)
+    clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => {
+    if (copiedId.value === item.id)
+      copiedId.value = null
+  }, 1400)
+}
 </script>
 
 <template>
@@ -232,7 +300,7 @@ const extensibility = computed<ExtensibilityContent>(() => ({
     :title="extensibility.headline"
     :subtitle="extensibility.subheadline"
     section-class="min-h-screen flex flex-col justify-center"
-    container-class="max-w-6xl w-full space-y-16"
+    container-class="w-full space-y-16"
     title-class="text-[clamp(.7rem,1vw+1.4rem,1.2rem)] font-bold leading-tight"
     subtitle-class="mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70"
     :reveal-options="{
@@ -243,15 +311,304 @@ const extensibility = computed<ExtensibilityContent>(() => ({
       },
     }"
   >
-    <div class="flex flex-col items-center gap-10 rounded-3xl bg-black py-36 shadow-[0_12px_20px_rgba(8,10,35,0.32)]">
-      <ChromaGrid
-        :items="showcaseItems"
-        :radius="300"
-        :damping="0.45"
-        :fade-out="0.6"
-        ease="power3.out"
-      />
-      <div class="pointer-events-none absolute from-transparent via-white/12 to-transparent bg-gradient-to-r blur-[120px] -inset-10 -z-10" />
+    <div class="landing-features__panel">
+      <div class="landing-features__marquee">
+        <div
+          v-for="(row, rowIndex) in sdkRows"
+          :key="`sdk-row-${rowIndex}`"
+          class="landing-features__row"
+          :style="{
+            '--marquee-duration': marqueeDurations[rowIndex] ?? '52s',
+            '--marquee-direction': rowIndex % 2 === 0 ? 'normal' : 'reverse',
+          }"
+        >
+          <div class="landing-features__track">
+            <div class="landing-features__segment">
+              <button
+                v-for="item in row"
+                :key="item.id"
+                class="landing-features__card"
+                :style="{ '--sdk-accent': item.color }"
+                :class="{ 'is-copied': copiedId === item.id }"
+                type="button"
+                :aria-label="`Copy ${item.tag}`"
+                @click="copySdkCode(item)"
+              >
+                <span class="landing-features__card-inner">
+                  <span class="landing-features__face landing-features__face--front">
+                    <span class="landing-features__icon" aria-hidden="true">
+                      <span :class="item.icon" />
+                    </span>
+                    <span class="landing-features__title">{{ item.title }}</span>
+                  </span>
+                  <span class="landing-features__face landing-features__face--back">
+                    <span class="landing-features__desc">{{ item.description }}</span>
+                    <span class="landing-features__copied-text" aria-hidden="true">{{ t('landing.os.extensibility.copied') }}</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+            <div class="landing-features__segment" aria-hidden="true">
+              <button
+                v-for="item in row"
+                :key="`${item.id}-copy`"
+                class="landing-features__card"
+                :style="{ '--sdk-accent': item.color }"
+                type="button"
+                tabindex="-1"
+              >
+                <span class="landing-features__card-inner">
+                  <span class="landing-features__face landing-features__face--front">
+                    <span class="landing-features__icon" aria-hidden="true">
+                      <span :class="item.icon" />
+                    </span>
+                    <span class="landing-features__title">{{ item.title }}</span>
+                  </span>
+                  <span class="landing-features__face landing-features__face--back">
+                    <span class="landing-features__desc">{{ item.description }}</span>
+                    <span class="landing-features__copied-text" aria-hidden="true">{{ t('landing.os.extensibility.copied') }}</span>
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </TuffLandingSection>
 </template>
+
+<style scoped>
+.landing-features__panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: clamp(4rem, 10vw, 8rem) 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.landing-features__marquee {
+  width: 100%;
+  display: grid;
+  gap: clamp(0.9rem, 2vw, 1.4rem);
+}
+
+.landing-features__row {
+  width: 100%;
+  overflow: hidden;
+  padding-block: 0.3rem;
+  mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+}
+
+.landing-features__track {
+  display: flex;
+  width: max-content;
+  animation: landing-marquee var(--marquee-duration, 52s) linear infinite;
+  animation-direction: var(--marquee-direction, normal);
+  align-items: stretch;
+}
+
+.landing-features__panel:hover .landing-features__track {
+  animation-play-state: paused;
+}
+
+.landing-features__segment {
+  display: flex;
+  gap: clamp(0.7rem, 1.4vw, 1.1rem);
+  padding-inline: clamp(0.6rem, 1.6vw, 1.6rem);
+  align-items: stretch;
+  perspective: 1200px;
+}
+
+.landing-features__card {
+  position: relative;
+  display: block;
+  width: clamp(190px, 22vw, 250px);
+  height: clamp(80px, 7vw, 102px);
+  padding: 0;
+  border-radius: 22px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #f8fafc;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-align: left;
+  cursor: pointer;
+  perspective: 1200px;
+  appearance: none;
+  background-clip: padding-box;
+}
+
+.landing-features__card-inner {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sdk-accent);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 12px 28px rgba(2, 6, 23, 0.35);
+  transform-style: preserve-3d;
+  transition: transform 420ms ease, box-shadow 220ms ease;
+}
+
+.landing-features__card-inner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(145deg, rgba(2, 6, 23, 0.45), rgba(2, 6, 23, 0.75));
+  opacity: 1;
+  pointer-events: none;
+}
+
+.landing-features__card-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.2);
+  pointer-events: none;
+}
+
+.landing-features__title {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.landing-features__card:hover .landing-features__card-inner {
+  transform: translateY(-4px) rotateY(180deg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 16px 34px rgba(2, 6, 23, 0.4);
+}
+
+.landing-features__card:focus-visible .landing-features__card-inner {
+  transform: translateY(-4px) rotateY(180deg);
+}
+
+.landing-features__card.is-copied .landing-features__card-inner {
+  transform: translateY(-4px) rotateY(180deg);
+  animation: landing-card-pulse 520ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 18px 40px rgba(2, 6, 23, 0.55);
+}
+
+.landing-features__face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  backface-visibility: hidden;
+  background: transparent;
+  border-radius: inherit;
+}
+
+.landing-features__face--front {
+  justify-content: flex-start;
+}
+
+.landing-features__face--back {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transform: rotateY(180deg);
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.landing-features__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  box-shadow: none;
+}
+
+.landing-features__icon :deep(span) {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.landing-features__desc {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: rgba(248, 250, 252, 0.9);
+  max-width: 80%;
+  text-align: center;
+  margin-inline: auto;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.landing-features__copied-text {
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(248, 250, 252, 0.95);
+  text-transform: uppercase;
+  opacity: 0;
+  filter: blur(6px);
+  transition: opacity 240ms ease, filter 240ms ease;
+}
+
+.landing-features__card.is-copied .landing-features__desc {
+  filter: blur(6px);
+  opacity: 0.25;
+  transition: filter 220ms ease, opacity 220ms ease;
+}
+
+.landing-features__card.is-copied .landing-features__copied-text {
+  opacity: 1;
+  filter: blur(0);
+}
+
+@keyframes landing-card-pulse {
+  0% {
+    transform: translateY(-4px) rotateY(180deg) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) rotateY(180deg) scale(1.03);
+  }
+  100% {
+    transform: translateY(-4px) rotateY(180deg) scale(1);
+  }
+}
+
+@keyframes landing-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-features__track {
+    animation: none;
+    transform: translateX(0);
+  }
+}
+</style>

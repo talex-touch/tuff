@@ -613,6 +613,28 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           actions: 'Actions',
           quickSelect: 'Quick Select',
         },
+        commands: {
+          launch: {
+            label: 'Quick launch',
+            description: 'Open apps, files, and URLs.',
+          },
+          search: {
+            label: 'Smart search',
+            description: 'Search across local + cloud.',
+          },
+          clipboard: {
+            label: 'Clipboard vault',
+            description: 'History, snippets, and paste.',
+          },
+          flows: {
+            label: 'Flow actions',
+            description: 'Chain multi-step automations.',
+          },
+          ai: {
+            label: 'AI assist',
+            description: 'Summaries, rewrite, extract.',
+          },
+        },
         slides: {
           search: {
             label: 'Search',
@@ -1002,6 +1024,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           },
         },
         footnote: 'Everything we build is documented, versioned, and ready for your pull request.',
+        cta: 'Opening Tuffex Design',
+        ctaHref: '/docs/dev/components/foundations',
       },
       proactive: {
         eyebrow: 'Proactive Intelligence',
