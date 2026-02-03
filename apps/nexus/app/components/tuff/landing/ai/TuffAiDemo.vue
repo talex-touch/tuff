@@ -26,17 +26,20 @@ watch(() => props.activeScenario, (newVal) => {
       <Transition name="fade" mode="out-in">
         <TuffAiChatDemo
           v-if="activeScenario === 'chat'"
-          :active="activeScenario === 'chat'"
+          :key="`chat-${activeScenario}`"
+          :active="true"
           :auto-play="autoPlay"
         />
         <TuffAiAssistDemo
           v-else-if="activeScenario === 'assist'"
-          :active="activeScenario === 'assist'"
+          :key="`assist-${activeScenario}`"
+          :active="true"
           :auto-play="autoPlay"
         />
         <TuffAiPreviewDemo
           v-else-if="activeScenario === 'preview'"
-          :active="activeScenario === 'preview'"
+          :key="`preview-${activeScenario}`"
+          :active="true"
           :auto-play="autoPlay"
         />
       </Transition>
@@ -57,9 +60,12 @@ watch(() => props.activeScenario, (newVal) => {
   position: relative;
 }
 
-.fade-enter-active,
+.fade-enter-active {
+  transition: opacity 0.35s ease;
+}
+
 .fade-leave-active {
-  transition: opacity 0.4s ease;
+  transition: opacity 0.2s ease;
 }
 
 .fade-enter-from,
