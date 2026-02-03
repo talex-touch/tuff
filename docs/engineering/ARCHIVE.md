@@ -62,6 +62,14 @@
   3. 权限检查超阈值告警。
   4. 插件加载路径安全复核。
 
+## docs/engineering/typecheck/TYPECHECK_FIXES.md
+- 状态：已处理（2026-02-03）
+- 摘要：
+  1. 记录了插件 Logger 的 LogLevelString 类型修复与颜色映射补齐。
+  2. 记录了移除未使用变量与多余 `@ts-expect-error` 的清理项。
+  3. 仍有若干 renderer 组件类型问题需另行处理（PermissionList/PluginPermissions/SettingPermission）。
+- 备注：legacy 权限类型兼容项已转入 `docs/engineering/todo.md` 跟踪。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：
