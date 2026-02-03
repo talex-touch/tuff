@@ -130,10 +130,16 @@ function handleCardClick(card: { id?: string }) {
 <style scoped>
 .TuffLandingPlugins-Main {
   position: relative;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  align-items: center;
 }
 
 :deep(.AppleCardCarousel-Track) {
   --edge-mask-size: clamp(24px, 6vw, 120px);
+  padding-block: clamp(1rem, 3vh, 3rem);
+  max-height: 100%;
   mask-image: linear-gradient(
     90deg,
     transparent 0,

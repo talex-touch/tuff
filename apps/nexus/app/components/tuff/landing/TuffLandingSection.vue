@@ -47,7 +47,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
     </div>
 
     <div
-      class="TuffLandingSection-Container flex flex-col min-h-0 relative mx-auto w-full h-full flex flex-col justify-center items-center"
+      class="TuffLandingSection-Container flex flex-col min-h-0 relative mx-auto w-full h-full items-center"
       :class="props.containerClass"
     >
       <template v-if="slots.sticky">
@@ -113,12 +113,18 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
 }
 
 .TuffLandingSection-Container {
+  height: 100%;
+  min-height: 0;
   padding-top: var(--tuff-landing-safe-top);
   padding-bottom: var(--tuff-landing-safe-bottom);
   box-sizing: border-box;
 }
 
 .TuffLandingSection-Content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   width: 100%;
   min-height: 0;
   box-sizing: border-box;
