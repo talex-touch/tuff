@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
   subtitleClass?: string
   revealOptions?: Parameters<typeof useGsapReveal>[1]
 }>(), {
-  sectionClass: 'min-h-screen flex flex-col justify-center',
+  sectionClass: 'absolute inset-0 h-full w-full flex flex-col justify-center',
   containerClass: 'max-w-6xl w-full flex flex-col gap-12',
   stickyClass: '',
   titleTag: 'h2',
@@ -35,7 +35,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
   <section
     :id="props.id"
     ref="sectionRef"
-    class="relative isolate overflow-hidden bg-black py-24 text-white" :class="[
+    class="isolate overflow-hidden bg-black text-white" :class="[
       props.sectionClass,
     ]"
   >
