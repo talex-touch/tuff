@@ -45,6 +45,23 @@
   3. 建议在 `evaluateWidgetComponent` 中补充 render 兜底绑定以恢复渲染。
 - 遗留/待办：验证修复后占位 UI 渲染正常。
 
+## docs/engineering/audits/260114-CODE-SCAN.md
+- 状态：已处理（2026-02-03）
+- 摘要：
+  1. 滚动回归根因：高度链路不成立 + 不可滚动时仍吞 wheel；已修复并同步 tuffex dist。
+  2. 容器高度链路修复与 TouchScroll 自适应增强（TTabs/TouchScroll）。
+  3. 渐变模糊已接入 ViewTemplate 与 TuffAsideTemplate。
+  4. 仍有多处 overflow 需后续迁移；建议明确 native/BetterScroll 策略。
+- 遗留/待办：推进 overflow 迁移与 tuffex 源码/产物流程固化。
+
+## docs/engineering/optimization/OPTIMIZATION_SUMMARY.md
+- 状态：已处理（2026-02-03）
+- 下一步（保留）：
+  1. 前端权限性能监控 UI。
+  2. 日志面板（实时过滤）。
+  3. 权限检查超阈值告警。
+  4. 插件加载路径安全复核。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：
