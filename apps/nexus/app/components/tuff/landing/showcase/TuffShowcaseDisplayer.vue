@@ -25,6 +25,7 @@ interface ShowcaseSlideScenario {
   }>
   media?: {
     src: string
+    poster?: string
     alt: string
   }
 }
@@ -74,7 +75,8 @@ const slides = computed<ShowcaseSlide[]>(() => [
       insight: '',
       references: [],
       media: {
-        src: '/shots/SearchFileImmediately.gif',
+        src: '/shots/SearchFileImmediately.mp4',
+        poster: '/shots/SearchFileImmediately.jpg',
         alt: t('landing.os.aiSpotlight.corebox.slides.file.alt'),
       },
       results: [],
@@ -128,6 +130,18 @@ let queuedIndex: number | null = null
 let queuedResume = false
 
 const durationCache = new Map<string, number>()
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
+
+function getMediaExtension(src: string): string | null {
+  const cleanSrc = src.split('?')[0]?.split('#')[0]
+  const match = cleanSrc?.match(/\.([a-z0-9]+)$/i)
+  return match ? match[1].toLowerCase() : null
+}
+
+function isVideoSource(src: string): boolean {
+  const extension = getMediaExtension(src)
+  return extension ? VIDEO_EXTENSIONS.has(extension) : false
+}
 
 function now() {
   if (typeof performance !== 'undefined' && typeof performance.now === 'function')
@@ -265,6 +279,53 @@ async function resolveGifDuration(src: string) {
   return normalized
 }
 
+function resolveVideoDuration(src: string): Promise<number> {
+  if (!hasWindow())
+    return Promise.resolve(DEFAULT_ROTATION_DURATION)
+
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+
+    const cleanup = () => {
+      video.removeEventListener('loadedmetadata', handleLoaded)
+      video.removeEventListener('error', handleError)
+      video.src = ''
+    }
+
+    const handleLoaded = () => {
+      const duration = Number.isFinite(video.duration)
+        ? video.duration * 1000
+        : DEFAULT_ROTATION_DURATION
+      cleanup()
+      resolve(duration)
+    }
+
+    const handleError = () => {
+      cleanup()
+      reject(new Error('Failed to load video metadata.'))
+    }
+
+    video.preload = 'metadata'
+    video.addEventListener('loadedmetadata', handleLoaded, { once: true })
+    video.addEventListener('error', handleError, { once: true })
+    video.src = src
+    video.load()
+  })
+}
+
+async function resolveMediaDuration(src: string) {
+  if (durationCache.has(src))
+    return durationCache.get(src) ?? DEFAULT_ROTATION_DURATION
+
+  if (isVideoSource(src)) {
+    const duration = await resolveVideoDuration(src)
+    durationCache.set(src, duration)
+    return duration
+  }
+
+  return resolveGifDuration(src)
+}
+
 async function loadSlideDurations(list: ShowcaseSlide[]) {
   if (!hasWindow())
     return
@@ -275,7 +336,7 @@ async function loadSlideDurations(list: ShowcaseSlide[]) {
       return DEFAULT_ROTATION_DURATION
 
     try {
-      return await resolveGifDuration(src)
+      return await resolveMediaDuration(src)
     }
     catch {
       return DEFAULT_ROTATION_DURATION
