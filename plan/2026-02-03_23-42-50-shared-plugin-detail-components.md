@@ -77,3 +77,21 @@ created_at: 2026-02-03T23:42:58+08:00
 - Nexus 详情缺少：`providerId/providerName/providerType`、`providerTrustLevel`、`timestamp`（Core-app meta 需要）。
 - README 数据形态不一致：Nexus 直传 Markdown，Core-app 需从 URL 拉取并渲染。
 - 评分/评论来源差异大：Nexus 有 reviews + rating summary；Core-app 仅评分（无评论列表）。
+
+## 共享组件边界与数据模型（SPDC-020）
+
+### 组件边界（最小可复用）
+
+- `SharedPluginDetailContent`：详情内容容器，组合 header/readme/versions/meta 等区块。
+- `SharedPluginDetailHeader`：标题/摘要/作者/标签/统计等顶部信息。
+- `SharedPluginDetailReadme`：README 渲染区块（空态提示、可覆盖渲染入口）。
+- `SharedPluginDetailVersions`：版本列表区块（含下载/签名/变更摘要）。
+- `SharedPluginDetailMetaList`：右侧元信息列表（provider/id/version/更新时间等）。
+
+### 数据模型（字段可选即隐藏）
+
+- 详情模型：`packages/utils/renderer/shared/plugin-detail.ts` 定义 `SharedPluginDetail`。
+- 约束规则：
+  - 任何字段 `undefined`/空数组时，组件对应区块默认隐藏。
+  - README 以 `readme.markdown` 优先，其次 `readme.url`。
+  - 版本列表仅在 `versions.length > 0` 时展示。
