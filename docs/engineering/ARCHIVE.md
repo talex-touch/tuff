@@ -77,6 +77,24 @@
   2. 包级 workflow 已存在：`package-utils-ci.yml` / `package-tuffex-ci.yml` / `package-unplugin-ci.yml`。
   3. `.github/workflows/README.md` 已记录 inputs 与接入步骤。
 
+## docs/engineering/notes/widget-render-flow.md
+- 状态：已处理（2026-02-03）
+- 摘要：
+  1. 主进程复用 `<pluginTemp>/widgets/*.cjs + .meta.json`，基于 hash/sourceMtime 判定是否重编译。
+  2. 渲染端仅消费 IPC payload，不直接读文件（权限/安全/IO）。
+  3. `.cjs` 可作为 interaction.path，已在脚本处理器支持。
+
+## docs/updates-module.md
+- 状态：部分完成（2026-02-03）
+- 摘要：
+  1. 更新系统主流程与 Provider 体系已落地；Nexus Releases API 已实现。
+  2. 官网 Updates 页面已实现（`apps/nexus/app/pages/updates.vue`）。
+  3. 静默安装仅覆盖 macOS（electron-updater autoUpdater），非 mac 仍走 UpdateSystem + DownloadCenter。
+- 待办保留：
+  - 扩展静默安装到非 mac 平台（如需）。
+  - 官网 Intelligence 页面（若仍需）。
+  - R2/S3 与发布相关事项按需要推进。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：
