@@ -1,0 +1,76 @@
+@use './container-base' as *;
+
+@mixin layout-shell-base {
+  @include layout-variables;
+
+  .AppLayout-View {
+    @include layout-view-base;
+    --fake-radius: var(--layout-view-radius, 0);
+    border-radius: var(--layout-view-radius, 0);
+  }
+
+  .AppLayout-IconFooter {
+    @include layout-icon-footer;
+  }
+
+  .AppLayout-Aside {
+    border-right: var(--layout-aside-border, none);
+    --fake-inner-opacity: var(--layout-aside-opacity, 0);
+  }
+
+  .AppLayout-Header {
+    padding: 0;
+    justify-content: space-between;
+    border-bottom: var(--layout-header-border, none);
+    --fake-opacity: var(--layout-header-fake-opacity, 0.75);
+
+    body.darwin & {
+      flex-direction: row-reverse;
+      justify-content: center;
+    }
+  }
+}
+
+@mixin layout-shell-display {
+  @include layout-display-mode-base;
+
+  &.is-display {
+    --ctr-height: var(--layout-display-ctr-height, var(--ctr-height, 26px));
+    --nav-width: var(--layout-display-nav-width, var(--nav-width, 64px));
+    padding: var(--layout-display-padding, 6px);
+
+    .AppLayout-Header {
+      border-bottom: none;
+      gap: var(--layout-display-header-gap, 8px);
+    }
+
+    .AppLayout-Main {
+      gap: var(--layout-display-main-gap, 0);
+    }
+
+    .AppLayout-Aside {
+      padding: var(--layout-display-aside-padding, 4px);
+      border-right: none;
+    }
+
+    .AppLayout-IconFooter {
+      min-height: var(--layout-display-footer-height, 32px);
+    }
+
+    :deep(.TouchMenuItem-Container) {
+      padding: var(--layout-display-menu-padding, 0.25rem);
+      margin: var(--layout-display-menu-margin, 0.15rem) 0;
+      --fake-inner-opacity: var(--layout-display-menu-opacity, 0.35);
+    }
+
+    .LayoutDisplay-View,
+    .LayoutDisplay-Footer {
+      opacity: var(--layout-display-placeholder-opacity, 0.6);
+    }
+
+    .LayoutDisplay-Footer {
+      height: var(--layout-display-footer-bar, 32px);
+      margin-top: var(--layout-display-footer-margin, 6px);
+    }
+  }
+}

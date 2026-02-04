@@ -1,9 +1,10 @@
 <script lang="ts" name="LayoutSection" setup>
 import type { Component } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxCard } from '@talex-touch/tuffex'
 import { ElMessage } from 'element-plus'
 import { markRaw, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import LayoutPreviewFrame from '~/components/layout/LayoutPreviewFrame.vue'
 import { useDynamicTuffLayout } from '~/modules/layout'
 
 const { t } = useI18n()
@@ -66,22 +67,29 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     class="LayoutSection-Wrapper"
   >
     <div class="LayoutSection-List p-2">
-      <TxButton
+      <TxCard
         v-for="(layout, key) in availableLayouts"
         :key="key"
-        variant="bare"
-        native-type="button"
+        variant="solid"
+        background="mask"
+        shadow="none"
+        :radius="18"
+        :padding="0"
+        clickable
         class="LayoutSection-Item"
         :class="{ active: currentLayoutName === key }"
+        role="button"
+        tabindex="0"
         :aria-pressed="currentLayoutName === key"
         @click="handleLayoutSelect(key)"
+        @keydown.enter.prevent="handleLayoutSelect(key)"
+        @keydown.space.prevent="handleLayoutSelect(key)"
       >
         <div class="LayoutSection-Preview">
           <div v-if="layoutPreviewStates[key]?.component" class="LayoutSection-PreviewLayout">
-            <component
-              :is="layoutPreviewStates[key].component"
+            <LayoutPreviewFrame
+              :layout="layoutPreviewStates[key].component"
               class="LayoutSection-PreviewLayout-Inner"
-              display
             />
           </div>
           <div v-else class="LayoutSection-PreviewSkeleton">
@@ -93,14 +101,16 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
           </div>
         </div>
         <div class="LayoutSection-Info">
-          <span class="LayoutSection-Name">
-            {{ getLayoutLabel(key, layout.displayName) }}
-          </span>
-          <span v-if="currentLayoutName === key" class="LayoutSection-Status">
-            {{ t('layoutSection.currentTag') }}
-          </span>
+          <div class="LayoutSection-NameRow">
+            <span class="LayoutSection-NameGroup">
+              <span v-if="currentLayoutName === key" class="LayoutSection-CurrentDot" />
+              <span class="LayoutSection-Name">
+                {{ getLayoutLabel(key, layout.displayName) }}
+              </span>
+            </span>
+          </div>
         </div>
-      </TxButton>
+      </TxCard>
     </div>
   </TuffGroupBlock>
 </template>
@@ -108,7 +118,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 <style lang="scss" scoped>
 .LayoutSection-List {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.25rem;
   padding: 0.5rem;
 }
@@ -116,20 +126,18 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 .LayoutSection-Item {
   display: flex;
   flex-direction: column;
-  border: 1.5px solid var(--el-border-color-lighter);
-  border-radius: 16px;
-  background: var(--el-bg-color);
+  position: relative;
   cursor: pointer;
   padding: 0;
   overflow: hidden;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .LayoutSection-Item:hover {
-  border-color: var(--el-border-color);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
 .LayoutSection-Item:focus-visible {
@@ -139,20 +147,18 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-Item.active {
   border-color: var(--el-color-primary);
-  background: linear-gradient(135deg, var(--el-color-primary-light-9) 0%, var(--el-bg-color) 100%);
-  box-shadow: 0 4px 20px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.15);
+  box-shadow: 0 6px 18px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.18);
 }
 
 .LayoutSection-Item.active:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.2);
+  box-shadow: 0 8px 22px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.2);
 }
 
 .LayoutSection-Preview {
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--el-fill-color-lighter);
+  background: var(--el-fill-color-light);
   border-bottom: 1px solid var(--el-border-color-lighter);
   position: relative;
 }
@@ -167,17 +173,28 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
   height: 100%;
 }
 
+.LayoutSection-PreviewLayout {
+  padding: 4px;
+  background: var(--el-bg-color);
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+}
+
 .LayoutSection-PreviewLayout-Inner {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  transform: scale(0.95);
+  transform: scale(0.96);
   transform-origin: center center;
+  border-radius: 10px;
+  overflow: hidden;
 
   :deep(.AppLayout-Container) {
     width: 100%;
     height: 100%;
     pointer-events: none;
+    border-radius: 10px;
+    overflow: hidden;
   }
 }
 
@@ -214,28 +231,50 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-Info {
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
+  padding: 0.6rem 0.75rem 0.45rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.LayoutSection-NameRow {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.875rem 1rem;
-  gap: 0.5rem;
+  width: 100%;
+  gap: 0.6rem;
+}
+
+.LayoutSection-NameGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18));
 }
 
 .LayoutSection-Name {
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--el-text-color-primary);
+  text-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  padding: 0.2rem 0.2rem;
 }
 
 .LayoutSection-Item.active .LayoutSection-Name {
   color: var(--el-color-primary);
 }
 
-.LayoutSection-Status {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-8);
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
+.LayoutSection-CurrentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
 }
 </style>
