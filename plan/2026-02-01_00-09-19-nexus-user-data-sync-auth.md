@@ -113,6 +113,27 @@ created_at: 2026-02-01T00:09:31+08:00
 - WS：实时通知“有新 cursor”，客户端拉取增量。
 - Polling：按 interval 对账，确保 WS 丢包后仍可收敛。
 
+## OAuth/OIDC 与 SSO 扩展
+
+### OAuth/OIDC（PKCE）流程
+1. 客户端发起授权请求（code_challenge + scope）。
+2. 服务端授权回调返回 code。
+3. 客户端用 code + code_verifier 交换 access_token/refresh_token。
+4. token 刷新采用滚动刷新，过期立即失效。
+
+### 多账号绑定规则
+- 同一设备最多绑定 3 个账号（默认个人阶段）。
+- 切换账号时隔离本地数据目录与密钥材料。
+
+### 设备上限校验点
+- 登录时校验 device_limit，超限提示解绑或升级。
+- 绑定新设备前强制校验并记录拒绝原因。
+
+### 企业扩展配置结构（预留）
+- OIDC：issuer、client_id、client_secret、scopes、redirect_uri。
+- SAML：entry_point、certificate、entity_id、acs_url。
+- SCIM：base_url、token、sync_interval。
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
