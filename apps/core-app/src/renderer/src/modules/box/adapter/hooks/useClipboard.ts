@@ -128,7 +128,9 @@ export function useClipboard(
   }
 
   function handleAutoFill(): void {
+    autoPasteActive.value = false
     if (!clipboardOptions.last || !canAutoPaste()) return
+    autoPasteActive.value = true
 
     const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
     if (!timestamp || autoPastedTimestamps.has(timestamp)) return
@@ -171,7 +173,10 @@ export function useClipboard(
     const isSameClipboard = currentTimestamp === clipboardTimestamp
     const isDismissed = !overrideDismissed && dismissedTimestamp === clipboardTimestamp
 
-    if (isDismissed) return
+    if (isDismissed) {
+      autoPasteActive.value = false
+      return
+    }
 
     if (!isSameClipboard || overrideDismissed) {
       autoPasteActive.value = false
@@ -227,7 +232,7 @@ export function useClipboard(
 
     clipboardOptions.last = null
     clipboardOptions.detectedAt = null
-    autoPasteActive.value = false
+    if (!remember) autoPasteActive.value = false
     onPasteCallback?.()
   }
 
