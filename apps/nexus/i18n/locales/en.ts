@@ -211,6 +211,7 @@ export default {
         releases: 'Release Notes',
         images: 'Resources',
         codes: 'Activation Codes',
+        reviews: 'Review Moderation',
         analytics: 'Analytics',
         privacy: 'Privacy',
       },
@@ -456,6 +457,12 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         last30Days: 'Last 30 days',
         last90Days: 'Last 90 days',
       },
+      reviews: {
+        title: 'Review Moderation',
+        subtitle: 'Review and manage community feedback.',
+        empty: 'No pending reviews yet.',
+      },
+
       codes: {
         title: 'Activation Codes',
         subtitle: 'Generate and manage activation codes',
