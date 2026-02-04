@@ -210,6 +210,7 @@ export default {
         releases: '版本说明',
         images: '资源',
         codes: '激活码',
+        reviews: '评论审核',
         analytics: '统计分析',
         privacy: '隐私设置',
       },
@@ -455,6 +456,12 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         last30Days: '最近 30 天',
         last90Days: '最近 90 天',
       },
+      reviews: {
+        title: '评论审核',
+        subtitle: '审核并管理社区评论',
+        empty: '暂无待审核评论。',
+      },
+
       codes: {
         title: '激活码',
         subtitle: '生成并管理激活码',
