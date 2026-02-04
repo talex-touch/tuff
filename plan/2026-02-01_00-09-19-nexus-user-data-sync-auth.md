@@ -44,6 +44,42 @@ created_at: 2026-02-01T00:09:31+08:00
 - 单条大小：5 MB（单对象/单 blob 上限，超出需分片）
 - 设备数：3 台（超过需解绑或升级）
 
+## 核心数据模型设计
+
+### 职责边界
+- 本地：items/oplog 写入与离线缓存；payload 加密后落盘；blob 本地缓存可清理。
+- 服务端：users/devices/quotas 权威；items/oplog/blobs 作为同步源；keyrings 仅保存加密材料与恢复码摘要。
+
+### 表结构草案
+
+#### users
+字段：id(uuid, PK)，account_id(string, UNIQUE)，plan(string)，status(string)，created_at(timestamp)
+索引/约束：UNIQUE(account_id)
+
+#### devices
+字段：id(uuid, PK)，user_id(uuid)，fingerprint(string)，name(string)，platform(string)，last_seen_at(timestamp)，status(string)
+索引/约束：UNIQUE(user_id, fingerprint)，INDEX(user_id, last_seen_at)
+
+#### quotas
+字段：id(uuid, PK)，user_id(uuid)，storage_limit_bytes(int)，object_limit(int)，item_limit(int)，device_limit(int)，used_storage_bytes(int)，used_objects(int)，used_devices(int)，updated_at(timestamp)
+索引/约束：UNIQUE(user_id)
+
+#### items
+字段：id(uuid, PK)，user_id(uuid)，device_id(uuid)，type(string)，schema_version(int)，payload_enc(blob_ref)，meta_plain(json)，updated_at(timestamp)，deleted_at(timestamp)
+索引/约束：INDEX(user_id, updated_at)，INDEX(user_id, type)
+
+#### oplog
+字段：id(uuid, PK)，user_id(uuid)，device_id(uuid)，item_id(uuid)，op_type(string)，op_seq(int)，op_hash(string)，created_at(timestamp)
+索引/约束：UNIQUE(user_id, device_id, op_seq)，INDEX(user_id, created_at)
+
+#### blobs
+字段：id(uuid, PK)，user_id(uuid)，object_key(string)，sha256(string)，size_bytes(int)，content_type(string)，created_at(timestamp)，status(string)
+索引/约束：UNIQUE(user_id, object_key)，INDEX(user_id, sha256)
+
+#### keyrings
+字段：id(uuid, PK)，user_id(uuid)，device_id(uuid)，key_type(string)，encrypted_key(blob)，recovery_code_hash(string)，rotated_at(timestamp)，created_at(timestamp)
+索引/约束：UNIQUE(user_id, device_id, key_type)，INDEX(user_id, key_type)
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
