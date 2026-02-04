@@ -19,7 +19,8 @@
     "start:generate": "npx serve .output/public",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts"
   },
   "dependencies": {
     "@sidebase/nuxt-auth": "^0.9.4",
@@ -63,6 +64,7 @@
     "nitro-cloudflare-dev": "catalog:dev",
     "next-auth": "~4.21.1",
     "nuxt": "catalog:build",
+    "openapi-typescript": "6.7.5",
     "pinia": "catalog:frontend",
     "react": "catalog:",
     "react-dom": "catalog:",

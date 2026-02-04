@@ -1,0 +1,454 @@
+openapi: 3.1.0
+info:
+  title: Nexus Sync V1 API
+  version: 1.0.0
+servers:
+  - url: /
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    XDeviceId:
+      name: x-device-id
+      in: header
+      required: true
+      schema:
+        type: string
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        errorCode:
+          type: string
+      required:
+        - errorCode
+    QuotaInfo:
+      type: object
+      properties:
+        limits:
+          type: object
+          properties:
+            storage_limit_bytes:
+              type: integer
+            object_limit:
+              type: integer
+            item_limit:
+              type: integer
+            device_limit:
+              type: integer
+        usage:
+          type: object
+          properties:
+            used_storage_bytes:
+              type: integer
+            used_objects:
+              type: integer
+            used_devices:
+              type: integer
+      required:
+        - limits
+        - usage
+    SyncItemInput:
+      type: object
+      properties:
+        item_id:
+          type: string
+        type:
+          type: string
+        schema_version:
+          type: integer
+        payload_enc:
+          type: string
+          nullable: true
+        payload_ref:
+          type: string
+          nullable: true
+        meta_plain:
+          type: object
+          additionalProperties: true
+          nullable: true
+        payload_size:
+          type: integer
+          nullable: true
+        updated_at:
+          type: string
+        deleted_at:
+          type: string
+          nullable: true
+        op_seq:
+          type: integer
+        op_hash:
+          type: string
+        op_type:
+          type: string
+          enum: [upsert, delete]
+      required:
+        - item_id
+        - type
+        - schema_version
+        - updated_at
+        - op_seq
+        - op_hash
+        - op_type
+    SyncItemOutput:
+      type: object
+      properties:
+        item_id:
+          type: string
+        type:
+          type: string
+        schema_version:
+          type: integer
+        payload_enc:
+          type: string
+          nullable: true
+        payload_ref:
+          type: string
+          nullable: true
+        meta_plain:
+          type: object
+          additionalProperties: true
+          nullable: true
+        payload_size:
+          type: integer
+          nullable: true
+        updated_at:
+          type: string
+        deleted_at:
+          type: string
+          nullable: true
+        device_id:
+          type: string
+          nullable: true
+      required:
+        - item_id
+        - type
+        - schema_version
+        - updated_at
+    OplogOutput:
+      type: object
+      properties:
+        cursor:
+          type: integer
+        item_id:
+          type: string
+        op_seq:
+          type: integer
+        op_hash:
+          type: string
+        op_type:
+          type: string
+          enum: [upsert, delete]
+        updated_at:
+          type: string
+        device_id:
+          type: string
+      required:
+        - cursor
+        - item_id
+        - op_seq
+        - op_hash
+        - op_type
+        - updated_at
+        - device_id
+    ConflictItem:
+      type: object
+      properties:
+        item_id:
+          type: string
+        server_updated_at:
+          type: string
+        server_device_id:
+          type: string
+          nullable: true
+      required:
+        - item_id
+        - server_updated_at
+paths:
+  /api/v1/sync/handshake:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sync_token:
+                    type: string
+                  server_cursor:
+                    type: integer
+                  device_id:
+                    type: string
+                  quotas:
+                    $ref: '#/components/schemas/QuotaInfo'
+                required:
+                  - sync_token
+                  - server_cursor
+                  - device_id
+                  - quotas
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/push:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SyncItemInput'
+              required:
+                - items
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ack_cursor:
+                    type: integer
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConflictItem'
+                required:
+                  - ack_cursor
+                  - conflicts
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/pull:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SyncItemOutput'
+                  oplog:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OplogOutput'
+                  next_cursor:
+                    type: integer
+                required:
+                  - items
+                  - oplog
+                  - next_cursor
+        '400':
+          description: Invalid cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/blobs/upload:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+                - file
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blob_id:
+                    type: string
+                  object_key:
+                    type: string
+                  sha256:
+                    type: string
+                  size_bytes:
+                    type: integer
+                required:
+                  - blob_id
+                  - object_key
+                  - sha256
+                  - size_bytes
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/quotas:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaInfo'
+  /api/v1/quotas/validate:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                storage_bytes_delta:
+                  type: integer
+                objects_delta:
+                  type: integer
+              required:
+                - storage_bytes_delta
+                - objects_delta
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  code:
+                    type: string
+                    nullable: true
+                required:
+                  - ok
+  /api/v1/keys/register:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key_type:
+                  type: string
+                encrypted_key:
+                  type: string
+                recovery_code_hash:
+                  type: string
+                  nullable: true
+              required:
+                - key_type
+                - encrypted_key
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyring_id:
+                    type: string
+                required:
+                  - keyring_id
+  /api/v1/keys/rotate:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key_type:
+                  type: string
+                encrypted_key:
+                  type: string
+              required:
+                - key_type
+                - encrypted_key
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rotated_at:
+                    type: string
+                required:
+                  - rotated_at

@@ -582,6 +582,17 @@ export async function listDevices(event: H3Event, userId: string): Promise<AuthD
   return result.results.map(row => mapDevice(row as Record<string, any>)!).filter(Boolean)
 }
 
+export async function countActiveDevices(event: H3Event, userId: string): Promise<number> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT COUNT(*) as total
+    FROM ${DEVICES_TABLE}
+    WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(userId).first<{ total: number }>()
+  return Number(row?.total ?? 0)
+}
+
 export async function revokeDevice(event: H3Event, userId: string, deviceId: string): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
