@@ -108,7 +108,13 @@ const legacyAppOpenEvent = defineRawEvent<{ appName?: string; path?: string }, v
 
 // Preset import/export events
 const dialogOpenFileEvent = defineRawEvent<
-  { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] },
+  {
+    title?: string
+    defaultPath?: string
+    buttonLabel?: string
+    filters?: { name: string; extensions: string[] }[]
+    properties?: string[]
+  },
   { filePaths?: string[] }
 >('dialog:open-file')
 
@@ -159,9 +165,6 @@ const legacyStorageCleanupIntelligenceEvent = defineRawEvent<unknown, unknown>(
 )
 const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
 const legacyStorageCleanupUpdatesEvent = defineRawEvent<void, unknown>('storage:cleanup:updates')
-const dialogOpenFileEvent = defineRawEvent<Record<string, unknown>, { filePaths?: string[] }>(
-  'dialog:open-file'
-)
 const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }

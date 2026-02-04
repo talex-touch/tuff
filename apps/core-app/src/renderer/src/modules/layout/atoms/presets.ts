@@ -15,7 +15,7 @@ export type LayoutPresetKey = (typeof LAYOUT_PRESET_KEYS)[number]
 export const layoutAtomPresets: Record<LayoutPresetKey, LayoutAtomConfig> = {
   simple: {
     preset: 'simple',
-    header: { border: 'solid', opacity: 1, height: 26, blur: false },
+    header: { border: 'solid', opacity: 0.5, height: 26, blur: false },
     aside: { position: 'left', width: 68, border: 'solid', opacity: 0.5, collapsed: false },
     view: { radius: [0, 0, 0, 0], shadow: 'none', padding: 0, background: 'transparent' },
     nav: { style: 'icon', activeIndicator: 'dot' }
