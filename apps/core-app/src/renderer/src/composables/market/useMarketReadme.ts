@@ -1,15 +1,8 @@
 import type { Ref } from 'vue'
-import { marked } from 'marked'
 import { ref, watch } from 'vue'
 
-// Configure marked for safe rendering
-marked.setOptions({
-  breaks: true,
-  gfm: true
-})
-
 export function useMarketReadme(readmeUrl: Ref<string | undefined>, t: (key: string) => string) {
-  const readmeContent = ref('')
+  const readmeMarkdown = ref('')
   const readmeLoading = ref(false)
   const readmeError = ref('')
 
@@ -18,14 +11,13 @@ export function useMarketReadme(readmeUrl: Ref<string | undefined>, t: (key: str
 
     readmeLoading.value = true
     readmeError.value = ''
-    readmeContent.value = ''
+    readmeMarkdown.value = ''
 
     try {
       const response = await fetch(url)
       if (!response.ok) throw new Error(`Failed to fetch README: ${response.status}`)
       const markdown = await response.text()
-      // Parse markdown to HTML
-      readmeContent.value = await marked.parse(markdown)
+      readmeMarkdown.value = markdown
     } catch (error) {
       console.error('[MarketDetail] Failed to load README:', error)
       readmeError.value = t('market.detailDialog.readmeError') || 'Failed to load README'
@@ -40,7 +32,7 @@ export function useMarketReadme(readmeUrl: Ref<string | undefined>, t: (key: str
       if (newUrl) {
         void fetchReadme(newUrl)
       } else {
-        readmeContent.value = ''
+        readmeMarkdown.value = ''
         readmeError.value = ''
       }
     },
@@ -48,7 +40,7 @@ export function useMarketReadme(readmeUrl: Ref<string | undefined>, t: (key: str
   )
 
   return {
-    readmeContent,
+    readmeMarkdown,
     readmeLoading,
     readmeError
   }

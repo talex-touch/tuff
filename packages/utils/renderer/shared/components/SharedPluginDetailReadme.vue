@@ -8,6 +8,7 @@ interface Props {
   title?: string
   emptyText?: string
   renderMarkdown?: (markdown: string) => string
+  contentClass?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -33,7 +34,7 @@ const renderedReadme = computed(() => {
     <h3 v-if="title" class="text-sm font-semibold uppercase tracking-wide text-black/70">
       {{ title }}
     </h3>
-    <div v-if="renderedReadme" class="prose prose-sm max-w-none">
+    <div v-if="renderedReadme" class="prose prose-sm max-w-none" :class="[contentClass]">
       <!-- eslint-disable-next-line vue/no-v-html -->
       <div v-html="renderedReadme" />
     </div>
