@@ -8,6 +8,14 @@
 - **单一事实来源**：版本、提交规范、质量门禁尽量只维护一份；需要差异化时才做 workspace 局部覆盖。
 - **KISS/DRY/YAGNI**：不引入新的工具（如 Commitizen/Changesets）除非已有明确需求。
 
+## 运行环境判断约定
+
+- 统一使用 `@talex-touch/utils/env`（如 `hasWindow/hasDocument/hasNavigator`、`isBrowserRuntime/isNodeRuntime`、`isElectronRenderer/isElectronMain`、`isDevEnv/isProdEnv`）。
+- 禁止新增 `typeof window/document/navigator` 直判；SSR/预渲染与插件运行时场景易出偏差。
+- renderer 端避免直接读取 `process.env`，改用 `getEnv/getEnvOrDefault` 或 `isDevEnv/isProdEnv`。
+- runtime 注入统一走 `setRuntimeEnv`，并确保入口只做一次初始化。
+- 访问 `window` 扩展对象前先 `hasWindow()`，避免非浏览器环境报错。
+
 ## Workspace 划分与职责
 
 - `apps/core-app/`：Electron 主应用（主进程 + 渲染进程），拥有自己独立的 ESLint/Prettier 配置与 typecheck。
