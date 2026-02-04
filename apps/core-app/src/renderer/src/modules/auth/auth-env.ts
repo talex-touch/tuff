@@ -3,6 +3,8 @@ import { appSetting } from '~/modules/channel/storage'
 
 export const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
 export const APP_AUTH_STORAGE_KEY = 'tuff-app-auth-token'
+export const APP_DEVICE_ID_KEY = 'tuff-app-device-id'
+export const APP_DEVICE_NAME_KEY = 'tuff-app-device-name'
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 export function isLocalAuthMode(): boolean {
@@ -59,6 +61,45 @@ export function clearAppAuthToken(): void {
     return
   }
   localStorage.removeItem(APP_AUTH_STORAGE_KEY)
+}
+
+export function getAppDeviceId(): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null
+  }
+  let deviceId = localStorage.getItem(APP_DEVICE_ID_KEY)
+  if (!deviceId) {
+    deviceId = crypto.randomUUID()
+    localStorage.setItem(APP_DEVICE_ID_KEY, deviceId)
+  }
+  return deviceId
+}
+
+export function getAppDevicePlatform(): string {
+  if (typeof navigator === 'undefined') {
+    return 'desktop'
+  }
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } }
+  return nav.userAgentData?.platform || navigator.platform || 'desktop'
+}
+
+export function getAppDeviceName(): string | null {
+  if (typeof localStorage === 'undefined') {
+    return null
+  }
+  let name = localStorage.getItem(APP_DEVICE_NAME_KEY)
+  if (!name) {
+    name = `Desktop-${getAppDevicePlatform()}`
+    localStorage.setItem(APP_DEVICE_NAME_KEY, name)
+  }
+  return name
+}
+
+export function setAppDeviceName(name: string): void {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+  localStorage.setItem(APP_DEVICE_NAME_KEY, name)
 }
 
 export function clearDevAuthUser(): void {

@@ -1,6 +1,6 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../../utils/auth'
+import { getUserById } from '../../../utils/authStore'
 import { uploadImage } from '../../../utils/imageStorage'
 import { getPluginById, updatePlugin } from '../../../utils/pluginsStore'
 
@@ -16,9 +16,10 @@ export default defineEventHandler(async (event) => {
 
   const formData = await readFormData(event)
 
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const isAdmin = user.publicMetadata?.role === 'admin'
+  const user = await getUserById(event, userId)
+  if (!user)
+    throw createError({ statusCode: 404, statusMessage: 'User not found.' })
+  const isAdmin = user?.role === 'admin'
 
   const existing = await getPluginById(event, id)
 

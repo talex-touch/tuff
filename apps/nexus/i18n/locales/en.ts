@@ -41,7 +41,7 @@ export default {
   },
   pricing: {
     title: 'Choose the plan that matches your momentum.',
-    subtitle: 'Upgrade directly inside Clerk. Once subscribed, you can unlock premium automations and surfaces instantly.',
+  subtitle: 'Upgrade inside Nexus. Unlock premium automations and surfaces instantly after subscription.',
     missingTable: 'Pricing table is not configured yet. Set NUXT_PUBLIC_CLERK_PRICING_TABLE_ID to display your plans.',
     loading: 'Loading pricing…',
   },
@@ -479,7 +479,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         waitlistCta: 'Join teams waitlist',
         pending: 'Loading team preview…',
         seatUsage: '{used} of {total} seats in use',
-        organizationLabel: 'Clerk Organization',
+    organizationLabel: 'Organization',
         activeStatus: 'Active',
         planLabel: 'Plan',
         emptyMembers: 'No teammates yet — invitations will appear here once the preview opens.',

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useI18n } from '#imports'
-import { ClerkLoaded, ClerkLoading } from '@clerk/nuxt/components'
 import { computed, onMounted, watch, watchEffect } from 'vue'
 import { appName } from '~/constants'
 
@@ -15,6 +14,9 @@ const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { locale, setLocale } = useI18n()
 const { syncLocaleChanges, getSavedLocale } = useUserLocale()
 const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
+const { status } = useSession()
+const isAuthLoading = computed(() => status.value === 'loading')
+const isAuthenticated = computed(() => status.value === 'authenticated')
 
 type SupportedLocale = 'en' | 'zh'
 
@@ -97,6 +99,9 @@ const localeFromQuery = computed(() => {
   return null
 })
 
+const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+const redirectTarget = computed(() => route.fullPath || '/dashboard')
+
 watchEffect(() => {
   const next = localeFromQuery.value
   if (next && next !== locale.value)
@@ -126,22 +131,41 @@ watchEffect(() => {
     })
   }
 })
+
+watchEffect(() => {
+  if (!isProtectedRoute.value)
+    return
+  if (status.value !== 'unauthenticated')
+    return
+  router.replace({
+    path: '/sign-in',
+    query: {
+      lang: langTag.value,
+      redirect_url: redirectTarget.value,
+    },
+  })
+})
 </script>
 
 <template>
   <VitePwaManifest />
   <ToastContainer />
   <template v-if="isProtectedRoute">
-    <ClerkLoading>
-      <div class="grid h-screen w-screen place-content-center text-sm text-gray-500">
-        Checking your session…
-      </div>
-    </ClerkLoading>
-    <ClerkLoaded>
-      <NuxtLayout>
-        <NuxtPage />
-      </NuxtLayout>
-    </ClerkLoaded>
+    <div
+      v-if="isAuthLoading"
+      class="grid h-screen w-screen place-content-center text-sm text-gray-500"
+    >
+      Checking your session…
+    </div>
+    <div
+      v-else-if="!isAuthenticated"
+      class="grid h-screen w-screen place-content-center text-sm text-gray-500"
+    >
+      Redirecting to sign in…
+    </div>
+    <NuxtLayout v-else>
+      <NuxtPage />
+    </NuxtLayout>
   </template>
   <template v-else>
     <NuxtLayout>

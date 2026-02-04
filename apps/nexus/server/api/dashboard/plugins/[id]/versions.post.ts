@@ -1,7 +1,7 @@
 import type { PluginChannel } from '../../../../utils/pluginsStore'
-import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
+import { getUserById } from '../../../../utils/authStore'
 import { publishPluginVersion } from '../../../../utils/pluginsStore'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
@@ -41,9 +41,8 @@ export default defineEventHandler(async (event) => {
 
   let isAdmin = false
   try {
-    const client = clerkClient(event)
-    const user = await client.users.getUser(userId)
-    isAdmin = user.publicMetadata?.role === 'admin'
+    const user = await getUserById(event, userId)
+    isAdmin = user?.role === 'admin'
   }
   catch (error) {
     console.warn('Failed to fetch user metadata for admin check:', error)

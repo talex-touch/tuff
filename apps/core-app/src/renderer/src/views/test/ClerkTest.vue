@@ -6,10 +6,10 @@ const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, 
 </script>
 
 <template>
-  <div class="clerk-test">
-    <h2>Clerk 认证测试</h2>
+  <div class="auth-test">
+    <h2>认证测试</h2>
 
-    <div v-if="isLoading" class="loading">正在加载 Clerk...</div>
+    <div v-if="isLoading" class="loading">正在加载认证信息...</div>
 
     <div v-else-if="isAuthenticated" class="authenticated">
       <h3>已登录</h3>
@@ -33,7 +33,7 @@ const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, 
 </template>
 
 <style scoped>
-.clerk-test {
+.auth-test {
   padding: 20px;
   max-width: 600px;
   margin: 0 auto;

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { SignedIn, SignedOut, UserButton } from '@clerk/nuxt/components'
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 import Logo from './icon/Logo.vue'
@@ -11,6 +10,8 @@ withDefaults(defineProps<{
 })
 
 const route = useRoute()
+const { data: session, status } = useSession()
+const { signOut } = useAuth()
 
 const scrolled = ref(false)
 const { t, locale } = useI18n()
@@ -53,6 +54,27 @@ const afterSignOutUrl = computed(() => {
   })
   return `/sign-in?${params.toString()}`
 })
+
+const isAuthenticated = computed(() => status.value === 'authenticated')
+const userLabel = computed(() => {
+  const name = session.value?.user?.name || session.value?.user?.email || ''
+  if (!name)
+    return ''
+  return name.trim()
+})
+const userInitial = computed(() => {
+  const label = userLabel.value
+  return label ? label.slice(0, 1).toUpperCase() : 'U'
+})
+
+async function handleSignOut() {
+  try {
+    await signOut({ callbackUrl: afterSignOutUrl.value })
+  }
+  catch (error) {
+    console.error('[Header] Failed to sign out:', error)
+  }
+}
 
 const currentPath = computed(() => route.path || '/')
 const normalizedPath = computed(() => {
@@ -169,31 +191,36 @@ const headerRevealStyle = computed(() => {
         />
 
         <div class="flex items-center gap-2 sm:gap-3">
-          <SignedOut>
+          <template v-if="!isAuthenticated">
             <NuxtLink
               :to="signInRoute"
               class="border border-primary/20 rounded-full bg-transparent px-3 py-1 text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
             >
               {{ t('nav.login') }}
             </NuxtLink>
-          </SignedOut>
-          <SignedIn>
+          </template>
+          <template v-else>
             <NuxtLink
               to="/dashboard"
               class="border border-primary/20 rounded-full bg-dark px-3 py-1 text-sm text-white font-semibold no-underline shadow-primary/30 shadow-sm transition dark:border-transparent dark:bg-light hover:bg-dark/90 dark:text-black dark:shadow-light/40 dark:hover:bg-light/90"
             >
               {{ t('nav.dashboard') }}
             </NuxtLink>
-
-            <UserButton
-              :after-sign-out-url="afterSignOutUrl"
-              :appearance="{
-                elements: {
-                  avatarBox: 'ring-2 ring-primary/20 rounded-full',
-                },
-              }"
-            />
-          </SignedIn>
+            <NuxtLink
+              to="/dashboard/account"
+              class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+              aria-label="Account"
+            >
+              {{ userInitial }}
+            </NuxtLink>
+            <button
+              type="button"
+              class="border border-primary/20 rounded-full bg-transparent px-3 py-1 text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
+              @click="handleSignOut"
+            >
+              {{ t('nav.logout', '退出') }}
+            </button>
+          </template>
         </div>
       </nav>
     </div>

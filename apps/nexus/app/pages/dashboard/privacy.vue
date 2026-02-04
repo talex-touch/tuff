@@ -4,12 +4,8 @@ import { ref } from 'vue'
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { user, isLoaded } = useUser()
 
 const loading = ref(false)
-const analyticsEnabled = ref(true)
-const crashReportEnabled = ref(true)
-const usageDataEnabled = ref(false)
 
 const privacySettings = ref({
   analytics: true,
@@ -21,15 +17,19 @@ const privacySettings = ref({
 async function saveSettings() {
   loading.value = true
   try {
-    // In a real implementation, save to user metadata or backend
-    if (user.value) {
-      await user.value.update({
-        unsafeMetadata: {
-          ...user.value.unsafeMetadata,
-          privacySettings: privacySettings.value,
-        },
-      })
-    }
+    await $fetch('/api/sync/push', {
+      method: 'POST',
+      body: {
+        items: [
+          {
+            namespace: 'preferences',
+            key: 'privacy',
+            value: privacySettings.value,
+            updatedAt: new Date().toISOString(),
+          },
+        ],
+      },
+    })
   }
   catch (error) {
     console.error('Failed to save privacy settings:', error)
@@ -39,18 +39,22 @@ async function saveSettings() {
   }
 }
 
-function loadSettings() {
-  if (user.value?.unsafeMetadata?.privacySettings) {
-    const saved = user.value.unsafeMetadata.privacySettings as typeof privacySettings.value
-    privacySettings.value = { ...privacySettings.value, ...saved }
+async function loadSettings() {
+  try {
+    const items = await $fetch<Array<{ namespace: string, key: string, value: any }>>('/api/sync/pull')
+    const item = items.find(entry => entry.namespace === 'preferences' && entry.key === 'privacy')
+    if (item?.value) {
+      privacySettings.value = { ...privacySettings.value, ...item.value }
+    }
+  }
+  catch (error) {
+    console.error('Failed to load privacy settings:', error)
   }
 }
 
-// Load settings when user is available
-watch(() => user.value, () => {
-  if (user.value)
-    loadSettings()
-}, { immediate: true })
+onMounted(() => {
+  loadSettings()
+})
 </script>
 
 <template>

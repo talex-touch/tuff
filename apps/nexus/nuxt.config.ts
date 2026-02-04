@@ -32,7 +32,7 @@ export default defineNuxtConfig({
     '@nuxt/eslint',
     '@nuxt/content',
     '@nuxtjs/i18n',
-    '@clerk/nuxt',
+    '@sidebase/nuxt-auth',
     '@sentry/nuxt/module',
     ...(useCloudflareDev ? ['nitro-cloudflare-dev'] : []),
   ],
@@ -93,21 +93,22 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    clerk: {
-      secretKey: process.env.CLERK_SECRET_KEY,
-      webhookSigningSecret: process.env.CLERK_WEBHOOK_SECRET,
-      jwtKey: process.env.CLERK_JWT_KEY,
-      machineSecretKey: process.env.CLERK_MACHINE_KEY,
+    auth: {
+      secret: process.env.AUTH_SECRET,
+      origin: process.env.AUTH_ORIGIN,
+      github: {
+        clientId: process.env.GITHUB_CLIENT_ID,
+        clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      },
+      email: {
+        from: process.env.AUTH_EMAIL_FROM,
+        resendApiKey: process.env.RESEND_API_KEY,
+      },
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
-      clerk: {
-        publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
-        signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
-        signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-        domain: process.env.NUXT_PUBLIC_CLERK_DOMAIN,
-        proxyUrl: process.env.NUXT_PUBLIC_CLERK_PROXY_URL,
-        pricingTableId: process.env.NUXT_PUBLIC_CLERK_PRICING_TABLE_ID,
+      auth: {
+        origin: process.env.AUTH_ORIGIN,
       },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
@@ -186,12 +187,8 @@ export default defineNuxtConfig({
 
   debug: false,
 
-  clerk: {
-    ...(process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-      ? { publishableKey: process.env.NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY }
-      : {}),
-    signInUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
-    signUpUrl: process.env.NUXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
+  auth: {
+    isEnabled: true,
   },
 
   eslint: {

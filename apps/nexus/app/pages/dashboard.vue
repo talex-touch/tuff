@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { RedirectToSignIn, SignedIn, SignedOut } from '@clerk/nuxt/components'
 import { computed } from 'vue'
 
 definePageMeta({
@@ -15,13 +14,11 @@ defineI18nRoute(false)
 
 const { t } = useI18n()
 const route = useRoute()
-const redirectUrl = computed(() => route.fullPath)
 
-const { user } = useUser()
+const { user, isAuthenticated } = useAuthUser()
 
 const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 const sectionPaths: Record<string, string> = {
@@ -29,12 +26,15 @@ const sectionPaths: Record<string, string> = {
   'plugins': '/dashboard/plugins',
   'team': '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
+  'credits': '/dashboard/credits',
   'updates': '/dashboard/updates',
   'releases': '/dashboard/releases',
   'images': '/dashboard/images',
   'codes': '/dashboard/admin/codes',
   'analytics': '/dashboard/admin/analytics',
   'privacy': '/dashboard/privacy',
+  'account': '/dashboard/account',
+  'devices': '/dashboard/devices',
 }
 
 const menuItems = computed(() => {
@@ -57,6 +57,11 @@ const menuItems = computed(() => {
     {
       id: 'api-keys',
       label: t('dashboard.sections.menu.apiKeys', 'API Keys'),
+      section: 'main',
+    },
+    {
+      id: 'credits',
+      label: t('dashboard.sections.menu.credits', 'AI 积分'),
       section: 'main',
     },
   ]
@@ -98,6 +103,16 @@ const menuItems = computed(() => {
 const accountMenuItems = computed(() => {
   return [
     {
+      id: 'account',
+      label: t('dashboard.sections.menu.account', '账号与安全'),
+      icon: 'i-carbon-user',
+    },
+    {
+      id: 'devices',
+      label: t('dashboard.sections.menu.devices', '设备管理'),
+      icon: 'i-carbon-devices',
+    },
+    {
       id: 'privacy',
       label: t('dashboard.sections.menu.privacy', '隐私设置'),
       icon: 'i-carbon-security',
@@ -113,6 +128,12 @@ const activeSection = computed(() => {
     return 'codes'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
+  if (route.path.startsWith('/dashboard/credits'))
+    return 'credits'
+  if (route.path.startsWith('/dashboard/account'))
+    return 'account'
+  if (route.path.startsWith('/dashboard/devices'))
+    return 'devices'
   if (route.path.startsWith('/dashboard/releases'))
     return 'releases'
   const segments = route.path.split('/').filter(Boolean)
@@ -125,81 +146,82 @@ const activeSection = computed(() => {
 
 <template>
   <div class="relative">
-    <SignedIn>
-      <section class="grid gap-8 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]">
-        <aside class="sticky top-24 space-y-6">
-          <nav
-            class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
-            aria-label="Dashboard sections"
+    <section
+      v-if="isAuthenticated"
+      class="grid gap-8 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]"
+    >
+      <aside class="sticky top-24 space-y-6">
+        <nav
+          class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
+          aria-label="Dashboard sections"
+        >
+          <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
+            {{ t('dashboard.sections.menu.title') }}
+          </p>
+          <ul
+            class="mt-4 flex flex-col list-none gap-2 p-0 text-sm"
+            role="listbox"
+            aria-label="Dashboard panels"
           >
-            <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
-              {{ t('dashboard.sections.menu.title') }}
-            </p>
-            <ul
-              class="mt-4 flex flex-col list-none gap-2 p-0 text-sm"
-              role="listbox"
-              aria-label="Dashboard panels"
+            <li
+              v-for="item in menuItems"
+              :key="item.id"
             >
-              <li
-                v-for="item in menuItems"
-                :key="item.id"
+              <NuxtLink
+                :to="item.to"
+                class="group w-full flex items-center justify-between rounded-2xl px-3 py-2 text-left text-black/75 no-underline transition hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
+                :class="activeSection === item.id ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+                role="option"
+                :aria-selected="activeSection === item.id"
               >
-                <NuxtLink
-                  :to="item.to"
-                  class="group w-full flex items-center justify-between rounded-2xl px-3 py-2 text-left text-black/75 no-underline transition hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
-                  :class="activeSection === item.id ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
-                  role="option"
-                  :aria-selected="activeSection === item.id"
-                >
-                  <span>{{ item.label }}</span>
-                  <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
-                </NuxtLink>
-              </li>
-            </ul>
-          </nav>
+                <span>{{ item.label }}</span>
+                <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
+              </NuxtLink>
+            </li>
+          </ul>
+        </nav>
 
-          <!-- Account Menu -->
-          <nav
-            class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
-            aria-label="Account settings"
+        <!-- Account Menu -->
+        <nav
+          class="relative border border-primary/10 rounded-3xl bg-white/80 p-5 dark:border-light/10 dark:bg-dark/70"
+          aria-label="Account settings"
+        >
+          <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
+            {{ t('dashboard.sections.menu.accountTitle', '账户') }}
+          </p>
+          <ul
+            class="mt-4 flex flex-col list-none gap-2 p-0 text-sm"
+            role="listbox"
+            aria-label="Account panels"
           >
-            <p class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/80">
-              {{ t('dashboard.sections.menu.accountTitle', '账户') }}
-            </p>
-            <ul
-              class="mt-4 flex flex-col list-none gap-2 p-0 text-sm"
-              role="listbox"
-              aria-label="Account panels"
+            <li
+              v-for="item in accountMenuItems"
+              :key="item.id"
             >
-              <li
-                v-for="item in accountMenuItems"
-                :key="item.id"
+              <NuxtLink
+                :to="item.to"
+                class="group w-full flex items-center justify-between rounded-2xl px-3 py-2 text-left text-black/75 no-underline transition hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
+                :class="activeSection === item.id ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+                role="option"
+                :aria-selected="activeSection === item.id"
               >
-                <NuxtLink
-                  :to="item.to"
-                  class="group w-full flex items-center justify-between rounded-2xl px-3 py-2 text-left text-black/75 no-underline transition hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
-                  :class="activeSection === item.id ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
-                  role="option"
-                  :aria-selected="activeSection === item.id"
-                >
-                  <span class="flex items-center gap-2">
-                    <span :class="item.icon" class="text-base opacity-60" />
-                    {{ item.label }}
-                  </span>
-                  <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
-                </NuxtLink>
-              </li>
-            </ul>
-          </nav>
-        </aside>
+                <span class="flex items-center gap-2">
+                  <span :class="item.icon" class="text-base opacity-60" />
+                  {{ item.label }}
+                </span>
+                <span class="i-carbon-arrow-right text-base opacity-20 transition duration-200 group-hover:translate-x-0.5 group-hover:opacity-70" />
+              </NuxtLink>
+            </li>
+          </ul>
+        </nav>
+      </aside>
 
-        <div class="space-y-8">
-          <NuxtPage />
-        </div>
-      </section>
-    </SignedIn>
-    <SignedOut>
-      <RedirectToSignIn :redirect-url="redirectUrl" />
-    </SignedOut>
+      <div class="space-y-8">
+        <NuxtPage />
+      </div>
+    </section>
+    <div v-else class="rounded-3xl border border-primary/10 bg-white/70 p-8 text-center text-sm text-black/60 dark:border-light/10 dark:bg-dark/60 dark:text-light/70">
+      {{ t('auth.redirecting', '正在跳转登录...') }}
+    </div>
   </div>
 </template>

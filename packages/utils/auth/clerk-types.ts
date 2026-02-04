@@ -1,22 +1,20 @@
-export interface ClerkUser {
+export interface AuthUser {
   id: string
-  emailAddresses: Array<{
-    emailAddress: string
-    id: string
-  }>
-  firstName?: string
-  lastName?: string
-  username?: string
-  imageUrl?: string
-  publicMetadata?: Record<string, unknown>
-  createdAt: string
-  updatedAt: string
+  email: string
+  name?: string | null
+  avatar?: string | null
+  role?: string | null
+  locale?: string | null
+  emailVerified?: boolean
+  bio?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
-export interface ClerkAuthState {
+export interface AuthState {
   isLoaded: boolean
   isSignedIn: boolean
-  user: ClerkUser | null
+  user: AuthUser | null
   sessionId: string | null
 }
 
@@ -37,21 +35,4 @@ export interface CurrentUser {
   email: string
   avatar?: string
   provider: string
-}
-
-/**
- * Clerk Auth Config
- */
-export interface ClerkConfig {
-  publishableKey: string
-  domain?: string
-  signInUrl?: string
-  signUpUrl?: string
-  afterSignInUrl?: string
-  afterSignUpUrl?: string
-}
-
-export interface ClerkResourceSnapshot {
-  user?: any | null
-  session?: { id?: string | null } | null
 }

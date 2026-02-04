@@ -5,7 +5,6 @@ packages:
   - '!app/core/extensions/**'
 
 catalog:
-  '@clerk/nuxt': ^1.10.0
   '@floating-ui/vue': ^1.1.9
   '@iconify-json/cib': ^1.2.3
   '@lobehub/icons': ^2.43.1

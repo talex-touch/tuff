@@ -26,8 +26,8 @@ import { databaseModule } from '../database'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 
-// User type from Clerk
-interface ClerkUser {
+// User type from auth
+interface AuthUserSnapshot {
   id: string
   username?: string | null
   emailAddresses?: Array<{ emailAddress: string }>
@@ -246,7 +246,7 @@ export class SentryServiceModule extends BaseModule {
     // Listen for user context updates from renderer
     transport.on(SentryEvents.api.updateUser, (payload) => {
       if (payload && typeof payload === 'object') {
-        const user = (payload.user as ClerkUser | null) || null
+        const user = (payload.user as AuthUserSnapshot | null) || null
         this.updateUserContext(user)
       }
     })
@@ -631,7 +631,7 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Update user context based on authentication and privacy settings
    */
-  updateUserContext(user?: ClerkUser | null): void {
+  updateUserContext(user?: AuthUserSnapshot | null): void {
     if (this.config.anonymous) {
       this.currentUserId = null
       // Anonymous mode: no user ID or fingerprint

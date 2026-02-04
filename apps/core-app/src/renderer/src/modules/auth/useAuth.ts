@@ -1,15 +1,5 @@
-import type {
-  ClerkResourceSnapshot,
-  ClerkUser,
-  LoginOptions,
-  LoginResult
-} from '@talex-touch/utils/renderer'
-import {
-  useAppSdk,
-  useAuthState,
-  useClerkProvider,
-  useCurrentUser
-} from '@talex-touch/utils/renderer'
+import type { AuthUser, LoginOptions, LoginResult } from '@talex-touch/utils/renderer'
+import { useAppSdk, useAuthState, useCurrentUser } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
@@ -17,54 +7,58 @@ import type { ElMessageBoxOptions } from 'element-plus'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
+import { isDevEnv } from '@talex-touch/utils/env'
 import { appSetting } from '../channel/storage/index'
 import {
   clearAppAuthToken,
   DEV_AUTH_STORAGE_KEY,
+  getAppAuthToken,
   getAuthBaseUrl,
+  getAppDeviceId,
+  getAppDeviceName,
+  getAppDevicePlatform,
+  getDevAuthToken,
   isLocalAuthMode,
   setAppAuthToken
 } from './auth-env'
 
-let eventListenerCleanup: (() => void) | null = null
 let authCallbackCleanup: (() => void) | null = null
 let focusPromptCleanup: (() => void) | null = null
 let isInitialized = false
-import { isDevEnv } from '@talex-touch/utils/env'
 let activeConsumers = 0
+
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 
-function buildLocalUser(token?: string): ClerkUser {
+function buildLocalUser(token?: string): AuthUser {
   const now = new Date().toISOString()
   const tokenHint = token ? token.replace(/[^a-z0-9]/gi, '').slice(0, 8) : 'local'
   return {
     id: `dev-${tokenHint || 'local'}`,
-    emailAddresses: [{ emailAddress: 'dev@local', id: 'dev-email' }],
-    firstName: 'Dev',
-    lastName: 'Local',
-    username: 'dev-local',
-    imageUrl: '',
+    email: 'dev@local',
+    name: 'Dev Local',
+    avatar: '',
+    role: 'dev',
     createdAt: now,
     updatedAt: now
   }
 }
 
-function readLocalAuthUser(): ClerkUser | null {
+function readLocalAuthUser(): AuthUser | null {
   if (!isLocalAuthMode()) return null
   try {
     const raw = localStorage.getItem(DEV_AUTH_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (parsed?.user?.id) return parsed.user as ClerkUser
+    if (parsed?.user?.id) return parsed.user as AuthUser
   } catch (error) {
     console.warn('[useAuth] Failed to read local auth cache', error)
   }
   return null
 }
 
-function writeLocalAuthUser(user: ClerkUser, token?: string): void {
+function writeLocalAuthUser(user: AuthUser, token?: string): void {
   if (!isLocalAuthMode()) return
   try {
     localStorage.setItem(DEV_AUTH_STORAGE_KEY, JSON.stringify({ user, token: token ?? null }))
@@ -84,34 +78,62 @@ function clearLocalAuthUser(): void {
 
 function applyLocalAuth(token?: string): void {
   const user = buildLocalUser(token)
-  authState.isLoaded = true
-  authState.isSignedIn = true
-  authState.user = user
-  authState.sessionId = token ?? `dev-session-${user.id}`
+  updateAuthState(user, token ?? `dev-session-${user.id}`)
   writeLocalAuthUser(user, token)
 }
 
-// Pending browser login state
+async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
+  try {
+    const url = new URL('/api/auth/me', getAuthBaseUrl()).toString()
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+    if (!response.ok) {
+      return null
+    }
+    const data = (await response.json()) as {
+      id: string
+      email: string
+      name: string | null
+      image: string | null
+      role?: string | null
+      locale?: string | null
+      emailVerified?: boolean
+    }
+    return {
+      id: data.id,
+      email: data.email,
+      name: data.name ?? data.email,
+      avatar: data.image ?? null,
+      role: data.role ?? null,
+      locale: data.locale ?? null,
+      emailVerified: data.emailVerified ?? false
+    }
+  } catch (error) {
+    console.warn('[useAuth] Failed to fetch user profile', error)
+    return null
+  }
+}
+
 const pendingBrowserLogin = ref<{
   resolve: (result: LoginResult) => void
   reject: (error: Error) => void
   timeoutId: NodeJS.Timeout
 } | null>(null)
 
-// 认证操作加载状态
 const authLoadingState = reactive({
   isSigningIn: false,
   isSigningUp: false,
   isSigningOut: false,
   isLoggingIn: false,
-  loginProgress: 0, // 登录进度 0-100
-  loginTimeRemaining: 0 // 剩余时间（秒）
+  loginProgress: 0,
+  loginTimeRemaining: 0
 })
 
-// 错误消息映射
 const ERROR_MESSAGES = {
   INITIALIZATION_FAILED: '认证系统初始化失败，请检查网络连接或稍后重试',
-  CLERK_NOT_INITIALIZED: '认证服务未就绪，请稍后重试',
   SIGN_IN_FAILED: '登录失败，请检查网络连接或稍后重试',
   SIGN_UP_FAILED: '注册失败，请检查网络连接或稍后重试',
   SIGN_OUT_FAILED: '登出失败，请重试',
@@ -121,13 +143,9 @@ const ERROR_MESSAGES = {
   UNKNOWN_ERROR: '发生未知错误，请重试'
 }
 
-// 获取用户友好的错误消息
 function getErrorMessage(error: unknown, defaultType: string): string {
   if (!error) return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES]
-
   const errorMessage = (error as Error).message || String(error)
-
-  // 网络相关错误
   if (
     errorMessage.includes('network') ||
     errorMessage.includes('fetch') ||
@@ -135,18 +153,9 @@ function getErrorMessage(error: unknown, defaultType: string): string {
   ) {
     return ERROR_MESSAGES.NETWORK_ERROR
   }
-
-  // Clerk 特定错误
-  if (errorMessage.includes('Clerk') || errorMessage.includes('clerk')) {
-    return ERROR_MESSAGES.AUTH_ERROR
-  }
-
-  // 超时错误
-  if (errorMessage.includes('timeout') || errorMessage.includes('Login timeout')) {
+  if (errorMessage.includes('timeout')) {
     return ERROR_MESSAGES.LOGIN_TIMEOUT
   }
-
-  // 返回默认错误消息
   return ERROR_MESSAGES[defaultType as keyof typeof ERROR_MESSAGES] || ERROR_MESSAGES.UNKNOWN_ERROR
 }
 
@@ -158,96 +167,96 @@ const isAuthenticated = computed(() => authState.isSignedIn)
 const user = computed(() => authState.user)
 const isLoggedIn = computed(() => authState.isSignedIn)
 
-function updateAuthState(snapshot?: ClerkResourceSnapshot | null) {
-  const { getClerk } = useClerkProvider()
-  const clerk = getClerk()
-  const snapshotHasUser = snapshot ? Object.prototype.hasOwnProperty.call(snapshot, 'user') : false
-  const snapshotHasSession = snapshot
-    ? Object.prototype.hasOwnProperty.call(snapshot, 'session')
-    : false
-
-  const candidateUser = snapshotHasUser ? (snapshot?.user ?? null) : (clerk?.user ?? null)
-  const candidateSession = snapshotHasSession
-    ? (snapshot?.session ?? null)
-    : (clerk?.session ?? null)
-
-  const isUserValid =
-    !!candidateUser &&
-    typeof candidateUser === 'object' &&
-    'id' in candidateUser &&
-    !!candidateUser.id
-  const isSessionValid =
-    !!candidateSession &&
-    typeof candidateSession === 'object' &&
-    'id' in candidateSession &&
-    !!candidateSession.id
-
-  const resolvedSessionId = isSessionValid ? (candidateSession as { id: string }).id : null
-
+function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
   authState.isLoaded = true
-  authState.isSignedIn = isUserValid && isSessionValid
-  authState.user = isUserValid ? (candidateUser as ClerkUser) : null
-  authState.sessionId = resolvedSessionId
+  authState.isSignedIn = Boolean(nextUser)
+  authState.user = nextUser
+  authState.sessionId = sessionId ?? null
 
-  // Notify Sentry about user context change (async, don't block)
   void (async () => {
     try {
-      // Notify main process Sentry - only send serializable data
-      const safeUser = authState.user
+      const safeUser = nextUser
         ? {
-            id: authState.user.id,
-            username: authState.user.username ?? null,
-            emailAddresses: authState.user.emailAddresses?.map((e) => ({
-              emailAddress: e.emailAddress
-            }))
+            id: nextUser.id,
+            username: nextUser.name ?? null,
+            emailAddresses: nextUser.email ? [{ emailAddress: nextUser.email }] : []
           }
         : null
       await transport.send(SentryEvents.api.updateUser, { user: safeUser })
-      // Notify renderer process Sentry
       try {
         const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
-        updateSentryUserContext(authState.user)
+        updateSentryUserContext(nextUser as any)
       } catch {
-        // Renderer Sentry not initialized yet
+        // ignore
       }
     } catch (error) {
-      // Silently fail if Sentry is not available
       console.debug('[useAuth] Failed to update Sentry user context', error)
     }
   })()
 }
 
 function getDisplayName(): string {
-  if (!authState.user) return ''
-
-  const { firstName, lastName, username } = authState.user
-  if (firstName || lastName) {
-    return [firstName, lastName].filter(Boolean).join(' ')
-  }
-  return username || ''
+  return authState.user?.name || ''
 }
 
 function getPrimaryEmail(): string {
-  if (!authState.user?.emailAddresses?.length) return ''
-  return authState.user.emailAddresses[0].emailAddress
-}
-
-type ProfileUpdateInput = {
-  displayName?: string
-  bio?: string
-}
-
-function splitDisplayName(name: string): { firstName: string; lastName: string } {
-  const trimmed = name.trim()
-  if (!trimmed) return { firstName: '', lastName: '' }
-  const parts = trimmed.split(/\s+/)
-  if (parts.length === 1) return { firstName: parts[0], lastName: '' }
-  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] }
+  return authState.user?.email || ''
 }
 
 function getUserBio(): string {
-  const metadata = authState.user?.publicMetadata
-  return typeof metadata?.bio === 'string' ? metadata.bio : ''
+  return authState.user?.bio || ''
+}
+
+async function updateUserProfile(payload: {
+  displayName?: string
+  bio?: string
+}): Promise<AuthUser | null> {
+  if (!payload.displayName && payload.bio === undefined) {
+    return authState.user
+  }
+
+  if (isLocalAuthMode()) {
+    const localUser = authState.user ?? buildLocalUser()
+    const updatedUser: AuthUser = { ...localUser }
+    if (payload.displayName !== undefined) {
+      updatedUser.name = payload.displayName
+    }
+    if (payload.bio !== undefined) {
+      updatedUser.bio = payload.bio
+    }
+    updatedUser.updatedAt = new Date().toISOString()
+    updateAuthState(updatedUser, authState.sessionId)
+    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
+    return updatedUser
+  }
+
+  const token = getAppAuthToken()
+  if (!token) {
+    throw new Error('Not authenticated')
+  }
+
+  const url = new URL('/api/auth/profile', getAuthBaseUrl()).toString()
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      name: payload.displayName ?? authState.user?.name ?? null
+    })
+  })
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`)
+  }
+  const data = (await response.json()) as AuthUser
+  const nextUser: AuthUser = {
+    ...authState.user,
+    ...data,
+    bio: payload.bio ?? authState.user?.bio ?? null
+  }
+  updateAuthState(nextUser, authState.sessionId)
+  return nextUser
 }
 
 async function fileToDataUrl(file: File): Promise<string> {
@@ -259,114 +268,48 @@ async function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-async function updateUserProfile(payload: ProfileUpdateInput): Promise<ClerkUser | null> {
-  if (!payload.displayName && payload.bio === undefined) {
-    return authState.user
-  }
-
-  if (isLocalAuthMode()) {
-    const localUser = authState.user ?? buildLocalUser()
-    const updatedUser: ClerkUser = { ...localUser }
-
-    if (payload.displayName !== undefined) {
-      const { firstName, lastName } = splitDisplayName(payload.displayName)
-      updatedUser.firstName = firstName || undefined
-      updatedUser.lastName = lastName || undefined
-    }
-
-    if (payload.bio !== undefined) {
-      const metadata = { ...(updatedUser.publicMetadata || {}) }
-      metadata.bio = payload.bio
-      updatedUser.publicMetadata = metadata
-    }
-
-    updatedUser.updatedAt = new Date().toISOString()
-    authState.user = updatedUser
-    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
-    return updatedUser
-  }
-
-  const { getClerk, initializeClerk } = useClerkProvider()
-  let clerk = getClerk()
-  if (!clerk) {
-    clerk = await initializeClerk()
-  }
-
-  if (!clerk?.user) {
-    throw new Error('User not available')
-  }
-
-  const clerkUser = clerk.user as unknown as {
-    update: (payload: Record<string, unknown>) => Promise<unknown>
-    publicMetadata?: Record<string, unknown>
-  }
-
-  const updatePayload: Record<string, unknown> = {}
-  if (payload.displayName !== undefined) {
-    const { firstName, lastName } = splitDisplayName(payload.displayName)
-    updatePayload.firstName = firstName
-    updatePayload.lastName = lastName
-  }
-  if (payload.bio !== undefined) {
-    const metadata = { ...(clerkUser.publicMetadata || {}) }
-    metadata.bio = payload.bio
-    updatePayload.publicMetadata = metadata
-  }
-
-  await clerkUser.update(updatePayload)
-  updateAuthState(clerk)
-  return authState.user
-}
-
-async function updateUserAvatar(file: File): Promise<ClerkUser | null> {
+async function updateUserAvatar(file: File): Promise<AuthUser | null> {
   if (isLocalAuthMode()) {
     const dataUrl = await fileToDataUrl(file)
     const localUser = authState.user ?? buildLocalUser()
-    const updatedUser: ClerkUser = {
+    const updatedUser: AuthUser = {
       ...localUser,
-      imageUrl: dataUrl,
+      avatar: dataUrl,
       updatedAt: new Date().toISOString()
     }
-    authState.user = updatedUser
+    updateAuthState(updatedUser, authState.sessionId)
     writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
     return updatedUser
   }
 
-  const { getClerk, initializeClerk } = useClerkProvider()
-  let clerk = getClerk()
-  if (!clerk) {
-    clerk = await initializeClerk()
+  const token = getAppAuthToken()
+  if (!token) {
+    throw new Error('Not authenticated')
   }
-
-  if (!clerk?.user) {
-    throw new Error('User not available')
+  const dataUrl = await fileToDataUrl(file)
+  const url = new URL('/api/auth/profile', getAuthBaseUrl()).toString()
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ image: dataUrl })
+  })
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`)
   }
-
-  const clerkUser = clerk.user as unknown as {
-    setProfileImage?: (payload: { file: File }) => Promise<unknown>
+  const data = (await response.json()) as AuthUser
+  const nextUser: AuthUser = {
+    ...authState.user,
+    ...data,
+    avatar: data.avatar ?? dataUrl
   }
-  if (typeof clerkUser.setProfileImage !== 'function') {
-    throw new Error('Profile image update not supported')
-  }
-
-  await clerkUser.setProfileImage({ file })
-  updateAuthState(clerk)
-  return authState.user
+  updateAuthState(nextUser, authState.sessionId)
+  return nextUser
 }
 
 async function openLoginSettings(): Promise<boolean> {
-  if (isLocalAuthMode()) return false
-  const { getClerk, initializeClerk } = useClerkProvider()
-  let clerk = getClerk()
-  if (!clerk) {
-    clerk = await initializeClerk()
-  }
-  if (!clerk) return false
-  const clerkWithProfile = clerk as unknown as { openUserProfile?: () => Promise<void> }
-  if (typeof clerkWithProfile.openUserProfile === 'function') {
-    await clerkWithProfile.openUserProfile()
-    return true
-  }
   return false
 }
 
@@ -377,137 +320,67 @@ async function initializeAuth() {
     if (isLocalAuthMode()) {
       const cachedUser = readLocalAuthUser()
       if (cachedUser) {
-        authState.isLoaded = true
-        authState.isSignedIn = true
-        authState.user = cachedUser
-        authState.sessionId = `dev-session-${cachedUser.id}`
+        updateAuthState(cachedUser, `dev-session-${cachedUser.id}`)
       } else {
-        authState.isLoaded = true
-        authState.isSignedIn = false
-        authState.user = null
-        authState.sessionId = null
+        updateAuthState(null)
       }
       isInitialized = true
       return
     }
 
-    const { initializeClerk } = useClerkProvider()
-    const clerk = await initializeClerk()
-
-    if (eventListenerCleanup) {
-      eventListenerCleanup()
-      eventListenerCleanup = null
+    const appToken = getAppAuthToken() || getDevAuthToken()
+    if (appToken) {
+      const remoteUser = await fetchRemoteUser(appToken)
+      if (remoteUser) {
+        updateAuthState(remoteUser, appToken)
+      } else {
+        clearAppAuthToken()
+        updateAuthState(null)
+      }
+    } else {
+      updateAuthState(null)
     }
-
-    eventListenerCleanup = clerk.addListener((resources: ClerkResourceSnapshot) => {
-      updateAuthState(resources)
-    })
-
-    updateAuthState(clerk)
     isInitialized = true
   } catch (error) {
-    console.error('Failed to initialize Clerk auth:', error)
-    authState.isLoaded = true
-    authState.isSignedIn = false
-    authState.user = null
-    authState.sessionId = null
-
-    // 显示用户友好的错误消息
+    console.error('[useAuth] Failed to initialize auth:', error)
+    updateAuthState(null)
     const errorMessage = getErrorMessage(error, 'INITIALIZATION_FAILED')
     toast.error(errorMessage)
   }
 }
 
-async function signIn() {
+async function signIn(): Promise<void> {
   if (isLocalAuthMode()) {
     applyLocalAuth()
     return
   }
-
-  const { getClerk } = useClerkProvider()
-  const clerk = getClerk()
-  if (!clerk) {
-    const error = new Error('Clerk not initialized')
-    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    toast.error(errorMessage)
-    throw error
-  }
-
   authLoadingState.isSigningIn = true
   try {
-    await clerk.openSignIn()
-  } catch (error) {
-    console.error('Sign in failed:', error)
-    const errorMessage = getErrorMessage(error, 'SIGN_IN_FAILED')
-    toast.error(errorMessage)
-    throw error
+    await loginWithBrowser()
   } finally {
     authLoadingState.isSigningIn = false
   }
 }
 
-async function signUp() {
+async function signUp(): Promise<void> {
   if (isLocalAuthMode()) {
     applyLocalAuth()
     return
   }
-
-  const { getClerk } = useClerkProvider()
-  const clerk = getClerk()
-  if (!clerk) {
-    const error = new Error('Clerk not initialized')
-    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    toast.error(errorMessage)
-    throw error
-  }
-
   authLoadingState.isSigningUp = true
   try {
-    await clerk.openSignUp()
-  } catch (error) {
-    console.error('Sign up failed:', error)
-    const errorMessage = getErrorMessage(error, 'SIGN_UP_FAILED')
-    toast.error(errorMessage)
-    throw error
+    await loginWithBrowser('sign-up')
   } finally {
     authLoadingState.isSigningUp = false
   }
 }
 
-async function signOut() {
-  if (isLocalAuthMode()) {
-    authState.isLoaded = true
-    authState.isSignedIn = false
-    authState.user = null
-    authState.sessionId = null
-    clearLocalAuthUser()
-    clearAppAuthToken()
-    return
-  }
-
-  const { getClerk } = useClerkProvider()
-  const clerk = getClerk()
-  if (!clerk) {
-    const error = new Error('Clerk not initialized')
-    const errorMessage = getErrorMessage(error, 'CLERK_NOT_INITIALIZED')
-    toast.error(errorMessage)
-    throw error
-  }
-
+async function signOut(): Promise<void> {
   authLoadingState.isSigningOut = true
   try {
-    await clerk.signOut()
-
-    authState.isLoaded = true
-    authState.isSignedIn = false
-    authState.user = null
-    authState.sessionId = null
+    updateAuthState(null)
     clearAppAuthToken()
-  } catch (error) {
-    console.error('Sign out failed:', error)
-    const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
-    toast.error(errorMessage)
-    throw error
+    clearLocalAuthUser()
   } finally {
     authLoadingState.isSigningOut = false
   }
@@ -515,129 +388,44 @@ async function signOut() {
 
 function checkAuthStatus() {
   if (isLocalAuthMode()) return
-  const { getClerk } = useClerkProvider()
-  const clerk = getClerk()
-  if (clerk) {
-    updateAuthState(clerk)
-  }
+  void initializeAuth()
 }
 
 function cleanup() {
   if (activeConsumers > 0) {
     activeConsumers -= 1
   }
-
   if (activeConsumers > 0) {
     return
-  }
-
-  if (eventListenerCleanup) {
-    eventListenerCleanup()
-    eventListenerCleanup = null
   }
   isInitialized = false
 }
 
-async function loginWithClerk(): Promise<LoginResult> {
+async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<LoginResult> {
   authLoadingState.isLoggingIn = true
   authLoadingState.loginProgress = 0
-  authLoadingState.loginTimeRemaining = 10
 
-  try {
-    await signIn()
-
-    return new Promise((resolve) => {
-      let timeoutId: NodeJS.Timeout | null = null
-      let progressId: NodeJS.Timeout | null = null
-      let isResolved = false
-
-      // 启动进度更新
-      const startTime = Date.now()
-      const updateProgress = () => {
-        if (isResolved) return
-
-        const elapsed = (Date.now() - startTime) / 1000
-        const progress = Math.min((elapsed / 10) * 100, 95) // 最多到95%，等待认证完成
-        authLoadingState.loginProgress = progress
-        authLoadingState.loginTimeRemaining = Math.max(0, 10 - elapsed)
-
-        if (elapsed < 10) {
-          progressId = setTimeout(updateProgress, 100)
-        }
-      }
-      updateProgress()
-
-      const stopWatcher = watch(isAuthenticated, (authenticated) => {
-        if (authenticated && !isResolved) {
-          isResolved = true
-          stopWatcher()
-          if (timeoutId) {
-            clearTimeout(timeoutId)
-          }
-          if (progressId) {
-            clearTimeout(progressId)
-          }
-
-          // 登录成功，完成进度
-          authLoadingState.loginProgress = 100
-          authLoadingState.loginTimeRemaining = 0
-
-          // 登录成功后，手动更新状态确保数据同步
-          const { getClerk } = useClerkProvider()
-          const clerk = getClerk()
-          if (clerk) {
-            updateAuthState(clerk)
-          }
-
-          const user = currentUser.value
-          resolve({
-            success: true,
-            user
-          })
-        }
-      })
-
-      timeoutId = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true
-          stopWatcher()
-          if (progressId) {
-            clearTimeout(progressId)
-          }
-          const error = new Error('Login timeout')
-          const errorMessage = getErrorMessage(error, 'LOGIN_TIMEOUT')
-          toast.error(errorMessage)
-          authLoadingState.loginProgress = 0
-          authLoadingState.loginTimeRemaining = 0
-          resolve({
-            success: false,
-            error
-          })
-        }
-      }, 10000)
+  return new Promise((resolve) => {
+    const timeoutId = createBrowserLoginTimeout(resolve)
+    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
+    openBrowserLoginPage(mode).catch((err) => {
+      console.error('[useAuth] Failed to open browser:', err)
+      clearTimeout(timeoutId)
+      pendingBrowserLogin.value = null
+      authLoadingState.isLoggingIn = false
+      toast.error('无法打开浏览器')
+      resolve({ success: false, error: err })
     })
-  } catch (error) {
-    authLoadingState.loginProgress = 0
-    authLoadingState.loginTimeRemaining = 0
-    return {
-      success: false,
-      error
-    }
-  } finally {
-    authLoadingState.isLoggingIn = false
-  }
+    toast.info('请在浏览器中完成登录')
+  })
 }
 
 async function login(options: LoginOptions = {}): Promise<LoginResult> {
   const { onSuccess, onError } = options
-
   if (isLoggedIn.value) {
     const user = currentUser.value
     onSuccess?.(user)
-    return {
-      success: true,
-      user
-    }
+    return { success: true, user }
   }
 
   const result = isLocalAuthMode()
@@ -648,24 +436,20 @@ async function login(options: LoginOptions = {}): Promise<LoginResult> {
         try {
           applyLocalAuth()
           authLoadingState.loginProgress = 100
-          return {
-            success: true,
-            user: currentUser.value
-          }
+          return { success: true, user: currentUser.value }
         } catch (error) {
           return { success: false, error }
         } finally {
           authLoadingState.isLoggingIn = false
         }
       })()
-    : await loginWithClerk()
+    : await loginWithBrowser()
 
   if (result.success) {
     onSuccess?.(result.user)
   } else {
     onError?.(result.error)
   }
-
   return result
 }
 
@@ -674,7 +458,6 @@ async function logout(): Promise<void> {
     if (isAuthenticated.value) {
       await signOut()
     }
-
     toast.success('已登出')
   } catch (error) {
     console.error('Logout failed:', error)
@@ -685,116 +468,38 @@ async function logout(): Promise<void> {
   }
 }
 
-/**
- * Login via external browser (opens Nexus sign-in page)
- * User completes auth in browser, then app receives callback via tuff:// protocol
- */
-async function loginWithBrowser(): Promise<LoginResult> {
-  authLoadingState.isLoggingIn = true
-  authLoadingState.loginProgress = 0
-
-  return new Promise((resolve) => {
-    const timeoutId = createBrowserLoginTimeout(resolve)
-
-    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
-
-    // Open browser to Nexus sign-in with app callback redirect
-    openBrowserLoginPage().catch((err) => {
-      console.error('[useAuth] Failed to open browser:', err)
-      clearTimeout(timeoutId)
-      pendingBrowserLogin.value = null
-      authLoadingState.isLoggingIn = false
-      toast.error('无法打开浏览器')
-      resolve({ success: false, error: err })
-    })
-
-    toast.info('请在浏览器中完成登录')
-  })
-}
-
-/**
- * Handle external auth callback from tuff:// protocol
- */
 async function handleExternalAuthCallback(token: string, appToken?: string): Promise<void> {
-  if (token) {
-    console.log('[useAuth] Handling external auth callback, token length:', token.length)
-  }
-  if (appToken) {
-    console.log('[useAuth] Handling external auth callback, app token length:', appToken.length)
-  }
-
-  if (!pendingBrowserLogin.value) {
-    console.warn('[useAuth] Received auth callback but no pending login')
-    // Still try to use the token
-  }
-
-  const resolvedAppToken = appToken && appToken.length > 0 ? appToken : null
-  if (resolvedAppToken) {
-    setAppAuthToken(resolvedAppToken)
+  const resolvedToken = appToken || token
+  if (!resolvedToken) {
+    toast.error(getErrorMessage(new Error('Missing token'), 'AUTH_ERROR'))
+    return
   }
 
   try {
     if (isLocalAuthMode()) {
-      applyLocalAuth(resolvedAppToken || token)
+      applyLocalAuth(resolvedToken)
       authLoadingState.loginProgress = 100
       toast.success('登录成功')
-
       if (pendingBrowserLogin.value) {
         clearTimeout(pendingBrowserLogin.value.timeoutId)
-        pendingBrowserLogin.value.resolve({
-          success: true,
-          user: currentUser.value
-        })
+        pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
         pendingBrowserLogin.value = null
       }
       return
     }
 
-    if (!token) {
-      throw new Error('Missing sign-in token')
+    setAppAuthToken(resolvedToken)
+    const remoteUser = await fetchRemoteUser(resolvedToken)
+    if (!remoteUser) {
+      throw new Error('Failed to fetch user profile')
     }
-
-    // Use the token to authenticate with Clerk
-    const { getClerk } = useClerkProvider()
-    const clerk = getClerk()
-
-    if (!clerk) {
-      throw new Error('Clerk not initialized')
-    }
-
-    // Set the session token - Clerk will validate and create session
-    // Note: This uses Clerk's signIn with ticket strategy
-    if (!clerk.client) {
-      throw new Error('Clerk client not available')
-    }
-
-    const signInAttempt = await clerk.client.signIn.create({
-      strategy: 'ticket',
-      ticket: token
-    })
-
-    console.log('[useAuth] Sign-in attempt status:', signInAttempt.status)
-
-    // Activate the session after successful sign-in
-    if (signInAttempt.status === 'complete' && signInAttempt.createdSessionId) {
-      await clerk.setActive({ session: signInAttempt.createdSessionId })
-      console.log('[useAuth] Session activated:', signInAttempt.createdSessionId)
-    } else {
-      console.warn('[useAuth] Sign-in not complete:', signInAttempt.status)
-    }
-
-    // Update auth state
-    updateAuthState(clerk)
-
+    updateAuthState(remoteUser, resolvedToken)
     authLoadingState.loginProgress = 100
     toast.success('登录成功')
 
     if (pendingBrowserLogin.value) {
       clearTimeout(pendingBrowserLogin.value.timeoutId)
-      pendingBrowserLogin.value.resolve({
-        success: true,
-        user: currentUser.value
-      })
+      pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
       pendingBrowserLogin.value = null
     }
   } catch (error) {
@@ -814,7 +519,6 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
 
 function setupAuthCallbackListener(): void {
   if (authCallbackCleanup) return
-
   const authCallbackEvent = defineRawEvent<{ token?: string; appToken?: string }, void>(
     'auth:external-callback'
   )
@@ -826,22 +530,16 @@ function setupAuthCallbackListener(): void {
     }
   })
 
-  // Dev mode: listen for manual token input via custom event
   if (isDevEnv()) {
     const devTokenHandler = (e: CustomEvent<string>) => {
       if (e.detail) {
-        console.log('[useAuth] Dev mode: received manual token')
         handleExternalAuthCallback(e.detail)
       }
     }
     window.addEventListener('dev-auth-token', devTokenHandler as EventListener)
-
-    // Also expose a global helper for easier dev usage
     window.__devAuthToken = (token: string) => {
-      console.log('[useAuth] Dev mode: __devAuthToken called')
       handleExternalAuthCallback(token)
     }
-    console.log('[useAuth] Dev mode: Use window.__devAuthToken("token") to manually authenticate')
   }
 }
 
@@ -852,13 +550,30 @@ function cleanupAuthCallbackListener(): void {
   }
 }
 
-function buildSignInUrl(): string {
+function buildSignInUrl(mode: 'sign-in' | 'sign-up' = 'sign-in'): string {
   const nexusUrl = getAuthBaseUrl()
-  return `${nexusUrl}/sign-in?redirect_url=/auth/app-callback`
+  const deviceId = getAppDeviceId()
+  const deviceName = getAppDeviceName()
+  const devicePlatform = getAppDevicePlatform()
+  const redirectUrl = new URL('/auth/app-callback', nexusUrl)
+  if (deviceId) {
+    redirectUrl.searchParams.set('device_id', deviceId)
+  }
+  if (deviceName) {
+    redirectUrl.searchParams.set('device_name', deviceName)
+  }
+  if (devicePlatform) {
+    redirectUrl.searchParams.set('device_platform', devicePlatform)
+  }
+
+  const entry = mode === 'sign-up' ? '/sign-up' : '/sign-in'
+  const url = new URL(entry, nexusUrl)
+  url.searchParams.set('redirect_url', redirectUrl.pathname + redirectUrl.search)
+  return url.toString()
 }
 
-async function openBrowserLoginPage(): Promise<void> {
-  const signInUrl = buildSignInUrl()
+async function openBrowserLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
+  const signInUrl = buildSignInUrl(mode)
   await appSdk.openExternal(signInUrl)
 }
 
@@ -909,12 +624,10 @@ async function handleManualTokenLogin(rawToken: string): Promise<void> {
     toast.error('请输入 token')
     return
   }
-
   if (isJwtToken(token)) {
     await handleExternalAuthCallback('', token)
     return
   }
-
   await handleExternalAuthCallback(token)
 }
 
@@ -1031,16 +744,9 @@ function cleanupAuthFocusPrompt(): void {
   }
 }
 
-/**
- * Authentication hook
- *
- * Note: Skip auth status check on first launch (before onboarding is complete) to avoid login prompts during onboarding
- */
 export function useAuth() {
   onMounted(() => {
     activeConsumers += 1
-
-    // Setup auth callback listener for browser login
     setupAuthCallbackListener()
     setupAuthFocusPrompt()
 
@@ -1050,12 +756,6 @@ export function useAuth() {
     }
 
     if (!isInitialized) {
-      initializeAuth()
-      return
-    }
-
-    const { isClerkInitialized } = useClerkProvider()
-    if (!isClerkInitialized()) {
       initializeAuth()
       return
     }
@@ -1070,26 +770,19 @@ export function useAuth() {
   })
 
   return {
-    // 状态
     authState,
     isLoading,
     isAuthenticated,
     user,
     isLoggedIn,
     currentUser,
-
-    // 加载状态
     authLoadingState,
-
-    // 认证方法
     signIn,
     signUp,
     signOut,
     login,
     loginWithBrowser,
     logout,
-
-    // 工具方法
     getUser: () => user.value,
     checkAuthStatus,
     initializeAuth,
