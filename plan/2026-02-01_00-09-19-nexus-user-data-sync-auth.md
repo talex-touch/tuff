@@ -134,6 +134,21 @@ created_at: 2026-02-01T00:09:31+08:00
 - SAML：entry_point、certificate、entity_id、acs_url。
 - SCIM：base_url、token、sync_interval。
 
+## 配额限制执行
+
+### 服务端强校验规则与错误码
+- QUOTA_STORAGE_EXCEEDED：总容量超限（storage_limit_bytes）。
+- QUOTA_OBJECT_EXCEEDED：对象数超限（object_limit）。
+- QUOTA_ITEM_EXCEEDED：单条大小超限（item_limit）。
+- QUOTA_DEVICE_EXCEEDED：设备数超限（device_limit）。
+
+### 客户端降级流程
+- 超限时进入只读模式，禁止写入并提示升级。
+- 本地暂存：新写入先落本地队列，恢复后批量补写。
+
+### 恢复路径
+- 用户升级或释放空间后触发重新校验，恢复写入并清空本地暂存队列。
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
