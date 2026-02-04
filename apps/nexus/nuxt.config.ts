@@ -102,6 +102,7 @@ export default defineNuxtConfig({
       },
       email: {
         from: process.env.AUTH_EMAIL_FROM,
+        server: process.env.AUTH_EMAIL_SERVER,
         resendApiKey: process.env.RESEND_API_KEY,
       },
     },
