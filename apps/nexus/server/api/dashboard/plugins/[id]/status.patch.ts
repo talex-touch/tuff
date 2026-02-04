@@ -1,6 +1,6 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readBody } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
+import { getUserById } from '../../../../utils/authStore'
 import { getPluginById, setPluginStatus } from '../../../../utils/pluginsStore'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
@@ -23,9 +23,8 @@ export default defineEventHandler(async (event) => {
   if (!plugin)
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
 
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const isAdmin = user.publicMetadata?.role === 'admin'
+  const user = await getUserById(event, userId)
+  const isAdmin = user?.role === 'admin'
 
   const isOwner = plugin.userId === userId
 

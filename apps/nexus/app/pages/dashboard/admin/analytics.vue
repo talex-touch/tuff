@@ -9,12 +9,11 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t, locale } = useI18n()
-const { user } = useUser()
+const { user } = useAuthUser()
 
 // Admin check - redirect if not admin
 const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 watch(isAdmin, (admin) => {

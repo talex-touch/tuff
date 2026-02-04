@@ -28,28 +28,28 @@ watch(isAuthenticated, (authenticated) => {
   }
 })
 
-async function handleClerkSignIn(): Promise<void> {
+async function handleBrowserSignIn(): Promise<void> {
   try {
     await signIn()
   } catch (error) {
-    console.error('Clerk sign in failed:', error)
+    console.error('Browser sign in failed:', error)
     toast.error('登录失败，请重试')
   }
 }
 
-// async function handleClerkSignUp(): Promise<void> {
+// async function handleSignUp(): Promise<void> {
 //   try {
 //     await signUp()
 //   } catch (error) {
-//     console.error('Clerk sign up failed:', error)
+//     console.error('Sign up failed:', error)
 //     toast.error('注册失败，请重试')
 //   }
 // }
 
 function handleAgree(): void {
   if (choice.value === 0) {
-    // 选择登录，使用 Clerk
-    handleClerkSignIn()
+    // 选择登录，通过浏览器认证
+    handleBrowserSignIn()
   } else {
     // 选择离线模式，跳转到权限设置页面
     step({
@@ -106,7 +106,7 @@ function handleAgree(): void {
 
     <div class="AccountDo-Next">
       <TxButton variant="flat" type="primary" :loading="isLoading" @click="handleAgree">
-        {{ choice === 0 ? 'Sign In with Clerk' : 'Continue Offline' }}
+        {{ choice === 0 ? 'Sign In' : 'Continue Offline' }}
       </TxButton>
     </div>
   </div>

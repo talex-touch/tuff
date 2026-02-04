@@ -4,7 +4,6 @@ import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSect
 import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
-import { useUser } from '@clerk/vue'
 import { computed, ref } from 'vue'
 import CreatePluginDrawer from '~/components/CreatePluginDrawer.vue'
 import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
@@ -68,14 +67,13 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t, locale } = useI18n()
-const { user } = useUser()
+const { user } = useAuthUser()
 const toast = useToast()
 
 const { plugins, pending: pluginsPending, refresh: refreshPlugins } = useDashboardPluginsData()
 
 const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 const currentUserId = computed(() => user.value?.id ?? null)

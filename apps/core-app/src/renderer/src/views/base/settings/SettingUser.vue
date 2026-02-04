@@ -37,7 +37,7 @@ const displayEmail = computed(() => {
   if (email) return email
   return currentUser.value?.email || ''
 })
-const avatarUrl = computed(() => user.value?.imageUrl || currentUser.value?.avatar || '')
+const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'
@@ -93,7 +93,7 @@ async function handleLoginMethods() {
   try {
     const opened = await openLoginSettings()
     if (!opened) {
-      const loginUrl = `${getAuthBaseUrl()}/dashboard/account#security`
+      const loginUrl = `${getAuthBaseUrl()}/dashboard/account`
       await appSdk.openExternal(loginUrl)
       toast.info(t('userProfile.loginMethodsWeb'))
     }

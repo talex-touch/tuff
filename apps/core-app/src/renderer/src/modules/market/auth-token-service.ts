@@ -1,8 +1,11 @@
-import { useAuthState, useClerkProvider } from '@talex-touch/utils/renderer'
+import { useAuthState } from '@talex-touch/utils/renderer'
 import {
   clearAppAuthToken,
   clearDevAuthUser,
   getAppAuthToken,
+  getAppDeviceId,
+  getAppDeviceName,
+  getAppDevicePlatform,
   getAuthBaseUrl,
   getDevAuthToken,
   isLocalAuthMode,
@@ -40,10 +43,16 @@ function getJwtExpiryMs(token: string): number | null {
 async function refreshAppToken(appToken: string): Promise<string | null> {
   const url = new URL('/api/auth/sign-in-token', getAuthBaseUrl()).toString()
   try {
+    const deviceId = getAppDeviceId()
+    const deviceName = getAppDeviceName()
+    const devicePlatform = getAppDevicePlatform()
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${appToken}`
+        Authorization: `Bearer ${appToken}`,
+        ...(deviceId ? { 'x-device-id': deviceId } : {}),
+        ...(deviceName ? { 'x-device-name': deviceName } : {}),
+        ...(devicePlatform ? { 'x-device-platform': devicePlatform } : {})
       }
     })
     if (!response.ok) {
@@ -61,8 +70,8 @@ async function refreshAppToken(appToken: string): Promise<string | null> {
 }
 
 /**
- * Get Clerk authentication token for API requests
- * Tokens are cached for 50 seconds (Clerk tokens expire after 60s)
+ * Get app authentication token for API requests
+ * Tokens are cached for 50 seconds
  */
 export async function getAuthToken(): Promise<string | null> {
   const now = Date.now()
@@ -96,25 +105,7 @@ export async function getAuthToken(): Promise<string | null> {
     return devToken
   }
 
-  if (isLocalAuthMode()) {
-    return null
-  }
-
-  try {
-    const { getToken } = useClerkProvider()
-    const token = await getToken()
-
-    if (token) {
-      cachedToken = token
-      // Cache for 50 seconds (tokens expire after 60s)
-      tokenExpiry = now + 50 * 1000
-    }
-
-    return token
-  } catch (error) {
-    console.warn('[AuthTokenService] Failed to get token:', error)
-    return null
-  }
+  return null
 }
 
 /**
@@ -149,16 +140,6 @@ export async function handleUnauthorized(context?: string): Promise<void> {
     if (isLocalAuthMode()) {
       clearDevAuthUser()
       return
-    }
-
-    const { getClerk } = useClerkProvider()
-    const clerk = getClerk()
-    if (clerk) {
-      try {
-        await clerk.signOut()
-      } catch (error) {
-        console.warn('[AuthTokenService] Failed to sign out Clerk after 401:', error)
-      }
     }
   } finally {
     unauthorizedHandling = false

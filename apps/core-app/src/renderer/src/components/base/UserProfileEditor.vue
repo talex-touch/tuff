@@ -38,7 +38,7 @@ const displayEmail = computed(() => {
   return currentUser.value?.email || ''
 })
 const profileBio = computed(() => getUserBio())
-const avatarUrl = computed(() => user.value?.imageUrl || currentUser.value?.avatar || '')
+const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'

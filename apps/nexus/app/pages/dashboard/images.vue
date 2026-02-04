@@ -17,11 +17,10 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { user } = useUser()
+const { user } = useAuthUser()
 
 const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 const {

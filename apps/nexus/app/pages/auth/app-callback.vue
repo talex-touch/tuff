@@ -6,7 +6,8 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { isSignedIn, isLoaded } = useAuth()
+const { status: sessionStatus } = useSession()
+const route = useRoute()
 
 const status = ref<'loading' | 'success' | 'error'>('loading')
 const errorMessage = ref('')
@@ -19,33 +20,43 @@ const isDev = import.meta.dev
 
 async function handleCallback() {
   try {
-    if (!isSignedIn.value) {
+    if (sessionStatus.value !== 'authenticated') {
       errorMessage.value = t('auth.notSignedIn', 'You are not signed in.')
       status.value = 'error'
       return
     }
 
-    // Get a sign-in token from the server (not a session JWT)
+    // Get app token for desktop client
+    const deviceId = typeof route.query.device_id === 'string' ? route.query.device_id : ''
+    const deviceName = typeof route.query.device_name === 'string' ? route.query.device_name : ''
+    const devicePlatform = typeof route.query.device_platform === 'string' ? route.query.device_platform : ''
+
+    const headers: Record<string, string> = {}
+    if (deviceId)
+      headers['x-device-id'] = deviceId
+    if (deviceName)
+      headers['x-device-name'] = deviceName
+    if (devicePlatform)
+      headers['x-device-platform'] = devicePlatform
+
     const { data, error } = await useFetch('/api/auth/sign-in-token', {
       method: 'POST',
+      headers,
     })
 
-    if (error.value || !data.value?.token) {
+    if (error.value || !data.value?.appToken) {
       errorMessage.value = t('auth.tokenFailed', 'Failed to get authentication token.')
       status.value = 'error'
       return
     }
 
-    const token = data.value.token
     const appToken = data.value.appToken
-    sessionToken.value = appToken || token
+    sessionToken.value = appToken
     status.value = 'success'
 
     // Redirect to app with token
-    const params = new URLSearchParams({ token })
-    if (appToken) {
-      params.set('app_token', appToken)
-    }
+    const params = new URLSearchParams()
+    params.set('app_token', appToken)
     const callbackUrl = `${APP_SCHEMA}://auth/callback?${params.toString()}`
     window.location.href = callbackUrl
 
@@ -73,11 +84,10 @@ async function copyToken() {
   }
 }
 
-// Wait for Clerk to load before handling callback
 watch(
-  () => isLoaded.value,
-  (loaded) => {
-    if (loaded) {
+  () => sessionStatus.value,
+  (current) => {
+    if (current !== 'loading') {
       handleCallback()
     }
   },
