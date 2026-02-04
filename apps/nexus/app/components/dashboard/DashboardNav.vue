@@ -37,6 +37,7 @@ const sectionPaths: Record<string, string> = {
   'releases': '/dashboard/releases',
   'images': '/dashboard/images',
   'codes': '/dashboard/admin/codes',
+  'reviews': '/dashboard/admin/reviews',
   'analytics': '/dashboard/admin/analytics',
   'privacy': '/dashboard/privacy',
   'account': '/dashboard/account',
@@ -103,6 +104,12 @@ const menuItems = computed(() => {
       section: 'main',
     })
     items.push({
+      id: 'reviews',
+      label: t('dashboard.sections.menu.reviews', 'Review Moderation'),
+      icon: 'i-carbon-chat',
+      section: 'main',
+    })
+    items.push({
       id: 'analytics',
       label: t('dashboard.sections.menu.analytics', 'Analytics'),
       icon: 'i-carbon-chart-line-data',
@@ -137,6 +144,8 @@ const accountMenuItems = computed(() => {
 const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/admin/codes'))
     return 'codes'
+  if (route.path.startsWith('/dashboard/admin/reviews'))
+    return 'reviews'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
   if (route.path.startsWith('/dashboard/credits'))
