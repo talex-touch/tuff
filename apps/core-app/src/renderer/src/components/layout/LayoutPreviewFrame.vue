@@ -123,5 +123,71 @@ defineProps<{
   :deep(.FlatLayout-Icon + .mx-auto) {
     display: none;
   }
+
+  :deep(.AppLayout-Container[data-variant='compact']) {
+    --nav-width: 36px;
+    --layout-display-nav-width: 36px;
+    .AppLayout-Aside .LayoutPreview-SidebarText {
+      display: none;
+    }
+  }
+
+  :deep(.AppLayout-Container[data-variant='minimal']) {
+    .AppLayout-Aside {
+      display: none;
+    }
+    .AppLayout-View {
+      width: 100%;
+    }
+    .FloatingNav-Trigger {
+      width: 32px;
+      height: 32px;
+      left: 6px;
+      bottom: 12px;
+    }
+  }
+
+  :deep(.AppLayout-Container[data-variant='classic']) {
+    .AppLayout-Aside {
+      display: none;
+    }
+    .AppLayout-View {
+      width: 100%;
+    }
+    .ClassicController-Tabs {
+      display: flex;
+    }
+  }
+
+  :deep(.AppLayout-Container[data-variant='card']) {
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    .LayoutPreview-View {
+      border-radius: 12px;
+      box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+      padding: 12px;
+    }
+  }
+
+  :deep(.AppLayout-Container[data-variant='dock']) {
+    .AppLayout-Main {
+      flex-direction: column;
+    }
+    .AppLayout-Aside {
+      order: 2;
+      width: 100%;
+      height: 44px;
+      min-height: 44px;
+      flex-direction: row;
+      border-top: 1px solid var(--el-border-color-lighter);
+    }
+    .AppLayout-Aside .LayoutPreview-SidebarText {
+      display: none;
+    }
+    .AppLayout-View {
+      order: 1;
+      width: 100%;
+    }
+  }
 }
 </style>

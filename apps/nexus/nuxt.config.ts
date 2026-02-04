@@ -20,7 +20,8 @@ const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/co
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
-const enableSentrySourceMaps = Boolean(sentryAuthToken)
+const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
+const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
 
 export default defineNuxtConfig({
   modules: [

@@ -1,9 +1,9 @@
-<script lang="ts" name="AppLayoutSimple" setup>
+<script lang="ts" name="AppLayoutCompact" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
 import LayoutShell from '../shared/LayoutShell.vue'
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
+import SimpleController from '../simple/SimpleController.vue'
+import SimpleNavBar from '../simple/SimpleNavBar.vue'
 
 const props = withDefaults(
   defineProps<{

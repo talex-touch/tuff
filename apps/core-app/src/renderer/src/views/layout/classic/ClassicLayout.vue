@@ -1,9 +1,8 @@
-<script lang="ts" name="AppLayoutSimple" setup>
+<script lang="ts" name="AppLayoutClassic" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
 import LayoutShell from '../shared/LayoutShell.vue'
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
+import ClassicController from './ClassicController.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -19,7 +18,6 @@ const props = withDefaults(
 const { atomConfig } = useLayoutAtoms()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
-const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
 const isWindows = process.platform === 'win32'
 </script>
 
@@ -32,22 +30,20 @@ const isWindows = process.platform === 'win32'
     :is-windows="isWindows"
   >
     <template #header>
-      <SimpleController>
+      <ClassicController>
         <template #nav>
           <slot name="nav" />
         </template>
-        <template v-if="shouldRenderSlots" #title>
+        <template #title>
           <slot name="title" />
         </template>
-      </SimpleController>
+        <template #navbar>
+          <slot name="navbar" />
+        </template>
+      </ClassicController>
     </template>
     <template #aside>
-      <SimpleNavBar>
-        <slot name="navbar" />
-        <template #plugins>
-          <slot name="plugins" />
-        </template>
-      </SimpleNavBar>
+      <div aria-hidden="true" />
     </template>
     <template #icon>
       <slot name="icon" />

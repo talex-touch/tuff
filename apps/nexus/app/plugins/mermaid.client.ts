@@ -24,6 +24,11 @@ async function renderMermaid() {
   if (!import.meta.client)
     return
 
+  await nextTick()
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('.mermaid'))
+  if (!nodes.length)
+    return
+
   const mermaid = await getMermaid()
   const theme = resolveTheme()
 
@@ -38,11 +43,6 @@ async function renderMermaid() {
       node.removeAttribute('data-processed')
     })
   }
-
-  await nextTick()
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('.mermaid'))
-  if (!nodes.length)
-    return
 
   try {
     await mermaid.run({ nodes })

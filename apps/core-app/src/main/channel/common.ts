@@ -20,7 +20,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
-import { BrowserWindow, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'
+import { BrowserWindow, dialog, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
@@ -98,6 +98,24 @@ const legacyExecuteCmdEvent = defineRawEvent<
   { success: boolean; error?: string }
 >('execute:cmd')
 const legacyAppOpenEvent = defineRawEvent<{ appName?: string; path?: string }, void>('app:open')
+
+// Preset import/export events
+const dialogOpenFileEvent = defineRawEvent<
+  { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] },
+  { filePaths?: string[] }
+>('dialog:open-file')
+
+const dialogSaveFileEvent = defineRawEvent<
+  { title?: string; defaultPath?: string; filters?: { name: string; extensions: string[] }[] },
+  { filePath?: string }
+>('dialog:save-file')
+
+const fsWriteFileEvent = defineRawEvent<{ path: string; data: string }, { success: boolean }>(
+  'fs:write-file'
+)
+const fsReadFileEvent = defineRawEvent<{ path: string }, { data?: string; error?: string }>(
+  'fs:read-file'
+)
 const legacyUrlOpenEvent = defineRawEvent<string, boolean>('url:open')
 const legacyFilesIndexProgressEvent = defineRawEvent<{ paths?: string[] }, unknown>(
   'files:index-progress'
@@ -1014,6 +1032,65 @@ export class CommonChannelModule extends BaseModule {
       this.transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
       )
+    )
+
+    // Preset import/export channel handlers
+    this.transportDisposers.push(
+      this.transport.on(dialogOpenFileEvent, async (payload) => {
+        const win = BrowserWindow.getFocusedWindow()
+        if (!win) return { filePaths: [] }
+
+        const properties: Electron.OpenDialogOptions['properties'] = ['openFile']
+        if (payload?.properties?.includes('openDirectory')) {
+          properties.push('openDirectory')
+        }
+
+        const result = await dialog.showOpenDialog(win, {
+          title: payload?.title ?? 'Open File',
+          filters: payload?.filters,
+          properties
+        })
+
+        return { filePaths: result.canceled ? [] : result.filePaths }
+      }),
+      this.transport.on(dialogSaveFileEvent, async (payload) => {
+        const win = BrowserWindow.getFocusedWindow()
+        if (!win) return { filePath: undefined }
+
+        const result = await dialog.showSaveDialog(win, {
+          title: payload?.title ?? 'Save File',
+          defaultPath: payload?.defaultPath,
+          filters: payload?.filters
+        })
+
+        return { filePath: result.canceled ? undefined : result.filePath }
+      }),
+      this.transport.on(fsWriteFileEvent, async (payload) => {
+        if (!payload?.path || typeof payload.data !== 'string') {
+          return { success: false }
+        }
+
+        try {
+          await fs.writeFile(payload.path, payload.data, 'utf-8')
+          return { success: true }
+        } catch (error) {
+          log.error(`[CommonChannel] fs:write-file failed: ${payload.path}`, { error })
+          return { success: false }
+        }
+      }),
+      this.transport.on(fsReadFileEvent, async (payload) => {
+        if (!payload?.path) {
+          return { error: 'Path is required' }
+        }
+
+        try {
+          const data = await fs.readFile(payload.path, 'utf-8')
+          return { data }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return { error: message }
+        }
+      })
     )
   }
 

@@ -1,3 +1,23 @@
+import type { CoreBoxThemeConfig, LayoutAtomConfig } from './layout-atom-types'
+
+/** Default layout atom for 'simple' preset */
+const defaultLayoutAtomSimple: LayoutAtomConfig = {
+  preset: 'simple',
+  header: { border: 'solid', opacity: 1, height: 26, blur: false },
+  aside: { position: 'left', width: 68, border: 'solid', opacity: 0.5, collapsed: false },
+  view: { radius: [0, 0, 0, 0], shadow: 'none', padding: 0, background: 'transparent' },
+  nav: { style: 'icon', activeIndicator: 'dot' },
+}
+
+/** Default CoreBox theme */
+const defaultCoreBoxTheme: CoreBoxThemeConfig = {
+  preset: 'default',
+  logo: { position: 'left', size: 24, style: 'default' },
+  input: { border: 'bottom', radius: 8, background: 'transparent' },
+  results: { itemRadius: 6, itemPadding: 8, divider: false, hoverStyle: 'background' },
+  container: { radius: 0, shadow: 'none', border: false },
+}
+
 /**
  * Default configuration object for application settings
  */
@@ -90,6 +110,8 @@ const _appSettingOriginData = {
     customDesktop: false,
   },
   layout: 'simple',
+  layoutAtomConfig: defaultLayoutAtomSimple,
+  coreBoxThemeConfig: defaultCoreBoxTheme,
 }
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)

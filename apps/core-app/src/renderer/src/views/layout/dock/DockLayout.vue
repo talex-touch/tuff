@@ -1,9 +1,9 @@
-<script lang="ts" name="AppLayoutSimple" setup>
+<script lang="ts" name="AppLayoutDock" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
 import LayoutShell from '../shared/LayoutShell.vue'
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
+import SimpleController from '../simple/SimpleController.vue'
+import FlatNavBar from '../flat/FlatNavBar.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -25,7 +25,7 @@ const isWindows = process.platform === 'win32'
 
 <template>
   <LayoutShell
-    variant="simple"
+    variant="flat"
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
@@ -42,12 +42,12 @@ const isWindows = process.platform === 'win32'
       </SimpleController>
     </template>
     <template #aside>
-      <SimpleNavBar>
+      <FlatNavBar>
         <slot name="navbar" />
         <template #plugins>
           <slot name="plugins" />
         </template>
-      </SimpleNavBar>
+      </FlatNavBar>
     </template>
     <template #icon>
       <slot name="icon" />

@@ -10,8 +10,8 @@ import {
   transformerVariantGroup,
 } from 'unocss'
 
-const useWebFonts = process.env.NODE_ENV === 'production'
-  || process.env.UNOCSS_WEBFONTS === 'true'
+const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
+  && (process.env.NODE_ENV === 'production' || process.env.UNOCSS_WEBFONTS === 'true')
 
 export default defineConfig({
   blocklist: [/^m\[pascalCase\(component\)\]$/],
