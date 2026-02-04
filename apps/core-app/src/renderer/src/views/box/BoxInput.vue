@@ -145,7 +145,7 @@ input {
 
   font-size: 22px;
 
-  border-radius: 8px;
+  border-radius: var(--corebox-input-radius, 8px);
   background-color: transparent;
   //color: transparent;
 

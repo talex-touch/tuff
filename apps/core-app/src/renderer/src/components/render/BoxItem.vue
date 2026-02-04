@@ -214,6 +214,12 @@ const recommendation = computed(() => props.item.meta?.recommendation)
 </template>
 
 <style scoped lang="scss">
+.BoxItem {
+  border-radius: var(--corebox-result-radius, 8px) !important;
+  padding: var(--corebox-result-padding, 6px) !important;
+  border-bottom: var(--corebox-result-divider, none);
+}
+
 .QuickKeyPill {
   display: inline-flex;
   align-items: center;

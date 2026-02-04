@@ -1,9 +1,9 @@
-<script lang="ts" name="AppLayoutSimple" setup>
+<script lang="ts" name="AppLayoutMinimal" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
 import LayoutShell from '../shared/LayoutShell.vue'
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
+import FloatingNav from '../shared/FloatingNav.vue'
+import SimpleController from '../simple/SimpleController.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -25,7 +25,7 @@ const isWindows = process.platform === 'win32'
 
 <template>
   <LayoutShell
-    variant="simple"
+    variant="flat"
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
@@ -42,17 +42,16 @@ const isWindows = process.platform === 'win32'
       </SimpleController>
     </template>
     <template #aside>
-      <SimpleNavBar>
-        <slot name="navbar" />
-        <template #plugins>
-          <slot name="plugins" />
-        </template>
-      </SimpleNavBar>
+      <div v-if="false" aria-hidden="true"><slot name="navbar" /></div>
     </template>
     <template #icon>
       <slot name="icon" />
     </template>
     <template #view>
+      <FloatingNav v-if="!isDisplayMode || isPreviewMode">
+        <slot name="navbar" />
+        <slot name="plugins" />
+      </FloatingNav>
       <slot name="view" />
     </template>
   </LayoutShell>

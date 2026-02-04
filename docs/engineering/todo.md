@@ -4,6 +4,7 @@
 
 ## 待确认 / 待处理
 
+- Nexus PWA 构建失败：Workbox 预缓存默认 2MiB 限制导致 `_nuxt/*.js`（~3MB）被拒；已加 `maximumFileSizeToCacheInBytes`，仍需确认是否继续拆分大 chunk。离线/内网构建需设置 `NUXT_DISABLE_WEB_FONTS=true`、`NUXT_DISABLE_SENTRY=true`。
 - legacy 权限类型兼容层（`packages/utils/permission/legacy.ts`）去留评估与迁移清理（从 `TYPECHECK_FIXES` 转入）。
 - 【P0/发版前】启动期日志与性能问题治理（基于 `docs/engineering/audits/260109-LOGANALY.md`）：event-loop 卡顿、StartupAnalytics 刷屏、`file-index:*` no-handler、renderer `sendSync.slow`、AppProvider 扫描/DB 更新偏重；需复测并验证日志收敛。
 - 【P0/高优先级】剪贴板/AutoPaste/Pin 机制问题（`docs/clipboard-mechanism-analysis.md`）：Pinned 去重不一致与 AutoPaste/AutoClear 行为需统一修复与验证。

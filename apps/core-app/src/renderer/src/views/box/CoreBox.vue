@@ -21,6 +21,7 @@ import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.
 import { appSetting } from '~/modules/channel/storage'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
+import { sanitizeUserCss } from '~/modules/style/sanitizeUserCss'
 import { BoxMode } from '../../modules/box/adapter'
 import { useActionPanel } from '../../modules/box/adapter/hooks/useActionPanel'
 import { useChannel } from '../../modules/box/adapter/hooks/useChannel'
@@ -31,6 +32,7 @@ import { useKeyboard } from '../../modules/box/adapter/hooks/useKeyboard'
 import { usePreviewHistory } from '../../modules/box/adapter/hooks/usePreviewHistory'
 import { useSearch } from '../../modules/box/adapter/hooks/useSearch'
 import { useVisibility } from '../../modules/box/adapter/hooks/useVisibility'
+import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
@@ -459,6 +461,16 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   await deactivateProvider(id)
   await focusWindowAndInput()
 }
+
+const { themeConfig, themeCSSVars } = useCoreBoxTheme()
+const showLogo = computed(() => themeConfig.value.logo.position !== 'hidden')
+const logoOrderRight = computed(() => themeConfig.value.logo.position === 'right')
+const inputBorderClass = computed(() => `CoreBoxInputBorder-${themeConfig.value.input.border}`)
+const inputBgClass = computed(() => `CoreBoxInputBg-${themeConfig.value.input.background}`)
+const resultHoverClass = computed(
+  () => `CoreBoxResultHover-${themeConfig.value.results.hoverStyle}`
+)
+const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? ''))
 </script>
 
 <template>
@@ -466,113 +478,122 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
     <div class="CoreBox-Mask" />
   </teleport>
 
-  <div class="CoreBox" @paste="() => handlePaste({ overrideDismissed: true })">
-    <!-- DivisionBox Mode Header -->
-    <template v-if="isDivisionBox">
-      <DivisionBoxHeader
-        v-model:search-val="searchVal"
-        :box-options="boxOptions"
-        :show-input="showInput"
-        :placeholder="inputPlaceholder"
-        :providers="effectiveProviders"
-        @deactivate-provider="handleDeactivateProvider"
-      />
-    </template>
-
-    <!-- MainBox Mode Header -->
-    <template v-else>
-      <PrefixPart
-        :providers="activeActivations"
-        @close="handleExit"
-        @deactivate-provider="handleDeactivateProvider"
-      />
-
-      <BoxInput
-        ref="boxInputRef"
-        v-model="searchVal"
-        :box-options="boxOptions"
-        :class="{ 'ui-mode-hidden': !shouldShowInput }"
-        :disabled="!shouldShowInput"
-      >
-        <template #completion>
-          <div class="text-sm truncate">
-            {{ completionDisplay }}
-          </div>
-        </template>
-      </BoxInput>
-
-      <TagSection
-        v-if="!isUIMode"
-        :box-options="boxOptions"
-        :clipboard-options="clipboardOptions"
-        :auto-paste-active="autoPasteActive"
-      />
-
-      <div class="CoreBox-Configure">
-        <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
-      </div>
-    </template>
-  </div>
-
-  <div class="CoreBoxRes flex" @contextmenu="previewHistory.handleContextMenu">
-    <!-- Hide result area when plugin UI view is attached -->
-    <template v-if="!isUIMode">
-      <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
-        <TouchScroll ref="scrollbar" no-padding class="scroll-area">
-          <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
-            <Transition :name="resultTransitionName" mode="out-in">
-              <BoxGrid
-                v-if="isGridMode"
-                :key="`grid-${resultBatchKey}`"
-                :items="res"
-                :layout="boxOptions.layout"
-                :focus="boxOptions.focus"
-                @select="handleGridSelect"
-              />
-              <div v-else :key="`list-${resultBatchKey}`" class="item-list">
-                <CoreBoxRender
-                  v-for="(item, index) in res"
-                  :key="item.id || index"
-                  :ref="(el) => setItemRef(el, index)"
-                  :active="boxOptions.focus === index"
-                  :item="item"
-                  :index="index"
-                  :class="{
-                    'is-new-item':
-                      appSetting.animation?.listItemStagger === true &&
-                      !lowBatteryMode &&
-                      newItemIds.has(item.id)
-                  }"
-                  :style="{
-                    '--stagger-delay': `${getStaggerDelay(index, res.length)}s`
-                  }"
-                  @trigger="handleItemTrigger(index, item)"
-                />
-              </div>
-            </Transition>
-          </div>
-        </TouchScroll>
-        <CoreBoxFooter
-          :display="!!res.length"
-          :item="activeItem ?? null"
-          :active-activations="activeActivations"
-          :result-count="res.length"
-          :is-recommendation="!searchVal && !activeActivations?.length"
-          class="CoreBoxFooter-Sticky"
+  <div
+    class="CoreBox-Wrapper"
+    :style="themeCSSVars"
+    :class="[inputBorderClass, inputBgClass, resultHoverClass]"
+  >
+    <component :is="'style'" v-if="customCss">{{ customCss }}</component>
+    <div class="CoreBox" @paste="() => handlePaste({ overrideDismissed: true })">
+      <!-- DivisionBox Mode Header -->
+      <template v-if="isDivisionBox">
+        <DivisionBoxHeader
+          v-model:search-val="searchVal"
+          :box-options="boxOptions"
+          :show-input="showInput"
+          :placeholder="inputPlaceholder"
+          :providers="effectiveProviders"
+          @deactivate-provider="handleDeactivateProvider"
         />
-      </div>
-      <TuffItemAddon :type="addon" :item="activeItem" />
-    </template>
+      </template>
 
-    <!-- Preview History Panel - Always mounted to listen to events -->
-    <PreviewHistoryPanel
-      ref="historyPanelRef"
-      :visible="previewHistory.visible"
-      :loading="previewHistory.loading"
-      :items="previewHistory.items"
-      :active-index="previewHistory.activeIndex"
-      @apply="previewHistory.apply"
-    />
+      <!-- MainBox Mode Header -->
+      <template v-else>
+        <PrefixPart
+          v-if="showLogo"
+          :class="{ 'CoreBox-LogoRight': logoOrderRight }"
+          :providers="activeActivations"
+          @close="handleExit"
+          @deactivate-provider="handleDeactivateProvider"
+        />
+
+        <BoxInput
+          ref="boxInputRef"
+          v-model="searchVal"
+          :box-options="boxOptions"
+          :class="{ 'ui-mode-hidden': !shouldShowInput }"
+          :disabled="!shouldShowInput"
+        >
+          <template #completion>
+            <div class="text-sm truncate">
+              {{ completionDisplay }}
+            </div>
+          </template>
+        </BoxInput>
+
+        <TagSection
+          v-if="!isUIMode"
+          :box-options="boxOptions"
+          :clipboard-options="clipboardOptions"
+          :auto-paste-active="autoPasteActive"
+        />
+
+        <div class="CoreBox-Configure">
+          <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
+        </div>
+      </template>
+    </div>
+
+    <div class="CoreBoxRes flex" @contextmenu="previewHistory.handleContextMenu">
+      <!-- Hide result area when plugin UI view is attached -->
+      <template v-if="!isUIMode">
+        <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
+          <TouchScroll ref="scrollbar" no-padding class="scroll-area">
+            <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
+              <Transition :name="resultTransitionName" mode="out-in">
+                <BoxGrid
+                  v-if="isGridMode"
+                  :key="`grid-${resultBatchKey}`"
+                  :items="res"
+                  :layout="boxOptions.layout"
+                  :focus="boxOptions.focus"
+                  @select="handleGridSelect"
+                />
+                <div v-else :key="`list-${resultBatchKey}`" class="item-list">
+                  <CoreBoxRender
+                    v-for="(item, index) in res"
+                    :key="item.id || index"
+                    :ref="(el) => setItemRef(el, index)"
+                    :active="boxOptions.focus === index"
+                    :item="item"
+                    :index="index"
+                    :class="{
+                      'is-new-item':
+                        appSetting.animation?.listItemStagger === true &&
+                        !lowBatteryMode &&
+                        newItemIds.has(item.id)
+                    }"
+                    :style="{
+                      '--stagger-delay': `${getStaggerDelay(index, res.length)}s`
+                    }"
+                    @trigger="handleItemTrigger(index, item)"
+                  />
+                </div>
+              </Transition>
+            </div>
+          </TouchScroll>
+          <CoreBoxFooter
+            :display="!!res.length"
+            :item="activeItem ?? null"
+            :active-activations="activeActivations"
+            :result-count="res.length"
+            :is-recommendation="!searchVal && !activeActivations?.length"
+            class="CoreBoxFooter-Sticky"
+          />
+        </div>
+        <TuffItemAddon :type="addon" :item="activeItem" />
+      </template>
+
+      <!-- Preview History Panel - Always mounted to listen to events -->
+      <PreviewHistoryPanel
+        ref="historyPanelRef"
+        :visible="previewHistory.visible"
+        :loading="previewHistory.loading"
+        :items="previewHistory.items"
+        :active-index="previewHistory.activeIndex"
+        @apply="previewHistory.apply"
+      />
+    </div>
   </div>
 
   <!-- Flow Selector Panel -->
@@ -595,6 +616,54 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
 </template>
 
 <style lang="scss">
+.CoreBox-Wrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.CoreBox-Wrapper.CoreBoxInputBorder-bottom .BoxInput-Wrapper input {
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.CoreBox-Wrapper.CoreBoxInputBorder-none .BoxInput-Wrapper input {
+  border: none;
+}
+
+.CoreBox-Wrapper.CoreBoxInputBg-transparent .BoxInput-Wrapper input {
+  background: transparent;
+}
+
+.CoreBox-Wrapper.CoreBoxInputBg-subtle .BoxInput-Wrapper input {
+  background: color-mix(in srgb, var(--el-bg-color) 70%, var(--el-fill-color-light));
+}
+
+.CoreBox-Wrapper.CoreBoxInputBg-solid .BoxInput-Wrapper input {
+  background: var(--el-bg-color);
+}
+
+.CoreBox-Wrapper.CoreBoxResultHover-background .BoxItem:hover {
+  background: var(--el-fill-color-lighter) !important;
+}
+
+.CoreBox-Wrapper.CoreBoxResultHover-border .BoxItem:hover {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px var(--el-border-color) !important;
+}
+
+.CoreBox-Wrapper.CoreBoxResultHover-scale .BoxItem:hover {
+  transform: scale(1.01);
+}
+
+.CoreBox-LogoRight {
+  order: 4;
+}
+
 .core-box {
   .CoreBoxRes {
     display: flex !important;
@@ -638,7 +707,7 @@ div.CoreBoxRes {
   height: calc(100% - 64px);
   overflow: hidden;
 
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--corebox-container-radius, 8px) var(--corebox-container-radius, 8px);
   border-top: 1px solid var(--el-border-color);
 
   .core-box & {
@@ -763,7 +832,9 @@ div.CoreBox {
   gap: 0.25rem;
   align-items: center;
 
-  border-radius: 8px;
+  border-radius: var(--corebox-container-radius, 8px);
+  box-shadow: var(--corebox-container-shadow, none);
+  border: var(--corebox-container-border, none);
   box-sizing: border-box;
 
   .core-box & {

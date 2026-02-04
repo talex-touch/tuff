@@ -1,9 +1,9 @@
-<script lang="ts" name="AppLayoutSimple" setup>
+<script lang="ts" name="AppLayoutCard" setup>
 import { computed } from 'vue'
 import { useLayoutAtoms } from '~/modules/layout/atoms'
 import LayoutShell from '../shared/LayoutShell.vue'
-import SimpleController from './SimpleController.vue'
-import SimpleNavBar from './SimpleNavBar.vue'
+import FlatController from '../flat/FlatController.vue'
+import FlatNavBar from '../flat/FlatNavBar.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -20,34 +20,32 @@ const { atomConfig } = useLayoutAtoms()
 const isDisplayMode = computed(() => props.display)
 const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
-const isWindows = process.platform === 'win32'
 </script>
 
 <template>
   <LayoutShell
-    variant="simple"
+    variant="flat"
     :atom-config="atomConfig"
     :display="isDisplayMode"
     :preview="isPreviewMode"
-    :is-windows="isWindows"
   >
     <template #header>
-      <SimpleController>
+      <FlatController>
         <template #nav>
           <slot name="nav" />
         </template>
         <template v-if="shouldRenderSlots" #title>
           <slot name="title" />
         </template>
-      </SimpleController>
+      </FlatController>
     </template>
     <template #aside>
-      <SimpleNavBar>
+      <FlatNavBar>
         <slot name="navbar" />
         <template #plugins>
           <slot name="plugins" />
         </template>
-      </SimpleNavBar>
+      </FlatNavBar>
     </template>
     <template #icon>
       <slot name="icon" />

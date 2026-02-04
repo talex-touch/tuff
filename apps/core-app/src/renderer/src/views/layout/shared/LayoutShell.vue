@@ -1,4 +1,8 @@
 <script lang="ts" name="LayoutShell" setup>
+import type { LayoutAtomConfig } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { resolveLayoutAtomsToCSSVars } from '~/modules/layout/atoms'
+import { sanitizeUserCss } from '~/modules/style/sanitizeUserCss'
 import LayoutFooter from './LayoutFooter.vue'
 
 const props = withDefaults(
@@ -7,11 +11,13 @@ const props = withDefaults(
     preview?: boolean
     variant: 'simple' | 'flat'
     isWindows?: boolean
+    atomConfig?: LayoutAtomConfig | null
   }>(),
   {
     display: false,
     preview: false,
-    isWindows: false
+    isWindows: false,
+    atomConfig: undefined
   }
 )
 
@@ -20,6 +26,19 @@ const isPreviewMode = computed(() => props.preview)
 const shouldRenderSlots = computed(() => !isDisplayMode.value || isPreviewMode.value)
 const isWindows = computed(() => props.isWindows)
 const variantClass = computed(() => (props.variant === 'simple' ? 'Simple' : 'Flat'))
+
+const atomCSSVars = computed(() => {
+  if (!props.atomConfig) return undefined
+  return resolveLayoutAtomsToCSSVars(props.atomConfig, isDisplayMode.value) as Record<
+    string,
+    string
+  >
+})
+
+const asidePosition = computed(() => props.atomConfig?.aside?.position ?? 'left')
+const asideVisible = computed(() => (props.atomConfig?.aside?.position ?? 'left') !== 'hidden')
+const isAsideBottom = computed(() => asidePosition.value === 'bottom')
+const customCss = computed(() => sanitizeUserCss(props.atomConfig?.customCSS ?? ''))
 </script>
 
 <template>
@@ -27,9 +46,16 @@ const variantClass = computed(() => (props.variant === 'simple' ? 'Simple' : 'Fl
     class="AppLayout-Container"
     :class="[
       { 'is-display': isDisplayMode, 'is-preview': isPreviewMode, 'is-windows': isWindows },
-      variantClass
+      variantClass,
+      {
+        'aside-hidden': !asideVisible,
+        'aside-bottom': isAsideBottom,
+        [`aside-${asidePosition}`]: asideVisible
+      }
     ]"
-    :data-variant="variant"
+    :data-variant="atomConfig ? atomConfig.preset : variant"
+    :data-aside-position="asidePosition"
+    :style="atomCSSVars"
   >
     <div class="AppLayout-Header fake-background">
       <slot name="header" />
@@ -48,6 +74,7 @@ const variantClass = computed(() => (props.variant === 'simple' ? 'Simple' : 'Fl
         <div v-else class="LayoutDisplay-View" />
       </div>
     </div>
+    <component :is="'style'" v-if="customCss">{{ customCss }}</component>
   </div>
 </template>
 
@@ -99,6 +126,68 @@ const variantClass = computed(() => (props.variant === 'simple' ? 'Simple' : 'Fl
 .AppLayout-Container[data-variant='simple'].is-windows {
   .AppLayout-Aside {
     padding-left: 8px;
+  }
+}
+
+.AppLayout-Container.aside-hidden {
+  .AppLayout-Aside {
+    display: none;
+  }
+
+  .AppLayout-View {
+    width: 100%;
+  }
+}
+
+.AppLayout-Container.aside-right .AppLayout-Main {
+  flex-direction: row-reverse;
+
+  .AppLayout-Aside {
+    border-right: none;
+    border-left: var(--layout-aside-border, none);
+  }
+}
+
+.AppLayout-Container.aside-bottom .AppLayout-Main {
+  flex-direction: column;
+
+  .AppLayout-Aside {
+    order: 2;
+    width: 100%;
+    min-width: unset;
+    max-width: none;
+    height: var(--layout-dock-height, 56px);
+    min-height: var(--layout-dock-height, 56px);
+    flex: 0 0 var(--layout-dock-height, 56px);
+    border-right: none;
+    border-top: var(--layout-aside-border, none);
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .AppLayout-Aside .AppLayout-IconFooter {
+    position: relative;
+    flex-direction: row;
+    width: auto;
+    height: auto;
+    min-height: 0;
+    gap: 4px;
+  }
+
+  .AppLayout-Aside > ul,
+  .AppLayout-Aside .SimpleNavBar-Home,
+  .AppLayout-Aside .FlatNavBar-Home {
+    flex-direction: row;
+    margin: 0;
+    padding: 0;
+  }
+
+  .AppLayout-View {
+    order: 1;
+    width: 100%;
   }
 }
 </style>
