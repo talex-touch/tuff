@@ -17,3 +17,4 @@ export { clearLayoutCache, useDynamicTuffLayout } from './useDynamicTuffLayout'
 export { useDynamicTuffLayout as useLayout } from './useDynamicTuffLayout'
 
 export { useSecondaryNavigation } from './useSecondaryNavigation'
+export { useWallpaper } from './useWallpaper'

@@ -154,6 +154,32 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
         .where(inArray(schema.files.path, paths))
     },
 
+    // Wallpaper Assets
+    async getWallpaperAssetByHash(hash: string) {
+      return db
+        .select()
+        .from(schema.wallpaperAssets)
+        .where(eq(schema.wallpaperAssets.hash, hash))
+        .get()
+    },
+    async upsertWallpaperAsset(asset: typeof schema.wallpaperAssets.$inferInsert) {
+      return db
+        .insert(schema.wallpaperAssets)
+        .values(asset)
+        .onConflictDoUpdate({
+          target: schema.wallpaperAssets.hash,
+          set: {
+            originalPath: asset.originalPath,
+            storedPath: asset.storedPath,
+            type: asset.type,
+            size: asset.size,
+            ext: asset.ext,
+            createdAt: asset.createdAt
+          }
+        })
+        .returning()
+    },
+
     // Embeddings
     async addEmbedding(embedding: typeof schema.embeddings.$inferInsert) {
       return db.insert(schema.embeddings).values(embedding).returning()
