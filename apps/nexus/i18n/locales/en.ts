@@ -550,6 +550,17 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         title: 'Review Moderation',
         subtitle: 'Review and manage community feedback.',
         empty: 'No pending reviews yet.',
+        pendingTitle: 'Pending reviews',
+        pendingCount: '{count} pending',
+        refresh: 'Refresh',
+        loading: 'Loading pending reviews...',
+        loadMore: 'Load more',
+        approve: 'Approve',
+        reject: 'Reject',
+        actionSuccess: 'Review status updated.',
+        actionFailed: 'Failed to update review.',
+        loadFailed: 'Unable to load pending reviews.',
+        unknownPlugin: 'Unknown plugin',
       },
 
       codes: {
