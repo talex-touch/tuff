@@ -207,6 +207,21 @@ created_at: 2026-02-01T00:09:31+08:00
 - 单测：pnpm -C "apps/core-app" run test（或 utils:test）。
 - 集成/安全：AUTOE2E 触发，发布前必须全量跑。
 
+## 观测与发布策略
+
+### 核心指标
+- 同步成功率（success_rate）
+- 同步延迟（sync_latency_ms）
+- 冲突率（conflict_rate）
+
+### 灰度开关清单
+- sync_enabled（全局同步开关）
+- ws_enabled（实时通道开关）
+- e2ee_enabled（加密开关）
+
+### 回滚策略
+- 支持一键降级为本地-only，停止 push/pull 但保留本地数据。
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
