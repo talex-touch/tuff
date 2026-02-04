@@ -9,6 +9,7 @@ import type { MarketPluginListItem } from '~/composables/market/useMarketData'
  * - Sidebar with plugin metadata
  */
 import { hasWindow } from '@talex-touch/utils/env'
+import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -55,7 +56,7 @@ const pluginStatus = usePluginStatus(activePlugin)
 
 const { detailMeta } = useMarketDetail(activePlugin, t, pluginStatus)
 const readmeUrl = computed(() => activePlugin.value?.readmeUrl)
-const { readmeContent, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
+const { readmeMarkdown, readmeLoading, readmeError } = useMarketReadme(readmeUrl, t)
 
 const canRate = computed(() => {
   return (
@@ -208,12 +209,13 @@ onBeforeUnmount(() => {
             <i class="i-ri-error-warning-line" />
             <span>{{ readmeError }}</span>
           </div>
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <div v-else-if="readmeContent" class="readme-content" v-html="readmeContent" />
-          <div v-else class="readme-state">
-            <i class="i-ri-file-text-line" />
-            <span>No README</span>
-          </div>
+          <SharedPluginDetailReadme
+            v-else
+            :readme="{ markdown: readmeMarkdown }"
+            title=""
+            empty-text="No README"
+            content-class="readme-content"
+          />
         </div>
 
         <div class="sidebar">
@@ -232,25 +234,11 @@ onBeforeUnmount(() => {
               {{ ratingErrorText }}
             </p>
           </div>
-          <div class="sidebar-card">
-            <h4>{{ t('market.detailDialog.information') }}</h4>
-            <div class="meta-list">
-              <div
-                v-for="meta in detailMeta"
-                :key="meta.label"
-                class="meta-item"
-                :class="meta.highlight && `highlight-${meta.highlight}`"
-              >
-                <div class="meta-label">
-                  <i :class="meta.icon" />
-                  <span>{{ meta.label }}</span>
-                </div>
-                <div class="meta-value" :title="meta.value">
-                  {{ meta.value }}
-                </div>
-              </div>
-            </div>
-          </div>
+          <SharedPluginDetailMetaList
+            v-if="detailMeta.length"
+            :items="detailMeta"
+            :title="t('market.detailDialog.information')"
+          />
         </div>
       </div>
     </div>
