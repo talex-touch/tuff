@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { TxButton } from '@talex-touch/tuffex'
-import { useAppSdk, useClerkProvider } from '@talex-touch/utils/renderer'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -43,7 +43,7 @@ const displayEmail = computed(() => {
   return currentUser.value?.email || ''
 })
 const displayId = computed(() => user.value?.id || currentUser.value?.id || '')
-const avatarUrl = computed(() => user.value?.imageUrl || currentUser.value?.avatar || '')
+const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'
@@ -132,7 +132,7 @@ async function handleLoginMethods() {
   try {
     const opened = await openLoginSettings()
     if (!opened) {
-      const loginUrl = `${getAuthBaseUrl()}/dashboard/account#security`
+      const loginUrl = `${getAuthBaseUrl()}/dashboard/account`
       await appSdk.openExternal(loginUrl)
       toast.info(t('userProfile.loginMethodsWeb'))
     }
@@ -169,31 +169,11 @@ async function fetchNexusJson<T>(path: string): Promise<T> {
 }
 
 async function loadDeviceSummary() {
-  const { getClerk, initializeClerk } = useClerkProvider()
-  let clerk = getClerk()
-  if (!clerk) {
-    try {
-      clerk = await initializeClerk()
-    } catch {
-      return
-    }
-  }
-  const user = (clerk as { user?: { sessions?: unknown[]; getSessions?: () => Promise<unknown> } })
-    ?.user
-  if (!user) {
-    return
-  }
-  if (Array.isArray(user.sessions)) {
-    deviceCount.value = user.sessions.length
-    return
-  }
-  if (typeof user.getSessions === 'function') {
-    try {
-      const sessions = await user.getSessions()
-      deviceCount.value = Array.isArray(sessions) ? sessions.length : 0
-    } catch {
-      deviceCount.value = null
-    }
+  try {
+    const devices = await fetchNexusJson<Array<{ id: string }>>('/api/devices')
+    deviceCount.value = Array.isArray(devices) ? devices.length : 0
+  } catch {
+    deviceCount.value = null
   }
 }
 
@@ -208,9 +188,9 @@ async function loadAccountOverview() {
   accountLoading.value = true
   accountError.value = ''
   try {
-    const [subscriptionResult, teamResult] = await Promise.allSettled([
+    const [subscriptionResult, creditsResult] = await Promise.allSettled([
       fetchNexusJson<SubscriptionStatus>('/api/subscription/status'),
-      fetchNexusJson<{ team: TeamSummary }>('/api/dashboard/team')
+      fetchNexusJson<{ team: { quota: number; used: number } }>('/api/credits/summary')
     ])
     let hasSuccess = false
     const errors = new Set<string>()
@@ -222,11 +202,15 @@ async function loadAccountOverview() {
         subscriptionResult.reason instanceof Error ? subscriptionResult.reason.message : ''
       errors.add(reason || t('userProfile.subscriptionFailed', '订阅信息获取失败'))
     }
-    if (teamResult.status === 'fulfilled') {
-      teamSummary.value = teamResult.value?.team || null
+    if (creditsResult.status === 'fulfilled') {
+      teamSummary.value = {
+        name: t('userProfile.personalTeam', 'Personal'),
+        plan: subscriptionStatus.value?.plan || 'FREE',
+        slots: { total: 1, used: 1 }
+      }
       hasSuccess = true
     } else {
-      const reason = teamResult.reason instanceof Error ? teamResult.reason.message : ''
+      const reason = creditsResult.reason instanceof Error ? creditsResult.reason.message : ''
       errors.add(reason || t('userProfile.teamFailed', '团队信息获取失败'))
     }
     await loadDeviceSummary()

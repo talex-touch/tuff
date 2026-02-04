@@ -1,9 +1,9 @@
-import type { ClerkAuthState, CurrentUser } from './clerk-types'
+import type { AuthState, CurrentUser } from './clerk-types'
 import { createGlobalState } from '@vueuse/core'
 import { computed, shallowReactive } from 'vue'
 
 export const useAuthState = createGlobalState(() => {
-  const authState = shallowReactive<ClerkAuthState>({
+  const authState = shallowReactive<AuthState>({
     isLoaded: false,
     isSignedIn: false,
     user: null,
@@ -21,23 +21,15 @@ export function useCurrentUser() {
       return null
     }
 
-    const { firstName, lastName, username, imageUrl } = authState.user
-    let name = ''
-    if (firstName || lastName) {
-      name = [firstName, lastName].filter(Boolean).join(' ')
-    }
-    else {
-      name = username || ''
-    }
-
-    const email = authState.user.emailAddresses?.[0]?.emailAddress || ''
+    const name = authState.user.name || authState.user.email || ''
+    const email = authState.user.email
 
     return {
       id: authState.user.id,
       name,
       email,
-      avatar: imageUrl,
-      provider: 'clerk',
+      avatar: authState.user.avatar || undefined,
+      provider: 'nexus',
     }
   })
 

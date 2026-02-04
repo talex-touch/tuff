@@ -5,14 +5,14 @@ const { t } = useI18n()
 
 defineI18nRoute(false)
 
-const { user, isLoaded } = useUser()
+const { user, pending } = useAuthUser()
 
 const fallbackName = computed(() => t('dashboard.header.defaultName'))
 
 const greetingName = computed(() => {
-  if (!isLoaded.value || !user.value)
+  if (pending.value || !user.value)
     return fallbackName.value
-  return user.value.firstName || user.value.fullName || fallbackName.value
+  return user.value.name || user.value.email || fallbackName.value
 })
 
 const greetingLine = computed(() => t('dashboard.header.greeting', { name: greetingName.value }))
