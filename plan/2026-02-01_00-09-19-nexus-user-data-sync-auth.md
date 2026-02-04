@@ -96,6 +96,23 @@ created_at: 2026-02-01T00:09:31+08:00
 - blob：id，object_key，size_bytes，content_type，sha256
 - 同步控制：cursor，op_hash（用于幂等校验）
 
+## 同步协议与冲突策略
+
+### 协议流程概览
+1. handshake：客户端携带 device_id + last_cursor 连接，服务端返回 sync_token 与服务端 cursor。
+2. push：客户端按 oplog 顺序提交变更包（含 op_seq/op_hash），服务端幂等写入并返回 ack_cursor。
+3. pull：客户端按 cursor 拉取增量 items/oplog，支持分页与断点续传。
+4. ws/polling 协作：WS 推送增量提示；Polling 作为对账与补偿通道（默认 5 分钟）。
+
+### 幂等与冲突规则
+- 幂等键：user_id + device_id + op_seq + op_hash，重复包直接 ACK。
+- LWW：以 updated_at + device_id 为胜者；冲突落地 oplog 以便审计。
+- 断网恢复：客户端保存 last_cursor + 未 ack 包；重连先 push 再 pull。
+
+### WS + Polling 协作序列
+- WS：实时通知“有新 cursor”，客户端拉取增量。
+- Polling：按 interval 对账，确保 WS 丢包后仍可收敛。
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
