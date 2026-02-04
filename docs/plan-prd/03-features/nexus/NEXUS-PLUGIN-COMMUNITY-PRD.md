@@ -44,7 +44,18 @@
 ## API 设计
 
 ### 市场端（公开）
-1) 获取插件评论列表  
+1) 获取插件评分汇总  
+`GET /api/market/plugins/:slug/rating`
+
+**响应**:
+```json
+{
+  "slug": "example-plugin",
+  "rating": { "average": 4.2, "count": 12 }
+}
+```
+
+2) 获取插件评论列表  
 `GET /api/market/plugins/:slug/reviews?limit=20&offset=0`
 
 **响应**:
@@ -70,7 +81,7 @@
 }
 ```
 
-2) 提交/更新评论  
+3) 提交/更新评论  
 `POST /api/market/plugins/:slug/reviews`
 
 **请求**:
