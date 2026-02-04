@@ -3,6 +3,7 @@ import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { appTaskGate } from '../../../../service/app-task-gate'
 import { and, desc, eq, gte, lt, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import * as schema from '../../../../db/schema'
@@ -37,8 +38,10 @@ export class RecommendationEngine {
 
   private readonly CACHE_DURATION_MS = 30 * 60 * 1000
   private readonly REFRESH_INTERVAL_MS = 15 * 60 * 1000
+  private readonly REFRESH_JITTER_MS = 15 * 1000
   private readonly pollingService = PollingService.getInstance()
   private readonly refreshTaskId = 'recommendation.refresh'
+  private refreshInFlight = false
   private readonly trendBackfillTaskId = 'recommendation.trend-backfill'
   private readonly telemetryTaskId = 'recommendation.telemetry-report'
   private trendBackfillQueue: number[] | null = null
@@ -57,18 +60,35 @@ export class RecommendationEngine {
     if (this.pollingService.isRegistered(this.refreshTaskId)) {
       this.pollingService.unregister(this.refreshTaskId)
     }
+    const initialDelayMs = 60_000 + Math.floor(Math.random() * this.REFRESH_JITTER_MS)
     this.pollingService.register(
       this.refreshTaskId,
-      async () => {
-        try {
-          await this.recommend({ forceRefresh: true })
-        } catch (error) {
-          console.error('[RecommendationEngine] Background refresh failed', error)
+      () => {
+        if (this.refreshInFlight) {
+          return
         }
+        this.refreshInFlight = true
+        const jitterMs = Math.floor(Math.random() * this.REFRESH_JITTER_MS)
+        setTimeout(() => {
+          void this.runBackgroundRefresh()
+        }, jitterMs)
       },
-      { interval: this.REFRESH_INTERVAL_MS, unit: 'milliseconds' }
+      { interval: this.REFRESH_INTERVAL_MS, unit: 'milliseconds', initialDelayMs }
     )
     this.pollingService.start()
+  }
+
+  private async runBackgroundRefresh(): Promise<void> {
+    try {
+      if (appTaskGate.isActive()) {
+        await appTaskGate.waitForIdle()
+      }
+      await this.recommend({ forceRefresh: true })
+    } catch (error) {
+      console.error('[RecommendationEngine] Background refresh failed', error)
+    } finally {
+      this.refreshInFlight = false
+    }
   }
 
   private startTelemetryReport(): void {
