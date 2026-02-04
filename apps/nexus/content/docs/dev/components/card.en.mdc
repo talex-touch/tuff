@@ -2,6 +2,7 @@
 title: "Card 卡片"
 description: "Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。"
 category: Layout
+syncStatus: migrated
 ---
 # Card 卡片
 

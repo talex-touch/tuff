@@ -2,6 +2,7 @@
 title: "ContextMenu 右键菜单"
 description: "基于 Floating UI 的右键菜单（跟随鼠标坐标）。"
 category: Feedback
+syncStatus: migrated
 ---
 # ContextMenu 右键菜单
 

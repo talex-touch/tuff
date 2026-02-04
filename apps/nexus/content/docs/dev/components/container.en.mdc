@@ -1,7 +1,11 @@
 ---
-title: "Container 容器"
-description: "容器组件是页面布局的基础，提供了灵活的布局选项和响应式设计支持。TouchX UI 的容器组件帮助您快速构建结构化的页面布局。"
+title: Container
+description: Layout container with flexible options and responsive support
 category: Layout
+status: beta
+since: 1.0.0
+tags: [container, layout, grid]
+syncStatus: migrated
 ---
 # Container 容器
 

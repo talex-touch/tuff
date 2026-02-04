@@ -5,71 +5,238 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [drawer, panel, overlay]
+syncStatus: migrated
 ---
 
 # Drawer 抽屉
 
-> 用于侧滑承载表单与复杂内容。  
-> **状态**：Beta
+从屏幕边缘滑出的面板组件，常用于设置、表单与补充信息展示。
 
+<script setup lang="ts">
+import { ref } from 'vue'
 
-## Demo
-::TuffDemo{title="Side Drawer" description="右侧抽屉用于表单与设置面板" code-lang="vue"}
+const visible1 = ref(false)
+const visible2 = ref(false)
+const visible3 = ref(false)
+const visible4 = ref(false)
+</script>
+
+## 基础用法
+
+::TuffDemo{title="Basic Drawer" description="最常见的抽屉用法。" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
-    <TxDrawer v-model:visible="drawerOpen" title="设置" width="420px">
-      <p>这里放表单或设置项。</p>
+    <TxButton @click="visible1 = true">打开抽屉</TxButton>
+    <TxDrawer v-model:visible="visible1" title="设置">
+      <p>这是抽屉的内容区域，你可以在这里放置任何内容。</p>
+      <p>支持自定义宽度、方向和关闭行为。</p>
     </TxDrawer>
   </template>
 ---
 #preview
-<tuff-drawer-demo
-  trigger-label="打开抽屉"
-  title="设置"
-  content="这里放表单或设置项。"
-  close-label="关闭"
-  width="420px"
-/>
+<div class="tuff-demo-row">
+  <tx-button @click="visible1 = true">打开抽屉</tx-button>
+</div>
+<tx-drawer v-model:visible="visible1" title="设置">
+  <p>这是抽屉的内容区域，你可以在这里放置任何内容。</p>
+  <p>支持自定义宽度、方向和关闭行为。</p>
+</tx-drawer>
 ::
 
-## API（简版）
+## 方向
+
+抽屉可以从左侧或右侧滑入。
+
+::TuffDemo{title="Direction" description="左右方向抽屉。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="visible2 = true">左侧抽屉</TxButton>
+    <TxButton @click="visible3 = true">右侧抽屉</TxButton>
+    <TxDrawer v-model:visible="visible2" title="左侧抽屉" direction="left">
+      <p>从左侧滑入的抽屉</p>
+    </TxDrawer>
+    <TxDrawer v-model:visible="visible3" title="右侧抽屉" direction="right">
+      <p>从右侧滑入的抽屉（默认）</p>
+    </TxDrawer>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="visible2 = true">左侧抽屉</tx-button>
+  <tx-button @click="visible3 = true">右侧抽屉</tx-button>
+</div>
+<tx-drawer v-model:visible="visible2" title="左侧抽屉" direction="left">
+  <p>从左侧滑入的抽屉</p>
+</tx-drawer>
+<tx-drawer v-model:visible="visible3" title="右侧抽屉" direction="right">
+  <p>从右侧滑入的抽屉（默认）</p>
+</tx-drawer>
+::
+
+## 自定义宽度
+
+::TuffDemo{title="Custom Width" description="可设置固定宽度。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="visible4 = true">自定义宽度 (400px)</TxButton>
+    <TxDrawer v-model:visible="visible4" title="固定宽度抽屉" width="400px">
+      <p>这个抽屉的宽度是固定的 400px</p>
+    </TxDrawer>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="visible4 = true">自定义宽度 (400px)</tx-button>
+</div>
+<tx-drawer v-model:visible="visible4" title="固定宽度抽屉" width="400px">
+  <p>这个抽屉的宽度是固定的 400px</p>
+</tx-drawer>
+::
+
+## 底部插槽
+
+使用 `footer` 插槽添加底部内容。
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxDrawer v-model:visible="visible" title="表单">
+      <form>
+        <input type="text" placeholder="姓名" />
+      </form>
+
+      <template #footer>
+        <TxButton @click="visible = false">取消</TxButton>
+        <TxButton type="primary" @click="handleSave">保存</TxButton>
+      </template>
+    </TxDrawer>
+  </template>
+---
+::
+
+## 关闭行为
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- 禁用点击遮罩关闭 -->
+    <TxDrawer
+      v-model:visible="visible"
+      title="持久化"
+      :close-on-click-mask="false"
+    >
+      <p>只能通过关闭按钮关闭</p>
+    </TxDrawer>
+
+    <!-- 禁用 Escape 键关闭 -->
+    <TxDrawer
+      v-model:visible="visible2"
+      title="禁用 Escape"
+      :close-on-press-escape="false"
+    >
+      <p>Escape 键不会关闭此抽屉</p>
+    </TxDrawer>
+  </template>
+---
+::
+
+## 事件
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxDrawer
+      v-model:visible="visible"
+      title="事件示例"
+      @open="handleOpen"
+      @close="handleClose"
+    >
+      <p>内容</p>
+    </TxDrawer>
+  </template>
+---
+::
+
+## API
+
+### 属性
+
 ::TuffPropsTable
 ---
 rows:
   - name: visible
+    description: '控制抽屉可见性'
     type: 'boolean'
-    default: 'false'
-    description: '抽屉显示'
+    default: '*必填*'
   - name: title
+    description: '头部显示的标题'
     type: 'string'
-    default: 'Drawer'
-    description: '标题'
+    default: "'Drawer'"
   - name: width
+    description: '抽屉宽度'
     type: 'string'
-    default: '360px'
-    description: '宽度'
+    default: "'60%'"
+  - name: direction
+    description: '抽屉出现的方向'
+    type: "'left' | 'right'"
+    default: "'right'"
+  - name: showClose
+    description: '是否显示关闭按钮'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnClickMask
+    description: '点击遮罩时关闭'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnPressEscape
+    description: '按 Escape 键时关闭'
+    type: 'boolean'
+    default: 'true'
+  - name: zIndex
+    description: '自定义 z-index'
+    type: 'number'
+    default: '1998'
 ---
 ::
 
-## 组合示例
-::TuffDemo{title="设置面板" description="抽屉配合快捷设置项。" code-lang="vue"}
+### 事件
+
+::TuffPropsTable
 ---
-code: |
-  <template>
-    <TxButton>打开设置</TxButton>
-    <TxDrawer v-model:visible="open" title="设置">
-      <TxSwitch />
-    </TxDrawer>
-  </template>
+rows:
+  - name: update:visible
+    description: '可见性变化时触发'
+    type: '(visible: boolean) => void'
+    default: '-'
+  - name: open
+    description: '抽屉打开时触发'
+    type: '() => void'
+    default: '-'
+  - name: close
+    description: '抽屉关闭时触发'
+    type: '() => void'
+    default: '-'
 ---
-#preview
-<tuff-drawer-demo
-  trigger-label="打开设置"
-  title="设置"
-  content="这里放快捷开关。"
-  close-label="关闭"
-  width="420px"
-/>
+::
+
+### 插槽
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: '抽屉主内容'
+    type: '-'
+    default: '-'
+  - name: footer
+    description: '底部内容区域'
+    type: '-'
+    default: '-'
+---
 ::

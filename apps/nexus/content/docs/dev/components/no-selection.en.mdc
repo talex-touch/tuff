@@ -2,6 +2,7 @@
 title: "NoSelection 未选择"
 description: "用于详情面板等未选择任何项的状态提示。"
 category: Feedback
+syncStatus: migrated
 ---
 # NoSelection 未选择
 

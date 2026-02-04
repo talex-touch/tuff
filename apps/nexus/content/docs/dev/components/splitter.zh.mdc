@@ -2,6 +2,7 @@
 title: "Splitter 分割面板"
 description: "可拖拽分割面板，支持水平/垂直。"
 category: Layout
+syncStatus: migrated
 ---
 # Splitter 分割面板
 

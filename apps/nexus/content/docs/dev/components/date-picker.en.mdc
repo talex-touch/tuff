@@ -2,6 +2,7 @@
 title: "DatePicker 日期选择"
 description: "基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。"
 category: Form
+syncStatus: migrated
 ---
 # DatePicker 日期选择
 

@@ -5,71 +5,238 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [drawer, panel, overlay]
+syncStatus: migrated
 ---
 
 # Drawer
 
-> Side panels for forms and settings.  
-> **Status**: Beta
+Panels that slide in from the screen edge, ideal for settings, forms, and auxiliary content.
 
+<script setup lang="ts">
+import { ref } from 'vue'
 
-## Demo
-::TuffDemo{title="Side Drawer" description="Right drawer for forms and settings" code-lang="vue"}
+const visible1 = ref(false)
+const visible2 = ref(false)
+const visible3 = ref(false)
+const visible4 = ref(false)
+</script>
+
+## Basic Usage
+
+::TuffDemo{title="Basic Drawer" description="The common drawer pattern." code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton @click="drawerOpen = true">Open Drawer</TxButton>
-    <TxDrawer v-model:visible="drawerOpen" title="Settings" width="420px">
-      <p>Place your form or settings here.</p>
+    <TxButton @click="visible1 = true">Open Drawer</TxButton>
+    <TxDrawer v-model:visible="visible1" title="Settings">
+      <p>This is the drawer content area.</p>
+      <p>Supports custom width, direction, and close behavior.</p>
     </TxDrawer>
   </template>
 ---
 #preview
-<tuff-drawer-demo
-  trigger-label="Open Drawer"
-  title="Settings"
-  content="Place your form or settings here."
-  close-label="Close"
-  width="420px"
-/>
+<div class="tuff-demo-row">
+  <tx-button @click="visible1 = true">Open Drawer</tx-button>
+</div>
+<tx-drawer v-model:visible="visible1" title="Settings">
+  <p>This is the drawer content area.</p>
+  <p>Supports custom width, direction, and close behavior.</p>
+</tx-drawer>
 ::
 
-## API (Lite)
+## Direction
+
+Drawers can slide in from the left or right.
+
+::TuffDemo{title="Direction" description="Left and right drawers." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="visible2 = true">Left Drawer</TxButton>
+    <TxButton @click="visible3 = true">Right Drawer</TxButton>
+    <TxDrawer v-model:visible="visible2" title="Left Drawer" direction="left">
+      <p>Slides in from the left</p>
+    </TxDrawer>
+    <TxDrawer v-model:visible="visible3" title="Right Drawer" direction="right">
+      <p>Slides in from the right (default)</p>
+    </TxDrawer>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="visible2 = true">Left Drawer</tx-button>
+  <tx-button @click="visible3 = true">Right Drawer</tx-button>
+</div>
+<tx-drawer v-model:visible="visible2" title="Left Drawer" direction="left">
+  <p>Slides in from the left</p>
+</tx-drawer>
+<tx-drawer v-model:visible="visible3" title="Right Drawer" direction="right">
+  <p>Slides in from the right (default)</p>
+</tx-drawer>
+::
+
+## Custom Width
+
+::TuffDemo{title="Custom Width" description="Fixed width drawer example." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="visible4 = true">Custom width (400px)</TxButton>
+    <TxDrawer v-model:visible="visible4" title="Fixed Width" width="400px">
+      <p>This drawer stays at 400px wide.</p>
+    </TxDrawer>
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="visible4 = true">Custom width (400px)</tx-button>
+</div>
+<tx-drawer v-model:visible="visible4" title="Fixed Width" width="400px">
+  <p>This drawer stays at 400px wide.</p>
+</tx-drawer>
+::
+
+## Footer Slot
+
+Use the `footer` slot to add action buttons.
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxDrawer v-model:visible="visible" title="Form">
+      <form>
+        <input type="text" placeholder="Name" />
+      </form>
+
+      <template #footer>
+        <TxButton @click="visible = false">Cancel</TxButton>
+        <TxButton type="primary" @click="handleSave">Save</TxButton>
+      </template>
+    </TxDrawer>
+  </template>
+---
+::
+
+## Close Behavior
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- Disable mask click -->
+    <TxDrawer
+      v-model:visible="visible"
+      title="Persistent"
+      :close-on-click-mask="false"
+    >
+      <p>Close via the button only.</p>
+    </TxDrawer>
+
+    <!-- Disable Escape close -->
+    <TxDrawer
+      v-model:visible="visible2"
+      title="Disable Escape"
+      :close-on-press-escape="false"
+    >
+      <p>Escape key won't close this drawer.</p>
+    </TxDrawer>
+  </template>
+---
+::
+
+## Events
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxDrawer
+      v-model:visible="visible"
+      title="Event Demo"
+      @open="handleOpen"
+      @close="handleClose"
+    >
+      <p>Content</p>
+    </TxDrawer>
+  </template>
+---
+::
+
+## API
+
+### Props
+
 ::TuffPropsTable
 ---
 rows:
   - name: visible
+    description: 'Controls drawer visibility'
     type: 'boolean'
-    default: 'false'
-    description: 'Drawer visibility'
+    default: '*required*'
   - name: title
+    description: 'Title text'
     type: 'string'
-    default: 'Drawer'
-    description: 'Title'
+    default: "'Drawer'"
   - name: width
+    description: 'Drawer width'
     type: 'string'
-    default: '360px'
-    description: 'Width'
+    default: "'60%'"
+  - name: direction
+    description: 'Slide-in direction'
+    type: "'left' | 'right'"
+    default: "'right'"
+  - name: showClose
+    description: 'Show close button'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnClickMask
+    description: 'Close on mask click'
+    type: 'boolean'
+    default: 'true'
+  - name: closeOnPressEscape
+    description: 'Close on Escape key'
+    type: 'boolean'
+    default: 'true'
+  - name: zIndex
+    description: 'Custom z-index'
+    type: 'number'
+    default: '1998'
 ---
 ::
 
-## Composite Patterns
-::TuffDemo{title="Settings Panel" description="Drawer paired with quick toggles." code-lang="vue"}
+### Events
+
+::TuffPropsTable
 ---
-code: |
-  <template>
-    <TxButton>Open Settings</TxButton>
-    <TxDrawer v-model:visible="open" title="Settings">
-      <TxSwitch />
-    </TxDrawer>
-  </template>
+rows:
+  - name: update:visible
+    description: 'Emitted on visibility change'
+    type: '(visible: boolean) => void'
+    default: '-'
+  - name: open
+    description: 'Emitted when opened'
+    type: '() => void'
+    default: '-'
+  - name: close
+    description: 'Emitted when closed'
+    type: '() => void'
+    default: '-'
 ---
-#preview
-<tuff-drawer-demo
-  trigger-label="Open Settings"
-  title="Settings"
-  content="Quick toggles live here."
-  close-label="Close"
-  width="420px"
-/>
+::
+
+### Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Main content'
+    type: '-'
+    default: '-'
+  - name: footer
+    description: 'Footer area'
+    type: '-'
+    default: '-'
+---
 ::

@@ -2,6 +2,7 @@
 title: Rating 评分
 description: 星级评分输入
 category: Form
+syncStatus: migrated
 ---
 
 # Rating 评分

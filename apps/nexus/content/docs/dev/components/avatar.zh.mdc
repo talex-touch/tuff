@@ -1,84 +1,232 @@
 ---
 title: Avatar 头像
-description: 识别度与尺寸体系
+description: 用户头像与身份标识
 category: Basic
 status: beta
 since: 1.0.0
 tags: [avatar, identity, profile]
+syncStatus: migrated
 ---
 
 # Avatar 头像
 
-> 头像是身份的最小单元，需要稳定的尺寸体系与清晰的层级。  
-> **状态**：Beta
+Avatar 头像组件用于展示用户头像、品牌标识或其他圆形内容，支持图片、文字（slot / name）、图标等多种展示方式。
 
+## 基础用法
 
-## Demo
-::TuffDemo{title="Size System" description="小尺寸适合列表，大尺寸用于详情页。" code-lang="vue"}
+::TuffDemo{title="Avatar" description="图片、名称、图标与默认内容。" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="TA" />
-    <TxAvatar name="UX" />
-    <TxAvatar name="PM" />
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar name="Talex DreamSoul" />
+      <TxAvatar icon="user" />
+      <TxAvatar>U</TxAvatar>
+    </div>
   </template>
 ---
 #preview
-<div class="tuff-demo-row">
-  <tx-avatar name="TA" />
-  <tx-avatar name="UX" />
-  <tx-avatar name="PM" />
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar name="Talex DreamSoul" />
+  <tx-avatar icon="user" />
+  <tx-avatar>U</tx-avatar>
 </div>
 ::
 
-## 基础用法
+## 头像尺寸
+
+::TuffDemo{title="Sizes" description="提供 small/medium/large/xlarge 四种预设尺寸。" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+</div>
+::
+
+## 文字头像
+
+::TuffDemo{title="Text" description="使用文字作为头像内容。" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar>张</TxAvatar>
+      <TxAvatar>AB</TxAvatar>
+      <TxAvatar>User</TxAvatar>
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar>张</tx-avatar>
+  <tx-avatar>AB</tx-avatar>
+  <tx-avatar>User</tx-avatar>
+</div>
+::
+
+## 图标头像
+
+::TuffDemo{title="Icon" description="使用图标作为头像内容。" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar icon="user" />
+      <TxAvatar icon="team" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar icon="user" />
+  <tx-avatar icon="team" />
+</div>
+::
+
+## 头像组
+
+::TuffDemo{title="AvatarGroup" description="叠放头像并限制最大数量。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAvatarGroup :max="3" size="small" :overlap="10">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/2?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/3?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+    </TxAvatarGroup>
+  </template>
+---
+#preview
+<tx-avatar-group :max="3" size="small" :overlap="10">
+  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/2?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/3?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+</tx-avatar-group>
+::
+
+## 状态
+
+::TuffDemo{title="Status" description="展示在线状态角标。" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar status="online" name="Online" />
+      <TxAvatar status="offline" name="Offline" />
+      <TxAvatar status="busy" name="Busy" />
+      <TxAvatar status="away" name="Away" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar status="online" name="Online" />
+  <tx-avatar status="offline" name="Offline" />
+  <tx-avatar status="busy" name="Busy" />
+  <tx-avatar status="away" name="Away" />
+</div>
+::
+
+## 可点击头像
+
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="Talex" />
-    <TxAvatar size="lg" name="Tuff" />
+    <TxAvatar
+      name="Click"
+      clickable
+      @click="handleAvatarClick"
+    />
   </template>
 ---
 ::
 
-## API（简版）
+## API 参考
+
+### Avatar Props
+
 ::TuffPropsTable
 ---
 rows:
-  - name: name
-    type: 'string'
-    default: '-'
-    description: '显示名称'
   - name: src
+    description: '头像图片地址'
     type: 'string'
     default: '-'
-    description: '头像图片地址'
+  - name: alt
+    description: '图片替代文本'
+    type: 'string'
+    default: '-'
+  - name: name
+    description: '名称（用于生成首字母 fallback）'
+    type: 'string'
+    default: '-'
+  - name: icon
+    description: 'icon 名称（基于 TxIcon）'
+    type: 'string'
+    default: '-'
   - name: size
-    type: "'sm' | 'md' | 'lg'"
-    default: 'md'
-    description: '尺寸'
+    description: '头像尺寸'
+    type: "'small' | 'medium' | 'large' | 'xlarge'"
+    default: "'medium'"
+  - name: status
+    description: '状态'
+    type: "'online' | 'offline' | 'busy' | 'away'"
+    default: '-'
+  - name: clickable
+    description: '是否可点击'
+    type: 'boolean'
+    default: 'false'
+  - name: backgroundColor
+    description: '自定义背景色'
+    type: 'string'
+    default: '-'
+  - name: textColor
+    description: '自定义文字色'
+    type: 'string'
+    default: '-'
 ---
 ::
 
-## Design Notes
-- 文字头像默认大写，避免混乱。  
-- 头像与用户名间距保持一致，提升识别速度。
+### Avatar Events
 
-## 组合示例
-::TuffDemo{title="身份行" description="头像配合状态与操作按钮。" code-lang="vue"}
+::TuffPropsTable
 ---
-code: |
-  <template>
-    <TxAvatar name="TA" />
-    <TxStatusBadge text="在线" status="success" />
-    <TxButton size="sm">发送消息</TxButton>
-  </template>
+rows:
+  - name: click
+    description: '点击头像时触发（仅 clickable=true）'
+    type: '() => void'
+    default: '-'
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-avatar name="TA" />
-  <tx-status-badge text="在线" status="success" />
-  <tx-button size="sm">发送消息</tx-button>
-</div>
+::
+
+### Avatar Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: '自定义头像内容（优先级高于 icon/name）'
+    type: '-'
+    default: '-'
+---
 ::

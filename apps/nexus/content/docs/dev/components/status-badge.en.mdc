@@ -5,6 +5,7 @@ category: Feedback
 status: beta
 since: 1.0.0
 tags: [badge, status, signal]
+syncStatus: migrated
 ---
 
 # StatusBadge

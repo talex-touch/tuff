@@ -2,6 +2,10 @@
 title: "SearchEmpty 搜索空态"
 description: "用于搜索无结果时的状态提示。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [search, empty, state]
+syncStatus: migrated
 ---
 # SearchEmpty 搜索空态
 

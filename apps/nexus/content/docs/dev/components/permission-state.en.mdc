@@ -2,6 +2,10 @@
 title: "PermissionState 权限不足"
 description: "用于权限不足或未授权场景。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [permission, state, access]
+syncStatus: migrated
 ---
 # PermissionState 权限不足
 

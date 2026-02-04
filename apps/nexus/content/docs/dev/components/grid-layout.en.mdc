@@ -2,6 +2,7 @@
 title: "GridLayout 网格布局"
 description: "用于快速构建响应式网格，并可选启用 hover 光斑交互效果。"
 category: Layout
+syncStatus: migrated
 ---
 # GridLayout 网格布局
 

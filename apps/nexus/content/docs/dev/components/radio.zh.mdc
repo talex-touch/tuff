@@ -2,6 +2,10 @@
 title: "Radio 单选框"
 description: "用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [radio, form, selection]
+syncStatus: migrated
 ---
 # Radio 单选框
 

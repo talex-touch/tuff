@@ -5,87 +5,248 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [grid, layout, alignment]
+syncStatus: migrated
 ---
 
 # Grid
 
-> A structured layout system that keeps rhythm and alignment.  
-> **Status**: Beta
+Grid provides a modern CSS Grid layout system with responsive and flexible configuration.
 
-
-## Demo
-::TuffDemo{title="Grid Rhythm" description="Consistent spacing keeps the layout steady." code-lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="4" gap="12">
-      <TxGridItem>1</TxGridItem>
-      <TxGridItem>2</TxGridItem>
-      <TxGridItem>3</TxGridItem>
-      <TxGridItem>4</TxGridItem>
-    </TxGrid>
-  </template>
----
-#preview
-<tx-grid :cols="4" gap="12">
-  <tx-grid-item>1</tx-grid-item>
-  <tx-grid-item>2</tx-grid-item>
-  <tx-grid-item>3</tx-grid-item>
-  <tx-grid-item>4</tx-grid-item>
-</tx-grid>
-::
+<script setup lang="ts">
+import GridBasicDemo from '~/components/content/demos/GridBasicDemo.vue'
+import GridBasicDemoSource from '~/components/content/demos/GridBasicDemo.vue?raw'
+</script>
 
 ## Basic Usage
+
+<DemoBlock title="Grid" :code="GridBasicDemoSource">
+  <template #preview>
+    <GridBasicDemo />
+  </template>
+</DemoBlock>
+
+Simple grid layout:
+
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="4" gap="12">
-      <div v-for="item in items" :key="item.id">
-        {{ item.title }}
-      </div>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem>Item 1</TxGridItem>
+      <TxGridItem>Item 2</TxGridItem>
+      <TxGridItem>Item 3</TxGridItem>
+      <TxGridItem>Item 4</TxGridItem>
+      <TxGridItem>Item 5</TxGridItem>
+      <TxGridItem>Item 6</TxGridItem>
     </TxGrid>
   </template>
 ---
 ::
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: cols
-    type: 'number'
-    default: '4'
-    description: 'Columns'
-  - name: gap
-    type: 'number'
-    default: '12'
-    description: 'Gap'
-  - name: responsive
-    type: 'boolean'
-    default: 'true'
-    description: 'Responsive'
----
-::
+## Responsive Grid
 
-## Design Notes
-- Spacing defines rhythm.  
-- Reduce columns when density rises.
+### Responsive columns
 
-## Composite Patterns
-::TuffDemo{title="Card Grid" description="Grid paired with cards for layout blocks." code-lang="vue"}
+::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="2" gap="12">
-      <TxCard>Card A</TxCard>
-      <TxCard>Card B</TxCard>
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>Item {{ i }}</TxCard>
+      </TxGridItem>
     </TxGrid>
   </template>
 ---
-#preview
-<tx-grid :cols="2" gap="12">
-  <tx-card>Card A</tx-card>
-  <tx-card>Card B</tx-card>
-</tx-grid>
+::
+
+### Auto-fit grid
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.description }}</p>
+        </TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## Grid Gaps
+
+### Uniform gap
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="32">
+      <TxGridItem v-for="i in 6" :key="i">
+        Item {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### Row / column gaps
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
+      <TxGridItem v-for="i in 6" :key="i">
+        Item {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### Responsive gaps
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid
+      :cols="{ xs: 1, md: 2, lg: 3 }"
+      :gap="{ xs: 16, md: 24, lg: 32 }"
+    >
+      <TxGridItem v-for="i in 6" :key="i">
+        Item {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## Grid Items
+
+### Column span
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" gap="16">
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="2">Span 2</TxGridItem>
+      <TxGridItem>Item</TxGridItem>
+      <TxGridItem :col-span="3">Span 3</TxGridItem>
+      <TxGridItem>Item</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### Row span
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem>Item 1</TxGridItem>
+      <TxGridItem :row-span="2">Span 2 rows</TxGridItem>
+      <TxGridItem>Item 3</TxGridItem>
+      <TxGridItem>Item 4</TxGridItem>
+      <TxGridItem>Item 5</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## Alignment
+
+### Grid alignment
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid
+      :cols="3"
+      gap="16"
+      justify="center"
+      align="center"
+      style="height: 400px;"
+    >
+      <TxGridItem v-for="i in 3" :key="i">
+        Item {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### Item alignment
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem justify-self="start">Start</TxGridItem>
+      <TxGridItem justify-self="center">Center</TxGridItem>
+      <TxGridItem justify-self="end">End</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## API Reference
+
+### Grid Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| cols | `number \| ResponsiveValue` | `1` | Columns |
+| rows | `number \| ResponsiveValue` | `auto` | Rows |
+| gap | `number \| string \| ResponsiveValue \| GapValue` | `0` | Grid gap |
+| minItemWidth | `string` | - | Min item width (auto-fit) |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
+| autoRows | `string` | `'auto'` | Auto row height |
+| dense | `boolean` | `false` | Dense layout |
+
+### GridItem Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| colSpan | `number \| ResponsiveValue` | `1` | Column span |
+| rowSpan | `number \| ResponsiveValue` | `1` | Row span |
+| colStart | `number` | - | Column start |
+| colEnd | `number` | - | Column end |
+| rowStart | `number` | - | Row start |
+| rowEnd | `number` | - | Row end |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item horizontal alignment |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | Item vertical alignment |
+
+### Types
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ResponsiveValue {
+    xs?: number
+    sm?: number
+    md?: number
+    lg?: number
+    xl?: number
+    xxl?: number
+  }
+
+  interface GapValue {
+    row?: number | string
+    col?: number | string
+  }
+---
 ::

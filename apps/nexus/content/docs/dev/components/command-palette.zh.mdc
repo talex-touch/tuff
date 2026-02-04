@@ -2,6 +2,7 @@
 title: "CommandPalette 命令面板"
 description: "用于全局快捷指令/搜索的命令面板。"
 category: Form
+syncStatus: migrated
 ---
 # CommandPalette 命令面板
 

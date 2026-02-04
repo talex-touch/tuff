@@ -2,6 +2,7 @@
 title: "Stack 堆叠"
 description: "通用堆叠布局容器（横向/纵向）。"
 category: Layout
+syncStatus: migrated
 ---
 # Stack 堆叠
 

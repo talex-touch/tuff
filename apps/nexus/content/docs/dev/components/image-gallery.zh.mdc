@@ -2,6 +2,7 @@
 title: "ImageGallery 图片预览"
 description: "用于图片网格与 Modal 预览。"
 category: Data
+syncStatus: migrated
 ---
 # ImageGallery 图片预览
 
