@@ -2,8 +2,11 @@
 import type {
   FilterCategory,
   MarketplacePluginDetail,
+  MarketplacePluginRatingResponse,
   MarketplacePluginRatingSummary,
   MarketplacePluginReview,
+  MarketplacePluginReviewListResponse,
+  MarketplacePluginReviewSubmitResponse,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
 import { SharedPluginDetailContent } from '@talex-touch/utils/renderer'
@@ -153,8 +156,8 @@ async function loadPluginCommunity(slug: string) {
   reviewsError.value = null
   try {
     const [reviewsResponse, ratingResponse] = await Promise.all([
-      $fetch<{ reviews: MarketplacePluginReview[] }>(`/api/market/plugins/${slug}/reviews`),
-      $fetch<{ rating: MarketplacePluginRatingSummary }>(`/api/market/plugins/${slug}/rating`),
+      $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${slug}/reviews`),
+      $fetch<MarketplacePluginRatingResponse>(`/api/market/plugins/${slug}/rating`),
     ])
     reviews.value = reviewsResponse.reviews ?? []
     ratingSummary.value = ratingResponse.rating
@@ -184,7 +187,7 @@ async function submitReview() {
 
   reviewSubmitting.value = true
   try {
-    const response = await $fetch<{ review: MarketplacePluginReview, rating: MarketplacePluginRatingSummary }>(
+    const response = await $fetch<MarketplacePluginReviewSubmitResponse>(
       `/api/market/plugins/${selectedSlug.value}/reviews`,
       {
         method: 'POST',

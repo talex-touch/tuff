@@ -57,9 +57,27 @@ export interface MarketplacePluginReview {
   updatedAt: string
 }
 
+export interface MarketplacePluginReviewListResponse {
+  slug: string
+  reviews: MarketplacePluginReview[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface MarketplacePluginRatingSummary {
   average: number
   count: number
+}
+
+export interface MarketplacePluginRatingResponse {
+  slug: string
+  rating: MarketplacePluginRatingSummary
+}
+
+export interface MarketplacePluginReviewSubmitResponse {
+  review: MarketplacePluginReview
+  rating: MarketplacePluginRatingSummary
 }
 
 export type FilterCategory = PluginCategoryId | 'all'
