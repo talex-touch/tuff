@@ -39,12 +39,18 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const result = await listPluginReviews(event, plugin.id, { limit, offset, viewerId })
-  const reviews = result.reviews.map(cleanReview)
+  const { reviews: rawReviews, total, limit: pageLimit, offset: pageOffset } = await listPluginReviews(event, plugin.id, {
+    limit,
+    offset,
+    viewerId,
+  })
+  const reviews = rawReviews.map(cleanReview)
 
   return {
     slug: plugin.slug,
-    ...result,
     reviews,
+    total,
+    limit: pageLimit,
+    offset: pageOffset,
   }
 })
