@@ -1,5 +1,6 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardHook, IClipboardItem, IClipboardOptions } from './types'
+import { ref } from 'vue'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
@@ -42,6 +43,13 @@ export function useClipboard(
   onPasteCallback?: () => void,
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
+  const autoPasteActive = ref(false)
+
+  function resetAutoPasteStateForSession(): void {
+    resetAutoPasteState()
+    autoPasteActive.value = false
+  }
+
   function resolveAutoPasteBaseTimestamp(timestamp: number): number {
     const detectedAt = clipboardOptions.detectedAt
     if (typeof detectedAt === 'number' && Number.isFinite(detectedAt)) {
@@ -126,9 +134,12 @@ export function useClipboard(
     if (!timestamp || autoPastedTimestamps.has(timestamp)) return
 
     const data = clipboardOptions.last
-    autoFillFiles(data, timestamp) ||
+    const didAutoPaste =
+      autoFillFiles(data, timestamp) ||
       autoFillText(data, timestamp) ||
       autoFillImage(data, timestamp)
+
+    if (didAutoPaste) autoPasteActive.value = true
   }
 
   async function resolveLatestClipboard(): Promise<IClipboardItem | null> {
@@ -163,19 +174,22 @@ export function useClipboard(
     if (isDismissed) return
 
     if (!isSameClipboard || overrideDismissed) {
+      autoPasteActive.value = false
       clipboardOptions.last = clipboard
       clipboardOptions.detectedAt = Date.now()
       clipboardOptions.lastClearedTimestamp = null
 
       const timestamp = normalizeTimestamp(clipboard.timestamp)
       const alreadyPasted = timestamp && autoPastedTimestamps.has(timestamp)
+      const shouldAutoPaste = !overrideDismissed && !alreadyPasted && canAutoPaste()
 
-      if (overrideDismissed || (!alreadyPasted && canAutoPaste())) {
-        if (timestamp) {
+      if (timestamp && (overrideDismissed || shouldAutoPaste)) {
+        const didAutoPaste =
           autoFillFiles(clipboard, timestamp) ||
-            autoFillText(clipboard, timestamp, overrideDismissed) ||
-            autoFillImage(clipboard, timestamp)
-        }
+          autoFillText(clipboard, timestamp, overrideDismissed) ||
+          autoFillImage(clipboard, timestamp)
+
+        if (shouldAutoPaste) autoPasteActive.value = didAutoPaste
       }
 
       onPasteCallback?.()
@@ -213,6 +227,7 @@ export function useClipboard(
 
     clipboardOptions.last = null
     clipboardOptions.detectedAt = null
+    autoPasteActive.value = false
     onPasteCallback?.()
   }
 
@@ -284,7 +299,8 @@ export function useClipboard(
     handleAutoFill,
     applyToActiveApp,
     clearClipboard,
-    resetAutoPasteState,
+    resetAutoPasteState: resetAutoPasteStateForSession,
+    autoPasteActive,
     cleanup: () => {
       cleanup?.()
     }

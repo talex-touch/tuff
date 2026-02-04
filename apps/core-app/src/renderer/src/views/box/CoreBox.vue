@@ -93,6 +93,7 @@ const {
   handleAutoFill,
   clearClipboard,
   resetAutoPasteState,
+  autoPasteActive,
   cleanup: cleanupClipboard
 } = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
 
@@ -504,6 +505,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
         v-if="!isUIMode"
         :box-options="boxOptions"
         :clipboard-options="clipboardOptions"
+        :auto-paste-active="autoPasteActive"
       />
 
       <div class="CoreBox-Configure">
