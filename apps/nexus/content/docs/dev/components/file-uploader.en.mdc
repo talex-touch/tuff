@@ -2,6 +2,7 @@
 title: "FileUploader 文件上传"
 description: "通用文件上传组件，支持多文件、拖拽与列表管理。"
 category: Form
+syncStatus: migrated
 ---
 # FileUploader 文件上传
 

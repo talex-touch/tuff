@@ -2,6 +2,7 @@
 title: "Tree 树形"
 description: "基础树形组件，支持搜索过滤、单选/多选与展开控制。"
 category: Data
+syncStatus: migrated
 ---
 # Tree 树形
 

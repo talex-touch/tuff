@@ -2,6 +2,7 @@
 title: "GlowText 扫光"
 description: "用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。"
 category: Basic
+syncStatus: migrated
 ---
 # GlowText 扫光
 

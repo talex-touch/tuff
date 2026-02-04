@@ -5,87 +5,248 @@ category: Layout
 status: beta
 since: 1.0.0
 tags: [grid, layout, alignment]
+syncStatus: migrated
 ---
 
 # Grid 栅格
 
-> 用于结构化布局与信息栅格化，强调对齐与节奏。  
-> **状态**：Beta
+栅格组件提供现代化的 CSS Grid 布局能力，支持响应式与灵活的网格配置。
 
-
-## Demo
-::TuffDemo{title="Grid Rhythm" description="保持间距一致，避免视觉跳动。" code-lang="vue"}
----
-code: |
-  <template>
-    <TxGrid :cols="4" gap="12">
-      <TxGridItem>1</TxGridItem>
-      <TxGridItem>2</TxGridItem>
-      <TxGridItem>3</TxGridItem>
-      <TxGridItem>4</TxGridItem>
-    </TxGrid>
-  </template>
----
-#preview
-<tx-grid :cols="4" gap="12">
-  <tx-grid-item>1</tx-grid-item>
-  <tx-grid-item>2</tx-grid-item>
-  <tx-grid-item>3</tx-grid-item>
-  <tx-grid-item>4</tx-grid-item>
-</tx-grid>
-::
+<script setup lang="ts">
+import GridBasicDemo from '~/components/content/demos/GridBasicDemo.vue'
+import GridBasicDemoSource from '~/components/content/demos/GridBasicDemo.vue?raw'
+</script>
 
 ## 基础用法
+
+<DemoBlock title="Grid" :code="GridBasicDemoSource">
+  <template #preview>
+    <GridBasicDemo />
+  </template>
+</DemoBlock>
+
+最简单的网格布局：
+
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="4" gap="12">
-      <div v-for="item in items" :key="item.id">
-        {{ item.title }}
-      </div>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem>项目 1</TxGridItem>
+      <TxGridItem>项目 2</TxGridItem>
+      <TxGridItem>项目 3</TxGridItem>
+      <TxGridItem>项目 4</TxGridItem>
+      <TxGridItem>项目 5</TxGridItem>
+      <TxGridItem>项目 6</TxGridItem>
     </TxGrid>
   </template>
 ---
 ::
 
-## API（简版）
-::TuffPropsTable
----
-rows:
-  - name: cols
-    type: 'number'
-    default: '4'
-    description: '列数'
-  - name: gap
-    type: 'number'
-    default: '12'
-    description: '间距'
-  - name: responsive
-    type: 'boolean'
-    default: 'true'
-    description: '响应式'
----
-::
+## 响应式网格
 
-## Design Notes
-- 网格间距是视觉节奏的核心。  
-- 内容密度过高时优先减少列数。
+### 响应式列数
 
-## 组合示例
-::TuffDemo{title="卡片栅格" description="栅格配合卡片形成结构化布局。" code-lang="vue"}
+::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxGrid :cols="2" gap="12">
-      <TxCard>Card A</TxCard>
-      <TxCard>Card B</TxCard>
+    <TxGrid :cols="{ xs: 1, sm: 2, md: 3, lg: 4, xl: 5 }" gap="20">
+      <TxGridItem v-for="i in 10" :key="i">
+        <TxCard>项目 {{ i }}</TxCard>
+      </TxGridItem>
     </TxGrid>
   </template>
 ---
-#preview
-<tx-grid :cols="2" gap="12">
-  <tx-card>Card A</tx-card>
-  <tx-card>Card B</tx-card>
-</tx-grid>
+::
+
+### 自适应网格
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid min-item-width="250px" gap="24">
+      <TxGridItem v-for="item in items" :key="item.id">
+        <TxCard>
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.description }}</p>
+        </TxCard>
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## 网格间距
+
+### 统一间距
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="32">
+      <TxGridItem v-for="i in 6" :key="i">
+        项目 {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### 不同方向间距
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
+      <TxGridItem v-for="i in 6" :key="i">
+        项目 {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### 响应式间距
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid
+      :cols="{ xs: 1, md: 2, lg: 3 }"
+      :gap="{ xs: 16, md: 24, lg: 32 }"
+    >
+      <TxGridItem v-for="i in 6" :key="i">
+        项目 {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## 网格项配置
+
+### 跨列布局
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="4" gap="16">
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="2">跨 2 列项目</TxGridItem>
+      <TxGridItem>普通项目</TxGridItem>
+      <TxGridItem :col-span="3">跨 3 列项目</TxGridItem>
+      <TxGridItem>普通项目</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### 跨行布局
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem>项目 1</TxGridItem>
+      <TxGridItem :row-span="2">跨 2 行项目</TxGridItem>
+      <TxGridItem>项目 3</TxGridItem>
+      <TxGridItem>项目 4</TxGridItem>
+      <TxGridItem>项目 5</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## 对齐方式
+
+### 网格对齐
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid
+      :cols="3"
+      gap="16"
+      justify="center"
+      align="center"
+      style="height: 400px;"
+    >
+      <TxGridItem v-for="i in 3" :key="i">
+        项目 {{ i }}
+      </TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+### 项目对齐
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGrid :cols="3" gap="16">
+      <TxGridItem justify-self="start">左对齐</TxGridItem>
+      <TxGridItem justify-self="center">居中对齐</TxGridItem>
+      <TxGridItem justify-self="end">右对齐</TxGridItem>
+    </TxGrid>
+  </template>
+---
+::
+
+## API 参考
+
+### Grid Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| cols | `number \| ResponsiveValue` | `1` | 列数 |
+| rows | `number \| ResponsiveValue` | `auto` | 行数 |
+| gap | `number \| string \| ResponsiveValue \| GapValue` | `0` | 网格间距 |
+| minItemWidth | `string` | - | 项目最小宽度（自适应模式） |
+| justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 水平对齐 |
+| align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 垂直对齐 |
+| autoRows | `string` | `'auto'` | 自动行高 |
+| dense | `boolean` | `false` | 是否使用密集布局 |
+
+### GridItem Props
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| colSpan | `number \| ResponsiveValue` | `1` | 跨列数 |
+| rowSpan | `number \| ResponsiveValue` | `1` | 跨行数 |
+| colStart | `number` | - | 起始列 |
+| colEnd | `number` | - | 结束列 |
+| rowStart | `number` | - | 起始行 |
+| rowEnd | `number` | - | 结束行 |
+| justifySelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身水平对齐 |
+| alignSelf | `'start' \| 'end' \| 'center' \| 'stretch'` | - | 自身垂直对齐 |
+
+### 类型定义
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ResponsiveValue {
+    xs?: number
+    sm?: number
+    md?: number
+    lg?: number
+    xl?: number
+    xxl?: number
+  }
+
+  interface GapValue {
+    row?: number | string
+    col?: number | string
+  }
+---
 ::

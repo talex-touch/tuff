@@ -2,6 +2,7 @@
 title: "Picker 滚轮选择"
 description: "移动端风格的滚轮选择器，支持多列。"
 category: Form
+syncStatus: migrated
 ---
 # Picker 滚轮选择
 

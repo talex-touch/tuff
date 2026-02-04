@@ -2,6 +2,7 @@
 title: "TextTransformer 文本变换"
 description: "用于在文本变化时提供平滑的过渡效果（fade + blur），适合与 `TxAutoSizer` 搭配实现“内容变化 + 尺寸跟随”的丝滑体验。"
 category: Basic
+syncStatus: migrated
 ---
 # TextTransformer 文本变换
 

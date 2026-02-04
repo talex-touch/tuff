@@ -2,6 +2,7 @@
 title: "AutoSizer 自适应尺寸"
 description: "用于让容器在内容变化时自动跟随宽/高，并带过渡动画。"
 category: Layout
+syncStatus: migrated
 ---
 # AutoSizer 自适应尺寸
 

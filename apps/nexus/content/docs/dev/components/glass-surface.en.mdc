@@ -2,6 +2,7 @@
 title: "GlassSurface 玻璃拟态"
 description: "用于渲染带玻璃拟态效果的容器。"
 category: Layout
+syncStatus: migrated
 ---
 # GlassSurface 玻璃拟态
 

@@ -2,6 +2,10 @@
 title: "Slider 滑块"
 description: "用于在区间内选择数值的滑块组件。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [slider, form, input]
+syncStatus: migrated
 ---
 # Slider 滑块
 

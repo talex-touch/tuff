@@ -2,6 +2,10 @@
 title: "SegmentedSlider 分段滑块"
 description: "用于在预定义的离散选项中进行选择的分段滑块组件。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [segmented, slider, form]
+syncStatus: migrated
 ---
 # SegmentedSlider 分段滑块
 

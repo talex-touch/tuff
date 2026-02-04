@@ -513,43 +513,6 @@ importers:
         specifier: ^6.0.6
         version: 6.0.6
 
-  apps/core-app/out:
-    dependencies:
-      '@libsql/client':
-        specifier: ^0.15.15
-        version: 0.15.15(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@libsql/core':
-        specifier: ^0.15.15
-        version: 0.15.15
-      '@libsql/darwin-arm64':
-        specifier: ^0.5.22
-        version: 0.5.22
-      '@libsql/hrana-client':
-        specifier: ^0.7.0
-        version: 0.7.0(bufferutil@4.1.0)(utf-8-validate@6.0.6)
-      '@libsql/isomorphic-fetch':
-        specifier: ^0.3.1
-        version: 0.3.1
-      '@neon-rs/load':
-        specifier: ^0.0.4
-        version: 0.0.4
-      detect-libc:
-        specifier: ^2.1.2
-        version: 2.1.2
-      fs-extra:
-        specifier: ^11.3.3
-        version: 11.3.3
-      libsql:
-        specifier: ^0.5.22
-        version: 0.5.22
-      marked:
-        specifier: ^17.0.1
-        version: 17.0.1
-    devDependencies:
-      '@sentry/vite-plugin':
-        specifier: ^4.7.0
-        version: 4.7.0(encoding@0.1.13)
-
   apps/nexus:
     dependencies:
       '@clerk/nuxt':
@@ -18152,7 +18115,8 @@ snapshots:
     dependencies:
       js-base64: 3.7.8
 
-  '@libsql/darwin-arm64@0.5.22': {}
+  '@libsql/darwin-arm64@0.5.22':
+    optional: true
 
   '@libsql/darwin-x64@0.5.22':
     optional: true

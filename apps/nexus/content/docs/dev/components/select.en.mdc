@@ -2,6 +2,10 @@
 title: "Select 选择器"
 description: "下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [select, form, dropdown]
+syncStatus: migrated
 ---
 # Select 选择器
 

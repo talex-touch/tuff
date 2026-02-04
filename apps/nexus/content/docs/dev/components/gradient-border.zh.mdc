@@ -2,6 +2,7 @@
 title: "GradientBorder 渐变边框"
 description: "用于给内容容器提供动态渐变边框效果。"
 category: Basic
+syncStatus: migrated
 ---
 # GradientBorder 渐变边框
 

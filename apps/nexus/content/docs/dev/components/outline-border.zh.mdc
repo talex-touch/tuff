@@ -2,6 +2,7 @@
 title: "OutlineBorder 描边容器"
 description: "`TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。"
 category: Basic
+syncStatus: migrated
 ---
 # OutlineBorder 描边容器
 

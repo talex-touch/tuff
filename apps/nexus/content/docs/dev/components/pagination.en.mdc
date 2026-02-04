@@ -2,6 +2,7 @@
 title: Pagination
 description: Page navigation for long lists
 category: Data
+syncStatus: migrated
 ---
 
 # Pagination

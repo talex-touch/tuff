@@ -2,6 +2,7 @@
 title: "Form 表单"
 description: "提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。"
 category: Form
+syncStatus: migrated
 ---
 # Form 表单
 

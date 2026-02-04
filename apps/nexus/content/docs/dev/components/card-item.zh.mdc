@@ -2,6 +2,7 @@
 title: "CardItem 卡片项"
 description: "用于列表/设置页等场景的通用条目：左侧头像/图标，右侧标题信息，支持右侧操作区。"
 category: Layout
+syncStatus: migrated
 ---
 # CardItem 卡片项
 

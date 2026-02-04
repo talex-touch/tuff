@@ -2,6 +2,7 @@
 title: "Agents 智能体列表"
 description: "用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。"
 category: Data
+syncStatus: migrated
 ---
 # Agents 智能体列表
 

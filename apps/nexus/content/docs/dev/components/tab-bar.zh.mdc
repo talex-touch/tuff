@@ -2,6 +2,7 @@
 title: "TabBar 底部导航"
 description: "移动端底部 TabBar，支持图标与 badge。"
 category: Layout
+syncStatus: migrated
 ---
 # TabBar 底部导航
 

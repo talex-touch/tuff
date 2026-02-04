@@ -2,6 +2,7 @@
 title: "StatCard 指标卡片"
 description: "用于展示一个数字/指标与对应描述。"
 category: Data
+syncStatus: migrated
 ---
 # StatCard 指标卡片
 

@@ -2,6 +2,10 @@
 title: "LoadingState 加载态"
 description: "用于加载中占位展示。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [loading, state, placeholder]
+syncStatus: migrated
 ---
 # LoadingState 加载态
 

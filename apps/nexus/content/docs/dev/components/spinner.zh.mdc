@@ -2,6 +2,10 @@
 title: "Spinner 加载"
 description: "用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [spinner, loading, progress]
+syncStatus: migrated
 ---
 # Spinner 加载
 

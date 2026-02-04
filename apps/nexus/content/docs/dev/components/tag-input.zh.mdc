@@ -2,6 +2,7 @@
 title: "TagInput 标签输入"
 description: "用于快速录入标签，支持分隔符与回车确认。"
 category: Form
+syncStatus: migrated
 ---
 # TagInput 标签输入
 

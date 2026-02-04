@@ -2,6 +2,10 @@
 title: "EmptyState 空态引导"
 description: "通用空态/引导组件，适用于页面为空、未选择、无权限等场景。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [empty, state, guide]
+syncStatus: migrated
 ---
 # EmptyState 空态引导
 
