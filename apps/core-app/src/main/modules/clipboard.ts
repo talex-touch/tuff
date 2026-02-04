@@ -77,6 +77,7 @@ const clipboardLegacyQueryEvent = defineRawEvent<ClipboardMetaQueryRequest, ICli
 )
 const clipboardLegacyNewItemEvent = defineRawEvent<IClipboardItem, void>('clipboard:new-item')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
+const CLIPBOARD_POLL_INTERVAL_SECONDS = 2
 const pollingService = PollingService.getInstance()
 
 const FILE_URL_FORMATS = new Set([
@@ -484,6 +485,7 @@ export class ClipboardModule extends BaseModule {
   private db?: LibSQLDatabase<typeof schema>
   private monitoringStarted = false
   private clipboardCheckCooldownUntil = 0
+  private clipboardCheckInFlight = false
   private activeAppCache: {
     value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
     fetchedAt: number
@@ -1301,11 +1303,30 @@ export class ClipboardModule extends BaseModule {
     if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
       pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     }
-    pollingService.register(CLIPBOARD_POLL_TASK_ID, () => this.checkClipboard(), {
-      interval: 1,
-      unit: 'seconds'
-    })
+    pollingService.register(
+      CLIPBOARD_POLL_TASK_ID,
+      () => {
+        setImmediate(() => {
+          void this.runClipboardMonitor()
+        })
+      },
+      { interval: CLIPBOARD_POLL_INTERVAL_SECONDS, unit: 'seconds', initialDelayMs: 1000 }
+    )
     pollingService.start()
+  }
+
+  private async runClipboardMonitor(): Promise<void> {
+    if (this.clipboardCheckInFlight) {
+      return
+    }
+    this.clipboardCheckInFlight = true
+    try {
+      await this.checkClipboard()
+    } catch (error) {
+      clipboardLog.warn('Clipboard check failed', { error })
+    } finally {
+      this.clipboardCheckInFlight = false
+    }
   }
 
   private async checkClipboard(): Promise<void> {

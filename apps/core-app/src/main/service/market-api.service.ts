@@ -4,6 +4,7 @@ import { getTpexApiBase, NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { DEFAULT_MARKET_PROVIDERS, MARKET_SOURCES_STORAGE_KEY } from '@talex-touch/utils/market'
 import { getMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
+import { appTaskGate } from './app-task-gate'
 import { performMarketHttpRequest } from './market-http.service'
 
 const log = createLogger('MarketApiService')
@@ -163,6 +164,8 @@ interface UpdateSchedulerOptions {
 class PluginUpdateScheduler {
   private static readonly pollingService = PollingService.getInstance()
   private readonly pollingTaskId = 'plugin-update-scheduler.check'
+  private readonly pollingJitterMs = 30_000
+  private checkInFlight = false
   private lastCheckTime = 0
   private readonly checkIntervalMs: number
   private readonly getPluginsWithSource: PluginSourceFetcher
@@ -184,14 +187,33 @@ class PluginUpdateScheduler {
       meta: { intervalHours: this.checkIntervalMs / (60 * 60 * 1000) }
     })
 
+    const initialDelayMs = 30_000 + Math.floor(Math.random() * this.pollingJitterMs)
     PluginUpdateScheduler.pollingService.register(
       this.pollingTaskId,
-      async () => {
-        await this.checkForUpdates()
+      () => {
+        if (this.checkInFlight) {
+          return
+        }
+        this.checkInFlight = true
+        const jitterMs = Math.floor(Math.random() * this.pollingJitterMs)
+        setTimeout(() => {
+          void this.runUpdateCheck()
+        }, jitterMs)
       },
-      { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs: 30_000 }
+      { interval: this.checkIntervalMs, unit: 'milliseconds', initialDelayMs }
     )
     PluginUpdateScheduler.pollingService.start()
+  }
+
+  private async runUpdateCheck(): Promise<void> {
+    try {
+      if (appTaskGate.isActive()) {
+        await appTaskGate.waitForIdle()
+      }
+      await this.checkForUpdates()
+    } finally {
+      this.checkInFlight = false
+    }
   }
 
   stop(): void {

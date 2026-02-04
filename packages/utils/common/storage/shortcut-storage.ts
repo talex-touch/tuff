@@ -55,6 +55,17 @@ class ShortcutStorage {
     this._save()
     return true
   }
+
+  updateShortcutEnabled(id: string, enabled: boolean): boolean {
+    const shortcut = this.getShortcutById(id)
+    if (!shortcut) {
+      return false
+    }
+    shortcut.meta.enabled = enabled
+    shortcut.meta.modificationTime = Date.now()
+    this._save()
+    return true
+  }
 }
 
 export default ShortcutStorage

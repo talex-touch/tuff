@@ -111,7 +111,7 @@ export class StorageModule extends BaseModule {
   private lruManager: StorageLRUManager
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
-  private hotConfigs = new Set<string>([StorageList.APP_SETTING])
+  private hotConfigs = new Set<string>([StorageList.APP_SETTING, StorageList.OPENERS])
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()

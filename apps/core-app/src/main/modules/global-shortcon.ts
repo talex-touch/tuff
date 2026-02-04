@@ -13,9 +13,10 @@ import { pluginModule } from './plugin/plugin-module'
 import { useMainStorage } from './storage'
 
 const shortconLog = createLogger('GlobalShortcon')
-const shortconUpdateEvent = defineRawEvent<{ id: string; accelerator: string }, boolean>(
-  'shortcon:update'
-)
+const shortconUpdateEvent = defineRawEvent<
+  { id: string; accelerator?: string; enabled?: boolean },
+  boolean
+>('shortcon:update')
 const shortconDisableAllEvent = defineRawEvent<void, void>('shortcon:disable-all')
 const shortconEnableAllEvent = defineRawEvent<void, void>('shortcon:enable-all')
 const shortconGetAllEvent = defineRawEvent<void, ShortcutWithStatus[]>('shortcon:get-all')
@@ -36,8 +37,14 @@ const SHORTCUT_PERMISSION_MIN_SDK = 260121
 type ShortcutWarning = 'permission-missing' | 'sdk-legacy' | 'missing-description'
 
 interface ShortcutStatus {
-  state: 'active' | 'conflict' | 'unavailable'
-  reason?: 'conflict-system' | 'conflict-plugin' | 'register-failed' | 'register-error' | 'invalid'
+  state: 'active' | 'conflict' | 'unavailable' | 'disabled'
+  reason?:
+    | 'conflict-system'
+    | 'conflict-plugin'
+    | 'register-failed'
+    | 'register-error'
+    | 'invalid'
+    | 'disabled'
   conflictWith?: string[]
   warnings?: ShortcutWarning[]
 }
@@ -115,8 +122,8 @@ export class ShortcutModule extends BaseModule {
     const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
 
     transport.on(shortconUpdateEvent, (data) => {
-      const { id, accelerator } = data
-      return this.updateShortcut(id, accelerator)
+      const { id, accelerator, enabled } = data
+      return this.updateShortcut(id, accelerator, enabled)
     })
 
     transport.on(shortconDisableAllEvent, () => {
@@ -174,7 +181,8 @@ export class ShortcutModule extends BaseModule {
         meta: {
           creationTime: Date.now(),
           modificationTime: Date.now(),
-          author: SYSTEM_SHORTCUT_AUTHOR
+          author: SYSTEM_SHORTCUT_AUTHOR,
+          enabled: true
         }
       })
     }
@@ -232,6 +240,7 @@ export class ShortcutModule extends BaseModule {
         creationTime: Date.now(),
         modificationTime: Date.now(),
         author,
+        enabled: true,
         description:
           typeof description === 'string' && description.trim() ? description.trim() : undefined,
         shortcutId: triggerId
@@ -264,12 +273,19 @@ export class ShortcutModule extends BaseModule {
   /**
    * Updates the accelerator for a given shortcut ID.
    */
-  updateShortcut(id: string, newAccelerator: string): boolean {
-    const success = this.storage!.updateShortcutAccelerator(id, newAccelerator)
-    if (success) {
+  updateShortcut(id: string, newAccelerator?: string, enabled?: boolean): boolean {
+    let updated = false
+    if (typeof newAccelerator === 'string' && newAccelerator.trim().length > 0) {
+      updated = this.storage!.updateShortcutAccelerator(id, newAccelerator)
+    }
+    if (typeof enabled === 'boolean') {
+      const enabledUpdated = this.storage!.updateShortcutEnabled(id, enabled)
+      updated = updated || enabledUpdated
+    }
+    if (updated) {
       this.reregisterAllShortcuts()
     }
-    return success
+    return updated
   }
 
   /**
@@ -309,6 +325,10 @@ export class ShortcutModule extends BaseModule {
     const statusMap = new Map<string, ShortcutStatus>()
 
     for (const shortcut of allShortcuts) {
+      if (shortcut.meta?.enabled === false) {
+        statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
+        continue
+      }
       const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
       if (!normalizedAccelerator) {
         statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
