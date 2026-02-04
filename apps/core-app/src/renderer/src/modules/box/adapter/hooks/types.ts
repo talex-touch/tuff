@@ -8,6 +8,8 @@
 /**
  * Clipboard item interface (matches main process definition)
  */
+import type { Ref } from 'vue'
+
 export interface IClipboardItem {
   id?: number
   type: 'text' | 'image' | 'files' | 'html'
@@ -44,4 +46,5 @@ export interface IClipboardHook {
   clearClipboard: (options?: { remember?: boolean }) => void
   /** Resets autopaste state for new CoreBox session */
   resetAutoPasteState: () => void
+  autoPasteActive: Ref<boolean>
 }

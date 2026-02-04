@@ -9,9 +9,9 @@ import {
   isCoreBox,
   isDivisionBox,
   isMainWindow,
-  useArgMapper,
-  useInitialize
-} from '@talex-touch/utils/renderer'
+  useArgMapper
+} from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents } from '@talex-touch/utils/transport'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'

@@ -10,6 +10,7 @@ import UnifiedFileTag from './UnifiedFileTag.vue'
 const props = defineProps<{
   boxOptions: IBoxOptions
   clipboardOptions: IClipboardOptions
+  autoPasteActive?: boolean
 }>()
 
 const { t } = useI18n()
@@ -68,7 +69,7 @@ const clipboardTagChips = computed(() => {
 
   const items: Array<{ key: string; label: string }> = []
   const sourceApp = typeof last.sourceApp === 'string' ? last.sourceApp.trim() : ''
-  if (sourceApp) {
+  if (sourceApp && !props.autoPasteActive) {
     items.push({
       key: `source:${sourceApp}`,
       label: t('tagSection.fromApp', { app: sourceApp })
