@@ -36,6 +36,8 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 const toast = useToast()
+const { user, isLoaded } = useUser()
+const isLoggedIn = computed(() => isLoaded.value && Boolean(user.value))
 
 const filters = reactive({
   search: '',
@@ -173,6 +175,11 @@ async function loadPluginCommunity(slug: string) {
 async function submitReview() {
   if (!selectedSlug.value)
     return
+
+  if (!isLoggedIn.value) {
+    toast.warning(t('market.detail.reviews.signInHint', 'Sign in to submit your review.'))
+    return
+  }
 
   if (reviewForm.rating < 1 || reviewForm.rating > 5) {
     toast.warning(t('market.detail.reviews.ratingRequired', 'Please provide a rating.'))
@@ -426,7 +433,16 @@ useSeoMeta({
               <h4 class="text-sm text-black font-semibold dark:text-light">
                 {{ t('market.detail.reviews.writeTitle') }}
               </h4>
-              <div class="mt-3 space-y-3">
+              <div v-if="!isLoaded" class="mt-3 text-xs text-black/60 dark:text-light/60">
+                {{ t('market.detail.reviews.authLoading', 'Checking sign-in status...') }}
+              </div>
+              <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
+                <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
+                <Button size="small" @click="navigateTo('/sign-in')">
+                  {{ t('market.detail.reviews.signInAction', 'Sign in') }}
+                </Button>
+              </div>
+              <div v-else class="mt-3 space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="text-xs text-black/60 dark:text-light/60">
                     {{ t('market.detail.reviews.ratingLabel') }}
