@@ -2,6 +2,7 @@
 title: "ChatComposer 消息输入"
 description: "用于 AI 消息输入、发送。"
 category: Form
+syncStatus: migrated
 ---
 # ChatComposer 消息输入
 

@@ -2,6 +2,7 @@
 title: "Chat 消息列表"
 description: "常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。"
 category: Data
+syncStatus: migrated
 ---
 # Chat 消息列表
 

@@ -1,25 +1,34 @@
 ---
 title: Toast
-description: Quick feedback and transient states
+description: Lightweight notifications and transient feedback
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [toast, feedback, status]
+syncStatus: migrated
 ---
 
 # Toast
 
-> Short-lived status hints that keep the flow uninterrupted.  
-> **Status**: Beta
+Lightweight notifications (similar to shadcn/sonner). Mount a single `<TxToastHost />` at the app root, then call `toast()` anywhere.
 
+## Basic Usage
 
-## Demo
-::TuffDemo{title="Status Toasts" description="Success, warning, and error states." code-lang="ts"}
+::TuffDemo{title="Toast" description="Mount host once, then trigger toasts." code-lang="vue"}
 ---
 code: |
-  toast({ title: "Saved", description: "Changes stored" })
-  toast({ title: "Network unstable", description: "Retry later", variant: "warning" })
-  toast({ title: "Save failed", description: "Check permissions", variant: "danger" })
+  <template>
+    <TxToastHost />
+    <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
+      Show toast
+    </TxButton>
+    <TxButton
+      style="margin-left: 8px;"
+      @click="toast({ title: 'Success', description: 'Done', variant: 'success' })"
+    >
+      Success
+    </TxButton>
+  </template>
 ---
 #preview
 <tuff-toast-demo
@@ -35,55 +44,29 @@ code: |
 />
 ::
 
-## Basic Usage
+## API
+
+### toast(options)
+
 ::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  toast.success('Saved')
-  toast.warning('Unstable network')
-  toast.error('Save failed')
+  toast({
+    title?: string
+    description?: string
+    variant?: 'default' | 'success' | 'warning' | 'danger'
+    duration?: number // ms, 0 = no auto dismiss
+  })
 ---
 ::
 
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: message
-    type: 'string'
-    default: '-'
-    description: 'Message text'
-  - name: duration
-    type: 'number'
-    default: '2000'
-    description: 'Duration in ms'
-  - name: level
-    type: "'success' | 'warning' | 'error'"
-    default: 'success'
-    description: 'Status level'
----
-::
+### dismissToast / clearToasts
 
-## Design Notes
-- Auto-dismiss in ~2s to avoid stacking.  
-- Keep contrast readable in dark mode.
+Import from `@talex-touch/tuffex/utils`:
 
-## Composite Patterns
-::TuffDemo{title="Toast Trigger" description="Toasts paired with action buttons." code-lang="ts"}
+::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  toast({ title: "Saved", description: "Changes stored" })
+  import { dismissToast, clearToasts } from '@talex-touch/tuffex/utils'
 ---
-#preview
-<tuff-toast-demo
-  success-label="Notify"
-  warning-label="Warn"
-  error-label="Error"
-  success-title="Saved"
-  success-description="Changes stored"
-  warning-title="Network unstable"
-  warning-description="Retry later"
-  error-title="Save failed"
-  error-description="Check permissions"
-/>
 ::

@@ -2,6 +2,10 @@
 title: "NoData 无数据"
 description: "用于列表、表格或图表数据为空的状态提示。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [empty, data, table]
+syncStatus: migrated
 ---
 # NoData 无数据
 

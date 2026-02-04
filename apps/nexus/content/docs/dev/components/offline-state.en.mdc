@@ -2,6 +2,10 @@
 title: "OfflineState 离线"
 description: "用于离线或网络不可用时的提示。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [offline, network, state]
+syncStatus: migrated
 ---
 # OfflineState 离线
 

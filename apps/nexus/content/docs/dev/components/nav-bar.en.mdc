@@ -2,6 +2,7 @@
 title: "NavBar 导航栏"
 description: "移动端顶部导航栏，支持标题、左右插槽与返回按钮。"
 category: Layout
+syncStatus: migrated
 ---
 # NavBar 导航栏
 

@@ -2,6 +2,7 @@
 title: "MarkdownView Markdown 渲染"
 description: "用于将 Markdown 渲染为 HTML（默认开启 sanitize）。"
 category: Data
+syncStatus: migrated
 ---
 # MarkdownView Markdown 渲染
 

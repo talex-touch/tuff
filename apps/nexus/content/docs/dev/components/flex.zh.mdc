@@ -1,7 +1,11 @@
 ---
-title: "Flex 弹性布局"
-description: "通用 Flex 容器。"
+title: Flex 弹性布局
+description: 通用 Flex 容器
 category: Layout
+status: beta
+since: 1.0.0
+tags: [flex, layout]
+syncStatus: migrated
 ---
 # Flex 弹性布局
 

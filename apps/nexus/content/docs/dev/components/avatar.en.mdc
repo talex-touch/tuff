@@ -1,84 +1,232 @@
 ---
 title: Avatar
-description: Identity and sizing system
+description: User avatars and identity marks
 category: Basic
 status: beta
 since: 1.0.0
 tags: [avatar, identity, profile]
+syncStatus: migrated
 ---
 
 # Avatar
 
-> The smallest identity unit needs a stable size system and clear hierarchy.  
-> **Status**: Beta
+The Avatar component displays user avatars, brand marks, or other circular content, supporting images, text (slot / name), and icons.
 
+## Basic Usage
 
-## Demo
-::TuffDemo{title="Size System" description="Small for lists, large for profiles." code-lang="vue"}
+::TuffDemo{title="Avatar" description="Image, name, icon, and fallback content." code-lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="TA" />
-    <TxAvatar name="UX" />
-    <TxAvatar name="PM" />
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar name="Talex DreamSoul" />
+      <TxAvatar icon="user" />
+      <TxAvatar>U</TxAvatar>
+    </div>
   </template>
 ---
 #preview
-<div class="tuff-demo-row">
-  <tx-avatar name="TA" />
-  <tx-avatar name="UX" />
-  <tx-avatar name="PM" />
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar name="Talex DreamSoul" />
+  <tx-avatar icon="user" />
+  <tx-avatar>U</tx-avatar>
 </div>
 ::
 
-## Basic Usage
+## Sizes
+
+::TuffDemo{title="Sizes" description="Preset sizes: small/medium/large/xlarge." code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
+</div>
+::
+
+## Text Avatars
+
+::TuffDemo{title="Text" description="Use text as avatar content." code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar>张</TxAvatar>
+      <TxAvatar>AB</TxAvatar>
+      <TxAvatar>User</TxAvatar>
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar>张</tx-avatar>
+  <tx-avatar>AB</tx-avatar>
+  <tx-avatar>User</tx-avatar>
+</div>
+::
+
+## Icon Avatars
+
+::TuffDemo{title="Icon" description="Use icons as avatar content." code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar icon="user" />
+      <TxAvatar icon="team" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar icon="user" />
+  <tx-avatar icon="team" />
+</div>
+::
+
+## Avatar Group
+
+::TuffDemo{title="AvatarGroup" description="Stacked avatars with a max limit." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxAvatarGroup :max="3" size="small" :overlap="10">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/2?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/3?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+      <TxAvatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+    </TxAvatarGroup>
+  </template>
+---
+#preview
+<tx-avatar-group :max="3" size="small" :overlap="10">
+  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/2?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/3?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/4?v=4" />
+  <tx-avatar src="https://avatars.githubusercontent.com/u/5?v=4" />
+</tx-avatar-group>
+::
+
+## Status
+
+::TuffDemo{title="Status" description="Status badge overlay." code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 12px; align-items: center;">
+      <TxAvatar status="online" name="Online" />
+      <TxAvatar status="offline" name="Offline" />
+      <TxAvatar status="busy" name="Busy" />
+      <TxAvatar status="away" name="Away" />
+    </div>
+  </template>
+---
+#preview
+<div style="display: flex; gap: 12px; align-items: center;">
+  <tx-avatar status="online" name="Online" />
+  <tx-avatar status="offline" name="Offline" />
+  <tx-avatar status="busy" name="Busy" />
+  <tx-avatar status="away" name="Away" />
+</div>
+::
+
+## Clickable Avatar
+
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxAvatar name="Talex" />
-    <TxAvatar size="lg" name="Tuff" />
+    <TxAvatar
+      name="Click"
+      clickable
+      @click="handleAvatarClick"
+    />
   </template>
 ---
 ::
 
-## API (Lite)
+## API Reference
+
+### Avatar Props
+
 ::TuffPropsTable
 ---
 rows:
-  - name: name
-    type: 'string'
-    default: '-'
-    description: 'Display name'
   - name: src
+    description: 'Avatar image URL'
     type: 'string'
     default: '-'
-    description: 'Avatar image URL'
+  - name: alt
+    description: 'Alt text'
+    type: 'string'
+    default: '-'
+  - name: name
+    description: 'Name (used for initials fallback)'
+    type: 'string'
+    default: '-'
+  - name: icon
+    description: 'Icon name (via TxIcon)'
+    type: 'string'
+    default: '-'
   - name: size
-    type: "'sm' | 'md' | 'lg'"
-    default: 'md'
-    description: 'Size'
+    description: 'Avatar size'
+    type: "'small' | 'medium' | 'large' | 'xlarge'"
+    default: "'medium'"
+  - name: status
+    description: 'Status'
+    type: "'online' | 'offline' | 'busy' | 'away'"
+    default: '-'
+  - name: clickable
+    description: 'Clickable state'
+    type: 'boolean'
+    default: 'false'
+  - name: backgroundColor
+    description: 'Custom background color'
+    type: 'string'
+    default: '-'
+  - name: textColor
+    description: 'Custom text color'
+    type: 'string'
+    default: '-'
 ---
 ::
 
-## Design Notes
-- Uppercase initials by default.  
-- Keep spacing between avatar and name consistent.
+### Avatar Events
 
-## Composite Patterns
-::TuffDemo{title="Identity Row" description="Avatar paired with status and action." code-lang="vue"}
+::TuffPropsTable
 ---
-code: |
-  <template>
-    <TxAvatar name="TA" />
-    <TxStatusBadge text="Online" status="success" />
-    <TxButton size="sm">Message</TxButton>
-  </template>
+rows:
+  - name: click
+    description: 'Triggered on click (clickable=true only)'
+    type: '() => void'
+    default: '-'
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-avatar name="TA" />
-  <tx-status-badge text="Online" status="success" />
-  <tx-button size="sm">Message</tx-button>
-</div>
+::
+
+### Avatar Slots
+
+::TuffPropsTable
+---
+rows:
+  - name: default
+    description: 'Custom content (higher priority than icon/name)'
+    type: '-'
+    default: '-'
+---
 ::

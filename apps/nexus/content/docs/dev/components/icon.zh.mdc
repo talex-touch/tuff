@@ -1,44 +1,182 @@
 ---
 title: Icon 图标
-description: 统一图标体系与密度控制
+description: UnoCSS 图标体系与 TuffIcon 组件
 category: Basic
 status: beta
 since: 1.0.0
 tags: [icon, glyph, visual]
+syncStatus: migrated
 ---
 
 # Icon 图标
 
-> 统一图标体系，控制密度与对齐，保证视觉节奏一致。  
-> **状态**：Beta
-
+TuffEx 使用 UnoCSS preset-icons 方案，提供丰富的图标支持，并通过 TuffIcon 统一渲染与管理。
 
 ## 基础用法
+
+### UnoCSS 图标类名
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <!-- Remix Icon -->
+    <i class="i-ri-home-line" />
+    <i class="i-ri-search-line" />
+    <i class="i-ri-settings-3-line" />
+    <!-- Carbon -->
+    <i class="i-carbon-user" />
+    <i class="i-carbon-folder" />
+
+    <!-- Simple Icons (品牌) -->
+    <i class="i-simple-icons-github" />
+    <i class="i-simple-icons-visualstudiocode" />
+  </template>
+---
+::
+
+### TuffIcon 组件
+
 ::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TuffIcon name="i-ri-home-line" />
     <TuffIcon name="chevron-down" />
+    <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" />
   </template>
 ---
 ::
 
-## Demo
-::TuffDemo{title="Icon Density" description="保持线性与留白一致。" code-lang="vue"}
+## TuffIcons 常量
+
+`@talex-touch/utils` 提供预定义的图标常量，确保一致性：
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { TuffIcons, AppIcons } from '@talex-touch/utils'
+
+  // 通用 UI 图标
+  TuffIcons.Home // 'i-ri-home-line'
+  TuffIcons.Search // 'i-ri-search-line'
+  TuffIcons.Settings // 'i-ri-settings-3-line'
+
+  // 应用品牌图标
+  AppIcons.VSCode // 'i-simple-icons-visualstudiocode'
+  AppIcons.GitHub // 'i-simple-icons-github'
+---
+::
+
+## 图标分类
+
+### 导航图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| Home | `i-ri-home-line` | <i class="i-ri-home-line" /> |
+| Back | `i-ri-arrow-left-line` | <i class="i-ri-arrow-left-line" /> |
+| Forward | `i-ri-arrow-right-line` | <i class="i-ri-arrow-right-line" /> |
+| Menu | `i-ri-menu-line` | <i class="i-ri-menu-line" /> |
+
+### 操作图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| Search | `i-ri-search-line` | <i class="i-ri-search-line" /> |
+| Add | `i-ri-add-line` | <i class="i-ri-add-line" /> |
+| Delete | `i-ri-delete-bin-line` | <i class="i-ri-delete-bin-line" /> |
+| Edit | `i-ri-edit-line` | <i class="i-ri-edit-line" /> |
+| Copy | `i-ri-file-copy-line` | <i class="i-ri-file-copy-line" /> |
+| Save | `i-ri-save-line` | <i class="i-ri-save-line" /> |
+| Download | `i-ri-download-line` | <i class="i-ri-download-line" /> |
+| Upload | `i-ri-upload-line` | <i class="i-ri-upload-line" /> |
+| Refresh | `i-ri-refresh-line` | <i class="i-ri-refresh-line" /> |
+
+### 状态图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| Check | `i-ri-check-line` | <i class="i-ri-check-line" /> |
+| Close | `i-ri-close-line` | <i class="i-ri-close-line" /> |
+| Warning | `i-ri-error-warning-line` | <i class="i-ri-error-warning-line" /> |
+| Info | `i-ri-information-line` | <i class="i-ri-information-line" /> |
+| Error | `i-ri-close-circle-line` | <i class="i-ri-close-circle-line" /> |
+
+### 文件图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| File | `i-ri-file-line` | <i class="i-ri-file-line" /> |
+| Folder | `i-ri-folder-line` | <i class="i-ri-folder-line" /> |
+| FileCode | `i-ri-file-code-line` | <i class="i-ri-file-code-line" /> |
+| FileImage | `i-ri-image-line` | <i class="i-ri-image-line" /> |
+
+### UI 元素图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| Settings | `i-ri-settings-3-line` | <i class="i-ri-settings-3-line" /> |
+| User | `i-ri-user-line` | <i class="i-ri-user-line" /> |
+| Star | `i-ri-star-line` | <i class="i-ri-star-line" /> |
+| Heart | `i-ri-heart-line` | <i class="i-ri-heart-line" /> |
+| Lock | `i-ri-lock-line` | <i class="i-ri-lock-line" /> |
+| Eye | `i-ri-eye-line` | <i class="i-ri-eye-line" /> |
+
+### 品牌图标
+
+| 名称 | 类名 | 预览 |
+|------|------|------|
+| GitHub | `i-simple-icons-github` | <i class="i-simple-icons-github" /> |
+| VSCode | `i-simple-icons-visualstudiocode` | <i class="i-simple-icons-visualstudiocode" /> |
+| Chrome | `i-simple-icons-googlechrome` | <i class="i-simple-icons-googlechrome" /> |
+| Discord | `i-simple-icons-discord` | <i class="i-simple-icons-discord" /> |
+
+## 自定义样式
+
+::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TuffIcon name="i-ri-home-line" />
-    <TuffIcon name="i-ri-search-line" />
-    <TuffIcon name="i-ri-settings-3-line" />
+    <!-- 尺寸 -->
+    <i class="i-ri-home-line text-sm" />
+    <i class="i-ri-home-line text-base" />
+    <i class="i-ri-home-line text-xl" />
+    <i class="i-ri-home-line text-2xl" />
+
+    <!-- 颜色 -->
+    <i class="i-ri-star-line text-yellow-500" />
+    <i class="i-ri-heart-fill text-red-500" />
+    <i class="i-ri-check-circle-fill text-green-500" />
+
+    <!-- 动画 -->
+    <i class="i-ri-loader-4-line animate-spin" />
+  </template>
+---
+::
+
+## TxStatusIcon
+
+用于在图标右下角叠加状态指示器（如插件运行状态/健康状态）。
+
+::TuffDemo{title="TxStatusIcon" description="在角标上展示不同状态。" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStatusIcon name="i-ri-translate-2" :size="22" tone="success" />
+    <TxStatusIcon name="i-ri-translate-2" :size="22" tone="warning" />
+    <TxStatusIcon name="i-ri-translate-2" :size="22" tone="error" />
+    <TxStatusIcon name="i-ri-translate-2" :size="22" tone="info" />
+    <TxStatusIcon name="i-ri-translate-2" :size="22" tone="loading" />
   </template>
 ---
 #preview
 <div class="tuff-demo-row">
-  <tuff-icon name="i-ri-home-line" />
-  <tuff-icon name="i-ri-search-line" />
-  <tuff-icon name="i-ri-settings-3-line" />
+  <tx-status-icon name="i-ri-translate-2" :size="22" tone="success" />
+  <tx-status-icon name="i-ri-translate-2" :size="22" tone="warning" />
+  <tx-status-icon name="i-ri-translate-2" :size="22" tone="error" />
+  <tx-status-icon name="i-ri-translate-2" :size="22" tone="info" />
+  <tx-status-icon name="i-ri-translate-2" :size="22" tone="loading" />
 </div>
 ::
 
@@ -52,6 +190,10 @@ code: |
 ::TuffPropsTable
 ---
 rows:
+  - name: icon
+    type: 'ITuffIcon'
+    default: '-'
+    description: '图标对象（type/value）'
   - name: name
     type: 'string'
     default: '-'
@@ -67,22 +209,31 @@ rows:
 ---
 ::
 
-## Design Notes
-- 与文本对齐时建议保持 `size` 为 16/18/20。  
-- 建议在密集列表中使用线性图标，减少视觉噪音。
+## 图标集
 
-## 组合示例
-::TuffDemo{title="图标按钮" description="图标与按钮组合用于快捷操作。" code-lang="vue"}
+| 图标集 | 前缀 | 描述 |
+|--------|------|------|
+| Remix Icon | `i-ri-` | 通用 UI 图标，线条/填充风格 |
+| Carbon | `i-carbon-` | IBM 设计系统图标 |
+| Simple Icons | `i-simple-icons-` | 品牌/Logo 图标 |
+
+## 图标搜索
+
+访问 [Icônes](https://icones.js.org/) 在线浏览和搜索所有可用图标。
+
+## API 参考
+
+### classIcon / getIcon
+
+::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  <template>
-    <TxButton icon="i-ri-add-line">创建</TxButton>
-    <TxButton variant="ghost" icon="i-ri-more-2-line">更多</TxButton>
-  </template>
+  import { classIcon, getIcon } from '@talex-touch/utils'
+
+  const icon = classIcon('i-ri-star-line')
+  // { type: 'class', value: 'i-ri-star-line' }
+
+  const searchIcon = getIcon('Search')
+  // { type: 'class', value: 'i-ri-search-line' }
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button icon="i-ri-add-line">创建</tx-button>
-  <tx-button variant="ghost" icon="i-ri-more-2-line">更多</tx-button>
-</div>
 ::

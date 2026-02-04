@@ -2,6 +2,7 @@
 title: "SortableList 拖拽排序"
 description: "用于拖拽排序的列表容器（基于 HTML5 Drag & Drop）。"
 category: Data
+syncStatus: migrated
 ---
 # SortableList 拖拽排序
 

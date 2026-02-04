@@ -2,6 +2,7 @@
 title: "SearchInput 搜索输入框"
 description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
 category: Form
+syncStatus: migrated
 ---
 # SearchInput 搜索输入框
 

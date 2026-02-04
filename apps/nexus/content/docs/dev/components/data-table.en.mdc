@@ -1,7 +1,11 @@
 ---
-title: "DataTable 数据表格"
-description: "轻量数据表格组件，提供排序、行选择与自定义渲染能力。"
+title: DataTable
+description: Lightweight data table with sorting and selection
 category: Data
+status: beta
+since: 1.0.0
+tags: [table, data, list]
+syncStatus: migrated
 ---
 # DataTable 数据表格
 
