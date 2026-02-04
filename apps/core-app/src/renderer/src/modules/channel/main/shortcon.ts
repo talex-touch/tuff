@@ -5,8 +5,14 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 export type ShortcutWarning = 'permission-missing' | 'sdk-legacy' | 'missing-description'
 
 export interface ShortcutStatus {
-  state: 'active' | 'conflict' | 'unavailable'
-  reason?: 'conflict-system' | 'conflict-plugin' | 'register-failed' | 'register-error' | 'invalid'
+  state: 'active' | 'conflict' | 'unavailable' | 'disabled'
+  reason?:
+    | 'conflict-system'
+    | 'conflict-plugin'
+    | 'register-failed'
+    | 'register-error'
+    | 'invalid'
+    | 'disabled'
   conflictWith?: string[]
   warnings?: ShortcutWarning[]
 }
@@ -15,7 +21,9 @@ export type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
 
 const shortconEvents = {
   getAll: defineRawEvent<void, ShortcutWithStatus[]>('shortcon:get-all'),
-  update: defineRawEvent<{ id: string; accelerator: string }, boolean>('shortcon:update'),
+  update: defineRawEvent<{ id: string; accelerator?: string; enabled?: boolean }, boolean>(
+    'shortcon:update'
+  ),
   disableAll: defineRawEvent<void, void>('shortcon:disable-all'),
   enableAll: defineRawEvent<void, void>('shortcon:enable-all')
 }
@@ -27,8 +35,8 @@ export class ShortconApi {
     return this.transport.send(shortconEvents.getAll)
   }
 
-  update(id: string, accelerator: string): Promise<boolean> {
-    return this.transport.send(shortconEvents.update, { id, accelerator })
+  update(id: string, accelerator?: string, enabled?: boolean): Promise<boolean> {
+    return this.transport.send(shortconEvents.update, { id, accelerator, enabled })
   }
 
   disableAll(): Promise<void> {
