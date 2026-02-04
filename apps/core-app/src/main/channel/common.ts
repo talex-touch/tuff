@@ -9,18 +9,29 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { Locale } from '../utils/i18n-helper'
 import type { StorageUsageIncludeOptions } from '../utils/storage-usage'
+import { execFile } from 'node:child_process'
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import { isLocalhostUrl } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
-import { BrowserWindow, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'
+import {
+  BrowserWindow,
+  dialog,
+  powerMonitor,
+  shell,
+  type OpenDevToolsOptions,
+  type OpenDialogOptions
+} from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
@@ -32,6 +43,7 @@ import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
 import { buildVerificationModule } from '../modules/build-verification'
 import { clipboardModule } from '../modules/clipboard'
 import { databaseModule } from '../modules/database'
+import { createDbUtils } from '../db/utils'
 import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
@@ -74,6 +86,8 @@ import { getStorageUsageReport } from '../utils/storage-usage'
 
 const BATTERY_POLL_TASK_ID = 'common-channel.battery'
 const pollingService = PollingService.getInstance()
+const execFileAsync = promisify(execFile)
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif'])
 const READ_FILE_CACHE_TTL_MS = 60_000
 const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
@@ -134,6 +148,20 @@ const legacyStorageCleanupIntelligenceEvent = defineRawEvent<unknown, unknown>(
 )
 const legacyStorageCleanupConfigEvent = defineRawEvent<void, unknown>('storage:cleanup:config')
 const legacyStorageCleanupUpdatesEvent = defineRawEvent<void, unknown>('storage:cleanup:updates')
+const dialogOpenFileEvent = defineRawEvent<Record<string, unknown>, { filePaths?: string[] }>(
+  'dialog:open-file'
+)
+const wallpaperListImagesEvent = defineRawEvent<
+  { folderPath: string; recursive?: boolean },
+  { images: string[] }
+>('wallpaper:list-images')
+const wallpaperGetDesktopEvent = defineRawEvent<void, { path: string | null }>(
+  'wallpaper:get-desktop'
+)
+const wallpaperCopyToLibraryEvent = defineRawEvent<
+  { sourcePath: string; type: 'file' | 'folder' },
+  { storedPath: string | null; skippedCount: number }
+>('wallpaper:copy-to-library')
 const legacyBuildVerificationEvent = AppEvents.build.getVerificationStatusLegacy
 const legacyBatteryStatusEvent = AppEvents.power.batteryStatus
 
@@ -147,6 +175,195 @@ function resolveTfilePath(urlOrPath: string): string {
     return decodeURIComponent(urlOrPath.slice(`${FILE_SCHEMA}://`.length))
   }
   return urlOrPath
+}
+
+function isImagePath(filePath: string): boolean {
+  const ext = path.extname(filePath).toLowerCase()
+  return IMAGE_EXTENSIONS.has(ext)
+}
+
+async function listWallpaperImages(folderPath: string, recursive = false): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(folderPath, { withFileTypes: true })
+    const results: string[] = []
+    for (const entry of entries) {
+      const entryPath = path.join(folderPath, entry.name)
+      if (entry.isDirectory()) {
+        if (recursive) {
+          results.push(...(await listWallpaperImages(entryPath, true)))
+        }
+        continue
+      }
+      if (entry.isFile() && isImagePath(entry.name)) {
+        results.push(entryPath)
+      }
+    }
+    return results
+  } catch {
+    return []
+  }
+}
+
+async function computeFileHash(filePath: string): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const hash = createHash('sha256')
+    const stream = createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('end', () => resolve(hash.digest('hex')))
+    stream.on('error', reject)
+  })
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.stat(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function execFileOutput(command: string, args: string[]): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync(command, args)
+    return typeof stdout === 'string' ? stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+async function getDesktopWallpaperPath(): Promise<string | null> {
+  if (process.platform === 'win32') {
+    const output = await execFileOutput('reg', [
+      'query',
+      'HKCU\\Control Panel\\Desktop',
+      '/v',
+      'WallPaper'
+    ])
+    if (!output) return null
+    const line = output
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .find((item) => item.toLowerCase().startsWith('wallpaper'))
+    if (!line) return null
+    const parts = line.split(/\s{2,}/)
+    return parts[parts.length - 1] || null
+  }
+
+  if (process.platform === 'darwin') {
+    const output = await execFileOutput('osascript', [
+      '-e',
+      'tell application "System Events" to get POSIX path of (get picture of item 1 of desktops)'
+    ])
+    return output || null
+  }
+
+  if (process.platform === 'linux') {
+    const output = await execFileOutput('gsettings', [
+      'get',
+      'org.gnome.desktop.background',
+      'picture-uri'
+    ])
+    if (!output) return null
+    const cleaned = output.replace(/^'+|'+$/g, '')
+    if (!cleaned || cleaned === 'none') return null
+    if (cleaned.startsWith('file://')) {
+      return decodeURI(cleaned.replace('file://', ''))
+    }
+    return cleaned
+  }
+
+  return null
+}
+
+async function copyWallpaperFileToLibrary(
+  sourcePath: string,
+  libraryRoot: string,
+  dbUtils: ReturnType<typeof createDbUtils> | null
+): Promise<{ storedPath: string | null; skippedCount: number }> {
+  if (!isImagePath(sourcePath)) {
+    return { storedPath: null, skippedCount: 0 }
+  }
+
+  const ext = path.extname(sourcePath).toLowerCase()
+  const hash = await computeFileHash(sourcePath)
+  const storedPath = path.join(libraryRoot, `${hash}${ext}`)
+
+  if (dbUtils) {
+    const existing = await dbUtils.getWallpaperAssetByHash(hash)
+    if (existing?.storedPath && (await fileExists(existing.storedPath))) {
+      return { storedPath: existing.storedPath, skippedCount: 1 }
+    }
+  }
+
+  if (await fileExists(storedPath)) {
+    return { storedPath, skippedCount: 1 }
+  }
+
+  await fs.mkdir(libraryRoot, { recursive: true })
+  await fs.copyFile(sourcePath, storedPath)
+  const stat = await fs.stat(sourcePath)
+
+  if (dbUtils) {
+    await dbUtils.upsertWallpaperAsset({
+      hash,
+      originalPath: sourcePath,
+      storedPath,
+      type: 'file',
+      size: stat.size,
+      ext,
+      createdAt: Date.now()
+    })
+  }
+
+  return { storedPath, skippedCount: 0 }
+}
+
+async function copyWallpaperFolderToLibrary(
+  sourcePath: string,
+  libraryRoot: string,
+  dbUtils: ReturnType<typeof createDbUtils> | null
+): Promise<{ storedPath: string | null; skippedCount: number }> {
+  const images = await listWallpaperImages(sourcePath, true)
+  const folderName = safeNamespaceSegment(path.basename(sourcePath))
+  const folderHash = createHash('sha1').update(sourcePath).digest('hex').slice(0, 8)
+  const folderDir = path.join(libraryRoot, 'folders', `${folderName}-${folderHash}`)
+  await fs.mkdir(folderDir, { recursive: true })
+
+  let skippedCount = 0
+  for (const imagePath of images) {
+    const ext = path.extname(imagePath).toLowerCase()
+    const hash = await computeFileHash(imagePath)
+    const storedPath = path.join(folderDir, `${hash}${ext}`)
+
+    if (dbUtils) {
+      const existing = await dbUtils.getWallpaperAssetByHash(hash)
+      if (existing) {
+        skippedCount += 1
+        continue
+      }
+    } else if (await fileExists(storedPath)) {
+      skippedCount += 1
+      continue
+    }
+
+    await fs.copyFile(imagePath, storedPath)
+    const stat = await fs.stat(imagePath)
+
+    if (dbUtils) {
+      await dbUtils.upsertWallpaperAsset({
+        hash,
+        originalPath: imagePath,
+        storedPath,
+        type: 'file',
+        size: stat.size,
+        ext,
+        createdAt: Date.now()
+      })
+    }
+  }
+
+  return { storedPath: folderDir, skippedCount }
 }
 
 interface ReadFileCacheEntry {
@@ -332,6 +549,7 @@ export class CommonChannelModule extends BaseModule {
 
   private channel: ReturnType<typeof genTouchChannel> | null = null
   private transport: ITuffTransportMain | null = null
+  private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private transportDisposers: Array<() => void> = []
   private batteryPollTimer: NodeJS.Timeout | undefined
   private touchApp: TalexTouch.TouchApp | null = null
@@ -702,6 +920,57 @@ export class CommonChannelModule extends BaseModule {
       })
     )
 
+    this.transportDisposers.push(
+      transport.on(dialogOpenFileEvent, async (payload) => {
+        const options = isRecord(payload) ? payload : {}
+        const dialogOptions: OpenDialogOptions = {
+          title: typeof options.title === 'string' ? options.title : undefined,
+          defaultPath: typeof options.defaultPath === 'string' ? options.defaultPath : undefined,
+          buttonLabel: typeof options.buttonLabel === 'string' ? options.buttonLabel : undefined,
+          filters: Array.isArray(options.filters)
+            ? (options.filters as OpenDialogOptions['filters'])
+            : undefined,
+          properties: Array.isArray(options.properties)
+            ? (options.properties as OpenDialogOptions['properties'])
+            : ['openFile']
+        }
+        const result = await dialog.showOpenDialog(
+          BrowserWindow.getFocusedWindow() ?? touchApp.window.window,
+          dialogOptions
+        )
+        return { filePaths: result.filePaths ?? [] }
+      }),
+      transport.on(wallpaperListImagesEvent, async (payload) => {
+        const folderPath = typeof payload?.folderPath === 'string' ? payload.folderPath : ''
+        const recursive = Boolean(payload?.recursive)
+        if (!folderPath) {
+          return { images: [] }
+        }
+        return { images: await listWallpaperImages(folderPath, recursive) }
+      }),
+      transport.on(wallpaperGetDesktopEvent, async () => {
+        return { path: await getDesktopWallpaperPath() }
+      }),
+      transport.on(wallpaperCopyToLibraryEvent, async (payload) => {
+        const sourcePath = typeof payload?.sourcePath === 'string' ? payload.sourcePath : ''
+        const type = payload?.type === 'folder' ? 'folder' : 'file'
+        if (!sourcePath) {
+          return { storedPath: null, skippedCount: 0 }
+        }
+        const dbUtils = this.getDbUtils()
+        const libraryRoot = path.join(touchApp.app.getPath('userData'), 'wallpapers')
+        try {
+          if (type === 'folder') {
+            return await copyWallpaperFolderToLibrary(sourcePath, libraryRoot, dbUtils)
+          }
+          return await copyWallpaperFileToLibrary(sourcePath, libraryRoot, dbUtils)
+        } catch (error) {
+          log.warn('[CommonChannel] Failed to copy wallpaper to library', { error })
+          return { storedPath: null, skippedCount: 0 }
+        }
+      })
+    )
+
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
     const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
@@ -808,6 +1077,20 @@ export class CommonChannelModule extends BaseModule {
     )
 
     this.registerTransportHandlers()
+  }
+
+  private getDbUtils(): ReturnType<typeof createDbUtils> | null {
+    if (this.dbUtils) {
+      return this.dbUtils
+    }
+
+    try {
+      this.dbUtils = createDbUtils(databaseModule.getDb())
+      return this.dbUtils
+    } catch (error) {
+      log.warn('[CommonChannel] Failed to initialize database utils for wallpaper', { error })
+      return null
+    }
   }
 
   private registerTransportHandlers(): void {

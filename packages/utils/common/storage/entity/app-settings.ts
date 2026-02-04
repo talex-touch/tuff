@@ -61,14 +61,38 @@ const _appSettingOriginData = {
     hotCacheDurationMs: 120000,
   },
   background: {
-    /** 背景图来源: 'bing' | 'custom' | 'none' */
-    source: 'bing' as 'bing' | 'custom' | 'none',
+    /** 背景图来源: 'none' | 'bing' | 'custom' | 'folder' | 'desktop' */
+    source: 'none' as 'none' | 'bing' | 'custom' | 'folder' | 'desktop',
     /** 自定义背景图路径 */
     customPath: '',
+    /** 文件夹路径 */
+    folderPath: '',
+    /** 文件夹轮播间隔（分钟） */
+    folderIntervalMinutes: 30,
+    /** 文件夹轮播是否随机 */
+    folderRandom: true,
     /** 背景图模糊度 0-20 */
     blur: 0,
-    /** 背景图透明度 0-100 */
+    /** 背景图透明度 10-100 */
     opacity: 100,
+    /** 背景图滤镜 */
+    filter: {
+      brightness: 100,
+      contrast: 100,
+      saturate: 100,
+    },
+    /** 桌面壁纸路径 */
+    desktopPath: '',
+    /** 壁纸库信息 */
+    library: {
+      enabled: false,
+      folderStoredPath: '',
+      fileStoredPath: '',
+    },
+    /** 云同步配置 */
+    sync: {
+      enabled: false,
+    },
   },
   coreBox: {
     /** 自定义 placeholder 文本，空则使用默认 */

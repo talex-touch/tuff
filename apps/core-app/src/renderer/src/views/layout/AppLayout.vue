@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import DynamicLayout from '~/components/layout/DynamicLayout.vue'
 import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
 import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
+import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
 import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
 
@@ -24,6 +25,8 @@ const routeTransitionName = computed(() => {
 const { canNavigateBack, navigateBack } = useSecondaryNavigation({
   debugLabel: 'AppLayout'
 })
+const { wallpaperActive, wallpaperStyle } = useWallpaper()
+const wrapperStyle = computed(() => (wallpaperActive.value ? { '--fake-index': -2 } : undefined))
 
 const routeTransitionStartedAt = new Map<string, number>()
 
@@ -88,7 +91,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="AppLayout-Wrapper fake-background" :class="{ mica, coloring, contrast }">
+  <div
+    class="AppLayout-Wrapper fake-background"
+    :class="{ mica, coloring, contrast }"
+    :style="wrapperStyle"
+  >
+    <div v-if="wallpaperActive" class="AppWallpaper" :style="wallpaperStyle" />
     <DynamicLayout>
       <template #view>
         <router-view v-slot="{ Component, route }">
@@ -290,7 +298,20 @@ onMounted(() => {
   --fake-inner-opacity: 0.5;
 }
 
+.AppWallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+  transition:
+    opacity 200ms ease,
+    filter 200ms ease;
+}
+
 .AppLayout-Wrapper {
+  position: relative;
   span.tag.version {
     margin-left: 10px;
 
