@@ -321,6 +321,10 @@ onMounted(() => {
     font-size: 12px;
   }
 
+  &.mica .AppLayout-View {
+    --fake-opacity: 0.85;
+  }
+
   .AppLayout-View {
     z-index: 100;
     position: relative;
@@ -332,7 +336,7 @@ onMounted(() => {
     box-sizing: border-box;
 
     opacity: 0;
-    --fake-opacity: 1;
+    --fake-opacity: 0.95;
     -webkit-app-region: no-drag;
     animation: viewEnter 0.25s 0.5s forwards;
   }
