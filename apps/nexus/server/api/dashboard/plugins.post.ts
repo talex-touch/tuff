@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
-import { clerkClient } from '@clerk/nuxt/server'
 import { createError, readFormData } from 'h3'
 import { requireAuth } from '../../utils/auth'
+import { getUserById } from '../../utils/authStore'
 import { uploadImage, uploadImageFromBuffer } from '../../utils/imageStorage'
 import { createPlugin } from '../../utils/pluginsStore'
 import { extractTpexMetadata } from '../../utils/tpex'
@@ -13,28 +13,12 @@ export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
   const formData = await readFormData(event)
 
-  const client = clerkClient(event)
-
-  let user
-  let ownerOrgId: string | null = null
-
-  try {
-    user = await client.users.getUser(userId)
+  const user = await getUserById(event, userId)
+  if (!user) {
+    throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }
-  catch (err) {
-    console.error('[plugins.post] Failed to fetch user:', err)
-    throw createError({ statusCode: 500, statusMessage: 'Failed to fetch user information.' })
-  }
-
-  try {
-    const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
-    ownerOrgId = orgMemberships.data?.[0]?.organization.id ?? null
-  }
-  catch (err) {
-    console.error('[plugins.post] Failed to fetch org memberships (non-fatal):', err)
-  }
-
-  const isAdmin = user.publicMetadata?.role === 'admin'
+  const ownerOrgId: string | null = null
+  const isAdmin = user.role === 'admin'
 
   const getString = (key: string) => {
     const value = formData.get(key)
@@ -114,26 +98,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const deriveAuthorName = () => {
-    const fullName = user.fullName?.trim()
-    if (fullName)
-      return fullName
-
-    const composed = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-    if (composed)
-      return composed
-
-    const username = user.username?.trim()
-    if (username)
-      return username
-
-    const primaryEmail = user.primaryEmailAddressId
-      ? user.emailAddresses?.find(address => address.id === user.primaryEmailAddressId)?.emailAddress
-      : undefined
-
-    if (primaryEmail)
-      return primaryEmail
-
-    return user.emailAddresses?.[0]?.emailAddress ?? userId
+    if (user.name)
+      return user.name
+    if (user.email)
+      return user.email
+    return userId
   }
 
   const status = isAdmin && statusField && (ALLOWED_STATUSES as readonly string[]).includes(statusField)

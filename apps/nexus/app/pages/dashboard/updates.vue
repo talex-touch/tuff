@@ -23,7 +23,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t, locale } = useI18n()
-const { user } = useUser()
+const { user } = useAuthUser()
 
 const { updates, pending: updatesPending, refresh: refreshUpdates } = useDashboardUpdatesData()
 
@@ -40,8 +40,7 @@ function formatDate(value?: string) {
 }
 
 const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
+  return user.value?.role === 'admin'
 })
 
 const drawerOpen = ref(false)

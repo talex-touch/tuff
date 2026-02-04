@@ -1,55 +1,59 @@
 import { watch } from 'vue'
 
-/**
- * Composable for managing user locale preferences stored in Clerk metadata.
- * Syncs user's language preference across devices and sessions.
- * SSR-safe: all Clerk operations are deferred to client-side only.
- *
- * @returns Object containing locale management functions
- */
+const LOCALE_STORAGE_KEY = 'tuff_locale_sync'
+const LOCALE_SYNC_NAMESPACE = 'ui'
+const LOCALE_SYNC_KEY = 'locale'
+
 export function useUserLocale() {
   const { locale, setLocale } = useI18n()
+  const { status } = useSession()
+  const { deviceId } = useDeviceIdentity()
 
-  const getClerkUser = () => {
+  const getSavedLocale = (): string | null => {
     if (import.meta.server)
       return null
-    try {
-      // Dynamic import to avoid SSR issues
-      const clerk = (window as any)?.__clerk_frontend_api || (window as any)?.Clerk
-      return clerk?.user ?? null
-    }
-    catch {
-      return null
-    }
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY)
   }
 
-  /**
-   * Get user's saved locale from Clerk metadata
-   * @returns Saved locale string or null if not set
-   */
-  const getSavedLocale = (): string | null => {
-    const user = getClerkUser()
-    if (!user)
-      return null
-
-    // Use unsafeMetadata for client-side writable locale preference
-    return (user.unsafeMetadata?.locale as string) ?? null
+  const persistLocal = (value: string) => {
+    if (import.meta.client)
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, value)
   }
 
-  /**
-   * Save user's locale preference to Clerk metadata
-   * @param newLocale - Locale to save (e.g., 'zh', 'en')
-   */
-  const saveUserLocale = async (newLocale: string) => {
-    const user = getClerkUser()
-    if (!user?.update)
+  const pullRemoteLocale = async () => {
+    if (status.value !== 'authenticated')
       return
-
     try {
-      await user.update({
-        unsafeMetadata: {
-          ...user.unsafeMetadata,
-          locale: newLocale,
+      const items = await $fetch<Array<{ namespace: string, key: string, value: unknown, updatedAt?: string }>>('/api/sync/pull')
+      const localeItem = items.find(item => item.namespace === LOCALE_SYNC_NAMESPACE && item.key === LOCALE_SYNC_KEY)
+      if (localeItem && typeof localeItem.value === 'string') {
+        persistLocal(localeItem.value)
+        if (localeItem.value !== locale.value)
+          setLocale(localeItem.value as 'en' | 'zh')
+      }
+    }
+    catch (error) {
+      console.error('[useUserLocale] Failed to pull locale:', error)
+    }
+  }
+
+  const saveUserLocale = async (newLocale: string) => {
+    persistLocal(newLocale)
+    if (status.value !== 'authenticated')
+      return
+    try {
+      await $fetch('/api/sync/push', {
+        method: 'POST',
+        body: {
+          items: [
+            {
+              namespace: LOCALE_SYNC_NAMESPACE,
+              key: LOCALE_SYNC_KEY,
+              value: newLocale,
+              updatedAt: new Date().toISOString(),
+              deviceId: deviceId.value ?? null,
+            },
+          ],
         },
       })
     }
@@ -58,27 +62,18 @@ export function useUserLocale() {
     }
   }
 
-  /**
-   * Initialize user's locale from Clerk metadata on mount
-   * Falls back to browser locale if not set in Clerk
-   */
-  const initializeLocale = () => {
-    if (import.meta.server)
-      return
-
-    const savedLocale = getSavedLocale()
-    if (savedLocale && savedLocale !== locale.value) {
-      setLocale(savedLocale as 'en' | 'zh')
-    }
-  }
-
-  /**
-   * Watch for locale changes and auto-save to Clerk
-   * This enables automatic synchronization when user changes language
-   */
   const syncLocaleChanges = () => {
     if (import.meta.server)
       return
+
+    watch(
+      () => status.value,
+      (value) => {
+        if (value === 'authenticated')
+          pullRemoteLocale()
+      },
+      { immediate: true },
+    )
 
     watch(locale, (newLocale) => {
       const savedLocale = getSavedLocale()
@@ -91,7 +86,6 @@ export function useUserLocale() {
   return {
     getSavedLocale,
     saveUserLocale,
-    initializeLocale,
     syncLocaleChanges,
   }
 }

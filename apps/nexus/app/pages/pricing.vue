@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import { PricingTable } from '@clerk/nuxt/components'
-import { computed } from 'vue'
-
 definePageMeta({
   layout: 'home',
   pageTransition: {
@@ -11,11 +8,42 @@ definePageMeta({
 })
 
 const { t } = useI18n()
-const runtimeConfig = useRuntimeConfig()
 
-const pricingTableId = computed(() => runtimeConfig.public?.clerk?.pricingTableId || '')
-const publishableKey = computed(() => runtimeConfig.public?.clerk?.publishableKey || '')
-const hasPricingConfig = computed(() => Boolean(pricingTableId.value && publishableKey.value))
+const plans = [
+  {
+    id: 'free',
+    title: t('pricing.freeTitle', 'Free'),
+    price: t('pricing.freePrice', '¥0 / 月'),
+    desc: t('pricing.freeDesc', '基础功能与社区支持'),
+    features: [
+      t('pricing.freeFeature1', '基础插件市场'),
+      t('pricing.freeFeature2', '个人设备同步'),
+      t('pricing.freeFeature3', '有限 AI 积分'),
+    ],
+  },
+  {
+    id: 'plus',
+    title: t('pricing.plusTitle', 'Plus'),
+    price: t('pricing.plusPrice', '敬请期待'),
+    desc: t('pricing.plusDesc', '面向个人的增强体验'),
+    features: [
+      t('pricing.plusFeature1', '更高 AI 积分额度'),
+      t('pricing.plusFeature2', '高级自动化模板'),
+      t('pricing.plusFeature3', '优先支持'),
+    ],
+  },
+  {
+    id: 'team',
+    title: t('pricing.teamTitle', 'Team'),
+    price: t('pricing.teamPrice', '即将开放'),
+    desc: t('pricing.teamDesc', '团队协作与共享额度'),
+    features: [
+      t('pricing.teamFeature1', '团队积分池'),
+      t('pricing.teamFeature2', '成员管理'),
+      t('pricing.teamFeature3', '企业级安全'),
+    ],
+  },
+]
 </script>
 
 <template>
@@ -32,25 +60,36 @@ const hasPricingConfig = computed(() => Boolean(pricingTableId.value && publisha
       </p>
     </header>
 
-    <div class="mx-auto max-w-[70%] w-full">
-      <ClientOnly>
-        <template #fallback>
-          <div class="text-center text-sm text-black/70 dark:text-light/80">
-            {{ t('pricing.loading') }}
-          </div>
-        </template>
-        <PricingTable
-          v-if="hasPricingConfig"
-          :publishable-key="publishableKey"
-          :pricing-table-id="pricingTableId"
-        />
-        <div
-          v-else
-          class="text-center text-sm text-black/70 dark:text-light/80"
-        >
-          {{ t('pricing.missingTable') }}
+    <div class="mx-auto grid w-full max-w-5xl gap-6 md:grid-cols-3">
+      <article
+        v-for="plan in plans"
+        :key="plan.id"
+        class="rounded-3xl border border-primary/10 bg-white/80 p-6 shadow-sm backdrop-blur-sm transition hover:shadow-lg dark:border-light/10 dark:bg-dark/70"
+      >
+        <div class="space-y-3">
+          <p class="text-sm font-semibold uppercase tracking-widest text-black/60 dark:text-light/60">
+            {{ plan.title }}
+          </p>
+          <p class="text-2xl font-semibold text-black dark:text-light">
+            {{ plan.price }}
+          </p>
+          <p class="text-sm text-black/70 dark:text-light/70">
+            {{ plan.desc }}
+          </p>
         </div>
-      </ClientOnly>
+        <ul class="mt-6 space-y-2 text-sm text-black/70 dark:text-light/70">
+          <li v-for="feature in plan.features" :key="feature" class="flex items-center gap-2">
+            <span class="i-carbon-checkmark-filled text-green-500" />
+            {{ feature }}
+          </li>
+        </ul>
+        <NuxtLink
+          to="/sign-up"
+          class="mt-6 inline-flex w-full items-center justify-center rounded-full bg-dark px-4 py-2 text-sm text-white font-medium transition hover:bg-dark/90 dark:bg-light dark:text-black dark:hover:bg-light/90"
+        >
+          {{ t('pricing.cta', '开始体验') }}
+        </NuxtLink>
+      </article>
     </div>
   </section>
 </template>

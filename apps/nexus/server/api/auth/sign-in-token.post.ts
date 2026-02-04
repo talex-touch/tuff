@@ -1,4 +1,3 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import { createAppToken, requireAuth } from '../../utils/auth'
 
 /**
@@ -9,22 +8,15 @@ export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
 
   try {
-    // Create a sign-in token that can be used by the desktop app
-    const signInToken = await clerkClient(event).signInTokens.createSignInToken({
-      userId,
-      expiresInSeconds: 60, // Short expiry for security
-    })
-
     let appToken: string | null = null
     try {
-      appToken = createAppToken(userId)
+      appToken = await createAppToken(event, userId)
     }
     catch (error) {
       console.warn('[SignInToken] App token disabled:', error)
     }
 
     return {
-      token: signInToken.token,
       appToken,
     }
   }

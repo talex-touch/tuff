@@ -1,17 +1,8 @@
-import { clerkClient } from '@clerk/nuxt/server'
-import { createError } from 'h3'
-import { requireAuth } from '../../../utils/auth'
+import { requireAdmin } from '../../../utils/auth'
 import { listPlugins } from '../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
-
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const isAdmin = user.publicMetadata?.role === 'admin'
-
-  if (!isAdmin)
-    throw createError({ statusCode: 403, statusMessage: 'Admin access required.' })
+  const { userId } = await requireAdmin(event)
 
   const plugins = await listPlugins(event, {
     includeVersions: true,

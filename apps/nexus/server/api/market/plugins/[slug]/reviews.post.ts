@@ -1,9 +1,8 @@
-import type { User } from '@clerk/backend'
-import { clerkClient } from '@clerk/nuxt/server'
 import { readBody } from 'h3'
 import { getPluginRatingSummary, upsertPluginRating } from '../../../../utils/pluginRatingStore'
 import { upsertPluginReview } from '../../../../utils/pluginReviewStore'
 import { requireAuth } from '../../../../utils/auth'
+import { getUserById } from '../../../../utils/authStore'
 import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
 function cleanReview<T extends { userId?: string }>(review: T) {
@@ -11,24 +10,10 @@ function cleanReview<T extends { userId?: string }>(review: T) {
   return rest
 }
 
-function resolveUserName(user: User, userId: string): string {
-  const fullName = user.fullName?.trim()
-  if (fullName)
-    return fullName
-
-  const composed = [user.firstName, user.lastName].filter(Boolean).join(' ').trim()
-  if (composed)
-    return composed
-
-  const username = user.username?.trim()
-  if (username)
-    return username
-
-  const primaryEmail = user.primaryEmailAddressId
-    ? user.emailAddresses?.find(address => address.id === user.primaryEmailAddressId)?.emailAddress
-    : null
-
-  return primaryEmail ?? user.emailAddresses?.[0]?.emailAddress ?? userId
+function resolveUserName(user: { name: string | null, email: string }): string {
+  if (user.name && user.name.trim())
+    return user.name.trim()
+  return user.email
 }
 
 export default defineEventHandler(async (event) => {
@@ -61,29 +46,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
   }
 
-  let client: ReturnType<typeof clerkClient>
-  try {
-    client = clerkClient(event)
+  const user = await getUserById(event, userId)
+  if (!user) {
+    throw createError({ statusCode: 401, statusMessage: 'User not found.' })
   }
-  catch (error: any) {
-    throw createError({ statusCode: 500, statusMessage: error?.message || 'Clerk client initialization failed.' })
-  }
-
-  let user: User
-  try {
-    user = await client.users.getUser(userId)
-  }
-  catch (error: any) {
-    const status = typeof error?.status === 'number' ? error.status : undefined
-    const statusCode = status === 404 ? 401 : status
-    throw createError({
-      statusCode: statusCode && statusCode >= 400 && statusCode < 600 ? statusCode : 500,
-      statusMessage: error?.message || 'Failed to fetch user info.',
-    })
-  }
-  const authorName = resolveUserName(user, userId)
-  const authorAvatarUrl = user.imageUrl || null
-  const isAdmin = user.publicMetadata?.role === 'admin'
+  const authorName = resolveUserName(user)
+  const authorAvatarUrl = user.image || null
+  const isAdmin = user.role === 'admin'
 
   const review = await upsertPluginReview(event, {
     pluginId: plugin.id,

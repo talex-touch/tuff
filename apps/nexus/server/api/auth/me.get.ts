@@ -1,0 +1,19 @@
+import { requireAuth } from '../../utils/auth'
+import { ensureDeviceForRequest, getUserById } from '../../utils/authStore'
+
+export default defineEventHandler(async (event) => {
+  const { userId } = await requireAuth(event)
+  await ensureDeviceForRequest(event, userId)
+  const user = await getUserById(event, userId)
+  if (!user)
+    return null
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    role: user.role,
+    locale: user.locale,
+    emailVerified: Boolean(user.emailVerified)
+  }
+})

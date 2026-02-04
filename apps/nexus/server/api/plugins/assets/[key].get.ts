@@ -1,23 +1,9 @@
-import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
-import { clerkClient } from '@clerk/nuxt/server'
 import { createError, send, setResponseHeader } from 'h3'
+import { getOptionalAuth } from '../../../utils/auth'
 import { getPluginPackage } from '../../../utils/pluginPackageStorage'
+import { getUserById } from '../../../utils/authStore'
 import { findVersionByPackageKey } from '../../../utils/pluginsStore'
-
-async function getOptionalAuth(event: H3Event) {
-  const authFn = event.context.auth
-  if (!authFn)
-    return null
-
-  try {
-    const auth = await authFn()
-    return auth?.userId ?? null
-  }
-  catch {
-    return null
-  }
-}
 
 export default defineEventHandler(async (event) => {
   const key = event.context.params?.key
@@ -33,20 +19,14 @@ export default defineEventHandler(async (event) => {
   const { plugin, version } = record
 
   let viewerId: string | null = null
-  let viewerOrgIds: string[] = []
   let viewerIsAdmin = false
 
-  const optionalUserId = await getOptionalAuth(event)
+  const optionalAuth = await getOptionalAuth(event)
 
-  if (optionalUserId) {
-    const authedUserId = optionalUserId
-    viewerId = authedUserId
-    const client = clerkClient(event)
-    const user = await client.users.getUser(authedUserId)
-    viewerIsAdmin = user.publicMetadata?.role === 'admin'
-
-    const orgMemberships = await client.users.getOrganizationMembershipList({ userId: authedUserId })
-    viewerOrgIds = orgMemberships.data?.map(membership => membership.organization.id) ?? []
+  if (optionalAuth) {
+    viewerId = optionalAuth.userId
+    const user = await getUserById(event, optionalAuth.userId)
+    viewerIsAdmin = user?.role === 'admin'
   }
 
   const canAccessBeta = () => {
@@ -55,8 +35,6 @@ export default defineEventHandler(async (event) => {
     if (viewerIsAdmin)
       return true
     if (viewerId === plugin.userId)
-      return true
-    if (plugin.ownerOrgId && viewerOrgIds.includes(plugin.ownerOrgId))
       return true
     return false
   }

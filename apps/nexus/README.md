@@ -17,16 +17,20 @@ The site will be available at `http://localhost:3000`.
 
 ## Authentication
 
-This project uses Clerk for authentication. Before starting the dev server, create a Clerk application and set at least:
+This project uses NuxtAuth for authentication. Before starting the dev server, configure at least:
 
 ```bash
-NUXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
-CLERK_SECRET_KEY=sk_test_...
+AUTH_SECRET=your_auth_secret
+AUTH_ORIGIN=http://localhost:3200
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+RESEND_API_KEY=your_resend_key
+AUTH_EMAIL_FROM="Tuff <noreply@tuff.chat>"
 ```
 
-Additional optional variables (domain, proxy URL, webhook secret, etc.) are described in `SETUP.md`.
+Additional optional variables are described in `SETUP.md`.
 
 ## Recent updates
 
 - 登录入口现在会携带 `redirect_url`，用户从任意页面进入/退出账号后都会回到原来的页面而不是被强制带到首页
-- 语言偏好支持持久化（Cookie + localStorage + Clerk metadata 同步），新访客会优先使用浏览器语言，中文用户会自动进入中文文档，刷新不再回退到默认英文
+- 语言偏好支持持久化（Cookie + localStorage + 必要配置同步），新访客会优先使用浏览器语言，中文用户会自动进入中文文档，刷新不再回退到默认英文

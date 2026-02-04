@@ -1,17 +1,14 @@
-import { clerkClient } from '@clerk/nuxt/server'
 import { getQuery } from 'h3'
 import { requireAuth } from '../../utils/auth'
+import { getUserById } from '../../utils/authStore'
 import { listPlugins } from '../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
 
-  const client = clerkClient(event)
-  const user = await client.users.getUser(userId)
-  const isAdmin = user.publicMetadata?.role === 'admin'
-
-  const orgMemberships = await client.users.getOrganizationMembershipList({ userId })
-  const viewerOrgIds = orgMemberships.data?.map(membership => membership.organization.id) ?? []
+  const user = await getUserById(event, userId)
+  const isAdmin = user?.role === 'admin'
+  const viewerOrgIds: string[] = []
 
   const pluginStatusIds = ['draft', 'pending', 'approved', 'rejected'] as const
   type PluginStatus = typeof pluginStatusIds[number]

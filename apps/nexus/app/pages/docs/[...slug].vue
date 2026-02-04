@@ -17,24 +17,8 @@ const nuxtApp = useNuxtApp()
 const { locale, t } = useI18n()
 const localePath = useLocalePath()
 
-// Lazy load user for admin features (non-blocking)
-const user = ref<any>(null)
-const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
-})
-
-// Load user info only on client side, non-blocking
-onMounted(async () => {
-  try {
-    const { useUser } = await import('@clerk/vue')
-    const { user: clerkUser } = useUser()
-    user.value = clerkUser.value
-  }
-  catch {
-    // Clerk not available, continue without admin features
-  }
-})
+const { user } = useAuthUser()
+const isAdmin = computed(() => user.value?.role === 'admin')
 
 const SUPPORTED_LOCALES = ['en', 'zh']
 function stripLocalePrefix(path: string) {
