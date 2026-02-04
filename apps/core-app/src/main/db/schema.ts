@@ -281,6 +281,24 @@ export const config = sqliteTable('config', {
   value: text('value') // 存储为 JSON string
 })
 
+export const wallpaperAssets = sqliteTable(
+  'wallpaper_assets',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    hash: text('hash').notNull().unique(),
+    originalPath: text('original_path').notNull(),
+    storedPath: text('stored_path').notNull(),
+    type: text('type').notNull(),
+    size: integer('size').notNull(),
+    ext: text('ext').notNull(),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    hashIdx: index('idx_wallpaper_assets_hash').on(table.hash),
+    createdAtIdx: index('idx_wallpaper_assets_created_at').on(table.createdAt)
+  })
+)
+
 /**
  * 记录全量扫描的进度，用于断点续传。
  */
