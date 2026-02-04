@@ -20,6 +20,9 @@ interface Props {
   formatDate?: (value: string | number | Date) => string
   formatNumber?: (value: number) => string
   formatSize?: (value: number) => string
+  installsText?: string
+  versionText?: string
+  updatedText?: string
   officialLabel?: string
   installsLabel?: string
   versionLabel?: string
@@ -37,11 +40,6 @@ const props = withDefaults(defineProps<Props>(), {
   emptyVersionsText: 'No versions'
 })
 
-const hasReadme = computed(() => {
-  return Boolean(props.detail.readme?.markdown || props.detail.readme?.url)
-})
-
-const hasVersions = computed(() => (props.detail.versions?.length ?? 0) > 0)
 const hasMeta = computed(() => (props.detail.metaItems?.length ?? 0) > 0)
 </script>
 
@@ -51,6 +49,9 @@ const hasMeta = computed(() => (props.detail.metaItems?.length ?? 0) > 0)
       :detail="detail"
       :format-date="formatDate"
       :format-number="formatNumber"
+      :installs-text="installsText"
+      :version-text="versionText"
+      :updated-text="updatedText"
       :official-label="officialLabel"
       :installs-label="installsLabel"
       :version-label="versionLabel"
@@ -60,14 +61,14 @@ const hasMeta = computed(() => (props.detail.metaItems?.length ?? 0) > 0)
     <div class="flex flex-col gap-6 lg:flex-row">
       <div class="min-w-0 flex-1 space-y-6">
         <SharedPluginDetailReadme
-          v-if="showReadme && hasReadme"
+          v-if="showReadme"
           :readme="detail.readme"
           :title="readmeTitle"
           :empty-text="emptyReadmeText"
           :render-markdown="renderMarkdown"
         />
         <SharedPluginDetailVersions
-          v-if="showVersions && hasVersions"
+          v-if="showVersions"
           :versions="detail.versions"
           :title="versionsTitle"
           :empty-text="emptyVersionsText"

@@ -6,6 +6,8 @@ import type {
   MarketplacePluginReview,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
+import { SharedPluginDetailContent } from '@talex-touch/utils/renderer'
+import type { SharedPluginDetail } from '@talex-touch/utils/renderer'
 import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
@@ -13,7 +15,6 @@ import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Modal from '~/components/ui/Modal.vue'
-import StatusBadge from '~/components/ui/StatusBadge.vue'
 import Tag from '~/components/ui/Tag.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
@@ -84,6 +85,47 @@ const normalizedSearch = computed(() => filters.search.trim().toLowerCase())
 const ratingAverageText = computed(() => (ratingSummary.value ? ratingSummary.value.average.toFixed(1) : '0.0'))
 const ratingCount = computed(() => ratingSummary.value?.count ?? 0)
 const ratingValue = computed(() => Math.round(ratingSummary.value?.average ?? 0))
+
+const sharedDetail = computed<SharedPluginDetail | null>(() => {
+  const plugin = selectedPlugin.value
+  if (!plugin) return null
+
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    summary: plugin.summary,
+    author: plugin.author ? { name: plugin.author.name, avatarColor: plugin.author.avatarColor } : undefined,
+    category: {
+      id: plugin.category,
+      label: resolveCategoryLabel(plugin.category),
+    },
+    badges: plugin.badges,
+    installs: plugin.installs,
+    official: plugin.isOfficial,
+    trustLevel: plugin.isOfficial ? 'official' : undefined,
+    iconUrl: plugin.iconUrl ?? null,
+    latestVersion: plugin.latestVersion ? { ...plugin.latestVersion } : undefined,
+    versions: plugin.versions?.map(version => ({ ...version })) ?? [],
+    readme: {
+      markdown: plugin.readmeMarkdown ?? plugin.latestVersion?.readmeMarkdown ?? null,
+    },
+  }
+})
+
+const installsText = computed(() => {
+  if (!selectedPlugin.value) return ''
+  return t('dashboard.plugins.stats.installs', { count: formatInstalls(selectedPlugin.value.installs) })
+})
+
+const versionText = computed(() => {
+  const version = selectedPlugin.value?.latestVersion?.version
+  return version ? `v${version}` : ''
+})
+
+const updatedText = computed(() => {
+  const updatedAt = selectedPlugin.value?.latestVersion?.createdAt
+  return updatedAt ? formatDate(updatedAt) : ''
+})
 
 function resetReviewState() {
   reviews.value = []
@@ -199,11 +241,6 @@ function closePluginDetail() {
   selectedPlugin.value = null
   detailError.value = null
   resetReviewState()
-}
-
-function openExternal(url: string) {
-  if (import.meta.client)
-    window.open(url, '_blank', 'noopener')
 }
 
 const filteredPlugins = computed(() => {
@@ -335,101 +372,22 @@ useSeoMeta({
         {{ detailError }}
       </div>
       <div v-else-if="selectedPlugin" class="space-y-6">
-        <header class="space-y-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-2xl text-black font-semibold dark:text-light">
-              {{ selectedPlugin.name }}
-            </h2>
-            <Tag :label="resolveCategoryLabel(selectedPlugin.category)" size="sm" icon="i-carbon-tag" />
-            <Tag
-              v-if="selectedPlugin.isOfficial"
-              :label="t('market.badges.official')"
-              size="sm"
-              icon="i-carbon-certificate"
-            />
-          </div>
-          <p class="text-sm text-black/70 dark:text-light/80">
-            {{ selectedPlugin.summary }}
-          </p>
-          <p
-            v-if="selectedPlugin.author?.name"
-            class="text-xs text-black/50 dark:text-light/60"
-          >
-            {{ t('market.detail.author', { name: selectedPlugin.author.name }) }}
-          </p>
-          <div class="flex flex-wrap gap-2 text-xs text-black/60 dark:text-light/60">
-            <Tag :label="t('dashboard.sections.plugins.stats.installs', { count: formatInstalls(selectedPlugin.installs) })" size="sm" icon="i-carbon-user-multiple" />
-            <Tag
-              v-if="selectedPlugin.latestVersion"
-              :label="`v${selectedPlugin.latestVersion.version}`"
-              size="sm"
-              icon="i-carbon-cube"
-            />
-            <Tag
-              v-if="selectedPlugin.latestVersion"
-              :label="formatDate(selectedPlugin.latestVersion.createdAt)"
-              size="sm"
-              icon="i-carbon-time"
-            />
-          </div>
-          <div
-            v-if="selectedPlugin.badges?.length"
-            class="flex flex-wrap gap-2"
-          >
-            <Tag v-for="badge in selectedPlugin.badges" :key="badge" :label="badge" size="sm" icon="i-carbon-tag" />
-          </div>
-        </header>
-
-        <section>
-          <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
-            {{ t('market.detail.readme') }}
-          </h3>
-          <div v-if="selectedPlugin.readmeMarkdown" class="mt-3 max-w-none prose prose-sm dark:prose-invert">
-            <ContentRendererMarkdown :value="selectedPlugin.readmeMarkdown" />
-          </div>
-          <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
-            {{ t('market.detail.noReadme') }}
-          </p>
-        </section>
-
-        <section>
-          <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
-            {{ t('market.detail.versions') }}
-          </h3>
-          <div
-            v-if="selectedPlugin.versions?.length"
-            class="mt-3 space-y-3"
-          >
-            <article
-              v-for="version in selectedPlugin.versions"
-              :key="version.id"
-              class="border border-primary/10 rounded-2xl bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-2 text-black font-semibold dark:text-light">
-                  <span>v{{ version.version }}</span>
-                  <StatusBadge :text="version.channel" status="info" size="sm" />
-                </div>
-                <span class="text-xs text-black/50 dark:text-light/60">
-                  {{ formatDate(version.createdAt) }} · {{ formatPackageSize(version.packageSize) }}
-                </span>
-              </div>
-              <p v-if="version.changelog" class="mt-2 text-sm text-black/70 leading-relaxed dark:text-light/70">
-                {{ version.changelog }}
-              </p>
-              <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                <Button size="small" @click="openExternal(version.packageUrl)">
-                  <span class="i-carbon-download text-sm" aria-hidden="true" />
-                  {{ t('market.detail.download') }}
-                </Button>
-                <Tag :label="`${version.signature.slice(0, 12)}…`" size="sm" icon="i-carbon-hash" />
-              </div>
-            </article>
-          </div>
-          <p v-else class="mt-3 text-sm text-black/60 dark:text-light/60">
-            {{ t('market.detail.noVersions') }}
-          </p>
-        </section>
+        <SharedPluginDetailContent
+          v-if="sharedDetail"
+          :detail="sharedDetail"
+          :show-meta="false"
+          :readme-title="t('market.detail.readme')"
+          :empty-readme-text="t('market.detail.noReadme')"
+          :versions-title="t('market.detail.versions')"
+          :empty-versions-text="t('market.detail.noVersions')"
+          :official-label="t('market.badges.official')"
+          :installs-text="installsText"
+          :version-text="versionText"
+          :updated-text="updatedText"
+          :format-date="formatDate"
+          :format-number="formatInstalls"
+          :format-size="formatPackageSize"
+        />
 
         <section>
           <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
