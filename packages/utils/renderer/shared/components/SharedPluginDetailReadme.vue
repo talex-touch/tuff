@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SharedPluginReadme } from '../plugin-detail'
+import { marked } from 'marked'
 import { computed } from 'vue'
 
 interface Props {
@@ -14,10 +15,16 @@ const props = withDefaults(defineProps<Props>(), {
   emptyText: 'No README'
 })
 
+marked.setOptions({
+  breaks: true,
+  gfm: true
+})
+
 const renderedReadme = computed(() => {
   const markdown = props.readme?.markdown?.trim()
   if (!markdown) return ''
-  return props.renderMarkdown ? props.renderMarkdown(markdown) : markdown
+  // NOTE: Markdown is not sanitized; caller should ensure content is trusted or provide a safe renderer.
+  return props.renderMarkdown ? props.renderMarkdown(markdown) : marked.parse(markdown)
 })
 </script>
 
