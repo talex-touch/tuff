@@ -12,6 +12,15 @@ interface PollingTask {
   nextRunMs: number
 }
 
+type PollingTaskStats = {
+  count: number
+  lastStartAt: number
+  lastEndAt: number
+  lastDurationMs: number
+  maxDurationMs: number
+  lastMeta?: Record<string, unknown>
+}
+
 type TimeUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours'
 
 export class PollingService {
@@ -22,16 +31,7 @@ export class PollingService {
   private quitListenerCleanup?: () => void
   private activeTasks = new Map<string, number>()
   private startAttempts = new Map<string, { count: number, lastAt: number }>()
-  private taskStats = new Map<
-    string,
-    {
-      count: number
-      lastStartAt: number
-      lastEndAt: number
-      lastDurationMs: number
-      maxDurationMs: number
-    }
-  >()
+  private taskStats = new Map<string, PollingTaskStats>()
 
   private constructor() {
     // Private constructor to enforce singleton pattern
@@ -108,6 +108,19 @@ export class PollingService {
     if (this.isRunning) {
       this._reschedule()
     }
+  }
+
+  public setTaskMeta(id: string, meta: Record<string, unknown> | null): void {
+    if (!meta) return
+    const stats = this.taskStats.get(id) ?? {
+      count: 0,
+      lastStartAt: 0,
+      lastEndAt: 0,
+      lastDurationMs: 0,
+      maxDurationMs: 0,
+    }
+    stats.lastMeta = meta
+    this.taskStats.set(id, stats)
   }
 
   /**
@@ -272,6 +285,9 @@ export class PollingService {
             lastDurationMs: 0,
             maxDurationMs: 0,
           }
+          if (this.taskStats.get(task.id)?.lastMeta) {
+            stats.lastMeta = this.taskStats.get(task.id)?.lastMeta
+          }
           stats.count += 1
           stats.lastStartAt = startAt
           stats.lastEndAt = endAt
@@ -299,6 +315,7 @@ export class PollingService {
       lastDurationMs?: number
       maxDurationMs?: number
       count?: number
+      lastMeta?: Record<string, unknown>
     }>
     recentTasks: Array<{
       id: string
@@ -308,6 +325,7 @@ export class PollingService {
       maxDurationMs: number
       intervalMs?: number
       nextRunMs?: number
+      lastMeta?: Record<string, unknown>
     }>
     startAttempts: Array<{ caller: string, count: number, ageMs: number }>
   } {
@@ -322,6 +340,7 @@ export class PollingService {
         lastDurationMs: this.taskStats.get(id)?.lastDurationMs,
         maxDurationMs: this.taskStats.get(id)?.maxDurationMs,
         count: this.taskStats.get(id)?.count,
+        lastMeta: this.taskStats.get(id)?.lastMeta,
       }))
       .sort((a, b) => b.ageMs - a.ageMs)
       .slice(0, 6)
@@ -334,6 +353,7 @@ export class PollingService {
         maxDurationMs: stat.maxDurationMs,
         intervalMs: this.tasks.get(id)?.intervalMs,
         nextRunMs: this.tasks.get(id)?.nextRunMs,
+        lastMeta: stat.lastMeta,
       }))
       .sort((a, b) => b.lastEndAt - a.lastEndAt)
       .slice(0, 6)

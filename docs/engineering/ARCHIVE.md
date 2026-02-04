@@ -102,6 +102,15 @@
   2. `CoreBoxModule` 在 `onInit`/`onDestroy` 调用 `searchLogger.init/destroy`。
   3. 避免 storage 未就绪时触发 `useMainStorage()` 报错。
 
+## docs/engineering/todo.md
+- 状态：部分归档（2026-02-04）
+- 已完成摘要：
+  1. Plugin 详情页收缩与滚动统一到 TouchScroll，覆盖主页面与多个子模块（Issues/Storage/Popover/JSON 横滚）。
+  2. TxScroll 回归修复：不可滚动时不吞 wheel，TTabs 高度链路修正。
+  3. 渐变模糊接入 ViewTemplate 与 TuffAsideTemplate。
+  4. 全局 TxScroll 迁移：FlowSelector / IntelligenceAuditPage / TPopperDialog。
+- 待办：保留在 `docs/engineering/todo.md`。
+
 ## 文档盘点（2026-02-03）
 - 状态：待处理（作为后续逐项确认的索引）
 - 建议顺序：

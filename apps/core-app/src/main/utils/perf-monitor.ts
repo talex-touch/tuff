@@ -458,7 +458,9 @@ export class PerfMonitor {
     this.pushIncident(incident)
 
     const shouldLog = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
-    if (shouldLog) {
+    const shouldLogDiagnostic =
+      lagMs >= 500 && this.shouldLog('event_loop.lag:diagnostic', 10000, now)
+    if (shouldLog || shouldLogDiagnostic) {
       const contexts = getPerfContextSnapshot(3)
       const pollingDiagnostics = pollingService.getDiagnostics()
       const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
@@ -480,7 +482,27 @@ export class PerfMonitor {
           ageMs: Math.max(0, now - task.lastEndAt),
           intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
           maxDurationMs: Math.round(task.maxDurationMs),
-          count: task.count
+          count: task.count,
+          phaseDurations:
+            typeof task.lastMeta === 'object' && task.lastMeta
+              ? (task.lastMeta as { phaseDurations?: Record<string, number> }).phaseDurations
+              : undefined
+        }))
+      const slowPollingRecent = pollingDiagnostics.recentTasks
+        .filter((task) => now - task.lastEndAt <= 10000)
+        .sort((a, b) => b.lastDurationMs - a.lastDurationMs)
+        .slice(0, 3)
+        .map((task) => ({
+          id: task.id,
+          durationMs: Math.round(task.lastDurationMs),
+          ageMs: Math.max(0, now - task.lastEndAt),
+          intervalMs: typeof task.intervalMs === 'number' ? Math.round(task.intervalMs) : undefined,
+          maxDurationMs: Math.round(task.maxDurationMs),
+          count: task.count,
+          phaseDurations:
+            typeof task.lastMeta === 'object' && task.lastMeta
+              ? (task.lastMeta as { phaseDurations?: Record<string, number> }).phaseDurations
+              : undefined
         }))
       const primaryContext = contexts[0]
         ? `${contexts[0].label} ${formatDuration(contexts[0].durationMs)}`
@@ -515,27 +537,39 @@ export class PerfMonitor {
         pollingRecent,
         primaryPollingActive,
         primaryPollingRecent,
-        lastSlowIpc
+        lastSlowIpc,
+        slowPollingRecent
       })
-      if (severity === 'error') {
-        loopPerfLog.error(message, { meta })
-      } else {
-        loopPerfLog.warn(message, { meta })
+      if (shouldLog) {
+        if (severity === 'error') {
+          loopPerfLog.error(message, { meta })
+        } else {
+          loopPerfLog.warn(message, { meta })
+        }
       }
 
-      appendWorkflowDebugLog({
-        hid: 'H4',
-        loc: 'perf-monitor.recordEventLoopLag',
-        msg: 'event_loop.lag',
-        data: {
-          lagMs,
-          severity,
-          contexts,
-          pollingActive,
-          pollingRecent,
-          lastSlowIpc
-        }
-      })
+      if (shouldLogDiagnostic) {
+        loopPerfLog.warn(`Event loop lag diagnostics ${formatDuration(lagMs)}`, {
+          meta: toLogMeta({ lagMs: Math.round(lagMs), slowPollingRecent })
+        })
+      }
+
+      if (shouldLog) {
+        appendWorkflowDebugLog({
+          hid: 'H4',
+          loc: 'perf-monitor.recordEventLoopLag',
+          msg: 'event_loop.lag',
+          data: {
+            lagMs,
+            severity,
+            contexts,
+            pollingActive,
+            pollingRecent,
+            lastSlowIpc,
+            slowPollingRecent
+          }
+        })
+      }
     }
   }
 

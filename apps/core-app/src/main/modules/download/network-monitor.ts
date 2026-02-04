@@ -1,6 +1,15 @@
 import type { NetworkStatus } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 
+type NetworkMonitorMode = 'full' | 'light'
+
+type NetworkMonitorDiagnostics = {
+  mode: NetworkMonitorMode
+  cacheHit: boolean
+  measuredAt: number
+  phaseDurations: Record<string, number>
+}
+
 /**
  * Network monitoring service for tracking network speed, latency, and stability.
  * Provides recommendations for optimal download concurrency based on network conditions.
@@ -15,48 +24,134 @@ export class NetworkMonitor {
   private cachedStatus: NetworkStatus | null = null
   private readonly cacheTimeout = 5000
   private networkAvailable = true
+  private inFlight: Promise<NetworkStatus> | null = null
+  private lastDiagnostics: NetworkMonitorDiagnostics | null = null
 
   /**
    * Monitors network conditions and returns current status with caching.
    * @returns Promise resolving to current network status
    */
-  async monitorNetwork(): Promise<NetworkStatus> {
+  async monitorNetwork(options?: {
+    cacheTtlMs?: number
+    mode?: NetworkMonitorMode
+  }): Promise<NetworkStatus> {
     const now = Date.now()
+    const mode = options?.mode ?? 'full'
+    const cacheTtlMs = options?.cacheTtlMs ?? this.cacheTimeout
 
-    if (this.cachedStatus && now - this.lastCheckTime < this.cacheTimeout) {
+    if (this.cachedStatus && now - this.lastCheckTime < cacheTtlMs) {
+      this.lastDiagnostics = {
+        mode,
+        cacheHit: true,
+        measuredAt: now,
+        phaseDurations: { cacheHit: 0 }
+      }
       return this.cachedStatus
     }
 
+    if (this.inFlight) {
+      return this.inFlight
+    }
+
+    const run = (async () => {
+      const startedAt = Date.now()
+      const phaseDurations: Record<string, number> = {}
+      const markDuration = (label: string, phaseStart: number) => {
+        phaseDurations[label] = Math.max(0, Date.now() - phaseStart)
+      }
+
+      try {
+        let speed: number
+        let latency: number
+
+        if (mode === 'light') {
+          const speedStart = Date.now()
+          speed =
+            this.speedHistory.length > 0
+              ? this.speedHistory.reduce((sum, value) => sum + value, 0) / this.speedHistory.length
+              : 1024 * 1024
+          markDuration('speed', speedStart)
+
+          const latencyStart = Date.now()
+          latency =
+            this.latencyHistory.length > 0
+              ? this.latencyHistory.reduce((sum, value) => sum + value, 0) /
+                this.latencyHistory.length
+              : 100
+          markDuration('latency', latencyStart)
+        } else {
+          const speedPromise = (async () => {
+            const speedStart = Date.now()
+            const value = await this.measureSpeed()
+            markDuration('speed', speedStart)
+            return value
+          })()
+          const latencyPromise = (async () => {
+            const latencyStart = Date.now()
+            const value = await this.measureLatency()
+            markDuration('latency', latencyStart)
+            return value
+          })()
+
+          const results = await Promise.all([speedPromise, latencyPromise])
+          speed = results[0]
+          latency = results[1]
+        }
+
+        const stabilityStart = Date.now()
+        const stability = this.calculateStability()
+        markDuration('stability', stabilityStart)
+
+        const concurrencyStart = Date.now()
+        const recommendedConcurrency = this.getRecommendedConcurrency(speed, latency, stability)
+        markDuration('recommendedConcurrency', concurrencyStart)
+
+        this.cachedStatus = {
+          speed,
+          latency,
+          stability,
+          recommendedConcurrency
+        }
+
+        this.lastCheckTime = Date.now()
+        this.networkAvailable = true
+        phaseDurations.total = Math.max(0, Date.now() - startedAt)
+        this.lastDiagnostics = {
+          mode,
+          cacheHit: false,
+          measuredAt: this.lastCheckTime,
+          phaseDurations
+        }
+        return this.cachedStatus
+      } catch (error) {
+        console.error('Network monitoring failed:', error)
+        this.networkAvailable = false
+
+        const defaultStatus = {
+          speed: 1024 * 1024,
+          latency: 100,
+          stability: 0.5,
+          recommendedConcurrency: 2
+        }
+
+        this.cachedStatus = defaultStatus
+        this.lastCheckTime = Date.now()
+        phaseDurations.total = Math.max(0, Date.now() - startedAt)
+        this.lastDiagnostics = {
+          mode,
+          cacheHit: false,
+          measuredAt: this.lastCheckTime,
+          phaseDurations
+        }
+        return defaultStatus
+      }
+    })()
+
+    this.inFlight = run
     try {
-      const speed = await this.measureSpeed()
-      const latency = await this.measureLatency()
-      const stability = this.calculateStability()
-      const recommendedConcurrency = this.getRecommendedConcurrency(speed, latency, stability)
-
-      this.cachedStatus = {
-        speed,
-        latency,
-        stability,
-        recommendedConcurrency
-      }
-
-      this.lastCheckTime = now
-      this.networkAvailable = true
-      return this.cachedStatus
-    } catch (error) {
-      console.error('Network monitoring failed:', error)
-      this.networkAvailable = false
-
-      const defaultStatus = {
-        speed: 1024 * 1024,
-        latency: 100,
-        stability: 0.5,
-        recommendedConcurrency: 2
-      }
-
-      this.cachedStatus = defaultStatus
-      this.lastCheckTime = now
-      return defaultStatus
+      return await run
+    } finally {
+      this.inFlight = null
     }
   }
 
@@ -73,6 +168,10 @@ export class NetworkMonitor {
         recommendedConcurrency: 2
       }
     )
+  }
+
+  getLastDiagnostics(): NetworkMonitorDiagnostics | null {
+    return this.lastDiagnostics
   }
 
   /**
@@ -281,7 +380,7 @@ export class NetworkMonitor {
       taskId,
       async () => {
         const oldStatus = this.cachedStatus
-        const newStatus = await this.monitorNetwork()
+        const newStatus = await this.monitorNetwork({ cacheTtlMs: 30000 })
 
         if (oldStatus && this.hasSignificantChange(oldStatus, newStatus)) {
           callback(newStatus)
