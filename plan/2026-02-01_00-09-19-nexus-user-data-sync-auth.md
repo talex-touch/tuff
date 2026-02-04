@@ -149,6 +149,30 @@ created_at: 2026-02-01T00:09:31+08:00
 ### 恢复路径
 - 用户升级或释放空间后触发重新校验，恢复写入并清空本地暂存队列。
 
+## API 与错误码规范
+
+### 认证
+- POST /api/v1/auth/oidc/start -> { auth_url }
+- POST /api/v1/auth/oidc/callback -> { access_token, refresh_token, expires_in }
+- POST /api/v1/auth/logout -> { success }
+
+### 同步
+- POST /api/v1/sync/handshake -> { sync_token, server_cursor }
+- POST /api/v1/sync/push -> { ack_cursor, conflicts[] }
+- GET /api/v1/sync/pull?cursor= -> { items[], oplog[], next_cursor }
+
+### 配额
+- GET /api/v1/quotas -> { limits, usage }
+- POST /api/v1/quotas/validate -> { ok, code }
+
+### 密钥
+- POST /api/v1/keys/register -> { keyring_id }
+- POST /api/v1/keys/rotate -> { rotated_at }
+
+### 错误码与版本策略
+- error_code 采用大写枚举（例：QUOTA_STORAGE_EXCEEDED）。
+- 版本策略：/api/v1 前缀，向后兼容新增字段，不破坏已有响应。
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
