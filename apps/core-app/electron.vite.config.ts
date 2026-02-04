@@ -21,9 +21,11 @@ const workspaceRoot = path.resolve(__dirname, '..', '..')
 const basePath = path.join(__dirname, 'src')
 const rendererPath = path.join(basePath, 'renderer', 'src')
 const tuffexRoot = path.join(workspaceRoot, 'packages', 'tuffex')
+const utilsRoot = path.join(workspaceRoot, 'packages', 'utils')
 const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src', 'index.ts')
 const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
+const utilsRendererEntry = path.join(utilsRoot, 'renderer', 'index.ts')
 // Disable sourcemap in production/release builds to reduce package size
 const isProduction =
   process.env.BUILD_TYPE === 'release' ||
@@ -36,6 +38,7 @@ const tuffexAliases = isProduction
       { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
       { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry }
     ]
+const utilsAliases = [{ find: /^@talex-touch\/utils\/renderer$/, replacement: utilsRendererEntry }]
 const tuffexDevPlugins: PluginOption[] = isProduction
   ? []
   : [
@@ -156,7 +159,8 @@ export default defineConfig({
           find: /^assets\//,
           replacement: `${path.join(rendererPath, 'assets')}/`
         },
-        ...tuffexAliases
+        ...tuffexAliases,
+        ...utilsAliases
       ]
     },
     server: {
