@@ -6,6 +6,9 @@ interface Props {
   detail: SharedPluginDetail
   formatDate?: (value: string | number | Date) => string
   formatNumber?: (value: number) => string
+  installsText?: string
+  versionText?: string
+  updatedText?: string
   officialLabel?: string
   installsLabel?: string
   versionLabel?: string
@@ -26,6 +29,12 @@ const displayInstalls = computed(() => {
   return props.formatNumber ? props.formatNumber(props.detail.installs) : `${props.detail.installs}`
 })
 
+const installsPillText = computed(() => {
+  if (props.installsText) return props.installsText
+  if (!displayInstalls.value) return ''
+  return `${props.installsLabel} · ${displayInstalls.value}`
+})
+
 const updatedAtValue = computed(() => {
   return props.detail.updatedAt ?? props.detail.latestVersion?.createdAt
 })
@@ -40,6 +49,18 @@ const displayUpdatedAt = computed(() => {
 const displayVersion = computed(() => props.detail.latestVersion?.version ?? '')
 
 const isOfficial = computed(() => props.detail.official || props.detail.trustLevel === 'official')
+
+const versionPillText = computed(() => {
+  if (props.versionText) return props.versionText
+  if (!displayVersion.value) return ''
+  return `${props.versionLabel} · v${displayVersion.value}`
+})
+
+const updatedPillText = computed(() => {
+  if (props.updatedText) return props.updatedText
+  if (!displayUpdatedAt.value) return ''
+  return `${props.updatedLabel} · ${displayUpdatedAt.value}`
+})
 </script>
 
 <template>
@@ -71,14 +92,14 @@ const isOfficial = computed(() => props.detail.official || props.detail.trustLev
     </p>
 
     <div class="flex flex-wrap gap-2 text-xs text-black/60">
-      <span v-if="displayInstalls" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
-        {{ installsLabel }} · {{ displayInstalls }}
+      <span v-if="installsPillText" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
+        {{ installsPillText }}
       </span>
-      <span v-if="displayVersion" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
-        {{ versionLabel }} · v{{ displayVersion }}
+      <span v-if="versionPillText" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
+        {{ versionPillText }}
       </span>
-      <span v-if="displayUpdatedAt" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
-        {{ updatedLabel }} · {{ displayUpdatedAt }}
+      <span v-if="updatedPillText" class="inline-flex items-center rounded-full bg-black/5 px-2 py-0.5">
+        {{ updatedPillText }}
       </span>
     </div>
 
