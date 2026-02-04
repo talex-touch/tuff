@@ -116,7 +116,7 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: ['@talex-touch/tuffex'],
+    transpile: ['@talex-touch/tuffex', '@talex-touch/utils'],
   },
 
   future: {
