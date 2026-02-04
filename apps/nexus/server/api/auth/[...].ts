@@ -63,6 +63,7 @@ function getAuthOptions(event: H3Event) {
         allowDangerousEmailAccountLinking: true
       }),
       Email({
+        server: config.auth?.email?.server ?? 'smtp://localhost',
         from: config.auth?.email?.from,
         sendVerificationRequest: async ({ identifier, url }) => {
           await sendEmail({
@@ -115,4 +116,3 @@ export default defineEventHandler((event) => {
   const handler = NuxtAuthHandler(getAuthOptions(event))
   return handler(event)
 })
-
