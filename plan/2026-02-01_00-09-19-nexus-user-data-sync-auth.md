@@ -80,6 +80,22 @@ created_at: 2026-02-01T00:09:31+08:00
 字段：id(uuid, PK)，user_id(uuid)，device_id(uuid)，key_type(string)，encrypted_key(blob)，recovery_code_hash(string)，rotated_at(timestamp)，created_at(timestamp)
 索引/约束：UNIQUE(user_id, device_id, key_type)，INDEX(user_id, key_type)
 
+## E2EE 密钥体系
+
+### 层级与用途
+- 主密钥（MK）：用户级主密钥，本地生成并仅在端内使用；用于包裹设备密钥，不上传明文。
+- 设备密钥（DK）：每设备生成，用于包裹数据密钥；随设备解绑/重装可撤销。
+- 数据密钥（DEK）：按 item 或 blob 生成，用于实际 payload 加解密；可随版本更新轮换。
+
+### 恢复与轮换
+- 恢复码：首次启用生成恢复码，仅存储 hash + salt；用于重装后解锁 MK 并重包 DK。
+- 轮换策略：设备异常/丢失时旋转 DK；敏感数据变更时旋转 DEK；MK 轮换需全量重包 DK。
+
+### 明文元数据字段清单（最小化）
+- item：id，type，schema_version，device_id，updated_at，deleted_at，op_seq，payload_size
+- blob：id，object_key，size_bytes，content_type，sha256
+- 同步控制：cursor，op_hash（用于幂等校验）
+
 ⚠️ 风险与注意事项
 - E2EE 带来密钥丢失不可恢复风险，需要强制恢复码与多设备冗余机制。
 - 实时同步与定时对账可能导致重复写入或冲突扩大，需严格 cursor 与幂等控制。
