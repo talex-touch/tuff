@@ -81,6 +81,7 @@ export class DownloadCenterModule extends BaseModule {
   private readonly pollingService = PollingService.getInstance()
   private readonly networkMonitorTaskId = 'download-center.network-monitor'
   private readonly progressUpdateTaskId = 'download-center.progress-update'
+  private networkMonitorInFlight = false
 
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
@@ -1107,9 +1108,28 @@ export class DownloadCenterModule extends BaseModule {
 
   // 启动网络监控
   private startNetworkMonitoring(): void {
+    const getMonitorOptions = () => {
+      const hasActiveTasks = this.taskQueue.getActiveTasks().length > 0
+      return {
+        cacheTtlMs: hasActiveTasks ? 5000 : 120000,
+        mode: hasActiveTasks ? 'full' : 'light'
+      } as const
+    }
+
+    const applyDiagnosticsMeta = () => {
+      const diagnostics = this.networkMonitor.getLastDiagnostics()
+      if (!diagnostics) return
+      this.pollingService.setTaskMeta(this.networkMonitorTaskId, {
+        cacheHit: diagnostics.cacheHit,
+        mode: diagnostics.mode,
+        phaseDurations: diagnostics.phaseDurations
+      })
+    }
+
     // 初始网络状态检查
-    this.networkMonitor.monitorNetwork().then((status) => {
+    this.networkMonitor.monitorNetwork(getMonitorOptions()).then((status) => {
       this.priorityCalculator.setNetworkStatus(status)
+      applyDiagnosticsMeta()
     })
 
     // 定期更新网络状态
@@ -1119,15 +1139,30 @@ export class DownloadCenterModule extends BaseModule {
     this.pollingService.register(
       this.networkMonitorTaskId,
       async () => {
-        const status = await this.networkMonitor.monitorNetwork()
-        this.priorityCalculator.setNetworkStatus(status)
+        if (this.networkMonitorInFlight) {
+          this.pollingService.setTaskMeta(this.networkMonitorTaskId, {
+            skipped: 'in-flight',
+            cacheHit: true,
+            mode: 'light'
+          })
+          return
+        }
+
+        this.networkMonitorInFlight = true
+        try {
+          const status = await this.networkMonitor.monitorNetwork(getMonitorOptions())
+          this.priorityCalculator.setNetworkStatus(status)
+          applyDiagnosticsMeta()
+        } finally {
+          this.networkMonitorInFlight = false
+        }
 
         // 根据网络状况调整并发数
         if (this.config.concurrency.autoAdjust) {
           this.concurrencyAdjuster.adjustConcurrency()
         }
       },
-      { interval: 30, unit: 'seconds' }
+      { interval: 30, unit: 'seconds', initialDelayMs: 1000 + Math.floor(Math.random() * 5000) }
     )
     this.pollingService.start()
   }
