@@ -2,6 +2,10 @@
 title: "LoadingOverlay 加载遮罩"
 description: "用于在内容区域或全屏展示加载遮罩。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [loading, overlay, mask]
+syncStatus: migrated
 ---
 # LoadingOverlay 加载遮罩
 

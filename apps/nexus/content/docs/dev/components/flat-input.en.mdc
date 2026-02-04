@@ -2,6 +2,7 @@
 title: FlatInput
 description: Minimal input with flat styling
 category: Form
+syncStatus: migrated
 ---
 
 # FlatInput

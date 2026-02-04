@@ -2,6 +2,7 @@
 title: "Transition 动效"
 description: "用于内容切换（X）与列表增删（Y）的通用过渡封装。"
 category: Layout
+syncStatus: migrated
 ---
 # Transition 动效
 

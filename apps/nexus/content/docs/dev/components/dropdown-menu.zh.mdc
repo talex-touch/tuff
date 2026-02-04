@@ -2,6 +2,7 @@
 title: "DropdownMenu 下拉菜单"
 description: "基于 Popover 的下拉菜单（Windows 风格）。"
 category: Form
+syncStatus: migrated
 ---
 # DropdownMenu 下拉菜单
 

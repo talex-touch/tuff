@@ -2,6 +2,7 @@
 title: "SearchSelect 搜索选择器"
 description: "搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。"
 category: Form
+syncStatus: migrated
 ---
 # SearchSelect 搜索选择器
 

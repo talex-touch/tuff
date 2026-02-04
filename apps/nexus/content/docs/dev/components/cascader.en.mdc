@@ -2,6 +2,7 @@
 title: "Cascader 级联选择"
 description: "用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。"
 category: Form
+syncStatus: migrated
 ---
 # Cascader 级联选择
 

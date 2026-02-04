@@ -2,6 +2,7 @@
 title: "TreeSelect 树选择器"
 description: "用于在下拉浮层中选择树形数据，支持搜索、单选/多选。"
 category: Form
+syncStatus: migrated
 ---
 # TreeSelect 树选择器
 

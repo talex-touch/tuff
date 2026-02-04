@@ -2,6 +2,7 @@
 title: Rating
 description: Star rating input
 category: Form
+syncStatus: migrated
 ---
 
 # Rating

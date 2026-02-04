@@ -2,6 +2,7 @@
 title: "Tabs 标签页"
 description: "用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。"
 category: Layout
+syncStatus: migrated
 ---
 # Tabs 标签页
 

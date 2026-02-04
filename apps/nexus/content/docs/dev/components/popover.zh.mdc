@@ -2,6 +2,10 @@
 title: "Popover 弹出层"
 description: "基于 Floating UI 的点击弹出层。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [popover, overlay, floating]
+syncStatus: migrated
 ---
 # Popover 弹出层
 

@@ -1,101 +1,296 @@
 ---
 title: Dialog
-description: Confirmation flows and critical decisions
+description: Critical confirmations and multi-style dialogs
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [dialog, modal, confirm]
+syncStatus: migrated
 ---
 
 # Dialog
 
-> For critical confirmations, with strict focus control and hierarchy.  
-> **Status**: Beta
+Dialogs surface important information and confirmations, including BottomDialog / BlowDialog / PopperDialog / TouchTip variants.
 
+<script setup lang="ts">
+import { ref } from 'vue'
 
-## Basic Usage
-::TuffCodeBlock{lang="vue"}
+const bottomOpen = ref(false)
+const blowOpen = ref(false)
+const popperOpen = ref(false)
+const tipOpen = ref(false)
+</script>
+
+## BottomDialog
+
+Bottom-aligned dialog with customizable buttons and motion.
+
+::TuffDemo{title="BottomDialog" description="Bottom sheet confirmation dialog." code-lang="vue"}
 ---
 code: |
   <template>
-    <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
-    <TxModal v-model="dialogOpen" title="Delete project">
-      <p>This action cannot be undone. Continue?</p>
-    </TxModal>
-  </template>
----
-::
-
-## Demo
-::TuffDemo{title="Critical Confirm" description="Keep focus and a decisive hierarchy." code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton @click="dialogOpen = true">Open Dialog</TxButton>
-    <TxModal v-model="dialogOpen" title="Delete project">
-      <p>This action cannot be undone. Continue?</p>
-      <template #footer>
-        <TxButton variant="ghost">Cancel</TxButton>
-        <TxButton>Confirm</TxButton>
-      </template>
-    </TxModal>
-  </template>
----
-#preview
-<tuff-dialog-demo
-  trigger-label="Open Dialog"
-  title="Delete project"
-  content="This action cannot be undone. Continue?"
-  cancel-label="Cancel"
-  confirm-label="Confirm"
-/>
-::
-
-## Interaction Notes
-- Lock background scroll on open.  
-- Primary action must be explicit.  
-- ESC and overlay close should be configurable.
-
-## API (Lite)
-::TuffPropsTable
----
-rows:
-  - name: modelValue
-    type: 'boolean'
-    default: 'false'
-    description: 'Dialog visibility'
-  - name: title
-    type: 'string'
-    default: "''"
-    description: 'Title'
-  - name: width
-    type: 'string'
-    default: "'480px'"
-    description: 'Width'
----
-::
-
-## Design Notes
-- Prioritize hierarchy and readability over decoration.  
-- Keep motion short and decisive.
-
-## Composite Patterns
-::TuffDemo{title="Destructive Flow" description="Dialog paired with clear visual warnings." code-lang="vue"}
----
-code: |
-  <template>
-    <TxButton variant="danger">Delete</TxButton>
-    <TxModal v-model="open" title="Delete project">
-      <TxTag>Irreversible</TxTag>
-    </TxModal>
+    <TxButton @click="bottomOpen = true">Show dialog</TxButton>
+    <TxBottomDialog
+      v-if="bottomOpen"
+      title="Confirm action"
+      message="Are you sure you want to continue?"
+      :btns="[
+        { content: 'Cancel', type: 'info', onClick: () => true },
+        { content: 'Confirm', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (bottomOpen = false)"
+    />
   </template>
 ---
 #preview
-<tuff-dialog-demo
-  trigger-label="Delete"
-  title="Delete project"
-  content="This action cannot be undone."
-  cancel-label="Cancel"
-  confirm-label="Delete"
+<div class="tuff-demo-row">
+  <tx-button @click="bottomOpen = true">Show dialog</tx-button>
+</div>
+<tx-bottom-dialog
+  v-if="bottomOpen"
+  title="Confirm action"
+  message="Are you sure you want to continue?"
+  :btns="[
+    { content: 'Cancel', type: 'info', onClick: () => true },
+    { content: 'Confirm', type: 'success', onClick: async () => true },
+  ]"
+  :close="() => (bottomOpen = false)"
 />
 ::
+
+### Button types
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    { content: 'Info', type: 'info', onClick: () => true },
+    { content: 'Warning', type: 'warning', onClick: () => true },
+    { content: 'Error', type: 'error', onClick: () => true },
+    { content: 'Success', type: 'success', onClick: () => true },
+  ]
+---
+::
+
+### Auto confirm timer
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    {
+      content: 'Auto confirm',
+      type: 'success',
+      time: 5,
+      onClick: () => true,
+    },
+  ]
+---
+::
+
+### Loading state
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const btns = [
+    {
+      content: 'Submit',
+      type: 'success',
+      onClick: async () => {
+        await saveData()
+        return true
+      },
+    },
+  ]
+---
+::
+
+## BlowDialog
+
+A centered dialog with dramatic animation.
+
+::TuffDemo{title="BlowDialog" description="Focused, high-impact dialog." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="blowOpen = true">Show blow dialog</TxButton>
+    <TxBlowDialog
+      v-if="blowOpen"
+      title="Welcome"
+      message="<strong>Hello!</strong> Welcome to the app."
+      :close="() => (blowOpen = false)"
+    />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="blowOpen = true">Show blow dialog</tx-button>
+</div>
+<tx-blow-dialog
+  v-if="blowOpen"
+  title="Welcome"
+  message="<strong>Hello!</strong> Welcome to the app."
+  :close="() => (blowOpen = false)"
+/>
+::
+
+## PopperDialog
+
+::TuffDemo{title="PopperDialog" description="Lightweight popper-style prompt." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="popperOpen = true">Show popper dialog</TxButton>
+    <TxPopperDialog
+      v-if="popperOpen"
+      title="Tip"
+      message="This is a short tip."
+      :close="() => (popperOpen = false)"
+    />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="popperOpen = true">Show popper dialog</tx-button>
+</div>
+<tx-popper-dialog
+  v-if="popperOpen"
+  title="Tip"
+  message="This is a short tip."
+  :close="() => (popperOpen = false)"
+/>
+::
+
+## TouchTip
+
+::TuffDemo{title="TouchTip" description="Touch-friendly guidance prompt." code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="tipOpen = true">Show TouchTip</TxButton>
+    <TxTouchTip
+      v-if="tipOpen"
+      title="Notice"
+      message="Pick an action."
+      :buttons="[
+        { content: 'Cancel', type: 'info', onClick: () => true },
+        { content: 'Confirm', type: 'success', onClick: async () => true },
+      ]"
+      :close="() => (tipOpen = false)"
+    />
+  </template>
+---
+#preview
+<div class="tuff-demo-row">
+  <tx-button @click="tipOpen = true">Show TouchTip</tx-button>
+</div>
+<tx-touch-tip
+  v-if="tipOpen"
+  title="Notice"
+  message="Pick an action."
+  :buttons="[
+    { content: 'Cancel', type: 'info', onClick: () => true },
+    { content: 'Confirm', type: 'success', onClick: async () => true },
+  ]"
+  :close="() => (tipOpen = false)"
+/>
+::
+
+## Custom components
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import CustomContent from './CustomContent.vue'
+
+  function showCustomDialog() {
+    return h(TxBlowDialog, {
+      comp: CustomContent,
+      close: () => {},
+    })
+  }
+---
+::
+
+## Render function
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  function showRenderDialog() {
+    return h(TxBlowDialog, {
+      render: () => h('div', [
+        h('h2', 'Dynamic content'),
+        h('p', 'Created with a render function'),
+      ]),
+      close: () => {},
+    })
+  }
+---
+::
+
+## API
+
+### TxBottomDialog props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Dialog message |
+| `stay` | `number` | `0` | Auto close duration (ms) |
+| `close` | `() => void` | *required* | Close callback |
+| `btns` | `DialogButton[]` | `[]` | Button configs |
+| `icon` | `string` | `''` | Icon class |
+| `index` | `number` | `0` | z-index offset |
+
+### DialogButton interface
+
+::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface DialogButton {
+    content: string
+    type?: 'info' | 'warning' | 'error' | 'success'
+    time?: number
+    onClick: () => Promise<boolean> | boolean
+    loading?: (done: () => void) => void
+  }
+---
+::
+
+### TxBlowDialog props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Message (HTML supported) |
+| `close` | `() => void` | *required* | Close callback |
+| `comp` | `Component` | `undefined` | Custom component |
+| `render` | `() => VNode` | `undefined` | Render function |
+
+### TxPopperDialog props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Dialog title |
+| `message` | `string` | `''` | Message (HTML supported) |
+| `close` | `() => void` | *required* | Close callback |
+| `comp` | `Component` | `undefined` | Custom component |
+| `render` | `() => VNode` | `undefined` | Render function |
+
+### TxTouchTip props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `''` | Title |
+| `message` | `string` | `''` | Message text |
+| `buttons` | `TouchTipButton[]` | `[]` | Button configs |
+| `close` | `() => void` | *required* | Close callback |
+
+### Accessibility
+
+- ESC to close
+- Focus trap inside dialog
+- Focus restore on close
+- ARIA attributes by default

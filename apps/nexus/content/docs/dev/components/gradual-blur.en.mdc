@@ -2,6 +2,7 @@
 title: "GradualBlur 渐变模糊"
 description: "用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。"
 category: Layout
+syncStatus: migrated
 ---
 # GradualBlur 渐变模糊
 

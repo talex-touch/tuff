@@ -2,6 +2,10 @@
 title: "Empty 空状态"
 description: "统一的空状态组件。"
 category: Feedback
+status: beta
+since: 1.0.0
+tags: [empty, state, placeholder]
+syncStatus: migrated
 ---
 # Empty 空状态
 

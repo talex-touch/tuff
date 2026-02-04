@@ -2,6 +2,7 @@
 title: "CornerOverlay 角标容器"
 description: "`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。"
 category: Basic
+syncStatus: migrated
 ---
 # CornerOverlay 角标容器
 

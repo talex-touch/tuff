@@ -2,6 +2,10 @@
 title: "Checkbox 复选框"
 description: "复选框组件，具有 SVG 动画勾选效果。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [checkbox, form, selection]
+syncStatus: migrated
 ---
 # Checkbox 复选框
 

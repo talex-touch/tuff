@@ -2,6 +2,7 @@
 title: Breadcrumb 面包屑
 description: 展示层级路径的导航组件
 category: Layout
+syncStatus: migrated
 ---
 
 # Breadcrumb 面包屑

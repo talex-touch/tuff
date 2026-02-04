@@ -2,6 +2,7 @@
 title: "Stagger 依次进入"
 description: "用于列表/节点依次进入（enter/leave）动画。"
 category: Layout
+syncStatus: migrated
 ---
 # Stagger 依次进入
 
