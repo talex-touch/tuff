@@ -1,9 +1,9 @@
-import { readBody } from 'h3'
+import { getHeader, readBody } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAuth } from '../../../utils/auth'
 import { countActiveDevices, readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
-import { applyQuotaDelta, getOrInitQuota, pushSyncItemsV1, validateQuota } from '../../../utils/syncStoreV1'
+import { applyQuotaDelta, ensureDeviceForSync, getOrInitQuota, getSyncSession, pushSyncItemsV1 } from '../../../utils/syncStoreV1'
 
 type PushBody = paths['/api/v1/sync/push']['post']['requestBody']['content']['application/json']
 type PushResponse = paths['/api/v1/sync/push']['post']['responses']['200']['content']['application/json']
@@ -13,6 +13,13 @@ export default defineEventHandler(async (event) => {
   const deviceId = tokenDeviceId ?? readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+
+  const syncToken = getHeader(event, 'x-sync-token')
+  if (!syncToken)
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing sync token')
+
+  await getSyncSession(event, userId, deviceId, syncToken)
+  await ensureDeviceForSync(event, userId)
 
   const quota = await getOrInitQuota(event, userId)
   const deviceCount = await countActiveDevices(event, userId)
@@ -24,17 +31,12 @@ export default defineEventHandler(async (event) => {
   if (!items)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid payload')
 
-  const activeItems = items.filter(item => item?.op_type !== 'delete')
-  const storageDelta = activeItems.reduce((sum, item) => sum + Number(item?.payload_size ?? 0), 0)
-  const objectsDelta = activeItems.length
-  const itemSize = activeItems.reduce((max, item) => Math.max(max, Number(item?.payload_size ?? 0)), 0)
-  const quotaCheck = await validateQuota(event, userId, { storageDelta, objectsDelta, itemSize })
-  if (!quotaCheck.ok)
-    throw createSyncError(quotaCheck.code!, 403, 'Quota exceeded')
-
   const result = await pushSyncItemsV1(event, userId, deviceId, items as any)
-  if ('errorCode' in result && result.errorCode)
-    throw createSyncError(result.errorCode, 400, 'Invalid payload')
+  if ('errorCode' in result && result.errorCode) {
+    const statusCode = result.errorCode.startsWith('QUOTA_') ? 403 : 400
+    const statusMessage = result.errorCode.startsWith('QUOTA_') ? 'Quota exceeded' : 'Invalid payload'
+    throw createSyncError(result.errorCode, statusCode, statusMessage)
+  }
 
   if (result.appliedStorageDelta || result.appliedObjectsDelta) {
     await applyQuotaDelta(event, userId, {

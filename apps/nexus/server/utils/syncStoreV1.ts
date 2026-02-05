@@ -3,6 +3,7 @@ import type { H3Event } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
 import { countActiveDevices, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
 import { generatePasswordSalt, hashPassword } from './authCrypto'
+import { createSyncError } from './syncErrors'
 
 const SYNC_ITEMS_TABLE = 'sync_items_v1'
 const SYNC_OPLOG_TABLE = 'sync_oplog_v1'
@@ -295,11 +296,24 @@ export async function applyQuotaDelta(event: H3Event, userId: string, payload: {
   await ensureSyncSchemaV1(db)
   await db.prepare(`
     UPDATE ${SYNC_QUOTAS_TABLE}
-    SET used_storage_bytes = used_storage_bytes + ?,
-        used_objects = used_objects + ?,
+    SET used_storage_bytes = CASE
+          WHEN used_storage_bytes + ? < 0 THEN 0
+          ELSE used_storage_bytes + ?
+        END,
+        used_objects = CASE
+          WHEN used_objects + ? < 0 THEN 0
+          ELSE used_objects + ?
+        END,
         updated_at = ?
     WHERE user_id = ?
-  `).bind(payload.storageDelta, payload.objectsDelta, new Date().toISOString(), userId).run()
+  `).bind(
+    payload.storageDelta,
+    payload.storageDelta,
+    payload.objectsDelta,
+    payload.objectsDelta,
+    new Date().toISOString(),
+    userId,
+  ).run()
 }
 
 export async function handshakeSyncSession(event: H3Event, userId: string, deviceId: string) {
@@ -323,33 +337,95 @@ export async function handshakeSyncSession(event: H3Event, userId: string, devic
   return { syncToken, serverCursor, expiresAt }
 }
 
+export async function getSyncSession(event: H3Event, userId: string, deviceId: string, syncToken: string) {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const row = await db.prepare(`
+    SELECT sync_token, expires_at
+    FROM ${SYNC_SESSIONS_TABLE}
+    WHERE user_id = ? AND device_id = ?
+  `).bind(userId, deviceId).first<{ sync_token: string, expires_at: string }>()
+
+  if (!row || row.sync_token !== syncToken) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Sync token invalid')
+  }
+
+  const expiresAt = new Date(row.expires_at).getTime()
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Sync token expired')
+  }
+
+  return { syncToken: row.sync_token, expiresAt: row.expires_at }
+}
+
 export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: string, items: SyncItemInput[]) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const conflicts: SyncConflictItem[] = []
-  let appliedStorageDelta = 0
-  let appliedObjectsDelta = 0
+  const candidates: Array<{
+    item: SyncItemInput
+    updatedAt: string
+    payloadSize: number
+    existing: {
+      updated_at: string
+      updated_by_device_id: string | null
+      payload_size: number | null
+      deleted_at: string | null
+    } | null
+  }> = []
+  let plannedStorageDelta = 0
+  let plannedObjectsDelta = 0
+  let maxItemSize: number | null = null
 
   for (const item of items) {
-    if (!item?.item_id || !item?.op_hash || !item?.op_seq || !item?.updated_at || !item?.type) {
-      return { errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode, conflicts, ackCursor: await getServerCursor(db, userId), appliedStorageDelta: 0, appliedObjectsDelta: 0 }
+    if (!item?.item_id || !item?.op_hash || item?.op_seq == null || !item?.updated_at || !item?.type) {
+      return {
+        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
+        conflicts,
+        ackCursor: await getServerCursor(db, userId),
+        appliedStorageDelta: 0,
+        appliedObjectsDelta: 0,
+      }
+    }
+    if (item.op_type !== 'upsert' && item.op_type !== 'delete') {
+      return {
+        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
+        conflicts,
+        ackCursor: await getServerCursor(db, userId),
+        appliedStorageDelta: 0,
+        appliedObjectsDelta: 0,
+      }
     }
 
     const updatedAt = normalizeUpdatedAt(item.updated_at)
-    const payloadSize = Number(item.payload_size ?? 0)
+    const rawPayloadSize = item.payload_size == null ? null : Number(item.payload_size)
+    if (rawPayloadSize != null && !Number.isFinite(rawPayloadSize)) {
+      return {
+        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
+        conflicts,
+        ackCursor: await getServerCursor(db, userId),
+        appliedStorageDelta: 0,
+        appliedObjectsDelta: 0,
+      }
+    }
 
-    const oplogResult = await db.prepare(`
-      INSERT OR IGNORE INTO ${SYNC_OPLOG_TABLE} (user_id, device_id, op_seq, op_hash, item_id, op_type, updated_at, payload_size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(userId, deviceId, item.op_seq, item.op_hash, item.item_id, item.op_type, updatedAt, payloadSize).run()
+    const existingOplog = await db.prepare(`
+      SELECT cursor FROM ${SYNC_OPLOG_TABLE}
+      WHERE user_id = ? AND device_id = ? AND op_seq = ?
+    `).bind(userId, deviceId, item.op_seq).first<{ cursor: number }>()
 
-    if (!oplogResult?.meta?.changes)
+    if (existingOplog)
       continue
 
     const existing = await db.prepare(`
-      SELECT updated_at, updated_by_device_id FROM ${SYNC_ITEMS_TABLE}
+      SELECT updated_at, updated_by_device_id, payload_size, deleted_at FROM ${SYNC_ITEMS_TABLE}
       WHERE user_id = ? AND item_id = ?
-    `).bind(userId, item.item_id).first<{ updated_at: string, updated_by_device_id: string | null }>()
+    `).bind(userId, item.item_id).first<{
+      updated_at: string
+      updated_by_device_id: string | null
+      payload_size: number | null
+      deleted_at: string | null
+    }>()
 
     const shouldApply = !existing || isNewerUpdate(updatedAt, existing.updated_at, deviceId, existing.updated_by_device_id)
     if (!shouldApply) {
@@ -360,6 +436,68 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
       })
       continue
     }
+
+    const existingPayloadSize = Number(existing?.payload_size ?? 0)
+    const nextPayloadSize = rawPayloadSize ?? existingPayloadSize
+    const existedNotDeleted = Boolean(existing && !existing.deleted_at)
+
+    if (item.op_type === 'delete') {
+      if (existedNotDeleted) {
+        plannedStorageDelta -= existingPayloadSize
+        plannedObjectsDelta -= 1
+      }
+    }
+    else {
+      if (maxItemSize === null || nextPayloadSize > maxItemSize)
+        maxItemSize = nextPayloadSize
+      if (existedNotDeleted) {
+        plannedStorageDelta += nextPayloadSize - existingPayloadSize
+      }
+      else {
+        plannedStorageDelta += nextPayloadSize
+        plannedObjectsDelta += 1
+      }
+    }
+
+    candidates.push({
+      item,
+      updatedAt,
+      payloadSize: nextPayloadSize,
+      existing: existing ?? null,
+    })
+  }
+
+  const quotaCheck = await validateQuota(event, userId, {
+    storageDelta: plannedStorageDelta,
+    objectsDelta: plannedObjectsDelta,
+    itemSize: maxItemSize,
+  })
+  if (!quotaCheck.ok) {
+    return {
+      errorCode: quotaCheck.code,
+      conflicts,
+      ackCursor: await getServerCursor(db, userId),
+      appliedStorageDelta: 0,
+      appliedObjectsDelta: 0,
+    }
+  }
+
+  let appliedStorageDelta = 0
+  let appliedObjectsDelta = 0
+
+  for (const candidate of candidates) {
+    const { item, updatedAt, payloadSize, existing } = candidate
+    const oplogResult = await db.prepare(`
+      INSERT OR IGNORE INTO ${SYNC_OPLOG_TABLE} (user_id, device_id, op_seq, op_hash, item_id, op_type, updated_at, payload_size)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(userId, deviceId, item.op_seq, item.op_hash, item.item_id, item.op_type, updatedAt, payloadSize).run()
+
+    if (!oplogResult?.meta?.changes)
+      continue
+
+    const existingPayloadSize = Number(existing?.payload_size ?? 0)
+    const existedNotDeleted = Boolean(existing && !existing.deleted_at)
+    const storedPayloadSize = item.op_type === 'delete' ? existingPayloadSize : payloadSize
 
     const deletedAt = item.op_type === 'delete' ? (item.deleted_at ?? updatedAt) : (item.deleted_at ?? null)
     const metaPlain = item.meta_plain ? JSON.stringify(item.meta_plain) : null
@@ -389,13 +527,24 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
       item.payload_enc ?? null,
       item.payload_ref ?? null,
       metaPlain,
-      payloadSize || null,
+      Number.isFinite(storedPayloadSize) ? storedPayloadSize : null,
       updatedAt,
       deletedAt,
       deviceId,
     ).run()
 
-    if (item.op_type !== 'delete') {
+    if (item.op_type === 'delete') {
+      if (existedNotDeleted) {
+        appliedStorageDelta -= existingPayloadSize
+        appliedObjectsDelta -= 1
+      }
+      continue
+    }
+
+    if (existedNotDeleted) {
+      appliedStorageDelta += payloadSize - existingPayloadSize
+    }
+    else {
       appliedStorageDelta += payloadSize
       appliedObjectsDelta += 1
     }

@@ -16,6 +16,12 @@ components:
       required: true
       schema:
         type: string
+    XSyncToken:
+      name: x-sync-token
+      in: header
+      required: true
+      schema:
+        type: string
   schemas:
     ErrorResponse:
       type: object
@@ -206,6 +212,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
       requestBody:
         required: true
         content:
@@ -254,6 +261,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
         - name: cursor
           in: query
           required: false
@@ -298,6 +306,7 @@ paths:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
       requestBody:
         required: true
         content:
