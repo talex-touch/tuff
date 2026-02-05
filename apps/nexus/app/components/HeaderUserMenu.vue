@@ -59,6 +59,12 @@ const authRedirectTarget = computed(() => {
     return '/dashboard'
   return target
 })
+const normalizedPath = computed(() => {
+  const rawPath = route.path || '/'
+  const trimmed = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
+})
+const isHome = computed(() => normalizedPath.value === '/')
 const afterSignOutUrl = computed(() => {
   const params = new URLSearchParams({
     lang: langTag.value,
@@ -84,6 +90,8 @@ async function handleLocaleSelect(nextLocale: 'en' | 'zh') {
 }
 
 function handleThemeSwitch(value: boolean) {
+  if (isHome.value)
+    return
   const cached = themeToggleEvent.value
   const event = cached && Date.now() - themeToggleAt.value < 600 ? cached : undefined
   themeToggleEvent.value = null
@@ -181,14 +189,20 @@ onBeforeUnmount(() => {
       panel-shadow="medium"
     >
       <template #trigger>
-        <button type="button" class="header-user-trigger" aria-label="Account" @click="handleAvatarClick">
+        <TxButton
+          variant="bare"
+          native-type="button"
+          class="header-user-trigger"
+          aria-label="Account"
+          @click="handleAvatarClick"
+        >
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
             size="small"
             class="header-user-trigger-avatar"
           />
-        </button>
+        </TxButton>
       </template>
 
       <div
@@ -236,8 +250,9 @@ onBeforeUnmount(() => {
           <TxPopover
             v-model="languageMenuOpen"
             placement="right"
-            :offset="12"
+            :offset="6"
             :min-width="160"
+            :reference-full-width="true"
             :panel-padding="0"
             :panel-radius="14"
             panel-variant="plain"
@@ -264,22 +279,24 @@ onBeforeUnmount(() => {
               @mouseenter="handleLanguagePanelHover(true)"
               @mouseleave="handleLanguagePanelHover(false)"
             >
-              <button
-                type="button"
+              <TxButton
+                variant="bare"
+                native-type="button"
                 class="header-user-submenu-item"
                 :class="{ 'is-active': locale === 'en' }"
                 @click="handleLocaleSelect('en')"
               >
                 English
-              </button>
-              <button
-                type="button"
+              </TxButton>
+              <TxButton
+                variant="bare"
+                native-type="button"
                 class="header-user-submenu-item"
                 :class="{ 'is-active': locale === 'zh' }"
                 @click="handleLocaleSelect('zh')"
               >
                 中文
-              </button>
+              </TxButton>
             </div>
           </TxPopover>
         </div>
@@ -295,6 +312,7 @@ onBeforeUnmount(() => {
               <TuffSwitch
                 class="header-user-theme-switch"
                 size="small"
+                :disabled="isHome"
                 :model-value="isDark"
                 @change="handleThemeSwitch"
               />
@@ -358,6 +376,11 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   color: var(--header-user-text);
+  --tx-button-bare-padding: 0;
+  --tx-button-bare-radius: 999px;
+  --tx-button-bare-hover: transparent;
+  --tx-button-bare-bg: transparent;
+  --tx-button-gap: 0;
 }
 
 .header-user-trigger-avatar {
@@ -485,6 +508,7 @@ onBeforeUnmount(() => {
 
 .header-user-submenu {
   position: relative;
+  width: 100%;
 }
 
 .header-user-submenu-icon {
@@ -511,6 +535,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  text-align: left;
   padding: 8px 10px;
   border-radius: 10px;
   font-size: 13px;
@@ -518,6 +544,16 @@ onBeforeUnmount(() => {
   background: transparent;
   border: 1px solid transparent;
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+  --tx-button-bare-padding: 0;
+  --tx-button-bare-radius: 10px;
+  --tx-button-bare-hover: var(--header-user-hover);
+  --tx-button-bare-bg: transparent;
+  --tx-button-gap: 0.5rem;
+}
+
+.header-user-submenu-item :deep(.tx-button__inner) {
+  width: 100%;
+  justify-content: space-between;
 }
 
 .header-user-submenu-item:hover {
