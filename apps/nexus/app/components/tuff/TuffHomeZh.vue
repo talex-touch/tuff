@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import TuffLandingFooter from './landing/TuffLandingFooter.vue'
 import TuffBanner from './TuffBanner.vue'
 
@@ -56,8 +57,26 @@ const waitlistPerks = [
   '核心团队提供一对一专属支持。',
 ]
 
+const colorMode = useColorMode()
+let previousPreference = colorMode.preference
+const stopDarkLock = watch(() => colorMode.preference, (value) => {
+  if (value !== 'dark')
+    colorMode.preference = 'dark'
+})
+
+onMounted(() => {
+  previousPreference = colorMode.preference
+  if (colorMode.preference !== 'dark')
+    colorMode.preference = 'dark'
+})
+
+onBeforeUnmount(() => {
+  stopDarkLock()
+  if (colorMode.preference !== previousPreference)
+    colorMode.preference = previousPreference
+})
+
 useHead({
-  htmlAttrs: { class: 'dark' },
   bodyAttrs: { class: 'bg-[#040406] text-light antialiased' },
 })
 </script>

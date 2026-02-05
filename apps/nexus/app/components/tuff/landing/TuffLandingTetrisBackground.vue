@@ -38,18 +38,23 @@ function createGrid() {
 
 function createNewCell() {
   const x = Math.floor(Math.random() * cols.value)
-  if (grid.value[0])
-    grid.value[0][x] = true
+  const firstRow = grid.value[0]
+  if (Array.isArray(firstRow))
+    firstRow[x] = true
 }
 
 function moveCellsDown() {
   for (let row = rows.value - 1; row >= 0; row--) {
+    const rowCells = grid.value[row]
+    if (!Array.isArray(rowCells))
+      continue
+    const nextRow = grid.value[row + 1]
     for (let col = 0; col < cols.value; col++) {
-      const cell = grid.value[row]?.[col]
-      const nextCell = Array.isArray(grid.value[row + 1]) ? grid.value[row + 1][col] : cell
-      if (cell !== null && nextCell === null) {
-        grid.value[row + 1][col] = grid.value[row][col]
-        grid.value[row][col] = null
+      const cell = rowCells[col] ?? null
+      const nextCell = Array.isArray(nextRow) ? (nextRow[col] ?? null) : cell
+      if (cell !== null && nextCell === null && Array.isArray(nextRow)) {
+        nextRow[col] = cell
+        rowCells[col] = null
       }
     }
   }
@@ -57,9 +62,10 @@ function moveCellsDown() {
   setTimeout(() => {
     const lastRow = grid.value[rows.value - 1]
     const isFilled = Array.isArray(lastRow) && lastRow.every(cell => cell !== null)
-    if (Array.isArray(grid.value[rows.value]) && isFilled) {
+    const overflowRow = grid.value[rows.value]
+    if (Array.isArray(overflowRow) && isFilled) {
       for (let col = 0; col < cols.value; col++) {
-        grid.value[rows.value][col] = null
+        overflowRow[col] = null
       }
     }
   }, 500)
@@ -67,18 +73,20 @@ function moveCellsDown() {
 
 function clearColumn() {
   const lastRow = grid.value[rows.value - 1]
-  const isFilled = Array.isArray(lastRow) && lastRow.every(cell => cell === true)
+  const isFilled = Array.isArray(lastRow) && lastRow.every(cell => Boolean(cell))
   if (!isFilled)
     return
 
   for (let col = 0; col < cols.value; col++) {
-    grid.value[rows.value - 1][col] = null
+    if (Array.isArray(lastRow))
+      lastRow[col] = null
   }
 }
 
 function removeCell(row: number, col: number) {
-  if (grid.value[row])
-    grid.value[row][col] = null
+  const rowCells = grid.value[row]
+  if (Array.isArray(rowCells))
+    rowCells[col] = null
 }
 
 function calcGrid() {

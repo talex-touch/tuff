@@ -215,7 +215,7 @@ function handleTouchEnd() {
         v-for="pillar in openFoundation.pillars"
         :key="pillar.id"
         data-reveal
-        class="group relative h-full flex flex-col gap-6 overflow-hidden border border-white/10 rounded-[28px] bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-8 text-left text-white/75 shadow-[0_28px_90px_rgba(3,15,59,0.4)] transition duration-500 hover:border-white/30 hover:bg-[linear-gradient(160deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))]"
+        class="group relative h-full flex flex-col gap-6 overflow-hidden border bg-black/75 backdrop-blur-sm border-white/10 rounded-[28px] bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-8 text-left text-white/75 shadow-[0_28px_90px_rgba(3,15,59,0.4)] transition duration-500 hover:border-white/30 hover:bg-[linear-gradient(160deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))]"
       >
         <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_transparent_65%)] opacity-0 transition duration-500 group-hover:opacity-100" />
         <span class="relative h-12 w-12 inline-flex items-center justify-center border border-white/10 rounded-2xl bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.2),_rgba(12,20,43,0.6))] text-white shadow-[0_24px_40px_rgba(0,0,0,0.35)]">
@@ -248,7 +248,7 @@ function handleTouchEnd() {
     linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
   background-size: 120px 120px;
   mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.9), transparent 72%);
-  opacity: 0.35;
+  opacity: 0.5;
 }
 
 .open-foundation-word-grid {
@@ -256,7 +256,7 @@ function handleTouchEnd() {
   align-items: center;
   justify-content: center;
   padding: clamp(2rem, 10vh, 6rem) clamp(1rem, 8vw, 5rem);
-  opacity: 0.35;
+  opacity: 0.85;
   pointer-events: none;
   user-select: none;
   mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.95), transparent 92%);
@@ -272,7 +272,7 @@ function handleTouchEnd() {
 }
 
 .open-foundation-word-text {
-  font-size: clamp(170px, 21vw, 300px);
+  font-size: clamp(170px, 21vw, 240px);
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;

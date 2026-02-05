@@ -52,8 +52,11 @@ class IntelligenceStorage extends TouchStorage<AISDKStorageData> {
 
     if (providerIndex !== -1) {
       const updatedProviders = [...currentData.providers]
+      const currentProvider = updatedProviders[providerIndex]
+      if (!currentProvider)
+        return
       updatedProviders[providerIndex] = {
-        ...updatedProviders[providerIndex],
+        ...currentProvider,
         ...updatedProvider,
       }
 

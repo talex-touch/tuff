@@ -14,6 +14,8 @@ export default defineEventHandler(async (event) => {
     image: user.image,
     role: user.role,
     locale: user.locale,
-    emailVerified: Boolean(user.emailVerified)
+    emailVerified: Boolean(user.emailVerified),
+    emailState: user.emailState,
+    isRestricted: user.emailState !== 'verified'
   }
 })

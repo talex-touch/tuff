@@ -11,12 +11,12 @@ export function useMarketFormatters() {
     return numberFormatter.value.format(count)
   }
 
-  function formatDate(value?: string) {
-    if (!value)
+  function formatDate(value?: string | number | Date) {
+    if (value === undefined || value === null || value === '')
       return '—'
-    const parsed = new Date(value)
+    const parsed = value instanceof Date ? value : new Date(value)
     if (Number.isNaN(parsed.getTime()))
-      return value
+      return String(value)
     return dateFormatter.value.format(parsed)
   }
 

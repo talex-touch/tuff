@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await getUserByEmail(event, email)
-  if (!user) {
+  if (!user || user.status !== 'active') {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }
 
@@ -23,4 +23,3 @@ export default defineEventHandler(async (event) => {
   await setEmailVerified(event, user.id)
   return { success: true }
 })
-

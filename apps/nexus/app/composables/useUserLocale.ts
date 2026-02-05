@@ -6,7 +6,7 @@ const LOCALE_SYNC_KEY = 'locale'
 
 export function useUserLocale() {
   const { locale, setLocale } = useI18n()
-  const { status } = useSession()
+  const { status } = useAuth()
   const { deviceId } = useDeviceIdentity()
 
   const getSavedLocale = (): string | null => {

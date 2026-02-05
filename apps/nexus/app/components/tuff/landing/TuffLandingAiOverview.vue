@@ -75,7 +75,7 @@ function animate(timestamp: number) {
       progress.value = 0;
       const currentIndex = scenarios.indexOf(activeScenario.value);
       const nextIndex = (currentIndex + 1) % scenarios.length;
-      activeScenario.value = scenarios[nextIndex];
+      activeScenario.value = scenarios[nextIndex] ?? activeScenario.value;
     }
   }
 

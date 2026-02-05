@@ -17,8 +17,12 @@ export interface ButtonProps {
   circle?: boolean
   /** 是否加载中状态 */
   loading?: boolean
+  /** 加载样式变体 */
+  loadingVariant?: 'spinner' | 'bar'
   /** 是否禁用状态 */
   disabled?: boolean
+  /** 是否显示边框 */
+  border?: boolean
   /** 图标类名 */
   icon?: string
   /** 是否默认聚焦 */

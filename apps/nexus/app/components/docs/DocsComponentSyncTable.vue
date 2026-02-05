@@ -67,7 +67,8 @@ const rows = computed(() => {
     .filter(item => resolveDocLocale(item.path) === targetLocale)
     .map((item) => {
       const statusKey = normalizeStatus(item?.syncStatus, item?.verified === true)
-      const statusLabel = STATUS_LABELS[targetLocale][statusKey]
+      const labelMap = (STATUS_LABELS[targetLocale] ?? STATUS_LABELS.en ?? STATUS_LABELS.zh)!
+      const statusLabel = labelMap[statusKey]
       const icon = statusKey === 'verified' || statusKey === 'migrated'
         ? '✅'
         : statusKey === 'in_progress'

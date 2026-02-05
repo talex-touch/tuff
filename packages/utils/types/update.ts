@@ -191,7 +191,7 @@ export function splitUpdateTag(tag: string): { version: string; channelLabel?: s
   const cleaned = trimmed.toLowerCase().startsWith(UPDATE_TAG_PREFIX)
     ? trimmed.slice(UPDATE_TAG_PREFIX.length)
     : trimmed
-  const [version, channelLabel] = cleaned.split('-', 2)
+  const [version = '', channelLabel] = cleaned.split('-', 2)
   return { version, channelLabel }
 }
 

@@ -23,7 +23,7 @@ const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
 function getMediaExtension(src: string): string | null {
   const cleanSrc = src.split('?')[0]?.split('#')[0]
   const match = cleanSrc?.match(/\.([a-z0-9]+)$/i)
-  return match ? match[1].toLowerCase() : null
+  return match?.[1] ? match[1].toLowerCase() : null
 }
 
 const isVideo = computed(() => {

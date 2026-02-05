@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Email already registered.' })
   }
 
-  const user = await createUser(event, { email, name })
+  const user = await createUser(event, { email, name, emailState: 'unverified' })
   await setUserPassword(event, user.id, password)
   await ensurePersonalTeam(event, user.id)
 

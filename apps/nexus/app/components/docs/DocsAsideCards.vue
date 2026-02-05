@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
 
 const query = ref('')
@@ -27,7 +28,7 @@ const aiDescription = computed(() => (locale.value === 'zh'
 
 function handleAsk() {
   const text = query.value.trim()
-  if (!text || typeof window === 'undefined')
+  if (!text || !hasWindow())
     return
   const url = `https://github.com/talex-touch/tuff/discussions/new?category=Q%26A&title=${encodeURIComponent(text)}`
   window.open(url, '_blank', 'noopener')
