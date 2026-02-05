@@ -200,6 +200,8 @@ export default {
         authLoading: 'Checking sign-in status…',
         signInHint: 'Sign in to submit your review.',
         signInAction: 'Sign in',
+        loadMore: 'Load more',
+        loadMoreFailed: 'Failed to load more reviews.',
         writeTitle: 'Write a review',
         ratingLabel: 'Rating',
         titlePlaceholder: 'Short headline (optional)',
