@@ -55,13 +55,14 @@ const cards = computed(() => (plugins.value.extensions ?? []).map((item, index) 
   component: index < 5 ? components[index] : components[5],
 })))
 
-function handleCardClick(card: { id?: string }) {
-  if (!card?.id)
+function handleCardClick(card: Record<string, unknown>, _index: number) {
+  const id = typeof card.id === 'string' ? card.id : ''
+  if (!id)
     return
   router.push({
     path: '/market',
     query: {
-      query: card.id,
+      query: id,
     },
   })
 }

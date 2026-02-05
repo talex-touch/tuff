@@ -38,10 +38,13 @@ async function deriveKey(password: string, salt: string): Promise<ArrayBuffer> {
     false,
     ['deriveBits']
   )
+  const saltBytes = base64UrlDecode(salt)
+  const saltCopy = Uint8Array.from(saltBytes)
+  const saltBuffer = saltCopy.buffer as ArrayBuffer
   const derived = await crypto.subtle.deriveBits(
     {
       name: 'PBKDF2',
-      salt: base64UrlDecode(salt),
+      salt: saltBuffer,
       iterations: PBKDF2_ITERATIONS,
       hash: PBKDF2_HASH
     },
@@ -64,8 +67,9 @@ export async function verifyPassword(password: string, salt: string, hash: strin
     return false
   let diff = 0
   for (let i = 0; i < expected.length; i++) {
-    diff |= expected[i] ^ actual[i]
+    const expectedByte = expected[i] ?? 0
+    const actualByte = actual[i] ?? 0
+    diff |= expectedByte ^ actualByte
   }
   return diff === 0
 }
-

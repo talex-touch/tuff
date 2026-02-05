@@ -816,13 +816,18 @@ function setByPath(target: Record<string, unknown>, path: string[], value: unkno
   let cursor: Record<string, unknown> = target
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]
+    if (!key)
+      continue
     const next = cursor[key]
     if (!isPlainObject(next)) {
       cursor[key] = {}
     }
     cursor = cursor[key] as Record<string, unknown>
   }
-  cursor[path[path.length - 1]] = value
+  const lastKey = path[path.length - 1]
+  if (!lastKey)
+    return
+  cursor[lastKey] = value
 }
 
 function unsetByPath(target: Record<string, unknown>, path: string[]): void {
@@ -832,13 +837,18 @@ function unsetByPath(target: Record<string, unknown>, path: string[]): void {
   let cursor: Record<string, unknown> = target
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]
+    if (!key)
+      return
     const next = cursor[key]
     if (!isPlainObject(next)) {
       return
     }
     cursor = next as Record<string, unknown>
   }
-  delete cursor[path[path.length - 1]]
+  const lastKey = path[path.length - 1]
+  if (!lastKey)
+    return
+  delete cursor[lastKey]
 }
 
 function isEqual(left: unknown, right: unknown): boolean {

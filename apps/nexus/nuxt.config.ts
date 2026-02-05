@@ -109,9 +109,6 @@ export default defineNuxtConfig({
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
-      auth: {
-        origin: process.env.AUTH_ORIGIN,
-      },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },

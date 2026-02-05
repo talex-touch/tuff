@@ -77,8 +77,10 @@ const promptBank = computed(() => [
   },
 ])
 
+interface PromptItem { question: string, intro: string, bullets: string[], note?: string }
 const activePromptIndex = ref(0)
-const activePrompt = computed(() => promptBank.value[activePromptIndex.value])
+const fallbackPrompt: PromptItem = { question: '', intro: '', bullets: [], note: '' }
+const activePrompt = computed<PromptItem>(() => promptBank.value[activePromptIndex.value] ?? fallbackPrompt)
 const codeExample = ref(`<script setup>
 import { ref, computed, onMounted } from 'vue'
 

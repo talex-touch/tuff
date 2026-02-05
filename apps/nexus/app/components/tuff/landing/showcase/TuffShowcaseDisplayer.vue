@@ -135,7 +135,7 @@ const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'm4v'])
 function getMediaExtension(src: string): string | null {
   const cleanSrc = src.split('?')[0]?.split('#')[0]
   const match = cleanSrc?.match(/\.([a-z0-9]+)$/i)
-  return match ? match[1].toLowerCase() : null
+  return match?.[1] ? match[1].toLowerCase() : null
 }
 
 function isVideoSource(src: string): boolean {
@@ -199,7 +199,7 @@ function parseGifDuration(bytes: Uint8Array) {
   if (offset + 7 > bytes.length)
     return 0
 
-  const packed = bytes[offset + 4]
+  const packed = bytes[offset + 4] ?? 0
   const hasGct = (packed & 0x80) === 0x80
   const gctSize = 3 * (1 << ((packed & 0x07) + 1))
   offset += 7
@@ -210,13 +210,13 @@ function parseGifDuration(bytes: Uint8Array) {
   let duration = 0
 
   while (offset < bytes.length) {
-    const blockId = bytes[offset]
+    const blockId = bytes[offset] ?? 0
     if (blockId === 0x21) {
-      const label = bytes[offset + 1]
+      const label = bytes[offset + 1] ?? 0
       if (label === 0xF9) {
-        const blockSize = bytes[offset + 2]
+        const blockSize = bytes[offset + 2] ?? 0
         if (blockSize === 4 && offset + 7 < bytes.length) {
-          const delay = bytes[offset + 4] | (bytes[offset + 5] << 8)
+          const delay = (bytes[offset + 4] ?? 0) | ((bytes[offset + 5] ?? 0) << 8)
           if (delay > 0)
             duration += delay * 10
         }
@@ -225,7 +225,7 @@ function parseGifDuration(bytes: Uint8Array) {
       else {
         offset += 2
         while (offset < bytes.length) {
-          const size = bytes[offset]
+          const size = bytes[offset] ?? 0
           offset += 1
           if (size === 0)
             break
@@ -236,7 +236,7 @@ function parseGifDuration(bytes: Uint8Array) {
     else if (blockId === 0x2C) {
       if (offset + 9 >= bytes.length)
         break
-      const packedField = bytes[offset + 9]
+      const packedField = bytes[offset + 9] ?? 0
       const hasLct = (packedField & 0x80) === 0x80
       const lctSize = 3 * (1 << ((packedField & 0x07) + 1))
       offset += 10
@@ -249,7 +249,7 @@ function parseGifDuration(bytes: Uint8Array) {
 
       offset += 1
       while (offset < bytes.length) {
-        const size = bytes[offset]
+        const size = bytes[offset] ?? 0
         offset += 1
         if (size === 0)
           break

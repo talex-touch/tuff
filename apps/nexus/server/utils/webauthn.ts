@@ -24,7 +24,9 @@ function base64UrlDecode(input: string): Uint8Array {
 }
 
 async function sha256(input: Uint8Array): Promise<Uint8Array> {
-  const hash = await crypto.subtle.digest('SHA-256', input)
+  const inputCopy = Uint8Array.from(input)
+  const buffer = inputCopy.buffer as ArrayBuffer
+  const hash = await crypto.subtle.digest('SHA-256', buffer)
   return new Uint8Array(hash)
 }
 
@@ -42,21 +44,24 @@ interface CborResult<T = any> {
 function decodeCbor(data: Uint8Array, offset = 0): CborResult {
   if (offset >= data.length)
     throw new Error('CBOR: unexpected end')
-  const initial = data[offset++]
+  const initial = data[offset++] ?? 0
   const major = initial >> 5
   let additional = initial & 0x1f
   const readLength = () => {
     if (additional < 24)
       return additional
     if (additional === 24)
-      return data[offset++]
+      return data[offset++] ?? 0
     if (additional === 25) {
-      const value = (data[offset] << 8) | data[offset + 1]
+      const value = ((data[offset] ?? 0) << 8) | (data[offset + 1] ?? 0)
       offset += 2
       return value
     }
     if (additional === 26) {
-      const value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]
+      const value = ((data[offset] ?? 0) << 24)
+        | ((data[offset + 1] ?? 0) << 16)
+        | ((data[offset + 2] ?? 0) << 8)
+        | (data[offset + 3] ?? 0)
       offset += 4
       return value >>> 0
     }
@@ -120,14 +125,17 @@ function parseAuthenticatorData(authData: Uint8Array) {
   if (authData.length < 37)
     throw new Error('Invalid authenticator data.')
   const rpIdHash = authData.slice(0, 32)
-  const flags = authData[32]
-  const counter = (authData[33] << 24) | (authData[34] << 16) | (authData[35] << 8) | authData[36]
+  const flags = authData[32] ?? 0
+  const counter = ((authData[33] ?? 0) << 24)
+    | ((authData[34] ?? 0) << 16)
+    | ((authData[35] ?? 0) << 8)
+    | (authData[36] ?? 0)
   let offset = 37
   let credentialId: Uint8Array | null = null
   let cosePublicKey: Uint8Array | null = null
   if (flags & FLAG_AT) {
     offset += 16 // aaguid
-    const idLen = (authData[offset] << 8) | authData[offset + 1]
+    const idLen = ((authData[offset] ?? 0) << 8) | (authData[offset + 1] ?? 0)
     offset += 2
     credentialId = authData.slice(offset, offset + idLen)
     offset += idLen
@@ -221,10 +229,13 @@ export async function verifyAssertionResponse(params: {
     false,
     ['verify']
   )
+  const signatureBytes = base64UrlDecode(params.signature)
+  const signatureCopy = Uint8Array.from(signatureBytes)
+  const signatureBuffer = signatureCopy.buffer as ArrayBuffer
   const verified = await crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     key,
-    base64UrlDecode(params.signature),
+    signatureBuffer,
     signedData
   )
   if (!verified)
@@ -233,4 +244,3 @@ export async function verifyAssertionResponse(params: {
     throw new Error('Authenticator counter did not increase.')
   return { counter: parsed.counter, userVerified: Boolean(parsed.flags & FLAG_UV) }
 }
-

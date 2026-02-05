@@ -6,6 +6,7 @@ defineI18nRoute(false)
 
 const { t } = useI18n()
 const { data: summary, pending, refresh } = useFetch<any>('/api/credits/summary')
+const handleRefresh = () => refresh()
 
 const teamName = computed(() => t('dashboard.team.personal', '个人团队'))
 const teamQuota = computed(() => summary.value?.team?.quota ?? 0)
@@ -33,7 +34,7 @@ const teamUsed = computed(() => summary.value?.team?.used ?? 0)
             {{ teamName }}
           </h2>
         </div>
-        <Button size="small" variant="secondary" @click="refresh">
+        <Button size="small" variant="secondary" @click="handleRefresh">
           {{ t('common.refresh', '刷新') }}
         </Button>
       </div>

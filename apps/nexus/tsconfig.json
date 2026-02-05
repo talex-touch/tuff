@@ -2,7 +2,8 @@
   "extends": "./.nuxt/tsconfig.json",
   "compilerOptions": {
     "types": [
-      "./types/cloudflare-env"
+      "./types/cloudflare-env",
+      "./types/sidebase-auth"
     ]
   }
 }

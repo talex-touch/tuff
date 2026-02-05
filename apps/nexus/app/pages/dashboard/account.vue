@@ -23,6 +23,7 @@ const passkeyLoading = ref(false)
 const passkeyMessage = ref('')
 
 const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
+const handleRefreshHistory = () => refreshHistory()
 
 const emailLabel = computed(() => user.value?.email || '')
 const isEmailVerified = computed(() => Boolean(user.value?.emailVerified))
@@ -227,7 +228,7 @@ function formatHistoryTime(value: string) {
         <h2 class="text-lg text-black font-semibold dark:text-light">
           {{ t('dashboard.account.loginHistory', '登录历史') }}
         </h2>
-        <Button size="small" variant="secondary" @click="refreshHistory">
+        <Button size="small" variant="secondary" @click="handleRefreshHistory">
           {{ t('common.refresh', '刷新') }}
         </Button>
       </div>

@@ -173,7 +173,7 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   }
 
   const session = await getServerSession(event)
-  const userId = session?.user?.id
+  const userId = (session?.user as { id?: string } | undefined)?.id
   if (!userId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
@@ -198,4 +198,3 @@ export async function requireAdmin(event: H3Event) {
   }
   return { userId, user }
 }
-
