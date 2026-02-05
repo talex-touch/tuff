@@ -51,10 +51,13 @@ const messages = ref([
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxChatList :messages="messages" :markdown="true" :stagger="true" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxChatList :messages="messages" :markdown="true" :stagger="true" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>

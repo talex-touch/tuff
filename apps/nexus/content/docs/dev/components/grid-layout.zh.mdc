@@ -20,15 +20,18 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxGridLayout>
-    <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 16px;">
-      Item {{ i }}
-    </div>
-  </TxGridLayout>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGridLayout>
+      <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 16px;">
+        Item {{ i }}
+      </div>
+    </TxGridLayout>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

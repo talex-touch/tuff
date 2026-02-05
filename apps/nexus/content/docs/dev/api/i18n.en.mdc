@@ -16,43 +16,49 @@ Use i18n keys for notifications, plugin errors, and system messages to keep UI t
 
 ## Backend Usage (Main Process)
 
-```typescript
-import { i18nMsg, DevServerKeys, FlowTransferKeys } from '@talex-touch/utils/i18n'
-
-// Basic usage - send i18n key
-win.webContents.send('notification', {
-  title: i18nMsg(DevServerKeys.DISCONNECTED),
-  message: i18nMsg(DevServerKeys.CONNECTION_LOST)
-})
-
-// With parameters (for interpolation)
-import { i18nMsgWithParams } from '@talex-touch/utils/i18n'
-
-win.webContents.send('error', {
-  message: i18nMsgWithParams('plugin.loadFailed', { name: 'my-plugin' })
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { i18nMsg, DevServerKeys, FlowTransferKeys } from '@talex-touch/utils/i18n'
+  
+  // Basic usage - send i18n key
+  win.webContents.send('notification', {
+    title: i18nMsg(DevServerKeys.DISCONNECTED),
+    message: i18nMsg(DevServerKeys.CONNECTION_LOST)
+  })
+  
+  // With parameters (for interpolation)
+  import { i18nMsgWithParams } from '@talex-touch/utils/i18n'
+  
+  win.webContents.send('error', {
+    message: i18nMsgWithParams('plugin.loadFailed', { name: 'my-plugin' })
+  })
+---
+:::
 
 ## Frontend Usage (Renderer)
 
-```typescript
-import { resolveI18nMessage, i18nResolver, useI18nResolver } from '@talex-touch/utils/i18n'
-
-// Set locale (typically on app init)
-i18nResolver.setLocale('zh')
-
-// Resolve message
-const text = resolveI18nMessage('$i18n:devServer.disconnected')
-// => '开发服务器已断开'
-
-// Non-i18n strings pass through unchanged
-const plain = resolveI18nMessage('Hello World')
-// => 'Hello World'
-
-// Vue composable
-const { resolve, setLocale } = useI18nResolver()
-const message = resolve(receivedMessage)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { resolveI18nMessage, i18nResolver, useI18nResolver } from '@talex-touch/utils/i18n'
+  
+  // Set locale (typically on app init)
+  i18nResolver.setLocale('zh')
+  
+  // Resolve message
+  const text = resolveI18nMessage('$i18n:devServer.disconnected')
+  // => '开发服务器已断开'
+  
+  // Non-i18n strings pass through unchanged
+  const plain = resolveI18nMessage('Hello World')
+  // => 'Hello World'
+  
+  // Vue composable
+  const { resolve, setLocale } = useI18nResolver()
+  const message = resolve(receivedMessage)
+---
+:::
 
 ## Message Keys
 
@@ -91,66 +97,81 @@ const message = resolve(receivedMessage)
 
 **1. Add Message Key**
 
-```typescript
-// packages/utils/i18n/message-keys.ts
-export const MyModuleKeys = {
-  SUCCESS: 'myModule.success',
-  ERROR: 'myModule.error',
-} as const
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // packages/utils/i18n/message-keys.ts
+  export const MyModuleKeys = {
+    SUCCESS: 'myModule.success',
+    ERROR: 'myModule.error',
+  } as const
+---
+:::
 
 **2. Add Translations**
 
-```json
-// packages/utils/i18n/locales/en.json
-{
-  "myModule": {
-    "success": "Operation Successful",
-    "error": "Operation Failed"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // packages/utils/i18n/locales/en.json
+  {
+    "myModule": {
+      "success": "Operation Successful",
+      "error": "Operation Failed"
+    }
   }
-}
-```
+---
+:::
 
-```json
-// packages/utils/i18n/locales/zh.json
-{
-  "myModule": {
-    "success": "操作成功",
-    "error": "操作失败"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // packages/utils/i18n/locales/zh.json
+  {
+    "myModule": {
+      "success": "操作成功",
+      "error": "操作失败"
+    }
   }
-}
-```
+---
+:::
 
 **3. Export Key**
 
-```typescript
-// packages/utils/i18n/message-keys.ts
-export const MessageKeys = {
-  // ... existing keys
-  myModule: MyModuleKeys,
-} as const
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // packages/utils/i18n/message-keys.ts
+  export const MessageKeys = {
+    // ... existing keys
+    myModule: MyModuleKeys,
+  } as const
+---
+:::
 
 ## Custom Messages (Plugin Use)
 
 Plugins can add their own messages:
 
-```typescript
-import { i18nResolver } from '@talex-touch/utils/i18n'
-
-// Add custom messages
-i18nResolver.addMessages('en', {
-  myPlugin: {
-    hello: 'Hello from plugin'
-  }
-})
-
-i18nResolver.addMessages('zh', {
-  myPlugin: {
-    hello: '插件问好'
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { i18nResolver } from '@talex-touch/utils/i18n'
+  
+  // Add custom messages
+  i18nResolver.addMessages('en', {
+    myPlugin: {
+      hello: 'Hello from plugin'
+    }
+  })
+  
+  i18nResolver.addMessages('zh', {
+    myPlugin: {
+      hello: '插件问好'
+    }
+  })
+---
+:::
 
 ## Best Practices
 - Define keys in `message-keys.ts` to avoid drift.
@@ -163,12 +184,15 @@ i18nResolver.addMessages('zh', {
 
 ## File Structure
 
-```
-packages/utils/i18n/
-├── index.ts           # Unified exports
-├── message-keys.ts    # Key definitions + utilities
-├── resolver.ts        # Frontend resolver
-└── locales/
-    ├── en.json       # English translations
-    └── zh.json       # Chinese translations
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  packages/utils/i18n/
+  ├── index.ts           # Unified exports
+  ├── message-keys.ts    # Key definitions + utilities
+  ├── resolver.ts        # Frontend resolver
+  └── locales/
+      ├── en.json       # English translations
+      └── zh.json       # Chinese translations
+---
+:::

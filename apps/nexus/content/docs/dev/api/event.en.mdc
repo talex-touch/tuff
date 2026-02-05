@@ -17,13 +17,16 @@ Use the event bus for lifecycle coordination, status sync, and lightweight cross
 | `PLUGIN_STORAGE_UPDATED` | Plugin storage mutated |
 
 **Subscribe**
-```ts
-const dispose = ctx.events.on('APP_READY', () => {
-  ctx.logger.info('App ready')
-})
-
-ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const dispose = ctx.events.on('APP_READY', () => {
+    ctx.logger.info('App ready')
+  })
+  
+  ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
+---
+:::
 
 **Custom namespaces**
 - `ctx.events.createNamespace('todo')` keeps plugin events isolated.

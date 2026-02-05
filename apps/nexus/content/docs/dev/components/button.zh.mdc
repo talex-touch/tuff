@@ -94,17 +94,20 @@ code: |
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxButton variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? '加载中' : '点击加载' }}
-  </TxButton>
-  <TxButton variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? '加载中' : '点击加载' }}
-  </TxButton>
-  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" :loading="loading" @click="handleClick">
+      {{ loading ? '加载中' : '点击加载' }}
+    </TxButton>
+    <TxButton variant="secondary" :loading="loading" @click="handleClick">
+      {{ loading ? '加载中' : '点击加载' }}
+    </TxButton>
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

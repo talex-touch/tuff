@@ -30,18 +30,21 @@ Plugin Features automatically generate search tokens upon registration, includin
 
 Add `keywords` to Features in `manifest.json` to enhance search matching:
 
-```json
-{
-  "features": [
-    {
-      "id": "translate",
-      "name": "翻译",
-      "desc": "Translate selected text",
-      "keywords": ["translate", "translation", "fanyi", "fy"]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "translate",
+        "name": "翻译",
+        "desc": "Translate selected text",
+        "keywords": ["translate", "translation", "fanyi", "fy"]
+      }
+    ]
+  }
+---
+:::
 
 ## Match Types & Priority
 
@@ -60,46 +63,55 @@ The search engine matches in the following priority order:
 
 Search results include a `matchResult` field for UI highlighting:
 
-```typescript
-interface MatchRange {
-  start: number  // Start position
-  end: number    // End position (exclusive)
-}
-
-// In TuffItem.meta.extension
-interface FeatureExtension {
-  matchResult?: MatchRange[]
-  searchTokens?: string[]
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface MatchRange {
+    start: number  // Start position
+    end: number    // End position (exclusive)
+  }
+  
+  // In TuffItem.meta.extension
+  interface FeatureExtension {
+    matchResult?: MatchRange[]
+    searchTokens?: string[]
+  }
+---
+:::
 
 **Using Highlighting in Renderer**
 
 The BoxItem component automatically handles `matchResult` highlighting:
 
-```vue
-<h5
-  class="text-sm font-semibold truncate"
-  v-html="getHighlightedHTML(
-    render.basic?.title || '',
-    props.item.meta?.extension?.matchResult
-  )"
-/>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <h5
+    class="text-sm font-semibold truncate"
+    v-html="getHighlightedHTML(
+      render.basic?.title || '',
+      props.item.meta?.extension?.matchResult
+    )"
+  />
+---
+:::
 
 The `getHighlightedHTML` function wraps matched regions in `<span>` tags:
 
-```typescript
-function getHighlightedHTML(
-  text: string,
-  matchedIndices?: MatchRange[],
-  opts?: {
-    className?: string   // Highlight CSS class
-    base?: 0 | 1        // Index base
-    inclusiveEnd?: boolean
-  }
-): string
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function getHighlightedHTML(
+    text: string,
+    matchedIndices?: MatchRange[],
+    opts?: {
+      className?: string   // Highlight CSS class
+      base?: 0 | 1        // Index base
+      inclusiveEnd?: boolean
+    }
+  ): string
+---
+:::
 
 ## Using Search Matching in Plugins
 
@@ -107,40 +119,46 @@ function getHighlightedHTML(
 
 The `matchFeature` function from `@talex-touch/utils/search` enables custom search:
 
-```typescript
-import { matchFeature } from '@talex-touch/utils/search'
-
-const result = matchFeature({
-  title: '翻译',
-  desc: 'Translate selected text',
-  searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
-  query: 'fanyi',
-  enableFuzzy: true
-})
-
-if (result.matched) {
-  console.log('Match type:', result.matchType)
-  console.log('Match score:', result.score)
-  console.log('Highlight ranges:', result.matchRanges)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { matchFeature } from '@talex-touch/utils/search'
+  
+  const result = matchFeature({
+    title: '翻译',
+    desc: 'Translate selected text',
+    searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
+    query: 'fanyi',
+    enableFuzzy: true
+  })
+  
+  if (result.matched) {
+    console.log('Match type:', result.matchType)
+    console.log('Match score:', result.score)
+    console.log('Highlight ranges:', result.matchRanges)
+  }
+---
+:::
 
 **FeatureMatchResult Interface**
 
-```typescript
-interface FeatureMatchResult {
-  /** Whether matched */
-  matched: boolean
-  /** Match score (0-1000) */
-  score: number
-  /** Match type */
-  matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
-  /** Highlight ranges */
-  matchRanges: MatchRange[]
-  /** Matched token (for debugging) */
-  matchedToken?: string
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FeatureMatchResult {
+    /** Whether matched */
+    matched: boolean
+    /** Match score (0-1000) */
+    score: number
+    /** Match type */
+    matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
+    /** Highlight ranges */
+    matchRanges: MatchRange[]
+    /** Matched token (for debugging) */
+    matchedToken?: string
+  }
+---
+:::
 
 ## Fuzzy Matching API
 
@@ -148,53 +166,62 @@ interface FeatureMatchResult {
 
 For typo-tolerant search:
 
-```typescript
-import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
-
-const result = fuzzyMatch('hello', 'helol', 2)
-
-if (result.matched) {
-  console.log('Score:', result.score)
-  console.log('Matched indices:', result.matchedIndices)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
   
-  // Convert to highlight ranges
-  const ranges = indicesToRanges(result.matchedIndices)
-}
-```
+  const result = fuzzyMatch('hello', 'helol', 2)
+  
+  if (result.matched) {
+    console.log('Score:', result.score)
+    console.log('Matched indices:', result.matchedIndices)
+    
+    // Convert to highlight ranges
+    const ranges = indicesToRanges(result.matchedIndices)
+  }
+---
+:::
 
 **FuzzyMatchResult Interface**
 
-```typescript
-interface FuzzyMatchResult {
-  /** Whether matched */
-  matched: boolean
-  /** Match score (0-1) */
-  score: number
-  /** Array of matched character indices */
-  matchedIndices: number[]
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FuzzyMatchResult {
+    /** Whether matched */
+    matched: boolean
+    /** Match score (0-1) */
+    score: number
+    /** Array of matched character indices */
+    matchedIndices: number[]
+  }
+---
+:::
 
 ## Command Matching
 
 The Feature `commands` field is used for precise trigger matching:
 
-```json
-{
-  "features": [
-    {
-      "id": "search-web",
-      "name": "Search Web",
-      "commands": [
-        { "type": "over" },
-        { "type": "match", "value": ["g ", "google "] },
-        { "type": "contain", "value": "search" },
-        { "type": "regex", "value": "^s\\s+" }
-      ]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "search-web",
+        "name": "Search Web",
+        "commands": [
+          { "type": "over" },
+          { "type": "match", "value": ["g ", "google "] },
+          { "type": "contain", "value": "search" },
+          { "type": "regex", "value": "^s\\s+" }
+        ]
+      }
+    ]
+  }
+---
+:::
 
 Command types:
 
@@ -209,36 +236,42 @@ Command types:
 
 Search queries include current clipboard state:
 
-```typescript
-interface TuffQuery {
-  text: string
-  inputs?: TuffQueryInput[]
-}
-
-interface TuffQueryInput {
-  type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
-  content: string
-  thumbnail?: string
-  rawContent?: string
-  metadata?: Record<string, unknown>
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffQuery {
+    text: string
+    inputs?: TuffQueryInput[]
+  }
+  
+  interface TuffQueryInput {
+    type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
+    content: string
+    thumbnail?: string
+    rawContent?: string
+    metadata?: Record<string, unknown>
+  }
+---
+:::
 
 **Declaring Accepted Input Types**
 
 Declare `acceptedInputTypes` in Features to receive clipboard content:
 
-```json
-{
-  "features": [
-    {
-      "id": "image-ocr",
-      "name": "Image OCR",
-      "acceptedInputTypes": ["image"]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "image-ocr",
+        "name": "Image OCR",
+        "acceptedInputTypes": ["image"]
+      }
+    ]
+  }
+---
+:::
 
 Supported input types:
 - `text` - Plain text

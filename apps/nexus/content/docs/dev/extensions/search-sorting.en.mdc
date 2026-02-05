@@ -4,17 +4,20 @@
 Customizes CoreBox ranking so your plugin surfaces at the right moment without hijacking the list.
 
 ## Hook
-```ts
-ctx.corebox.registerSorter('mySorter', ({ query, results }) => {
-  const boosted = results.map(item => {
-    if (item.pluginId === ctx.meta.id && query.includes('todo')) {
-      return { ...item, score: item.score + 20 }
-    }
-    return item
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  ctx.corebox.registerSorter('mySorter', ({ query, results }) => {
+    const boosted = results.map(item => {
+      if (item.pluginId === ctx.meta.id && query.includes('todo')) {
+        return { ...item, score: item.score + 20 }
+      }
+      return item
+    })
+    return boosted.sort((a, b) => b.score - a.score)
   })
-  return boosted.sort((a, b) => b.score - a.score)
-})
-```
+---
+:::
 
 ## Strategy
 - Combine keyword matches, recency, and context signals.

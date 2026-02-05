@@ -17,13 +17,16 @@
 | `PLUGIN_STORAGE_UPDATED` | 插件存储变更 |
 
 **插件订阅**
-```ts
-const dispose = ctx.events.on('APP_READY', () => {
-  ctx.logger.info('应用已就绪')
-})
-
-ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const dispose = ctx.events.on('APP_READY', () => {
+    ctx.logger.info('应用已就绪')
+  })
+  
+  ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
+---
+:::
 
 **自定义事件**
 - 插件可创建内部事件 `ctx.events.createNamespace('todo')`，避免冲突。

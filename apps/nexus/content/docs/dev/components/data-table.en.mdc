@@ -38,25 +38,28 @@ const selectedKeys = ref<number[]>([])
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-const columns = [
-  { key: 'name', title: 'Name' },
-  { key: 'role', title: 'Role' },
-  { key: 'score', title: 'Score', sortable: true },
-]
-
-const data = [
-  { id: 1, name: 'Ava', role: 'Designer', score: 92 },
-  { id: 2, name: 'Noah', role: 'Engineer', score: 88 },
-  { id: 3, name: 'Mia', role: 'PM', score: 95 },
-]
-</script>
-
-<template>
-  <TxDataTable :columns="columns" :data="data" striped bordered />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const columns = [
+    { key: 'name', title: 'Name' },
+    { key: 'role', title: 'Role' },
+    { key: 'score', title: 'Score', sortable: true },
+  ]
+  
+  const data = [
+    { id: 1, name: 'Ava', role: 'Designer', score: 92 },
+    { id: 2, name: 'Noah', role: 'Engineer', score: 88 },
+    { id: 3, name: 'Mia', role: 'PM', score: 95 },
+  ]
+  </script>
+  
+  <template>
+    <TxDataTable :columns="columns" :data="data" striped bordered />
+  </template>
+---
+:::
 :::
 
 ## 行选择
@@ -74,23 +77,26 @@ const data = [
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const selectedKeys = ref([])
-</script>
-
-<template>
-  <TxDataTable
-    v-model:selected-keys="selectedKeys"
-    :columns="columns"
-    :data="data"
-    row-key="id"
-    selectable
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const selectedKeys = ref([])
+  </script>
+  
+  <template>
+    <TxDataTable
+      v-model:selected-keys="selectedKeys"
+      :columns="columns"
+      :data="data"
+      row-key="id"
+      selectable
+    />
+  </template>
+---
+:::
 :::
 
 ## API

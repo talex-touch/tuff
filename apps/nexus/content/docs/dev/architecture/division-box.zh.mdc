@@ -38,12 +38,15 @@ DivisionBox 用于分离 CoreBox UI View，形成独立窗口与会话级管理�
 
 ## 5. 关键流程（Mermaid）
 
-```mermaid
-flowchart LR
-  corebox["CoreBox UI View"] --> transfer["Transfer View"]
-  transfer --> division["DivisionBox Session"]
-  division --> window["TouchWindow + WebContentsView"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    corebox["CoreBox UI View"] --> transfer["Transfer View"]
+    transfer --> division["DivisionBox Session"]
+    division --> window["TouchWindow + WebContentsView"]
+---
+:::
 
 ## 6. 相关文档
 

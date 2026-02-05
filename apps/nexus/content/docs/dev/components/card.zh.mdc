@@ -200,35 +200,41 @@ import CardInertialDemoSource from '~/components/content/demos/CardInertialDemo.
 
 ### CSS 变量
 
-```css
-.custom-card {
-  --tx-card-fake-background: rgba(255, 255, 255, 0.8);
-  --tx-card-padding: 24px;
-}
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  .custom-card {
+    --tx-card-fake-background: rgba(255, 255, 255, 0.8);
+    --tx-card-padding: 24px;
+  }
+---
+:::
 
 ### 主题定制
 
-```css
-:root {
-  /* 卡片背景 */
-  --tx-card-background-default: rgba(255, 255, 255, 0.8);
-  --tx-card-background-glass: rgba(255, 255, 255, 0.1);
-  
-  /* 卡片边框 */
-  --tx-card-border-default: 1px solid rgba(0, 0, 0, 0.1);
-  --tx-card-border-outlined: 1px solid var(--tx-color-border);
-  
-  /* 卡片阴影 */
-  --tx-card-shadow-default: 0 2px 8px rgba(0, 0, 0, 0.1);
-  --tx-card-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.15);
-  
-  /* 卡片尺寸 */
-  --tx-card-padding-small: 16px;
-  --tx-card-padding-medium: 20px;
-  --tx-card-padding-large: 24px;
-}
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  :root {
+    /* 卡片背景 */
+    --tx-card-background-default: rgba(255, 255, 255, 0.8);
+    --tx-card-background-glass: rgba(255, 255, 255, 0.1);
+    
+    /* 卡片边框 */
+    --tx-card-border-default: 1px solid rgba(0, 0, 0, 0.1);
+    --tx-card-border-outlined: 1px solid var(--tx-color-border);
+    
+    /* 卡片阴影 */
+    --tx-card-shadow-default: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --tx-card-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.15);
+    
+    /* 卡片尺寸 */
+    --tx-card-padding-small: 16px;
+    --tx-card-padding-medium: 20px;
+    --tx-card-padding-large: 24px;
+  }
+---
+:::
 
 ## 最佳实践
 
@@ -241,30 +247,33 @@ import CardInertialDemoSource from '~/components/content/demos/CardInertialDemo.
 
 ### 布局示例
 
-```vue
-<template>
-  <div class="card-grid">
-    <TxCard 
-      v-for="item in items" 
-      :key="item.id"
-      clickable
-      @click="handleItemClick(item)"
-    >
-      <template #header>
-        <h3>{{ item.title }}</h3>
-      </template>
-      
-      <p>{{ item.description }}</p>
-      
-      <template #footer>
-        <div class="card-actions">
-          <TxButton size="small" variant="text">编辑</TxButton>
-          <TxButton size="small" variant="text">删除</TxButton>
-        </div>
-      </template>
-    </TxCard>
-  </div>
-</template>
-
-TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <div class="card-grid">
+      <TxCard 
+        v-for="item in items" 
+        :key="item.id"
+        clickable
+        @click="handleItemClick(item)"
+      >
+        <template #header>
+          <h3>{{ item.title }}</h3>
+        </template>
+        
+        <p>{{ item.description }}</p>
+        
+        <template #footer>
+          <div class="card-actions">
+            <TxButton size="small" variant="text">编辑</TxButton>
+            <TxButton size="small" variant="text">删除</TxButton>
+          </div>
+        </template>
+      </TxCard>
+    </div>
+  </template>
+  
+  TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
+---
+:::

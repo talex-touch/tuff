@@ -53,15 +53,18 @@ function onRemoteSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
-    &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-    &lt;TuffSelectItem value="option2" label="选项 2" /&gt;
-    &lt;TuffSelectItem value="option3" label="选项 3" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
+      &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
+      &lt;TuffSelectItem value="option2" label="选项 2" /&gt;
+      &lt;TuffSelectItem value="option3" label="选项 3" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 
@@ -77,25 +80,28 @@ function onRemoteSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;script setup lang="ts"&gt;
-import { ref } from 'vue'
-
-const value = ref('')
-const remoteOptions = ref&lt;Array&lt;{ value: string; label: string }&gt;&gt;([])
-
-async function onSearch(q: string) {
-  // remote request
-  // remoteOptions.value = await fetch(...)
-}
-&lt;/script&gt;
-
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" remote editable @search="onSearch"&gt;
-    &lt;TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;script setup lang="ts"&gt;
+  import { ref } from 'vue'
+  
+  const value = ref('')
+  const remoteOptions = ref&lt;Array&lt;{ value: string; label: string }&gt;&gt;([])
+  
+  async function onSearch(q: string) {
+    // remote request
+    // remoteOptions.value = await fetch(...)
+  }
+  &lt;/script&gt;
+  
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" remote editable @search="onSearch"&gt;
+      &lt;TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 
@@ -111,13 +117,16 @@ async function onSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" placeholder="Searchable" searchable&gt;
-    &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" placeholder="Searchable" searchable&gt;
+      &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 
@@ -133,13 +142,16 @@ async function onSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" placeholder="禁用状态" disabled&gt;
-    &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" placeholder="禁用状态" disabled&gt;
+      &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 
@@ -157,15 +169,18 @@ async function onSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
-    &lt;TuffSelectItem value="option1" label="可选项 1" /&gt;
-    &lt;TuffSelectItem value="option2" label="禁用选项" disabled /&gt;
-    &lt;TuffSelectItem value="option3" label="可选项 2" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
+      &lt;TuffSelectItem value="option1" label="可选项 1" /&gt;
+      &lt;TuffSelectItem value="option2" label="禁用选项" disabled /&gt;
+      &lt;TuffSelectItem value="option3" label="可选项 2" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 
@@ -181,13 +196,16 @@ async function onSearch(q: string) {
 </template>
 
 <template #code>
-```vue
-&lt;template&gt;
-  &lt;TuffSelect v-model="value" :dropdown-max-height="220"&gt;
-    &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
-  &lt;/TuffSelect&gt;
-&lt;/template&gt;
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;template&gt;
+    &lt;TuffSelect v-model="value" :dropdown-max-height="220"&gt;
+      &lt;TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" /&gt;
+    &lt;/TuffSelect&gt;
+  &lt;/template&gt;
+---
+:::
 </template>
 </DemoBlock>
 

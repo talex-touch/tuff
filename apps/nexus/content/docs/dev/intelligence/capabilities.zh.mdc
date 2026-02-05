@@ -14,19 +14,22 @@
 
 **OCR 示例**
 
-```ts
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-
-const { vision } = useIntelligence()
-
-const res = await vision.ocr({
-  source: { type: 'data-url', dataUrl },
-  includeLayout: true,
-  includeKeywords: true,
-})
-
-console.log(res.result.text)
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  
+  const { vision } = useIntelligence()
+  
+  const res = await vision.ocr({
+    source: { type: 'data-url', dataUrl },
+    includeLayout: true,
+    includeKeywords: true,
+  })
+  
+  console.log(res.result.text)
+---
+:::
 
 ## 向量（Embedding）
 
@@ -42,17 +45,20 @@ console.log(res.result.text)
 
 因此调用侧一般不需要再手动分块。
 
-```ts
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-
-const { embedding } = useIntelligence()
-
-const res = await embedding.generate({
-  text: veryLongText,
-})
-
-console.log(res.result.length)
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  
+  const { embedding } = useIntelligence()
+  
+  const res = await embedding.generate({
+    text: veryLongText,
+  })
+  
+  console.log(res.result.length)
+---
+:::
 
 ## Agent
 

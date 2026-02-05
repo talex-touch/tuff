@@ -20,15 +20,18 @@
 **技术实现**
 系统通过监听 WebContents 的 `before-input-event` 事件来捕获 ESC 键：
 
-```typescript
-// 主进程自动处理（插件无需关心）
-uiView.webContents.on('before-input-event', (event, input) => {
-  if (input.key === 'Escape' && input.type === 'keyDown') {
-    coreBoxManager.exitUIMode()
-    event.preventDefault()
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 主进程自动处理（插件无需关心）
+  uiView.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'Escape' && input.type === 'keyDown') {
+      coreBoxManager.exitUIMode()
+      event.preventDefault()
+    }
+  })
+---
+:::
 
 ## 键盘事件转发
 
@@ -48,70 +51,82 @@ uiView.webContents.on('before-input-event', (event, input) => {
 
 **方式一：使用 Feature SDK**
 
-```typescript
-import { useFeature } from '@talex-touch/utils/plugin/sdk'
-
-const feature = useFeature()
-
-const unsubscribe = feature.onKeyEvent((event) => {
-  if (event.key === 'Enter') {
-    // 处理回车键
-    submitSelection()
-  } else if (event.key === 'ArrowDown') {
-    // 向下导航
-    selectNext()
-  } else if (event.key === 'ArrowUp') {
-    // 向上导航
-    selectPrev()
-  } else if (event.metaKey && event.key === 'k') {
-    // 处理 Cmd+K
-    openSearch()
-  }
-})
-
-// 清理时取消监听
-onUnmounted(() => {
-  unsubscribe()
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useFeature } from '@talex-touch/utils/plugin/sdk'
+  
+  const feature = useFeature()
+  
+  const unsubscribe = feature.onKeyEvent((event) => {
+    if (event.key === 'Enter') {
+      // 处理回车键
+      submitSelection()
+    } else if (event.key === 'ArrowDown') {
+      // 向下导航
+      selectNext()
+    } else if (event.key === 'ArrowUp') {
+      // 向上导航
+      selectPrev()
+    } else if (event.metaKey && event.key === 'k') {
+      // 处理 Cmd+K
+      openSearch()
+    }
+  })
+  
+  // 清理时取消监听
+  onUnmounted(() => {
+    unsubscribe()
+  })
+---
+:::
 
 **方式二：使用 Bridge Hook**
 
-```typescript
-import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks/bridge'
-
-onCoreBoxKeyEvent((event) => {
-  console.log('Key pressed:', event.key)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { onCoreBoxKeyEvent } from '@talex-touch/utils/plugin/sdk/hooks/bridge'
   
-  if (event.key === 'Enter' && !event.repeat) {
-    handleSubmit()
-  }
-})
-```
+  onCoreBoxKeyEvent((event) => {
+    console.log('Key pressed:', event.key)
+    
+    if (event.key === 'Enter' && !event.repeat) {
+      handleSubmit()
+    }
+  })
+---
+:::
 
 **方式三：直接监听 Channel**
 
-```typescript
-// 在插件 renderer 中
-window.$channel.on('core-box:key-event', (event) => {
-  const { key, metaKey, ctrlKey } = event
-  // 处理按键
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 在插件 renderer 中
+  window.$channel.on('core-box:key-event', (event) => {
+    const { key, metaKey, ctrlKey } = event
+    // 处理按键
+  })
+---
+:::
 
 ## 事件数据结构
 
-```typescript
-interface ForwardedKeyEvent {
-  key: string       // 按键名称，如 'Enter', 'ArrowDown'
-  code: string      // 按键代码，如 'Enter', 'ArrowDown'
-  metaKey: boolean  // Cmd/Win 键是否按下
-  ctrlKey: boolean  // Ctrl 键是否按下
-  altKey: boolean   // Alt 键是否按下
-  shiftKey: boolean // Shift 键是否按下
-  repeat: boolean   // 是否为重复按键（长按）
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface ForwardedKeyEvent {
+    key: string       // 按键名称，如 'Enter', 'ArrowDown'
+    code: string      // 按键代码，如 'Enter', 'ArrowDown'
+    metaKey: boolean  // Cmd/Win 键是否按下
+    ctrlKey: boolean  // Ctrl 键是否按下
+    altKey: boolean   // Alt 键是否按下
+    shiftKey: boolean // Shift 键是否按下
+    repeat: boolean   // 是否为重复按键（长按）
+  }
+---
+:::
 
 ## IPC 通道
 
@@ -134,46 +149,58 @@ ESC 键已由系统自动处理，插件不应再监听 ESC 来退出 UI 模式�
 **2. 检查 repeat 标志**
 对于需要单次触发的操作（如提交），应检查 `repeat` 标志：
 
-```typescript
-feature.onKeyEvent((event) => {
-  if (event.key === 'Enter' && !event.repeat) {
-    // 只在首次按下时触发
-    submitForm()
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.onKeyEvent((event) => {
+    if (event.key === 'Enter' && !event.repeat) {
+      // 只在首次按下时触发
+      submitForm()
+    }
+  })
+---
+:::
 
 **3. 组合键处理**
 处理组合键时，注意平台差异：
 
-```typescript
-feature.onKeyEvent((event) => {
-  // macOS 使用 metaKey (Cmd)，Windows/Linux 使用 ctrlKey
-  const modifier = event.metaKey || event.ctrlKey
-  
-  if (modifier && event.key === 's') {
-    // Cmd+S 或 Ctrl+S 保存
-    saveDocument()
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  feature.onKeyEvent((event) => {
+    // macOS 使用 metaKey (Cmd)，Windows/Linux 使用 ctrlKey
+    const modifier = event.metaKey || event.ctrlKey
+    
+    if (modifier && event.key === 's') {
+      // Cmd+S 或 Ctrl+S 保存
+      saveDocument()
+    }
+  })
+---
+:::
 
 **4. 清理监听器**
 在组件卸载时取消监听，避免内存泄漏：
 
-```typescript
-const unsubscribe = feature.onKeyEvent(handler)
-
-onUnmounted(() => {
-  unsubscribe()
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unsubscribe = feature.onKeyEvent(handler)
+  
+  onUnmounted(() => {
+    unsubscribe()
+  })
+---
+:::
 
 ## 调试
 
 开启 DevTools 后，可以在控制台看到键盘事件日志：
 
-```
-[CoreBox] Forwarding key event to UI view: Enter
-[CoreBox] ESC pressed in UI view, exiting UI mode
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  [CoreBox] Forwarding key event to UI view: Enter
+  [CoreBox] ESC pressed in UI view, exiting UI mode
+---
+:::

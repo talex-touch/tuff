@@ -23,17 +23,20 @@ const tags = ref(['Design', 'Docs'])
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const tags = ref(['Design', 'Docs'])
-</script>
-
-<template>
-  <TxTagInput v-model="tags" placeholder="输入标签后回车" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const tags = ref(['Design', 'Docs'])
+  </script>
+  
+  <template>
+    <TxTagInput v-model="tags" placeholder="输入标签后回车" />
+  </template>
+---
+:::
 :::
 
 ## API

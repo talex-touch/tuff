@@ -24,14 +24,17 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxPermissionState
-    description="Request access to continue."
-    :primary-action="{ label: 'Request access', type: 'primary' }"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxPermissionState
+      description="Request access to continue."
+      :primary-action="{ label: 'Request access', type: 'primary' }"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

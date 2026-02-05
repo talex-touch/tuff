@@ -59,11 +59,14 @@ const richContent = ref(
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxMarkdownView :content="content" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxMarkdownView :content="content" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -77,11 +80,14 @@ const richContent = ref(
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxMarkdownView :content="richContent" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxMarkdownView :content="richContent" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

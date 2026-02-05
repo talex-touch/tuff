@@ -25,33 +25,39 @@ TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结�
 
 **插件侧**
 
-```typescript
-import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
-
-const temp = useTempPluginFiles()
-const result = await temp.create({
-  ext: 'svg',
-  text: '<svg></svg>',
-  retentionMs: 24 * 60 * 60 * 1000
-})
-
-// tfile://...
-console.log(result.url)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
+  
+  const temp = useTempPluginFiles()
+  const result = await temp.create({
+    ext: 'svg',
+    text: '<svg></svg>',
+    retentionMs: 24 * 60 * 60 * 1000
+  })
+  
+  // tfile://...
+  console.log(result.url)
+---
+:::
 
 **应用渲染进程**
 
-```typescript
-import { useTouchSDK } from '@talex-touch/utils/renderer'
-
-const sdk = useTouchSDK()
-const result = await sdk.createTempFile({
-  namespace: 'icons/svg',
-  ext: 'svg',
-  text: '<svg></svg>',
-  retentionMs: 7 * 24 * 60 * 60 * 1000
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useTouchSDK } from '@talex-touch/utils/renderer'
+  
+  const sdk = useTouchSDK()
+  const result = await sdk.createTempFile({
+    namespace: 'icons/svg',
+    ext: 'svg',
+    text: '<svg></svg>',
+    retentionMs: 7 * 24 * 60 * 60 * 1000
+  })
+---
+:::
 
 ## 常见例子
 

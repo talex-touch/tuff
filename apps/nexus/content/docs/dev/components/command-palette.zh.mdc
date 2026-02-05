@@ -39,19 +39,22 @@ function onSelect(cmd: { title: string }) {
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-const commands = [{ id: 'open', title: 'Open File' }]
-</script>
-
-<template>
-  <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
-  <TxCommandPalette v-model="open" :commands="commands" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const open = ref(false)
+  const commands = [{ id: 'open', title: 'Open File' }]
+  </script>
+  
+  <template>
+    <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
+    <TxCommandPalette v-model="open" :commands="commands" />
+  </template>
+---
+:::
 :::
 
 ## API

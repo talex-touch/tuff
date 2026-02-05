@@ -24,27 +24,30 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxOutlineBorder :ring-width="2" ring-color="var(--tx-color-primary)" :offset="2" offset-bg="var(--tx-bg-color)">
-    <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-  </TxOutlineBorder>
-
-  <TxOutlineBorder
-    variant="border"
-    :border-width="2"
-    border-color="var(--tx-border-color)"
-    :padding="2"
-    shape="rect"
-    :border-radius="12"
-  >
-    <img
-      src="https://avatars.githubusercontent.com/u/2?v=4"
-      style="width:40px;height:40px;object-fit:cover;border-radius:12px;"
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxOutlineBorder :ring-width="2" ring-color="var(--tx-color-primary)" :offset="2" offset-bg="var(--tx-bg-color)">
+      <TxAvatar src="https://avatars.githubusercontent.com/u/1?v=4" />
+    </TxOutlineBorder>
+  
+    <TxOutlineBorder
+      variant="border"
+      :border-width="2"
+      border-color="var(--tx-border-color)"
+      :padding="2"
+      shape="rect"
+      :border-radius="12"
     >
-  </TxOutlineBorder>
-</template>
-```
+      <img
+        src="https://avatars.githubusercontent.com/u/2?v=4"
+        style="width:40px;height:40px;object-fit:cover;border-radius:12px;"
+      >
+    </TxOutlineBorder>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -66,22 +69,25 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxOutlineBorder
-    variant="ring"
-    :ring-width="2"
-    ring-color="var(--tx-color-primary)"
-    clip-mode="mask"
-    clip-shape="hexagon"
-  >
-    <img
-      src="https://avatars.githubusercontent.com/u/3?v=4"
-      style="width:48px;height:48px;object-fit:cover;"
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxOutlineBorder
+      variant="ring"
+      :ring-width="2"
+      ring-color="var(--tx-color-primary)"
+      clip-mode="mask"
+      clip-shape="hexagon"
     >
-  </TxOutlineBorder>
-</template>
-```
+      <img
+        src="https://avatars.githubusercontent.com/u/3?v=4"
+        style="width:48px;height:48px;object-fit:cover;"
+      >
+    </TxOutlineBorder>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

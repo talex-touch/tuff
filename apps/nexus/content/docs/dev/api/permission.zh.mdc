@@ -10,22 +10,25 @@
 
 **1. 在 manifest.json 中声明权限**
 
-```json
-{
-  "id": "com.example.plugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "sdkapi": 251212,
-  "permissions": {
-    "required": ["clipboard.read", "network.internet"],
-    "optional": ["storage.shared"]
-  },
-  "permissionReasons": {
-    "clipboard.read": "需要读取剪贴板以获取待翻译文本",
-    "network.internet": "需要访问翻译 API 服务"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.example.plugin",
+    "name": "My Plugin",
+    "version": "1.0.0",
+    "sdkapi": 251212,
+    "permissions": {
+      "required": ["clipboard.read", "network.internet"],
+      "optional": ["storage.shared"]
+    },
+    "permissionReasons": {
+      "clipboard.read": "需要读取剪贴板以获取待翻译文本",
+      "network.internet": "需要访问翻译 API 服务"
+    }
   }
-}
-```
+---
+:::
 
 **2. 权限分类**
 
@@ -80,15 +83,18 @@
 
 如果您的插件未声明 `sdkapi` 或版本较低：
 
-```json
-{
-  "sdkapi": 251212,
-  "permissions": {
-    "required": ["clipboard.read"],
-    "optional": []
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 251212,
+    "permissions": {
+      "required": ["clipboard.read"],
+      "optional": []
+    }
   }
-}
-```
+---
+:::
 
 ## 技术原理
 - 权限校验由权限中心统一管理，`sdkapi` 达到门槛才启用完整校验。
@@ -98,37 +104,43 @@
 
 **在 Prelude (index.js) 中检查权限**
 
-```javascript
-const { permission } = globalThis
-
-// 检查是否有权限
-const hasPermission = await permission.check('clipboard.read')
-
-// 请求权限（会触发用户确认弹窗）
-const granted = await permission.request('clipboard.read', '需要读取剪贴板内容')
-
-if (granted) {
-  // 使用 clipboard API
-  const text = clipboard.readText()
-}
-```
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const { permission } = globalThis
+  
+  // 检查是否有权限
+  const hasPermission = await permission.check('clipboard.read')
+  
+  // 请求权限（会触发用户确认弹窗）
+  const granted = await permission.request('clipboard.read', '需要读取剪贴板内容')
+  
+  if (granted) {
+    // 使用 clipboard API
+    const text = clipboard.readText()
+  }
+---
+:::
 
 **在 Surface (Vue) 中使用**
 
-```typescript
-import { usePermission } from '@talex-touch/utils/plugin/sdk'
-
-const { check, request, status } = usePermission()
-
-// 检查权限
-const hasClipboard = await check('clipboard.read')
-
-// 请求权限
-const granted = await request('network.internet', '需要访问翻译服务')
-
-// 获取所有权限状态
-const allStatus = await status()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePermission } from '@talex-touch/utils/plugin/sdk'
+  
+  const { check, request, status } = usePermission()
+  
+  // 检查权限
+  const hasClipboard = await check('clipboard.read')
+  
+  // 请求权限
+  const granted = await request('network.internet', '需要访问翻译服务')
+  
+  // 获取所有权限状态
+  const allStatus = await status()
+---
+:::
 
 ## 最佳实践
 
@@ -136,55 +148,67 @@ const allStatus = await status()
 
 只声明实际需要的权限：
 
-```json
-// ✅ 好的做法
-"permissions": {
-  "required": ["clipboard.read"],
-  "optional": []
-}
-
-// ❌ 避免
-"permissions": {
-  "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // ✅ 好的做法
+  "permissions": {
+    "required": ["clipboard.read"],
+    "optional": []
+  }
+  
+  // ❌ 避免
+  "permissions": {
+    "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
+  }
+---
+:::
 
 **2. 提供权限说明**
 
-```json
-"permissionReasons": {
-  "clipboard.read": "读取剪贴板中的待翻译文本",
-  "network.internet": "连接 Google 翻译 API"
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板中的待翻译文本",
+    "network.internet": "连接 Google 翻译 API"
+  }
+---
+:::
 
 **3. 优雅降级**
 
-```javascript
-async function translateText(text) {
-  const hasNetwork = await permission.check('network.internet')
-  
-  if (!hasNetwork) {
-    // 请求权限或提示用户
-    const granted = await permission.request('network.internet')
-    if (!granted) {
-      return { error: '需要网络权限才能翻译' }
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async function translateText(text) {
+    const hasNetwork = await permission.check('network.internet')
+    
+    if (!hasNetwork) {
+      // 请求权限或提示用户
+      const granted = await permission.request('network.internet')
+      if (!granted) {
+        return { error: '需要网络权限才能翻译' }
+      }
     }
+    
+    // 正常翻译逻辑
+    return await http.post('...')
   }
-  
-  // 正常翻译逻辑
-  return await http.post('...')
-}
-```
+---
+:::
 
 **4. 区分必需和可选权限**
 
-```json
-"permissions": {
-  "required": ["clipboard.read"],  // 核心功能必需
-  "optional": ["network.internet"] // 增强功能可选
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissions": {
+    "required": ["clipboard.read"],  // 核心功能必需
+    "optional": ["network.internet"] // 增强功能可选
+  }
+---
+:::
 
 ## 用户界面
 
@@ -199,24 +223,30 @@ async function translateText(text) {
 
 A: 您的 `manifest.json` 中未声明 `sdkapi` 字段或版本低于 `251212`。添加：
 
-```json
-"sdkapi": 251212
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "sdkapi": 251212
+---
+:::
 
 **Q: 如何处理用户拒绝权限？**
 
 A: 提供降级方案或清晰的错误提示：
 
-```javascript
-const granted = await permission.request('clipboard.read')
-if (!granted) {
-  // 显示提示，引导用户手动输入或授权
-  feature.pushItems([{
-    title: '需要剪贴板权限',
-    subtitle: '请在插件设置中授予权限'
-  }])
-}
-```
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const granted = await permission.request('clipboard.read')
+  if (!granted) {
+    // 显示提示，引导用户手动输入或授权
+    feature.pushItems([{
+      title: '需要剪贴板权限',
+      subtitle: '请在插件设置中授予权限'
+    }])
+  }
+---
+:::
 
 **Q: 权限数据存储在哪里？**
 

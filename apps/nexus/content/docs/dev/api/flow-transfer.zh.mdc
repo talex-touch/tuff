@@ -27,26 +27,29 @@ Flow Transfer 是一个插件间数据流转系统，允许插件将结构化数
 
 发起插件提交的标准化数据包：
 
-```typescript
-interface FlowPayload {
-  /** 载荷类型 */
-  type: 'text' | 'image' | 'files' | 'json' | 'html' | 'custom'
-  
-  /** 主要数据内容 */
-  data: string | object
-  
-  /** 数据的 MIME 类型（可选） */
-  mimeType?: string
-  
-  /** 上下文元信息 */
-  context?: {
-    sourcePluginId: string
-    sourceFeatureId?: string
-    originalQuery?: TuffQuery
-    metadata?: Record<string, any>
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FlowPayload {
+    /** 载荷类型 */
+    type: 'text' | 'image' | 'files' | 'json' | 'html' | 'custom'
+    
+    /** 主要数据内容 */
+    data: string | object
+    
+    /** 数据的 MIME 类型（可选） */
+    mimeType?: string
+    
+    /** 上下文元信息 */
+    context?: {
+      sourcePluginId: string
+      sourceFeatureId?: string
+      originalQuery?: TuffQuery
+      metadata?: Record<string, any>
+    }
   }
-}
-```
+---
+:::
 
 > 当前实现说明：FlowTarget 的最终可用列表由主进程维护。
 > - Native share targets：由主进程在启动时注册。
@@ -57,27 +60,30 @@ interface FlowPayload {
 
 接收端在 manifest 中声明的可接收 Flow 的端点：
 
-```typescript
-interface FlowTarget {
-  /** 目标唯一 ID（插件内唯一） */
-  id: string
-  
-  /** 显示名称 */
-  name: string
-  
-  /** 描述 */
-  description?: string
-  
-  /** 支持的载荷类型 */
-  supportedTypes: ('text' | 'image' | 'files' | 'json' | 'html' | 'custom')[]
-  
-  /** 图标（iconify 格式） */
-  icon?: string
-  
-  /** 关联的 Feature ID */
-  featureId?: string
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FlowTarget {
+    /** 目标唯一 ID（插件内唯一） */
+    id: string
+    
+    /** 显示名称 */
+    name: string
+    
+    /** 描述 */
+    description?: string
+    
+    /** 支持的载荷类型 */
+    supportedTypes: ('text' | 'image' | 'files' | 'json' | 'html' | 'custom')[]
+    
+    /** 图标（iconify 格式） */
+    icon?: string
+    
+    /** 关联的 Feature ID */
+    featureId?: string
+  }
+---
+:::
 
 ## 快捷键
 
@@ -97,206 +103,230 @@ Flow 的 manifest 配置结构以 `FlowManifestConfig` 为准：
 - `flowSender?: boolean`
 - `flowTargets?: FlowTarget[]`
 
-```json
-{
-  "name": "my-plugin",
-  "version": "1.0.0",
-  
-  "flowSender": true,
-  
-  "flowTargets": [
-    {
-      "id": "quick-note",
-      "name": "快速记录",
-      "description": "将内容保存为笔记",
-      "supportedTypes": ["text", "html", "image"],
-      "icon": "ri:sticky-note-line",
-      "featureId": "create-note"
-    },
-    {
-      "id": "translate",
-      "name": "翻译",
-      "description": "翻译选中的文本",
-      "supportedTypes": ["text"],
-      "icon": "ri:translate",
-      "featureId": "translate-text"
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "name": "my-plugin",
+    "version": "1.0.0",
+    
+    "flowSender": true,
+    
+    "flowTargets": [
+      {
+        "id": "quick-note",
+        "name": "快速记录",
+        "description": "将内容保存为笔记",
+        "supportedTypes": ["text", "html", "image"],
+        "icon": "ri:sticky-note-line",
+        "featureId": "create-note"
+      },
+      {
+        "id": "translate",
+        "name": "翻译",
+        "description": "翻译选中的文本",
+        "supportedTypes": ["text"],
+        "icon": "ri:translate",
+        "featureId": "translate-text"
+      }
+    ]
+  }
+---
+:::
 
 ## SDK 使用
 
 **发起 Flow（发送方）**
 
-```typescript
-import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-
-// 创建 Flow SDK 实例
-const flow = createFlowSDK(channel, 'my-plugin-id')
-
-// 发起流转
-async function shareToOtherPlugin() {
-  const result = await flow.dispatch(
-    {
-      type: 'text',
-      data: 'Hello from my plugin!',
-      context: {
-        sourcePluginId: 'my-plugin-id',
-        metadata: { timestamp: Date.now() }
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
+  
+  // 创建 Flow SDK 实例
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+  
+  // 发起流转
+  async function shareToOtherPlugin() {
+    const result = await flow.dispatch(
+      {
+        type: 'text',
+        data: 'Hello from my plugin!',
+        context: {
+          sourcePluginId: 'my-plugin-id',
+          metadata: { timestamp: Date.now() }
+        }
+      },
+      {
+        title: '分享文本',
+        description: '将文本发送到其他插件'
       }
-    },
-    {
-      title: '分享文本',
-      description: '将文本发送到其他插件'
-    }
-  )
-  
-  console.log('Flow result:', result.state)
-}
-
-// 直接发送到指定目标（跳过选择面板）
-async function sendToSpecificTarget() {
-  const result = await flow.dispatch(
-    {
-      type: 'json',
-      data: { title: 'Note', content: 'Content...' }
-    },
-    {
-      preferredTarget: 'notes-plugin.quick-note',
-      skipSelector: true,
-      requireAck: true,
-      timeout: 10000,
-      fallbackAction: 'copy'
-    }
-  )
-  
-  if (result.state === 'ACKED') {
-    console.log('Acknowledged:', result.ackPayload)
+    )
+    
+    console.log('Flow result:', result.state)
   }
-}
-```
+  
+  // 直接发送到指定目标（跳过选择面板）
+  async function sendToSpecificTarget() {
+    const result = await flow.dispatch(
+      {
+        type: 'json',
+        data: { title: 'Note', content: 'Content...' }
+      },
+      {
+        preferredTarget: 'notes-plugin.quick-note',
+        skipSelector: true,
+        requireAck: true,
+        timeout: 10000,
+        fallbackAction: 'copy'
+      }
+    )
+    
+    if (result.state === 'ACKED') {
+      console.log('Acknowledged:', result.ackPayload)
+    }
+  }
+---
+:::
 
 **获取可用目标**
 
-```typescript
-// 获取所有可用目标
-const allTargets = await flow.getAvailableTargets()
-
-// 获取支持特定类型的目标
-const textTargets = await flow.getAvailableTargets('text')
-const imageTargets = await flow.getAvailableTargets('image')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 获取所有可用目标
+  const allTargets = await flow.getAvailableTargets()
+  
+  // 获取支持特定类型的目标
+  const textTargets = await flow.getAvailableTargets('text')
+  const imageTargets = await flow.getAvailableTargets('image')
+---
+:::
 
 **接收 Flow（接收方）⚡ 重要**
 
 **插件必须注册 `onFlowTransfer` 处理器才能接收 Flow 数据。** 未注册的插件仍会在目标列表中显示，但会标记为"未适配"并排在列表末尾。
 
-```typescript
-import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-
-const flow = createFlowSDK(channel, 'my-plugin-id')
-
-// 注册 Flow 接收处理器（必需！）
-const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
-  console.log(`收到来自 ${sender.senderName} 的 ${payload.type} 数据`)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
   
-  try {
-    // 处理数据
-    const result = await processPayload(payload)
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+  
+  // 注册 Flow 接收处理器（必需！）
+  const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
+    console.log(`收到来自 ${sender.senderName} 的 ${payload.type} 数据`)
     
-    // 发送确认
-    await flow.acknowledge(sessionId, { success: true, result })
-  } catch (error) {
-    // 报告错误
-    await flow.reportError(sessionId, error.message)
-  }
-})
-
-// 组件卸载时取消注册
-onUnmounted(() => {
-  unsubscribe()
-})
-```
+    try {
+      // 处理数据
+      const result = await processPayload(payload)
+      
+      // 发送确认
+      await flow.acknowledge(sessionId, { success: true, result })
+    } catch (error) {
+      // 报告错误
+      await flow.reportError(sessionId, error.message)
+    }
+  })
+  
+  // 组件卸载时取消注册
+  onUnmounted(() => {
+    unsubscribe()
+  })
+---
+:::
 
 **通过 Feature 触发（备选方式）**
 
 你也可以通过 Feature 的 `query` 参数接收 Flow 数据：
 
-```typescript
-import { extractFlowData, isFlowTriggered } from '@talex-touch/utils/plugin/sdk'
-
-function onFeatureTriggered(featureId: string, query: TuffQuery) {
-  // 检查是否通过 Flow 触发
-  if (isFlowTriggered(query)) {
-    const flowData = extractFlowData(query)
-    if (flowData) {
-      console.log('来自:', flowData.senderId)
-      console.log('类型:', flowData.payload.type)
-      console.log('数据:', flowData.payload.data)
-      
-      // 处理 Flow 数据
-      processFlowPayload(flowData.sessionId, flowData.payload)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { extractFlowData, isFlowTriggered } from '@talex-touch/utils/plugin/sdk'
+  
+  function onFeatureTriggered(featureId: string, query: TuffQuery) {
+    // 检查是否通过 Flow 触发
+    if (isFlowTriggered(query)) {
+      const flowData = extractFlowData(query)
+      if (flowData) {
+        console.log('来自:', flowData.senderId)
+        console.log('类型:', flowData.payload.type)
+        console.log('数据:', flowData.payload.data)
+        
+        // 处理 Flow 数据
+        processFlowPayload(flowData.sessionId, flowData.payload)
+      }
+    } else {
+      // 普通触发（非 Flow）
+      console.log('普通查询:', query.text)
     }
-  } else {
-    // 普通触发（非 Flow）
-    console.log('普通查询:', query.text)
   }
-}
-```
+---
+:::
 
 **发送确认响应**
 
-```typescript
-async function processFlowPayload(sessionId: string, payload: FlowPayload) {
-  try {
-    // 处理数据...
-    const result = await saveNote(payload.data)
-    
-    // 发送确认
-    await flow.acknowledge(sessionId, {
-      success: true,
-      noteId: result.id,
-      message: '保存成功'
-    })
-  } catch (error) {
-    // 报告错误
-    await flow.reportError(sessionId, error.message)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  async function processFlowPayload(sessionId: string, payload: FlowPayload) {
+    try {
+      // 处理数据...
+      const result = await saveNote(payload.data)
+      
+      // 发送确认
+      await flow.acknowledge(sessionId, {
+        success: true,
+        noteId: result.id,
+        message: '保存成功'
+      })
+    } catch (error) {
+      // 报告错误
+      await flow.reportError(sessionId, error.message)
+    }
   }
-}
-```
+---
+:::
 
 ## Flow 会话状态
 
-```typescript
-type FlowSessionState =
-  | 'INIT'             // 初始化
-  | 'TARGET_SELECTING' // 用户选择目标中
-  | 'TARGET_SELECTED'  // 目标已选择
-  | 'DELIVERING'       // 投递中
-  | 'DELIVERED'        // 已投递
-  | 'PROCESSING'       // 目标处理中
-  | 'ACKED'            // 已确认完成
-  | 'FAILED'           // 失败
-  | 'CANCELLED'        // 已取消
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  type FlowSessionState =
+    | 'INIT'             // 初始化
+    | 'TARGET_SELECTING' // 用户选择目标中
+    | 'TARGET_SELECTED'  // 目标已选择
+    | 'DELIVERING'       // 投递中
+    | 'DELIVERED'        // 已投递
+    | 'PROCESSING'       // 目标处理中
+    | 'ACKED'            // 已确认完成
+    | 'FAILED'           // 失败
+    | 'CANCELLED'        // 已取消
+---
+:::
 
 ## 错误处理
 
-```typescript
-enum FlowErrorCode {
-  SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
-  TARGET_NOT_FOUND = 'TARGET_NOT_FOUND',
-  TARGET_OFFLINE = 'TARGET_OFFLINE',
-  PAYLOAD_INVALID = 'PAYLOAD_INVALID',
-  PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
-  TYPE_NOT_SUPPORTED = 'TYPE_NOT_SUPPORTED',
-  PERMISSION_DENIED = 'PERMISSION_DENIED',
-  TIMEOUT = 'TIMEOUT',
-  CANCELLED = 'CANCELLED',
-  INTERNAL_ERROR = 'INTERNAL_ERROR'
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum FlowErrorCode {
+    SENDER_NOT_ALLOWED = 'SENDER_NOT_ALLOWED',
+    TARGET_NOT_FOUND = 'TARGET_NOT_FOUND',
+    TARGET_OFFLINE = 'TARGET_OFFLINE',
+    PAYLOAD_INVALID = 'PAYLOAD_INVALID',
+    PAYLOAD_TOO_LARGE = 'PAYLOAD_TOO_LARGE',
+    TYPE_NOT_SUPPORTED = 'TYPE_NOT_SUPPORTED',
+    PERMISSION_DENIED = 'PERMISSION_DENIED',
+    TIMEOUT = 'TIMEOUT',
+    CANCELLED = 'CANCELLED',
+    INTERNAL_ERROR = 'INTERNAL_ERROR'
+  }
+---
+:::
 
 ## 原生系统分享
 
@@ -304,27 +334,30 @@ Flow Transfer 集成了系统原生分享功能，可以将数据分享到 AirDr
 
 **使用原生分享**
 
-```typescript
-const flow = createFlowSDK(channel, 'my-plugin-id')
-
-// 使用系统分享
-const result = await flow.nativeShare({
-  type: 'text',
-  data: 'Hello World!'
-})
-
-// 指定分享目标
-const result = await flow.nativeShare(
-  { type: 'text', data: 'Hello!' },
-  'airdrop'  // 可选: 'system' | 'airdrop' | 'mail' | 'messages'
-)
-
-if (result.success) {
-  console.log('分享成功:', result.target)
-} else {
-  console.error('分享失败:', result.error)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const flow = createFlowSDK(channel, 'my-plugin-id')
+  
+  // 使用系统分享
+  const result = await flow.nativeShare({
+    type: 'text',
+    data: 'Hello World!'
+  })
+  
+  // 指定分享目标
+  const result = await flow.nativeShare(
+    { type: 'text', data: 'Hello!' },
+    'airdrop'  // 可选: 'system' | 'airdrop' | 'mail' | 'messages'
+  )
+  
+  if (result.success) {
+    console.log('分享成功:', result.target)
+  } else {
+    console.error('分享失败:', result.error)
+  }
+---
+:::
 
 **支持的原生目标**
 
@@ -347,15 +380,18 @@ Flow 目标列表按以下优先级排序：
 2. **已适配插件** - 注册了 `onFlowTransfer` 处理器的插件
 3. **未适配插件** - 未注册处理器的插件（显示"未适配"提示）
 
-```typescript
-// FlowTargetInfo 中的适配状态字段
-interface FlowTargetInfo {
-  // ...其他字段
-  hasFlowHandler: boolean    // 是否已注册处理器
-  isNativeShare?: boolean    // 是否为原生分享目标
-  adaptationHint?: string    // 适配提示（如"该插件尚未适配 Flow Transfer"）
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // FlowTargetInfo 中的适配状态字段
+  interface FlowTargetInfo {
+    // ...其他字段
+    hasFlowHandler: boolean    // 是否已注册处理器
+    isNativeShare?: boolean    // 是否为原生分享目标
+    adaptationHint?: string    // 适配提示（如"该插件尚未适配 Flow Transfer"）
+  }
+---
+:::
 
 ## IPC 通道（实现对齐）
 

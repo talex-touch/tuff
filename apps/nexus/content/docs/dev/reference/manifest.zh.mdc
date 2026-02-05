@@ -36,16 +36,19 @@
 
 **声明格式**
 
-```json
-"permissions": {
-  "required": ["clipboard.read", "network.internet"],
-  "optional": ["storage.shared"]
-},
-"permissionReasons": {
-  "clipboard.read": "读取剪贴板中的待翻译文本",
-  "network.internet": "连接翻译服务 API"
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissions": {
+    "required": ["clipboard.read", "network.internet"],
+    "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "读取剪贴板中的待翻译文本",
+    "network.internet": "连接翻译服务 API"
+  }
+---
+:::
 
 **可用权限**
 
@@ -71,37 +74,40 @@
 | `window.capture` | 高 | 屏幕截图 |
 
 ## 示例
-```json
-{
-  "id": "com.tuff.todo",
-  "name": {
-    "default": "待办",
-    "en": "Todo"
-  },
-  "description": "快速记录与同步待办",
-  "version": "1.3.0",
-  "sdkapi": 260114,
-  "category": "utilities",
-  "entry": "init/index.ts",
-  "features": [
-    {
-      "type": "corebox",
-      "id": "todo.new",
-      "title": "快速创建待办",
-      "keywords": ["todo", "task"],
-      "queryMode": "text"
-    }
-  ],
-  "permissions": {
-    "required": ["clipboard.read"],
-    "optional": ["storage.shared"]
-  },
-  "permissionReasons": {
-    "clipboard.read": "读取剪贴板中的待办内容"
-  },
-  "acceptedInputTypes": ["text", "files"]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.tuff.todo",
+    "name": {
+      "default": "待办",
+      "en": "Todo"
+    },
+    "description": "快速记录与同步待办",
+    "version": "1.3.0",
+    "sdkapi": 260114,
+    "category": "utilities",
+    "entry": "init/index.ts",
+    "features": [
+      {
+        "type": "corebox",
+        "id": "todo.new",
+        "title": "快速创建待办",
+        "keywords": ["todo", "task"],
+        "queryMode": "text"
+      }
+    ],
+    "permissions": {
+      "required": ["clipboard.read"],
+      "optional": ["storage.shared"]
+    },
+    "permissionReasons": {
+      "clipboard.read": "读取剪贴板中的待办内容"
+    },
+    "acceptedInputTypes": ["text", "files"]
+  }
+---
+:::
 
 ## 校验
 - `id` 必须唯一且只含字母数字点。

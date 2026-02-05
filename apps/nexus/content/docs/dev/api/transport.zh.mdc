@@ -24,25 +24,28 @@ TuffTransport 替代传统 Channel API。旧 API 仍可使用，但建议新开�
 
 **快速开始**
 
-```ts
-import { useTuffTransport, CoreBoxEvents, StorageEvents } from '@talex-touch/utils/transport'
-
-const transport = useTuffTransport()
-
-// 发送类型安全的请求
-await transport.send(CoreBoxEvents.ui.hide)
-
-// 带参数的请求
-const result = await transport.send(CoreBoxEvents.search.query, {
-  query: { text: 'hello' }
-})
-
-// 批量请求（自动合并）
-const [theme, lang] = await Promise.all([
-  transport.send(StorageEvents.app.get, { key: 'theme' }),
-  transport.send(StorageEvents.app.get, { key: 'language' }),
-])
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useTuffTransport, CoreBoxEvents, StorageEvents } from '@talex-touch/utils/transport'
+  
+  const transport = useTuffTransport()
+  
+  // 发送类型安全的请求
+  await transport.send(CoreBoxEvents.ui.hide)
+  
+  // 带参数的请求
+  const result = await transport.send(CoreBoxEvents.search.query, {
+    query: { text: 'hello' }
+  })
+  
+  // 批量请求（自动合并）
+  const [theme, lang] = await Promise.all([
+    transport.send(StorageEvents.app.get, { key: 'theme' }),
+    transport.send(StorageEvents.app.get, { key: 'language' }),
+  ])
+---
+:::
 
 ---
 
@@ -52,36 +55,42 @@ const [theme, lang] = await Promise.all([
 
 TuffTransport 的每次通信都使用 `TuffEvent` —— 一个在编译时编码请求/响应类型的类型安全事件定义。
 
-```ts
-// ❌ 传统方式：字符串，无类型安全
-channel.send('core-box:search:query', { text: 'hello' })
-
-// ✅ TuffTransport：类型安全，自动补全
-transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
-//                                          ↑ TypeScript 强制正确的参数类型
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // ❌ 传统方式：字符串，无类型安全
+  channel.send('core-box:search:query', { text: 'hello' })
+  
+  // ✅ TuffTransport：类型安全，自动补全
+  transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
+  //                                          ↑ TypeScript 强制正确的参数类型
+---
+:::
 
 **Event Builder**
 
 使用 `defineEvent` 构建器创建自定义事件：
 
-```ts
-import { defineEvent } from '@talex-touch/utils/transport'
-
-// 定义类型安全的事件
-const MyPluginEvents = {
-  data: {
-    fetch: defineEvent('my-plugin')
-      .module('data')
-      .event('fetch')
-      .define<{ id: string }, { name: string; value: number }>()
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { defineEvent } from '@talex-touch/utils/transport'
+  
+  // 定义类型安全的事件
+  const MyPluginEvents = {
+    data: {
+      fetch: defineEvent('my-plugin')
+        .module('data')
+        .event('fetch')
+        .define<{ id: string }, { name: string; value: number }>()
+    }
   }
-}
-
-// 使用 - 完全类型安全！
-const result = await transport.send(MyPluginEvents.data.fetch, { id: '123' })
-console.log(result.name, result.value) // ✅ 类型安全访问
-```
+  
+  // 使用 - 完全类型安全！
+  const result = await transport.send(MyPluginEvents.data.fetch, { id: '123' })
+  console.log(result.name, result.value) // ✅ 类型安全访问
+---
+:::
 
 ---
 
@@ -91,11 +100,14 @@ console.log(result.name, result.value) // ✅ 类型安全访问
 
 在插件渲染进程中获取 transport 实例。
 
-```ts
-import { useTuffTransport } from '@talex-touch/utils/transport'
-
-const transport = useTuffTransport()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+  
+  const transport = useTuffTransport()
+---
+:::
 
 **transport.send(event, payload?, options?)**
 
@@ -114,47 +126,53 @@ const transport = useTuffTransport()
 
 **示例：**
 
-```ts
-// 简单请求
-await transport.send(CoreBoxEvents.ui.hide)
-
-// 带参数的请求
-const result = await transport.send(StorageEvents.app.get, { key: 'theme' })
-
-// 立即发送（跳过批量）
-await transport.send(StorageEvents.app.set, 
-  { key: 'urgent', value: true },
-  { immediate: true }
-)
-
-// 自定义超时
-await transport.send(SlowEvent, data, { timeout: 30000 })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 简单请求
+  await transport.send(CoreBoxEvents.ui.hide)
+  
+  // 带参数的请求
+  const result = await transport.send(StorageEvents.app.get, { key: 'theme' })
+  
+  // 立即发送（跳过批量）
+  await transport.send(StorageEvents.app.set, 
+    { key: 'urgent', value: true },
+    { immediate: true }
+  )
+  
+  // 自定义超时
+  await transport.send(SlowEvent, data, { timeout: 30000 })
+---
+:::
 
 **transport.stream(event, payload, options)**
 
 通过 MessagePort 发起流式请求。
 
-```ts
-const controller = await transport.stream(
-  CoreBoxEvents.search.query,
-  { query: { text: 'hello' } },
-  {
-    onData: (result) => {
-      console.log('收到数据:', result)
-    },
-    onEnd: () => {
-      console.log('流完成')
-    },
-    onError: (err) => {
-      console.error('流错误:', err)
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const controller = await transport.stream(
+    CoreBoxEvents.search.query,
+    { query: { text: 'hello' } },
+    {
+      onData: (result) => {
+        console.log('收到数据:', result)
+      },
+      onEnd: () => {
+        console.log('流完成')
+      },
+      onError: (err) => {
+        console.error('流错误:', err)
+      }
     }
-  }
-)
-
-// 需要时取消流
-controller.cancel()
-```
+  )
+  
+  // 需要时取消流
+  controller.cancel()
+---
+:::
 
 **MessagePort 升级与回退**
 
@@ -164,48 +182,60 @@ controller.cancel()
   `CoreBoxEvents.search.end`、`CoreBoxEvents.search.noResults`。
 - 手动控制：`options.port = false` 强制走 channel；或配置 `options.port.timeoutMs`/`options.port.scope`。
 
-```ts
-// 自定义端口超时
-const controller = await transport.stream(
-  AppEvents.fileIndex.progress,
-  undefined,
-  {
-    onData: (data) => console.log(data),
-    port: { timeoutMs: 800 }
-  }
-)
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 自定义端口超时
+  const controller = await transport.stream(
+    AppEvents.fileIndex.progress,
+    undefined,
+    {
+      onData: (data) => console.log(data),
+      port: { timeoutMs: 800 }
+    }
+  )
+---
+:::
 
-```ts
-// 高级用法：主动升级端口（仅在需要时使用）
-const handle = await transport.openPort({
-  channel: CoreBoxEvents.search.update.toEventName(),
-  scope: 'window'
-})
-handle?.port.postMessage({ type: 'data', payload: { hello: 'world' } })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 高级用法：主动升级端口（仅在需要时使用）
+  const handle = await transport.openPort({
+    channel: CoreBoxEvents.search.update.toEventName(),
+    scope: 'window'
+  })
+  handle?.port.postMessage({ type: 'data', payload: { hello: 'world' } })
+---
+:::
 
 **transport.on(event, handler)**
 
 注册事件处理器接收消息。
 
-```ts
-const cleanup = transport.on(SomeEvent, (payload) => {
-  console.log('收到:', payload)
-  return { success: true } // 返回响应
-})
-
-// 完成时清理
-onUnmounted(() => cleanup())
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const cleanup = transport.on(SomeEvent, (payload) => {
+    console.log('收到:', payload)
+    return { success: true } // 返回响应
+  })
+  
+  // 完成时清理
+  onUnmounted(() => cleanup())
+---
+:::
 
 **transport.flush()**
 
 强制发送所有待处理的批量请求。
 
-```ts
-await transport.flush()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await transport.flush()
+---
+:::
 
 ---
 
@@ -213,122 +243,143 @@ await transport.flush()
 
 **CoreBoxEvents**
 
-```ts
-import { CoreBoxEvents } from '@talex-touch/utils/transport'
-
-// UI 控制
-CoreBoxEvents.ui.show       // 显示 CoreBox
-CoreBoxEvents.ui.hide       // 隐藏 CoreBox
-CoreBoxEvents.ui.expand     // 展开/收起
-
-// 搜索
-CoreBoxEvents.search.query  // 执行搜索（流式）
-CoreBoxEvents.search.cancel // 取消搜索
-
-// 输入框
-CoreBoxEvents.input.get     // 获取输入值
-CoreBoxEvents.input.set     // 设置输入值
-CoreBoxEvents.input.clear   // 清空输入
-
-// 提供者
-CoreBoxEvents.provider.deactivate    // 停用提供者
-CoreBoxEvents.provider.getDetails    // 获取提供者详情（批量）
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { CoreBoxEvents } from '@talex-touch/utils/transport'
+  
+  // UI 控制
+  CoreBoxEvents.ui.show       // 显示 CoreBox
+  CoreBoxEvents.ui.hide       // 隐藏 CoreBox
+  CoreBoxEvents.ui.expand     // 展开/收起
+  
+  // 搜索
+  CoreBoxEvents.search.query  // 执行搜索（流式）
+  CoreBoxEvents.search.cancel // 取消搜索
+  
+  // 输入框
+  CoreBoxEvents.input.get     // 获取输入值
+  CoreBoxEvents.input.set     // 设置输入值
+  CoreBoxEvents.input.clear   // 清空输入
+  
+  // 提供者
+  CoreBoxEvents.provider.deactivate    // 停用提供者
+  CoreBoxEvents.provider.getDetails    // 获取提供者详情（批量）
+---
+:::
 
 **StorageEvents**
 
-```ts
-import { StorageEvents } from '@talex-touch/utils/transport'
-
-// 应用存储（支持批量）
-StorageEvents.app.get       // 获取值
-StorageEvents.app.set       // 设置值
-StorageEvents.app.delete    // 删除值
-
-// 插件存储（支持批量）
-StorageEvents.plugin.get    // 获取插件值
-StorageEvents.plugin.set    // 设置插件值
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { StorageEvents } from '@talex-touch/utils/transport'
+  
+  // 应用存储（支持批量）
+  StorageEvents.app.get       // 获取值
+  StorageEvents.app.set       // 设置值
+  StorageEvents.app.delete    // 删除值
+  
+  // 插件存储（支持批量）
+  StorageEvents.plugin.get    // 获取插件值
+  StorageEvents.plugin.set    // 设置插件值
+---
+:::
 
 **PluginEvents**
 
-```ts
-import { PluginEvents } from '@talex-touch/utils/transport'
-
-// 生命周期
-PluginEvents.lifecycle.load     // 加载插件
-PluginEvents.lifecycle.unload   // 卸载插件
-PluginEvents.lifecycle.reload   // 重载插件
-
-// 功能
-PluginEvents.feature.trigger    // 触发功能
-
-// 日志（批量）
-PluginEvents.log.write          // 写入日志
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { PluginEvents } from '@talex-touch/utils/transport'
+  
+  // 生命周期
+  PluginEvents.lifecycle.load     // 加载插件
+  PluginEvents.lifecycle.unload   // 卸载插件
+  PluginEvents.lifecycle.reload   // 重载插件
+  
+  // 功能
+  PluginEvents.feature.trigger    // 触发功能
+  
+  // 日志（批量）
+  PluginEvents.log.write          // 写入日志
+---
+:::
 
 **BoxItemEvents**
 
-```ts
-import { BoxItemEvents } from '@talex-touch/utils/transport'
-
-// CRUD（支持批量）
-BoxItemEvents.crud.create   // 创建项
-BoxItemEvents.crud.update   // 更新项
-BoxItemEvents.crud.upsert   // 创建或更新
-BoxItemEvents.crud.delete   // 删除项
-
-// 批量操作
-BoxItemEvents.batch.upsert  // 批量更新
-BoxItemEvents.batch.delete  // 批量删除
-BoxItemEvents.batch.clear   // 按来源清空
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { BoxItemEvents } from '@talex-touch/utils/transport'
+  
+  // CRUD（支持批量）
+  BoxItemEvents.crud.create   // 创建项
+  BoxItemEvents.crud.update   // 更新项
+  BoxItemEvents.crud.upsert   // 创建或更新
+  BoxItemEvents.crud.delete   // 删除项
+  
+  // 批量操作
+  BoxItemEvents.batch.upsert  // 批量更新
+  BoxItemEvents.batch.delete  // 批量删除
+  BoxItemEvents.batch.clear   // 按来源清空
+---
+:::
 
 **ClipboardEvents :badge[v0.9.0]{type="info"}**
 
-```ts
-import { ClipboardEvents } from '@talex-touch/utils/transport'
-
-// 监听（流式）
-ClipboardEvents.change      // 订阅剪贴板变化
-
-// 历史记录（支持批量）
-ClipboardEvents.getHistory  // 分页查询历史
-ClipboardEvents.getLatest   // 获取最新项
-
-// 操作
-ClipboardEvents.apply       // 应用到活动应用
-ClipboardEvents.delete      // 删除历史项
-ClipboardEvents.setFavorite // 切换收藏状态
-ClipboardEvents.write       // 写入系统剪贴板
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { ClipboardEvents } from '@talex-touch/utils/transport'
+  
+  // 监听（流式）
+  ClipboardEvents.change      // 订阅剪贴板变化
+  
+  // 历史记录（支持批量）
+  ClipboardEvents.getHistory  // 分页查询历史
+  ClipboardEvents.getLatest   // 获取最新项
+  
+  // 操作
+  ClipboardEvents.apply       // 应用到活动应用
+  ClipboardEvents.delete      // 删除历史项
+  ClipboardEvents.setFavorite // 切换收藏状态
+  ClipboardEvents.write       // 写入系统剪贴板
+---
+:::
 
 **示例：订阅剪贴板变化**
 
-```ts
-const controller = await transport.stream(
-  ClipboardEvents.change,
-  undefined,
-  {
-    onData: ({ item, source }) => {
-      console.log(`新 ${item.type} 来自 ${source}:`, item.content)
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const controller = await transport.stream(
+    ClipboardEvents.change,
+    undefined,
+    {
+      onData: ({ item, source }) => {
+        console.log(`新 ${item.type} 来自 ${source}:`, item.content)
+      }
     }
-  }
-)
-
-onUnmounted(() => controller.cancel())
-```
+  )
+  
+  onUnmounted(() => controller.cancel())
+---
+:::
 
 **示例：查询剪贴板历史**
 
-```ts
-const { history, total } = await transport.send(ClipboardEvents.getHistory, {
-  page: 1,
-  pageSize: 20,
-  type: 'text',
-  keyword: '搜索关键词'
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const { history, total } = await transport.send(ClipboardEvents.getHistory, {
+    page: 1,
+    pageSize: 20,
+    type: 'text',
+    keyword: '搜索关键词'
+  })
+---
+:::
 
 ---
 
@@ -336,33 +387,39 @@ const { history, total } = await transport.send(ClipboardEvents.getHistory, {
 
 TuffTransport 自动合并支持批量的事件请求：
 
-```ts
-// 这 3 个请求自动合并为 1 次 IPC 调用
-const [a, b, c] = await Promise.all([
-  transport.send(StorageEvents.app.get, { key: 'a' }),
-  transport.send(StorageEvents.app.get, { key: 'b' }),
-  transport.send(StorageEvents.app.get, { key: 'c' }),
-])
-// 结果：单次 IPC 包含 3 个请求，性能提升 500%+
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 这 3 个请求自动合并为 1 次 IPC 调用
+  const [a, b, c] = await Promise.all([
+    transport.send(StorageEvents.app.get, { key: 'a' }),
+    transport.send(StorageEvents.app.get, { key: 'b' }),
+    transport.send(StorageEvents.app.get, { key: 'c' }),
+  ])
+  // 结果：单次 IPC 包含 3 个请求，性能提升 500%+
+---
+:::
 
 **批量配置**
 
 定义自定义事件时配置批量：
 
-```ts
-const MyEvent = defineEvent('my-plugin')
-  .module('data')
-  .event('fetch')
-  .define<Request, Response>({
-    batch: {
-      enabled: true,
-      windowMs: 50,        // 收集 50ms
-      maxSize: 20,         // 每批最多 20 个请求
-      mergeStrategy: 'dedupe' // 'queue' | 'dedupe' | 'latest'
-    }
-  })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const MyEvent = defineEvent('my-plugin')
+    .module('data')
+    .event('fetch')
+    .define<Request, Response>({
+      batch: {
+        enabled: true,
+        windowMs: 50,        // 收集 50ms
+        maxSize: 20,         // 每批最多 20 个请求
+        mergeStrategy: 'dedupe' // 'queue' | 'dedupe' | 'latest'
+      }
+    })
+---
+:::
 
 **合并策略：**
 - `queue` - 所有请求按顺序处理
@@ -375,31 +432,34 @@ const MyEvent = defineEvent('my-plugin')
 
 对于大数据或持续数据，使用 MessagePort 流式传输：
 
-```ts
-const MyStreamEvent = defineEvent('my-plugin')
-  .module('data')
-  .event('stream')
-  .define<{ filter: string }, AsyncIterable<DataItem>>({
-    stream: {
-      enabled: true,
-      bufferSize: 100
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const MyStreamEvent = defineEvent('my-plugin')
+    .module('data')
+    .event('stream')
+    .define<{ filter: string }, AsyncIterable<DataItem>>({
+      stream: {
+        enabled: true,
+        bufferSize: 100
+      }
+    })
+  
+  // 消费流
+  const controller = await transport.stream(
+    MyStreamEvent,
+    { filter: 'active' },
+    {
+      onData: (item) => items.push(item),
+      onEnd: () => console.log('完成'),
+      onError: (err) => console.error(err)
     }
-  })
-
-// 消费流
-const controller = await transport.stream(
-  MyStreamEvent,
-  { filter: 'active' },
-  {
-    onData: (item) => items.push(item),
-    onEnd: () => console.log('完成'),
-    onError: (err) => console.error(err)
-  }
-)
-
-// 需要时取消
-onUnmounted(() => controller.cancel())
-```
+  )
+  
+  // 需要时取消
+  onUnmounted(() => controller.cancel())
+---
+:::
 
 ---
 
@@ -407,27 +467,30 @@ onUnmounted(() => controller.cancel())
 
 TuffTransport 提供结构化错误：
 
-```ts
-import { TuffTransportError, TuffTransportErrorCode } from '@talex-touch/utils/transport'
-
-try {
-  await transport.send(SomeEvent, data)
-} catch (err) {
-  if (err instanceof TuffTransportError) {
-    switch (err.code) {
-      case TuffTransportErrorCode.TIMEOUT:
-        console.log('请求超时')
-        break
-      case TuffTransportErrorCode.INVALID_EVENT:
-        console.log('无效事件 - 请使用 defineEvent()')
-        break
-      case TuffTransportErrorCode.UNKNOWN_EVENT:
-        console.log('未注册处理器')
-        break
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { TuffTransportError, TuffTransportErrorCode } from '@talex-touch/utils/transport'
+  
+  try {
+    await transport.send(SomeEvent, data)
+  } catch (err) {
+    if (err instanceof TuffTransportError) {
+      switch (err.code) {
+        case TuffTransportErrorCode.TIMEOUT:
+          console.log('请求超时')
+          break
+        case TuffTransportErrorCode.INVALID_EVENT:
+          console.log('无效事件 - 请使用 defineEvent()')
+          break
+        case TuffTransportErrorCode.UNKNOWN_EVENT:
+          console.log('未注册处理器')
+          break
+      }
     }
   }
-}
-```
+---
+:::
 
 **错误码：**
 | 错误码 | 说明 |
@@ -445,33 +508,42 @@ try {
 
 **之前（传统方式）**
 
-```ts
-import { useChannel } from '@talex-touch/utils/plugin/sdk'
-
-const channel = useChannel()
-const result = await channel.send('core-box:search:query', { text: 'hello' })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+  
+  const channel = useChannel()
+  const result = await channel.send('core-box:search:query', { text: 'hello' })
+---
+:::
 
 **之后（TuffTransport）**
 
-```ts
-import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
-
-const transport = useTuffTransport()
-const result = await transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useTuffTransport, CoreBoxEvents } from '@talex-touch/utils/transport'
+  
+  const transport = useTuffTransport()
+  const result = await transport.send(CoreBoxEvents.search.query, { query: { text: 'hello' } })
+---
+:::
 
 **渐进式迁移**
 
 两套 API 可以同时使用 —— 按自己的节奏迁移：
 
-```ts
-// 传统方式（仍然有效）
-await channel.send('storage:app:get', { key: 'theme' })
-
-// 新方式（推荐）
-await transport.send(StorageEvents.app.get, { key: 'theme' })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 传统方式（仍然有效）
+  await channel.send('storage:app:get', { key: 'theme' })
+  
+  // 新方式（推荐）
+  await transport.send(StorageEvents.app.get, { key: 'theme' })
+---
+:::
 
 ---
 
@@ -494,43 +566,46 @@ await transport.send(StorageEvents.app.get, { key: 'theme' })
 
 ## 类型定义
 
-```ts
-interface ITuffTransport {
-  send<TReq, TRes>(
-    event: TuffEvent<TReq, TRes>,
-    payload: TReq,
-    options?: SendOptions
-  ): Promise<TRes>
-
-  stream<TReq, TChunk>(
-    event: TuffEvent<TReq, AsyncIterable<TChunk>>,
-    payload: TReq,
-    options: StreamOptions<TChunk>
-  ): Promise<StreamController>
-
-  on<TReq, TRes>(
-    event: TuffEvent<TReq, TRes>,
-    handler: (payload: TReq) => TRes | Promise<TRes>
-  ): () => void
-
-  flush(): Promise<void>
-  destroy(): void
-}
-
-interface SendOptions {
-  immediate?: boolean
-  timeout?: number
-}
-
-interface StreamOptions<T> {
-  onData: (chunk: T) => void
-  onError?: (error: Error) => void
-  onEnd?: () => void
-}
-
-interface StreamController {
-  cancel(): void
-  readonly cancelled: boolean
-  readonly streamId: string
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface ITuffTransport {
+    send<TReq, TRes>(
+      event: TuffEvent<TReq, TRes>,
+      payload: TReq,
+      options?: SendOptions
+    ): Promise<TRes>
+  
+    stream<TReq, TChunk>(
+      event: TuffEvent<TReq, AsyncIterable<TChunk>>,
+      payload: TReq,
+      options: StreamOptions<TChunk>
+    ): Promise<StreamController>
+  
+    on<TReq, TRes>(
+      event: TuffEvent<TReq, TRes>,
+      handler: (payload: TReq) => TRes | Promise<TRes>
+    ): () => void
+  
+    flush(): Promise<void>
+    destroy(): void
+  }
+  
+  interface SendOptions {
+    immediate?: boolean
+    timeout?: number
+  }
+  
+  interface StreamOptions<T> {
+    onData: (chunk: T) => void
+    onError?: (error: Error) => void
+    onEnd?: () => void
+  }
+  
+  interface StreamController {
+    cancel(): void
+    readonly cancelled: boolean
+    readonly streamId: string
+  }
+---
+:::

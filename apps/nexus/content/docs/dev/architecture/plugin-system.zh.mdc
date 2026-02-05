@@ -53,16 +53,19 @@
 
 ## 7. 关键流程（Mermaid）
 
-```mermaid
-flowchart TB
-  discover["Providers (Local/NPM/GitHub/TPEX)"] --> install["Installer/Resolver"]
-  install --> runtime["Plugin Runtime"]
-  runtime --> manifest["Manifest.json"]
-  manifest --> prelude["Prelude (index.js)"]
-  prelude --> surface["Surface UI (attachUIView)"]
-  prelude --> adapter["Feature Adapter"]
-  adapter --> corebox["CoreBox Search Items"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    discover["Providers (Local/NPM/GitHub/TPEX)"] --> install["Installer/Resolver"]
+    install --> runtime["Plugin Runtime"]
+    runtime --> manifest["Manifest.json"]
+    manifest --> prelude["Prelude (index.js)"]
+    prelude --> surface["Surface UI (attachUIView)"]
+    prelude --> adapter["Feature Adapter"]
+    adapter --> corebox["CoreBox Search Items"]
+---
+:::
 
 ## 8. 相关文档
 
