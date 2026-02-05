@@ -9,18 +9,13 @@ const props = withDefaults(defineProps<{
   colorful: true,
 })
 
-const LINUXDO_SVG = `<svg
-    class="icon-tabler"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <clipPath id="a"><circle cx="10" cy="12" r="7"/></clipPath>
-    <circle cx="10" cy="12" r="9"/>
-    <rect clip-path="url(#a)" x="1.7" y="3.7" width="16.6" height="5"/>
-    <rect clip-path="url(#a)" x="1.7" y="8.7" width="16.6" height="6.7"/>
-    <rect clip-path="url(#a)" x="1.7" y="15.3" width="16.6" height="5"/>
-  </svg>`
+const LINUXDO_SVG = `<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <clipPath id="a"><circle cx="60" cy="60" r="47"/></clipPath>
+    <circle fill="#f0f0f0" cx="60" cy="60" r="50"/>
+    <rect fill="#1c1c1e" clip-path="url(#a)" x="10" y="10" width="100" height="30"/>
+    <rect fill="#f0f0f0" clip-path="url(#a)" x="10" y="40" width="100" height="40"/>
+    <rect fill="#ffb003" clip-path="url(#a)" x="10" y="80" width="100" height="30"/>
+</svg>`
 
 const linuxdoIcon = {
   type: 'url',
