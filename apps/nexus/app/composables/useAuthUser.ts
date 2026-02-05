@@ -11,7 +11,7 @@ export interface AuthUserProfile {
 }
 
 export function useAuthUser() {
-  const { status } = useSession()
+  const { status } = useAuth()
   const userState = useState<AuthUserProfile | null>('auth-user', () => null)
   const pendingState = useState<boolean>('auth-user-pending', () => false)
   const errorState = useState<string | null>('auth-user-error', () => null)

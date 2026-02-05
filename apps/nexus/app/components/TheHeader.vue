@@ -10,8 +10,7 @@ withDefaults(defineProps<{
 })
 
 const route = useRoute()
-const { data: session, status } = useSession()
-const { signOut } = useAuth()
+const { data: session, status, signOut } = useAuth()
 
 const scrolled = ref(false)
 const { t, locale } = useI18n()

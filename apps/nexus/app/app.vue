@@ -14,7 +14,7 @@ const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { locale, setLocale } = useI18n()
 const { syncLocaleChanges, getSavedLocale } = useUserLocale()
 const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
-const { status } = useSession()
+const { status } = useAuth()
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
 

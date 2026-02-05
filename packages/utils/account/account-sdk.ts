@@ -241,7 +241,9 @@ export class AccountSDK {
     const profile = await this.getProfile()
     if (!profile)
       return ''
-    return profile.displayName || profile.username || profile.email.split('@')[0]
+    const email = profile.email ?? ''
+    const emailName = email ? email.split('@')[0] : ''
+    return profile.displayName ?? profile.username ?? emailName
   }
 
   /**
