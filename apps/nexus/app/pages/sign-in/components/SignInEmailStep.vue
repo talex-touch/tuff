@@ -56,6 +56,40 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
       </TxBadge>
     </div>
 
+    <div class="auth-method auth-method--full">
+      <Button
+        variant="ghost"
+        class="auth-button auth-button--ghost"
+        size="lg"
+        block
+        :aria-label="t('auth.oauthGithub', 'GitHub')"
+        @click="emit('github')"
+      >
+        <span class="i-carbon-logo-github text-base" />
+        {{ t('auth.oauthGithub', 'GitHub') }}
+      </Button>
+      <TxBadge v-if="lastMethod === 'github'" class="auth-last-badge">
+        {{ lastUsedLabel }}
+      </TxBadge>
+    </div>
+
+    <div class="auth-method auth-method--full">
+      <Button
+        variant="ghost"
+        class="auth-button auth-button--ghost"
+        size="lg"
+        block
+        :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')"
+        @click="emit('linuxdo')"
+      >
+        <LinuxdoIcon :size="18" />
+        {{ t('auth.oauthLinuxdo', 'LinuxDO') }}
+      </Button>
+      <TxBadge v-if="lastMethod === 'linuxdo'" class="auth-last-badge">
+        {{ lastUsedLabel }}
+      </TxBadge>
+    </div>
+
     <div class="auth-divider">
       <span class="auth-divider__line" />
       <span>OR</span>
@@ -72,37 +106,6 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
         {{ lastUsedLabel }}
       </TxBadge>
     </div>
-
-    <div class="auth-oauth">
-      <div class="auth-oauth-row">
-        <div class="auth-method auth-method--icon">
-          <Button
-            variant="ghost"
-            class="auth-icon-button"
-            :aria-label="t('auth.oauthGithub', 'GitHub')"
-            @click="emit('github')"
-          >
-            <span class="i-carbon-logo-github text-lg" />
-          </Button>
-          <TxBadge v-if="lastMethod === 'github'" class="auth-last-badge auth-last-badge--icon">
-            {{ lastUsedLabel }}
-          </TxBadge>
-        </div>
-        <div class="auth-method auth-method--icon">
-          <Button
-            variant="ghost"
-            class="auth-icon-button"
-            :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')"
-            @click="emit('linuxdo')"
-          >
-            <LinuxdoIcon :size="18" />
-          </Button>
-          <TxBadge v-if="lastMethod === 'linuxdo'" class="auth-last-badge auth-last-badge--icon">
-            {{ lastUsedLabel }}
-          </TxBadge>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -115,10 +118,6 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
 
 .auth-method--full {
   width: 100%;
-}
-
-.auth-method--icon {
-  width: auto;
 }
 
 .auth-last-badge {
@@ -135,8 +134,4 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
   pointer-events: none;
 }
 
-.auth-last-badge--icon {
-  top: 4px;
-  right: 4px;
-}
 </style>
