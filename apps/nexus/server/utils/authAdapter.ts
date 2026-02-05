@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
-import { createVerificationToken, getUserByAccount, getUserByEmail, getUserById, linkAccount, updateUserProfile, useVerificationToken } from './authStore'
+import { ensurePersonalTeam } from './creditsStore'
+import { createUser, createVerificationToken, getUserByAccount, getUserByEmail, getUserById, isUserActive, linkAccount, updateUserProfile, useVerificationToken } from './authStore'
 
 function toAdapterUser(user: { id: string, email: string, name: string | null, image: string | null, emailVerified: string | null }) {
   return {
@@ -14,11 +15,30 @@ function toAdapterUser(user: { id: string, email: string, name: string | null, i
 export function createD1Adapter(event: H3Event) {
   return {
     async createUser(data: any) {
-      const existing = await getUserByEmail(event, data.email)
-      if (!existing) {
-        throw new Error('Email signup is disabled for OAuth providers.')
+      const rawEmail = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
+      const hasEmail = rawEmail.length > 0
+      const email = hasEmail ? rawEmail : `missing+${crypto.randomUUID()}@tuff.local`
+      if (hasEmail) {
+        const existing = await getUserByEmail(event, email)
+        if (existing) {
+          if (!isUserActive(existing)) {
+            throw new Error('Account is disabled.')
+          }
+          return toAdapterUser(existing)
+        }
       }
-      return toAdapterUser(existing)
+      const emailVerified = hasEmail
+        ? (data.emailVerified instanceof Date ? data.emailVerified.toISOString() : new Date().toISOString())
+        : null
+      const user = await createUser(event, {
+        email,
+        name: typeof data.name === 'string' ? data.name : null,
+        image: typeof data.image === 'string' ? data.image : null,
+        emailVerified,
+        emailState: hasEmail ? 'verified' : 'missing',
+      })
+      await ensurePersonalTeam(event, user.id)
+      return toAdapterUser(user)
     },
     async getUser(id: string) {
       const user = await getUserById(event, id)

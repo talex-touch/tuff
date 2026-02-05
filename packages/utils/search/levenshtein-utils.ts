@@ -15,23 +15,31 @@ export function levenshteinDistance(s1: string, s2: string): number {
 
   // Initialize the DP table
   for (let i = 0; i <= m; i++) {
-    dp[i][0] = i
+    const row = dp[i]
+    if (row)
+      row[0] = i
   }
-  for (let j = 0; j <= n; j++) {
-    dp[0][j] = j
+  const firstRow = dp[0]
+  if (firstRow) {
+    for (let j = 0; j <= n; j++)
+      firstRow[j] = j
   }
 
   // Fill the DP table
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
       const cost = s1[i - 1] === s2[j - 1] ? 0 : 1
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1, // Deletion
-        dp[i][j - 1] + 1, // Insertion
-        dp[i - 1][j - 1] + cost, // Substitution
+      const row = dp[i]
+      const prevRow = dp[i - 1]
+      if (!row || !prevRow)
+        continue
+      row[j] = Math.min(
+        (prevRow[j] ?? 0) + 1, // Deletion
+        (row[j - 1] ?? 0) + 1, // Insertion
+        (prevRow[j - 1] ?? 0) + cost, // Substitution
       )
     }
   }
 
-  return dp[m][n]
+  return dp[m]?.[n] ?? 0
 }

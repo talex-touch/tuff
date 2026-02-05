@@ -23,12 +23,14 @@ export function useTheme() {
       && ('startViewTransition' in document)
     const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode?.matches)
 
-    if (!isAppearanceTransition || !event) {
+    if (!isAppearanceTransition) {
       applyPreference(mode)
       return
     }
 
-    const [x, y] = [event.clientX, event.clientY]
+    const [x, y] = event
+      ? [event.clientX, event.clientY]
+      : [window.innerWidth / 2, window.innerHeight / 2]
 
     const transition = document.startViewTransition(() => {
       applyPreference(mode)

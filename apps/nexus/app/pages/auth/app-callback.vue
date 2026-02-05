@@ -6,7 +6,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { status: sessionStatus } = useSession()
+const { status: sessionStatus } = useAuth()
 const route = useRoute()
 
 const status = ref<'loading' | 'success' | 'error'>('loading')

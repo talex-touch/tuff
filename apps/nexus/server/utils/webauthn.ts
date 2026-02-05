@@ -23,8 +23,63 @@ function base64UrlDecode(input: string): Uint8Array {
   return new Uint8Array(Buffer.from(normalized, 'base64'))
 }
 
+function readDerLength(buffer: Uint8Array, offset: number): { length: number, offset: number } {
+  let length = buffer[offset++]
+  if (length & 0x80) {
+    const byteCount = length & 0x7f
+    if (byteCount === 0 || byteCount > 2) {
+      throw new Error('Invalid DER length.')
+    }
+    length = 0
+    for (let i = 0; i < byteCount; i += 1) {
+      length = (length << 8) | buffer[offset++]
+    }
+  }
+  return { length, offset }
+}
+
+function stripDerLeadingZeros(bytes: Uint8Array): Uint8Array {
+  let start = 0
+  while (start < bytes.length - 1 && bytes[start] === 0) {
+    start += 1
+  }
+  return bytes.slice(start)
+}
+
+function derToRawSignature(signature: Uint8Array, keySizeBytes = 32): Uint8Array {
+  let offset = 0
+  if (signature[offset++] !== 0x30) {
+    throw new Error('Invalid DER signature.')
+  }
+  const seq = readDerLength(signature, offset)
+  offset = seq.offset
+  if (signature[offset++] !== 0x02) {
+    throw new Error('Invalid DER signature.')
+  }
+  const rInfo = readDerLength(signature, offset)
+  offset = rInfo.offset
+  const rBytes = signature.slice(offset, offset + rInfo.length)
+  offset += rInfo.length
+  if (signature[offset++] !== 0x02) {
+    throw new Error('Invalid DER signature.')
+  }
+  const sInfo = readDerLength(signature, offset)
+  offset = sInfo.offset
+  const sBytes = signature.slice(offset, offset + sInfo.length)
+  const r = stripDerLeadingZeros(rBytes)
+  const s = stripDerLeadingZeros(sBytes)
+  const output = new Uint8Array(keySizeBytes * 2)
+  const rStart = keySizeBytes - Math.min(r.length, keySizeBytes)
+  const sStart = keySizeBytes * 2 - Math.min(s.length, keySizeBytes)
+  output.set(r.slice(-keySizeBytes), rStart)
+  output.set(s.slice(-keySizeBytes), sStart)
+  return output
+}
+
 async function sha256(input: Uint8Array): Promise<Uint8Array> {
-  const hash = await crypto.subtle.digest('SHA-256', input)
+  const inputCopy = Uint8Array.from(input)
+  const buffer = inputCopy.buffer as ArrayBuffer
+  const hash = await crypto.subtle.digest('SHA-256', buffer)
   return new Uint8Array(hash)
 }
 
@@ -42,21 +97,24 @@ interface CborResult<T = any> {
 function decodeCbor(data: Uint8Array, offset = 0): CborResult {
   if (offset >= data.length)
     throw new Error('CBOR: unexpected end')
-  const initial = data[offset++]
+  const initial = data[offset++] ?? 0
   const major = initial >> 5
   let additional = initial & 0x1f
   const readLength = () => {
     if (additional < 24)
       return additional
     if (additional === 24)
-      return data[offset++]
+      return data[offset++] ?? 0
     if (additional === 25) {
-      const value = (data[offset] << 8) | data[offset + 1]
+      const value = ((data[offset] ?? 0) << 8) | (data[offset + 1] ?? 0)
       offset += 2
       return value
     }
     if (additional === 26) {
-      const value = (data[offset] << 24) | (data[offset + 1] << 16) | (data[offset + 2] << 8) | data[offset + 3]
+      const value = ((data[offset] ?? 0) << 24)
+        | ((data[offset + 1] ?? 0) << 16)
+        | ((data[offset + 2] ?? 0) << 8)
+        | (data[offset + 3] ?? 0)
       offset += 4
       return value >>> 0
     }
@@ -120,14 +178,17 @@ function parseAuthenticatorData(authData: Uint8Array) {
   if (authData.length < 37)
     throw new Error('Invalid authenticator data.')
   const rpIdHash = authData.slice(0, 32)
-  const flags = authData[32]
-  const counter = (authData[33] << 24) | (authData[34] << 16) | (authData[35] << 8) | authData[36]
+  const flags = authData[32] ?? 0
+  const counter = ((authData[33] ?? 0) << 24)
+    | ((authData[34] ?? 0) << 16)
+    | ((authData[35] ?? 0) << 8)
+    | (authData[36] ?? 0)
   let offset = 37
   let credentialId: Uint8Array | null = null
   let cosePublicKey: Uint8Array | null = null
   if (flags & FLAG_AT) {
     offset += 16 // aaguid
-    const idLen = (authData[offset] << 8) | authData[offset + 1]
+    const idLen = ((authData[offset] ?? 0) << 8) | (authData[offset + 1] ?? 0)
     offset += 2
     credentialId = authData.slice(offset, offset + idLen)
     offset += idLen
@@ -221,16 +282,36 @@ export async function verifyAssertionResponse(params: {
     false,
     ['verify']
   )
-  const verified = await crypto.subtle.verify(
+  const signatureBytes = base64UrlDecode(params.signature)
+  const signatureCopy = Uint8Array.from(signatureBytes)
+  const signatureBuffer = signatureCopy.buffer as ArrayBuffer
+  let verified = await crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     key,
-    base64UrlDecode(params.signature),
+    signatureBuffer,
     signedData
   )
+  if (!verified) {
+    try {
+      const rawSignature = derToRawSignature(signatureBytes, 32)
+      verified = await crypto.subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' },
+        key,
+        rawSignature,
+        signedData
+      )
+    }
+    catch {
+      // ignore invalid DER formats
+    }
+  }
   if (!verified)
     throw new Error('Invalid signature.')
-  if (parsed.counter <= params.previousCounter)
+  const currentCounter = parsed.counter
+  const previousCounter = params.previousCounter
+  const shouldCheckCounter = currentCounter > 0 && previousCounter > 0
+  if (shouldCheckCounter && currentCounter <= previousCounter)
     throw new Error('Authenticator counter did not increase.')
-  return { counter: parsed.counter, userVerified: Boolean(parsed.flags & FLAG_UV) }
+  const nextCounter = currentCounter === 0 && previousCounter > 0 ? previousCounter : currentCounter
+  return { counter: nextCounter, userVerified: Boolean(parsed.flags & FLAG_UV) }
 }
-

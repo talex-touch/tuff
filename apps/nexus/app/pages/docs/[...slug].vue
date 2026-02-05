@@ -169,9 +169,13 @@ function buildTocTree(entries: TocEntry[]) {
   const stack: TocEntry[] = []
   for (const entry of entries) {
     const node: TocEntry = { ...entry, children: [] }
-    while (stack.length && stack[stack.length - 1].depth >= node.depth)
+    while (stack.length) {
+      const last = stack.at(-1)
+      if (!last || last.depth < node.depth)
+        break
       stack.pop()
-    const parent = stack[stack.length - 1]
+    }
+    const parent = stack.at(-1)
     if (parent)
       parent.children?.push(node)
     else

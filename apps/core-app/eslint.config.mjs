@@ -79,5 +79,25 @@ export default tseslint.config(
       'require-yield': 'off'
     }
   },
+  {
+    files: ['src/**/*.{ts,mts,tsx,vue,js,mjs,cjs}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='window']",
+          message: 'Use hasWindow() from @talex-touch/utils/env instead of typeof window.'
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='document']",
+          message: 'Use hasDocument() from @talex-touch/utils/env instead of typeof document.'
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='navigator']",
+          message: 'Use hasNavigator() from @talex-touch/utils/env instead of typeof navigator.'
+        }
+      ]
+    }
+  },
   eslintConfigPrettier
 )
