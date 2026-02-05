@@ -474,6 +474,9 @@ watch(step, (value) => {
       await nextTick()
     }
 
+    const prepareDelay = 240
+    const promptDelay = 360
+
     clearPasskeyTimer()
     passkeyTimer = setTimeout(() => {
       if (step.value !== 'passkey')
@@ -482,8 +485,8 @@ watch(step, (value) => {
       clearPasskeyTimer()
       passkeyTimer = setTimeout(() => {
         void startPasskeyAuth()
-      }, 520)
-    }, 360)
+      }, promptDelay)
+    }, prepareDelay)
   }
 
   async function startPasskeyAuth() {
