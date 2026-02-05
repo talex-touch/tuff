@@ -2,6 +2,7 @@
 import type { MarkdownViewProps } from './types'
 import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { hasDocument } from '@talex-touch/utils/env'
 
 defineOptions({
   name: 'TxMarkdownView',
@@ -36,7 +37,7 @@ onMounted(async () => {
 })
 
 function resolveAutoTheme(): 'light' | 'dark' {
-  if (typeof document === 'undefined')
+  if (!hasDocument())
     return 'light'
 
   const root = document.documentElement
@@ -60,7 +61,7 @@ function syncAutoTheme(): void {
 }
 
 function setupThemeObserver(): void {
-  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined')
+  if (!hasDocument() || typeof MutationObserver === 'undefined')
     return
 
   const root = document.documentElement

@@ -19,13 +19,21 @@ const CHANNEL_DEFAULT_TIMEOUT = 60_000
 let cachedIpcRenderer: IpcRenderer | null = null
 const channelLog = getLogger('plugin-channel')
 
+type PluginWindow = Window & {
+  $plugin?: { name?: string }
+  $channel?: ITouchClientChannel
+  electron?: { ipcRenderer?: IpcRenderer }
+}
+
+function getPluginWindow(): PluginWindow | undefined {
+  return hasWindow() ? (window as PluginWindow) : undefined
+}
+
 // 使用惰性解析避免在打包阶段静态引入 electron
 function resolveIpcRenderer(): IpcRenderer | null {
-  if (hasWindow()) {
-    const bridge = (window as any)?.electron
-    if (bridge?.ipcRenderer)
-      return bridge.ipcRenderer as IpcRenderer
-  }
+  const globalWindow = getPluginWindow()
+  if (globalWindow?.electron?.ipcRenderer)
+    return globalWindow.electron.ipcRenderer as IpcRenderer
 
   try {
     const electronFromGlobal = (globalThis as any)?.electron
@@ -333,13 +341,14 @@ let touchChannel: ITouchClientChannel | null = null
 
 export function genChannel(): ITouchClientChannel {
   if (!touchChannel) {
-    if (!hasWindow() || !(window as any)?.$plugin?.name) {
+    const globalWindow = getPluginWindow()
+    const pluginName = globalWindow?.$plugin?.name
+    if (!globalWindow || !pluginName) {
       throw new Error('TouchChannel cannot be initialized outside plugin renderer context')
     }
 
-    const pluginName = (window as any).$plugin.name as string
     touchChannel = new TouchChannel(pluginName)
-    ;(window as any).$channel = touchChannel
+    globalWindow.$channel = touchChannel
   }
 
   return touchChannel

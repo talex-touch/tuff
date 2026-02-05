@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { gsap } from 'gsap'
 import CoreBoxMock from './CoreBoxMock.vue'
@@ -157,7 +158,7 @@ function resetState() {
 }
 
 function revealAnswerContent() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   answerTimeline?.kill()
   answerTimeline = null
@@ -206,7 +207,7 @@ function revealAnswerContent() {
 }
 
 function queueReveal(attempt = 0) {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   if (answerRef.value) {
     revealAnswerContent()
@@ -220,7 +221,7 @@ function queueReveal(attempt = 0) {
 }
 
 function startSequence() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   resetState()
 
@@ -280,7 +281,7 @@ function handleCommandSelect(command: CoreBoxCommand) {
 }
 
 watch(() => [props.active, props.autoPlay], ([active, autoPlay]) => {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   if (active && autoPlay) {
     startSequence()
@@ -292,7 +293,7 @@ watch(() => [props.active, props.autoPlay], ([active, autoPlay]) => {
 watch(showAnswer, (visible) => {
   if (visible) {
     nextTick(() => {
-      if (typeof window === 'undefined')
+      if (!hasWindow())
         return
       queueReveal()
     })

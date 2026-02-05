@@ -8,6 +8,8 @@ export interface AuthUserProfile {
   role: string
   locale: string | null
   emailVerified: boolean
+  emailState: 'verified' | 'unverified' | 'missing'
+  isRestricted: boolean
 }
 
 export function useAuthUser() {

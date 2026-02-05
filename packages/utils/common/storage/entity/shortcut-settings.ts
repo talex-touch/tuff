@@ -8,6 +8,7 @@ export interface ShortcutMeta {
   modificationTime: number
   author: string
   description?: string
+  enabled?: boolean
 }
 
 export interface Shortcut {
