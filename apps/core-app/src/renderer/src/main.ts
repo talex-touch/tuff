@@ -29,6 +29,7 @@ import { usePluginStore } from '~/stores/plugin'
 import App from './App.vue'
 
 import '~/modules/channel/channel-core'
+import '~/modules/auth/account-channel'
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/style.css'
