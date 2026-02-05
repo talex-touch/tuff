@@ -345,6 +345,7 @@ const {
 .auth-form {
   margin-top: 4px;
   text-align: left;
+  overflow: hidden;
 }
 
 .auth-step-shell {
