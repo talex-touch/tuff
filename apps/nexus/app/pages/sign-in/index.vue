@@ -10,6 +10,7 @@ import SignInLoginStep from './components/SignInLoginStep.vue'
 import SignInPasskeyStep from './components/SignInPasskeyStep.vue'
 import SignInSuccessStep from './components/SignInSuccessStep.vue'
 import SignInSignupStep from './components/SignInSignupStep.vue'
+import TouchAurora from '~/components/tuff/background/TouchAurora.vue'
 
 definePageMeta({
   layout: false,
@@ -60,6 +61,14 @@ const {
       <div class="auth-glow auth-glow--top absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(120,90,255,0.18),_transparent_55%)]" />
       <div class="auth-glow auth-glow--left absolute -left-40 top-[18%] h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(255,120,155,0.18),_transparent_70%)] blur-3xl" />
       <div class="auth-glow auth-glow--right absolute -right-48 bottom-[8%] h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(88,190,255,0.2),_transparent_70%)] blur-3xl" />
+      <TouchAurora
+        :color-stops="['#574BDD', '#8727CE', '#057CCF']"
+        :amplitude="1.0"
+        :blend="0.5"
+        :speed="1.0"
+        :intensity="1.0"
+        class="op-10 -scale-100"
+      />
     </div>
 
     <ClientOnly>
@@ -76,17 +85,14 @@ const {
 
     <main class="auth-main">
       <div class="auth-shell" :class="{ 'is-loading': authLoading }">
-        <div class="auth-banner">
-UNDER BETA
-</div>
         <div class="auth-header">
           <div class="auth-logo">
-            <Logo class="text-[40px]" />
+            <Logo class="text-28" />
           </div>
           <div class="auth-heading">
             <TxTransition class="auth-carousel auth-carousel--header" preset="slide-fade" :duration="180" mode="in-out">
               <div :key="step" class="auth-heading__content">
-                <h1 class="auth-title">
+                <h1 class="auth-title m-0">
                   {{ stepTitle }}
                 </h1>
                 <p class="auth-subtitle">
@@ -289,18 +295,7 @@ UNDER BETA
   flex-direction: column;
   gap: 18px;
   text-align: center;
-}
-
-.auth-banner {
-  width: 100%;
-  padding: 10px 16px;
-  font-size: 11px;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: linear-gradient(90deg, rgba(125, 110, 255, 0.25), rgba(255, 120, 155, 0.18));
-  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 4rem;
 }
 
 .auth-header {
@@ -334,7 +329,6 @@ UNDER BETA
 .auth-heading__content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
 .auth-title {
@@ -446,27 +440,7 @@ UNDER BETA
   transform: translateX(-20px);
 }
 
-:deep(.auth-oauth) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-:deep(.auth-oauth-row) {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-}
-
 :deep(.auth-input.tx-input) {
-  --tx-border-color: rgba(255, 255, 255, 0.14);
-  --tx-border-color-light: rgba(255, 255, 255, 0.18);
-  --tx-bg-color: rgba(255, 255, 255, 0.06);
-  --tx-text-color-primary: rgba(255, 255, 255, 0.92);
-  --tx-text-color-placeholder: rgba(255, 255, 255, 0.45);
-  --tx-color-primary: #9f8bff;
   height: 46px;
   padding: 0 16px;
   border-radius: 12px;
@@ -553,18 +527,6 @@ UNDER BETA
 :deep(.auth-footer-link:hover) {
   color: rgba(255, 255, 255, 0.9);
   text-decoration: underline;
-}
-
-:deep(.auth-icon-button) {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  padding: 0;
-  border-radius: 12px;
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.85);
-  --tx-button-bg-color-hover: rgba(255, 255, 255, 0.12);
 }
 
 @keyframes auth-float {
