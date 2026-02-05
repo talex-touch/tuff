@@ -15,6 +15,7 @@ const PASSKEYS_TABLE = 'auth_passkeys'
 const WEBAUTHN_CHALLENGE_TABLE = 'auth_webauthn_challenges'
 const DEVICES_TABLE = 'auth_devices'
 const LOGIN_HISTORY_TABLE = 'auth_login_history'
+const MERGE_LOGS_TABLE = 'auth_user_merges'
 
 let authSchemaInitialized = false
 
@@ -42,8 +43,14 @@ async function ensureAuthSchema(db: D1Database) {
       name TEXT,
       image TEXT,
       email_verified TEXT,
+      email_state TEXT NOT NULL DEFAULT 'unverified',
       role TEXT NOT NULL DEFAULT 'user',
       locale TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      merged_to_user_id TEXT,
+      merged_at TEXT,
+      merged_by_user_id TEXT,
+      disabled_at TEXT,
       created_at TEXT NOT NULL
     );
   `).run()
@@ -157,6 +164,54 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${MERGE_LOGS_TABLE} (
+      id TEXT PRIMARY KEY,
+      source_user_id TEXT NOT NULL,
+      target_user_id TEXT NOT NULL,
+      merged_by_user_id TEXT,
+      reason TEXT,
+      metadata TEXT,
+      merged_at TEXT NOT NULL,
+      FOREIGN KEY (source_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
+      FOREIGN KEY (target_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL,
+      FOREIGN KEY (merged_by_user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE SET NULL
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_merges_source ON ${MERGE_LOGS_TABLE}(source_user_id);
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_merges_target ON ${MERGE_LOGS_TABLE}(target_user_id);
+  `).run()
+
+  const userColumns = await db.prepare(`PRAGMA table_info(${USERS_TABLE});`).all<{ name: string }>()
+  const addUserColumnIfMissing = async (column: string, ddl: string) => {
+    if (!userColumns.results?.some(item => item.name === column)) {
+      await db.prepare(`ALTER TABLE ${USERS_TABLE} ADD COLUMN ${ddl};`).run()
+    }
+  }
+
+  await addUserColumnIfMissing('status', "status TEXT NOT NULL DEFAULT 'active'")
+  await addUserColumnIfMissing('email_state', "email_state TEXT NOT NULL DEFAULT 'unverified'")
+  await addUserColumnIfMissing('merged_to_user_id', 'merged_to_user_id TEXT')
+  await addUserColumnIfMissing('merged_at', 'merged_at TEXT')
+  await addUserColumnIfMissing('merged_by_user_id', 'merged_by_user_id TEXT')
+  await addUserColumnIfMissing('disabled_at', 'disabled_at TEXT')
+
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET email_state = 'verified'
+    WHERE email_verified IS NOT NULL AND email_state != 'verified'
+  `).run()
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET email_state = 'unverified'
+    WHERE email_state IS NULL
+  `).run()
+
+  await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_auth_accounts_user ON ${ACCOUNTS_TABLE}(user_id);
   `).run()
 
@@ -171,14 +226,23 @@ async function ensureAuthSchema(db: D1Database) {
   authSchemaInitialized = true
 }
 
+export type UserStatus = 'active' | 'merged' | 'disabled'
+export type EmailState = 'verified' | 'unverified' | 'missing'
+
 export interface AuthUser {
   id: string
   email: string
   name: string | null
   image: string | null
   emailVerified: string | null
+  emailState: EmailState
   role: string
   locale: string | null
+  status: UserStatus
+  mergedToUserId: string | null
+  mergedAt: string | null
+  mergedByUserId: string | null
+  disabledAt: string | null
   createdAt: string
 }
 
@@ -197,14 +261,21 @@ export interface AuthDevice {
 function mapUser(row: Record<string, any> | null): AuthUser | null {
   if (!row)
     return null
+  const emailState = (row.email_state as EmailState | null) ?? (row.email_verified ? 'verified' : 'unverified')
   return {
     id: row.id,
     email: row.email,
     name: row.name ?? null,
     image: row.image ?? null,
     emailVerified: row.email_verified ?? null,
+    emailState,
     role: row.role ?? 'user',
     locale: row.locale ?? null,
+    status: (row.status as UserStatus) || 'active',
+    mergedToUserId: row.merged_to_user_id ?? null,
+    mergedAt: row.merged_at ?? null,
+    mergedByUserId: row.merged_by_user_id ?? null,
+    disabledAt: row.disabled_at ?? null,
     createdAt: row.created_at
   }
 }
@@ -229,24 +300,58 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-export async function createUser(event: H3Event, data: { email: string, name?: string | null, image?: string | null, locale?: string | null }): Promise<AuthUser> {
+export function isUserActive(user: AuthUser | null): user is AuthUser {
+  return Boolean(user && user.status === 'active')
+}
+
+export async function createUser(
+  event: H3Event,
+  data: {
+    email: string
+    name?: string | null
+    image?: string | null
+    locale?: string | null
+    emailVerified?: string | null
+    emailState?: EmailState
+    status?: UserStatus
+  },
+): Promise<AuthUser> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const email = normalizeEmail(data.email)
+  const status: UserStatus = data.status ?? 'active'
+  const emailVerified = data.emailVerified ?? null
+  const emailState: EmailState = data.emailState ?? (emailVerified ? 'verified' : 'unverified')
   await db.prepare(`
-    INSERT INTO ${USERS_TABLE} (id, email, name, image, role, locale, created_at)
-    VALUES (?, ?, ?, ?, 'user', ?, ?)
-  `).bind(id, email, data.name ?? null, data.image ?? null, data.locale ?? null, now).run()
+    INSERT INTO ${USERS_TABLE} (id, email, name, image, email_verified, email_state, role, locale, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
+  `).bind(
+    id,
+    email,
+    data.name ?? null,
+    data.image ?? null,
+    emailVerified,
+    emailState,
+    data.locale ?? null,
+    status,
+    now
+  ).run()
   return {
     id,
     email,
     name: data.name ?? null,
     image: data.image ?? null,
-    emailVerified: null,
+    emailVerified,
+    emailState,
     role: 'user',
     locale: data.locale ?? null,
+    status,
+    mergedToUserId: null,
+    mergedAt: null,
+    mergedByUserId: null,
+    disabledAt: null,
     createdAt: now
   }
 }
@@ -269,7 +374,23 @@ export async function setEmailVerified(event: H3Event, userId: string): Promise<
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
-  await db.prepare(`UPDATE ${USERS_TABLE} SET email_verified = ? WHERE id = ?`).bind(now, userId).run()
+  await db.prepare(`UPDATE ${USERS_TABLE} SET email_verified = ?, email_state = 'verified' WHERE id = ?`).bind(now, userId).run()
+}
+
+export async function setEmailState(event: H3Event, userId: string, emailState: EmailState): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`UPDATE ${USERS_TABLE} SET email_state = ? WHERE id = ?`).bind(emailState, userId).run()
+  return getUserById(event, userId)
+}
+
+export async function setUserEmail(event: H3Event, userId: string, email: string, emailState: EmailState, emailVerified: string | null = null): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`UPDATE ${USERS_TABLE} SET email = ?, email_verified = ?, email_state = ? WHERE id = ?`)
+    .bind(normalizeEmail(email), emailVerified, emailState, userId)
+    .run()
+  return getUserById(event, userId)
 }
 
 export async function updateUserProfile(event: H3Event, userId: string, payload: { name?: string | null, image?: string | null, locale?: string | null }): Promise<AuthUser | null> {
@@ -302,7 +423,7 @@ export async function verifyUserPassword(event: H3Event, email: string, password
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const user = await getUserByEmail(event, email)
-  if (!user)
+  if (!user || user.status !== 'active')
     return null
   const row = await db.prepare(`SELECT password_hash, password_salt FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(user.id).first()
   if (!row)
@@ -315,6 +436,21 @@ function generateToken(bytes = 32): string {
   const data = new Uint8Array(bytes)
   crypto.getRandomValues(data)
   return Buffer.from(data).toString('hex')
+}
+
+function base64UrlEncode(input: Uint8Array | Buffer): string {
+  const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input)
+  return buffer
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function generateWebAuthnChallenge(bytes = 32): string {
+  const data = new Uint8Array(bytes)
+  crypto.getRandomValues(data)
+  return base64UrlEncode(data)
 }
 
 export async function createVerificationToken(event: H3Event, email: string, ttlMs: number, tokenValue?: string): Promise<string> {
@@ -364,7 +500,7 @@ export async function createLoginToken(event: H3Event, userId: string, reason: s
 export async function createWebAuthnChallenge(event: H3Event, payload: { userId?: string | null, type: 'register' | 'login', ttlMs: number }): Promise<string> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const token = generateToken(32)
+  const token = generateWebAuthnChallenge(32)
   const now = new Date().toISOString()
   const expiresAt = new Date(Date.now() + payload.ttlMs).toISOString()
   await db.prepare(`
@@ -390,13 +526,15 @@ export async function consumeWebAuthnChallenge(event: H3Event, challenge: string
   return { userId: (row.user_id as string | null) ?? null }
 }
 
-export async function consumeLoginToken(event: H3Event, token: string): Promise<AuthUser | null> {
+export async function consumeLoginToken(event: H3Event, token: string, reason?: string | null): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const row = await db.prepare(`
-    SELECT user_id, expires_at FROM ${LOGIN_TOKEN_TABLE} WHERE token = ?
+    SELECT user_id, expires_at, reason FROM ${LOGIN_TOKEN_TABLE} WHERE token = ?
   `).bind(token).first()
   if (!row)
+    return null
+  if (reason && row.reason !== reason)
     return null
   const expires = Date.parse(row.expires_at as string)
   if (Number.isNaN(expires) || expires <= Date.now())
@@ -506,6 +644,180 @@ export async function unlinkAccount(event: H3Event, userId: string, provider: st
   await db.prepare(`
     DELETE FROM ${ACCOUNTS_TABLE} WHERE user_id = ? AND provider = ?
   `).bind(userId, provider).run()
+}
+
+async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?
+  `).bind(tableName).first()
+  return Boolean(row?.name)
+}
+
+export interface MergeUserInput {
+  sourceUserId: string
+  targetUserId: string
+  mergedByUserId?: string | null
+  reason?: string | null
+  metadata?: Record<string, any> | null
+}
+
+export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  if (input.sourceUserId === input.targetUserId) {
+    throw new Error('Source and target users must be different.')
+  }
+
+  const source = await getUserById(event, input.sourceUserId)
+  const target = await getUserById(event, input.targetUserId)
+  if (!source || !target) {
+    throw new Error('User not found.')
+  }
+  if (source.status === 'merged') {
+    throw new Error('Source user already merged.')
+  }
+  if (target.status !== 'active') {
+    throw new Error('Target user is not active.')
+  }
+
+  const now = new Date().toISOString()
+  const mergedBy = input.mergedByUserId ?? null
+
+  await db.prepare(`
+    INSERT OR IGNORE INTO ${CREDENTIALS_TABLE} (user_id, password_hash, password_salt, updated_at)
+    SELECT ?, password_hash, password_salt, updated_at
+    FROM ${CREDENTIALS_TABLE}
+    WHERE user_id = ?
+  `).bind(input.targetUserId, input.sourceUserId).run()
+
+  await db.prepare(`DELETE FROM ${CREDENTIALS_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
+
+  await db.prepare(`
+    UPDATE ${ACCOUNTS_TABLE}
+    SET user_id = ?
+    WHERE user_id = ?
+  `).bind(input.targetUserId, input.sourceUserId).run()
+
+  await db.prepare(`
+    UPDATE ${PASSKEYS_TABLE}
+    SET user_id = ?
+    WHERE user_id = ?
+  `).bind(input.targetUserId, input.sourceUserId).run()
+
+  await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET user_id = ?
+    WHERE user_id = ?
+  `).bind(input.targetUserId, input.sourceUserId).run()
+
+  await db.prepare(`
+    UPDATE ${LOGIN_HISTORY_TABLE}
+    SET user_id = ?
+    WHERE user_id = ?
+  `).bind(input.targetUserId, input.sourceUserId).run()
+
+  await db.prepare(`DELETE FROM ${LOGIN_TOKEN_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
+  await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
+  await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
+
+  if (await tableExists(db, 'sync_items')) {
+    await db.prepare(`
+      INSERT INTO sync_items (user_id, namespace, key, value_json, updated_at, updated_by_device_id)
+      SELECT ?, namespace, key, value_json, updated_at, updated_by_device_id
+      FROM sync_items
+      WHERE user_id = ?
+      ON CONFLICT(user_id, namespace, key) DO UPDATE SET
+        value_json = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.value_json ELSE sync_items.value_json END,
+        updated_at = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.updated_at ELSE sync_items.updated_at END,
+        updated_by_device_id = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.updated_by_device_id ELSE sync_items.updated_by_device_id END
+    `).bind(input.targetUserId, input.sourceUserId).run()
+
+    await db.prepare(`DELETE FROM sync_items WHERE user_id = ?`).bind(input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'api_keys')) {
+    await db.prepare(`
+      UPDATE api_keys
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'plugins')) {
+    await db.prepare(`
+      UPDATE plugins
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'plugin_reviews')) {
+    await db.prepare(`
+      DELETE FROM plugin_reviews
+      WHERE user_id = ?1
+        AND plugin_id IN (SELECT plugin_id FROM plugin_reviews WHERE user_id = ?2)
+    `).bind(input.sourceUserId, input.targetUserId).run()
+
+    await db.prepare(`
+      UPDATE plugin_reviews
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'plugin_ratings')) {
+    await db.prepare(`
+      DELETE FROM plugin_ratings
+      WHERE user_id = ?1
+        AND plugin_id IN (SELECT plugin_id FROM plugin_ratings WHERE user_id = ?2)
+    `).bind(input.sourceUserId, input.targetUserId).run()
+
+    await db.prepare(`
+      UPDATE plugin_ratings
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'activation_logs')) {
+    await db.prepare(`
+      UPDATE activation_logs
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  if (await tableExists(db, 'telemetry_events')) {
+    await db.prepare(`
+      UPDATE telemetry_events
+      SET user_id = ?1
+      WHERE user_id = ?2
+    `).bind(input.targetUserId, input.sourceUserId).run()
+  }
+
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET status = 'merged',
+        merged_to_user_id = ?,
+        merged_at = ?,
+        merged_by_user_id = ?,
+        disabled_at = COALESCE(disabled_at, ?)
+    WHERE id = ?
+  `).bind(input.targetUserId, now, mergedBy, now, input.sourceUserId).run()
+
+  await db.prepare(`
+    INSERT INTO ${MERGE_LOGS_TABLE} (id, source_user_id, target_user_id, merged_by_user_id, reason, metadata, merged_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    crypto.randomUUID(),
+    input.sourceUserId,
+    input.targetUserId,
+    mergedBy,
+    input.reason ?? null,
+    input.metadata ? JSON.stringify(input.metadata) : null,
+    now
+  ).run()
 }
 
 function getRequestIp(event: H3Event): string | null {

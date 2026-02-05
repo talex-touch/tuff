@@ -11,7 +11,9 @@ const props = withDefaults(
     round?: boolean
     circle?: boolean
     loading?: boolean
+    loadingVariant?: 'spinner' | 'bar'
     disabled?: boolean
+    border?: boolean
     icon?: string
     autofocus?: boolean
     nativeType?: 'button' | 'submit' | 'reset'
@@ -28,7 +30,9 @@ const props = withDefaults(
     round: false,
     circle: false,
     loading: false,
+    loadingVariant: 'spinner',
     disabled: false,
+    border: true,
     icon: undefined,
     autofocus: false,
     nativeType: 'button',
@@ -53,7 +57,9 @@ const emit = defineEmits<{
     :round="round"
     :circle="circle"
     :loading="loading"
+    :loading-variant="loadingVariant"
     :disabled="disabled"
+    :border="border"
     :icon="icon"
     :autofocus="autofocus"
     :native-type="nativeType"

@@ -158,6 +158,10 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   if (bearerToken) {
     const payload = verifyAppToken(bearerToken)
     if (payload?.sub) {
+      const user = await getUserById(event, payload.sub)
+      if (!user || user.status !== 'active') {
+        throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
+      }
       if (payload.deviceId) {
         const device = await getDevice(event, payload.sub, payload.deviceId)
         if (!device || device.revokedAt) {
@@ -177,8 +181,24 @@ export async function requireAuth(event: H3Event): Promise<AuthContext> {
   if (!userId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
+  const user = await getUserById(event, userId)
+  if (!user || user.status !== 'active') {
+    throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
+  }
   await ensureDeviceForRequest(event, userId)
   return { userId }
+}
+
+export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext> {
+  const context = await requireAuth(event)
+  const user = await getUserById(event, context.userId)
+  if (!user || user.status !== 'active') {
+    throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
+  }
+  if (user.emailState !== 'verified') {
+    throw createError({ statusCode: 403, statusMessage: 'Email not verified.' })
+  }
+  return context
 }
 
 export async function getOptionalAuth(event: H3Event): Promise<AuthContext | null> {
@@ -193,9 +213,8 @@ export async function getOptionalAuth(event: H3Event): Promise<AuthContext | nul
 export async function requireAdmin(event: H3Event) {
   const { userId } = await requireAuth(event)
   const user = await getUserById(event, userId)
-  if (!user || user.role !== 'admin') {
+  if (!user || user.status !== 'active' || user.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
   }
   return { userId, user }
 }
-
