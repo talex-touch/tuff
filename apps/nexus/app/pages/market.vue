@@ -65,6 +65,13 @@ const detailError = ref<string | null>(null)
 const reviews = ref<MarketplacePluginReview[]>([])
 const reviewsPending = ref(false)
 const reviewsError = ref<string | null>(null)
+const reviewsMeta = reactive({
+  total: 0,
+  limit: 20,
+  offset: 0,
+})
+const reviewsLoadingMore = ref(false)
+const canLoadMoreReviews = computed(() => reviews.value.length < reviewsMeta.total)
 const reviewSubmitting = ref(false)
 const ratingSummary = ref<MarketplacePluginRatingSummary | null>(null)
 const reviewForm = reactive({
@@ -158,10 +165,18 @@ async function loadPluginCommunity(slug: string) {
   reviewsError.value = null
   try {
     const [reviewsResponse, ratingResponse] = await Promise.all([
-      $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${slug}/reviews`),
+      $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${slug}/reviews`, {
+      query: {
+        limit: reviewsMeta.limit,
+        offset: 0,
+      },
+    }),
       $fetch<MarketplacePluginRatingResponse>(`/api/market/plugins/${slug}/rating`),
     ])
     reviews.value = reviewsResponse.reviews ?? []
+    reviewsMeta.total = reviewsResponse.total ?? 0
+    reviewsMeta.limit = reviewsResponse.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = reviewsResponse.offset ?? 0
     ratingSummary.value = ratingResponse.rating
   }
   catch (error: unknown) {
@@ -169,6 +184,32 @@ async function loadPluginCommunity(slug: string) {
   }
   finally {
     reviewsPending.value = false
+  }
+}
+
+async function loadMoreReviews() {
+  if (!selectedSlug.value || reviewsLoadingMore.value || reviewsPending.value || !canLoadMoreReviews.value)
+    return
+
+  reviewsLoadingMore.value = true
+  try {
+    const response = await $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${selectedSlug.value}/reviews`, {
+      query: {
+        limit: reviewsMeta.limit,
+        offset: reviews.value.length,
+      },
+    })
+    reviews.value = [...reviews.value, ...(response.reviews ?? [])]
+    reviewsMeta.total = response.total ?? reviewsMeta.total
+    reviewsMeta.limit = response.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = response.offset ?? reviewsMeta.offset
+  }
+  catch (error: unknown) {
+    const fallback = t('market.detail.reviews.loadMoreFailed', 'Failed to load more reviews.')
+    toast.warning(error instanceof Error ? error.message : fallback)
+  }
+  finally {
+    reviewsLoadingMore.value = false
   }
 }
 
@@ -486,6 +527,7 @@ useSeoMeta({
             <p v-else-if="!reviews.length" class="text-sm text-black/60 dark:text-light/60">
               {{ t('market.detail.reviews.empty') }}
             </p>
+            <div v-else class="space-y-4">
             <article
               v-for="review in reviews"
               :key="review.id"
@@ -535,6 +577,12 @@ useSeoMeta({
                 </p>
               </div>
             </article>
+            <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
+              <Button size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+                {{ t('market.detail.reviews.loadMore', 'Load more') }}
+              </Button>
+            </div>
+          </div>
           </div>
         </section>
       </div>

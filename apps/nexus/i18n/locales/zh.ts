@@ -200,6 +200,8 @@ export default {
         authLoading: '正在检查登录状态…',
         signInHint: '登录后可提交评论。',
         signInAction: '去登录',
+        loadMore: '加载更多',
+        loadMoreFailed: '加载更多失败。',
         writeTitle: '写下评价',
         ratingLabel: '评分',
         titlePlaceholder: '简短标题（可选）',
