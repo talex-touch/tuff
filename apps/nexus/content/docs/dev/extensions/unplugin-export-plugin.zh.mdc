@@ -4,58 +4,70 @@
 
 ## 安装
 
-```bash
-pnpm add -D @talex-touch/unplugin-export-plugin
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add -D @talex-touch/unplugin-export-plugin
+---
+:::
 
 ## 快速开始
 
 **Vite 配置**
 
-```ts
-// vite.config.ts
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
-import vue from '@vitejs/plugin-vue'
-import UnoCSS from 'unocss/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    vue(),
-    UnoCSS(),
-    TouchPluginExport()
-  ],
-  server: {
-    port: 6001  // 开发服务器端口
-  }
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // vite.config.ts
+  import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
+  import vue from '@vitejs/plugin-vue'
+  import UnoCSS from 'unocss/vite'
+  import { defineConfig } from 'vite'
+  
+  export default defineConfig({
+    plugins: [
+      vue(),
+      UnoCSS(),
+      TouchPluginExport()
+    ],
+    server: {
+      port: 6001  // 开发服务器端口
+    }
+  })
+---
+:::
 
 **Webpack 配置**
 
-```js
-// webpack.config.js
-const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
-
-module.exports = {
-  plugins: [
-    TouchPluginExport()
-  ]
-}
-```
+:::TuffCodeBlock{lang="js"}
+---
+code: |
+  // webpack.config.js
+  const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
+  
+  module.exports = {
+    plugins: [
+      TouchPluginExport()
+    ]
+  }
+---
+:::
 
 **Rollup 配置**
 
-```js
-// rollup.config.js
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
-
-export default {
-  plugins: [
-    TouchPluginExport()
-  ]
-}
-```
+:::TuffCodeBlock{lang="js"}
+---
+code: |
+  // rollup.config.js
+  import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
+  
+  export default {
+    plugins: [
+      TouchPluginExport()
+    ]
+  }
+---
+:::
 
 ---
 
@@ -86,63 +98,66 @@ export default {
 
 ## 配置选项
 
-```ts
-import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
-
-// 使用 defineConfig 获得类型提示
-export default defineConfig({
-  // 项目根目录
-  root: process.cwd(),
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
   
-  // manifest.json 路径（相对于项目根目录）
-  manifest: './manifest.json',
-  
-  // 输出目录
-  outDir: 'dist',
-  
-  // 源码目录（用于资源加载）
-  sourceDir: 'src',
-  
-  // Widgets 目录
-  widgetsDir: 'widgets',
-  
-  // 公共资源目录
-  publicDir: 'public',
-  
-  // Index 脚本目录（Prelude 脚本）
-  indexDir: 'index',
-  
-  // 是否生成 source map
-  sourcemap: false,
-  
-  // 是否压缩输出
-  minify: true,
-  
-  // 外部依赖（不打包）
-  external: ['electron'],
-  
-  // 自定义资源处理
-  assets: {
-    // 额外复制的文件/目录（glob 模式）
-    copy: ['./assets/**/*', './public/icons/*'],
+  // 使用 defineConfig 获得类型提示
+  export default defineConfig({
+    // 项目根目录
+    root: process.cwd(),
     
-    // 排除的文件（glob 模式）
-    exclude: ['**/*.test.ts', '**/*.spec.js']
-  },
-  
-  // 版本同步选项
-  versionSync: {
-    // 启用从 package.json 同步版本到 manifest.json
-    enabled: true,
+    // manifest.json 路径（相对于项目根目录）
+    manifest: './manifest.json',
     
-    // 自动同步（不提示）
-    auto: false
-  },
-  
-  // 最大插件体积（MB），超过此值会警告
-  maxSizeMB: 10
-})
-```
+    // 输出目录
+    outDir: 'dist',
+    
+    // 源码目录（用于资源加载）
+    sourceDir: 'src',
+    
+    // Widgets 目录
+    widgetsDir: 'widgets',
+    
+    // 公共资源目录
+    publicDir: 'public',
+    
+    // Index 脚本目录（Prelude 脚本）
+    indexDir: 'index',
+    
+    // 是否生成 source map
+    sourcemap: false,
+    
+    // 是否压缩输出
+    minify: true,
+    
+    // 外部依赖（不打包）
+    external: ['electron'],
+    
+    // 自定义资源处理
+    assets: {
+      // 额外复制的文件/目录（glob 模式）
+      copy: ['./assets/**/*', './public/icons/*'],
+      
+      // 排除的文件（glob 模式）
+      exclude: ['**/*.test.ts', '**/*.spec.js']
+    },
+    
+    // 版本同步选项
+    versionSync: {
+      // 启用从 package.json 同步版本到 manifest.json
+      enabled: true,
+      
+      // 自动同步（不提示）
+      auto: false
+    },
+    
+    // 最大插件体积（MB），超过此值会警告
+    maxSizeMB: 10
+  })
+---
+:::
 
 **配置项说明**
 
@@ -176,11 +191,14 @@ export default defineConfig({
 
 当打包后的 `.tpex` 文件超过 `maxSizeMB`（默认 10MB）时，会显示警告：
 
-```
-⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
-  → Consider optimizing assets or splitting into smaller plugins
-  → Large plugins may be rejected by the plugin store
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  ⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
+    → Consider optimizing assets or splitting into smaller plugins
+    → Large plugins may be rejected by the plugin store
+---
+:::
 
 ---
 
@@ -188,49 +206,55 @@ export default defineConfig({
 
 推荐的插件项目结构：
 
-```
-my-plugin/
-├── public/
-│   └── icon.png           # 插件图标
-├── src/
-│   ├── main.ts            # 入口文件
-│   ├── App.vue            # 主组件
-│   └── components/        # 组件目录
-├── index.html             # HTML 入口
-├── manifest.json          # 插件清单
-├── vite.config.ts         # Vite 配置
-├── package.json
-└── tsconfig.json
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  my-plugin/
+  ├── public/
+  │   └── icon.png           # 插件图标
+  ├── src/
+  │   ├── main.ts            # 入口文件
+  │   ├── App.vue            # 主组件
+  │   └── components/        # 组件目录
+  ├── index.html             # HTML 入口
+  ├── manifest.json          # 插件清单
+  ├── vite.config.ts         # Vite 配置
+  ├── package.json
+  └── tsconfig.json
+---
+:::
 
 ---
 
 ## Manifest 示例
 
-```json
-{
-  "id": "com.example.my-plugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "description": "A sample Tuff plugin",
-  "author": "Your Name",
-  "icon": "public/icon.png",
-  "main": "index.html",
-  "features": [
-    {
-      "id": "search",
-      "name": "搜索功能",
-      "description": "快速搜索",
-      "keywords": ["search", "find"],
-      "icon": "ri:search-line"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.example.my-plugin",
+    "name": "My Plugin",
+    "version": "1.0.0",
+    "description": "A sample Tuff plugin",
+    "author": "Your Name",
+    "icon": "public/icon.png",
+    "main": "index.html",
+    "features": [
+      {
+        "id": "search",
+        "name": "搜索功能",
+        "description": "快速搜索",
+        "keywords": ["search", "find"],
+        "icon": "ri:search-line"
+      }
+    ],
+    "dev": {
+      "enable": true,
+      "port": 6001
     }
-  ],
-  "dev": {
-    "enable": true,
-    "port": 6001
   }
-}
-```
+---
+:::
 
 ---
 
@@ -240,14 +264,17 @@ my-plugin/
 
 在 `manifest.json` 中配置：
 
-```json
-{
-  "dev": {
-    "enable": true,
-    "port": 6001
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "dev": {
+      "enable": true,
+      "port": 6001
+    }
   }
-}
-```
+---
+:::
 
 **热重载**
 
@@ -268,21 +295,27 @@ my-plugin/
 
 ## 构建生产版本
 
-```bash
-pnpm build
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm build
+---
+:::
 
 构建产物：
 
-```
-dist/
-├── assets/
-│   ├── index-[hash].js
-│   └── index-[hash].css
-├── index.html
-├── manifest.json
-└── icon.png
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  dist/
+  ├── assets/
+  │   ├── index-[hash].js
+  │   └── index-[hash].css
+  ├── index.html
+  ├── manifest.json
+  └── icon.png
+---
+:::
 
 ---
 
@@ -290,16 +323,19 @@ dist/
 
 插件构建完成后，可以使用 `@talex-touch/utils` 提供的 SDK：
 
-```ts
-// src/main.ts
-import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const box = useBox()
-const clipboard = useClipboard()
-const storage = usePluginStorage()
-
-// 插件逻辑...
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // src/main.ts
+  import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const box = useBox()
+  const clipboard = useClipboard()
+  const storage = usePluginStorage()
+  
+  // 插件逻辑...
+---
+:::
 
 ---
 
@@ -315,34 +351,40 @@ const storage = usePluginStorage()
 
 确保在 `vite.config.ts` 中正确配置了 CSS 预处理器：
 
-```ts
-export default defineConfig({
-  css: {
-    preprocessorOptions: {
-      scss: {
-        // SCSS 配置
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export default defineConfig({
+    css: {
+      preprocessorOptions: {
+        scss: {
+          // SCSS 配置
+        }
       }
     }
-  }
-})
-```
+  })
+---
+:::
 
 **Q: 资源路径错误**
 
 使用相对路径或 `@/` 别名：
 
-```ts
-// vite.config.ts
-import { resolve } from 'path'
-
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src')
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // vite.config.ts
+  import { resolve } from 'path'
+  
+  export default defineConfig({
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src')
+      }
     }
-  }
-})
-```
+  })
+---
+:::
 
 ---
 

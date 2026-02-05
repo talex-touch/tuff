@@ -4,58 +4,70 @@
 
 ## Installation
 
-```bash
-pnpm add -D @talex-touch/unplugin-export-plugin
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add -D @talex-touch/unplugin-export-plugin
+---
+:::
 
 ## Quick Start
 
 **Vite Configuration**
 
-```ts
-// vite.config.ts
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
-import vue from '@vitejs/plugin-vue'
-import UnoCSS from 'unocss/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [
-    vue(),
-    UnoCSS(),
-    TouchPluginExport()
-  ],
-  server: {
-    port: 6001  // Dev server port
-  }
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // vite.config.ts
+  import TouchPluginExport from '@talex-touch/unplugin-export-plugin/vite'
+  import vue from '@vitejs/plugin-vue'
+  import UnoCSS from 'unocss/vite'
+  import { defineConfig } from 'vite'
+  
+  export default defineConfig({
+    plugins: [
+      vue(),
+      UnoCSS(),
+      TouchPluginExport()
+    ],
+    server: {
+      port: 6001  // Dev server port
+    }
+  })
+---
+:::
 
 **Webpack Configuration**
 
-```js
-// webpack.config.js
-const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
-
-module.exports = {
-  plugins: [
-    TouchPluginExport()
-  ]
-}
-```
+:::TuffCodeBlock{lang="js"}
+---
+code: |
+  // webpack.config.js
+  const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
+  
+  module.exports = {
+    plugins: [
+      TouchPluginExport()
+    ]
+  }
+---
+:::
 
 **Rollup Configuration**
 
-```js
-// rollup.config.js
-import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
-
-export default {
-  plugins: [
-    TouchPluginExport()
-  ]
-}
-```
+:::TuffCodeBlock{lang="js"}
+---
+code: |
+  // rollup.config.js
+  import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
+  
+  export default {
+    plugins: [
+      TouchPluginExport()
+    ]
+  }
+---
+:::
 
 ---
 
@@ -86,63 +98,66 @@ In development mode:
 
 ## Configuration Options
 
-```ts
-import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
-
-// Use defineConfig for type hints
-export default defineConfig({
-  // Project root directory
-  root: process.cwd(),
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
   
-  // manifest.json path (relative to project root)
-  manifest: './manifest.json',
-  
-  // Output directory
-  outDir: 'dist',
-  
-  // Source directory (for resource loading)
-  sourceDir: 'src',
-  
-  // Widgets directory
-  widgetsDir: 'widgets',
-  
-  // Public assets directory
-  publicDir: 'public',
-  
-  // Index script directory (Prelude script)
-  indexDir: 'index',
-  
-  // Generate source maps
-  sourcemap: false,
-  
-  // Minify output
-  minify: true,
-  
-  // External dependencies (not bundled)
-  external: ['electron'],
-  
-  // Custom asset handling
-  assets: {
-    // Additional files/directories to copy (glob patterns)
-    copy: ['./assets/**/*', './public/icons/*'],
+  // Use defineConfig for type hints
+  export default defineConfig({
+    // Project root directory
+    root: process.cwd(),
     
-    // Excluded files (glob patterns)
-    exclude: ['**/*.test.ts', '**/*.spec.js']
-  },
-  
-  // Version sync options
-  versionSync: {
-    // Enable syncing version from package.json to manifest.json
-    enabled: true,
+    // manifest.json path (relative to project root)
+    manifest: './manifest.json',
     
-    // Auto sync without prompting
-    auto: false
-  },
-  
-  // Maximum plugin size (MB) before warning
-  maxSizeMB: 10
-})
-```
+    // Output directory
+    outDir: 'dist',
+    
+    // Source directory (for resource loading)
+    sourceDir: 'src',
+    
+    // Widgets directory
+    widgetsDir: 'widgets',
+    
+    // Public assets directory
+    publicDir: 'public',
+    
+    // Index script directory (Prelude script)
+    indexDir: 'index',
+    
+    // Generate source maps
+    sourcemap: false,
+    
+    // Minify output
+    minify: true,
+    
+    // External dependencies (not bundled)
+    external: ['electron'],
+    
+    // Custom asset handling
+    assets: {
+      // Additional files/directories to copy (glob patterns)
+      copy: ['./assets/**/*', './public/icons/*'],
+      
+      // Excluded files (glob patterns)
+      exclude: ['**/*.test.ts', '**/*.spec.js']
+    },
+    
+    // Version sync options
+    versionSync: {
+      // Enable syncing version from package.json to manifest.json
+      enabled: true,
+      
+      // Auto sync without prompting
+      auto: false
+    },
+    
+    // Maximum plugin size (MB) before warning
+    maxSizeMB: 10
+  })
+---
+:::
 
 **Configuration Reference**
 
@@ -176,11 +191,14 @@ When `versionSync.enabled` is `true`, the build process checks if `package.json`
 
 When the packaged `.tpex` file exceeds `maxSizeMB` (default 10MB), a warning is shown:
 
-```
-⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
-  → Consider optimizing assets or splitting into smaller plugins
-  → Large plugins may be rejected by the plugin store
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  ⚠ WARNING  Plugin size (12.34 MB) exceeds 10 MB limit!
+    → Consider optimizing assets or splitting into smaller plugins
+    → Large plugins may be rejected by the plugin store
+---
+:::
 
 ---
 
@@ -188,49 +206,55 @@ When the packaged `.tpex` file exceeds `maxSizeMB` (default 10MB), a warning is 
 
 Recommended plugin project structure:
 
-```
-my-plugin/
-├── public/
-│   └── icon.png           # Plugin icon
-├── src/
-│   ├── main.ts            # Entry file
-│   ├── App.vue            # Main component
-│   └── components/        # Components directory
-├── index.html             # HTML entry
-├── manifest.json          # Plugin manifest
-├── vite.config.ts         # Vite config
-├── package.json
-└── tsconfig.json
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  my-plugin/
+  ├── public/
+  │   └── icon.png           # Plugin icon
+  ├── src/
+  │   ├── main.ts            # Entry file
+  │   ├── App.vue            # Main component
+  │   └── components/        # Components directory
+  ├── index.html             # HTML entry
+  ├── manifest.json          # Plugin manifest
+  ├── vite.config.ts         # Vite config
+  ├── package.json
+  └── tsconfig.json
+---
+:::
 
 ---
 
 ## Manifest Example
 
-```json
-{
-  "id": "com.example.my-plugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "description": "A sample Tuff plugin",
-  "author": "Your Name",
-  "icon": "public/icon.png",
-  "main": "index.html",
-  "features": [
-    {
-      "id": "search",
-      "name": "Search Feature",
-      "description": "Quick search",
-      "keywords": ["search", "find"],
-      "icon": "ri:search-line"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.example.my-plugin",
+    "name": "My Plugin",
+    "version": "1.0.0",
+    "description": "A sample Tuff plugin",
+    "author": "Your Name",
+    "icon": "public/icon.png",
+    "main": "index.html",
+    "features": [
+      {
+        "id": "search",
+        "name": "Search Feature",
+        "description": "Quick search",
+        "keywords": ["search", "find"],
+        "icon": "ri:search-line"
+      }
+    ],
+    "dev": {
+      "enable": true,
+      "port": 6001
     }
-  ],
-  "dev": {
-    "enable": true,
-    "port": 6001
   }
-}
-```
+---
+:::
 
 ---
 
@@ -240,14 +264,17 @@ my-plugin/
 
 Configure in `manifest.json`:
 
-```json
-{
-  "dev": {
-    "enable": true,
-    "port": 6001
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "dev": {
+      "enable": true,
+      "port": 6001
+    }
   }
-}
-```
+---
+:::
 
 **Hot Reload**
 
@@ -268,21 +295,27 @@ In development mode, these changes trigger hot reload:
 
 ## Building for Production
 
-```bash
-pnpm build
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm build
+---
+:::
 
 Build output:
 
-```
-dist/
-├── assets/
-│   ├── index-[hash].js
-│   └── index-[hash].css
-├── index.html
-├── manifest.json
-└── icon.png
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  dist/
+  ├── assets/
+  │   ├── index-[hash].js
+  │   └── index-[hash].css
+  ├── index.html
+  ├── manifest.json
+  └── icon.png
+---
+:::
 
 ---
 
@@ -290,16 +323,19 @@ dist/
 
 After building, use the SDK from `@talex-touch/utils`:
 
-```ts
-// src/main.ts
-import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const box = useBox()
-const clipboard = useClipboard()
-const storage = usePluginStorage()
-
-// Plugin logic...
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // src/main.ts
+  import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const box = useBox()
+  const clipboard = useClipboard()
+  const storage = usePluginStorage()
+  
+  // Plugin logic...
+---
+:::
 
 ---
 
@@ -315,34 +351,40 @@ const storage = usePluginStorage()
 
 Ensure CSS preprocessor is configured correctly in `vite.config.ts`:
 
-```ts
-export default defineConfig({
-  css: {
-    preprocessorOptions: {
-      scss: {
-        // SCSS config
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export default defineConfig({
+    css: {
+      preprocessorOptions: {
+        scss: {
+          // SCSS config
+        }
       }
     }
-  }
-})
-```
+  })
+---
+:::
 
 **Q: Resource path errors**
 
 Use relative paths or `@/` alias:
 
-```ts
-// vite.config.ts
-import { resolve } from 'path'
-
-export default defineConfig({
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src')
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // vite.config.ts
+  import { resolve } from 'path'
+  
+  export default defineConfig({
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, 'src')
+      }
     }
-  }
-})
-```
+  })
+---
+:::
 
 ---
 

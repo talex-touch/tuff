@@ -33,16 +33,19 @@ This page maps the AI/Intelligence subsystem files and layers in the main proces
 
 ## 3. Runtime Relation (Mermaid)
 
-```mermaid
-flowchart TB
-  module["IntelligenceModule"] --> service["IntelligenceService"]
-  service --> strategy["Strategy Manager"]
-  service --> registry["Capability Registry"]
-  service --> quota["Quota Manager"]
-  service --> providers["Providers"]
-  service --> agents["Agents + Tools"]
-  service --> storage["Storage Adapter"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    module["IntelligenceModule"] --> service["IntelligenceService"]
+    service --> strategy["Strategy Manager"]
+    service --> registry["Capability Registry"]
+    service --> quota["Quota Manager"]
+    service --> providers["Providers"]
+    service --> agents["Agents + Tools"]
+    service --> storage["Storage Adapter"]
+---
+:::
 
 ## 4. Related Docs
 

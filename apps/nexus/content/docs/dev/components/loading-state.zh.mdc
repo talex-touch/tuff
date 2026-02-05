@@ -21,11 +21,14 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxLoadingState description="Loading official plugins..." />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxLoadingState description="Loading official plugins..." />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

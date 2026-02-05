@@ -8,18 +8,21 @@
 
 **快速开始**
 
-```ts
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const storage = usePluginStorage()
-
-// 保存配置
-await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
-
-// 读取配置
-const settings = await storage.getFile('settings.json')
-console.log(settings) // { theme: 'dark', fontSize: 14 }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const storage = usePluginStorage()
+  
+  // 保存配置
+  await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
+  
+  // 读取配置
+  const settings = await storage.getFile('settings.json')
+  console.log(settings) // { theme: 'dark', fontSize: 14 }
+---
+:::
 
 ---
 
@@ -35,11 +38,14 @@ console.log(settings) // { theme: 'dark', fontSize: 14 }
 
 **获取 Storage 实例**
 
-```ts
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const storage = usePluginStorage()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const storage = usePluginStorage()
+---
+:::
 
 > **注意**：必须在插件渲染器上下文中调用。
 
@@ -49,10 +55,13 @@ const storage = usePluginStorage()
 
 读取存储文件内容。
 
-```ts
-const config = await storage.getFile('config.json')
-// 如果文件不存在，返回 null
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const config = await storage.getFile('config.json')
+  // 如果文件不存在，返回 null
+---
+:::
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -63,13 +72,16 @@ const config = await storage.getFile('config.json')
 
 写入存储文件。
 
-```ts
-await storage.setFile('settings.json', { 
-  theme: 'dark',
-  shortcuts: ['Cmd+K']
-})
-// 返回 { success: true }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.setFile('settings.json', { 
+    theme: 'dark',
+    shortcuts: ['Cmd+K']
+  })
+  // 返回 { success: true }
+---
+:::
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
@@ -81,27 +93,36 @@ await storage.setFile('settings.json', {
 
 删除存储文件。
 
-```ts
-await storage.deleteFile('old-cache.json')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.deleteFile('old-cache.json')
+---
+:::
 
 **`listFiles()`**
 
 列出插件所有存储文件。
 
-```ts
-const files = await storage.listFiles()
-// ['settings.json', 'data/cache.json']
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const files = await storage.listFiles()
+  // ['settings.json', 'data/cache.json']
+---
+:::
 
 **`clearAll()`**
 
 清空插件所有存储数据。
 
-```ts
-await storage.clearAll()
-// ⚠️ 此操作不可逆
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.clearAll()
+  // ⚠️ 此操作不可逆
+---
+:::
 
 ---
 
@@ -111,50 +132,62 @@ await storage.clearAll()
 
 获取存储统计信息。
 
-```ts
-const stats = await storage.getStats()
-// {
-//   totalSize: 1024,      // 总大小（字节）
-//   fileCount: 3,         // 文件数量
-//   limit: 10485760,      // 容量限制（10MB）
-//   usagePercent: 0.01    // 使用率
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const stats = await storage.getStats()
+  // {
+  //   totalSize: 1024,      // 总大小（字节）
+  //   fileCount: 3,         // 文件数量
+  //   limit: 10485760,      // 容量限制（10MB）
+  //   usagePercent: 0.01    // 使用率
+  // }
+---
+:::
 
 **`getTree()`**
 
 获取存储目录树结构。
 
-```ts
-const tree = await storage.getTree()
-// [
-//   { name: 'settings.json', type: 'file', size: 256 },
-//   { name: 'data', type: 'directory', children: [...] }
-// ]
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const tree = await storage.getTree()
+  // [
+  //   { name: 'settings.json', type: 'file', size: 256 },
+  //   { name: 'data', type: 'directory', children: [...] }
+  // ]
+---
+:::
 
 **`getFileDetails(fileName)`**
 
 获取文件详细信息。
 
-```ts
-const details = await storage.getFileDetails('settings.json')
-// {
-//   name: 'settings.json',
-//   size: 256,
-//   createdAt: 1702123456789,
-//   modifiedAt: 1702123456789
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const details = await storage.getFileDetails('settings.json')
+  // {
+  //   name: 'settings.json',
+  //   size: 256,
+  //   createdAt: 1702123456789,
+  //   modifiedAt: 1702123456789
+  // }
+---
+:::
 
 **`openFolder()`**
 
 在系统文件管理器中打开插件存储目录。
 
-```ts
-await storage.openFolder()
-// 打开 Finder/Explorer
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.openFolder()
+  // 打开 Finder/Explorer
+---
+:::
 
 ---
 
@@ -162,15 +195,18 @@ await storage.openFolder()
 
 监听存储文件的变化，适用于多窗口同步场景。
 
-```ts
-const unsubscribe = storage.onDidChange('settings.json', (data) => {
-  console.log('配置已更新:', data)
-  // 重新加载配置
-})
-
-// 停止监听
-unsubscribe()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const unsubscribe = storage.onDidChange('settings.json', (data) => {
+    console.log('配置已更新:', data)
+    // 重新加载配置
+  })
+  
+  // 停止监听
+  unsubscribe()
+---
+:::
 
 ---
 
@@ -183,71 +219,80 @@ unsubscribe()
 
 **1. 结构化配置管理**
 
-```ts
-interface PluginSettings {
-  theme: 'light' | 'dark'
-  language: string
-  shortcuts: Record<string, string>
-}
-
-async function loadSettings(): Promise<PluginSettings> {
-  const defaults: PluginSettings = {
-    theme: 'dark',
-    language: 'zh-CN',
-    shortcuts: {}
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface PluginSettings {
+    theme: 'light' | 'dark'
+    language: string
+    shortcuts: Record<string, string>
   }
   
-  const saved = await storage.getFile('settings.json')
-  return { ...defaults, ...saved }
-}
-
-async function saveSettings(settings: PluginSettings) {
-  await storage.setFile('settings.json', settings)
-}
-```
+  async function loadSettings(): Promise<PluginSettings> {
+    const defaults: PluginSettings = {
+      theme: 'dark',
+      language: 'zh-CN',
+      shortcuts: {}
+    }
+    
+    const saved = await storage.getFile('settings.json')
+    return { ...defaults, ...saved }
+  }
+  
+  async function saveSettings(settings: PluginSettings) {
+    await storage.setFile('settings.json', settings)
+  }
+---
+:::
 
 **2. 缓存过期处理**
 
-```ts
-interface CacheEntry<T> {
-  data: T
-  expiresAt: number
-}
-
-async function getCached<T>(key: string): Promise<T | null> {
-  const entry = await storage.getFile(`cache/${key}.json`) as CacheEntry<T> | null
-  
-  if (!entry) return null
-  if (Date.now() > entry.expiresAt) {
-    await storage.deleteFile(`cache/${key}.json`)
-    return null
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface CacheEntry<T> {
+    data: T
+    expiresAt: number
   }
   
-  return entry.data
-}
-
-async function setCache<T>(key: string, data: T, ttlMs: number = 3600000) {
-  const entry: CacheEntry<T> = {
-    data,
-    expiresAt: Date.now() + ttlMs
+  async function getCached<T>(key: string): Promise<T | null> {
+    const entry = await storage.getFile(`cache/${key}.json`) as CacheEntry<T> | null
+    
+    if (!entry) return null
+    if (Date.now() > entry.expiresAt) {
+      await storage.deleteFile(`cache/${key}.json`)
+      return null
+    }
+    
+    return entry.data
   }
-  await storage.setFile(`cache/${key}.json`, entry)
-}
-```
+  
+  async function setCache<T>(key: string, data: T, ttlMs: number = 3600000) {
+    const entry: CacheEntry<T> = {
+      data,
+      expiresAt: Date.now() + ttlMs
+    }
+    await storage.setFile(`cache/${key}.json`, entry)
+  }
+---
+:::
 
 **3. 容量监控**
 
-```ts
-async function checkStorageQuota() {
-  const stats = await storage.getStats()
-  
-  if (stats.usagePercent > 0.8) {
-    console.warn('[Plugin] 存储空间使用超过 80%，考虑清理旧数据')
-    // 清理过期缓存
-    await cleanExpiredCache()
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function checkStorageQuota() {
+    const stats = await storage.getStats()
+    
+    if (stats.usagePercent > 0.8) {
+      console.warn('[Plugin] 存储空间使用超过 80%，考虑清理旧数据')
+      // 清理过期缓存
+      await cleanExpiredCache()
+    }
   }
-}
-```
+---
+:::
 
 ---
 
@@ -261,25 +306,28 @@ async function checkStorageQuota() {
 
 ## 类型定义
 
-```ts
-interface StorageStats {
-  totalSize: number
-  fileCount: number
-  limit: number
-  usagePercent: number
-}
-
-interface StorageTreeNode {
-  name: string
-  type: 'file' | 'directory'
-  size?: number
-  children?: StorageTreeNode[]
-}
-
-interface FileDetails {
-  name: string
-  size: number
-  createdAt: number
-  modifiedAt: number
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface StorageStats {
+    totalSize: number
+    fileCount: number
+    limit: number
+    usagePercent: number
+  }
+  
+  interface StorageTreeNode {
+    name: string
+    type: 'file' | 'directory'
+    size?: number
+    children?: StorageTreeNode[]
+  }
+  
+  interface FileDetails {
+    name: string
+    size: number
+    createdAt: number
+    modifiedAt: number
+  }
+---
+:::

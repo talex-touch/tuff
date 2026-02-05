@@ -69,16 +69,9 @@ function toggleCode() {
       </div>
       <div class="tuff-demo__window-body">
         <div class="tuff-demo__preview">
-          <ClientOnly>
-            <slot name="preview">
-              <slot />
-            </slot>
-            <template #fallback>
-              <div class="tuff-demo__placeholder">
-                Demo loads on client.
-              </div>
-            </template>
-          </ClientOnly>
+          <slot name="preview">
+            <slot />
+          </slot>
           <div v-if="!hasPreview" class="tuff-demo__placeholder">
             Add a preview slot to render the demo.
           </div>

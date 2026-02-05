@@ -17,20 +17,26 @@ Loaded by: `@talex-touch/tuffex/style.css`
 
 **Primary font stack**
 
-```css
-font-family:
-  'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',
-  'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  font-family:
+    'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',
+    'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
+---
+:::
 
 **Sizing + weight**
 
-```css
---tx-font-size-base: 14px;
---tx-font-size-small: 12px;
---tx-font-size-large: 16px;
---tx-font-weight-primary: 500;
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  --tx-font-size-base: 14px;
+  --tx-font-size-small: 12px;
+  --tx-font-size-large: 16px;
+  --tx-font-weight-primary: 500;
+---
+:::
 
 ## Color System
 

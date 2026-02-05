@@ -7,6 +7,7 @@ export enum StorageList {
   DEVICE_IDLE_SETTINGS = 'device-idle-settings.json',
   IntelligenceConfig = 'aisdk-config',
   MARKET_SOURCES = 'market-sources.json',
+  AGENT_MARKET = 'agent-market.json',
   THEME_STYLE = 'theme-style.ini',
   SEARCH_ENGINE_LOGS_ENABLED = 'search-engine-logs-enabled',
   EVERYTHING_SETTINGS = 'everything-settings.json',

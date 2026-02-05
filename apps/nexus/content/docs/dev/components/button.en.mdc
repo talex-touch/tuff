@@ -24,7 +24,7 @@ Buttons trigger explicit actions. Keep a clear hierarchy in the interface:
 
 Base visuals and semantic variants.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -38,24 +38,13 @@ code: |
     <TxButton variant="info">Info</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button>Default</tx-button>
-  <tx-button variant="primary">Primary</tx-button>
-  <tx-button variant="secondary">Secondary</tx-button>
-  <tx-button variant="ghost">Ghost</tx-button>
-  <tx-button variant="danger">Danger</tx-button>
-  <tx-button variant="success">Success</tx-button>
-  <tx-button variant="warning">Warning</tx-button>
-  <tx-button variant="info">Info</tx-button>
-</div>
-:::
+::
 
 ### Disabled
 
 Disabled states.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -66,53 +55,44 @@ code: |
     <TxButton variant="danger" disabled>Danger</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button disabled>Default</tx-button>
-  <tx-button variant="primary" disabled>Primary</tx-button>
-  <tx-button variant="secondary" disabled>Secondary</tx-button>
-  <tx-button variant="ghost" disabled>Ghost</tx-button>
-  <tx-button variant="danger" disabled>Danger</tx-button>
-</div>
-:::
+::
 
 ### Loading
 
 Show loading feedback during async actions.
 
-<DemoBlock>
-<template #preview>
-<div class="tuff-demo-row">
-  <TxButton variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</div>
-</template>
+::TuffDemoWrapper{demo="ButtonLoadingDemo" code-lang="vue"}
+---
+code: |
+  <script setup>
+  import { ref } from 'vue'
 
-<template #code>
-```vue
-<template>
-  <TxButton variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</template>
-```
-</template>
-</DemoBlock>
+  const loading = ref(false)
+
+  async function handleClick() {
+    if (loading.value) return
+    loading.value = true
+    setTimeout(() => { loading.value = false }, 1200)
+  }
+  </script>
+
+  <template>
+    <TxButton variant="primary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton variant="secondary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+  </template>
+---
+::
 
 ### Sizes
 
 Buttons provide three sizes beyond the default, affecting density and tactile feel.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -121,36 +101,26 @@ code: |
     <TxButton size="sm">Small</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button size="lg">Large</tx-button>
-  <tx-button size="md">Medium</tx-button>
-  <tx-button size="sm">Small</tx-button>
-</div>
-:::
+::
 
 ### Block
 
 Block buttons fill the container width for full-width primary actions.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonBlockDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TxButton block variant="primary">Block Button</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 260px;">
-  <tx-button block variant="primary">Block Button</tx-button>
-</div>
-:::
+::
 
 ### Shapes
 
 Adjust shapes with `plain` / `round` / `circle` / `dashed`.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonShapesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -160,20 +130,13 @@ code: |
     <TxButton circle icon="i-carbon-edit" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button dashed>Dashed</tx-button>
-  <tx-button plain variant="primary">Plain</tx-button>
-  <tx-button round variant="primary">Round</tx-button>
-  <tx-button circle icon="i-carbon-edit" />
-</div>
-:::
+::
 
 ### Haptics
 
 Haptic feedback for mobile interactions, with multiple intensity options.
 
-:::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonHapticsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -184,19 +147,7 @@ code: |
     <TxButton variant="secondary" :vibrate="false">No Haptics</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button variant="primary" vibrate-type="light">Light</tx-button>
-  <tx-button variant="primary" vibrate-type="medium">Medium</tx-button>
-  <tx-button variant="primary" vibrate-type="heavy">Heavy</tx-button>
-  <tx-button variant="danger" vibrate-type="error">Error</tx-button>
-  <tx-button variant="secondary" :vibrate="false">No Haptics</tx-button>
-</div>
-:::
-
-## Demo Conventions
-- Wrap interactive demos in `client-only`.
-- Demos must be copyable and runnable (no screenshot-only blocks).
+::
 
 ## API Specifications
 
@@ -294,9 +245,9 @@ code: |
 
 ### Split Button
 
-A combined button for “primary action + more actions” (e.g., RUN + …).
+A combined button for "primary action + more actions" (e.g., RUN + …).
 
-::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -321,35 +272,13 @@ code: |
     </TxSplitButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-split-button
-    variant="primary"
-    size="sm"
-    icon="i-ri-play-fill"
-    :loading="splitLoading"
-    @click="handleRun"
-  >
-    RUN
-    <template #menu="{ close }">
-      <div style="display: flex; flex-direction: column; gap: 6px;">
-        <tx-button size="sm" plain block icon="i-ri-settings-3-line" @click="close()">
-          Settings
-        </tx-button>
-        <tx-button size="sm" plain block icon="i-ri-folder-open-line" @click="close()">
-          Open Folder
-        </tx-button>
-      </div>
-    </template>
-  </tx-split-button>
-</div>
 ::
 
 ### Primary + Ghost
 
 Pair primary with ghost for clear hierarchy.
 
-::TuffDemo{code-lang="vue"}
+::TuffDemoWrapper{demo="ButtonPrimaryGhostDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -357,11 +286,6 @@ code: |
     <TxButton variant="ghost">Learn More</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button icon="i-ri-add-line">Create Project</tx-button>
-  <tx-button variant="ghost">Learn More</tx-button>
-</div>
 ::
 
 ## Design Principles
@@ -378,33 +302,3 @@ code: |
 ## Source
 
 <TuffDocSourceLink label="View source" />
-
-<script setup>
-import { ref } from 'vue'
-
-const loading = ref(false)
-const splitLoading = ref(false)
-
-async function handleClick() {
-  if (loading.value) return
-  loading.value = true
-  setTimeout(() => {
-    loading.value = false
-  }, 1200)
-}
-
-async function handleRun() {
-  if (splitLoading.value) return
-  splitLoading.value = true
-
-  setTimeout(() => {
-    splitLoading.value = false
-  }, 1200)
-}
-</script>
-
-<style scoped>
-::global(.docs-background) {
-  display: none;
-}
-</style>

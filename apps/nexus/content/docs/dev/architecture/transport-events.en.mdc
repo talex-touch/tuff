@@ -53,14 +53,17 @@ This page maps channel entry points and IPC event definitions.
 
 ## 5. Diagram (Mermaid)
 
-```mermaid
-flowchart LR
-  main["Main ChannelCore"] <--> renderer["Renderer ChannelCore"]
-  main <--> plugin["Plugin Channel (isolated)"]
-  main --> events["Event Types (packages/utils/transport/events/types/*)"]
-  renderer --> events
-  plugin --> events
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    main["Main ChannelCore"] <--> renderer["Renderer ChannelCore"]
+    main <--> plugin["Plugin Channel (isolated)"]
+    main --> events["Event Types (packages/utils/transport/events/types/*)"]
+    renderer --> events
+    plugin --> events
+---
+:::
 
 ## 6. Related Docs
 

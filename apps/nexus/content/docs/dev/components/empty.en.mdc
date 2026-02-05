@@ -21,11 +21,14 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxEmpty title="No results" description="Try changing filters." />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxEmpty title="No results" description="Try changing filters." />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -43,15 +46,18 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxEmpty title="No items" description="Create your first item.">
-    <template #action>
-      <TxButton>New</TxButton>
-    </template>
-  </TxEmpty>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxEmpty title="No items" description="Create your first item.">
+      <template #action>
+        <TxButton>New</TxButton>
+      </template>
+    </TxEmpty>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

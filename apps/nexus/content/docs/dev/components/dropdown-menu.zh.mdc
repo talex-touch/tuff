@@ -33,18 +33,21 @@ const open = ref(false)
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxDropdownMenu>
-    <template #trigger>
-      <TxButton>Menu</TxButton>
-    </template>
-
-    <TxDropdownItem>Open</TxDropdownItem>
-    <TxDropdownItem danger>Delete</TxDropdownItem>
-  </TxDropdownMenu>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxDropdownMenu>
+      <template #trigger>
+        <TxButton>Menu</TxButton>
+      </template>
+  
+      <TxDropdownItem>Open</TxDropdownItem>
+      <TxDropdownItem danger>Delete</TxDropdownItem>
+    </TxDropdownMenu>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

@@ -6,19 +6,22 @@
 - **Channel System**：通过 `ChannelType.MAIN` 与 `ChannelType.PLUGIN` 实现 IPC。
 
 ## 目录结构
-```
-apps/core-app/
-├── src/main/           # 主进程、模块、通道
-├── src/renderer/       # 渲染进程（Vue 3）
-└── ...
-plugins/
-└── my-plugin/
-    ├── manifest.json
-    ├── init/
-    │   └── index.ts
-    ├── preload/
-    └── src/
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  apps/core-app/
+  ├── src/main/           # 主进程、模块、通道
+  ├── src/renderer/       # 渲染进程（Vue 3）
+  └── ...
+  plugins/
+  └── my-plugin/
+      ├── manifest.json
+      ├── init/
+      │   └── index.ts
+      ├── preload/
+      └── src/
+---
+:::
 
 ## 生命周期
 1. **加载**：Manifest 被解析，注册入口脚本。

@@ -24,14 +24,17 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxNoData
-    description="No records yet."
-    :primary-action="{ label: 'Create', type: 'primary' }"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxNoData
+      description="No records yet."
+      :primary-action="{ label: 'Create', type: 'primary' }"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

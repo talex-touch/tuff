@@ -12,17 +12,20 @@ The Channel SDK provides IPC communication between plugins and the main process.
 
 **Quick Start**
 
-```ts
-import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
 
-// Method 1: Get raw channel object
-const channel = useChannel()
-const result = await channel.send('some-event', { data: 'value' })
+  // Method 1: Get raw channel object
+  const channel = useChannel()
+  const result = await channel.send('some-event', { data: 'value' })
 
-// Method 2: Use wrapped Plugin Channel
-const pluginChannel = usePluginRendererChannel()
-await pluginChannel.send('my-plugin:action', { payload: 'data' })
-```
+  // Method 2: Use wrapped Plugin Channel
+  const pluginChannel = usePluginRendererChannel()
+  await pluginChannel.send('my-plugin:action', { payload: 'data' })
+---
+:::
 
 ---
 
@@ -32,63 +35,78 @@ await pluginChannel.send('my-plugin:action', { payload: 'data' })
 
 Get the underlying IPC channel instance.
 
-```ts
-import { useChannel } from '@talex-touch/utils/plugin/sdk'
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
 
-const channel = useChannel()
+  const channel = useChannel()
 
-// Send message
-const response = await channel.send('event-name', { key: 'value' })
+  // Send message
+  const response = await channel.send('event-name', { key: 'value' })
 
-// Register listener
-const unsubscribe = channel.regChannel('event-name', (data) => {
-  console.log('Received:', data)
-})
+  // Register listener
+  const unsubscribe = channel.regChannel('event-name', (data) => {
+    console.log('Received:', data)
+  })
 
-// Unsubscribe
-unsubscribe()
-```
+  // Unsubscribe
+  unsubscribe()
+---
+:::
 
 **usePluginRendererChannel()**
 
 Get plugin-specific channel instance with a friendlier API.
 
-```ts
-import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
 
-const channel = usePluginRendererChannel()
-```
+  const channel = usePluginRendererChannel()
+---
+:::
 
 **`send(eventName, payload)`**
 
 Async send message and wait for response.
 
-```ts
-const result = await channel.send('clipboard:get-latest')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await channel.send('clipboard:get-latest')
+---
+:::
 
 **`on(eventName, handler)`**
 
 Register event listener.
 
-```ts
-const dispose = channel.on('core-box:input-change', (data) => {
-  console.log('Input changed:', data.input)
-})
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const dispose = channel.on('core-box:input-change', (data) => {
+    console.log('Input changed:', data.input)
+  })
 
-// Stop listening
-dispose()
-```
+  // Stop listening
+  dispose()
+---
+:::
 
 **`once(eventName, handler)`**
 
 Register one-time listener, automatically removed after trigger.
 
-```ts
-channel.once('plugin:ready', () => {
-  console.log('Plugin ready')
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  channel.once('plugin:ready', () => {
+    console.log('Plugin ready')
+  })
+---
+:::
 
 ---
 
@@ -126,13 +144,17 @@ channel.once('plugin:ready', () => {
 
 ## Type Definitions
 
-```ts
-interface IPluginRendererChannel {
-  send(eventName: string, payload?: any): Promise<any>
-  sendSync(eventName: string, payload?: any): any
-  on(eventName: string, handler: PluginChannelHandler): () => void
-  once(eventName: string, handler: PluginChannelHandler): () => void
-  raw: ITouchClientChannel
-}
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface IPluginRendererChannel {
+    send(eventName: string, payload?: any): Promise<any>
+    sendSync(eventName: string, payload?: any): any
+    on(eventName: string, handler: PluginChannelHandler): () => void
+    once(eventName: string, handler: PluginChannelHandler): () => void
+    raw: ITouchClientChannel
+  }
 
-type PluginChannelHandler = (event: any) => void
+  type PluginChannelHandler = (event: any) => void
+---
+:::

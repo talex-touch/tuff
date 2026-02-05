@@ -16,43 +16,49 @@ i18n 消息系统通过简单的 `$i18n:key` 格式实现主进程与渲染进�
 
 ## 后端使用（主进程）
 
-```typescript
-import { i18nMsg, DevServerKeys, FlowTransferKeys } from '@talex-touch/utils/i18n'
-
-// 基本用法 - 发送 i18n 键
-win.webContents.send('notification', {
-  title: i18nMsg(DevServerKeys.DISCONNECTED),
-  message: i18nMsg(DevServerKeys.CONNECTION_LOST)
-})
-
-// 带参数（用于插值）
-import { i18nMsgWithParams } from '@talex-touch/utils/i18n'
-
-win.webContents.send('error', {
-  message: i18nMsgWithParams('plugin.loadFailed', { name: 'my-plugin' })
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { i18nMsg, DevServerKeys, FlowTransferKeys } from '@talex-touch/utils/i18n'
+  
+  // 基本用法 - 发送 i18n 键
+  win.webContents.send('notification', {
+    title: i18nMsg(DevServerKeys.DISCONNECTED),
+    message: i18nMsg(DevServerKeys.CONNECTION_LOST)
+  })
+  
+  // 带参数（用于插值）
+  import { i18nMsgWithParams } from '@talex-touch/utils/i18n'
+  
+  win.webContents.send('error', {
+    message: i18nMsgWithParams('plugin.loadFailed', { name: 'my-plugin' })
+  })
+---
+:::
 
 ## 前端使用（渲染进程）
 
-```typescript
-import { resolveI18nMessage, i18nResolver, useI18nResolver } from '@talex-touch/utils/i18n'
-
-// 设置语言（通常在应用初始化时）
-i18nResolver.setLocale('zh')
-
-// 解析消息
-const text = resolveI18nMessage('$i18n:devServer.disconnected')
-// => '开发服务器已断开'
-
-// 非 i18n 字符串直接返回
-const plain = resolveI18nMessage('Hello World')
-// => 'Hello World'
-
-// Vue composable
-const { resolve, setLocale } = useI18nResolver()
-const message = resolve(receivedMessage)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { resolveI18nMessage, i18nResolver, useI18nResolver } from '@talex-touch/utils/i18n'
+  
+  // 设置语言（通常在应用初始化时）
+  i18nResolver.setLocale('zh')
+  
+  // 解析消息
+  const text = resolveI18nMessage('$i18n:devServer.disconnected')
+  // => '开发服务器已断开'
+  
+  // 非 i18n 字符串直接返回
+  const plain = resolveI18nMessage('Hello World')
+  // => 'Hello World'
+  
+  // Vue composable
+  const { resolve, setLocale } = useI18nResolver()
+  const message = resolve(receivedMessage)
+---
+:::
 
 ## 消息键
 
@@ -90,56 +96,68 @@ const message = resolve(receivedMessage)
 
 **1. 添加消息键**
 
-```typescript
-// packages/utils/i18n/message-keys.ts
-export const MyModuleKeys = {
-  SUCCESS: 'myModule.success',
-  ERROR: 'myModule.error',
-} as const
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // packages/utils/i18n/message-keys.ts
+  export const MyModuleKeys = {
+    SUCCESS: 'myModule.success',
+    ERROR: 'myModule.error',
+  } as const
+---
+:::
 
 **2. 添加翻译**
 
-```json
-// packages/utils/i18n/locales/en.json
-{
-  "myModule": {
-    "success": "Operation Successful",
-    "error": "Operation Failed"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // packages/utils/i18n/locales/en.json
+  {
+    "myModule": {
+      "success": "Operation Successful",
+      "error": "Operation Failed"
+    }
   }
-}
-```
+---
+:::
 
-```json
-// packages/utils/i18n/locales/zh.json
-{
-  "myModule": {
-    "success": "操作成功",
-    "error": "操作失败"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // packages/utils/i18n/locales/zh.json
+  {
+    "myModule": {
+      "success": "操作成功",
+      "error": "操作失败"
+    }
   }
-}
-```
+---
+:::
 
 ## 插件自定义消息
 
 插件可以添加自己的消息：
 
-```typescript
-import { i18nResolver } from '@talex-touch/utils/i18n'
-
-// 添加自定义消息
-i18nResolver.addMessages('en', {
-  myPlugin: {
-    hello: 'Hello from plugin'
-  }
-})
-
-i18nResolver.addMessages('zh', {
-  myPlugin: {
-    hello: '插件问好'
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { i18nResolver } from '@talex-touch/utils/i18n'
+  
+  // 添加自定义消息
+  i18nResolver.addMessages('en', {
+    myPlugin: {
+      hello: 'Hello from plugin'
+    }
+  })
+  
+  i18nResolver.addMessages('zh', {
+    myPlugin: {
+      hello: '插件问好'
+    }
+  })
+---
+:::
 
 ## 最佳实践
 - 统一在 `message-keys.ts` 定义键名，避免散落。
@@ -152,12 +170,15 @@ i18nResolver.addMessages('zh', {
 
 ## 文件结构
 
-```
-packages/utils/i18n/
-├── index.ts           # 统一导出
-├── message-keys.ts    # 键定义 + 工具函数
-├── resolver.ts        # 前端解析器
-└── locales/
-    ├── en.json       # 英文翻译
-    └── zh.json       # 中文翻译
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  packages/utils/i18n/
+  ├── index.ts           # 统一导出
+  ├── message-keys.ts    # 键定义 + 工具函数
+  ├── resolver.ts        # 前端解析器
+  └── locales/
+      ├── en.json       # 英文翻译
+      └── zh.json       # 中文翻译
+---
+:::

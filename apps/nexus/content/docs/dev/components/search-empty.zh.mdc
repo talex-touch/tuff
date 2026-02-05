@@ -21,11 +21,14 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxSearchEmpty description="Try another keyword or filter." />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxSearchEmpty description="Try another keyword or filter." />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

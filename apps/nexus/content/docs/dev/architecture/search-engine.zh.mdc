@@ -56,16 +56,19 @@
 
 ## 5. 关键流程（Mermaid）
 
-```mermaid
-flowchart LR
-  input["CoreBox Input"] --> parser["Query Parser (@file)"]
-  parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
-  providers --> score["Scoring + Sort"]
-  score --> merge["Merge & Rank"]
-  merge --> output["CoreBox Results"]
-  merge --> rec["Recommendation Engine"]
-  rec --> output
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    input["CoreBox Input"] --> parser["Query Parser (@file)"]
+    parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
+    providers --> score["Scoring + Sort"]
+    score --> merge["Merge & Rank"]
+    merge --> output["CoreBox Results"]
+    merge --> rec["Recommendation Engine"]
+    rec --> output
+---
+:::
 
 ## 6. 相关文档
 

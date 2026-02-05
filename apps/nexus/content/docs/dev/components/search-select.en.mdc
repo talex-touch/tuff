@@ -74,10 +74,13 @@ import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelec
 
 ### Types
 
-```ts
-export interface TxSearchSelectOption {
-  value: string | number
-  label: string
-  disabled?: boolean
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export interface TxSearchSelectOption {
+    value: string | number
+    label: string
+    disabled?: boolean
+  }
+---
+:::

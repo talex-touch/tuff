@@ -27,21 +27,24 @@ const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
-</script>
-
-<template>
-  <TxVirtualList :items="items" :item-height="36" height="240px">
-    <template #item="{ item, index }">
-      <div style="padding: 6px 12px; width: 100%;">
-        {{ index + 1 }}. {{ item }}
-      </div>
-    </template>
-  </TxVirtualList>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
+  </script>
+  
+  <template>
+    <TxVirtualList :items="items" :item-height="36" height="240px">
+      <template #item="{ item, index }">
+        <div style="padding: 6px 12px; width: 100%;">
+          {{ index + 1 }}. {{ item }}
+        </div>
+      </template>
+    </TxVirtualList>
+  </template>
+---
+:::
 :::
 
 ## API

@@ -11,9 +11,12 @@ This document covers the currently shipped capabilities (open/close/state + life
 ## Core Concepts
 **Lifecycle states**
 
-```
-prepare → attach → active → inactive → detach → destroy
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  prepare → attach → active → inactive → detach → destroy
+---
+:::
 
 | State | Description |
 |------|------|
@@ -26,27 +29,30 @@ prepare → attach → active → inactive → detach → destroy
 
 **DivisionBox config**
 
-```typescript
-interface DivisionBoxConfig {
-  url: string
-  title: string
-  icon?: string
-  size?: 'compact' | 'medium' | 'expanded'
-  keepAlive?: boolean
-  pluginId?: string
-  header?: {
-    show: boolean
-    title?: string
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface DivisionBoxConfig {
+    url: string
+    title: string
     icon?: string
+    size?: 'compact' | 'medium' | 'expanded'
+    keepAlive?: boolean
+    pluginId?: string
+    header?: {
+      show: boolean
+      title?: string
+      icon?: string
+    }
+    ui?: {
+      showInput?: boolean
+      inputPlaceholder?: string
+      showResults?: boolean
+      initialInput?: string
+    }
   }
-  ui?: {
-    showInput?: boolean
-    inputPlaceholder?: string
-    showResults?: boolean
-    initialInput?: string
-  }
-}
-```
+---
+:::
 
 ## Shortcuts
 
@@ -57,67 +63,82 @@ interface DivisionBoxConfig {
 ## Usage
 **Plugin SDK (recommended)**
 
-```typescript
-import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-
-const divisionBox = useDivisionBox()
-const { sessionId } = await divisionBox.open({
-  url: 'https://example.com/tool',
-  title: 'My Tool',
-  size: 'medium',
-  keepAlive: true
-})
-
-const unsubscribe = divisionBox.onLifecycleChange((event) => {
-  console.log(event.sessionId, event.oldState, event.newState)
-})
-
-await divisionBox.close(sessionId)
-unsubscribe()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+  
+  const divisionBox = useDivisionBox()
+  const { sessionId } = await divisionBox.open({
+    url: 'https://example.com/tool',
+    title: 'My Tool',
+    size: 'medium',
+    keepAlive: true
+  })
+  
+  const unsubscribe = divisionBox.onLifecycleChange((event) => {
+    console.log(event.sessionId, event.oldState, event.newState)
+  })
+  
+  await divisionBox.close(sessionId)
+  unsubscribe()
+---
+:::
 
 **Open from renderer**
 
-```typescript
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-
-const transport = useTuffTransport()
-const response = await transport.send(DivisionBoxEvents.open, {
-  url: 'plugin://my-plugin/panel.html',
-  title: 'My Panel',
-  icon: 'ri:dashboard-line',
-  size: 'medium',
-  keepAlive: true,
-  pluginId: 'my-plugin'
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+  import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+  
+  const transport = useTuffTransport()
+  const response = await transport.send(DivisionBoxEvents.open, {
+    url: 'plugin://my-plugin/panel.html',
+    title: 'My Panel',
+    icon: 'ri:dashboard-line',
+    size: 'medium',
+    keepAlive: true,
+    pluginId: 'my-plugin'
+  })
+---
+:::
 
 **Close**
 
-```typescript
-await divisionBox.close(sessionId, {
-  delay: 0,
-  animation: false,
-  force: false
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await divisionBox.close(sessionId, {
+    delay: 0,
+    animation: false,
+    force: false
+  })
+---
+:::
 
 **Get session state**
 
-```typescript
-const response = await transport.send(DivisionBoxEvents.getState, { sessionId })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const response = await transport.send(DivisionBoxEvents.getState, { sessionId })
+---
+:::
 
 **Update session state**
 
-```typescript
-await transport.send(DivisionBoxEvents.updateState, {
-  sessionId,
-  key: 'scrollY',
-  value: 150
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await transport.send(DivisionBoxEvents.updateState, {
+    sessionId,
+    key: 'scrollY',
+    value: 150
+  })
+---
+:::
 
 ## API Reference
 **open(config)**
@@ -149,30 +170,36 @@ Reads session state data.
 
 ## Flow Transfer Integration
 
-```json
-{
-  "flowTargets": [
-    {
-      "id": "open-in-panel",
-      "name": "Open in panel",
-      "supportedTypes": ["json", "text"],
-      "featureId": "open-panel"
-    }
-  ]
-}
-```
-
-```typescript
-function onFeatureTriggered(featureId: string, query: TuffQuery) {
-  if (isFlowTriggered(query)) {
-    const flowData = extractFlowData(query)
-    divisionBox.open({
-      url: `/viewer.html?sessionId=${flowData.sessionId}`,
-      title: 'View Data'
-    })
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "flowTargets": [
+      {
+        "id": "open-in-panel",
+        "name": "Open in panel",
+        "supportedTypes": ["json", "text"],
+        "featureId": "open-panel"
+      }
+    ]
   }
-}
-```
+---
+:::
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function onFeatureTriggered(featureId: string, query: TuffQuery) {
+    if (isFlowTriggered(query)) {
+      const flowData = extractFlowData(query)
+      divisionBox.open({
+        url: `/viewer.html?sessionId=${flowData.sessionId}`,
+        title: 'View Data'
+      })
+    }
+  }
+---
+:::
 
 ## IPC Channels
 

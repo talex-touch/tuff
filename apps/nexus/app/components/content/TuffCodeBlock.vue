@@ -40,6 +40,7 @@ const copyLabel = computed(() => {
 })
 
 const showHeader = computed(() => !props.embedded)
+const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
 
 async function handleCopy() {
   if (!import.meta.client || !canCopy.value)
@@ -67,7 +68,23 @@ async function resolveHighlighter() {
       const { createHighlighter } = mod
       return createHighlighter({
         themes: ['github-dark'],
-        langs: ['vue', 'ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'scss', 'bash', 'shell', 'yaml', 'md'],
+        langs: [
+          'vue',
+          'ts',
+          'tsx',
+          'js',
+          'jsx',
+          'json',
+          'html',
+          'css',
+          'scss',
+          'bash',
+          'shell',
+          'yaml',
+          'md',
+          'typescript',
+          'javascript',
+        ],
       })
     })
   }
@@ -75,6 +92,10 @@ async function resolveHighlighter() {
 }
 
 async function updateHighlight() {
+  if (isMermaid.value) {
+    highlightedHtml.value = ''
+    return
+  }
   const code = props.code?.trim()
   if (!code) {
     highlightedHtml.value = ''
@@ -125,7 +146,7 @@ onMounted(() => {
         {{ copyLabel }}
       </button>
     </div>
-    <pre class="tuff-code-block__pre">
+    <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre">
       <button
         v-if="props.embedded && canCopy"
         type="button"
@@ -135,8 +156,13 @@ onMounted(() => {
         <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
         {{ copyLabel }}
       </button>
+      <div
+        v-if="isMermaid"
+        class="tuff-code-block__mermaid mermaid"
+        v-text="props.code"
+      />
       <code
-        v-if="highlightedHtml"
+        v-else-if="highlightedHtml"
         :class="['tuff-code-block__code', `language-${props.lang}`]"
         v-html="highlightedHtml"
       />
@@ -145,7 +171,7 @@ onMounted(() => {
         :class="['tuff-code-block__code', `language-${props.lang}`]"
         v-text="props.code"
       />
-    </pre>
+    </component>
   </div>
 </template>
 
@@ -270,6 +296,16 @@ onMounted(() => {
 
 .tuff-code-block__pre code .line {
   display: block;
+}
+
+.tuff-code-block__mermaid {
+  display: block;
+  width: 100%;
+}
+
+.tuff-code-block__mermaid svg {
+  max-width: 100%;
+  height: auto;
 }
 
 :global(.dark .tuff-code-block),

@@ -27,10 +27,13 @@ const files = ref([])
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxImageUploader v-model="files" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxImageUploader v-model="files" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
