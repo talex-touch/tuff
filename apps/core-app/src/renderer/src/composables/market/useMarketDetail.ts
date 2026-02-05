@@ -1,6 +1,12 @@
 import type { ComputedRef } from 'vue'
 import type { MarketPluginListItem } from './useMarketData'
 import type { PluginVersionStatus } from './usePluginVersionStatus'
+import {
+  CURRENT_SDK_VERSION,
+  SUPPORTED_SDK_VERSIONS,
+  isValidSdkVersion,
+  parseSdkVersion
+} from '@talex-touch/utils/plugin'
 import { computed } from 'vue'
 
 interface DetailMetaItem {
@@ -8,7 +14,13 @@ interface DetailMetaItem {
   label: string
   value: string
   /** Highlight style for special states like upgrade available */
-  highlight?: 'upgrade' | 'installed'
+  highlight?: 'upgrade' | 'installed' | 'info'
+}
+
+function normalizeSdkapi(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return parseSdkVersion(value)
+  return undefined
 }
 
 export function useMarketDetail(
@@ -67,6 +79,34 @@ export function useMarketDetail(
     const time = formatTimestamp(p.timestamp)
     if (time)
       meta.push({ icon: 'i-ri-time-line', label: t('market.detailDialog.updateTime'), value: time })
+
+    const sdkapiRaw = p.sdkapi
+    const sdkapiValue = normalizeSdkapi(sdkapiRaw)
+    const sdkapiValid = sdkapiValue !== undefined && isValidSdkVersion(sdkapiValue)
+    const sdkapiSupported = sdkapiValid && SUPPORTED_SDK_VERSIONS.includes(sdkapiValue as number)
+
+    let sdkapiDisplay = t('market.detailDialog.sdkapiMissing')
+    if (sdkapiValue) {
+      sdkapiDisplay = `${sdkapiValue}`
+    } else if (sdkapiRaw !== undefined && sdkapiRaw !== null) {
+      sdkapiDisplay = String(sdkapiRaw)
+    }
+    let sdkapiHighlight: DetailMetaItem['highlight']
+
+    if (!sdkapiValid || !sdkapiSupported) {
+      sdkapiHighlight = 'upgrade'
+    } else if (sdkapiValue && sdkapiValue > CURRENT_SDK_VERSION) {
+      sdkapiHighlight = 'upgrade'
+    } else if (sdkapiValue && sdkapiValue < CURRENT_SDK_VERSION) {
+      sdkapiHighlight = 'info'
+    }
+
+    meta.push({
+      icon: 'i-ri-code-line',
+      label: t('market.detailDialog.sdkapi'),
+      value: sdkapiDisplay,
+      highlight: sdkapiHighlight
+    })
 
     meta.push({
       icon: 'i-ri-shield-user-line',

@@ -3,6 +3,12 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { MarketPluginListItem } from './useMarketData'
+import {
+  CURRENT_SDK_VERSION,
+  SUPPORTED_SDK_VERSIONS,
+  isValidSdkVersion,
+  parseSdkVersion
+} from '@talex-touch/utils/plugin'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
 import { useI18n } from 'vue-i18n'
@@ -17,6 +23,15 @@ export interface InstallOptions {
   autoReEnable?: boolean
 }
 
+type SdkapiCheckLevel = 'ok' | 'warning' | 'error'
+type SdkapiCheckReason = 'missing' | 'invalid' | 'unsupported' | 'tooNew' | 'legacy'
+
+function normalizeSdkapi(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return parseSdkVersion(value)
+  return undefined
+}
+
 /**
  * Composable for managing plugin installation
  * Handles plugin installation flow and status tracking
@@ -26,6 +41,119 @@ export function useMarketInstall() {
   const installManager = useInstallManager()
   const transport = useTuffTransport()
   const pluginSdk = createPluginSdk(transport)
+
+  function evaluateSdkapi(plugin: MarketPluginListItem): {
+    level: SdkapiCheckLevel
+    reason?: SdkapiCheckReason
+    sdkapi?: number
+    raw?: unknown
+  } {
+    const raw = plugin.sdkapi
+    if (raw === undefined || raw === null) {
+      return { level: 'error', reason: 'missing', raw }
+    }
+
+    const parsed = normalizeSdkapi(raw)
+    if (parsed === undefined || !isValidSdkVersion(parsed)) {
+      return { level: 'error', reason: 'invalid', raw }
+    }
+
+    if (!SUPPORTED_SDK_VERSIONS.includes(parsed)) {
+      return { level: 'error', reason: 'unsupported', sdkapi: parsed, raw }
+    }
+
+    if (parsed > CURRENT_SDK_VERSION) {
+      return { level: 'error', reason: 'tooNew', sdkapi: parsed, raw }
+    }
+
+    if (parsed < CURRENT_SDK_VERSION) {
+      return { level: 'warning', reason: 'legacy', sdkapi: parsed, raw }
+    }
+
+    return { level: 'ok', sdkapi: parsed, raw }
+  }
+
+  function buildSdkapiMessage(
+    plugin: MarketPluginListItem,
+    result: ReturnType<typeof evaluateSdkapi>
+  ): string {
+    const name = plugin.name
+    const sdkapi = result.sdkapi ? String(result.sdkapi) : ''
+    const raw = result.raw !== undefined ? String(result.raw) : ''
+
+    switch (result.reason) {
+      case 'missing':
+        return t('market.installation.sdkapi.blockMissing', { name, current: CURRENT_SDK_VERSION })
+      case 'invalid':
+        return t('market.installation.sdkapi.blockInvalid', {
+          name,
+          value: raw,
+          current: CURRENT_SDK_VERSION
+        })
+      case 'unsupported':
+        return t('market.installation.sdkapi.blockUnsupported', {
+          name,
+          version: sdkapi,
+          current: CURRENT_SDK_VERSION
+        })
+      case 'tooNew':
+        return t('market.installation.sdkapi.blockTooNew', {
+          name,
+          version: sdkapi,
+          current: CURRENT_SDK_VERSION
+        })
+      case 'legacy':
+        return t('market.installation.sdkapi.warnLegacy', {
+          name,
+          version: sdkapi,
+          current: CURRENT_SDK_VERSION
+        })
+      default:
+        return ''
+    }
+  }
+
+  async function confirmSdkapiCompatibility(plugin: MarketPluginListItem): Promise<boolean> {
+    const result = evaluateSdkapi(plugin)
+    if (result.level === 'ok') return true
+
+    if (result.level === 'error') {
+      await forTouchTip(
+        t('market.installation.sdkapi.blockTitle'),
+        buildSdkapiMessage(plugin, result),
+        [
+          {
+            content: t('market.installation.sdkapi.blockConfirm'),
+            type: 'default',
+            onClick: async () => true
+          }
+        ]
+      )
+      return false
+    }
+
+    let confirmed = false
+    await forTouchTip(
+      t('market.installation.sdkapi.warnTitle'),
+      buildSdkapiMessage(plugin, result),
+      [
+        {
+          content: t('market.installation.sdkapi.warnContinue'),
+          type: 'warning',
+          onClick: async () => {
+            confirmed = true
+            return true
+          }
+        },
+        {
+          content: t('market.installation.sdkapi.warnCancel'),
+          type: 'default',
+          onClick: async () => true
+        }
+      ]
+    )
+    return confirmed
+  }
 
   function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
@@ -136,6 +264,9 @@ export function useMarketInstall() {
     if (isPluginInstalling(plugin.id, plugin.providerId)) return
 
     try {
+      const sdkapiConfirmed = await confirmSdkapiCompatibility(plugin)
+      if (!sdkapiConfirmed) return
+
       // For upgrades, show upgrade confirmation
       if (options?.isUpgrade) {
         const upgradeConfirmed = await confirmUpgrade(plugin)

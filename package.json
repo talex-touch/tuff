@@ -18,6 +18,7 @@
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
     "typecheck:all": "pnpm -r --if-present run typecheck",
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
+    "sdkapi:sync-docs": "node scripts/sync-sdkapi-docs.mjs",
     "core:dev": "pnpm -F @talex-touch/core-app run dev",
     "nexus:dev": "pnpm -F @talex-touch/tuff-nexus run dev",
     "nexus:content:reset": "pnpm -F @talex-touch/tuff-nexus run content:reset",

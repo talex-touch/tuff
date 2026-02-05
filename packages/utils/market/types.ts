@@ -80,6 +80,10 @@ export interface MarketPlugin {
    * Direct URL to icon image (e.g., '/api/images/xxx.svg')
    */
   iconUrl?: string
+  /**
+   * SDK API version declared by the plugin (YYMMDD).
+   */
+  sdkapi?: number
   metadata?: Record<string, unknown>
   readmeUrl?: string
   homepage?: string

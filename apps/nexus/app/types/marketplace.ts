@@ -15,6 +15,7 @@ export interface MarketplacePluginVersion {
   signature: string
   packageUrl: string
   packageSize?: number
+  sdkapi?: number
   changelog?: string | null
   readmeMarkdown?: string | null
 }

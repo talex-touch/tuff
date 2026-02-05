@@ -9,6 +9,7 @@ import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
+import { evaluateSdkapi } from './sdkapi'
 import { extractTpexMetadata } from './tpex'
 
 const PLUGINS_KEY = 'dashboard:plugins'
@@ -1472,6 +1473,13 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   const signature = await sha256Hex(packageBuffer)
 
   const metadata = await extractTpexMetadata(packageBuffer)
+  const sdkapiStatus = evaluateSdkapi(metadata.manifest ?? null)
+  if (sdkapiStatus.level === 'error') {
+    const message = sdkapiStatus.suggestion
+      ? `${sdkapiStatus.message} ${sdkapiStatus.suggestion}`
+      : sdkapiStatus.message
+    throw createError({ statusCode: 400, statusMessage: message })
+  }
 
   // Auto-extract and upload icon from package if plugin doesn't have one
   let iconKey = plugin.iconKey ?? null

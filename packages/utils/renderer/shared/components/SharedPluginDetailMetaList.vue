@@ -24,7 +24,17 @@ const hasItems = computed(() => (props.items?.length ?? 0) > 0)
         v-for="item in items"
         :key="item.label"
         class="rounded-xl border border-black/5 bg-white/80 p-3 text-sm text-black/70"
-        :class="item.highlight ? `highlight-${item.highlight}` : ''"
+        :class="[
+          item.highlight === 'upgrade'
+            ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-100'
+            : '',
+          item.highlight === 'installed'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-100'
+            : '',
+          item.highlight === 'info'
+            ? 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900/50 dark:bg-sky-900/20 dark:text-sky-100'
+            : '',
+        ]"
       >
         <div class="flex items-center gap-2 text-xs uppercase tracking-wide text-black/50">
           <i v-if="item.icon" :class="item.icon" />
