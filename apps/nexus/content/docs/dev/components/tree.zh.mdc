@@ -49,20 +49,23 @@ const nodes = [
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const query = ref('')
-const value = ref()
-const nodes = [{ key: 'design', label: 'Design' }]
-</script>
-
-<template>
-  <TxSearchInput v-model="query" placeholder="过滤节点" />
-  <TxTree v-model="value" :nodes="nodes" :filter-text="query" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const query = ref('')
+  const value = ref()
+  const nodes = [{ key: 'design', label: 'Design' }]
+  </script>
+  
+  <template>
+    <TxSearchInput v-model="query" placeholder="过滤节点" />
+    <TxTree v-model="value" :nodes="nodes" :filter-text="query" />
+  </template>
+---
+:::
 :::
 
 ## API

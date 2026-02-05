@@ -18,11 +18,14 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxNoSelection description="Select an item to see its details." />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxNoSelection description="Select an item to see its details." />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

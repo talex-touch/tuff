@@ -66,28 +66,31 @@ const agents = [
 </template>
 
 <template #code>
-```vue
-&lt;script setup lang="ts"&gt;
-import { ref } from 'vue'
-
-const selectedId = ref<string | null>('chat')
-const loading = ref(false)
-const agents = [
-  { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
-  { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
-  { id: 'disabled', name: 'Disabled Agent', disabled: true },
-]
-&lt;/script&gt;
-
-<template>
-  <TxAgentsList
-    :agents="agents"
-    :loading="loading"
-    :selected-id="selectedId"
-    @select="(id) => (selectedId = id)"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  &lt;script setup lang="ts"&gt;
+  import { ref } from 'vue'
+  
+  const selectedId = ref<string | null>('chat')
+  const loading = ref(false)
+  const agents = [
+    { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
+    { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
+    { id: 'disabled', name: 'Disabled Agent', disabled: true },
+  ]
+  &lt;/script&gt;
+  
+  <template>
+    <TxAgentsList
+      :agents="agents"
+      :loading="loading"
+      :selected-id="selectedId"
+      @select="(id) => (selectedId = id)"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

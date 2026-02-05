@@ -41,14 +41,17 @@
 
 ## 4. 存储更新链路（Mermaid）
 
-```mermaid
-flowchart LR
-  storage["StorageModule"] --> cache["Cache/LRU"]
-  storage --> persist["Disk JSON / SQLite"]
-  storage --> broadcast["Broadcast Update"]
-  broadcast --> renderer["Renderer Windows"]
-  broadcast --> plugin["Plugin Storage Listeners"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    storage["StorageModule"] --> cache["Cache/LRU"]
+    storage --> persist["Disk JSON / SQLite"]
+    storage --> broadcast["Broadcast Update"]
+    broadcast --> renderer["Renderer Windows"]
+    broadcast --> plugin["Plugin Storage Listeners"]
+---
+:::
 
 ## 5. 相关文档
 

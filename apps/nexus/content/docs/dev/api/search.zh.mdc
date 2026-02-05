@@ -30,18 +30,21 @@ CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 
 在 `manifest.json` 中为 Feature 添加 `keywords` 可以增强搜索匹配：
 
-```json
-{
-  "features": [
-    {
-      "id": "translate",
-      "name": "翻译",
-      "desc": "翻译选中的文本",
-      "keywords": ["translate", "translation", "fanyi", "fy"]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "translate",
+        "name": "翻译",
+        "desc": "翻译选中的文本",
+        "keywords": ["translate", "translation", "fanyi", "fy"]
+      }
+    ]
+  }
+---
+:::
 
 ## 匹配类型与优先级
 
@@ -60,46 +63,55 @@ CoreBox 搜索系统提供强大的搜索匹配能力，支持：
 
 搜索结果会包含 `matchResult` 字段用于 UI 高亮显示：
 
-```typescript
-interface MatchRange {
-  start: number  // 起始位置
-  end: number    // 结束位置（不含）
-}
-
-// 在 TuffItem.meta.extension 中
-interface FeatureExtension {
-  matchResult?: MatchRange[]
-  searchTokens?: string[]
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface MatchRange {
+    start: number  // 起始位置
+    end: number    // 结束位置（不含）
+  }
+  
+  // 在 TuffItem.meta.extension 中
+  interface FeatureExtension {
+    matchResult?: MatchRange[]
+    searchTokens?: string[]
+  }
+---
+:::
 
 **渲染器中使用高亮**
 
 BoxItem 组件自动处理 `matchResult` 高亮：
 
-```vue
-<h5
-  class="text-sm font-semibold truncate"
-  v-html="getHighlightedHTML(
-    render.basic?.title || '',
-    props.item.meta?.extension?.matchResult
-  )"
-/>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <h5
+    class="text-sm font-semibold truncate"
+    v-html="getHighlightedHTML(
+      render.basic?.title || '',
+      props.item.meta?.extension?.matchResult
+    )"
+  />
+---
+:::
 
 `getHighlightedHTML` 函数会将匹配区域包裹在 `<span>` 中：
 
-```typescript
-function getHighlightedHTML(
-  text: string,
-  matchedIndices?: MatchRange[],
-  opts?: {
-    className?: string   // 高亮 CSS 类名
-    base?: 0 | 1        // 索引基数
-    inclusiveEnd?: boolean
-  }
-): string
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function getHighlightedHTML(
+    text: string,
+    matchedIndices?: MatchRange[],
+    opts?: {
+      className?: string   // 高亮 CSS 类名
+      base?: 0 | 1        // 索引基数
+      inclusiveEnd?: boolean
+    }
+  ): string
+---
+:::
 
 ## 在插件中使用搜索匹配
 
@@ -107,40 +119,46 @@ function getHighlightedHTML(
 
 `@talex-touch/utils/search` 导出的 `matchFeature` 函数可用于自定义搜索：
 
-```typescript
-import { matchFeature } from '@talex-touch/utils/search'
-
-const result = matchFeature({
-  title: '翻译',
-  desc: '翻译选中的文本',
-  searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
-  query: 'fanyi',
-  enableFuzzy: true
-})
-
-if (result.matched) {
-  console.log('匹配类型:', result.matchType)
-  console.log('匹配分数:', result.score)
-  console.log('高亮区域:', result.matchRanges)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { matchFeature } from '@talex-touch/utils/search'
+  
+  const result = matchFeature({
+    title: '翻译',
+    desc: '翻译选中的文本',
+    searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
+    query: 'fanyi',
+    enableFuzzy: true
+  })
+  
+  if (result.matched) {
+    console.log('匹配类型:', result.matchType)
+    console.log('匹配分数:', result.score)
+    console.log('高亮区域:', result.matchRanges)
+  }
+---
+:::
 
 **FeatureMatchResult 接口**
 
-```typescript
-interface FeatureMatchResult {
-  /** 是否匹配 */
-  matched: boolean
-  /** 匹配分数 (0-1000) */
-  score: number
-  /** 匹配类型 */
-  matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
-  /** 高亮区域 */
-  matchRanges: MatchRange[]
-  /** 匹配的令牌（调试用） */
-  matchedToken?: string
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FeatureMatchResult {
+    /** 是否匹配 */
+    matched: boolean
+    /** 匹配分数 (0-1000) */
+    score: number
+    /** 匹配类型 */
+    matchType: 'exact' | 'token' | 'prefix' | 'contains' | 'fuzzy' | 'none'
+    /** 高亮区域 */
+    matchRanges: MatchRange[]
+    /** 匹配的令牌（调试用） */
+    matchedToken?: string
+  }
+---
+:::
 
 ## 模糊匹配 API
 
@@ -148,53 +166,62 @@ interface FeatureMatchResult {
 
 用于容错搜索，支持拼写错误：
 
-```typescript
-import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
-
-const result = fuzzyMatch('hello', 'helol', 2)
-
-if (result.matched) {
-  console.log('分数:', result.score)
-  console.log('匹配索引:', result.matchedIndices)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
   
-  // 转换为高亮区域
-  const ranges = indicesToRanges(result.matchedIndices)
-}
-```
+  const result = fuzzyMatch('hello', 'helol', 2)
+  
+  if (result.matched) {
+    console.log('分数:', result.score)
+    console.log('匹配索引:', result.matchedIndices)
+    
+    // 转换为高亮区域
+    const ranges = indicesToRanges(result.matchedIndices)
+  }
+---
+:::
 
 **FuzzyMatchResult 接口**
 
-```typescript
-interface FuzzyMatchResult {
-  /** 是否匹配 */
-  matched: boolean
-  /** 匹配分数 (0-1) */
-  score: number
-  /** 匹配字符的索引数组 */
-  matchedIndices: number[]
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface FuzzyMatchResult {
+    /** 是否匹配 */
+    matched: boolean
+    /** 匹配分数 (0-1) */
+    score: number
+    /** 匹配字符的索引数组 */
+    matchedIndices: number[]
+  }
+---
+:::
 
 ## 命令匹配
 
 Feature 的 `commands` 字段用于精确匹配触发：
 
-```json
-{
-  "features": [
-    {
-      "id": "search-web",
-      "name": "搜索网页",
-      "commands": [
-        { "type": "over" },
-        { "type": "match", "value": ["g ", "google "] },
-        { "type": "contain", "value": "搜索" },
-        { "type": "regex", "value": "^s\\s+" }
-      ]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "search-web",
+        "name": "搜索网页",
+        "commands": [
+          { "type": "over" },
+          { "type": "match", "value": ["g ", "google "] },
+          { "type": "contain", "value": "搜索" },
+          { "type": "regex", "value": "^s\\s+" }
+        ]
+      }
+    ]
+  }
+---
+:::
 
 命令类型：
 
@@ -209,36 +236,42 @@ Feature 的 `commands` 字段用于精确匹配触发：
 
 搜索查询会包含当前剪贴板状态：
 
-```typescript
-interface TuffQuery {
-  text: string
-  inputs?: TuffQueryInput[]
-}
-
-interface TuffQueryInput {
-  type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
-  content: string
-  thumbnail?: string
-  rawContent?: string
-  metadata?: Record<string, unknown>
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffQuery {
+    text: string
+    inputs?: TuffQueryInput[]
+  }
+  
+  interface TuffQueryInput {
+    type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
+    content: string
+    thumbnail?: string
+    rawContent?: string
+    metadata?: Record<string, unknown>
+  }
+---
+:::
 
 **声明接受的输入类型**
 
 在 Feature 中声明 `acceptedInputTypes` 以接收剪贴板内容：
 
-```json
-{
-  "features": [
-    {
-      "id": "image-ocr",
-      "name": "图片文字识别",
-      "acceptedInputTypes": ["image"]
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "features": [
+      {
+        "id": "image-ocr",
+        "name": "图片文字识别",
+        "acceptedInputTypes": ["image"]
+      }
+    ]
+  }
+---
+:::
 
 支持的输入类型：
 - `text` - 纯文本

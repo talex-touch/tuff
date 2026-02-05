@@ -25,15 +25,18 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxEmptyState
-    variant="no-data"
-    :primary-action="{ label: 'Create', type: 'primary' }"
-    :secondary-action="{ label: 'Refresh' }"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState
+      variant="no-data"
+      :primary-action="{ label: 'Create', type: 'primary' }"
+      :secondary-action="{ label: 'Refresh' }"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -53,17 +56,20 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxEmptyState
-    variant="no-selection"
-    layout="horizontal"
-    surface="card"
-    title="No selection"
-    description="Pick an item from the left to continue."
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState
+      variant="no-selection"
+      layout="horizontal"
+      surface="card"
+      title="No selection"
+      description="Pick an item from the left to continue."
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -91,25 +97,28 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxEmptyState variant="custom">
-    <template #icon>
-      <TxIcon name="i-carbon-search" :size="28" />
-    </template>
-    <template #title>
-      Setup required
-    </template>
-    <template #description>
-      Connect a workspace to enable this feature.
-    </template>
-    <template #actions>
-      <TxButton type="primary">Connect</TxButton>
-      <TxButton>Learn more</TxButton>
-    </template>
-  </TxEmptyState>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxEmptyState variant="custom">
+      <template #icon>
+        <TxIcon name="i-carbon-search" :size="28" />
+      </template>
+      <template #title>
+        Setup required
+      </template>
+      <template #description>
+        Connect a workspace to enable this feature.
+      </template>
+      <template #actions>
+        <TxButton type="primary">Connect</TxButton>
+        <TxButton>Learn more</TxButton>
+      </template>
+    </TxEmptyState>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

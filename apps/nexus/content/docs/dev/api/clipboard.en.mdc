@@ -14,21 +14,24 @@ All operations are executed in the main process via IPC to avoid WebContents foc
 
 **Quick Start**
 
-```typescript
-import { useClipboard } from '@talex-touch/utils/plugin/sdk'
-
-const clipboard = useClipboard()
-
-// Write text
-await clipboard.writeText('Hello World')
-
-// Read clipboard
-const content = await clipboard.read()
-console.log(content.text, content.formats)
-
-// Copy and paste to active app
-await clipboard.copyAndPaste({ text: 'Pasted content' })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useClipboard } from '@talex-touch/utils/plugin/sdk'
+  
+  const clipboard = useClipboard()
+  
+  // Write text
+  await clipboard.writeText('Hello World')
+  
+  // Read clipboard
+  const content = await clipboard.read()
+  console.log(content.text, content.formats)
+  
+  // Copy and paste to active app
+  await clipboard.copyAndPaste({ text: 'Pasted content' })
+---
+:::
 
 ## API Reference
 
@@ -36,9 +39,12 @@ await clipboard.copyAndPaste({ text: 'Pasted content' })
 
 Returns a unified clipboard SDK instance.
 
-```typescript
-const clipboard = useClipboard()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const clipboard = useClipboard()
+---
+:::
 
 ---
 
@@ -48,31 +54,37 @@ const clipboard = useClipboard()
 
 Write plain text to the clipboard.
 
-```typescript
-await clipboard.writeText('Hello World')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.writeText('Hello World')
+---
+:::
 
 **write(options)**
 
 Write multiple formats to the clipboard.
 
-```typescript
-// Text + HTML
-await clipboard.write({
-  text: 'Hello',
-  html: '<b>Hello</b>'
-})
-
-// Image (data URL)
-await clipboard.write({
-  image: 'data:image/png;base64,...'
-})
-
-// Files
-await clipboard.write({
-  files: ['/path/to/file.txt', '/path/to/image.png']
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Text + HTML
+  await clipboard.write({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+  
+  // Image (data URL)
+  await clipboard.write({
+    image: 'data:image/png;base64,...'
+  })
+  
+  // Files
+  await clipboard.write({
+    files: ['/path/to/file.txt', '/path/to/image.png']
+  })
+---
+:::
 
 **Parameters**:
 | Field | Type | Description |
@@ -86,16 +98,19 @@ await clipboard.write({
 
 Read current clipboard content.
 
-```typescript
-const content = await clipboard.read()
-// {
-//   text: 'Hello',
-//   html: '<b>Hello</b>',
-//   hasImage: false,
-//   hasFiles: false,
-//   formats: ['text/plain', 'text/html']
-// }
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const content = await clipboard.read()
+  // {
+  //   text: 'Hello',
+  //   html: '<b>Hello</b>',
+  //   hasImage: false,
+  //   hasFiles: false,
+  //   formats: ['text/plain', 'text/html']
+  // }
+---
+:::
 
 **Returns**:
 | Field | Type | Description |
@@ -110,12 +125,15 @@ const content = await clipboard.read()
 
 Read image from clipboard.
 
-```typescript
-const image = await clipboard.readImage()
-if (image) {
-  console.log(image.dataUrl, image.width, image.height)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const image = await clipboard.readImage()
+  if (image) {
+    console.log(image.dataUrl, image.width, image.height)
+  }
+---
+:::
 
 **Returns**: `{ dataUrl: string, width: number, height: number } | null`
 
@@ -123,18 +141,24 @@ if (image) {
 
 Read file paths from clipboard.
 
-```typescript
-const files = await clipboard.readFiles()
-// ['/path/to/file1.txt', '/path/to/file2.png']
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const files = await clipboard.readFiles()
+  // ['/path/to/file1.txt', '/path/to/file2.png']
+---
+:::
 
 **clear()**
 
 Clear the clipboard.
 
-```typescript
-await clipboard.clear()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.clear()
+---
+:::
 
 ---
 
@@ -144,33 +168,36 @@ await clipboard.clear()
 
 Write content to the clipboard and simulate paste into the active app.
 
-```typescript
-// Paste text
-await clipboard.copyAndPaste({ text: 'Hello' })
-
-// Paste formatted text
-await clipboard.copyAndPaste({
-  text: 'Hello',
-  html: '<b>Hello</b>'
-})
-
-// Paste image
-await clipboard.copyAndPaste({
-  image: 'data:image/png;base64,...'
-})
-
-// Paste files
-await clipboard.copyAndPaste({
-  files: ['/path/to/file.txt']
-})
-
-// Custom delay and behavior
-await clipboard.copyAndPaste({
-  text: 'Hello',
-  delayMs: 200,        // delay before paste (default 150ms)
-  hideCoreBox: true    // hide CoreBox before paste (default true)
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Paste text
+  await clipboard.copyAndPaste({ text: 'Hello' })
+  
+  // Paste formatted text
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    html: '<b>Hello</b>'
+  })
+  
+  // Paste image
+  await clipboard.copyAndPaste({
+    image: 'data:image/png;base64,...'
+  })
+  
+  // Paste files
+  await clipboard.copyAndPaste({
+    files: ['/path/to/file.txt']
+  })
+  
+  // Custom delay and behavior
+  await clipboard.copyAndPaste({
+    text: 'Hello',
+    delayMs: 200,        // delay before paste (default 150ms)
+    hideCoreBox: true    // hide CoreBox before paste (default true)
+  })
+---
+:::
 
 **Parameters**:
 | Field | Type | Description |
@@ -194,53 +221,62 @@ Access history operations via `clipboard.history`.
 
 Get the latest clipboard item.
 
-```typescript
-const latest = await clipboard.history.getLatest()
-if (latest) {
-  console.log(latest.type, latest.content)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  if (latest) {
+    console.log(latest.type, latest.content)
+  }
+---
+:::
 
 **history.getHistory(options)**
 
 Get clipboard history with pagination.
 
-```typescript
-const { history, total, page, pageSize } = await clipboard.history.getHistory({
-  page: 1,
-  pageSize: 20
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { history, total, page, pageSize } = await clipboard.history.getHistory({
+    page: 1,
+    pageSize: 20
+  })
+---
+:::
 
 **history.searchHistory(options)**
 
 Advanced search.
 
-```typescript
-// Keyword search
-const result = await clipboard.history.searchHistory({
-  keyword: 'hello'
-})
-
-// Filter by type
-const textItems = await clipboard.history.searchHistory({
-  type: 'text'
-})
-
-// Time range
-const recent = await clipboard.history.searchHistory({
-  startTime: Date.now() - 24 * 60 * 60 * 1000
-})
-
-// Combined filters
-const filtered = await clipboard.history.searchHistory({
-  type: 'text',
-  isFavorite: true,
-  sourceApp: 'com.apple.Safari',
-  page: 1,
-  pageSize: 10
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Keyword search
+  const result = await clipboard.history.searchHistory({
+    keyword: 'hello'
+  })
+  
+  // Filter by type
+  const textItems = await clipboard.history.searchHistory({
+    type: 'text'
+  })
+  
+  // Time range
+  const recent = await clipboard.history.searchHistory({
+    startTime: Date.now() - 24 * 60 * 60 * 1000
+  })
+  
+  // Combined filters
+  const filtered = await clipboard.history.searchHistory({
+    type: 'text',
+    isFavorite: true,
+    sourceApp: 'com.apple.Safari',
+    page: 1,
+    pageSize: 10
+  })
+---
+:::
 
 **Search parameters**:
 | Field | Type | Description |
@@ -259,28 +295,37 @@ const filtered = await clipboard.history.searchHistory({
 
 Set favorite status.
 
-```typescript
-await clipboard.history.setFavorite({
-  id: 123,
-  isFavorite: true
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.setFavorite({
+    id: 123,
+    isFavorite: true
+  })
+---
+:::
 
 **history.deleteItem(options)**
 
 Delete a history item.
 
-```typescript
-await clipboard.history.deleteItem({ id: 123 })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.deleteItem({ id: 123 })
+---
+:::
 
 **history.clearHistory()**
 
 Clear all history.
 
-```typescript
-await clipboard.history.clearHistory()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  await clipboard.history.clearHistory()
+---
+:::
 
 ---
 
@@ -294,23 +339,26 @@ Listen to clipboard changes.
 Plugins must call `box.allowClipboard(types)` first, otherwise no events are emitted.
 :::
 
-```typescript
-import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
-
-const box = useBox()
-const clipboard = useClipboard()
-
-// 1. Enable clipboard monitoring
-await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
-
-// 2. Register listener
-const unsubscribe = clipboard.history.onDidChange((item) => {
-  console.log('Clipboard changed:', item.type, item.content)
-})
-
-// 3. Stop listening
-unsubscribe()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
+  
+  const box = useBox()
+  const clipboard = useClipboard()
+  
+  // 1. Enable clipboard monitoring
+  await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
+  
+  // 2. Register listener
+  const unsubscribe = clipboard.history.onDidChange((item) => {
+    console.log('Clipboard changed:', item.type, item.content)
+  })
+  
+  // 3. Stop listening
+  unsubscribe()
+---
+:::
 
 **ClipboardType enum**:
 | Value | Binary | Description |
@@ -320,36 +368,42 @@ unsubscribe()
 | `FILE` | `0b0100` | File |
 
 **Presets**:
-```typescript
-import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
-
-// Text only
-await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
-
-// Text + image
-await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
-
-// All types
-await box.allowClipboard(ClipboardTypePresets.ALL)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
+  
+  // Text only
+  await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
+  
+  // Text + image
+  await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
+  
+  // All types
+  await box.allowClipboard(ClipboardTypePresets.ALL)
+---
+:::
 
 ---
 
 ## Clipboard Item Shape
 
-```typescript
-interface PluginClipboardItem {
-  id?: number
-  type: 'text' | 'image' | 'files'
-  content: string           // text / image dataURL / file paths JSON
-  thumbnail?: string        // thumbnail dataURL
-  rawContent?: string       // HTML raw content
-  sourceApp?: string        // source app
-  timestamp?: Date          // timestamp
-  isFavorite?: boolean      // favorite
-  meta?: Record<string, unknown>  // metadata (including tags)
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface PluginClipboardItem {
+    id?: number
+    type: 'text' | 'image' | 'files'
+    content: string           // text / image dataURL / file paths JSON
+    thumbnail?: string        // thumbnail dataURL
+    rawContent?: string       // HTML raw content
+    sourceApp?: string        // source app
+    timestamp?: Date          // timestamp
+    isFavorite?: boolean      // favorite
+    meta?: Record<string, unknown>  // metadata (including tags)
+  }
+---
+:::
 
 ---
 
@@ -367,14 +421,17 @@ Tags describe **categories only** and never include raw sensitive values.
 - `email`: Email
 
 **Example**:
-```typescript
-const latest = await clipboard.history.getLatest()
-const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
-
-if (tags.includes('api_key') || tags.includes('password')) {
-  // e.g. warn the user about sensitive content
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const latest = await clipboard.history.getLatest()
+  const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
+  
+  if (tags.includes('api_key') || tags.includes('password')) {
+    // e.g. warn the user about sensitive content
+  }
+---
+:::
 
 > Tip: For `history.searchHistory()` results, filter by `meta.tags` in your plugin to build more precise matching.
 
@@ -392,17 +449,20 @@ if (tags.includes('api_key') || tags.includes('password')) {
 
 `useClipboardHistory()` is deprecated. Use `useClipboard()` instead:
 
-```typescript
-// Old
-const history = useClipboardHistory()
-await history.getLatest()
-await history.applyToActiveApp({ text: 'Hello' })
-
-// New
-const clipboard = useClipboard()
-await clipboard.history.getLatest()
-await clipboard.copyAndPaste({ text: 'Hello' })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Old
+  const history = useClipboardHistory()
+  await history.getLatest()
+  await history.applyToActiveApp({ text: 'Hello' })
+  
+  // New
+  const clipboard = useClipboard()
+  await clipboard.history.getLatest()
+  await clipboard.copyAndPaste({ text: 'Hello' })
+---
+:::
 
 ---
 

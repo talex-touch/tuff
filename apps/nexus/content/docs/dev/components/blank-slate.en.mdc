@@ -23,16 +23,19 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxBlankSlate
-    title="Create your first project"
-    description="Start by creating a project to organize your work."
-    :primary-action="{ label: 'Create', type: 'primary' }"
-    :secondary-action="{ label: 'Learn more' }"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxBlankSlate
+      title="Create your first project"
+      description="Start by creating a project to organize your work."
+      :primary-action="{ label: 'Create', type: 'primary' }"
+      :secondary-action="{ label: 'Learn more' }"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

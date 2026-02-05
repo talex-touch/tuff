@@ -24,14 +24,17 @@ syncStatus: migrated
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxOfflineState
-    description="Network connection lost."
-    :primary-action="{ label: 'Retry', type: 'primary' }"
-  />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxOfflineState
+      description="Network connection lost."
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+    />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

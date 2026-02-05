@@ -8,18 +8,21 @@ The Plugin Storage SDK provides file-based persistent storage that survives appl
 
 **Quick Start**
 
-```ts
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const storage = usePluginStorage()
-
-// Save settings
-await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
-
-// Read settings
-const settings = await storage.getFile('settings.json')
-console.log(settings) // { theme: 'dark', fontSize: 14 }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const storage = usePluginStorage()
+  
+  // Save settings
+  await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
+  
+  // Read settings
+  const settings = await storage.getFile('settings.json')
+  console.log(settings) // { theme: 'dark', fontSize: 14 }
+---
+:::
 
 ---
 
@@ -35,11 +38,14 @@ console.log(settings) // { theme: 'dark', fontSize: 14 }
 
 **Getting Storage Instance**
 
-```ts
-import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-
-const storage = usePluginStorage()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
+  
+  const storage = usePluginStorage()
+---
+:::
 
 > **Note**: Must be called within plugin renderer context.
 
@@ -49,48 +55,63 @@ const storage = usePluginStorage()
 
 Read storage file content.
 
-```ts
-const config = await storage.getFile('config.json')
-// Returns null if file doesn't exist
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const config = await storage.getFile('config.json')
+  // Returns null if file doesn't exist
+---
+:::
 
 **`setFile(fileName, content)`**
 
 Write to storage file.
 
-```ts
-await storage.setFile('settings.json', { 
-  theme: 'dark',
-  shortcuts: ['Cmd+K']
-})
-// Returns { success: true }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.setFile('settings.json', { 
+    theme: 'dark',
+    shortcuts: ['Cmd+K']
+  })
+  // Returns { success: true }
+---
+:::
 
 **`deleteFile(fileName)`**
 
 Delete a storage file.
 
-```ts
-await storage.deleteFile('old-cache.json')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.deleteFile('old-cache.json')
+---
+:::
 
 **`listFiles()`**
 
 List all storage files for the plugin.
 
-```ts
-const files = await storage.listFiles()
-// ['settings.json', 'data/cache.json']
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const files = await storage.listFiles()
+  // ['settings.json', 'data/cache.json']
+---
+:::
 
 **`clearAll()`**
 
 Clear all storage data for the plugin.
 
-```ts
-await storage.clearAll()
-// ⚠️ This operation is irreversible
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.clearAll()
+  // ⚠️ This operation is irreversible
+---
+:::
 
 ---
 
@@ -100,52 +121,67 @@ await storage.clearAll()
 
 Get storage statistics.
 
-```ts
-const stats = await storage.getStats()
-// {
-//   totalSize: 1024,
-//   fileCount: 3,
-//   limit: 10485760,
-//   usagePercent: 0.01
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const stats = await storage.getStats()
+  // {
+  //   totalSize: 1024,
+  //   fileCount: 3,
+  //   limit: 10485760,
+  //   usagePercent: 0.01
+  // }
+---
+:::
 
 **`getTree()`**
 
 Get directory tree structure.
 
-```ts
-const tree = await storage.getTree()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const tree = await storage.getTree()
+---
+:::
 
 **`getFileDetails(fileName)`**
 
 Get detailed file information.
 
-```ts
-const details = await storage.getFileDetails('settings.json')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const details = await storage.getFileDetails('settings.json')
+---
+:::
 
 **`openFolder()`**
 
 Open plugin storage directory in system file manager.
 
-```ts
-await storage.openFolder()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await storage.openFolder()
+---
+:::
 
 ---
 
 **Listening to Changes**
 
-```ts
-const unsubscribe = storage.onDidChange('settings.json', (data) => {
-  console.log('Config updated:', data)
-})
-
-// Stop listening
-unsubscribe()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const unsubscribe = storage.onDidChange('settings.json', (data) => {
+    console.log('Config updated:', data)
+  })
+  
+  // Stop listening
+  unsubscribe()
+---
+:::
 
 ---
 

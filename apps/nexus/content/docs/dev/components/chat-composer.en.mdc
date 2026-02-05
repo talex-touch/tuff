@@ -40,10 +40,13 @@ function onSend(payload: { text: string }) {
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxChatComposer v-model="text" @send="onSend" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxChatComposer v-model="text" @send="onSend" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>

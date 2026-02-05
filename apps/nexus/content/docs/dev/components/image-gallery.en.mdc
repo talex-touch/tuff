@@ -26,10 +26,13 @@ const items = [
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxImageGallery :items="items" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxImageGallery :items="items" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>

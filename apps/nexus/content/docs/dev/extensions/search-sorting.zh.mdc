@@ -5,17 +5,20 @@
 
 ## Hook 入口
 在 `init/index.ts` 注册：
-```ts
-ctx.corebox.registerSorter('mySorter', ({ query, results }) => {
-  const boosted = results.map(item => {
-    if (item.pluginId === ctx.meta.id && query.includes('todo')) {
-      return { ...item, score: item.score + 20 }
-    }
-    return item
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  ctx.corebox.registerSorter('mySorter', ({ query, results }) => {
+    const boosted = results.map(item => {
+      if (item.pluginId === ctx.meta.id && query.includes('todo')) {
+        return { ...item, score: item.score + 20 }
+      }
+      return item
+    })
+    return boosted.sort((a, b) => b.score - a.score)
   })
-  return boosted.sort((a, b) => b.score - a.score)
-})
-```
+---
+:::
 
 ## 调整策略
 - 使用关键词匹配、最近使用时间、上下文权重等数据。

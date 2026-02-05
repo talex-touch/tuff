@@ -15,43 +15,52 @@ TuffEx (Chinese name: Ta Fu) is a modern Vue3 component library focused on tacti
 
 ## Installation
 
-```bash
-# npm
-npm install @talex-touch/tuffex
-
-# yarn
-yarn add @talex-touch/tuffex
-
-# pnpm (recommended)
-pnpm add @talex-touch/tuffex
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # npm
+  npm install @talex-touch/tuffex
+  
+  # yarn
+  yarn add @talex-touch/tuffex
+  
+  # pnpm (recommended)
+  pnpm add @talex-touch/tuffex
+---
+:::
 
 ## Quick Start
 
 **Full Import**
 
-```typescript
-import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TuffUI)
-app.mount('#app')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TuffUI from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+  
+  const app = createApp(App)
+  app.use(TuffUI)
+  app.mount('#app')
+---
+:::
 
 **On-Demand Import (Recommended)**
 
-```typescript
-import { createApp } from 'vue'
-import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TuffButton)
-app.use(TuffSwitch)
-app.use(TuffFlatButton)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+  
+  const app = createApp(App)
+  app.use(TuffButton)
+  app.use(TuffSwitch)
+  app.use(TuffFlatButton)
+---
+:::
 
 ## Core Features
 
@@ -91,24 +100,27 @@ app.use(TuffFlatButton)
 
 TUFF UI supports custom theming through CSS variables:
 
-```css
-:root {
-  /* Primary colors */
-  --tx-color-primary: #409eff;
-  --tx-color-primary-light-3: #79bbff;
-  
-  /* Text colors */
-  --tx-text-color-primary: #303133;
-  --tx-text-color-secondary: #909399;
-  
-  /* Border and radius */
-  --tx-border-color: #dcdfe6;
-  --tx-border-radius-base: 4px;
-  
-  /* Transitions */
-  --tx-transition-duration: 0.3s;
-}
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  :root {
+    /* Primary colors */
+    --tx-color-primary: #409eff;
+    --tx-color-primary-light-3: #79bbff;
+    
+    /* Text colors */
+    --tx-text-color-primary: #303133;
+    --tx-text-color-secondary: #909399;
+    
+    /* Border and radius */
+    --tx-border-color: #dcdfe6;
+    --tx-border-radius-base: 4px;
+    
+    /* Transitions */
+    --tx-transition-duration: 0.3s;
+  }
+---
+:::
 
 ## Tech Stack
 
@@ -122,14 +134,17 @@ TUFF UI supports custom theming through CSS variables:
 
 ## Development
 
-```bash
-# In monorepo root
-pnpm install
-
-# In packages/tuffex directory
-pnpm docs:dev    # Start docs server at :8000
-pnpm build       # Build library
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # In monorepo root
+  pnpm install
+  
+  # In packages/tuffex directory
+  pnpm docs:dev    # Start docs server at :8000
+  pnpm build       # Build library
+---
+:::
 
 ## Design Philosophy
 

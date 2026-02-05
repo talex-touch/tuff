@@ -8,42 +8,48 @@ CoreBox 支持两种布局模式，由后端通过 `TuffSearchResult.containerLa
 ## DSL 类型定义
 
 **TuffContainerLayout**
-```typescript
-interface TuffContainerLayout {
-  mode: 'list' | 'grid'
-  grid?: {
-    columns: number      // 列数，默认 5
-    gap?: number         // 间距(px)，默认 8
-    itemSize?: 'small' | 'medium' | 'large'
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffContainerLayout {
+    mode: 'list' | 'grid'
+    grid?: {
+      columns: number      // 列数，默认 5
+      gap?: number         // 间距(px)，默认 8
+      itemSize?: 'small' | 'medium' | 'large'
+    }
+    sections?: TuffSection[]
   }
-  sections?: TuffSection[]
-}
-
-interface TuffSection {
-  id: string
-  title?: string
-  layout: 'list' | 'grid'
-  itemIds: string[]
-  collapsed?: boolean
-}
-```
+  
+  interface TuffSection {
+    id: string
+    title?: string
+    layout: 'list' | 'grid'
+    itemIds: string[]
+    collapsed?: boolean
+  }
+---
+:::
 
 **TuffMeta 扩展**
-```typescript
-interface TuffMeta {
-  // 固定配置
-  pinned?: {
-    isPinned: boolean
-    pinnedAt?: number
-    order?: number
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffMeta {
+    // 固定配置
+    pinned?: {
+      isPinned: boolean
+      pinnedAt?: number
+      order?: number
+    }
+    // 推荐来源标记
+    recommendation?: {
+      source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+      score?: number
+    }
   }
-  // 推荐来源标记
-  recommendation?: {
-    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
-    score?: number
-  }
-}
-```
+---
+:::
 
 ## 键盘导航
 
@@ -66,35 +72,41 @@ interface TuffMeta {
 ## 使用示例
 
 **插件返回宫格布局**
-```typescript
-const result: TuffSearchResult = {
-  items: [...],
-  query,
-  duration: 100,
-  sources: [],
-  containerLayout: {
-    mode: 'grid',
-    grid: {
-      columns: 5,
-      gap: 8,
-      itemSize: 'medium'
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result: TuffSearchResult = {
+    items: [...],
+    query,
+    duration: 100,
+    sources: [],
+    containerLayout: {
+      mode: 'grid',
+      grid: {
+        columns: 5,
+        gap: 8,
+        itemSize: 'medium'
+      }
     }
   }
-}
-```
+---
+:::
 
 **标记固定项目**
-```typescript
-const item: TuffItem = {
-  id: 'my-app',
-  source: { type: 'app', id: 'app-provider' },
-  render: { mode: 'default', basic: { title: 'My App' } },
-  meta: {
-    pinned: {
-      isPinned: true,
-      pinnedAt: Date.now(),
-      order: 0
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const item: TuffItem = {
+    id: 'my-app',
+    source: { type: 'app', id: 'app-provider' },
+    render: { mode: 'default', basic: { title: 'My App' } },
+    meta: {
+      pinned: {
+        isPinned: true,
+        pinnedAt: Date.now(),
+        order: 0
+      }
     }
   }
-}
-```
+---
+:::

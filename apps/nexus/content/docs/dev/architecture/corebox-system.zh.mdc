@@ -42,14 +42,17 @@
 
 ## 4. 关键流程（Mermaid）
 
-```mermaid
-flowchart LR
-  renderer["Renderer CoreBox UI"] --> ipc["CoreBox IPC"]
-  ipc --> corebox["CoreBox Module (Main)"]
-  corebox --> engine["SearchEngine"]
-  engine --> providers["Providers"]
-  providers --> engine --> corebox --> renderer
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    renderer["Renderer CoreBox UI"] --> ipc["CoreBox IPC"]
+    ipc --> corebox["CoreBox Module (Main)"]
+    corebox --> engine["SearchEngine"]
+    engine --> providers["Providers"]
+    providers --> engine --> corebox --> renderer
+---
+:::
 
 ## 5. 相关事件与处理
 
