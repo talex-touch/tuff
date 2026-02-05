@@ -1,9 +1,9 @@
-import { readFormData } from 'h3'
+import { getHeader, readFormData } from 'h3'
 import type { paths } from '../../../../../types/sync-api'
 import { requireAuth } from '../../../../utils/auth'
 import { readDeviceId } from '../../../../utils/authStore'
 import { createSyncError } from '../../../../utils/syncErrors'
-import { applyQuotaDelta, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
+import { applyQuotaDelta, getSyncSession, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
 
 type UploadResponse = paths['/api/v1/sync/blobs/upload']['post']['responses']['200']['content']['application/json']
 
@@ -14,6 +14,12 @@ export default defineEventHandler(async (event) => {
   const deviceId = readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+
+  const syncToken = getHeader(event, 'x-sync-token')
+  if (!syncToken)
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing sync token')
+
+  await getSyncSession(event, userId, deviceId, syncToken)
 
   const formData = await readFormData(event)
   const file = formData.get('file')

@@ -1,9 +1,9 @@
-import { getQuery } from 'h3'
+import { getHeader, getQuery } from 'h3'
 import type { paths } from '../../../../types/sync-api'
 import { requireAuth } from '../../../utils/auth'
 import { readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
-import { pullSyncItemsV1 } from '../../../utils/syncStoreV1'
+import { getSyncSession, pullSyncItemsV1 } from '../../../utils/syncStoreV1'
 
 type PullResponse = paths['/api/v1/sync/pull']['get']['responses']['200']['content']['application/json']
 
@@ -12,6 +12,12 @@ export default defineEventHandler(async (event) => {
   const deviceId = readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
+
+  const syncToken = getHeader(event, 'x-sync-token')
+  if (!syncToken)
+    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing sync token')
+
+  await getSyncSession(event, userId, deviceId, syncToken)
 
   const query = getQuery(event)
   const cursorValue = typeof query.cursor === 'string' ? Number(query.cursor) : 0

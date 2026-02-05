@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import type { H3Event } from 'h3'
 import {
+  getSyncSession,
   handshakeSyncSession,
   pullSyncItemsV1,
   pushSyncItemsV1,
@@ -106,7 +107,7 @@ class MockD1Database {
         item_id: String(itemId),
         op_type: String(opType),
         updated_at: String(updatedAt),
-        payload_size: payloadSize ? Number(payloadSize) : null,
+        payload_size: payloadSize == null ? null : Number(payloadSize),
       })
       return { meta: { changes: 1 } }
     }
@@ -186,9 +187,9 @@ class MockD1Database {
         row.updated_at = String(updatedAt)
       }
       if (sql.includes('SET used_storage_bytes')) {
-        const [storageDelta, objectsDelta, updatedAt] = args
-        row.used_storage_bytes += Number(storageDelta)
-        row.used_objects += Number(objectsDelta)
+        const [storageDelta, , objectsDelta, , updatedAt] = args
+        row.used_storage_bytes = Math.max(0, row.used_storage_bytes + Number(storageDelta))
+        row.used_objects = Math.max(0, row.used_objects + Number(objectsDelta))
         row.updated_at = String(updatedAt)
       }
       return { meta: { changes: 1 } }
@@ -215,7 +216,21 @@ class MockD1Database {
       return {
         updated_at: row.updated_at,
         updated_by_device_id: row.updated_by_device_id,
+        payload_size: row.payload_size,
+        deleted_at: row.deleted_at,
       }
+    }
+    if (sql.includes('FROM sync_oplog_v1') && sql.includes('op_seq')) {
+      const [userId, deviceId, opSeq] = args
+      const row = this.oplog.get(`${userId}:${deviceId}:${opSeq}`)
+      if (!row)
+        return null
+      return { cursor: row.cursor }
+    }
+    if (sql.includes('FROM sync_sessions_v1')) {
+      const [userId, deviceId] = args
+      const row = this.sessions.get(`${userId}:${deviceId}`)
+      return row ?? null
     }
     if (sql.includes('SELECT MAX(cursor)')) {
       return { cursor: this.cursor }
@@ -353,6 +368,62 @@ describe('syncStoreV1 push', () => {
     expect(result.conflicts[0].server_updated_at).toBe('2026-02-04T00:00:00.000Z')
     expect(result.conflicts[0].server_device_id).toBe('device-b')
   })
+
+  it('computes quota delta for updates and deletes', async () => {
+    const db = new MockD1Database()
+    const event = createEvent(db)
+    db.items.set('user-1:item-1', {
+      user_id: 'user-1',
+      item_id: 'item-1',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: 'enc',
+      payload_ref: null,
+      meta_plain: null,
+      payload_size: 10,
+      updated_at: '2026-02-03T00:00:00.000Z',
+      deleted_at: null,
+      updated_by_device_id: 'device-a',
+    })
+
+    const updateItem: SyncItemInput = {
+      item_id: 'item-1',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: 'enc',
+      payload_ref: null,
+      meta_plain: null,
+      payload_size: 15,
+      updated_at: '2026-02-04T00:00:00.000Z',
+      deleted_at: null,
+      op_seq: 1,
+      op_hash: 'hash-update',
+      op_type: 'upsert',
+    }
+
+    const updateResult = await pushSyncItemsV1(event, 'user-1', 'device-a', [updateItem])
+    expect(updateResult.appliedObjectsDelta).toBe(0)
+    expect(updateResult.appliedStorageDelta).toBe(5)
+
+    const deleteItem: SyncItemInput = {
+      item_id: 'item-1',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: null,
+      payload_ref: null,
+      meta_plain: null,
+      payload_size: null,
+      updated_at: '2026-02-05T00:00:00.000Z',
+      deleted_at: null,
+      op_seq: 2,
+      op_hash: 'hash-delete',
+      op_type: 'delete',
+    }
+
+    const deleteResult = await pushSyncItemsV1(event, 'user-1', 'device-a', [deleteItem])
+    expect(deleteResult.appliedObjectsDelta).toBe(-1)
+    expect(deleteResult.appliedStorageDelta).toBe(-15)
+  })
 })
 
 describe('syncStoreV1 flow', () => {
@@ -399,6 +470,25 @@ describe('syncStoreV1 flow', () => {
     const result = await uploadSyncBlob(event, 'user-1', file)
     expect(result.blobId).toBeTruthy()
     expect(bucket.objects.has(result.objectKey)).toBe(true)
+  })
+})
+
+describe('syncStoreV1 session', () => {
+  it('rejects invalid sync token', async () => {
+    const db = new MockD1Database()
+    const event = createEvent(db)
+    const handshake = await handshakeSyncSession(event, 'user-1', 'device-1')
+    await expect(getSyncSession(event, 'user-1', 'device-1', `${handshake.syncToken}-bad`))
+      .rejects
+      .toMatchObject({ data: { errorCode: 'SYNC_INVALID_PAYLOAD' } })
+  })
+
+  it('accepts valid sync token', async () => {
+    const db = new MockD1Database()
+    const event = createEvent(db)
+    const handshake = await handshakeSyncSession(event, 'user-1', 'device-1')
+    const session = await getSyncSession(event, 'user-1', 'device-1', handshake.syncToken)
+    expect(session.syncToken).toBe(handshake.syncToken)
   })
 })
 

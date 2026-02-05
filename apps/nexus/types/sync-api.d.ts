@@ -38,6 +38,7 @@ export interface paths {
       parameters: {
         header: {
           "x-device-id": components["parameters"]["XDeviceId"];
+          "x-sync-token": components["parameters"]["XSyncToken"];
         };
       };
       requestBody: {
@@ -81,6 +82,7 @@ export interface paths {
         };
         header: {
           "x-device-id": components["parameters"]["XDeviceId"];
+          "x-sync-token": components["parameters"]["XSyncToken"];
         };
       };
       responses: {
@@ -108,6 +110,7 @@ export interface paths {
       parameters: {
         header: {
           "x-device-id": components["parameters"]["XDeviceId"];
+          "x-sync-token": components["parameters"]["XSyncToken"];
         };
       };
       requestBody: {
@@ -311,6 +314,7 @@ export interface components {
   responses: never;
   parameters: {
     XDeviceId: string;
+    XSyncToken: string;
   };
   requestBodies: never;
   headers: never;
