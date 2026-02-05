@@ -7,7 +7,7 @@ export default defineComponent({
   name: 'TxAvatarGroup',
   props: {
     max: { type: Number, required: false },
-    size: { type: String, required: false },
+    size: { type: [String, Number], required: false },
     overlap: { type: [Number, String], default: 8 },
   },
   setup(props: AvatarGroupProps, { slots }) {
