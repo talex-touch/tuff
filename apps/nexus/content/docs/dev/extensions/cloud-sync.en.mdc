@@ -1,0 +1,26 @@
+# Cloud Sync SDK
+
+## Purpose
+Client SDK for Nexus Sync V1. It handles handshake, push/pull, blob upload, quotas, and key management with automatic sync_token handling.
+
+## Install
+```ts
+import { CloudSyncSDK } from '@talex-touch/utils'
+```
+
+## Usage
+```ts
+const sdk = new CloudSyncSDK({
+  apiBaseUrl: 'https://api.example.com',
+  getAuthToken: () => authToken,
+  getDeviceId: () => deviceId,
+})
+
+await sdk.push(items)
+const result = await sdk.pull({ cursor: 0, limit: 100 })
+```
+
+## Notes
+- Requires bearer auth and `x-device-id`.
+- `sync_token` is managed automatically and sent via `x-sync-token`.
+- For Node/Electron main, pass `fetch` and `formDataFactory` if globals are missing.
