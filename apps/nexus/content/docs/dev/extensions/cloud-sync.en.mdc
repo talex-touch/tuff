@@ -20,6 +20,40 @@ await sdk.push(items)
 const result = await sdk.pull({ cursor: 0, limit: 100 })
 ```
 
+## End-to-end Example
+```ts
+const sdk = new CloudSyncSDK({
+  apiBaseUrl: 'https://api.example.com',
+  getAuthToken: () => authToken,
+  getDeviceId: () => deviceId,
+})
+
+const handshake = await sdk.handshake()
+
+await sdk.push([
+  {
+    item_id: 'note-1',
+    type: 'note',
+    schema_version: 1,
+    payload_enc: 'ciphertext',
+    payload_ref: null,
+    meta_plain: { title: 'Hello' },
+    payload_size: 128,
+    updated_at: new Date().toISOString(),
+    op_seq: 1,
+    op_hash: 'hash-1',
+    op_type: 'upsert',
+  },
+])
+
+const pulled = await sdk.pull({ cursor: handshake.server_cursor, limit: 100 })
+
+const blob = new Blob(['hello'], { type: 'text/plain' })
+const upload = await sdk.uploadBlob(blob, { filename: 'note.txt' })
+
+const quotas = await sdk.getQuotas()
+```
+
 ## Notes
 - Requires bearer auth and `x-device-id`.
 - `sync_token` is managed automatically and sent via `x-sync-token`.
