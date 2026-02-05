@@ -1,4 +1,4 @@
-# Account API
+# Account SDK
 
 ## Overview
 
@@ -40,7 +40,7 @@ code: |
 
 ---
 
-## API Reference
+## SDK Reference
 
 **Get SDK Instance**
 
@@ -57,6 +57,25 @@ code: |
 ::alert{type="warning"}
 **Note**: When using in Prelude script (`index.js`), you need to call `accountSDK.setChannelSend(send)` to inject the communication function first.
 ::
+
+---
+
+**Auth Token & Device**
+
+Used by SDKs that need authenticated API access (e.g., Cloud Sync SDK).
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const token = await accountSDK.getAuthToken()
+  const deviceId = await accountSDK.getDeviceId()
+---
+:::
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `getAuthToken()` | `string \| null` | Bearer auth token (null if unavailable) |
+| `getDeviceId()` | `string \| null` | Current device id (null if unavailable) |
 
 ---
 

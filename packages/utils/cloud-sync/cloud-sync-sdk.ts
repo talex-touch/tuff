@@ -16,6 +16,11 @@ import type {
 const DEFAULT_SYNC_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7
 
 export interface CloudSyncSDKOptions {
+  baseUrl?: string
+  serviceBaseUrl?: string
+  /**
+   * @deprecated Use baseUrl or serviceBaseUrl instead.
+   */
   apiBaseUrl?: string
   getAuthToken: () => string | Promise<string>
   getDeviceId: () => string | Promise<string>
@@ -41,7 +46,7 @@ export class CloudSyncError extends Error {
 }
 
 export class CloudSyncSDK {
-  private apiBaseUrl: string
+  private baseUrl: string
   private getAuthToken: () => Promise<string>
   private getDeviceId: () => Promise<string>
   private fetchFn: typeof fetch | null
@@ -52,7 +57,8 @@ export class CloudSyncSDK {
   private handshakePromise: Promise<HandshakeResponse> | null = null
 
   constructor(options: CloudSyncSDKOptions) {
-    this.apiBaseUrl = normalizeBaseUrl(options.apiBaseUrl ?? getTelemetryApiBase())
+    const baseUrl = options.baseUrl ?? options.serviceBaseUrl ?? options.apiBaseUrl ?? getTelemetryApiBase()
+    this.baseUrl = normalizeBaseUrl(baseUrl)
     this.getAuthToken = async () => options.getAuthToken()
     this.getDeviceId = async () => options.getDeviceId()
     this.fetchFn = options.fetch ?? (globalThis as any).fetch ?? null
@@ -228,7 +234,7 @@ export class CloudSyncSDK {
       init.body = JSON.stringify(init.json)
     }
 
-    const url = `${this.apiBaseUrl}${path.startsWith('/') ? path : `/${path}`}`
+    const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
     const response = await fetchFn(url, { ...init, headers })
     const contentType = response.headers.get('content-type') ?? ''
     const payload = contentType.includes('application/json')

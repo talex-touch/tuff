@@ -195,6 +195,50 @@ export class AccountSDK {
   }
 
   // ============================================================================
+  // Auth Token & Device
+  // ============================================================================
+
+  /**
+   * Get auth token for API requests
+   */
+  async getAuthToken(): Promise<string | null> {
+    const cached = this.getCached<string>('authToken')
+    if (cached)
+      return cached
+
+    try {
+      const token = await this.send<string | null>('account:get-auth-token')
+      if (token) {
+        this.setCache('authToken', token)
+      }
+      return token
+    }
+    catch {
+      return null
+    }
+  }
+
+  /**
+   * Get current device id
+   */
+  async getDeviceId(): Promise<string | null> {
+    const cached = this.getCached<string>('deviceId')
+    if (cached)
+      return cached
+
+    try {
+      const deviceId = await this.send<string | null>('account:get-device-id')
+      if (deviceId) {
+        this.setCache('deviceId', deviceId)
+      }
+      return deviceId
+    }
+    catch {
+      return null
+    }
+  }
+
+  // ============================================================================
   // User Profile
   // ============================================================================
 

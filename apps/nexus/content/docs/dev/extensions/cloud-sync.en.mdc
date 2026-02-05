@@ -5,28 +5,38 @@ Client SDK for Nexus Sync V1. It handles handshake, push/pull, blob upload, quot
 
 ## Install
 ```ts
+import { CloudSyncSDK, useCloudSyncSDK } from '@talex-touch/utils/plugin/sdk'
+```
+
+For Node/Electron main or custom auth handling:
+```ts
 import { CloudSyncSDK } from '@talex-touch/utils'
 ```
 
-## Usage
+## Plugin Quick Start (no token handling)
+```ts
+const sdk = useCloudSyncSDK()
+
+await sdk.push(items)
+const pulled = await sdk.pull({ cursor: 0, limit: 100 })
+```
+
+## Renderer/Node (custom auth)
 ```ts
 const sdk = new CloudSyncSDK({
-  apiBaseUrl: 'https://api.example.com',
-  getAuthToken: () => authToken,
-  getDeviceId: () => deviceId,
+  baseUrl: 'https://api.example.com',
+  getAuthToken: async () => authToken,
+  getDeviceId: async () => deviceId,
+  fetch,
+  formDataFactory: () => new FormData(),
 })
 
 await sdk.push(items)
-const result = await sdk.pull({ cursor: 0, limit: 100 })
 ```
 
 ## End-to-end Example
 ```ts
-const sdk = new CloudSyncSDK({
-  apiBaseUrl: 'https://api.example.com',
-  getAuthToken: () => authToken,
-  getDeviceId: () => deviceId,
-})
+const sdk = useCloudSyncSDK()
 
 const handshake = await sdk.handshake()
 
@@ -54,7 +64,22 @@ const upload = await sdk.uploadBlob(blob, { filename: 'note.txt' })
 const quotas = await sdk.getQuotas()
 ```
 
+## Error Handling
+```ts
+import { CloudSyncError } from '@talex-touch/utils/plugin/sdk'
+
+try {
+  await sdk.push(items)
+} catch (error) {
+  if (error instanceof CloudSyncError) {
+    console.log(error.status, error.errorCode)
+  }
+}
+```
+
 ## Notes
 - Requires bearer auth and `x-device-id`.
 - `sync_token` is managed automatically and sent via `x-sync-token`.
 - For Node/Electron main, pass `fetch` and `formDataFactory` if globals are missing.
+- Plugin SDK reads auth token + device id from AccountSDK (`account:get-auth-token` / `account:get-device-id`).
+- In Prelude, call `accountSDK.setChannelSend(send)` or pass `channelSend` in CloudSyncSDK options.
