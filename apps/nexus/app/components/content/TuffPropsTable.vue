@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasDocument, hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
 
 interface PropRow {
@@ -51,6 +52,8 @@ function isCopyable(value?: string) {
 }
 
 function fallbackCopy(text: string) {
+  if (!hasDocument())
+    return
   const textarea = document.createElement('textarea')
   textarea.value = text
   textarea.setAttribute('readonly', 'true')
@@ -63,10 +66,15 @@ function fallbackCopy(text: string) {
 }
 
 async function copyText(text?: string, key?: string) {
-  if (!text || typeof window === 'undefined')
+  if (!text || !hasWindow())
     return
   try {
-    await navigator.clipboard.writeText(text)
+    if (hasNavigator() && navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+    }
+    else {
+      fallbackCopy(text)
+    }
   }
   catch {
     fallbackCopy(text)

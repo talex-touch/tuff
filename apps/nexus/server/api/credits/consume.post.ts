@@ -1,9 +1,9 @@
 import { createError, readBody } from 'h3'
-import { requireAuth } from '../../utils/auth'
+import { requireVerifiedEmail } from '../../utils/auth'
 import { consumeCredits } from '../../utils/creditsStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireVerifiedEmail(event)
   const body = await readBody(event)
   const amount = Number(body?.amount ?? 0)
   const reason = typeof body?.reason === 'string' ? body.reason : 'usage'
@@ -13,4 +13,3 @@ export default defineEventHandler(async (event) => {
   await consumeCredits(event, userId, amount, reason, body?.metadata ?? null)
   return { success: true }
 })
-

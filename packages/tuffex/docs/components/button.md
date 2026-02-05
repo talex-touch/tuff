@@ -163,10 +163,22 @@ const buttonProps = [
     default: 'false',
   },
   {
+    name: 'loading-variant',
+    description: '加载样式变体',
+    type: "'spinner' | 'bar'",
+    default: "'spinner'",
+  },
+  {
     name: 'disabled',
     description: '是否禁用状态',
     type: 'boolean',
     default: 'false',
+  },
+  {
+    name: 'border',
+    description: '是否显示边框',
+    type: 'boolean',
+    default: 'true',
   },
   {
     name: 'icon',
@@ -236,6 +248,11 @@ async function handleRun() {
   <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick">
   </TxButton>
 </div>
+<div class="group" style="width: 260px;">
+  <TxButton block variant="primary" loading loading-variant="bar">
+    处理中
+  </TxButton>
+</div>
 
 ::: details Show Code
 
@@ -247,6 +264,11 @@ async function handleRun() {
     </TxButton>
     <TxButton variant="secondary" loading>
       加载中
+    </TxButton>
+  </div>
+  <div class="group" style="width: 260px;">
+    <TxButton block variant="primary" loading loading-variant="bar">
+      处理中
     </TxButton>
   </div>
 </template>

@@ -23,6 +23,59 @@ function base64UrlDecode(input: string): Uint8Array {
   return new Uint8Array(Buffer.from(normalized, 'base64'))
 }
 
+function readDerLength(buffer: Uint8Array, offset: number): { length: number, offset: number } {
+  let length = buffer[offset++]
+  if (length & 0x80) {
+    const byteCount = length & 0x7f
+    if (byteCount === 0 || byteCount > 2) {
+      throw new Error('Invalid DER length.')
+    }
+    length = 0
+    for (let i = 0; i < byteCount; i += 1) {
+      length = (length << 8) | buffer[offset++]
+    }
+  }
+  return { length, offset }
+}
+
+function stripDerLeadingZeros(bytes: Uint8Array): Uint8Array {
+  let start = 0
+  while (start < bytes.length - 1 && bytes[start] === 0) {
+    start += 1
+  }
+  return bytes.slice(start)
+}
+
+function derToRawSignature(signature: Uint8Array, keySizeBytes = 32): Uint8Array {
+  let offset = 0
+  if (signature[offset++] !== 0x30) {
+    throw new Error('Invalid DER signature.')
+  }
+  const seq = readDerLength(signature, offset)
+  offset = seq.offset
+  if (signature[offset++] !== 0x02) {
+    throw new Error('Invalid DER signature.')
+  }
+  const rInfo = readDerLength(signature, offset)
+  offset = rInfo.offset
+  const rBytes = signature.slice(offset, offset + rInfo.length)
+  offset += rInfo.length
+  if (signature[offset++] !== 0x02) {
+    throw new Error('Invalid DER signature.')
+  }
+  const sInfo = readDerLength(signature, offset)
+  offset = sInfo.offset
+  const sBytes = signature.slice(offset, offset + sInfo.length)
+  const r = stripDerLeadingZeros(rBytes)
+  const s = stripDerLeadingZeros(sBytes)
+  const output = new Uint8Array(keySizeBytes * 2)
+  const rStart = keySizeBytes - Math.min(r.length, keySizeBytes)
+  const sStart = keySizeBytes * 2 - Math.min(s.length, keySizeBytes)
+  output.set(r.slice(-keySizeBytes), rStart)
+  output.set(s.slice(-keySizeBytes), sStart)
+  return output
+}
+
 async function sha256(input: Uint8Array): Promise<Uint8Array> {
   const hash = await crypto.subtle.digest('SHA-256', input)
   return new Uint8Array(hash)
@@ -221,16 +274,34 @@ export async function verifyAssertionResponse(params: {
     false,
     ['verify']
   )
-  const verified = await crypto.subtle.verify(
+  const signatureBytes = base64UrlDecode(params.signature)
+  let verified = await crypto.subtle.verify(
     { name: 'ECDSA', hash: 'SHA-256' },
     key,
-    base64UrlDecode(params.signature),
+    signatureBytes,
     signedData
   )
+  if (!verified) {
+    try {
+      const rawSignature = derToRawSignature(signatureBytes, 32)
+      verified = await crypto.subtle.verify(
+        { name: 'ECDSA', hash: 'SHA-256' },
+        key,
+        rawSignature,
+        signedData
+      )
+    }
+    catch {
+      // ignore invalid DER formats
+    }
+  }
   if (!verified)
     throw new Error('Invalid signature.')
-  if (parsed.counter <= params.previousCounter)
+  const currentCounter = parsed.counter
+  const previousCounter = params.previousCounter
+  const shouldCheckCounter = currentCounter > 0 && previousCounter > 0
+  if (shouldCheckCounter && currentCounter <= previousCounter)
     throw new Error('Authenticator counter did not increase.')
-  return { counter: parsed.counter, userVerified: Boolean(parsed.flags & FLAG_UV) }
+  const nextCounter = currentCounter === 0 && previousCounter > 0 ? previousCounter : currentCounter
+  return { counter: nextCounter, userVerified: Boolean(parsed.flags & FLAG_UV) }
 }
-

@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const storedChallenge = await consumeWebAuthnChallenge(event, challenge, 'login')
-  if (!storedChallenge?.userId) {
+  if (!storedChallenge) {
     throw createError({ statusCode: 400, statusMessage: 'Challenge expired.' })
   }
 
@@ -32,12 +32,28 @@ export default defineEventHandler(async (event) => {
   if (!passkey) {
     throw createError({ statusCode: 404, statusMessage: 'Passkey not found.' })
   }
+  if (storedChallenge.userId && storedChallenge.userId !== passkey.user_id) {
+    throw createError({ statusCode: 400, statusMessage: 'Passkey does not match challenge.' })
+  }
+  const resolvedUserId = storedChallenge.userId ?? passkey.user_id
+  if (!resolvedUserId) {
+    throw createError({ statusCode: 404, statusMessage: 'User not found.' })
+  }
 
   const origin = useRuntimeConfig().auth?.origin as string | undefined
   if (!origin) {
     throw createError({ statusCode: 500, statusMessage: 'AUTH_ORIGIN missing.' })
   }
   const rpId = new URL(origin).hostname
+  const publicKeyJwk = JSON.parse(passkey.public_key as string)
+  if (process.env.NODE_ENV !== 'production') {
+    console.info('[passkey] verify', {
+      expectedOrigin: origin,
+      expectedRpId: rpId,
+      keyCrv: publicKeyJwk?.crv,
+      signatureLength: credential.response.signature?.length ?? 0
+    })
+  }
 
   const result = await verifyAssertionResponse({
     authenticatorData: credential.response.authenticatorData,
@@ -46,14 +62,14 @@ export default defineEventHandler(async (event) => {
     expectedChallenge: challenge,
     expectedOrigin: origin,
     expectedRpId: rpId,
-    publicKeyJwk: JSON.parse(passkey.public_key as string),
+    publicKeyJwk,
     previousCounter: Number(passkey.counter ?? 0)
   })
 
   await updatePasskeyCounter(event, credential.id, result.counter)
 
-  const user = await getUserById(event, storedChallenge.userId)
-  if (!user) {
+  const user = await getUserById(event, resolvedUserId)
+  if (!user || user.status !== 'active') {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }
 
