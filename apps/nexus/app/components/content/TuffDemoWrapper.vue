@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import { computed, ref, useSlots } from 'vue'
+import { type Component, computed, defineAsyncComponent, ref } from 'vue'
 
-interface DemoProps {
+interface DemoWrapperProps {
+  demo: string
+  code?: string
+  codeLang?: string
   title?: string
   description?: string
-  codeLabel?: string
-  code?: string
-  codeLines?: string[]
-  codeLang?: string
 }
 
-const props = defineProps<DemoProps>()
-const slots = useSlots()
-const hasPreview = computed(() => Boolean(slots.preview || slots.default))
+const props = withDefaults(defineProps<DemoWrapperProps>(), {
+  code: '',
+  codeLang: 'vue',
+  title: '',
+  description: '',
+})
+
 const { locale } = useI18n()
+
 const htmlEntityMap: Record<string, string> = {
   '&lt;': '<',
   '&gt;': '>',
@@ -29,14 +33,12 @@ function decodeHtmlEntities(value: string) {
 const resolvedCode = computed(() => {
   if (props.code)
     return decodeHtmlEntities(props.code)
-  if (props.codeLines?.length)
-    return props.codeLines.map(decodeHtmlEntities).join('\n')
   return ''
 })
-const hasCode = computed(() => Boolean(resolvedCode.value || slots.code))
-const codeLabel = computed(() => props.codeLabel || '')
-const codeLang = computed(() => props.codeLang || 'vue')
+
+const hasCode = computed(() => Boolean(resolvedCode.value))
 const showCode = ref(false)
+
 const toggleLabel = computed(() => {
   if (showCode.value)
     return locale.value === 'zh' ? '隐藏代码' : 'Hide code'
@@ -46,65 +48,78 @@ const toggleLabel = computed(() => {
 function toggleCode() {
   showCode.value = !showCode.value
 }
+
+const demoModules = import.meta.glob<{ default: Component }>('./demos/*.vue')
+const demoComponentMap: Record<string, Component> = {}
+for (const [path, loader] of Object.entries(demoModules)) {
+  const name = path.match(/\.\/demos\/(.+)\.vue$/)?.[1]
+  if (name)
+    demoComponentMap[name] = defineAsyncComponent(loader as any)
+}
+
+const demoComponent = computed(() => {
+  if (!props.demo)
+    return null
+  return demoComponentMap[props.demo] ?? null
+})
 </script>
 
 <template>
   <ClientOnly>
     <section class="tuff-demo">
-    <header v-if="props.title || props.description" class="tuff-demo__header">
-      <h3 v-if="props.title" class="tuff-demo__title">
-        {{ props.title }}
-      </h3>
-      <p v-if="props.description" class="tuff-demo__desc">
-        {{ props.description }}
-      </p>
-    </header>
-    <div class="tuff-demo__window">
-      <div class="tuff-demo__window-bar">
-        <div class="tuff-demo__dots" aria-hidden="true">
-          <span class="tuff-demo__dot is-red" />
-          <span class="tuff-demo__dot is-yellow" />
-          <span class="tuff-demo__dot is-green" />
-        </div>
-      </div>
-      <div class="tuff-demo__window-body">
-        <div class="tuff-demo__preview">
-          <slot name="preview">
-            <slot />
-          </slot>
-          <div v-if="!hasPreview" class="tuff-demo__placeholder">
-            Add a preview slot to render the demo.
+      <header v-if="props.title || props.description" class="tuff-demo__header">
+        <h3 v-if="props.title" class="tuff-demo__title">
+          {{ props.title }}
+        </h3>
+        <p v-if="props.description" class="tuff-demo__desc">
+          {{ props.description }}
+        </p>
+      </header>
+      <div class="tuff-demo__window">
+        <div class="tuff-demo__window-bar">
+          <div class="tuff-demo__dots" aria-hidden="true">
+            <span class="tuff-demo__dot is-red" />
+            <span class="tuff-demo__dot is-yellow" />
+            <span class="tuff-demo__dot is-green" />
           </div>
         </div>
-        <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
-          <div class="tuff-demo__code-body">
-            <div class="tuff-demo__code-body-inner">
-              <slot name="code">
+        <div class="tuff-demo__window-body">
+          <div class="tuff-demo__preview">
+            <component :is="demoComponent" v-if="demoComponent" />
+            <div v-else class="tuff-demo__placeholder">
+              Demo component "{{ props.demo }}" not found.
+            </div>
+          </div>
+          <div v-if="hasCode" class="tuff-demo__code" :class="{ 'is-open': showCode }">
+            <div class="tuff-demo__code-body">
+              <div class="tuff-demo__code-body-inner">
                 <TuffCodeBlock
-                  v-if="resolvedCode"
                   embedded
-                  :lang="codeLang"
-                  :title="codeLabel"
+                  :lang="props.codeLang"
                   :code="resolvedCode"
                 />
-              </slot>
+              </div>
             </div>
           </div>
         </div>
+        <div v-if="hasCode" class="tuff-demo__toggle-row">
+          <button
+            type="button"
+            class="tuff-demo__toggle"
+            :aria-expanded="showCode"
+            @click="toggleCode"
+          >
+            <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
+            {{ toggleLabel }}
+          </button>
+        </div>
       </div>
-      <div v-if="hasCode" class="tuff-demo__toggle-row">
-        <button
-          type="button"
-          class="tuff-demo__toggle"
-          :aria-expanded="showCode"
-          @click="toggleCode"
-        >
-          <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
-          {{ toggleLabel }}
-        </button>
-      </div>
-    </div>
     </section>
+    <template #fallback>
+      <div class="tuff-demo__placeholder">
+        Demo loads on client.
+      </div>
+    </template>
   </ClientOnly>
 </template>
 
@@ -286,6 +301,13 @@ function toggleCode() {
   border-top-color: transparent;
 }
 
+:deep(.tuff-demo-row) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
 :global(.dark .tuff-demo),
 :global([data-theme='dark'] .tuff-demo) {
   background: transparent;
@@ -310,81 +332,14 @@ function toggleCode() {
 
 :global(.dark .tuff-demo__toggle),
 :global([data-theme='dark'] .tuff-demo__toggle) {
-  background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(148, 163, 184, 0.4);
-  color: rgba(226, 232, 240, 0.8);
-}
-
-:slotted(.tuff-demo-row) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-
-:slotted(.tuff-demo-pill) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--docs-border);
-  font-size: 12px;
-  color: var(--docs-ink);
-  background: rgba(255, 255, 255, 0.75);
-}
-
-:slotted(.tuff-demo-btn) {
-  border-radius: 999px;
-  padding: 8px 16px;
-  border: 1px solid var(--docs-border);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(220, 220, 230, 0.65));
-  color: var(--docs-ink);
-  font-size: 13px;
-}
-
-:slotted(.tuff-demo-btn.is-flat) {
-  background: transparent;
-  border-style: dashed;
-}
-
-:slotted(.tuff-demo-avatar) {
-  width: 36px;
-  height: 36px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--docs-ink);
-  border: 1px solid var(--docs-border);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(220, 220, 230, 0.6));
-}
-
-:slotted(.tuff-demo-grid) {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-
-:slotted(.tuff-demo-grid-item) {
-  height: 48px;
-  border-radius: 12px;
-  border: 1px solid var(--docs-border);
-  background: rgba(255, 255, 255, 0.7);
-}
-::global(.dark .tuff-demo__toggle),
-::global([data-theme='dark'] .tuff-demo__toggle) {
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(2, 132, 199, 0.3));
   border-color: rgba(125, 211, 252, 0.4);
   color: rgba(226, 232, 240, 0.92);
   box-shadow: 0 10px 22px rgba(14, 165, 233, 0.25);
 }
 
-::global(.dark .tuff-demo__toggle:hover),
-::global([data-theme='dark'] .tuff-demo__toggle:hover) {
+:global(.dark .tuff-demo__toggle:hover),
+:global([data-theme='dark'] .tuff-demo__toggle:hover) {
   border-color: rgba(186, 230, 253, 0.7);
   background: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.42));
   color: rgba(255, 255, 255, 0.98);
