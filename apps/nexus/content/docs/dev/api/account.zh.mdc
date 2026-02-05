@@ -1,4 +1,4 @@
-# Account API
+# Account SDK
 
 ## 概述
 
@@ -40,7 +40,7 @@ code: |
 
 ---
 
-## API 参考
+## SDK 参考
 
 **获取 SDK 实例**
 
@@ -57,6 +57,25 @@ code: |
 ::alert{type="warning"}
 **注意**：在 Prelude 脚本 (`index.js`) 中使用时，需要先调用 `accountSDK.setChannelSend(send)` 注入通信函数。
 ::
+
+---
+
+**Auth Token & 设备信息**
+
+用于需要认证访问的 SDK（例如 Cloud Sync SDK）。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const token = await accountSDK.getAuthToken()
+  const deviceId = await accountSDK.getDeviceId()
+---
+:::
+
+| 方法 | 返回值 | 说明 |
+|------|--------|------|
+| `getAuthToken()` | `string \| null` | Bearer token（不可用时为 null） |
+| `getDeviceId()` | `string \| null` | 设备 ID（不可用时为 null） |
 
 ---
 

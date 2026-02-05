@@ -5,28 +5,38 @@
 
 ## 安装
 ```ts
+import { CloudSyncSDK, useCloudSyncSDK } from '@talex-touch/utils/plugin/sdk'
+```
+
+Node/Electron 主进程或自定义认证场景：
+```ts
 import { CloudSyncSDK } from '@talex-touch/utils'
 ```
 
-## 使用
+## 插件快速上手（无需手动处理 token）
+```ts
+const sdk = useCloudSyncSDK()
+
+await sdk.push(items)
+const pulled = await sdk.pull({ cursor: 0, limit: 100 })
+```
+
+## Renderer/Node（自定义认证）
 ```ts
 const sdk = new CloudSyncSDK({
-  apiBaseUrl: 'https://api.example.com',
-  getAuthToken: () => authToken,
-  getDeviceId: () => deviceId,
+  baseUrl: 'https://api.example.com',
+  getAuthToken: async () => authToken,
+  getDeviceId: async () => deviceId,
+  fetch,
+  formDataFactory: () => new FormData(),
 })
 
 await sdk.push(items)
-const result = await sdk.pull({ cursor: 0, limit: 100 })
 ```
 
 ## 端到端示例
 ```ts
-const sdk = new CloudSyncSDK({
-  apiBaseUrl: 'https://api.example.com',
-  getAuthToken: () => authToken,
-  getDeviceId: () => deviceId,
-})
+const sdk = useCloudSyncSDK()
 
 const handshake = await sdk.handshake()
 
@@ -54,7 +64,22 @@ const upload = await sdk.uploadBlob(blob, { filename: 'note.txt' })
 const quotas = await sdk.getQuotas()
 ```
 
+## 错误处理示例
+```ts
+import { CloudSyncError } from '@talex-touch/utils/plugin/sdk'
+
+try {
+  await sdk.push(items)
+} catch (error) {
+  if (error instanceof CloudSyncError) {
+    console.log(error.status, error.errorCode)
+  }
+}
+```
+
 ## 注意事项
 - 需要 Bearer 认证与 `x-device-id`。
 - `sync_token` 自动管理，并通过 `x-sync-token` 传递。
 - Node/Electron 主进程需要自行注入 `fetch` 与 `formDataFactory`。
+- 插件 SDK 默认通过 AccountSDK 获取 auth token 与 device id（`account:get-auth-token` / `account:get-device-id`）。
+- Prelude 中需要先调用 `accountSDK.setChannelSend(send)` 或在 CloudSyncSDK options 传入 `channelSend`。
