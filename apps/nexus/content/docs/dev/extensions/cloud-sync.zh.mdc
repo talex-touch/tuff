@@ -1,0 +1,26 @@
+# Cloud Sync SDK
+
+## 目的
+为 Nexus Sync V1 提供客户端能力，覆盖握手、推送/拉取、blob 上传、配额与密钥管理，并自动处理 sync_token。
+
+## 安装
+```ts
+import { CloudSyncSDK } from '@talex-touch/utils'
+```
+
+## 使用
+```ts
+const sdk = new CloudSyncSDK({
+  apiBaseUrl: 'https://api.example.com',
+  getAuthToken: () => authToken,
+  getDeviceId: () => deviceId,
+})
+
+await sdk.push(items)
+const result = await sdk.pull({ cursor: 0, limit: 100 })
+```
+
+## 注意事项
+- 需要 Bearer 认证与 `x-device-id`。
+- `sync_token` 自动管理，并通过 `x-sync-token` 传递。
+- Node/Electron 主进程需要自行注入 `fetch` 与 `formDataFactory`。

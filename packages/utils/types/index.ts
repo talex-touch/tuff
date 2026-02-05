@@ -1,4 +1,5 @@
 export * from './agent'
+export * from './cloud-sync'
 export * from './division-box'
 export * from './flow'
 export * from './intelligence'
