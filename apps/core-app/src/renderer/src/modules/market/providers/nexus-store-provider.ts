@@ -20,11 +20,13 @@ interface NexusManifestEntry {
     version: string
     packageUrl: string
     changelog?: string
+    sdkapi?: number
   }
   versions?: Array<{
     version: string
     packageUrl: string
     changelog?: string
+    sdkapi?: number
   }>
   readmeUrl?: string | null
   createdAt?: string
@@ -205,6 +207,14 @@ export class NexusStoreProvider extends BaseMarketProvider {
       }
     }
 
+    const sdkapiRaw = entry.latestVersion?.sdkapi
+    const sdkapi =
+      typeof sdkapiRaw === 'number'
+        ? sdkapiRaw
+        : typeof sdkapiRaw === 'string'
+          ? Number.parseInt(sdkapiRaw, 10)
+          : undefined
+
     // Handle author
     const author =
       typeof entry.author === 'object' && entry.author?.name
@@ -224,6 +234,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
       timestamp: entry.updatedAt || entry.createdAt || entry.timestamp,
       icon,
       iconUrl,
+      sdkapi: Number.isFinite(sdkapi) ? sdkapi : undefined,
       metadata,
       readmeUrl,
       downloadUrl,

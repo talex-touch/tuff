@@ -8,6 +8,7 @@ import type { SdkApiVersion } from './index'
  * - 251212 ~ 260113: permission enforcement + new input model baseline
  * - >= 260114: `manifest.json.category` is required for plugin grouping
  * - >= 260121: `tfileScope` is required when requesting tfile access
+ * - >= 260209: SDK marker update (no new rules)
  */
 export enum SdkApi {
   /**
@@ -22,6 +23,10 @@ export enum SdkApi {
    * 2026-01-21: add tfile permission + scope enforcement.
    */
   V260121 = 260121,
+  /**
+   * 2026-02-09: SDK marker update (no new rules).
+   */
+  V260209 = 260209,
 }
 
 /**
@@ -29,6 +34,7 @@ export enum SdkApi {
  * Used to gracefully fallback for unknown/invalid sdkapi values.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V260209,
   SdkApi.V260121,
   SdkApi.V260114,
   SdkApi.V251212,
@@ -38,7 +44,7 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
  * Current SDK API version.
  * Updated when breaking changes are introduced to plugin APIs.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260121
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260209
 
 /**
  * Minimum SDK version required for permission enforcement.

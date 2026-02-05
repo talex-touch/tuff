@@ -8,6 +8,12 @@ import type {
 } from '~/types/marketplace'
 import { SharedPluginDetailContent } from '@talex-touch/utils/renderer'
 import type { SharedPluginDetail } from '@talex-touch/utils/renderer'
+import {
+  CURRENT_SDK_VERSION,
+  SUPPORTED_SDK_VERSIONS,
+  isValidSdkVersion,
+  parseSdkVersion,
+} from '@talex-touch/utils/plugin'
 import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
@@ -125,6 +131,59 @@ const versionText = computed(() => {
 const updatedText = computed(() => {
   const updatedAt = selectedPlugin.value?.latestVersion?.createdAt
   return updatedAt ? formatDate(updatedAt) : ''
+})
+
+const sdkapiBanner = computed(() => {
+  const plugin = selectedPlugin.value
+  if (!plugin)
+    return null
+
+  const sdkapiRaw = plugin.latestVersion?.sdkapi
+  if (sdkapiRaw === undefined || sdkapiRaw === null) {
+    return {
+      level: 'error' as const,
+      message: t('market.detail.sdkapi.missing'),
+    }
+  }
+
+  const parsed = typeof sdkapiRaw === 'number' ? sdkapiRaw : parseSdkVersion(String(sdkapiRaw))
+  if (parsed === undefined || !isValidSdkVersion(parsed)) {
+    return {
+      level: 'error' as const,
+      message: t('market.detail.sdkapi.invalid', { value: sdkapiRaw, version: CURRENT_SDK_VERSION }),
+    }
+  }
+
+  if (!SUPPORTED_SDK_VERSIONS.includes(parsed)) {
+    return {
+      level: 'error' as const,
+      message: t('market.detail.sdkapi.unsupported', { value: parsed, version: CURRENT_SDK_VERSION }),
+    }
+  }
+
+  if (parsed > CURRENT_SDK_VERSION) {
+    return {
+      level: 'error' as const,
+      message: t('market.detail.sdkapi.tooNew', { value: parsed, version: CURRENT_SDK_VERSION }),
+    }
+  }
+
+  if (parsed < CURRENT_SDK_VERSION) {
+    return {
+      level: 'warning' as const,
+      message: t('market.detail.sdkapi.legacy', { value: parsed, version: CURRENT_SDK_VERSION }),
+    }
+  }
+
+  return null
+})
+
+const sdkapiBannerClass = computed(() => {
+  const level = sdkapiBanner.value?.level
+  if (level === 'warning') {
+    return 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200'
+  }
+  return 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'
 })
 
 function resetReviewState() {
@@ -372,6 +431,18 @@ useSeoMeta({
         {{ detailError }}
       </div>
       <div v-else-if="selectedPlugin" class="space-y-6">
+        <div
+          v-if="sdkapiBanner"
+          class="rounded-xl border p-4 text-sm"
+          :class="sdkapiBannerClass"
+        >
+          <p class="font-semibold">
+            {{ t('market.detail.sdkapi.title') }}
+          </p>
+          <p class="mt-1 text-xs">
+            {{ sdkapiBanner.message }}
+          </p>
+        </div>
         <SharedPluginDetailContent
           v-if="sharedDetail"
           :detail="sharedDetail"

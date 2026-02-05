@@ -463,6 +463,8 @@
       "download": "Download Source",
       "viewDocs": "View Documentation",
       "information": "Information",
+      "sdkapi": "SDK API",
+      "sdkapiMissing": "Not declared",
       "readmeError": "Failed to load README",
       "notFound": "Plugin Not Found",
       "notFoundDesc": "Check the plugin ID or return to market",
@@ -491,7 +493,19 @@
       "confirmMessage": "\"{name}\" comes from an unofficial source. Proceed with installation?",
       "confirmInstall": "Install",
       "confirmReject": "Cancel",
-      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?"
+      "beforeExitPrompt": "Plugin installations are still running. Are you sure you want to exit?",
+      "sdkapi": {
+        "blockTitle": "SDK API Incompatible",
+        "blockMissing": "Plugin \"{name}\" does not declare sdkapi. Please update the plugin to continue.",
+        "blockInvalid": "Plugin \"{name}\" declares invalid sdkapi ({value}). Please update the plugin.",
+        "blockUnsupported": "Plugin \"{name}\" uses sdkapi {version}, but your client is {current}.",
+        "blockTooNew": "Plugin \"{name}\" requires sdkapi {version}; your client is {current}. Please upgrade Tuff.",
+        "warnTitle": "Legacy SDK API",
+        "warnLegacy": "Plugin \"{name}\" targets sdkapi {version} and may lack permission protections. Continue?",
+        "warnContinue": "Install anyway",
+        "warnCancel": "Cancel",
+        "blockConfirm": "OK"
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "Confirm Update",

@@ -5,6 +5,17 @@ function buildMarketDownloadUrl(slug: string, version: string): string {
   return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
 }
 
+function resolveSdkapi(version: DashboardPluginVersion): number | undefined {
+  const raw = version.manifest?.sdkapi
+  if (typeof raw === 'number')
+    return raw
+  if (typeof raw === 'string') {
+    const parsed = Number.parseInt(raw, 10)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
 /**
  * Clean version object for market API response
  * Remove redundant fields that should only exist at plugin level
@@ -18,6 +29,7 @@ function cleanVersionForMarket(slug: string, version: DashboardPluginVersion) {
     signature: version.signature,
     packageUrl: buildMarketDownloadUrl(slug, version.version),
     packageSize: version.packageSize,
+    sdkapi: resolveSdkapi(version),
     manifest: version.manifest,
     changelog: version.changelog,
     status: version.status,

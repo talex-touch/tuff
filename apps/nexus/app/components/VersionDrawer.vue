@@ -28,6 +28,21 @@ export interface VersionFormData {
   packageFile: File
 }
 
+interface SdkapiStatus {
+  level: 'ok' | 'warning' | 'error'
+  code: string
+  message: string
+  suggestion?: string
+  declared?: number | string
+  resolved?: number
+  current: number
+}
+
+type PackagePreviewResult = TpexPackagePreviewResult & {
+  sdkapiStatus?: SdkapiStatus | null
+  sdkapi?: number | null
+}
+
 const { t } = useI18n()
 
 const formData = ref<VersionFormData>({
@@ -40,6 +55,7 @@ const formData = ref<VersionFormData>({
 const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
+const sdkapiStatus = ref<SdkapiStatus | null>(null)
 
 // Reset form when drawer opens
 watch(() => props.isOpen, (isOpen) => {
@@ -53,6 +69,7 @@ watch(() => props.isOpen, (isOpen) => {
     step.value = 'form'
     packageError.value = null
     manifestPreview.value = null
+    sdkapiStatus.value = null
   }
 })
 
@@ -70,6 +87,7 @@ async function handlePackageInput(event: Event) {
   formData.value.packageFile = file
   packageError.value = null
   manifestPreview.value = null
+  sdkapiStatus.value = null
 
   // Preview tpex to auto-fill form
   packageLoading.value = true
@@ -77,10 +95,12 @@ async function handlePackageInput(event: Event) {
     const previewFormData = new FormData()
     previewFormData.append('package', file)
 
-    const result = await $fetch<TpexPackagePreviewResult>('/api/dashboard/plugins/package/preview', {
+    const result = await $fetch<PackagePreviewResult>('/api/dashboard/plugins/package/preview', {
       method: 'POST',
       body: previewFormData,
     })
+
+    sdkapiStatus.value = result.sdkapiStatus ?? null
 
     if (result.manifest) {
       manifestPreview.value = result.manifest as TpexExtractedManifest
@@ -137,6 +157,41 @@ const channelDescription = computed(() =>
 const channelVisibility = computed(() =>
   t(`dashboard.sections.plugins.channels.${formData.value.channel}.visibility`),
 )
+
+const sdkapiStatusMessage = computed(() => {
+  const status = sdkapiStatus.value
+  if (!status)
+    return ''
+  const current = status.current
+  const declared = typeof status.declared === 'number' ? status.declared : status.resolved
+  const value = declared ?? status.declared ?? ''
+
+  switch (status.code) {
+    case 'SDK_VERSION_MISSING':
+      return t('dashboard.sections.plugins.sdkapi.missing', { version: current })
+    case 'SDK_VERSION_INVALID':
+      return t('dashboard.sections.plugins.sdkapi.invalid', { value, version: current })
+    case 'SDK_VERSION_UNSUPPORTED':
+      return t('dashboard.sections.plugins.sdkapi.unsupported', { value, version: current })
+    case 'SDK_VERSION_TOO_NEW':
+      return t('dashboard.sections.plugins.sdkapi.tooNew', { value, version: current })
+    case 'SDK_VERSION_TOO_OLD':
+      return t('dashboard.sections.plugins.sdkapi.tooOld', { value, version: current })
+    default:
+      return status.message
+  }
+})
+
+const sdkapiStatusClass = computed(() => {
+  const level = sdkapiStatus.value?.level
+  if (level === 'warning') {
+    return 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200'
+  }
+  if (level === 'error') {
+    return 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'
+  }
+  return 'border-black/10 bg-black/5 text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70'
+})
 </script>
 
 <template>
@@ -247,6 +302,19 @@ const channelVisibility = computed(() =>
                   <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
                 </p>
               </div>
+            </div>
+
+            <div
+              v-if="sdkapiStatus && sdkapiStatus.level !== 'ok'"
+              class="mt-2 rounded-lg border p-3 text-xs"
+              :class="sdkapiStatusClass"
+            >
+              <p class="mb-1 text-xs font-medium uppercase tracking-wider">
+                {{ t('dashboard.sections.plugins.sdkapi.title') }}
+              </p>
+              <p>
+                {{ sdkapiStatusMessage }}
+              </p>
             </div>
           </div>
 

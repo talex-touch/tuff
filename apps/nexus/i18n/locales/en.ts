@@ -120,6 +120,14 @@ export default {
       download: 'Download package',
       sizeUnknown: 'Size unknown',
       author: 'Published by {name}',
+      sdkapi: {
+        title: 'SDK API Compatibility',
+        missing: 'This plugin does not declare sdkapi and may not work with your current Tuff.',
+        invalid: 'This plugin declares an invalid sdkapi ({value}) and may not install.',
+        unsupported: 'This plugin uses sdkapi {value}, which is not supported by your client.',
+        tooNew: 'This plugin requires sdkapi {value}, but your client is {version}. Please upgrade Tuff.',
+        legacy: 'This plugin targets older sdkapi {value} and may lack permission protections.',
+      },
       reviews: {
         title: 'Community reviews',
         tag: 'Community',
@@ -347,6 +355,14 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         noManifest: 'No manifest found in this package.',
         manifestPreview: 'Manifest preview',
         manifestRaw: 'Raw manifest JSON',
+        sdkapi: {
+          title: 'SDK API Compatibility',
+          missing: 'sdkapi is missing. Set it to {version} before publishing.',
+          invalid: 'Invalid sdkapi ({value}). Use {version}.',
+          unsupported: 'sdkapi {value} is not supported. Use {version}.',
+          tooNew: 'sdkapi {value} is newer than {version}. Upgrade Tuff first.',
+          tooOld: 'sdkapi {value} is below the required {version}. Update the plugin.',
+        },
         packageAwaiting: 'Select a .tpex package to preview manifest and README details here.',
         noReadme: 'No README detected inside this package.',
         previewFields: {

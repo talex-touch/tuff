@@ -66,6 +66,7 @@ const manifestPreview = ref<TpexExtractedManifest | null>(null)
 const readmePreview = ref('')
 const iconPreviewUrl = ref<string | null>(null)
 const packageHasIcon = ref(false)
+const sdkapiStatus = ref<SdkapiStatus | null>(null)
 
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 
@@ -93,6 +94,7 @@ watch(() => props.isOpen, (isOpen) => {
     readmePreview.value = ''
     iconPreviewUrl.value = null
     packageHasIcon.value = false
+    sdkapiStatus.value = null
     inputMode.value = 'upload'
   }
 })
@@ -133,6 +135,18 @@ interface PackagePreviewResult {
   readmeMarkdown: string | null
   iconDataUrl: string | null
   hasIcon: boolean
+  sdkapiStatus?: SdkapiStatus | null
+  sdkapi?: number | null
+}
+
+interface SdkapiStatus {
+  level: 'ok' | 'warning' | 'error'
+  code: string
+  message: string
+  suggestion?: string
+  declared?: number | string
+  resolved?: number
+  current: number
 }
 
 async function requestPackagePreview(file: File): Promise<PackagePreviewResult> {
@@ -189,6 +203,7 @@ async function handlePackageInput(event: Event) {
   packageError.value = null
   manifestPreview.value = null
   readmePreview.value = ''
+  sdkapiStatus.value = null
 
   // Reset version info when file changes
   formData.value.initialVersion = null
@@ -205,6 +220,7 @@ async function handlePackageInput(event: Event) {
     readmePreview.value = preview.readmeMarkdown ?? ''
     iconPreviewUrl.value = preview.iconDataUrl
     packageHasIcon.value = preview.hasIcon
+    sdkapiStatus.value = preview.sdkapiStatus ?? null
     applyManifestToForm(preview.manifest, preview.readmeMarkdown ?? '')
   }
   catch (error: unknown) {
@@ -230,6 +246,41 @@ const displayIconUrl = computed(() => {
 })
 
 const hasIconPreview = computed(() => !!displayIconUrl.value)
+
+const sdkapiStatusMessage = computed(() => {
+  const status = sdkapiStatus.value
+  if (!status)
+    return ''
+  const current = status.current
+  const declared = typeof status.declared === 'number' ? status.declared : status.resolved
+  const value = declared ?? status.declared ?? ''
+
+  switch (status.code) {
+    case 'SDK_VERSION_MISSING':
+      return t('dashboard.sections.plugins.sdkapi.missing', { version: current })
+    case 'SDK_VERSION_INVALID':
+      return t('dashboard.sections.plugins.sdkapi.invalid', { value, version: current })
+    case 'SDK_VERSION_UNSUPPORTED':
+      return t('dashboard.sections.plugins.sdkapi.unsupported', { value, version: current })
+    case 'SDK_VERSION_TOO_NEW':
+      return t('dashboard.sections.plugins.sdkapi.tooNew', { value, version: current })
+    case 'SDK_VERSION_TOO_OLD':
+      return t('dashboard.sections.plugins.sdkapi.tooOld', { value, version: current })
+    default:
+      return status.message
+  }
+})
+
+const sdkapiStatusClass = computed(() => {
+  const level = sdkapiStatus.value?.level
+  if (level === 'warning') {
+    return 'border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200'
+  }
+  if (level === 'error') {
+    return 'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200'
+  }
+  return 'border-black/10 bg-black/5 text-black/60 dark:border-white/10 dark:bg-white/5 dark:text-white/70'
+})
 
 const canSubmit = computed(() => {
   const { slug, name, summary, readme, category } = formData.value
@@ -346,6 +397,19 @@ function onSubmit() {
                   <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
                 </p>
               </div>
+            </div>
+
+            <div
+              v-if="sdkapiStatus && sdkapiStatus.level !== 'ok'"
+              class="rounded-lg border p-3 text-xs"
+              :class="sdkapiStatusClass"
+            >
+              <p class="mb-1 text-xs font-medium uppercase tracking-wider">
+                {{ t('dashboard.sections.plugins.sdkapi.title') }}
+              </p>
+              <p>
+                {{ sdkapiStatusMessage }}
+              </p>
             </div>
 
             <div v-if="formData.initialVersion" class="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">

@@ -463,6 +463,8 @@
       "download": "下载源文件",
       "viewDocs": "查看文档",
       "information": "插件信息",
+      "sdkapi": "SDK API",
+      "sdkapiMissing": "未声明",
       "readmeError": "加载 README 失败",
       "notFound": "未找到插件",
       "notFoundDesc": "请检查插件 ID 或返回市场",
@@ -491,7 +493,19 @@
       "confirmMessage": "插件「{name}」来自非官方来源，确定继续安装吗？",
       "confirmInstall": "继续安装",
       "confirmReject": "取消",
-      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？"
+      "beforeExitPrompt": "仍有插件安装正在进行，确认要退出吗？",
+      "sdkapi": {
+        "blockTitle": "SDK API 不兼容",
+        "blockMissing": "插件「{name}」未声明 sdkapi，无法验证兼容性。请更新插件后再试。",
+        "blockInvalid": "插件「{name}」声明的 sdkapi 无效（{value}），请更新插件。",
+        "blockUnsupported": "插件「{name}」使用 sdkapi {version}，当前客户端为 {current}。",
+        "blockTooNew": "插件「{name}」需要 sdkapi {version}，当前客户端为 {current}。请先升级 Tuff。",
+        "warnTitle": "SDK API 兼容性提醒",
+        "warnLegacy": "插件「{name}」基于旧版 sdkapi {version}，可能缺少权限保护。是否继续安装？",
+        "warnContinue": "继续安装",
+        "warnCancel": "取消",
+        "blockConfirm": "知道了"
+      }
     },
     "upgradeDialog": {
       "confirmTitle": "确认更新",
