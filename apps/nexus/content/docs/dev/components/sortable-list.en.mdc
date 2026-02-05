@@ -38,15 +38,18 @@ const list = ref([
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxSortableList v-model="list">
-    <template #item="{ item }">
-      <div>{{ item.id }}</div>
-    </template>
-  </TxSortableList>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxSortableList v-model="list">
+      <template #item="{ item }">
+        <div>{{ item.id }}</div>
+      </template>
+    </TxSortableList>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

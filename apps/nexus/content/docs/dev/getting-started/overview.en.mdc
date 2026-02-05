@@ -6,19 +6,22 @@
 - **Channel System**: `ChannelType.MAIN` and `ChannelType.PLUGIN` handle IPC with promise-based replies.
 
 ## Directory Layout
-```
-apps/core-app/
-├── src/main/        # main process, modules, channels
-├── src/renderer/    # renderer (Vue 3)
-└── ...
-plugins/
-└── my-plugin/
-    ├── manifest.json
-    ├── init/
-    │   └── index.ts
-    ├── preload/
-    └── src/
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  apps/core-app/
+  ├── src/main/        # main process, modules, channels
+  ├── src/renderer/    # renderer (Vue 3)
+  └── ...
+  plugins/
+  └── my-plugin/
+      ├── manifest.json
+      ├── init/
+      │   └── index.ts
+      ├── preload/
+      └── src/
+---
+:::
 
 ## Lifecycle
 1. **Load** – manifest is parsed and entry scripts are registered.

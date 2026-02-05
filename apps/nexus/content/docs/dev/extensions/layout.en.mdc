@@ -8,42 +8,48 @@ CoreBox supports two layout modes, controlled by backend via `TuffSearchResult.c
 ## DSL Type Definitions
 
 **TuffContainerLayout**
-```typescript
-interface TuffContainerLayout {
-  mode: 'list' | 'grid'
-  grid?: {
-    columns: number      // Number of columns, default 5
-    gap?: number         // Gap in px, default 8
-    itemSize?: 'small' | 'medium' | 'large'
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffContainerLayout {
+    mode: 'list' | 'grid'
+    grid?: {
+      columns: number      // Number of columns, default 5
+      gap?: number         // Gap in px, default 8
+      itemSize?: 'small' | 'medium' | 'large'
+    }
+    sections?: TuffSection[]
   }
-  sections?: TuffSection[]
-}
-
-interface TuffSection {
-  id: string
-  title?: string
-  layout: 'list' | 'grid'
-  itemIds: string[]
-  collapsed?: boolean
-}
-```
+  
+  interface TuffSection {
+    id: string
+    title?: string
+    layout: 'list' | 'grid'
+    itemIds: string[]
+    collapsed?: boolean
+  }
+---
+:::
 
 **TuffMeta Extensions**
-```typescript
-interface TuffMeta {
-  // Pin configuration
-  pinned?: {
-    isPinned: boolean
-    pinnedAt?: number
-    order?: number
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface TuffMeta {
+    // Pin configuration
+    pinned?: {
+      isPinned: boolean
+      pinnedAt?: number
+      order?: number
+    }
+    // Recommendation source marker
+    recommendation?: {
+      source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
+      score?: number
+    }
   }
-  // Recommendation source marker
-  recommendation?: {
-    source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'pinned' | 'context'
-    score?: number
-  }
-}
-```
+---
+:::
 
 ## Keyboard Navigation
 
@@ -66,35 +72,41 @@ The recommendation engine generates recommendations based on:
 ## Usage Examples
 
 **Plugin Returns Grid Layout**
-```typescript
-const result: TuffSearchResult = {
-  items: [...],
-  query,
-  duration: 100,
-  sources: [],
-  containerLayout: {
-    mode: 'grid',
-    grid: {
-      columns: 5,
-      gap: 8,
-      itemSize: 'medium'
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result: TuffSearchResult = {
+    items: [...],
+    query,
+    duration: 100,
+    sources: [],
+    containerLayout: {
+      mode: 'grid',
+      grid: {
+        columns: 5,
+        gap: 8,
+        itemSize: 'medium'
+      }
     }
   }
-}
-```
+---
+:::
 
 **Mark Pinned Item**
-```typescript
-const item: TuffItem = {
-  id: 'my-app',
-  source: { type: 'app', id: 'app-provider' },
-  render: { mode: 'default', basic: { title: 'My App' } },
-  meta: {
-    pinned: {
-      isPinned: true,
-      pinnedAt: Date.now(),
-      order: 0
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const item: TuffItem = {
+    id: 'my-app',
+    source: { type: 'app', id: 'app-provider' },
+    render: { mode: 'default', basic: { title: 'My App' } },
+    meta: {
+      pinned: {
+        isPinned: true,
+        pinnedAt: Date.now(),
+        order: 0
+      }
     }
   }
-}
-```
+---
+:::

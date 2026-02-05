@@ -33,16 +33,19 @@
 
 ## 3. 运行关系（Mermaid）
 
-```mermaid
-flowchart TB
-  module["IntelligenceModule"] --> service["IntelligenceService"]
-  service --> strategy["Strategy Manager"]
-  service --> registry["Capability Registry"]
-  service --> quota["Quota Manager"]
-  service --> providers["Providers"]
-  service --> agents["Agents + Tools"]
-  service --> storage["Storage Adapter"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    module["IntelligenceModule"] --> service["IntelligenceService"]
+    service --> strategy["Strategy Manager"]
+    service --> registry["Capability Registry"]
+    service --> quota["Quota Manager"]
+    service --> providers["Providers"]
+    service --> agents["Agents + Tools"]
+    service --> storage["Storage Adapter"]
+---
+:::
 
 ## 4. 相关文档
 

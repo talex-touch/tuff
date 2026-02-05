@@ -23,17 +23,20 @@ Platform Capabilities SDK 提供平台能力目录查询，用于查看当前可
 
 ## 如何使用
 
-```typescript
-import { usePlatformSdk } from '@talex-touch/utils/renderer'
-
-const platform = usePlatformSdk()
-
-// 获取全部能力
-const all = await platform.listCapabilities()
-
-// 仅查看系统级能力
-const systemCaps = await platform.listCapabilities({ scope: 'system' })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePlatformSdk } from '@talex-touch/utils/renderer'
+  
+  const platform = usePlatformSdk()
+  
+  // 获取全部能力
+  const all = await platform.listCapabilities()
+  
+  // 仅查看系统级能力
+  const systemCaps = await platform.listCapabilities({ scope: 'system' })
+---
+:::
 
 ## 常见例子
 

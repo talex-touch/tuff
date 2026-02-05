@@ -8,9 +8,12 @@ The SDK exposes window control, clipboard, search, storage, and transport capabi
 
 ## Installation
 
-```bash
-pnpm add @talex-touch/utils
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  pnpm add @talex-touch/utils
+---
+:::
 
 ## API Reference
 
@@ -39,42 +42,45 @@ pnpm add @talex-touch/utils
 
 ## Quick Start
 
-```typescript
-import {
-  useBox,
-  useClipboard,
-  usePluginStorage,
-  useChannel,
-  useFeature,
-  useDivisionBox
-} from '@talex-touch/utils/plugin/sdk'
-
-// Initialize SDKs
-const box = useBox()
-const clipboard = useClipboard()
-const storage = usePluginStorage()
-const channel = useChannel()
-const feature = useFeature()
-const divisionBox = useDivisionBox()
-
-// Usage example
-async function init() {
-  // Read config
-  const config = await storage.getFile('config.json')
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import {
+    useBox,
+    useClipboard,
+    usePluginStorage,
+    useChannel,
+    useFeature,
+    useDivisionBox
+  } from '@talex-touch/utils/plugin/sdk'
   
-  // Listen to input changes
-  feature.onInputChange(async (input) => {
-    const results = await search(input)
-    feature.pushItems(results)
-  })
+  // Initialize SDKs
+  const box = useBox()
+  const clipboard = useClipboard()
+  const storage = usePluginStorage()
+  const channel = useChannel()
+  const feature = useFeature()
+  const divisionBox = useDivisionBox()
   
-  // Listen to clipboard
-  await box.allowClipboard(ClipboardType.TEXT)
-  clipboard.history.onDidChange((item) => {
-    console.log('Clipboard changed:', item)
-  })
-}
-```
+  // Usage example
+  async function init() {
+    // Read config
+    const config = await storage.getFile('config.json')
+    
+    // Listen to input changes
+    feature.onInputChange(async (input) => {
+      const results = await search(input)
+      feature.pushItems(results)
+    })
+    
+    // Listen to clipboard
+    await box.allowClipboard(ClipboardType.TEXT)
+    clipboard.history.onDidChange((item) => {
+      console.log('Clipboard changed:', item)
+    })
+  }
+---
+:::
 
 ---
 
@@ -84,48 +90,60 @@ async function init() {
 
 All SDKs are accessed through `use*` functions, no context passing required:
 
-```typescript
-// ✅ Correct
-const storage = usePluginStorage()
-await storage.getFile('config.json')
-
-// ❌ Wrong (deprecated API)
-// const storage = ctx.storage
-// await storage.getItem('key')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // ✅ Correct
+  const storage = usePluginStorage()
+  await storage.getFile('config.json')
+  
+  // ❌ Wrong (deprecated API)
+  // const storage = ctx.storage
+  // await storage.getItem('key')
+---
+:::
 
 **2. Automatic Context Detection**
 
 SDKs automatically detect plugin context, no manual configuration needed:
 
-```typescript
-const storage = usePluginStorage()
-// Automatically gets current plugin name
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const storage = usePluginStorage()
+  // Automatically gets current plugin name
+---
+:::
 
 **3. Returns Dispose Function**
 
 All listeners return an unsubscribe function:
 
-```typescript
-const unsubscribe = feature.onInputChange((input) => {
-  // ...
-})
-
-// Unsubscribe when component unmounts
-onUnmounted(() => {
-  unsubscribe()
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unsubscribe = feature.onInputChange((input) => {
+    // ...
+  })
+  
+  // Unsubscribe when component unmounts
+  onUnmounted(() => {
+    unsubscribe()
+  })
+---
+:::
 
 **4. Promise-based Async**
 
 All async operations return Promises:
 
-```typescript
-const config = await storage.getFile('config.json')
-await clipboard.copyAndPaste({ text: 'Hello' })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const config = await storage.getFile('config.json')
+  await clipboard.copyAndPaste({ text: 'Hello' })
+---
+:::
 
 ---
 
@@ -135,15 +153,18 @@ await clipboard.copyAndPaste({ text: 'Hello' })
 
 ## Type Imports
 
-```typescript
-import type {
-  TuffItem,
-  TuffQuery,
-  ClipboardType,
-  DivisionBoxConfig,
-  FlowPayload
-} from '@talex-touch/utils/plugin/sdk'
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import type {
+    TuffItem,
+    TuffQuery,
+    ClipboardType,
+    DivisionBoxConfig,
+    FlowPayload
+  } from '@talex-touch/utils/plugin/sdk'
+---
+:::
 
 ---
 

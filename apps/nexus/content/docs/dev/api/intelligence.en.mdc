@@ -8,30 +8,33 @@ The Intelligence SDK provides a unified interface for plugins to access AI capab
 
 **Quick Start**
 
-```typescript
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-
-const { text, vision } = useIntelligence()
-
-// AI Chat
-const chatRes = await text.chat({
-  messages: [{ role: 'user', content: 'Hello!' }]
-})
-console.log(chatRes.result)
-
-// Translation
-const translateRes = await text.translate({
-  text: 'Hello World',
-  targetLang: 'zh-CN'
-})
-console.log(translateRes.result)
-
-// OCR
-const ocrRes = await vision.ocr({
-  source: { type: 'data-url', dataUrl: imageDataUrl }
-})
-console.log(ocrRes.result.text)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  
+  const { text, vision } = useIntelligence()
+  
+  // AI Chat
+  const chatRes = await text.chat({
+    messages: [{ role: 'user', content: 'Hello!' }]
+  })
+  console.log(chatRes.result)
+  
+  // Translation
+  const translateRes = await text.translate({
+    text: 'Hello World',
+    targetLang: 'zh-CN'
+  })
+  console.log(translateRes.result)
+  
+  // OCR
+  const ocrRes = await vision.ocr({
+    source: { type: 'data-url', dataUrl: imageDataUrl }
+  })
+  console.log(ocrRes.result.text)
+---
+:::
 
 ## See also
 
@@ -48,12 +51,15 @@ console.log(ocrRes.result.text)
 
 Get Intelligence SDK instance (Vue Composable).
 
-```typescript
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
-
-const intelligence = useIntelligence()
-void intelligence
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useIntelligence } from '@talex-touch/utils/renderer/hooks'
+  
+  const intelligence = useIntelligence()
+  void intelligence
+---
+:::
 
 Returns an object with the following properties and methods:
 
@@ -78,71 +84,86 @@ Returns an object with the following properties and methods:
 
 AI Chat.
 
-```typescript
-const result = await text.chat({
-  messages: [
-    { role: 'system', content: 'You are a helpful assistant' },
-    { role: 'user', content: 'Hello!' }
-  ],
-  temperature: 0.7,
-  maxTokens: 1000
-})
-
-console.log(result.result) // Chat response
-console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await text.chat({
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant' },
+      { role: 'user', content: 'Hello!' }
+    ],
+    temperature: 0.7,
+    maxTokens: 1000
+  })
+  
+  console.log(result.result) // Chat response
+  console.log(result.usage) // { promptTokens, completionTokens, totalTokens }
+---
+:::
 
 **`text.translate(payload, options?)`**
 
 Text translation.
 
-```typescript
-const result = await text.translate({
-  text: 'Hello World',
-  sourceLang: 'en', // Optional, auto-detect
-  targetLang: 'zh-CN'
-})
-console.log(result.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await text.translate({
+    text: 'Hello World',
+    sourceLang: 'en', // Optional, auto-detect
+    targetLang: 'zh-CN'
+  })
+  console.log(result.result)
+---
+:::
 
 **`text.summarize(payload, options?)`**
 
 Text summarization.
 
-```typescript
-const result = await text.summarize({
-  text: 'This is a long article',
-  maxLength: 200,
-  style: 'bullet-points' // 'concise' | 'detailed' | 'bullet-points'
-})
-console.log(result.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await text.summarize({
+    text: 'This is a long article',
+    maxLength: 200,
+    style: 'bullet-points' // 'concise' | 'detailed' | 'bullet-points'
+  })
+  console.log(result.result)
+---
+:::
 
 **`text.rewrite(payload, options?)`**
 
 Text rewriting.
 
-```typescript
-const result = await text.rewrite({
-  text: 'This product is good',
-  style: 'formal', // 'formal' | 'casual' | 'professional' | 'creative'
-  tone: 'authoritative' // 'neutral' | 'friendly' | 'authoritative'
-})
-console.log(result.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const result = await text.rewrite({
+    text: 'This product is good',
+    style: 'formal', // 'formal' | 'casual' | 'professional' | 'creative'
+    tone: 'authoritative' // 'neutral' | 'friendly' | 'authoritative'
+  })
+  console.log(result.result)
+---
+:::
 
 **`text.grammarCheck(payload, options?)`**
 
 Grammar checking.
 
-```typescript
-const res = await text.grammarCheck({
-  text: 'I has a apple',
-  language: 'en',
-  checkTypes: ['spelling', 'grammar', 'punctuation']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await text.grammarCheck({
+    text: 'I has a apple',
+    language: 'en',
+    checkTypes: ['spelling', 'grammar', 'punctuation']
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -152,68 +173,83 @@ console.log(res.result)
 
 Code generation.
 
-```typescript
-const res = await code.generate({
-  description: 'Implement a quicksort algorithm',
-  language: 'typescript',
-  includeTests: true,
-  includeComments: true
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await code.generate({
+    description: 'Implement a quicksort algorithm',
+    language: 'typescript',
+    includeTests: true,
+    includeComments: true
+  })
+  console.log(res.result)
+---
+:::
 
 **`code.explain(payload, options?)`**
 
 Code explanation.
 
-```typescript
-const res = await code.explain({
-  code: 'const [a, b] = [b, a]',
-  language: 'javascript',
-  depth: 'detailed',
-  targetAudience: 'beginner'
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await code.explain({
+    code: 'const [a, b] = [b, a]',
+    language: 'javascript',
+    depth: 'detailed',
+    targetAudience: 'beginner'
+  })
+  console.log(res.result)
+---
+:::
 
 **`code.review(payload, options?)`**
 
 Code review.
 
-```typescript
-const res = await code.review({
-  code: myCode,
-  language: 'typescript',
-  focusAreas: ['security', 'performance', 'best-practices']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await code.review({
+    code: myCode,
+    language: 'typescript',
+    focusAreas: ['security', 'performance', 'best-practices']
+  })
+  console.log(res.result)
+---
+:::
 
 **`code.refactor(payload, options?)`**
 
 Code refactoring.
 
-```typescript
-const res = await code.refactor({
-  code: legacyCode,
-  language: 'javascript',
-  goals: ['readability', 'maintainability']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await code.refactor({
+    code: legacyCode,
+    language: 'javascript',
+    goals: ['readability', 'maintainability']
+  })
+  console.log(res.result)
+---
+:::
 
 **`code.debug(payload, options?)`**
 
 Code debugging.
 
-```typescript
-const res = await code.debug({
-  code: buggyCode,
-  error: 'TypeError: Cannot read property...',
-  stackTrace: '...'
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await code.debug({
+    code: buggyCode,
+    error: 'TypeError: Cannot read property...',
+    stackTrace: '...'
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -223,63 +259,78 @@ console.log(res.result)
 
 Intent detection.
 
-```typescript
-const res = await analysis.detectIntent({
-  text: 'Book a flight to New York tomorrow',
-  possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await analysis.detectIntent({
+    text: 'Book a flight to New York tomorrow',
+    possibleIntents: ['book_flight', 'book_hotel', 'query_weather']
+  })
+  console.log(res.result)
+---
+:::
 
 **`analysis.analyzeSentiment(payload, options?)`**
 
 Sentiment analysis.
 
-```typescript
-const res = await analysis.analyzeSentiment({
-  text: 'This product is amazing!',
-  granularity: 'document'
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await analysis.analyzeSentiment({
+    text: 'This product is amazing!',
+    granularity: 'document'
+  })
+  console.log(res.result)
+---
+:::
 
 **`analysis.extractContent(payload, options?)`**
 
 Content extraction.
 
-```typescript
-const res = await analysis.extractContent({
-  text: 'Contact John at john@example.com or call 555-1234',
-  extractTypes: ['people', 'phones', 'emails']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await analysis.extractContent({
+    text: 'Contact John at john@example.com or call 555-1234',
+    extractTypes: ['people', 'phones', 'emails']
+  })
+  console.log(res.result)
+---
+:::
 
 **`analysis.extractKeywords(payload, options?)`**
 
 Keyword extraction.
 
-```typescript
-const res = await analysis.extractKeywords({
-  text: articleContent,
-  maxKeywords: 10,
-  includeScores: true
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await analysis.extractKeywords({
+    text: articleContent,
+    maxKeywords: 10,
+    includeScores: true
+  })
+  console.log(res.result)
+---
+:::
 
 **`analysis.classify(payload, options?)`**
 
 Text classification.
 
-```typescript
-const res = await analysis.classify({
-  text: 'Apple released a new iPhone',
-  categories: ['Technology', 'Sports', 'Entertainment', 'Finance'],
-  multiLabel: false
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await analysis.classify({
+    text: 'Apple released a new iPhone',
+    categories: ['Technology', 'Sports', 'Entertainment', 'Finance'],
+    multiLabel: false
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -289,73 +340,88 @@ console.log(res.result)
 
 OCR text recognition.
 
-```typescript
-const res = await vision.ocr({
-  source: {
-    type: 'data-url',
-    dataUrl: 'data:image/png;base64,...'
-  },
-  language: 'en',
-  includeLayout: true,
-  includeKeywords: true
-})
-console.log(res.result.text)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await vision.ocr({
+    source: {
+      type: 'data-url',
+      dataUrl: 'data:image/png;base64,...'
+    },
+    language: 'en',
+    includeLayout: true,
+    includeKeywords: true
+  })
+  console.log(res.result.text)
+---
+:::
 
 **Image Source Types**:
 
-```typescript
-// Data URL
-const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
-
-// File path
-const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
-
-// Base64
-const sourceBase64 = { type: 'base64', base64: '...' } as const
-
-console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Data URL
+  const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
+  
+  // File path
+  const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
+  
+  // Base64
+  const sourceBase64 = { type: 'base64', base64: '...' } as const
+  
+  console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
+---
+:::
 
 **`vision.caption(payload, options?)`**
 
 Image captioning.
 
-```typescript
-const res = await vision.caption({
-  source: { type: 'data-url', dataUrl: imageUrl },
-  style: 'detailed',
-  language: 'en'
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await vision.caption({
+    source: { type: 'data-url', dataUrl: imageUrl },
+    style: 'detailed',
+    language: 'en'
+  })
+  console.log(res.result)
+---
+:::
 
 **`vision.analyze(payload, options?)`**
 
 Image analysis.
 
-```typescript
-const res = await vision.analyze({
-  source: { type: 'data-url', dataUrl: imageUrl },
-  analysisTypes: ['objects', 'faces', 'colors', 'scene']
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await vision.analyze({
+    source: { type: 'data-url', dataUrl: imageUrl },
+    analysisTypes: ['objects', 'faces', 'colors', 'scene']
+  })
+  console.log(res.result)
+---
+:::
 
 **`vision.generate(payload, options?)`**
 
 Image generation.
 
-```typescript
-const res = await vision.generate({
-  prompt: 'A cute cat sitting on a sofa',
-  width: 1024,
-  height: 1024,
-  quality: 'hd',
-  count: 1
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await vision.generate({
+    prompt: 'A cute cat sitting on a sofa',
+    width: 1024,
+    height: 1024,
+    quality: 'hd',
+    count: 1
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -365,14 +431,17 @@ console.log(res.result)
 
 Generate text embeddings.
 
-```typescript
-const res = await embedding.generate({
-  text: 'This is some text',
-  model: 'text-embedding-3-small'
-})
-
-console.log(res.result.length)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await embedding.generate({
+    text: 'This is some text',
+    model: 'text-embedding-3-small'
+  })
+  
+  console.log(res.result.length)
+---
+:::
 
 ---
 
@@ -382,40 +451,49 @@ console.log(res.result.length)
 
 RAG query.
 
-```typescript
-const res = await rag.query({
-  query: 'How to configure plugins?',
-  documents: [],
-  topK: 5
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await rag.query({
+    query: 'How to configure plugins?',
+    documents: [],
+    topK: 5
+  })
+  console.log(res.result)
+---
+:::
 
 **`rag.semanticSearch(payload, options?)`**
 
 Semantic search.
 
-```typescript
-const res = await rag.semanticSearch({
-  query: 'user interface design',
-  corpus: 'documentation',
-  limit: 10
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await rag.semanticSearch({
+    query: 'user interface design',
+    corpus: 'documentation',
+    limit: 10
+  })
+  console.log(res.result)
+---
+:::
 
 **`rag.rerank(payload, options?)`**
 
 Result reranking.
 
-```typescript
-const res = await rag.rerank({
-  query: 'search query',
-  documents: searchResults,
-  topK: 5
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await rag.rerank({
+    query: 'search query',
+    documents: searchResults,
+    topK: 5
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -425,14 +503,17 @@ console.log(res.result)
 
 Run an agent.
 
-```typescript
-const res = await agent.run({
-  task: 'Analyze this data for me',
-  tools: ['calculator', 'web_search'],
-  context: { data: [] }
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await agent.run({
+    task: 'Analyze this data for me',
+    tools: ['calculator', 'web_search'],
+    context: { data: [] }
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -442,12 +523,15 @@ console.log(res.result)
 
 Directly invoke any capability.
 
-```typescript
-const res = await invoke('text.chat', {
-  messages: [{ role: 'user', content: 'Hello' }]
-})
-console.log(res.result)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const res = await invoke('text.chat', {
+    messages: [{ role: 'user', content: 'Hello' }]
+  })
+  console.log(res.result)
+---
+:::
 
 ---
 
@@ -455,21 +539,24 @@ console.log(res.result)
 
 All methods support a second `options` parameter:
 
-```typescript
-interface IntelligenceInvokeOptions {
-  strategy?: string // Strategy ID
-  modelPreference?: string[] // Preferred models list
-  costCeiling?: number // Cost ceiling
-  latencyTarget?: number // Target latency (ms)
-  timeout?: number // Timeout (ms)
-  stream?: boolean // Enable streaming
-  preferredProviderId?: string // Preferred Provider
-  allowedProviderIds?: string[] // Allowed Provider list
-}
-
-const _invokeOptions: IntelligenceInvokeOptions = {}
-void _invokeOptions
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeOptions {
+    strategy?: string // Strategy ID
+    modelPreference?: string[] // Preferred models list
+    costCeiling?: number // Cost ceiling
+    latencyTarget?: number // Target latency (ms)
+    timeout?: number // Timeout (ms)
+    stream?: boolean // Enable streaming
+    preferredProviderId?: string // Preferred Provider
+    allowedProviderIds?: string[] // Allowed Provider list
+  }
+  
+  const _invokeOptions: IntelligenceInvokeOptions = {}
+  void _invokeOptions
+---
+:::
 
 ---
 
@@ -477,80 +564,92 @@ void _invokeOptions
 
 All APIs return a unified response structure:
 
-```typescript
-interface IntelligenceInvokeResult<T> {
-  result: T // Result data
-  usage: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-    cost?: number
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceInvokeResult<T> {
+    result: T // Result data
+    usage: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+      cost?: number
+    }
+    model: string // Model used
+    latency: number // Request latency (ms)
+    traceId: string // Trace ID
+    provider: string // Provider used
   }
-  model: string // Model used
-  latency: number // Request latency (ms)
-  traceId: string // Trace ID
-  provider: string // Provider used
-}
-
-const _invokeResult = {} as IntelligenceInvokeResult<string>
-void _invokeResult
-```
+  
+  const _invokeResult = {} as IntelligenceInvokeResult<string>
+  void _invokeResult
+---
+:::
 
 ---
 
 ## State Management
 
-```typescript
-const { isLoading, lastError } = useIntelligence()
-
-// Watch loading state
-watch(isLoading, loading => console.log('loading', loading))
-
-// Watch errors
-watch(lastError, error => console.log('error', error))
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const { isLoading, lastError } = useIntelligence()
+  
+  // Watch loading state
+  watch(isLoading, loading => console.log('loading', loading))
+  
+  // Watch errors
+  watch(lastError, error => console.log('error', error))
+---
+:::
 
 ---
 
 ## Provider Types
 
-```typescript
-enum IntelligenceProviderType {
-  OPENAI = 'openai',
-  ANTHROPIC = 'anthropic',
-  DEEPSEEK = 'deepseek',
-  SILICONFLOW = 'siliconflow',
-  LOCAL = 'local',
-  CUSTOM = 'custom'
-}
-
-void IntelligenceProviderType.OPENAI
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum IntelligenceProviderType {
+    OPENAI = 'openai',
+    ANTHROPIC = 'anthropic',
+    DEEPSEEK = 'deepseek',
+    SILICONFLOW = 'siliconflow',
+    LOCAL = 'local',
+    CUSTOM = 'custom'
+  }
+  
+  void IntelligenceProviderType.OPENAI
+---
+:::
 
 ---
 
 ## Capability Types
 
-```typescript
-enum IntelligenceCapabilityType {
-  // Text
-  CHAT, COMPLETION, EMBEDDING, SUMMARIZE, TRANSLATE, REWRITE, GRAMMAR_CHECK,
-  // Code
-  CODE_GENERATE, CODE_EXPLAIN, CODE_REVIEW, CODE_REFACTOR, CODE_DEBUG,
-  // Analysis
-  INTENT_DETECT, SENTIMENT_ANALYZE, CONTENT_EXTRACT, KEYWORDS_EXTRACT, CLASSIFICATION,
-  // Audio
-  TTS, STT, AUDIO_TRANSCRIBE,
-  // Vision
-  VISION, VISION_OCR, IMAGE_CAPTION, IMAGE_ANALYZE, IMAGE_GENERATE, IMAGE_EDIT,
-  // RAG
-  RAG_QUERY, SEMANTIC_SEARCH, RERANK,
-  // Workflow
-  WORKFLOW, AGENT
-}
-
-void IntelligenceCapabilityType.CHAT
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  enum IntelligenceCapabilityType {
+    // Text
+    CHAT, COMPLETION, EMBEDDING, SUMMARIZE, TRANSLATE, REWRITE, GRAMMAR_CHECK,
+    // Code
+    CODE_GENERATE, CODE_EXPLAIN, CODE_REVIEW, CODE_REFACTOR, CODE_DEBUG,
+    // Analysis
+    INTENT_DETECT, SENTIMENT_ANALYZE, CONTENT_EXTRACT, KEYWORDS_EXTRACT, CLASSIFICATION,
+    // Audio
+    TTS, STT, AUDIO_TRANSCRIBE,
+    // Vision
+    VISION, VISION_OCR, IMAGE_CAPTION, IMAGE_ANALYZE, IMAGE_GENERATE, IMAGE_EDIT,
+    // RAG
+    RAG_QUERY, SEMANTIC_SEARCH, RERANK,
+    // Workflow
+    WORKFLOW, AGENT
+  }
+  
+  void IntelligenceCapabilityType.CHAT
+---
+:::
 
 ## Best Practices
 

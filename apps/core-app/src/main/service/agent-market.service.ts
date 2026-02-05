@@ -4,7 +4,8 @@
  * Provides APIs for browsing, searching and managing agents from external sources.
  */
 
-import type { AgentCapability, AgentDescriptor } from '@talex-touch/utils'
+import { StorageList, type AgentCapability, type AgentDescriptor } from '@talex-touch/utils'
+import { getMainConfig, isMainStorageReady, saveMainConfig } from '../modules/storage'
 import { createLogger } from '../utils/logger'
 
 const log = createLogger('AgentMarket')
@@ -83,6 +84,10 @@ export interface AgentInstallResult {
   version: string
   message?: string
   error?: string
+}
+
+interface AgentMarketStore {
+  installed: Record<string, string>
 }
 
 // Built-in agents catalog
@@ -201,15 +206,81 @@ const FEATURED_AGENTS: MarketAgentInfo[] = [
   }
 ]
 
+const BUILTIN_AGENT_IDS = new Set(BUILTIN_AGENTS.map((agent) => agent.id))
+const BUILTIN_AGENT_VERSION_MAP = new Map(BUILTIN_AGENTS.map((agent) => [agent.id, agent.version]))
+
 /**
  * Agent Market Service
  */
 class AgentMarketService {
-  private installedAgentIds: Set<string> = new Set([
-    'builtin.file-agent',
-    'builtin.search-agent',
-    'builtin.data-agent'
-  ])
+  private installedAgentIds = new Set<string>(BUILTIN_AGENT_IDS)
+  private installedAgentVersions = new Map<string, string>(BUILTIN_AGENT_VERSION_MAP)
+  private storageLoaded = false
+  private pendingPersist = false
+
+  private ensureStorageLoaded(): void {
+    if (this.storageLoaded) return
+    if (!isMainStorageReady()) return
+
+    try {
+      const state = getMainConfig(StorageList.AGENT_MARKET) as AgentMarketStore | undefined
+      const installed = state?.installed ?? {}
+      for (const [agentId, version] of Object.entries(installed)) {
+        if (!agentId) continue
+        this.installedAgentIds.add(agentId)
+        if (typeof version === 'string' && version.length > 0) {
+          this.installedAgentVersions.set(agentId, version)
+        }
+      }
+    } catch (error) {
+      log.warn('Failed to load agent market state', { error })
+    }
+
+    this.storageLoaded = true
+    if (this.pendingPersist) {
+      this.persistInstalledState()
+    }
+  }
+
+  private persistInstalledState(): void {
+    if (!isMainStorageReady()) {
+      this.pendingPersist = true
+      return
+    }
+
+    const installed: Record<string, string> = {}
+    for (const [agentId, version] of this.installedAgentVersions.entries()) {
+      if (!this.installedAgentIds.has(agentId)) continue
+      if (BUILTIN_AGENT_IDS.has(agentId)) continue
+      installed[agentId] = version
+    }
+
+    try {
+      saveMainConfig(StorageList.AGENT_MARKET, { installed })
+      this.pendingPersist = false
+    } catch (error) {
+      log.warn('Failed to save agent market state', { error })
+    }
+  }
+
+  private resolveInstalledVersion(agent: MarketAgentInfo): string | undefined {
+    const stored = this.installedAgentVersions.get(agent.id)
+    if (stored) return stored
+    if (BUILTIN_AGENT_IDS.has(agent.id)) return agent.version
+    return undefined
+  }
+
+  private applyInstallMeta(agent: MarketAgentInfo): MarketAgentInfo {
+    const isInstalled = this.installedAgentIds.has(agent.id)
+    const installedVersion = isInstalled ? this.resolveInstalledVersion(agent) : undefined
+    const hasUpdate = Boolean(isInstalled && installedVersion && installedVersion !== agent.version)
+    return {
+      ...agent,
+      isInstalled,
+      installedVersion,
+      hasUpdate
+    }
+  }
 
   /**
    * Search agents in the market
@@ -227,15 +298,13 @@ class AgentMarketService {
     } = options
 
     log.debug(`Searching agents: ${JSON.stringify(options)}`)
+    this.ensureStorageLoaded()
 
     // Combine all agents
     let agents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
 
     // Update installed status
-    agents = agents.map((a) => ({
-      ...a,
-      isInstalled: this.installedAgentIds.has(a.id)
-    }))
+    agents = agents.map((a) => this.applyInstallMeta(a))
 
     // Filter by keyword
     if (keyword) {
@@ -297,14 +366,12 @@ class AgentMarketService {
    * Get agent details by ID
    */
   async getAgentDetails(agentId: string): Promise<MarketAgentInfo | null> {
+    this.ensureStorageLoaded()
     const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
     const agent = allAgents.find((a) => a.id === agentId)
 
     if (agent) {
-      return {
-        ...agent,
-        isInstalled: this.installedAgentIds.has(agent.id)
-      }
+      return this.applyInstallMeta(agent)
     }
 
     return null
@@ -314,20 +381,19 @@ class AgentMarketService {
    * Get featured/recommended agents
    */
   async getFeaturedAgents(): Promise<MarketAgentInfo[]> {
-    return FEATURED_AGENTS.map((a) => ({
-      ...a,
-      isInstalled: this.installedAgentIds.has(a.id)
-    }))
+    this.ensureStorageLoaded()
+    return FEATURED_AGENTS.map((a) => this.applyInstallMeta(a))
   }
 
   /**
    * Get installed agents
    */
   async getInstalledAgents(): Promise<MarketAgentInfo[]> {
+    this.ensureStorageLoaded()
     const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
     return allAgents
       .filter((a) => this.installedAgentIds.has(a.id))
-      .map((a) => ({ ...a, isInstalled: true }))
+      .map((a) => this.applyInstallMeta(a))
   }
 
   /**
@@ -363,9 +429,10 @@ class AgentMarketService {
    * Install an agent (placeholder for future implementation)
    */
   async installAgent(options: AgentInstallOptions): Promise<AgentInstallResult> {
-    const { agentId, version } = options
+    const { agentId, version, force } = options
 
     log.info(`Installing agent: ${agentId}@${version || 'latest'}`)
+    this.ensureStorageLoaded()
 
     // Check if agent exists
     const agent = await this.getAgentDetails(agentId)
@@ -379,7 +446,7 @@ class AgentMarketService {
     }
 
     // Check if already installed
-    if (this.installedAgentIds.has(agentId)) {
+    if (this.installedAgentIds.has(agentId) && !force) {
       return {
         success: false,
         agentId,
@@ -388,14 +455,17 @@ class AgentMarketService {
       }
     }
 
-    // TODO: Actually download and install the agent
-    // For now, just mark as installed
+    const targetVersion = version || agent.version
+
+    // For now, just mark as installed and persist state
     this.installedAgentIds.add(agentId)
+    this.installedAgentVersions.set(agentId, targetVersion)
+    this.persistInstalledState()
 
     return {
       success: true,
       agentId,
-      version: agent.version,
+      version: targetVersion,
       message: `Agent ${agent.name} installed successfully`
     }
   }
@@ -405,6 +475,7 @@ class AgentMarketService {
    */
   async uninstallAgent(agentId: string): Promise<AgentInstallResult> {
     log.info(`Uninstalling agent: ${agentId}`)
+    this.ensureStorageLoaded()
 
     // Check if it's a builtin agent
     if (agentId.startsWith('builtin.')) {
@@ -425,13 +496,17 @@ class AgentMarketService {
       }
     }
 
-    // TODO: Actually remove the agent
+    const installedVersion = this.installedAgentVersions.get(agentId) ?? 'unknown'
+
+    // Remove and persist
     this.installedAgentIds.delete(agentId)
+    this.installedAgentVersions.delete(agentId)
+    this.persistInstalledState()
 
     return {
       success: true,
       agentId,
-      version: 'unknown',
+      version: installedVersion,
       message: 'Agent uninstalled successfully'
     }
   }
@@ -440,6 +515,7 @@ class AgentMarketService {
    * Check for agent updates
    */
   async checkUpdates(): Promise<MarketAgentInfo[]> {
+    this.ensureStorageLoaded()
     // For now, no updates available
     return []
   }

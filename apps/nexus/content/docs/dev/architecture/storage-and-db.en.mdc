@@ -41,14 +41,17 @@ This page covers the storage module, plugin storage isolation, and database file
 
 ## 4. Storage Update Flow (Mermaid)
 
-```mermaid
-flowchart LR
-  storage["StorageModule"] --> cache["Cache/LRU"]
-  storage --> persist["Disk JSON / SQLite"]
-  storage --> broadcast["Broadcast Update"]
-  broadcast --> renderer["Renderer Windows"]
-  broadcast --> plugin["Plugin Storage Listeners"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    storage["StorageModule"] --> cache["Cache/LRU"]
+    storage --> persist["Disk JSON / SQLite"]
+    storage --> broadcast["Broadcast Update"]
+    broadcast --> renderer["Renderer Windows"]
+    broadcast --> plugin["Plugin Storage Listeners"]
+---
+:::
 
 ## 5. Related Docs
 

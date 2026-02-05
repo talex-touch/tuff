@@ -64,30 +64,33 @@ function handleReset() {
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { reactive, ref } from 'vue'
-
-const form = reactive({ name: '', email: '' })
-const rules = { name: { required: true, message: '请输入名称' } }
-const formRef = ref()
-
-async function handleValidate() {
-  await formRef.value?.validate()
-}
-</script>
-
-<template>
-  <TxForm ref="formRef" :model="form" :rules="rules" label-width="90px">
-    <TxFormItem label="名称" prop="name">
-      <TuffInput v-model="form.name" placeholder="请输入名称" />
-    </TxFormItem>
-    <TxFormItem label="邮箱" prop="email">
-      <TuffInput v-model="form.email" placeholder="name@example.com" />
-    </TxFormItem>
-  </TxForm>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { reactive, ref } from 'vue'
+  
+  const form = reactive({ name: '', email: '' })
+  const rules = { name: { required: true, message: '请输入名称' } }
+  const formRef = ref()
+  
+  async function handleValidate() {
+    await formRef.value?.validate()
+  }
+  </script>
+  
+  <template>
+    <TxForm ref="formRef" :model="form" :rules="rules" label-width="90px">
+      <TxFormItem label="名称" prop="name">
+        <TuffInput v-model="form.name" placeholder="请输入名称" />
+      </TxFormItem>
+      <TxFormItem label="邮箱" prop="email">
+        <TuffInput v-model="form.email" placeholder="name@example.com" />
+      </TxFormItem>
+    </TxForm>
+  </template>
+---
+:::
 :::
 
 ## API

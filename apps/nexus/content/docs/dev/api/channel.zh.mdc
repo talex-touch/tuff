@@ -12,17 +12,20 @@ Channel SDK 提供插件与主程序之间的 IPC 通信能力，基于 Promise 
 
 **快速开始**
 
-```ts
-import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
-
-// 方式 1: 获取原始 channel 对象
-const channel = useChannel()
-const result = await channel.send('some-event', { data: 'value' })
-
-// 方式 2: 使用封装的 Plugin Channel
-const pluginChannel = usePluginRendererChannel()
-await pluginChannel.send('my-plugin:action', { payload: 'data' })
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useChannel, usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
+  
+  // 方式 1: 获取原始 channel 对象
+  const channel = useChannel()
+  const result = await channel.send('some-event', { data: 'value' })
+  
+  // 方式 2: 使用封装的 Plugin Channel
+  const pluginChannel = usePluginRendererChannel()
+  await pluginChannel.send('my-plugin:action', { payload: 'data' })
+---
+:::
 
 ---
 
@@ -32,79 +35,100 @@ await pluginChannel.send('my-plugin:action', { payload: 'data' })
 
 获取底层 IPC channel 实例。
 
-```ts
-import { useChannel } from '@talex-touch/utils/plugin/sdk'
-
-const channel = useChannel()
-
-// 发送消息
-const response = await channel.send('event-name', { key: 'value' })
-
-// 注册监听器
-const unsubscribe = channel.regChannel('event-name', (data) => {
-  console.log('收到消息:', data)
-})
-
-// 取消监听
-unsubscribe()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { useChannel } from '@talex-touch/utils/plugin/sdk'
+  
+  const channel = useChannel()
+  
+  // 发送消息
+  const response = await channel.send('event-name', { key: 'value' })
+  
+  // 注册监听器
+  const unsubscribe = channel.regChannel('event-name', (data) => {
+    console.log('收到消息:', data)
+  })
+  
+  // 取消监听
+  unsubscribe()
+---
+:::
 
 **usePluginRendererChannel()**
 
 获取插件专用的 channel 实例，提供更友好的 API。
 
-```ts
-import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
-
-const channel = usePluginRendererChannel()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginRendererChannel } from '@talex-touch/utils/plugin/sdk'
+  
+  const channel = usePluginRendererChannel()
+---
+:::
 
 **`send(eventName, payload)`**
 
 异步发送消息并等待响应。
 
-```ts
-const result = await channel.send('clipboard:get-latest')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await channel.send('clipboard:get-latest')
+---
+:::
 
 **`sendSync(eventName, payload)`**
 
 同步发送消息（尽量避免使用）。
 
-```ts
-const result = channel.sendSync('get-config')
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = channel.sendSync('get-config')
+---
+:::
 
 **`on(eventName, handler)`**
 
 注册事件监听器。
 
-```ts
-const dispose = channel.on('core-box:input-change', (data) => {
-  console.log('输入变化:', data.input)
-})
-
-// 停止监听
-dispose()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const dispose = channel.on('core-box:input-change', (data) => {
+    console.log('输入变化:', data.input)
+  })
+  
+  // 停止监听
+  dispose()
+---
+:::
 
 **`once(eventName, handler)`**
 
 注册一次性监听器，触发后自动移除。
 
-```ts
-channel.once('plugin:ready', () => {
-  console.log('插件就绪')
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  channel.once('plugin:ready', () => {
+    console.log('插件就绪')
+  })
+---
+:::
 
 **`raw`**
 
 获取底层 channel 对象。
 
-```ts
-const rawChannel = channel.raw
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const rawChannel = channel.raw
+---
+:::
 
 ---
 
@@ -136,48 +160,57 @@ const rawChannel = channel.raw
 
 **发送到主进程**
 
-```ts
-const channel = useChannel()
-
-// 发送并等待响应
-const result = await channel.send('my-plugin:do-something', {
-  action: 'process',
-  data: [1, 2, 3]
-})
-
-if (result.success) {
-  console.log('处理结果:', result.data)
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const channel = useChannel()
+  
+  // 发送并等待响应
+  const result = await channel.send('my-plugin:do-something', {
+    action: 'process',
+    data: [1, 2, 3]
+  })
+  
+  if (result.success) {
+    console.log('处理结果:', result.data)
+  }
+---
+:::
 
 **监听主进程事件**
 
-```ts
-const dispose = channel.regChannel('my-plugin:notification', (data) => {
-  console.log('收到通知:', data)
-})
-
-// 组件卸载时清理
-onUnmounted(() => {
-  dispose()
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const dispose = channel.regChannel('my-plugin:notification', (data) => {
+    console.log('收到通知:', data)
+  })
+  
+  // 组件卸载时清理
+  onUnmounted(() => {
+    dispose()
+  })
+---
+:::
 
 ---
 
 ## 错误处理
 
-```ts
-try {
-  const result = await channel.send('risky-operation', data)
-} catch (error) {
-  if (error.message.includes('timeout')) {
-    console.error('操作超时')
-  } else {
-    console.error('操作失败:', error)
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  try {
+    const result = await channel.send('risky-operation', data)
+  } catch (error) {
+    if (error.message.includes('timeout')) {
+      console.error('操作超时')
+    } else {
+      console.error('操作失败:', error)
+    }
   }
-}
-```
+---
+:::
 
 ---
 
@@ -193,36 +226,42 @@ try {
 3. **错误处理**：始终用 try-catch 包裹 send 调用
 4. **类型安全**：定义请求和响应的 TypeScript 接口
 
-```ts
-interface MyRequest {
-  action: string
-  params: Record<string, any>
-}
-
-interface MyResponse {
-  success: boolean
-  data?: any
-  error?: string
-}
-
-const result = await channel.send('my-plugin:action', {
-  action: 'query',
-  params: { id: 123 }
-} as MyRequest) as MyResponse
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface MyRequest {
+    action: string
+    params: Record<string, any>
+  }
+  
+  interface MyResponse {
+    success: boolean
+    data?: any
+    error?: string
+  }
+  
+  const result = await channel.send('my-plugin:action', {
+    action: 'query',
+    params: { id: 123 }
+  } as MyRequest) as MyResponse
+---
+:::
 
 ---
 
 ## 类型定义
 
-```ts
-interface IPluginRendererChannel {
-  send(eventName: string, payload?: any): Promise<any>
-  sendSync(eventName: string, payload?: any): any
-  on(eventName: string, handler: PluginChannelHandler): () => void
-  once(eventName: string, handler: PluginChannelHandler): () => void
-  raw: ITouchClientChannel
-}
-
-type PluginChannelHandler = (event: any) => void
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface IPluginRendererChannel {
+    send(eventName: string, payload?: any): Promise<any>
+    sendSync(eventName: string, payload?: any): any
+    on(eventName: string, handler: PluginChannelHandler): () => void
+    once(eventName: string, handler: PluginChannelHandler): () => void
+    raw: ITouchClientChannel
+  }
+  
+  type PluginChannelHandler = (event: any) => void
+---
+:::

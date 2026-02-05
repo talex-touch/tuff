@@ -94,17 +94,20 @@ Show loading feedback during async actions.
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxButton variant="primary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton variant="secondary" :loading="loading" @click="handleClick">
-    {{ loading ? 'Loading' : 'Click to load' }}
-  </TxButton>
-  <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxButton variant="primary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton variant="secondary" :loading="loading" @click="handleClick">
+      {{ loading ? 'Loading' : 'Click to load' }}
+    </TxButton>
+    <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

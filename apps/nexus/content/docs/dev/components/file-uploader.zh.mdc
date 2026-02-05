@@ -23,17 +23,20 @@ const files = ref([])
 </ClientOnly>
 
 ::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const files = ref([])
-</script>
-
-<template>
-  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const files = ref([])
+  </script>
+  
+  <template>
+    <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
+  </template>
+---
+:::
 :::
 
 ## API

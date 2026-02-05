@@ -32,6 +32,10 @@ export interface TelemetryClientConfig {
   clientId: string
 }
 
+export interface AgentMarketStore {
+  installed: Record<string, string>
+}
+
 export interface MainStorageEntry<T> {
   key: StorageList
   defaultValue: T | (() => T)
@@ -152,6 +156,11 @@ export const mainStorageRegistry = {
   [StorageList.MARKET_SOURCES]: defineEntry<MarketSourcesPayload>({
     key: StorageList.MARKET_SOURCES,
     defaultValue: () => createDefaultMarketSourcesPayload(),
+    normalize: normalizeObject
+  }),
+  [StorageList.AGENT_MARKET]: defineEntry<AgentMarketStore>({
+    key: StorageList.AGENT_MARKET,
+    defaultValue: { installed: {} },
     normalize: normalizeObject
   }),
   [StorageList.THEME_STYLE]: defineEntry<ThemeStyleConfig>({

@@ -38,17 +38,20 @@ const open = ref(false)
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxPopover v-model="open">
-    <template #reference>
-      <TxButton>Click</TxButton>
-    </template>
-
-    Popover content
-  </TxPopover>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxPopover v-model="open">
+      <template #reference>
+        <TxButton>Click</TxButton>
+      </template>
+  
+      Popover content
+    </TxPopover>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

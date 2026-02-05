@@ -47,16 +47,19 @@ const enabled = ref(true)
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
-    <template #right>
-      <TxSwitch v-model="enabled" />
-      <i class="i-carbon-chevron-right" />
-    </template>
-  </TxCardItem>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
+      <template #right>
+        <TxSwitch v-model="enabled" />
+        <i class="i-carbon-chevron-right" />
+      </template>
+    </TxCardItem>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

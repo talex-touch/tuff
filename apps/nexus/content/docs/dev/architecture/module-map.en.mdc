@@ -15,18 +15,21 @@ This document maps runtime modules to concrete directories and files so you can 
 - EventBus: `apps/core-app/src/main/core/eventbus/touch-event.ts`
 - BaseModule: `apps/core-app/src/main/modules/abstract-base-module.ts`
 
-```mermaid
-flowchart TB
-  entry["apps/core-app/src/main/index.ts"]
-  gen["apps/core-app/src/main/core/index.ts"]
-  app["TouchApp"]
-  manager["ModuleManager"]
-  channel["ChannelCore"]
-  modules["Modules (BaseModule)"]
-
-  entry --> gen --> app --> manager --> modules
-  manager --> channel
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    entry["apps/core-app/src/main/index.ts"]
+    gen["apps/core-app/src/main/core/index.ts"]
+    app["TouchApp"]
+    manager["ModuleManager"]
+    channel["ChannelCore"]
+    modules["Modules (BaseModule)"]
+  
+    entry --> gen --> app --> manager --> modules
+    manager --> channel
+---
+:::
 
 ## 2. Module Load Order (Main)
 
@@ -49,13 +52,16 @@ flowchart TB
 14. FileProtocolModule → `apps/core-app/src/main/modules/file-protocol/index.ts`
 15. TerminalModule → `apps/core-app/src/main/modules/terminal/terminal.manager.ts`
 
-```mermaid
-flowchart TB
-  m1["Database"] --> m2["Storage"] --> m3["Shortcut"] --> m4["ExtensionLoader"] --> m5["CommonChannel"]
-  m5 --> m6["Plugin"] --> m7["PluginLog"] --> m8["CoreBox"] --> m9["TrayHolder"]
-  m9 --> m10["AddonOpener"] --> m11["Clipboard"] --> m12["TuffDashboard"]
-  m12 --> m13["FileSystemWatcher"] --> m14["FileProtocol"] --> m15["Terminal"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    m1["Database"] --> m2["Storage"] --> m3["Shortcut"] --> m4["ExtensionLoader"] --> m5["CommonChannel"]
+    m5 --> m6["Plugin"] --> m7["PluginLog"] --> m8["CoreBox"] --> m9["TrayHolder"]
+    m9 --> m10["AddonOpener"] --> m11["Clipboard"] --> m12["TuffDashboard"]
+    m12 --> m13["FileSystemWatcher"] --> m14["FileProtocol"] --> m15["Terminal"]
+---
+:::
 
 ## 3. CoreBox & SearchEngine
 
@@ -86,14 +92,17 @@ flowchart TB
 - App Provider → `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
 - FileSystemWatcher → `apps/core-app/src/main/modules/box-tool/file-system-watcher/file-system-watcher.ts`
 
-```mermaid
-flowchart LR
-  input["CoreBox Input"] --> parser["Query Parser (@file)"]
-  parser --> providers["Providers (Everything/File/App/Plugin/Intelligence)"]
-  providers --> score["Scoring + Sort"]
-  score --> merge["Merge & Rank"]
-  merge --> output["CoreBox Results UI"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    input["CoreBox Input"] --> parser["Query Parser (@file)"]
+    parser --> providers["Providers (Everything/File/App/Plugin/Intelligence)"]
+    providers --> score["Scoring + Sort"]
+    score --> merge["Merge & Rank"]
+    merge --> output["CoreBox Results UI"]
+---
+:::
 
 ## 4. Plugin System (Manifest/Prelude/Surface)
 
@@ -113,12 +122,15 @@ flowchart LR
 - Plugin types/helpers: `packages/utils/plugin/`
 - Examples: `plugins/touch-translation/`, `plugins/touch-music/`, `plugins/touch-image/`
 
-```mermaid
-flowchart TB
-  manifest["Manifest (manifest.json)"] --> prelude["Prelude (index.js)"]
-  prelude --> surface["Surface UI (attachUIView)"]
-  prelude --> ipc["Plugin Channel (isolated)"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart TB
+    manifest["Manifest (manifest.json)"] --> prelude["Prelude (index.js)"]
+    prelude --> surface["Surface UI (attachUIView)"]
+    prelude --> ipc["Plugin Channel (isolated)"]
+---
+:::
 
 ## 5. Channel / Transport
 

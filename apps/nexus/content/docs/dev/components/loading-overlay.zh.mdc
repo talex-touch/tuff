@@ -32,14 +32,17 @@ const loading = ref(false)
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxButton @click="loading = !loading">Toggle</TxButton>
-  <TxLoadingOverlay :loading="loading" text="Loading...">
-    <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
-  </TxLoadingOverlay>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="loading = !loading">Toggle</TxButton>
+    <TxLoadingOverlay :loading="loading" text="Loading...">
+      <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
+    </TxLoadingOverlay>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
@@ -52,12 +55,15 @@ const loading = ref(false)
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxButton @click="loading = !loading">Toggle</TxButton>
-  <TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="loading = !loading">Toggle</TxButton>
+    <TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 

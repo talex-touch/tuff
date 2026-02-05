@@ -69,13 +69,16 @@ import GlassSurfaceControlsDemoSource from '~/components/content/demos/GlassSurf
 </template>
 
 <template #code>
-```vue
-<template>
-  <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0">
-    <div style="padding: 16px; font-weight: 700;">GlassSurface</div>
-  </TxGlassSurface>
-</template>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxGlassSurface :width="360" :height="160" :border-radius="20" :background-opacity="0">
+      <div style="padding: 16px; font-weight: 700;">GlassSurface</div>
+    </TxGlassSurface>
+  </template>
+---
+:::
 </template>
 </DemoBlock>
 
