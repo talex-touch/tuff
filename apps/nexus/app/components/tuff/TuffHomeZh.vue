@@ -57,7 +57,6 @@ const waitlistPerks = [
 ]
 
 useHead({
-  htmlAttrs: { class: 'dark' },
   bodyAttrs: { class: 'bg-[#040406] text-light antialiased' },
 })
 </script>

@@ -146,9 +146,11 @@ export default defineNuxtConfig({
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
       ? {
-          cloudflareDev: {
-            environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
-          },
+        cloudflareDev: {
+          environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
+          configPath: resolve(workspaceRoot, 'wrangler.toml'),
+          persistDir: resolve(workspaceRoot, '.wrangler/state/v3'),
+        },
         }
       : {}),
     esbuild: {

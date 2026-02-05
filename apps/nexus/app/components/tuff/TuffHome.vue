@@ -18,7 +18,7 @@ import { useTuffHomeSections } from '~/composables/useTuffHomeSections'
 const showStarSnippets = false
 const showAggregation = false
 const showPricing = false
-const enableSmoothScroll = false
+const enableSmoothScroll = !false
 
 const {
   smoothScrollContainerRef,
@@ -40,7 +40,6 @@ const {
 })
 
 useHead({
-  htmlAttrs: { class: 'dark' },
   bodyAttrs: { class: 'text-light antialiased' },
 })
 </script>
