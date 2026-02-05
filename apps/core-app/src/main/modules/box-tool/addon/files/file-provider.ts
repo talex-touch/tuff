@@ -358,7 +358,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     this.WATCH_PATHS = [...new Set(paths.filter((p): p is string => !!p))]
     this.normalizedWatchPaths = this.WATCH_PATHS.map((p) => this.normalizePath(p))
-    this.logInfo('Watching paths', {
+    this.logDebug('Watching paths', {
       count: this.WATCH_PATHS.length
     })
 
@@ -561,7 +561,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.backgroundTaskService.start()
 
-    this.logInfo('Background task service initialized')
+    this.logDebug('Background task service initialized')
   }
 
   /**
@@ -873,7 +873,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       : path.join(app.getPath('userData'), 'database.db')
 
     // 🔍 DEBUG: 确认 onLoad 被调用
-    this.logInfo('[DEBUG] FileProvider.onLoad called', {
+    this.logDebug('[DEBUG] FileProvider.onLoad called', {
       watchPathsCount: this.WATCH_PATHS.length,
       watchPaths: JSON.stringify(this.WATCH_PATHS.slice(0, 3))
     })
@@ -885,12 +885,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.registerIndexingChannels(context)
 
     // 索引任务由后台调度执行（空闲+电量策略）
-    this.logInfo('onLoad: background index task registered, waiting for idle conditions')
+    this.logDebug('onLoad: background index task registered, waiting for idle conditions')
 
     // 只等待文件系统监听器设置完成，不等待索引完成
     await this.ensureFileSystemWatchers()
     const loadDuration = performance.now() - loadStart
-    this.logInfo('Provider onLoad completed (indexing continues in background)', {
+    this.logDebug('Provider onLoad completed (indexing continues in background)', {
       duration: formatDuration(loadDuration)
     })
   }
@@ -908,7 +908,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    this.logInfo('Registering watch paths', {
+    this.logDebug('Registering watch paths', {
       count: this.WATCH_PATHS.length,
       sample: this.WATCH_PATHS.slice(0, 3).join(', ')
     })
@@ -1992,7 +1992,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     touchEventBus.on(TalexEvents.FILE_UNLINKED, this.handleFsUnlinked)
 
     this.fsEventsSubscribed = true
-    this.logInfo('Subscribed to file system events for incremental updates.')
+    this.logDebug('Subscribed to file system events for incremental updates.')
   }
 
   private normalizePath(p: string): string {
@@ -2098,7 +2098,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.searchIndex?.removeItems(existing.map((file) => file.path))
     })
-    this.logInfo('Incremental remove completed', {
+    this.logDebug('Incremental remove completed', {
       removed: existing.length
     })
   }
@@ -2176,14 +2176,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       await this.processFileExtensions(inserted)
       this.scheduleIndexing(inserted, 'incremental-insert')
-      this.logInfo('Incremental index completed', {
+      this.logDebug('Incremental index completed', {
         inserted: inserted.length
       })
     }
 
     if (filesToUpdate.length > 0) {
       await this._processFileUpdates(filesToUpdate)
-      this.logInfo('Incremental update completed', {
+      this.logDebug('Incremental update completed', {
         updated: filesToUpdate.length
       })
     }
@@ -2291,14 +2291,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private async _initialize(): Promise<void> {
     const initStart = performance.now()
-    this.logInfo('Starting index process')
+    this.logDebug('Starting index process')
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
     const indexEnsuredStart = performance.now()
     await this.ensureKeywordIndexes(db)
     // file_index_progress 表由数据库迁移自动创建，无需手动创建
-    this.logInfo('Keyword indexes ensured', {
+    this.logDebug('Keyword indexes ensured', {
       duration: formatDuration(performance.now() - indexEnsuredStart)
     })
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
@@ -2329,7 +2329,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
     this.emitIndexingProgress('cleanup', 1, 1)
-    this.logInfo('Cleanup stage finished', {
+    this.logDebug('Cleanup stage finished', {
       duration: formatDuration(performance.now() - cleanupStart),
       removed: filesToDelete.length
     })
@@ -2343,7 +2343,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
 
     // 🔍 DEBUG: 详细输出扫描策略信息
-    this.logInfo('[DEBUG] File indexing scan strategy', {
+    this.logDebug('[DEBUG] File indexing scan strategy', {
       totalWatchPaths: this.WATCH_PATHS.length,
       watchPaths: JSON.stringify(this.WATCH_PATHS),
       completedScansCount: completedScans.length,
@@ -2366,7 +2366,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         paths: newPathsToScan.length
       })
       try {
-        this.logInfo('Starting full scan for new paths', {
+        this.logDebug('Starting full scan for new paths', {
           count: newPathsToScan.length,
           sample: newPathsToScan.slice(0, 3).join(', ')
         })
@@ -2462,7 +2462,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       const reconciliationStart = performance.now()
       try {
-        this.logInfo('Starting reconciliation scan', {
+        this.logDebug('Starting reconciliation scan', {
           count: reconciliationPaths.length,
           sample: reconciliationPaths.slice(0, 3).join(', ')
         })
@@ -2659,7 +2659,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             })
         )
 
-        this.logInfo('Reconciliation completed', {
+        this.logDebug('Reconciliation completed', {
           duration: formatDuration(performance.now() - reconciliationStart),
           added: filesToAdd.length,
           updated: filesToUpdate.length,

@@ -1,9 +1,9 @@
 import { readBody } from 'h3'
-import { requireAuth } from '../../utils/auth'
+import { requireVerifiedEmail } from '../../utils/auth'
 import { pushSyncItems } from '../../utils/syncStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId, deviceId } = await requireAuth(event)
+  const { userId, deviceId } = await requireVerifiedEmail(event)
   const body = await readBody(event)
   interface LegacySyncItem {
     namespace?: string

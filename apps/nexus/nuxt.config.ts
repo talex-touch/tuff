@@ -22,6 +22,7 @@ const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/uti
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
+const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
 export default defineNuxtConfig({
   modules: [
@@ -95,11 +96,16 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     auth: {
-      secret: process.env.AUTH_SECRET,
+      secret: authSecret,
       origin: process.env.AUTH_ORIGIN,
       github: {
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      },
+      linuxdo: {
+        clientId: process.env.LINUXDO_CLIENT_ID,
+        clientSecret: process.env.LINUXDO_CLIENT_SECRET,
+        issuer: process.env.LINUXDO_ISSUER,
       },
       email: {
         from: process.env.AUTH_EMAIL_FROM,

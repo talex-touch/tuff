@@ -35,6 +35,7 @@ import { yaml } from '@codemirror/lang-yaml'
 import { properties } from '@codemirror/legacy-modes/mode/properties'
 import { toml } from '@codemirror/legacy-modes/mode/toml'
 import { parse as parseYaml, parseDocument, stringify as stringifyYaml } from 'yaml'
+import { hasDocument, hasNavigator } from '@talex-touch/utils/env'
 
 defineOptions({
   name: 'TxCodeEditor',
@@ -245,7 +246,7 @@ const highlightPalettes: Record<ResolvedTheme, {
 }
 
 function resolveAutoTheme(): 'light' | 'dark' {
-  if (typeof document === 'undefined')
+  if (!hasDocument())
     return 'light'
 
   const root = document.documentElement
@@ -269,7 +270,7 @@ function syncAutoTheme(): void {
 }
 
 function setupThemeObserver(): void {
-  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined')
+  if (!hasDocument() || typeof MutationObserver === 'undefined')
     return
 
   const root = document.documentElement
@@ -526,7 +527,7 @@ async function copyToClipboard(): Promise<boolean> {
   if (!view)
     return false
   const value = view.state.doc.toString()
-  if (typeof navigator === 'undefined' || !navigator.clipboard)
+  if (!hasNavigator() || !navigator.clipboard)
     return false
   try {
     await navigator.clipboard.writeText(value)

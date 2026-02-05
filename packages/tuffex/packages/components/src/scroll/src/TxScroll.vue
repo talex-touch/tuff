@@ -3,6 +3,7 @@ import type { TxScrollInfo } from './types'
 import PullDown from '@better-scroll/pull-down'
 import PullUp from '@better-scroll/pull-up'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { hasNavigator } from '@talex-touch/utils/env'
 
 type BetterScroll = any
 
@@ -217,7 +218,7 @@ async function initBetterScroll() {
   const shouldDisableTransitionByDefault = !hasUseTransitionOverride
     && props.wheel
     && props.bounce
-    && typeof navigator !== 'undefined'
+    && hasNavigator()
     && (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
 
   bs = new BScroll(wrapperRef.value, {

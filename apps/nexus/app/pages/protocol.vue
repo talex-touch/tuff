@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import protocolContent from '~~/content/app/protocol.md?raw'
+
 definePageMeta({
   layout: 'license',
 })
@@ -16,44 +18,7 @@ useHead({
 <template>
   <div class="protocol-surface px-8 py-10 space-y-10">
     <div class="prose prose-neutral dark:prose-invert max-w-none">
-      <h1>{{ t('protocol.title') }}</h1>
-
-      <p class="text-lg text-gray-600 dark:text-gray-300">
-        {{ t('protocol.lastUpdated') }}: {{ new Date().toLocaleDateString() }}
-      </p>
-
-      <h2>{{ t('protocol.section1.title') }}</h2>
-      <p>{{ t('protocol.section1.content') }}</p>
-
-      <h2>{{ t('protocol.section2.title') }}</h2>
-      <p>{{ t('protocol.section2.content') }}</p>
-
-      <h2>{{ t('protocol.section3.title') }}</h2>
-      <p>{{ t('protocol.section3.content') }}</p>
-
-      <h2>{{ t('protocol.section4.title') }}</h2>
-      <p>{{ t('protocol.section4.content') }}</p>
-
-      <h2>{{ t('protocol.section5.title') }}</h2>
-      <p>{{ t('protocol.section5.content') }}</p>
-
-      <h2>{{ t('protocol.section6.title') }}</h2>
-      <p>{{ t('protocol.section6.content') }}</p>
-
-      <h2>{{ t('protocol.section7.title') }}</h2>
-      <p>{{ t('protocol.section7.content') }}</p>
-
-      <h2>{{ t('protocol.section8.title') }}</h2>
-      <p>{{ t('protocol.section8.content') }}</p>
-
-      <h2>{{ t('protocol.section9.title') }}</h2>
-      <p>{{ t('protocol.section9.content') }}</p>
-
-      <h2>{{ t('protocol.section10.title') }}</h2>
-      <p>{{ t('protocol.section10.content') }}</p>
-
-      <h2>{{ t('protocol.contact.title') }}</h2>
-      <p>{{ t('protocol.contact.content') }}</p>
+      <ContentRendererMarkdown :value="protocolContent" />
     </div>
   </div>
 </template>

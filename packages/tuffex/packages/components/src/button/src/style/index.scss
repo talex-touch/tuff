@@ -1,4 +1,5 @@
 .tx-button {
+  position: relative;
   &:hover {
     background-color: var(--tx-button-bg-color-hover);
   }
@@ -15,6 +16,7 @@
   min-width: 80px;
   height: 32px;
 
+  user-select: none;
   color: var(--tx-text-color);
   border-radius: 12px;
   background-color: transparent;
@@ -41,8 +43,21 @@
     width: 32px;
   }
 
+  &.circle.block {
+    width: 100%;
+    border-radius: 50%;
+    --fake-radius: 50%;
+    padding: 0 0.5rem;
+    min-width: 80px;
+  }
+
   &.dashed {
     border-style: dashed;
+  }
+
+  &.borderless {
+    border-color: transparent;
+    --tx-button-border-color: transparent;
   }
 
   &.disabled {
@@ -219,6 +234,41 @@
     translate: -50% -50%;
   }
 
+  .tx-button__loading-layer {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--fake-radius, 12px);
+    overflow: hidden;
+    z-index: 0;
+    pointer-events: none;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        120deg,
+        transparent 40%,
+        color-mix(in srgb, currentColor 18%, transparent) 50%,
+        transparent 60%
+      );
+      background-size: 200% 100%;
+      animation: tx-button-loading-sweep 1.33s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+  }
+
+  &.loading-bar {
+    .tx-button__spinner,
+    .tx-button__spinner-slot {
+      display: none;
+    }
+
+    .tx-button__inner {
+      position: relative;
+      z-index: 1;
+    }
+  }
+
   &:not(.loading) {
     .tx-button__spinner {
       opacity: 0;
@@ -268,6 +318,24 @@
     padding: 0 1.25rem;
     height: 42px;
     font-size: 15px;
+  }
+}
+
+@keyframes tx-button-loading-sweep {
+  0% {
+    background-position: 100% 0;
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.55;
+  }
+  60% {
+    background-position: -100% 0;
+    opacity: 0.55;
+  }
+  100% {
+    background-position: -100% 0;
+    opacity: 0;
   }
 }
 

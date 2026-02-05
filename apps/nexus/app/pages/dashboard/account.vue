@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
@@ -25,8 +26,16 @@ const passkeyMessage = ref('')
 const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
 
-const emailLabel = computed(() => user.value?.email || '')
-const isEmailVerified = computed(() => Boolean(user.value?.emailVerified))
+const emailState = computed(() => user.value?.emailState ?? 'unverified')
+const emailLabel = computed(() => {
+  if (!user.value)
+    return ''
+  if (emailState.value === 'missing')
+    return t('auth.accountNoEmail', '未绑定邮箱')
+  return user.value.email || ''
+})
+const isEmailVerified = computed(() => emailState.value === 'verified')
+const isRestricted = computed(() => user.value?.isRestricted ?? emailState.value !== 'verified')
 
 watch(
   () => user.value,
@@ -37,7 +46,7 @@ watch(
 )
 
 onMounted(() => {
-  supportsPasskey.value = typeof window !== 'undefined' && Boolean(window.PublicKeyCredential)
+  supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
 })
 
 async function saveProfile() {
@@ -79,6 +88,10 @@ async function handleGithubLink() {
 }
 
 async function handleMagicLink() {
+  if (emailState.value === 'missing') {
+    magicLinkMessage.value = t('auth.accountNoEmail', '未绑定邮箱')
+    return
+  }
   if (!user.value?.email)
     return
   sendingMagic.value = true
@@ -177,6 +190,12 @@ function formatHistoryTime(value: string) {
             {{ isEmailVerified ? t('auth.verified', '已验证') : t('auth.unverified', '未验证') }}
           </span>
         </div>
+        <p
+          v-if="isRestricted"
+          class="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
+        >
+          {{ t('auth.restrictedAccount', '邮箱未验证，充值与同步功能暂不可用。') }}
+        </p>
         <label class="text-xs text-black/60 dark:text-light/60">
           {{ t('dashboard.account.displayName', '显示名称') }}
         </label>
@@ -200,7 +219,7 @@ function formatHistoryTime(value: string) {
         <Button variant="secondary" :loading="linkingGithub" @click="handleGithubLink">
           {{ t('auth.githubLogin', '绑定 GitHub') }}
         </Button>
-        <Button variant="secondary" :loading="sendingMagic" @click="handleMagicLink">
+        <Button variant="secondary" :loading="sendingMagic" :disabled="emailState === 'missing'" @click="handleMagicLink">
           {{ t('auth.magicLink', '发送 Magic Link') }}
         </Button>
         <Button
