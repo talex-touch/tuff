@@ -20,6 +20,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "typecheck": "nuxt typecheck",
+    "test": "vitest run",
     "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts"
   },
   "dependencies": {
