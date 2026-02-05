@@ -145,6 +145,10 @@ onBeforeUnmount(() => {
         v-if="props.showDarkToggle && props.githubUrl"
         class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
       />
+      <div
+        v-if="props.githubUrl && !props.showDarkToggle && !props.showLanguageToggle"
+        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
+      />
       <a
         v-if="props.githubUrl"
         :href="props.githubUrl"

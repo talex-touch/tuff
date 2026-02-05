@@ -1,4 +1,5 @@
-export type AvatarSize = 'small' | 'medium' | 'large' | 'xlarge'
+export type AvatarPresetSize = 'small' | 'medium' | 'large' | 'xlarge'
+export type AvatarSize = AvatarPresetSize | number | `${number}` | `${number}px`
 
 export type AvatarStatus = 'online' | 'offline' | 'busy' | 'away'
 

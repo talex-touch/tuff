@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import TuffLandingAggregation from './landing/TuffLandingAggregation.vue'
 import TuffLandingAiOverview from './landing/TuffLandingAiOverview.vue'
 import TuffLandingBuiltForYou from './landing/TuffLandingBuiltForYou.vue'
@@ -37,6 +38,25 @@ const {
   waitlistSectionRef,
 } = useTuffHomeSections({
   enableSmoothScroll,
+})
+
+const colorMode = useColorMode()
+let previousPreference = colorMode.preference
+const stopDarkLock = watch(() => colorMode.preference, (value) => {
+  if (value !== 'dark')
+    colorMode.preference = 'dark'
+})
+
+onMounted(() => {
+  previousPreference = colorMode.preference
+  if (colorMode.preference !== 'dark')
+    colorMode.preference = 'dark'
+})
+
+onBeforeUnmount(() => {
+  stopDarkLock()
+  if (colorMode.preference !== previousPreference)
+    colorMode.preference = previousPreference
 })
 
 useHead({
