@@ -249,11 +249,11 @@ function createLayeredSearchController(
         signal,
         deferredLayerConcurrency,
         taskTimeoutMs,
-        (result, stat) => {
+        sourceStats,
+        (result) => {
           if (isAborted) return
 
           allResults.push(result)
-          sourceStats.push(stat)
 
           onUpdate({
             newResults: [result],
@@ -394,7 +394,8 @@ async function runDeferredLayer(
   signal: AbortSignal,
   concurrency: number,
   taskTimeoutMs: number,
-  onResult: (result: TuffSearchResult, stat: ExtendedSourceStat) => void
+  sourceStats: ExtendedSourceStat[],
+  onResult: (result: TuffSearchResult) => void
 ): Promise<void> {
   const queue = [...providers]
 
@@ -407,24 +408,15 @@ async function runDeferredLayer(
       let status: ExtendedSourceStat['status'] = 'success'
       let resultCount = 0
 
+      let result: TuffSearchResult | null = null
+
       try {
         searchLogger.providerCall(provider.id)
         const searchPromise = provider.onSearch(params, signal)
-        const result = await withTimeout(searchPromise, taskTimeoutMs)
+        result = await withTimeout(searchPromise, taskTimeoutMs)
 
         resultCount = result.items.length
         searchLogger.providerResult(provider.id, resultCount)
-
-        const stat: ExtendedSourceStat = {
-          providerId: provider.id,
-          providerName: provider.name || provider.id,
-          duration: performance.now() - startTime,
-          resultCount,
-          status: 'success',
-          layer: 'deferred'
-        }
-
-        onResult(result, stat)
       } catch (error) {
         if (signal.aborted) {
           status = 'aborted'
@@ -442,7 +434,19 @@ async function runDeferredLayer(
       } finally {
         const duration = performance.now() - startTime
         if (!signal.aborted) {
+          const stat: ExtendedSourceStat = {
+            providerId: provider.id,
+            providerName: provider.name || provider.id,
+            duration,
+            resultCount,
+            status,
+            layer: 'deferred'
+          }
+          sourceStats.push(stat)
           logProviderCompletion(provider, duration, resultCount, status, 'deferred')
+          if (status === 'success' && result) {
+            onResult(result)
+          }
         }
       }
     }

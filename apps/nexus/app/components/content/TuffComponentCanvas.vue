@@ -31,6 +31,8 @@ withDefaults(defineProps<{
   border-radius: 26px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.92);
+  --canvas-grid: rgba(15, 15, 15, 0.08);
+  --canvas-glow: rgba(15, 15, 15, 0.08);
   overflow: hidden;
 }
 
@@ -39,8 +41,8 @@ withDefaults(defineProps<{
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(90deg, rgba(59, 130, 246, 0.08) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(59, 130, 246, 0.08) 1px, transparent 1px);
+    linear-gradient(90deg, var(--canvas-grid) 1px, transparent 1px),
+    linear-gradient(180deg, var(--canvas-grid) 1px, transparent 1px);
   background-size: 32px 32px;
   opacity: 0.7;
   pointer-events: none;
@@ -50,7 +52,7 @@ withDefaults(defineProps<{
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, rgba(59, 130, 246, 0.08), transparent 60%);
+  background: radial-gradient(circle at center, var(--canvas-glow), transparent 60%);
   opacity: 0.6;
   pointer-events: none;
 }
@@ -85,17 +87,19 @@ withDefaults(defineProps<{
 
 :global(.dark .tuff-component-canvas),
 :global([data-theme='dark'] .tuff-component-canvas) {
-  background: rgba(15, 23, 42, 0.78);
-  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(16, 16, 16, 0.82);
+  border-color: rgba(160, 160, 160, 0.25);
+  --canvas-grid: rgba(255, 255, 255, 0.06);
+  --canvas-glow: rgba(255, 255, 255, 0.06);
 }
 
 :global(.dark .tuff-component-canvas__label),
 :global([data-theme='dark'] .tuff-component-canvas__label) {
-  color: rgba(226, 232, 240, 0.75);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 :global(.dark .tuff-component-canvas__subtitle),
 :global([data-theme='dark'] .tuff-component-canvas__subtitle) {
-  color: rgba(148, 163, 184, 0.75);
+  color: rgba(200, 200, 200, 0.75);
 }
 </style>

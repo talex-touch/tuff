@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
@@ -60,6 +61,8 @@ const formData = ref<PluginFormData>({
 })
 
 const packageFile = ref<File | null>(null)
+const packageFiles = ref<FileUploaderFile[]>([])
+const iconFiles = ref<FileUploaderFile[]>([])
 const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
@@ -87,6 +90,8 @@ watch(() => props.isOpen, (isOpen) => {
       initialChangelog: null,
     }
     packageFile.value = null
+    packageFiles.value = []
+    iconFiles.value = []
     packageLoading.value = false
     packageError.value = null
     manifestPreview.value = null
@@ -181,14 +186,15 @@ function applyManifestToForm(manifest: TpexExtractedManifest | null, readme: str
     formData.value.initialChangelog = manifest.changelog
 }
 
-async function handlePackageInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
+async function handlePackageInput(files: FileUploaderFile[]) {
+  const file = files[0]?.file ?? null
   packageFile.value = file
   formData.value.packageFile = file
   packageError.value = null
   manifestPreview.value = null
   readmePreview.value = ''
+  iconPreviewUrl.value = null
+  packageHasIcon.value = false
 
   // Reset version info when file changes
   formData.value.initialVersion = null
@@ -215,9 +221,8 @@ async function handlePackageInput(event: Event) {
   }
 }
 
-function handleIconInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
+function handleIconInput(files: FileUploaderFile[]) {
+  const file = files[0]?.file ?? null
   formData.value.iconFile = file
 }
 
@@ -301,28 +306,15 @@ function onSubmit() {
               <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.plugins.form.packageUpload') }}
               </label>
-              <div class="relative">
-                <input
-                  type="file"
-                  accept=".tpex"
-                  class="absolute inset-0 cursor-pointer opacity-0"
-                  @change="handlePackageInput"
-                >
-                <div class="flex items-center gap-3 rounded-lg border-2 border-dashed border-black/10 p-4 transition hover:border-black/20 dark:border-white/10 dark:hover:border-white/20">
-                  <div class="flex size-10 items-center justify-center rounded-full bg-black/5 dark:bg-white/5">
-                    <span v-if="packageLoading" class="i-carbon-circle-dash animate-spin text-black/40 dark:text-white/40" />
-                    <span v-else class="i-carbon-document-add text-black/40 dark:text-white/40" />
-                  </div>
-                  <div class="flex-1">
-                    <p class="text-sm font-medium text-black dark:text-white">
-                      {{ packageFile ? packageFile.name : t('dashboard.sections.plugins.packageAwaiting') }}
-                    </p>
-                    <p class="text-xs text-black/50 dark:text-white/50">
-                      {{ t('dashboard.sections.plugins.form.packageHelp') }}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <TxFileUploader
+                v-model="packageFiles"
+                :multiple="false"
+                :max="1"
+                :disabled="packageLoading || props.loading"
+                accept=".tpex"
+                :show-size="false"
+                @change="handlePackageInput"
+              />
               <p v-if="packageError" class="text-xs text-red-500">
                 {{ packageError }}
               </p>
@@ -378,22 +370,15 @@ function onSubmit() {
               <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.plugins.form.category') }}
               </label>
-              <div class="relative">
-                <select
-                  v-model="formData.category"
-                  required
-                  class="w-full appearance-none border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
+              <TxSelect v-model="formData.category" class="w-full">
+                <TxSelectItem
+                  v-for="category in pluginCategoryOptions"
+                  :key="category.id"
+                  :value="category.id"
                 >
-                  <option
-                    v-for="category in pluginCategoryOptions"
-                    :key="category.id"
-                    :value="category.id"
-                  >
-                    {{ category.label }}
-                  </option>
-                </select>
-                <span class="i-carbon-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40" />
-              </div>
+                  {{ category.label }}
+                </TxSelectItem>
+              </TxSelect>
             </div>
           </div>
 
@@ -428,14 +413,17 @@ function onSubmit() {
                   {{ formData.name ? formData.name.charAt(0).toUpperCase() : '?' }}
                 </span>
               </div>
-              <div class="relative flex-1">
-                <input
-                  type="file"
+              <div class="flex flex-1 flex-col gap-2">
+                <TxFileUploader
+                  v-model="iconFiles"
+                  :multiple="false"
+                  :max="1"
+                  :disabled="props.loading"
                   accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                  class="absolute inset-0 cursor-pointer opacity-0"
+                  :show-size="false"
                   @change="handleIconInput"
-                >
-                <div class="rounded border border-black/10 px-3 py-2 text-xs text-black/60 dark:border-white/10 dark:text-white/60">
+                />
+                <p class="text-[11px] text-black/50 dark:text-white/50">
                   <template v-if="formData.iconFile">
                     {{ formData.iconFile.name }}
                   </template>
@@ -445,7 +433,7 @@ function onSubmit() {
                   <template v-else>
                     {{ t('dashboard.sections.plugins.form.iconHelp') }}
                   </template>
-                </div>
+                </p>
               </div>
             </div>
           </div>

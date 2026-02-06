@@ -144,10 +144,6 @@ function resolveStarClass(value: number, rating: number) {
     : 'i-carbon-star text-black/30 dark:text-light/30'
 }
 
-function setReviewRating(value: number) {
-  reviewForm.rating = value
-}
-
 async function loadPluginCommunity(slug: string) {
   reviewsPending.value = true
   reviewsError.value = null
@@ -428,17 +424,7 @@ useSeoMeta({
                   <span class="text-xs text-black/60 dark:text-light/60">
                     {{ t('market.detail.reviews.ratingLabel') }}
                   </span>
-                  <div class="flex items-center gap-1">
-                    <button
-                      v-for="value in 5"
-                      :key="`rate-${value}`"
-                      type="button"
-                      class="transition"
-                      @click="setReviewRating(value)"
-                    >
-                      <span :class="resolveStarClass(value, reviewForm.rating)" class="text-base" />
-                    </button>
-                  </div>
+                <TxRating v-model="reviewForm.rating" :max-stars="5" :precision="1" />
                   <span class="text-xs text-black/50 dark:text-light/60">
                     {{ reviewForm.rating || '-' }}
                   </span>

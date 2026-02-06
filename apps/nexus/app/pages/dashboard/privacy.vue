@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import Button from '~/components/ui/Button.vue'
+import Switch from '~/components/ui/Switch.vue'
 
 defineI18nRoute(false)
 
@@ -13,6 +15,7 @@ const privacySettings = ref({
   usageData: false,
   personalization: true,
 })
+type PrivacySettingKey = keyof typeof privacySettings.value
 
 async function saveSettings() {
   loading.value = true
@@ -52,6 +55,17 @@ async function loadSettings() {
   }
 }
 
+function updateSetting(key: PrivacySettingKey, value: boolean) {
+  if (loading.value)
+    return
+  privacySettings.value[key] = value
+  saveSettings()
+}
+
+function toggleSetting(key: PrivacySettingKey) {
+  updateSetting(key, !privacySettings.value[key])
+}
+
 onMounted(() => {
   loadSettings()
 })
@@ -79,7 +93,10 @@ onMounted(() => {
 
       <div class="mt-6 space-y-4">
         <!-- Analytics -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <div
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('analytics')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-chart-bar text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -91,16 +108,19 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.analytics"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
-        </label>
+          <Switch
+            :model-value="privacySettings.analytics"
+            :disabled="loading"
+            @change="(value) => updateSetting('analytics', value)"
+            @click.stop
+          />
+        </div>
 
         <!-- Crash Reports -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <div
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('crashReports')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-warning text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -112,16 +132,19 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.crashReports"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
-        </label>
+          <Switch
+            :model-value="privacySettings.crashReports"
+            :disabled="loading"
+            @change="(value) => updateSetting('crashReports', value)"
+            @click.stop
+          />
+        </div>
 
         <!-- Usage Data -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <div
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('usageData')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-data-vis-1 text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -133,16 +156,19 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.usageData"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
-        </label>
+          <Switch
+            :model-value="privacySettings.usageData"
+            :disabled="loading"
+            @change="(value) => updateSetting('usageData', value)"
+            @click.stop
+          />
+        </div>
 
         <!-- Personalization -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <div
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('personalization')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-user-favorite text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -154,13 +180,13 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.personalization"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
-        </label>
+          <Switch
+            :model-value="privacySettings.personalization"
+            :disabled="loading"
+            @change="(value) => updateSetting('personalization', value)"
+            @click.stop
+          />
+        </div>
       </div>
     </section>
 
@@ -171,25 +197,31 @@ onMounted(() => {
       </h2>
 
       <div class="mt-4 space-y-3">
-        <button
-          class="w-full flex items-center justify-between border border-primary/15 rounded-2xl bg-dark/5 px-4 py-3 text-left text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/30 dark:bg-light/10 hover:bg-light/5 dark:text-light"
+        <Button
+          variant="secondary"
+          size="small"
+          block
+          class="justify-between"
         >
-          <div class="flex items-center gap-3">
+          <span class="flex items-center gap-3">
             <span class="i-carbon-download text-lg" />
             {{ t('dashboard.privacy.exportData', '导出我的数据') }}
-          </div>
+          </span>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </Button>
 
-        <button
-          class="w-full flex items-center justify-between border border-red-500/20 rounded-2xl bg-red-500/5 px-4 py-3 text-left text-sm text-red-600 font-medium transition hover:border-red-500/40 hover:bg-red-500/10 dark:text-red-400"
+        <Button
+          variant="danger"
+          size="small"
+          block
+          class="justify-between"
         >
-          <div class="flex items-center gap-3">
+          <span class="flex items-center gap-3">
             <span class="i-carbon-trash-can text-lg" />
             {{ t('dashboard.privacy.deleteData', '删除我的数据') }}
-          </div>
+          </span>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </Button>
       </div>
     </section>
 
