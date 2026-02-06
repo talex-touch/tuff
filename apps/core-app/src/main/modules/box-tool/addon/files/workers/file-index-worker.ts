@@ -295,6 +295,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       content = trimmedContent
       const embeddingStatus =
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+      const contentHash = buildContentHash(rawContent)
 
       const contentHash = buildContentHash(rawContent)
 
@@ -313,8 +314,7 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
         fileUpdate: {
           content: trimmedContent,
           embeddingStatus,
-          embeddings:
-            result.embeddings && result.embeddings.length > 0 ? result.embeddings : undefined,
+          embeddings: result.embeddings?.length ? result.embeddings : undefined,
           contentHash
         },
         indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content)
