@@ -22,9 +22,8 @@ const progressValue = computed(() => {
 </script>
 
 <template>
-  <TxButton
-    variant="bare"
-    native-type="button"
+  <button
+    type="button"
     class="tuff-showcase-displayer__timeline-button"
     :class="{ 'is-active': active }"
     :style="{ '--showcase-progress': `${progressValue * 100}%` }"
@@ -35,7 +34,7 @@ const progressValue = computed(() => {
       {{ label }}
     </span>
     <div class="tuff-showcase-displayer__timeline-button-indicator" />
-  </TxButton>
+  </button>
 </template>
 
 <style scoped>

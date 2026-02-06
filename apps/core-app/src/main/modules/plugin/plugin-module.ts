@@ -1063,6 +1063,8 @@ function createPluginModuleInternal(
     }
   }
 
+  let readyFired = false
+
   const __init__ = (): void => {
     void (async () => {
       const exists = await fse.pathExists(pluginPath)
@@ -1228,6 +1230,11 @@ function createPluginModuleInternal(
           await unloadPlugin(pluginName)
         },
         onReady: async () => {
+          if (readyFired) {
+            logDebug('File watcher ready event already processed, skipping duplicate')
+            return
+          }
+          readyFired = true
           logModuleInfo('File watcher ready for changes.', pluginPath)
           logDebug(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
           await Promise.allSettled(initialLoadPromises)
