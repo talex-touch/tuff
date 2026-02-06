@@ -18,15 +18,8 @@ const items = [
 
 ## 基础用法
 
-<DemoBlock title="ImageGallery">
-<template #preview>
-<div style="width: 560px;">
-  <TxImageGallery :items="items" />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### ImageGallery
+:::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -34,5 +27,3 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>

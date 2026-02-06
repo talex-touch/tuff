@@ -159,7 +159,9 @@ code: |
 
 Overlay a status indicator on the bottom-right corner of an icon.
 
-::TuffDemo{title="TxStatusIcon" description="Status overlays for different states." code-lang="vue"}
+### TxStatusIcon
+Status overlays for different states.
+:::TuffDemoWrapper{demo="IconTxStatusIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -170,16 +172,7 @@ code: |
     <TxStatusIcon name="i-ri-translate-2" :size="22" tone="loading" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="success" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="warning" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="error" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="info" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="loading" />
-</div>
-::
-
+:::
 ## Types & Sources
 - `class`: icon class name (recommended).
 - `emoji`: lightweight emphasis.

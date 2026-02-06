@@ -10,7 +10,9 @@ syncStatus: migrated
 用于展示流程进度。
 
 ## 基础用法
-::TuffDemo{title="步骤条" description="展示当前进度。" code-lang="vue"}
+### 步骤条
+展示当前进度。
+:::TuffDemoWrapper{demo="StepsStepsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -21,14 +23,7 @@ code: |
     </TxSteps>
   </template>
 ---
-#preview
-<tx-steps :active="1">
-  <tx-step title="开始" description="收集基础信息" :step="0" />
-  <tx-step title="填写" description="补充详细内容" :step="1" />
-  <tx-step title="完成" description="确认提交" :step="2" />
-</tx-steps>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

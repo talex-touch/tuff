@@ -26,7 +26,9 @@ code: |
 ::
 
 ## Demo
-::TuffDemo{title="Toggle State" description="Movement and color change together." code-lang="vue"}
+### Toggle State
+Movement and color change together.
+:::TuffDemoWrapper{demo="SwitchToggleStateDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -34,13 +36,7 @@ code: |
     <TuffSwitch :model-value="true" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-switch :model-value="false" />
-  <tuff-switch :model-value="true" />
-</div>
-::
-
+:::
 ## States
 ::TuffPropsTable
 ---
@@ -79,7 +75,9 @@ rows:
 - Use smaller size for dense lists, larger for settings.
 
 ## Composite Patterns
-::TuffDemo{title="Settings Row" description="Switch paired with labels." code-lang="vue"}
+### Settings Row
+Switch paired with labels.
+:::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -87,9 +85,4 @@ code: |
     <TuffSwitch :model-value="true" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag>Notifications</tx-tag>
-  <tuff-switch :model-value="true" />
-</div>
-::
+:::

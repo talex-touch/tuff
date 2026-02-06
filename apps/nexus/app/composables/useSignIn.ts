@@ -1,11 +1,11 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toast } from 'vue-sonner'
-import { useAuthState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
-type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'success'
+type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
+export type OauthProvider = 'github' | 'linuxdo'
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
@@ -35,6 +35,10 @@ export function useSignIn() {
   const emailCheckLoading = ref(false)
   const bindLoading = ref(false)
   const oauthLoading = ref(false)
+  const oauthProvider = ref<OauthProvider | null>(null)
+  const oauthPhase = ref<'idle' | 'redirect' | 'verifying' | 'error'>('idle')
+  const oauthError = ref('')
+  const oauthHandled = ref(false)
   const magicSent = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
@@ -91,6 +95,28 @@ export function useSignIn() {
     passkeyPhase.value = 'idle'
     passkeyError.value = ''
     passkeyLoading.value = false
+  }
+
+  function resetOauthState() {
+    oauthPhase.value = 'idle'
+    oauthError.value = ''
+    oauthProvider.value = null
+  }
+
+  function syncOauthProvider() {
+    if (oauthProvider.value)
+      return
+    if (lastLoginMethod.value === 'github' || lastLoginMethod.value === 'linuxdo')
+      oauthProvider.value = lastLoginMethod.value
+  }
+
+  async function clearOauthQuery() {
+    if (!route.query.oauth && !route.query.provider)
+      return
+    const nextQuery = { ...route.query } as Record<string, string | string[]>
+    delete nextQuery.oauth
+    delete nextQuery.provider
+    await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
   }
 
   const redirectTarget = computed(() => {

@@ -26,7 +26,9 @@ code: |
 ::
 
 ## Demo
-::TuffDemo{title="Toggle State" description="移动与颜色同步变化。" code-lang="vue"}
+### Toggle State
+移动与颜色同步变化。
+:::TuffDemoWrapper{demo="SwitchToggleStateDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -34,13 +36,7 @@ code: |
     <TuffSwitch :model-value="true" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-switch :model-value="false" />
-  <tuff-switch :model-value="true" />
-</div>
-::
-
+:::
 ## 状态
 ::TuffPropsTable
 ---
@@ -79,7 +75,9 @@ rows:
 - 小尺寸用于列表，大尺寸用于设置页。
 
 ## 组合示例
-::TuffDemo{title="设置项" description="开关搭配标签用于设置列表。" code-lang="vue"}
+### 设置项
+开关搭配标签用于设置列表。
+:::TuffDemoWrapper{demo="SwitchSettingsRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -87,9 +85,4 @@ code: |
     <TuffSwitch :model-value="true" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag>通知</tx-tag>
-  <tuff-switch :model-value="true" />
-</div>
-::
+:::

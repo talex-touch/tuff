@@ -94,7 +94,7 @@ onUnmounted(() => {
 }
 
 .back-to-top:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.4);
+  outline: 2px solid rgba(15, 23, 42, 0.35);
   outline-offset: 2px;
 }
 

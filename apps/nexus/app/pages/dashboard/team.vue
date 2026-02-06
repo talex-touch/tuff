@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import Button from '~/components/ui/Button.vue'
 
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const { user } = useAuthUser()
 const { data: summary, pending, refresh } = useFetch<any>('/api/credits/summary')
+const { data: access, pending: accessPending } = useFetch<{ allowed: boolean }>('/api/dashboard/team/access')
 const handleRefresh = () => refresh()
 
 const teamName = computed(() => t('dashboard.team.personal', '个人团队'))
 const teamQuota = computed(() => summary.value?.team?.quota ?? 0)
 const teamUsed = computed(() => summary.value?.team?.used ?? 0)
+const hasTeamAccess = computed(() => Boolean(access.value?.allowed))
+
+const waitlistEmail = ref('')
+watchEffect(() => {
+  if (!waitlistEmail.value && user.value?.email) {
+    waitlistEmail.value = user.value.email
+  }
+})
 </script>
 
 <template>
@@ -24,7 +34,65 @@ const teamUsed = computed(() => summary.value?.team?.used ?? 0)
       </p>
     </header>
 
-    <section class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60">
+    <section
+      v-if="accessPending"
+      class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60"
+    >
+      <div class="flex items-center gap-2 text-sm text-black/60 dark:text-light/70">
+        <span class="i-carbon-circle-dash animate-spin text-primary" />
+        {{ t('dashboard.team.pending', '正在加载团队信息…') }}
+      </div>
+    </section>
+
+    <section
+      v-else-if="!hasTeamAccess"
+      class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60"
+    >
+      <div class="flex flex-col gap-5">
+        <div class="space-y-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-black/40 dark:text-light/50">
+            {{ t('dashboard.team.previewStatus', '私人预览') }}
+          </p>
+          <h2 class="text-lg font-semibold text-black dark:text-light">
+            {{ t('dashboard.team.notInvitedTitle', '你不是受邀请的用户') }}
+          </h2>
+          <p class="text-sm text-black/60 dark:text-light/70">
+            {{ t('dashboard.team.notInvitedDesc', '团队功能目前仅对受邀用户开放，留下邮箱加入候补，我们会在开放时通知你。') }}
+          </p>
+        </div>
+
+        <form
+          class="flex flex-col gap-3 sm:flex-row sm:items-center"
+          action="/waitlist"
+          method="post"
+        >
+          <input
+            v-model="waitlistEmail"
+            type="email"
+            name="email"
+            autocomplete="email"
+            required
+            placeholder="you@studio.com"
+            class="w-full rounded-full border border-primary/15 bg-white/90 px-4 py-2.5 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
+          >
+          <Button size="small" variant="secondary" native-type="submit">
+            {{ t('dashboard.team.waitlistCta', '加入团队候补') }}
+          </Button>
+        </form>
+
+        <NuxtLink
+          to="/team/join"
+          class="text-xs text-black/50 transition hover:text-black dark:text-light/60 dark:hover:text-light"
+        >
+          {{ t('dashboard.team.waitlistHint', '已有邀请码？去加入团队') }}
+        </NuxtLink>
+      </div>
+    </section>
+
+    <section
+      v-else
+      class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60"
+    >
       <div class="flex items-center justify-between">
         <div>
           <p class="text-xs text-black/50 dark:text-light/60">

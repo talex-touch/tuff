@@ -10,7 +10,9 @@ syncStatus: migrated
 用于展示页面层级路径。
 
 ## 基础用法
-::TuffDemo{title="路径导航" description="展示当前位置层级。" code-lang="vue"}
+### 路径导航
+展示当前位置层级。
+:::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -23,16 +25,7 @@ code: |
     />
   </template>
 ---
-#preview
-<tx-breadcrumb
-  :items="[
-    { label: '首页', href: '/' },
-    { label: '资料库', href: '/library' },
-    { label: '数据' },
-  ]"
-/>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

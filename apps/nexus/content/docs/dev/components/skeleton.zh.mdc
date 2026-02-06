@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Skeleton" description="文本与头像混合占位" code-lang="vue"}
+### Skeleton
+文本与头像混合占位
+:::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -23,13 +25,7 @@ code: |
     <TxSkeleton variant="circle" :width="40" :height="40" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-skeleton :loading="true" :lines="3" />
-  <tx-skeleton variant="circle" :width="40" :height="40" />
-</div>
-::
-
+:::
 ## API（简版）
 ::TuffPropsTable
 ---
@@ -50,7 +46,9 @@ rows:
 ::
 
 ## 组合示例
-::TuffDemo{title="卡片占位" description="骨架屏配合卡片承载列表。" code-lang="vue"}
+### 卡片占位
+骨架屏配合卡片承载列表。
+:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -59,10 +57,4 @@ code: |
     </TxCard>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <tx-card style="width: 100%;">
-    <tx-skeleton :loading="true" :lines="2" />
-  </tx-card>
-</div>
-::
+:::
