@@ -37,6 +37,7 @@ import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcil
 import type { WorkerStatusSnapshot } from './workers/worker-status'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -2114,6 +2115,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const idsToDelete = existing.map((file) => file.id)
     await this.withDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+      await this.deleteEmbeddingsByFileIds(db, idsToDelete)
       await this.searchIndex?.removeItems(existing.map((file) => file.path))
     })
     this.logDebug('Incremental remove completed', {
@@ -2341,6 +2343,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       await this.withDbWrite('file-index.cleanup.delete', async () => {
         await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+        await this.deleteEmbeddingsByFileIds(db, idsToDelete)
         const pathsToDelete = filesToDelete.map((f) => f.path)
         await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
         await this.searchIndex?.removeItems(pathsToDelete)
@@ -2579,9 +2582,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
-            await this.withDbWrite('file-index.reconcile.delete', () =>
-              db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
-            )
+            await this.withDbWrite('file-index.reconcile.delete', async () => {
+              await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
+              await this.deleteEmbeddingsByFileIds(db, chunk)
+            })
           }
 
           const deletedIdSet = new Set(deletedFileIds)
@@ -3263,6 +3267,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         contentHash
       }))
     )
+  }
+
+  private async deleteEmbeddingsByFileIds(tx: LibSQLDatabase, fileIds: number[]): Promise<void> {
+    if (fileIds.length === 0) return
+    const sourceIds = fileIds.map((id) => String(id))
+    await tx
+      .delete(embeddingsSchema)
+      .where(
+        and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
+      )
   }
 
   private async handleParserResult(
