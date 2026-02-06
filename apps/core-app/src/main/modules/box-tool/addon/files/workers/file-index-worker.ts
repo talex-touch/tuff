@@ -1,4 +1,7 @@
-import type { FileParserResult } from '@talex-touch/utils/electron/file-parsers'
+import type {
+  FileParserEmbedding,
+  FileParserResult
+} from '@talex-touch/utils/electron/file-parsers'
 import type {
   SearchIndexItem,
   SearchIndexKeyword
@@ -13,6 +16,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
+import { createHash } from 'node:crypto'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import {
   CONTENT_INDEXABLE_EXTENSIONS,
@@ -67,6 +71,8 @@ interface IndexProgressUpdate {
 interface IndexFileUpdate {
   content: string | null
   embeddingStatus: 'pending' | 'completed'
+  embeddings?: FileParserEmbedding[]
+  contentHash?: string | null
 }
 
 interface IndexFileResultMessage {
@@ -108,6 +114,11 @@ const MAX_CONTENT_LENGTH = 200_000
 
 const queue: IndexRequest[] = []
 let running = false
+
+function buildContentHash(content: string): string | null {
+  if (!content) return null
+  return createHash('sha256').update(content).digest('hex')
+}
 
 async function ensureFileSize(file: IndexFilePayload): Promise<number | null> {
   if (typeof file.size === 'number' && file.size >= 0) {
@@ -285,6 +296,8 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       const embeddingStatus =
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
 
+      const contentHash = buildContentHash(rawContent)
+
       emitFileResult({
         type: 'file',
         taskId: task.taskId,
@@ -297,7 +310,13 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
           lastError: null,
           updatedAt: new Date().toISOString()
         },
-        fileUpdate: { content: trimmedContent, embeddingStatus },
+        fileUpdate: {
+          content: trimmedContent,
+          embeddingStatus,
+          embeddings:
+            result.embeddings && result.embeddings.length > 0 ? result.embeddings : undefined,
+          contentHash
+        },
         indexItem: buildSearchIndexItem(file, task.providerId, task.providerType, content)
       })
       continue
