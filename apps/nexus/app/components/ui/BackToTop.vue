@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
 
 const visible = ref(false)
 const prefersReducedMotion = ref(false)
@@ -47,16 +46,18 @@ onUnmounted(() => {
 
 <template>
   <Transition name="back-to-top">
-    <Button
+    <TxButton
       v-show="visible"
-      variant="bare"
       circle
+      size="small"
+      variant="ghost"
+      native-type="button"
       class="back-to-top"
       aria-label="Back to top"
       @click="scrollToTop"
     >
       <span class="back-to-top__icon i-carbon-chevron-up" aria-hidden="true" />
-    </Button>
+    </TxButton>
   </Transition>
 </template>
 
@@ -66,38 +67,6 @@ onUnmounted(() => {
   right: 24px;
   bottom: 24px;
   z-index: 40;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.88);
-  color: rgba(15, 23, 42, 0.8);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(12px) saturate(180%);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
-  transition:
-    transform 0.22s ease,
-    box-shadow 0.22s ease,
-    opacity 0.22s ease,
-    background 0.22s ease,
-    color 0.22s ease;
-}
-
-.back-to-top:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.18);
-}
-
-.back-to-top:active {
-  transform: translateY(0) scale(0.98);
-}
-
-.back-to-top:focus-visible {
-  outline: 2px solid rgba(15, 23, 42, 0.35);
-  outline-offset: 2px;
 }
 
 .back-to-top__icon {

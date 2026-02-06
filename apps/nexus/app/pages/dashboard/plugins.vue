@@ -212,14 +212,13 @@ const versionStatusUpdating = ref<string | null>(null)
 const pluginActionError = ref<string | null>(null)
 const versionActionError = ref<string | null>(null)
 const iconPreviewObjectUrl = ref<string | null>(null)
-const originalIconPreviewUrl = ref<string | null>(null)
-const pluginIconFiles = ref<FileUploaderFile[]>([])
 const editingPluginHasIcon = ref(false)
 const pluginPackageLoading = ref(false)
 const pluginPackageError = ref<string | null>(null)
 const pluginManifestPreview = ref<ExtractedManifest | null>(null)
 const pluginReadmePreview = ref('')
 const pluginPackageFileName = ref<string | null>(null)
+const pluginIconFiles = ref<FileUploaderFile[]>([])
 const pluginPackageFiles = ref<FileUploaderFile[]>([])
 
 // New UI state for refactored plugin list
@@ -337,9 +336,6 @@ function handleDetailDeleteVersion(plugin: DashboardPlugin, version: DashboardPl
 function resetPluginForm() {
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
-  originalIconPreviewUrl.value = null
-  pluginIconFiles.value = []
-  pluginPackageFiles.value = []
   Object.assign(pluginForm, createPluginFormState())
   editingPluginId.value = null
   pluginFormError.value = null
@@ -350,6 +346,8 @@ function resetPluginForm() {
   pluginManifestPreview.value = null
   pluginReadmePreview.value = ''
   pluginPackageFileName.value = null
+  pluginIconFiles.value = []
+  pluginPackageFiles.value = []
 }
 
 watch(() => pluginForm.name, (name) => {
@@ -492,9 +490,6 @@ function openEditPluginForm(plugin: DashboardPlugin) {
   const categoryValue = isPluginCategoryId(plugin.category) ? plugin.category : defaultPluginCategoryId
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
-  originalIconPreviewUrl.value = plugin.iconUrl ?? null
-  pluginIconFiles.value = []
-  pluginPackageFiles.value = []
   Object.assign(pluginForm, {
     slug: plugin.slug,
     name: plugin.name,
@@ -513,26 +508,24 @@ function openEditPluginForm(plugin: DashboardPlugin) {
   showPluginForm.value = true
 }
 
-function handlePluginIconInput(files: FileUploaderFile[]) {
+function handlePluginIconChange(files: FileUploaderFile[]) {
+  pluginIconFiles.value = files
   const file = files[0]?.file ?? null
   pluginForm.iconFile = file
   pluginForm.removeIcon = false
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
-  if (!file) {
-    pluginForm.iconPreviewUrl = originalIconPreviewUrl.value
-    editingPluginHasIcon.value = Boolean(originalIconPreviewUrl.value)
-    return
+  if (file) {
+    const objectUrl = createObjectUrl(file)
+    if (objectUrl) {
+      iconPreviewObjectUrl.value = objectUrl
+      pluginForm.iconPreviewUrl = objectUrl
+    }
+    else {
+      pluginForm.iconPreviewUrl = null
+    }
+    editingPluginHasIcon.value = true
   }
-  const objectUrl = createObjectUrl(file)
-  if (objectUrl) {
-    iconPreviewObjectUrl.value = objectUrl
-    pluginForm.iconPreviewUrl = objectUrl
-  }
-  else {
-    pluginForm.iconPreviewUrl = null
-  }
-  editingPluginHasIcon.value = true
 }
 
 function removePluginIconPreview() {
@@ -541,12 +534,11 @@ function removePluginIconPreview() {
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
   pluginForm.iconPreviewUrl = null
-  originalIconPreviewUrl.value = null
-  pluginIconFiles.value = []
   editingPluginHasIcon.value = false
 }
 
-async function handlePluginPackageInput(files: FileUploaderFile[]) {
+async function handlePluginPackageChange(files: FileUploaderFile[]) {
+  pluginPackageFiles.value = files
   const file = files[0]?.file ?? null
   pluginPackageFileName.value = file?.name ?? null
   pluginPackageError.value = null
@@ -894,15 +886,14 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             {{ t('dashboard.sections.plugins.form.category') }}
-            <TxSelect v-model="pluginForm.category" class="w-full">
-              <TxSelectItem
+            <TuffSelect v-model="pluginForm.category" class="w-full">
+              <TuffSelectItem
                 v-for="category in pluginCategoryOptions"
                 :key="category.id"
                 :value="category.id"
-              >
-                {{ category.label }}
-              </TxSelectItem>
-            </TxSelect>
+                :label="category.label"
+              />
+            </TuffSelect>
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.summary') }}
@@ -921,15 +912,18 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 <span v-else>{{ pluginForm.name ? pluginForm.name.charAt(0).toUpperCase() : '∗' }}</span>
               </div>
               <div class="flex flex-col gap-2 text-[11px] font-medium normal-case text-black/60 dark:text-light/60">
-                <TxFileUploader
-                  v-model="pluginIconFiles"
-                  :multiple="false"
-                  :max="1"
-                  :disabled="pluginSaving"
-                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                  :show-size="false"
-                  @change="handlePluginIconInput"
-                />
+                <label class="flex items-center gap-2">
+                  <TxFileUploader
+                    v-model="pluginIconFiles"
+                    :multiple="false"
+                    :max="1"
+                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                    :button-text="t('dashboard.sections.plugins.form.icon')"
+                    :drop-text="t('dashboard.sections.plugins.form.iconHelp')"
+                    :hint-text="t('dashboard.sections.plugins.form.iconHelp')"
+                    @change="handlePluginIconChange"
+                  />
+                </label>
                 <FlatButton
                   v-if="pluginFormMode === 'edit' && (pluginForm.iconPreviewUrl || editingPluginHasIcon)"
                   class="text-[11px] font-semibold uppercase tracking-wide"
@@ -953,13 +947,20 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
               v-model="pluginPackageFiles"
               :multiple="false"
               :max="1"
-              :disabled="pluginPackageLoading"
               accept=".tpex"
-              :show-size="false"
-              @change="handlePluginPackageInput"
+              :button-text="t('dashboard.sections.plugins.form.packageUpload')"
+              :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
+              :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
+              @change="handlePluginPackageChange"
             />
             <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
               {{ t('dashboard.sections.plugins.form.packageHelp') }}
+            </span>
+            <span
+              v-if="pluginPackageFileName"
+              class="text-[11px] font-medium normal-case text-black/60 dark:text-light/60"
+            >
+              {{ pluginPackageFileName }}
             </span>
           </label>
           <div

@@ -326,13 +326,14 @@ async function copySdkCode(item: SdkItem) {
         >
           <div class="landing-features__track">
             <div class="landing-features__segment">
-              <button
+              <TxButton
                 v-for="item in row"
                 :key="item.id"
+                variant="bare"
+                native-type="button"
                 class="landing-features__card"
                 :style="{ '--sdk-accent': item.color }"
                 :class="{ 'is-copied': copiedId === item.id }"
-                type="button"
                 :aria-label="`Copy ${item.tag}`"
                 @click="copySdkCode(item)"
               >
@@ -348,15 +349,16 @@ async function copySdkCode(item: SdkItem) {
                     <span class="landing-features__copied-text" aria-hidden="true">{{ t('landing.os.extensibility.copied') }}</span>
                   </span>
                 </span>
-              </button>
+              </TxButton>
             </div>
             <div class="landing-features__segment" aria-hidden="true">
-              <button
+              <TxButton
                 v-for="item in row"
                 :key="`${item.id}-copy`"
+                variant="bare"
+                native-type="button"
                 class="landing-features__card"
                 :style="{ '--sdk-accent': item.color }"
-                type="button"
                 tabindex="-1"
               >
                 <span class="landing-features__card-inner">
@@ -371,7 +373,7 @@ async function copySdkCode(item: SdkItem) {
                     <span class="landing-features__copied-text" aria-hidden="true">{{ t('landing.os.extensibility.copied') }}</span>
                   </span>
                 </span>
-              </button>
+              </TxButton>
             </div>
           </div>
         </div>

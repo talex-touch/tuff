@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Switch from '~/components/ui/Switch.vue'
 import { useTheme } from '~/composables/useTheme'
 
 const { color, toggleDark } = useTheme()
@@ -21,9 +20,5 @@ function handleToggle(value: boolean) {
 </script>
 
 <template>
-  <Switch
-    :model-value="isDark"
-    aria-label="Toggle theme"
-    @change="handleToggle"
-  />
+  <TuffSwitch :model-value="isDark" @change="handleToggle" />
 </template>

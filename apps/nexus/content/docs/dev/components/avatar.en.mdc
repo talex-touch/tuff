@@ -15,8 +15,10 @@ The Avatar component displays user avatars, brand marks, or other circular conte
 ## Basic Usage
 
 ### Avatar
+
 Image, name, icon, and fallback content.
-:::TuffDemoWrapper{demo="AvatarAvatarDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -28,12 +30,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## Sizes
 
-### Sizes
 Preset sizes: small/medium/large/xlarge.
-:::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -45,12 +48,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## Text Avatars
 
-### Text
 Use text as avatar content.
-:::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -61,12 +65,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## Icon Avatars
 
-### Icon
 Use icons as avatar content.
-:::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -76,12 +81,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## Avatar Group
 
-### AvatarGroup
 Stacked avatars with a max limit.
-:::TuffDemoWrapper{demo="AvatarAvatarGroupDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -94,12 +100,13 @@ code: |
     </TxAvatarGroup>
   </template>
 ---
-:::
+::
+
 ## Status
 
-### Status
 Status badge overlay.
-:::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -111,7 +118,8 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## Clickable Avatar
 
 ::TuffCodeBlock{lang="vue"}

@@ -136,26 +136,30 @@ onMounted(() => {
           {{ resolvedTitle }}
         </div>
       </div>
-      <button
+      <TxButton
         v-if="canCopy"
-        type="button"
+        variant="ghost"
+        size="small"
+        native-type="button"
         class="tuff-code-block__copy"
         @click="handleCopy"
       >
         <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
         {{ copyLabel }}
-      </button>
+      </TxButton>
     </div>
     <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre">
-      <button
+      <TxButton
         v-if="props.embedded && canCopy"
-        type="button"
+        variant="ghost"
+        size="small"
+        native-type="button"
         class="tuff-code-block__copy tuff-code-block__copy--floating"
         @click="handleCopy"
       >
         <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
         {{ copyLabel }}
-      </button>
+      </TxButton>
       <div
         v-if="isMermaid"
         class="tuff-code-block__mermaid mermaid"
@@ -242,34 +246,11 @@ onMounted(() => {
   color: rgba(255, 255, 255, 0.55);
 }
 
-.tuff-code-block__copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 10px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
 .tuff-code-block__copy--floating {
   position: absolute;
   top: 14px;
   right: 14px;
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 10px;
   z-index: 1;
-}
-
-.tuff-code-block__copy:hover {
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.92);
 }
 
 .tuff-code-block__pre {

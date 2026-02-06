@@ -9,16 +9,13 @@ syncStatus: migrated
 
 Centered modal for short tasks or confirmations.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-</script>
-
 ## Basic Usage
+
 ### Modal Dialog
+
 Trigger a lightweight modal.
-:::TuffDemoWrapper{demo="ModalModalDialogDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -38,7 +35,8 @@ code: |
     </TxModal>
   </template>
 ---
-:::
+::
+
 ## API (Lite)
 ::TuffPropsTable
 ---

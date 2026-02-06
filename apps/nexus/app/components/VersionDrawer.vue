@@ -52,8 +52,8 @@ watch(() => props.isOpen, (isOpen) => {
       changelog: '',
       packageFile: null as any,
     }
-    step.value = 'form'
     packageFiles.value = []
+    step.value = 'form'
     packageError.value = null
     manifestPreview.value = null
   }
@@ -64,13 +64,17 @@ type Step = 'form' | 'warning' | 'license'
 const step = ref<Step>('form')
 const licenseAgreed = ref(false)
 
-async function handlePackageInput(files: FileUploaderFile[]) {
-  const file = files[0]?.file ?? null
-  formData.value.packageFile = file as any
+async function handlePackageChange(files: FileUploaderFile[]) {
+  packageFiles.value = files
+  const file = files[0]?.file
+  if (!file) {
+    formData.value.packageFile = null as any
+    return
+  }
+
+  formData.value.packageFile = file
   packageError.value = null
   manifestPreview.value = null
-  if (!file)
-    return
 
   // Preview tpex to auto-fill form
   packageLoading.value = true
@@ -182,17 +186,11 @@ const channelVisibility = computed(() =>
             <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.plugins.versionForm.channel') }}
             </label>
-            <TxSelect v-model="formData.channel" class="w-full">
-              <TxSelectItem value="RELEASE">
-                RELEASE
-              </TxSelectItem>
-              <TxSelectItem value="BETA">
-                BETA
-              </TxSelectItem>
-              <TxSelectItem value="SNAPSHOT">
-                SNAPSHOT
-              </TxSelectItem>
-            </TxSelect>
+            <TuffSelect v-model="formData.channel" class="w-full">
+              <TuffSelectItem value="RELEASE" label="RELEASE" />
+              <TuffSelectItem value="BETA" label="BETA" />
+              <TuffSelectItem value="SNAPSHOT" label="SNAPSHOT" />
+            </TuffSelect>
             <div class="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/5">
               <p class="mb-1 text-black/70 dark:text-white/70">
                 {{ channelDescription }}
@@ -211,11 +209,17 @@ const channelVisibility = computed(() =>
               v-model="packageFiles"
               :multiple="false"
               :max="1"
-              :disabled="packageLoading || props.loading"
               accept=".tpex"
-              :show-size="false"
-              @change="handlePackageInput"
+              :disabled="packageLoading"
+              :button-text="t('dashboard.sections.plugins.versionForm.package')"
+              :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
+              :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
+              @change="handlePackageChange"
             />
+            <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+              <span class="i-carbon-circle-dash animate-spin" />
+              {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
+            </p>
             <p v-if="packageError" class="text-xs text-red-500">
               {{ packageError }}
             </p>

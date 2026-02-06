@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
 definePageMeta({
   layout: false,
 })
@@ -94,10 +93,6 @@ watch(
   },
   { immediate: true },
 )
-
-function goSignIn() {
-  navigateTo('/sign-in')
-}
 </script>
 
 <template>
@@ -132,11 +127,7 @@ function goSignIn() {
           <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
             {{ sessionToken }}
           </code>
-          <Button
-            variant="warning"
-            size="small"
-            @click="copyToken"
-          >
+          <Button size="small" variant="warning" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
           </Button>
           <p class="mt-2 text-xs text-gray-400">
@@ -154,14 +145,12 @@ function goSignIn() {
         <p class="text-sm text-red-400">
           {{ errorMessage }}
         </p>
-        <Button
-          variant="primary"
-          size="small"
-          class="mt-4"
-          @click="goSignIn"
+        <NuxtLink
+          to="/sign-in"
+          class="mt-4 rounded-lg bg-primary px-6 py-2 text-white transition hover:bg-primary/80"
         >
           {{ t('auth.tryAgain', 'Try Again') }}
-        </Button>
+        </NuxtLink>
       </div>
     </div>
   </div>

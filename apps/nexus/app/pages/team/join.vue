@@ -1,7 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
-import Input from '~/components/ui/Input.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -67,13 +65,11 @@ async function joinTeam(): Promise<void> {
           type="text"
           autocomplete="off"
           placeholder="ABCDEFGH"
-          class="w-full font-mono"
+          class="w-full"
           @keyup.enter="joinTeam"
         />
 
         <Button
-          variant="primary"
-          size="small"
           block
           :disabled="!canSubmit"
           @click="joinTeam"

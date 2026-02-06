@@ -62,13 +62,13 @@ const formData = ref<PluginFormData>({
 
 const packageFile = ref<File | null>(null)
 const packageFiles = ref<FileUploaderFile[]>([])
-const iconFiles = ref<FileUploaderFile[]>([])
 const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
 const readmePreview = ref('')
 const iconPreviewUrl = ref<string | null>(null)
 const packageHasIcon = ref(false)
+const iconFiles = ref<FileUploaderFile[]>([])
 
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 
@@ -91,13 +91,13 @@ watch(() => props.isOpen, (isOpen) => {
     }
     packageFile.value = null
     packageFiles.value = []
-    iconFiles.value = []
     packageLoading.value = false
     packageError.value = null
     manifestPreview.value = null
     readmePreview.value = ''
     iconPreviewUrl.value = null
     packageHasIcon.value = false
+    iconFiles.value = []
     inputMode.value = 'upload'
   }
 })
@@ -186,7 +186,8 @@ function applyManifestToForm(manifest: TpexExtractedManifest | null, readme: str
     formData.value.initialChangelog = manifest.changelog
 }
 
-async function handlePackageInput(files: FileUploaderFile[]) {
+async function handlePackageChange(files: FileUploaderFile[]) {
+  packageFiles.value = files
   const file = files[0]?.file ?? null
   packageFile.value = file
   formData.value.packageFile = file
@@ -221,9 +222,9 @@ async function handlePackageInput(files: FileUploaderFile[]) {
   }
 }
 
-function handleIconInput(files: FileUploaderFile[]) {
-  const file = files[0]?.file ?? null
-  formData.value.iconFile = file
+function handleIconChange(files: FileUploaderFile[]) {
+  iconFiles.value = files
+  formData.value.iconFile = files[0]?.file ?? null
 }
 
 // Computed for icon preview display - priority: user uploaded > package extracted
@@ -310,11 +311,17 @@ function onSubmit() {
                 v-model="packageFiles"
                 :multiple="false"
                 :max="1"
-                :disabled="packageLoading || props.loading"
                 accept=".tpex"
-                :show-size="false"
-                @change="handlePackageInput"
+                :disabled="packageLoading"
+                :button-text="t('dashboard.sections.plugins.form.uploadPackage')"
+                :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
+                :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
+                @change="handlePackageChange"
               />
+              <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                <span class="i-carbon-circle-dash animate-spin" />
+                {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
+              </p>
               <p v-if="packageError" class="text-xs text-red-500">
                 {{ packageError }}
               </p>
@@ -370,15 +377,14 @@ function onSubmit() {
               <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
                 {{ t('dashboard.sections.plugins.form.category') }}
               </label>
-              <TxSelect v-model="formData.category" class="w-full">
-                <TxSelectItem
+              <TuffSelect v-model="formData.category" class="w-full">
+                <TuffSelectItem
                   v-for="category in pluginCategoryOptions"
                   :key="category.id"
                   :value="category.id"
-                >
-                  {{ category.label }}
-                </TxSelectItem>
-              </TxSelect>
+                  :label="category.label"
+                />
+              </TuffSelect>
             </div>
           </div>
 
@@ -413,29 +419,23 @@ function onSubmit() {
                   {{ formData.name ? formData.name.charAt(0).toUpperCase() : '?' }}
                 </span>
               </div>
-              <div class="flex flex-1 flex-col gap-2">
-                <TxFileUploader
-                  v-model="iconFiles"
-                  :multiple="false"
-                  :max="1"
-                  :disabled="props.loading"
-                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                  :show-size="false"
-                  @change="handleIconInput"
-                />
-                <p class="text-[11px] text-black/50 dark:text-white/50">
-                  <template v-if="formData.iconFile">
-                    {{ formData.iconFile.name }}
-                  </template>
-                  <template v-else-if="packageHasIcon">
-                    {{ t('dashboard.sections.plugins.form.iconFromPackage', 'Icon from package (click to override)') }}
-                  </template>
-                  <template v-else>
-                    {{ t('dashboard.sections.plugins.form.iconHelp') }}
-                  </template>
-                </p>
-              </div>
+              <TxFileUploader
+                v-model="iconFiles"
+                class="flex-1"
+                :multiple="false"
+                :max="1"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                @change="handleIconChange"
+              />
             </div>
+            <p class="text-[11px] text-black/40 dark:text-white/50">
+              <template v-if="packageHasIcon && !formData.iconFile">
+                {{ t('dashboard.sections.plugins.form.iconFromPackage', 'Icon from package (click to override)') }}
+              </template>
+              <template v-else>
+                {{ t('dashboard.sections.plugins.form.iconHelp') }}
+              </template>
+            </p>
           </div>
 
           <div class="flex flex-col gap-2">
