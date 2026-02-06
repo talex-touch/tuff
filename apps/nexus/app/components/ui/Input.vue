@@ -4,9 +4,9 @@ import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | number
     placeholder?: string
-    type?: 'text' | 'password' | 'textarea'
+    type?: 'text' | 'password' | 'textarea' | 'number'
     disabled?: boolean
     readonly?: boolean
     clearable?: boolean
@@ -33,7 +33,7 @@ const emit = defineEmits<{
 
 const value = computed({
   get: () => props.modelValue ?? '',
-  set: (val: string) => {
+  set: (val: string | number) => {
     emit('update:modelValue', val)
     emit('input', val)
   },
