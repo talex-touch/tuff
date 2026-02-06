@@ -13,15 +13,8 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="LoadingState">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxLoadingState description="Loading official plugins..." />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### LoadingState
+:::TuffDemoWrapper{demo="LoadingStateLoadingStateDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -29,8 +22,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

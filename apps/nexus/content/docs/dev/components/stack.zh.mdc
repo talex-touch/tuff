@@ -15,11 +15,25 @@ import StackBasicDemoSource from '~/components/content/demos/StackBasicDemo.vue?
 
 ## 基础用法
 
-<DemoBlock title="Stack" :code="StackBasicDemoSource">
-  <template #preview>
-    <StackBasicDemo />
+### Stack
+:::TuffDemoWrapper{demo="StackStackDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxStack :gap="10">
+        <TxButton>One</TxButton>
+        <TxButton variant="secondary">
+          Two
+        </TxButton>
+        <TxButton variant="ghost">
+          Three
+        </TxButton>
+      </TxStack>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

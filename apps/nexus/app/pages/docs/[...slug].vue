@@ -977,8 +977,8 @@ a.docs-hero-crumb:hover {
 
 
 :deep(.docs-prose) {
-  --docs-accent: #1bb5f4;
-  --docs-accent-strong: #0ea5e9;
+  --docs-accent: #6a5546;
+  --docs-accent-strong: #2f241c;
   --docs-ink: var(--fgColor-default);
   --docs-muted: var(--fgColor-muted);
   --docs-border: var(--borderColor-muted);
@@ -1008,10 +1008,10 @@ a.docs-hero-crumb:hover {
 
 :deep(.dark .docs-prose),
 :deep([data-theme='dark'] .docs-prose) {
-  --docs-accent: #7dd3fc;
-  --docs-accent-strong: #38bdf8;
-  --docs-ink: #f8fafc;
-  --docs-muted: rgba(226, 232, 240, 0.8);
+  --docs-accent: #d8b899;
+  --docs-accent-strong: #ffe5c8;
+  --docs-ink: #f3ede5;
+  --docs-muted: rgba(235, 224, 213, 0.85);
   --docs-border: var(--borderColor-muted);
   --docs-code-bg: var(--bgColor-muted);
   --docs-code-border: var(--borderColor-default);
@@ -1184,7 +1184,7 @@ a.docs-hero-crumb:hover {
 :deep(.docs-prose a) {
   color: var(--docs-accent);
   text-decoration: none;
-  border-bottom: 1px solid rgba(27, 181, 244, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--docs-accent) 40%, transparent);
 }
 
 :deep(.docs-prose hr) {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxDatePicker } from '@talex-touch/tuffex'
 import Button from '~/components/ui/Button.vue'
 import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
@@ -36,6 +37,7 @@ const { t } = useI18n()
 
 const saving = ref(false)
 const error = ref<string | null>(null)
+const datePickerVisible = ref(false)
 
 const todayInput = () => new Date().toISOString().slice(0, 10)
 
@@ -50,6 +52,7 @@ const form = reactive<UpdateFormState>({
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     error.value = null
+    datePickerVisible.value = false
     if (props.mode === 'edit' && props.update) {
       form.title = props.update.title
       form.summary = props.update.summary
@@ -136,12 +139,20 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.date') }}
           </label>
-          <input
+          <Input
             v-model="form.timestamp"
-            type="date"
+            type="text"
+            readonly
             required
-            class="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm text-black outline-none transition focus:border-black/40 focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:text-white"
-          >
+            class="w-full"
+            @click="datePickerVisible = true"
+          />
+          <TxDatePicker
+            v-model="form.timestamp"
+            v-model:visible="datePickerVisible"
+            :title="t('dashboard.sections.updates.form.date')"
+            :disabled="saving"
+          />
         </div>
 
         <div class="flex flex-col gap-1.5">

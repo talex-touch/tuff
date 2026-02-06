@@ -10,7 +10,9 @@ syncStatus: migrated
 Progress indicator for multi-step flows.
 
 ## Basic Usage
-::TuffDemo{title="Steps" description="Show progress across steps." code-lang="vue"}
+### Steps
+Show progress across steps.
+:::TuffDemoWrapper{demo="StepsStepsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -21,14 +23,7 @@ code: |
     </TxSteps>
   </template>
 ---
-#preview
-<tx-steps :active="1">
-  <tx-step title="Start" description="Collect basics" :step="0" />
-  <tx-step title="Details" description="Fill in details" :step="1" />
-  <tx-step title="Finish" description="Review and submit" :step="2" />
-</tx-steps>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

@@ -7,12 +7,28 @@ const { t } = useI18n()
 
 const loading = ref(false)
 
-const privacySettings = ref({
+interface PrivacySettings {
+  analytics: boolean
+  crashReports: boolean
+  usageData: boolean
+  personalization: boolean
+}
+
+const privacySettings = ref<PrivacySettings>({
   analytics: true,
   crashReports: true,
   usageData: false,
   personalization: true,
 })
+
+type PrivacySettingKey = keyof PrivacySettings
+
+function toggleSetting(key: PrivacySettingKey) {
+  if (loading.value)
+    return
+  privacySettings.value[key] = !privacySettings.value[key]
+  saveSettings()
+}
 
 async function saveSettings() {
   loading.value = true
@@ -79,7 +95,10 @@ onMounted(() => {
 
       <div class="mt-6 space-y-4">
         <!-- Analytics -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <label
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('analytics')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-chart-bar text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -91,16 +110,20 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
+          <TuffSwitch
             v-model="privacySettings.analytics"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
+            size="small"
+            :disabled="loading"
             @change="saveSettings"
-          >
+            @click.stop
+          />
         </label>
 
         <!-- Crash Reports -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <label
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('crashReports')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-warning text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -112,16 +135,20 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
+          <TuffSwitch
             v-model="privacySettings.crashReports"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
+            size="small"
+            :disabled="loading"
             @change="saveSettings"
-          >
+            @click.stop
+          />
         </label>
 
         <!-- Usage Data -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <label
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('usageData')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-data-vis-1 text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -133,16 +160,20 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
+          <TuffSwitch
             v-model="privacySettings.usageData"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
+            size="small"
+            :disabled="loading"
             @change="saveSettings"
-          >
+            @click.stop
+          />
         </label>
 
         <!-- Personalization -->
-        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
+        <label
+          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
+          @click="toggleSetting('personalization')"
+        >
           <div class="flex items-center gap-3">
             <span class="i-carbon-user-favorite text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -154,12 +185,13 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
+          <TuffSwitch
             v-model="privacySettings.personalization"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
+            size="small"
+            :disabled="loading"
             @change="saveSettings"
-          >
+            @click.stop
+          />
         </label>
       </div>
     </section>

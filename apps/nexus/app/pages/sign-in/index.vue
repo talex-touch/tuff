@@ -7,6 +7,7 @@ import { useSignIn } from '~/composables/useSignIn'
 import SignInBindEmailStep from './components/SignInBindEmailStep.vue'
 import SignInEmailStep from './components/SignInEmailStep.vue'
 import SignInLoginStep from './components/SignInLoginStep.vue'
+import SignInOauthStep from './components/SignInOauthStep.vue'
 import SignInPasskeyStep from './components/SignInPasskeyStep.vue'
 import SignInSuccessStep from './components/SignInSuccessStep.vue'
 import SignInSignupStep from './components/SignInSignupStep.vue'
@@ -35,6 +36,9 @@ const {
   supportsPasskey,
   passkeyPhase,
   passkeyError,
+  oauthPhase,
+  oauthProvider,
+  oauthError,
   authLoading,
   lastLoginMethod,
   emailPreview,
@@ -52,6 +56,7 @@ const {
   handleGithubSignIn,
   handleLinuxdoSignIn,
   handlePasskeySignIn,
+  handleOauthRetry,
 } = useSignIn()
 </script>
 
@@ -141,6 +146,16 @@ const {
                 :phase="passkeyPhase"
                 :error-message="passkeyError"
                 @retry="handlePasskeySignIn"
+                @back="resetToEmailStep"
+              />
+              <SignInOauthStep
+                v-else-if="step === 'oauth'"
+                key="oauth"
+                :t="t"
+                :provider="oauthProvider"
+                :phase="oauthPhase"
+                :error-message="oauthError"
+                @retry="handleOauthRetry"
                 @back="resetToEmailStep"
               />
               <SignInSuccessStep

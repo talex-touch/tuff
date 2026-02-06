@@ -10,7 +10,9 @@ syncStatus: migrated
 Compact count or status indicator.
 
 ## Basic Usage
-::TuffDemo{title="Badge Variants" description="Counts, labels, and dot indicators." code-lang="vue"}
+### Badge Variants
+Counts, labels, and dot indicators.
+:::TuffDemoWrapper{demo="BadgeBadgeVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -20,15 +22,7 @@ code: |
     <TxBadge dot variant="error" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-badge :value="8" />
-  <tx-badge value="New" variant="primary" />
-  <tx-badge value="99+" variant="success" />
-  <tx-badge dot variant="error" />
-</div>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

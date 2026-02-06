@@ -21,6 +21,15 @@ const props = withDefaults(defineProps<DemoBlockProps>(), {
 const slots = useSlots()
 const hasPreviewSlot = computed(() => Boolean(slots.preview))
 const hasCodeSlot = computed(() => Boolean(slots.code))
+const warnKey = '__demo_block_deprecated_warned__'
+
+if (import.meta.dev && import.meta.client) {
+  const warnState = globalThis as typeof globalThis & Record<string, boolean>
+  if (!warnState[warnKey]) {
+    warnState[warnKey] = true
+    console.warn('[DemoBlock] Deprecated. Use TuffDemoWrapper + demo components in docs.')
+  }
+}
 </script>
 
 <template>

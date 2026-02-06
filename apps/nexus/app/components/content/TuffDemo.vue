@@ -14,6 +14,15 @@ const props = defineProps<DemoProps>()
 const slots = useSlots()
 const hasPreview = computed(() => Boolean(slots.preview || slots.default))
 const { locale } = useI18n()
+const warnKey = '__tuff_demo_deprecated_warned__'
+
+if (import.meta.dev && import.meta.client) {
+  const warnState = globalThis as typeof globalThis & Record<string, boolean>
+  if (!warnState[warnKey]) {
+    warnState[warnKey] = true
+    console.warn('[TuffDemo] Deprecated. Use TuffDemoWrapper + demo components in docs.')
+  }
+}
 const htmlEntityMap: Record<string, string> = {
   '&lt;': '<',
   '&gt;': '>',
@@ -139,6 +148,8 @@ function toggleCode() {
 }
 
 .tuff-demo__window {
+  display: flex;
+  flex-direction: column;
   border-radius: 26px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.96);
@@ -183,9 +194,12 @@ function toggleCode() {
 .tuff-demo__window-body {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .tuff-demo__preview {
+  flex: 0 0 auto;
   padding: 28px;
   background: rgba(255, 255, 255, 0.98);
 }
@@ -204,6 +218,8 @@ function toggleCode() {
   gap: 0;
   align-items: stretch;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .tuff-demo__toggle-row {
@@ -212,6 +228,9 @@ function toggleCode() {
   padding: 16px 18px 20px;
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.98);
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 .tuff-demo__toggle {
@@ -220,33 +239,33 @@ function toggleCode() {
   gap: 6px;
   padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(59, 130, 246, 0.45);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(14, 165, 233, 0.2));
-  color: rgba(30, 64, 175, 0.95);
+  border: 1px solid rgba(15, 23, 42, 0.24);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.03));
+  color: rgba(15, 23, 42, 0.86);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
   transition: all 0.2s ease;
 }
 
 .tuff-demo__toggle:hover {
-  border-color: rgba(37, 99, 235, 0.75);
-  color: rgba(30, 58, 138, 0.98);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(14, 165, 233, 0.28));
-  box-shadow: 0 12px 26px rgba(59, 130, 246, 0.25);
+  border-color: rgba(15, 23, 42, 0.38);
+  color: rgba(15, 23, 42, 0.95);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.04));
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.18);
   transform: translateY(-1px);
 }
 
 .tuff-demo__toggle:active {
   transform: translateY(0);
-  box-shadow: 0 6px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 6px 12px rgba(15, 23, 42, 0.12);
 }
 
 .tuff-demo__toggle:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.5);
+  outline: 2px solid rgba(15, 23, 42, 0.35);
   outline-offset: 2px;
 }
 
@@ -274,7 +293,8 @@ function toggleCode() {
 
 .tuff-demo__code-body-inner {
   min-height: 0;
-  overflow: hidden;
+  max-height: 360px;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -294,13 +314,13 @@ function toggleCode() {
 
 :global(.dark .tuff-demo__preview),
 :global([data-theme='dark'] .tuff-demo__preview) {
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(22, 19, 17, 0.68);
 }
 
 :global(.dark .tuff-demo__toggle-row),
 :global([data-theme='dark'] .tuff-demo__toggle-row) {
-  border-top-color: rgba(148, 163, 184, 0.15);
-  background: rgba(15, 23, 42, 0.6);
+  border-top-color: rgba(214, 198, 184, 0.18);
+  background: rgba(22, 19, 17, 0.62);
 }
 
 :global(.dark .tuff-demo__code),
@@ -310,9 +330,10 @@ function toggleCode() {
 
 :global(.dark .tuff-demo__toggle),
 :global([data-theme='dark'] .tuff-demo__toggle) {
-  background: rgba(15, 23, 42, 0.75);
-  border-color: rgba(148, 163, 184, 0.4);
-  color: rgba(226, 232, 240, 0.8);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  border-color: rgba(226, 232, 240, 0.22);
+  color: rgba(245, 239, 231, 0.92);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.45);
 }
 
 :slotted(.tuff-demo-row) {
@@ -377,36 +398,36 @@ function toggleCode() {
 }
 ::global(.dark .tuff-demo__toggle),
 ::global([data-theme='dark'] .tuff-demo__toggle) {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(2, 132, 199, 0.3));
-  border-color: rgba(125, 211, 252, 0.4);
-  color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.25);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04));
+  border-color: rgba(226, 232, 240, 0.22);
+  color: rgba(245, 239, 231, 0.92);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.45);
 }
 
 ::global(.dark .tuff-demo__toggle:hover),
 ::global([data-theme='dark'] .tuff-demo__toggle:hover) {
-  border-color: rgba(186, 230, 253, 0.7);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.42));
+  border-color: rgba(245, 239, 231, 0.45);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.06));
   color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 14px 30px rgba(14, 165, 233, 0.35);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.55);
 }
 
 :global(.dark .tuff-demo__window),
 :global([data-theme='dark'] .tuff-demo__window) {
-  border-color: rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.75);
+  border-color: rgba(214, 198, 184, 0.22);
+  background: rgba(20, 17, 15, 0.82);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 }
 
 :global(.dark .tuff-demo__window-bar),
 :global([data-theme='dark'] .tuff-demo__window-bar) {
-  border-bottom-color: rgba(148, 163, 184, 0.15);
-  background: linear-gradient(90deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.7));
+  border-bottom-color: rgba(214, 198, 184, 0.18);
+  background: linear-gradient(90deg, rgba(24, 20, 18, 0.92), rgba(18, 15, 13, 0.85));
 }
 
 :global(.dark .tuff-demo__code-body-inner),
 :global([data-theme='dark'] .tuff-demo__code-body-inner) {
-  border-top-color: rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(8, 10, 16, 0.98), rgba(6, 8, 12, 0.98));
+  border-top-color: rgba(214, 198, 184, 0.18);
+  background: linear-gradient(180deg, rgba(18, 16, 14, 0.98), rgba(14, 12, 10, 0.98));
 }
 </style>

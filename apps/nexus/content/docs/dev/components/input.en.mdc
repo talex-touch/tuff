@@ -15,24 +15,23 @@ syncStatus: migrated
 
 ## Basic Usage
 
-:::TuffDemo{title="Basic Input" description="The most common text input usage." code-lang="vue"}
+### Basic Input
+The most common text input usage.
+:::TuffDemoWrapper{demo="InputBasicInputDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TuffInput v-model="value" placeholder="Type here..." />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="value" placeholder="Type here..." />
-</div>
 :::
-
 ## Input Types
 
 Supported: `text` / `password` / `textarea`.
 
-:::TuffDemo{title="Input Types" description="Text, password, and textarea." code-lang="vue"}
+### Input Types
+Text, password, and textarea.
+:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -41,21 +40,12 @@ code: |
     <TuffInput v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 10px;">
-  <div class="tuff-demo-row">
-    <tuff-input v-model="text" placeholder="Text input" />
-    <tuff-input v-model="password" type="password" placeholder="Password input" />
-  </div>
-  <div class="tuff-demo-row">
-    <tuff-input v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
-  </div>
-</div>
 :::
-
 ## Readonly / Disabled
 
-:::TuffDemo{title="Readonly / Disabled" description="Readonly and disabled states." code-lang="vue"}
+### Readonly / Disabled
+Readonly and disabled states.
+:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -63,31 +53,24 @@ code: |
     <TuffInput v-model="disabledValue" disabled placeholder="Disabled" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="readonlyValue" readonly placeholder="Readonly" />
-  <tuff-input v-model="disabledValue" disabled placeholder="Disabled" />
-</div>
 :::
-
 ## Clearable
 
-:::TuffDemo{title="Clearable" description="One-click clear for content." code-lang="vue"}
+### Clearable
+One-click clear for content.
+:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TuffInput v-model="clearableValue" clearable placeholder="Clearable" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="clearableValue" clearable placeholder="Clearable" />
-</div>
 :::
-
 ## Prefix / Suffix Slots
 
-:::TuffDemo{title="Prefix / Suffix" description="Icons help reinforce context." code-lang="vue"}
+### Prefix / Suffix
+Icons help reinforce context.
+:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -103,21 +86,7 @@ code: |
     </TuffInput>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="withPrefix" placeholder="Search">
-    <template #prefix>
-      <tx-icon icon="i-carbon-search" />
-    </template>
-  </tuff-input>
-  <tuff-input v-model="withSuffix" placeholder="User">
-    <template #suffix>
-      <tx-icon icon="i-carbon-user" />
-    </template>
-  </tuff-input>
-</div>
 :::
-
 ## API
 
 ### Props
@@ -206,7 +175,9 @@ rows:
 
 ## Composite Patterns
 
-:::TuffDemo{title="Search Row" description="Input paired with an action button." code-lang="vue"}
+### Search Row
+Input paired with an action button.
+:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -214,13 +185,7 @@ code: |
     <TxButton size="sm">Go</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input placeholder="Search..." />
-  <tx-button size="sm">Go</tx-button>
-</div>
 :::
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
 definePageMeta({
   layout: false,
 })
@@ -93,6 +94,10 @@ watch(
   },
   { immediate: true },
 )
+
+function goSignIn() {
+  navigateTo('/sign-in')
+}
 </script>
 
 <template>
@@ -127,12 +132,13 @@ watch(
           <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
             {{ sessionToken }}
           </code>
-          <button
-            class="rounded-lg bg-yellow-500 px-4 py-2 text-sm text-white transition hover:bg-yellow-600"
+          <Button
+            variant="warning"
+            size="small"
             @click="copyToken"
           >
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
-          </button>
+          </Button>
           <p class="mt-2 text-xs text-gray-400">
             Then run in Electron DevTools console: <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">__devAuthToken("PASTE_TOKEN_HERE")</code>
           </p>
@@ -148,12 +154,14 @@ watch(
         <p class="text-sm text-red-400">
           {{ errorMessage }}
         </p>
-        <NuxtLink
-          to="/sign-in"
-          class="mt-4 rounded-lg bg-primary px-6 py-2 text-white transition hover:bg-primary/80"
+        <Button
+          variant="primary"
+          size="small"
+          class="mt-4"
+          @click="goSignIn"
         >
           {{ t('auth.tryAgain', 'Try Again') }}
-        </NuxtLink>
+        </Button>
       </div>
     </div>
   </div>

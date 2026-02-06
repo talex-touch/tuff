@@ -1,9 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const { user } = useAuthUser()
+const { user, refresh, isAuthenticated } = useAuthUser()
+
+const revalidateUser = () => {
+  if (!isAuthenticated.value)
+    return
+  void refresh()
+}
+
+onMounted(() => {
+  revalidateUser()
+})
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path.startsWith('/dashboard/admin') || !user.value)
+      revalidateUser()
+  },
+)
 
 const isAdmin = computed(() => {
   return user.value?.role === 'admin'
@@ -104,11 +122,6 @@ const accountMenuItems = computed(() => {
       id: 'account',
       label: t('dashboard.sections.menu.account', '账号与安全'),
       icon: 'i-carbon-user',
-    },
-    {
-      id: 'devices',
-      label: t('dashboard.sections.menu.devices', '设备管理'),
-      icon: 'i-carbon-devices',
     },
     {
       id: 'privacy',

@@ -7,7 +7,11 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
-import type { FileParserProgress, FileParserResult } from '@talex-touch/utils/electron/file-parsers'
+import type {
+  FileParserEmbedding,
+  FileParserProgress,
+  FileParserResult
+} from '@talex-touch/utils/electron/file-parsers'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   FileIndexBatteryStatus,
@@ -31,7 +35,9 @@ import type { ScannedFileInfo } from './types'
 import type { IndexWorkerFile, IndexWorkerFileResult } from './workers/file-index-worker-client'
 import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcile-worker-client'
 import type { WorkerStatusSnapshot } from './workers/worker-status'
+import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -58,6 +64,7 @@ import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlace
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import {
+  embeddings as embeddingsSchema,
   fileExtensions,
   fileIndexProgress,
   files as filesSchema,
@@ -1365,6 +1372,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                     embeddingStatus: entry.fileUpdate.embeddingStatus
                   })
                   .where(eq(filesSchema.id, entry.fileId))
+
+                if (entry.fileUpdate.embeddings && entry.fileUpdate.embeddings.length > 0) {
+                  const contentHash =
+                    entry.fileUpdate.contentHash ??
+                    this.buildContentHash(entry.fileUpdate.content ?? '')
+                  await this.persistEmbeddings(
+                    tx,
+                    entry.fileId,
+                    contentHash,
+                    entry.fileUpdate.embeddings
+                  )
+                }
               }
 
               await tx
@@ -2096,6 +2115,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const idsToDelete = existing.map((file) => file.id)
     await this.withDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+      await this.deleteEmbeddingsByFileIds(db, idsToDelete)
       await this.searchIndex?.removeItems(existing.map((file) => file.path))
     })
     this.logDebug('Incremental remove completed', {
@@ -2323,6 +2343,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       await this.withDbWrite('file-index.cleanup.delete', async () => {
         await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
+        await this.deleteEmbeddingsByFileIds(db, idsToDelete)
         const pathsToDelete = filesToDelete.map((f) => f.path)
         await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
         await this.searchIndex?.removeItems(pathsToDelete)
@@ -2561,9 +2582,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
-            await this.withDbWrite('file-index.reconcile.delete', () =>
-              db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
-            )
+            await this.withDbWrite('file-index.reconcile.delete', async () => {
+              await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
+              await this.deleteEmbeddingsByFileIds(db, chunk)
+            })
           }
 
           const deletedIdSet = new Set(deletedFileIds)
@@ -3218,6 +3240,45 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await this.handleParserResult(file, result, size, performance.now() - parseStart)
   }
 
+  private buildContentHash(content: string): string | null {
+    if (!content) return null
+    return createHash('sha256').update(content).digest('hex')
+  }
+
+  private async persistEmbeddings(
+    tx: LibSQLDatabase,
+    fileId: number,
+    contentHash: string | null,
+    embeddings: FileParserEmbedding[]
+  ): Promise<void> {
+    if (embeddings.length === 0) return
+    const sourceId = String(fileId)
+
+    await tx
+      .delete(embeddingsSchema)
+      .where(and(eq(embeddingsSchema.sourceId, sourceId), eq(embeddingsSchema.sourceType, 'file')))
+
+    await tx.insert(embeddingsSchema).values(
+      embeddings.map((embedding) => ({
+        sourceId,
+        sourceType: 'file',
+        embedding: embedding.vector,
+        model: embedding.model || 'unknown',
+        contentHash
+      }))
+    )
+  }
+
+  private async deleteEmbeddingsByFileIds(tx: LibSQLDatabase, fileIds: number[]): Promise<void> {
+    if (fileIds.length === 0) return
+    const sourceIds = fileIds.map((id) => String(id))
+    await tx
+      .delete(embeddingsSchema)
+      .where(
+        and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))
+      )
+  }
+
   private async handleParserResult(
     file: typeof filesSchema.$inferSelect,
     result: FileParserResult,
@@ -3241,6 +3302,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       const embeddingStatus =
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
+      const contentHash = this.buildContentHash(rawContent)
 
       await this.withDbWrite('file-index.content.success', () =>
         db.transaction(async (tx) => {
@@ -3274,14 +3336,17 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                 updatedAt: new Date()
               }
             })
+
+          if (result.embeddings && result.embeddings.length > 0) {
+            await this.persistEmbeddings(tx, fileId, contentHash, result.embeddings)
+          }
         })
       )
 
       file.content = trimmedContent
 
       if (result.embeddings && result.embeddings.length > 0) {
-        // TODO: hook into embeddings table when vector storage is ready
-        this.logDebug('Parser returned embeddings for file', {
+        this.logDebug('Persisted embeddings for file', {
           path: file.path,
           embeddings: result.embeddings.length
         })

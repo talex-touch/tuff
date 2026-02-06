@@ -21,24 +21,8 @@ const list = ref([
 
 ## 基础用法
 
-<DemoBlock title="SortableList">
-<template #preview>
-<div style="width: 420px;">
-  <TxSortableList v-model="list" @reorder="(e) => console.log('reorder', e)">
-    <template #item="{ item }">
-      <div
-        style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;"
-      >
-        <span style="font-weight: 600;">{{ item.title }}</span>
-        <span data-tx-sort-handle="true" style="opacity: 0.6; cursor: grab;">drag</span>
-      </div>
-    </template>
-  </TxSortableList>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### SortableList
+:::TuffDemoWrapper{demo="SortableListSortableListDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -50,8 +34,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

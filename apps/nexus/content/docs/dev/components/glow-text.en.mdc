@@ -20,19 +20,45 @@ import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDem
 
 ## 基础用法
 
-<DemoBlock title="GlowText" :code="GlowTextBasicDemoSource">
-  <template #preview>
-    <GlowTextBasicDemo />
+### GlowText
+:::TuffDemoWrapper{demo="GlowTextGlowTextDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <TxGlowText style="font-size: 20px; font-weight: 700;">
+        GlowText
+      </TxGlowText>
+
+      <TxGlowText :angle="-15" :band-size="26" :duration-ms="1100" color="rgba(99, 102, 241, 0.9)" style="font-size: 14px;">
+        Sweep highlight over text
+      </TxGlowText>
+
+      <TxGlowText :angle="18" :band-size="32" :duration-ms="1500" style="font-size: 16px; font-weight: 700;">
+        <span style="background: linear-gradient(90deg, #f59e0b, #ef4444, #8b5cf6); -webkit-background-clip: text; color: transparent;">
+          Colorful text still shines
+        </span>
+      </TxGlowText>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 作用于图片/卡片
 
-<DemoBlock title="GlowText on image" :code="GlowTextImageDemoSource">
-  <template #preview>
-    <GlowTextImageDemo />
+### GlowText on image
+:::TuffDemoWrapper{demo="GlowTextGlowTextOnImageDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGlowText tag="div" :radius="14" :angle="20" :band-size="34" :duration-ms="1600" color="rgba(255, 255, 255, 0.95)">
+      <div
+        style="width: 240px; height: 120px; border-radius: 14px; background: linear-gradient(135deg, #111827, #0f766e); border: 1px solid var(--tx-border-color-light);"
+      />
+    </TxGlowText>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

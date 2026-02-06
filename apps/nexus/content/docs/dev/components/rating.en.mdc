@@ -16,7 +16,9 @@ const score = ref(3.5)
 </script>
 
 ## Basic Usage
-::TuffDemo{title="Rating" description="Select a score with half steps." code-lang="vue"}
+### Rating
+Select a score with half steps.
+:::TuffDemoWrapper{demo="RatingRatingDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -29,10 +31,7 @@ code: |
     <TxRating v-model="score" :precision="0.5" show-text />
   </template>
 ---
-#preview
-<tx-rating v-model="score" :precision="0.5" show-text />
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---
