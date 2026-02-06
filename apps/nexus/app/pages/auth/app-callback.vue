@@ -127,12 +127,9 @@ watch(
           <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
             {{ sessionToken }}
           </code>
-          <button
-            class="rounded-lg bg-yellow-500 px-4 py-2 text-sm text-white transition hover:bg-yellow-600"
-            @click="copyToken"
-          >
+          <Button size="small" variant="warning" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
-          </button>
+          </Button>
           <p class="mt-2 text-xs text-gray-400">
             Then run in Electron DevTools console: <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">__devAuthToken("PASTE_TOKEN_HERE")</code>
           </p>

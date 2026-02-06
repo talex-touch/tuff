@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FileUploaderFile } from '@talex-touch/tuffex'
 import { computed, ref, watchEffect } from 'vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
 
@@ -35,7 +36,7 @@ watchEffect(() => {
     execute()
 })
 
-const imageFile = ref<File | null>(null)
+const imageFiles = ref<FileUploaderFile[]>([])
 const imageUploading = ref(false)
 const imageError = ref<string | null>(null)
 const copiedImageKey = ref<string | null>(null)
@@ -44,25 +45,10 @@ function isImageResource(key: string) {
   return /\.(png|jpe?g|gif|webp|svg)$/i.test(key)
 }
 
-function resetFileInput() {
-  if (import.meta.client) {
-    const fileInput = document.getElementById('image-upload-input') as HTMLInputElement | null
-    if (fileInput)
-      fileInput.value = ''
-  }
-}
-
-async function handleImageUpload(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  if (!target?.files?.length)
-    return
-
-  imageFile.value = target.files[0] ?? null
-  await uploadImage()
-}
-
-async function uploadImage() {
-  if (!imageFile.value || !isAdmin.value)
+async function handleImageUpload(files: FileUploaderFile[]) {
+  imageFiles.value = files
+  const file = files[0]?.file
+  if (!file || !isAdmin.value)
     return
 
   imageUploading.value = true
@@ -70,7 +56,7 @@ async function uploadImage() {
 
   try {
     const formData = new FormData()
-    formData.append('file', imageFile.value)
+    formData.append('file', file)
 
     await $fetch('/api/images/upload', {
       method: 'POST',
@@ -78,8 +64,7 @@ async function uploadImage() {
     })
 
     await refreshImages()
-    imageFile.value = null
-    resetFileInput()
+    imageFiles.value = []
   }
   catch (error: unknown) {
     imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.unknown', 'Upload failed')
@@ -131,7 +116,7 @@ async function copyImageUrl(imageUrl: string, imageKey: string) {
 watchEffect(() => {
   if (!isAdmin.value) {
     imageError.value = null
-    imageFile.value = null
+    imageFiles.value = []
   }
 })
 </script>
@@ -173,13 +158,17 @@ watchEffect(() => {
           <div class="flex flex-col gap-3">
             <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
               {{ t('dashboard.sections.images.selectFile', 'Select File') }}
-              <input
-                id="image-upload-input"
-                type="file"
+              <TxFileUploader
+                v-model="imageFiles"
+                :multiple="false"
+                :max="1"
                 accept="*/*"
-                class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
+                :disabled="imageUploading"
+                :button-text="t('dashboard.sections.images.selectFile', 'Select File')"
+                :drop-text="t('dashboard.sections.images.selectFile', 'Select File')"
+                :hint-text="t('dashboard.sections.images.uploadSubtitle', 'Upload assets to use in plugins and updates')"
                 @change="handleImageUpload"
-              >
+              />
             </label>
 
             <p
@@ -243,21 +232,26 @@ watchEffect(() => {
                 {{ image.key }}
               </p>
               <div class="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
+                <TxButton
+                  variant="bare"
+                  block
+                  native-type="button"
                   class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-primary/20 bg-dark/5 px-3 py-1.5 text-xs font-medium text-black transition hover:bg-dark/10 dark:border-light/20 dark:bg-light/10 dark:text-light"
                   @click="copyImageUrl(image.url, image.key)"
                 >
                   <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
                   {{ copiedImageKey === image.key ? t('dashboard.sections.images.copied', 'Copied!') : t('dashboard.sections.images.copyUrl', 'Copy URL') }}
-                </button>
-                <button
-                  type="button"
+                </TxButton>
+                <TxButton
+                  variant="bare"
+                  circle
+                  size="mini"
+                  native-type="button"
                   class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 transition hover:border-red-300 hover:text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200"
                   @click="deleteImage(image.key)"
                 >
                   <span class="i-carbon-trash-can text-sm" />
-                </button>
+                </TxButton>
               </div>
             </div>
           </article>

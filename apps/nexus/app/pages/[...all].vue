@@ -58,20 +58,24 @@ function goHome() {
 
       <!-- Actions -->
       <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-        <button
-          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 text-sm font-medium text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary/90 hover:shadow-xl hover:shadow-primary/30 sm:w-auto"
+        <Button
+          variant="primary"
+          size="lg"
+          class="w-full sm:w-auto"
           @click="goHome"
         >
           <span class="i-carbon-home text-lg" />
           Back to Home
-        </button>
-        <button
-          class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-6 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto"
+        </Button>
+        <Button
+          variant="secondary"
+          size="lg"
+          class="w-full sm:w-auto"
           @click="goBack"
         >
           <span class="i-carbon-arrow-left text-lg" />
           Go Back
-        </button>
+        </Button>
       </div>
 
       <!-- Help links -->

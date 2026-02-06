@@ -35,10 +35,11 @@ function getBackgroundStyle(color: string): Record<string, string> {
 
 <template>
   <div class="grid grid-cols-2 mx-auto gap-[5em] overflow-visible py-[3em] md:grid-cols-3" :class="[className]">
-    <button
+    <TxButton
       v-for="(item, index) in items"
       :key="index"
-      type="button"
+      variant="bare"
+      native-type="button"
       :aria-label="item.label"
       class="group [-webkit-tap-highlight-color:transparent] [perspective:24em] [transform-style:preserve-3d] relative h-[4.5em] w-[4.5em] bg-transparent outline-none" :class="[
         item.customClass,
@@ -68,6 +69,6 @@ function getBackgroundStyle(color: string): Record<string, string> {
       >
         {{ item.label }}
       </span>
-    </button>
+    </TxButton>
   </div>
 </template>

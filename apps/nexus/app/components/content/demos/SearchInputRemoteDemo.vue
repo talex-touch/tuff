@@ -45,15 +45,18 @@ function onPick(h: string) {
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto;">
-            <button
+            <TxButton
               v-for="h in hits"
               :key="h"
-              type="button"
-              style="text-align: left; padding: 8px 10px; border-radius: 12px; border: 1px solid transparent; background: transparent; cursor: pointer;"
+              variant="bare"
+              size="small"
+              block
+              native-type="button"
+              style="justify-content: flex-start;"
               @click="onPick(h)"
             >
               {{ h }}
-            </button>
+            </TxButton>
 
             <div v-if="!loading && value.trim() && !hits.length" style="color: var(--tx-text-color-secondary, #909399); font-size: 12px; padding: 6px 2px;">
               No results

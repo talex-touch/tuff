@@ -9,14 +9,13 @@ syncStatus: migrated
 
 用于收集打分或满意度反馈。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const score = ref(3.5)
-</script>
-
 ## 基础用法
-::TuffDemo{title="评分组件" description="支持半星评分。" code-lang="vue"}
+
+### 评分组件
+
+支持半星评分。
+
+::TuffDemoWrapper{demo="RatingBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -29,9 +28,7 @@ code: |
     <TxRating v-model="score" :precision="0.5" show-text />
   </template>
 ---
-#preview
-<tx-rating v-model="score" :precision="0.5" show-text />
-:::
+::
 
 ## API（Lite）
 ::TuffPropsTable

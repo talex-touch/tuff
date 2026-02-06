@@ -37,9 +37,12 @@ function handleToggle() {
         <slot name="header" />
       </span>
     </NuxtLink>
-    <button
+    <TxButton
       v-else
-      type="button"
+      variant="bare"
+      size="small"
+      block
+      native-type="button"
       class="DocSection-Header"
       :class="active ? 'is-active' : ''"
       :aria-expanded="active"
@@ -53,7 +56,7 @@ function handleToggle() {
         :class="active ? 'is-open' : ''"
         aria-hidden="true"
       />
-    </button>
+    </TxButton>
 
     <TxAutoSizer
       v-if="list > 0"

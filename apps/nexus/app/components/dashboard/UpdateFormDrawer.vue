@@ -136,12 +136,7 @@ async function submit() {
           <label class="text-xs font-medium text-black/50 dark:text-white/50">
             {{ t('dashboard.sections.updates.form.date') }}
           </label>
-          <input
-            v-model="form.timestamp"
-            type="date"
-            required
-            class="w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm text-black outline-none transition focus:border-black/40 focus:ring-1 focus:ring-black/10 dark:border-white/10 dark:text-white"
-          >
+          <Input v-model="form.timestamp" type="date" required />
         </div>
 
         <div class="flex flex-col gap-1.5">
