@@ -1,13 +1,23 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toast } from 'vue-sonner'
-import { useAuthState } from '~/composables/useAuthState'
+import { useAuthLoadingState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
-type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'success'
+type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
+type AuthFlow = 'login' | 'bind'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
+export type OauthProvider = 'github' | 'linuxdo'
+interface OauthState {
+  flow: AuthFlow
+  provider?: OauthProvider | null
+  redirect?: string | null
+  ts: number
+}
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
+const OAUTH_STATE_KEY = 'tuff_oauth_state'
+const OAUTH_STATE_TTL = 10 * 60 * 1000
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
 
 function resolveErrorMessage(error: any, fallback: string) {
@@ -35,6 +45,13 @@ export function useSignIn() {
   const emailCheckLoading = ref(false)
   const bindLoading = ref(false)
   const oauthLoading = ref(false)
+  const oauthFlow = ref<AuthFlow>('login')
+  const oauthProvider = ref<OauthProvider | null>(null)
+  const oauthPhase = ref<'idle' | 'redirect' | 'verifying' | 'error'>('idle')
+  const oauthError = ref('')
+  const oauthPending = ref(false)
+  const oauthHandled = ref(false)
+  const oauthRedirect = ref<string | null>(null)
   const magicSent = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
@@ -71,6 +88,46 @@ export function useSignIn() {
       window.localStorage.setItem(LAST_LOGIN_METHOD_KEY, method)
   }
 
+  function readOauthState(): OauthState | null {
+    if (!hasWindow())
+      return null
+    const raw = window.localStorage.getItem(OAUTH_STATE_KEY)
+    if (!raw)
+      return null
+    try {
+      const parsed = JSON.parse(raw) as OauthState
+      if (!parsed?.ts)
+        return null
+      if (Date.now() - parsed.ts > OAUTH_STATE_TTL) {
+        window.localStorage.removeItem(OAUTH_STATE_KEY)
+        return null
+      }
+      return parsed
+    }
+    catch {
+      window.localStorage.removeItem(OAUTH_STATE_KEY)
+      return null
+    }
+  }
+
+  function persistOauthState(flow: AuthFlow, provider: OauthProvider | null, redirect: string | null) {
+    if (!hasWindow())
+      return
+    const payload: OauthState = {
+      flow,
+      provider,
+      redirect,
+      ts: Date.now(),
+    }
+    window.localStorage.setItem(OAUTH_STATE_KEY, JSON.stringify(payload))
+  }
+
+  function clearPersistedOauthState() {
+    if (!hasWindow())
+      return
+    window.localStorage.removeItem(OAUTH_STATE_KEY)
+  }
+
   function clearPasskeyTimer() {
     if (!passkeyTimer)
       return
@@ -93,12 +150,54 @@ export function useSignIn() {
     passkeyLoading.value = false
   }
 
+  function resetOauthState() {
+    oauthPhase.value = 'idle'
+    oauthError.value = ''
+    oauthProvider.value = null
+    oauthFlow.value = 'login'
+    oauthRedirect.value = null
+    oauthPending.value = false
+    oauthHandled.value = false
+    clearPersistedOauthState()
+  }
+
+  async function clearOauthContext() {
+    resetOauthState()
+    if (!route.query.oauth && !route.query.flow && !route.query.provider)
+      return
+    const nextQuery = { ...route.query } as Record<string, any>
+    delete nextQuery.oauth
+    delete nextQuery.flow
+    delete nextQuery.provider
+    await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
+  }
+
   const redirectTarget = computed(() => {
     const redirect = route.query.redirect_url
     if (typeof redirect === 'string' && redirect.length > 0) {
       return redirect
     }
     return '/dashboard'
+  })
+
+  const flowParam = computed(() => {
+    const raw = route.query.flow
+    if (!raw)
+      return null
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (value === 'bind' || value === 'login')
+      return value
+    return null
+  })
+
+  const providerParam = computed(() => {
+    const raw = route.query.provider
+    if (!raw)
+      return null
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (value === 'github' || value === 'linuxdo')
+      return value as OauthProvider
+    return null
   })
 
   const langParam = computed(() => {
@@ -145,6 +244,19 @@ export function useSignIn() {
     notify('warning', t('auth.sessionExpired', '登录信息已失效，请重新登录。'))
   })
 
+  watchEffect(() => {
+    if (flowParam.value) {
+      oauthFlow.value = flowParam.value
+      oauthPending.value = true
+    }
+    if (providerParam.value)
+      oauthProvider.value = providerParam.value
+    if (oauthParam.value === '1')
+      oauthPending.value = true
+    if (oauthPending.value && !oauthRedirect.value)
+      oauthRedirect.value = redirectTarget.value
+  })
+
   const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 
   const forgotUrl = computed(() => {
@@ -154,14 +266,16 @@ export function useSignIn() {
     return `/forgot-password?${params.toString()}`
   })
 
-  const oauthCallbackUrl = computed(() => {
+  function buildOauthCallbackUrl(flow: AuthFlow, provider: OauthProvider) {
     const params = new URLSearchParams({
       lang: langTag.value,
       redirect_url: redirectTarget.value,
       oauth: '1',
+      flow,
+      provider,
     })
     return `/sign-in?${params.toString()}`
-  })
+  }
 
   const emailPreview = computed(() => email.value.trim().toLowerCase())
   const lastLoginLabel = computed(() => {
@@ -180,12 +294,23 @@ export function useSignIn() {
         return ''
     }
   })
+
+  const oauthProviderLabel = computed(() => {
+    if (oauthProvider.value === 'github')
+      return 'GitHub'
+    if (oauthProvider.value === 'linuxdo')
+      return 'LinuxDO'
+    return t('auth.oauthProvider', '第三方')
+  })
   const oauthParam = computed(() => {
     const raw = route.query.oauth
     if (!raw)
       return null
     return Array.isArray(raw) ? raw[0] : raw
   })
+
+  const oauthReturn = computed(() => oauthParam.value === '1' || oauthPending.value)
+  const oauthTarget = computed(() => oauthRedirect.value || redirectTarget.value)
 
   const stepTitle = computed(() => {
     if (step.value === 'email')
@@ -194,6 +319,11 @@ export function useSignIn() {
       return t('auth.signUpTitle', '创建账号')
     if (step.value === 'passkey')
       return t('auth.passkeyTitle', 'Passkey 登录')
+    if (step.value === 'oauth') {
+      if (oauthFlow.value === 'bind')
+        return t('auth.oauthBindTitle', `正在绑定 ${oauthProviderLabel.value}`)
+      return t('auth.oauthTitle', `正在连接 ${oauthProviderLabel.value}`)
+    }
     if (step.value === 'success')
       return t('auth.signInSuccess', '登录成功')
     if (step.value === 'bind-email')
@@ -208,6 +338,15 @@ export function useSignIn() {
       return t('auth.signUpSubtitle', '使用邮箱创建账号，或选择 Passkey。')
     if (step.value === 'passkey')
       return t('auth.passkeySubtitle', '将调用系统 Passkey 完成验证。')
+    if (step.value === 'oauth') {
+      if (oauthPhase.value === 'redirect')
+        return t('auth.oauthRedirectSubtitle', `即将前往 ${oauthProviderLabel.value} 完成授权。`)
+      if (oauthPhase.value === 'error')
+        return t('auth.oauthErrorSubtitle', '登录遇到问题，请重试。')
+      if (oauthFlow.value === 'bind')
+        return t('auth.oauthBindSubtitle', '正在验证绑定状态...')
+      return t('auth.oauthVerifyingSubtitle', '正在验证账号信息...')
+    }
     if (step.value === 'success')
       return t('auth.signInSuccessSubtitle', '正在跳转...')
     if (step.value === 'bind-email')
@@ -222,7 +361,7 @@ export function useSignIn() {
       || passkeyPhase.value === 'verifying'
       || passkeyPhase.value === 'success'
   })
-  const { loading: authLoading } = useAuthState([
+  const { loading: authLoading } = useAuthLoadingState([
     loading,
     signupLoading,
     passkeyLoading,
@@ -233,14 +372,23 @@ export function useSignIn() {
     passkeyBusy,
   ])
 
-watch(step, (value) => {
-  magicSent.value = false
-  if (value !== 'passkey' && value !== 'success')
-    resetPasskeyState()
-})
+  watch(step, (value) => {
+    magicSent.value = false
+    if (value !== 'passkey' && value !== 'success')
+      resetPasskeyState()
+    if (value !== 'oauth')
+      resetOauthState()
+  })
 
   onMounted(() => {
     supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
+    const storedOauth = readOauthState()
+    if (storedOauth) {
+      oauthPending.value = true
+      oauthFlow.value = storedOauth.flow
+      oauthProvider.value = storedOauth.provider ?? oauthProvider.value
+      oauthRedirect.value = storedOauth.redirect ?? null
+    }
   })
 
   onBeforeUnmount(() => {
@@ -304,6 +452,7 @@ watch(step, (value) => {
     confirmPassword.value = ''
     bindEmail.value = ''
     magicSent.value = false
+    void clearOauthContext()
   }
 
   async function handlePasswordSignIn() {
@@ -444,24 +593,54 @@ watch(step, (value) => {
     }
   }
 
-  async function handleGithubSignIn() {
+  async function startOauthSignIn(provider: OauthProvider, fallbackMessage: string) {
+    if (oauthLoading.value)
+      return
+    oauthFlow.value = 'login'
+    oauthProvider.value = provider
+    oauthPhase.value = 'redirect'
+    oauthError.value = ''
+    oauthPending.value = true
+    oauthHandled.value = false
+    oauthRedirect.value = redirectTarget.value
+    persistOauthState('login', provider, redirectTarget.value)
+    recordLoginMethod(provider)
+    if (step.value !== 'oauth') {
+      step.value = 'oauth'
+      await nextTick()
+    }
+    await new Promise(resolve => setTimeout(resolve, 180))
+    oauthLoading.value = true
     try {
-      recordLoginMethod('github')
-      await signIn('github', { callbackUrl: oauthCallbackUrl.value })
+      await signIn(provider, { callbackUrl: buildOauthCallbackUrl('login', provider) })
     }
     catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.githubFailed', 'GitHub sign-in failed')))
+      const message = resolveErrorMessage(error, fallbackMessage)
+      oauthPhase.value = 'error'
+      oauthError.value = message
+      notify('error', message)
+      oauthLoading.value = false
     }
   }
 
+  async function handleGithubSignIn() {
+    await startOauthSignIn('github', t('auth.githubFailed', 'GitHub sign-in failed'))
+  }
+
   async function handleLinuxdoSignIn() {
-    try {
-      recordLoginMethod('linuxdo')
-      await signIn('linuxdo', { callbackUrl: oauthCallbackUrl.value })
+    await startOauthSignIn('linuxdo', t('auth.linuxdoFailed', 'LinuxDO sign-in failed'))
+  }
+
+  async function handleOauthRetry() {
+    if (oauthProvider.value === 'github') {
+      await handleGithubSignIn()
+      return
     }
-    catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.linuxdoFailed', 'LinuxDO sign-in failed')))
+    if (oauthProvider.value === 'linuxdo') {
+      await handleLinuxdoSignIn()
+      return
     }
+    resetToEmailStep()
   }
 
   async function handlePasskeySignIn() {

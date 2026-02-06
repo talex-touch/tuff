@@ -32,6 +32,7 @@ import type {
   IntelligenceKeywordsExtractPayload,
   IntelligenceKeywordsExtractResult,
   IntelligenceMessage,
+  IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
   IntelligenceRAGQueryPayload,
@@ -59,6 +60,7 @@ import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
+import { IntelligenceProvider } from './runtime/base-provider'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: unknown[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
@@ -119,6 +121,84 @@ function averageEmbeddings(vectors: number[][], weights: number[]): number[] {
     sum[j] /= weightSum
   }
   return sum
+}
+
+type CapabilityMethodName = keyof IntelligenceProviderAdapter
+
+const CAPABILITY_METHOD_MAP: Record<
+  string,
+  { method: CapabilityMethodName; requiresOverride?: boolean }
+> = {
+  chat: { method: 'chat' },
+  embedding: { method: 'embedding' },
+  translate: { method: 'translate' },
+  summarize: { method: 'summarize' },
+  rewrite: { method: 'rewrite' },
+  'grammar-check': { method: 'grammarCheck' },
+  'code-generate': { method: 'codeGenerate' },
+  'code-explain': { method: 'codeExplain' },
+  'code-review': { method: 'codeReview' },
+  'code-refactor': { method: 'codeRefactor' },
+  'code-debug': { method: 'codeDebug' },
+  'intent-detect': { method: 'intentDetect' },
+  'sentiment-analyze': { method: 'sentimentAnalyze' },
+  'content-extract': { method: 'contentExtract' },
+  'keywords-extract': { method: 'keywordsExtract' },
+  classification: { method: 'classification' },
+  vision: { method: 'visionOcr', requiresOverride: true },
+  'vision-ocr': { method: 'visionOcr', requiresOverride: true },
+  'image-caption': { method: 'imageCaption', requiresOverride: true },
+  'image-analyze': { method: 'imageAnalyze', requiresOverride: true },
+  'image-generate': { method: 'imageGenerate', requiresOverride: true },
+  'image-edit': { method: 'imageEdit', requiresOverride: true },
+  tts: { method: 'tts', requiresOverride: true },
+  stt: { method: 'stt', requiresOverride: true },
+  'audio-transcribe': { method: 'audioTranscribe', requiresOverride: true },
+  'rag-query': { method: 'ragQuery', requiresOverride: true },
+  'semantic-search': { method: 'semanticSearch', requiresOverride: true },
+  rerank: { method: 'rerank', requiresOverride: true },
+  agent: { method: 'agent', requiresOverride: true }
+}
+
+function resolveCapabilityMethod(
+  capabilityType: string,
+  stream: boolean
+): { method: CapabilityMethodName; requiresOverride?: boolean } | null {
+  if (stream) {
+    if (capabilityType !== 'chat') return null
+    return { method: 'chatStream' }
+  }
+  return CAPABILITY_METHOD_MAP[capabilityType] ?? null
+}
+
+function providerSupportsCapability(
+  provider: IntelligenceProviderAdapter,
+  capabilityId: string,
+  capabilityType: string,
+  stream: boolean
+): boolean {
+  const config = provider.getConfig()
+  if (Array.isArray(config.capabilities) && config.capabilities.length > 0) {
+    if (!config.capabilities.includes(capabilityId)) {
+      return false
+    }
+  }
+
+  const methodInfo = resolveCapabilityMethod(capabilityType, stream)
+  if (!methodInfo) return false
+  const method = (provider as Record<string, unknown>)[methodInfo.method]
+  if (typeof method !== 'function') return false
+
+  if (methodInfo.requiresOverride && provider instanceof IntelligenceProvider) {
+    const baseMethod = (IntelligenceProvider.prototype as Record<string, unknown>)[
+      methodInfo.method
+    ]
+    if (method === baseMethod) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function extractMustacheVariables(template: string): string[] {
@@ -291,25 +371,41 @@ export class AiSDK {
 
     const manager = ensureProviderManager()
 
-    const enabledProviders = manager.getEnabled().map((p) => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter((config) =>
-      capability.supportedProviders.includes(config.type)
+    if (!resolveCapabilityMethod(capability.type, false)) {
+      throw new Error(`[Intelligence] Capability type ${capability.type} not supported`)
+    }
+
+    const enabledProviders = manager.getEnabled()
+    const typeFilteredProviders = enabledProviders.filter((provider) =>
+      capability.supportedProviders.includes(provider.getConfig().type)
     )
 
-    const accessFilteredProviders = typeFilteredProviders.filter((config) => {
+    const accessFilteredProviders = typeFilteredProviders.filter((provider) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
         return true
       }
-      return runtimeOptions.allowedProviderIds.includes(config.id)
+      return runtimeOptions.allowedProviderIds.includes(provider.getConfig().id)
     })
 
-    const missingKeyProviders = accessFilteredProviders
-      .filter((config) => config.type !== 'local' && !config.apiKey)
-      .map((config) => config.id)
-
-    const availableProviders = accessFilteredProviders.filter(
-      (config) => !(config.type !== 'local' && !config.apiKey)
+    const capabilityFilteredProviders = accessFilteredProviders.filter((provider) =>
+      providerSupportsCapability(provider, capabilityId, capability.type, false)
     )
+
+    if (capabilityFilteredProviders.length === 0 && accessFilteredProviders.length > 0) {
+      throw new Error(
+        `[Intelligence] No enabled providers for ${capabilityId}: capability not supported`
+      )
+    }
+
+    const missingKeyProviders = capabilityFilteredProviders
+      .filter((provider) => provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
+      .map((provider) => provider.getConfig().id)
+
+    const availableProviders = capabilityFilteredProviders
+      .filter(
+        (provider) => !(provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
+      )
+      .map((provider) => provider.getConfig())
 
     if (availableProviders.length === 0) {
       if (missingKeyProviders.length > 0) {
@@ -751,21 +847,54 @@ export class AiSDK {
       }
     }
 
+    if (capability.type !== 'chat') {
+      throw new Error('[Intelligence] Stream is only supported for chat capability')
+    }
+
     const manager = ensureProviderManager()
 
-    const enabledProviders = manager.getEnabled().map((p) => p.getConfig())
-    const typeFilteredProviders = enabledProviders.filter((config) =>
-      capability.supportedProviders.includes(config.type)
+    if (!resolveCapabilityMethod(capability.type, true)) {
+      throw new Error(`[Intelligence] Capability type ${capability.type} not supported`)
+    }
+
+    const enabledProviders = manager.getEnabled()
+    const typeFilteredProviders = enabledProviders.filter((provider) =>
+      capability.supportedProviders.includes(provider.getConfig().type)
     )
 
-    const availableProviders = typeFilteredProviders.filter((config) => {
+    const accessFilteredProviders = typeFilteredProviders.filter((provider) => {
       if (!runtimeOptions.allowedProviderIds || runtimeOptions.allowedProviderIds.length === 0) {
         return true
       }
-      return runtimeOptions.allowedProviderIds.includes(config.id)
+      return runtimeOptions.allowedProviderIds.includes(provider.getConfig().id)
     })
 
+    const capabilityFilteredProviders = accessFilteredProviders.filter((provider) =>
+      providerSupportsCapability(provider, capabilityId, capability.type, true)
+    )
+
+    if (capabilityFilteredProviders.length === 0 && accessFilteredProviders.length > 0) {
+      throw new Error(
+        `[Intelligence] No enabled providers for ${capabilityId}: capability not supported`
+      )
+    }
+
+    const missingKeyProviders = capabilityFilteredProviders
+      .filter((provider) => provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
+      .map((provider) => provider.getConfig().id)
+
+    const availableProviders = capabilityFilteredProviders
+      .filter(
+        (provider) => !(provider.getConfig().type !== 'local' && !provider.getConfig().apiKey)
+      )
+      .map((provider) => provider.getConfig())
+
     if (availableProviders.length === 0) {
+      if (missingKeyProviders.length > 0) {
+        throw new Error(
+          `[Intelligence] No enabled providers for ${capabilityId}: missing API key for ${missingKeyProviders.join(', ')}`
+        )
+      }
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
@@ -778,10 +907,6 @@ export class AiSDK {
     const provider = manager.get(strategyResult.selectedProvider.id)
     if (!provider) {
       throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
-    }
-
-    if (capability.type !== 'chat') {
-      throw new Error('[Intelligence] Stream is only supported for chat capability')
     }
 
     yield* provider.chatStream(payload as IntelligenceChatPayload, runtimeOptions)

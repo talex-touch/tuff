@@ -64,8 +64,16 @@ export class LocalProvider extends IntelligenceProvider {
     }
   }
 
-  async *chatStream(): AsyncGenerator<AiStreamChunk> {
-    throw new Error('[LocalProvider] Streaming not implemented')
+  async *chatStream(
+    payload: IntelligenceChatPayload,
+    options: AiInvokeOptions
+  ): AsyncGenerator<AiStreamChunk> {
+    const result = await this.chat(payload, options)
+    yield {
+      delta: result.result ?? '',
+      done: true,
+      usage: result.usage
+    }
   }
 
   async embedding(

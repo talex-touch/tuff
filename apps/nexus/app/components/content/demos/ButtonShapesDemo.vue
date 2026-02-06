@@ -1,14 +1,24 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const { locale } = useI18n()
+
+const labels = computed(() => (locale.value === 'zh'
+  ? { dashed: '虚线', plain: '朴素', round: '圆角' }
+  : { dashed: 'Dashed', plain: 'Plain', round: 'Round' }))
+</script>
+
 <template>
   <div class="tuff-demo-row">
     <TxButton dashed>
-Dashed
-</TxButton>
+      {{ labels.dashed }}
+    </TxButton>
     <TxButton plain variant="primary">
-Plain
-</TxButton>
+      {{ labels.plain }}
+    </TxButton>
     <TxButton round variant="primary">
-Round
-</TxButton>
+      {{ labels.round }}
+    </TxButton>
     <TxButton circle icon="i-carbon-edit" />
   </div>
 </template>

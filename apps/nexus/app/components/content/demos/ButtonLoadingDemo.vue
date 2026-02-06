@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   loadingLabel?: string
   idleLabel?: string
-}>(), {
-  loadingLabel: 'Loading',
-  idleLabel: 'Click to load',
-})
+}>()
+
+const { locale } = useI18n()
+
+const labels = computed(() => (locale.value === 'zh'
+  ? { loading: '加载中', idle: '点击加载' }
+  : { loading: 'Loading', idle: 'Click to load' }))
+
+const loadingLabel = computed(() => props.loadingLabel || labels.value.loading)
+const idleLabel = computed(() => props.idleLabel || labels.value.idle)
 
 const loading = ref(false)
 
@@ -23,12 +29,12 @@ async function handleClick() {
 <template>
   <div class="tuff-demo-row">
     <TxButton variant="primary" :loading="loading" @click="handleClick">
-      <span v-if="loading">{{ props.loadingLabel }}</span>
-      <span v-else>{{ props.idleLabel }}</span>
+      <span v-if="loading">{{ loadingLabel }}</span>
+      <span v-else>{{ idleLabel }}</span>
     </TxButton>
     <TxButton variant="secondary" :loading="loading" @click="handleClick">
-      <span v-if="loading">{{ props.loadingLabel }}</span>
-      <span v-else>{{ props.idleLabel }}</span>
+      <span v-if="loading">{{ loadingLabel }}</span>
+      <span v-else>{{ idleLabel }}</span>
     </TxButton>
     <TxButton circle icon="i-carbon-edit" :loading="loading" @click="handleClick" />
   </div>
