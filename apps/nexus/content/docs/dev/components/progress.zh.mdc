@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Progress States" description="基础进度 + 状态色" code-lang="vue"}
+### Progress States
+基础进度 + 状态色
+:::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -24,14 +26,7 @@ code: |
     <TuffProgress :percentage="100" status="success" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-progress :percentage="40" />
-  <tuff-progress :percentage="72" status="warning" />
-  <tuff-progress :percentage="100" status="success" />
-</div>
-::
-
+:::
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -63,7 +58,9 @@ rows:
 ::
 
 ## 组合示例
-::TuffDemo{title="进度行" description="进度条配合状态提示使用。" code-lang="vue"}
+### 进度行
+进度条配合状态提示使用。
+:::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -71,9 +68,4 @@ code: |
     <TxStatusBadge text="进行中" status="warning" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-progress :percentage="60" />
-  <tx-status-badge text="进行中" status="warning" />
-</div>
-::
+:::

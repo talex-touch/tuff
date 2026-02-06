@@ -14,7 +14,9 @@ syncStatus: migrated
 
 ## 基础用法
 
-::TuffDemo{title="Toast" description="挂载 host 后触发提示。" code-lang="vue"}
+### Toast
+挂载 host 后触发提示。
+:::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -30,20 +32,7 @@ code: |
     </TxButton>
   </template>
 ---
-#preview
-<tuff-toast-demo
-  success-label="成功"
-  warning-label="警告"
-  error-label="失败"
-  success-title="保存成功"
-  success-description="已写入本地"
-  warning-title="网络不稳定"
-  warning-description="请稍后重试"
-  error-title="保存失败"
-  error-description="请检查权限"
-/>
-::
-
+:::
 ## API
 
 ### toast(options)

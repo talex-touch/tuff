@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSection.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
@@ -211,12 +212,15 @@ const versionStatusUpdating = ref<string | null>(null)
 const pluginActionError = ref<string | null>(null)
 const versionActionError = ref<string | null>(null)
 const iconPreviewObjectUrl = ref<string | null>(null)
+const originalIconPreviewUrl = ref<string | null>(null)
+const pluginIconFiles = ref<FileUploaderFile[]>([])
 const editingPluginHasIcon = ref(false)
 const pluginPackageLoading = ref(false)
 const pluginPackageError = ref<string | null>(null)
 const pluginManifestPreview = ref<ExtractedManifest | null>(null)
 const pluginReadmePreview = ref('')
 const pluginPackageFileName = ref<string | null>(null)
+const pluginPackageFiles = ref<FileUploaderFile[]>([])
 
 // New UI state for refactored plugin list
 const selectedPlugin = ref<DashboardPlugin | null>(null)
@@ -333,6 +337,9 @@ function handleDetailDeleteVersion(plugin: DashboardPlugin, version: DashboardPl
 function resetPluginForm() {
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
+  originalIconPreviewUrl.value = null
+  pluginIconFiles.value = []
+  pluginPackageFiles.value = []
   Object.assign(pluginForm, createPluginFormState())
   editingPluginId.value = null
   pluginFormError.value = null
@@ -485,6 +492,9 @@ function openEditPluginForm(plugin: DashboardPlugin) {
   const categoryValue = isPluginCategoryId(plugin.category) ? plugin.category : defaultPluginCategoryId
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
+  originalIconPreviewUrl.value = plugin.iconUrl ?? null
+  pluginIconFiles.value = []
+  pluginPackageFiles.value = []
   Object.assign(pluginForm, {
     slug: plugin.slug,
     name: plugin.name,
@@ -503,24 +513,26 @@ function openEditPluginForm(plugin: DashboardPlugin) {
   showPluginForm.value = true
 }
 
-function handlePluginIconInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
+function handlePluginIconInput(files: FileUploaderFile[]) {
+  const file = files[0]?.file ?? null
   pluginForm.iconFile = file
   pluginForm.removeIcon = false
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
-  if (file) {
-    const objectUrl = createObjectUrl(file)
-    if (objectUrl) {
-      iconPreviewObjectUrl.value = objectUrl
-      pluginForm.iconPreviewUrl = objectUrl
-    }
-    else {
-      pluginForm.iconPreviewUrl = null
-    }
-    editingPluginHasIcon.value = true
+  if (!file) {
+    pluginForm.iconPreviewUrl = originalIconPreviewUrl.value
+    editingPluginHasIcon.value = Boolean(originalIconPreviewUrl.value)
+    return
   }
+  const objectUrl = createObjectUrl(file)
+  if (objectUrl) {
+    iconPreviewObjectUrl.value = objectUrl
+    pluginForm.iconPreviewUrl = objectUrl
+  }
+  else {
+    pluginForm.iconPreviewUrl = null
+  }
+  editingPluginHasIcon.value = true
 }
 
 function removePluginIconPreview() {
@@ -529,12 +541,13 @@ function removePluginIconPreview() {
   revokeObjectUrl(iconPreviewObjectUrl.value)
   iconPreviewObjectUrl.value = null
   pluginForm.iconPreviewUrl = null
+  originalIconPreviewUrl.value = null
+  pluginIconFiles.value = []
   editingPluginHasIcon.value = false
 }
 
-async function handlePluginPackageInput(event: Event) {
-  const target = event.target as HTMLInputElement | null
-  const file = target?.files?.[0] ?? null
+async function handlePluginPackageInput(files: FileUploaderFile[]) {
+  const file = files[0]?.file ?? null
   pluginPackageFileName.value = file?.name ?? null
   pluginPackageError.value = null
   pluginManifestPreview.value = null
@@ -881,19 +894,15 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
             {{ t('dashboard.sections.plugins.form.category') }}
-            <select
-              v-model="pluginForm.category"
-              required
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light"
-            >
-              <option
+            <TxSelect v-model="pluginForm.category" class="w-full">
+              <TxSelectItem
                 v-for="category in pluginCategoryOptions"
                 :key="category.id"
                 :value="category.id"
               >
                 {{ category.label }}
-              </option>
-            </select>
+              </TxSelectItem>
+            </TxSelect>
           </label>
           <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
             {{ t('dashboard.sections.plugins.form.summary') }}
@@ -912,14 +921,15 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 <span v-else>{{ pluginForm.name ? pluginForm.name.charAt(0).toUpperCase() : '∗' }}</span>
               </div>
               <div class="flex flex-col gap-2 text-[11px] font-medium normal-case text-black/60 dark:text-light/60">
-                <label class="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                    class="max-w-[220px] text-[11px] font-medium text-black outline-none file:mr-3 file:rounded-full file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:uppercase file:tracking-wide file:text-primary hover:file:bg-primary/20 dark:text-light dark:file:bg-light/20 dark:file:text-light"
-                    @change="handlePluginIconInput"
-                  >
-                </label>
+                <TxFileUploader
+                  v-model="pluginIconFiles"
+                  :multiple="false"
+                  :max="1"
+                  :disabled="pluginSaving"
+                  accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                  :show-size="false"
+                  @change="handlePluginIconInput"
+                />
                 <FlatButton
                   v-if="pluginFormMode === 'edit' && (pluginForm.iconPreviewUrl || editingPluginHasIcon)"
                   class="text-[11px] font-semibold uppercase tracking-wide"
@@ -939,20 +949,17 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
             class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2"
           >
             {{ t('dashboard.sections.plugins.form.packageUpload') }}
-            <input
-              type="file"
+            <TxFileUploader
+              v-model="pluginPackageFiles"
+              :multiple="false"
+              :max="1"
+              :disabled="pluginPackageLoading"
               accept=".tpex"
-              class="rounded-xl border border-primary/15 bg-white/90 px-3 py-2 text-sm text-black outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-dark/10 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-black transition focus:border-primary/40 focus:ring-2 focus:ring-primary/20 dark:border-light/20 dark:bg-dark/40 dark:text-light dark:file:bg-light/10 dark:file:text-light"
+              :show-size="false"
               @change="handlePluginPackageInput"
-            >
+            />
             <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
               {{ t('dashboard.sections.plugins.form.packageHelp') }}
-            </span>
-            <span
-              v-if="pluginPackageFileName"
-              class="text-[11px] font-medium normal-case text-black/60 dark:text-light/60"
-            >
-              {{ pluginPackageFileName }}
             </span>
           </label>
           <div

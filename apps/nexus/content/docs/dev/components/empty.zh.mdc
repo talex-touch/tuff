@@ -13,15 +13,8 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="Empty">
-<template #preview>
-<div style="max-width: 360px;">
-  <TxEmpty title="No results" description="Try changing filters." />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Empty
+:::TuffDemoWrapper{demo="EmptyEmptyDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -29,24 +22,11 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 带操作
 
-<DemoBlock title="Empty (action)">
-<template #preview>
-<div style="max-width: 360px;">
-  <TxEmpty title="No items" description="Create your first item.">
-    <template #action>
-      <TxButton>New</TxButton>
-    </template>
-  </TxEmpty>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Empty (action)
+:::TuffDemoWrapper{demo="EmptyEmptyActionDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -58,8 +38,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

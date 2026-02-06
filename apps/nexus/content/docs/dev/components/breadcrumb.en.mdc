@@ -10,7 +10,9 @@ syncStatus: migrated
 Navigation trail that shows hierarchy.
 
 ## Basic Usage
-::TuffDemo{title="Breadcrumb Trail" description="Provide a quick sense of place." code-lang="vue"}
+### Breadcrumb Trail
+Provide a quick sense of place.
+:::TuffDemoWrapper{demo="BreadcrumbBreadcrumbTrailDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -23,16 +25,7 @@ code: |
     />
   </template>
 ---
-#preview
-<tx-breadcrumb
-  :items="[
-    { label: 'Home', href: '/' },
-    { label: 'Library', href: '/library' },
-    { label: 'Data' },
-  ]"
-/>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

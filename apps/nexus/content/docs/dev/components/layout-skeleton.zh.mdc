@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Layout Placeholder" description="容器决定骨架尺寸。" code-lang="vue"}
+### Layout Placeholder
+容器决定骨架尺寸。
+:::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -24,14 +26,7 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <div style="width: 100%; height: 240px;">
-    <tx-layout-skeleton />
-  </div>
-</div>
-::
-
+:::
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -60,7 +55,9 @@ rows:
 ::
 
 ## 组合示例
-::TuffDemo{title="面板占位" description="布局骨架搭配卡片容器使用。" code-lang="vue"}
+### 面板占位
+布局骨架搭配卡片容器使用。
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -69,10 +66,4 @@ code: |
     </TxCard>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <tx-card style="width: 100%;">
-    <tx-layout-skeleton />
-  </tx-card>
-</div>
-::
+:::

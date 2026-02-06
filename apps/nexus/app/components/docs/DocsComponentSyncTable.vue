@@ -149,7 +149,7 @@ const rows = computed(() => {
 }
 
 .docs-sync-table__link:hover {
-  color: rgba(59, 130, 246, 0.95);
+  color: var(--docs-accent-strong);
 }
 
 .docs-sync-table__status {

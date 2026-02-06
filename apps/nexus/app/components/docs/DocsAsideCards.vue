@@ -136,7 +136,7 @@ function handleAsk() {
 }
 
 .docs-aside-card__sparkle {
-  color: #3b82f6;
+  color: var(--docs-accent-strong);
   font-size: 14px;
 }
 
@@ -163,8 +163,8 @@ function handleAsk() {
 }
 
 .docs-aside-card__input:focus {
-  border-color: rgba(147, 197, 253, 0.9);
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
+  border-color: var(--docs-accent-strong);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--docs-accent) 35%, transparent);
 }
 
 .docs-aside-card__send {

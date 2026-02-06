@@ -10,7 +10,9 @@ syncStatus: migrated
 Inline status banner for contextual feedback.
 
 ## Basic Usage
-::TuffDemo{title="Alert Variants" description="Info / Success / Warning / Error." code-lang="vue"}
+### Alert Variants
+Info / Success / Warning / Error.
+:::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -20,15 +22,7 @@ code: |
     <TxAlert title="Error" message="Save failed." type="error" />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 12px;">
-  <tx-alert title="Heads up" message="Check your configuration." type="info" />
-  <tx-alert title="Success" message="Saved successfully." type="success" />
-  <tx-alert title="Warning" message="Something needs your attention." type="warning" />
-  <tx-alert title="Error" message="Save failed." type="error" />
-</div>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

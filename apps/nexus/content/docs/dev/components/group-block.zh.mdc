@@ -20,38 +20,8 @@ const dummy = ref(false)
 
 ## 基础用法
 
-<DemoBlock title="GroupBlock">
-<template #preview>
-<div style="width: 560px;">
-  <TxGroupBlock
-    name="通用设置"
-    default-icon="i-ri-settings-3-line"
-    active-icon="i-ri-settings-3-fill"
-    description="配置基本选项"
-  >
-    <TxBlockSwitch
-      v-model="notifications"
-      title="通知"
-      description="启用推送通知"
-      default-icon="i-ri-notification-line"
-      active-icon="i-ri-notification-fill"
-    />
-    <TxBlockSlot
-      title="语言"
-      description="选择显示语言"
-      default-icon="i-carbon-translate"
-    >
-      <select v-model="language" style="padding: 6px 10px; border-radius: 10px; border: 1px solid var(--tx-border-color); background: var(--tx-fill-color-blank);">
-        <option value="en">English</option>
-        <option value="zh">中文</option>
-      </select>
-    </TxBlockSlot>
-  </TxGroupBlock>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### GroupBlock
+:::TuffDemoWrapper{demo="GroupBlockGroupBlockDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -78,30 +48,13 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 初始折叠
 
 使用 `default-expand` 或 `collapsed` 控制初始展开状态。
 
-<DemoBlock title="GroupBlock (collapsed)">
-<template #preview>
-<div style="width: 560px;">
-  <TxGroupBlock
-    name="高级设置"
-    description="折叠展示内容"
-    default-icon="i-ri-folder-line"
-    active-icon="i-ri-folder-open-line"
-    :default-expand="false"
-  >
-    <div style="padding: 12px;">高级内容</div>
-  </TxGroupBlock>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### GroupBlock (collapsed)
+:::TuffDemoWrapper{demo="GroupBlockGroupBlockCollapsedDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -117,36 +70,13 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 记忆展开状态
 
 为 `memory-name` 指定唯一键，组件会持久化展开状态。
 
-<DemoBlock title="GroupBlock (memory)">
-<template #preview>
-<div style="width: 560px;">
-  <TxGroupBlock
-    name="更新策略"
-    description="记忆展开状态"
-    default-icon="i-ri-refresh-line"
-    active-icon="i-ri-refresh-line"
-    memory-name="tx-group-block-demo"
-  >
-    <TxBlockSwitch
-      v-model="autoUpdate"
-      title="自动更新"
-      description="后台自动检查更新"
-      default-icon="i-ri-refresh-line"
-      active-icon="i-ri-refresh-line"
-    />
-  </TxGroupBlock>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### GroupBlock (memory)
+:::TuffDemoWrapper{demo="GroupBlockGroupBlockMemoryDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -168,34 +98,13 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 头部扩展
 
 使用 `header-extra` 插槽放置操作区。
 
-<DemoBlock title="GroupBlock (header-extra)">
-<template #preview>
-<div style="width: 560px;">
-  <TxGroupBlock
-    name="同步"
-    description="手动触发同步"
-    default-icon="i-ri-loop-left-line"
-    :collapsible="false"
-  >
-    <template #header-extra>
-      <button style="padding: 6px 10px; border-radius: 8px; border: 1px solid var(--tx-border-color); background: var(--tx-fill-color-blank); font-size: 12px;">
-        立即同步
-      </button>
-    </template>
-    <TxBlockLine title="上次同步" description="刚刚" />
-  </TxGroupBlock>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### GroupBlock (header-extra)
+:::TuffDemoWrapper{demo="GroupBlockGroupBlockHeaderExtraDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -213,8 +122,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ---
 
@@ -320,21 +227,8 @@ code: |
 
 ## 基础用法
 
-<DemoBlock title="BlockSwitch">
-<template #preview>
-<div style="width: 560px;">
-  <TxBlockSwitch
-    v-model="autoUpdate"
-    title="自动更新"
-    description="启用后台更新"
-    default-icon="i-ri-refresh-line"
-    active-icon="i-ri-refresh-line"
-  />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### BlockSwitch
+:::TuffDemoWrapper{demo="GroupBlockBlockSwitchDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -348,27 +242,11 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 加载状态
 
-<DemoBlock title="BlockSwitch (loading)">
-<template #preview>
-<div style="width: 560px;">
-  <TxBlockSwitch
-    v-model="loading"
-    title="正在同步"
-    description="同步过程中暂不可用"
-    default-icon="i-ri-loader-4-line"
-    active-icon="i-ri-loader-4-line"
-    :loading="true"
-  />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### BlockSwitch (loading)
+:::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -383,8 +261,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 禁用状态
 
@@ -408,22 +284,8 @@ code: |
 
 显示为导航项而非开关。
 
-<DemoBlock title="BlockSwitch (guidance)">
-<template #preview>
-<div style="width: 560px;">
-  <TxBlockSwitch
-    v-model="dummy"
-    title="隐私设置"
-    description="管理您的隐私选项"
-    default-icon="i-ri-shield-keyhole-line"
-    guidance
-    @click="() => {}"
-  />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### BlockSwitch (guidance)
+:::TuffDemoWrapper{demo="GroupBlockBlockSwitchGuidanceDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -438,8 +300,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ---
 

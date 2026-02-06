@@ -14,7 +14,9 @@ The Avatar component displays user avatars, brand marks, or other circular conte
 
 ## Basic Usage
 
-::TuffDemo{title="Avatar" description="Image, name, icon, and fallback content." code-lang="vue"}
+### Avatar
+Image, name, icon, and fallback content.
+:::TuffDemoWrapper{demo="AvatarAvatarDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -26,18 +28,12 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar name="Talex DreamSoul" />
-  <tx-avatar icon="user" />
-  <tx-avatar>U</tx-avatar>
-</div>
-::
-
+:::
 ## Sizes
 
-::TuffDemo{title="Sizes" description="Preset sizes: small/medium/large/xlarge." code-lang="vue"}
+### Sizes
+Preset sizes: small/medium/large/xlarge.
+:::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -49,18 +45,12 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
-</div>
-::
-
+:::
 ## Text Avatars
 
-::TuffDemo{title="Text" description="Use text as avatar content." code-lang="vue"}
+### Text
+Use text as avatar content.
+:::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -71,17 +61,12 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar>张</tx-avatar>
-  <tx-avatar>AB</tx-avatar>
-  <tx-avatar>User</tx-avatar>
-</div>
-::
-
+:::
 ## Icon Avatars
 
-::TuffDemo{title="Icon" description="Use icons as avatar content." code-lang="vue"}
+### Icon
+Use icons as avatar content.
+:::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -91,16 +76,12 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar icon="user" />
-  <tx-avatar icon="team" />
-</div>
-::
-
+:::
 ## Avatar Group
 
-::TuffDemo{title="AvatarGroup" description="Stacked avatars with a max limit." code-lang="vue"}
+### AvatarGroup
+Stacked avatars with a max limit.
+:::TuffDemoWrapper{demo="AvatarAvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -113,19 +94,12 @@ code: |
     </TxAvatarGroup>
   </template>
 ---
-#preview
-<tx-avatar-group :max="3" size="small" :overlap="10">
-  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/2?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/3?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/4?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/5?v=4" />
-</tx-avatar-group>
-::
-
+:::
 ## Status
 
-::TuffDemo{title="Status" description="Status badge overlay." code-lang="vue"}
+### Status
+Status badge overlay.
+:::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -137,15 +111,7 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar status="online" name="Online" />
-  <tx-avatar status="offline" name="Offline" />
-  <tx-avatar status="busy" name="Busy" />
-  <tx-avatar status="away" name="Away" />
-</div>
-::
-
+:::
 ## Clickable Avatar
 
 ::TuffCodeBlock{lang="vue"}

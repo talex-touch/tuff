@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
 import { useToast } from '~/composables/useToast'
 
 const { toasts, remove } = useToast()
@@ -35,9 +36,11 @@ function toneClass(type: string) {
               {{ toast.message }}
             </p>
           </div>
-          <button
-            type="button"
-            class="i-carbon-close text-xs opacity-60 transition hover:opacity-100"
+          <Button
+            variant="bare"
+            size="mini"
+            circle
+            icon="i-carbon-close"
             aria-label="Dismiss"
             @click="remove(toast.id)"
           />

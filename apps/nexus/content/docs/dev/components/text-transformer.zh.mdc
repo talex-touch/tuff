@@ -29,11 +29,80 @@ import TextTransformerBadgeDemoSource from '~/components/content/demos/TextTrans
 
 ## 基础用法
 
-<DemoBlock title="TextTransformer" :code="TextTransformerBasicDemoSource">
-  <template #preview>
-    <TextTransformerBasicDemo />
+### TextTransformer
+:::TuffDemoWrapper{demo="TextTransformerTextTransformerDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const text = ref('Hello')
+  const duration = ref(320)
+  const blurPx = ref(10)
+  const accent = ref(false)
+  const sizerRef = ref<any>(null)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      text.value = text.value === 'Hello'
+        ? 'Goodbye (blur + fade) - a longer title that will be clipped while resizing'
+        : 'Hello'
+      accent.value = !accent.value
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle
+        </TxButton>
+
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div style="width: 220px;">
+            <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+              duration (ms)
+            </div>
+            <TxSlider v-model="duration" :min="120" :max="720" :step="10" :show-value="true" />
+          </div>
+
+          <div style="width: 220px;">
+            <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+              blur (px)
+            </div>
+            <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
+          </div>
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :inline="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+      >
+        <TxCard variant="plain" background="mask" :padding="12" :radius="14">
+          <div style="font-size: 14px; font-weight: 600; line-height: 1.4;">
+            <TxTextTransformer
+              :text="text"
+              :duration-ms="duration"
+              :blur-px="blurPx"
+              :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
+            />
+          </div>
+          <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
+            text: {{ text }}
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 与 AutoSizer 搭配
 
@@ -41,35 +110,323 @@ import TextTransformerBadgeDemoSource from '~/components/content/demos/TextTrans
 
 如果你在尺寸动画过程中不希望文本被挤压换行（出现竖排/跳行），可以保持默认 `wrap=false`，超出部分会被裁剪（`overflow: hidden`）。
 
-<DemoBlock title="AutoSizer + TextTransformer" :code="AutoSizerTextTransformerDemoSource">
-  <template #preview>
-    <AutoSizerTextTransformerDemo />
+### AutoSizer + TextTransformer
+:::TuffDemoWrapper{demo="TextTransformerAutoSizerTextTransformerDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sizerRef = ref<any>(null)
+  const label = ref('Short')
+  const accent = ref(false)
+  const duration = ref(360)
+  const blurPx = ref(10)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      label.value = label.value === 'Short'
+        ? 'Very very long label (blur + fade) that will be clipped while resizing'
+        : 'Short'
+      accent.value = !accent.value
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle
+        </TxButton>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
+          <TxSlider v-model="duration" :min="160" :max="720" :step="10" :show-value="true" />
+        </div>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
+          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :inline="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+      >
+        <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
+          <div style="font-size: 13px; line-height: 1.4;">
+            <TxTextTransformer
+              :text="label"
+              :duration-ms="duration"
+              :blur-px="blurPx"
+              :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
+            />
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 长文本/章节切换
 
-<DemoBlock title="Long text chapter" :code="TextTransformerLongTextDemoSource">
-  <template #preview>
-    <TextTransformerLongTextDemo />
+### Long text chapter
+:::TuffDemoWrapper{demo="TextTransformerLongTextChapterDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sizerRef = ref<any>(null)
+  const long = ref(false)
+  const duration = ref(380)
+  const blurPx = ref(12)
+
+  const chapterA = `Chapter A\n\nThis is a longer paragraph of text used to simulate chapter content changes.\nIt includes multiple lines so you can observe both width and height transitions.\n\n- Bullet A\n- Bullet B\n- Bullet C\n\nEnd.`
+
+  const chapterB = `Chapter B\n\nA different chapter with different length.\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit.\nSed do eiusmod tempor incididunt ut labore et dolore magna aliqua.\n\nUt enim ad minim veniam, quis nostrud exercitation ullamco laboris.\n\nEnd.`
+
+  const text = ref(chapterA)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      long.value = !long.value
+      text.value = long.value ? chapterB : chapterA
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle chapter
+        </TxButton>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
+          <TxSlider v-model="duration" :min="180" :max="900" :step="10" :show-value="true" />
+        </div>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
+          <TxSlider v-model="blurPx" :min="0" :max="28" :step="1" :show-value="true" />
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+        style="max-width: 720px;"
+      >
+        <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+          <div style="font-size: 13px; line-height: 1.6; max-width: 640px;">
+            <TxTextTransformer :text="text" :duration-ms="duration" :blur-px="blurPx" wrap />
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+
+      <div style="font-size: 12px; opacity: 0.65;">
+        Tip: this component is designed for occasional transitions. Avoid using it for high-frequency real-time updates.
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 标题 + 副标题
 
-<DemoBlock title="Title + subtitle" :code="TextTransformerTitleSubtitleDemoSource">
-  <template #preview>
-    <TextTransformerTitleSubtitleDemo />
+### Title + subtitle
+:::TuffDemoWrapper{demo="TextTransformerTitleSubtitleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sizerRef = ref<any>(null)
+  const duration = ref(320)
+  const blurPx = ref(10)
+  const accent = ref(false)
+
+  const title = ref('Daily Report')
+  const subtitle = ref('Short summary.')
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      if (title.value === 'Daily Report') {
+        title.value = 'Weekly Report (Longer Title)'
+        subtitle.value = 'A longer subtitle that spans multiple words.'
+      }
+      else {
+        title.value = 'Daily Report'
+        subtitle.value = 'Short summary.'
+      }
+      accent.value = !accent.value
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle
+        </TxButton>
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
+          <TxSlider v-model="duration" :min="160" :max="720" :step="10" :show-value="true" />
+        </div>
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
+          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :inline="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+      >
+        <TxCard variant="plain" background="mask" :padding="14" :radius="14" style="max-width: 420px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 14px; font-weight: 700; line-height: 1.3;">
+              <TxTextTransformer
+                :text="title"
+                :duration-ms="duration"
+                :blur-px="blurPx"
+                :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
+              />
+            </div>
+            <div style="font-size: 12px; opacity: 0.8; line-height: 1.4;">
+              <TxTextTransformer
+                :text="subtitle"
+                :duration-ms="duration"
+                :blur-px="blurPx"
+                :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-secondary)' }"
+              />
+            </div>
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 状态/徽标文本
 
-<DemoBlock title="Status text" :code="TextTransformerBadgeDemoSource">
-  <template #preview>
-    <TextTransformerBadgeDemo />
+### Status text
+:::TuffDemoWrapper{demo="TextTransformerStatusTextDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sizerRef = ref<any>(null)
+  const duration = ref(280)
+  const blurPx = ref(10)
+
+  const mode = ref<'ok' | 'warn' | 'err'>('ok')
+
+  function label() {
+    if (mode.value === 'ok')
+      return 'Synced'
+    if (mode.value === 'warn')
+      return 'Syncing (may take a while)'
+    return 'Failed: Network error'
+  }
+
+  function color() {
+    if (mode.value === 'ok')
+      return 'var(--tx-color-success)'
+    if (mode.value === 'warn')
+      return 'var(--tx-color-warning)'
+    return 'var(--tx-color-danger)'
+  }
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      mode.value = mode.value === 'ok' ? 'warn' : mode.value === 'warn' ? 'err' : 'ok'
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle
+        </TxButton>
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
+          <TxSlider v-model="duration" :min="120" :max="600" :step="10" :show-value="true" />
+        </div>
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
+          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :inline="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+      >
+        <TxCard variant="plain" background="mask" :padding="12" :radius="14">
+          <div style="display: inline-flex; align-items: center; gap: 10px;">
+            <div
+              style="width: 8px; height: 8px; border-radius: 99px;"
+              :style="{ background: color() }"
+            />
+            <TxTextTransformer
+              :text="label()"
+              :duration-ms="duration"
+              :blur-px="blurPx"
+              :style="{ color: color() }"
+            />
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

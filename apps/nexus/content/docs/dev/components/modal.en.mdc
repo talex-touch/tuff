@@ -16,7 +16,9 @@ const open = ref(false)
 </script>
 
 ## Basic Usage
-::TuffDemo{title="Modal Dialog" description="Trigger a lightweight modal." code-lang="vue"}
+### Modal Dialog
+Trigger a lightweight modal.
+:::TuffDemoWrapper{demo="ModalModalDialogDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -36,19 +38,7 @@ code: |
     </TxModal>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button variant="primary" @click="open = true">Open Modal</tx-button>
-  <tx-modal v-model="open" title="Quick Action">
-    <p>Give the user a short task or decision.</p>
-    <template #footer>
-      <tx-button variant="ghost" @click="open = false">Cancel</tx-button>
-      <tx-button variant="primary" @click="open = false">Confirm</tx-button>
-    </template>
-  </tx-modal>
-</div>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

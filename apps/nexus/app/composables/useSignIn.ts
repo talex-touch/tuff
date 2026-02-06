@@ -1,11 +1,12 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toast } from 'vue-sonner'
-import { useAuthState } from '~/composables/useAuthState'
+import { useAuthLoadingState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
-type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'success'
+type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
+export type OauthProvider = 'github' | 'linuxdo'
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
@@ -35,6 +36,10 @@ export function useSignIn() {
   const emailCheckLoading = ref(false)
   const bindLoading = ref(false)
   const oauthLoading = ref(false)
+  const oauthProvider = ref<OauthProvider | null>(null)
+  const oauthPhase = ref<'idle' | 'redirect' | 'verifying' | 'error'>('idle')
+  const oauthError = ref('')
+  const oauthHandled = ref(false)
   const magicSent = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
@@ -93,12 +98,54 @@ export function useSignIn() {
     passkeyLoading.value = false
   }
 
+  function resetOauthState() {
+    oauthPhase.value = 'idle'
+    oauthError.value = ''
+    oauthProvider.value = null
+  }
+
+  function syncOauthProvider() {
+    if (oauthProvider.value)
+      return
+    if (lastLoginMethod.value === 'github' || lastLoginMethod.value === 'linuxdo')
+      oauthProvider.value = lastLoginMethod.value
+  }
+
+  async function clearOauthQuery() {
+    if (!route.query.oauth && !route.query.provider)
+      return
+    const nextQuery = { ...route.query } as Record<string, string | string[]>
+    delete nextQuery.oauth
+    delete nextQuery.provider
+    await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
+  }
+
   const redirectTarget = computed(() => {
     const redirect = route.query.redirect_url
     if (typeof redirect === 'string' && redirect.length > 0) {
       return redirect
     }
     return '/dashboard'
+  })
+
+  const flowParam = computed(() => {
+    const raw = route.query.flow
+    if (!raw)
+      return null
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (value === 'bind' || value === 'login')
+      return value
+    return null
+  })
+
+  const providerParam = computed(() => {
+    const raw = route.query.provider
+    if (!raw)
+      return null
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (value === 'github' || value === 'linuxdo')
+      return value as OauthProvider
+    return null
   })
 
   const langParam = computed(() => {
@@ -154,14 +201,16 @@ export function useSignIn() {
     return `/forgot-password?${params.toString()}`
   })
 
-  const oauthCallbackUrl = computed(() => {
+  function buildOauthCallbackUrl(flow: AuthFlow, provider: OauthProvider) {
     const params = new URLSearchParams({
       lang: langTag.value,
       redirect_url: redirectTarget.value,
       oauth: '1',
+      flow,
+      provider,
     })
     return `/sign-in?${params.toString()}`
-  })
+  }
 
   const emailPreview = computed(() => email.value.trim().toLowerCase())
   const lastLoginLabel = computed(() => {
@@ -180,12 +229,23 @@ export function useSignIn() {
         return ''
     }
   })
+
+  const oauthProviderLabel = computed(() => {
+    if (oauthProvider.value === 'github')
+      return 'GitHub'
+    if (oauthProvider.value === 'linuxdo')
+      return 'LinuxDO'
+    return t('auth.oauthProvider', '第三方')
+  })
   const oauthParam = computed(() => {
     const raw = route.query.oauth
     if (!raw)
       return null
     return Array.isArray(raw) ? raw[0] : raw
   })
+
+  const oauthReturn = computed(() => oauthParam.value === '1' || oauthPending.value)
+  const oauthTarget = computed(() => oauthRedirect.value || redirectTarget.value)
 
   const stepTitle = computed(() => {
     if (step.value === 'email')
@@ -194,6 +254,11 @@ export function useSignIn() {
       return t('auth.signUpTitle', '创建账号')
     if (step.value === 'passkey')
       return t('auth.passkeyTitle', 'Passkey 登录')
+    if (step.value === 'oauth') {
+      if (oauthFlow.value === 'bind')
+        return t('auth.oauthBindTitle', `正在绑定 ${oauthProviderLabel.value}`)
+      return t('auth.oauthTitle', `正在连接 ${oauthProviderLabel.value}`)
+    }
     if (step.value === 'success')
       return t('auth.signInSuccess', '登录成功')
     if (step.value === 'bind-email')
@@ -208,6 +273,15 @@ export function useSignIn() {
       return t('auth.signUpSubtitle', '使用邮箱创建账号，或选择 Passkey。')
     if (step.value === 'passkey')
       return t('auth.passkeySubtitle', '将调用系统 Passkey 完成验证。')
+    if (step.value === 'oauth') {
+      if (oauthPhase.value === 'redirect')
+        return t('auth.oauthRedirectSubtitle', `即将前往 ${oauthProviderLabel.value} 完成授权。`)
+      if (oauthPhase.value === 'error')
+        return t('auth.oauthErrorSubtitle', '登录遇到问题，请重试。')
+      if (oauthFlow.value === 'bind')
+        return t('auth.oauthBindSubtitle', '正在验证绑定状态...')
+      return t('auth.oauthVerifyingSubtitle', '正在验证账号信息...')
+    }
     if (step.value === 'success')
       return t('auth.signInSuccessSubtitle', '正在跳转...')
     if (step.value === 'bind-email')
@@ -222,7 +296,7 @@ export function useSignIn() {
       || passkeyPhase.value === 'verifying'
       || passkeyPhase.value === 'success'
   })
-  const { loading: authLoading } = useAuthState([
+  const { loading: authLoading } = useAuthLoadingState([
     loading,
     signupLoading,
     passkeyLoading,
