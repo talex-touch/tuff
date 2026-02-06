@@ -139,6 +139,8 @@ function toggleCode() {
 }
 
 .tuff-demo__window {
+  display: flex;
+  flex-direction: column;
   border-radius: 26px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.96);
@@ -183,9 +185,12 @@ function toggleCode() {
 .tuff-demo__window-body {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .tuff-demo__preview {
+  flex: 0 0 auto;
   padding: 28px;
   background: rgba(255, 255, 255, 0.98);
 }
@@ -204,6 +209,8 @@ function toggleCode() {
   gap: 0;
   align-items: stretch;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .tuff-demo__toggle-row {
@@ -212,6 +219,9 @@ function toggleCode() {
   padding: 16px 18px 20px;
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.98);
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
 }
 
 .tuff-demo__toggle {
@@ -274,7 +284,8 @@ function toggleCode() {
 
 .tuff-demo__code-body-inner {
   min-height: 0;
-  overflow: hidden;
+  max-height: 360px;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
