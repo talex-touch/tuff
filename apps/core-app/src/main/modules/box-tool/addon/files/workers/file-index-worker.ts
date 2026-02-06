@@ -297,8 +297,6 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
         result.embeddings && result.embeddings.length > 0 ? 'completed' : 'pending'
       const contentHash = buildContentHash(rawContent)
 
-      const contentHash = buildContentHash(rawContent)
-
       emitFileResult({
         type: 'file',
         taskId: task.taskId,
