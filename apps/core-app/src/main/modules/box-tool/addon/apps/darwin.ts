@@ -313,7 +313,7 @@ export async function getAppsViaMdfind(): Promise<
     )
   )
 
-  const appInfos = await mapWithConcurrency(appPaths, 8, async (appPath) => {
+  const appInfos = await mapWithConcurrency(appPaths, 4, async (appPath) => {
     try {
       return await getAppInfo(appPath)
     } catch {
@@ -337,6 +337,8 @@ export async function getAppsViaMdfind(): Promise<
   )
 }
 
+const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
+
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
@@ -358,6 +360,10 @@ async function mapWithConcurrency<T, R>(
       }
 
       results[currentIndex] = await mapper(items[currentIndex])
+      // Yield to the event loop every 5 items to prevent blocking
+      if (currentIndex % 5 === 0) {
+        await yieldToEventLoop()
+      }
     }
   })
 

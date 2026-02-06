@@ -661,7 +661,14 @@ export class AnalyticsModule extends BaseModule {
         this.messageReportBackoffMs * 2,
         MESSAGE_REPORT_MAX_DELAY_MS
       )
-      analyticsLog.warn('Failed to report analytics messages', { error: errorMessage })
+      analyticsLog.warn('Failed to report analytics messages', {
+        error: errorMessage,
+        meta: {
+          batchSize: batch.length,
+          attempt: batch[0]?.attempts ?? 0,
+          nextRetryMs: this.messageReportBackoffMs
+        }
+      })
     } finally {
       this.messageReportInFlight = false
       if (this.messageReportQueue.length > 0) {

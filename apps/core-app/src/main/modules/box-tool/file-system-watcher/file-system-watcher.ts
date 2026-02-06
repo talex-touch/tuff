@@ -3,7 +3,6 @@ import fs from 'node:fs/promises'
 import process from 'node:process'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import * as chokidar from 'chokidar'
-import { dialog } from 'electron'
 import {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
@@ -58,70 +57,18 @@ export class FileSystemWatcherModule extends BaseModule {
     }
   }
 
-  private async requestAccess(p: string): Promise<boolean> {
-    if (isMac) {
-      // macOS: Use folder picker dialog
-      console.log(`[FileSystemWatcher] Requesting access to ${p}`)
-      const { response } = await dialog.showMessageBox({
-        type: 'info',
-        title: 'Permission Request',
-        message: 'TalexTouch needs access to your Applications folder to watch for new apps.',
-        detail: `Please grant access to the following folder to continue: ${p}`,
-        buttons: ['Open Folder Picker', 'Cancel']
-      })
+  /**
+   * Get the list of paths that are pending permission.
+   */
+  public getPendingPaths(): string[] {
+    return Array.from(this.pendingPaths.keys())
+  }
 
-      if (response === 1) {
-        console.warn(`[FileSystemWatcher] User cancelled access request for ${p}`)
-        return false
-      }
-
-      const { filePaths } = await dialog.showOpenDialog({
-        title: `Grant Access to ${p}`,
-        properties: ['openDirectory'],
-        defaultPath: p
-      })
-
-      if (filePaths && filePaths.length > 0) {
-        console.log(`[FileSystemWatcher] Access granted to ${filePaths[0]}`)
-        return true
-      }
-
-      console.warn(`[FileSystemWatcher] User did not select a directory for ${p}`)
-      return false
-    } else if (isWindows) {
-      // Windows: Show dialog to request folder access
-      console.log(`[FileSystemWatcher] Requesting access to ${p}`)
-      const { response } = await dialog.showMessageBox({
-        type: 'warning',
-        title: 'Folder Access Required',
-        message: 'TalexTouch needs access to this folder to watch for file changes.',
-        detail: `Path: ${p}\n\nPlease grant access to this folder or run TalexTouch as administrator.`,
-        buttons: ['Open Folder', 'Cancel'],
-        defaultId: 0
-      })
-
-      if (response === 0) {
-        // Open folder to allow user to grant access
-        const { filePaths } = await dialog.showOpenDialog({
-          title: `Grant Access to ${p}`,
-          properties: ['openDirectory'],
-          defaultPath: p
-        })
-
-        if (filePaths && filePaths.length > 0) {
-          // Check if access is now available
-          if (await this.hasAccess(p)) {
-            console.log(`[FileSystemWatcher] Access granted to ${p}`)
-            return true
-          }
-        }
-      }
-
-      console.warn(`[FileSystemWatcher] No access to ${p}, will retry later`)
-      return false
-    }
-
-    return false
+  /**
+   * Check whether there are paths waiting for permission.
+   */
+  public hasPendingPaths(): boolean {
+    return this.pendingPaths.size > 0
   }
 
   private getOrCreateWatcher(depth: number): chokidar.FSWatcher {
@@ -181,21 +128,23 @@ export class FileSystemWatcherModule extends BaseModule {
   }
 
   /**
-   * Try to add pending paths when permission becomes available
+   * Try to add pending paths when permission becomes available.
+   * Returns the list of paths that were successfully added.
    */
-  private async tryPendingPaths(): Promise<void> {
+  public async tryPendingPaths(): Promise<string[]> {
     if (this.pendingPaths.size === 0) {
-      return
+      return []
     }
 
+    const recovered: string[] = []
     const pathsToRetry: string[] = []
 
     for (const [path, pending] of this.pendingPaths.entries()) {
       if (await this.hasAccess(path)) {
-        // Permission granted, try to add to watcher
         try {
           await this.addPathInternal(path, pending.depth)
           this.pendingPaths.delete(path)
+          recovered.push(path)
           console.log(`[FileSystemWatcher] Successfully added pending path: ${path}`)
         } catch (error) {
           console.warn(`[FileSystemWatcher] Failed to add pending path ${path}:`, error)
@@ -217,6 +166,8 @@ export class FileSystemWatcherModule extends BaseModule {
       }
       this.pendingPaths = stillPending
     }
+
+    return recovered
   }
 
   /**
@@ -246,16 +197,11 @@ export class FileSystemWatcherModule extends BaseModule {
       return
     }
 
-    // Check access permissions on all platforms
+    // Check access permissions silently -- never show system dialogs on startup
     if (!(await this.hasAccess(p))) {
-      // Request access (may show dialog)
-      const granted = await this.requestAccess(p)
-      if (!granted) {
-        // No permission yet, store in pending queue
-        this.pendingPaths.set(p, { path: p, depth })
-        console.log(`[FileSystemWatcher] Path ${p} added to pending queue, waiting for permission`)
-        return
-      }
+      this.pendingPaths.set(p, { path: p, depth })
+      console.log(`[FileSystemWatcher] No access to ${p}, silently queued for later`)
+      return
     }
 
     // Permission granted or available, add to watcher
