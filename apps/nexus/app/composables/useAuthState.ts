@@ -3,7 +3,7 @@ import { computed } from 'vue'
 
 type BoolSource = Ref<boolean> | ComputedRef<boolean>
 
-export function useAuthState(sources: BoolSource[]) {
+export function useAuthLoadingState(sources: BoolSource[]) {
   const loading = computed(() => {
     return sources.some(source => Boolean(source.value))
   })
