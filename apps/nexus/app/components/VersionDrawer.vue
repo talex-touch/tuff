@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
 import { computed, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
@@ -37,6 +38,7 @@ const formData = ref<VersionFormData>({
   packageFile: null as any,
 })
 
+const packageFiles = ref<FileUploaderFile[]>([])
 const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
@@ -51,6 +53,7 @@ watch(() => props.isOpen, (isOpen) => {
       packageFile: null as any,
     }
     step.value = 'form'
+    packageFiles.value = []
     packageError.value = null
     manifestPreview.value = null
   }
@@ -61,15 +64,13 @@ type Step = 'form' | 'warning' | 'license'
 const step = ref<Step>('form')
 const licenseAgreed = ref(false)
 
-async function handlePackageInput(event: Event) {
-  const target = event.target as HTMLInputElement
-  if (!target.files?.[0])
-    return
-
-  const file = target.files[0]
-  formData.value.packageFile = file
+async function handlePackageInput(files: FileUploaderFile[]) {
+  const file = files[0]?.file ?? null
+  formData.value.packageFile = file as any
   packageError.value = null
   manifestPreview.value = null
+  if (!file)
+    return
 
   // Preview tpex to auto-fill form
   packageLoading.value = true
@@ -181,23 +182,17 @@ const channelVisibility = computed(() =>
             <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.plugins.versionForm.channel') }}
             </label>
-            <div class="relative">
-              <select
-                v-model="formData.channel"
-                class="w-full appearance-none border-b border-black/10 bg-transparent py-2 text-sm text-black outline-none transition focus:border-black dark:border-white/10 dark:text-white dark:focus:border-white"
-              >
-                <option value="RELEASE">
-                  RELEASE
-                </option>
-                <option value="BETA">
-                  BETA
-                </option>
-                <option value="SNAPSHOT">
-                  SNAPSHOT
-                </option>
-              </select>
-              <span class="i-carbon-chevron-down absolute right-0 top-1/2 -translate-y-1/2 text-black/40 dark:text-white/40" />
-            </div>
+            <TxSelect v-model="formData.channel" class="w-full">
+              <TxSelectItem value="RELEASE">
+                RELEASE
+              </TxSelectItem>
+              <TxSelectItem value="BETA">
+                BETA
+              </TxSelectItem>
+              <TxSelectItem value="SNAPSHOT">
+                SNAPSHOT
+              </TxSelectItem>
+            </TxSelect>
             <div class="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/5">
               <p class="mb-1 text-black/70 dark:text-white/70">
                 {{ channelDescription }}
@@ -212,22 +207,15 @@ const channelVisibility = computed(() =>
             <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
               {{ t('dashboard.sections.plugins.versionForm.package') }}
             </label>
-            <div class="relative">
-              <input
-                type="file"
-                accept=".tpex"
-                required
-                class="absolute inset-0 cursor-pointer opacity-0"
-                @change="handlePackageInput"
-              >
-              <div class="flex items-center gap-2 border-b border-black/10 py-2 transition dark:border-white/10">
-                <span v-if="packageLoading" class="i-carbon-circle-dash animate-spin text-black/40 dark:text-white/40" />
-                <span v-else class="i-carbon-document-add text-black/40 dark:text-white/40" />
-                <span class="text-sm text-black dark:text-white">
-                  {{ formData.packageFile ? formData.packageFile.name : t('dashboard.sections.plugins.packageAwaiting') }}
-                </span>
-              </div>
-            </div>
+            <TxFileUploader
+              v-model="packageFiles"
+              :multiple="false"
+              :max="1"
+              :disabled="packageLoading || props.loading"
+              accept=".tpex"
+              :show-size="false"
+              @change="handlePackageInput"
+            />
             <p v-if="packageError" class="text-xs text-red-500">
               {{ packageError }}
             </p>

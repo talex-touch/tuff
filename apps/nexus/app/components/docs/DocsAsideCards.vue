@@ -136,7 +136,7 @@ function handleAsk() {
 }
 
 .docs-aside-card__sparkle {
-  color: #3b82f6;
+  color: var(--docs-accent-strong);
   font-size: 14px;
 }
 

@@ -216,7 +216,7 @@ async function copyText(text?: string, key?: string) {
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: var(--docs-accent);
+  color: var(--docs-ink);
 }
 
 .tuff-props-table__type,
@@ -245,9 +245,9 @@ async function copyText(text?: string, key?: string) {
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 11px;
-  color: var(--docs-ink);
-  border: none;
-  background: rgba(241, 245, 249, 0.95);
+  color: rgba(15, 15, 15, 0.86);
+  border: 1px solid rgba(15, 15, 15, 0.1);
+  background: rgba(15, 15, 15, 0.06);
   margin: 0 8px 6px 0;
 }
 
@@ -256,7 +256,7 @@ async function copyText(text?: string, key?: string) {
 }
 
 .tuff-props-tag--clickable:hover {
-  background: rgba(226, 232, 240, 0.9);
+  background: rgba(15, 15, 15, 0.12);
 }
 
 .tuff-props-table__copy {
@@ -274,13 +274,14 @@ async function copyText(text?: string, key?: string) {
 }
 
 .tuff-props-table__copy:hover {
-  border-color: rgba(59, 130, 246, 0.5);
-  color: rgba(30, 64, 175, 0.95);
+  border-color: rgba(15, 15, 15, 0.28);
+  background: rgba(15, 15, 15, 0.06);
+  color: rgba(15, 15, 15, 0.85);
 }
 
 .tuff-props-tag.is-default {
-  color: rgba(30, 41, 59, 0.7);
-  background: rgba(241, 245, 249, 0.95);
+  color: rgba(15, 15, 15, 0.7);
+  background: rgba(15, 15, 15, 0.05);
 }
 
 .tuff-props-table__desc {
@@ -338,26 +339,27 @@ async function copyText(text?: string, key?: string) {
 
 ::global(.dark .tuff-props-tag),
 ::global([data-theme='dark'] .tuff-props-tag) {
-  background: rgba(30, 41, 59, 0.7);
-  border: none;
-  color: rgba(226, 232, 240, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 ::global(.dark .tuff-props-tag--clickable:hover),
 ::global([data-theme='dark'] .tuff-props-tag--clickable:hover) {
-  background: rgba(15, 23, 42, 0.75);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 ::global(.dark .tuff-props-table__copy),
 ::global([data-theme='dark'] .tuff-props-table__copy) {
-  background: rgba(15, 23, 42, 0.7);
-  border-color: rgba(148, 163, 184, 0.35);
-  color: rgba(226, 232, 240, 0.8);
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.78);
 }
 
 ::global(.dark .tuff-props-tag.is-default),
 ::global([data-theme='dark'] .tuff-props-tag.is-default) {
-  color: rgba(226, 232, 240, 0.7);
-  background: rgba(30, 41, 59, 0.7);
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 </style>

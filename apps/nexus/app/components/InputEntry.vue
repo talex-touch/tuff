@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
+import Input from '~/components/ui/Input.vue'
 const name = ref('')
 
 const router = useRouter()
@@ -10,26 +12,25 @@ function go() {
 
 <template>
   <div>
-    <input
+    <Input
       id="input"
       v-model="name"
       placeholder="What's your name?"
       type="text"
       autocomplete="off"
-      p="x-4 y-2" m="t-5" w="250px"
-      text="center" bg="transparent"
-      border="~ rounded gray-200 dark:gray-700"
-      outline="none active:none"
+      class="mt-5 w-[250px] text-center"
       @keydown.enter="go"
-    >
+    />
     <div>
-      <button
-        text-sm btn m-3
+      <Button
+        variant="primary"
+        size="small"
+        class="m-3"
         :disabled="!name"
         @click="go"
       >
         GO
-      </button>
+      </Button>
     </div>
   </div>
 </template>

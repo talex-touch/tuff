@@ -17,6 +17,7 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -96,6 +97,13 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
   'url-provider': 'url'
 }
 
+const PROVIDER_REFRACTORY_THRESHOLD = 2
+const PROVIDER_REFRACTORY_BASE_MS = 30_000
+const PROVIDER_REFRACTORY_MAX_MS = 5 * 60 * 1000
+const PROVIDER_HEALTH_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
+const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
+
 function resolveProviderCategory(providerId: string): string {
   if (PROVIDER_CATEGORY_MAP[providerId]) return PROVIDER_CATEGORY_MAP[providerId]
   if (providerId.includes('file')) return 'file'
@@ -113,6 +121,20 @@ interface ParsedSearchQuery {
   raw: string
   text: string
   providerFilter?: string
+}
+
+type ExtendedProviderStatus = 'success' | 'timeout' | 'error' | 'aborted'
+
+interface ProviderHealth {
+  failureCount: number
+  timeoutCount: number
+  lastSeenAt: number
+  lastStatus?: ExtendedProviderStatus
+  lastDurationMs?: number
+  lastResultCount?: number
+  lastFailureAt?: number
+  lastSuccessAt?: number
+  blockedUntil?: number
 }
 
 /**
@@ -191,6 +213,9 @@ export class SearchEngineCore
   private searchSessionStartTimes = new Map<string, number>()
   private pinnedCache: { fetchedAt: number; pinnedSet: Set<string> } | null = null
   private readonly pinnedCacheTtlMs = 10_000
+  private readonly pollingService = PollingService.getInstance()
+  private readonly maintenanceTaskId = 'search-engine.maintenance'
+  private providerHealth = new Map<string, ProviderHealth>()
 
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -222,7 +247,7 @@ export class SearchEngineCore
 
     this.registerProvider(appProvider)
     //  this.registerProvider(new ClipboardProvider())
-    // TODO refractory - this provider costs a lot of time
+    // NOTE: ClipboardProvider is intentionally disabled for now due to cost.
 
     // Windows: Use Everything for fast file search, fallback to file-provider for indexing
     // macOS/Linux: Use file-provider with full indexing
@@ -681,6 +706,24 @@ export class SearchEngineCore
         }
       }
 
+      const shouldApplyRefractory = !providerFilter && !this.activatedProviders?.size
+      if (shouldApplyRefractory && providersToSearch.length > 0) {
+        const refractoryIds = new Set<string>()
+        providersToSearch = providersToSearch.filter((provider) => {
+          const shouldSkip = this.shouldSkipProvider(provider.id)
+          if (shouldSkip) {
+            refractoryIds.add(provider.id)
+          }
+          return !shouldSkip
+        })
+
+        if (refractoryIds.size > 0) {
+          searchEngineLog.debug(
+            `Provider refractory active, skipping: ${Array.from(refractoryIds).join(', ')}`
+          )
+        }
+      }
+
       searchLogger.searchProviders(providersToSearch.map((p) => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
@@ -702,6 +745,7 @@ export class SearchEngineCore
         try {
           searchLogger.searchUpdate(update.isDone, update.newResults.length)
           if (update.isDone) {
+            this.updateProviderHealth(update.sourceStats || [])
             if (!didResolveInitial) {
               didResolveInitial = true
 
@@ -1354,11 +1398,139 @@ export class SearchEngineCore
   }
 
   maintain(): void {
-    // console.log(
-    //   '[SearchEngineCore] Maintenance tasks can be triggered from here, but providers are now stateless.',
-    // ) // Remove to reduce noise
-    // TODO: The logic for refreshing indexes or caches should be handled
-    // within the providers themselves, possibly triggered by a separate scheduler.
+    this.pruneProviderHealth()
+
+    if (this.queryCompletionService) {
+      void this.queryCompletionService.cleanupOldCompletions().catch((error) => {
+        searchEngineLog.error('Failed to cleanup query completions', { error })
+      })
+    }
+  }
+
+  private startMaintenance(): void {
+    if (this.pollingService.isRegistered(this.maintenanceTaskId)) {
+      this.pollingService.unregister(this.maintenanceTaskId)
+    }
+
+    const initialDelayMs = 60_000 + Math.floor(Math.random() * SEARCH_MAINTENANCE_JITTER_MS)
+    this.pollingService.register(
+      this.maintenanceTaskId,
+      () => {
+        try {
+          this.maintain()
+        } catch (error) {
+          searchEngineLog.error('SearchEngine maintenance failed', { error })
+        }
+      },
+      { interval: SEARCH_MAINTENANCE_INTERVAL_MS, unit: 'milliseconds', initialDelayMs }
+    )
+    this.pollingService.start()
+  }
+
+  private stopMaintenance(): void {
+    if (this.pollingService.isRegistered(this.maintenanceTaskId)) {
+      this.pollingService.unregister(this.maintenanceTaskId)
+    }
+  }
+
+  private pruneProviderHealth(): void {
+    if (this.providerHealth.size === 0) return
+    const now = Date.now()
+    for (const [providerId, health] of this.providerHealth) {
+      if (now - health.lastSeenAt > PROVIDER_HEALTH_TTL_MS) {
+        this.providerHealth.delete(providerId)
+      }
+    }
+  }
+
+  private shouldSkipProvider(providerId: string): boolean {
+    const health = this.providerHealth.get(providerId)
+    if (!health?.blockedUntil) {
+      return false
+    }
+
+    const now = Date.now()
+    if (now < health.blockedUntil) {
+      return true
+    }
+
+    health.blockedUntil = undefined
+    health.failureCount = 0
+    health.timeoutCount = 0
+    return false
+  }
+
+  private updateProviderHealth(
+    sourceStats: Array<{
+      providerId?: string
+      status?: ExtendedProviderStatus
+      duration?: number
+      resultCount?: number
+    }>
+  ): void {
+    if (sourceStats.length === 0) return
+    const now = Date.now()
+
+    for (const stat of sourceStats) {
+      const providerId = stat.providerId
+      if (!providerId) continue
+
+      const status = stat.status
+      if (!status || status === 'aborted') {
+        const existing = this.providerHealth.get(providerId)
+        if (existing) {
+          existing.lastSeenAt = now
+        }
+        continue
+      }
+
+      const entry =
+        this.providerHealth.get(providerId) ??
+        ({
+          failureCount: 0,
+          timeoutCount: 0,
+          lastSeenAt: now
+        } satisfies ProviderHealth)
+
+      entry.lastSeenAt = now
+      entry.lastStatus = status
+      if (typeof stat.duration === 'number') {
+        entry.lastDurationMs = stat.duration
+      }
+      if (typeof stat.resultCount === 'number') {
+        entry.lastResultCount = stat.resultCount
+      }
+
+      if (status === 'success') {
+        entry.failureCount = 0
+        entry.timeoutCount = 0
+        entry.blockedUntil = undefined
+        entry.lastSuccessAt = now
+      } else {
+        entry.failureCount += 1
+        entry.lastFailureAt = now
+        if (status === 'timeout') {
+          entry.timeoutCount += 1
+        }
+
+        if (entry.failureCount >= PROVIDER_REFRACTORY_THRESHOLD) {
+          const backoffPower = Math.max(0, entry.failureCount - PROVIDER_REFRACTORY_THRESHOLD)
+          const cooldownMs = Math.min(
+            PROVIDER_REFRACTORY_MAX_MS,
+            PROVIDER_REFRACTORY_BASE_MS * 2 ** backoffPower
+          )
+          const nextBlockedUntil = now + cooldownMs
+          if (!entry.blockedUntil || nextBlockedUntil > entry.blockedUntil) {
+            entry.blockedUntil = nextBlockedUntil
+            searchEngineLog.warn(
+              `Provider '${providerId}' entering refractory for ${Math.round(cooldownMs / 1000)}s`
+            )
+          }
+        }
+      }
+
+      this.providerHealth.set(providerId, entry)
+    }
   }
 
   init(ctx: ModuleInitContext<TalexEvents>): void {
@@ -1396,6 +1568,7 @@ export class SearchEngineCore
 
       // 启动汇总服务
       instance.usageSummaryService?.start()
+      instance.startMaintenance()
     })
 
     // Register IPC handlers
@@ -1516,6 +1689,7 @@ export class SearchEngineCore
 
     // 停止汇总服务
     this.usageSummaryService?.stop()
+    this.stopMaintenance()
 
     // 强制刷新队列
     this.usageStatsQueue?.forceFlush().catch((error) => {

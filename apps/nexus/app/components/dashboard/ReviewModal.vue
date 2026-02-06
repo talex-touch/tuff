@@ -6,6 +6,7 @@ import type {
 } from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
+import Input from '~/components/ui/Input.vue'
 import Modal from '~/components/ui/Modal.vue'
 
 export interface ReviewItem {
@@ -243,10 +244,11 @@ function toggleRejectForm() {
             <span class="text-xs font-medium uppercase tracking-wide text-rose-600 dark:text-rose-400">
               {{ t('dashboard.sections.plugins.rejectReason') }}
             </span>
-            <textarea
+            <Input
               v-model="rejectReason"
-              rows="3"
-              class="mt-2 w-full resize-none rounded-lg border border-rose-200 bg-white p-3 text-sm text-black outline-none transition focus:border-rose-300 focus:ring-2 focus:ring-rose-200 dark:border-rose-500/30 dark:bg-black/20 dark:text-white dark:focus:border-rose-500/50 dark:focus:ring-rose-500/20"
+              type="textarea"
+              :rows="3"
+              class="mt-2"
               :placeholder="t('dashboard.sections.plugins.rejectReasonPlaceholder')"
             />
           </label>
