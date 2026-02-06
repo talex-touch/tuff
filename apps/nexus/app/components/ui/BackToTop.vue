@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import Button from '~/components/ui/Button.vue'
 
 const visible = ref(false)
 const prefersReducedMotion = ref(false)
@@ -46,15 +47,16 @@ onUnmounted(() => {
 
 <template>
   <Transition name="back-to-top">
-    <button
+    <Button
       v-show="visible"
-      type="button"
+      variant="bare"
+      circle
       class="back-to-top"
       aria-label="Back to top"
       @click="scrollToTop"
     >
       <span class="back-to-top__icon i-carbon-chevron-up" aria-hidden="true" />
-    </button>
+    </Button>
   </Transition>
 </template>
 
