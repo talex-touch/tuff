@@ -1,7 +1,7 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toast } from 'vue-sonner'
-import { useAuthState } from '~/composables/useAuthState'
+import { useAuthLoadingState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'success'
@@ -222,7 +222,7 @@ export function useSignIn() {
       || passkeyPhase.value === 'verifying'
       || passkeyPhase.value === 'success'
   })
-  const { loading: authLoading } = useAuthState([
+  const { loading: authLoading } = useAuthLoadingState([
     loading,
     signupLoading,
     passkeyLoading,

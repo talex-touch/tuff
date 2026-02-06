@@ -1,9 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const { user } = useAuthUser()
+const { user, refresh, isAuthenticated } = useAuthUser()
+
+const revalidateUser = () => {
+  if (!isAuthenticated.value)
+    return
+  void refresh()
+}
+
+onMounted(() => {
+  revalidateUser()
+})
+
+watch(
+  () => route.path,
+  (path) => {
+    if (path.startsWith('/dashboard/admin') || !user.value)
+      revalidateUser()
+  },
+)
 
 const isAdmin = computed(() => {
   return user.value?.role === 'admin'

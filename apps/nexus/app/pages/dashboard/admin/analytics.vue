@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -301,56 +302,51 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Sections -->
       <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-white/50 p-2 text-sm dark:bg-dark/40">
-        <button
-          type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'overview'
-            ? 'bg-black text-white dark:bg-light dark:text-black'
-            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+        <Button
+          :variant="activeSection === 'overview' ? 'primary' : 'ghost'"
+          native-type="button"
+          size="small"
+          round
           @click="activeSection = 'overview'"
         >
           Overview
-        </button>
-        <button
-          type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'performance'
-            ? 'bg-black text-white dark:bg-light dark:text-black'
-            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+        </Button>
+        <Button
+          :variant="activeSection === 'performance' ? 'primary' : 'ghost'"
+          native-type="button"
+          size="small"
+          round
           @click="activeSection = 'performance'"
         >
           Performance
-        </button>
-        <button
-          type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'search'
-            ? 'bg-black text-white dark:bg-light dark:text-black'
-            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+        </Button>
+        <Button
+          :variant="activeSection === 'search' ? 'primary' : 'ghost'"
+          native-type="button"
+          size="small"
+          round
           @click="activeSection = 'search'"
         >
           Search
-        </button>
-        <button
-          type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'usage'
-            ? 'bg-black text-white dark:bg-light dark:text-black'
-            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+        </Button>
+        <Button
+          :variant="activeSection === 'usage' ? 'primary' : 'ghost'"
+          native-type="button"
+          size="small"
+          round
           @click="activeSection = 'usage'"
         >
           Usage
-        </button>
-        <button
-          type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'messages'
-            ? 'bg-black text-white dark:bg-light dark:text-black'
-            : 'bg-black/5 text-black/60 hover:bg-black/10 dark:bg-light/10 dark:text-light/60 dark:hover:bg-light/15'"
+        </Button>
+        <Button
+          :variant="activeSection === 'messages' ? 'primary' : 'ghost'"
+          native-type="button"
+          size="small"
+          round
           @click="activeSection = 'messages'"
         >
           Alerts
-        </button>
+        </Button>
       </div>
 
       <!-- Summary Stats -->
@@ -671,13 +667,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Search Scenes
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="bare"
+              native-type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.searchSceneDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
@@ -691,13 +688,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Result Categories
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="bare"
+              native-type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.searchResultCategoryDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
@@ -711,13 +709,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Most Executed
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="bare"
+              native-type="button"
               class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
               @click="showBreakdown = true; activeBreakdownTab = 'usage'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
@@ -736,13 +735,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <h3 class="font-semibold text-black dark:text-light">
             Telemetry Messages
           </h3>
-          <button
-            type="button"
+          <Button
+            variant="bare"
+            native-type="button"
             class="rounded-lg bg-black/5 px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/70"
             @click="fetchMessages"
           >
             Refresh
-          </button>
+          </Button>
         </div>
         <div v-if="messagesLoading" class="flex items-center gap-2 text-sm text-black/40 dark:text-light/40">
           <span class="i-carbon-circle-dash animate-spin" />
@@ -803,18 +803,21 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 Secondary distributions and deep-dive signals
               </p>
             </div>
-            <button
-              type="button"
+            <Button
+              variant="bare"
+              native-type="button"
               class="rounded-full bg-black/5 p-2 text-black/60 transition hover:bg-black/10 dark:bg-light/10 dark:text-light/70"
+              aria-label="Close"
               @click="showBreakdown = false"
             >
               <span class="i-carbon-close" />
-            </button>
+            </Button>
           </div>
 
           <div class="mb-4 flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="bare"
+              native-type="button"
               class="rounded-full px-3 py-1 text-xs"
               :class="activeBreakdownTab === 'search'
                 ? 'bg-black text-white dark:bg-light dark:text-black'
@@ -822,9 +825,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               @click="activeBreakdownTab = 'search'"
             >
               Search
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="bare"
+              native-type="button"
               class="rounded-full px-3 py-1 text-xs"
               :class="activeBreakdownTab === 'usage'
                 ? 'bg-black text-white dark:bg-light dark:text-black'
@@ -832,7 +836,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               @click="activeBreakdownTab = 'usage'"
             >
               Usage
-            </button>
+            </Button>
           </div>
 
           <div v-if="activeBreakdownTab === 'search'" class="space-y-6 text-sm">

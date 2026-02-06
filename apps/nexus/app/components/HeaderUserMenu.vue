@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
-            size="medium"
+            size="28"
             class="header-user-profile-avatar"
           />
           <div class="header-user-profile-meta">
@@ -356,6 +356,14 @@ onBeforeUnmount(() => {
   --header-user-divider: color-mix(in srgb, var(--header-user-border-strong) 90%, transparent);
 }
 
+:global(.tx-popover:has(.header-user-panel)) {
+  --tx-index-popper: 2200;
+}
+
+:global(.tx-popover:has(.header-user-submenu-panel)) {
+  --tx-index-popper: 2300;
+}
+
 .header-user-wrapper {
   position: relative;
   display: inline-flex;
@@ -381,6 +389,12 @@ onBeforeUnmount(() => {
   --tx-button-bare-hover: transparent;
   --tx-button-bare-bg: transparent;
   --tx-button-gap: 0;
+}
+
+.header-user-trigger.tx-button.variant-bare {
+  justify-content: center;
+  width: 28px;
+  height: 28px;
 }
 
 .header-user-trigger-avatar {
