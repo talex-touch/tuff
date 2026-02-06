@@ -1572,10 +1572,12 @@ export class ClipboardModule extends BaseModule {
     } finally {
       const duration = performance.now() - startAt
       if (duration > 500) {
-        this.clipboardCheckCooldownUntil = Date.now() + 2000
+        this.clipboardCheckCooldownUntil = Date.now() + 5000
       }
       if (duration > 200) {
-        clipboardLog.warn('Clipboard check slow', { meta: { durationMs: Math.round(duration) } })
+        clipboardLog.warn('Clipboard check slow', {
+          meta: { durationMs: Math.round(duration) }
+        })
       }
       dispose()
     }

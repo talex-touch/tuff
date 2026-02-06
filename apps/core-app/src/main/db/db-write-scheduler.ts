@@ -69,6 +69,7 @@ export class DbWriteScheduler {
 
     this.processing = true
 
+    let taskCount = 0
     while (this.queue.length > 0) {
       const task = this.queue.shift()!
       const waitedMs = Date.now() - task.enqueuedAt
@@ -85,6 +86,12 @@ export class DbWriteScheduler {
         task.reject(error)
       } finally {
         this.currentTaskLabel = null
+      }
+
+      // Yield to event loop every 3 tasks to prevent starving other operations
+      taskCount++
+      if (taskCount % 3 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
       }
     }
 
