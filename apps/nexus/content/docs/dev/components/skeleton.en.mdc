@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Skeleton" description="Text and avatar placeholders" code-lang="vue"}
+### Skeleton
+Text and avatar placeholders
+:::TuffDemoWrapper{demo="SkeletonSkeletonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -23,13 +25,7 @@ code: |
     <TxSkeleton variant="circle" :width="40" :height="40" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-skeleton :loading="true" :lines="3" />
-  <tx-skeleton variant="circle" :width="40" :height="40" />
-</div>
-::
-
+:::
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -50,7 +46,9 @@ rows:
 ::
 
 ## Composite Patterns
-::TuffDemo{title="Card Placeholder" description="Skeletons inside cards for feeds." code-lang="vue"}
+### Card Placeholder
+Skeletons inside cards for feeds.
+:::TuffDemoWrapper{demo="SkeletonCardPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -59,10 +57,4 @@ code: |
     </TxCard>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <tx-card style="width: 100%;">
-    <tx-skeleton :loading="true" :lines="2" />
-  </tx-card>
-</div>
-::
+:::

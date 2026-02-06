@@ -10,7 +10,9 @@ syncStatus: migrated
 Chronological list of events.
 
 ## Basic Usage
-::TuffDemo{title="Timeline" description="Highlight recent updates." code-lang="vue"}
+### Timeline
+Highlight recent updates.
+:::TuffDemoWrapper{demo="TimelineTimelineDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -21,14 +23,7 @@ code: |
     </TxTimeline>
   </template>
 ---
-#preview
-<tx-timeline>
-  <tx-timeline-item title="Design phase" time="09:30" color="primary" />
-  <tx-timeline-item title="Build" time="12:00" color="success" />
-  <tx-timeline-item title="Launch" time="16:10" color="warning" />
-</tx-timeline>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

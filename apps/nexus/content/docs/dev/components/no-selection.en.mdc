@@ -10,15 +10,8 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="NoSelection">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxNoSelection description="Select an item to see its details." />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### NoSelection
+:::TuffDemoWrapper{demo="NoSelectionNoSelectionDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -26,8 +19,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

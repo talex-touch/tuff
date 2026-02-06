@@ -41,19 +41,8 @@ function onRemoteSearch(q: string) {
 
 ## 基础用法
 
-<DemoBlock title="Select">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value1" placeholder="请选择">
-    <TuffSelectItem value="option1" label="选项 1" />
-    <TuffSelectItem value="option2" label="选项 2" />
-    <TuffSelectItem value="option3" label="选项 3" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select
+:::TuffDemoWrapper{demo="SelectSelectDemo" code-lang="vue"}
 ---
 code: |
   &lt;template&gt;
@@ -65,36 +54,25 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 远程搜索（可编辑）
 
-<DemoBlock title="Select (remote searchable)">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value6" placeholder="Remote" remote editable @search="onRemoteSearch">
-    <TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select (remote searchable)
+:::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
 ---
 code: |
   &lt;script setup lang="ts"&gt;
   import { ref } from 'vue'
-  
+
   const value = ref('')
   const remoteOptions = ref&lt;Array&lt;{ value: string; label: string }&gt;&gt;([])
-  
+
   async function onSearch(q: string) {
     // remote request
     // remoteOptions.value = await fetch(...)
   }
   &lt;/script&gt;
-  
+
   &lt;template&gt;
     &lt;TuffSelect v-model="value" remote editable @search="onSearch"&gt;
       &lt;TuffSelectItem v-for="o in remoteOptions" :key="o.value" :value="o.value" :label="o.label" /&gt;
@@ -102,22 +80,11 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 可搜索
 
-<DemoBlock title="Select (searchable)">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value5" placeholder="Searchable" searchable>
-    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select (searchable)
+:::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
 ---
 code: |
   &lt;template&gt;
@@ -127,22 +94,11 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 禁用状态
 
-<DemoBlock title="Select (disabled)">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value2" placeholder="禁用状态" disabled>
-    <TuffSelectItem value="option1" label="选项 1" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select (disabled)
+:::TuffDemoWrapper{demo="SelectSelectDisabledDemo" code-lang="vue"}
 ---
 code: |
   &lt;template&gt;
@@ -152,24 +108,11 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 禁用选项
 
-<DemoBlock title="Select (disabled option)">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value3" placeholder="请选择">
-    <TuffSelectItem value="option1" label="可选项 1" />
-    <TuffSelectItem value="option2" label="禁用选项" disabled />
-    <TuffSelectItem value="option3" label="可选项 2" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select (disabled option)
+:::TuffDemoWrapper{demo="SelectSelectDisabledOptionDemo" code-lang="vue"}
 ---
 code: |
   &lt;template&gt;
@@ -181,22 +124,11 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 滚动面板
 
-<DemoBlock title="Select (scrollable dropdown)">
-<template #preview>
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; max-width: 300px;">
-  <TuffSelect v-model="value4" placeholder="请选择" :dropdown-max-height="220">
-    <TuffSelectItem v-for="i in 30" :key="i" :value="`option${i}`" :label="`Option ${i}`" />
-  </TuffSelect>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### Select (scrollable dropdown)
+:::TuffDemoWrapper{demo="SelectSelectScrollableDropdownDemo" code-lang="vue"}
 ---
 code: |
   &lt;template&gt;
@@ -206,8 +138,6 @@ code: |
   &lt;/template&gt;
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

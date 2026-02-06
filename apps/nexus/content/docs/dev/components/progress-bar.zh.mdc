@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Stateful Progress" description="加载、警告、成功态一屏展示。" code-lang="vue"}
+### Stateful Progress
+加载、警告、成功态一屏展示。
+:::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -25,15 +27,7 @@ code: |
     <TxProgressBar loading message="同步中" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
-  <tx-progress-bar :percentage="32" show-text />
-  <tx-progress-bar :percentage="68" status="warning" show-text />
-  <tx-progress-bar success message="完成" />
-  <tx-progress-bar loading message="同步中" />
-</div>
-::
-
+:::
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -81,7 +75,9 @@ rows:
 ::
 
 ## 组合示例
-::TuffDemo{title="状态面板" description="进度条配合状态提示使用。" code-lang="vue"}
+### 状态面板
+进度条配合状态提示使用。
+:::TuffDemoWrapper{demo="ProgressBarStatusPanelDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -89,9 +85,4 @@ code: |
     <TxStatusBadge text="进行中" status="warning" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
-  <tx-progress-bar :percentage="80" show-text message="上传中" />
-  <tx-status-badge text="进行中" status="warning" />
-</div>
-::
+:::

@@ -7,9 +7,9 @@ defineOptions({
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | number
     placeholder?: string
-    type?: 'text' | 'password' | 'textarea'
+    type?: 'text' | 'password' | 'textarea' | 'number'
     disabled?: boolean
     readonly?: boolean
     clearable?: boolean
@@ -27,8 +27,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'input': [value: string]
+  'update:modelValue': [value: string | number]
+  'input': [value: string | number]
   'focus': [event: FocusEvent]
   'blur': [event: FocusEvent]
   'clear': []
@@ -36,7 +36,7 @@ const emit = defineEmits<{
 
 const inputValue = computed({
   get: () => props.modelValue,
-  set: (val: string) => {
+  set: (val: string | number) => {
     emit('update:modelValue', val)
     emit('input', val)
   },
@@ -45,7 +45,12 @@ const inputValue = computed({
 const inputEl = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
 const showClear = computed(() => {
-  return props.clearable && inputValue.value && !props.disabled && !props.readonly
+  return props.clearable
+    && inputValue.value !== ''
+    && inputValue.value !== null
+    && inputValue.value !== undefined
+    && !props.disabled
+    && !props.readonly
 })
 
 function handleClear() {
@@ -65,7 +70,7 @@ defineExpose({
   focus: () => inputEl.value?.focus?.(),
   blur: () => inputEl.value?.blur?.(),
   clear: () => handleClear(),
-  setValue: (v: string) => (inputValue.value = v),
+  setValue: (v: string | number) => (inputValue.value = v),
   getValue: () => inputValue.value,
   inputEl,
 })

@@ -16,18 +16,8 @@ const files = ref([])
 
 ## 基础用法
 
-<DemoBlock title="ImageUploader">
-<template #preview>
-<div style="width: 560px;">
-  <TxImageUploader v-model="files" />
-  <div style="margin-top: 12px; font-size: 12px; opacity: 0.75;">
-    {{ files.length }} files
-  </div>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### ImageUploader
+:::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -35,5 +25,3 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>

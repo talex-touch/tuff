@@ -4,9 +4,9 @@ import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | number
     placeholder?: string
-    type?: 'text' | 'password' | 'textarea'
+    type?: 'text' | 'password' | 'textarea' | 'number'
     disabled?: boolean
     readonly?: boolean
     clearable?: boolean
@@ -24,8 +24,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: string): void
-  (e: 'input', value: string): void
+  (e: 'update:modelValue', value: string | number): void
+  (e: 'input', value: string | number): void
   (e: 'focus', event: FocusEvent): void
   (e: 'blur', event: FocusEvent): void
   (e: 'clear'): void
@@ -33,9 +33,22 @@ const emit = defineEmits<{
 
 const value = computed({
   get: () => props.modelValue ?? '',
-  set: (val: string) => {
-    emit('update:modelValue', val)
-    emit('input', val)
+  set: (val: string | number) => {
+    let next: string | number = val
+    if (props.type === 'number') {
+      if (val === '' || val === null || val === undefined) {
+        next = ''
+      }
+      else if (typeof val === 'number') {
+        next = val
+      }
+      else {
+        const parsed = Number(val)
+        next = Number.isNaN(parsed) ? val : parsed
+      }
+    }
+    emit('update:modelValue', next)
+    emit('input', next)
   },
 })
 </script>

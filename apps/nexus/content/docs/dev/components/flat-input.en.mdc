@@ -17,7 +17,9 @@ const secret = ref('')
 </script>
 
 ## Basic Usage
-::TuffDemo{title="Flat Input" description="Text and password variants." code-lang="vue"}
+### Flat Input
+Text and password variants.
+:::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -32,13 +34,7 @@ code: |
     <FlatInput v-model="secret" placeholder="Password" password />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 12px; max-width: 360px;">
-  <flat-input v-model="text" placeholder="Type something" />
-  <flat-input v-model="secret" placeholder="Password" password />
-</div>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---
