@@ -8,6 +8,8 @@ type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'succe
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
+const OAUTH_STATE_KEY = 'tuff_oauth_state'
+const OAUTH_STATE_TTL = 10 * 60 * 1000
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
 
 function resolveErrorMessage(error: any, fallback: string) {
@@ -35,6 +37,13 @@ export function useSignIn() {
   const emailCheckLoading = ref(false)
   const bindLoading = ref(false)
   const oauthLoading = ref(false)
+  const oauthFlow = ref<AuthFlow>('login')
+  const oauthProvider = ref<OauthProvider | null>(null)
+  const oauthPhase = ref<'idle' | 'redirect' | 'verifying' | 'error'>('idle')
+  const oauthError = ref('')
+  const oauthPending = ref(false)
+  const oauthHandled = ref(false)
+  const oauthRedirect = ref<string | null>(null)
   const magicSent = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
@@ -71,6 +80,46 @@ export function useSignIn() {
       window.localStorage.setItem(LAST_LOGIN_METHOD_KEY, method)
   }
 
+  function readOauthState(): OauthState | null {
+    if (!hasWindow())
+      return null
+    const raw = window.localStorage.getItem(OAUTH_STATE_KEY)
+    if (!raw)
+      return null
+    try {
+      const parsed = JSON.parse(raw) as OauthState
+      if (!parsed?.ts)
+        return null
+      if (Date.now() - parsed.ts > OAUTH_STATE_TTL) {
+        window.localStorage.removeItem(OAUTH_STATE_KEY)
+        return null
+      }
+      return parsed
+    }
+    catch {
+      window.localStorage.removeItem(OAUTH_STATE_KEY)
+      return null
+    }
+  }
+
+  function persistOauthState(flow: AuthFlow, provider: OauthProvider | null, redirect: string | null) {
+    if (!hasWindow())
+      return
+    const payload: OauthState = {
+      flow,
+      provider,
+      redirect,
+      ts: Date.now(),
+    }
+    window.localStorage.setItem(OAUTH_STATE_KEY, JSON.stringify(payload))
+  }
+
+  function clearPersistedOauthState() {
+    if (!hasWindow())
+      return
+    window.localStorage.removeItem(OAUTH_STATE_KEY)
+  }
+
   function clearPasskeyTimer() {
     if (!passkeyTimer)
       return
@@ -91,6 +140,28 @@ export function useSignIn() {
     passkeyPhase.value = 'idle'
     passkeyError.value = ''
     passkeyLoading.value = false
+  }
+
+  function resetOauthState() {
+    oauthPhase.value = 'idle'
+    oauthError.value = ''
+    oauthProvider.value = null
+    oauthFlow.value = 'login'
+    oauthRedirect.value = null
+    oauthPending.value = false
+    oauthHandled.value = false
+    clearPersistedOauthState()
+  }
+
+  async function clearOauthContext() {
+    resetOauthState()
+    if (!route.query.oauth && !route.query.flow && !route.query.provider)
+      return
+    const nextQuery = { ...route.query } as Record<string, any>
+    delete nextQuery.oauth
+    delete nextQuery.flow
+    delete nextQuery.provider
+    await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
   }
 
   const redirectTarget = computed(() => {
