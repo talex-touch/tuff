@@ -1,11 +1,18 @@
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { toast } from 'vue-sonner'
-import { useAuthState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
-type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'success'
+type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
+type AuthFlow = 'login' | 'bind'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
+export type OauthProvider = 'github' | 'linuxdo'
+interface OauthState {
+  flow: AuthFlow
+  provider?: OauthProvider | null
+  redirect?: string | null
+  ts: number
+}
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
@@ -249,24 +256,44 @@ watch(step, (value) => {
   })
 
   watchEffect(async () => {
-    if (oauthParam.value !== '1')
+    if (!oauthReturn.value) {
+      oauthHandled.value = false
       return
+    }
+    if (step.value !== 'bind-email' && step.value !== 'success' && step.value !== 'oauth')
+      step.value = 'oauth'
+    if (step.value === 'oauth' && (oauthPhase.value === 'idle' || oauthPhase.value === 'redirect'))
+      oauthPhase.value = 'verifying'
     if (status.value !== 'authenticated')
       return
-    if (oauthLoading.value)
+    if (oauthHandled.value || oauthLoading.value)
       return
+    oauthHandled.value = true
     oauthLoading.value = true
+    oauthError.value = ''
+    const target = oauthTarget.value
     try {
+      if (oauthFlow.value === 'bind') {
+        await clearOauthContext()
+        await navigateTo(target)
+        return
+      }
       const profile = await $fetch<any>('/api/auth/me')
       if (profile?.emailState === 'missing') {
         step.value = 'bind-email'
         bindEmail.value = ''
+        await clearOauthContext()
         return
       }
-      await navigateTo(redirectTarget.value)
+      await clearOauthContext()
+      await navigateTo(target)
     }
     catch (error: any) {
-      notify('error', resolveErrorMessage(error, t('auth.loginFailed', 'Login failed')))
+      const message = resolveErrorMessage(error, t('auth.loginFailed', 'Login failed'))
+      oauthPhase.value = 'error'
+      oauthError.value = message
+      notify('error', message)
+      await clearOauthContext()
     }
     finally {
       oauthLoading.value = false
@@ -577,6 +604,9 @@ watch(step, (value) => {
     supportsPasskey,
     passkeyPhase,
     passkeyError,
+    oauthPhase,
+    oauthProvider,
+    oauthError,
     authLoading,
     lastLoginMethod,
     lastLoginLabel,
@@ -595,5 +625,6 @@ watch(step, (value) => {
     handleGithubSignIn,
     handleLinuxdoSignIn,
     handlePasskeySignIn,
+    handleOauthRetry,
   }
 }
