@@ -671,13 +671,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Search Scenes
             </h3>
-            <button
-              type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+            <Button
+              variant="bare"
+              native-type="button"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.searchSceneDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
@@ -691,13 +692,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Result Categories
             </h3>
-            <button
-              type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+            <Button
+              variant="bare"
+              native-type="button"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.searchResultCategoryDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
@@ -711,13 +713,14 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-light">
               Most Executed
             </h3>
-            <button
-              type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+            <Button
+              variant="bare"
+              native-type="button"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'usage'"
             >
               View details
-            </button>
+            </Button>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
             <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
