@@ -11,6 +11,8 @@ const { t } = useI18n()
 const { user, refresh } = useAuthUser()
 const { signIn } = useAuth()
 
+const OAUTH_STATE_KEY = 'tuff_oauth_state'
+
 const displayName = ref('')
 const savingProfile = ref(false)
 const profileMessage = ref('')
@@ -77,7 +79,22 @@ async function handleGithubLink() {
     return
   linkingGithub.value = true
   try {
-    await signIn('github', { callbackUrl: '/dashboard/account' })
+    const redirectUrl = '/dashboard/account'
+    const callbackUrl = `/sign-in?${new URLSearchParams({
+      oauth: '1',
+      flow: 'bind',
+      provider: 'github',
+      redirect_url: redirectUrl,
+    }).toString()}`
+    if (hasWindow()) {
+      window.localStorage.setItem(OAUTH_STATE_KEY, JSON.stringify({
+        flow: 'bind',
+        provider: 'github',
+        redirect: redirectUrl,
+        ts: Date.now(),
+      }))
+    }
+    await signIn('github', { callbackUrl })
   }
   catch (error: any) {
     magicLinkMessage.value = error?.data?.statusMessage || error?.message || t('auth.githubFailed', 'GitHub 绑定失败')
