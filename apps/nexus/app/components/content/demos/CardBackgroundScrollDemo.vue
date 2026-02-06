@@ -66,8 +66,7 @@ onBeforeUnmount(() => {
 
       <label v-if="glassBlur" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
         <span style="opacity: 0.75;">blur</span>
-        <input v-model.number="glassBlurAmount" type="range" min="0" max="40" step="1">
-        <span style="min-width: 30px; text-align: right; opacity: 0.75;">{{ glassBlurAmount }}</span>
+        <TxSlider v-model="glassBlurAmount" :min="0" :max="40" :step="1" show-value />
       </label>
 
       <label style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
@@ -77,8 +76,14 @@ onBeforeUnmount(() => {
 
       <label v-if="glassOverlay" style="display: inline-flex; gap: 8px; align-items: center; font-size: 13px;">
         <span style="opacity: 0.75;">opacity</span>
-        <input v-model.number="glassOverlayOpacity" type="range" min="0" max="0.6" step="0.02">
-        <span style="min-width: 42px; text-align: right; opacity: 0.75;">{{ glassOverlayOpacity.toFixed(2) }}</span>
+        <TxSlider
+          v-model="glassOverlayOpacity"
+          :min="0"
+          :max="0.6"
+          :step="0.02"
+          show-value
+          :format-value="(value) => value.toFixed(2)"
+        />
       </label>
     </div>
 

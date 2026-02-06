@@ -41,8 +41,10 @@ function channelTone(channel: PluginVersion['channel']) {
 </script>
 
 <template>
-  <button
-    type="button"
+  <TxButton
+    variant="bare"
+    block
+    native-type="button"
     class="group flex w-full items-center gap-4 rounded-xl border border-transparent bg-white/60 p-3 text-left transition hover:border-primary/20 hover:bg-white dark:bg-white/5 dark:hover:border-white/10 dark:hover:bg-white/10"
     @click="emit('click', plugin)"
   >
@@ -106,5 +108,5 @@ function channelTone(channel: PluginVersion['channel']) {
 
     <!-- Arrow -->
     <span class="i-carbon-chevron-right shrink-0 text-black/20 transition group-hover:text-black/40 dark:text-white/20 dark:group-hover:text-white/40" />
-  </button>
+  </TxButton>
 </template>

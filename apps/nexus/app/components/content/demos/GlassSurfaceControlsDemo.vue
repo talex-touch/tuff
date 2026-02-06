@@ -294,27 +294,36 @@ const blendModes = [
     <div style="display: flex; flex-wrap: wrap; gap: 16px;">
       <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; opacity: 0.72;">
         xChannel
-        <select v-model="xChannel" style="padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);">
-          <option v-for="channel in channels" :key="channel" :value="channel">
-            {{ channel }}
-          </option>
-        </select>
+        <TuffSelect v-model="xChannel" style="min-width: 140px;">
+          <TuffSelectItem
+            v-for="channel in channels"
+            :key="channel"
+            :value="channel"
+            :label="channel"
+          />
+        </TuffSelect>
       </label>
       <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; opacity: 0.72;">
         yChannel
-        <select v-model="yChannel" style="padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);">
-          <option v-for="channel in channels" :key="channel" :value="channel">
-            {{ channel }}
-          </option>
-        </select>
+        <TuffSelect v-model="yChannel" style="min-width: 140px;">
+          <TuffSelectItem
+            v-for="channel in channels"
+            :key="channel"
+            :value="channel"
+            :label="channel"
+          />
+        </TuffSelect>
       </label>
       <label style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; opacity: 0.72; min-width: 180px;">
         mixBlendMode
-        <select v-model="mixBlendMode" style="padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(0,0,0,0.12);">
-          <option v-for="mode in blendModes" :key="mode" :value="mode">
-            {{ mode }}
-          </option>
-        </select>
+        <TuffSelect v-model="mixBlendMode" style="min-width: 180px;">
+          <TuffSelectItem
+            v-for="mode in blendModes"
+            :key="mode"
+            :value="mode"
+            :label="mode"
+          />
+        </TuffSelect>
       </label>
     </div>
   </div>

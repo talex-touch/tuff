@@ -9,14 +9,13 @@ syncStatus: migrated
 
 用于收纳可折叠的内容块。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const active = ref<string[]>(['first'])
-</script>
-
 ## 基础用法
-::TuffDemo{title="折叠面板" description="点击展开详细内容。" code-lang="vue"}
+
+### 折叠面板
+
+点击展开详细内容。
+
+::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -36,16 +35,7 @@ code: |
     </TxCollapse>
   </template>
 ---
-#preview
-<tx-collapse v-model="active">
-  <tx-collapse-item title="快速开始" name="first">
-    这里是基础说明。
-  </tx-collapse-item>
-  <tx-collapse-item title="高级选项" name="second">
-    这里是高级配置说明。
-  </tx-collapse-item>
-</tx-collapse>
-:::
+::
 
 ## API（Lite）
 ::TuffPropsTable

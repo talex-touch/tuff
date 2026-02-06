@@ -103,15 +103,16 @@ const demoComponent = computed(() => {
           </div>
         </div>
         <div v-if="hasCode" class="tuff-demo__toggle-row">
-          <button
-            type="button"
-            class="tuff-demo__toggle"
+          <TxButton
+            variant="ghost"
+            size="small"
+            native-type="button"
             :aria-expanded="showCode"
             @click="toggleCode"
           >
             <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
             {{ toggleLabel }}
-          </button>
+          </TxButton>
         </div>
       </div>
     </section>
@@ -229,42 +230,6 @@ const demoComponent = computed(() => {
   background: rgba(255, 255, 255, 0.98);
 }
 
-.tuff-demo__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(59, 130, 246, 0.45);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(14, 165, 233, 0.2));
-  color: rgba(30, 64, 175, 0.95);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
-  transition: all 0.2s ease;
-}
-
-.tuff-demo__toggle:hover {
-  border-color: rgba(37, 99, 235, 0.75);
-  color: rgba(30, 58, 138, 0.98);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(14, 165, 233, 0.28));
-  box-shadow: 0 12px 26px rgba(59, 130, 246, 0.25);
-  transform: translateY(-1px);
-}
-
-.tuff-demo__toggle:active {
-  transform: translateY(0);
-  box-shadow: 0 6px 12px rgba(59, 130, 246, 0.2);
-}
-
-.tuff-demo__toggle:focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.5);
-  outline-offset: 2px;
-}
-
 .tuff-demo__toggle-icon {
   font-size: 12px;
   transition: transform 0.2s ease;
@@ -328,22 +293,6 @@ const demoComponent = computed(() => {
 :global(.dark .tuff-demo__code),
 :global([data-theme='dark'] .tuff-demo__code) {
   color: rgba(255, 255, 255, 0.92);
-}
-
-:global(.dark .tuff-demo__toggle),
-:global([data-theme='dark'] .tuff-demo__toggle) {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(2, 132, 199, 0.3));
-  border-color: rgba(125, 211, 252, 0.4);
-  color: rgba(226, 232, 240, 0.92);
-  box-shadow: 0 10px 22px rgba(14, 165, 233, 0.25);
-}
-
-:global(.dark .tuff-demo__toggle:hover),
-:global([data-theme='dark'] .tuff-demo__toggle:hover) {
-  border-color: rgba(186, 230, 253, 0.7);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(2, 132, 199, 0.42));
-  color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 14px 30px rgba(14, 165, 233, 0.35);
 }
 
 :global(.dark .tuff-demo__window),

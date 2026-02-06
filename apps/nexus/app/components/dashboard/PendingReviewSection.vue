@@ -35,8 +35,10 @@ function toggleExpand() {
     class="rounded-2xl border border-amber-200/50 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/5"
   >
     <!-- Header -->
-    <button
-      type="button"
+    <TxButton
+      variant="bare"
+      block
+      native-type="button"
       class="flex w-full items-center justify-between p-4 text-left"
       @click="toggleExpand"
     >
@@ -57,7 +59,7 @@ function toggleExpand() {
         class="i-carbon-chevron-down text-black/40 transition dark:text-white/40"
         :class="{ 'rotate-180': isExpanded }"
       />
-    </button>
+    </TxButton>
 
     <!-- Content -->
     <Transition
@@ -70,10 +72,12 @@ function toggleExpand() {
     >
       <div v-if="isExpanded" class="border-t border-amber-200/50 p-4 dark:border-amber-500/20">
         <div class="space-y-2">
-          <button
+          <TxButton
             v-for="item in items"
             :key="item.type === 'version' ? `v-${item.version?.id}` : `p-${item.plugin.id}`"
-            type="button"
+            variant="bare"
+            block
+            native-type="button"
             class="group flex w-full items-center gap-3 rounded-xl bg-white/80 p-3 text-left transition hover:bg-white dark:bg-white/5 dark:hover:bg-white/10"
             @click="emit('review', item)"
           >
@@ -113,7 +117,7 @@ function toggleExpand() {
               <span class="i-carbon-view text-xs" />
               {{ t('dashboard.sections.plugins.viewDetails') }}
             </span>
-          </button>
+          </TxButton>
         </div>
       </div>
     </Transition>
