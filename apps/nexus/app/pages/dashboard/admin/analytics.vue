@@ -673,7 +673,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </h3>
             <button
               type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
@@ -738,7 +738,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           </h3>
           <button
             type="button"
-            class="rounded-lg bg-black/5 px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/70"
+            size="mini"
             @click="fetchMessages"
           >
             Refresh

@@ -14,6 +14,15 @@ const props = defineProps<DemoProps>()
 const slots = useSlots()
 const hasPreview = computed(() => Boolean(slots.preview || slots.default))
 const { locale } = useI18n()
+const warnKey = '__tuff_demo_deprecated_warned__'
+
+if (import.meta.dev && import.meta.client) {
+  const warnState = globalThis as typeof globalThis & Record<string, boolean>
+  if (!warnState[warnKey]) {
+    warnState[warnKey] = true
+    console.warn('[TuffDemo] Deprecated. Use TuffDemoWrapper + demo components in docs.')
+  }
+}
 const htmlEntityMap: Record<string, string> = {
   '&lt;': '<',
   '&gt;': '>',

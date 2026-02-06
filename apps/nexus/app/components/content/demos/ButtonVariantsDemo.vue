@@ -1,26 +1,57 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const { locale } = useI18n()
+
+const labels = computed(() => {
+  if (locale.value === 'zh') {
+    return {
+      default: '默认按钮',
+      primary: 'Primary',
+      secondary: 'Secondary',
+      ghost: 'Ghost',
+      danger: 'Danger',
+      success: 'Success',
+      warning: 'Warning',
+      info: 'Info',
+    }
+  }
+  return {
+    default: 'Default',
+    primary: 'Primary',
+    secondary: 'Secondary',
+    ghost: 'Ghost',
+    danger: 'Danger',
+    success: 'Success',
+    warning: 'Warning',
+    info: 'Info',
+  }
+})
+</script>
+
 <template>
   <div class="tuff-demo-row">
-    <TxButton>默认按钮</TxButton>
+    <TxButton>{{ labels.default }}</TxButton>
     <TxButton variant="primary">
-Primary
-</TxButton>
+      {{ labels.primary }}
+    </TxButton>
     <TxButton variant="secondary">
-Secondary
-</TxButton>
+      {{ labels.secondary }}
+    </TxButton>
     <TxButton variant="ghost">
-Ghost
-</TxButton>
+      {{ labels.ghost }}
+    </TxButton>
     <TxButton variant="danger">
-Danger
-</TxButton>
+      {{ labels.danger }}
+    </TxButton>
     <TxButton variant="success">
-Success
-</TxButton>
+      {{ labels.success }}
+    </TxButton>
     <TxButton variant="warning">
-Warning
-</TxButton>
+      {{ labels.warning }}
+    </TxButton>
     <TxButton variant="info">
-Info
-</TxButton>
+      {{ labels.info }}
+    </TxButton>
   </div>
 </template>
