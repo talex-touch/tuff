@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Hover Hint" description="Short hints with low intrusion." code-lang="vue"}
+### Hover Hint
+Short hints with low intrusion.
+:::TuffDemoWrapper{demo="TooltipHoverHintDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -27,17 +29,7 @@ code: |
     </TxTooltip>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tooltip content="Hint">
-    <tx-button variant="ghost">Hover me</tx-button>
-  </tx-tooltip>
-  <tx-tooltip content="Info">
-    <tx-button variant="ghost">Info</tx-button>
-  </tx-tooltip>
-</div>
-::
-
+:::
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -78,7 +70,9 @@ rows:
 - Maintain light spacing from the trigger element.
 
 ## Composite Patterns
-::TuffDemo{title="Tooltip Button" description="Icon button with a hint." code-lang="vue"}
+### Tooltip Button
+Icon button with a hint.
+:::TuffDemoWrapper{demo="TooltipTooltipButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -87,10 +81,4 @@ code: |
     </TxTooltip>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tooltip content="Share">
-    <tx-button icon="i-ri-share-line" circle />
-  </tx-tooltip>
-</div>
-::
+:::

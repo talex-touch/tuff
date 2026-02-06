@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Tags" description="颜色与尺寸组合" code-lang="vue"}
+### Tags
+颜色与尺寸组合
+:::TuffDemoWrapper{demo="TagTagsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -25,15 +27,7 @@ code: |
     <TxTag label="危险" color="var(--tx-color-danger)" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag label="默认" />
-  <tx-tag label="成功" color="var(--tx-color-success)" />
-  <tx-tag label="警告" color="var(--tx-color-warning)" />
-  <tx-tag label="危险" color="var(--tx-color-danger)" />
-</div>
-::
-
+:::
 ## API（简版）
 ::TuffPropsTable
 ---
@@ -54,7 +48,9 @@ rows:
 ::
 
 ## 组合示例
-::TuffDemo{title="标签 + 按钮" description="标签配合按钮突出操作。 " code-lang="vue"}
+### 标签 + 按钮
+标签配合按钮突出操作。
+:::TuffDemoWrapper{demo="TagTagButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -62,9 +58,4 @@ code: |
     <TxButton size="sm">升级</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag label="Beta" />
-  <tx-button size="sm">升级</tx-button>
-</div>
-::
+:::

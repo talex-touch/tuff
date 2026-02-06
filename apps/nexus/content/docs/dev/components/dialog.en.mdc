@@ -25,7 +25,9 @@ const tipOpen = ref(false)
 
 Bottom-aligned dialog with customizable buttons and motion.
 
-::TuffDemo{title="BottomDialog" description="Bottom sheet confirmation dialog." code-lang="vue"}
+### BottomDialog
+Bottom sheet confirmation dialog.
+:::TuffDemoWrapper{demo="DialogBottomDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -42,22 +44,7 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="bottomOpen = true">Show dialog</tx-button>
-</div>
-<tx-bottom-dialog
-  v-if="bottomOpen"
-  title="Confirm action"
-  message="Are you sure you want to continue?"
-  :btns="[
-    { content: 'Cancel', type: 'info', onClick: () => true },
-    { content: 'Confirm', type: 'success', onClick: async () => true },
-  ]"
-  :close="() => (bottomOpen = false)"
-/>
-::
-
+:::
 ### Button types
 
 ::TuffCodeBlock{lang="ts"}
@@ -110,7 +97,9 @@ code: |
 
 A centered dialog with dramatic animation.
 
-::TuffDemo{title="BlowDialog" description="Focused, high-impact dialog." code-lang="vue"}
+### BlowDialog
+Focused, high-impact dialog.
+:::TuffDemoWrapper{demo="DialogBlowDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -123,21 +112,12 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="blowOpen = true">Show blow dialog</tx-button>
-</div>
-<tx-blow-dialog
-  v-if="blowOpen"
-  title="Welcome"
-  message="<strong>Hello!</strong> Welcome to the app."
-  :close="() => (blowOpen = false)"
-/>
-::
-
+:::
 ## PopperDialog
 
-::TuffDemo{title="PopperDialog" description="Lightweight popper-style prompt." code-lang="vue"}
+### PopperDialog
+Lightweight popper-style prompt.
+:::TuffDemoWrapper{demo="DialogPopperDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -150,21 +130,12 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="popperOpen = true">Show popper dialog</tx-button>
-</div>
-<tx-popper-dialog
-  v-if="popperOpen"
-  title="Tip"
-  message="This is a short tip."
-  :close="() => (popperOpen = false)"
-/>
-::
-
+:::
 ## TouchTip
 
-::TuffDemo{title="TouchTip" description="Touch-friendly guidance prompt." code-lang="vue"}
+### TouchTip
+Touch-friendly guidance prompt.
+:::TuffDemoWrapper{demo="DialogTouchTipDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -181,22 +152,7 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="tipOpen = true">Show TouchTip</tx-button>
-</div>
-<tx-touch-tip
-  v-if="tipOpen"
-  title="Notice"
-  message="Pick an action."
-  :buttons="[
-    { content: 'Cancel', type: 'info', onClick: () => true },
-    { content: 'Confirm', type: 'success', onClick: async () => true },
-  ]"
-  :close="() => (tipOpen = false)"
-/>
-::
-
+:::
 ## Custom components
 
 ::TuffCodeBlock{lang="ts"}

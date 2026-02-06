@@ -25,7 +25,6 @@ code: |
   </template>
 ---
 :::
-
 ## 输入框类型
 
 目前支持：`text` / `password` / `textarea`。
@@ -42,7 +41,6 @@ code: |
   </template>
 ---
 :::
-
 ## 只读 / 禁用
 
 ### Readonly / Disabled
@@ -56,7 +54,6 @@ code: |
   </template>
 ---
 :::
-
 ## 可清空
 
 ### Clearable
@@ -69,7 +66,6 @@ code: |
   </template>
 ---
 :::
-
 ## 前后缀插槽
 
 ### Prefix / Suffix
@@ -91,7 +87,6 @@ code: |
   </template>
 ---
 :::
-
 ## API
 
 ### Props
@@ -191,7 +186,6 @@ code: |
   </template>
 ---
 :::
-
 <script setup lang="ts">
 import { ref } from 'vue'
 

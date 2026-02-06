@@ -23,7 +23,9 @@ const visible4 = ref(false)
 
 ## Basic Usage
 
-::TuffDemo{title="Basic Drawer" description="The common drawer pattern." code-lang="vue"}
+### Basic Drawer
+The common drawer pattern.
+:::TuffDemoWrapper{demo="DrawerBasicDrawerDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -34,21 +36,14 @@ code: |
     </TxDrawer>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="visible1 = true">Open Drawer</tx-button>
-</div>
-<tx-drawer v-model:visible="visible1" title="Settings">
-  <p>This is the drawer content area.</p>
-  <p>Supports custom width, direction, and close behavior.</p>
-</tx-drawer>
-::
-
+:::
 ## Direction
 
 Drawers can slide in from the left or right.
 
-::TuffDemo{title="Direction" description="Left and right drawers." code-lang="vue"}
+### Direction
+Left and right drawers.
+:::TuffDemoWrapper{demo="DrawerDirectionDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -62,22 +57,12 @@ code: |
     </TxDrawer>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="visible2 = true">Left Drawer</tx-button>
-  <tx-button @click="visible3 = true">Right Drawer</tx-button>
-</div>
-<tx-drawer v-model:visible="visible2" title="Left Drawer" direction="left">
-  <p>Slides in from the left</p>
-</tx-drawer>
-<tx-drawer v-model:visible="visible3" title="Right Drawer" direction="right">
-  <p>Slides in from the right (default)</p>
-</tx-drawer>
-::
-
+:::
 ## Custom Width
 
-::TuffDemo{title="Custom Width" description="Fixed width drawer example." code-lang="vue"}
+### Custom Width
+Fixed width drawer example.
+:::TuffDemoWrapper{demo="DrawerCustomWidthDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -87,15 +72,7 @@ code: |
     </TxDrawer>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="visible4 = true">Custom width (400px)</tx-button>
-</div>
-<tx-drawer v-model:visible="visible4" title="Fixed Width" width="400px">
-  <p>This drawer stays at 400px wide.</p>
-</tx-drawer>
-::
-
+:::
 ## Footer Slot
 
 Use the `footer` slot to add action buttons.

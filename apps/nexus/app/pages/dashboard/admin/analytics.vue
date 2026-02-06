@@ -229,20 +229,17 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           {{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}
         </p>
       </div>
-      <select
-        v-model="selectedDays"
-        class="rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
-      >
-        <option :value="7">
+      <TxSelect v-model="selectedDays">
+        <TxSelectItem :value="7">
           {{ t('dashboard.sections.analytics.last7Days', 'Last 7 days') }}
-        </option>
-        <option :value="30">
+        </TxSelectItem>
+        <TxSelectItem :value="30">
           {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
-        </option>
-        <option :value="90">
+        </TxSelectItem>
+        <TxSelectItem :value="90">
           {{ t('dashboard.sections.analytics.last90Days', 'Last 90 days') }}
-        </option>
-      </select>
+        </TxSelectItem>
+      </TxSelect>
     </div>
 
     <!-- Loading -->
@@ -670,7 +667,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <Button
               variant="bare"
               native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
@@ -691,7 +688,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <Button
               variant="bare"
               native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'search'"
             >
               View details
@@ -712,7 +709,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <Button
               variant="bare"
               native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-light/50 dark:hover:text-light"
+              size="mini"
               @click="showBreakdown = true; activeBreakdownTab = 'usage'"
             >
               View details
@@ -735,10 +732,10 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <h3 class="font-semibold text-black dark:text-light">
             Telemetry Messages
           </h3>
-          <Button
-            variant="bare"
+        <Button
+            variant="secondary"
             native-type="button"
-            class="rounded-lg bg-black/5 px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/70"
+            size="mini"
             @click="fetchMessages"
           >
             Refresh
@@ -806,7 +803,8 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <Button
               variant="bare"
               native-type="button"
-              class="rounded-full bg-black/5 p-2 text-black/60 transition hover:bg-black/10 dark:bg-light/10 dark:text-light/70"
+              size="mini"
+              circle
               aria-label="Close"
               @click="showBreakdown = false"
             >
@@ -816,23 +814,19 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
           <div class="mb-4 flex gap-2">
             <Button
-              variant="bare"
+              :variant="activeBreakdownTab === 'search' ? 'primary' : 'ghost'"
               native-type="button"
-              class="rounded-full px-3 py-1 text-xs"
-              :class="activeBreakdownTab === 'search'
-                ? 'bg-black text-white dark:bg-light dark:text-black'
-                : 'bg-black/5 text-black/60 dark:bg-light/10 dark:text-light/60'"
+              size="mini"
+              round
               @click="activeBreakdownTab = 'search'"
             >
               Search
             </Button>
             <Button
-              variant="bare"
+              :variant="activeBreakdownTab === 'usage' ? 'primary' : 'ghost'"
               native-type="button"
-              class="rounded-full px-3 py-1 text-xs"
-              :class="activeBreakdownTab === 'usage'
-                ? 'bg-black text-white dark:bg-light dark:text-black'
-                : 'bg-black/5 text-black/60 dark:bg-light/10 dark:text-light/60'"
+              size="mini"
+              round
               @click="activeBreakdownTab = 'usage'"
             >
               Usage

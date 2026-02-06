@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
+import Input from '~/components/ui/Input.vue'
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -155,7 +157,7 @@ onMounted(() => {
             type="number"
             min="1"
             max="365"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            class="w-full"
           />
         </div>
 
@@ -166,7 +168,7 @@ onMounted(() => {
             type="number"
             min="1"
             max="1000"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            class="w-full"
           />
         </div>
 
@@ -177,7 +179,7 @@ onMounted(() => {
             type="number"
             min="1"
             max="365"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            class="w-full"
           />
         </div>
 
@@ -188,18 +190,20 @@ onMounted(() => {
             type="number"
             min="1"
             max="100"
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            class="w-full"
           />
         </div>
       </div>
 
       <Button
-        variant="bare"
+        variant="primary"
+        size="small"
+        round
+        :loading="generating"
         :disabled="generating"
-        class="mt-4 inline-flex items-center gap-2 rounded-full bg-dark px-4 py-2 text-sm font-medium text-white transition hover:bg-dark/90 disabled:opacity-50 dark:bg-light dark:text-black dark:hover:bg-light/90"
+        class="mt-4"
         @click="generateCodes"
       >
-        <span v-if="generating" class="i-carbon-rotate-360 animate-spin" />
         <span>{{ generating ? t('dashboard.sections.codes.generating', 'Generating...') : t('dashboard.sections.codes.generateButton', 'Generate Codes') }}</span>
       </Button>
     </section>
@@ -216,12 +220,13 @@ onMounted(() => {
           {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
         </h2>
         <Button
-          variant="bare"
+          variant="secondary"
+          size="small"
+          :loading="loading"
           :disabled="loading"
-          class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
+          icon="i-carbon-refresh"
           @click="fetchCodes"
         >
-          <span :class="loading ? 'i-carbon-rotate-360 animate-spin' : 'i-carbon-refresh'" class="text-base" />
           {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
         </Button>
       </div>
@@ -268,7 +273,8 @@ onMounted(() => {
                   <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-light/10 dark:text-light">{{ code.code }}</code>
                   <Button
                     variant="bare"
-                    class="text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+                    size="mini"
+                    circle
                     :title="t('dashboard.sections.codes.copy', 'Copy')"
                     :aria-label="t('dashboard.sections.codes.copy', 'Copy')"
                     @click="copyCode(code.code)"

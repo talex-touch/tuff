@@ -7,8 +7,8 @@ const value = ref('')
 <template>
   <div v-if="locale === 'zh'">
         <TuffInput v-model="value" placeholder="请输入内容" />
-</div>
+  </div>
   <div v-else>
         <TuffInput v-model="value" placeholder="Type here..." />
-</div>
+  </div>
 </template>

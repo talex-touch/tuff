@@ -27,8 +27,8 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'input': [value: string]
+  'update:modelValue': [value: string | number]
+  'input': [value: string | number]
   'focus': [event: FocusEvent]
   'blur': [event: FocusEvent]
   'clear': []
@@ -70,7 +70,7 @@ defineExpose({
   focus: () => inputEl.value?.focus?.(),
   blur: () => inputEl.value?.blur?.(),
   clear: () => handleClear(),
-  setValue: (v: string) => (inputValue.value = v),
+  setValue: (v: string | number) => (inputValue.value = v),
   getValue: () => inputValue.value,
   inputEl,
 })

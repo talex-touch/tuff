@@ -275,6 +275,32 @@ export async function getInviteById(
   return row ? mapInviteRow(row) : null
 }
 
+export async function hasInviteForEmail(
+  event: H3Event,
+  email: string,
+): Promise<boolean> {
+  const db = getD1Database(event)
+  if (!db) {
+    return false
+  }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail) {
+    return false
+  }
+
+  await ensureTeamSchema(db)
+
+  const row = await db.prepare(`
+    SELECT id FROM ${INVITES_TABLE}
+    WHERE lower(email) = ?1
+      AND status IN ('pending', 'accepted')
+    LIMIT 1;
+  `).bind(normalizedEmail).first<{ id: string }>()
+
+  return Boolean(row?.id)
+}
+
 export async function useInvite(
   event: H3Event,
   code: string,

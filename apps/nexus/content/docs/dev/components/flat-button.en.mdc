@@ -10,7 +10,9 @@ syncStatus: migrated
 A lightweight button for secondary actions.
 
 ## Basic Usage
-::TuffDemo{title="Flat Button" description="Default, primary, mini, and loading states." code-lang="vue"}
+### Flat Button
+Default, primary, mini, and loading states.
+:::TuffDemoWrapper{demo="FlatButtonFlatButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -20,15 +22,7 @@ code: |
     <TuffFlatButton loading>Loading</TuffFlatButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-flat-button>Default</tuff-flat-button>
-  <tuff-flat-button primary>Primary</tuff-flat-button>
-  <tuff-flat-button mini>Mini</tuff-flat-button>
-  <tuff-flat-button loading>Loading</tuff-flat-button>
-</div>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

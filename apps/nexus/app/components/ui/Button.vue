@@ -3,7 +3,7 @@ import { TxButton } from '@talex-touch/tuffex'
 
 const props = withDefaults(
   defineProps<{
-    variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'ghost'
+    variant?: 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info' | 'ghost' | 'flat' | 'bare'
     type?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'
     size?: 'sm' | 'md' | 'lg' | 'small' | 'large' | 'mini'
     block?: boolean

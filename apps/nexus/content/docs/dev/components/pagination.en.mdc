@@ -16,7 +16,9 @@ const page = ref(1)
 </script>
 
 ## Basic Usage
-::TuffDemo{title="Pagination" description="Navigate through pages of data." code-lang="vue"}
+### Pagination
+Navigate through pages of data.
+:::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -35,16 +37,7 @@ code: |
     />
   </template>
 ---
-#preview
-<tx-pagination
-  v-model:current-page="page"
-  :total="120"
-  :page-size="10"
-  show-info
-  show-first-last
-/>
 :::
-
 ## API (Lite)
 ::TuffPropsTable
 ---

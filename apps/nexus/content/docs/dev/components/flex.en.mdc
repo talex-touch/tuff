@@ -18,11 +18,22 @@ import FlexBasicDemoSource from '~/components/content/demos/FlexBasicDemo.vue?ra
 
 ## 基础用法
 
-<DemoBlock title="Flex" :code="FlexBasicDemoSource">
-  <template #preview>
-    <FlexBasicDemo />
+### Flex
+:::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 360px; padding: 16px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxFlex justify="space-between" align="center">
+        <TxTag label="Left" />
+        <TxButton variant="primary">
+          Action
+        </TxButton>
+      </TxFlex>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

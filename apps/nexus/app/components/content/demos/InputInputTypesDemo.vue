@@ -11,10 +11,10 @@ const text = ref('')
         <TuffInput v-model="text" placeholder="文本输入" />
         <TuffInput v-model="password" type="password" placeholder="密码输入" />
         <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
-</div>
+  </div>
   <div v-else>
         <TuffInput v-model="text" placeholder="Text input" />
         <TuffInput v-model="password" type="password" placeholder="Password input" />
         <TuffInput v-model="content" type="textarea" placeholder="Multiline text" :rows="4" />
-</div>
+  </div>
 </template>

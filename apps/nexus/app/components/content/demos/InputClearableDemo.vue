@@ -7,8 +7,8 @@ const clearableValue = ref('')
 <template>
   <div v-if="locale === 'zh'">
         <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
-</div>
+  </div>
   <div v-else>
         <TuffInput v-model="clearableValue" clearable placeholder="Clearable" />
-</div>
+  </div>
 </template>

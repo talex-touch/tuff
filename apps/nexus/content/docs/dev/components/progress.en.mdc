@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Progress States" description="Base progress with status colors" code-lang="vue"}
+### Progress States
+Base progress with status colors
+:::TuffDemoWrapper{demo="ProgressProgressStatesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -24,14 +26,7 @@ code: |
     <TuffProgress :percentage="100" status="success" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-progress :percentage="40" />
-  <tuff-progress :percentage="72" status="warning" />
-  <tuff-progress :percentage="100" status="success" />
-</div>
-::
-
+:::
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -63,7 +58,9 @@ rows:
 ::
 
 ## Composite Patterns
-::TuffDemo{title="Progress Row" description="Progress paired with status label." code-lang="vue"}
+### Progress Row
+Progress paired with status label.
+:::TuffDemoWrapper{demo="ProgressProgressRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -71,9 +68,4 @@ code: |
     <TxStatusBadge text="Running" status="warning" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-progress :percentage="60" />
-  <tx-status-badge text="Running" status="warning" />
-</div>
-::
+:::

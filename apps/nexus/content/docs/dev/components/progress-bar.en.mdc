@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Stateful Progress" description="Loading, warning, and success in one panel." code-lang="vue"}
+### Stateful Progress
+Loading, warning, and success in one panel.
+:::TuffDemoWrapper{demo="ProgressBarStatefulProgressDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -25,15 +27,7 @@ code: |
     <TxProgressBar loading message="Syncing" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
-  <tx-progress-bar :percentage="32" show-text />
-  <tx-progress-bar :percentage="68" status="warning" show-text />
-  <tx-progress-bar success message="Done" />
-  <tx-progress-bar loading message="Syncing" />
-</div>
-::
-
+:::
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -81,7 +75,9 @@ rows:
 ::
 
 ## Composite Patterns
-::TuffDemo{title="Status Panel" description="Progress bars paired with status text." code-lang="vue"}
+### Status Panel
+Progress bars paired with status text.
+:::TuffDemoWrapper{demo="ProgressBarStatusPanelDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -89,9 +85,4 @@ code: |
     <TxStatusBadge text="In progress" status="warning" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="flex-direction: column; align-items: stretch; width: 100%;">
-  <tx-progress-bar :percentage="80" show-text message="Uploading" />
-  <tx-status-badge text="In progress" status="warning" />
-</div>
-::
+:::

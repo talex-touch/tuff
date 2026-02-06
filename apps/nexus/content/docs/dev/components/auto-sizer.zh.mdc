@@ -42,63 +42,391 @@ import AutoSizerTextTransformerDemoSource from '~/components/content/demos/AutoS
 
 ### 仅高度（推荐用于 Tabs/Accordion）
 
-<DemoBlock title="AutoSizer height" :code="AutoSizerHeightDemoSource">
-  <template #preview>
-    <AutoSizerHeightDemo />
+### AutoSizer height
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref<'a' | 'b'>('a')
+  const sizerRef = ref<any>(null)
+
+  function setTab(next: 'a' | 'b') {
+    void sizerRef.value?.action?.(() => {
+      active.value = next
+    })
+  }
+  </script>
+
+  <template>
+    <div style="width: 420px; max-width: 100%;">
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <TxButton :variant="active === 'a' ? 'primary' : 'secondary'" @click="setTab('a')">
+          Tab A
+        </TxButton>
+        <TxButton :variant="active === 'b' ? 'primary' : 'secondary'" @click="setTab('b')">
+          Tab B
+        </TxButton>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="false"
+        :height="true"
+        :duration-ms="250"
+        outer-class="overflow-hidden"
+        style="border: 1px solid var(--tx-border-color); border-radius: 12px; padding: 12px;"
+      >
+        <div v-if="active === 'a'">
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            Tab A
+          </div>
+          <div style="color: var(--tx-text-color-secondary);">
+            Short content.
+          </div>
+        </div>
+        <div v-else>
+          <div style="font-weight: 600; margin-bottom: 8px;">
+            Tab B
+          </div>
+          <div style="color: var(--tx-text-color-secondary); line-height: 1.6;">
+            Long content. Long content. Long content. Long content. Long content. Long content.
+          </div>
+          <div style="height: 24px;" />
+          <div style="color: var(--tx-text-color-secondary); line-height: 1.6;">
+            More lines. More lines. More lines.
+          </div>
+        </div>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 宽度跟随（在 flex 容器内）
 
 > 当 AutoSizer 处于 flex item 且父容器把它 `flex: 1` 或者 `width: 100%` 撑满时，看起来就像“没跟随内容”。
 
-<DemoBlock title="AutoSizer width in flex" :code="AutoSizerWidthFlexDemoSource">
-  <template #preview>
-    <AutoSizerWidthFlexDemo />
+### AutoSizer width in flex
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthInFlexDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const wide = ref(false)
+  const sizerRef = ref<any>(null)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      wide.value = !wide.value
+    })
+  }
+  </script>
+
+  <template>
+    <div
+      style="width: 520px; max-width: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid var(--tx-border-color); border-radius: 12px; padding: 12px;"
+    >
+      <TxButton @click="toggle">
+        Toggle
+      </TxButton>
+
+      <TxAutoSizer ref="sizerRef" :width="true" :height="false" outer-class="overflow-hidden">
+        <TxButton variant="secondary">
+          {{ wide ? 'Very very long label' : 'Short' }}
+        </TxButton>
+      </TxAutoSizer>
+
+      <div style="flex: 1; text-align: right; color: var(--tx-text-color-secondary);">
+        Right Area
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 下拉内容高度跟随（用于筛选/搜索）
 
-<DemoBlock title="AutoSizer height for dropdown" :code="AutoSizerDropdownDemoSource">
-  <template #preview>
-    <AutoSizerDropdownDemo />
+### AutoSizer height for dropdown
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDropdownDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const mode = ref<'short' | 'long'>('short')
+  const sizerRef = ref<any>(null)
+
+  function toggleOpen() {
+    void sizerRef.value?.action?.(() => {
+      open.value = !open.value
+    })
+  }
+
+  function toggleItems() {
+    void sizerRef.value?.action?.(() => {
+      mode.value = mode.value === 'short' ? 'long' : 'short'
+    })
+  }
+  </script>
+
+  <template>
+    <div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <TxButton @click="toggleOpen">
+          Toggle dropdown
+        </TxButton>
+        <TxButton @click="toggleItems">
+          Toggle items
+        </TxButton>
+      </div>
+
+      <div style="height: 10px;" />
+
+      <div style="width: 320px; max-width: 100%; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
+        <div style="padding: 10px 12px; font-weight: 600;">
+          Dropdown Panel (mock)
+        </div>
+        <TxAutoSizer ref="sizerRef" :width="false" :height="true" outer-class="overflow-hidden" style="padding: 8px 12px;">
+          <div v-if="open" style="display: flex; flex-direction: column; gap: 8px;">
+            <TxButton variant="secondary" style="justify-content: flex-start;">
+              Item A
+            </TxButton>
+            <TxButton variant="secondary" style="justify-content: flex-start;">
+              Item B
+            </TxButton>
+            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
+              Item C
+            </TxButton>
+            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
+              Item D
+            </TxButton>
+            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
+              Item E
+            </TxButton>
+          </div>
+        </TxAutoSizer>
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 弹框内容高度跟随（模拟）
 
-<DemoBlock title="AutoSizer height for dialog" :code="AutoSizerDialogDemoSource">
-  <template #preview>
-    <AutoSizerDialogDemo />
+### AutoSizer height for dialog
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDialogDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const mode = ref<'short' | 'long'>('short')
+  const sizerRef = ref<any>(null)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      mode.value = mode.value === 'short' ? 'long' : 'short'
+    })
+  }
+  </script>
+
+  <template>
+    <div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <TxButton @click="toggle">
+          Toggle content
+        </TxButton>
+      </div>
+
+      <div style="height: 10px;" />
+
+      <div style="width: 420px; max-width: 100%; border: 1px solid var(--tx-border-color); border-radius: 16px; overflow: hidden;">
+        <div style="padding: 12px 14px; font-weight: 600;">
+          Dialog (mock)
+        </div>
+
+        <TxAutoSizer ref="sizerRef" :width="false" :height="true" outer-class="overflow-hidden" style="padding: 12px 14px;">
+          <div v-if="mode === 'short'" style="color: var(--tx-text-color-secondary); line-height: 1.6;">
+            Short content.
+          </div>
+          <div v-else style="color: var(--tx-text-color-secondary); line-height: 1.6;">
+            Long content. Long content. Long content. Long content. Long content.
+            <div style="height: 12px;" />
+            More lines. More lines. More lines.
+          </div>
+        </TxAutoSizer>
+
+        <div
+          style="padding: 12px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--tx-border-color);"
+        >
+          <TxButton variant="secondary">
+            Cancel
+          </TxButton>
+          <TxButton variant="primary">
+            Confirm
+          </TxButton>
+        </div>
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 仅宽度（推荐用于 Button 内容变化）
 
-<DemoBlock title="AutoSizer width" :code="AutoSizerButtonLoadingDemoSource">
-  <template #preview>
-    <AutoSizerButtonLoadingDemo />
+### AutoSizer width
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const loading = ref(false)
+  const sizerRef = ref<any>(null)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      loading.value = !loading.value
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <TxButton @click="toggle">
+        Toggle loading
+      </TxButton>
+
+      <TxAutoSizer ref="sizerRef" :width="true" :height="false" outer-class="overflow-hidden">
+        <TxButton :loading="loading" variant="primary">
+          Submit
+        </TxButton>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 数字过渡 + 宽度跟随（NumberFlow）
 
-<DemoBlock title="AutoSizer + NumberFlow" :code="AutoSizerNumberFlowDemoSource">
-  <template #preview>
-    <AutoSizerNumberFlowDemo />
+### AutoSizer + NumberFlow
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerNumberFlowDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import NumberFlow from '@number-flow/vue'
+  import { ref } from 'vue'
+
+  const value = ref(123.45)
+  const sizerRef = ref<any>(null)
+
+  function shuffle() {
+    const next = Math.random() > 0.5
+      ? 3243.6
+      : 1000000.12
+
+    void sizerRef.value?.action?.(() => {
+      value.value = next
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <TxButton @click="shuffle">
+        Shuffle
+      </TxButton>
+
+      <TxAutoSizer ref="sizerRef" :width="true" :height="false" outer-class="overflow-hidden">
+        <TxButton variant="secondary">
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+            <span style="opacity: 0.7;">$</span>
+            <NumberFlow :value="value" />
+          </span>
+        </TxButton>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ### 文本丝滑变换 + 宽度跟随（TextTransformer）
 
 > 该示例同时开启 `width + height` 跟随，并在外层设置 `overflow-hidden`，用于裁剪 blur 的边缘溢出。
 
-<DemoBlock title="AutoSizer + TextTransformer" :code="AutoSizerTextTransformerDemoSource">
-  <template #preview>
-    <AutoSizerTextTransformerDemo />
+### AutoSizer + TextTransformer
+:::TuffDemoWrapper{demo="AutoSizerAutoSizerTextTransformerDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sizerRef = ref<any>(null)
+  const label = ref('Short')
+  const accent = ref(false)
+  const duration = ref(360)
+  const blurPx = ref(10)
+
+  function toggle() {
+    void sizerRef.value?.action?.(() => {
+      label.value = label.value === 'Short'
+        ? 'Very very long label (blur + fade) that will be clipped while resizing'
+        : 'Short'
+      accent.value = !accent.value
+    })
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <TxButton @click="toggle">
+          Toggle
+        </TxButton>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            duration (ms)
+          </div>
+          <TxSlider v-model="duration" :min="160" :max="720" :step="10" :show-value="true" />
+        </div>
+
+        <div style="width: 220px;">
+          <div style="font-size: 12px; opacity: 0.72; margin-bottom: 6px;">
+            blur (px)
+          </div>
+          <TxSlider v-model="blurPx" :min="0" :max="24" :step="1" :show-value="true" />
+        </div>
+      </div>
+
+      <TxAutoSizer
+        ref="sizerRef"
+        :width="true"
+        :height="true"
+        :inline="true"
+        :duration-ms="duration"
+        easing="cubic-bezier(0.2, 0, 0, 1)"
+        outer-class="overflow-hidden"
+      >
+        <TxCard variant="plain" background="mask" :padding="12" :radius="14" style="max-width: 360px;">
+          <div style="font-size: 13px; line-height: 1.4;">
+            <TxTextTransformer
+              :text="label"
+              :duration-ms="duration"
+              :blur-px="blurPx"
+              :style="{ color: accent ? 'var(--tx-color-primary)' : 'var(--tx-text-color-primary)' }"
+            />
+          </div>
+        </TxCard>
+      </TxAutoSizer>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

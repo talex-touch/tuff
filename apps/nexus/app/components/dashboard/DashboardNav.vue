@@ -124,11 +124,6 @@ const accountMenuItems = computed(() => {
       icon: 'i-carbon-user',
     },
     {
-      id: 'devices',
-      label: t('dashboard.sections.menu.devices', '设备管理'),
-      icon: 'i-carbon-devices',
-    },
-    {
       id: 'privacy',
       label: t('dashboard.sections.menu.privacy', '隐私设置'),
       icon: 'i-carbon-security',

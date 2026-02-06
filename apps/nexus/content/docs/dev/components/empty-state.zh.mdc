@@ -13,19 +13,8 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="EmptyState (variant)">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxEmptyState
-    variant="no-data"
-    :primary-action="{ label: 'Create', type: 'primary' }"
-    :secondary-action="{ label: 'Refresh' }"
-  />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### EmptyState (variant)
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateVariantDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -37,26 +26,11 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 横向布局
 
-<DemoBlock title="EmptyState (horizontal)">
-<template #preview>
-<div style="max-width: 520px;">
-  <TxEmptyState
-    variant="no-selection"
-    layout="horizontal"
-    surface="card"
-    title="No selection"
-    description="Pick an item from the left to continue."
-  />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### EmptyState (horizontal)
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateHorizontalDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -70,34 +44,11 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 自定义插槽
 
-<DemoBlock title="EmptyState (slots)">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxEmptyState variant="custom">
-    <template #icon>
-      <TxIcon name="i-carbon-search" :size="28" />
-    </template>
-    <template #title>
-      Setup required
-    </template>
-    <template #description>
-      Connect a workspace to enable this feature.
-    </template>
-    <template #actions>
-      <TxButton type="primary">Connect</TxButton>
-      <TxButton>Learn more</TxButton>
-    </template>
-  </TxEmptyState>
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### EmptyState (slots)
+:::TuffDemoWrapper{demo="EmptyStateEmptyStateSlotsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -119,8 +70,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## 预设组件
 
