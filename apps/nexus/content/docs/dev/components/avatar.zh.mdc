@@ -15,8 +15,10 @@ Avatar 头像组件用于展示用户头像、品牌标识或其他圆形内容�
 ## 基础用法
 
 ### Avatar
+
 图片、名称、图标与默认内容。
-:::TuffDemoWrapper{demo="AvatarAvatarDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -28,12 +30,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## 头像尺寸
 
-### Sizes
 提供 small/medium/large/xlarge 四种预设尺寸。
-:::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -45,12 +48,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## 文字头像
 
-### Text
 使用文字作为头像内容。
-:::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -61,12 +65,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## 图标头像
 
-### Icon
 使用图标作为头像内容。
-:::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -76,12 +81,13 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## 头像组
 
-### AvatarGroup
 叠放头像并限制最大数量。
-:::TuffDemoWrapper{demo="AvatarAvatarGroupDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -94,12 +100,13 @@ code: |
     </TxAvatarGroup>
   </template>
 ---
-:::
+::
+
 ## 状态
 
-### Status
 展示在线状态角标。
-:::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -111,7 +118,8 @@ code: |
     </div>
   </template>
 ---
-:::
+::
+
 ## 可点击头像
 
 ::TuffCodeBlock{lang="vue"}

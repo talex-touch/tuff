@@ -9,16 +9,13 @@ syncStatus: migrated
 
 用于简短任务或确认操作的模态窗口。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-</script>
-
 ## 基础用法
+
 ### 模态框
+
 点击按钮打开模态窗口。
-:::TuffDemoWrapper{demo="ModalModalDialogDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -38,7 +35,8 @@ code: |
     </TxModal>
   </template>
 ---
-:::
+::
+
 ## API（Lite）
 ::TuffPropsTable
 ---

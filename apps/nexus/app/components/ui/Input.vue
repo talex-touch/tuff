@@ -6,7 +6,7 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string | number
     placeholder?: string
-    type?: 'text' | 'password' | 'textarea' | 'number'
+    type?: 'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'
     disabled?: boolean
     readonly?: boolean
     clearable?: boolean
@@ -34,21 +34,8 @@ const emit = defineEmits<{
 const value = computed({
   get: () => props.modelValue ?? '',
   set: (val: string | number) => {
-    let next: string | number = val
-    if (props.type === 'number') {
-      if (val === '' || val === null || val === undefined) {
-        next = ''
-      }
-      else if (typeof val === 'number') {
-        next = val
-      }
-      else {
-        const parsed = Number(val)
-        next = Number.isNaN(parsed) ? val : parsed
-      }
-    }
-    emit('update:modelValue', next)
-    emit('input', next)
+    emit('update:modelValue', val)
+    emit('input', val)
   },
 })
 </script>

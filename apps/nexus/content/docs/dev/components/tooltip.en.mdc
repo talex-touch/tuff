@@ -15,9 +15,12 @@ syncStatus: migrated
 
 
 ## Demo
+
 ### Hover Hint
+
 Short hints with low intrusion.
-:::TuffDemoWrapper{demo="TooltipHoverHintDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="TooltipHoverDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -29,7 +32,8 @@ code: |
     </TxTooltip>
   </template>
 ---
-:::
+::
+
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -70,9 +74,12 @@ rows:
 - Maintain light spacing from the trigger element.
 
 ## Composite Patterns
+
 ### Tooltip Button
+
 Icon button with a hint.
-:::TuffDemoWrapper{demo="TooltipTooltipButtonDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="TooltipButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -81,4 +88,4 @@ code: |
     </TxTooltip>
   </template>
 ---
-:::
+::

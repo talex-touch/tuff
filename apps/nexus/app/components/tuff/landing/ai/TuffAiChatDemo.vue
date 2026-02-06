@@ -353,9 +353,14 @@ onBeforeUnmount(() => {
                 <div class="ai-chat-demo__code-block" data-reveal-block>
                   <div class="ai-chat-demo__code-header">
                     <span class="ai-chat-demo__code-lang">vue</span>
-                    <button type="button" class="ai-chat-demo__code-copy">
+                    <TxButton
+                      variant="bare"
+                      size="mini"
+                      native-type="button"
+                      class="ai-chat-demo__code-copy"
+                    >
                       <span class="i-carbon-copy" />
-                    </button>
+                    </TxButton>
                   </div>
                   <pre class="ai-chat-demo__code-content"><code>{{ codeExample }}</code></pre>
                 </div>

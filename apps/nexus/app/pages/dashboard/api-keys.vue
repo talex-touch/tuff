@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
-import Input from '~/components/ui/Input.vue'
 definePageMeta({
   layout: 'dashboard',
 })
@@ -38,17 +36,6 @@ const showCreateModal = ref(false)
 const newKeyName = ref('')
 const newKeyScopes = ref<string[]>(['plugin:publish'])
 const newKeyExpiry = ref<number | null>(null)
-
-const expiryValue = computed({
-  get: () => newKeyExpiry.value ?? '',
-  set: (val: string | number) => {
-    if (val === '' || val === null || val === undefined) {
-      newKeyExpiry.value = null
-      return
-    }
-    newKeyExpiry.value = typeof val === 'number' ? val : Number(val)
-  },
-})
 
 // Newly created key (show once)
 const newlyCreatedKey = ref<{ name: string, secretKey: string } | null>(null)
@@ -104,15 +91,6 @@ async function createKey() {
   }
 }
 
-function toggleScope(scopeId: string, enabled: boolean) {
-  if (enabled) {
-    if (!newKeyScopes.value.includes(scopeId))
-      newKeyScopes.value.push(scopeId)
-    return
-  }
-  newKeyScopes.value = newKeyScopes.value.filter(scope => scope !== scopeId)
-}
-
 async function deleteKey(keyId: string) {
   if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
     return
@@ -133,6 +111,16 @@ async function copyKey() {
   await navigator.clipboard.writeText(newlyCreatedKey.value.secretKey)
   copied.value = true
   setTimeout(() => { copied.value = false }, 2000)
+}
+
+function toggleScope(scopeId: string, enabled: boolean) {
+  const current = newKeyScopes.value
+  if (enabled) {
+    if (!current.includes(scopeId))
+      newKeyScopes.value = [...current, scopeId]
+    return
+  }
+  newKeyScopes.value = current.filter(item => item !== scopeId)
 }
 
 function formatDate(date: string | null): string {
@@ -180,7 +168,6 @@ const expiryOptions = [
       </div>
       <Button
         variant="primary"
-        size="small"
         @click="showCreateModal = true"
       >
         <span class="i-carbon-add text-base" />
@@ -202,24 +189,21 @@ const expiryOptions = [
             <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-light">
               {{ newlyCreatedKey.secretKey }}
             </code>
-            <Button
-              variant="success"
-              size="small"
-              @click="copyKey"
-            >
+            <Button size="small" variant="success" @click="copyKey">
               {{ copied ? 'Copied!' : 'Copy' }}
             </Button>
           </div>
         </div>
-        <Button
+        <TxButton
           variant="bare"
-          size="mini"
           circle
-          aria-label="Close"
+          size="mini"
+          native-type="button"
+          class="text-green-600/60 transition hover:text-green-600"
           @click="newlyCreatedKey = null"
         >
           <span class="i-carbon-close text-lg" />
-        </Button>
+        </TxButton>
       </div>
     </div>
 
@@ -275,15 +259,16 @@ const expiryOptions = [
             </div>
           </div>
         </div>
-        <Button
-          variant="danger"
-          size="mini"
+        <TxButton
+          variant="bare"
           circle
-          aria-label="Delete"
+          size="mini"
+          native-type="button"
+          class="rounded-lg p-2 text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
           @click="deleteKey(key.id)"
         >
           <span class="i-carbon-trash-can text-lg" />
-        </Button>
+        </TxButton>
       </div>
     </div>
 
@@ -298,12 +283,7 @@ const expiryOptions = [
       <p class="mt-1 text-sm text-black/50 dark:text-light/50">
         Create an API key to use with tuffcli and other integrations
       </p>
-      <Button
-        variant="primary"
-        size="small"
-        class="mt-4"
-        @click="showCreateModal = true"
-      >
+      <Button variant="primary" class="mt-4" @click="showCreateModal = true">
         Create Your First Key
       </Button>
     </div>
@@ -347,13 +327,11 @@ const expiryOptions = [
                   v-for="scope in availableScopes"
                   :key="scope.id"
                   class="flex cursor-pointer items-start gap-3 rounded-lg bg-black/5 p-3 transition hover:bg-black/10 dark:bg-light/5 dark:hover:bg-light/10"
-                  @click="toggleScope(scope.id, !newKeyScopes.includes(scope.id))"
                 >
                   <TxCheckbox
-                    :model-value="newKeyScopes.includes(scope.id)"
                     class="mt-0.5"
-                    @change="(checked) => toggleScope(scope.id, checked)"
-                    @click.stop
+                    :model-value="newKeyScopes.includes(scope.id)"
+                    @change="(value) => toggleScope(scope.id, value)"
                   />
                   <div>
                     <p class="text-sm font-medium text-black dark:text-light">{{ scope.label }}</p>
@@ -368,25 +346,20 @@ const expiryOptions = [
               <label class="mb-1 block text-xs font-medium text-black/60 dark:text-light/60">
                 Expiration
               </label>
-              <TxSelect
-                v-model="expiryValue"
-                class="w-full"
-              >
-                <TxSelectItem
+              <TuffSelect v-model="newKeyExpiry" class="w-full">
+                <TuffSelectItem
                   v-for="opt in expiryOptions"
                   :key="opt.value ?? 'never'"
-                  :value="opt.value ?? ''"
-                >
-                  {{ opt.label }}
-                </TxSelectItem>
-              </TxSelect>
+                  :value="opt.value"
+                  :label="opt.label"
+                />
+              </TuffSelect>
             </div>
           </div>
 
           <div class="mt-6 flex gap-3">
             <Button
               variant="secondary"
-              size="small"
               class="flex-1"
               @click="showCreateModal = false"
             >
@@ -394,9 +367,7 @@ const expiryOptions = [
             </Button>
             <Button
               variant="primary"
-              size="small"
               class="flex-1"
-              :loading="creating"
               :disabled="!newKeyName.trim() || creating"
               @click="createKey"
             >

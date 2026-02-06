@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex'
 import { computed, ref, watchEffect } from 'vue'
-import Button from '~/components/ui/Button.vue'
 import { useDashboardImagesData } from '~/composables/useDashboardData'
 
 interface DashboardImage {
@@ -37,8 +36,7 @@ watchEffect(() => {
     execute()
 })
 
-const imageFile = ref<File | null>(null)
-const imageUploadFiles = ref<FileUploaderFile[]>([])
+const imageFiles = ref<FileUploaderFile[]>([])
 const imageUploading = ref(false)
 const imageError = ref<string | null>(null)
 const copiedImageKey = ref<string | null>(null)
@@ -48,15 +46,9 @@ function isImageResource(key: string) {
 }
 
 async function handleImageUpload(files: FileUploaderFile[]) {
-  const file = files[0]?.file ?? null
-  imageFile.value = file
-  if (!file)
-    return
-  await uploadImage()
-}
-
-async function uploadImage() {
-  if (!imageFile.value || !isAdmin.value)
+  imageFiles.value = files
+  const file = files[0]?.file
+  if (!file || !isAdmin.value)
     return
 
   imageUploading.value = true
@@ -64,7 +56,7 @@ async function uploadImage() {
 
   try {
     const formData = new FormData()
-    formData.append('file', imageFile.value)
+    formData.append('file', file)
 
     await $fetch('/api/images/upload', {
       method: 'POST',
@@ -72,8 +64,7 @@ async function uploadImage() {
     })
 
     await refreshImages()
-    imageFile.value = null
-    imageUploadFiles.value = []
+    imageFiles.value = []
   }
   catch (error: unknown) {
     imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.unknown', 'Upload failed')
@@ -125,8 +116,7 @@ async function copyImageUrl(imageUrl: string, imageKey: string) {
 watchEffect(() => {
   if (!isAdmin.value) {
     imageError.value = null
-    imageFile.value = null
-    imageUploadFiles.value = []
+    imageFiles.value = []
   }
 })
 </script>
@@ -169,11 +159,14 @@ watchEffect(() => {
             <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
               {{ t('dashboard.sections.images.selectFile', 'Select File') }}
               <TxFileUploader
-                v-model="imageUploadFiles"
+                v-model="imageFiles"
                 :multiple="false"
                 :max="1"
-                :disabled="imageUploading"
                 accept="*/*"
+                :disabled="imageUploading"
+                :button-text="t('dashboard.sections.images.selectFile', 'Select File')"
+                :drop-text="t('dashboard.sections.images.selectFile', 'Select File')"
+                :hint-text="t('dashboard.sections.images.uploadSubtitle', 'Upload assets to use in plugins and updates')"
                 @change="handleImageUpload"
               />
             </label>
@@ -239,23 +232,26 @@ watchEffect(() => {
                 {{ image.key }}
               </p>
               <div class="mt-3 flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="small"
-                  class="flex-1"
+                <TxButton
+                  variant="bare"
+                  block
+                  native-type="button"
+                  class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-primary/20 bg-dark/5 px-3 py-1.5 text-xs font-medium text-black transition hover:bg-dark/10 dark:border-light/20 dark:bg-light/10 dark:text-light"
                   @click="copyImageUrl(image.url, image.key)"
                 >
                   <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
                   {{ copiedImageKey === image.key ? t('dashboard.sections.images.copied', 'Copied!') : t('dashboard.sections.images.copyUrl', 'Copy URL') }}
-                </Button>
-                <Button
-                  variant="danger"
-                  size="mini"
+                </TxButton>
+                <TxButton
+                  variant="bare"
                   circle
-                  icon="i-carbon-trash-can"
-                  aria-label="Delete resource"
+                  size="mini"
+                  native-type="button"
+                  class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 transition hover:border-red-300 hover:text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200"
                   @click="deleteImage(image.key)"
-                />
+                >
+                  <span class="i-carbon-trash-can text-sm" />
+                </TxButton>
               </div>
             </div>
           </article>

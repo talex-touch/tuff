@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
 definePageMeta({
   layout: false,
 })
@@ -61,20 +60,20 @@ function goHome() {
       <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
         <Button
           variant="primary"
-          size="large"
-          icon="i-carbon-home"
+          size="lg"
           class="w-full sm:w-auto"
           @click="goHome"
         >
+          <span class="i-carbon-home text-lg" />
           Back to Home
         </Button>
         <Button
           variant="secondary"
-          size="large"
-          icon="i-carbon-arrow-left"
+          size="lg"
           class="w-full sm:w-auto"
           @click="goBack"
         >
+          <span class="i-carbon-arrow-left text-lg" />
           Go Back
         </Button>
       </div>

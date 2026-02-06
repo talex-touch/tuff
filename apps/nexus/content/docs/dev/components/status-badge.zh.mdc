@@ -16,8 +16,10 @@ syncStatus: migrated
 
 ## Demo
 ### Status Signals
-成功/警告/错误/信息
-:::TuffDemoWrapper{demo="StatusBadgeStatusSignalsDemo" code-lang="vue"}
+
+成功/警告/错误/信息。
+
+::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -27,7 +29,8 @@ code: |
     <TxStatusBadge text="信息" status="info" />
   </template>
 ---
-:::
+::
+
 ## API（简版）
 ::TuffPropsTable
 ---
@@ -49,8 +52,10 @@ rows:
 
 ## 组合示例
 ### 状态行
+
 徽标搭配头像进行状态展示。
-:::TuffDemoWrapper{demo="StatusBadgeStatusRowDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -58,4 +63,4 @@ code: |
     <TxStatusBadge text="在线" status="success" />
   </template>
 ---
-:::
+::

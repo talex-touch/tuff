@@ -2,7 +2,6 @@
 import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
 import type { ReleaseChannelId } from '~/data/updates'
 import { computed, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
 import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
 
@@ -193,17 +192,20 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
     <!-- Channel Selector -->
     <div class="mx-auto max-w-2xl w-full animate-fade-in-up" style="animation-delay: 100ms;">
       <div class="flex gap-2 rounded-xl bg-gray-100 p-1.5 dark:bg-gray-800/80">
-        <Button
+        <TxButton
           v-for="option in channelOptions"
           :key="option.id"
-          size="small"
-          :variant="selectedChannel === option.id ? 'primary' : 'ghost'"
-          class="flex-1"
+          variant="bare"
+          native-type="button"
+          class="channel-tab flex-1 flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all duration-300"
+          :class="selectedChannel === option.id
+            ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
+            : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
           @click="selectedChannel = option.id"
         >
           <span :class="option.icon" class="text-base" />
           <span>{{ option.badge }}</span>
-        </Button>
+        </TxButton>
       </div>
     </div>
 
@@ -277,10 +279,14 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
             </a>
 
             <div v-if="allDownloads.length > 1" class="relative group">
-              <Button variant="secondary" size="small">
+              <TxButton
+                variant="bare"
+                native-type="button"
+                class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 transition-all duration-200 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
                 <span class="i-carbon-overflow-menu-horizontal text-base" />
                 {{ t('updates.downloads.otherPlatforms') || 'Other platforms' }}
-              </Button>
+              </TxButton>
               <div class="absolute left-0 top-full z-10 mt-2 hidden min-w-48 flex-col rounded-lg border border-gray-200 bg-white p-1.5 shadow-lg group-hover:flex dark:border-gray-700 dark:bg-gray-800">
                 <a
                   v-for="asset in allDownloads"
@@ -323,15 +329,16 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
           {{ t('updates.table.title') }}
         </h3>
-        <Button
+        <TxButton
           v-if="hasHistory"
-          variant="ghost"
-          size="small"
+          variant="bare"
+          native-type="button"
+          class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
           @click="historyExpanded = !historyExpanded"
         >
           <span :class="historyExpanded ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'" class="text-base transition-transform duration-200" />
           {{ historyExpanded ? t('updates.table.hideLabel') : t('updates.table.toggleLabel') }}
-        </Button>
+        </TxButton>
       </div>
 
       <Transition name="slide-fade">

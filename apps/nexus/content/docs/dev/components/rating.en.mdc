@@ -9,16 +9,13 @@ syncStatus: migrated
 
 Star rating control for feedback input.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const score = ref(3.5)
-</script>
-
 ## Basic Usage
+
 ### Rating
+
 Select a score with half steps.
-:::TuffDemoWrapper{demo="RatingRatingDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="RatingBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -31,7 +28,8 @@ code: |
     <TxRating v-model="score" :precision="0.5" show-text />
   </template>
 ---
-:::
+::
+
 ## API (Lite)
 ::TuffPropsTable
 ---

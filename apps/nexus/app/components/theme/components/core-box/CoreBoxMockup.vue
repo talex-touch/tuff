@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import TypeIt from 'typeit'
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import Logo from '../../../icon/Logo.vue'
 
+const inputRef = ref<{ inputEl?: HTMLInputElement | null } | null>(null)
+
 onMounted(() => {
-  new TypeIt('#input', {
+  const target = inputRef.value?.inputEl ?? null
+  if (!target)
+    return
+  new TypeIt(target, {
     strings: [
       'Summarize what I wrote these days in WPS...',
       'Translate this article into English.',
@@ -34,7 +39,7 @@ onMounted(() => {
       <Logo />
     </div>
     <div class="CoreBoxMockup-Input">
-      <input id="input" placeholder="Type what you want to search by tuff.">
+      <TuffInput ref="inputRef" placeholder="Type what you want to search by tuff." />
     </div>
     <div class="CoreBoxMockup-Suffix">
       <i />
@@ -93,20 +98,22 @@ onMounted(() => {
 .CoreBoxMockup-Input {
   flex: 1;
   height: 100%;
-  input, p {
-    width: 100%;
-    height: 100%;
+}
 
-    outline: none;
-    border: none;
-    background-color: transparent;
+.CoreBoxMockup-Input :deep(.tx-input) {
+  height: 100%;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
 
-    color: #fff !important;
-    font-size: 22px;
+.CoreBoxMockup-Input :deep(.tx-input__inner) {
+  height: 100%;
+  color: #fff;
+  font-size: 22px;
+}
 
-    &::placeholder {
-      color: #888888 !important;
-    }
-  }
+.CoreBoxMockup-Input :deep(.tx-input__inner::placeholder) {
+  color: #888888;
 }
 </style>

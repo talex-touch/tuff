@@ -231,21 +231,22 @@ useHead({
             action="/waitlist"
             method="post"
           >
-            <input
+            <TuffInput
               type="email"
               name="email"
               required
               autocomplete="email"
               placeholder="you@studio.com"
-              class="w-full rounded-full border border-white/25 bg-transparent px-5 py-3 text-sm text-white placeholder:text-white/40 focus:border-white focus:outline-none focus:ring-2 focus:ring-white/30"
-            >
-            <button
-              type="submit"
-              class="inline-flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black shadow-md transition hover:-translate-y-0.5 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:w-auto"
+              class="w-full"
+            />
+            <TxButton
+              variant="primary"
+              native-type="submit"
+              class="w-full sm:w-auto"
             >
               <span class="i-carbon-send text-base" />
               通知我
-            </button>
+            </TxButton>
           </form>
           <ul class="flex flex-col gap-2 text-sm text-white/60 sm:flex-row sm:items-center sm:gap-6">
             <li

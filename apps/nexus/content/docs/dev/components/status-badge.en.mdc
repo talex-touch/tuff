@@ -15,9 +15,12 @@ syncStatus: migrated
 
 
 ## Demo
+
 ### Status Signals
-Success, warning, error, info
-:::TuffDemoWrapper{demo="StatusBadgeStatusSignalsDemo" code-lang="vue"}
+
+Success, warning, error, info.
+
+::TuffDemoWrapper{demo="StatusBadgeSignalsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -27,7 +30,8 @@ code: |
     <TxStatusBadge text="Info" status="info" />
   </template>
 ---
-:::
+::
+
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -48,9 +52,12 @@ rows:
 ::
 
 ## Composite Patterns
+
 ### Status Row
+
 Status badge paired with avatar.
-:::TuffDemoWrapper{demo="StatusBadgeStatusRowDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="StatusBadgeRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -58,4 +65,4 @@ code: |
     <TxStatusBadge text="Online" status="success" />
   </template>
 ---
-:::
+::

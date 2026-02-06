@@ -7,28 +7,12 @@ const { t } = useI18n()
 
 const loading = ref(false)
 
-interface PrivacySettings {
-  analytics: boolean
-  crashReports: boolean
-  usageData: boolean
-  personalization: boolean
-}
-
-const privacySettings = ref<PrivacySettings>({
+const privacySettings = ref({
   analytics: true,
   crashReports: true,
   usageData: false,
   personalization: true,
 })
-
-type PrivacySettingKey = keyof PrivacySettings
-
-function toggleSetting(key: PrivacySettingKey) {
-  if (loading.value)
-    return
-  privacySettings.value[key] = !privacySettings.value[key]
-  saveSettings()
-}
 
 async function saveSettings() {
   loading.value = true
@@ -95,10 +79,7 @@ onMounted(() => {
 
       <div class="mt-6 space-y-4">
         <!-- Analytics -->
-        <label
-          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
-          @click="toggleSetting('analytics')"
-        >
+        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
           <div class="flex items-center gap-3">
             <span class="i-carbon-chart-bar text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -110,20 +91,11 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <TuffSwitch
-            v-model="privacySettings.analytics"
-            size="small"
-            :disabled="loading"
-            @change="saveSettings"
-            @click.stop
-          />
+          <TuffSwitch v-model="privacySettings.analytics" @change="saveSettings" />
         </label>
 
         <!-- Crash Reports -->
-        <label
-          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
-          @click="toggleSetting('crashReports')"
-        >
+        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
           <div class="flex items-center gap-3">
             <span class="i-carbon-warning text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -135,20 +107,11 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <TuffSwitch
-            v-model="privacySettings.crashReports"
-            size="small"
-            :disabled="loading"
-            @change="saveSettings"
-            @click.stop
-          />
+          <TuffSwitch v-model="privacySettings.crashReports" @change="saveSettings" />
         </label>
 
         <!-- Usage Data -->
-        <label
-          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
-          @click="toggleSetting('usageData')"
-        >
+        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
           <div class="flex items-center gap-3">
             <span class="i-carbon-data-vis-1 text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -160,20 +123,11 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <TuffSwitch
-            v-model="privacySettings.usageData"
-            size="small"
-            :disabled="loading"
-            @change="saveSettings"
-            @click.stop
-          />
+          <TuffSwitch v-model="privacySettings.usageData" @change="saveSettings" />
         </label>
 
         <!-- Personalization -->
-        <label
-          class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5"
-          @click="toggleSetting('personalization')"
-        >
+        <label class="flex cursor-pointer items-center justify-between rounded-2xl p-4 transition hover:bg-dark/5 dark:hover:bg-light/5">
           <div class="flex items-center gap-3">
             <span class="i-carbon-user-favorite text-xl text-black/70 dark:text-light/70" />
             <div>
@@ -185,13 +139,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <TuffSwitch
-            v-model="privacySettings.personalization"
-            size="small"
-            :disabled="loading"
-            @change="saveSettings"
-            @click.stop
-          />
+          <TuffSwitch v-model="privacySettings.personalization" @change="saveSettings" />
         </label>
       </div>
     </section>
@@ -203,7 +151,10 @@ onMounted(() => {
       </h2>
 
       <div class="mt-4 space-y-3">
-        <button
+        <TxButton
+          variant="bare"
+          block
+          native-type="button"
           class="w-full flex items-center justify-between border border-primary/15 rounded-2xl bg-dark/5 px-4 py-3 text-left text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/30 dark:bg-light/10 hover:bg-light/5 dark:text-light"
         >
           <div class="flex items-center gap-3">
@@ -211,9 +162,12 @@ onMounted(() => {
             {{ t('dashboard.privacy.exportData', '导出我的数据') }}
           </div>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </TxButton>
 
-        <button
+        <TxButton
+          variant="bare"
+          block
+          native-type="button"
           class="w-full flex items-center justify-between border border-red-500/20 rounded-2xl bg-red-500/5 px-4 py-3 text-left text-sm text-red-600 font-medium transition hover:border-red-500/40 hover:bg-red-500/10 dark:text-red-400"
         >
           <div class="flex items-center gap-3">
@@ -221,7 +175,7 @@ onMounted(() => {
             {{ t('dashboard.privacy.deleteData', '删除我的数据') }}
           </div>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </TxButton>
       </div>
     </section>
 

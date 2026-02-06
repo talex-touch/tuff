@@ -16,8 +16,10 @@ syncStatus: migrated
 
 ## Demo
 ### Hover Hint
+
 短文本提示，保持低侵入感。
-:::TuffDemoWrapper{demo="TooltipHoverHintDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="TooltipHoverDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -29,7 +31,8 @@ code: |
     </TxTooltip>
   </template>
 ---
-:::
+::
+
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -71,8 +74,10 @@ rows:
 
 ## 组合示例
 ### 提示按钮
+
 图标按钮搭配提示信息。
-:::TuffDemoWrapper{demo="TooltipTooltipButtonDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="TooltipButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -81,4 +86,4 @@ code: |
     </TxTooltip>
   </template>
 ---
-:::
+::

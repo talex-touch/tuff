@@ -23,9 +23,9 @@ watch(searchTerm, async (newTerm) => {
   <div class="relative search">
     <TxSearchInput
       v-model="searchTerm"
+      class="w-full"
       placeholder="Search..."
       aria-label="Search"
-      class="w-full"
     />
     <ul
       v-if="searchResults.length"

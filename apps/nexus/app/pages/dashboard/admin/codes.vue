@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
-import Input from '~/components/ui/Input.vue'
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -136,74 +134,44 @@ onMounted(() => {
       <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan</label>
-          <TxSelect
-            v-model="genForm.plan"
-            class="w-full"
-          >
-            <TxSelectItem
+          <TuffSelect v-model="genForm.plan" class="w-full">
+            <TuffSelectItem
               v-for="opt in planOptions"
               :key="opt.value"
               :value="opt.value"
-            >
-              <span :class="opt.color">{{ opt.label }}</span>
-            </TxSelectItem>
-          </TxSelect>
+              :label="opt.label"
+            />
+          </TuffSelect>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (days)</label>
-          <Input
-            v-model.number="genForm.durationDays"
-            type="number"
-            min="1"
-            max="365"
-            class="w-full"
-          />
+          <Input v-model="genForm.durationDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Uses</label>
-          <Input
-            v-model.number="genForm.maxUses"
-            type="number"
-            min="1"
-            max="1000"
-            class="w-full"
-          />
+          <Input v-model="genForm.maxUses" type="number" min="1" max="1000" class="w-full" />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In (days)</label>
-          <Input
-            v-model.number="genForm.expiresInDays"
-            type="number"
-            min="1"
-            max="365"
-            class="w-full"
-          />
+          <Input v-model="genForm.expiresInDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Count</label>
-          <Input
-            v-model.number="genForm.count"
-            type="number"
-            min="1"
-            max="100"
-            class="w-full"
-          />
+          <Input v-model="genForm.count" type="number" min="1" max="100" class="w-full" />
         </div>
       </div>
 
       <Button
-        variant="primary"
-        size="small"
-        round
-        :loading="generating"
-        :disabled="generating"
         class="mt-4"
+        :disabled="generating"
+        variant="primary"
         @click="generateCodes"
       >
+        <span v-if="generating" class="i-carbon-rotate-360 animate-spin" />
         <span>{{ generating ? t('dashboard.sections.codes.generating', 'Generating...') : t('dashboard.sections.codes.generateButton', 'Generate Codes') }}</span>
       </Button>
     </section>
@@ -219,16 +187,17 @@ onMounted(() => {
         <h2 class="text-base font-semibold text-black dark:text-light">
           {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
         </h2>
-        <Button
-          variant="secondary"
+        <TxButton
+          variant="bare"
           size="small"
-          :loading="loading"
+          native-type="button"
           :disabled="loading"
-          icon="i-carbon-refresh"
+          class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
           @click="fetchCodes"
         >
+          <span :class="loading ? 'i-carbon-rotate-360 animate-spin' : 'i-carbon-refresh'" class="text-base" />
           {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
-        </Button>
+        </TxButton>
       </div>
 
       <div v-if="loading && !codes.length" class="p-8 text-center text-black/50 dark:text-light/50">
@@ -271,16 +240,15 @@ onMounted(() => {
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-light/10 dark:text-light">{{ code.code }}</code>
-                  <Button
+                  <TxButton
                     variant="bare"
                     size="mini"
-                    circle
+                    native-type="button"
+                    icon="i-carbon-copy"
+                    class="text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
                     :title="t('dashboard.sections.codes.copy', 'Copy')"
-                    :aria-label="t('dashboard.sections.codes.copy', 'Copy')"
                     @click="copyCode(code.code)"
-                  >
-                    <span class="i-carbon-copy text-sm" />
-                  </Button>
+                  />
                 </div>
               </td>
               <td class="px-4 py-3">

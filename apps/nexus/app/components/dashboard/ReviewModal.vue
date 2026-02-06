@@ -6,7 +6,6 @@ import type {
 } from '~/types/dashboard-plugin'
 import Button from '~/components/ui/Button.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
-import Input from '~/components/ui/Input.vue'
 import Modal from '~/components/ui/Modal.vue'
 
 export interface ReviewItem {
@@ -244,11 +243,11 @@ function toggleRejectForm() {
             <span class="text-xs font-medium uppercase tracking-wide text-rose-600 dark:text-rose-400">
               {{ t('dashboard.sections.plugins.rejectReason') }}
             </span>
-            <Input
+            <TuffInput
               v-model="rejectReason"
+              class="mt-2"
               type="textarea"
               :rows="3"
-              class="mt-2"
               :placeholder="t('dashboard.sections.plugins.rejectReasonPlaceholder')"
             />
           </label>
