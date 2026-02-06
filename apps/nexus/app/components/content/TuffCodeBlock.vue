@@ -180,8 +180,8 @@ onMounted(() => {
   border-radius: 18px;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--docs-border) 70%, transparent);
-  background: linear-gradient(180deg, rgba(12, 14, 18, 0.98), rgba(6, 8, 12, 0.98));
-  box-shadow: 0 22px 60px rgba(8, 10, 15, 0.35);
+  background: linear-gradient(180deg, rgba(16, 14, 12, 0.98), rgba(10, 8, 6, 0.98));
+  box-shadow: 0 22px 60px rgba(8, 6, 4, 0.35);
 }
 
 .tuff-code-block--embedded {
@@ -197,7 +197,7 @@ onMounted(() => {
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(90deg, rgba(20, 22, 28, 0.96), rgba(10, 12, 18, 0.95));
+  background: linear-gradient(90deg, rgba(24, 20, 18, 0.96), rgba(18, 15, 13, 0.95));
   justify-content: space-between;
 }
 
@@ -311,7 +311,7 @@ onMounted(() => {
 :global(.dark .tuff-code-block),
 :global([data-theme='dark'] .tuff-code-block) {
   border-color: rgba(255, 255, 255, 0.08);
-  background: linear-gradient(180deg, rgba(10, 12, 18, 0.96), rgba(6, 8, 12, 0.98));
+  background: linear-gradient(180deg, rgba(16, 14, 12, 0.96), rgba(10, 8, 6, 0.98));
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 

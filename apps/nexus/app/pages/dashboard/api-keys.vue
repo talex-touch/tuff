@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Button from '~/components/ui/Button.vue'
+import Input from '~/components/ui/Input.vue'
 definePageMeta({
   layout: 'dashboard',
 })
@@ -177,8 +179,8 @@ const expiryOptions = [
         </p>
       </div>
       <Button
-        variant="bare"
-        class="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-black dark:hover:bg-light/80"
+        variant="primary"
+        size="small"
         @click="showCreateModal = true"
       >
         <span class="i-carbon-add text-base" />
@@ -201,8 +203,8 @@ const expiryOptions = [
               {{ newlyCreatedKey.secretKey }}
             </code>
             <Button
-              variant="bare"
-              class="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-700"
+              variant="success"
+              size="small"
               @click="copyKey"
             >
               {{ copied ? 'Copied!' : 'Copy' }}
@@ -211,7 +213,8 @@ const expiryOptions = [
         </div>
         <Button
           variant="bare"
-          class="text-green-600/60 transition hover:text-green-600"
+          size="mini"
+          circle
           aria-label="Close"
           @click="newlyCreatedKey = null"
         >
@@ -273,8 +276,9 @@ const expiryOptions = [
           </div>
         </div>
         <Button
-          variant="bare"
-          class="rounded-lg p-2 text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
+          variant="danger"
+          size="mini"
+          circle
           aria-label="Delete"
           @click="deleteKey(key.id)"
         >
@@ -295,8 +299,9 @@ const expiryOptions = [
         Create an API key to use with tuffcli and other integrations
       </p>
       <Button
-        variant="bare"
-        class="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-black"
+        variant="primary"
+        size="small"
+        class="mt-4"
         @click="showCreateModal = true"
       >
         Create Your First Key
@@ -328,7 +333,7 @@ const expiryOptions = [
                 v-model="newKeyName"
                 type="text"
                 placeholder="e.g., My Laptop, CI/CD"
-                class="w-full rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
+                class="w-full"
               />
             </div>
 
@@ -380,15 +385,18 @@ const expiryOptions = [
 
           <div class="mt-6 flex gap-3">
             <Button
-              variant="bare"
-              class="flex-1 rounded-lg bg-black/5 py-2 text-sm font-medium text-black/60 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/60"
+              variant="secondary"
+              size="small"
+              class="flex-1"
               @click="showCreateModal = false"
             >
               Cancel
             </Button>
             <Button
-              variant="bare"
-              class="flex-1 rounded-lg bg-black py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-light dark:text-black"
+              variant="primary"
+              size="small"
+              class="flex-1"
+              :loading="creating"
               :disabled="!newKeyName.trim() || creating"
               @click="createKey"
             >

@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Hover Hint" description="短文本提示，保持低侵入感。" code-lang="vue"}
+### Hover Hint
+短文本提示，保持低侵入感。
+:::TuffDemoWrapper{demo="TooltipHoverHintDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -27,17 +29,7 @@ code: |
     </TxTooltip>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tooltip content="提示信息">
-    <tx-button variant="ghost">Hover me</tx-button>
-  </tx-tooltip>
-  <tx-tooltip content="信息">
-    <tx-button variant="ghost">Info</tx-button>
-  </tx-tooltip>
-</div>
 :::
-
 ## 基础用法
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -78,7 +70,9 @@ rows:
 - 与触发元素的间距保持轻盈。
 
 ## 组合示例
-::TuffDemo{title="提示按钮" description="图标按钮搭配提示信息。" code-lang="vue"}
+### 提示按钮
+图标按钮搭配提示信息。
+:::TuffDemoWrapper{demo="TooltipTooltipButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -87,10 +81,4 @@ code: |
     </TxTooltip>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tooltip content="分享">
-    <tx-button icon="i-ri-share-line" circle />
-  </tx-tooltip>
-</div>
 :::

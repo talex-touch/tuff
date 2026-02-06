@@ -25,7 +25,9 @@ const tipOpen = ref(false)
 
 底部定位的对话框，带有可自定义的按钮与动画效果。
 
-::TuffDemo{title="BottomDialog" description="底部滑入的确认对话框。" code-lang="vue"}
+### BottomDialog
+底部滑入的确认对话框。
+:::TuffDemoWrapper{demo="DialogBottomDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -42,22 +44,7 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="bottomOpen = true">显示对话框</tx-button>
-</div>
-<tx-bottom-dialog
-  v-if="bottomOpen"
-  title="确认操作"
-  message="您确定要继续吗？"
-  :btns="[
-    { content: '取消', type: 'info', onClick: () => true },
-    { content: '确认', type: 'success', onClick: async () => true },
-  ]"
-  :close="() => (bottomOpen = false)"
-/>
-::
-
+:::
 ### 按钮类型
 
 ::TuffCodeBlock{lang="ts"}
@@ -110,7 +97,9 @@ code: |
 
 带有戏剧性爆炸动画效果的居中对话框。
 
-::TuffDemo{title="BlowDialog" description="突出展示的居中对话框。" code-lang="vue"}
+### BlowDialog
+突出展示的居中对话框。
+:::TuffDemoWrapper{demo="DialogBlowDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -123,21 +112,12 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="blowOpen = true">显示爆炸对话框</tx-button>
-</div>
-<tx-blow-dialog
-  v-if="blowOpen"
-  title="欢迎"
-  message="<strong>你好！</strong> 欢迎使用我们的应用。"
-  :close="() => (blowOpen = false)"
-/>
-::
-
+:::
 ## PopperDialog 弹出对话框
 
-::TuffDemo{title="PopperDialog" description="轻量弹出式提示。" code-lang="vue"}
+### PopperDialog
+轻量弹出式提示。
+:::TuffDemoWrapper{demo="DialogPopperDialogDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -150,21 +130,12 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="popperOpen = true">显示弹出对话框</tx-button>
-</div>
-<tx-popper-dialog
-  v-if="popperOpen"
-  title="Tip"
-  message="这是一段提示内容。"
-  :close="() => (popperOpen = false)"
-/>
-::
-
+:::
 ## TouchTip 触控提示
 
-::TuffDemo{title="TouchTip" description="面向触控场景的引导提示。" code-lang="vue"}
+### TouchTip
+面向触控场景的引导提示。
+:::TuffDemoWrapper{demo="DialogTouchTipDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -181,22 +152,7 @@ code: |
     />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button @click="tipOpen = true">显示 TouchTip</tx-button>
-</div>
-<tx-touch-tip
-  v-if="tipOpen"
-  title="提示"
-  message="请选择一个操作。"
-  :buttons="[
-    { content: '取消', type: 'info', onClick: () => true },
-    { content: '确定', type: 'success', onClick: async () => true },
-  ]"
-  :close="() => (tipOpen = false)"
-/>
-::
-
+:::
 ## 自定义组件
 
 ::TuffCodeBlock{lang="ts"}

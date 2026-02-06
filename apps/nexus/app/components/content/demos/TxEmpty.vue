@@ -1,0 +1,24 @@
+<script setup lang="ts">
+const { locale } = useI18n()
+</script>
+
+<template>
+  <div v-if="locale === 'zh'">
+    <div style="max-width: 360px;">
+      <TxEmpty title="No items" description="Create your first item.">
+        <template #action>
+          <TxButton>New</TxButton>
+        </template>
+      </TxEmpty>
+    </div>
+  </div>
+  <div v-else>
+    <div style="max-width: 360px;">
+      <TxEmpty title="No items" description="Create your first item.">
+        <template #action>
+          <TxButton>New</TxButton>
+        </template>
+      </TxEmpty>
+    </div>
+  </div>
+</template>

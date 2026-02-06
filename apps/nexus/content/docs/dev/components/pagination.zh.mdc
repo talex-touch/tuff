@@ -16,7 +16,9 @@ const page = ref(1)
 </script>
 
 ## 基础用法
-::TuffDemo{title="分页导航" description="在多页数据间切换。" code-lang="vue"}
+### 分页导航
+在多页数据间切换。
+:::TuffDemoWrapper{demo="PaginationPaginationDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -35,16 +37,7 @@ code: |
     />
   </template>
 ---
-#preview
-<tx-pagination
-  v-model:current-page="page"
-  :total="120"
-  :page-size="10"
-  show-info
-  show-first-last
-/>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

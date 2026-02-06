@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const withPrefix = ref('')
+const withSuffix = ref('')
 </script>
 
 <template>
@@ -9,14 +10,24 @@ const withPrefix = ref('')
         <TuffInput v-model="withPrefix" placeholder="Search">
           <template #prefix>
             <TxIcon icon="i-carbon-search" />
-</template>
-</tuffinput>
-</div>
+          </template>
+        </TuffInput>
+        <TuffInput v-model="withSuffix" placeholder="User">
+          <template #suffix>
+            <TxIcon icon="i-carbon-user" />
+          </template>
+        </TuffInput>
+  </div>
   <div v-else>
         <TuffInput v-model="withPrefix" placeholder="Search">
           <template #prefix>
             <TxIcon icon="i-carbon-search" />
-</template>
-</tuffinput>
-</div>
+          </template>
+        </TuffInput>
+        <TuffInput v-model="withSuffix" placeholder="User">
+          <template #suffix>
+            <TxIcon icon="i-carbon-user" />
+          </template>
+        </TuffInput>
+  </div>
 </template>

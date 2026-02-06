@@ -13,15 +13,8 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="SearchEmpty">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxSearchEmpty description="Try another keyword or filter." />
-</div>
-</template>
-
-<template #code>
-:::TuffCodeBlock{lang="vue"}
+### SearchEmpty
+:::TuffDemoWrapper{demo="SearchEmptySearchEmptyDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -29,8 +22,6 @@ code: |
   </template>
 ---
 :::
-</template>
-</DemoBlock>
 
 ## API
 

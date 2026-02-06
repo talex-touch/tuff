@@ -8,11 +8,11 @@ const { locale } = useI18n()
         <TxButton size="sm">
 搜索
 </TxButton>
-</div>
+  </div>
   <div v-else>
         <TuffInput placeholder="Search..." />
         <TxButton size="sm">
 Go
 </TxButton>
-</div>
+  </div>
 </template>
