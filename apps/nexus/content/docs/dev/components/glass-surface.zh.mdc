@@ -30,7 +30,7 @@ code: |
 ## 参数调节（滑块）
 
 ### GlassSurface 参数调节
-:::TuffDemoWrapper{demo="GlassSurfaceGlassSurfaceDemo2" code-lang="vue"}
+:::TuffDemoWrapper{demo="GlassSurfaceGlassSurface2Demo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">

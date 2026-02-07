@@ -40,8 +40,11 @@ export interface IClipboardOptions {
  */
 export interface IClipboardHook {
   clipboardOptions: IClipboardOptions
-  handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
-  handleAutoFill: () => void
+  handlePaste: (options?: {
+    overrideDismissed?: boolean
+    triggerSearch?: boolean
+    attemptAutoFill?: boolean
+  }) => void
   applyToActiveApp: (item?: IClipboardItem) => Promise<boolean>
   clearClipboard: (options?: { remember?: boolean }) => void
   /** Resets autopaste state for new CoreBox session */
