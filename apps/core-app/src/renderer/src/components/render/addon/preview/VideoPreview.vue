@@ -1,14 +1,18 @@
 <script setup lang="ts" name="VideoPreview">
 import type { TuffItem } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
-defineProps<{
+const props = defineProps<{
   item: TuffItem
 }>()
+
+const videoSrc = computed(() => buildTfileUrl(props.item.meta?.file?.path ?? ''))
 </script>
 
 <template>
   <div class="VideoPreview">
-    <video :src="`tfile://${item.meta?.file?.path}`" controls />
+    <video :src="videoSrc" controls />
   </div>
 </template>
 

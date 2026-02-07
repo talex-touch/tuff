@@ -2,17 +2,51 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { AudioPreview, DefaultPreview, ImagePreview, TextPreview, VideoPreview } from './preview'
+import {
+  AudioPreview,
+  CodePreview,
+  DefaultPreview,
+  ImagePreview,
+  MarkdownPreview,
+  TextPreview,
+  VideoPreview
+} from './preview'
 
 const props = defineProps<{
   item: TuffItem
+  searchQuery?: string
 }>()
 
 const { t } = useI18n()
 
-function getFileType(
-  filePath: string
-): 'image' | 'video' | 'audio' | 'text' | 'pdf' | 'archive' | 'document' | 'default' {
+type FilePreviewType =
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'code'
+  | 'markdown'
+  | 'text'
+  | 'pdf'
+  | 'archive'
+  | 'document'
+  | 'default'
+
+const CODE_EXTENSIONS = new Set([
+  'json',
+  'yaml',
+  'yml',
+  'js',
+  'mjs',
+  'cjs',
+  'ts',
+  'tsx',
+  'jsx',
+  'ini',
+  'conf',
+  'toml'
+])
+
+function getFileType(filePath: string): FilePreviewType {
   const extension = filePath.split('.').pop()?.toLowerCase()
   if (!extension) return 'default'
 
@@ -25,7 +59,13 @@ function getFileType(
   if (['mp3', 'wav', 'flac', 'aac', 'ogg'].includes(extension)) {
     return 'audio'
   }
-  if (['txt', 'md', 'json', 'xml', 'csv', 'log'].includes(extension)) {
+  if (extension === 'md') {
+    return 'markdown'
+  }
+  if (CODE_EXTENSIONS.has(extension)) {
+    return 'code'
+  }
+  if (['txt', 'xml', 'csv', 'log', 'html', 'htm', 'env', 'sh', 'bat', 'ps1'].includes(extension)) {
     return 'text'
   }
   if (['pdf'].includes(extension)) {
@@ -53,6 +93,10 @@ const previewComponent = computed(() => {
       return VideoPreview
     case 'audio':
       return AudioPreview
+    case 'code':
+      return CodePreview
+    case 'markdown':
+      return MarkdownPreview
     case 'text':
       return TextPreview
     default:
@@ -65,7 +109,7 @@ const previewComponent = computed(() => {
   <div class="TuffItemPreviewer">
     <TouchScroll class="h-full w-full">
       <div class="preview-area max-h-[60%]">
-        <component :is="previewComponent" :item="item" />
+        <component :is="previewComponent" :item="item" :search-query="searchQuery" />
       </div>
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-semibold mb-4">

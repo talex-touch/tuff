@@ -67,6 +67,7 @@ export class DownloadCenterModule extends BaseModule {
   // Core components
   private taskQueue!: TaskQueue
   private downloadWorkers!: DownloadWorker[]
+  private taskWorkerMap: Map<string, DownloadWorker> = new Map() // Track which worker is handling which task
   private chunkManager!: ChunkManager
   private networkMonitor!: NetworkMonitor
   private priorityCalculator!: PriorityCalculator
@@ -253,6 +254,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PAUSED
+    task.updatedAt = new Date()
     await this.getDb()
       .update(downloadTasks)
       .set({
@@ -261,6 +263,7 @@ export class DownloadCenterModule extends BaseModule {
       })
       .where(eq(downloadTasks.id, taskId))
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
@@ -272,6 +275,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PENDING
+    task.updatedAt = new Date()
     await this.getDb()
       .update(downloadTasks)
       .set({
@@ -280,22 +284,45 @@ export class DownloadCenterModule extends BaseModule {
       })
       .where(eq(downloadTasks.id, taskId))
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
   // 取消任务
   async cancelTask(taskId: string): Promise<void> {
-    const task = this.taskQueue.remove(taskId)
+    const task = this.taskQueue.getTask(taskId) || this.taskQueue.remove(taskId)
     if (!task) {
       throw new Error(`Task ${taskId} not found`)
     }
 
+    // If task is actively downloading, cancel it in the worker
+    const worker = this.taskWorkerMap.get(taskId)
+    if (worker) {
+      try {
+        await worker.cancelTask(taskId)
+      } catch (error) {
+        console.warn(`[DownloadCenter] Error cancelling task in worker ${taskId}:`, error)
+      }
+      this.taskWorkerMap.delete(taskId)
+    }
+
+    // Remove from queue if it's still there
+    if (this.taskQueue.getTask(taskId)) {
+      this.taskQueue.remove(taskId)
+    }
+
     task.status = DownloadStatus.CANCELLED
+    task.updatedAt = new Date()
     await this.updateTaskStatusInDb(taskId, DownloadStatus.CANCELLED)
 
     // 立即清理切片文件和任务临时目录
-    await this.chunkManager.cleanupChunks(task.chunks)
-    await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    try {
+      await this.chunkManager.cleanupChunks(task.chunks)
+      await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    } catch (cleanupError) {
+      // Log cleanup errors but don't fail the cancellation
+      console.warn(`[DownloadCenter] Cleanup error for task ${taskId}:`, cleanupError)
+    }
 
     // Clear from cache
     this.clearTaskCache(taskId)
@@ -331,10 +358,16 @@ export class DownloadCenterModule extends BaseModule {
     await this.updateTaskErrorInDb(taskId, '')
 
     // 清理旧的切片和临时目录
-    await this.chunkManager.cleanupChunks(task.chunks)
-    await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    try {
+      await this.chunkManager.cleanupChunks(task.chunks)
+      await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    } catch (cleanupError) {
+      // Log cleanup errors but don't fail the retry
+      console.warn(`[DownloadCenter] Cleanup error during retry for task ${taskId}:`, cleanupError)
+    }
     task.chunks = []
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
@@ -1217,9 +1250,15 @@ export class DownloadCenterModule extends BaseModule {
 
   // 启动下载任务
   private async startDownloadTask(task: DownloadTask, worker: DownloadWorker): Promise<void> {
+    // Track which worker is handling this task
+    this.taskWorkerMap.set(task.id, worker)
+
     try {
       task.status = DownloadStatus.DOWNLOADING
+      task.updatedAt = new Date()
       await this.updateTaskStatusInDb(task.id, DownloadStatus.DOWNLOADING)
+      this.updateTaskCache(task) // Ensure cache is updated
+      this.broadcastTaskUpdated(task) // Broadcast status change
 
       // 使用重试策略启动下载
       const result = await this.retryStrategy.executeWithRetry(
@@ -1253,7 +1292,11 @@ export class DownloadCenterModule extends BaseModule {
       if (result.success) {
         // 下载完成
         task.status = DownloadStatus.COMPLETED
+        task.updatedAt = new Date()
+        task.completedAt = new Date()
         await this.updateTaskStatusInDb(task.id, DownloadStatus.COMPLETED)
+        this.updateTaskCache(task) // Ensure cache is updated
+
         if (!this.shouldSuppressHistory(task)) {
           await this.saveToHistoryDb(task)
         }
@@ -1263,29 +1306,39 @@ export class DownloadCenterModule extends BaseModule {
         throw result.error || new Error('Download failed')
       }
     } catch (error) {
-      // 转换为 DownloadErrorClass
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const downloadError =
-        error instanceof DownloadErrorClass
-          ? error
-          : DownloadErrorClass.fromError(normalizedError, {
-              taskId: task.id,
-              url: task.url,
-              filename: task.filename,
-              module: task.module,
-              timestamp: Date.now()
-            })
+      // Check if error is due to cancellation
+      const isCancelled = error instanceof Error && error.message.includes('cancelled')
 
-      // 记录错误
-      await this.errorLogger.logError(downloadError.toErrorObject())
+      if (!isCancelled) {
+        // 转换为 DownloadErrorClass
+        const normalizedError = error instanceof Error ? error : new Error(String(error))
+        const downloadError =
+          error instanceof DownloadErrorClass
+            ? error
+            : DownloadErrorClass.fromError(normalizedError, {
+                taskId: task.id,
+                url: task.url,
+                filename: task.filename,
+                module: task.module,
+                timestamp: Date.now()
+              })
 
-      // 更新任务状态
-      task.status = DownloadStatus.FAILED
-      task.error = downloadError.userMessage
-      await this.updateTaskStatusInDb(task.id, DownloadStatus.FAILED)
-      await this.updateTaskErrorInDb(task.id, downloadError.userMessage)
+        // 记录错误
+        await this.errorLogger.logError(downloadError.toErrorObject())
 
-      this.broadcastTaskFailed(task)
+        // 更新任务状态
+        task.status = DownloadStatus.FAILED
+        task.error = downloadError.userMessage
+        task.updatedAt = new Date()
+        await this.updateTaskStatusInDb(task.id, DownloadStatus.FAILED)
+        await this.updateTaskErrorInDb(task.id, downloadError.userMessage)
+        this.updateTaskCache(task) // Ensure cache is updated
+
+        this.broadcastTaskFailed(task)
+      }
+    } finally {
+      // Remove from worker map when task completes or fails
+      this.taskWorkerMap.delete(task.id)
     }
   }
 
@@ -1369,6 +1422,167 @@ export class DownloadCenterModule extends BaseModule {
       taskId,
       action
     })
+  }
+
+  /**
+   * Health check for the download module
+   * Returns diagnostic information about the module's state
+   */
+  getHealthStatus(): {
+    healthy: boolean
+    status: string
+    details: {
+      isRunning: boolean
+      workerCount: number
+      activeTasks: number
+      pendingTasks: number
+      failedTasks: number
+      completedTasks: number
+      networkStatus: string
+      cacheSize: number
+      workerMapSize: number
+      issues: string[]
+    }
+  } {
+    const issues: string[] = []
+    const activeTasks = this.taskQueue.getActiveTasks()
+    const pendingTasks = this.taskQueue.getPendingTasks()
+    const allTasks = this.taskQueue.getAllTasks()
+    const failedTasks = allTasks.filter((t) => t.status === DownloadStatus.FAILED)
+    const completedTasks = allTasks.filter((t) => t.status === DownloadStatus.COMPLETED)
+
+    // Check for issues
+    if (!this.isRunning) {
+      issues.push('Module is not running')
+    }
+
+    if (this.downloadWorkers.length === 0) {
+      issues.push('No download workers initialized')
+    }
+
+    if (
+      this.taskWorkerMap.size >
+      this.downloadWorkers.length * this.config.concurrency.maxConcurrent
+    ) {
+      issues.push('Task-worker mapping size exceeds expected limit')
+    }
+
+    const networkStatus = this.networkMonitor.getNetworkQuality()
+    if (networkStatus === 'poor') {
+      issues.push('Network quality is poor')
+    }
+
+    // Check for stuck tasks (downloading for more than 1 hour)
+    const now = Date.now()
+    const stuckTasks = activeTasks.filter((task) => {
+      const startTime = task.updatedAt instanceof Date ? task.updatedAt.getTime() : task.updatedAt
+      return now - startTime > 60 * 60 * 1000 // 1 hour
+    })
+    if (stuckTasks.length > 0) {
+      issues.push(`${stuckTasks.length} task(s) appear to be stuck`)
+    }
+
+    const healthy = issues.length === 0
+
+    return {
+      healthy,
+      status: healthy ? 'healthy' : 'degraded',
+      details: {
+        isRunning: this.isRunning,
+        workerCount: this.downloadWorkers.length,
+        activeTasks: activeTasks.length,
+        pendingTasks: pendingTasks.length,
+        failedTasks: failedTasks.length,
+        completedTasks: completedTasks.length,
+        networkStatus,
+        cacheSize: this.taskCache.size,
+        workerMapSize: this.taskWorkerMap.size,
+        issues
+      }
+    }
+  }
+
+  /**
+   * Diagnostic method to help troubleshoot download issues
+   */
+  async diagnose(): Promise<{
+    health: ReturnType<typeof this.getHealthStatus>
+    taskDetails: Array<{
+      id: string
+      status: string
+      url: string
+      filename: string
+      progress: number
+      error?: string
+      worker?: string
+      createdAt: number
+      updatedAt: number
+    }>
+    workerStats: Array<{
+      index: number
+      activeTasks: number
+      canAcceptTask: boolean
+      stats: ReturnType<DownloadWorker['getDownloadStats']>
+    }>
+    networkDiagnostics: {
+      quality: string
+      status: ReturnType<NetworkMonitor['getCurrentStatus']>
+    }
+    recentErrors: Array<{
+      timestamp: number
+      message: string
+      taskId?: string
+    }>
+  }> {
+    const health = this.getHealthStatus()
+    const allTasks = this.taskQueue.getAllTasks()
+
+    const taskDetails = allTasks.map((task) => ({
+      id: task.id,
+      status: task.status,
+      url: task.url,
+      filename: task.filename,
+      progress: task.progress.percentage || 0,
+      error: task.error,
+      worker: this.taskWorkerMap.has(task.id) ? 'assigned' : 'none',
+      createdAt: task.createdAt instanceof Date ? task.createdAt.getTime() : task.createdAt,
+      updatedAt: task.updatedAt instanceof Date ? task.updatedAt.getTime() : task.updatedAt
+    }))
+
+    const workerStats = this.downloadWorkers.map((worker, index) => ({
+      index,
+      activeTasks: worker.getActiveTasks().length,
+      canAcceptTask: worker.canAcceptTask(),
+      stats: worker.getDownloadStats()
+    }))
+
+    const networkDiagnostics = {
+      quality: this.networkMonitor.getNetworkQuality(),
+      status: this.networkMonitor.getCurrentStatus()
+    }
+
+    // Get recent errors from error logger
+    const recentErrors: Array<{ timestamp: number; message: string; taskId?: string }> = []
+    try {
+      const errorLogs = await this.errorLogger.getRecentErrors(10)
+      recentErrors.push(
+        ...errorLogs.map((log) => ({
+          timestamp: log.timestamp,
+          message: log.message,
+          taskId: log.metadata?.taskId
+        }))
+      )
+    } catch (error) {
+      console.warn('[DownloadCenter] Failed to get recent errors:', error)
+    }
+
+    return {
+      health,
+      taskDetails,
+      workerStats,
+      networkDiagnostics,
+      recentErrors
+    }
   }
 }
 
