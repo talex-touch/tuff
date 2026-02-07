@@ -1,0 +1,72 @@
+{
+  "id": "com.tuffex.code-snippets",
+  "name": "touch-code-snippets",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "代码片段库：按语言/标签管理与复制模板",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": ["clipboard.read"]
+  },
+  "permissionReasons": {
+    "clipboard.write": "复制代码片段到剪贴板",
+    "clipboard.read": "支持 {{clipboard}} 占位符替换"
+  },
+  "features": [
+    {
+      "id": "code-snippets.search",
+      "name": "代码片段",
+      "desc": "搜索并复制代码模板",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["code", "snippet", "模板", "代码", "片段"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["code", "snippet", "代码", "模板"]
+        }
+      ]
+    },
+    {
+      "id": "code-snippets.manage",
+      "name": "代码片段管理",
+      "desc": "管理代码片段配置",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["code-manage", "管理", "代码管理", "配置"],
+      "push": true,
+      "priority": 3,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["code-manage", "代码管理"]
+        }
+      ]
+    }
+  ]
+}

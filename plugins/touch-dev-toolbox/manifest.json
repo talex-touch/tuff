@@ -1,0 +1,48 @@
+{
+  "id": "com.tuffex.dev-toolbox",
+  "name": "touch-dev-toolbox",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "开发工具箱：快捷命令与链接入口",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell", "fs.read"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "执行用户配置的开发命令",
+    "fs.read": "读取 workspace 的 package.json 脚本列表"
+  },
+  "features": [
+    {
+      "id": "dev-toolbox",
+      "name": "开发工具箱",
+      "desc": "常用命令与链接入口",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["dev", "toolbox", "脚本", "工具箱", "命令"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["dev", "toolbox", "工具箱", "脚本"]
+        }
+      ]
+    }
+  ]
+}

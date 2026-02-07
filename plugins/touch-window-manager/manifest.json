@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.window-manager",
+  "name": "touch-window-manager",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "macOS 窗口/应用管理：激活、隐藏、退出",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "调用系统脚本管理应用窗口"
+  },
+  "features": [
+    {
+      "id": "window.app",
+      "name": "窗口管理",
+      "desc": "管理 macOS 应用窗口",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["window", "app", "应用", "窗口管理", "激活", "隐藏", "退出"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": false,
+        "darwin": true,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["window", "app", "应用", "窗口管理"]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "id": "com.tuffex.batch-rename",
+  "name": "touch-batch-rename",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "文件批量重命名：前后缀、编号、正则替换",
+  "main": "index.js",
+  "permissions": {
+    "required": ["fs.read", "fs.write"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "fs.read": "读取选中文件信息用于生成重命名计划",
+    "fs.write": "执行文件重命名操作"
+  },
+  "features": [
+    {
+      "id": "batch-rename",
+      "name": "批量重命名",
+      "desc": "批量重命名文件",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["rename", "批量重命名", "文件", "重命名"],
+      "push": true,
+      "priority": 8,
+      "acceptedInputTypes": ["files", "text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["rename", "批量重命名", "rename-files"]
+        }
+      ]
+    }
+  ]
+}
