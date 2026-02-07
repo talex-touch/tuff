@@ -1,9 +1,13 @@
 <script setup lang="ts" name="AudioPreview">
 import type { TuffItem } from '@talex-touch/utils'
+import { computed } from 'vue'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
-defineProps<{
+const props = defineProps<{
   item: TuffItem
 }>()
+
+const audioSrc = computed(() => buildTfileUrl(props.item.meta?.file?.path ?? ''))
 
 function handleError(e: Event): void {
   console.error('Audio load error:', e)
@@ -12,7 +16,7 @@ function handleError(e: Event): void {
 
 <template>
   <div class="AudioPreview">
-    <audio :src="`tfile://${item.meta?.file?.path}`" muted autoplay controls @error="handleError" />
+    <audio :src="audioSrc" muted autoplay controls @error="handleError" />
   </div>
 </template>
 

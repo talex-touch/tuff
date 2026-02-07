@@ -209,47 +209,64 @@ export function useSvgContent(
         throw new Error('Download SDK unavailable')
       }
 
-      const temp = await transport.send(tempFileCreateEvent, {
-        namespace: 'icons/svg',
-        ext: 'svg',
-        prefix: 'tufficon',
-        retentionMs: 7 * 24 * 60 * 60 * 1000
-      })
+      try {
+        const temp = await transport.send(tempFileCreateEvent, {
+          namespace: 'icons/svg',
+          ext: 'svg',
+          prefix: 'tufficon',
+          retentionMs: 7 * 24 * 60 * 60 * 1000
+        })
 
-      const fileUrl = temp.url
-      const filePath = resolveLocalPath(fileUrl)
-      if (!filePath) {
-        throw new Error('Invalid temp file path')
-      }
-
-      const { destination, filename } = splitPath(filePath)
-      const response = await downloadSdk.addTask({
-        url: targetUrl,
-        destination,
-        filename,
-        priority: DownloadPriority.LOW,
-        module: DownloadModule.RESOURCE_DOWNLOAD,
-        metadata: {
-          hidden: true,
-          purpose: 'tufficon-svg',
-          sourceUrl: targetUrl
+        const fileUrl = temp.url
+        const filePath = resolveLocalPath(fileUrl)
+        if (!filePath) {
+          throw new Error('Invalid temp file path')
         }
-      })
 
-      if (!response?.success || !response.taskId) {
-        throw new Error(response?.error || 'Failed to create download task')
+        const { destination, filename } = splitPath(filePath)
+        const response = await downloadSdk.addTask({
+          url: targetUrl,
+          destination,
+          filename,
+          priority: DownloadPriority.LOW,
+          module: DownloadModule.RESOURCE_DOWNLOAD,
+          metadata: {
+            hidden: true,
+            purpose: 'tufficon-svg',
+            sourceUrl: targetUrl
+          }
+        })
+
+        if (!response?.success || !response.taskId) {
+          throw new Error(response?.error || 'Failed to create download task')
+        }
+
+        await waitForTask(response.taskId)
+        const svgText = await transport.send(AppEvents.system.readFile, { source: fileUrl })
+
+        if (!svgText || svgText.trim().length === 0) {
+          throw new Error('Downloaded SVG file is empty')
+        }
+
+        svgFileCache.set(targetUrl, fileUrl)
+        svgContentCache.set(targetUrl, svgText)
+        return { fileUrl, content: svgText }
+      } catch (err) {
+        // Clean up cache on error
+        svgFileCache.delete(targetUrl)
+        svgContentCache.delete(targetUrl)
+        throw err instanceof Error ? err : new Error(String(err))
       }
-
-      await waitForTask(response.taskId)
-      const svgText = await transport.send(AppEvents.system.readFile, { source: fileUrl })
-      svgFileCache.set(targetUrl, fileUrl)
-      svgContentCache.set(targetUrl, svgText)
-      return { fileUrl, content: svgText }
     })()
 
     svgInflight.set(targetUrl, taskPromise)
     try {
       return await taskPromise
+    } catch (err) {
+      // Re-throw with better context
+      throw new Error(
+        `Failed to download SVG from ${targetUrl}: ${err instanceof Error ? err.message : String(err)}`
+      )
     } finally {
       svgInflight.delete(targetUrl)
     }
@@ -287,10 +304,8 @@ export function useSvgContent(
       return content
     }
 
-    const fallbackUrl = ensureTfileUrl(targetUrl)
-    resolvedUrl.value = fallbackUrl
-    const response = await fetch(fallbackUrl)
-    return await response.text()
+    // All other cases failed - throw error instead of trying invalid fetch(tfile://)
+    throw new Error(`Unsupported icon source: ${targetUrl}`)
   }
 
   const fetchWithRetry = retrier(doFetch) as () => Promise<string>
@@ -298,12 +313,18 @@ export function useSvgContent(
   async function fetchSvgContent() {
     loading.value = true
     error.value = null
+    content.value = null // Clear previous content on new fetch
 
     try {
       const text = await fetchWithRetry()
+      if (!text || text.trim().length === 0) {
+        throw new Error('Empty content received')
+      }
       content.value = text
+      error.value = null // Clear error on success
     } catch (err) {
-      error.value = err as Error
+      error.value = err instanceof Error ? err : new Error(String(err))
+      content.value = null // Ensure content is cleared on error
       console.error('fetchSvgContent failed after retries', url.value, err)
     } finally {
       loading.value = false
