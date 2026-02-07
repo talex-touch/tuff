@@ -7,38 +7,13 @@ since: 1.0.0
 tags: [table, data, list]
 syncStatus: migrated
 ---
-# DataTable 数据表格
+# DataTable
 
-轻量数据表格组件，提供排序、行选择与自定义渲染能力。
+Lightweight data table with sorting, row selection, and custom rendering.
 
-<script setup lang="ts">
-import { ref } from 'vue'
+## Basic Usage
 
-const columns = [
-  { key: 'name', title: 'Name' },
-  { key: 'role', title: 'Role' },
-  { key: 'score', title: 'Score', sortable: true },
-]
-
-const data = [
-  { id: 1, name: 'Ava', role: 'Designer', score: 92 },
-  { id: 2, name: 'Noah', role: 'Engineer', score: 88 },
-  { id: 3, name: 'Mia', role: 'PM', score: 95 },
-]
-
-const selectedKeys = ref<number[]>([])
-</script>
-
-## 基础用法
-
-<ClientOnly>
-<div class="group">
-  <TxDataTable :columns="columns" :data="data" striped bordered />
-</div>
-</ClientOnly>
-
-::: details Show Code
-:::TuffCodeBlock{lang="vue"}
+::TuffDemoWrapper{demo="DataTableDataTableDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -47,45 +22,31 @@ code: |
     { key: 'role', title: 'Role' },
     { key: 'score', title: 'Score', sortable: true },
   ]
-  
+
   const data = [
     { id: 1, name: 'Ava', role: 'Designer', score: 92 },
     { id: 2, name: 'Noah', role: 'Engineer', score: 88 },
     { id: 3, name: 'Mia', role: 'PM', score: 95 },
   ]
   </script>
-  
+
   <template>
     <TxDataTable :columns="columns" :data="data" striped bordered />
   </template>
 ---
-:::
-:::
+::
 
-## 行选择
+## Row Selection
 
-<ClientOnly>
-<div class="group">
-  <TxDataTable
-    v-model:selected-keys="selectedKeys"
-    :columns="columns"
-    :data="data"
-    row-key="id"
-    selectable
-  />
-</div>
-</ClientOnly>
-
-::: details Show Code
-:::TuffCodeBlock{lang="vue"}
+::TuffDemoWrapper{demo="DataTableDataTableSelectableDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
-  
+
   const selectedKeys = ref([])
   </script>
-  
+
   <template>
     <TxDataTable
       v-model:selected-keys="selectedKeys"
@@ -96,56 +57,55 @@ code: |
     />
   </template>
 ---
-:::
-:::
+::
 
 ## API
 
 ### TxDataTable Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `columns` | `DataTableColumn[]` | `[]` | 列配置 |
-| `data` | `any[]` | `[]` | 数据源 |
-| `rowKey` | `string \| (row, index) => string \| number` | `index` | 行唯一标识 |
-| `loading` | `boolean` | `false` | 加载状态 |
-| `emptyText` | `string` | `'No data'` | 空数据提示 |
-| `striped` | `boolean` | `false` | 斑马纹 |
-| `bordered` | `boolean` | `false` | 表格边框 |
-| `hover` | `boolean` | `true` | 悬浮高亮 |
-| `selectable` | `boolean` | `false` | 是否可选择 |
-| `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 默认排序 |
-| `sortOnClient` | `boolean` | `true` | 是否前端排序 |
+| `columns` | `DataTableColumn[]` | `[]` | Column config |
+| `data` | `any[]` | `[]` | Data source |
+| `rowKey` | `string \| (row, index) => string \| number` | `index` | Unique row key |
+| `loading` | `boolean` | `false` | Loading state |
+| `emptyText` | `string` | `'No data'` | Empty text |
+| `striped` | `boolean` | `false` | Zebra rows |
+| `bordered` | `boolean` | `false` | Show borders |
+| `hover` | `boolean` | `true` | Hover highlight |
+| `selectable` | `boolean` | `false` | Selectable rows |
+| `selectedKeys` | `Array<string \| number>` | `[]` | Selected keys |
+| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Default sort |
+| `sortOnClient` | `boolean` | `true` | Client-side sort |
 
 ### DataTableColumn
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `key` | `string` | 列 key |
-| `title` | `string` | 表头文本 |
-| `dataIndex` | `string` | 数据字段名 |
-| `width` | `string \| number` | 列宽 |
-| `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
-| `sortable` | `boolean` | 是否可排序 |
-| `sorter` | `(a, b) => number` | 自定义排序器 |
-| `format` | `(value, row, index) => string` | 默认文本格式化 |
-| `headerClass` | `string` | 表头 class |
-| `cellClass` | `string` | 单元格 class |
+| `key` | `string` | Column key |
+| `title` | `string` | Header title |
+| `dataIndex` | `string` | Data field |
+| `width` | `string \| number` | Column width |
+| `align` | `'left' \| 'center' \| 'right'` | Alignment |
+| `sortable` | `boolean` | Sortable |
+| `sorter` | `(a, b) => number` | Custom sorter |
+| `format` | `(value, row, index) => string` | Cell formatter |
+| `headerClass` | `string` | Header class |
+| `cellClass` | `string` | Cell class |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `update:selectedKeys` | `(keys)` | 选中变化 |
-| `selectionChange` | `(keys)` | 选中变化 |
-| `sortChange` | `(sort)` | 排序变化 |
-| `rowClick` | `({ row, index })` | 行点击 |
+| `update:selectedKeys` | `(keys)` | Selection update |
+| `selectionChange` | `(keys)` | Selection change |
+| `sortChange` | `(sort)` | Sort change |
+| `rowClick` | `({ row, index })` | Row click |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `header-<columnKey>` | 自定义表头 |
-| `cell-<columnKey>` | 自定义单元格 |
-| `empty` | 空状态 |
+| `header-<columnKey>` | Custom header |
+| `cell-<columnKey>` | Custom cell |
+| `empty` | Empty slot |

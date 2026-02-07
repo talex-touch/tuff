@@ -1,138 +1,83 @@
 ---
-title: "Form 表单"
-description: "提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。"
+title: "Form"
+description: "Form container with validation, paired with `TxFormItem` for consistent layout and messages."
 category: Form
 syncStatus: migrated
 ---
-# Form 表单
+# Form
 
-提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。
+Form container with validation, paired with `TxFormItem` for consistent layout and messages.
 
-<script setup lang="ts">
-import { reactive, ref } from 'vue'
+## Basic Usage
 
-const form = reactive({
-  name: '',
-  email: '',
-})
-
-const rules = {
-  name: { required: true, message: '请输入名称' },
-  email: {
-    validator: (value: string) => {
-      if (!value)
-        return '请输入邮箱'
-      return value.includes('@') || '邮箱格式错误'
-    },
-  },
-}
-
-const formRef = ref()
-const message = ref('')
-
-async function handleValidate() {
-  const ok = await formRef.value?.validate()
-  message.value = ok ? '表单校验通过' : '请检查表单'
-}
-
-function handleReset() {
-  formRef.value?.resetFields()
-  message.value = ''
-}
-</script>
-
-## 基础用法
-
-<ClientOnly>
-<div class="group" style="max-width: 420px;">
-  <TxForm ref="formRef" :model="form" :rules="rules" label-width="90px">
-    <TxFormItem label="名称" prop="name">
-      <TuffInput v-model="form.name" placeholder="请输入名称" />
-    </TxFormItem>
-    <TxFormItem label="邮箱" prop="email">
-      <TuffInput v-model="form.email" placeholder="name@example.com" />
-    </TxFormItem>
-    <div style="display: flex; gap: 8px;">
-      <TxButton variant="primary" @click="handleValidate">校验</TxButton>
-      <TxButton @click="handleReset">重置</TxButton>
-    </div>
-    <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-      {{ message }}
-    </div>
-  </TxForm>
-</div>
-</ClientOnly>
-
-::: details Show Code
-:::TuffCodeBlock{lang="vue"}
+::TuffDemoWrapper{demo="FormFormDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { reactive, ref } from 'vue'
-  
+
   const form = reactive({ name: '', email: '' })
-  const rules = { name: { required: true, message: '请输入名称' } }
+  const rules = { name: { required: true, message: 'Please enter your name' } }
   const formRef = ref()
-  
+
   async function handleValidate() {
     await formRef.value?.validate()
   }
   </script>
-  
+
   <template>
     <TxForm ref="formRef" :model="form" :rules="rules" label-width="90px">
-      <TxFormItem label="名称" prop="name">
-        <TuffInput v-model="form.name" placeholder="请输入名称" />
+      <TxFormItem label="Name" prop="name">
+        <TuffInput v-model="form.name" placeholder="Enter your name" />
       </TxFormItem>
-      <TxFormItem label="邮箱" prop="email">
+      <TxFormItem label="Email" prop="email">
         <TuffInput v-model="form.email" placeholder="name@example.com" />
       </TxFormItem>
     </TxForm>
   </template>
 ---
-:::
-:::
+::
 
 ## API
 
 ### TxForm Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `model` | `Record<string, any>` | - | 表单数据 |
-| `rules` | `FormRules` | - | 校验规则 |
-| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | 标签位置 |
-| `labelWidth` | `string \| number` | - | 标签宽度 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 表单尺寸 |
-| `disabled` | `boolean` | `false` | 禁用表单 |
+| `model` | `Record<string, any>` | - | Form data |
+| `rules` | `FormRules` | - | Validation rules |
+| `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | Label position |
+| `labelWidth` | `string \| number` | - | Label width |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Form size |
+| `disabled` | `boolean` | `false` | Disable form |
 
 ### TxForm Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `validate` | `(valid: boolean)` | 表单校验结果 |
+| `validate` | `(valid: boolean)` | Validation result |
 
 ### TxFormItem Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `label` | `string` | `''` | 标签文本 |
-| `prop` | `string` | - | 对应字段 |
-| `rules` | `FormRule \| FormRule[]` | - | 自定义规则 |
-| `required` | `boolean` | `false` | 是否必填 |
-| `showMessage` | `boolean` | `true` | 是否显示错误 |
-| `inline` | `boolean` | `false` | 内联布局 |
+| `label` | `string` | `''` | Label text |
+| `prop` | `string` | - | Target field |
+| `rules` | `FormRule \| FormRule[]` | - | Custom rules |
+| `required` | `boolean` | `false` | Required flag |
+| `showMessage` | `boolean` | `true` | Show error message |
+| `inline` | `boolean` | `false` | Inline layout |
 
 ### TxFormItem Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `validate` | `(valid: boolean)` | 单项校验结果 |
+| `validate` | `(valid: boolean)` | Field validation result |
 
 ### Expose
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `validate()` | 触发表单校验 |
-| `resetFields()` | 重置字段 |
-| `clearValidate()` | 清空错误 |
+| `validate()` | Trigger form validation |
+| `resetFields()` | Reset all fields |
+| `clearValidate()` | Clear validation state |
