@@ -6,6 +6,7 @@ import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { appSetting } from '~/modules/channel/storage'
 import { BoxMode } from '..'
+import { isUrlLikeClipboardText } from './clipboard-text-utils'
 import { getLatestClipboard, useClipboardChannel } from './useClipboardChannel'
 
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
@@ -49,6 +50,25 @@ export function useClipboard(
   searchVal?: import('vue').Ref<string>
 ): Omit<IClipboardHook, 'clipboardOptions'> & { cleanup: () => void } {
   const autoPasteActive = ref(false)
+  let startupClipboardIdentity: string | null = null
+
+  function resolveClipboardIdentity(item: IClipboardItem | null | undefined): string | null {
+    if (!item) return null
+    if (typeof item.id === 'number') return 'id:' + item.id
+    const timestamp = normalizeTimestamp(item.timestamp)
+    return timestamp === null ? null : 'ts:' + timestamp
+  }
+
+  function rememberStartupClipboard(item: IClipboardItem | null | undefined): void {
+    if (startupClipboardIdentity !== null) return
+    startupClipboardIdentity = resolveClipboardIdentity(item)
+  }
+
+  function isStartupClipboard(item: IClipboardItem | null | undefined): boolean {
+    if (startupClipboardIdentity === null) return false
+    const identity = resolveClipboardIdentity(item)
+    return identity !== null && identity === startupClipboardIdentity
+  }
 
   function resetAutoPasteStateForSession(): void {
     resetAutoPasteState()
@@ -129,14 +149,15 @@ export function useClipboard(
     const length = content.length
     if (length === 0) return false
 
-    // Short text: fill into input
-    if (length <= AUTOFILL_INPUT_TEXT_LIMIT) {
+    // Text layout is format-first: short URL still stays in suffix tag.
+    const shouldFillInput = length <= AUTOFILL_INPUT_TEXT_LIMIT && !isUrlLikeClipboardText(data)
+    if (shouldFillInput) {
       searchVal.value = content
       markAsAutoPasted(timestamp)
       return true
     }
 
-    // Long text: show as tag only
+    // Long/plain URL text: show as tag only
     autoPastedTimestamps.add(timestamp)
     return true
   }
@@ -179,6 +200,17 @@ export function useClipboard(
     const clipboardTimestamp = normalizeTimestamp(clipboard.timestamp)
     if (!clipboardTimestamp) {
       clearClipboard()
+      return
+    }
+
+    if (attemptAutoFill && !overrideDismissed && startupClipboardIdentity === null) {
+      rememberStartupClipboard(clipboard)
+    }
+
+    if (attemptAutoFill && !overrideDismissed && isStartupClipboard(clipboard)) {
+      clipboardOptions.last = null
+      clipboardOptions.detectedAt = null
+      autoPasteActive.value = false
       return
     }
 
@@ -267,6 +299,13 @@ export function useClipboard(
   let cleanup: (() => void) | null = null
   let initAttempted = false
 
+  // Capture startup baseline clipboard to avoid auto-pasting stale content on first show.
+  void getLatestClipboard()
+    .then((item) => {
+      rememberStartupClipboard(item)
+    })
+    .catch(() => {})
+
   // Initialize clipboard channel on next tick to ensure TouchChannel is ready
   const initClipboardChannel = () => {
     if (initAttempted) return
@@ -276,6 +315,8 @@ export function useClipboard(
       cleanup = useClipboardChannel({
         onNewItem: (item) => {
           if (!item?.type) return
+
+          rememberStartupClipboard(item)
 
           const incomingTimestamp = normalizeTimestamp(item.timestamp)
           const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
