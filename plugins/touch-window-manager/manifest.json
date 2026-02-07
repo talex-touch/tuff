@@ -9,7 +9,7 @@
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "macOS 窗口/应用管理：激活、隐藏、退出",
+  "description": "桌面窗口调度：激活、关闭、贴边、置顶、启动",
   "main": "index.js",
   "permissions": {
     "required": ["system.shell"],
@@ -22,17 +22,17 @@
     {
       "id": "window.app",
       "name": "窗口管理",
-      "desc": "管理 macOS 应用窗口",
+      "desc": "管理桌面应用窗口（Windows/macOS）",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["window", "app", "应用", "窗口管理", "激活", "隐藏", "退出"],
+      "keywords": ["window", "app", "应用", "窗口管理", "激活", "关闭", "启动", "贴边", "置顶", "snap", "topmost"],
       "push": true,
       "priority": 6,
       "acceptedInputTypes": ["text"],
       "platform": {
-        "win32": false,
+        "win32": true,
         "darwin": true,
         "linux": false
       },
