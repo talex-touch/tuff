@@ -11,9 +11,14 @@ import { getLatestClipboard, useClipboardChannel } from './useClipboardChannel'
 const AUTOFILL_INPUT_TEXT_LIMIT = 80
 const AUTOFILL_TIMESTAMP_TTL = 60 * 60 * 1000
 const AUTOFILL_CLEANUP_PROBABILITY = 0.1
-const MAX_CLIPBOARD_AGE_MS = 5 * 60 * 1000
 const autoPastedTimestamps = new Set<number>()
 const pollingService = PollingService.getInstance()
+
+type HandlePasteOptions = {
+  overrideDismissed?: boolean
+  triggerSearch?: boolean
+  attemptAutoFill?: boolean
+}
 
 function normalizeTimestamp(value?: string | number | Date | null): number | null {
   if (value == null) return null
@@ -58,6 +63,21 @@ export function useClipboard(
     return timestamp
   }
 
+  function isSameClipboardItem(
+    prev: IClipboardItem | null | undefined,
+    next: IClipboardItem | null | undefined
+  ): boolean {
+    if (!prev || !next) return false
+
+    if (typeof prev.id === 'number' && typeof next.id === 'number') {
+      return prev.id === next.id
+    }
+
+    const prevTimestamp = normalizeTimestamp(prev.timestamp)
+    const nextTimestamp = normalizeTimestamp(next.timestamp)
+    return prevTimestamp !== null && nextTimestamp !== null && prevTimestamp === nextTimestamp
+  }
+
   function canAutoPaste(): boolean {
     if (!clipboardOptions.last?.timestamp) return false
     if (!appSetting.tools.autoPaste.enable) return false
@@ -71,7 +91,7 @@ export function useClipboard(
     const baseTimestamp = resolveAutoPasteBaseTimestamp(timestamp)
     const clipboardAge = Date.now() - baseTimestamp
     const limit = appSetting.tools.autoPaste.time
-    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
+    const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
     return clipboardAge <= effectiveLimit
   }
 
@@ -101,7 +121,7 @@ export function useClipboard(
     return data.type === 'text' || (data.type as string) === 'html'
   }
 
-  function autoFillText(data: IClipboardItem, timestamp: number, forceFill = false): boolean {
+  function autoFillText(data: IClipboardItem, timestamp: number): boolean {
     if (!isTextType(data)) return false
     if (!searchVal) return false
 
@@ -109,8 +129,8 @@ export function useClipboard(
     const length = content.length
     if (length === 0) return false
 
-    // Explicit paste (Cmd+V) or short text: fill into input
-    if (forceFill || length <= AUTOFILL_INPUT_TEXT_LIMIT) {
+    // Short text: fill into input
+    if (length <= AUTOFILL_INPUT_TEXT_LIMIT) {
       searchVal.value = content
       markAsAutoPasted(timestamp)
       return true
@@ -127,21 +147,12 @@ export function useClipboard(
     return true
   }
 
-  function handleAutoFill(): void {
-    autoPasteActive.value = false
-    if (!clipboardOptions.last || !canAutoPaste()) return
-    autoPasteActive.value = true
-
-    const timestamp = normalizeTimestamp(clipboardOptions.last.timestamp)
-    if (!timestamp || autoPastedTimestamps.has(timestamp)) return
-
-    const data = clipboardOptions.last
-    const didAutoPaste =
+  function autoFillClipboard(data: IClipboardItem, timestamp: number): boolean {
+    return (
       autoFillFiles(data, timestamp) ||
       autoFillText(data, timestamp) ||
       autoFillImage(data, timestamp)
-
-    if (didAutoPaste) autoPasteActive.value = true
+    )
   }
 
   async function resolveLatestClipboard(): Promise<IClipboardItem | null> {
@@ -149,12 +160,15 @@ export function useClipboard(
     return latest ?? clipboardOptions.last
   }
 
-  async function handlePasteAsync(options?: {
-    overrideDismissed?: boolean
-    triggerSearch?: boolean
-  }): Promise<void> {
+  async function handlePasteAsync(options?: HandlePasteOptions): Promise<void> {
     const overrideDismissed = options?.overrideDismissed ?? false
     const triggerSearch = options?.triggerSearch ?? false
+    const attemptAutoFill = options?.attemptAutoFill ?? false
+
+    if (attemptAutoFill) {
+      autoPasteActive.value = false
+    }
+
     const clipboard = await resolveLatestClipboard()
 
     if (!clipboard?.timestamp) {
@@ -168,9 +182,8 @@ export function useClipboard(
       return
     }
 
-    const currentTimestamp = normalizeTimestamp(clipboardOptions.last?.timestamp ?? null)
     const dismissedTimestamp = normalizeTimestamp(clipboardOptions.lastClearedTimestamp)
-    const isSameClipboard = currentTimestamp === clipboardTimestamp
+    const isSameClipboard = isSameClipboardItem(clipboardOptions.last, clipboard)
     const isDismissed = !overrideDismissed && dismissedTimestamp === clipboardTimestamp
 
     if (isDismissed) {
@@ -187,23 +200,37 @@ export function useClipboard(
       const timestamp = normalizeTimestamp(clipboard.timestamp)
       const alreadyPasted = timestamp && autoPastedTimestamps.has(timestamp)
       const shouldAutoPaste = !overrideDismissed && !alreadyPasted && canAutoPaste()
+      let didAutoPaste = false
 
       if (timestamp && (overrideDismissed || shouldAutoPaste)) {
-        const didAutoPaste =
-          autoFillFiles(clipboard, timestamp) ||
-          autoFillText(clipboard, timestamp, overrideDismissed) ||
-          autoFillImage(clipboard, timestamp)
+        didAutoPaste = autoFillClipboard(clipboard, timestamp)
 
         if (shouldAutoPaste) autoPasteActive.value = didAutoPaste
       }
 
-      onPasteCallback?.()
-    } else if (triggerSearch && clipboardOptions.last) {
+      if (!didAutoPaste || clipboardOptions.last) {
+        onPasteCallback?.()
+      }
+      return
+    }
+
+    if (attemptAutoFill && !overrideDismissed) {
+      const timestamp = normalizeTimestamp(clipboard.timestamp)
+      const alreadyPasted = timestamp && autoPastedTimestamps.has(timestamp)
+      const shouldAutoPaste = !alreadyPasted && canAutoPaste()
+
+      if (timestamp && shouldAutoPaste) {
+        const didAutoPaste = autoFillClipboard(clipboard, timestamp)
+        autoPasteActive.value = didAutoPaste
+      }
+    }
+
+    if (triggerSearch && clipboardOptions.last) {
       onPasteCallback?.()
     }
   }
 
-  function handlePaste(options?: { overrideDismissed?: boolean; triggerSearch?: boolean }): void {
+  function handlePaste(options?: HandlePasteOptions): void {
     void handlePasteAsync(options)
   }
 
@@ -232,7 +259,7 @@ export function useClipboard(
 
     clipboardOptions.last = null
     clipboardOptions.detectedAt = null
-    if (!remember) autoPasteActive.value = false
+    autoPasteActive.value = false
     onPasteCallback?.()
   }
 
@@ -257,7 +284,10 @@ export function useClipboard(
             return
           }
 
-          const changed = clipboardOptions.last?.timestamp !== item.timestamp
+          const changed = !isSameClipboardItem(clipboardOptions.last, item)
+          if (changed) {
+            autoPasteActive.value = false
+          }
           clipboardOptions.last = item
           clipboardOptions.detectedAt = Date.now()
           clipboardOptions.lastClearedTimestamp = null
@@ -301,7 +331,6 @@ export function useClipboard(
 
   return {
     handlePaste,
-    handleAutoFill,
     applyToActiveApp,
     clearClipboard,
     resetAutoPasteState: resetAutoPasteStateForSession,

@@ -14,20 +14,20 @@ interface UseVisibilityOptions {
   boxOptions: IBoxOptions
   searchVal: Ref<string>
   clipboardOptions: IClipboardOptions
-  handleAutoFill: () => void
-  handlePaste: (options?: { overrideDismissed?: boolean; triggerSearch?: boolean }) => void
+  handlePaste: (options?: {
+    overrideDismissed?: boolean
+    triggerSearch?: boolean
+    attemptAutoFill?: boolean
+  }) => void
   boxInputRef: Ref<{ focus?: () => void } | null>
   deactivateAllProviders: () => Promise<void>
 }
-
-const MAX_CLIPBOARD_AGE_MS = 5 * 60 * 1000
 
 export function useVisibility(options: UseVisibilityOptions) {
   const {
     boxOptions,
     searchVal,
     clipboardOptions,
-    handleAutoFill,
     handlePaste,
     boxInputRef,
     deactivateAllProviders
@@ -117,7 +117,7 @@ export function useVisibility(options: UseVisibilityOptions) {
         ? Math.min(copiedTime, detectedAt)
         : copiedTime
     const clipboardAge = Date.now() - baseTime
-    const effectiveLimit = limit === 0 ? MAX_CLIPBOARD_AGE_MS : limit * 1000
+    const effectiveLimit = limit === 0 ? Number.POSITIVE_INFINITY : limit * 1000
     return clipboardAge <= effectiveLimit
   }
 
@@ -125,8 +125,7 @@ export function useVisibility(options: UseVisibilityOptions) {
     checkAutoClear()
 
     if (wasTriggeredByShortcut.value && (await isClipboardFreshForAutoPaste())) {
-      handlePaste({ triggerSearch: true })
-      handleAutoFill()
+      handlePaste({ triggerSearch: true, attemptAutoFill: true })
     }
     wasTriggeredByShortcut.value = false
 
