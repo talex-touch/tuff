@@ -8,36 +8,22 @@ syncStatus: migrated
 
 用于快速录入标签，支持分隔符与回车确认。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const tags = ref(['Design', 'Docs'])
-</script>
-
 ## 基础用法
 
-<ClientOnly>
-<div class="group" style="max-width: 360px;">
-  <TxTagInput v-model="tags" placeholder="输入标签后回车" />
-</div>
-</ClientOnly>
-
-::: details Show Code
-:::TuffCodeBlock{lang="vue"}
+::TuffDemoWrapper{demo="TagInputTagInputDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
-  
+
   const tags = ref(['Design', 'Docs'])
   </script>
-  
+
   <template>
     <TxTagInput v-model="tags" placeholder="输入标签后回车" />
   </template>
 ---
-:::
-:::
+::
 
 ## API
 
