@@ -15,12 +15,29 @@ const loggedErrorPaths = new Set<string>()
  * Handles both `tfile:///absolute/path` (3 slashes, correct) and the legacy
  * `tfile://relative/path` (2 slashes, path accidentally used as hostname)
  * by always ensuring the result starts with `/`.
+ *
+ * Robust against double-encoding: if the URL was percent-encoded by the
+ * renderer's `buildTfileUrl()`, Chromium may or may not re-encode it before
+ * delivering it to the protocol handler. We decode until the result stabilises.
  */
 function extractAbsolutePath(rawUrl: string): string {
   const prefix = `${FILE_SCHEMA}://`
-  const afterPrefix = decodeURIComponent(rawUrl.slice(prefix.length))
+  let decoded = rawUrl.slice(prefix.length)
+
+  // Decode iteratively (max 3 passes) to handle double/triple encoding
+  for (let i = 0; i < 3; i++) {
+    try {
+      const next = decodeURIComponent(decoded)
+      if (next === decoded) break
+      decoded = next
+    } catch {
+      // malformed URI — stop decoding
+      break
+    }
+  }
+
   // Normalise: ensure leading /
-  return afterPrefix.startsWith('/') ? afterPrefix : `/${afterPrefix}`
+  return decoded.startsWith('/') ? decoded : `/${decoded}`
 }
 
 class FileProtocolModule extends BaseModule {

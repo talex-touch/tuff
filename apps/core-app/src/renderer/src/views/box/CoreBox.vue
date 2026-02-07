@@ -581,7 +581,7 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
             class="CoreBoxFooter-Sticky"
           />
         </div>
-        <TuffItemAddon :type="addon" :item="activeItem" />
+        <TuffItemAddon :type="addon" :item="activeItem" :search-query="searchVal" />
       </template>
 
       <!-- Preview History Panel - Always mounted to listen to events -->

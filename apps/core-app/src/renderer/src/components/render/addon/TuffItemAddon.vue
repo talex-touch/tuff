@@ -4,13 +4,14 @@ import type { TuffItem } from '@talex-touch/utils'
 defineProps<{
   type?: 'preview'
   item?: TuffItem
+  searchQuery?: string
 }>()
 </script>
 
 <template>
   <div class="TuffItemAddon transition-cubic" :class="{ show: !!type }">
     <template v-if="type === 'preview'">
-      <TuffItemPreviewer :item="item!" />
+      <TuffItemPreviewer :item="item!" :search-query="searchQuery" />
     </template>
   </div>
 </template>
