@@ -18,8 +18,32 @@ const isComponentDoc = computed(() => {
   const path = typeof docMetaState.value?.path === 'string' ? docMetaState.value.path : ''
   return path.includes('/docs/dev/components/')
 })
-const isVerified = computed(() => docMetaState.value?.verified === true)
-const showAiNotice = computed(() => isComponentDoc.value && !isVerified.value)
+const SYNC_STATUS_ALIASES: Record<string, 'not_started' | 'in_progress' | 'migrated' | 'verified'> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+const normalizedSyncStatus = computed(() => {
+  if (docMetaState.value?.verified === true)
+    return 'verified'
+  const raw = typeof docMetaState.value?.syncStatus === 'string'
+    ? docMetaState.value.syncStatus.trim()
+    : ''
+  return SYNC_STATUS_ALIASES[raw] ?? 'not_started'
+})
+
+const isVerified = computed(() => normalizedSyncStatus.value === 'verified')
+const showAiNotice = computed(() => (
+  isComponentDoc.value
+  && !isVerified.value
+  && normalizedSyncStatus.value === 'migrated'
+))
 const aiTitle = computed(() => (locale.value === 'zh' ? 'AI Generated' : 'AI Generated'))
 const aiDescription = computed(() => (locale.value === 'zh'
   ? 'AI 生成内容，仅供参考。最终以 Verified 文档为准。'

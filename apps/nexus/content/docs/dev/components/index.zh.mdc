@@ -1,14 +1,16 @@
 ---
 title: Tuffex 组件
 description: 塔芙组件库的组件展示中心
+syncStatus: migrated
 ---
 
 # Tuffex 组件
 
-> 塔芙组件中心：触感、透明材质、克制的高级动效。
+> 组件文档已迁移到统一结构：`TuffDemoWrapper + 独立 Demo 组件`。
 
 ## 组件预览
-:::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
+
+::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -21,178 +23,144 @@ code: |
     </div>
   </template>
 ---
-:::
+::
 
-## 快速入口
-<div class="docs-component-grid">
-  <section class="docs-component-group">
-    <h3>基础</h3>
-    <ul>
-      <li><a href="./button.zh.md"><strong>Button 按钮</strong></a><span class="docs-component-desc"> — 触感按钮与扁平按钮的核心交互</span></li>
-      <li><a href="./icon.zh.md"><strong>Icon 图标</strong></a><span class="docs-component-desc"> — 统一图标体系与密度控制</span></li>
-      <li><a href="./avatar.zh.md"><strong>Avatar 头像</strong></a><span class="docs-component-desc"> — 识别度与尺寸体系</span></li>
-      <li><a href="./avatar-variants.zh.md"><strong>Avatar Variants 头像变体</strong></a><span class="docs-component-desc"> — 基于 `TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` 的组合配方集合，用于快速拼装在线状态、角标、平台标记、系统徽章、动效等“头像变体”。</span></li>
-      <li><a href="./tag.zh.md"><strong>Tag 标签</strong></a><span class="docs-component-desc"> — 分类与标记</span></li>
-      <li><a href="./status-badge.zh.md"><strong>StatusBadge 状态徽标</strong></a><span class="docs-component-desc"> — 状态标识与系统反馈</span></li>
-      <li><a href="./stat-card.zh.md"><strong>StatCard 指标卡片</strong></a><span class="docs-component-desc"> — 用于展示一个数字/指标与对应描述。</span></li>
-      <li><a href="./card.zh.md"><strong>Card 卡片</strong></a><span class="docs-component-desc"> — Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。</span></li>
-      <li><a href="./card-item.zh.md"><strong>CardItem 卡片项</strong></a><span class="docs-component-desc"> — 用于列表/设置页等场景的通用条目：左侧头像/图标，右侧标题信息，支持右侧操作区。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>表单与输入</h3>
-    <ul>
-      <li><a href="./input.zh.md"><strong>Input 输入</strong></a><span class="docs-component-desc"> — 轻量输入框与搜索态</span></li>
-      <li><a href="./select.zh.md"><strong>Select 选择器</strong></a><span class="docs-component-desc"> — 下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。</span></li>
-      <li><a href="./search-input.zh.md"><strong>SearchInput 搜索输入框</strong></a><span class="docs-component-desc"> — 基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。</span></li>
-      <li><a href="./search-select.zh.md"><strong>SearchSelect 搜索选择器</strong></a><span class="docs-component-desc"> — 搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。</span></li>
-      <li><a href="./checkbox.zh.md"><strong>Checkbox 复选框</strong></a><span class="docs-component-desc"> — 复选框组件，具有 SVG 动画勾选效果。</span></li>
-      <li><a href="./radio.zh.md"><strong>Radio 单选框</strong></a><span class="docs-component-desc"> — 用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。</span></li>
-      <li><a href="./switch.zh.md"><strong>Switch 开关</strong></a><span class="docs-component-desc"> — 轻触反馈与状态切换</span></li>
-      <li><a href="./slider.zh.md"><strong>Slider 滑块</strong></a><span class="docs-component-desc"> — 用于在区间内选择数值的滑块组件。</span></li>
-      <li><a href="./segmented-slider.zh.md"><strong>SegmentedSlider 分段滑块</strong></a><span class="docs-component-desc"> — 用于在预定义的离散选项中进行选择的分段滑块组件。</span></li>
-      <li><a href="./date-picker.zh.md"><strong>DatePicker 日期选择</strong></a><span class="docs-component-desc"> — 基于 `TxPicker` 的日期选择器（`YYYY-MM-DD`）。</span></li>
-      <li><a href="./picker.zh.md"><strong>Picker 滚轮选择</strong></a><span class="docs-component-desc"> — 移动端风格的滚轮选择器，支持多列。</span></li>
-      <li><a href="./cascader.zh.md"><strong>Cascader 级联选择</strong></a><span class="docs-component-desc"> — 用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。</span></li>
-      <li><a href="./tag-input.zh.md"><strong>TagInput 标签输入</strong></a><span class="docs-component-desc"> — 用于快速录入标签，支持分隔符与回车确认。</span></li>
-      <li><a href="./form.zh.md"><strong>Form 表单</strong></a><span class="docs-component-desc"> — 提供表单容器与校验能力，配合 `TxFormItem` 统一布局与提示。</span></li>
-      <li><a href="./file-uploader.zh.md"><strong>FileUploader 文件上传</strong></a><span class="docs-component-desc"> — 通用文件上传组件，支持多文件、拖拽与列表管理。</span></li>
-      <li><a href="./image-uploader.zh.md"><strong>ImageUploader 图片上传</strong></a><span class="docs-component-desc"> — 用于图片选择、预览、删除。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>反馈与状态</h3>
-    <ul>
-      <li><a href="./dialog.zh.md"><strong>Dialog 弹窗</strong></a><span class="docs-component-desc"> — 交互闭环与确认场景</span></li>
-      <li><a href="./drawer.zh.md"><strong>Drawer 抽屉</strong></a><span class="docs-component-desc"> — 侧滑面板与表单承载</span></li>
-      <li><a href="./toast.zh.md"><strong>Toast 提示</strong></a><span class="docs-component-desc"> — 快速反馈与短暂状态</span></li>
-      <li><a href="./tooltip.zh.md"><strong>Tooltip 提示</strong></a><span class="docs-component-desc"> — 轻量提示与信息层级</span></li>
-      <li><a href="./popover.zh.md"><strong>Popover 弹出层</strong></a><span class="docs-component-desc"> — 基于 Floating UI 的点击弹出层。</span></li>
-      <li><a href="./loading-state.zh.md"><strong>LoadingState 加载态</strong></a><span class="docs-component-desc"> — 用于加载中占位展示。</span></li>
-      <li><a href="./loading-overlay.zh.md"><strong>LoadingOverlay 加载遮罩</strong></a><span class="docs-component-desc"> — 用于在内容区域或全屏展示加载遮罩。</span></li>
-      <li><a href="./progress.zh.md"><strong>Progress 进度</strong></a><span class="docs-component-desc"> — 线性进度与状态反馈</span></li>
-      <li><a href="./progress-bar.zh.md"><strong>ProgressBar 进度条</strong></a><span class="docs-component-desc"> — 多状态进度条与加载反馈</span></li>
-      <li><a href="./spinner.zh.md"><strong>Spinner 加载</strong></a><span class="docs-component-desc"> — 用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。</span></li>
-      <li><a href="./empty.zh.md"><strong>Empty 空状态</strong></a><span class="docs-component-desc"> — 统一的空状态组件。</span></li>
-      <li><a href="./empty-state.zh.md"><strong>EmptyState 空态引导</strong></a><span class="docs-component-desc"> — 通用空态/引导组件，适用于页面为空、未选择、无权限等场景。</span></li>
-      <li><a href="./offline-state.zh.md"><strong>OfflineState 离线</strong></a><span class="docs-component-desc"> — 用于离线或网络不可用时的提示。</span></li>
-      <li><a href="./permission-state.zh.md"><strong>PermissionState 权限不足</strong></a><span class="docs-component-desc"> — 用于权限不足或未授权场景。</span></li>
-      <li><a href="./search-empty.zh.md"><strong>SearchEmpty 搜索空态</strong></a><span class="docs-component-desc"> — 用于搜索无结果时的状态提示。</span></li>
-      <li><a href="./skeleton.zh.md"><strong>Skeleton 骨架屏</strong></a><span class="docs-component-desc"> — 加载占位与结构提示</span></li>
-      <li><a href="./layout-skeleton.zh.md"><strong>LayoutSkeleton 布局骨架</strong></a><span class="docs-component-desc"> — 布局级骨架占位</span></li>
-      <li><a href="./no-data.zh.md"><strong>NoData 无数据</strong></a><span class="docs-component-desc"> — 用于列表、表格或图表数据为空的状态提示。</span></li>
-      <li><a href="./no-selection.zh.md"><strong>NoSelection 未选择</strong></a><span class="docs-component-desc"> — 用于详情面板等未选择任何项的状态提示。</span></li>
-      <li><a href="./blank-slate.zh.md"><strong>BlankSlate 空白页</strong></a><span class="docs-component-desc"> — 用于首次进入、引导用户开始操作的空白页布局。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>布局与结构</h3>
-    <ul>
-      <li><a href="./grid.zh.md"><strong>Grid 栅格</strong></a><span class="docs-component-desc"> — 结构化布局与对齐</span></li>
-      <li><a href="./grid-layout.zh.md"><strong>GridLayout 网格布局</strong></a><span class="docs-component-desc"> — 用于快速构建响应式网格，并可选启用 hover 光斑交互效果。</span></li>
-      <li><a href="./flex.zh.md"><strong>Flex 弹性布局</strong></a><span class="docs-component-desc"> — 通用 Flex 容器。</span></li>
-      <li><a href="./stack.zh.md"><strong>Stack 堆叠</strong></a><span class="docs-component-desc"> — 通用堆叠布局容器（横向/纵向）。</span></li>
-      <li><a href="./container.zh.md"><strong>Container 容器</strong></a><span class="docs-component-desc"> — 容器组件是页面布局的基础，提供了灵活的布局选项和响应式设计支持。TouchX UI 的容器组件帮助您快速构建结构化的页面布局。</span></li>
-      <li><a href="./splitter.zh.md"><strong>Splitter 分割面板</strong></a><span class="docs-component-desc"> — 可拖拽分割面板，支持水平/垂直。</span></li>
-      <li><a href="./outline-border.zh.md"><strong>OutlineBorder 描边容器</strong></a><span class="docs-component-desc"> — `TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。</span></li>
-      <li><a href="./glass-surface.zh.md"><strong>GlassSurface 玻璃拟态</strong></a><span class="docs-component-desc"> — 用于渲染带玻璃拟态效果的容器。</span></li>
-      <li><a href="./auto-sizer.zh.md"><strong>AutoSizer 自适应尺寸</strong></a><span class="docs-component-desc"> — 用于让容器在内容变化时自动跟随宽/高，并带过渡动画。</span></li>
-      <li><a href="./scroll.zh.md"><strong>Scroll 滚动</strong></a><span class="docs-component-desc"> — 基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。</span></li>
-      <li><a href="./group-block.zh.md"><strong>GroupBlock 分组块</strong></a><span class="docs-component-desc"> — 用于组织相关内容的可折叠分组容器，带有平滑动画效果。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>导航与指令</h3>
-    <ul>
-      <li><a href="./nav-bar.zh.md"><strong>NavBar 导航栏</strong></a><span class="docs-component-desc"> — 移动端顶部导航栏，支持标题、左右插槽与返回按钮。</span></li>
-      <li><a href="./tab-bar.zh.md"><strong>TabBar 底部导航</strong></a><span class="docs-component-desc"> — 移动端底部 TabBar，支持图标与 badge。</span></li>
-      <li><a href="./tabs.zh.md"><strong>Tabs 标签页</strong></a><span class="docs-component-desc"> — 用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。</span></li>
-      <li><a href="./dropdown-menu.zh.md"><strong>DropdownMenu 下拉菜单</strong></a><span class="docs-component-desc"> — 基于 Popover 的下拉菜单（Windows 风格）。</span></li>
-      <li><a href="./command-palette.zh.md"><strong>CommandPalette 命令面板</strong></a><span class="docs-component-desc"> — 用于全局快捷指令/搜索的命令面板。</span></li>
-      <li><a href="./context-menu.zh.md"><strong>ContextMenu 右键菜单</strong></a><span class="docs-component-desc"> — 基于 Floating UI 的右键菜单（跟随鼠标坐标）。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>数据与列表</h3>
-    <ul>
-      <li><a href="./data-table.zh.md"><strong>DataTable 数据表格</strong></a><span class="docs-component-desc"> — 轻量数据表格组件，提供排序、行选择与自定义渲染能力。</span></li>
-      <li><a href="./tree.zh.md"><strong>Tree 树形</strong></a><span class="docs-component-desc"> — 基础树形组件，支持搜索过滤、单选/多选与展开控制。</span></li>
-      <li><a href="./tree-select.zh.md"><strong>TreeSelect 树选择器</strong></a><span class="docs-component-desc"> — 用于在下拉浮层中选择树形数据，支持搜索、单选/多选。</span></li>
-      <li><a href="./sortable-list.zh.md"><strong>SortableList 拖拽排序</strong></a><span class="docs-component-desc"> — 用于拖拽排序的列表容器（基于 HTML5 Drag &amp; Drop）。</span></li>
-      <li><a href="./virtual-list.zh.md"><strong>VirtualList 虚拟列表</strong></a><span class="docs-component-desc"> — 用于长列表渲染场景，降低 DOM 数量提升性能。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>内容与媒体</h3>
-    <ul>
-      <li><a href="./chat.zh.md"><strong>Chat 消息列表</strong></a><span class="docs-component-desc"> — 常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。</span></li>
-      <li><a href="./chat-composer.zh.md"><strong>ChatComposer 消息输入</strong></a><span class="docs-component-desc"> — 用于 AI 消息输入、发送。</span></li>
-      <li><a href="./typing-indicator.zh.md"><strong>TypingIndicator 打字中</strong></a><span class="docs-component-desc"> — 用于展示 AI 正在回复的状态。</span></li>
-      <li><a href="./markdown-view.zh.md"><strong>MarkdownView Markdown 渲染</strong></a><span class="docs-component-desc"> — 用于将 Markdown 渲染为 HTML（默认开启 sanitize）。</span></li>
-      <li><a href="./image-gallery.zh.md"><strong>ImageGallery 图片预览</strong></a><span class="docs-component-desc"> — 用于图片网格与 Modal 预览。</span></li>
-      <li><a href="./agents.zh.md"><strong>Agents 智能体列表</strong></a><span class="docs-component-desc"> — 用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。</span></li>
-    </ul>
-  </section>
-  <section class="docs-component-group">
-    <h3>动效与效果</h3>
-    <ul>
-      <li><a href="./gradual-blur.zh.md"><strong>GradualBlur 渐变模糊</strong></a><span class="docs-component-desc"> — 用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。</span></li>
-      <li><a href="./glow-text.zh.md"><strong>GlowText 扫光</strong></a><span class="docs-component-desc"> — 用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。</span></li>
-      <li><a href="./text-transformer.zh.md"><strong>TextTransformer 文本变换</strong></a><span class="docs-component-desc"> — 用于在文本变化时提供平滑的过渡效果（fade + blur），适合与 `TxAutoSizer` 搭配实现“内容变化 + 尺寸跟随”的丝滑体验。</span></li>
-      <li><a href="./transition.zh.md"><strong>Transition 动效</strong></a><span class="docs-component-desc"> — 用于内容切换（X）与列表增删（Y）的通用过渡封装。</span></li>
-      <li><a href="./stagger.zh.md"><strong>Stagger 依次进入</strong></a><span class="docs-component-desc"> — 用于列表/节点依次进入（enter/leave）动画。</span></li>
-      <li><a href="./fusion.zh.md"><strong>Fusion 交融</strong></a><span class="docs-component-desc"> — 两个元素交融与分开的视觉组件。</span></li>
-      <li><a href="./corner-overlay.zh.md"><strong>CornerOverlay 角标容器</strong></a><span class="docs-component-desc"> — `TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。</span></li>
-      <li><a href="./gradient-border.zh.md"><strong>GradientBorder 渐变边框</strong></a><span class="docs-component-desc"> — 用于给内容容器提供动态渐变边框效果。</span></li>
-    </ul>
-  </section>
-</div>
+## 迁移状态看板
 
-## 组件地图
-| 分类 | 代表能力 | 迁移状态 |
-|------|----------|----------|
-| 基础 | Button / Icon / Avatar | 进行中 |
-| 表单 | Input / Select / Switch | 进行中 |
-
-## 同步状态
-迁移进度以此表为准：✅ 表示已迁移或已确认，未标记则为未迁移。
+- `开发中`：文档仍在完善，示例/API 可能继续调整。
+- `AI 迁移`：已完成迁移，但仍建议结合源码核对。
+- `已审阅`：人工审阅完成。
 
 <DocsComponentSyncTable />
-| 反馈 | Dialog / Toast / Tooltip / ProgressBar | 规划中 |
-| 布局 | Grid / Flex / LayoutSkeleton / Container | 规划中 |
-| 状态 | Empty / Skeleton / Loading | 规划中 |
 
-## 文档结构
-每个组件页遵循统一结构，便于检索与维护：
-1. **Overview** — 组件定位与设计语义  
-2. **Usage** — 基础用法 + 交互 Demo  
-3. **Variants** — 尺寸、状态、组合示例  
-4. **API** — Props / Slots / Events  
-5. **Design Notes** — 视觉与动效约束
+## 章节总览
 
-## 设计支柱
-- **Motion**：短促、可控、有收束感的动效。
-- **Surface**：透明材质与层级关系优先。
-- **Density**：在高信息密度下保持呼吸感。
+| 章节 | 核心范围 | 当前状态 |
+|------|----------|----------|
+| 设计模式 | Surface / Motion / 组合样式 | ✅ migrated |
+| 设计案例 | 实战页面与复合范式 | ✅ migrated |
+| 暗黑模式与主题 | Token、深浅色与主题约束 | ✅ migrated |
+| 基础与操作 | Button / Icon / Avatar / Tag | ✅ migrated |
+| 表单与输入 | Input / Select / Form / Uploader | ✅ migrated |
+| 反馈与状态 | Dialog / Toast / Progress / Empty | ✅ migrated |
+| 布局与导航 | Grid / Container / Tabs / Menu | ✅ migrated |
+| 数据与列表 | DataTable / Tree / VirtualList | ✅ migrated |
+| 内容与媒体 | Chat / Markdown / Image | ✅ migrated |
 
-<TuffPillars :items="[
-  { title: 'Motion', summary: '短促、可控、有收束感的动效。', accent: '01' },
-  { title: 'Surface', summary: '透明材质与层级关系优先。', accent: '02' },
-  { title: 'Density', summary: '高密度下仍有节奏与呼吸感。', accent: '03' },
-]" />
+## 设计模式
 
-## Demo 约定
-- Demo 示例优先可复制运行，避免仅截图。
-- 有交互的 Demo 使用 `client-only` 包裹，避免 SSR 水合异常。
-- Props/Slots/Events 以表格为主，补充必要的行为说明。
+- [Foundations 设计基础](./foundations.zh.md)
+- [GlassSurface 玻璃拟态](./glass-surface.zh.md)
+- [GradientBorder 渐变边框](./gradient-border.zh.md)
+- [OutlineBorder 描边容器](./outline-border.zh.md)
+- [CornerOverlay 角标容器](./corner-overlay.zh.md)
+- [GradualBlur 渐变模糊](./gradual-blur.zh.md)
+- [GlowText 扫光](./glow-text.zh.md)
+- [TextTransformer 文本变换](./text-transformer.zh.md)
+- [Transition 动效](./transition.zh.md)
+- [Stagger 依次进入](./stagger.zh.md)
+- [Fusion 交融](./fusion.zh.md)
+- [Avatar Variants 头像变体](./avatar-variants.zh.md)
 
-## 迁移节奏
-- **Phase 1**：Button / Icon / Input（优先）  
-- **Phase 2**：Dialog / Drawer / Toast（交互闭环）  
-- **Phase 3**：Grid / Layout / Data（完善体系）
+## 设计案例
 
-## 贡献与维护
-组件文档统一落在 `apps/nexus/content/docs/dev/components/`，以 Nexus 为唯一来源，避免双维护。
+- [Agents 智能体列表](./agents.zh.md)
+- [Chat 消息列表](./chat.zh.md)
+- [ChatComposer 消息输入](./chat-composer.zh.md)
+- [MarkdownView Markdown 渲染](./markdown-view.zh.md)
+- [ImageGallery 图片预览](./image-gallery.zh.md)
+- [GroupBlock 分组块](./group-block.zh.md)
+- [Card 卡片](./card.zh.md)
 
-## 设计基础
-- [设计基础](./foundations) — 统一字体与颜色变量，保持 Nexus 与 Tuffex 体验一致。
+## 暗黑模式与主题
+
+- [Foundations 设计基础](./foundations.zh.md)（含亮暗色 token 与主题约束）
+- [StatusBadge 状态徽标](./status-badge.zh.md)
+- [EmptyState 空态引导](./empty-state.zh.md)
+
+## 基础与操作
+
+- [Button 按钮](./button.zh.md)
+- [FlatButton 扁平按钮](./flat-button.zh.md)
+- [Icon 图标](./icon.zh.md)
+- [Avatar 头像](./avatar.zh.md)
+- [Tag 标签](./tag.zh.md)
+- [StatCard 指标卡片](./stat-card.zh.md)
+
+## 表单与输入
+
+- [Input 输入](./input.zh.md)
+- [Select 选择器](./select.zh.md)
+- [SearchInput 搜索输入框](./search-input.zh.md)
+- [SearchSelect 搜索选择器](./search-select.zh.md)
+- [Checkbox 复选框](./checkbox.zh.md)
+- [Radio 单选框](./radio.zh.md)
+- [Switch 开关](./switch.zh.md)
+- [Slider 滑块](./slider.zh.md)
+- [SegmentedSlider 分段滑块](./segmented-slider.zh.md)
+- [DatePicker 日期选择](./date-picker.zh.md)
+- [Picker 滚轮选择](./picker.zh.md)
+- [Cascader 级联选择](./cascader.zh.md)
+- [TagInput 标签输入](./tag-input.zh.md)
+- [Form 表单](./form.zh.md)
+- [FileUploader 文件上传](./file-uploader.zh.md)
+- [ImageUploader 图片上传](./image-uploader.zh.md)
+
+## 反馈与状态
+
+- [Dialog 弹窗](./dialog.zh.md)
+- [Drawer 抽屉](./drawer.zh.md)
+- [Toast 提示](./toast.zh.md)
+- [Tooltip 提示](./tooltip.zh.md)
+- [Popover 弹出层](./popover.zh.md)
+- [LoadingState 加载态](./loading-state.zh.md)
+- [LoadingOverlay 加载遮罩](./loading-overlay.zh.md)
+- [Progress 进度](./progress.zh.md)
+- [ProgressBar 进度条](./progress-bar.zh.md)
+- [Spinner 加载](./spinner.zh.md)
+- [Empty 空状态](./empty.zh.md)
+- [EmptyState 空态引导](./empty-state.zh.md)
+- [OfflineState 离线](./offline-state.zh.md)
+- [PermissionState 权限不足](./permission-state.zh.md)
+- [SearchEmpty 搜索空态](./search-empty.zh.md)
+- [Skeleton 骨架屏](./skeleton.zh.md)
+- [LayoutSkeleton 布局骨架](./layout-skeleton.zh.md)
+- [NoData 无数据](./no-data.zh.md)
+- [NoSelection 未选择](./no-selection.zh.md)
+- [BlankSlate 空白页](./blank-slate.zh.md)
+
+## 布局与导航
+
+- [Grid 栅格](./grid.zh.md)
+- [GridLayout 网格布局](./grid-layout.zh.md)
+- [Flex 弹性布局](./flex.zh.md)
+- [Stack 堆叠](./stack.zh.md)
+- [Container 容器](./container.zh.md)
+- [Splitter 分割面板](./splitter.zh.md)
+- [Scroll 滚动](./scroll.zh.md)
+- [AutoSizer 自适应尺寸](./auto-sizer.zh.md)
+- [NavBar 导航栏](./nav-bar.zh.md)
+- [TabBar 底部导航](./tab-bar.zh.md)
+- [Tabs 标签页](./tabs.zh.md)
+- [DropdownMenu 下拉菜单](./dropdown-menu.zh.md)
+- [CommandPalette 命令面板](./command-palette.zh.md)
+- [ContextMenu 右键菜单](./context-menu.zh.md)
+
+## 数据与列表
+
+- [DataTable 数据表格](./data-table.zh.md)
+- [Tree 树形](./tree.zh.md)
+- [TreeSelect 树选择器](./tree-select.zh.md)
+- [SortableList 拖拽排序](./sortable-list.zh.md)
+- [VirtualList 虚拟列表](./virtual-list.zh.md)
+- [Pagination 分页](./pagination.zh.md)
+- [Steps 步骤条](./steps.zh.md)
+- [Timeline 时间线](./timeline.zh.md)
+
+## 内容与媒体
+
+- [Chat 消息列表](./chat.zh.md)
+- [ChatComposer 消息输入](./chat-composer.zh.md)
+- [TypingIndicator 打字中](./typing-indicator.zh.md)
+- [MarkdownView Markdown 渲染](./markdown-view.zh.md)
+- [ImageGallery 图片预览](./image-gallery.zh.md)
