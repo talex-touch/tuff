@@ -1,30 +1,30 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
 const popperOpen = ref(false)
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      trigger: '显示弹出对话框',
+      title: '提示',
+      message: '这是一段提示内容。',
+    }
+  : {
+      trigger: 'Show popper dialog',
+      title: 'Tip',
+      message: 'This is a short tip.',
+    }))
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxButton @click="popperOpen = true">
-显示弹出对话框
-</TxButton>
-        <TxPopperDialog
-          v-if="popperOpen"
-          title="Tip"
-          message="这是一段提示内容。"
-          :close="() => (popperOpen = false)"
-        />
-  </div>
-  <div v-else>
-        <TxButton @click="popperOpen = true">
-Show popper dialog
-</TxButton>
-        <TxPopperDialog
-          v-if="popperOpen"
-          title="Tip"
-          message="This is a short tip."
-          :close="() => (popperOpen = false)"
-        />
-  </div>
+  <TxButton @click="popperOpen = true">
+    {{ labels.trigger }}
+  </TxButton>
+  <TxPopperDialog
+    v-if="popperOpen"
+    :title="labels.title"
+    :message="labels.message"
+    :close="() => (popperOpen = false)"
+  />
 </template>

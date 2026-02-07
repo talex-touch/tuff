@@ -12,15 +12,6 @@ syncStatus: migrated
 
 Dialogs surface important information and confirmations, including BottomDialog / BlowDialog / PopperDialog / TouchTip variants.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const bottomOpen = ref(false)
-const blowOpen = ref(false)
-const popperOpen = ref(false)
-const tipOpen = ref(false)
-</script>
-
 ## BottomDialog
 
 Bottom-aligned dialog with customizable buttons and motion.

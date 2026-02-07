@@ -1,30 +1,34 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const { locale } = useI18n()
+
+const labels = computed(() => {
+  if (locale.value === 'zh') {
+    return {
+      menu: '菜单',
+      open: '打开',
+      delete: '删除',
+    }
+  }
+
+  return {
+    menu: 'Menu',
+    open: 'Open',
+    delete: 'Delete',
+  }
+})
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxDropdownMenu>
-          <template #trigger>
-            <TxButton>Menu</TxButton>
-          </template>
-  
-          <TxDropdownItem>Open</TxDropdownItem>
-          <TxDropdownItem danger>
-Delete
-</TxDropdownItem>
-        </TxDropdownMenu>
-  </div>
-  <div v-else>
-        <TxDropdownMenu>
-          <template #trigger>
-            <TxButton>Menu</TxButton>
-          </template>
-  
-          <TxDropdownItem>Open</TxDropdownItem>
-          <TxDropdownItem danger>
-Delete
-</TxDropdownItem>
-        </TxDropdownMenu>
-  </div>
+  <TxDropdownMenu>
+    <template #trigger>
+      <TxButton>{{ labels.menu }}</TxButton>
+    </template>
+
+    <TxDropdownItem>{{ labels.open }}</TxDropdownItem>
+    <TxDropdownItem danger>
+      {{ labels.delete }}
+    </TxDropdownItem>
+  </TxDropdownMenu>
 </template>

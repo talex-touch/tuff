@@ -1,38 +1,40 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
 const bottomOpen = ref(false)
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      trigger: '显示对话框',
+      title: '确认操作',
+      message: '您确定要继续吗？',
+      cancel: '取消',
+      confirm: '确认',
+    }
+  : {
+      trigger: 'Show dialog',
+      title: 'Confirm action',
+      message: 'Are you sure you want to continue?',
+      cancel: 'Cancel',
+      confirm: 'Confirm',
+    }))
+
+const buttons = computed(() => [
+  { content: labels.value.cancel, type: 'info', onClick: () => true },
+  { content: labels.value.confirm, type: 'success', onClick: async () => true },
+])
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxButton @click="bottomOpen = true">
-显示对话框
-</TxButton>
-        <TxBottomDialog
-          v-if="bottomOpen"
-          title="确认操作"
-          message="您确定要继续吗？"
-          :btns="[
-            { content: '取消', type: 'info', onClick: () => true },
-            { content: '确认', type: 'success', onClick: async () => true },
-          ]"
-          :close="() => (bottomOpen = false)"
-        />
-  </div>
-  <div v-else>
-        <TxButton @click="bottomOpen = true">
-Show dialog
-</TxButton>
-        <TxBottomDialog
-          v-if="bottomOpen"
-          title="Confirm action"
-          message="Are you sure you want to continue?"
-          :btns="[
-            { content: 'Cancel', type: 'info', onClick: () => true },
-            { content: 'Confirm', type: 'success', onClick: async () => true },
-          ]"
-          :close="() => (bottomOpen = false)"
-        />
-  </div>
+  <TxButton @click="bottomOpen = true">
+    {{ labels.trigger }}
+  </TxButton>
+  <TxBottomDialog
+    v-if="bottomOpen"
+    :title="labels.title"
+    :message="labels.message"
+    :btns="buttons"
+    :close="() => (bottomOpen = false)"
+  />
 </template>

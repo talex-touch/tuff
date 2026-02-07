@@ -1,18 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const { locale } = useI18n()
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      placeholder: '搜索...',
+      action: '搜索',
+    }
+  : {
+      placeholder: 'Search...',
+      action: 'Go',
+    }))
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TuffInput placeholder="搜索..." />
-        <TxButton size="sm">
-搜索
-</TxButton>
-  </div>
-  <div v-else>
-        <TuffInput placeholder="Search..." />
-        <TxButton size="sm">
-Go
-</TxButton>
+  <div class="tuff-demo-row">
+    <TuffInput :placeholder="labels.placeholder" />
+    <TxButton size="sm">
+      {{ labels.action }}
+    </TxButton>
   </div>
 </template>

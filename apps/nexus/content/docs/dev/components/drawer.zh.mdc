@@ -12,15 +12,6 @@ syncStatus: migrated
 
 从屏幕边缘滑出的面板组件，常用于设置、表单与补充信息展示。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const visible1 = ref(false)
-const visible2 = ref(false)
-const visible3 = ref(false)
-const visible4 = ref(false)
-</script>
-
 ## 基础用法
 
 ### Basic Drawer

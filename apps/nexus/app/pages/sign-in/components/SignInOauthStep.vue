@@ -3,11 +3,12 @@ import { TxSpinner } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import LinuxdoIcon from '~/components/icon/LinuxdoIcon.vue'
 import Button from '~/components/ui/Button.vue'
-import type { OauthProvider } from '~/composables/useSignIn'
+import type { AuthFlow, OauthProvider } from '~/composables/useOauthContext'
 
 const props = defineProps<{
   t: (key: string, fallback?: string) => string
   provider: OauthProvider | null
+  flow: AuthFlow
   phase: 'idle' | 'redirect' | 'verifying' | 'error'
   errorMessage?: string
 }>()
@@ -32,8 +33,13 @@ const isError = computed(() => props.phase === 'error')
 const message = computed(() => {
   if (isError.value)
     return props.errorMessage || props.t('auth.oauthError', '登录失败，请重试。')
-  if (isRedirect.value)
+  if (isRedirect.value) {
+    if (props.flow === 'bind')
+      return props.t('auth.oauthBindRedirect', `正在跳转到 ${providerLabel.value} 完成绑定...`)
     return props.t('auth.oauthRedirect', `正在跳转到 ${providerLabel.value}...`)
+  }
+  if (props.flow === 'bind')
+    return props.t('auth.oauthBindVerifying', '正在验证绑定状态...')
   return props.t('auth.oauthVerifying', '正在验证账号信息...')
 })
 

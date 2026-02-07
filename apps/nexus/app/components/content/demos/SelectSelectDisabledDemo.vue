@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
 const value = ref('')
+
+const labels = computed(() => {
+  if (locale.value === 'zh') {
+    return {
+      placeholder: '禁用状态',
+      option: '选项 1',
+    }
+  }
+
+  return {
+    placeholder: 'Disabled',
+    option: 'Option 1',
+  }
+})
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-      &lt;template&gt;
-        &lt;TuffSelect v-model="value" placeholder="禁用状态" disabled&gt;
-          &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-        &lt;/TuffSelect&gt;
-      &lt;/template&gt;
-  </div>
-  <div v-else>
-      &lt;template&gt;
-        &lt;TuffSelect v-model="value" placeholder="禁用状态" disabled&gt;
-          &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-        &lt;/TuffSelect&gt;
-      &lt;/template&gt;
-  </div>
+  <TuffSelect v-model="value" :placeholder="labels.placeholder" disabled>
+    <TuffSelectItem value="option1" :label="labels.option" />
+  </TuffSelect>
 </template>

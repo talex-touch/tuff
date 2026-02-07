@@ -8,17 +8,20 @@ description: 塔芙组件库的组件展示中心
 > 塔芙组件中心：触感、透明材质、克制的高级动效。
 
 ## 组件预览
-<TuffDemo title="Component Lineup" description="关键控件一眼看全。">
-  <template #preview>
+:::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
+---
+code: |
+  <template>
     <div class="tuff-demo-row">
-      <TxButton size="sm">Action</TxButton>
+      <TxButton size="sm">操作</TxButton>
       <TuffSwitch :model-value="true" />
       <TxStatusBadge text="在线" status="success" />
       <TxTag label="专注" />
       <TxProgressBar :percentage="62" style="width: 140px;" />
     </div>
   </template>
-</TuffDemo>
+---
+:::
 
 ## 快速入口
 <div class="docs-component-grid">
