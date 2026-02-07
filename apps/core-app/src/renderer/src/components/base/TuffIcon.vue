@@ -2,6 +2,7 @@
 import type { ITuffIcon } from '@talex-touch/utils'
 import { isElectronRenderer } from '@talex-touch/utils/env'
 import { useSvgContent } from '~/modules/hooks/useSvgContent'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
   icon?: ITuffIcon | null
@@ -34,10 +35,7 @@ const url = computed(() => {
     if (!isElectron) {
       return ''
     }
-    const targetPath = `tfile://${safeIcon.value.value}`
-    // console.log('fileable', props, props.icon.value, '=', targetPath)
-    // File paths are absolute (e.g., "/Users/..."), so tfile://${path} gives tfile:///Users/...
-    return targetPath
+    return buildTfileUrl(safeIcon.value.value)
   }
 
   if (safeIcon.value.type === 'url') {
@@ -48,7 +46,7 @@ const url = computed(() => {
     // Only use tfile:// for local file paths (absolute paths starting with /)
     // but NOT for API paths like /api/... which should be HTTP URLs
     if (isElectron && urlPath.startsWith('/') && !urlPath.startsWith('/api/')) {
-      return `tfile://${urlPath}`
+      return buildTfileUrl(urlPath)
     }
     if (!isElectron && urlPath.startsWith('tfile:')) {
       return ''
@@ -59,10 +57,20 @@ const url = computed(() => {
   return safeIcon.value.value
 })
 
-const { content: svgContent, resolvedUrl: svgResolvedUrl, setUrl } = useSvgContent()
+const {
+  content: svgContent,
+  resolvedUrl: svgResolvedUrl,
+  loading: svgLoading,
+  error: svgError,
+  setUrl
+} = useSvgContent()
 
 const effectiveUrl = computed(() => svgResolvedUrl.value || url.value)
 const isSvg = computed(() => url.value?.endsWith('.svg'))
+
+// Combine icon status error with SVG fetch error
+const combinedError = computed(() => error.value || !!svgError.value)
+const combinedLoading = computed(() => loading.value || svgLoading.value)
 
 const dataurl = computed(() => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svgContent.value ?? '')}`
@@ -88,7 +96,7 @@ watch(
     class="TuffIcon"
     :data-icon-type="safeIcon.type"
     :data-icon-value="safeIcon.value"
-    :class="{ 'TuffIcon-Loading': loading }"
+    :class="{ 'TuffIcon-Loading': combinedLoading }"
     :style="{ fontSize: size ? `${size}px` : undefined }"
   >
     <span v-if="!safeIcon?.value" class="TuffIcon-Empty">
@@ -97,11 +105,11 @@ watch(
       </slot>
     </span>
 
-    <span v-else-if="error" class="TuffIcon-Error">
+    <span v-else-if="combinedError" class="TuffIcon-Error">
       <i class="i-ri-image-line" />
     </span>
 
-    <span v-else-if="loading" class="TuffIcon-Loading">
+    <span v-else-if="combinedLoading" class="TuffIcon-Loading">
       <span class="TuffIcon-Loading-Skeleton">
         <span class="skeleton-shimmer" />
       </span>
@@ -111,18 +119,31 @@ watch(
       {{ safeIcon.value || '⚠️' }}
     </span>
 
-    <span v-else-if="safeIcon.type === 'class'" class="class flex">
+    <span v-else-if="safeIcon.type === 'class'" class="class">
       <i :class="safeIcon.value" />
     </span>
 
-    <template v-else-if="addressable && effectiveUrl">
-      <template v-if="isSvg && colorful">
+    <template v-else-if="addressable && effectiveUrl && !combinedError && !combinedLoading">
+      <template v-if="isSvg && colorful && svgContent">
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
-      <template v-else>
-        <img :alt="alt" :src="effectiveUrl" />
+      <template v-else-if="!isSvg || !colorful">
+        <img
+          :alt="alt"
+          :src="effectiveUrl"
+          @error="
+            () => {
+              /* Handle image load error */
+            }
+          "
+        />
       </template>
     </template>
+
+    <!-- Fallback: if icon type is unknown or invalid, show error state -->
+    <span v-else class="TuffIcon-Error">
+      <i class="i-ri-image-line" />
+    </span>
   </span>
 </template>
 
@@ -145,18 +166,21 @@ watch(
 
 .TuffIcon {
   position: relative;
-  display: flex;
-
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 
   min-width: 1em;
   min-height: 1em;
+  max-width: 1em;
+  max-height: 1em;
 
   width: 1em;
   height: 1em;
 
   aspect-ratio: 1 / 1;
+  overflow: hidden;
 
   .emoji {
     display: inline-block;
@@ -164,10 +188,26 @@ watch(
     line-height: 1;
   }
 
+  .class {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
+    i {
+      font-size: 1em;
+      line-height: 1;
+      display: block;
+    }
+  }
+
   img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    display: block;
   }
 
   .TuffIcon-Loading-Skeleton {

@@ -19,25 +19,26 @@ const props = defineProps<Props>()
 
 const { t } = useI18n()
 
-const displayIcon = computed(() => {
+const displayIcon = computed<ITuffIcon>(() => {
   const icon = props.render?.basic?.icon
-  const defaultIcon = {
-    type: 'url',
-    value: '',
-    status: 'normal'
-  } as ITuffIcon
 
-  if (typeof icon === 'string') {
-    defaultIcon.value = icon
+  if (!icon) {
+    return { type: 'url', value: '', status: 'normal' }
   }
 
-  if (icon && typeof icon === 'object' && 'value' in icon) {
-    if (icon.value?.length) {
-      defaultIcon.value = icon.value
+  if (typeof icon === 'string') {
+    return { type: 'url', value: icon, status: 'normal' }
+  }
+
+  if ('value' in icon && icon.value?.length) {
+    return {
+      type: icon.type || 'url',
+      value: icon.value,
+      status: icon.status || 'normal'
     }
   }
 
-  return defaultIcon
+  return { type: 'url', value: '', status: 'normal' }
 })
 
 const fileExtension = computed(() => {
