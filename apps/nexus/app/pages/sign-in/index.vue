@@ -36,6 +36,7 @@ const {
   supportsPasskey,
   passkeyPhase,
   passkeyError,
+  oauthFlow,
   oauthPhase,
   oauthProvider,
   oauthError,
@@ -153,6 +154,7 @@ const {
                 key="oauth"
                 :t="t"
                 :provider="oauthProvider"
+                :flow="oauthFlow"
                 :phase="oauthPhase"
                 :error-message="oauthError"
                 @retry="handleOauthRetry"

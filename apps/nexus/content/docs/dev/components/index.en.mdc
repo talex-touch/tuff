@@ -8,8 +8,10 @@ description: The component gallery for Tuffex (Ta Fu)
 > Tactile feel, translucent surfaces, and restrained motion. Welcome to Ta Fu.
 
 ## Preview
-<TuffDemo title="Component Lineup" description="A quick scan of core building blocks.">
-  <template #preview>
+:::TuffDemoWrapper{demo="ComponentsLineupDemo" code-lang="vue"}
+---
+code: |
+  <template>
     <div class="tuff-demo-row">
       <TxButton size="sm">Action</TxButton>
       <TuffSwitch :model-value="true" />
@@ -18,7 +20,8 @@ description: The component gallery for Tuffex (Ta Fu)
       <TxProgressBar :percentage="62" style="width: 140px;" />
     </div>
   </template>
-</TuffDemo>
+---
+:::
 
 ## Quick Access
 <div class="docs-component-grid">

@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
-const disabledValue = ref(false)
 const readonlyValue = ref('')
+const disabledValue = ref('')
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      readonly: '只读',
+      disabled: '禁用',
+    }
+  : {
+      readonly: 'Readonly',
+      disabled: 'Disabled',
+    }))
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TuffInput v-model="readonlyValue" readonly placeholder="只读" />
-        <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
-  </div>
-  <div v-else>
-        <TuffInput v-model="readonlyValue" readonly placeholder="Readonly" />
-        <TuffInput v-model="disabledValue" disabled placeholder="Disabled" />
+  <div style="display: grid; gap: 10px;">
+    <TuffInput v-model="readonlyValue" readonly :placeholder="labels.readonly" />
+    <TuffInput v-model="disabledValue" disabled :placeholder="labels.disabled" />
   </div>
 </template>

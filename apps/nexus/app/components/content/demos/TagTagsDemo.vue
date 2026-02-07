@@ -1,18 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 const { locale } = useI18n()
+
+const labels = computed(() => (locale.value === 'zh'
+  ? {
+      default: '默认',
+      success: '成功',
+      warning: '警告',
+      danger: '危险',
+    }
+  : {
+      default: 'Default',
+      success: 'Success',
+      warning: 'Warning',
+      danger: 'Danger',
+    }))
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-        <TxTag label="默认" />
-        <TxTag label="成功" color="var(--tx-color-success)" />
-        <TxTag label="警告" color="var(--tx-color-warning)" />
-        <TxTag label="危险" color="var(--tx-color-danger)" />
-  </div>
-  <div v-else>
-        <TxTag label="Default" />
-        <TxTag label="Success" color="var(--tx-color-success)" />
-        <TxTag label="Warning" color="var(--tx-color-warning)" />
-        <TxTag label="Danger" color="var(--tx-color-danger)" />
+  <div class="tuff-demo-row">
+    <TxTag :label="labels.default" />
+    <TxTag :label="labels.success" color="var(--tx-color-success)" />
+    <TxTag :label="labels.warning" color="var(--tx-color-warning)" />
+    <TxTag :label="labels.danger" color="var(--tx-color-danger)" />
   </div>
 </template>

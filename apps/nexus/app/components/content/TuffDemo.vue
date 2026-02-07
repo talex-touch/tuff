@@ -37,6 +37,15 @@ const hasCode = computed(() => Boolean(resolvedCode.value || slots.code))
 const codeLabel = computed(() => props.codeLabel || '')
 const codeLang = computed(() => props.codeLang || 'vue')
 const showCode = ref(false)
+const warnKey = '__tuff_demo_deprecated_warned__'
+
+if (import.meta.dev && import.meta.client) {
+  const warnState = globalThis as typeof globalThis & Record<string, boolean>
+  if (!warnState[warnKey]) {
+    warnState[warnKey] = true
+    console.warn('[TuffDemo] Deprecated. Use TuffDemoWrapper + demo components in docs.')
+  }
+}
 const toggleLabel = computed(() => {
   if (showCode.value)
     return locale.value === 'zh' ? '隐藏代码' : 'Hide code'

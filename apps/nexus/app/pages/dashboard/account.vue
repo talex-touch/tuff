@@ -3,6 +3,7 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
+import { buildOauthCallbackUrl, persistOauthContext, type OauthProvider } from '~/composables/useOauthContext'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 defineI18nRoute(false)
@@ -11,7 +12,6 @@ const { t } = useI18n()
 const { user, refresh } = useAuthUser()
 const { signIn } = useAuth()
 
-const OAUTH_STATE_KEY = 'tuff_oauth_state'
 
 const displayName = ref('')
 const savingProfile = ref(false)
@@ -78,49 +78,48 @@ async function saveProfile() {
   }
 }
 
-async function handleGithubLink() {
-  if (linkingGithub.value)
+async function startOauthBind(provider: OauthProvider) {
+  const loadingState = provider === 'github' ? linkingGithub : linkingLinuxdo
+  if (loadingState.value)
     return
-  linkingGithub.value = true
+
+  loadingState.value = true
+  oauthMessage.value = ''
+
   try {
-    const redirectUrl = '/dashboard/account'
-    const callbackUrl = `/sign-in?${new URLSearchParams({
-      oauth: '1',
+    const redirect = '/dashboard/account'
+    const callbackUrl = buildOauthCallbackUrl({
       flow: 'bind',
-      provider: 'github',
-      redirect_url: redirectUrl,
-    }).toString()}`
-    if (hasWindow()) {
-      window.localStorage.setItem(OAUTH_STATE_KEY, JSON.stringify({
-        flow: 'bind',
-        provider: 'github',
-        redirect: redirectUrl,
-        ts: Date.now(),
-      }))
-    }
-    await signIn('github', { callbackUrl })
+      provider,
+      redirect,
+    })
+
+    persistOauthContext({
+      flow: 'bind',
+      provider,
+      redirect,
+    })
+
+    await signIn(provider, { callbackUrl })
   }
   catch (error: any) {
-    oauthMessage.value = error?.data?.statusMessage || error?.message || t('auth.githubFailed', 'GitHub 绑定失败')
+    oauthMessage.value = error?.data?.statusMessage
+      || error?.message
+      || (provider === 'github'
+        ? t('auth.githubFailed', 'GitHub 绑定失败')
+        : t('auth.linuxdoFailed', 'LinuxDO 绑定失败'))
   }
   finally {
-    linkingGithub.value = false
+    loadingState.value = false
   }
 }
 
+async function handleGithubLink() {
+  await startOauthBind('github')
+}
+
 async function handleLinuxdoLink() {
-  if (linkingLinuxdo.value)
-    return
-  linkingLinuxdo.value = true
-  try {
-    await signIn('linuxdo', { callbackUrl: '/dashboard/account' })
-  }
-  catch (error: any) {
-    oauthMessage.value = error?.data?.statusMessage || error?.message || t('auth.linuxdoFailed', 'LinuxDO 绑定失败')
-  }
-  finally {
-    linkingLinuxdo.value = false
-  }
+  await startOauthBind('linuxdo')
 }
 
 async function handlePasskeyRegister() {

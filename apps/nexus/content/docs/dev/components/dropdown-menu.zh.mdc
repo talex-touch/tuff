@@ -8,14 +8,6 @@ syncStatus: migrated
 
 基于 Popover 的下拉菜单（Windows 风格）。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-import DropdownMenuNavDemo from '~/components/content/demos/DropdownMenuNavDemo.vue'
-import DropdownMenuNavDemoSource from '~/components/content/demos/DropdownMenuNavDemo.vue?raw'
-
-const open = ref(false)
-</script>
 
 ## 基础用法
 

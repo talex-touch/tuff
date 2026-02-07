@@ -12,15 +12,6 @@ syncStatus: migrated
 
 用于显示重要信息与获取用户确认，包含 BottomDialog / BlowDialog / PopperDialog / TouchTip 等多种形态。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const bottomOpen = ref(false)
-const blowOpen = ref(false)
-const popperOpen = ref(false)
-const tipOpen = ref(false)
-</script>
-
 ## BottomDialog 底部对话框
 
 底部定位的对话框，带有可自定义的按钮与动画效果。

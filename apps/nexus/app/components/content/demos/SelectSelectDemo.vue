@@ -1,26 +1,39 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+
 const { locale } = useI18n()
 const value = ref('')
+
+const labels = computed(() => {
+  if (locale.value === 'zh') {
+    return {
+      placeholder: '请选择',
+      options: [
+        { value: 'option1', label: '选项 1' },
+        { value: 'option2', label: '选项 2' },
+        { value: 'option3', label: '选项 3' },
+      ],
+    }
+  }
+
+  return {
+    placeholder: 'Please select',
+    options: [
+      { value: 'option1', label: 'Option 1' },
+      { value: 'option2', label: 'Option 2' },
+      { value: 'option3', label: 'Option 3' },
+    ],
+  }
+})
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
-      &lt;template&gt;
-        &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
-          &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-          &lt;TuffSelectItem value="option2" label="选项 2" /&gt;
-          &lt;TuffSelectItem value="option3" label="选项 3" /&gt;
-        &lt;/TuffSelect&gt;
-      &lt;/template&gt;
-  </div>
-  <div v-else>
-      &lt;template&gt;
-        &lt;TuffSelect v-model="value" placeholder="请选择"&gt;
-          &lt;TuffSelectItem value="option1" label="选项 1" /&gt;
-          &lt;TuffSelectItem value="option2" label="选项 2" /&gt;
-          &lt;TuffSelectItem value="option3" label="选项 3" /&gt;
-        &lt;/TuffSelect&gt;
-      &lt;/template&gt;
-  </div>
+  <TuffSelect v-model="value" :placeholder="labels.placeholder">
+    <TuffSelectItem
+      v-for="option in labels.options"
+      :key="option.value"
+      :value="option.value"
+      :label="option.label"
+    />
+  </TuffSelect>
 </template>

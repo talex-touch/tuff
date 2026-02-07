@@ -186,16 +186,3 @@ code: |
   </template>
 ---
 :::
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const value = ref('')
-const text = ref('')
-const password = ref('')
-const content = ref('')
-const readonlyValue = ref('readonly')
-const disabledValue = ref('disabled')
-const clearableValue = ref('hello')
-const withPrefix = ref('')
-const withSuffix = ref('')
-</script>

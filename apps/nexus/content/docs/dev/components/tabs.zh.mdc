@@ -8,25 +8,6 @@ syncStatus: migrated
 
 用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
 
-<script setup lang="ts">
-import TabsBasicDemo from '~/components/content/demos/TabsBasicDemo.vue'
-import TabsBasicDemoSource from '~/components/content/demos/TabsBasicDemo.vue?raw'
-
-import TabsPlacementDemo from '~/components/content/demos/TabsPlacementDemo.vue'
-import TabsPlacementDemoSource from '~/components/content/demos/TabsPlacementDemo.vue?raw'
-
-import TabsAutoSizeDemo from '~/components/content/demos/TabsAutoSizeDemo.vue'
-import TabsAutoSizeDemoSource from '~/components/content/demos/TabsAutoSizeDemo.vue?raw'
-
-import TabsDynamicContentDemo from '~/components/content/demos/TabsDynamicContentDemo.vue'
-import TabsDynamicContentDemoSource from '~/components/content/demos/TabsDynamicContentDemo.vue?raw'
-
-import TabsIndicatorShowcaseDemo from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue'
-import TabsIndicatorShowcaseDemoSource from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue?raw'
-
-import TabsDisableAnimDemo from '~/components/content/demos/TabsDisableAnimDemo.vue'
-import TabsDisableAnimDemoSource from '~/components/content/demos/TabsDisableAnimDemo.vue?raw'
-</script>
 
 ## 基础用法
 

@@ -5,21 +5,27 @@ packages:
   - '!app/core/extensions/**'
 
 catalog:
+  '@auth/core': ^0.34.1
   '@floating-ui/vue': ^1.1.9
   '@iconify-json/cib': ^1.2.3
   '@lobehub/icons': ^2.43.1
   '@sentry/nuxt': ^10.20.0
+  '@sidebase/nuxt-auth': ^0.9.4
   fighting-design: 0.25.1
   gsap: ^3.12.5
   jszip: ^3.10.1
   markdown-it: ^14.1.0
   mermaid: ^11.12.2
   motion-v: ^1.7.2
+  next-auth: ~4.21.1
+  nodemailer: ^7.0.13
   ogl: ^1.0.11
+  openapi-typescript: 6.7.5
   react: ^19.2.1
   react-dom: ^19.2.1
   sass: ^1.89.2
   simplex-noise: ^4.0.3
+  theme-colors: ^0.1.0
   typeit: ^8.8.7
   vitepress: 2.0.0-alpha.9
   vue-sonner: ^2.0.9

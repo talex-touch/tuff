@@ -13,13 +13,6 @@ syncStatus: migrated
 
 Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板的边框、背景与阴影。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-import PopoverVisualEffectsDemo from '~/components/content/demos/PopoverVisualEffectsDemo.vue'
-import PopoverVisualEffectsDemoSource from '~/components/content/demos/PopoverVisualEffectsDemo.vue?raw'
-const open = ref(false)
-</script>
 
 ## 基础用法
 

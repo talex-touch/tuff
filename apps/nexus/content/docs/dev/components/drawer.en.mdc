@@ -12,15 +12,6 @@ syncStatus: migrated
 
 Panels that slide in from the screen edge, ideal for settings, forms, and auxiliary content.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const visible1 = ref(false)
-const visible2 = ref(false)
-const visible3 = ref(false)
-const visible4 = ref(false)
-</script>
-
 ## Basic Usage
 
 ### Basic Drawer
