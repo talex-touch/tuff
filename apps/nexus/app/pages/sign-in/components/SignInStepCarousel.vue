@@ -12,13 +12,21 @@ const props = withDefaults(defineProps<{
   duration: 240,
   distance: 32,
   height: true,
-  mask: true,
+  mask: false,
 })
 
 const containerRef = ref<HTMLElement | null>(null)
 let containerTween: gsap.core.Tween | null = null
 let enterTween: gsap.core.Tween | null = null
 let leaveTween: gsap.core.Tween | null = null
+
+function slideDistance() {
+  return Math.max(props.distance, 0)
+}
+
+function slideDuration() {
+  return Math.max(props.duration, 120) / 1000
+}
 
 function clearContainerTween() {
   if (!containerTween)
@@ -41,91 +49,51 @@ function clearLeaveTween() {
   leaveTween = null
 }
 
-function slideDistance() {
-  return Math.max(props.distance, 0)
-}
-
-function slideDuration() {
-  return Math.max(props.duration, 120) / 1000
-}
-
-function lockContainerHeight() {
+function lockContainerHeight(height: number) {
   if (!props.height || !containerRef.value)
     return
 
-  const currentHeight = Math.max(containerRef.value.offsetHeight, 1)
   clearContainerTween()
-  gsap.set(containerRef.value, { height: currentHeight, overflow: 'hidden' })
+  gsap.set(containerRef.value, {
+    height: Math.max(height, 1),
+    overflow: 'hidden',
+  })
 }
 
 function animateContainerHeight(nextHeight: number) {
   if (!props.height || !containerRef.value)
     return
 
-  const currentHeight = Math.max(containerRef.value.offsetHeight, 1)
-  if (Math.abs(currentHeight - nextHeight) < 1) {
-    gsap.set(containerRef.value, { height: nextHeight, overflow: 'hidden' })
+  const fromHeight = Math.max(containerRef.value.offsetHeight, 1)
+  const toHeight = Math.max(nextHeight, 1)
+
+  if (Math.abs(fromHeight - toHeight) < 1) {
+    gsap.set(containerRef.value, { height: toHeight, overflow: 'hidden' })
     return
   }
 
   clearContainerTween()
-  gsap.set(containerRef.value, { height: currentHeight, overflow: 'hidden' })
+  gsap.set(containerRef.value, { height: fromHeight, overflow: 'hidden' })
   containerTween = gsap.to(containerRef.value, {
-    height: nextHeight,
+    height: toHeight,
     duration: slideDuration(),
     ease: 'power2.out',
     overwrite: 'auto',
   })
 }
 
-function onBeforeEnter(el: Element) {
-  const node = el as HTMLElement
-  lockContainerHeight()
-  clearEnterTween()
-  gsap.killTweensOf(node)
-  gsap.set(node, {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    display: 'block',
-    x: slideDistance(),
-    opacity: 0,
-    zIndex: 2,
-  })
-}
-
-function onEnter(el: Element, done: () => void) {
-  const node = el as HTMLElement
-  const nextHeight = Math.max(node.offsetHeight, node.scrollHeight, 1)
-  animateContainerHeight(nextHeight)
-
-  clearEnterTween()
-  enterTween = gsap.to(node, {
-    x: 0,
-    opacity: 1,
-    duration: slideDuration(),
-    ease: 'power2.out',
-    onComplete: () => {
-      enterTween = null
-      done()
-    },
-  })
+function clearNodeInlineStyles(node: HTMLElement) {
+  gsap.set(node, { clearProps: 'transform,opacity,pointer-events' })
 }
 
 function onBeforeLeave(el: Element) {
   const node = el as HTMLElement
-  lockContainerHeight()
+  lockContainerHeight(node.offsetHeight)
   clearLeaveTween()
   gsap.killTweensOf(node)
   gsap.set(node, {
-    position: 'absolute',
-    inset: 0,
-    width: '100%',
-    display: 'block',
     x: 0,
     opacity: 1,
-    zIndex: 1,
-    pointerEvents: 'none',
   })
 }
 
@@ -144,15 +112,35 @@ function onLeave(el: Element, done: () => void) {
   })
 }
 
-function clearNodeInlineStyles(node: HTMLElement) {
+function onBeforeEnter(el: Element) {
+  const node = el as HTMLElement
+  clearEnterTween()
+  gsap.killTweensOf(node)
   gsap.set(node, {
-    clearProps: 'position,inset,width,display,pointer-events,z-index,transform,opacity',
+    x: slideDistance(),
+    opacity: 0,
+  })
+}
+
+function onEnter(el: Element, done: () => void) {
+  const node = el as HTMLElement
+  animateContainerHeight(Math.max(node.offsetHeight, node.scrollHeight, 1))
+
+  clearEnterTween()
+  enterTween = gsap.to(node, {
+    x: 0,
+    opacity: 1,
+    duration: slideDuration(),
+    ease: 'power2.out',
+    onComplete: () => {
+      enterTween = null
+      done()
+    },
   })
 }
 
 function onAfterEnter(el: Element) {
-  const node = el as HTMLElement
-  clearNodeInlineStyles(node)
+  clearNodeInlineStyles(el as HTMLElement)
 
   if (!props.height || !containerRef.value)
     return
@@ -218,6 +206,6 @@ onBeforeUnmount(() => {
 }
 
 .sign-step-carousel--mask .sign-step-carousel__item {
-  background: #08080d;
+  background: transparent;
 }
 </style>

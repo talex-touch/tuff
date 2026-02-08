@@ -6,6 +6,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 
 const loading = ref(false)
+const PRIVACY_STORAGE_KEY = 'tuff_privacy_settings'
 
 const privacySettings = ref({
   analytics: true,
@@ -17,19 +18,9 @@ const privacySettings = ref({
 async function saveSettings() {
   loading.value = true
   try {
-    await $fetch('/api/sync/push', {
-      method: 'POST',
-      body: {
-        items: [
-          {
-            namespace: 'preferences',
-            key: 'privacy',
-            value: privacySettings.value,
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      },
-    })
+    if (import.meta.client) {
+      window.localStorage.setItem(PRIVACY_STORAGE_KEY, JSON.stringify(privacySettings.value))
+    }
   }
   catch (error) {
     console.error('Failed to save privacy settings:', error)
@@ -41,10 +32,14 @@ async function saveSettings() {
 
 async function loadSettings() {
   try {
-    const items = await $fetch<Array<{ namespace: string, key: string, value: any }>>('/api/sync/pull')
-    const item = items.find(entry => entry.namespace === 'preferences' && entry.key === 'privacy')
-    if (item?.value) {
-      privacySettings.value = { ...privacySettings.value, ...item.value }
+    if (import.meta.client) {
+      const raw = window.localStorage.getItem(PRIVACY_STORAGE_KEY)
+      if (!raw)
+        return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        privacySettings.value = { ...privacySettings.value, ...(parsed as any) }
+      }
     }
   }
   catch (error) {

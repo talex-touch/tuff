@@ -12,7 +12,32 @@ import { createD1Adapter } from '../../utils/authAdapter'
 import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 
-function getAuthOptions(event: H3Event): AuthOptions {
+type AuthRequestHeaders = Record<string, string | string[] | undefined>
+
+function getRuntimeBindings() {
+  const bindings = (globalThis as { __env__?: { DB?: unknown } }).__env__
+  if (!bindings?.DB) {
+    throw new Error('[Auth] Cloudflare bindings are not available.')
+  }
+  return bindings
+}
+
+function createAuthEvent(headers?: AuthRequestHeaders): H3Event {
+  return {
+    context: {
+      cloudflare: {
+        env: getRuntimeBindings(),
+      },
+    },
+    node: {
+      req: {
+        headers: headers ?? {},
+      },
+    },
+  } as unknown as H3Event
+}
+
+function getAuthOptions(): AuthOptions {
   const config = useRuntimeConfig()
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
   const linuxdoClientId = config.auth?.linuxdo?.clientId
@@ -26,31 +51,32 @@ function getAuthOptions(event: H3Event): AuthOptions {
         loginToken: { label: 'Login Token', type: 'text' }
       },
       async authorize(credentials, req) {
+        const authEvent = createAuthEvent((req as { headers?: AuthRequestHeaders } | undefined)?.headers)
         const email = credentials?.email?.toString().trim().toLowerCase() ?? ''
         const password = credentials?.password?.toString() ?? ''
         const loginToken = credentials?.loginToken?.toString() ?? ''
 
         if (loginToken) {
-          const user = await consumeLoginToken(event, loginToken)
+          const user = await consumeLoginToken(authEvent, loginToken)
           if (user) {
-            await logLoginAttempt(event, { userId: user.id, deviceId: null, success: true, reason: 'login_token' })
+            await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'login_token' })
             return { id: user.id, email: user.email, name: user.name, image: user.image }
           }
-          await logLoginAttempt(event, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid' })
           return null
         }
 
         if (!email || !password) {
-          await logLoginAttempt(event, { userId: null, deviceId: null, success: false, reason: 'missing_credentials' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials' })
           return null
         }
 
-        const user = await verifyUserPassword(event, email, password)
+        const user = await verifyUserPassword(authEvent, email, password)
         if (!user) {
-          await logLoginAttempt(event, { userId: null, deviceId: null, success: false, reason: 'invalid_password' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'invalid_password' })
           return null
         }
-        await logLoginAttempt(event, { userId: user.id, deviceId: null, success: true, reason: 'password' })
+        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password' })
         return { id: user.id, email: user.email, name: user.name, image: user.image }
       }
     })
@@ -70,12 +96,17 @@ function getAuthOptions(event: H3Event): AuthOptions {
     const linuxdoProvider: OAuthConfig<Record<string, any>> = {
       id: 'linuxdo',
       name: 'LinuxDO',
-      type: 'oauth',
+      type: 'oidc',
       clientId: linuxdoClientId,
       clientSecret: linuxdoClientSecret,
-      authorization: { url: `${linuxdoIssuer}/oauth2/authorize` },
+      wellKnown: `${linuxdoIssuer}/.well-known/openid-configuration`,
+      authorization: {
+        url: `${linuxdoIssuer}/oauth2/authorize`,
+        params: { scope: 'openid profile email' },
+      },
       token: { url: `${linuxdoIssuer}/oauth2/token` },
       userinfo: { url: `${linuxdoIssuer}/api/user` },
+      idToken: false,
       profile(profile: Record<string, any>) {
         const id = profile.sub ?? profile.id ?? profile.user_id ?? profile.uid
         const avatarTemplate = typeof profile.avatar_template === 'string'
@@ -113,7 +144,7 @@ function getAuthOptions(event: H3Event): AuthOptions {
     trustHost: true,
     secret: config.auth?.secret,
     session: { strategy: 'jwt' },
-    adapter: createD1Adapter(event) as AuthOptions['adapter'],
+    adapter: createD1Adapter(() => createAuthEvent()) as AuthOptions['adapter'],
     pages: {
       signIn: '/sign-in',
       error: '/sign-in',
@@ -122,18 +153,19 @@ function getAuthOptions(event: H3Event): AuthOptions {
     providers,
     callbacks: {
       async signIn({ user, account, profile }: { user: User, account: Account | null, profile?: Profile | undefined }) {
+        const authEvent = createAuthEvent()
         if (!account)
           return false
         if (account.type === 'oauth') {
           if (account.provider && account.providerAccountId) {
-            const existingByAccount = await getUserByAccount(event, account.provider, account.providerAccountId)
+            const existingByAccount = await getUserByAccount(authEvent, account.provider, account.providerAccountId)
             if (existingByAccount)
               return existingByAccount.status === 'active'
           }
           const email = user?.email ?? (profile as any)?.email
           if (!email)
             return true
-          const existing = await getUserByEmail(event, email)
+          const existing = await getUserByEmail(authEvent, email)
           if (!existing)
             return true
           return existing.status === 'active'
@@ -142,7 +174,7 @@ function getAuthOptions(event: H3Event): AuthOptions {
           const email = user?.email
           if (!email)
             return false
-          const existing = await getUserByEmail(event, email)
+          const existing = await getUserByEmail(authEvent, email)
           return Boolean(existing && existing.status === 'active')
         }
         return true
@@ -207,8 +239,9 @@ function markSessionError(event: H3Event) {
   })
 }
 
+const authHandler = NuxtAuthHandler(getAuthOptions())
+
 export default defineEventHandler(async (event) => {
-  const authHandler = NuxtAuthHandler(getAuthOptions(event))
   try {
     return await authHandler(event)
   }

@@ -10,6 +10,7 @@ export interface AuthUserProfile {
   emailVerified: boolean
   emailState: 'verified' | 'unverified' | 'missing'
   isRestricted: boolean
+  passkeyCount?: number
 }
 
 export function useAuthUser() {

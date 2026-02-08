@@ -12,9 +12,14 @@ function toAdapterUser(user: { id: string, email: string, name: string | null, i
   }
 }
 
-export function createD1Adapter(event: H3Event) {
+export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
+  const resolveEvent = typeof eventOrGetter === 'function'
+    ? eventOrGetter
+    : () => eventOrGetter
+
   return {
     async createUser(data: any) {
+      const event = resolveEvent()
       const rawEmail = typeof data.email === 'string' ? data.email.trim().toLowerCase() : ''
       const hasEmail = rawEmail.length > 0
       const email = hasEmail ? rawEmail : `missing+${crypto.randomUUID()}@tuff.local`
@@ -41,22 +46,27 @@ export function createD1Adapter(event: H3Event) {
       return toAdapterUser(user)
     },
     async getUser(id: string) {
+      const event = resolveEvent()
       const user = await getUserById(event, id)
       return user ? toAdapterUser(user) : null
     },
     async getUserByEmail(email: string) {
+      const event = resolveEvent()
       const user = await getUserByEmail(event, email)
       return user ? toAdapterUser(user) : null
     },
     async getUserByAccount({ provider, providerAccountId }: { provider: string, providerAccountId: string }) {
+      const event = resolveEvent()
       const user = await getUserByAccount(event, provider, providerAccountId)
       return user ? toAdapterUser(user) : null
     },
     async updateUser(data: any) {
+      const event = resolveEvent()
       const updated = await updateUserProfile(event, data.id, { name: data.name ?? null, image: data.image ?? null })
       return updated ? toAdapterUser(updated) : null
     },
     async linkAccount(account: any) {
+      const event = resolveEvent()
       await linkAccount(event, account.userId, account.provider, account.providerAccountId)
       return account
     },
@@ -76,6 +86,7 @@ export function createD1Adapter(event: H3Event) {
       return null
     },
     async createVerificationToken(token: any) {
+      const event = resolveEvent()
       await createVerificationToken(
         event,
         token.identifier,
@@ -85,6 +96,7 @@ export function createD1Adapter(event: H3Event) {
       return token
     },
     async useVerificationToken({ identifier, token }: { identifier: string, token: string }) {
+      const event = resolveEvent()
       return useVerificationToken(event, identifier, token)
     }
   } as any

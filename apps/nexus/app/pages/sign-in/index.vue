@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxSpinner } from '@talex-touch/tuffex'
 import { Toaster } from 'vue-sonner'
 import Logo from '~/components/icon/Logo.vue'
 import Button from '~/components/ui/Button.vue'
@@ -46,7 +47,9 @@ const {
   stepTitle,
   stepSubtitle,
   showTurnstile,
+  turnstileState,
   forgotUrl,
+  retryTurnstile,
   handleEmailNext,
   resetToEmailStep,
   handlePasswordSignIn,
@@ -204,8 +207,21 @@ function goTo(path: string) {
             </div>
 
             <div class="auth-footer">
-              <div v-if="showTurnstile" class="auth-turnstile">
-                <div id="turnstile-container" data-provider="cloudflare-turnstile" class="h-10 w-full" />
+              <div
+                v-if="showTurnstile"
+                class="auth-turnstile"
+                :class="{ 'auth-turnstile--loading': turnstileState === 'loading' }"
+              >
+                <div id="turnstile-container" data-provider="cloudflare-turnstile" class="auth-turnstile-slot" />
+                <div v-if="turnstileState !== 'ready'" class="auth-turnstile-overlay" :class="{ 'is-loading': turnstileState === 'loading' }">
+                  <TxSpinner :size="20" />
+                  <span class="auth-turnstile-label">
+                    {{ turnstileState === 'loading' ? t('auth.turnstileLoading', '正在准备安全验证…') : t('auth.turnstilePending', '点击重试继续安全验证') }}
+                  </span>
+                  <Button v-if="turnstileState === 'error'" variant="ghost" size="sm" class="auth-turnstile-retry" @click="retryTurnstile">
+                    {{ t('auth.retry', '重试') }}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -254,7 +270,8 @@ function goTo(path: string) {
   left: 0;
   right: 0;
   top: 0;
-  z-index: 10;
+  z-index: 40;
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -429,13 +446,95 @@ function goTo(path: string) {
 }
 
 .auth-turnstile {
+  position: relative;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  padding: 12px 16px;
+  border: 1px solid rgba(167, 204, 255, 0.22);
+  background: linear-gradient(145deg, rgba(45, 63, 103, 0.34), rgba(16, 22, 36, 0.48));
+  padding: 12px 14px;
   font-size: 12px;
   color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
 }
+
+.auth-turnstile--loading {
+  border-color: rgba(168, 208, 255, 0.38);
+  box-shadow: 0 0 0 1px rgba(131, 178, 255, 0.18) inset;
+}
+
+.auth-turnstile-slot {
+  min-height: 70px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(8, 11, 20, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:deep(.auth-turnstile-slot iframe) {
+  max-width: 100%;
+}
+
+.auth-turnstile-overlay {
+  position: absolute;
+  inset: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(10, 12, 22, 0.82);
+  color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(3px);
+}
+
+.auth-turnstile-overlay.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, rgba(255, 255, 255, 0.02) 25%, rgba(153, 212, 255, 0.24) 50%, rgba(255, 255, 255, 0.02) 75%);
+  background-size: 220% 100%;
+  animation: turnstile-shimmer 1.4s linear infinite;
+}
+
+.auth-turnstile-overlay > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-turnstile-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.auth-turnstile-retry {
+  height: auto;
+  min-width: 0;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: rgba(167, 214, 255, 0.95);
+  --tx-button-bg-color-hover: transparent;
+}
+
+:deep(.auth-turnstile-retry:hover) {
+  text-decoration: underline;
+}
+
+@keyframes turnstile-shimmer {
+  0% {
+    background-position: 220% 0;
+  }
+
+  100% {
+    background-position: -20% 0;
+  }
+}
+
 
 .auth-carousel {
   width: 100%;
@@ -457,10 +556,25 @@ function goTo(path: string) {
 }
 
 :deep(.auth-button--primary) {
-  background: #ffffff;
-  color: #0b0b10;
-  border-color: transparent;
-  --tx-button-bg-color-hover: rgba(255, 255, 255, 0.9);
+  color: rgba(245, 250, 255, 0.96);
+  border-color: rgba(148, 188, 255, 0.5);
+  background: linear-gradient(135deg, #65b8ff 0%, #4a84ff 55%, #5f72ff 100%);
+  box-shadow: 0 10px 24px rgba(51, 114, 255, 0.28);
+  --tx-button-bg-color-hover: rgba(110, 168, 255, 0.92);
+}
+
+:deep(.auth-button--primary:hover:not(.disabled):not(.loading)) {
+  color: rgba(245, 250, 255, 0.98);
+  background: linear-gradient(135deg, #73c1ff 0%, #5a8eff 55%, #6b7eff 100%);
+}
+
+:deep(.auth-button--primary.loading),
+:deep(.auth-button--primary.disabled),
+:deep(.auth-button--primary[disabled]) {
+  color: rgba(235, 245, 255, 0.95);
+  border-color: rgba(137, 177, 236, 0.42);
+  background: rgba(89, 122, 176, 0.74);
+  box-shadow: none;
 }
 
 :deep(.auth-button--passkey) {

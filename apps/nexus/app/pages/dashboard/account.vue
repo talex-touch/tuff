@@ -25,6 +25,8 @@ const supportsPasskey = ref(false)
 const passkeyLoading = ref(false)
 const passkeyMessage = ref('')
 
+const hasBoundPasskey = computed(() => (user.value?.passkeyCount ?? 0) > 0)
+
 const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
 
@@ -127,6 +129,10 @@ async function handlePasskeyRegister() {
     passkeyMessage.value = t('auth.passkeyNotSupported', '当前浏览器不支持 Passkey')
     return
   }
+  if (hasBoundPasskey.value) {
+    passkeyMessage.value = t('dashboard.account.passkeyBoundHint', '当前账号已绑定 Passkey')
+    return
+  }
   passkeyLoading.value = true
   passkeyMessage.value = ''
   try {
@@ -149,6 +155,7 @@ async function handlePasskeyRegister() {
       method: 'POST',
       body: { credential: payload },
     })
+    await refresh()
     passkeyMessage.value = t('auth.passkeySuccess', 'Passkey 已绑定')
   }
   catch (error: any) {
@@ -372,11 +379,11 @@ Passkey
             <Button
               size="small"
               variant="secondary"
-              :disabled="!supportsPasskey"
+              :disabled="!supportsPasskey || hasBoundPasskey"
               :loading="passkeyLoading"
               @click="handlePasskeyRegister"
             >
-              {{ t('auth.passkeyRegister', '添加') }}
+              {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
             </Button>
           </div>
         </div>
