@@ -1022,38 +1022,72 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     totalFiles: number
     failedFiles: number
     skippedFiles: number
+    completedFiles: number
+    embeddingCompletedFiles: number
+    embeddingRows: number
   }> {
     if (!this.dbUtils) {
-      return { totalFiles: 0, failedFiles: 0, skippedFiles: 0 }
+      return {
+        totalFiles: 0,
+        failedFiles: 0,
+        skippedFiles: 0,
+        completedFiles: 0,
+        embeddingCompletedFiles: 0,
+        embeddingRows: 0
+      }
     }
 
     const db = this.dbUtils.getDb()
 
-    // 查询总文件数
-    const totalFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(filesSchema)
-      .where(eq(filesSchema.type, 'file'))
+    const [
+      totalFilesResult,
+      failedFilesResult,
+      skippedFilesResult,
+      completedFilesResult,
+      embeddingCompletedFilesResult,
+      embeddingRowsResult
+    ] = await Promise.all([
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(filesSchema)
+        .where(eq(filesSchema.type, 'file')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'failed')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'skipped')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'completed')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(filesSchema)
+        .where(and(eq(filesSchema.type, 'file'), eq(filesSchema.embeddingStatus, 'completed'))),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(embeddingsSchema)
+        .where(eq(embeddingsSchema.sourceType, 'file'))
+    ])
 
     const totalFiles = totalFilesResult[0]?.count ?? 0
-
-    // 查询失败的文件数
-    const failedFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(fileIndexProgress)
-      .where(eq(fileIndexProgress.status, 'failed'))
-
     const failedFiles = failedFilesResult[0]?.count ?? 0
-
-    // 查询跳过的文件数
-    const skippedFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(fileIndexProgress)
-      .where(eq(fileIndexProgress.status, 'skipped'))
-
     const skippedFiles = skippedFilesResult[0]?.count ?? 0
+    const completedFiles = completedFilesResult[0]?.count ?? 0
+    const embeddingCompletedFiles = embeddingCompletedFilesResult[0]?.count ?? 0
+    const embeddingRows = embeddingRowsResult[0]?.count ?? 0
 
-    return { totalFiles, failedFiles, skippedFiles }
+    return {
+      totalFiles,
+      failedFiles,
+      skippedFiles,
+      completedFiles,
+      embeddingCompletedFiles,
+      embeddingRows
+    }
   }
 
   /**
