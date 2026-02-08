@@ -8,8 +8,9 @@
 import type { PermissionAuditLog } from '@talex-touch/utils'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@element-plus/icons-vue'
+import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { PermissionEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { PluginEvents } from '@talex-touch/utils/transport/events'
 import {
   ElButton,
   ElCollapse,
@@ -28,6 +29,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const transport = useTuffTransport()
+const permissionSdk = usePermissionSdk()
 
 interface PermissionGrant {
   pluginId: string
@@ -123,13 +125,13 @@ async function loadData() {
     const pluginList = (await transport.send(PluginEvents.api.list, {})) as ITouchPlugin[]
 
     // Get all permissions
-    const perms = await transport.send(PermissionEvents.api.getAll)
+    const perms = await permissionSdk.getAll()
     allPermissions.value = perms || {}
 
     // Build plugin permission info
     plugins.value = await Promise.all(
       pluginList.map(async (plugin: ITouchPlugin) => {
-        const status = await transport.send(PermissionEvents.api.getStatus, {
+        const status = await permissionSdk.getStatus({
           pluginId: plugin.name,
           sdkapi: plugin.sdkapi,
           required: plugin.declaredPermissions?.required || [],
@@ -198,13 +200,13 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
 async function handleToggle(pluginId: string, permissionId: string, granted: boolean) {
   try {
     if (granted) {
-      await transport.send(PermissionEvents.api.grant, {
+      await permissionSdk.grant({
         pluginId,
         permissionId,
         grantedBy: 'user'
       })
     } else {
-      await transport.send(PermissionEvents.api.revoke, { pluginId, permissionId })
+      await permissionSdk.revoke({ pluginId, permissionId })
     }
     // Refresh data
     await loadData()
@@ -216,7 +218,7 @@ async function handleToggle(pluginId: string, permissionId: string, granted: boo
 // Grant all required permissions
 async function handleGrantAll(plugin: PluginPermissionInfo) {
   try {
-    await transport.send(PermissionEvents.api.grantMultiple, {
+    await permissionSdk.grantMultiple({
       pluginId: plugin.id,
       permissionIds: plugin.missingRequired,
       grantedBy: 'user'
@@ -230,7 +232,7 @@ async function handleGrantAll(plugin: PluginPermissionInfo) {
 // Revoke all permissions
 async function handleRevokeAll(pluginId: string) {
   try {
-    await transport.send(PermissionEvents.api.revokeAll, { pluginId })
+    await permissionSdk.revokeAll({ pluginId })
     await loadData()
   } catch (e) {
     console.error('Failed to revoke all permissions:', e)
@@ -241,7 +243,7 @@ async function handleRevokeAll(pluginId: string) {
 async function loadAuditLogs() {
   auditLogsLoading.value = true
   try {
-    const result = await transport.send(PermissionEvents.api.getAuditLogs, {
+    const result = await permissionSdk.getAuditLogs({
       action: auditLogFilter.value === 'all' ? undefined : auditLogFilter.value,
       limit: 100
     })
@@ -257,7 +259,7 @@ async function loadAuditLogs() {
 // Clear audit logs
 async function clearAuditLogs() {
   try {
-    await transport.send(PermissionEvents.api.clearAuditLogs)
+    await permissionSdk.clearAuditLogs()
     await loadAuditLogs()
   } catch (e) {
     console.error('Failed to clear audit logs:', e)

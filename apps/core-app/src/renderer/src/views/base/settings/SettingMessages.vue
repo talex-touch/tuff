@@ -1,8 +1,9 @@
 <script setup lang="ts" name="SettingMessages">
 import type { AnalyticsMessage } from '@talex-touch/utils/analytics'
 import { TxButton } from '@talex-touch/tuffex'
+import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
+import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
@@ -10,6 +11,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const settingsSdk = useSettingsSdk()
 
 const messages = ref<AnalyticsMessage[]>([])
 const loading = ref(false)
@@ -20,7 +22,7 @@ const limitedMessages = computed(() => messages.value.slice(0, 12))
 async function loadMessages() {
   loading.value = true
   try {
-    const list = await transport.send(AppEvents.analytics.messages.list, {
+    const list = await settingsSdk.analytics.messages.list({
       status: 'all',
       limit: 50
     })
@@ -35,7 +37,7 @@ async function loadMessages() {
 async function markMessage(message: AnalyticsMessage) {
   if (message.status === 'read') return
   try {
-    const updated = await transport.send(AppEvents.analytics.messages.mark, {
+    const updated = await settingsSdk.analytics.messages.mark({
       id: message.id,
       status: 'read'
     })

@@ -21,6 +21,12 @@ import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { BoxWindowOption } from '../../../config/default'
 import { genTouchApp } from '../../../core'
+import {
+  CoreBoxWindowHiddenEvent,
+  CoreBoxWindowShownEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../../core/eventbus/touch-event'
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
@@ -600,6 +606,7 @@ export class WindowManager {
       id: window.window.webContents.id,
       show: true
     })
+    touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
     if (triggeredByShortcut) {
       const transport = this.getTransport()
@@ -628,6 +635,7 @@ export class WindowManager {
       id: window.window.webContents.id,
       show: false
     })
+    touchEventBus.emit(TalexEvents.COREBOX_WINDOW_HIDDEN, new CoreBoxWindowHiddenEvent())
 
     if (process.platform !== 'darwin') {
       window.window.setPosition(-1000000, -1000000)

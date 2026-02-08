@@ -47,6 +47,8 @@ export enum TalexEvents {
   // Window Events
   WINDOW_HIDDEN = 'window/hidden',
   WINDOW_SHOWN = 'window/shown',
+  COREBOX_WINDOW_HIDDEN = 'corebox/window-hidden',
+  COREBOX_WINDOW_SHOWN = 'corebox/window-shown',
 
   // Language Events
   LANGUAGE_CHANGED = 'language/changed',
@@ -367,6 +369,18 @@ export class WindowHiddenEvent implements ITouchEvent<TalexEvents> {
 
 export class WindowShownEvent implements ITouchEvent<TalexEvents> {
   name: TalexEvents = TalexEvents.WINDOW_SHOWN
+
+  constructor() {}
+}
+
+export class CoreBoxWindowHiddenEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.COREBOX_WINDOW_HIDDEN
+
+  constructor() {}
+}
+
+export class CoreBoxWindowShownEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.COREBOX_WINDOW_SHOWN
 
   constructor() {}
 }

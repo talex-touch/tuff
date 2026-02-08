@@ -37,7 +37,6 @@ import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcil
 import type { WorkerStatusSnapshot } from './workers/worker-status'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -127,6 +126,8 @@ interface FileUpdateRecord {
   type: string
   isDir: boolean
 }
+
+type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete' | 'insert'>
 
 export interface FileIndexSettings {
   autoScanEnabled: boolean
@@ -852,22 +853,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     void this.indexFilesForSearch([])
     void this.extractContentForFiles([])
 
-    // Windows 平台暂时禁用文件索引，避免权限问题导致闪退
-    // TODO: Phase 2 将使用 Everything SDK 替代
-    if (process.platform === 'win32') {
-      this.logInfo(
-        'File indexing disabled on Windows platform (Everything SDK integration planned)'
-      )
-      this.dbUtils = createDbUtils(context.databaseManager.getDb())
-      this.searchIndex = context.searchIndex
-      this.touchApp = context.touchApp
-      this.initializationContext = context
-      // 只注册必要的 channel，不启动扫描
-      this.registerOpenersChannel(context)
-      this.registerIndexingChannels(context)
-      return
-    }
-
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
@@ -1037,38 +1022,72 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     totalFiles: number
     failedFiles: number
     skippedFiles: number
+    completedFiles: number
+    embeddingCompletedFiles: number
+    embeddingRows: number
   }> {
     if (!this.dbUtils) {
-      return { totalFiles: 0, failedFiles: 0, skippedFiles: 0 }
+      return {
+        totalFiles: 0,
+        failedFiles: 0,
+        skippedFiles: 0,
+        completedFiles: 0,
+        embeddingCompletedFiles: 0,
+        embeddingRows: 0
+      }
     }
 
     const db = this.dbUtils.getDb()
 
-    // 查询总文件数
-    const totalFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(filesSchema)
-      .where(eq(filesSchema.type, 'file'))
+    const [
+      totalFilesResult,
+      failedFilesResult,
+      skippedFilesResult,
+      completedFilesResult,
+      embeddingCompletedFilesResult,
+      embeddingRowsResult
+    ] = await Promise.all([
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(filesSchema)
+        .where(eq(filesSchema.type, 'file')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'failed')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'skipped')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(fileIndexProgress)
+        .where(eq(fileIndexProgress.status, 'completed')),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(filesSchema)
+        .where(and(eq(filesSchema.type, 'file'), eq(filesSchema.embeddingStatus, 'completed'))),
+      db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(embeddingsSchema)
+        .where(eq(embeddingsSchema.sourceType, 'file'))
+    ])
 
     const totalFiles = totalFilesResult[0]?.count ?? 0
-
-    // 查询失败的文件数
-    const failedFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(fileIndexProgress)
-      .where(eq(fileIndexProgress.status, 'failed'))
-
     const failedFiles = failedFilesResult[0]?.count ?? 0
-
-    // 查询跳过的文件数
-    const skippedFilesResult = await db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(fileIndexProgress)
-      .where(eq(fileIndexProgress.status, 'skipped'))
-
     const skippedFiles = skippedFilesResult[0]?.count ?? 0
+    const completedFiles = completedFilesResult[0]?.count ?? 0
+    const embeddingCompletedFiles = embeddingCompletedFilesResult[0]?.count ?? 0
+    const embeddingRows = embeddingRowsResult[0]?.count ?? 0
 
-    return { totalFiles, failedFiles, skippedFiles }
+    return {
+      totalFiles,
+      failedFiles,
+      skippedFiles,
+      completedFiles,
+      embeddingCompletedFiles,
+      embeddingRows
+    }
   }
 
   /**
@@ -3246,7 +3265,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async persistEmbeddings(
-    tx: LibSQLDatabase,
+    executor: EmbeddingDbExecutor,
     fileId: number,
     contentHash: string | null,
     embeddings: FileParserEmbedding[]
@@ -3254,11 +3273,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (embeddings.length === 0) return
     const sourceId = String(fileId)
 
-    await tx
+    await executor
       .delete(embeddingsSchema)
       .where(and(eq(embeddingsSchema.sourceId, sourceId), eq(embeddingsSchema.sourceType, 'file')))
 
-    await tx.insert(embeddingsSchema).values(
+    await executor.insert(embeddingsSchema).values(
       embeddings.map((embedding) => ({
         sourceId,
         sourceType: 'file',
@@ -3269,10 +3288,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async deleteEmbeddingsByFileIds(tx: LibSQLDatabase, fileIds: number[]): Promise<void> {
+  private async deleteEmbeddingsByFileIds(
+    executor: EmbeddingDbExecutor,
+    fileIds: number[]
+  ): Promise<void> {
     if (fileIds.length === 0) return
     const sourceIds = fileIds.map((id) => String(id))
-    await tx
+    await executor
       .delete(embeddingsSchema)
       .where(
         and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))

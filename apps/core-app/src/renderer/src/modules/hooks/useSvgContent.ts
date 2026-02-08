@@ -11,10 +11,14 @@ import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 const svgFileCache = new Map<string, string>()
 const svgContentCache = new Map<string, string>()
 const svgInflight = new Map<string, Promise<{ fileUrl: string; content: string }>>()
+const REMOTE_SVG_CACHE_SUBDIR = 'temp/icons/svg-cache'
+const REMOTE_SVG_CACHE_PREFIX = 'tufficon'
+const REMOTE_SVG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 const pendingTasks = new Map<
   string,
   { resolve: () => void; reject: (error: Error) => void; timeoutId: number; promise: Promise<void> }
@@ -48,6 +52,7 @@ export function useSvgContent(
     'temp-file:create'
   )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
+  let remoteSvgCacheDirPromise: Promise<string | null> | null = null
   const defaultFetchTimeoutMs = 5_000
   const downloadTimeoutMs = 20_000
 
@@ -107,15 +112,73 @@ export function useSvgContent(
   }
 
   function ensureTfileUrl(source: string): string {
-    if (source.startsWith('tfile:') || source.startsWith('file:')) return source
+    if (source.startsWith('tfile:')) {
+      const localPath = resolveLocalPath(source)
+      return localPath ? buildTfileUrl(localPath) : source
+    }
+    if (source.startsWith('file:')) {
+      const localPath = resolveLocalPath(source)
+      return localPath ? buildTfileUrl(localPath) : source
+    }
     if (source.startsWith('/') || source.startsWith('\\\\') || /^[a-z]:[\\/]/i.test(source)) {
-      return `tfile://${source}`
+      return buildTfileUrl(source)
     }
     return source
   }
 
   function resolveLocalPath(targetUrl: string): string {
-    return targetUrl.replace(/^tfile:\/\//, '')
+    const normalizeLocalPath = (value: string): string => {
+      const normalized = value.replace(/\\/g, '/')
+      if (/^\/[a-z]:\//i.test(normalized)) {
+        return normalized.slice(1)
+      }
+      return normalized
+    }
+
+    const decodeStable = (value: string): string => {
+      let decoded = value
+      for (let i = 0; i < 3; i++) {
+        try {
+          const next = decodeURIComponent(decoded)
+          if (next === decoded) break
+          decoded = next
+        } catch {
+          break
+        }
+      }
+      return decoded
+    }
+
+    if (targetUrl.startsWith('file:')) {
+      try {
+        return normalizeLocalPath(decodeStable(new URL(targetUrl).pathname))
+      } catch {
+        return ''
+      }
+    }
+
+    if (targetUrl.startsWith('tfile:')) {
+      try {
+        const parsed = new URL(targetUrl)
+        if (
+          parsed.hostname &&
+          /^[a-z]$/i.test(parsed.hostname) &&
+          parsed.pathname.startsWith('/')
+        ) {
+          return normalizeLocalPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+        }
+        const host = parsed.hostname || ''
+        const pathname = parsed.pathname || ''
+        const merged = host ? `/${host}${pathname}` : pathname
+        return normalizeLocalPath(decodeStable(merged))
+      } catch {
+        const raw = targetUrl.replace(/^tfile:\/\//, '').split(/[?#]/)[0] ?? ''
+        const normalized = raw.startsWith('/') ? raw : `/${raw}`
+        return normalizeLocalPath(decodeStable(normalized))
+      }
+    }
+
+    return targetUrl
   }
 
   function splitPath(filePath: string): { destination: string; filename: string } {
@@ -129,42 +192,142 @@ export function useSvgContent(
     }
   }
 
+  function stableHash(input: string): string {
+    let hash = 2166136261
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i)
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0')
+  }
+
+  function joinPath(base: string, file: string): string {
+    const normalizedBase = base.replace(/[\\/]+$/, '')
+    return `${normalizedBase}/${file}`
+  }
+
+  function buildRemoteCacheFilename(targetUrl: string): string {
+    return `${REMOTE_SVG_CACHE_PREFIX}-${stableHash(targetUrl)}.svg`
+  }
+
+  async function resolveRemoteSvgCacheDir(): Promise<string | null> {
+    if (!isElectronRenderer()) return null
+
+    if (!remoteSvgCacheDirPromise) {
+      remoteSvgCacheDirPromise = transport
+        .send(AppEvents.system.getPath, { name: 'userData' })
+        .then((userDataPath) => {
+          if (typeof userDataPath !== 'string' || userDataPath.trim().length === 0) {
+            return null
+          }
+          const normalizedUserDataPath = userDataPath.replace(/\\/g, '/').replace(/[\\/]+$/, '')
+          return `${normalizedUserDataPath}/${REMOTE_SVG_CACHE_SUBDIR}`
+        })
+        .catch(() => null)
+    }
+
+    return await remoteSvgCacheDirPromise
+  }
+
+  async function readSvgText(source: string, allowMissing = false): Promise<string | null> {
+    try {
+      const svgText = await transport.send(AppEvents.system.readFile, { source, allowMissing })
+      if (!svgText || svgText.trim().length === 0) {
+        return null
+      }
+      return svgText
+    } catch {
+      return null
+    }
+  }
+
+  async function tryReadRemoteCache(
+    targetUrl: string
+  ): Promise<{ fileUrl: string; content: string } | null> {
+    const knownFileUrl = svgFileCache.get(targetUrl)
+    if (knownFileUrl) {
+      const cachedText = await readSvgText(knownFileUrl, true)
+      if (cachedText) {
+        svgContentCache.set(targetUrl, cachedText)
+        return { fileUrl: knownFileUrl, content: cachedText }
+      }
+      svgFileCache.delete(targetUrl)
+      svgContentCache.delete(targetUrl)
+    }
+
+    const cacheDir = await resolveRemoteSvgCacheDir()
+    if (!cacheDir) {
+      return null
+    }
+
+    const cacheFilePath = joinPath(cacheDir, buildRemoteCacheFilename(targetUrl))
+    const cacheFileUrl = buildTfileUrl(cacheFilePath)
+    const cachedText = await readSvgText(cacheFileUrl, true)
+    if (!cachedText) {
+      return null
+    }
+
+    svgFileCache.set(targetUrl, cacheFileUrl)
+    svgContentCache.set(targetUrl, cachedText)
+    return { fileUrl: cacheFileUrl, content: cachedText }
+  }
+
+  function settlePendingTask(taskId: string, action: 'resolve' | 'reject', reason?: string): void {
+    const pending = pendingTasks.get(taskId)
+    if (!pending) return
+    pendingTasks.delete(taskId)
+    clearTimeout(pending.timeoutId)
+    if (action === 'resolve') {
+      pending.resolve()
+      return
+    }
+    pending.reject(new Error(reason || 'Download failed'))
+  }
+
+  async function getTaskStatus(taskId: string): Promise<DownloadStatus | null> {
+    if (!downloadSdk) return null
+    try {
+      const response = await downloadSdk.getTaskStatus({ taskId })
+      if (!response?.success) return null
+      return response.task?.status ?? null
+    } catch {
+      return null
+    }
+  }
+
+  async function syncTaskState(taskId: string): Promise<boolean> {
+    const status = await getTaskStatus(taskId)
+    if (status === DownloadStatus.COMPLETED) {
+      settlePendingTask(taskId, 'resolve')
+      return true
+    }
+    if (status === DownloadStatus.FAILED || status === DownloadStatus.CANCELLED) {
+      settlePendingTask(taskId, 'reject', `Download ${status}`)
+      return true
+    }
+    return false
+  }
+
   function ensureDownloadListeners(): void {
     if (downloadListenerRegistered || !downloadSdk) return
     downloadListenerRegistered = true
 
-    const resolveTask = (taskId: string) => {
-      const pending = pendingTasks.get(taskId)
-      if (!pending) return
-      pendingTasks.delete(taskId)
-      clearTimeout(pending.timeoutId)
-      pending.resolve()
-    }
-
-    const rejectTask = (taskId: string, reason: string) => {
-      const pending = pendingTasks.get(taskId)
-      if (!pending) return
-      pendingTasks.delete(taskId)
-      clearTimeout(pending.timeoutId)
-      pending.reject(new Error(reason))
-    }
-
     downloadDisposers.push(
       downloadSdk.onTaskCompleted((task) => {
-        if (task?.id) resolveTask(task.id)
+        if (task?.id) settlePendingTask(task.id, 'resolve')
       }),
       downloadSdk.onTaskFailed((task) => {
-        if (task?.id) rejectTask(task.id, task.error || 'Download failed')
+        if (task?.id) settlePendingTask(task.id, 'reject', task.error || 'Download failed')
       }),
       downloadSdk.onTaskUpdated((task) => {
         if (!task?.id || !task.status) return
         if (task.status === DownloadStatus.COMPLETED) {
-          resolveTask(task.id)
+          settlePendingTask(task.id, 'resolve')
         } else if (
           task.status === DownloadStatus.FAILED ||
           task.status === DownloadStatus.CANCELLED
         ) {
-          rejectTask(task.id, task.error || `Download ${task.status}`)
+          settlePendingTask(task.id, 'reject', task.error || `Download ${task.status}`)
         }
       })
     )
@@ -172,9 +335,11 @@ export function useSvgContent(
 
   async function waitForTask(taskId: string): Promise<void> {
     ensureDownloadListeners()
-    if (pendingTasks.has(taskId)) {
-      return pendingTasks.get(taskId)!.promise
+    const inflight = pendingTasks.get(taskId)
+    if (inflight) {
+      return inflight.promise
     }
+
     const timeoutMs = downloadTimeoutMs
     let resolve!: () => void
     let reject!: (error: Error) => void
@@ -182,11 +347,17 @@ export function useSvgContent(
       resolve = resolveFn
       reject = rejectFn
     })
+
     const timeoutId = window.setTimeout(() => {
-      pendingTasks.delete(taskId)
-      reject(new Error('Download timeout'))
+      void syncTaskState(taskId).then((settled) => {
+        if (!settled) {
+          settlePendingTask(taskId, 'reject', 'Download timeout')
+        }
+      })
     }, timeoutMs)
+
     pendingTasks.set(taskId, { resolve, reject, timeoutId, promise })
+    void syncTaskState(taskId)
     return promise
   }
 
@@ -210,20 +381,39 @@ export function useSvgContent(
       }
 
       try {
-        const temp = await transport.send(tempFileCreateEvent, {
-          namespace: 'icons/svg',
-          ext: 'svg',
-          prefix: 'tufficon',
-          retentionMs: 7 * 24 * 60 * 60 * 1000
-        })
-
-        const fileUrl = temp.url
-        const filePath = resolveLocalPath(fileUrl)
-        if (!filePath) {
-          throw new Error('Invalid temp file path')
+        const cached = await tryReadRemoteCache(targetUrl)
+        if (cached) {
+          return cached
         }
 
-        const { destination, filename } = splitPath(filePath)
+        let fileUrl = ''
+        let destination = ''
+        let filename = ''
+
+        const cacheDir = await resolveRemoteSvgCacheDir()
+        if (cacheDir) {
+          filename = buildRemoteCacheFilename(targetUrl)
+          destination = cacheDir
+          fileUrl = buildTfileUrl(joinPath(destination, filename))
+        } else {
+          const temp = await transport.send(tempFileCreateEvent, {
+            namespace: 'icons/svg',
+            ext: 'svg',
+            prefix: 'tufficon',
+            retentionMs: REMOTE_SVG_RETENTION_MS
+          })
+
+          fileUrl = temp.url
+          const filePath = resolveLocalPath(fileUrl)
+          if (!filePath) {
+            throw new Error('Invalid temp file path')
+          }
+
+          const split = splitPath(filePath)
+          destination = split.destination
+          filename = split.filename
+        }
+
         const response = await downloadSdk.addTask({
           url: targetUrl,
           destination,
@@ -233,7 +423,8 @@ export function useSvgContent(
           metadata: {
             hidden: true,
             purpose: 'tufficon-svg',
-            sourceUrl: targetUrl
+            sourceUrl: targetUrl,
+            cacheKey: filename
           }
         })
 
@@ -242,9 +433,9 @@ export function useSvgContent(
         }
 
         await waitForTask(response.taskId)
-        const svgText = await transport.send(AppEvents.system.readFile, { source: fileUrl })
+        const svgText = await readSvgText(fileUrl)
 
-        if (!svgText || svgText.trim().length === 0) {
+        if (!svgText) {
           throw new Error('Downloaded SVG file is empty')
         }
 
@@ -311,6 +502,15 @@ export function useSvgContent(
   const fetchWithRetry = retrier(doFetch) as () => Promise<string>
 
   async function fetchSvgContent() {
+    const targetUrl = normalizeSource(url.value)
+    if (!targetUrl) {
+      loading.value = false
+      error.value = null
+      content.value = null
+      resolvedUrl.value = ''
+      return
+    }
+
     loading.value = true
     error.value = null
     content.value = null // Clear previous content on new fetch
@@ -334,6 +534,14 @@ export function useSvgContent(
   function setUrl(newUrl: string) {
     url.value = newUrl
     resolvedUrl.value = ''
+
+    if (!normalizeSource(newUrl)) {
+      loading.value = false
+      error.value = null
+      content.value = null
+      return
+    }
+
     if (autoFetch) {
       fetchSvgContent()
     }

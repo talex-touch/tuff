@@ -21,23 +21,45 @@ const loggedErrorPaths = new Set<string>()
  * delivering it to the protocol handler. We decode until the result stabilises.
  */
 function extractAbsolutePath(rawUrl: string): string {
-  const prefix = `${FILE_SCHEMA}://`
-  let decoded = rawUrl.slice(prefix.length)
-
-  // Decode iteratively (max 3 passes) to handle double/triple encoding
-  for (let i = 0; i < 3; i++) {
-    try {
-      const next = decodeURIComponent(decoded)
-      if (next === decoded) break
-      decoded = next
-    } catch {
-      // malformed URI — stop decoding
-      break
+  const normalizeDecodedPath = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
     }
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
   }
 
-  // Normalise: ensure leading /
-  return decoded.startsWith('/') ? decoded : `/${decoded}`
+  const decodeStable = (value: string): string => {
+    let decoded = value
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
+    }
+    return decoded
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+      return normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+    }
+    const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
+  } catch {
+    const prefix = `${FILE_SCHEMA}://`
+    const rawWithTail = rawUrl.startsWith(prefix) ? rawUrl.slice(prefix.length) : rawUrl
+    const tailIndex = rawWithTail.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    return normalizeDecodedPath(decodeStable(body))
+  }
 }
 
 class FileProtocolModule extends BaseModule {

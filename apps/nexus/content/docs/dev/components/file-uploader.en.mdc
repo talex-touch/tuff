@@ -1,82 +1,68 @@
 ---
-title: "FileUploader 文件上传"
-description: "通用文件上传组件，支持多文件、拖拽与列表管理。"
+title: "FileUploader"
+description: "General file uploader with multi-file, drag & drop, and list management."
 category: Form
 syncStatus: migrated
 ---
-# FileUploader 文件上传
+# FileUploader
 
-通用文件上传组件，支持多文件、拖拽与列表管理。
+General file uploader with multi-file support, drag & drop, and list management.
 
-<script setup lang="ts">
-import { ref } from 'vue'
+## Basic Usage
 
-const files = ref([])
-</script>
-
-## 基础用法
-
-<ClientOnly>
-<div class="group" style="max-width: 480px;">
-  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
-</div>
-</ClientOnly>
-
-::: details Show Code
-:::TuffCodeBlock{lang="vue"}
+::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
-  
+
   const files = ref([])
   </script>
-  
+
   <template>
     <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
   </template>
 ---
-:::
-:::
+::
 
 ## API
 
 ### TxFileUploader Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `modelValue` | `FileUploaderFile[]` | `[]` | 文件列表 |
-| `multiple` | `boolean` | `true` | 是否多选 |
-| `accept` | `string` | `*/*` | 接受类型 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `max` | `number` | `10` | 最大文件数 |
-| `showSize` | `boolean` | `true` | 显示大小 |
-| `allowDrop` | `boolean` | `true` | 允许拖拽 |
-| `buttonText` | `string` | `'Choose files'` | 按钮文案 |
-| `dropText` | `string` | `'Drop files here'` | 拖拽文案 |
-| `hintText` | `string` | `'or click to browse'` | 辅助文案 |
+| `modelValue` | `FileUploaderFile[]` | `[]` | File list |
+| `multiple` | `boolean` | `true` | Enable multi-select |
+| `accept` | `string` | `*/*` | Accept types |
+| `disabled` | `boolean` | `false` | Disabled state |
+| `max` | `number` | `10` | Max files |
+| `showSize` | `boolean` | `true` | Show file size |
+| `allowDrop` | `boolean` | `true` | Enable drag & drop |
+| `buttonText` | `string` | `'Choose files'` | Button text |
+| `dropText` | `string` | `'Drop files here'` | Drop area text |
+| `hintText` | `string` | `'or click to browse'` | Hint text |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `update:modelValue` | `(files)` | 文件变化 |
-| `change` | `(files)` | 文件变化 |
-| `add` | `(files)` | 添加文件 |
-| `remove` | `({ id, value })` | 删除文件 |
+| `update:modelValue` | `(files)` | File update |
+| `change` | `(files)` | File change |
+| `add` | `(files)` | Add files |
+| `remove` | `({ id, value })` | Remove file |
 
 ### FileUploaderFile
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `id` | `string` | 唯一标识 |
-| `name` | `string` | 文件名 |
-| `size` | `number` | 文件大小 |
-| `type` | `string` | MIME 类型 |
-| `file` | `File` | 原始文件 |
+| `id` | `string` | Unique id |
+| `name` | `string` | File name |
+| `size` | `number` | File size |
+| `type` | `string` | MIME type |
+| `file` | `File` | Original file |
 
 ### Expose
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `pick()` | 打开系统文件选择 |
+| `pick()` | Open system file picker |

@@ -40,6 +40,7 @@
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.6.0",
     "@talex-touch/tuff-intelligence": "workspace:^",
+    "@talex-touch/tuff-native": "workspace:^",
     "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@types/yauzl": "^2.10.3",

@@ -4,8 +4,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import HelloData from '~/assets/lotties/hello.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 // import Protocol from './Protocol.vue'
-// import AccountDo from './AccountDo.vue'
-import SetupPermissions from './SetupPermissions.vue'
+import AccountDo from './AccountDo.vue'
 
 type StepFunction = (call: { comp: Component; rect?: { width: number; height: number } }) => void
 
@@ -13,7 +12,7 @@ const step: StepFunction = inject('step')!
 
 function goon(): void {
   step({
-    comp: SetupPermissions
+    comp: AccountDo
     // Protocol
   })
 }

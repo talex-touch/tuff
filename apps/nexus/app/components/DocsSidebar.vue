@@ -63,6 +63,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/api/temp-file',
     '/docs/dev/api/download',
     '/docs/dev/api/platform-capabilities',
+    '/docs/dev/api/power',
     '/docs/dev/api/account',
     '/docs/dev/api/intelligence',
     '/docs/dev/api/permission',
@@ -176,6 +177,83 @@ const COMPONENT_CATEGORY_ORDER = computed(() => ([
   { key: 'Layout', label: t('docsSidebar.categories.layout') },
   { key: 'Data', label: t('docsSidebar.categories.data') },
 ]))
+
+type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
+  if (locale.value === 'zh') {
+    return {
+      not_started: '开发中',
+      in_progress: '开发中',
+      migrated: 'AI迁移',
+      verified: '已审阅',
+    }
+  }
+
+  return {
+    not_started: 'In progress',
+    in_progress: 'In progress',
+    migrated: 'AI migrated',
+    verified: 'Reviewed',
+  }
+})
+
+const COMPONENT_PRIORITY_SECTIONS = computed(() => ([
+  {
+    key: 'design-patterns',
+    label: locale.value === 'zh' ? '设计模式' : 'Design Patterns',
+    paths: [
+      '/docs/dev/components/glass-surface',
+      '/docs/dev/components/gradient-border',
+      '/docs/dev/components/outline-border',
+      '/docs/dev/components/corner-overlay',
+      '/docs/dev/components/gradual-blur',
+      '/docs/dev/components/glow-text',
+      '/docs/dev/components/text-transformer',
+      '/docs/dev/components/transition',
+      '/docs/dev/components/stagger',
+      '/docs/dev/components/fusion',
+      '/docs/dev/components/avatar-variants',
+    ],
+  },
+  {
+    key: 'design-cases',
+    label: locale.value === 'zh' ? '设计案例' : 'Design Cases',
+    paths: [
+      '/docs/dev/components/agents',
+      '/docs/dev/components/chat',
+      '/docs/dev/components/chat-composer',
+      '/docs/dev/components/markdown-view',
+      '/docs/dev/components/image-gallery',
+      '/docs/dev/components/group-block',
+      '/docs/dev/components/card',
+      '/docs/dev/components/card-item',
+    ],
+  },
+  {
+    key: 'dark-mode',
+    label: locale.value === 'zh' ? '暗黑模式与主题' : 'Dark Mode & Theme',
+    paths: ['/docs/dev/components/foundations'],
+  },
+]))
+
+function normalizeComponentSyncStatus(raw: unknown, verified: boolean): SyncStatusKey {
+  if (verified)
+    return 'verified'
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  return COMPONENT_SYNC_STATUS_ALIASES[value] ?? 'not_started'
+}
 
 const defaultSection = computed(() => 'extensions')
 
@@ -317,10 +395,13 @@ const componentSections = computed(() => {
   const normalizedItems = sourceItems
     .map((item) => {
       const meta = resolveMeta(item.meta)
+      const verified = item.verified === true || meta?.verified === true
       return {
         ...item,
+        _meta: meta,
         _normalizedPath: normalizeContentPath(item.path),
         _category: item.category ?? meta?.category,
+        _syncStatus: normalizeComponentSyncStatus(item.syncStatus ?? meta?.syncStatus, verified),
       }
     })
     .filter(item => item._normalizedPath?.startsWith('/docs/dev/components'))
@@ -335,6 +416,21 @@ const componentSections = computed(() => {
   const sections: any[] = []
   const indexLinkPath = '/docs/dev/components'
 
+  const addSection = (title: string, children: any[]) => {
+    if (!children.length)
+      return
+    for (const child of children) {
+      if (child._normalizedPath)
+        used.add(child._normalizedPath)
+    }
+    sections.push({
+      title,
+      path: children[0].path,
+      children,
+      page: false,
+    })
+  }
+
   if (indexItem) {
     sections.push({
       title: indexItem.title,
@@ -344,40 +440,70 @@ const componentSections = computed(() => {
     })
   }
 
+  const entriesByPath = new Map(entries.map(item => [item._normalizedPath, item]))
+
+  for (const section of COMPONENT_PRIORITY_SECTIONS.value) {
+    const children = section.paths
+      .map(path => entriesByPath.get(path))
+      .filter((item): item is any => Boolean(item))
+      .filter(item => !used.has(item._normalizedPath ?? ''))
+
+    addSection(section.label, children)
+  }
+
   for (const category of COMPONENT_CATEGORY_ORDER.value) {
     const children = sortByOrder(
-      entries.filter(item => item._category === category.key),
+      entries.filter(item => item._category === category.key && !used.has(item._normalizedPath ?? '')),
       '/docs/dev/components',
     )
-    if (!children.length)
-      continue
-    for (const child of children) {
-      if (child._normalizedPath)
-        used.add(child._normalizedPath)
-    }
-    sections.push({
-      title: category.label,
-      path: children[0].path,
-      children,
-      page: false,
-    })
+    addSection(category.label, children)
   }
 
   const remaining = sortByOrder(
     entries.filter(item => !used.has(item._normalizedPath ?? '')),
     '/docs/dev/components',
   )
-  if (remaining.length) {
-    sections.push({
-      title: t('docsSidebar.categories.misc'),
-      path: remaining[0].path,
-      children: remaining,
-      page: false,
-    })
-  }
+  addSection(t('docsSidebar.categories.misc'), remaining)
 
   return sections
 })
+
+function resolveComponentItemStatus(item: any): SyncStatusKey | null {
+  if (!item)
+    return null
+
+  const preset = typeof item?._syncStatus === 'string' ? item._syncStatus.trim() : ''
+  if (preset)
+    return COMPONENT_SYNC_STATUS_ALIASES[preset] ?? null
+
+  const verified = item?.verified === true || item?._meta?.verified === true
+  if (verified)
+    return 'verified'
+
+  const raw = typeof item?.syncStatus === 'string'
+    ? item.syncStatus.trim()
+    : typeof item?._meta?.syncStatus === 'string'
+      ? item._meta.syncStatus.trim()
+      : ''
+  if (!raw)
+    return null
+
+  return COMPONENT_SYNC_STATUS_ALIASES[raw] ?? null
+}
+
+function componentSyncBadge(item: any) {
+  if (activeTopSection.value !== 'components')
+    return null
+
+  const status = resolveComponentItemStatus(item)
+  if (!status)
+    return null
+
+  return {
+    status,
+    label: COMPONENT_SYNC_STATUS_LABELS.value[status],
+  }
+}
 
 const activeTopSection = computed(() => {
   if (isTutorialRoute.value)
@@ -558,7 +684,12 @@ watch(
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
             >
-              {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+              <span
+                class="truncate"
+                :title="itemTitle(currentSectionData.title, currentSectionData.path)"
+              >
+                {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+              </span>
             </NuxtLink>
           </li>
         </ul>
@@ -573,7 +704,20 @@ watch(
           @click="toggleSection(section)"
         >
           <template #header>
-            <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
+            <span class="flex flex-1 items-center gap-1.5 truncate">
+              <span
+                class="flex-1 truncate"
+                :title="itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)"
+              >
+                {{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}
+              </span>
+              <span
+                v-if="section.children?.length"
+                class="docs-nav-section-count"
+              >
+                {{ section.children.length }}
+              </span>
+            </span>
           </template>
           <li
             v-for="child in section.children"
@@ -587,7 +731,19 @@ watch(
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
             >
-              <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
+              <span
+                class="truncate"
+                :title="itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)"
+              >
+                {{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}
+              </span>
+              <span
+                v-if="componentSyncBadge(child)"
+                class="docs-nav-sync-badge"
+                :data-status="componentSyncBadge(child)?.status"
+              >
+                {{ componentSyncBadge(child)?.label }}
+              </span>
             </NuxtLink>
           </li>
         </DocSection>
@@ -625,12 +781,62 @@ watch(
   box-shadow: none;
 }
 
+:deep(.docs-nav-section-count) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  color: rgba(51, 65, 85, 0.9);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+:deep(.docs-nav-sync-badge) {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(226, 232, 240, 0.35);
+  color: rgba(71, 85, 105, 0.92);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+:deep(.docs-nav-sync-badge[data-status='in_progress']),
+:deep(.docs-nav-sync-badge[data-status='not_started']) {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+  color: rgba(180, 83, 9, 0.95);
+}
+
+:deep(.docs-nav-sync-badge[data-status='migrated']) {
+  border-color: rgba(14, 165, 233, 0.35);
+  background: rgba(14, 165, 233, 0.1);
+  color: rgba(3, 105, 161, 0.95);
+}
+
+:deep(.docs-nav-sync-badge[data-status='verified']) {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.1);
+  color: rgba(5, 150, 105, 0.95);
+}
 :deep(.docs-nav-link) {
   position: relative;
   display: flex;
   align-items: center;
   padding: 6px 8px 6px 6px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: rgba(15, 23, 42, 0.58);
   background: transparent;
@@ -702,6 +908,41 @@ watch(
   box-shadow: none;
 }
 
+:global(.dark .docs-nav-section-count),
+:global([data-theme='dark'] .docs-nav-section-count) {
+  background: rgba(71, 85, 105, 0.4);
+  color: rgba(226, 232, 240, 0.88);
+}
+
+:global(.dark .docs-nav-sync-badge),
+:global([data-theme='dark'] .docs-nav-sync-badge) {
+  border-color: rgba(71, 85, 105, 0.55);
+  background: rgba(51, 65, 85, 0.45);
+  color: rgba(226, 232, 240, 0.9);
+}
+
+:global(.dark .docs-nav-sync-badge[data-status='in_progress']),
+:global([data-theme='dark'] .docs-nav-sync-badge[data-status='in_progress']),
+:global(.dark .docs-nav-sync-badge[data-status='not_started']),
+:global([data-theme='dark'] .docs-nav-sync-badge[data-status='not_started']) {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(120, 53, 15, 0.35);
+  color: rgba(253, 186, 116, 0.95);
+}
+
+:global(.dark .docs-nav-sync-badge[data-status='migrated']),
+:global([data-theme='dark'] .docs-nav-sync-badge[data-status='migrated']) {
+  border-color: rgba(14, 165, 233, 0.5);
+  background: rgba(12, 74, 110, 0.35);
+  color: rgba(125, 211, 252, 0.95);
+}
+
+:global(.dark .docs-nav-sync-badge[data-status='verified']),
+:global([data-theme='dark'] .docs-nav-sync-badge[data-status='verified']) {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(6, 95, 70, 0.35);
+  color: rgba(110, 231, 183, 0.95);
+}
 :global(.dark .docs-nav-link:hover),
 :global([data-theme='dark'] .docs-nav-link:hover) {
   color: rgba(226, 232, 240, 0.82);

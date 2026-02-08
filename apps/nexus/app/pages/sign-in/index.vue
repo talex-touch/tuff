@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { TxTransition, TxTransitionSmoothSize } from '@talex-touch/tuffex'
 import { Toaster } from 'vue-sonner'
 import Logo from '~/components/icon/Logo.vue'
 import Button from '~/components/ui/Button.vue'
@@ -10,6 +9,7 @@ import SignInLoginStep from './components/SignInLoginStep.vue'
 import SignInOauthStep from './components/SignInOauthStep.vue'
 import SignInPasskeyStep from './components/SignInPasskeyStep.vue'
 import SignInSuccessStep from './components/SignInSuccessStep.vue'
+import SignInStepCarousel from './components/SignInStepCarousel.vue'
 import SignInSignupStep from './components/SignInSignupStep.vue'
 import TouchAurora from '~/components/tuff/background/TouchAurora.vue'
 
@@ -59,6 +59,10 @@ const {
   handlePasskeySignIn,
   handleOauthRetry,
 } = useSignIn()
+
+function goTo(path: string) {
+  return navigateTo(path)
+}
 </script>
 
 <template>
@@ -82,7 +86,7 @@ const {
     </ClientOnly>
 
     <header class="auth-topbar">
-      <Button variant="ghost" size="sm" class="auth-text-button auth-header-link" @click="navigateTo('/')">
+      <Button variant="ghost" size="sm" class="auth-text-button auth-header-link" @click="goTo('/')">
         <span class="i-carbon-arrow-left" />
         <span>{{ t('auth.backToHome', '返回首页') }}</span>
       </Button>
@@ -96,8 +100,15 @@ const {
             <Logo class="text-28" />
           </div>
           <div class="auth-heading">
-            <TxTransition class="auth-carousel auth-carousel--header" preset="slide-fade" :duration="180" mode="in-out">
-              <div :key="step" class="auth-heading__content">
+            <SignInStepCarousel
+              class="auth-carousel auth-carousel--header"
+              :active-key="step"
+              :duration="200"
+              :distance="20"
+              :height="false"
+              :mask="false"
+            >
+              <div class="auth-heading__content">
                 <h1 class="auth-title m-0">
                   {{ stepTitle }}
                 </h1>
@@ -105,12 +116,17 @@ const {
                   {{ stepSubtitle }}
                 </p>
               </div>
-            </TxTransition>
+            </SignInStepCarousel>
           </div>
         </div>
 
-        <TxTransitionSmoothSize class="auth-carousel" motion="slide-fade" :duration="240" mode="in-out">
-          <div :key="step" class="auth-step-shell">
+        <SignInStepCarousel
+          class="auth-carousel"
+          :active-key="step"
+          :duration="260"
+          :distance="36"
+        >
+          <div class="auth-step-shell">
             <div class="auth-form">
               <SignInEmailStep
                 v-if="step === 'email'"
@@ -136,7 +152,7 @@ const {
                 :magic-loading="magicLoading"
                 :magic-sent="magicSent"
                 @reset-email="resetToEmailStep"
-                @forgot="navigateTo(forgotUrl)"
+                @forgot="goTo(forgotUrl)"
                 @sign-in="handlePasswordSignIn"
                 @magic-link="handleMagicLink"
               />
@@ -193,7 +209,7 @@ const {
               </div>
             </div>
           </div>
-        </TxTransitionSmoothSize>
+        </SignInStepCarousel>
       </div>
     </main>
 
@@ -202,11 +218,11 @@ const {
         <div class="auth-footer-row">
           <span>{{ t('auth.copyright', '© 2026 Tuff. All rights reserved.') }}</span>
           <div class="flex items-center gap-2">
-            <Button variant="ghost" size="sm" class="auth-footer-link" @click="navigateTo('/privacy')">
+            <Button variant="ghost" size="sm" class="auth-footer-link" @click="goTo('/privacy')">
               {{ t('auth.privacyPolicy', 'Privacy Policy') }}
             </Button>
             <span class="text-white/20">·</span>
-            <Button variant="ghost" size="sm" class="auth-footer-link" @click="navigateTo('/protocol')">
+            <Button variant="ghost" size="sm" class="auth-footer-link" @click="goTo('/protocol')">
               {{ t('auth.termsOfService', 'Terms of Service') }}
             </Button>
           </div>
@@ -217,11 +233,11 @@ const {
           </div>
           <div class="auth-legal">
             <span>{{ t('auth.loginAgreementPrefix', 'By logging in, you agree to') }}</span>
-            <Button variant="ghost" size="sm" class="auth-link-button" @click="navigateTo('/protocol')">
+            <Button variant="ghost" size="sm" class="auth-link-button" @click="goTo('/protocol')">
               {{ t('auth.termsOfService', 'Terms of Service') }}
             </Button>
             <span>{{ t('auth.loginAgreementAnd', 'and') }}</span>
-            <Button variant="ghost" size="sm" class="auth-link-button" @click="navigateTo('/privacy')">
+            <Button variant="ghost" size="sm" class="auth-link-button" @click="goTo('/privacy')">
               {{ t('auth.privacyPolicy', 'Privacy Policy') }}
             </Button>
             <span>.</span>
@@ -421,41 +437,8 @@ const {
   color: rgba(255, 255, 255, 0.5);
 }
 
-.auth-carousel :deep(.tx-slide-fade-enter-active),
-.auth-carousel :deep(.tx-slide-fade-leave-active) {
-  transition:
-    opacity var(--tx-transition-duration, 240ms) var(--tx-transition-easing, cubic-bezier(0.2, 0, 0, 1)),
-    transform var(--tx-transition-duration, 240ms) var(--tx-transition-easing, cubic-bezier(0.2, 0, 0, 1));
-}
-
 .auth-carousel {
-  position: relative;
   width: 100%;
-}
-
-.auth-carousel :deep(.tx-slide-fade-leave-active) {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-}
-
-.auth-carousel :deep(.tx-slide-fade-enter-from) {
-  opacity: 0;
-  transform: translateX(36px);
-}
-
-.auth-carousel :deep(.tx-slide-fade-leave-to) {
-  opacity: 0;
-  transform: translateX(-36px);
-}
-
-.auth-carousel--header :deep(.tx-slide-fade-enter-from) {
-  transform: translateX(20px);
-}
-
-.auth-carousel--header :deep(.tx-slide-fade-leave-to) {
-  transform: translateX(-20px);
 }
 
 :deep(.auth-input.tx-input) {

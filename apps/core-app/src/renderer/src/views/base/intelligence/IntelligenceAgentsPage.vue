@@ -1,7 +1,6 @@
 <script lang="ts" name="IntelligenceAgentsPage" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AgentsEvents } from '@talex-touch/utils/transport/events'
+import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
@@ -9,7 +8,7 @@ import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
 
 const { t } = useI18n()
-const transport = useTuffTransport()
+const agentsSdk = useAgentsSdk()
 
 const agents = ref<AgentDescriptor[]>([])
 const selectedAgentId = ref<string | null>(null)
@@ -31,7 +30,7 @@ const filteredAgents = computed(() => {
 async function loadAgents() {
   loading.value = true
   try {
-    const result = await transport.send(AgentsEvents.api.listAll)
+    const result = await agentsSdk.listAll()
     agents.value = result || []
     if (agents.value.length > 0 && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id

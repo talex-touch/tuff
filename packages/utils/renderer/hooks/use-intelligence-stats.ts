@@ -1,11 +1,11 @@
 import type { Ref } from 'vue'
 import { ref } from 'vue'
-import { useChannel } from './use-channel'
+import { useIntelligenceSdk } from './use-intelligence-sdk'
 
 /**
  * Usage summary for a specific period
  */
-export interface IntelligenceUsageSummary {
+interface IntelligenceUsageSummary {
   period: string
   periodType: 'minute' | 'day' | 'month'
   requestCount: number
@@ -21,7 +21,7 @@ export interface IntelligenceUsageSummary {
 /**
  * Audit log entry
  */
-export interface IntelligenceAuditLogEntry {
+interface IntelligenceAuditLogEntry {
   traceId: string
   timestamp: number
   capabilityId: string
@@ -44,7 +44,7 @@ export interface IntelligenceAuditLogEntry {
 /**
  * Current usage for a caller
  */
-export interface CurrentUsage {
+interface CurrentUsage {
   requestsThisMinute: number
   requestsToday: number
   requestsThisMonth: number
@@ -58,7 +58,7 @@ export interface CurrentUsage {
 /**
  * Quota configuration
  */
-export interface QuotaConfig {
+interface QuotaConfig {
   callerId: string
   callerType: 'plugin' | 'user' | 'system'
   requestsPerMinute?: number
@@ -75,7 +75,7 @@ export interface QuotaConfig {
 /**
  * Quota check result
  */
-export interface QuotaCheckResult {
+interface QuotaCheckResult {
   allowed: boolean
   reason?: string
   remainingRequests?: number
@@ -86,7 +86,7 @@ export interface QuotaCheckResult {
 /**
  * Query options for audit logs
  */
-export interface AuditLogQueryOptions {
+interface AuditLogQueryOptions {
   caller?: string
   capabilityId?: string
   provider?: string
@@ -150,25 +150,13 @@ interface IntelligenceStatsComposable {
  * downloadAsFile(csv, 'audit-logs.csv', 'text/csv')
  * ```
  */
+/**
+ * @deprecated 请优先使用 useIntelligenceSdk() 直接调用统计相关能力。
+ */
 export function useIntelligenceStats(): IntelligenceStatsComposable {
   const isLoading = ref(false)
   const lastError = ref<string | null>(null)
-
-  const channel = useChannel()
-
-  interface ChannelResponse<T> {
-    ok: boolean
-    result?: T
-    error?: string
-  }
-
-  async function sendRequest<T>(eventName: string, payload?: any): Promise<T> {
-    const response = await channel.send<any, ChannelResponse<T>>(eventName, payload)
-    if (!response?.ok) {
-      throw new Error(response?.error || 'Request failed')
-    }
-    return response.result as T
-  }
+  const intelligenceSdk = useIntelligenceSdk()
 
   async function withLoadingState<T>(operation: () => Promise<T>): Promise<T> {
     isLoading.value = true
@@ -250,18 +238,18 @@ export function useIntelligenceStats(): IntelligenceStatsComposable {
   return {
     // Audit logs
     getAuditLogs: (options?: AuditLogQueryOptions) =>
-      withLoadingState(() => sendRequest<IntelligenceAuditLogEntry[]>('intelligence:get-audit-logs', options)),
+      withLoadingState(() => intelligenceSdk.getAuditLogs(options)),
 
     // Usage statistics
     getTodayStats: (callerId?: string) =>
-      withLoadingState(() => sendRequest<IntelligenceUsageSummary | null>('intelligence:get-today-stats', { callerId })),
+      withLoadingState(() => intelligenceSdk.getTodayStats(callerId)),
 
     getMonthStats: (callerId?: string) =>
-      withLoadingState(() => sendRequest<IntelligenceUsageSummary | null>('intelligence:get-month-stats', { callerId })),
+      withLoadingState(() => intelligenceSdk.getMonthStats(callerId)),
 
     getUsageStats: (callerId: string, periodType: 'day' | 'month', startPeriod?: string, endPeriod?: string) =>
       withLoadingState(() =>
-        sendRequest<IntelligenceUsageSummary[]>('intelligence:get-usage-stats', {
+        intelligenceSdk.getUsageStats({
           callerId,
           periodType,
           startPeriod,
@@ -271,24 +259,24 @@ export function useIntelligenceStats(): IntelligenceStatsComposable {
 
     // Quota management
     getQuota: (callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin') =>
-      withLoadingState(() => sendRequest<QuotaConfig | null>('intelligence:get-quota', { callerId, callerType })),
+      withLoadingState(() => intelligenceSdk.getQuota({ callerId, callerType })),
 
     setQuota: (config: QuotaConfig) =>
-      withLoadingState(() => sendRequest<void>('intelligence:set-quota', config)),
+      withLoadingState(() => intelligenceSdk.setQuota(config)),
 
     deleteQuota: (callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin') =>
-      withLoadingState(() => sendRequest<void>('intelligence:delete-quota', { callerId, callerType })),
+      withLoadingState(() => intelligenceSdk.deleteQuota({ callerId, callerType })),
 
     getAllQuotas: () =>
-      withLoadingState(() => sendRequest<QuotaConfig[]>('intelligence:get-all-quotas')),
+      withLoadingState(() => intelligenceSdk.getAllQuotas()),
 
     checkQuota: (callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin', estimatedTokens: number = 0) =>
       withLoadingState(() =>
-        sendRequest<QuotaCheckResult>('intelligence:check-quota', { callerId, callerType, estimatedTokens }),
+        intelligenceSdk.checkQuota({ callerId, callerType, estimatedTokens }),
       ),
 
     getCurrentUsage: (callerId: string, callerType: 'plugin' | 'user' | 'system' = 'plugin') =>
-      withLoadingState(() => sendRequest<CurrentUsage>('intelligence:get-current-usage', { callerId, callerType })),
+      withLoadingState(() => intelligenceSdk.getCurrentUsage({ callerId, callerType })),
 
     // Export utilities
     exportToCSV,

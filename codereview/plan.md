@@ -71,3 +71,61 @@
 - 生产路径不出现 “not implemented” 异常
 - 主要模块日志可控且不污染生产
 - 核心包具备可运行的最小测试入口
+
+## 附录 — Nexus 固定回调 OAuth QA 验收清单（登录/绑定统一）
+
+> 目标：验证固定 `/sign-in` 回调下，`login/bind` 两条链路行为稳定、无循环、可预期。
+
+### 前置准备（每轮测试前）
+- 清理本地状态：`localStorage.removeItem('tuff_oauth_state')`
+- DevTools 打开 Network 并勾选 Preserve log
+- 准备两类账号：
+  - A：正常邮箱账号
+  - B：`emailState=missing` 账号
+
+### 场景清单（可勾选）
+
+#### 1) 登录页 GitHub 成功
+- [ ] 步骤：访问 `/sign-in?redirect_url=/dashboard`，点击 GitHub 登录并完成授权
+- [ ] 预期：进入 OAuth 过渡态，最终只跳一次到 `/dashboard`
+- [ ] 预期：URL 中 `oauth/flow/provider` 被清理
+- [ ] 预期：`tuff_oauth_state` 被清理，无循环 toast/循环跳转
+
+#### 2) 登录页 LinuxDO 成功
+- [ ] 步骤：同上，provider 改 LinuxDO
+- [ ] 预期：行为与 GitHub 一致（仅 provider 不同）
+
+#### 3) 登录页 OAuth + 缺邮箱账号
+- [ ] 步骤：使用 B 账号走 OAuth 登录
+- [ ] 预期：不直接进 dashboard，进入 `bind-email`
+- [ ] 预期：OAuth query/context 被清理，不会再次触发回调流程
+
+#### 4) 账号页 GitHub 绑定成功
+- [ ] 步骤：在 `/dashboard/account` 点击绑定 GitHub
+- [ ] 预期：回调落 `/sign-in?oauth=1&flow=bind&provider=github&redirect_url=/dashboard/account`
+- [ ] 预期：成功后直接回 `/dashboard/account`，不走补邮箱分支
+
+#### 5) 账号页 LinuxDO 绑定成功
+- [ ] 步骤：在 `/dashboard/account` 点击绑定 LinuxDO
+- [ ] 预期：与 GitHub 绑定一致，最终回 `/dashboard/account`
+
+#### 6) OAuth 取消/失败
+- [ ] 步骤：在 provider 授权页取消或拒绝
+- [ ] 预期：进入 error 态，展示“重试 + 返回”
+- [ ] 预期：重试可重新发起 OAuth；返回可回登录方式页且清理状态
+
+#### 7) 非法 redirect 拦截
+- [ ] 步骤：构造 `redirect_url=https://evil.com`
+- [ ] 预期：不会外跳；`login` 降级 `/dashboard`，`bind` 降级 `/dashboard/account`
+
+#### 8) 回调页刷新防循环
+- [ ] 步骤：在 `/sign-in?...oauth=1...` 阶段刷新 1~2 次
+- [ ] 预期：不重复处理，不重复 toast，不循环跳转
+
+### 结果记录
+- 测试日期：
+- 测试版本：
+- 测试人：
+- 通过项：
+- 未通过项：
+- 备注：

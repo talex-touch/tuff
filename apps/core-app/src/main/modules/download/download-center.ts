@@ -32,6 +32,7 @@ import { NotificationService } from './notification-service'
 import { PriorityCalculator } from './priority-calculator'
 import { RetryStrategy } from './retry-strategy'
 import { TaskQueue } from './task-queue'
+import { safeOpHandler, toErrorMessage } from '../../utils/safe-handler'
 
 /**
  * DownloadCenterModule - Unified download management system
@@ -865,276 +866,126 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const tx = this.transport
-    const toErrorMessage = (error: unknown) =>
-      error instanceof Error ? error.message : String(error)
+
+    const registerSafeHandler = <TExtra extends Record<string, unknown> = Record<string, never>>(
+      event: { toEventName: () => string },
+      handler: (payload: any) => Promise<void | TExtra> | void | TExtra
+    ) => {
+      return tx.on(
+        event as any,
+        safeOpHandler<any, TExtra>(
+          async (payload) => {
+            return await handler(payload)
+          },
+          {
+            onError: (error) => {
+              console.warn(
+                `[DownloadCenter] Handler failed: ${event.toEventName()}`,
+                toErrorMessage(error)
+              )
+            }
+          }
+        )
+      )
+    }
 
     this.transportDisposers.push(
-      tx.on(DownloadEvents.task.add, async (request) => {
-        try {
-          const taskId = await this.addTask(request)
-          return { success: true, taskId }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.add, async (request) => {
+        const taskId = await this.addTask(request)
+        return { taskId }
       }),
-
-      tx.on(DownloadEvents.task.pause, async (payload) => {
-        try {
-          await this.pauseTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.pause, async (payload) => {
+        await this.pauseTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.resume, async (payload) => {
-        try {
-          await this.resumeTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.resume, async (payload) => {
+        await this.resumeTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.cancel, async (payload) => {
-        try {
-          await this.cancelTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.cancel, async (payload) => {
+        await this.cancelTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.list.getAll, async () => {
-        try {
-          const tasks = this.getAllTasks()
-          return { success: true, tasks }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.list.getAll, async () => {
+        return { tasks: this.getAllTasks() }
       }),
-
-      tx.on(DownloadEvents.task.getStatus, async (payload) => {
-        try {
-          const task = this.getTaskStatus(payload.taskId)
-          return { success: true, task }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.getStatus, async (payload) => {
+        return { task: this.getTaskStatus(payload.taskId) }
       }),
-
-      tx.on(DownloadEvents.config.update, async (payload) => {
-        try {
-          this.updateConfig(payload.config)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.update, async (payload) => {
+        this.updateConfig(payload.config)
       }),
-
-      tx.on(DownloadEvents.task.retry, async (payload) => {
-        try {
-          await this.retryTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.retry, async (payload) => {
+        await this.retryTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.pauseAll, async () => {
-        try {
-          await this.pauseAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.pauseAll, async () => {
+        await this.pauseAllTasks()
       }),
-
-      tx.on(DownloadEvents.task.resumeAll, async () => {
-        try {
-          await this.resumeAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.resumeAll, async () => {
+        await this.resumeAllTasks()
       }),
-
-      tx.on(DownloadEvents.task.cancelAll, async () => {
-        try {
-          await this.cancelAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.cancelAll, async () => {
+        await this.cancelAllTasks()
       }),
-
-      tx.on(DownloadEvents.list.getByStatus, async (payload) => {
-        try {
-          const tasks = this.getTasksByStatus(payload.status)
-          return { success: true, tasks }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.list.getByStatus, async (payload) => {
+        return { tasks: this.getTasksByStatus(payload.status) }
       }),
-
-      tx.on(DownloadEvents.task.updatePriority, async (payload) => {
-        try {
-          await this.updateTaskPriority(payload.taskId, payload.priority)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.updatePriority, async (payload) => {
+        await this.updateTaskPriority(payload.taskId, payload.priority)
       }),
-
-      tx.on(DownloadEvents.task.remove, async (payload) => {
-        try {
-          await this.removeTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.remove, async (payload) => {
+        await this.removeTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.history.get, async (payload, _context) => {
-        try {
-          const history = await this.getTaskHistory(payload?.limit)
-          return { success: true, history }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.get, async (payload) => {
+        return { history: await this.getTaskHistory(payload?.limit) }
       }),
-
-      tx.on(DownloadEvents.history.clear, async () => {
-        try {
-          await this.clearHistory()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.clear, async () => {
+        await this.clearHistory()
       }),
-
-      tx.on(DownloadEvents.history.clearItem, async (payload) => {
-        try {
-          await this.clearHistoryItem(payload.historyId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.clearItem, async (payload) => {
+        await this.clearHistoryItem(payload.historyId)
       }),
-
-      tx.on(DownloadEvents.file.open, async (payload) => {
-        try {
-          await this.openFile(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.open, async (payload) => {
+        await this.openFile(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.file.showInFolder, async (payload) => {
-        try {
-          await this.showInFolder(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.showInFolder, async (payload) => {
+        await this.showInFolder(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.file.delete, async (payload) => {
-        try {
-          await this.deleteFile(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.delete, async (payload) => {
+        await this.deleteFile(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.maintenance.cleanupTemp, async () => {
-        try {
-          await this.cleanupTempFiles()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.maintenance.cleanupTemp, async () => {
+        await this.cleanupTempFiles()
       }),
-
-      tx.on(DownloadEvents.config.get, async () => {
-        try {
-          const config = this.getConfig()
-          return { success: true, config }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.get, async () => {
+        return { config: this.getConfig() }
       }),
-
-      tx.on(DownloadEvents.config.updateNotification, async (payload) => {
-        try {
-          this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.updateNotification, async (payload) => {
+        this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
       }),
-
-      tx.on(DownloadEvents.config.getNotification, async () => {
-        try {
-          const config = this.getNotificationConfig()
-          return { success: true, config }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.getNotification, async () => {
+        return { config: this.getNotificationConfig() }
       }),
-
-      tx.on(DownloadEvents.logs.get, async (payload) => {
-        try {
-          const logs = await this.errorLogger.readLogs(payload?.limit)
-          return { success: true, logs }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.get, async (payload) => {
+        return { logs: await this.errorLogger.readLogs(payload?.limit) }
       }),
-
-      tx.on(DownloadEvents.logs.getErrorStats, async () => {
-        try {
-          const stats = await this.errorLogger.getErrorStats()
-          return { success: true, stats }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.getErrorStats, async () => {
+        return { stats: await this.errorLogger.getErrorStats() }
       }),
-
-      tx.on(DownloadEvents.logs.clear, async () => {
-        try {
-          await this.errorLogger.clearLogs()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.clear, async () => {
+        await this.errorLogger.clearLogs()
       }),
-
-      tx.on(DownloadEvents.temp.getStats, async () => {
-        try {
-          const stats = await this.getTempFileStats()
-          return { success: true, stats }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.temp.getStats, async () => {
+        return { stats: await this.getTempFileStats() }
       }),
-
-      tx.on(DownloadEvents.migration.checkNeeded, async () => {
-        return { success: true, needed: false }
+      registerSafeHandler(DownloadEvents.migration.checkNeeded, async () => {
+        return { needed: false }
       }),
-
-      tx.on(DownloadEvents.migration.start, async () => {
-        return { success: true, result: { migrated: true } }
+      registerSafeHandler(DownloadEvents.migration.start, async () => {
+        return { result: { migrated: true } }
       }),
-
-      tx.on(DownloadEvents.migration.retry, async () => {
-        return { success: true, result: { migrated: true } }
+      registerSafeHandler(DownloadEvents.migration.retry, async () => {
+        return { result: { migrated: true } }
       }),
-
-      tx.on(DownloadEvents.migration.status, async () => {
-        return { success: true, currentVersion: 1, appliedMigrations: [] }
+      registerSafeHandler(DownloadEvents.migration.status, async () => {
+        return { currentVersion: 1, appliedMigrations: [] }
       })
     )
   }
