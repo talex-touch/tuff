@@ -1,9 +1,24 @@
+import type {
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceProviderConfig,
+} from '../types/intelligence'
 import type { ITuffTransport } from '../transport/types'
-import type { IntelligenceInvokeOptions, IntelligenceInvokeResult, IntelligenceProviderConfig } from '../types/intelligence'
-import { defineRawEvent } from '../transport/event/builder'
+import {
+  createIntelligenceSdk,
+  type IntelligenceAuditLogEntry,
+  type IntelligenceAuditLogQueryOptions,
+  type IntelligenceChatRequest,
+  type IntelligenceCurrentUsage,
+  type IntelligenceQuotaCheckResult,
+  type IntelligenceQuotaConfig,
+  type IntelligenceSdk,
+  type IntelligenceSdkTransport,
+  type IntelligenceUsageSummary,
+} from '../transport/sdk/domains/intelligence'
 
 export interface IntelligenceClientChannel {
-  send: (eventName: string, payload: unknown) => Promise<any>
+  send: (eventName: string, payload?: unknown) => Promise<any>
 }
 
 type IntelligenceChannelLike = IntelligenceClientChannel | ITuffTransport
@@ -24,7 +39,9 @@ const defaultResolvers: IntelligenceChannelResolver[] = [
   },
 ]
 
-export function resolveIntelligenceChannel(resolvers: IntelligenceChannelResolver[] = defaultResolvers): IntelligenceClientChannel | null {
+export function resolveIntelligenceChannel(
+  resolvers: IntelligenceChannelResolver[] = defaultResolvers,
+): IntelligenceClientChannel | null {
   for (const resolver of resolvers) {
     try {
       const channel = resolver()
@@ -39,37 +56,29 @@ export function resolveIntelligenceChannel(resolvers: IntelligenceChannelResolve
   return null
 }
 
-interface ChannelResponse<T> {
-  ok: boolean
-  result?: T
-  error?: string
+export interface IntelligenceClient extends IntelligenceSdk {
+  /**
+   * @deprecated 请优先使用 chatLangChain() 或 invoke('text.chat', ...)。
+   */
+  chat: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
 }
 
-async function assertResponse<T>(promise: Promise<ChannelResponse<T>>): Promise<T> {
-  const response = await promise
-  if (!response?.ok) {
-    throw new Error(response?.error || 'Intelligence channel request failed')
-  }
-  return response.result as T
-}
-
-export interface IntelligenceClient {
-  invoke: <T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<T>>
-  testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
-  testCapability: (params: Record<string, any>) => Promise<unknown>
-  fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
-}
-
-function isTuffTransport(channel: IntelligenceChannelLike | null | undefined): channel is ITuffTransport {
+function isTuffTransport(
+  channel: IntelligenceChannelLike | null | undefined,
+): channel is ITuffTransport {
   return Boolean(channel && typeof (channel as ITuffTransport).stream === 'function')
 }
 
-function createTransportAdapter(transport: ITuffTransport): IntelligenceClientChannel {
+function createChannelTransport(channel: IntelligenceClientChannel): IntelligenceSdkTransport {
   return {
-    send: (eventName: string, payload: unknown) => {
-      const event = defineRawEvent<unknown, unknown>(eventName)
-      return transport.send(event, payload as unknown)
-    },
+    send: (event, payload) => channel.send(event.toEventName(), payload),
+  }
+}
+
+function toClient(sdk: IntelligenceSdk): IntelligenceClient {
+  return {
+    ...sdk,
+    chat: payload => sdk.chatLangChain(payload),
   }
 }
 
@@ -77,35 +86,32 @@ export function createIntelligenceClient(
   channel?: IntelligenceChannelLike,
   resolvers?: IntelligenceChannelResolver[],
 ): IntelligenceClient {
-  let resolvedChannel: IntelligenceClientChannel | ITuffTransport | null | undefined
-    = channel ?? resolveIntelligenceChannel(resolvers)
-  if (resolvedChannel && isTuffTransport(resolvedChannel)) {
-    resolvedChannel = createTransportAdapter(resolvedChannel)
-  }
-  if (!resolvedChannel) {
-    throw new Error('[Intelligence Client] Unable to resolve channel. Pass a channel instance or register a resolver.')
+  const resolved = channel ?? resolveIntelligenceChannel(resolvers)
+
+  if (!resolved) {
+    throw new Error(
+      '[Intelligence Client] Unable to resolve channel. Pass a channel instance or register a resolver.',
+    )
   }
 
-  return {
-    invoke<T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) {
-      return assertResponse<IntelligenceInvokeResult<T>>(
-        resolvedChannel.send('intelligence:invoke', { capabilityId, payload, options }),
-      )
-    },
-    testProvider(config: IntelligenceProviderConfig) {
-      return assertResponse(
-        resolvedChannel.send('intelligence:test-provider', { provider: config }),
-      )
-    },
-    testCapability(params: Record<string, any>) {
-      return assertResponse(
-        resolvedChannel.send('intelligence:test-capability', params),
-      )
-    },
-    fetchModels(config: IntelligenceProviderConfig) {
-      return assertResponse<{ success: boolean, models?: string[], message?: string }>(
-        resolvedChannel.send('intelligence:fetch-models', { provider: config }),
-      )
-    },
+  if (isTuffTransport(resolved)) {
+    return toClient(createIntelligenceSdk(resolved))
   }
+
+  return toClient(createIntelligenceSdk(createChannelTransport(resolved)))
+}
+
+export type {
+  IntelligenceAuditLogEntry,
+  IntelligenceAuditLogQueryOptions,
+  IntelligenceCurrentUsage,
+  IntelligenceQuotaCheckResult,
+  IntelligenceQuotaConfig,
+  IntelligenceUsageSummary,
+}
+
+export type {
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceProviderConfig,
 }
