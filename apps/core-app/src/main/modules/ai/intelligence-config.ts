@@ -1,5 +1,10 @@
-import type { AiCapabilityRoutingConfig, AiSDKPersistedConfig } from '@talex-touch/utils'
-import { StorageList } from '@talex-touch/utils'
+import type {
+  AiCapabilityRoutingConfig,
+  AiSDKPersistedConfig,
+  IntelligenceProviderConfig
+} from '@talex-touch/utils'
+import { IntelligenceProviderType, StorageList } from '@talex-touch/utils'
+
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { getMainConfig, saveMainConfig } from '../storage'
@@ -15,6 +20,23 @@ const SUPPORTED_PROVIDER_TYPES = new Set([
   'local',
   'custom'
 ])
+
+export const INTERNAL_SYSTEM_OCR_PROVIDER_ID = 'local-system-ocr'
+
+const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
+  id: INTERNAL_SYSTEM_OCR_PROVIDER_ID,
+  type: IntelligenceProviderType.LOCAL,
+  name: 'System OCR',
+  enabled: true,
+  priority: 0,
+  models: ['system-ocr'],
+  timeout: 30000,
+  capabilities: ['vision.ocr'],
+  metadata: {
+    internal: true,
+    engine: 'system-ocr'
+  }
+}
 
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
@@ -48,6 +70,14 @@ export function ensureAiConfigLoaded(_force?: boolean): void {
     }
     return true
   })
+
+  const nativeOcrDisabledByEnv = process.env.TUFF_DISABLE_NATIVE_OCR === '1'
+  const hasInternalProvider = providers.some(
+    (provider) => provider.id === INTERNAL_SYSTEM_OCR_PROVIDER_ID
+  )
+  if (!nativeOcrDisabledByEnv && !hasInternalProvider) {
+    providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
+  }
 
   ai.updateConfig({
     providers,
