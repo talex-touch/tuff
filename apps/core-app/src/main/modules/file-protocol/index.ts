@@ -22,28 +22,44 @@ const loggedErrorPaths = new Set<string>()
  */
 function extractAbsolutePath(rawUrl: string): string {
   const normalizeDecodedPath = (value: string): string => {
-    if (/^\/[a-z]:\//i.test(value)) {
-      return value.slice(1)
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
     }
-    return value.startsWith('/') ? value : `/${value}`
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
   }
 
-  const prefix = `${FILE_SCHEMA}://`
-  const rawWithTail = rawUrl.slice(prefix.length)
-  const tailIndex = rawWithTail.search(/[?#]/)
-  let decoded = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
-
-  for (let i = 0; i < 3; i++) {
-    try {
-      const next = decodeURIComponent(decoded)
-      if (next === decoded) break
-      decoded = next
-    } catch {
-      break
+  const decodeStable = (value: string): string => {
+    let decoded = value
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
     }
+    return decoded
   }
 
-  return normalizeDecodedPath(decoded)
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+      return normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+    }
+    const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
+  } catch {
+    const prefix = `${FILE_SCHEMA}://`
+    const rawWithTail = rawUrl.startsWith(prefix) ? rawUrl.slice(prefix.length) : rawUrl
+    const tailIndex = rawWithTail.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    return normalizeDecodedPath(decodeStable(body))
+  }
 }
 
 class FileProtocolModule extends BaseModule {

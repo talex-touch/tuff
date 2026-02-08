@@ -185,18 +185,23 @@ function safeNamespaceSegment(value: string): string {
 
 function resolveTfilePath(urlOrPath: string): string {
   if (!urlOrPath) return ''
-  if (urlOrPath.startsWith(`${FILE_SCHEMA}://`)) {
-    const normalizeDecodedPath = (value: string): string => {
-      if (/^\/[a-z]:\//i.test(value)) {
-        return value.slice(1)
-      }
-      return value.startsWith('/') ? value : `/${value}`
+  if (!urlOrPath.startsWith(`${FILE_SCHEMA}:`)) {
+    return urlOrPath
+  }
+
+  const normalizeDecodedPath = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
     }
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
+  }
 
-    const rawWithTail = urlOrPath.slice(`${FILE_SCHEMA}://`.length)
-    const tailIndex = rawWithTail.search(/[?#]/)
-    let decoded = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
-
+  const decodeStable = (value: string): string => {
+    let decoded = value
     for (let i = 0; i < 3; i++) {
       try {
         const next = decodeURIComponent(decoded)
@@ -206,14 +211,46 @@ function resolveTfilePath(urlOrPath: string): string {
         break
       }
     }
-
-    return normalizeDecodedPath(decoded)
+    return decoded
   }
-  return urlOrPath
+
+  try {
+    const parsed = new URL(urlOrPath)
+    if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+      return normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+    }
+    const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
+  } catch {
+    const fullPrefix = `${FILE_SCHEMA}://`
+    const compactPrefix = `${FILE_SCHEMA}:`
+    const rawWithTail = urlOrPath.startsWith(fullPrefix)
+      ? urlOrPath.slice(fullPrefix.length)
+      : urlOrPath.slice(compactPrefix.length)
+    const tailIndex = rawWithTail.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    return normalizeDecodedPath(decodeStable(body))
+  }
 }
 
 function buildTfileUrl(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/')
+  const raw = filePath?.trim()
+  if (!raw) {
+    return ''
+  }
+
+  let resolvedPath = raw
+  if (raw.startsWith(`${FILE_SCHEMA}:`)) {
+    resolvedPath = resolveTfilePath(raw)
+  } else if (raw.startsWith('file:')) {
+    try {
+      resolvedPath = fileURLToPath(raw)
+    } catch {
+      resolvedPath = raw
+    }
+  }
+
+  const normalized = resolvedPath.replace(/\\/g, '/')
   let absolutePath = normalized
   if (/^[a-z]:\//i.test(absolutePath)) {
     // Keep Windows drive path without forcing a leading slash.
