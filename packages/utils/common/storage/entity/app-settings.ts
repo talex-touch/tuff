@@ -54,6 +54,13 @@ const _appSettingOriginData = {
     },
     autoHide: true,
     autoClear: 600,
+    clipboardPolling: {
+      interval: 5,
+      lowBatteryPolicy: {
+        enable: true,
+        interval: 10,
+      },
+    },
   },
   dashboard: {
     enable: false,
