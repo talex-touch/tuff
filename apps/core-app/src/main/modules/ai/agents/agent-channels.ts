@@ -4,20 +4,16 @@
  * Handles communication between renderer and main process for agents.
  */
 
+import type { AgentDescriptor, AgentResult, AgentTool } from '@talex-touch/utils'
 import type {
-  AgentDescriptor,
-  AgentResult,
-  AgentTask,
-  AgentTool,
-  TaskProgress
-} from '@talex-touch/utils'
-import type { AgentInstallOptions, AgentSearchOptions } from '../../../service/agent-market.service'
+  AgentsMarketInstallRequest,
+  AgentsMarketSearchRequest
+} from '@talex-touch/utils/transport/events/types'
 import {
   AgentsEvents,
   getTuffTransportMain,
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../core'
 import { agentMarketService } from '../../../service/agent-market.service'
 import { createLogger } from '../../../utils/logger'
@@ -26,25 +22,6 @@ import { agentManager } from './agent-manager'
 const agentChannelsLog = createLogger('Intelligence').child('AgentChannels')
 const formatLogArgs = (args: unknown[]): string => args.map((arg) => String(arg)).join(' ')
 const logInfo = (...args: unknown[]) => agentChannelsLog.info(formatLogArgs(args))
-
-const agentUpdatePriorityEvent = defineRawEvent<
-  { taskId?: string; priority?: number },
-  { success: boolean }
->('agents:update-priority')
-type AgentTaskStartedPayload = { taskId: string; agentId: string }
-type AgentTaskCompletedPayload = { taskId: string; result: AgentResult }
-type AgentTaskFailedPayload = { taskId: string; error?: string }
-type AgentTaskCancelledPayload = { taskId: string }
-
-const agentTaskStartedEvent = defineRawEvent<AgentTaskStartedPayload, void>('agents:task-started')
-const agentTaskProgressEvent = defineRawEvent<TaskProgress, void>('agents:task-progress')
-const agentTaskCompletedEvent = defineRawEvent<AgentTaskCompletedPayload, void>(
-  'agents:task-completed'
-)
-const agentTaskFailedEvent = defineRawEvent<AgentTaskFailedPayload, void>('agents:task-failed')
-const agentTaskCancelledEvent = defineRawEvent<AgentTaskCancelledPayload, void>(
-  'agents:task-cancelled'
-)
 
 /**
  * Register all agent IPC channels
@@ -91,7 +68,7 @@ export function registerAgentChannels(): () => void {
   // Execute a task (queued)
   cleanups.push(
     transport.on(AgentsEvents.api.execute, async (payload): Promise<{ taskId: string }> => {
-      const taskId = await agentManager.executeTask(payload as AgentTask)
+      const taskId = await agentManager.executeTask(payload)
       return { taskId }
     })
   )
@@ -99,7 +76,7 @@ export function registerAgentChannels(): () => void {
   // Execute a task immediately
   cleanups.push(
     transport.on(AgentsEvents.api.executeImmediate, async (payload): Promise<AgentResult> => {
-      return agentManager.executeTaskImmediate(payload as AgentTask)
+      return agentManager.executeTaskImmediate(payload)
     })
   )
 
@@ -127,13 +104,16 @@ export function registerAgentChannels(): () => void {
 
   // Update task priority
   cleanups.push(
-    transport.on(agentUpdatePriorityEvent, async (payload): Promise<{ success: boolean }> => {
-      if (!payload?.taskId || typeof payload.priority !== 'number') {
-        return { success: false }
+    transport.on(
+      AgentsEvents.api.updatePriority,
+      async (payload): Promise<{ success: boolean }> => {
+        if (!payload?.taskId || typeof payload.priority !== 'number') {
+          return { success: false }
+        }
+        const success = agentManager.updateTaskPriority(payload.taskId, payload.priority)
+        return { success }
       }
-      const success = agentManager.updateTaskPriority(payload.taskId, payload.priority)
-      return { success }
-    })
+    )
   )
 
   // ============================================================================
@@ -172,7 +152,7 @@ export function registerAgentChannels(): () => void {
   // Search agents in market
   cleanups.push(
     transport.on(AgentsEvents.market.search, async (payload) => {
-      const options = (payload && typeof payload === 'object' ? payload : {}) as AgentSearchOptions
+      const options: AgentsMarketSearchRequest = payload ?? {}
       return agentMarketService.searchAgents(options)
     })
   )
@@ -180,7 +160,7 @@ export function registerAgentChannels(): () => void {
   // Get agent details
   cleanups.push(
     transport.on(AgentsEvents.market.get, async (payload) => {
-      const agentId = (payload as { agentId?: string } | null | undefined)?.agentId
+      const agentId = payload?.agentId
       if (!agentId) {
         return null
       }
@@ -212,7 +192,7 @@ export function registerAgentChannels(): () => void {
   // Install agent
   cleanups.push(
     transport.on(AgentsEvents.market.install, async (payload) => {
-      const options = payload as AgentInstallOptions | null | undefined
+      const options: AgentsMarketInstallRequest | undefined = payload
       if (!options?.agentId) {
         return {
           success: false,
@@ -228,7 +208,7 @@ export function registerAgentChannels(): () => void {
   // Uninstall agent
   cleanups.push(
     transport.on(AgentsEvents.market.uninstall, async (payload) => {
-      const agentId = (payload as { agentId?: string } | null | undefined)?.agentId
+      const agentId = payload?.agentId
       if (!agentId) {
         return {
           success: false,
@@ -259,11 +239,11 @@ export function registerAgentChannels(): () => void {
       transport.broadcast(event, data)
     }
 
-  agentManager.on('task:started', eventHandler(agentTaskStartedEvent))
-  agentManager.on('task:progress', eventHandler(agentTaskProgressEvent))
-  agentManager.on('task:completed', eventHandler(agentTaskCompletedEvent))
-  agentManager.on('task:failed', eventHandler(agentTaskFailedEvent))
-  agentManager.on('task:cancelled', eventHandler(agentTaskCancelledEvent))
+  agentManager.on('task:started', eventHandler(AgentsEvents.push.taskStarted))
+  agentManager.on('task:progress', eventHandler(AgentsEvents.push.taskProgress))
+  agentManager.on('task:completed', eventHandler(AgentsEvents.push.taskCompleted))
+  agentManager.on('task:failed', eventHandler(AgentsEvents.push.taskFailed))
+  agentManager.on('task:cancelled', eventHandler(AgentsEvents.push.taskCancelled))
 
   logInfo('Registered agent IPC channels')
 

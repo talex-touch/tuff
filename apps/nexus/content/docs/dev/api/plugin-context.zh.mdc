@@ -19,6 +19,7 @@ code: |
     http,             // HTTP 请求 (axios)
     clipboard,        // 剪贴板操作
     storage,          // 插件专属存储
+    power,            // PowerSDK（低电量状态）
     
     // 功能 API
     feature,          // Feature SDK (推送搜索结果)
@@ -138,6 +139,34 @@ code: |
   unsubscribe()
 ---
 :::
+
+---
+
+## power
+
+PowerSDK：用于在低电量场景自动做能力降级。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // 读取当前低电量状态
+  const status = await power.getLowPowerStatus({ threshold: 25 })
+
+  if (status.lowPower) {
+    logger.info('低电量模式，跳过重负载后台任务')
+  }
+
+  // 监听状态变化
+  const disposePower = power.onLowPowerChanged((nextStatus) => {
+    logger.info('低电量状态变化', nextStatus)
+  })
+
+  // 可选：取消监听
+  disposePower()
+---
+:::
+
+> 说明：在 `index.js` 上下文里，`power.onLowPowerChanged` 当前是轮询（约 60 秒），严格实时推送还在待定。
 
 ---
 
@@ -527,4 +556,5 @@ code: |
 
 - [Feature SDK](./feature-sdk.zh.md) - Feature 详细 API
 - [DivisionBox API](./division-box.zh.md) - 独立窗口系统
+- [PowerSDK](./power.zh.md) - 低电量适配能力
 - [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转

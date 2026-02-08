@@ -30,12 +30,31 @@ import type {
   AgentsGetRequest,
   AgentsGetResponse,
   AgentsListResponse,
+  AgentsMarketCategoriesResponse,
+  AgentsMarketCheckUpdatesResponse,
+  AgentsMarketFeaturedResponse,
+  AgentsMarketGetRequest,
+  AgentsMarketGetResponse,
+  AgentsMarketInstallRequest,
+  AgentsMarketInstallResponse,
+  AgentsMarketInstalledResponse,
+  AgentsMarketSearchRequest,
+  AgentsMarketSearchResponse,
+  AgentsMarketUninstallRequest,
+  AgentsMarketUninstallResponse,
   AgentsStatsResponse,
+  AgentsTaskCancelledPayload,
+  AgentsTaskCompletedPayload,
+  AgentsTaskFailedPayload,
+  AgentsTaskProgressPayload,
+  AgentsTaskStartedPayload,
   AgentsTaskStatusRequest,
   AgentsTaskStatusResponse,
   AgentsToolsGetRequest,
   AgentsToolsGetResponse,
   AgentsToolsListResponse,
+  AgentsUpdatePriorityRequest,
+  AgentsUpdatePriorityResponse,
 } from './types/agents'
 
 import type {
@@ -71,6 +90,8 @@ import type {
   RendererPerfReport,
   ReportMetricsRequest,
   ReportMetricsResponse,
+  SecureValueGetRequest,
+  SecureValueSetRequest,
   SetLocaleRequest,
   ShowInFolderRequest,
   StartupRequest,
@@ -618,6 +639,14 @@ export const AppEvents = {
       .define<OpenAppRequest, void>(),
 
     /**
+     * Open intelligence prompts folder.
+     */
+    openPromptsFolder: defineEvent('app')
+      .module('system')
+      .event('open-prompts-folder')
+      .define<void, void>(),
+
+    /**
      * Execute a command/open a path.
      */
     executeCommand: defineEvent('app')
@@ -640,6 +669,22 @@ export const AppEvents = {
       .module('system')
       .event('get-path')
       .define<GetPathRequest, string | null>(),
+
+    /**
+     * Read a secure local value.
+     */
+    getSecureValue: defineEvent('app')
+      .module('system')
+      .event('get-secure-value')
+      .define<SecureValueGetRequest, string | null>(),
+
+    /**
+     * Write a secure local value.
+     */
+    setSecureValue: defineEvent('app')
+      .module('system')
+      .event('set-secure-value')
+      .define<SecureValueSetRequest, void>(),
 
     /**
      * Read a local file as text.
@@ -2203,6 +2248,7 @@ export const AgentsEvents = {
     executeImmediate: defineRawEvent<AgentsExecuteImmediateRequest, AgentsExecuteImmediateResponse>('agents:execute-immediate'),
     cancel: defineRawEvent<AgentsCancelRequest, AgentsCancelResponse>('agents:cancel'),
     taskStatus: defineRawEvent<AgentsTaskStatusRequest, AgentsTaskStatusResponse>('agents:task-status'),
+    updatePriority: defineRawEvent<AgentsUpdatePriorityRequest, AgentsUpdatePriorityResponse>('agents:update-priority'),
     stats: defineRawEvent<void, AgentsStatsResponse>('agents:stats'),
 
     tools: {
@@ -2218,46 +2264,54 @@ export const AgentsEvents = {
     },
   },
 
+  push: {
+    taskStarted: defineRawEvent<AgentsTaskStartedPayload, void>('agents:task-started'),
+    taskProgress: defineRawEvent<AgentsTaskProgressPayload, void>('agents:task-progress'),
+    taskCompleted: defineRawEvent<AgentsTaskCompletedPayload, void>('agents:task-completed'),
+    taskFailed: defineRawEvent<AgentsTaskFailedPayload, void>('agents:task-failed'),
+    taskCancelled: defineRawEvent<AgentsTaskCancelledPayload, void>('agents:task-cancelled'),
+  },
+
   market: {
     search: defineEvent('agents')
       .module('market')
       .event('search')
-      .define<unknown, unknown>(),
+      .define<AgentsMarketSearchRequest | void, AgentsMarketSearchResponse>(),
 
     get: defineEvent('agents')
       .module('market')
       .event('get')
-      .define<unknown, unknown>(),
+      .define<AgentsMarketGetRequest, AgentsMarketGetResponse>(),
 
     featured: defineEvent('agents')
       .module('market')
       .event('featured')
-      .define<void, unknown>(),
+      .define<void, AgentsMarketFeaturedResponse>(),
 
     installed: defineEvent('agents')
       .module('market')
       .event('installed')
-      .define<void, unknown>(),
+      .define<void, AgentsMarketInstalledResponse>(),
 
     categories: defineEvent('agents')
       .module('market')
       .event('categories')
-      .define<void, unknown>(),
+      .define<void, AgentsMarketCategoriesResponse>(),
 
     install: defineEvent('agents')
       .module('market')
       .event('install')
-      .define<unknown, unknown>(),
+      .define<AgentsMarketInstallRequest, AgentsMarketInstallResponse>(),
 
     uninstall: defineEvent('agents')
       .module('market')
       .event('uninstall')
-      .define<unknown, unknown>(),
+      .define<AgentsMarketUninstallRequest, AgentsMarketUninstallResponse>(),
 
     checkUpdates: defineEvent('agents')
       .module('market')
       .event('check-updates')
-      .define<void, unknown>(),
+      .define<void, AgentsMarketCheckUpdatesResponse>(),
   },
 } as const
 

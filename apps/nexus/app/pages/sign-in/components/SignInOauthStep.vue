@@ -65,21 +65,19 @@ const showRetry = computed(() => isError.value)
       </p>
     </div>
 
-    <div class="auth-oauth-actions" :class="{ 'is-visible': showRetry }">
+    <div v-if="showRetry" class="auth-oauth-actions">
       <Button class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.oauthRetry', '重新尝试') }}
       </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        class="auth-text-button auth-oauth-back"
+        @click="emit('back')"
+      >
+        {{ t('auth.backToMethods', '返回') }}
+      </Button>
     </div>
-
-    <Button
-      variant="ghost"
-      size="sm"
-      class="auth-text-button auth-oauth-back"
-      :class="{ 'is-visible': showRetry }"
-      @click="emit('back')"
-    >
-      {{ t('auth.backToMethods', '返回') }}
-    </Button>
   </div>
 </template>
 
@@ -150,26 +148,9 @@ const showRetry = computed(() => isError.value)
   flex-direction: column;
   gap: 12px;
   min-height: 46px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.auth-oauth-actions.is-visible {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .auth-oauth-back {
   align-self: center;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.auth-oauth-back.is-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transition-delay: 120ms;
 }
 </style>

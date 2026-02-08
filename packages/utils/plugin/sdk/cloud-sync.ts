@@ -10,6 +10,7 @@ export interface CloudSyncSDKOptions {
   now?: () => number
   syncTokenCache?: { token?: string, expiresAt?: string }
   onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  onStepUpRequired?: () => string | null | Promise<string | null>
   formDataFactory?: () => FormData
   channelSend?: (event: string, data?: any) => Promise<any>
 }
@@ -58,6 +59,7 @@ export class CloudSyncSDK extends CloudSyncClientSDK {
       now: options.now,
       syncTokenCache: options.syncTokenCache,
       onSyncTokenUpdate: options.onSyncTokenUpdate,
+      onStepUpRequired: options.onStepUpRequired,
       formDataFactory: options.formDataFactory,
       getAuthToken: () => resolveAuthToken(options),
       getDeviceId: () => resolveDeviceId(options),

@@ -20,7 +20,7 @@ const outlineVisible = ref(false)
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-[88rem] w-full flex gap-6 lg:gap-8">
-          <aside class="hidden w-[200px] shrink-0 xl:block">
+          <aside class="hidden w-[230px] shrink-0 xl:block">
             <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>

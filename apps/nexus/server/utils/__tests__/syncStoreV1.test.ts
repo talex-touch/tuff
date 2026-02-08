@@ -480,7 +480,7 @@ describe('syncStoreV1 session', () => {
     const handshake = await handshakeSyncSession(event, 'user-1', 'device-1')
     await expect(getSyncSession(event, 'user-1', 'device-1', `${handshake.syncToken}-bad`))
       .rejects
-      .toMatchObject({ data: { errorCode: 'SYNC_INVALID_PAYLOAD' } })
+      .toMatchObject({ data: { errorCode: 'SYNC_INVALID_TOKEN' } })
   })
 
   it('accepts valid sync token', async () => {

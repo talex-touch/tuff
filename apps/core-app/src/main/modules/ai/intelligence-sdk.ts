@@ -186,13 +186,14 @@ function providerSupportsCapability(
 
   const methodInfo = resolveCapabilityMethod(capabilityType, stream)
   if (!methodInfo) return false
-  const method = (provider as Record<string, unknown>)[methodInfo.method]
+
+  const providerRecord = provider as unknown as Record<string, unknown>
+  const method = providerRecord[methodInfo.method]
   if (typeof method !== 'function') return false
 
   if (methodInfo.requiresOverride && provider instanceof IntelligenceProvider) {
-    const baseMethod = (IntelligenceProvider.prototype as Record<string, unknown>)[
-      methodInfo.method
-    ]
+    const baseRecord = IntelligenceProvider.prototype as unknown as Record<string, unknown>
+    const baseMethod = baseRecord[methodInfo.method]
     if (method === baseMethod) {
       return false
     }
@@ -315,7 +316,6 @@ export class AiSDK {
     }
     logInfo(`invoke -> ${capabilityId}`)
 
-    // Check quota if caller is specified
     const caller = options.metadata?.caller
     if (this.config.enableQuota && caller) {
       const quotaCheck = await this.checkQuota(caller)
@@ -324,11 +324,119 @@ export class AiSDK {
       }
     }
 
+    const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
+      capabilityId,
+      options
+    )
+
+    const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
+    if (this.config.enableCache && !runtimeOptions.stream) {
+      const cached = this.getFromCache<T>(cacheKey)
+      if (cached) {
+        logInfo(`Returning cached result for ${capabilityId}`)
+        return cached
+      }
+    }
+
+    const manager = ensureProviderManager()
+    const availableProviders = this.resolveAvailableProviders(
+      manager,
+      capabilityId,
+      capability.type,
+      capability.supportedProviders,
+      runtimeOptions,
+      false
+    )
+
+    const strategyResult = await strategyManager.select({
+      capabilityId,
+      options: runtimeOptions,
+      availableProviders
+    })
+
+    const provider = manager.get(strategyResult.selectedProvider.id)
+    if (!provider) {
+      throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
+    }
+    logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
+
+    this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
+
+    const startTime = Date.now()
+
+    try {
+      const result = await this.invokeByCapabilityType<T>(
+        provider,
+        capability.type,
+        payload,
+        runtimeOptions,
+        promptTemplate,
+        promptVariables
+      )
+
+      if (this.config.enableCache) {
+        this.setToCache(cacheKey, result)
+      }
+
+      await this.writeSuccessAudit({
+        result,
+        startTime,
+        capabilityId,
+        caller: runtimeOptions.metadata?.caller,
+        userId: runtimeOptions.metadata?.userId,
+        promptTemplate,
+        promptVariables
+      })
+
+      logInfo(
+        `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
+      )
+      return result
+    } catch (error) {
+      logError(`Invoke error for ${capabilityId}`, error)
+
+      await this.writeFailureAudit({
+        error,
+        startTime,
+        capabilityId,
+        providerId: strategyResult.selectedProvider.id,
+        caller: runtimeOptions.metadata?.caller,
+        userId: runtimeOptions.metadata?.userId,
+        promptTemplate,
+        promptVariables
+      })
+
+      const fallbackResult = await this.tryFallbackProviders<T>({
+        capabilityId,
+        capabilityType: capability.type,
+        payload,
+        runtimeOptions,
+        manager,
+        fallbackProviders: strategyResult.fallbackProviders
+      })
+
+      if (fallbackResult) {
+        return fallbackResult
+      }
+
+      throw error
+    }
+  }
+
+  private prepareRuntimeOptions(
+    capabilityId: string,
+    options: IntelligenceInvokeOptions
+  ): {
+    runtimeOptions: IntelligenceInvokeOptions
+    promptTemplate?: string
+    promptVariables?: Record<string, unknown>
+  } {
     const runtimeOptions: IntelligenceInvokeOptions = { ...options }
     runtimeOptions.metadata = {
       ...(runtimeOptions.metadata ?? {}),
       capabilityId
     }
+
     const capabilityRouting = this.config.capabilities?.[capabilityId]
     const configuredProviders =
       capabilityRouting?.providers
@@ -360,24 +468,32 @@ export class AiSDK {
       }
     }
 
-    const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
-    if (this.config.enableCache && !runtimeOptions.stream) {
-      const cached = this.getFromCache<T>(cacheKey)
-      if (cached) {
-        logInfo(`Returning cached result for ${capabilityId}`)
-        return cached
-      }
+    const promptTemplate =
+      (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
+    const promptVariables = options.metadata?.promptVariables as Record<string, unknown> | undefined
+
+    return {
+      runtimeOptions,
+      promptTemplate,
+      promptVariables
     }
+  }
 
-    const manager = ensureProviderManager()
-
-    if (!resolveCapabilityMethod(capability.type, false)) {
-      throw new Error(`[Intelligence] Capability type ${capability.type} not supported`)
+  private resolveAvailableProviders(
+    manager: IntelligenceProviderManagerAdapter,
+    capabilityId: string,
+    capabilityType: string,
+    supportedProviderTypes: Array<IntelligenceProviderConfig['type']>,
+    runtimeOptions: IntelligenceInvokeOptions,
+    stream: boolean
+  ): IntelligenceProviderConfig[] {
+    if (!resolveCapabilityMethod(capabilityType, stream)) {
+      throw new Error(`[Intelligence] Capability type ${capabilityType} not supported`)
     }
 
     const enabledProviders = manager.getEnabled()
     const typeFilteredProviders = enabledProviders.filter((provider) =>
-      capability.supportedProviders.includes(provider.getConfig().type)
+      supportedProviderTypes.includes(provider.getConfig().type)
     )
 
     const accessFilteredProviders = typeFilteredProviders.filter((provider) => {
@@ -388,7 +504,7 @@ export class AiSDK {
     })
 
     const capabilityFilteredProviders = accessFilteredProviders.filter((provider) =>
-      providerSupportsCapability(provider, capabilityId, capability.type, false)
+      providerSupportsCapability(provider, capabilityId, capabilityType, stream)
     )
 
     if (capabilityFilteredProviders.length === 0 && accessFilteredProviders.length > 0) {
@@ -416,393 +532,441 @@ export class AiSDK {
       throw new Error(`[Intelligence] No enabled providers for ${capabilityId}`)
     }
 
-    const strategyResult = await strategyManager.select({
-      capabilityId,
-      options: runtimeOptions,
-      availableProviders
-    })
+    return availableProviders
+  }
 
-    const provider = manager.get(strategyResult.selectedProvider.id)
-    if (!provider) {
-      throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
+  private applyModelPreference(
+    runtimeOptions: IntelligenceInvokeOptions,
+    selectedProvider: IntelligenceProviderConfig,
+    capabilityId: string
+  ): void {
+    if (!runtimeOptions.modelPreference || runtimeOptions.modelPreference.length === 0) {
+      return
     }
-    logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
-    if (runtimeOptions.modelPreference && runtimeOptions.modelPreference.length > 0) {
-      const providerModels = new Set<string>()
-      const { defaultModel, models } = strategyResult.selectedProvider
-      if (defaultModel) providerModels.add(defaultModel)
-      if (Array.isArray(models)) {
-        for (const model of models) {
-          if (model) providerModels.add(model)
-        }
-      }
-      if (providerModels.size > 0) {
-        const filtered = runtimeOptions.modelPreference.filter((model) => providerModels.has(model))
-        if (filtered.length === 0) {
-          logWarn(
-            `Model preference not supported by ${strategyResult.selectedProvider.id} for ${capabilityId}, fallback to provider default.`
-          )
-          runtimeOptions.modelPreference = undefined
-        } else {
-          runtimeOptions.modelPreference = filtered
-        }
+
+    const providerModels = new Set<string>()
+    const { defaultModel, models } = selectedProvider
+    if (defaultModel) providerModels.add(defaultModel)
+    if (Array.isArray(models)) {
+      for (const model of models) {
+        if (model) providerModels.add(model)
       }
     }
 
-    let result: IntelligenceInvokeResult<T>
-    const startTime = Date.now()
+    if (providerModels.size === 0) {
+      return
+    }
 
-    const invokeEmbeddingWithGovernance = async (embeddingProvider: {
+    const filtered = runtimeOptions.modelPreference.filter((model) => providerModels.has(model))
+    if (filtered.length === 0) {
+      logWarn(
+        `Model preference not supported by ${selectedProvider.id} for ${capabilityId}, fallback to provider default.`
+      )
+      runtimeOptions.modelPreference = undefined
+      return
+    }
+
+    runtimeOptions.modelPreference = filtered
+  }
+
+  private applyPromptTemplate(
+    messages: IntelligenceMessage[],
+    template?: string
+  ): IntelligenceMessage[] {
+    if (!template) return messages
+    const systemMsg: IntelligenceMessage = { role: 'system', content: template }
+    const rest = messages ?? []
+    return [systemMsg, ...rest]
+  }
+
+  private async invokeEmbeddingWithGovernance(
+    embeddingProvider: {
       embedding: (
-        p: IntelligenceEmbeddingPayload,
-        o: IntelligenceInvokeOptions
+        payload: IntelligenceEmbeddingPayload,
+        options: IntelligenceInvokeOptions
       ) => Promise<IntelligenceInvokeResult<number[]>>
-    }): Promise<IntelligenceInvokeResult<number[]>> => {
-      const embeddingPayload = payload as IntelligenceEmbeddingPayload
-      const rawText = normalizeEmbeddingText(embeddingPayload.text)
-      if (!rawText || !rawText.trim()) {
-        throw new Error('[Intelligence] Embedding text is required')
+    },
+    payload: IntelligenceEmbeddingPayload,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<number[]>> {
+    const rawText = normalizeEmbeddingText(payload.text)
+    if (!rawText || !rawText.trim()) {
+      throw new Error('[Intelligence] Embedding text is required')
+    }
+
+    const { chunks, truncated } = chunkText(rawText)
+    const vectors: number[][] = []
+    const weights: number[] = []
+    let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    let latency = 0
+    let model = ''
+    let traceId = ''
+    let providerName = ''
+
+    for (const chunk of chunks) {
+      const res = await embeddingProvider.embedding(
+        {
+          ...payload,
+          text: chunk
+        },
+        runtimeOptions
+      )
+
+      vectors.push(res.result)
+      weights.push(Math.max(1, chunk.length))
+      usage = {
+        promptTokens: usage.promptTokens + (res.usage?.promptTokens ?? 0),
+        completionTokens: usage.completionTokens + (res.usage?.completionTokens ?? 0),
+        totalTokens: usage.totalTokens + (res.usage?.totalTokens ?? 0)
+      }
+      latency += res.latency ?? 0
+      if (!model) model = res.model
+      if (!traceId) traceId = res.traceId
+      if (!providerName) providerName = res.provider
+    }
+
+    const aggregated = averageEmbeddings(vectors, weights)
+
+    return {
+      result: aggregated,
+      usage,
+      model,
+      latency,
+      traceId: traceId
+        ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}`
+        : intelligenceAuditLogger.generateTraceId(),
+      provider: providerName
+    }
+  }
+
+  private async invokeByCapabilityType<T>(
+    provider: IntelligenceProviderAdapter,
+    capabilityType: string,
+    payload: unknown,
+    runtimeOptions: IntelligenceInvokeOptions,
+    promptTemplate?: string,
+    promptVariables?: Record<string, unknown>
+  ): Promise<IntelligenceInvokeResult<T>> {
+    switch (capabilityType) {
+      case 'chat': {
+        const chatPayload = payload as IntelligenceChatPayload
+        let renderedTemplate = promptTemplate
+        if (promptTemplate) {
+          try {
+            renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
+          } catch (error) {
+            logWarn('Failed to render prompt template, falling back to raw template', error)
+          }
+        }
+        const promptAppliedMessages = this.applyPromptTemplate(
+          chatPayload.messages ?? [],
+          renderedTemplate
+        )
+        const nextPayload: IntelligenceChatPayload = {
+          ...chatPayload,
+          messages: promptAppliedMessages
+        }
+        return (await provider.chat(nextPayload, runtimeOptions)) as IntelligenceInvokeResult<T>
       }
 
-      const { chunks, truncated } = chunkText(rawText)
-      const vectors: number[][] = []
-      const weights: number[] = []
-      let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-      let latency = 0
-      let model = ''
-      let traceId = ''
-      let providerName = ''
-
-      for (const chunk of chunks) {
-        const res = await embeddingProvider.embedding(
-          {
-            ...embeddingPayload,
-            text: chunk
+      case 'embedding':
+        return (await this.invokeEmbeddingWithGovernance(
+          provider as {
+            embedding: (
+              p: IntelligenceEmbeddingPayload,
+              o: IntelligenceInvokeOptions
+            ) => Promise<IntelligenceInvokeResult<number[]>>
           },
+          payload as IntelligenceEmbeddingPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'translate':
+        return (await provider.translate(
+          payload as IntelligenceTranslatePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'summarize':
+        return (await provider.summarize!(
+          payload as IntelligenceSummarizePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'rewrite':
+        return (await provider.rewrite!(
+          payload as IntelligenceRewritePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'grammar-check':
+        return (await provider.grammarCheck!(
+          payload as IntelligenceGrammarCheckPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      case 'code-generate':
+        return (await provider.codeGenerate!(
+          payload as IntelligenceCodeGeneratePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'code-explain':
+        return (await provider.codeExplain!(
+          payload as IntelligenceCodeExplainPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'code-review':
+        return (await provider.codeReview!(
+          payload as IntelligenceCodeReviewPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'code-refactor':
+        return (await provider.codeRefactor!(
+          payload as IntelligenceCodeRefactorPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'code-debug':
+        return (await provider.codeDebug!(
+          payload as IntelligenceCodeDebugPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      case 'intent-detect':
+        return (await provider.intentDetect!(
+          payload as IntelligenceIntentDetectPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'sentiment-analyze':
+        return (await provider.sentimentAnalyze!(
+          payload as IntelligenceSentimentAnalyzePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'content-extract':
+        return (await provider.contentExtract!(
+          payload as IntelligenceContentExtractPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'keywords-extract':
+        return (await provider.keywordsExtract!(
+          payload as IntelligenceKeywordsExtractPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'classification':
+        return (await provider.classification!(
+          payload as IntelligenceClassificationPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      case 'vision':
+      case 'vision-ocr':
+        return (await provider.visionOcr(
+          payload as IntelligenceVisionOcrPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'image-caption':
+        return (await provider.imageCaption!(
+          payload as IntelligenceImageCaptionPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'image-analyze':
+        return (await provider.imageAnalyze!(
+          payload as IntelligenceImageAnalyzePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'image-generate':
+        return (await provider.imageGenerate!(
+          payload as IntelligenceImageGeneratePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      case 'rag-query':
+        return (await provider.ragQuery!(
+          payload as IntelligenceRAGQueryPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'semantic-search':
+        return (await provider.semanticSearch!(
+          payload as IntelligenceSemanticSearchPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'rerank':
+        return (await provider.rerank!(
+          payload as IntelligenceRerankPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      case 'agent':
+        return (await provider.agent!(
+          payload as IntelligenceAgentPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
+      default:
+        throw new Error(`[Intelligence] Capability type ${capabilityType} not implemented`)
+    }
+  }
+
+  private async invokeFallbackByCapabilityType<T>(
+    provider: IntelligenceProviderAdapter,
+    capabilityType: string,
+    payload: unknown,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<T> | null> {
+    switch (capabilityType) {
+      case 'chat':
+        return (await provider.chat(
+          payload as IntelligenceChatPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'embedding':
+        return (await this.invokeEmbeddingWithGovernance(
+          provider as {
+            embedding: (
+              p: IntelligenceEmbeddingPayload,
+              o: IntelligenceInvokeOptions
+            ) => Promise<IntelligenceInvokeResult<number[]>>
+          },
+          payload as IntelligenceEmbeddingPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'translate':
+        return (await provider.translate(
+          payload as IntelligenceTranslatePayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      case 'vision':
+      case 'vision-ocr':
+        return (await provider.visionOcr(
+          payload as IntelligenceVisionOcrPayload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+      default:
+        return null
+    }
+  }
+
+  private async tryFallbackProviders<T>(params: {
+    capabilityId: string
+    capabilityType: string
+    payload: unknown
+    runtimeOptions: IntelligenceInvokeOptions
+    manager: IntelligenceProviderManagerAdapter
+    fallbackProviders: IntelligenceProviderConfig[]
+  }): Promise<IntelligenceInvokeResult<T> | null> {
+    const { capabilityId, capabilityType, payload, runtimeOptions, manager, fallbackProviders } =
+      params
+
+    if (fallbackProviders.length === 0) {
+      return null
+    }
+
+    logWarn(`Attempting fallback providers for ${capabilityId}`)
+
+    for (const fallbackConfig of fallbackProviders) {
+      const fallbackProvider = manager.get(fallbackConfig.id)
+      if (!fallbackProvider) continue
+
+      try {
+        const result = await this.invokeFallbackByCapabilityType<T>(
+          fallbackProvider,
+          capabilityType,
+          payload,
           runtimeOptions
         )
-        vectors.push(res.result)
-        weights.push(Math.max(1, chunk.length))
-        usage = {
-          promptTokens: usage.promptTokens + (res.usage?.promptTokens ?? 0),
-          completionTokens: usage.completionTokens + (res.usage?.completionTokens ?? 0),
-          totalTokens: usage.totalTokens + (res.usage?.totalTokens ?? 0)
-        }
-        latency += res.latency ?? 0
-        if (!model) model = res.model
-        if (!traceId) traceId = res.traceId
-        if (!providerName) providerName = res.provider
-      }
+        if (!result) continue
 
-      const aggregated = averageEmbeddings(vectors, weights)
-      return {
-        result: aggregated,
-        usage,
-        model,
-        latency,
-        traceId: traceId
-          ? `${traceId}-chunked-${chunks.length}${truncated ? '-truncated' : ''}`
-          : intelligenceAuditLogger.generateTraceId(),
-        provider: providerName
+        logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
+        return result
+      } catch (fallbackError) {
+        logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
       }
     }
 
-    const promptTemplate =
-      (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
-    const promptVariables = options.metadata?.promptVariables as Record<string, unknown> | undefined
-    const applyPromptTemplate = (messages: IntelligenceMessage[], template?: string) => {
-      if (!template) return messages
-      const systemMsg: IntelligenceMessage = { role: 'system', content: template }
-      const rest = messages ?? []
-      return [systemMsg, ...rest]
+    return null
+  }
+
+  private getAuditMeta(
+    promptTemplate?: string,
+    promptVariables?: Record<string, unknown>
+  ): { promptHash?: string; metadata?: Record<string, unknown> } {
+    if (!promptTemplate) {
+      return {}
     }
 
-    try {
-      switch (capability.type) {
-        // Core text capabilities
-        case 'chat':
-          {
-            const chatPayload = payload as IntelligenceChatPayload
-            let renderedTemplate = promptTemplate
-            if (promptTemplate) {
-              try {
-                renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
-              } catch (error) {
-                logWarn('Failed to render prompt template, falling back to raw template', error)
-              }
-            }
-            const promptAppliedMessages = applyPromptTemplate(
-              chatPayload.messages ?? [],
-              renderedTemplate
-            )
-            const nextPayload: IntelligenceChatPayload = {
-              ...chatPayload,
-              messages: promptAppliedMessages
-            }
-            result = (await provider.chat(
-              nextPayload,
-              runtimeOptions
-            )) as IntelligenceInvokeResult<T>
-          }
-          break
-        case 'embedding':
-          result = (await invokeEmbeddingWithGovernance(
-            provider as {
-              embedding: (
-                p: IntelligenceEmbeddingPayload,
-                o: IntelligenceInvokeOptions
-              ) => Promise<IntelligenceInvokeResult<number[]>>
-            }
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'translate':
-          result = (await provider.translate(
-            payload as IntelligenceTranslatePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'summarize':
-          result = (await provider.summarize!(
-            payload as IntelligenceSummarizePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'rewrite':
-          result = (await provider.rewrite!(
-            payload as IntelligenceRewritePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'grammar-check':
-          result = (await provider.grammarCheck!(
-            payload as IntelligenceGrammarCheckPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        // Code capabilities
-        case 'code-generate':
-          result = (await provider.codeGenerate!(
-            payload as IntelligenceCodeGeneratePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'code-explain':
-          result = (await provider.codeExplain!(
-            payload as IntelligenceCodeExplainPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'code-review':
-          result = (await provider.codeReview!(
-            payload as IntelligenceCodeReviewPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'code-refactor':
-          result = (await provider.codeRefactor!(
-            payload as IntelligenceCodeRefactorPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'code-debug':
-          result = (await provider.codeDebug!(
-            payload as IntelligenceCodeDebugPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        // Analysis capabilities
-        case 'intent-detect':
-          result = (await provider.intentDetect!(
-            payload as IntelligenceIntentDetectPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'sentiment-analyze':
-          result = (await provider.sentimentAnalyze!(
-            payload as IntelligenceSentimentAnalyzePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'content-extract':
-          result = (await provider.contentExtract!(
-            payload as IntelligenceContentExtractPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'keywords-extract':
-          result = (await provider.keywordsExtract!(
-            payload as IntelligenceKeywordsExtractPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'classification':
-          result = (await provider.classification!(
-            payload as IntelligenceClassificationPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        // Vision capabilities
-        case 'vision':
-        case 'vision-ocr':
-          result = (await provider.visionOcr(
-            payload as IntelligenceVisionOcrPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'image-caption':
-          result = (await provider.imageCaption!(
-            payload as IntelligenceImageCaptionPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'image-analyze':
-          result = (await provider.imageAnalyze!(
-            payload as IntelligenceImageAnalyzePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'image-generate':
-          result = (await provider.imageGenerate!(
-            payload as IntelligenceImageGeneratePayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        // RAG & Search capabilities
-        case 'rag-query':
-          result = (await provider.ragQuery!(
-            payload as IntelligenceRAGQueryPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'semantic-search':
-          result = (await provider.semanticSearch!(
-            payload as IntelligenceSemanticSearchPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-        case 'rerank':
-          result = (await provider.rerank!(
-            payload as IntelligenceRerankPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        // Agent capabilities
-        case 'agent':
-          result = (await provider.agent!(
-            payload as IntelligenceAgentPayload,
-            runtimeOptions
-          )) as IntelligenceInvokeResult<T>
-          break
-
-        default:
-          throw new Error(`[Intelligence] Capability type ${capability.type} not implemented`)
-      }
-
-      if (this.config.enableCache) {
-        this.setToCache(cacheKey, result)
-      }
-
-      if (this.config.enableAudit) {
-        await this.logAudit({
-          traceId: result.traceId,
-          timestamp: startTime,
-          capabilityId,
-          provider: result.provider,
-          model: result.model,
-          usage: result.usage,
-          latency: result.latency,
-          success: true,
-          caller: runtimeOptions.metadata?.caller,
-          userId: runtimeOptions.metadata?.userId,
-          promptHash: promptTemplate
-            ? intelligenceAuditLogger.generatePromptHash(promptTemplate)
-            : undefined,
-          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined
-        })
-      }
-
-      logInfo(
-        `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
-      )
-      return result
-    } catch (error) {
-      logError(`Invoke error for ${capabilityId}`, error)
-
-      if (this.config.enableAudit) {
-        await this.logAudit({
-          traceId: intelligenceAuditLogger.generateTraceId(),
-          timestamp: startTime,
-          capabilityId,
-          provider: strategyResult.selectedProvider.id,
-          model: 'unknown',
-          usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          latency: Date.now() - startTime,
-          success: false,
-          error: error instanceof Error ? error.message : String(error),
-          caller: runtimeOptions.metadata?.caller,
-          userId: runtimeOptions.metadata?.userId,
-          promptHash: promptTemplate
-            ? intelligenceAuditLogger.generatePromptHash(promptTemplate)
-            : undefined,
-          metadata: promptTemplate ? { promptTemplate, promptVariables } : undefined
-        })
-      }
-
-      if (strategyResult.fallbackProviders.length > 0) {
-        logWarn(`Attempting fallback providers for ${capabilityId}`)
-        for (const fallbackConfig of strategyResult.fallbackProviders) {
-          const fallbackProvider = manager.get(fallbackConfig.id)
-          if (!fallbackProvider) continue
-
-          try {
-            switch (capability.type) {
-              case 'chat':
-                result = (await fallbackProvider.chat(
-                  payload as IntelligenceChatPayload,
-                  runtimeOptions
-                )) as IntelligenceInvokeResult<T>
-                break
-              case 'embedding':
-                result = (await invokeEmbeddingWithGovernance(
-                  fallbackProvider as {
-                    embedding: (
-                      p: IntelligenceEmbeddingPayload,
-                      o: IntelligenceInvokeOptions
-                    ) => Promise<IntelligenceInvokeResult<number[]>>
-                  }
-                )) as IntelligenceInvokeResult<T>
-                break
-              case 'translate':
-                result = (await fallbackProvider.translate(
-                  payload as IntelligenceTranslatePayload,
-                  runtimeOptions
-                )) as IntelligenceInvokeResult<T>
-                break
-              case 'vision':
-                result = (await fallbackProvider.visionOcr(
-                  payload as IntelligenceVisionOcrPayload,
-                  runtimeOptions
-                )) as IntelligenceInvokeResult<T>
-                break
-              default:
-                continue
-            }
-
-            logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
-            return result
-          } catch (fallbackError) {
-            logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
-          }
-        }
-      }
-
-      throw error
+    return {
+      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate),
+      metadata: { promptTemplate, promptVariables }
     }
+  }
+
+  private async writeSuccessAudit(params: {
+    result: IntelligenceInvokeResult<unknown>
+    startTime: number
+    capabilityId: string
+    caller?: string
+    userId?: string
+    promptTemplate?: string
+    promptVariables?: Record<string, unknown>
+  }): Promise<void> {
+    if (!this.config.enableAudit) {
+      return
+    }
+
+    const { result, startTime, capabilityId, caller, userId, promptTemplate, promptVariables } =
+      params
+    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+
+    await this.logAudit({
+      traceId: result.traceId,
+      timestamp: startTime,
+      capabilityId,
+      provider: result.provider,
+      model: result.model,
+      usage: result.usage,
+      latency: result.latency,
+      success: true,
+      caller,
+      userId,
+      ...auditMeta
+    })
+  }
+
+  private async writeFailureAudit(params: {
+    error: unknown
+    startTime: number
+    capabilityId: string
+    providerId: string
+    caller?: string
+    userId?: string
+    promptTemplate?: string
+    promptVariables?: Record<string, unknown>
+  }): Promise<void> {
+    if (!this.config.enableAudit) {
+      return
+    }
+
+    const {
+      error,
+      startTime,
+      capabilityId,
+      providerId,
+      caller,
+      userId,
+      promptTemplate,
+      promptVariables
+    } = params
+    const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+
+    await this.logAudit({
+      traceId: intelligenceAuditLogger.generateTraceId(),
+      timestamp: startTime,
+      capabilityId,
+      provider: providerId,
+      model: 'unknown',
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      latency: Date.now() - startTime,
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      caller,
+      userId,
+      ...auditMeta
+    })
   }
 
   async *invokeStream(

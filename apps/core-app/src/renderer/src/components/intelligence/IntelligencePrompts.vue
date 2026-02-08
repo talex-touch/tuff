@@ -1,7 +1,6 @@
 <script setup name="IntelligencePrompts" lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -11,8 +10,7 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 
 const { t } = useI18n()
 const router = useRouter()
-const transport = useTuffTransport()
-const openPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
+const appSdk = useAppSdk()
 
 // TODO: 从存储中获取实际数据
 const promptFiles = ref<string[]>([])
@@ -25,7 +23,7 @@ function handlePromptsClick() {
 
 async function handleOpenFolder() {
   try {
-    await transport.send(openPromptsFolderEvent)
+    await appSdk.openPromptsFolder()
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('Failed to open prompts folder:', error)

@@ -246,6 +246,12 @@ export interface IPluginUtils {
   meta: import('./meta-sdk').MetaSDK
 
   /**
+   * Power SDK for low power status
+   * @see {@link PowerSDK}
+   */
+  power: import('./power').PowerSDK
+
+  /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */

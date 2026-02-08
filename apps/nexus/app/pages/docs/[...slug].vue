@@ -458,6 +458,55 @@ const heroUpdatedLabel = computed(() => {
 })
 const heroVerifiedLabel = computed(() => (docMeta.value?.verified ? 'Verified' : ''))
 
+type DocSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const DOC_SYNC_STATUS_ALIASES: Record<string, DocSyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+const docSyncStatus = computed<DocSyncStatusKey>(() => {
+  if (docMeta.value?.verified === true)
+    return 'verified'
+
+  const raw = typeof docMeta.value?.syncStatus === 'string'
+    ? docMeta.value.syncStatus.trim()
+    : ''
+
+  return DOC_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
+})
+
+const heroSyncBanner = computed(() => {
+  if (!docScope.value.isComponent || docSyncStatus.value === 'verified')
+    return null
+
+  if (docSyncStatus.value === 'in_progress' || docSyncStatus.value === 'not_started') {
+    return {
+      status: 'in_progress',
+      icon: 'i-carbon-in-progress',
+      title: locale.value === 'zh' ? '当前组件文档正在开发中' : 'This component doc is in progress',
+      description: locale.value === 'zh'
+        ? '该页面正在持续迁移，示例与 API 可能会继续调整。'
+        : 'This page is still being migrated. Demos and API details may change.',
+    }
+  }
+
+  return {
+    status: 'migrated',
+    icon: 'i-carbon-warning-alt',
+    title: locale.value === 'zh' ? '该页面由 AI 迁移生成，请谨慎使用' : 'This page was migrated by AI, please review carefully',
+    description: locale.value === 'zh'
+      ? '内容已迁移完成，但仍建议结合源码和人工评审结果使用。'
+      : 'Migration is complete, but please validate against source code and manual review.',
+  }
+})
+
 const formattedLastUpdated = computed(() => {
   if (!lastUpdatedDate.value)
     return null
@@ -762,6 +811,21 @@ watch(
               :verified-label="heroVerifiedLabel"
             />
           </div>
+          <div
+            v-if="heroSyncBanner"
+            class="docs-sync-banner"
+            :data-status="heroSyncBanner.status"
+          >
+            <span class="docs-sync-banner__icon" :class="heroSyncBanner.icon" />
+            <div class="docs-sync-banner__content">
+              <p class="docs-sync-banner__title">
+                {{ heroSyncBanner.title }}
+              </p>
+              <p class="docs-sync-banner__desc">
+                {{ heroSyncBanner.description }}
+              </p>
+            </div>
+          </div>
           <ContentRenderer
             :value="doc ?? {}"
             :class="[
@@ -915,6 +979,86 @@ watch(
   gap: 12px;
 }
 
+.docs-sync-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.75);
+  background: rgba(248, 250, 252, 0.7);
+  padding: 12px 14px;
+}
+
+.docs-sync-banner__icon {
+  margin-top: 1px;
+  font-size: 16px;
+  color: rgba(71, 85, 105, 0.9);
+}
+
+.docs-sync-banner__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-sync-banner__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.docs-sync-banner__desc {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(71, 85, 105, 0.9);
+}
+
+.docs-sync-banner[data-status='in_progress'] {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.docs-sync-banner[data-status='in_progress'] .docs-sync-banner__icon {
+  color: rgba(180, 83, 9, 0.92);
+}
+
+.docs-sync-banner[data-status='migrated'] {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.docs-sync-banner[data-status='migrated'] .docs-sync-banner__icon {
+  color: rgba(217, 119, 6, 0.92);
+}
+
+::global(.dark .docs-sync-banner),
+::global([data-theme='dark'] .docs-sync-banner) {
+  border-color: rgba(71, 85, 105, 0.55);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::global(.dark .docs-sync-banner__title),
+::global([data-theme='dark'] .docs-sync-banner__title) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+::global(.dark .docs-sync-banner__desc),
+::global([data-theme='dark'] .docs-sync-banner__desc) {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+::global(.dark .docs-sync-banner[data-status='in_progress']),
+::global([data-theme='dark'] .docs-sync-banner[data-status='in_progress']) {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(120, 53, 15, 0.3);
+}
+
+::global(.dark .docs-sync-banner[data-status='migrated']),
+::global([data-theme='dark'] .docs-sync-banner[data-status='migrated']) {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(120, 53, 15, 0.24);
+}
 .docs-hero-breadcrumb {
   display: flex;
   flex-wrap: wrap;

@@ -33,6 +33,8 @@ components:
     QuotaInfo:
       type: object
       properties:
+        plan_tier:
+          type: string
         limits:
           type: object
           properties:
@@ -54,8 +56,53 @@ components:
             used_devices:
               type: integer
       required:
+        - plan_tier
         - limits
         - usage
+    KeyringMeta:
+      type: object
+      properties:
+        keyring_id:
+          type: string
+        device_id:
+          type: string
+        key_type:
+          type: string
+        rotated_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+        has_recovery_code:
+          type: boolean
+      required:
+        - keyring_id
+        - device_id
+        - key_type
+        - created_at
+        - has_recovery_code
+    KeyringSecret:
+      type: object
+      properties:
+        keyring_id:
+          type: string
+        device_id:
+          type: string
+        key_type:
+          type: string
+        encrypted_key:
+          type: string
+        rotated_at:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required:
+        - keyring_id
+        - device_id
+        - key_type
+        - encrypted_key
+        - created_at
     SyncItemInput:
       type: object
       properties:
@@ -189,6 +236,8 @@ paths:
                 properties:
                   sync_token:
                     type: string
+                  sync_token_expires_at:
+                    type: string
                   server_cursor:
                     type: integer
                   device_id:
@@ -197,6 +246,7 @@ paths:
                     $ref: '#/components/schemas/QuotaInfo'
                 required:
                   - sync_token
+                  - sync_token_expires_at
                   - server_cursor
                   - device_id
                   - quotas
@@ -346,6 +396,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/sync/blobs/{blob_id}/download:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+        - $ref: '#/components/parameters/XSyncToken'
+        - name: blob_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/quotas:
     get:
       security:
@@ -429,6 +505,142 @@ paths:
                     type: string
                 required:
                   - keyring_id
+  /api/v1/keys/list:
+    get:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyrings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KeyringMeta'
+                required:
+                  - keyrings
+  /api/v1/keys/issue-device:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_device_id:
+                  type: string
+                key_type:
+                  type: string
+                encrypted_key:
+                  type: string
+                recovery_code_hash:
+                  type: string
+                  nullable: true
+              required:
+                - target_device_id
+                - key_type
+                - encrypted_key
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyring_id:
+                    type: string
+                required:
+                  - keyring_id
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/keys/recover-device:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                recovery_code:
+                  type: string
+              required:
+                - recovery_code
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyrings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/KeyringSecret'
+                required:
+                  - keyrings
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/devices/attest:
+    post:
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/XDeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                machine_code_hash:
+                  type: string
+              required:
+                - machine_code_hash
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  device_id:
+                    type: string
+                  updated_at:
+                    type: string
+                required:
+                  - ok
+                  - device_id
+                  - updated_at
   /api/v1/keys/rotate:
     post:
       security:

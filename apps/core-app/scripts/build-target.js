@@ -152,6 +152,45 @@ function resolveBuilderBin() {
   return binPath;
 }
 
+function verifyNativeOcrModule(strict) {
+  const releaseDir = path.join(
+    projectRoot,
+    'node_modules',
+    '@talex-touch',
+    'tuff-native',
+    'build',
+    'Release'
+  );
+  const modulePath = path.join(releaseDir, 'tuff_native_ocr.node');
+  if (fs.existsSync(modulePath)) {
+    console.log(`✓ Native OCR module found: ${modulePath}`);
+    return;
+  }
+
+  let files = [];
+  if (fs.existsSync(releaseDir)) {
+    try {
+      files = fs.readdirSync(releaseDir).filter((name) => name.endsWith('.node'));
+    } catch (error) {
+      console.warn(`Warning: Failed to inspect native release directory: ${error.message}`);
+    }
+  }
+
+  if (files.length > 0) {
+    console.log(`✓ Native OCR module found: ${path.join(releaseDir, files[0])}`);
+    return;
+  }
+
+  const message =
+    `Native OCR module missing at ${releaseDir}. Please ensure @talex-touch/tuff-native was rebuilt for Electron target.`;
+
+  if (strict) {
+    throw new Error(message);
+  }
+
+  console.warn(`Warning: ${message}`);
+}
+
 function build() {
   const cleanupTempLock = ensureLocalPnpmLockfile();
   try {
@@ -333,6 +372,7 @@ function build() {
 
   if (skipInstallAppDeps) {
     console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
+    verifyNativeOcrModule(process.env.CI === 'true');
   } else {
     console.log('=== Rebuilding Electron native modules for packaged app ===');
     const installPlatformMap = {
@@ -362,6 +402,7 @@ function build() {
         }
       });
       console.log('✓ electron-builder install-app-deps completed\n');
+      verifyNativeOcrModule(process.env.CI === 'true');
     } catch (error) {
       console.error('\n❌ electron-builder install-app-deps failed!');
       throw error;

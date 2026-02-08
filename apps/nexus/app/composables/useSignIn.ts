@@ -89,6 +89,23 @@ export function useSignIn() {
       toast.warning(message)
   }
 
+  function resolveOauthRouteErrorMessage() {
+    const error = oauthErrorParam.value
+    if (!error)
+      return ''
+
+    const description = oauthErrorDescriptionParam.value
+    const normalized = error.toLowerCase()
+    if (normalized.includes('accessdenied') || normalized.includes('access_denied')) {
+      return t('auth.oauthCancelled', '你已取消授权，可返回并选择其他方式。')
+    }
+
+    if (description)
+      return description
+
+    return t('auth.oauthError', '登录失败，请重试。')
+  }
+
   function recordLoginMethod(method: LoginMethod) {
     lastLoginMethod.value = method
     if (hasWindow())
@@ -141,6 +158,8 @@ export function useSignIn() {
   const redirectParam = computed(() => pickFirstQueryValue(route.query.redirect_url))
   const langParam = computed(() => pickFirstQueryValue(route.query.lang))
   const reasonParam = computed(() => pickFirstQueryValue(route.query.reason))
+  const oauthErrorParam = computed(() => pickFirstQueryValue(route.query.error))
+  const oauthErrorDescriptionParam = computed(() => pickFirstQueryValue(route.query.error_description))
 
   const localeFromQuery = computed(() => {
     const param = langParam.value
@@ -179,7 +198,9 @@ export function useSignIn() {
     return `/forgot-password?${params.toString()}`
   })
 
-  const oauthReturn = computed(() => oauthParam.value === '1' || Boolean(storedOauthContext.value))
+  const isOauthErrorCallback = computed(() => Boolean(oauthErrorParam.value) && Boolean(storedOauthContext.value))
+  const isOauthCallback = computed(() => oauthParam.value === '1' || isOauthErrorCallback.value)
+  const oauthReturn = computed(() => isOauthCallback.value)
 
   const oauthContext = computed(() => {
     const fallbackFlow = flowParam.value === 'bind' || storedOauthContext.value?.flow === 'bind'
@@ -318,6 +339,11 @@ export function useSignIn() {
   onMounted(() => {
     supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
     refreshStoredOauthContext()
+
+    if (!isOauthCallback.value && storedOauthContext.value) {
+      clearOauthContext()
+      storedOauthContext.value = null
+    }
   })
 
   onBeforeUnmount(() => {
@@ -326,13 +352,16 @@ export function useSignIn() {
   })
 
   async function clearOauthQuery() {
-    if (!route.query.oauth && !route.query.provider && !route.query.flow)
+    if (!route.query.oauth && !route.query.provider && !route.query.flow && !route.query.redirect_url && !route.query.error && !route.query.error_description)
       return
 
     const nextQuery = { ...route.query } as Record<string, string | string[]>
     delete nextQuery.oauth
     delete nextQuery.provider
     delete nextQuery.flow
+    delete nextQuery.redirect_url
+    delete nextQuery.error
+    delete nextQuery.error_description
     await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
   }
 
@@ -441,6 +470,18 @@ export function useSignIn() {
     if (!oauthReturn.value)
       return
 
+    const routeOauthError = resolveOauthRouteErrorMessage()
+    if (routeOauthError) {
+      clearOauthContext()
+      storedOauthContext.value = null
+      oauthPhase.value = 'error'
+      oauthError.value = routeOauthError
+      step.value = 'oauth'
+      oauthHandled.value = true
+      oauthLoading.value = false
+      return
+    }
+
     if (step.value !== 'oauth' && step.value !== 'bind-email' && step.value !== 'success')
       step.value = 'oauth'
 
@@ -450,6 +491,8 @@ export function useSignIn() {
 
   watchEffect(() => {
     if (!oauthReturn.value)
+      return
+    if (resolveOauthRouteErrorMessage())
       return
     if (status.value !== 'authenticated')
       return

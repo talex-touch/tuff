@@ -210,6 +210,9 @@ importers:
       '@talex-touch/tuff-intelligence':
         specifier: workspace:^
         version: link:../../packages/tuff-intelligence
+      '@talex-touch/tuff-native':
+        specifier: workspace:^
+        version: link:../../packages/tuff-native
       '@talex-touch/tuffex':
         specifier: workspace:^
         version: link:../../packages/tuffex
@@ -790,6 +793,19 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  packages/tuff-native:
+    dependencies:
+      node-addon-api:
+        specifier: ^7.1.1
+        version: 7.1.1
+      node-gyp-build:
+        specifier: ^4.8.4
+        version: 4.8.4
+    devDependencies:
+      node-gyp:
+        specifier: ^11.5.0
+        version: 11.5.0
 
   packages/tuffcli:
     dependencies:

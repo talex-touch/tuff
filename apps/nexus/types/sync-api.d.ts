@@ -18,6 +18,7 @@ export interface paths {
           content: {
             "application/json": {
               sync_token: string;
+              sync_token_expires_at: string;
               server_cursor: number;
               device_id: string;
               quotas: components["schemas"]["QuotaInfo"];
@@ -142,6 +143,33 @@ export interface paths {
       };
     };
   };
+  "/api/v1/sync/blobs/{blob_id}/download": {
+    get: {
+      parameters: {
+        header: {
+          "x-device-id": components["parameters"]["XDeviceId"];
+          "x-sync-token": components["parameters"]["XSyncToken"];
+        };
+        path: {
+          blob_id: string;
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            "application/octet-stream": string;
+          };
+        };
+        /** @description Not found */
+        404: {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
   "/api/v1/quotas": {
     get: {
       parameters: {
@@ -215,6 +243,120 @@ export interface paths {
       };
     };
   };
+  "/api/v1/keys/list": {
+    get: {
+      parameters: {
+        header: {
+          "x-device-id": components["parameters"]["XDeviceId"];
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            "application/json": {
+              keyrings: components["schemas"]["KeyringMeta"][];
+            };
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/keys/issue-device": {
+    post: {
+      parameters: {
+        header: {
+          "x-device-id": components["parameters"]["XDeviceId"];
+        };
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            target_device_id: string;
+            key_type: string;
+            encrypted_key: string;
+            recovery_code_hash?: string | null;
+          };
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            "application/json": {
+              keyring_id: string;
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/keys/recover-device": {
+    post: {
+      parameters: {
+        header: {
+          "x-device-id": components["parameters"]["XDeviceId"];
+        };
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            recovery_code: string;
+          };
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            "application/json": {
+              keyrings: components["schemas"]["KeyringSecret"][];
+            };
+          };
+        };
+        /** @description Forbidden */
+        403: {
+          content: {
+            "application/json": components["schemas"]["ErrorResponse"];
+          };
+        };
+      };
+    };
+  };
+  "/api/v1/devices/attest": {
+    post: {
+      parameters: {
+        header: {
+          "x-device-id": components["parameters"]["XDeviceId"];
+        };
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            machine_code_hash: string;
+          };
+        };
+      };
+      responses: {
+        /** @description OK */
+        200: {
+          content: {
+            "application/json": {
+              ok: boolean;
+              device_id: string;
+              updated_at: string;
+            };
+          };
+        };
+      };
+    };
+  };
   "/api/v1/keys/rotate": {
     post: {
       parameters: {
@@ -252,6 +394,7 @@ export interface components {
       errorCode: string;
     };
     QuotaInfo: {
+      plan_tier: string;
       limits: {
         storage_limit_bytes?: number;
         object_limit?: number;
@@ -263,6 +406,22 @@ export interface components {
         used_objects?: number;
         used_devices?: number;
       };
+    };
+    KeyringMeta: {
+      keyring_id: string;
+      device_id: string;
+      key_type: string;
+      rotated_at?: string | null;
+      created_at: string;
+      has_recovery_code: boolean;
+    };
+    KeyringSecret: {
+      keyring_id: string;
+      device_id: string;
+      key_type: string;
+      encrypted_key: string;
+      rotated_at?: string | null;
+      created_at: string;
     };
     SyncItemInput: {
       item_id: string;

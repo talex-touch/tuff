@@ -41,6 +41,9 @@ export interface FileIndexStats {
   totalFiles: number
   failedFiles: number
   skippedFiles: number
+  completedFiles: number
+  embeddingCompletedFiles: number
+  embeddingRows: number
 }
 
 export interface FileIndexRebuildRequest {

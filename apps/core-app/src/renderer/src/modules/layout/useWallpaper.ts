@@ -4,6 +4,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle } from '~/modules/storage/theme-style'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
 
@@ -19,8 +20,7 @@ const DEFAULT_FILTER = { brightness: 100, contrast: 100, saturate: 100 }
 function resolveWallpaperUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return ''
   if (pathOrUrl.startsWith('http') || pathOrUrl.startsWith('data:')) return pathOrUrl
-  if (pathOrUrl.startsWith('tfile://')) return pathOrUrl
-  return `tfile://${pathOrUrl}`
+  return buildTfileUrl(pathOrUrl)
 }
 
 export function useWallpaper() {

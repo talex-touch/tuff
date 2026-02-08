@@ -3,11 +3,11 @@ import type {
   AppIndexSettings,
   DeviceIdleSettings,
   FileIndexStatus,
-  FileIndexBatteryStatus
+  FileIndexBatteryStatus,
+  FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { ElMessage } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,16 +24,14 @@ import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgressUpdate } =
   useFileIndexMonitor()
 const { t, te } = useI18n()
-const transport = useTuffTransport()
+const settingsSdk = useSettingsSdk()
 
 const indexStatus = ref<FileIndexStatus | null>(null)
 const isRebuilding = ref(false)
 const lastChecked = ref<Date | null>(null)
 const estimatedTimeRemaining = ref<number | null>(null)
 const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
-const indexStats = ref<{ totalFiles: number; failedFiles: number; skippedFiles: number } | null>(
-  null
-)
+const indexStats = ref<FileIndexStats | null>(null)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 
@@ -155,7 +153,7 @@ function toAppIndexForm(settings: AppIndexSettings): AppIndexForm {
 
 async function loadDeviceIdleSettings() {
   try {
-    const settings = (await transport.send(AppEvents.deviceIdle.getSettings)) as DeviceIdleSettings
+    const settings = await settingsSdk.deviceIdle.getSettings()
     deviceIdleSettings.value = settings
     deviceIdleForm.value = toDeviceIdleForm(settings)
   } catch (error) {
@@ -186,10 +184,7 @@ async function saveDeviceIdleSettings() {
       forceAfterHours
     }
 
-    const updated = (await transport.send(
-      AppEvents.deviceIdle.updateSettings,
-      payload
-    )) as DeviceIdleSettings
+    const updated = await settingsSdk.deviceIdle.updateSettings(payload)
     deviceIdleSettings.value = updated
     deviceIdleForm.value = toDeviceIdleForm(updated)
     toast.success(t('settings.settingFileIndex.deviceIdleSaved'))
@@ -203,7 +198,7 @@ async function saveDeviceIdleSettings() {
 
 async function loadAppIndexSettings() {
   try {
-    const settings = (await transport.send(AppEvents.appIndex.getSettings)) as AppIndexSettings
+    const settings = await settingsSdk.appIndex.getSettings()
     appIndexSettings.value = settings
     appIndexForm.value = toAppIndexForm(settings)
   } catch (error) {
@@ -250,10 +245,7 @@ async function saveAppIndexSettings() {
       fullSyncCheckIntervalMs: Math.round(fullSyncCheckIntervalMinutes * 60000)
     }
 
-    const updated = (await transport.send(
-      AppEvents.appIndex.updateSettings,
-      payload
-    )) as AppIndexSettings
+    const updated = await settingsSdk.appIndex.updateSettings(payload)
     appIndexSettings.value = updated
     appIndexForm.value = toAppIndexForm(updated)
     toast.success(t('settings.settingFileIndex.appIndexSaved'))
@@ -521,6 +513,23 @@ async function triggerRebuild() {
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.skippedFiles') }}</span>
           <span class="stat-value skipped">&nbsp;{{ indexStats.skippedFiles }}</span>
+        </div>
+        <span class="stat-divider">·</span>
+        <div class="stat-item">
+          <span class="stat-label">{{ t('settings.settingFileIndex.completedFiles') }}</span>
+          <span class="stat-value">&nbsp;{{ indexStats.completedFiles }}</span>
+        </div>
+        <span class="stat-divider">·</span>
+        <div class="stat-item">
+          <span class="stat-label">
+            {{ t('settings.settingFileIndex.embeddingCompletedFiles') }}
+          </span>
+          <span class="stat-value">&nbsp;{{ indexStats.embeddingCompletedFiles }}</span>
+        </div>
+        <span class="stat-divider">·</span>
+        <div class="stat-item">
+          <span class="stat-label">{{ t('settings.settingFileIndex.embeddingRows') }}</span>
+          <span class="stat-value">&nbsp;{{ indexStats.embeddingRows }}</span>
         </div>
       </div>
     </TuffBlockSlot>
@@ -842,7 +851,7 @@ async function triggerRebuild() {
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .stat-item {

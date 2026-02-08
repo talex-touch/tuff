@@ -1,9 +1,15 @@
 import { getTelemetryApiBase, normalizeBaseUrl } from '../env'
 import type {
   ConflictItem,
+  DeviceAttestResponse,
   HandshakeResponse,
   KeyRegisterResponse,
+  KeyringMeta,
+  KeyringSecret,
   KeyRotateResponse,
+  KeysIssueDeviceResponse,
+  KeysListResponse,
+  KeysRecoverDeviceResponse,
   PullResponse,
   PushResponse,
   QuotaInfo,
@@ -28,6 +34,7 @@ export interface CloudSyncSDKOptions {
   now?: () => number
   syncTokenCache?: { token?: string, expiresAt?: string }
   onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  onStepUpRequired?: () => string | null | Promise<string | null>
   formDataFactory?: () => FormData
 }
 
@@ -53,6 +60,7 @@ export class CloudSyncSDK {
   private now: () => number
   private syncTokenCache: { token?: string, expiresAt?: string }
   private onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  private onStepUpRequired?: () => string | null | Promise<string | null>
   private formDataFactory?: () => FormData
   private handshakePromise: Promise<HandshakeResponse> | null = null
 
@@ -65,6 +73,7 @@ export class CloudSyncSDK {
     this.now = options.now ?? (() => Date.now())
     this.syncTokenCache = options.syncTokenCache ?? {}
     this.onSyncTokenUpdate = options.onSyncTokenUpdate
+    this.onStepUpRequired = options.onStepUpRequired
     this.formDataFactory = options.formDataFactory
   }
 
@@ -78,7 +87,7 @@ export class CloudSyncSDK {
         method: 'POST',
         headers,
       })
-      this.updateSyncToken(response.sync_token)
+      this.updateSyncToken(response.sync_token, response.sync_token_expires_at)
       return response
     })()
 
@@ -150,6 +159,123 @@ export class CloudSyncSDK {
     })
   }
 
+  async listKeyrings(): Promise<KeyringMeta[]> {
+    const headers = await this.buildHeaders()
+    const response = await this.request<KeysListResponse>('/api/v1/keys/list', { method: 'GET', headers })
+    return response.keyrings
+  }
+
+  async issueDeviceKey(payload: {
+    target_device_id: string
+    key_type: string
+    encrypted_key: string
+    recovery_code_hash?: string | null
+  }, options?: { stepUpToken?: string | null }): Promise<KeysIssueDeviceResponse> {
+    const request = async (stepUpToken?: string | null) => {
+      const headers = await this.buildHeaders(
+        stepUpToken ? { 'x-login-token': stepUpToken } : undefined,
+      )
+      return this.request<KeysIssueDeviceResponse>('/api/v1/keys/issue-device', {
+        method: 'POST',
+        headers,
+        json: payload,
+      })
+    }
+
+    try {
+      return await request(options?.stepUpToken)
+    }
+    catch (error) {
+      if (options?.stepUpToken || !this.isStepUpRequired(error)) {
+        throw error
+      }
+      const fallbackToken = await this.tryRequestStepUpToken()
+      if (!fallbackToken) {
+        throw error
+      }
+      return await request(fallbackToken)
+    }
+  }
+
+  async recoverDevice(payload: { recovery_code: string }, options?: { stepUpToken?: string | null }): Promise<KeyringSecret[]> {
+    const request = async (stepUpToken?: string | null) => {
+      const headers = await this.buildHeaders(
+        stepUpToken ? { 'x-login-token': stepUpToken } : undefined,
+      )
+      const response = await this.request<KeysRecoverDeviceResponse>('/api/v1/keys/recover-device', {
+        method: 'POST',
+        headers,
+        json: payload,
+      })
+      return response.keyrings
+    }
+
+    try {
+      return await request(options?.stepUpToken)
+    }
+    catch (error) {
+      if (options?.stepUpToken || !this.isStepUpRequired(error)) {
+        throw error
+      }
+      const fallbackToken = await this.tryRequestStepUpToken()
+      if (!fallbackToken) {
+        throw error
+      }
+      return await request(fallbackToken)
+    }
+  }
+
+  async attestDevice(payload: { machine_code_hash: string }): Promise<DeviceAttestResponse> {
+    const headers = await this.buildHeaders()
+    return this.request<DeviceAttestResponse>('/api/v1/devices/attest', {
+      method: 'POST',
+      headers,
+      json: payload,
+    })
+  }
+
+  async downloadBlob(blobId: string): Promise<{
+    data: ArrayBuffer
+    contentType: string
+    sha256: string | null
+    sizeBytes: number | null
+  }> {
+    const path = `/api/v1/sync/blobs/${encodeURIComponent(blobId)}/download`
+    const hadToken = Boolean(this.syncTokenCache.token)
+    const syncToken = await this.ensureSession()
+
+    try {
+      const headers = await this.buildHeaders()
+      const result = await this.requestBinary(path, { method: 'GET', headers, syncToken })
+      const sizeBytes = Number(result.headers.get('content-length'))
+      return {
+        data: result.data,
+        contentType: result.headers.get('content-type') ?? 'application/octet-stream',
+        sha256: result.headers.get('x-content-sha256'),
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null,
+      }
+    }
+    catch (error) {
+      if (
+        hadToken
+        && error instanceof CloudSyncError
+        && (error.errorCode === 'SYNC_INVALID_TOKEN' || error.errorCode === 'SYNC_TOKEN_EXPIRED')
+      ) {
+        const refreshed = await this.handshake()
+        const headers = await this.buildHeaders()
+        const result = await this.requestBinary(path, { method: 'GET', headers, syncToken: refreshed.sync_token })
+        const sizeBytes = Number(result.headers.get('content-length'))
+        return {
+          data: result.data,
+          contentType: result.headers.get('content-type') ?? 'application/octet-stream',
+          sha256: result.headers.get('x-content-sha256'),
+          sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : null,
+        }
+      }
+      throw error
+    }
+  }
+
   private async requestWithSyncToken<T>(path: string, init: RequestInit & { json?: any }): Promise<T> {
     const hadToken = Boolean(this.syncTokenCache.token)
     const syncToken = await this.ensureSession()
@@ -158,13 +284,46 @@ export class CloudSyncSDK {
       return await this.request<T>(path, { ...init, headers, syncToken })
     }
     catch (error) {
-      if (hadToken && error instanceof CloudSyncError && error.errorCode === 'SYNC_INVALID_PAYLOAD') {
+      if (
+        hadToken
+        && error instanceof CloudSyncError
+        && (error.errorCode === 'SYNC_INVALID_TOKEN' || error.errorCode === 'SYNC_TOKEN_EXPIRED')
+      ) {
         const refreshed = await this.handshake()
         const headers = this.mergeHeaders(await this.buildHeaders(), init.headers)
         return this.request<T>(path, { ...init, headers, syncToken: refreshed.sync_token })
       }
       throw error
     }
+  }
+
+  private async tryRequestStepUpToken(): Promise<string | null> {
+    if (!this.onStepUpRequired) {
+      return null
+    }
+    const token = await this.onStepUpRequired()
+    if (typeof token !== 'string') {
+      return null
+    }
+    const trimmed = token.trim()
+    return trimmed || null
+  }
+
+  private isStepUpRequired(error: unknown): boolean {
+    if (!(error instanceof CloudSyncError)) {
+      return false
+    }
+    if (error.errorCode !== 'DEVICE_NOT_AUTHORIZED') {
+      return false
+    }
+    const payloadMessage =
+      error.data && typeof error.data === 'object' && 'message' in error.data
+        ? typeof (error.data as { message?: unknown }).message === 'string'
+            ? (error.data as { message: string }).message
+            : ''
+        : ''
+    const detail = `${typeof error.message === 'string' ? error.message : ''} ${payloadMessage}`
+    return /mf2a|step[-\s]?up|required/i.test(detail)
   }
 
   private async ensureSession(): Promise<string> {
@@ -175,8 +334,8 @@ export class CloudSyncSDK {
     return response.sync_token
   }
 
-  private updateSyncToken(token: string) {
-    const expiresAt = this.syncTokenCache.expiresAt ?? new Date(this.now() + DEFAULT_SYNC_TOKEN_TTL_MS).toISOString()
+  private updateSyncToken(token: string, expiresAtInput?: string) {
+    const expiresAt = expiresAtInput ?? new Date(this.now() + DEFAULT_SYNC_TOKEN_TTL_MS).toISOString()
     this.syncTokenCache.token = token
     this.syncTokenCache.expiresAt = expiresAt
     this.onSyncTokenUpdate?.(token, expiresAt)
@@ -219,6 +378,35 @@ export class CloudSyncSDK {
       })
     }
     return headers
+  }
+
+  private async requestBinary(
+    path: string,
+    init: RequestInit & { syncToken?: string },
+  ): Promise<{ data: ArrayBuffer, headers: Headers }> {
+    const fetchFn = this.fetchFn ?? (globalThis as any).fetch
+    if (!fetchFn)
+      throw new Error('[CloudSyncSDK] Fetch API not available. Provide fetch in options.')
+
+    const headers = new Headers(init.headers ?? {})
+    if (init.syncToken)
+      headers.set('x-sync-token', init.syncToken)
+
+    const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+    const response = await fetchFn(url, { ...init, headers })
+
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type') ?? ''
+      const payload = contentType.includes('application/json')
+        ? await response.json().catch(() => null)
+        : await response.text().catch(() => null)
+
+      const errorCode = payload?.errorCode as SyncErrorCode | undefined
+      const message = errorCode ?? response.statusText ?? 'Cloud sync request failed'
+      throw new CloudSyncError(message, response.status, errorCode, payload)
+    }
+
+    return { data: await response.arrayBuffer(), headers: response.headers }
   }
 
   private async request<T>(path: string, init: RequestInit & { json?: any, syncToken?: string }): Promise<T> {

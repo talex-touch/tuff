@@ -13,6 +13,7 @@ import type {
   StateChangeEvent,
 } from '../../types/division-box'
 import { createPluginTuffTransport } from '../../transport'
+import { createDisposableBag } from '../../transport/sdk'
 import { DivisionBoxEvents } from '../../transport/events'
 import { ensureRendererChannel } from './channel'
 import { tryGetPluginSdkApi } from './plugin-info'
@@ -162,6 +163,11 @@ export interface DivisionBoxSDK {
    * ```
    */
   getState: (sessionId: string, key: string) => Promise<any>
+
+  /**
+   * 释放 SDK 内部注册的监听器
+   */
+  dispose: () => void
 }
 
 /**
@@ -176,42 +182,84 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
   const stateChangeHandlers: Set<StateChangeHandler> = new Set()
   const lifecycleChangeHandlers: Set<LifecycleChangeHandler> = new Set()
   const transport = createPluginTuffTransport(channel)
+  const disposables = createDisposableBag()
+  let disposed = false
 
-  // Register listener for state change events from main process
-  // The channel can be either IPluginChannelBridge (main process) or window.$channel (renderer)
-  const registerListener = () => {
-    if (channel.onMain) {
-      // Main process plugin context
-      channel.onMain('division-box:state-changed', (event: any) => {
-        const payload = (event?.data || event) as StateChangeEvent
-        lifecycleChangeHandlers.forEach(handler => handler(payload))
-        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
-      })
-    }
-    else if (channel.on) {
-      // Renderer process context
-      channel.on('division-box:state-changed', (data: any) => {
-        const payload = data as StateChangeEvent
-        lifecycleChangeHandlers.forEach(handler => handler(payload))
-        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
-      })
+  const emitStateChange = (payload: StateChangeEvent) => {
+    for (const handler of lifecycleChangeHandlers) {
+      try {
+        handler(payload)
+      }
+      catch (error) {
+        console.error('[DivisionBox SDK] onLifecycleChange handler error:', error)
+      }
     }
 
-    try {
-      transport.on(DivisionBoxEvents.stateChanged, (payload: StateChangeEvent) => {
-        lifecycleChangeHandlers.forEach(handler => handler(payload))
-        stateChangeHandlers.forEach(handler => handler({ sessionId: payload.sessionId, state: payload.newState }))
-      })
-    }
-    catch {
-      // ignore
+    for (const handler of stateChangeHandlers) {
+      try {
+        handler({ sessionId: payload.sessionId, state: payload.newState })
+      }
+      catch (error) {
+        console.error('[DivisionBox SDK] onStateChange handler error:', error)
+      }
     }
   }
 
-  registerListener()
+  const dispose = () => {
+    if (disposed) {
+      return
+    }
+
+    disposed = true
+    stateChangeHandlers.clear()
+    lifecycleChangeHandlers.clear()
+    disposables.dispose()
+    transport.destroy()
+  }
+
+  const ensureActive = (method: string) => {
+    if (disposed) {
+      throw new Error(`[DivisionBox SDK] Cannot call ${method} after dispose`)
+    }
+  }
+
+  try {
+    disposables.add(
+      transport.on(DivisionBoxEvents.stateChanged, (payload: StateChangeEvent) => {
+        emitStateChange(payload)
+      }),
+    )
+  }
+  catch {
+    const registerFallback =
+      typeof channel?.onMain === 'function'
+        ? channel.onMain.bind(channel)
+        : typeof channel?.on === 'function'
+          ? channel.on.bind(channel)
+          : null
+
+    if (registerFallback) {
+      const fallbackDispose = registerFallback('division-box:state-changed', (raw: any) => {
+        const payload = (raw?.data || raw) as StateChangeEvent
+        if (payload?.sessionId) {
+          emitStateChange(payload)
+        }
+      })
+      if (typeof fallbackDispose === 'function') {
+        disposables.add(fallbackDispose)
+      }
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    const onBeforeUnload = () => dispose()
+    window.addEventListener('beforeunload', onBeforeUnload, { once: true })
+    disposables.add(() => window.removeEventListener('beforeunload', onBeforeUnload))
+  }
 
   return {
     async open(config: DivisionBoxConfig): Promise<SessionInfo> {
+      ensureActive('open')
       const result = await transport.send(DivisionBoxEvents.open, {
         ...(config as any),
         _sdkapi: resolveSdkApi(),
@@ -229,6 +277,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async close(sessionId: string, options?: CloseOptions): Promise<void> {
+      ensureActive('close')
       const result = await transport.send(DivisionBoxEvents.close, {
         sessionId,
         options,
@@ -241,6 +290,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     onStateChange(handler: StateChangeHandler): () => void {
+      ensureActive('onStateChange')
       stateChangeHandlers.add(handler)
 
       return () => {
@@ -249,6 +299,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     onLifecycleChange(handler: LifecycleChangeHandler): () => void {
+      ensureActive('onLifecycleChange')
       lifecycleChangeHandlers.add(handler)
 
       return () => {
@@ -257,6 +308,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async updateState(sessionId: string, key: string, value: any): Promise<void> {
+      ensureActive('updateState')
       const result = await transport.send(DivisionBoxEvents.updateState, {
         sessionId,
         key,
@@ -270,6 +322,7 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
     },
 
     async getState(sessionId: string, key: string): Promise<any> {
+      ensureActive('getState')
       const result = await transport.send(DivisionBoxEvents.getState, {
         sessionId,
         key,
@@ -282,6 +335,8 @@ export function createDivisionBoxSDK(channel: any): DivisionBoxSDK {
 
       return result.data
     },
+
+    dispose,
   }
 }
 

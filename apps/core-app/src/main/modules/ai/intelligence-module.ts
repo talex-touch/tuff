@@ -12,8 +12,8 @@ import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/tr
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
+import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
-import { withPermission } from '../permission'
 import { capabilityTesterRegistry } from './capability-testers'
 import { aiCapabilityRegistry } from './intelligence-capability-registry'
 import {
@@ -33,13 +33,6 @@ import type { QuotaConfig } from './intelligence-quota-manager'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
 
 const intelligenceLog = createLogger('Intelligence')
-
-type ApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
-
-const toErrorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-const ok = <T>(result?: T): ApiResponse<T> => ({ ok: true, result })
-const fail = (error: unknown): ApiResponse<never> => ({ ok: false, error: toErrorMessage(error) })
 
 type IntelligenceInvokePayload = {
   capabilityId: string
@@ -286,6 +279,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       IntelligenceProviderType.OPENAI,
       IntelligenceProviderType.ANTHROPIC,
       IntelligenceProviderType.SILICONFLOW,
+      IntelligenceProviderType.LOCAL,
       IntelligenceProviderType.CUSTOM
     ]
 
@@ -588,45 +582,91 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   private registerChannels(): void {
     if (!this.transport) return
 
-    const transport = this.transport
-
     intelligenceLog.info('Registering IPC channels')
 
-    // 调用 AI 能力
-    const invokeHandler = async (
-      data: IntelligenceInvokePayload,
-      _context: HandlerContext
-    ): Promise<ApiResponse<IntelligenceInvokeResult<unknown>>> => {
-      try {
+    const { registerSafe, registerProtectedSafe } = this.createChannelRegistrars(this.transport)
+
+    this.registerInvokeChannels(registerProtectedSafe)
+    this.registerCapabilityChannels(registerSafe)
+    this.registerStatsChannels(registerSafe)
+    this.registerQuotaChannels(registerSafe)
+
+    intelligenceLog.success('IPC channels registered')
+  }
+
+  private createChannelRegistrars(transport: NonNullable<IntelligenceModule['transport']>) {
+    const createErrorLogger = (action: string) => {
+      return (error: unknown) => {
+        intelligenceLog.error(`${action} failed:`, { error })
+      }
+    }
+
+    const registerSafe = <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => {
+      transport.on(
+        event as any,
+        safeApiHandler<any, TRes>(handler, {
+          onError: (error) => createErrorLogger(action)(error)
+        })
+      )
+    }
+
+    const registerProtectedSafe = <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => {
+      transport.on(
+        event as any,
+        withPermissionSafeApi({ permissionId }, handler, {
+          onError: (error) => createErrorLogger(action)(error)
+        })
+      )
+    }
+
+    return {
+      registerSafe,
+      registerProtectedSafe
+    }
+  }
+
+  private registerInvokeChannels(
+    registerProtectedSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerProtectedSafe(
+      intelligenceInvokeEvent,
+      'Invoke capability',
+      'ai.basic',
+      async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
           throw new Error('Invalid invoke payload')
         }
 
         const { capabilityId, payload, options } = data
-
         ensureAiConfigLoaded()
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
         const result = await ai.invoke(capabilityId, payload, options)
         intelligenceLog.success(
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
-        return ok(result)
-      } catch (error) {
-        intelligenceLog.error('Invoke failed:', { error })
-        return fail(error)
+        return result
       }
-    }
-
-    transport.on(
-      intelligenceInvokeEvent,
-      withPermission({ permissionId: 'ai.basic' }, invokeHandler)
     )
 
-    const chatHandler = async (
-      data: IntelligenceChatLangchainPayload,
-      _context: HandlerContext
-    ): Promise<ApiResponse<IntelligenceInvokeResult<string>>> => {
-      try {
+    registerProtectedSafe(
+      intelligenceChatLangchainEvent,
+      'LangChain chat',
+      'ai.basic',
+      async (data) => {
         if (!data || typeof data !== 'object' || !Array.isArray(data.messages)) {
           throw new Error('Invalid chat payload')
         }
@@ -649,41 +689,35 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           }
         )
 
-        return ok(result)
-      } catch (error) {
-        intelligenceLog.error('LangChain chat failed:', { error })
-        return fail(error)
+        return result
       }
-    }
-
-    transport.on(
-      intelligenceChatLangchainEvent,
-      withPermission({ permissionId: 'ai.basic' }, chatHandler)
     )
+  }
 
-    // 测试 Provider
-    transport.on(intelligenceTestProviderEvent, async (data, _context) => {
-      try {
-        if (!data || typeof data !== 'object' || !data.provider) {
-          throw new Error('Missing provider payload')
-        }
-
-        const { provider } = data
-        ensureAiConfigLoaded()
-        intelligenceLog.info(`Testing provider: ${provider.id}`)
-        const result = await ai.testProvider(provider)
-        intelligenceLog.success(`Provider ${provider.id} test success`)
-
-        return ok(result)
-      } catch (error) {
-        intelligenceLog.error('Provider test failed:', { error })
-        return fail(error)
+  private registerCapabilityChannels(
+    registerSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerSafe(intelligenceTestProviderEvent, 'Provider test', async (data) => {
+      if (!data || typeof data !== 'object' || !data.provider) {
+        throw new Error('Missing provider payload')
       }
+
+      const { provider } = data
+      ensureAiConfigLoaded()
+      intelligenceLog.info(`Testing provider: ${provider.id}`)
+      const result = await ai.testProvider(provider)
+      intelligenceLog.success(`Provider ${provider.id} test success`)
+      return result
     })
 
-    // 获取能力测试元数据
-    transport.on(intelligenceGetCapabilityTestMetaEvent, async (data, _context) => {
-      try {
+    registerSafe(
+      intelligenceGetCapabilityTestMetaEvent,
+      'Get capability test metadata',
+      async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
           throw new Error('Invalid capability ID')
         }
@@ -692,265 +726,179 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const tester = capabilityTesterRegistry.get(capabilityId)
 
         if (!tester) {
-          return ok({
+          return {
             requiresUserInput: false,
             inputHint: ''
-          })
+          }
         }
 
-        return ok({
+        return {
           requiresUserInput: tester.requiresUserInput(),
           inputHint: tester.getDefaultInputHint()
-        })
-      } catch (error) {
-        intelligenceLog.error('Get capability test meta failed:', { error })
-        return fail(error)
-      }
-    })
-
-    // 测试能力
-    transport.on(intelligenceTestCapabilityEvent, async (data, _context) => {
-      try {
-        if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
-          throw new Error('Invalid capability test payload')
         }
+      }
+    )
 
-        const {
-          capabilityId,
-          providerId,
-          userInput,
-          model,
+    registerSafe(intelligenceTestCapabilityEvent, 'Capability test', async (data) => {
+      if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
+        throw new Error('Invalid capability test payload')
+      }
+
+      const {
+        capabilityId,
+        providerId,
+        userInput,
+        model,
+        promptTemplate,
+        promptVariables,
+        ...rest
+      } = data
+
+      const capability = aiCapabilityRegistry.get(capabilityId)
+      if (!capability) {
+        throw new Error(`Capability ${capabilityId} not registered`)
+      }
+
+      const tester = capabilityTesterRegistry.get(capabilityId)
+      if (!tester) {
+        throw new Error(`No tester registered for capability ${capabilityId}`)
+      }
+
+      ensureAiConfigLoaded()
+      const options = getCapabilityOptions(capabilityId)
+      const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
+
+      intelligenceLog.info(`Testing capability: ${capabilityId}`)
+      const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
+
+      const result = await ai.invoke(capabilityId, payload, {
+        modelPreference: model ? [model] : options.modelPreference,
+        allowedProviderIds,
+        metadata: {
           promptTemplate,
           promptVariables,
-          ...rest
-        } = data
-
-        const capability = aiCapabilityRegistry.get(capabilityId)
-        if (!capability) {
-          throw new Error(`Capability ${capabilityId} not registered`)
+          caller: 'system'
         }
+      })
 
-        const tester = capabilityTesterRegistry.get(capabilityId)
-        if (!tester) {
-          throw new Error(`No tester registered for capability ${capabilityId}`)
-        }
+      const formattedResult = tester.formatTestResult(result)
 
-        ensureAiConfigLoaded()
-        const options = getCapabilityOptions(capabilityId)
-        const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
+      intelligenceLog.success(
+        `Capability ${capabilityId} test success via ${result.provider} (${result.model})`
+      )
 
-        intelligenceLog.info(`Testing capability: ${capabilityId}`)
-
-        // 使用测试器生成 payload
-        const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
-
-        // 执行测试
-        const result = await ai.invoke(capabilityId, payload, {
-          modelPreference: model ? [model] : options.modelPreference,
-          allowedProviderIds,
-          metadata: {
-            promptTemplate,
-            promptVariables,
-            caller: 'system'
-          }
-        })
-
-        // 格式化结果
-        const formattedResult = tester.formatTestResult(result)
-
-        intelligenceLog.success(
-          `Capability ${capabilityId} test success via ${result.provider} (${result.model})`
-        )
-
-        return ok(formattedResult)
-      } catch (error) {
-        intelligenceLog.error('Capability test failed:', { error })
-        return fail(error)
-      }
+      return formattedResult
     })
 
-    // 获取可用模型
-    transport.on(intelligenceFetchModelsEvent, async (data, _context) => {
-      try {
-        if (!data || typeof data !== 'object' || !data.provider) {
-          throw new Error('Missing provider payload')
-        }
+    registerSafe(intelligenceFetchModelsEvent, 'Fetch provider models', async (data) => {
+      if (!data || typeof data !== 'object' || !data.provider) {
+        throw new Error('Missing provider payload')
+      }
 
-        const { provider } = data
-        ensureAiConfigLoaded()
-        intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
+      const { provider } = data
+      ensureAiConfigLoaded()
+      intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
 
-        const models = await fetchProviderModels(provider)
-        intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
+      const models = await fetchProviderModels(provider)
+      intelligenceLog.success(`Loaded ${models.length} models for provider ${provider.id}`)
 
-        return ok({
-          success: true,
-          models
-        })
-      } catch (error) {
-        intelligenceLog.error('Fetch models failed:', { error })
-        return fail(error)
+      return {
+        success: true,
+        models
       }
     })
+  }
 
-    // ========================================================================
-    // Audit & Usage Statistics Channels
-    // ========================================================================
-
-    // 获取审计日志
-    transport.on(intelligenceGetAuditLogsEvent, async (data, _context) => {
-      try {
-        const options = data ?? {}
-        const logs = await ai.queryAuditLogs(options)
-        return ok(logs)
-      } catch (error) {
-        intelligenceLog.error('Get audit logs failed:', { error })
-        return fail(error)
-      }
+  private registerStatsChannels(
+    registerSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerSafe(intelligenceGetAuditLogsEvent, 'Get audit logs', async (data) => {
+      const options = data ?? {}
+      return await ai.queryAuditLogs(options)
     })
 
-    // 获取今日统计
-    transport.on(intelligenceGetTodayStatsEvent, async (data, _context) => {
-      try {
-        const { callerId } = data ?? {}
-        const stats = await ai.getTodayStats(callerId)
-        return ok(stats)
-      } catch (error) {
-        intelligenceLog.error('Get today stats failed:', { error })
-        return fail(error)
-      }
+    registerSafe(intelligenceGetTodayStatsEvent, 'Get today stats', async (data) => {
+      const { callerId } = data ?? {}
+      return await ai.getTodayStats(callerId)
     })
 
-    // 获取本月统计
-    transport.on(intelligenceGetMonthStatsEvent, async (data, _context) => {
-      try {
-        const { callerId } = data ?? {}
-        const stats = await ai.getMonthStats(callerId)
-        return ok(stats)
-      } catch (error) {
-        intelligenceLog.error('Get month stats failed:', { error })
-        return fail(error)
-      }
+    registerSafe(intelligenceGetMonthStatsEvent, 'Get month stats', async (data) => {
+      const { callerId } = data ?? {}
+      return await ai.getMonthStats(callerId)
     })
 
-    // 获取用量统计
-    transport.on(intelligenceGetUsageStatsEvent, async (data, _context) => {
-      try {
-        if (!data || typeof data !== 'object') {
-          throw new Error('Invalid payload')
-        }
-        const { callerId, periodType, startPeriod, endPeriod } = data
-        const stats = await ai.getUsageStats(callerId, periodType, startPeriod, endPeriod)
-        return ok(stats)
-      } catch (error) {
-        intelligenceLog.error('Get usage stats failed:', { error })
-        return fail(error)
+    registerSafe(intelligenceGetUsageStatsEvent, 'Get usage stats', async (data) => {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid payload')
       }
+      const { callerId, periodType, startPeriod, endPeriod } = data
+      return await ai.getUsageStats(callerId, periodType, startPeriod, endPeriod)
+    })
+  }
+
+  private registerQuotaChannels(
+    registerSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerSafe(intelligenceGetQuotaEvent, 'Get quota', async (data) => {
+      const { callerId, callerType } = data
+      if (!callerId) {
+        throw new Error('callerId is required')
+      }
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      return await intelligenceQuotaManager.getQuota(callerId, callerType || 'plugin')
     })
 
-    // ========================================================================
-    // Quota Management Channels
-    // ========================================================================
-
-    // 获取配额
-    transport.on(intelligenceGetQuotaEvent, async (data, _context) => {
-      try {
-        const { callerId, callerType } = data
-        if (!callerId) {
-          throw new Error('callerId is required')
-        }
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const quota = await intelligenceQuotaManager.getQuota(callerId, callerType || 'plugin')
-        return ok(quota)
-      } catch (error) {
-        intelligenceLog.error('Get quota failed:', { error })
-        return fail(error)
+    registerSafe(intelligenceSetQuotaEvent, 'Set quota', async (data) => {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid quota config')
       }
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      await intelligenceQuotaManager.setQuota(data)
     })
 
-    // 设置配额
-    transport.on(intelligenceSetQuotaEvent, async (data, _context) => {
-      try {
-        if (!data || typeof data !== 'object') {
-          throw new Error('Invalid quota config')
-        }
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        await intelligenceQuotaManager.setQuota(data)
-        return ok()
-      } catch (error) {
-        intelligenceLog.error('Set quota failed:', { error })
-        return fail(error)
+    registerSafe(intelligenceDeleteQuotaEvent, 'Delete quota', async (data) => {
+      const { callerId, callerType } = data
+      if (!callerId) {
+        throw new Error('callerId is required')
       }
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      await intelligenceQuotaManager.deleteQuota(callerId, callerType || 'plugin')
     })
 
-    // 删除配额
-    transport.on(intelligenceDeleteQuotaEvent, async (data, _context) => {
-      try {
-        const { callerId, callerType } = data
-        if (!callerId) {
-          throw new Error('callerId is required')
-        }
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        await intelligenceQuotaManager.deleteQuota(callerId, callerType || 'plugin')
-        return ok()
-      } catch (error) {
-        intelligenceLog.error('Delete quota failed:', { error })
-        return fail(error)
-      }
+    registerSafe(intelligenceGetAllQuotasEvent, 'Get all quotas', async () => {
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      return await intelligenceQuotaManager.getAllQuotas()
     })
 
-    // 获取所有配额
-    transport.on(intelligenceGetAllQuotasEvent, async (_payload, _context) => {
-      try {
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const quotas = await intelligenceQuotaManager.getAllQuotas()
-        return ok(quotas)
-      } catch (error) {
-        intelligenceLog.error('Get all quotas failed:', { error })
-        return fail(error)
+    registerSafe(intelligenceCheckQuotaEvent, 'Check quota', async (data) => {
+      const { callerId, callerType, estimatedTokens } = data
+      if (!callerId) {
+        throw new Error('callerId is required')
       }
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      return await intelligenceQuotaManager.checkQuota(
+        callerId,
+        callerType || 'plugin',
+        estimatedTokens || 0
+      )
     })
 
-    // 检查配额
-    transport.on(intelligenceCheckQuotaEvent, async (data, _context) => {
-      try {
-        const { callerId, callerType, estimatedTokens } = data
-        if (!callerId) {
-          throw new Error('callerId is required')
-        }
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const result = await intelligenceQuotaManager.checkQuota(
-          callerId,
-          callerType || 'plugin',
-          estimatedTokens || 0
-        )
-        return ok(result)
-      } catch (error) {
-        intelligenceLog.error('Check quota failed:', { error })
-        return fail(error)
+    registerSafe(intelligenceGetCurrentUsageEvent, 'Get current usage', async (data) => {
+      const { callerId, callerType } = data
+      if (!callerId) {
+        throw new Error('callerId is required')
       }
+      const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
+      return await intelligenceQuotaManager.getCurrentUsage(callerId, callerType || 'plugin')
     })
-
-    // 获取当前用量
-    transport.on(intelligenceGetCurrentUsageEvent, async (data, _context) => {
-      try {
-        const { callerId, callerType } = data
-        if (!callerId) {
-          throw new Error('callerId is required')
-        }
-        const { intelligenceQuotaManager } = await import('./intelligence-quota-manager')
-        const usage = await intelligenceQuotaManager.getCurrentUsage(
-          callerId,
-          callerType || 'plugin'
-        )
-        return ok(usage)
-      } catch (error) {
-        intelligenceLog.error('Get current usage failed:', { error })
-        return fail(error)
-      }
-    })
-
-    intelligenceLog.success('IPC channels registered')
   }
 }
 

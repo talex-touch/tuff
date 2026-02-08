@@ -8,6 +8,7 @@ import type {
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
@@ -34,6 +35,7 @@ const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
 const execFileAsync = promisify(execFile)
+const requireFromCurrentModule = createRequire(import.meta.url)
 const fileProviderLog = getLogger('file-provider')
 
 interface EverythingSearchResult {
@@ -45,14 +47,25 @@ interface EverythingSearchResult {
   ctime: Date
 }
 
+type EverythingBackendType = 'sdk-napi' | 'cli' | 'unavailable'
+
+interface EverythingSdkAddon {
+  search?: (query: string, options?: { maxResults?: number }) => unknown
+  query?: (query: string, options?: { maxResults?: number }) => unknown
+  getVersion?: () => string
+}
+
 const everythingStatusEvent = defineRawEvent<
   void,
   {
     enabled: boolean
     available: boolean
+    backend: EverythingBackendType
     version: string | null
     esPath: string | null
     error: string | null
+    lastBackendError: string | null
+    fallbackChain: EverythingBackendType[]
     lastChecked: number | null
   }
 >('everything:status')
@@ -64,6 +77,7 @@ const everythingTestEvent = defineRawEvent<
   void,
   {
     success: boolean
+    backend?: EverythingBackendType
     error?: string
     resultCount?: number
     duration?: number
@@ -96,7 +110,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private isAvailable = false
   private initializationError: Error | null = null
   private isEnabled = true
+  private backend: EverythingBackendType = 'unavailable'
+  private readonly fallbackChain: EverythingBackendType[] = ['sdk-napi', 'cli', 'unavailable']
+  private lastBackendError: string | null = null
   private everythingVersion: string | null = null
+  private sdkAddon: EverythingSdkAddon | null = null
   private lastChecked: number | null = null
 
   private logInfo(message: string, meta?: Record<string, unknown>): void {
@@ -156,19 +174,27 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const loadStart = performance.now()
     this.logInfo('Initializing Everything provider')
 
+    await this.loadSettings(context)
+
     try {
-      await this.detectEverything()
-      await this.loadSettings(context)
-      this.isAvailable = true
+      const initialized = await this.initializeSearchBackend()
+      this.isAvailable = initialized
       this.lastChecked = Date.now()
-      this.logInfo('Everything provider initialized successfully', {
-        duration: formatDuration(performance.now() - loadStart),
-        esPath: this.esPath || 'unknown',
-        enabled: this.isEnabled
-      })
+
+      if (initialized) {
+        this.logInfo('Everything provider initialized successfully', {
+          duration: formatDuration(performance.now() - loadStart),
+          backend: this.backend,
+          path: this.esPath || 'unknown',
+          enabled: this.isEnabled
+        })
+      } else {
+        throw new Error('No available Everything backend (SDK/CLI)')
+      }
     } catch (error) {
       this.initializationError = error as Error
       this.isAvailable = false
+      this.backend = 'unavailable'
       this.lastChecked = Date.now()
       this.logWarn('Everything not available', error, {
         duration: formatDuration(performance.now() - loadStart)
@@ -215,9 +241,12 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return {
         enabled: this.isEnabled,
         available: this.isAvailable,
+        backend: this.backend,
         version: this.everythingVersion,
         esPath: this.esPath,
         error: this.initializationError?.message || null,
+        lastBackendError: this.lastBackendError,
+        fallbackChain: this.fallbackChain,
         lastChecked: this.lastChecked
       }
     })
@@ -238,6 +267,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       if (!this.isAvailable || !this.isEnabled) {
         return {
           success: false,
+          backend: this.backend,
           error: 'Everything is not available or disabled'
         }
       }
@@ -249,16 +279,126 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
         return {
           success: true,
+          backend: this.backend,
           resultCount: results.length,
           duration: Math.round(duration)
         }
       } catch (error: unknown) {
         return {
           success: false,
+          backend: this.backend,
           error: getErrorMessage(error)
         }
       }
     })
+  }
+
+  private async initializeSearchBackend(): Promise<boolean> {
+    this.backend = 'unavailable'
+    this.initializationError = null
+    this.lastBackendError = null
+    this.esPath = null
+    this.everythingVersion = null
+    this.sdkAddon = null
+
+    if (await this.tryInitializeSdkBackend()) {
+      return true
+    }
+
+    if (await this.tryInitializeCliBackend()) {
+      return true
+    }
+
+    return false
+  }
+
+  private async tryInitializeSdkBackend(): Promise<boolean> {
+    const envPath = process.env.TALEX_EVERYTHING_SDK_PATH?.trim()
+    const candidates = [
+      envPath,
+      path.join(process.resourcesPath, 'native', 'everything.node'),
+      path.join(process.resourcesPath, 'everything', 'everything.node'),
+      path.join(process.cwd(), 'resources', 'native', 'everything.node'),
+      path.join(process.cwd(), 'resources', 'everything.node'),
+      '@talex-touch/tuff-native/everything',
+      '@talex-touch/everything-sdk'
+    ].filter((candidate): candidate is string => Boolean(candidate))
+
+    for (const candidate of candidates) {
+      const addon = await this.loadSdkAddon(candidate)
+      if (!addon) {
+        continue
+      }
+
+      const supportsSearch = typeof addon.search === 'function' || typeof addon.query === 'function'
+      if (!supportsSearch) {
+        this.logWarn('Everything SDK loaded but search method is missing', undefined, {
+          candidate
+        })
+        continue
+      }
+
+      this.sdkAddon = addon
+      this.backend = 'sdk-napi'
+      this.isAvailable = true
+      this.esPath = candidate
+      this.everythingVersion =
+        typeof addon.getVersion === 'function' ? addon.getVersion() : this.everythingVersion
+
+      this.logInfo('Everything SDK backend ready', {
+        backend: this.backend,
+        candidate,
+        version: this.everythingVersion
+      })
+      return true
+    }
+
+    return false
+  }
+
+  private async loadSdkAddon(candidate: string): Promise<EverythingSdkAddon | null> {
+    const isPathLike =
+      candidate.includes('\\') || candidate.includes('/') || candidate.endsWith('.node')
+
+    if (isPathLike) {
+      try {
+        await fs.access(candidate)
+      } catch {
+        return null
+      }
+    }
+
+    try {
+      const loaded = requireFromCurrentModule(candidate) as unknown
+      if (isRecord(loaded) && isRecord(loaded.default)) {
+        return loaded.default as unknown as EverythingSdkAddon
+      }
+      if (isRecord(loaded)) {
+        return loaded as EverythingSdkAddon
+      }
+      return null
+    } catch (error) {
+      this.lastBackendError = getErrorMessage(error)
+      this.logDebug('Everything SDK candidate load failed', {
+        candidate,
+        error: getErrorMessage(error)
+      })
+      return null
+    }
+  }
+
+  private async tryInitializeCliBackend(): Promise<boolean> {
+    try {
+      await this.detectEverything()
+      this.backend = 'cli'
+      this.isAvailable = true
+      this.lastBackendError = null
+      return true
+    } catch (error) {
+      this.lastBackendError = getErrorMessage(error)
+      this.logWarn('Everything CLI backend unavailable', error)
+      return false
+    }
   }
 
   /**
@@ -302,9 +442,167 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   }
 
   /**
-   * Search files using Everything
+   * Search files using active backend with fallback.
    */
   private async searchEverything(
+    query: string,
+    maxResults = 50
+  ): Promise<EverythingSearchResult[]> {
+    if (this.backend === 'sdk-napi') {
+      try {
+        return await this.searchEverythingWithSdk(query, maxResults)
+      } catch (error) {
+        this.lastBackendError = getErrorMessage(error)
+        this.logWarn('Everything SDK search failed, falling back to CLI', error)
+        const cliReady = await this.ensureCliFallback()
+        if (!cliReady) {
+          return []
+        }
+      }
+    }
+
+    if (this.backend === 'cli') {
+      return this.searchEverythingWithCli(query, maxResults)
+    }
+
+    return []
+  }
+
+  private async ensureCliFallback(): Promise<boolean> {
+    const ready = await this.tryInitializeCliBackend()
+    if (!ready) {
+      this.backend = 'unavailable'
+      this.isAvailable = false
+      this.initializationError = new Error(
+        this.lastBackendError || 'Everything backend unavailable'
+      )
+      return false
+    }
+    this.initializationError = null
+    return true
+  }
+
+  private async searchEverythingWithSdk(
+    query: string,
+    maxResults: number
+  ): Promise<EverythingSearchResult[]> {
+    if (!this.sdkAddon) {
+      throw new Error('Everything SDK not initialized')
+    }
+
+    const searchStart = performance.now()
+    const searchFn = this.sdkAddon.search ?? this.sdkAddon.query
+
+    if (typeof searchFn !== 'function') {
+      throw new TypeError('Everything SDK search method is not available')
+    }
+
+    const rawResults = await Promise.resolve(
+      searchFn.call(this.sdkAddon, query, {
+        maxResults
+      })
+    )
+
+    const results = this.parseEverythingSdkOutput(rawResults)
+
+    this.logDebug('Everything SDK search completed', {
+      query,
+      results: results.length,
+      duration: formatDuration(performance.now() - searchStart)
+    })
+
+    return results
+  }
+
+  private parseEverythingSdkOutput(rawResults: unknown): EverythingSearchResult[] {
+    if (!Array.isArray(rawResults)) {
+      return []
+    }
+
+    const normalized: EverythingSearchResult[] = []
+
+    for (const entry of rawResults) {
+      if (!isRecord(entry)) {
+        continue
+      }
+
+      const pathValue =
+        typeof entry.fullPath === 'string'
+          ? entry.fullPath
+          : typeof entry.path === 'string'
+            ? entry.path
+            : ''
+      const nameValue =
+        typeof entry.name === 'string'
+          ? entry.name
+          : typeof entry.filename === 'string'
+            ? entry.filename
+            : ''
+
+      const filePath = pathValue
+        ? nameValue && path.basename(pathValue).toLowerCase() !== nameValue.toLowerCase()
+          ? path.join(pathValue, nameValue)
+          : pathValue
+        : nameValue
+
+      if (!filePath) {
+        continue
+      }
+
+      const name = nameValue || path.basename(filePath)
+      const extensionValue =
+        typeof entry.extension === 'string' ? entry.extension : path.extname(name)
+      const sizeValue =
+        typeof entry.size === 'number'
+          ? entry.size
+          : typeof entry.fileSize === 'number'
+            ? entry.fileSize
+            : 0
+
+      normalized.push({
+        path: filePath,
+        name,
+        extension: extensionValue.toLowerCase().replace(/^\./, ''),
+        size: sizeValue,
+        mtime: this.toResultDate(entry.mtime ?? entry.dateModified ?? entry.modifiedAt),
+        ctime: this.toResultDate(entry.ctime ?? entry.dateCreated ?? entry.createdAt)
+      })
+    }
+
+    return normalized
+  }
+
+  private toResultDate(value: unknown): Date {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const timestamp = value > 1_000_000_000_000 ? value : value * 1000
+      const date = new Date(timestamp)
+      return Number.isNaN(date.getTime()) ? new Date() : date
+    }
+
+    if (typeof value === 'string') {
+      const numericValue = Number(value)
+      if (Number.isFinite(numericValue)) {
+        const timestamp = numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000
+        const numericDate = new Date(timestamp)
+        if (!Number.isNaN(numericDate.getTime())) {
+          return numericDate
+        }
+      }
+
+      const parsed = new Date(value)
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed
+      }
+    }
+
+    return new Date()
+  }
+
+  private async searchEverythingWithCli(
     query: string,
     maxResults = 50
   ): Promise<EverythingSearchResult[]> {
@@ -332,7 +630,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
       const results = this.parseEverythingOutput(stdout)
 
-      this.logDebug('Everything search completed', {
+      this.logDebug('Everything CLI search completed', {
         query,
         results: results.length,
         duration: formatDuration(performance.now() - searchStart)
@@ -341,9 +639,9 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return results
     } catch (error: unknown) {
       if (getErrorCode(error) === 'ETIMEDOUT') {
-        this.logWarn('Everything search timed out', error, { query })
+        this.logWarn('Everything CLI search timed out', error, { query })
       } else {
-        this.logError('Everything search failed', error, { query })
+        this.logError('Everything CLI search failed', error, { query })
       }
       return []
     }
