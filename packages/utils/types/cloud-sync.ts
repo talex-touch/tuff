@@ -106,3 +106,39 @@ export interface KeyRegisterResponse {
 export interface KeyRotateResponse {
   rotated_at: string
 }
+
+export interface KeyringMeta {
+  keyring_id: string
+  device_id: string
+  key_type: string
+  rotated_at: string | null
+  created_at: string
+  has_recovery_code: boolean
+}
+
+export interface KeyringSecret {
+  keyring_id: string
+  device_id: string
+  key_type: string
+  encrypted_key: string
+  rotated_at: string | null
+  created_at: string
+}
+
+export interface KeysListResponse {
+  keyrings: KeyringMeta[]
+}
+
+export interface KeysIssueDeviceResponse {
+  keyring_id: string
+}
+
+export interface KeysRecoverDeviceResponse {
+  keyrings: KeyringSecret[]
+}
+
+export interface DeviceAttestResponse {
+  ok: boolean
+  device_id: string
+  updated_at: string
+}

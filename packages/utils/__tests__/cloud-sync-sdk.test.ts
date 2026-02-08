@@ -12,6 +12,14 @@ const createJsonResponse = (payload: unknown, status = 200) => new Response(
   },
 )
 
+const createBinaryResponse = (payload: Uint8Array, status = 200, headers?: Record<string, string>) => new Response(
+  payload,
+  {
+    status,
+    headers: { 'content-type': 'application/octet-stream', ...(headers ?? {}) },
+  },
+)
+
 describe('CloudSyncSDK', () => {
   it('handshakes and attaches sync token for push', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -173,5 +181,178 @@ describe('CloudSyncSDK', () => {
 
     authSpy.mockRestore()
     deviceSpy.mockRestore()
+  })
+
+  it('downloads blob as binary and keeps sync token header', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/sync/handshake')) {
+        return createJsonResponse({
+          sync_token: 'sync-4',
+          sync_token_expires_at: '2099-01-01T00:00:00.000Z',
+          server_cursor: 0,
+          device_id: 'device-4',
+          quotas: {
+            limits: { storage_limit_bytes: 100, object_limit: 10, item_limit: 5, device_limit: 3 },
+            usage: { used_storage_bytes: 0, used_objects: 0, used_devices: 1 },
+          },
+        })
+      }
+      if (url.endsWith('/api/v1/sync/blobs/blob-1/download')) {
+        const headers = new Headers(init?.headers as HeadersInit)
+        expect(headers.get('x-sync-token')).toBe('sync-4')
+        return createBinaryResponse(
+          new TextEncoder().encode('hello'),
+          200,
+          { 'x-content-sha256': 'sha-1', 'content-length': '5' },
+        )
+      }
+      return createJsonResponse({}, 404)
+    })
+
+    const sdk = new CloudSyncSDK({
+      baseUrl: 'https://example.com',
+      getAuthToken: () => 'auth-4',
+      getDeviceId: () => 'device-4',
+      fetch: fetchMock as any,
+      now: () => 0,
+    })
+
+    const blob = await sdk.downloadBlob('blob-1')
+    expect(blob.sha256).toBe('sha-1')
+    expect(blob.sizeBytes).toBe(5)
+    expect(new TextDecoder().decode(blob.data)).toBe('hello')
+  })
+
+  it('calls keys and device attest apis without sync token', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/keys/list')) {
+        const headers = new Headers(init?.headers as HeadersInit)
+        expect(headers.get('x-sync-token')).toBeNull()
+        return createJsonResponse({
+          keyrings: [
+            {
+              keyring_id: 'k1',
+              device_id: 'd1',
+              key_type: 'uk',
+              rotated_at: null,
+              created_at: '2026-02-04T00:00:00.000Z',
+              has_recovery_code: true,
+            },
+          ],
+        })
+      }
+      if (url.endsWith('/api/v1/keys/issue-device')) {
+        return createJsonResponse({ keyring_id: 'k2' })
+      }
+      if (url.endsWith('/api/v1/keys/recover-device')) {
+        return createJsonResponse({
+          keyrings: [
+            {
+              keyring_id: 'k3',
+              device_id: 'd2',
+              key_type: 'uk',
+              encrypted_key: 'enc',
+              rotated_at: null,
+              created_at: '2026-02-04T00:00:00.000Z',
+            },
+          ],
+        })
+      }
+      if (url.endsWith('/api/v1/devices/attest')) {
+        return createJsonResponse({ ok: true, device_id: 'd1', updated_at: '2026-02-04T00:00:00.000Z' })
+      }
+      return createJsonResponse({}, 404)
+    })
+
+    const sdk = new CloudSyncSDK({
+      baseUrl: 'https://example.com',
+      getAuthToken: () => 'auth-5',
+      getDeviceId: () => 'device-5',
+      fetch: fetchMock as any,
+    })
+
+    const keyrings = await sdk.listKeyrings()
+    expect(keyrings).toHaveLength(1)
+
+    const issued = await sdk.issueDeviceKey({
+      target_device_id: 'd1',
+      key_type: 'uk',
+      encrypted_key: 'enc',
+      recovery_code_hash: 'rc',
+    })
+    expect(issued.keyring_id).toBe('k2')
+
+    const recovered = await sdk.recoverDevice({ recovery_code: 'rc' })
+    expect(recovered).toHaveLength(1)
+
+    const attested = await sdk.attestDevice({ machine_code_hash: 'mc' })
+    expect(attested.ok).toBe(true)
+  })
+
+  it('retries sensitive keys api with step-up callback token', async () => {
+    let issueCalls = 0
+    let recoverCalls = 0
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/keys/issue-device')) {
+        issueCalls += 1
+        const headers = new Headers(init?.headers as HeadersInit)
+        const loginToken = headers.get('x-login-token')
+        if (!loginToken) {
+          return createJsonResponse({ errorCode: 'DEVICE_NOT_AUTHORIZED', message: 'MF2A required' }, 403)
+        }
+        expect(loginToken).toBe('step-up-token')
+        return createJsonResponse({ keyring_id: 'k4' })
+      }
+
+      if (url.endsWith('/api/v1/keys/recover-device')) {
+        recoverCalls += 1
+        const headers = new Headers(init?.headers as HeadersInit)
+        const loginToken = headers.get('x-login-token')
+        if (!loginToken) {
+          return createJsonResponse({ errorCode: 'DEVICE_NOT_AUTHORIZED', message: 'MF2A required' }, 403)
+        }
+        expect(loginToken).toBe('step-up-token')
+        return createJsonResponse({
+          keyrings: [
+            {
+              keyring_id: 'k5',
+              device_id: 'd5',
+              key_type: 'uk',
+              encrypted_key: 'enc',
+              rotated_at: null,
+              created_at: '2026-02-04T00:00:00.000Z',
+            },
+          ],
+        })
+      }
+
+      return createJsonResponse({}, 404)
+    })
+
+    const onStepUpRequired = vi.fn(async () => 'step-up-token')
+    const sdk = new CloudSyncSDK({
+      baseUrl: 'https://example.com',
+      getAuthToken: () => 'auth-6',
+      getDeviceId: () => 'device-6',
+      fetch: fetchMock as any,
+      onStepUpRequired,
+    })
+
+    const issued = await sdk.issueDeviceKey({
+      target_device_id: 'd5',
+      key_type: 'uk',
+      encrypted_key: 'enc',
+    })
+    expect(issued.keyring_id).toBe('k4')
+
+    const recovered = await sdk.recoverDevice({ recovery_code: 'rc-1' })
+    expect(recovered).toHaveLength(1)
+
+    expect(onStepUpRequired).toHaveBeenCalledTimes(2)
+    expect(issueCalls).toBe(2)
+    expect(recoverCalls).toBe(2)
   })
 })
