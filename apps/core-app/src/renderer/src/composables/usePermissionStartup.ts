@@ -5,8 +5,7 @@
  */
 
 import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { PermissionEvents } from '@talex-touch/utils/transport/events'
+import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import type { ElMessageBoxOptions } from 'element-plus'
 import { ElButton, ElMessageBox } from 'element-plus'
 import { h, onMounted, onUnmounted, ref } from 'vue'
@@ -18,7 +17,7 @@ const PERMISSION_TIMEOUT_MS = 30_000
 
 export function usePermissionStartup() {
   const pendingRequests = ref<PermissionStartupRequest[]>([])
-  const transport = useTuffTransport()
+  const permissionSdk = usePermissionSdk()
   const { t } = useI18n()
   let unregister: (() => void) | null = null
 
@@ -115,7 +114,7 @@ export function usePermissionStartup() {
     // Handle user choice
     switch (userChoice) {
       case 'always':
-        await transport.send(PermissionEvents.api.grantMultiple, {
+        await permissionSdk.grantMultiple({
           pluginId: request.pluginId,
           permissionIds: request.required,
           grantedBy: 'user'
@@ -123,7 +122,7 @@ export function usePermissionStartup() {
         break
 
       case 'session':
-        await transport.send(PermissionEvents.api.grantSession, {
+        await permissionSdk.grantSession({
           pluginId: request.pluginId,
           permissionIds: request.required
         })
@@ -136,7 +135,7 @@ export function usePermissionStartup() {
   }
 
   const setupListener = () => {
-    unregister = transport.on(PermissionEvents.push.startupRequest, (request) => {
+    unregister = permissionSdk.onStartupRequest((request) => {
       handlePermissionRequest(request as PermissionStartupRequest)
     })
   }

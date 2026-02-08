@@ -229,9 +229,9 @@ export function useSvgContent(
     return await remoteSvgCacheDirPromise
   }
 
-  async function readSvgText(source: string): Promise<string | null> {
+  async function readSvgText(source: string, allowMissing = false): Promise<string | null> {
     try {
-      const svgText = await transport.send(AppEvents.system.readFile, { source })
+      const svgText = await transport.send(AppEvents.system.readFile, { source, allowMissing })
       if (!svgText || svgText.trim().length === 0) {
         return null
       }
@@ -246,7 +246,7 @@ export function useSvgContent(
   ): Promise<{ fileUrl: string; content: string } | null> {
     const knownFileUrl = svgFileCache.get(targetUrl)
     if (knownFileUrl) {
-      const cachedText = await readSvgText(knownFileUrl)
+      const cachedText = await readSvgText(knownFileUrl, true)
       if (cachedText) {
         svgContentCache.set(targetUrl, cachedText)
         return { fileUrl: knownFileUrl, content: cachedText }
@@ -262,7 +262,7 @@ export function useSvgContent(
 
     const cacheFilePath = joinPath(cacheDir, buildRemoteCacheFilename(targetUrl))
     const cacheFileUrl = buildTfileUrl(cacheFilePath)
-    const cachedText = await readSvgText(cacheFileUrl)
+    const cachedText = await readSvgText(cacheFileUrl, true)
     if (!cachedText) {
       return null
     }
@@ -272,42 +272,62 @@ export function useSvgContent(
     return { fileUrl: cacheFileUrl, content: cachedText }
   }
 
+  function settlePendingTask(taskId: string, action: 'resolve' | 'reject', reason?: string): void {
+    const pending = pendingTasks.get(taskId)
+    if (!pending) return
+    pendingTasks.delete(taskId)
+    clearTimeout(pending.timeoutId)
+    if (action === 'resolve') {
+      pending.resolve()
+      return
+    }
+    pending.reject(new Error(reason || 'Download failed'))
+  }
+
+  async function getTaskStatus(taskId: string): Promise<DownloadStatus | null> {
+    if (!downloadSdk) return null
+    try {
+      const response = await downloadSdk.getTaskStatus({ taskId })
+      if (!response?.success) return null
+      return response.task?.status ?? null
+    } catch {
+      return null
+    }
+  }
+
+  async function syncTaskState(taskId: string): Promise<boolean> {
+    const status = await getTaskStatus(taskId)
+    if (status === DownloadStatus.COMPLETED) {
+      settlePendingTask(taskId, 'resolve')
+      return true
+    }
+    if (status === DownloadStatus.FAILED || status === DownloadStatus.CANCELLED) {
+      settlePendingTask(taskId, 'reject', `Download ${status}`)
+      return true
+    }
+    return false
+  }
+
   function ensureDownloadListeners(): void {
     if (downloadListenerRegistered || !downloadSdk) return
     downloadListenerRegistered = true
 
-    const resolveTask = (taskId: string) => {
-      const pending = pendingTasks.get(taskId)
-      if (!pending) return
-      pendingTasks.delete(taskId)
-      clearTimeout(pending.timeoutId)
-      pending.resolve()
-    }
-
-    const rejectTask = (taskId: string, reason: string) => {
-      const pending = pendingTasks.get(taskId)
-      if (!pending) return
-      pendingTasks.delete(taskId)
-      clearTimeout(pending.timeoutId)
-      pending.reject(new Error(reason))
-    }
-
     downloadDisposers.push(
       downloadSdk.onTaskCompleted((task) => {
-        if (task?.id) resolveTask(task.id)
+        if (task?.id) settlePendingTask(task.id, 'resolve')
       }),
       downloadSdk.onTaskFailed((task) => {
-        if (task?.id) rejectTask(task.id, task.error || 'Download failed')
+        if (task?.id) settlePendingTask(task.id, 'reject', task.error || 'Download failed')
       }),
       downloadSdk.onTaskUpdated((task) => {
         if (!task?.id || !task.status) return
         if (task.status === DownloadStatus.COMPLETED) {
-          resolveTask(task.id)
+          settlePendingTask(task.id, 'resolve')
         } else if (
           task.status === DownloadStatus.FAILED ||
           task.status === DownloadStatus.CANCELLED
         ) {
-          rejectTask(task.id, task.error || `Download ${task.status}`)
+          settlePendingTask(task.id, 'reject', task.error || `Download ${task.status}`)
         }
       })
     )
@@ -315,9 +335,11 @@ export function useSvgContent(
 
   async function waitForTask(taskId: string): Promise<void> {
     ensureDownloadListeners()
-    if (pendingTasks.has(taskId)) {
-      return pendingTasks.get(taskId)!.promise
+    const inflight = pendingTasks.get(taskId)
+    if (inflight) {
+      return inflight.promise
     }
+
     const timeoutMs = downloadTimeoutMs
     let resolve!: () => void
     let reject!: (error: Error) => void
@@ -325,11 +347,17 @@ export function useSvgContent(
       resolve = resolveFn
       reject = rejectFn
     })
+
     const timeoutId = window.setTimeout(() => {
-      pendingTasks.delete(taskId)
-      reject(new Error('Download timeout'))
+      void syncTaskState(taskId).then((settled) => {
+        if (!settled) {
+          settlePendingTask(taskId, 'reject', 'Download timeout')
+        }
+      })
     }, timeoutMs)
+
     pendingTasks.set(taskId, { resolve, reject, timeoutId, promise })
+    void syncTaskState(taskId)
     return promise
   }
 
@@ -474,6 +502,15 @@ export function useSvgContent(
   const fetchWithRetry = retrier(doFetch) as () => Promise<string>
 
   async function fetchSvgContent() {
+    const targetUrl = normalizeSource(url.value)
+    if (!targetUrl) {
+      loading.value = false
+      error.value = null
+      content.value = null
+      resolvedUrl.value = ''
+      return
+    }
+
     loading.value = true
     error.value = null
     content.value = null // Clear previous content on new fetch
@@ -497,6 +534,14 @@ export function useSvgContent(
   function setUrl(newUrl: string) {
     url.value = newUrl
     resolvedUrl.value = ''
+
+    if (!normalizeSource(newUrl)) {
+      loading.value = false
+      error.value = null
+      content.value = null
+      return
+    }
+
     if (autoFetch) {
       fetchSvgContent()
     }

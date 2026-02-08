@@ -96,6 +96,14 @@ function handleTokensPerMinuteBlur() {
   }
 }
 
+function parseOptionalNumberInput(event: Event): number | '' {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return ''
+  }
+  return target.value !== '' ? Number(target.value) : ''
+}
+
 function emitUpdate() {
   const updated = {
     ...props.modelValue,
@@ -135,13 +143,7 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="
-              update(
-                ($event.target as HTMLInputElement).value !== ''
-                  ? Number(($event.target as HTMLInputElement).value)
-                  : ''
-              )
-            "
+            @input="update(parseOptionalNumberInput($event))"
             @focus="focus"
             @blur="
               blur()
@@ -176,13 +178,7 @@ function emitUpdate() {
             :placeholder="t('intelligence.config.rateLimit.unlimitedPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="
-              update(
-                ($event.target as HTMLInputElement).value !== ''
-                  ? Number(($event.target as HTMLInputElement).value)
-                  : ''
-              )
-            "
+            @input="update(parseOptionalNumberInput($event))"
             @focus="focus"
             @blur="
               blur()
