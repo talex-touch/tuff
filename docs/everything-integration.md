@@ -7,11 +7,23 @@
 ## Summary
 
 - Goal: sub-50ms file search using Everything index.
-- Requirement: Everything installed + CLI available.
+- Backend strategy: prefer native SDK (N-API), fallback to Everything CLI (`es.exe`) when SDK is unavailable.
 
 ## References
 
 - Docs Index: `docs/INDEX.md`
+
+## Rollout Status
+
+- 最新落地状态与待办统一见：`docs/engineering/everything-sdk-rollout-status.md`
+- 当前实现：SDK（N-API）优先，失败自动回退 CLI（`es.exe`）
+- 发布前必须补齐：Windows 真机自检与结果留档
+
+## Documentation Ownership
+
+- Core 技术细节（安装、架构、排障）统一维护在本文。
+- Nexus 文档只保留视角差异与入口，详见：`docs/nexus-everything-integration.md`。
+- 状态与执行进度统一维护在：`docs/engineering/everything-sdk-rollout-status.md`。
 
 ## Overview
 
@@ -106,27 +118,55 @@ readonly expectedDuration = 50 // milliseconds
 
 1. **Search Request**: User enters query in CoreBox
 2. **Provider Selection**: Everything provider is invoked for Windows platform
-3. **Everything CLI**: Query is passed to `es.exe` with optimized parameters
-4. **Result Parsing**: CLI output is parsed into TuffItems
-5. **Scoring**: Results are scored based on recency and position
-6. **Display**: Results are merged with other providers and displayed
+3. **Backend Resolve**: provider tries SDK (`sdk-napi`) first, then falls back to CLI (`es.exe`)
+4. **Backend Query**: active backend executes the query with optimized parameters
+5. **Result Parsing**: backend output is normalized into TuffItems
+6. **Scoring**: results are scored based on recency and position
+7. **Display**: results are merged with other providers and displayed
 
 ### Fallback Behavior
 
-- If Everything is not installed, the provider gracefully skips search
-- File provider continues to work for indexing and metadata
-- No errors or crashes occur when Everything is unavailable
+- Default fallback chain: `sdk-napi -> cli -> unavailable`
+- If SDK fails at runtime, provider auto-falls back to CLI in the same request lifecycle
+- If both backends are unavailable, provider gracefully skips search (no crash)
+- File provider still handles indexing and metadata as a safety net
 
 ## Configuration
 
 ### Environment Variables
 
-You can customize the Everything CLI path:
+You can override SDK addon discovery path:
 
 ```bash
-# Set custom es.exe path (optional)
-set EVERYTHING_CLI_PATH=C:\Custom\Path\es.exe
+# Optional: custom native addon path
+set TALEX_EVERYTHING_SDK_PATH=C:\path\to\everything.node
 ```
+
+### Runtime Status Fields
+
+`everything:status` now returns backend diagnostics:
+
+- `backend`: current active backend (`sdk-napi` | `cli` | `unavailable`)
+- `fallbackChain`: backend downgrade order
+- `lastBackendError`: latest backend initialization/search error
+- `version`: SDK/CLI version when available
+
+`everything:test` also returns `backend` to indicate which backend handled the probe query.
+
+### SDK Self-check (Windows)
+
+Use the native package self-check script to verify SDK availability and query flow:
+
+```bash
+pnpm -C "packages/tuff-native" run check:everything -- --query "*.txt" --max 10
+```
+
+Expected output is a JSON summary with:
+
+- `ok`: whether SDK query succeeded
+- `version`: Everything SDK version (or `null` if unavailable)
+- `resultCount`: number of results returned
+- `sample`: first normalized result (when available)
 
 ### Search Limits
 
