@@ -112,7 +112,14 @@ export function useSvgContent(
   }
 
   function ensureTfileUrl(source: string): string {
-    if (source.startsWith('tfile:') || source.startsWith('file:')) return source
+    if (source.startsWith('tfile:')) {
+      const localPath = resolveLocalPath(source)
+      return localPath ? buildTfileUrl(localPath) : source
+    }
+    if (source.startsWith('file:')) {
+      const localPath = resolveLocalPath(source)
+      return localPath ? buildTfileUrl(localPath) : source
+    }
     if (source.startsWith('/') || source.startsWith('\\\\') || /^[a-z]:[\\/]/i.test(source)) {
       return buildTfileUrl(source)
     }
@@ -121,15 +128,30 @@ export function useSvgContent(
 
   function resolveLocalPath(targetUrl: string): string {
     const normalizeLocalPath = (value: string): string => {
-      if (/^\/[a-z]:\//i.test(value)) {
-        return value.slice(1)
+      const normalized = value.replace(/\\/g, '/')
+      if (/^\/[a-z]:\//i.test(normalized)) {
+        return normalized.slice(1)
       }
-      return value
+      return normalized
+    }
+
+    const decodeStable = (value: string): string => {
+      let decoded = value
+      for (let i = 0; i < 3; i++) {
+        try {
+          const next = decodeURIComponent(decoded)
+          if (next === decoded) break
+          decoded = next
+        } catch {
+          break
+        }
+      }
+      return decoded
     }
 
     if (targetUrl.startsWith('file:')) {
       try {
-        return normalizeLocalPath(decodeURIComponent(new URL(targetUrl).pathname))
+        return normalizeLocalPath(decodeStable(new URL(targetUrl).pathname))
       } catch {
         return ''
       }
@@ -138,14 +160,21 @@ export function useSvgContent(
     if (targetUrl.startsWith('tfile:')) {
       try {
         const parsed = new URL(targetUrl)
+        if (
+          parsed.hostname &&
+          /^[a-z]$/i.test(parsed.hostname) &&
+          parsed.pathname.startsWith('/')
+        ) {
+          return normalizeLocalPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+        }
         const host = parsed.hostname || ''
         const pathname = parsed.pathname || ''
         const merged = host ? `/${host}${pathname}` : pathname
-        return normalizeLocalPath(decodeURIComponent(merged))
+        return normalizeLocalPath(decodeStable(merged))
       } catch {
-        const raw = targetUrl.replace(/^tfile:\/\//, '')
+        const raw = targetUrl.replace(/^tfile:\/\//, '').split(/[?#]/)[0] ?? ''
         const normalized = raw.startsWith('/') ? raw : `/${raw}`
-        return normalizeLocalPath(normalized)
+        return normalizeLocalPath(decodeStable(normalized))
       }
     }
 

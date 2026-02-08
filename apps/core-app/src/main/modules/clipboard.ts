@@ -235,11 +235,59 @@ const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 function toTfileUrl(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/')
-  let absolutePath = normalized.startsWith('/') ? normalized : `/${normalized}`
-  if (/^\/[a-z]:\//i.test(absolutePath)) {
-    absolutePath = absolutePath.slice(1)
+  const raw = filePath?.trim()
+  if (!raw) return ''
+
+  const decodeStable = (value: string): string => {
+    let decoded = value
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
+    }
+    return decoded
   }
+
+  const normalizeAbsolutePath = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
+    }
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
+  }
+
+  let resolvedPath = raw
+  if (raw.startsWith('tfile:')) {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+        resolvedPath = decodeStable(`${parsed.hostname}:${parsed.pathname}`)
+      } else {
+        const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+        resolvedPath = decodeStable(merged)
+      }
+    } catch {
+      const fallback = raw.replace(/^tfile:\/\//i, '').split(/[?#]/)[0] ?? ''
+      resolvedPath = decodeStable(fallback)
+    }
+  } else if (raw.startsWith('file:')) {
+    try {
+      resolvedPath = fileURLToPath(raw)
+    } catch {
+      resolvedPath = raw
+    }
+  } else {
+    resolvedPath = decodeStable(raw)
+  }
+
+  const absolutePath = normalizeAbsolutePath(resolvedPath)
   const encoded = absolutePath
     .split('/')
     .map((segment) => {
@@ -250,6 +298,7 @@ function toTfileUrl(filePath: string): string {
       }
     })
     .join('/')
+
   return `tfile://${encoded}`
 }
 
@@ -1124,9 +1173,14 @@ export class ClipboardModule extends BaseModule {
       return nativeImage.createFromDataURL(source)
     }
 
-    if (source.startsWith('tfile://')) {
-      const rawPath = decodeURIComponent(source.slice('tfile://'.length))
-      return nativeImage.createFromPath(rawPath)
+    if (source.startsWith('tfile:')) {
+      const normalizedUrl = toTfileUrl(source)
+      const rawPath = normalizedUrl.slice('tfile://'.length)
+      try {
+        return nativeImage.createFromPath(decodeURIComponent(rawPath))
+      } catch {
+        return nativeImage.createFromPath(rawPath)
+      }
     }
 
     if (source.startsWith('file://')) {

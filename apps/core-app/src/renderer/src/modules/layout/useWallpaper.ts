@@ -20,7 +20,6 @@ const DEFAULT_FILTER = { brightness: 100, contrast: 100, saturate: 100 }
 function resolveWallpaperUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return ''
   if (pathOrUrl.startsWith('http') || pathOrUrl.startsWith('data:')) return pathOrUrl
-  if (pathOrUrl.startsWith('tfile://')) return pathOrUrl
   return buildTfileUrl(pathOrUrl)
 }
 
