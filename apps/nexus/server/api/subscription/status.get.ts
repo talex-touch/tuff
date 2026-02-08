@@ -1,20 +1,20 @@
 import { requireAuth } from '../../utils/auth'
-import { getPlanFeatures } from '../../utils/subscriptionStore'
+import { getPlanFeatures, getUserSubscription } from '../../utils/subscriptionStore'
 import { getCreditSummary } from '../../utils/creditsStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
-  const subscriptionPlan = 'FREE'
-  const features = getPlanFeatures(subscriptionPlan)
+  const subscription = await getUserSubscription(event, userId)
+  const features = getPlanFeatures(subscription.plan)
   const credits = await getCreditSummary(event, userId)
   const teamUsed = Number((credits.team as any)?.used ?? 0)
   const teamLimit = Number((credits.team as any)?.quota ?? features.aiRequestsLimit)
 
   return {
-    plan: subscriptionPlan,
-    expiresAt: null,
-    activatedAt: null,
-    isActive: true,
+    plan: subscription.plan,
+    expiresAt: subscription.expiresAt,
+    activatedAt: subscription.activatedAt,
+    isActive: subscription.isActive,
     features: {
       aiRequests: {
         limit: teamLimit,

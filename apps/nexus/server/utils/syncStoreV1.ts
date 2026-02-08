@@ -1,9 +1,11 @@
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
-import { countActiveDevices, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
-import { generatePasswordSalt, hashPassword } from './authCrypto'
+import { countActiveDevices, getDevice, readDeviceId, upsertDevice, readDeviceMetadata } from './authStore'
+import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
 import { createSyncError } from './syncErrors'
+import type { SubscriptionPlan } from './subscriptionStore'
+import { getUserSubscription } from './subscriptionStore'
 
 const SYNC_ITEMS_TABLE = 'sync_items_v1'
 const SYNC_OPLOG_TABLE = 'sync_oplog_v1'
@@ -19,6 +21,24 @@ const DEFAULT_QUOTAS = {
   device_limit: 3,
 }
 
+const PLAN_STORAGE_LIMITS_BYTES: Record<SubscriptionPlan, number> = {
+  FREE: 1 * 1024 * 1024,
+  PRO: 100 * 1024 * 1024,
+  PLUS: 1024 * 1024 * 1024,
+  TEAM: 5 * 1024 * 1024 * 1024,
+  ENTERPRISE: 20 * 1024 * 1024 * 1024,
+}
+
+function resolveQuotaLimits(plan: SubscriptionPlan) {
+  const storageLimitBytes = PLAN_STORAGE_LIMITS_BYTES[plan] ?? DEFAULT_QUOTAS.storage_limit_bytes
+  return {
+    storage_limit_bytes: storageLimitBytes,
+    object_limit: DEFAULT_QUOTAS.object_limit,
+    item_limit: Math.min(DEFAULT_QUOTAS.item_limit, storageLimitBytes),
+    device_limit: DEFAULT_QUOTAS.device_limit,
+  }
+}
+
 const SYNC_TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7
 
 let syncSchemaInitialized = false
@@ -30,8 +50,12 @@ export type SyncErrorCode =
   | 'QUOTA_DEVICE_EXCEEDED'
   | 'SYNC_INVALID_CURSOR'
   | 'SYNC_INVALID_PAYLOAD'
+  | 'SYNC_INVALID_TOKEN'
+  | 'SYNC_TOKEN_EXPIRED'
+  | 'DEVICE_NOT_AUTHORIZED'
 
 export interface QuotaInfo {
+  plan_tier: SubscriptionPlan
   limits: {
     storage_limit_bytes: number
     object_limit: number
@@ -221,6 +245,9 @@ function isNewerUpdate(candidate: string, existing: string, candidateDeviceId: s
 export async function getOrInitQuota(event: H3Event, userId: string): Promise<QuotaInfo> {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
+  const subscription = await getUserSubscription(event, userId)
+  const plan = subscription.plan
+  const limits = resolveQuotaLimits(plan)
   const deviceCount = await countActiveDevices(event, userId)
   const row = await db.prepare(`SELECT * FROM ${SYNC_QUOTAS_TABLE} WHERE user_id = ?`).bind(userId).first()
   if (row) {
@@ -229,20 +256,38 @@ export async function getOrInitQuota(event: H3Event, userId: string): Promise<Qu
       used_objects: Number(row.used_objects ?? 0),
       used_devices: deviceCount,
     }
-    if (usage.used_devices !== Number(row.used_devices ?? 0)) {
+    const storedLimits = {
+      storage_limit_bytes: Number(row.storage_limit_bytes ?? DEFAULT_QUOTAS.storage_limit_bytes),
+      object_limit: Number(row.object_limit ?? DEFAULT_QUOTAS.object_limit),
+      item_limit: Number(row.item_limit ?? DEFAULT_QUOTAS.item_limit),
+      device_limit: Number(row.device_limit ?? DEFAULT_QUOTAS.device_limit),
+    }
+
+    const shouldUpdateUsage = usage.used_devices !== Number(row.used_devices ?? 0)
+    const shouldUpdateLimits = Object.keys(limits).some((key) => {
+      const k = key as keyof typeof limits
+      return limits[k] !== storedLimits[k]
+    })
+
+    if (shouldUpdateUsage || shouldUpdateLimits) {
       await db.prepare(`
         UPDATE ${SYNC_QUOTAS_TABLE}
-        SET used_devices = ?, updated_at = ?
+        SET storage_limit_bytes = ?, object_limit = ?, item_limit = ?, device_limit = ?,
+            used_devices = ?, updated_at = ?
         WHERE user_id = ?
-      `).bind(usage.used_devices, new Date().toISOString(), userId).run()
+      `).bind(
+        limits.storage_limit_bytes,
+        limits.object_limit,
+        limits.item_limit,
+        limits.device_limit,
+        usage.used_devices,
+        new Date().toISOString(),
+        userId,
+      ).run()
     }
     return {
-      limits: {
-        storage_limit_bytes: Number(row.storage_limit_bytes ?? DEFAULT_QUOTAS.storage_limit_bytes),
-        object_limit: Number(row.object_limit ?? DEFAULT_QUOTAS.object_limit),
-        item_limit: Number(row.item_limit ?? DEFAULT_QUOTAS.item_limit),
-        device_limit: Number(row.device_limit ?? DEFAULT_QUOTAS.device_limit),
-      },
+      plan_tier: plan,
+      limits,
       usage,
     }
   }
@@ -254,10 +299,10 @@ export async function getOrInitQuota(event: H3Event, userId: string): Promise<Qu
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     userId,
-    DEFAULT_QUOTAS.storage_limit_bytes,
-    DEFAULT_QUOTAS.object_limit,
-    DEFAULT_QUOTAS.item_limit,
-    DEFAULT_QUOTAS.device_limit,
+    limits.storage_limit_bytes,
+    limits.object_limit,
+    limits.item_limit,
+    limits.device_limit,
     0,
     0,
     deviceCount,
@@ -265,7 +310,8 @@ export async function getOrInitQuota(event: H3Event, userId: string): Promise<Qu
   ).run()
 
   return {
-    limits: { ...DEFAULT_QUOTAS },
+    plan_tier: plan,
+    limits,
     usage: {
       used_storage_bytes: 0,
       used_objects: 0,
@@ -347,12 +393,12 @@ export async function getSyncSession(event: H3Event, userId: string, deviceId: s
   `).bind(userId, deviceId).first<{ sync_token: string, expires_at: string }>()
 
   if (!row || row.sync_token !== syncToken) {
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Sync token invalid')
+    throw createSyncError('SYNC_INVALID_TOKEN', 400, 'Sync token invalid')
   }
 
   const expiresAt = new Date(row.expires_at).getTime()
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Sync token expired')
+    throw createSyncError('SYNC_TOKEN_EXPIRED', 400, 'Sync token expired')
   }
 
   return { syncToken: row.sync_token, expiresAt: row.expires_at }
@@ -651,6 +697,45 @@ export async function uploadSyncBlob(event: H3Event, userId: string, file: File)
   return { blobId, objectKey, sha256, sizeBytes }
 }
 
+export async function getSyncBlob(event: H3Event, userId: string, blobId: string): Promise<{
+  data: ArrayBuffer
+  contentType: string
+  sha256: string
+  sizeBytes: number
+  objectKey: string
+} | null> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+  const bucket = getSyncBlobBucket(event)
+  if (!bucket)
+    throw new Error('R2 bucket is not available.')
+
+  const row = await db.prepare(`
+    SELECT object_key, sha256, size_bytes, content_type
+    FROM ${SYNC_BLOBS_TABLE}
+    WHERE user_id = ? AND blob_id = ?
+  `).bind(userId, blobId).first<{ object_key: string, sha256: string, size_bytes: number, content_type: string | null }>()
+
+  if (!row)
+    return null
+
+  const object = await bucket.get(row.object_key)
+  if (!object)
+    return null
+
+  const arrayBuffer = await object.arrayBuffer()
+  const contentType = row.content_type || object.httpMetadata?.contentType || 'application/octet-stream'
+  const sizeBytes = Number(row.size_bytes ?? arrayBuffer.byteLength)
+
+  return {
+    data: arrayBuffer,
+    contentType,
+    sha256: row.sha256,
+    sizeBytes,
+    objectKey: row.object_key,
+  }
+}
+
 export async function registerKey(event: H3Event, userId: string, deviceId: string, payload: { keyType: string, encryptedKey: string, recoveryCodeHash?: string | null }) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
@@ -681,6 +766,125 @@ export async function rotateKey(event: H3Event, userId: string, deviceId: string
   `).bind(userId, deviceId, payload.keyType, payload.encryptedKey, rotatedAt, rotatedAt).run()
 
   return { rotatedAt }
+}
+
+export interface KeyringMeta {
+  keyring_id: string
+  device_id: string
+  key_type: string
+  rotated_at: string | null
+  created_at: string
+  has_recovery_code: boolean
+}
+
+export interface KeyringSecret {
+  keyring_id: string
+  device_id: string
+  key_type: string
+  encrypted_key: string
+  rotated_at: string | null
+  created_at: string
+}
+
+export async function listKeyrings(event: H3Event, userId: string): Promise<KeyringMeta[]> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const result = await db.prepare(`
+    SELECT device_id, key_type, rotated_at, created_at, recovery_code_hash
+    FROM ${SYNC_KEYRINGS_TABLE}
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `).bind(userId).all<{ device_id: string, key_type: string, rotated_at: string | null, created_at: string, recovery_code_hash: string | null }>()
+
+  return (result.results ?? []).map(row => ({
+    keyring_id: `${userId}:${row.device_id}:${row.key_type}`,
+    device_id: row.device_id,
+    key_type: row.key_type,
+    rotated_at: row.rotated_at ?? null,
+    created_at: row.created_at,
+    has_recovery_code: Boolean(row.recovery_code_hash),
+  }))
+}
+
+export async function issueDeviceKey(
+  event: H3Event,
+  userId: string,
+  payload: { targetDeviceId: string, keyType: string, encryptedKey: string, recoveryCodeHash?: string | null }
+): Promise<{ keyringId: string }> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const targetDevice = await getDevice(event, userId, payload.targetDeviceId)
+  if (!targetDevice || targetDevice.revokedAt) {
+    throw createSyncError('DEVICE_NOT_AUTHORIZED', 403, 'Target device is not available')
+  }
+
+  const now = new Date().toISOString()
+  const recoveryCodeHash = await maybeHashRecoveryCode(payload.recoveryCodeHash)
+  await db.prepare(`
+    INSERT INTO ${SYNC_KEYRINGS_TABLE} (user_id, device_id, key_type, encrypted_key, recovery_code_hash, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, device_id, key_type) DO UPDATE SET
+      encrypted_key = excluded.encrypted_key,
+      recovery_code_hash = COALESCE(excluded.recovery_code_hash, ${SYNC_KEYRINGS_TABLE}.recovery_code_hash),
+      created_at = excluded.created_at
+  `).bind(
+    userId,
+    payload.targetDeviceId,
+    payload.keyType,
+    payload.encryptedKey,
+    recoveryCodeHash,
+    now,
+  ).run()
+
+  return { keyringId: `${userId}:${payload.targetDeviceId}:${payload.keyType}` }
+}
+
+async function verifyRecoveryCode(recoveryCode: string, stored: string): Promise<boolean> {
+  const [hash, salt] = stored.split(':')
+  if (!hash || !salt)
+    return false
+  return verifyPassword(recoveryCode, salt, hash)
+}
+
+export async function recoverKeyrings(
+  event: H3Event,
+  userId: string,
+  payload: { recoveryCode: string }
+): Promise<KeyringSecret[]> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const result = await db.prepare(`
+    SELECT device_id, key_type, encrypted_key, rotated_at, created_at, recovery_code_hash
+    FROM ${SYNC_KEYRINGS_TABLE}
+    WHERE user_id = ?
+  `).bind(userId).all<{ device_id: string, key_type: string, encrypted_key: string, rotated_at: string | null, created_at: string, recovery_code_hash: string | null }>()
+
+  const rows = result.results ?? []
+  const candidates = rows.filter(row => typeof row.recovery_code_hash === 'string' && row.recovery_code_hash.length > 0)
+
+  let verified = false
+  for (const row of candidates) {
+    if (await verifyRecoveryCode(payload.recoveryCode, row.recovery_code_hash!)) {
+      verified = true
+      break
+    }
+  }
+
+  if (!verified) {
+    throw createSyncError('DEVICE_NOT_AUTHORIZED', 403, 'Invalid recovery code')
+  }
+
+  return rows.map(row => ({
+    keyring_id: `${userId}:${row.device_id}:${row.key_type}`,
+    device_id: row.device_id,
+    key_type: row.key_type,
+    encrypted_key: row.encrypted_key,
+    rotated_at: row.rotated_at ?? null,
+    created_at: row.created_at,
+  }))
 }
 
 async function maybeHashRecoveryCode(recoveryCodeHash?: string | null) {

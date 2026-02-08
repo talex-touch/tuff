@@ -26,6 +26,7 @@ code: |
 | [Storage SDK](./storage.zh.md) | `usePluginStorage()` | 插件数据持久化 |
 | [Download SDK](./download.zh.md) | `useDownloadSdk()` | 下载任务管理 |
 | [Platform Capabilities SDK](./platform-capabilities.zh.md) | `usePlatformSdk()` | 平台能力目录 |
+| [PowerSDK](./power.zh.md) | `usePowerSDK()` | 插件低电量状态能力 |
 | [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
 | [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |
@@ -49,6 +50,7 @@ code: |
     useBox,
     useClipboard,
     usePluginStorage,
+    usePowerSDK,
     useChannel,
     useFeature,
     useDivisionBox
@@ -58,6 +60,7 @@ code: |
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
+  const power = usePowerSDK()
   const channel = useChannel()
   const feature = useFeature()
   const divisionBox = useDivisionBox()
@@ -66,6 +69,12 @@ code: |
   async function init() {
     // 读取配置
     const config = await storage.getFile('config.json')
+
+    // 读取低电量状态
+    const lowPower = await power.isLowPower({ threshold: 25 })
+    if (lowPower) {
+      console.log('电池模式下跳过重负载任务')
+    }
     
     // 监听输入变化
     feature.onInputChange(async (input) => {

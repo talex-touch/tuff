@@ -282,6 +282,42 @@ export async function getUserActivationHistory(
   }))
 }
 
+export async function getUserSubscription(event: H3Event, userId: string): Promise<UserSubscription> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureSubscriptionSchema(db)
+
+  const row = await db.prepare(`
+    SELECT plan, activated_at, expires_at
+    FROM ${ACTIVATION_LOGS_TABLE}
+    WHERE user_id = ?1
+    ORDER BY activated_at DESC
+    LIMIT 1;
+  `).bind(userId).first<{ plan: string, activated_at: string, expires_at: string }>()
+
+  if (!row) {
+    return {
+      plan: 'FREE',
+      expiresAt: null,
+      activatedAt: null,
+      isActive: true,
+    }
+  }
+
+  const expiresAt = row.expires_at ? new Date(row.expires_at) : null
+  const isActive = !expiresAt || expiresAt > new Date()
+
+  return {
+    plan: (isActive ? row.plan : 'FREE') as SubscriptionPlan,
+    expiresAt: row.expires_at || null,
+    activatedAt: row.activated_at || null,
+    isActive,
+  }
+}
+
 export function getSubscriptionFromMetadata(metadata: any): UserSubscription {
   const sub = metadata?.subscription
   if (!sub) {

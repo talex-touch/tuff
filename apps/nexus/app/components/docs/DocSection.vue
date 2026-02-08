@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { TxAutoSizer, TxButton } from '@talex-touch/tuffex'
+
 interface Props {
   active: boolean
   link?: string
@@ -85,7 +87,7 @@ function handleToggle() {
   border: 0;
   background: transparent;
   text-align: left;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: rgba(15, 23, 42, 0.68);

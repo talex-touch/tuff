@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
 
   const response: HandshakeResponse = {
     sync_token: session.syncToken,
+    sync_token_expires_at: session.expiresAt,
     server_cursor: session.serverCursor,
     device_id: deviceId,
     quotas: quota,
