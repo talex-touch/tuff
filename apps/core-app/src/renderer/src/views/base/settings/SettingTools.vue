@@ -47,13 +47,69 @@ const FLIP_ROTATE_X = 6
 const FLIP_ROTATE_Y = 8
 const FLIP_SPEED_BOOST = 1.1
 
+function ensureClipboardPollingSettings(): void {
+  const tools = appSetting.tools as {
+    clipboardPolling?: {
+      interval?: number
+      lowBatteryPolicy?: {
+        enable?: boolean
+        interval?: number
+      }
+    }
+  }
+
+  if (!tools.clipboardPolling || typeof tools.clipboardPolling !== 'object') {
+    tools.clipboardPolling = {
+      interval: 5,
+      lowBatteryPolicy: {
+        enable: true,
+        interval: 10
+      }
+    }
+    return
+  }
+
+  const polling = tools.clipboardPolling
+  if (typeof polling.interval !== 'number') {
+    polling.interval = 5
+  }
+
+  if (!polling.lowBatteryPolicy || typeof polling.lowBatteryPolicy !== 'object') {
+    polling.lowBatteryPolicy = {
+      enable: true,
+      interval: 10
+    }
+    return
+  }
+
+  if (typeof polling.lowBatteryPolicy.enable !== 'boolean') {
+    polling.lowBatteryPolicy.enable = true
+  }
+  if (polling.lowBatteryPolicy.interval !== 10 && polling.lowBatteryPolicy.interval !== 15) {
+    polling.lowBatteryPolicy.interval = 10
+  }
+}
+
+const clipboardPollingLowBatteryDisabled = computed(
+  () => appSetting.tools.clipboardPolling?.lowBatteryPolicy?.enable === false
+)
+
 async function refreshShortcuts(): Promise<void> {
   shortcuts.value = await shortconApi.getAll()
 }
 
 onMounted(async () => {
+  ensureClipboardPollingSettings()
   await refreshShortcuts()
 })
+
+watch(
+  () => appSetting.tools,
+  () => {
+    ensureClipboardPollingSettings()
+  },
+  { deep: false, immediate: true }
+)
 
 async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
   if (!id || !newAccelerator) return
@@ -374,6 +430,41 @@ watch(shortcutsDialogVisible, (visible) => {
       <TSelectItem :model-value="300"> 5 {{ t('settingTools.min') }} </TSelectItem>
       <TSelectItem :model-value="600"> 10 {{ t('settingTools.min') }} </TSelectItem>
       <TSelectItem :model-value="750"> 15 {{ t('settingTools.min') }} </TSelectItem>
+    </TuffBlockSelect>
+
+    <TuffBlockSelect
+      v-model="appSetting.tools.clipboardPolling.interval"
+      :title="t('settingTools.clipboardPollingInterval')"
+      :description="t('settingTools.clipboardPollingIntervalDesc')"
+      default-icon="i-carbon-timer"
+      active-icon="i-carbon-timer"
+    >
+      <TSelectItem :model-value="1">1 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="3">3 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="5">5 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="10">10 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="15">15 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="-1">{{ t('settingTools.never') }}</TSelectItem>
+    </TuffBlockSelect>
+
+    <TuffBlockSwitch
+      v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
+      :title="t('settingTools.clipboardPollingLowBattery')"
+      :description="t('settingTools.clipboardPollingLowBatteryDesc')"
+      default-icon="i-carbon-battery-charging"
+      active-icon="i-carbon-battery-charging"
+    />
+
+    <TuffBlockSelect
+      v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
+      :title="t('settingTools.clipboardPollingLowBatteryInterval')"
+      :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
+      default-icon="i-carbon-battery-empty"
+      active-icon="i-carbon-battery-empty"
+      :disabled="clipboardPollingLowBatteryDisabled"
+    >
+      <TSelectItem :model-value="10">10 {{ t('settingTools.sec') }}</TSelectItem>
+      <TSelectItem :model-value="15">15 {{ t('settingTools.sec') }}</TSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto hide switch -->
