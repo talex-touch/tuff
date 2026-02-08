@@ -6,7 +6,7 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { status: sessionStatus } = useAuth()
+const { status: sessionStatus, getSession } = useAuth()
 const route = useRoute()
 
 const status = ref<'loading' | 'success' | 'error'>('loading')
@@ -21,8 +21,16 @@ const isDev = import.meta.dev
 async function handleCallback() {
   try {
     if (sessionStatus.value !== 'authenticated') {
-      errorMessage.value = t('auth.notSignedIn', 'You are not signed in.')
-      status.value = 'error'
+      await getSession()
+    }
+
+    if (sessionStatus.value !== 'authenticated') {
+      await navigateTo({
+        path: '/sign-in',
+        query: {
+          redirect_url: route.fullPath,
+        },
+      }, { replace: true })
       return
     }
 

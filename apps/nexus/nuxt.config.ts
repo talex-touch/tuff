@@ -113,8 +113,14 @@ export default defineNuxtConfig({
         resendApiKey: process.env.RESEND_API_KEY,
       },
     },
+    turnstile: {
+      secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
+    },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
+      turnstile: {
+        siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
+      },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
       },
