@@ -1,9 +1,11 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   BatteryStatusPayload,
   PackageInfo,
   ReadFileRequest,
+  SecureValueGetRequest,
+  SecureValueSetRequest,
   StartupRequest,
   StartupResponse
 } from '@talex-touch/utils/transport/events/types'
@@ -24,7 +26,15 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
-import { BrowserWindow, dialog, powerMonitor, shell, type OpenDevToolsOptions } from 'electron'
+import {
+  BrowserWindow,
+  dialog,
+  powerMonitor,
+  safeStorage,
+  shell,
+  type OpenDevToolsOptions,
+  type OpenDialogOptions
+} from 'electron'
 import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
@@ -73,6 +83,7 @@ import { TalexTouch } from '../types'
 import { checkPlatformCompatibility } from '../utils/common-util'
 import { setLocale } from '../utils/i18n-helper'
 import { createLogger } from '../utils/logger'
+import { safeOpHandler, toErrorMessage } from '../utils/safe-handler'
 import { enterPerfContext } from '../utils/perf-context'
 import { perfMonitor } from '../utils/perf-monitor'
 import { getStorageUsageReport } from '../utils/storage-usage'
@@ -86,6 +97,8 @@ const READ_FILE_CACHE_MAX_ENTRIES = 120
 const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const PLUGIN_TEMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+const SECURE_STORE_FILE = 'secure-store.json'
+const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 const log = createLogger('CommonChannel')
 
 const legacyCloseEvent = defineRawEvent<void, void>('close')
@@ -98,7 +111,6 @@ const legacyGetOsEvent = defineRawEvent<void, OSInformation>('get-os')
 const legacyCommonCwdEvent = defineRawEvent<void, string>('common:cwd')
 const legacyCommonGetPathEvent = defineRawEvent<{ name: string }, string | null>('common:get-path')
 const legacyFolderOpenEvent = defineRawEvent<{ path: string }, void>('folder:open')
-const legacyOpenPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
 const legacyModuleFolderEvent = defineRawEvent<{ name: string }, void>('module:folder')
 const legacyExecuteCmdEvent = defineRawEvent<
   { command: string },
@@ -670,6 +682,23 @@ export class CommonChannelModule extends BaseModule {
       return
     }
 
+    this.setupBatteryStatusBroadcast(transport)
+    this.registerLegacyLifecycleHandlers(transport, touchApp)
+    this.registerLegacyTempFileHandlers(transport)
+    this.registerLegacyStorageCleanupHandlers(transport)
+    this.registerLegacyDialogWallpaperHandlers(transport, touchApp)
+
+    const onOpenUrl = this.createOpenUrlHandler(transport, touchApp)
+    this.registerLegacyCommonHandlers(transport, touchApp, onOpenUrl)
+    this.bindOpenUrlListeners(touchApp, onOpenUrl)
+
+    this.registerBuildVerificationStatusHandlers(transport)
+    this.registerTransportHandlers()
+  }
+
+  private setupBatteryStatusBroadcast(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
     const broadcastBatteryStatus = async (): Promise<void> => {
       const onBattery = safeIsOnBatteryPower()
       const percent = await safeGetBatteryPercent()
@@ -685,12 +714,10 @@ export class CommonChannelModule extends BaseModule {
       }
     }
 
-    // Smart polling management
     const startPolling = () => {
       if (pollingService.isRegistered(BATTERY_POLL_TASK_ID)) {
         return
       }
-      // Poll every 2 minutes when on battery to save resources
       pollingService.register(BATTERY_POLL_TASK_ID, () => broadcastBatteryStatus(), {
         interval: 120_000,
         unit: 'milliseconds'
@@ -702,16 +729,13 @@ export class CommonChannelModule extends BaseModule {
       pollingService.unregister(BATTERY_POLL_TASK_ID)
     }
 
-    // Start battery status broadcast (best-effort)
     try {
-      // Emit once on startup
       void broadcastBatteryStatus()
 
       if (safeIsOnBatteryPower()) {
         startPolling()
       }
 
-      // Subscribe to power source changes for immediate updates
       powerMonitor.on('on-ac', () => {
         stopPolling()
         void broadcastBatteryStatus()
@@ -724,16 +748,21 @@ export class CommonChannelModule extends BaseModule {
     } catch (error) {
       log.warn('[CommonChannel] Failed to initialize battery status broadcaster:', { error })
     }
+  }
 
+  private registerLegacyLifecycleHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    touchApp: TalexTouch.TouchApp
+  ): void {
     this.transportDisposers.push(
-      transport.on(legacyCloseEvent, () => closeApp(app as TalexTouch.TouchApp)),
-      transport.on(legacyHideEvent, () => (app as TalexTouch.TouchApp).window.window.hide()),
-      transport.on(legacyMinimizeEvent, () => (app as TalexTouch.TouchApp).window.minimize()),
+      transport.on(legacyCloseEvent, () => closeApp(touchApp)),
+      transport.on(legacyHideEvent, () => touchApp.window.window.hide()),
+      transport.on(legacyMinimizeEvent, () => touchApp.window.minimize()),
       transport.on(legacyDevToolsEvent, () => {
         log.debug('[dev-tools] Open dev tools!')
-        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'undocked' })
-        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'detach' })
-        ;(app as TalexTouch.TouchApp).window.openDevTools({ mode: 'right' })
+        touchApp.window.openDevTools({ mode: 'undocked' })
+        touchApp.window.openDevTools({ mode: 'detach' })
+        touchApp.window.openDevTools({ mode: 'right' })
       }),
       transport.on(legacyGetPackageEvent, () => packageJson),
       transport.on(legacyOpenExternalEvent, (payload) => {
@@ -748,7 +777,11 @@ export class CommonChannelModule extends BaseModule {
         activeAppService.getActiveApp(Boolean(payload?.forceRefresh))
       )
     )
+  }
 
+  private registerLegacyTempFileHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
     const registeredTempNamespaces = new Map<string, number | null>()
     const ensureTempNamespace = (namespace: string, retentionMs: number | null) => {
       const normalized = namespace.replace(/^\/+/, '').replace(/\\/g, '/')
@@ -851,7 +884,11 @@ export class CommonChannelModule extends BaseModule {
         return { success }
       })
     )
+  }
 
+  private registerLegacyStorageCleanupHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
     this.transportDisposers.push(
       transport.on(legacySystemGetStorageUsageEvent, async (payload) => {
         const usagePayload = isRecord(payload) ? payload : {}
@@ -926,98 +963,12 @@ export class CommonChannelModule extends BaseModule {
         return await cleanupUpdates()
       })
     )
+  }
 
-    this.transportDisposers.push(
-      transport.on(legacyCommonCwdEvent, () => process.cwd()),
-      transport.on(legacyCommonGetPathEvent, (payload) => {
-        const name = typeof payload?.name === 'string' ? payload.name : ''
-        if (!name) {
-          return null
-        }
-        try {
-          return touchApp.app.getPath(name as AppPathName)
-        } catch (error) {
-          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
-          return null
-        }
-      }),
-      transport.on(legacyFolderOpenEvent, (payload) => {
-        if (payload?.path) {
-          shell.showItemInFolder(payload.path)
-        }
-      }),
-      transport.on(legacyOpenPromptsFolderEvent, async () => {
-        const basePath = storageModule.filePath
-        if (!basePath) {
-          throw new Error('Config path not available')
-        }
-
-        const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
-        try {
-          await fs.stat(promptFilePath)
-          shell.showItemInFolder(promptFilePath)
-          return
-        } catch {
-          // Ignore and fallback to opening config root
-        }
-
-        const error = await shell.openPath(basePath)
-        if (error) {
-          throw new Error(error)
-        }
-      }),
-      transport.on(legacyModuleFolderEvent, (payload) => {
-        if (payload?.name) {
-          const modulePath = path.join(
-            (app as TalexTouch.TouchApp).rootPath,
-            'modules',
-            payload.name
-          )
-          shell.openPath(modulePath)
-
-          log.debug(
-            `[Channel] Open path [${modulePath}] with module folder @${payload?.name ?? 'defaults'}`
-          )
-        }
-      }),
-      transport.on(legacyExecuteCmdEvent, async (payload) => {
-        if (payload?.command) {
-          try {
-            const error = await shell.openPath(payload.command)
-            if (error) {
-              log.error(`[CommonChannel] Failed to open path: ${payload.command}`, { error })
-              return { success: false, error }
-            }
-            return { success: true }
-          } catch (error) {
-            log.error(`[CommonChannel] Error opening path: ${payload.command}`, { error })
-            return { success: false, error: error instanceof Error ? error.message : String(error) }
-          }
-        }
-        return { success: false, error: 'No command provided' }
-      }),
-      transport.on(legacyAppOpenEvent, (payload) => {
-        const target = payload?.appName ?? payload?.path
-        if (target) {
-          shell.openPath(target)
-        }
-      }),
-      transport.on(legacyUrlOpenEvent, (payload) => {
-        if (typeof payload === 'string') {
-          void onOpenUrl(payload)
-          return true
-        }
-        return false
-      }),
-      transport.on(legacyFilesIndexProgressEvent, async (payload) => {
-        const payloadPaths = (payload as { paths?: unknown })?.paths
-        const paths = Array.isArray(payloadPaths)
-          ? payloadPaths.filter((item): item is string => typeof item === 'string')
-          : undefined
-        return fileProvider.getIndexingProgress(paths)
-      })
-    )
-
+  private registerLegacyDialogWallpaperHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    touchApp: TalexTouch.TouchApp
+  ): void {
     this.transportDisposers.push(
       transport.on(dialogOpenFileEvent, async (payload) => {
         const options = isRecord(payload) ? payload : {}
@@ -1068,7 +1019,12 @@ export class CommonChannelModule extends BaseModule {
         }
       })
     )
+  }
 
+  private createOpenUrlHandler(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    touchApp: TalexTouch.TouchApp
+  ): (url: string) => Promise<void> {
     type OpenUrlDecision = 'skip' | 'open' | 'confirm'
 
     const shouldSkipPromptProtocols = new Set([APP_SCHEMA, FILE_SCHEMA])
@@ -1082,7 +1038,7 @@ export class CommonChannelModule extends BaseModule {
       }
     })()
 
-    function isFrontendLocalUrl(parsed: URL): boolean {
+    const isFrontendLocalUrl = (parsed: URL): boolean => {
       if (!isLocalhostUrl(parsed.toString())) return false
 
       if (rendererOrigin && parsed.origin === rendererOrigin) return true
@@ -1091,7 +1047,7 @@ export class CommonChannelModule extends BaseModule {
       return hash.startsWith('#/') || parsed.pathname.includes('/#/')
     }
 
-    function getOpenUrlDecision(url: string): OpenUrlDecision {
+    const getOpenUrlDecision = (url: string): OpenUrlDecision => {
       if (!url || url.startsWith('/') || url.startsWith('#')) return 'skip'
 
       let parsed: URL
@@ -1116,7 +1072,7 @@ export class CommonChannelModule extends BaseModule {
       return 'confirm'
     }
 
-    async function onOpenUrl(url: string) {
+    return async (url: string) => {
       const decision = getOpenUrlDecision(url)
       if (decision === 'skip') return
       if (decision === 'open') {
@@ -1135,7 +1091,85 @@ export class CommonChannelModule extends BaseModule {
         shell.openExternal(url)
       }
     }
+  }
 
+  private registerLegacyCommonHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    touchApp: TalexTouch.TouchApp,
+    onOpenUrl: (url: string) => Promise<void>
+  ): void {
+    this.transportDisposers.push(
+      transport.on(legacyCommonCwdEvent, () => process.cwd()),
+      transport.on(legacyCommonGetPathEvent, (payload) => {
+        const name = typeof payload?.name === 'string' ? payload.name : ''
+        if (!name) {
+          return null
+        }
+        try {
+          return touchApp.app.getPath(name as AppPathName)
+        } catch (error) {
+          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
+          return null
+        }
+      }),
+      transport.on(legacyFolderOpenEvent, (payload) => {
+        if (payload?.path) {
+          shell.showItemInFolder(payload.path)
+        }
+      }),
+      transport.on(legacyModuleFolderEvent, (payload) => {
+        if (payload?.name) {
+          const modulePath = path.join(touchApp.rootPath, 'modules', payload.name)
+          shell.openPath(modulePath)
+
+          log.debug(
+            `[Channel] Open path [${modulePath}] with module folder @${payload?.name ?? 'defaults'}`
+          )
+        }
+      }),
+      transport.on(legacyExecuteCmdEvent, async (payload) => {
+        if (payload?.command) {
+          try {
+            const error = await shell.openPath(payload.command)
+            if (error) {
+              log.error(`[CommonChannel] Failed to open path: ${payload.command}`, { error })
+              return { success: false, error }
+            }
+            return { success: true }
+          } catch (error) {
+            log.error(`[CommonChannel] Error opening path: ${payload.command}`, { error })
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        }
+        return { success: false, error: 'No command provided' }
+      }),
+      transport.on(legacyAppOpenEvent, (payload) => {
+        const target = payload?.appName ?? payload?.path
+        if (target) {
+          shell.openPath(target)
+        }
+      }),
+      transport.on(legacyUrlOpenEvent, (payload) => {
+        if (typeof payload === 'string') {
+          void onOpenUrl(payload)
+          return true
+        }
+        return false
+      }),
+      transport.on(legacyFilesIndexProgressEvent, async (payload) => {
+        const payloadPaths = (payload as { paths?: unknown })?.paths
+        const paths = Array.isArray(payloadPaths)
+          ? payloadPaths.filter((item): item is string => typeof item === 'string')
+          : undefined
+        return fileProvider.getIndexingProgress(paths)
+      })
+    )
+  }
+
+  private bindOpenUrlListeners(
+    touchApp: TalexTouch.TouchApp,
+    onOpenUrl: (url: string) => Promise<void>
+  ): void {
     touchApp.app.addListener('open-url', (event, url) => {
       event.preventDefault()
 
@@ -1144,11 +1178,17 @@ export class CommonChannelModule extends BaseModule {
         return
       }
 
-      onOpenUrl(url)
+      void onOpenUrl(url)
     })
 
-    touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => onOpenUrl(event.data))
+    touchEventBus.on(TalexEvents.OPEN_EXTERNAL_URL, (event) => {
+      void onOpenUrl(event.data)
+    })
+  }
 
+  private registerBuildVerificationStatusHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
     const resolveBuildVerificationStatus = () => {
       try {
         if (buildVerificationModule?.getVerificationStatus) {
@@ -1173,8 +1213,6 @@ export class CommonChannelModule extends BaseModule {
       transport.on(legacyBuildVerificationEvent, resolveBuildVerificationStatus),
       transport.on(AppEvents.build.getVerificationStatus, resolveBuildVerificationStatus)
     )
-
-    this.registerTransportHandlers()
   }
 
   private getDbUtils(): ReturnType<typeof createDbUtils> | null {
@@ -1199,12 +1237,43 @@ export class CommonChannelModule extends BaseModule {
     if (!touchApp) {
       return
     }
-    const electronApp = touchApp.app
+
+    const transport = this.transport
+    const registerSafeHandler = this.createSafeOperationHandler(transport)
 
     registerDefaultPlatformCapabilities()
 
+    this.registerSystemTransportHandlers(transport, touchApp, registerSafeHandler)
+    this.registerIndexSettingsTransportHandlers(transport)
+    this.registerPresetTransportHandlers(transport, registerSafeHandler)
+  }
+
+  private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {
+    return <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
+      event: { toEventName: () => string },
+      handler: (payload: TReq, context: HandlerContext) => Promise<void | TExtra> | void | TExtra
+    ) =>
+      transport.on(
+        event as any,
+        safeOpHandler(handler, {
+          onError: (error) => {
+            log.warn(`[CommonChannel] Handler failed: ${event.toEventName()}`, {
+              error: toErrorMessage(error)
+            })
+          }
+        })
+      )
+  }
+
+  private registerSystemTransportHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    touchApp: TalexTouch.TouchApp,
+    registerSafeHandler: ReturnType<CommonChannelModule['createSafeOperationHandler']>
+  ): void {
+    const electronApp = touchApp.app
+
     this.transportDisposers.push(
-      this.transport.on<StartupRequest, StartupResponse>(
+      transport.on<StartupRequest, StartupResponse>(
         AppEvents.system.startup,
         (payload, context) => {
           const rendererStartTime =
@@ -1257,22 +1326,22 @@ export class CommonChannelModule extends BaseModule {
           }
         }
       ),
-      this.transport.on(PlatformEvents.capabilities.list, (payload) => {
+      transport.on(PlatformEvents.capabilities.list, (payload) => {
         return platformCapabilityRegistry.list(payload ?? {})
       }),
-      this.transport.on(AppEvents.window.close, () => closeApp(touchApp)),
-      this.transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
-      this.transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
-      this.transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
-      this.transport.on(AppEvents.debug.openDevTools, (payload) => {
+      transport.on(AppEvents.window.close, () => closeApp(touchApp)),
+      transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
+      transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
+      transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
+      transport.on(AppEvents.debug.openDevTools, (payload) => {
         const options =
           payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined
         touchApp.window.openDevTools(options)
       }),
-      this.transport.on(AppEvents.system.getCwd, () => process.cwd()),
-      this.transport.on(AppEvents.system.getOS, () => getOSInformation()),
-      this.transport.on(AppEvents.system.getPackage, () => packageJson),
-      this.transport.on(AppEvents.system.getPath, (payload) => {
+      transport.on(AppEvents.system.getCwd, () => process.cwd()),
+      transport.on(AppEvents.system.getOS, () => getOSInformation()),
+      transport.on(AppEvents.system.getPackage, () => packageJson),
+      transport.on(AppEvents.system.getPath, (payload) => {
         const name = typeof payload?.name === 'string' ? payload.name : ''
         if (!name) {
           return null
@@ -1284,102 +1353,108 @@ export class CommonChannelModule extends BaseModule {
           return null
         }
       }),
-      this.transport.on(AppEvents.system.openExternal, (payload) => {
+      transport.on<SecureValueGetRequest, string | null>(
+        AppEvents.system.getSecureValue,
+        async (payload) => {
+          const key = typeof payload?.key === 'string' ? payload.key : ''
+          if (!key) {
+            return null
+          }
+          return await this.getSecureValue(key)
+        }
+      ),
+      transport.on<SecureValueSetRequest, void>(
+        AppEvents.system.setSecureValue,
+        async (payload) => {
+          const key = typeof payload?.key === 'string' ? payload.key : ''
+          if (!key) {
+            throw new Error('Missing secure storage key')
+          }
+          await this.setSecureValue(key, payload?.value ?? null)
+        }
+      ),
+      transport.on(AppEvents.system.openExternal, (payload) => {
         const url = typeof payload?.url === 'string' ? payload.url : ''
         if (url) {
           return shell.openExternal(url)
         }
         return undefined
       }),
-      this.transport.on(AppEvents.system.showInFolder, (payload) => {
+      transport.on(AppEvents.system.showInFolder, (payload) => {
         const target = typeof payload?.path === 'string' ? payload.path : ''
         if (target) {
           shell.showItemInFolder(target)
         }
       }),
-      this.transport.on(AppEvents.system.openApp, (payload) => {
+      transport.on(AppEvents.system.openApp, (payload) => {
         const target = payload?.appName || payload?.path
         if (target) {
           void shell.openPath(target)
         }
         return undefined
       }),
-      this.transport.on(AppEvents.system.executeCommand, async (payload) => {
-        const command = typeof payload?.command === 'string' ? payload.command : ''
-        if (!command) {
-          return { success: false, error: 'No command provided' }
+      transport.on(AppEvents.system.openPromptsFolder, async () => {
+        const basePath = storageModule.filePath
+        if (!basePath) {
+          throw new Error('Config path not available')
         }
+
+        const promptFilePath = path.join(basePath, 'intelligence', 'prompt-library')
         try {
-          const error = await shell.openPath(command)
-          if (error) {
-            log.error(`[CommonChannel] Failed to open path: ${command}`, { error })
-            return { success: false, error }
-          }
-          return { success: true }
-        } catch (error) {
-          log.error(`[CommonChannel] Error opening path: ${command}`, { error })
-          return { success: false, error: error instanceof Error ? error.message : String(error) }
+          await fs.stat(promptFilePath)
+          shell.showItemInFolder(promptFilePath)
+          return
+        } catch {
+          // Ignore and fallback to opening config root
+        }
+
+        const error = await shell.openPath(basePath)
+        if (error) {
+          throw new Error(error)
         }
       }),
-      this.transport.on(AppEvents.i18n.setLocale, (payload) => {
+      registerSafeHandler(
+        AppEvents.system.executeCommand,
+        async (payload: { command?: string }) => {
+          const command = typeof payload?.command === 'string' ? payload.command : ''
+          if (!command) {
+            throw new Error('No command provided')
+          }
+
+          const error = await shell.openPath(command)
+          if (error) {
+            throw new Error(error)
+          }
+        }
+      ),
+      transport.on(AppEvents.i18n.setLocale, (payload) => {
         const locale = getOptionalStringProp(payload, 'locale')
         if (locale && isLocale(locale)) {
           setLocale(locale)
         }
       }),
-      this.transport.on(AppEvents.analytics.perfReport, (payload) => {
+      transport.on(AppEvents.analytics.perfReport, (payload) => {
         if (isRendererPerfReport(payload)) {
           perfMonitor.recordRendererReport(payload)
         }
       }),
-      this.transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
-        const source = payload?.source?.trim()
-        const resolvedPath = source ? resolveLocalFilePath(source) : null
-        if (!resolvedPath) {
-          throw new Error('Unsupported file source')
-        }
-
-        const cached = getCachedReadFile(resolvedPath)
-        if (cached) {
-          return cached.content
-        }
-
-        const inflight = readFileInflight.get(resolvedPath)
-        if (inflight) {
-          return await inflight
-        }
-
-        const fileName = path.basename(resolvedPath)
-        const ext = path.extname(resolvedPath).toLowerCase()
-        const dispose = enterPerfContext('system.readFile', {
-          fileName,
-          ext,
-          cacheHit: false
-        })
-        const task = fs
-          .readFile(resolvedPath, { encoding: 'utf8' })
-          .then((content) => {
-            setCachedReadFile(resolvedPath, content)
-            return content
-          })
-          .finally(() => {
-            readFileInflight.delete(resolvedPath)
-            dispose()
-          })
-
-        readFileInflight.set(resolvedPath, task)
-        return await task
+      transport.on<ReadFileRequest, string>(AppEvents.system.readFile, async (payload) => {
+        return await this.readSystemFile(payload)
       }),
-      this.transport.onStream(AppEvents.fileIndex.progress, (_payload, context) => {
+      transport.onStream(AppEvents.fileIndex.progress, (_payload, context) => {
         fileProvider.registerProgressStream(context)
       })
     )
+  }
 
+  private registerIndexSettingsTransportHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>
+  ): void {
     this.transportDisposers.push(
-      this.transport.on(AppEvents.fileIndex.status, () => fileProvider.getIndexingStatus()),
-      this.transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
-      this.transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
-      this.transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
+      transport.on(AppEvents.fileIndex.status, () => fileProvider.getIndexingStatus()),
+      transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
+      transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
+      transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
         try {
           return await fileProvider.rebuildIndex(payload ?? undefined)
         } catch (error) {
@@ -1387,19 +1462,23 @@ export class CommonChannelModule extends BaseModule {
           return { success: false, error: message }
         }
       }),
-      this.transport.on(AppEvents.deviceIdle.getSettings, () => deviceIdleService.getSettings()),
-      this.transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
+      transport.on(AppEvents.deviceIdle.getSettings, () => deviceIdleService.getSettings()),
+      transport.on(AppEvents.deviceIdle.updateSettings, (payload) =>
         deviceIdleService.updateSettings(payload ?? {})
       ),
-      this.transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
-      this.transport.on(AppEvents.appIndex.updateSettings, (payload) =>
+      transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
+      transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
       )
     )
+  }
 
-    // Preset import/export channel handlers
+  private registerPresetTransportHandlers(
+    transport: NonNullable<CommonChannelModule['transport']>,
+    registerSafeHandler: ReturnType<CommonChannelModule['createSafeOperationHandler']>
+  ): void {
     this.transportDisposers.push(
-      this.transport.on(dialogOpenFileEvent, async (payload) => {
+      transport.on(dialogOpenFileEvent, async (payload) => {
         const win = BrowserWindow.getFocusedWindow()
         if (!win) return { filePaths: [] }
 
@@ -1416,7 +1495,7 @@ export class CommonChannelModule extends BaseModule {
 
         return { filePaths: result.canceled ? [] : result.filePaths }
       }),
-      this.transport.on(dialogSaveFileEvent, async (payload) => {
+      transport.on(dialogSaveFileEvent, async (payload) => {
         const win = BrowserWindow.getFocusedWindow()
         if (!win) return { filePath: undefined }
 
@@ -1428,20 +1507,14 @@ export class CommonChannelModule extends BaseModule {
 
         return { filePath: result.canceled ? undefined : result.filePath }
       }),
-      this.transport.on(fsWriteFileEvent, async (payload) => {
+      registerSafeHandler(fsWriteFileEvent, async (payload: { path?: string; data?: string }) => {
         if (!payload?.path || typeof payload.data !== 'string') {
-          return { success: false }
+          throw new Error('Path and data are required')
         }
 
-        try {
-          await fs.writeFile(payload.path, payload.data, 'utf-8')
-          return { success: true }
-        } catch (error) {
-          log.error(`[CommonChannel] fs:write-file failed: ${payload.path}`, { error })
-          return { success: false }
-        }
+        await fs.writeFile(payload.path, payload.data, 'utf-8')
       }),
-      this.transport.on(fsReadFileEvent, async (payload) => {
+      transport.on(fsReadFileEvent, async (payload) => {
         if (!payload?.path) {
           return { error: 'Path is required' }
         }
@@ -1455,6 +1528,154 @@ export class CommonChannelModule extends BaseModule {
         }
       })
     )
+  }
+
+  private async readSystemFile(payload: ReadFileRequest): Promise<string> {
+    const source = payload?.source?.trim()
+    const resolvedPath = source ? resolveLocalFilePath(source) : null
+    const allowMissing = payload?.allowMissing === true
+    const isFileMissingError = (error: unknown): boolean =>
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'ENOENT'
+
+    if (!resolvedPath) {
+      throw new Error('Unsupported file source')
+    }
+
+    const cached = getCachedReadFile(resolvedPath)
+    if (cached) {
+      return cached.content
+    }
+
+    const inflight = readFileInflight.get(resolvedPath)
+    if (inflight) {
+      try {
+        return await inflight
+      } catch (error) {
+        if (allowMissing && isFileMissingError(error)) {
+          return ''
+        }
+        throw error
+      }
+    }
+
+    const fileName = path.basename(resolvedPath)
+    const ext = path.extname(resolvedPath).toLowerCase()
+    const dispose = enterPerfContext('system.readFile', {
+      fileName,
+      ext,
+      cacheHit: false
+    })
+
+    const task = fs
+      .readFile(resolvedPath, { encoding: 'utf8' })
+      .then((content) => {
+        setCachedReadFile(resolvedPath, content)
+        return content
+      })
+      .catch((error) => {
+        if (allowMissing && isFileMissingError(error)) {
+          return ''
+        }
+        throw error
+      })
+      .finally(() => {
+        readFileInflight.delete(resolvedPath)
+        dispose()
+      })
+
+    readFileInflight.set(resolvedPath, task)
+    return await task
+  }
+
+  private normalizeSecureStoreKey(rawKey: string): string {
+    const key = rawKey.trim()
+    if (!SECURE_STORE_KEY_PATTERN.test(key)) {
+      throw new Error('Invalid secure storage key')
+    }
+    return key
+  }
+
+  private resolveSecureStorePath(): string {
+    const touchApp = this.touchApp
+    if (!touchApp) {
+      throw new Error('App context is not ready')
+    }
+    return path.join(touchApp.rootPath, 'config', SECURE_STORE_FILE)
+  }
+
+  private async readSecureStoreFile(): Promise<Record<string, string>> {
+    const storePath = this.resolveSecureStorePath()
+    try {
+      const raw = await fs.readFile(storePath, 'utf-8')
+      const parsed: unknown = JSON.parse(raw)
+      if (!isRecord(parsed)) {
+        return {}
+      }
+      const store: Record<string, string> = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === 'string') {
+          store[key] = value
+        }
+      }
+      return store
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+        return {}
+      }
+      log.warn('[CommonChannel] Failed to read secure store file', { error: toErrorMessage(error) })
+      return {}
+    }
+  }
+
+  private async writeSecureStoreFile(store: Record<string, string>): Promise<void> {
+    const storePath = this.resolveSecureStorePath()
+    await fs.mkdir(path.dirname(storePath), { recursive: true })
+    await fs.writeFile(storePath, JSON.stringify(store), 'utf-8')
+  }
+
+  private async getSecureValue(rawKey: string): Promise<string | null> {
+    if (!safeStorage.isEncryptionAvailable()) {
+      return null
+    }
+
+    const key = this.normalizeSecureStoreKey(rawKey)
+    const store = await this.readSecureStoreFile()
+    const encrypted = store[key]
+    if (!encrypted) {
+      return null
+    }
+
+    try {
+      const buffer = Buffer.from(encrypted, 'base64')
+      return safeStorage.decryptString(buffer)
+    } catch (error) {
+      log.warn('[CommonChannel] Failed to decrypt secure value', {
+        error: toErrorMessage(error)
+      })
+      return null
+    }
+  }
+
+  private async setSecureValue(rawKey: string, value: string | null): Promise<void> {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error('Secure storage is unavailable')
+    }
+
+    const key = this.normalizeSecureStoreKey(rawKey)
+    const store = await this.readSecureStoreFile()
+
+    if (typeof value !== 'string' || !value.length) {
+      delete store[key]
+      await this.writeSecureStoreFile(store)
+      return
+    }
+
+    const encrypted = safeStorage.encryptString(value).toString('base64')
+    store[key] = encrypted
+    await this.writeSecureStoreFile(store)
   }
 
   onDestroy(): MaybePromise<void> {
