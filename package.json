@@ -69,6 +69,7 @@
       "@parcel/watcher",
       "@sentry/cli",
       "@swc/core",
+      "@talex-touch/tuff-native",
       "browser-tabs-lock",
       "bufferutil",
       "core-js",
@@ -78,13 +79,13 @@
       "esbuild",
       "extract-file-icon",
       "get-windows",
+      "sharp",
       "simple-git-hooks",
       "tesseract.js",
       "typeit",
+      "unrs-resolver",
       "utf-8-validate",
       "vue-demi",
-      "sharp",
-      "unrs-resolver",
       "workerd"
     ],
     "overrides": {
