@@ -1,0 +1,48 @@
+{
+  "name": "@talex-touch/tuff-native",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Native OCR bindings for Talex Touch",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./ocr": {
+      "types": "./index.d.ts",
+      "require": "./index.js",
+      "default": "./index.js"
+    },
+    "./everything": {
+      "types": "./everything.d.ts",
+      "require": "./everything.js",
+      "default": "./everything.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "binding.gyp",
+    "native/src",
+    "build/Release/*.node",
+    "everything.js",
+    "everything.d.ts",
+    "native/src/everything/addon.cc"
+  ],
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "rebuild": "node-gyp rebuild",
+    "check:everything": "node scripts/everything-selfcheck.js"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.1",
+    "node-gyp-build": "^4.8.4"
+  },
+  "devDependencies": {
+    "node-gyp": "^11.5.0"
+  }
+}
