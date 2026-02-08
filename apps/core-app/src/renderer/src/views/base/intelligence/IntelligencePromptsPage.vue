@@ -4,8 +4,8 @@ import type { CapabilityTestResult as UiCapabilityTestResult } from '~/component
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -25,7 +25,7 @@ type FilterMode = 'all' | 'builtin' | 'custom'
 const { t } = useI18n()
 const promptManager = getPromptManager()
 const transport = useTuffTransport()
-const openPromptsFolderEvent = defineRawEvent<void, void>('app:open-prompts-folder')
+const appSdk = useAppSdk()
 const aiClient = createIntelligenceClient(transport)
 
 const { providers, capabilities } = useIntelligenceManager()
@@ -281,7 +281,7 @@ function handleOpenDocs(): void {
 
 async function handleOpenFolder(): Promise<void> {
   try {
-    await transport.send(openPromptsFolderEvent)
+    await appSdk.openPromptsFolder()
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
   } catch (error) {
     console.error('[PromptManager] Failed to open folder', error)

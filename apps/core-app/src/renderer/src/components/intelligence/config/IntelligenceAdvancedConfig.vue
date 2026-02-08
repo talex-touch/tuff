@@ -74,6 +74,14 @@ function handlePriorityChange() {
   emits('change')
 }
 
+function parseTimeoutInput(event: Event): number {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return localTimeout.value
+  }
+  return Number(target.value)
+}
+
 function handleTimeoutBlur() {
   if (validateTimeout(localTimeout.value)) {
     const updated = {
@@ -142,7 +150,7 @@ function handleTimeoutBlur() {
             :placeholder="t('intelligence.config.advanced.timeoutPlaceholder')"
             :disabled="disabled"
             class="tuff-input flex-1"
-            @input="update(Number(($event.target as HTMLInputElement).value))"
+            @input="update(parseTimeoutInput($event))"
             @focus="focus"
             @blur="
               blur()

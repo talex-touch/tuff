@@ -9,8 +9,7 @@ import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 import { TxButton } from '@talex-touch/tuffex'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { PermissionEvents } from '@talex-touch/utils/transport/events'
+import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { ElEmpty, ElTag } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,7 +25,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-const transport = useTuffTransport()
+const permissionSdk = usePermissionSdk()
 const { t } = useI18n()
 
 interface PluginPermissionStatus {
@@ -246,7 +245,7 @@ async function loadStatus() {
     const required = [...(props.plugin.declaredPermissions?.required || [])]
     const optional = [...(props.plugin.declaredPermissions?.optional || [])]
 
-    const result = await transport.send(PermissionEvents.api.getStatus, {
+    const result = await permissionSdk.getStatus({
       pluginId: props.plugin.name,
       sdkapi: props.plugin.sdkapi,
       required,
@@ -291,13 +290,13 @@ async function updatePluginShortcut(id: string, newAccelerator: string): Promise
 async function handleToggle(permissionId: string, granted: boolean) {
   try {
     if (granted) {
-      await transport.send(PermissionEvents.api.grant, {
+      await permissionSdk.grant({
         pluginId: props.plugin.name,
         permissionId,
         grantedBy: 'user'
       })
     } else {
-      await transport.send(PermissionEvents.api.revoke, {
+      await permissionSdk.revoke({
         pluginId: props.plugin.name,
         permissionId
       })
@@ -312,7 +311,7 @@ async function handleToggle(permissionId: string, granted: boolean) {
 async function handleGrantAll() {
   if (!status.value?.missingRequired.length) return
   try {
-    await transport.send(PermissionEvents.api.grantMultiple, {
+    await permissionSdk.grantMultiple({
       pluginId: props.plugin.name,
       permissionIds: status.value.missingRequired,
       grantedBy: 'user'
@@ -326,7 +325,7 @@ async function handleGrantAll() {
 // Revoke all
 async function handleRevokeAll() {
   try {
-    await transport.send(PermissionEvents.api.revokeAll, {
+    await permissionSdk.revokeAll({
       pluginId: props.plugin.name
     })
     await loadStatus()
