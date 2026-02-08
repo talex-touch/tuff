@@ -3,6 +3,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
 } from '../../types/intelligence'
+import { createIntelligenceClient } from '../../intelligence/client'
 import { ensureRendererChannel } from './channel'
 import { tryGetPluginSdkApi } from './plugin-info'
 
@@ -23,6 +24,9 @@ export interface IntelligenceSDK {
     options?: IntelligenceInvokeOptions,
   ) => Promise<IntelligenceInvokeResult<T>>
 
+  /**
+   * @deprecated 请优先使用 invoke('text.chat', ...) 或 intelligence client 的 chatLangChain()。
+   */
   chat: (options: IntelligenceChatOptions) => Promise<IntelligenceInvokeResult<string>>
 }
 
@@ -30,43 +34,51 @@ function resolveSdkApi(): number | undefined {
   return tryGetPluginSdkApi()
 }
 
+function createPluginIntelligenceClient() {
+  return createIntelligenceClient({
+    send: (eventName, payload) => {
+      const channel = ensureRendererChannel()
+      if (payload && typeof payload === 'object') {
+        return channel.send(eventName, {
+          ...(payload as Record<string, unknown>),
+          _sdkapi: resolveSdkApi(),
+        })
+      }
+      return channel.send(eventName, payload)
+    },
+  })
+}
+
+let cachedClient: ReturnType<typeof createPluginIntelligenceClient> | null = null
+
+function getClient() {
+  if (!cachedClient) {
+    cachedClient = createPluginIntelligenceClient()
+  }
+  return cachedClient
+}
+
 async function invokeCapability<T = any>(
   capabilityId: string,
   payload: any,
   options?: IntelligenceInvokeOptions,
 ): Promise<IntelligenceInvokeResult<T>> {
-  const channel = ensureRendererChannel()
-  const response = await channel.send('intelligence:invoke', {
-    capabilityId,
-    payload,
-    options,
-    _sdkapi: resolveSdkApi(),
-  })
-
-  if (!response?.ok) {
-    throw new Error(response?.error || 'Intelligence invoke failed')
-  }
-
-  return response.result
+  return getClient().invoke<T>(capabilityId, payload, options)
 }
 
+/**
+ * @deprecated 请优先使用 invoke('text.chat', ...) 或 intelligence client 的 chatLangChain()。
+ */
+
 async function chat(options: IntelligenceChatOptions): Promise<IntelligenceInvokeResult<string>> {
-  const channel = ensureRendererChannel()
-  const response = await channel.send('intelligence:chat-langchain', {
+  return getClient().chatLangChain({
     messages: options.messages,
     providerId: options.providerId,
     model: options.model,
     promptTemplate: options.promptTemplate,
     promptVariables: options.promptVariables,
     metadata: options.metadata,
-    _sdkapi: resolveSdkApi(),
   })
-
-  if (!response?.ok) {
-    throw new Error(response?.error || 'Intelligence chat failed')
-  }
-
-  return response.result
 }
 
 export const intelligence: IntelligenceSDK = {

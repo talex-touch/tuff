@@ -565,5 +565,5 @@ export * from './install'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
 export * from './risk'
 export * from './sdk-version'
-export * from './sdk/index'
+// Plugin runtime SDK should be imported from `@talex-touch/utils/plugin/sdk` to avoid root export collisions.
 export * from './widget'
