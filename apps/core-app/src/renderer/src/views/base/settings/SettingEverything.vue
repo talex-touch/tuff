@@ -10,18 +10,29 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 const { t } = useI18n()
 const channel = tryUseChannel()
 
+type EverythingBackend = 'sdk-napi' | 'cli' | 'unavailable'
+
 interface EverythingStatus {
   enabled: boolean
   available: boolean
+  backend: EverythingBackend
   version: string | null
   esPath: string | null
   error: string | null
+  lastBackendError: string | null
+  fallbackChain: EverythingBackend[]
   lastChecked: number | null
 }
 
 const everythingStatus = ref<EverythingStatus | null>(null)
 const isChecking = ref(false)
 const isTesting = ref(false)
+
+function mapBackendLabel(backend: EverythingBackend): string {
+  if (backend === 'sdk-napi') return t('settings.settingEverything.backendSdk')
+  if (backend === 'cli') return t('settings.settingEverything.backendCli')
+  return t('settings.settingEverything.backendUnavailable')
+}
 
 let statusCheckInterval: NodeJS.Timeout | null = null
 
@@ -128,6 +139,18 @@ const showToggle = computed(() => {
   return everythingStatus.value && everythingStatus.value.available
 })
 
+const backendText = computed(() => {
+  if (!everythingStatus.value) return '-'
+  return mapBackendLabel(everythingStatus.value.backend)
+})
+
+const fallbackChainText = computed(() => {
+  if (!everythingStatus.value?.fallbackChain || everythingStatus.value.fallbackChain.length === 0) {
+    return '-'
+  }
+  return everythingStatus.value.fallbackChain.map((item) => mapBackendLabel(item)).join(' → ')
+})
+
 const lastCheckedText = computed(() => {
   if (!everythingStatus.value?.lastChecked) return t('settings.settingEverything.neverChecked')
 
@@ -194,6 +217,30 @@ onUnmounted(() => {
     </TuffBlockSlot>
 
     <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.backendTitle')"
+      :description="t('settings.settingEverything.backendDesc')"
+      default-icon="i-carbon-data-view"
+      active-icon="i-carbon-data-view"
+    >
+      <div class="version-info">
+        {{ backendText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus"
+      :title="t('settings.settingEverything.fallbackChainTitle')"
+      :description="t('settings.settingEverything.fallbackChainDesc')"
+      default-icon="i-carbon-flow-stream"
+      active-icon="i-carbon-flow-stream"
+    >
+      <div class="version-info">
+        {{ fallbackChainText }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
       v-if="showToggle"
       :title="t('settings.settingEverything.enableTitle')"
       :description="t('settings.settingEverything.enableDesc')"
@@ -255,6 +302,18 @@ onUnmounted(() => {
     >
       <div class="error-message">
         {{ everythingStatus.error }}
+      </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSlot
+      v-if="everythingStatus?.lastBackendError"
+      :title="t('settings.settingEverything.backendErrorTitle')"
+      :description="everythingStatus.lastBackendError"
+      default-icon="i-carbon-warning-alt-inverted"
+      active-icon="i-carbon-warning-alt-inverted"
+    >
+      <div class="error-message">
+        {{ everythingStatus.lastBackendError }}
       </div>
     </TuffBlockSlot>
 
