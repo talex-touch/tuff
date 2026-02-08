@@ -78,7 +78,7 @@ export class CloudSyncSDK {
         method: 'POST',
         headers,
       })
-      this.updateSyncToken(response.sync_token)
+      this.updateSyncToken(response.sync_token, response.sync_token_expires_at)
       return response
     })()
 
@@ -158,7 +158,11 @@ export class CloudSyncSDK {
       return await this.request<T>(path, { ...init, headers, syncToken })
     }
     catch (error) {
-      if (hadToken && error instanceof CloudSyncError && error.errorCode === 'SYNC_INVALID_PAYLOAD') {
+      if (
+        hadToken
+        && error instanceof CloudSyncError
+        && (error.errorCode === 'SYNC_INVALID_TOKEN' || error.errorCode === 'SYNC_TOKEN_EXPIRED')
+      ) {
         const refreshed = await this.handshake()
         const headers = this.mergeHeaders(await this.buildHeaders(), init.headers)
         return this.request<T>(path, { ...init, headers, syncToken: refreshed.sync_token })
@@ -175,8 +179,8 @@ export class CloudSyncSDK {
     return response.sync_token
   }
 
-  private updateSyncToken(token: string) {
-    const expiresAt = this.syncTokenCache.expiresAt ?? new Date(this.now() + DEFAULT_SYNC_TOKEN_TTL_MS).toISOString()
+  private updateSyncToken(token: string, expiresAtInput?: string) {
+    const expiresAt = expiresAtInput ?? new Date(this.now() + DEFAULT_SYNC_TOKEN_TTL_MS).toISOString()
     this.syncTokenCache.token = token
     this.syncTokenCache.expiresAt = expiresAt
     this.onSyncTokenUpdate?.(token, expiresAt)

@@ -5,8 +5,12 @@ export type SyncErrorCode =
   | 'QUOTA_DEVICE_EXCEEDED'
   | 'SYNC_INVALID_CURSOR'
   | 'SYNC_INVALID_PAYLOAD'
+  | 'SYNC_INVALID_TOKEN'
+  | 'SYNC_TOKEN_EXPIRED'
+  | 'DEVICE_NOT_AUTHORIZED'
 
 export interface QuotaInfo {
+  plan_tier?: string
   limits: {
     storage_limit_bytes: number
     object_limit: number
@@ -66,6 +70,7 @@ export interface ConflictItem {
 
 export interface HandshakeResponse {
   sync_token: string
+  sync_token_expires_at: string
   server_cursor: number
   device_id: string
   quotas: QuotaInfo

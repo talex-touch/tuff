@@ -19,6 +19,7 @@ describe('CloudSyncSDK', () => {
       if (url.endsWith('/api/v1/sync/handshake')) {
         return createJsonResponse({
           sync_token: 'sync-1',
+          sync_token_expires_at: '2099-01-01T00:00:00.000Z',
           server_cursor: 0,
           device_id: 'device-1',
           quotas: {
@@ -73,6 +74,7 @@ describe('CloudSyncSDK', () => {
       if (url.endsWith('/api/v1/sync/handshake')) {
         return createJsonResponse({
           sync_token: 'sync-2',
+          sync_token_expires_at: '2099-01-01T00:00:00.000Z',
           server_cursor: 0,
           device_id: 'device-2',
           quotas: {
@@ -121,6 +123,7 @@ describe('CloudSyncSDK', () => {
         expect(headers.get('x-device-id')).toBe('device-3')
         return createJsonResponse({
           sync_token: 'sync-3',
+          sync_token_expires_at: '2099-01-01T00:00:00.000Z',
           server_cursor: 0,
           device_id: 'device-3',
           quotas: {
