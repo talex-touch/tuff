@@ -2,6 +2,7 @@
 import path from 'path-browserify'
 import { computed } from 'vue'
 import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
@@ -74,12 +75,12 @@ const firstFileName = computed(() => {
 const fileIconUrl = computed(() => {
   // Priority 1: Explicit icon path (for FILE mode)
   if (props.iconPath && isValidFilePath(props.iconPath)) {
-    return `tfile://${props.iconPath}`
+    return buildTfileUrl(props.iconPath)
   }
 
   // Priority 2: First file path
   if (filePaths.value.length > 0) {
-    return `tfile://${filePaths.value[0]}`
+    return buildTfileUrl(filePaths.value[0])
   }
 
   return null

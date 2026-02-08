@@ -11,10 +11,14 @@ import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 const svgFileCache = new Map<string, string>()
 const svgContentCache = new Map<string, string>()
 const svgInflight = new Map<string, Promise<{ fileUrl: string; content: string }>>()
+const REMOTE_SVG_CACHE_SUBDIR = 'temp/icons/svg-cache'
+const REMOTE_SVG_CACHE_PREFIX = 'tufficon'
+const REMOTE_SVG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 const pendingTasks = new Map<
   string,
   { resolve: () => void; reject: (error: Error) => void; timeoutId: number; promise: Promise<void> }
@@ -48,6 +52,7 @@ export function useSvgContent(
     'temp-file:create'
   )
   const downloadSdk = isElectronRenderer() ? useDownloadSdk() : null
+  let remoteSvgCacheDirPromise: Promise<string | null> | null = null
   const defaultFetchTimeoutMs = 5_000
   const downloadTimeoutMs = 20_000
 
@@ -109,13 +114,42 @@ export function useSvgContent(
   function ensureTfileUrl(source: string): string {
     if (source.startsWith('tfile:') || source.startsWith('file:')) return source
     if (source.startsWith('/') || source.startsWith('\\\\') || /^[a-z]:[\\/]/i.test(source)) {
-      return `tfile://${source}`
+      return buildTfileUrl(source)
     }
     return source
   }
 
   function resolveLocalPath(targetUrl: string): string {
-    return targetUrl.replace(/^tfile:\/\//, '')
+    const normalizeLocalPath = (value: string): string => {
+      if (/^\/[a-z]:\//i.test(value)) {
+        return value.slice(1)
+      }
+      return value
+    }
+
+    if (targetUrl.startsWith('file:')) {
+      try {
+        return normalizeLocalPath(decodeURIComponent(new URL(targetUrl).pathname))
+      } catch {
+        return ''
+      }
+    }
+
+    if (targetUrl.startsWith('tfile:')) {
+      try {
+        const parsed = new URL(targetUrl)
+        const host = parsed.hostname || ''
+        const pathname = parsed.pathname || ''
+        const merged = host ? `/${host}${pathname}` : pathname
+        return normalizeLocalPath(decodeURIComponent(merged))
+      } catch {
+        const raw = targetUrl.replace(/^tfile:\/\//, '')
+        const normalized = raw.startsWith('/') ? raw : `/${raw}`
+        return normalizeLocalPath(normalized)
+      }
+    }
+
+    return targetUrl
   }
 
   function splitPath(filePath: string): { destination: string; filename: string } {
@@ -127,6 +161,86 @@ export function useSvgContent(
       destination: filePath.slice(0, separatorIndex),
       filename: filePath.slice(separatorIndex + 1)
     }
+  }
+
+  function stableHash(input: string): string {
+    let hash = 2166136261
+    for (let i = 0; i < input.length; i++) {
+      hash ^= input.charCodeAt(i)
+      hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24)
+    }
+    return (hash >>> 0).toString(16).padStart(8, '0')
+  }
+
+  function joinPath(base: string, file: string): string {
+    const normalizedBase = base.replace(/[\\/]+$/, '')
+    return `${normalizedBase}/${file}`
+  }
+
+  function buildRemoteCacheFilename(targetUrl: string): string {
+    return `${REMOTE_SVG_CACHE_PREFIX}-${stableHash(targetUrl)}.svg`
+  }
+
+  async function resolveRemoteSvgCacheDir(): Promise<string | null> {
+    if (!isElectronRenderer()) return null
+
+    if (!remoteSvgCacheDirPromise) {
+      remoteSvgCacheDirPromise = transport
+        .send(AppEvents.system.getPath, { name: 'userData' })
+        .then((userDataPath) => {
+          if (typeof userDataPath !== 'string' || userDataPath.trim().length === 0) {
+            return null
+          }
+          const normalizedUserDataPath = userDataPath.replace(/\\/g, '/').replace(/[\\/]+$/, '')
+          return `${normalizedUserDataPath}/${REMOTE_SVG_CACHE_SUBDIR}`
+        })
+        .catch(() => null)
+    }
+
+    return await remoteSvgCacheDirPromise
+  }
+
+  async function readSvgText(source: string): Promise<string | null> {
+    try {
+      const svgText = await transport.send(AppEvents.system.readFile, { source })
+      if (!svgText || svgText.trim().length === 0) {
+        return null
+      }
+      return svgText
+    } catch {
+      return null
+    }
+  }
+
+  async function tryReadRemoteCache(
+    targetUrl: string
+  ): Promise<{ fileUrl: string; content: string } | null> {
+    const knownFileUrl = svgFileCache.get(targetUrl)
+    if (knownFileUrl) {
+      const cachedText = await readSvgText(knownFileUrl)
+      if (cachedText) {
+        svgContentCache.set(targetUrl, cachedText)
+        return { fileUrl: knownFileUrl, content: cachedText }
+      }
+      svgFileCache.delete(targetUrl)
+      svgContentCache.delete(targetUrl)
+    }
+
+    const cacheDir = await resolveRemoteSvgCacheDir()
+    if (!cacheDir) {
+      return null
+    }
+
+    const cacheFilePath = joinPath(cacheDir, buildRemoteCacheFilename(targetUrl))
+    const cacheFileUrl = buildTfileUrl(cacheFilePath)
+    const cachedText = await readSvgText(cacheFileUrl)
+    if (!cachedText) {
+      return null
+    }
+
+    svgFileCache.set(targetUrl, cacheFileUrl)
+    svgContentCache.set(targetUrl, cachedText)
+    return { fileUrl: cacheFileUrl, content: cachedText }
   }
 
   function ensureDownloadListeners(): void {
@@ -210,20 +324,39 @@ export function useSvgContent(
       }
 
       try {
-        const temp = await transport.send(tempFileCreateEvent, {
-          namespace: 'icons/svg',
-          ext: 'svg',
-          prefix: 'tufficon',
-          retentionMs: 7 * 24 * 60 * 60 * 1000
-        })
-
-        const fileUrl = temp.url
-        const filePath = resolveLocalPath(fileUrl)
-        if (!filePath) {
-          throw new Error('Invalid temp file path')
+        const cached = await tryReadRemoteCache(targetUrl)
+        if (cached) {
+          return cached
         }
 
-        const { destination, filename } = splitPath(filePath)
+        let fileUrl = ''
+        let destination = ''
+        let filename = ''
+
+        const cacheDir = await resolveRemoteSvgCacheDir()
+        if (cacheDir) {
+          filename = buildRemoteCacheFilename(targetUrl)
+          destination = cacheDir
+          fileUrl = buildTfileUrl(joinPath(destination, filename))
+        } else {
+          const temp = await transport.send(tempFileCreateEvent, {
+            namespace: 'icons/svg',
+            ext: 'svg',
+            prefix: 'tufficon',
+            retentionMs: REMOTE_SVG_RETENTION_MS
+          })
+
+          fileUrl = temp.url
+          const filePath = resolveLocalPath(fileUrl)
+          if (!filePath) {
+            throw new Error('Invalid temp file path')
+          }
+
+          const split = splitPath(filePath)
+          destination = split.destination
+          filename = split.filename
+        }
+
         const response = await downloadSdk.addTask({
           url: targetUrl,
           destination,
@@ -233,7 +366,8 @@ export function useSvgContent(
           metadata: {
             hidden: true,
             purpose: 'tufficon-svg',
-            sourceUrl: targetUrl
+            sourceUrl: targetUrl,
+            cacheKey: filename
           }
         })
 
@@ -242,9 +376,9 @@ export function useSvgContent(
         }
 
         await waitForTask(response.taskId)
-        const svgText = await transport.send(AppEvents.system.readFile, { source: fileUrl })
+        const svgText = await readSvgText(fileUrl)
 
-        if (!svgText || svgText.trim().length === 0) {
+        if (!svgText) {
           throw new Error('Downloaded SVG file is empty')
         }
 

@@ -1,5 +1,6 @@
 <script name="FileTag" setup lang="ts">
 import path from 'path-browserify'
+import { buildTfileUrl } from '~/utils/tfile-url'
 
 const props = defineProps<{
   iconPath?: string
@@ -9,12 +10,12 @@ const props = defineProps<{
 const image = computed(() => {
   // Use tfile:// protocol if available
   if (props.iconPath) {
-    return `tfile://${props.iconPath}`
+    return buildTfileUrl(props.iconPath)
   }
 
   // Fallback to first path
   if (props.paths && props.paths.length > 0) {
-    return `tfile://${props.paths[0]}`
+    return buildTfileUrl(props.paths[0])
   }
 
   return ''

@@ -235,7 +235,22 @@ const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 function toTfileUrl(filePath: string): string {
-  return `tfile://${filePath}`
+  const normalized = filePath.replace(/\\/g, '/')
+  let absolutePath = normalized.startsWith('/') ? normalized : `/${normalized}`
+  if (/^\/[a-z]:\//i.test(absolutePath)) {
+    absolutePath = absolutePath.slice(1)
+  }
+  const encoded = absolutePath
+    .split('/')
+    .map((segment) => {
+      try {
+        return encodeURIComponent(decodeURIComponent(segment))
+      } catch {
+        return encodeURIComponent(segment)
+      }
+    })
+    .join('/')
+  return `tfile://${encoded}`
 }
 
 function isDataUrl(value: string): boolean {

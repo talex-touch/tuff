@@ -7,6 +7,7 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
 
@@ -163,6 +164,9 @@ try {
 }
 
 app.whenReady().then(async () => {
+  const canContinue = await enforceDevReleaseStartupConstraint()
+  if (!canContinue) return
+
   electronReadyTime = Date.now()
   const startupTimer = mainLog.time('All modules loaded', 'success')
   mainLog.info('Electron ready, bootstrapping modules')
