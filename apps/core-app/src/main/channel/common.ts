@@ -186,9 +186,53 @@ function safeNamespaceSegment(value: string): string {
 function resolveTfilePath(urlOrPath: string): string {
   if (!urlOrPath) return ''
   if (urlOrPath.startsWith(`${FILE_SCHEMA}://`)) {
-    return decodeURIComponent(urlOrPath.slice(`${FILE_SCHEMA}://`.length))
+    const normalizeDecodedPath = (value: string): string => {
+      if (/^\/[a-z]:\//i.test(value)) {
+        return value.slice(1)
+      }
+      return value.startsWith('/') ? value : `/${value}`
+    }
+
+    const rawWithTail = urlOrPath.slice(`${FILE_SCHEMA}://`.length)
+    const tailIndex = rawWithTail.search(/[?#]/)
+    let decoded = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
+    }
+
+    return normalizeDecodedPath(decoded)
   }
   return urlOrPath
+}
+
+function buildTfileUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/')
+  let absolutePath = normalized
+  if (/^[a-z]:\//i.test(absolutePath)) {
+    // Keep Windows drive path without forcing a leading slash.
+  } else if (!absolutePath.startsWith('/')) {
+    absolutePath = `/${absolutePath}`
+  }
+
+  const encoded = absolutePath
+    .split('/')
+    .map((segment) => {
+      try {
+        return encodeURIComponent(decodeURIComponent(segment))
+      } catch {
+        return encodeURIComponent(segment)
+      }
+    })
+    .join('/')
+
+  return `${FILE_SCHEMA}://${encoded}`
 }
 
 function isImagePath(filePath: string): boolean {
@@ -487,13 +531,16 @@ function getOSInformation(): OSInformation {
 function resolveLocalFilePath(source: string): string | null {
   if (!source) return null
 
-  if (source.startsWith('file:') || source.startsWith(`${FILE_SCHEMA}:`)) {
-    const fileUrl = source.startsWith('file:') ? source : source.replace(`${FILE_SCHEMA}:`, 'file:')
+  if (source.startsWith('file:')) {
     try {
-      return fileURLToPath(fileUrl)
+      return fileURLToPath(source)
     } catch {
       return null
     }
+  }
+
+  if (source.startsWith(`${FILE_SCHEMA}:`)) {
+    return resolveTfilePath(source)
   }
 
   if (path.isAbsolute(source) || path.win32.isAbsolute(source)) {
@@ -700,7 +747,7 @@ export class CommonChannelModule extends BaseModule {
           })
 
           return {
-            url: `${FILE_SCHEMA}://${res.path}`,
+            url: buildTfileUrl(res.path),
             sizeBytes: res.sizeBytes,
             createdAt: res.createdAt
           }
@@ -725,7 +772,7 @@ export class CommonChannelModule extends BaseModule {
         })
 
         return {
-          url: `${FILE_SCHEMA}://${res.path}`,
+          url: buildTfileUrl(res.path),
           sizeBytes: res.sizeBytes,
           createdAt: res.createdAt
         }

@@ -13,6 +13,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { themeStyle, triggerThemeTransition, type ThemeMode } from '~/modules/storage/app-storage'
+import { buildTfileUrl } from '~/utils/tfile-url'
 import LayoutSection from './LayoutSection.vue'
 import SectionItem from './SectionItem.vue'
 
@@ -133,6 +134,7 @@ const bgSourceValue = computed({
 const customBgPath = computed(() => appSetting.background?.customPath ?? '')
 const folderBgPath = computed(() => appSetting.background?.folderPath ?? '')
 const desktopBgPath = computed(() => appSetting.background?.desktopPath ?? '')
+const customBgPreviewUrl = computed(() => buildTfileUrl(customBgPath.value))
 const bgBlur = computed({
   get: () => appSetting.background?.blur ?? 0,
   set: (val: number) => {
@@ -448,7 +450,7 @@ watch(
         <!-- Preview -->
         <div v-if="customBgPath" class="mt-3 overflow-hidden rounded-lg">
           <img
-            :src="`tfile://${customBgPath}`"
+            :src="customBgPreviewUrl"
             class="h-24 w-full object-cover"
             :style="{
               filter: `blur(${bgBlur}px) brightness(${bgBrightness}%) contrast(${bgContrast}%) saturate(${bgSaturate}%)`,

@@ -37,7 +37,6 @@ import type { ReconcileDbFile, ReconcileDiskFile } from './workers/file-reconcil
 import type { WorkerStatusSnapshot } from './workers/worker-status'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -127,6 +126,8 @@ interface FileUpdateRecord {
   type: string
   isDir: boolean
 }
+
+type EmbeddingDbExecutor = Pick<LibSQLDatabase<typeof schema>, 'delete' | 'insert'>
 
 export interface FileIndexSettings {
   autoScanEnabled: boolean
@@ -851,22 +852,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     void this.computeReconciliationDiff([], [], [])
     void this.indexFilesForSearch([])
     void this.extractContentForFiles([])
-
-    // Windows 平台暂时禁用文件索引，避免权限问题导致闪退
-    // TODO: Phase 2 将使用 Everything SDK 替代
-    if (process.platform === 'win32') {
-      this.logInfo(
-        'File indexing disabled on Windows platform (Everything SDK integration planned)'
-      )
-      this.dbUtils = createDbUtils(context.databaseManager.getDb())
-      this.searchIndex = context.searchIndex
-      this.touchApp = context.touchApp
-      this.initializationContext = context
-      // 只注册必要的 channel，不启动扫描
-      this.registerOpenersChannel(context)
-      this.registerIndexingChannels(context)
-      return
-    }
 
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
@@ -3246,7 +3231,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async persistEmbeddings(
-    tx: LibSQLDatabase,
+    executor: EmbeddingDbExecutor,
     fileId: number,
     contentHash: string | null,
     embeddings: FileParserEmbedding[]
@@ -3254,11 +3239,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (embeddings.length === 0) return
     const sourceId = String(fileId)
 
-    await tx
+    await executor
       .delete(embeddingsSchema)
       .where(and(eq(embeddingsSchema.sourceId, sourceId), eq(embeddingsSchema.sourceType, 'file')))
 
-    await tx.insert(embeddingsSchema).values(
+    await executor.insert(embeddingsSchema).values(
       embeddings.map((embedding) => ({
         sourceId,
         sourceType: 'file',
@@ -3269,10 +3254,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  private async deleteEmbeddingsByFileIds(tx: LibSQLDatabase, fileIds: number[]): Promise<void> {
+  private async deleteEmbeddingsByFileIds(
+    executor: EmbeddingDbExecutor,
+    fileIds: number[]
+  ): Promise<void> {
     if (fileIds.length === 0) return
     const sourceIds = fileIds.map((id) => String(id))
-    await tx
+    await executor
       .delete(embeddingsSchema)
       .where(
         and(eq(embeddingsSchema.sourceType, 'file'), inArray(embeddingsSchema.sourceId, sourceIds))

@@ -34,7 +34,7 @@ import {
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
@@ -1103,6 +1103,114 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    const normalizeLowPowerThreshold = (threshold?: number): number => {
+      if (typeof threshold !== 'number' || !Number.isFinite(threshold)) {
+        return 20
+      }
+      const normalized = Math.floor(threshold)
+      if (normalized <= 0) return 1
+      if (normalized > 100) return 100
+      return normalized
+    }
+
+    const getLowPowerStatus = async (options: { threshold?: number } = {}) => {
+      const threshold = normalizeLowPowerThreshold(options.threshold)
+
+      try {
+        const battery = await touchChannel.send(AppEvents.fileIndex.batteryLevel.toEventName())
+        const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
+        const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
+
+        const percent =
+          typeof levelRaw === 'number' && Number.isFinite(levelRaw)
+            ? Math.max(0, Math.min(100, levelRaw))
+            : null
+        const charging = typeof chargingRaw === 'boolean' ? chargingRaw : true
+        const onBattery = percent !== null ? !charging : false
+
+        return {
+          lowPower: onBattery && percent !== null && percent <= threshold,
+          onBattery,
+          percent,
+          threshold
+        }
+      } catch (error) {
+        pluginSystemLog.debug('[Plugin ' + pluginName + '] Failed to query low power status.', {
+          error: toError(error)
+        })
+        return {
+          lowPower: false,
+          onBattery: false,
+          percent: null,
+          threshold
+        }
+      }
+    }
+
+    const powerSDK = {
+      getLowPowerStatus,
+
+      async isLowPower(options: { threshold?: number } = {}): Promise<boolean> {
+        const status = await getLowPowerStatus(options)
+        return status.lowPower
+      },
+
+      onLowPowerChanged(
+        callback: (status: {
+          lowPower: boolean
+          onBattery: boolean
+          percent: number | null
+          threshold: number
+        }) => void,
+        options: { threshold?: number; emitImmediately?: boolean } = {}
+      ): () => void {
+        const intervalMs = 60_000
+        let disposed = false
+        let lastSignature = ''
+
+        const emit = async (force = false) => {
+          if (disposed) return
+
+          const status = await getLowPowerStatus({ threshold: options.threshold })
+          const signature = [
+            status.lowPower,
+            status.onBattery,
+            status.percent ?? 'null',
+            status.threshold
+          ].join(':')
+          if (!force && signature === lastSignature) {
+            return
+          }
+
+          lastSignature = signature
+
+          try {
+            callback(status)
+          } catch (error) {
+            pluginSystemLog.warn(
+              '[Plugin ' + pluginName + '] Low power listener callback failed.',
+              {
+                error: toError(error)
+              }
+            )
+          }
+        }
+
+        if (options.emitImmediately !== false) {
+          void emit(true)
+        }
+
+        const timer = setInterval(() => {
+          void emit()
+        }, intervalMs)
+
+        return () => {
+          disposed = true
+          clearInterval(timer)
+        }
+      }
+    }
+
     const featuresManager = {
       /**
        * Dynamically adds a feature to the plugin
@@ -1374,7 +1482,8 @@ export class TouchPlugin implements ITouchPlugin {
       search: searchManager,
       box: createBoxSDK(boxChannel),
       divisionBox: createDivisionBoxSDK(channelBridge),
-      meta: createMetaSDK(channelBridge, this.name)
+      meta: createMetaSDK(channelBridge, this.name),
+      power: powerSDK
     }
 
     return {
@@ -1391,6 +1500,7 @@ export class TouchPlugin implements ITouchPlugin {
       box: createBoxSDK(boxChannel),
       feature: createFeatureSDK(boxItems, channelBridge),
       meta: createMetaSDK(channelBridge, this.name),
+      power: powerSDK,
       // 新的 BoxItemSDK API
       boxItems,
       // 废弃的 API - 直接抛出错误

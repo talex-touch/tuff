@@ -21,23 +21,29 @@ const loggedErrorPaths = new Set<string>()
  * delivering it to the protocol handler. We decode until the result stabilises.
  */
 function extractAbsolutePath(rawUrl: string): string {
-  const prefix = `${FILE_SCHEMA}://`
-  let decoded = rawUrl.slice(prefix.length)
+  const normalizeDecodedPath = (value: string): string => {
+    if (/^\/[a-z]:\//i.test(value)) {
+      return value.slice(1)
+    }
+    return value.startsWith('/') ? value : `/${value}`
+  }
 
-  // Decode iteratively (max 3 passes) to handle double/triple encoding
+  const prefix = `${FILE_SCHEMA}://`
+  const rawWithTail = rawUrl.slice(prefix.length)
+  const tailIndex = rawWithTail.search(/[?#]/)
+  let decoded = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+
   for (let i = 0; i < 3; i++) {
     try {
       const next = decodeURIComponent(decoded)
       if (next === decoded) break
       decoded = next
     } catch {
-      // malformed URI — stop decoding
       break
     }
   }
 
-  // Normalise: ensure leading /
-  return decoded.startsWith('/') ? decoded : `/${decoded}`
+  return normalizeDecodedPath(decoded)
 }
 
 class FileProtocolModule extends BaseModule {
