@@ -19,6 +19,7 @@ code: |
     http,             // HTTP requests (axios)
     clipboard,        // Clipboard operations
     storage,          // Plugin-specific storage
+    power,            // PowerSDK (low-power state)
     
     // Feature APIs
     feature,          // Feature SDK (push search results)
@@ -138,6 +139,34 @@ code: |
   unsubscribe()
 ---
 :::
+
+---
+
+## power
+
+PowerSDK for low-power adaptation:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Read current low-power status
+  const status = await power.getLowPowerStatus({ threshold: 25 })
+
+  if (status.lowPower) {
+    logger.info('Skip expensive background tasks')
+  }
+
+  // Listen to status changes
+  const disposePower = power.onLowPowerChanged((nextStatus) => {
+    logger.info('Low power changed', nextStatus)
+  })
+
+  // Optional: stop listening
+  disposePower()
+---
+:::
+
+> Note: In `index.js` context, `power.onLowPowerChanged` currently uses polling (about 60s), and strict real-time push is pending.
 
 ---
 
@@ -527,4 +556,5 @@ code: |
 
 - [Feature SDK](./feature-sdk.en.md) - Feature detailed API
 - [DivisionBox API](./division-box.en.md) - Independent window system
+- [PowerSDK](./power.en.md) - Low-power adaptation
 - [Flow Transfer API](./flow-transfer.en.md) - Plugin data transfer

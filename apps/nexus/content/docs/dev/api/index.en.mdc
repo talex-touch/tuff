@@ -26,6 +26,7 @@ code: |
 | [Storage SDK](./storage.en.md) | `usePluginStorage()` | Plugin data persistence |
 | [Download SDK](./download.en.md) | `useDownloadSdk()` | Download task management |
 | [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()` | Platform capability catalog |
+| [PowerSDK](./power.en.md) | `usePowerSDK()` | Low-power status for plugin adaptation |
 | [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
 | [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |
@@ -49,6 +50,7 @@ code: |
     useBox,
     useClipboard,
     usePluginStorage,
+    usePowerSDK,
     useChannel,
     useFeature,
     useDivisionBox
@@ -58,6 +60,7 @@ code: |
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
+  const power = usePowerSDK()
   const channel = useChannel()
   const feature = useFeature()
   const divisionBox = useDivisionBox()
@@ -66,6 +69,12 @@ code: |
   async function init() {
     // Read config
     const config = await storage.getFile('config.json')
+
+    // Read low-power status
+    const lowPower = await power.isLowPower({ threshold: 25 })
+    if (lowPower) {
+      console.log('Skip heavy work on battery')
+    }
     
     // Listen to input changes
     feature.onInputChange(async (input) => {

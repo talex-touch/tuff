@@ -41,17 +41,17 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
   <div class="auth-step">
     <div class="auth-method auth-method--full">
       <Button
-        class="auth-button auth-button--passkey"
+        variant="ghost"
+        class="auth-button auth-button--ghost"
         size="lg"
         block
-        :loading="passkeyLoading"
-        :disabled="!supportsPasskey"
-        @click="emit('passkey')"
+        :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')"
+        @click="emit('linuxdo')"
       >
-        <span class="i-carbon-fingerprint-recognition text-base" />
-        {{ t('auth.passkeyLogin', 'Login with Passkey') }}
+        <LinuxdoIcon :size="18" />
+        {{ t('auth.oauthLinuxdo', 'LinuxDO') }}
       </Button>
-      <TxBadge v-if="lastMethod === 'passkey'" class="auth-last-badge">
+      <TxBadge v-if="lastMethod === 'linuxdo'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>
     </div>
@@ -75,17 +75,17 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
 
     <div class="auth-method auth-method--full">
       <Button
-        variant="ghost"
-        class="auth-button auth-button--ghost"
+        class="auth-button auth-button--passkey"
         size="lg"
         block
-        :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')"
-        @click="emit('linuxdo')"
+        :loading="passkeyLoading"
+        :disabled="!supportsPasskey"
+        @click="emit('passkey')"
       >
-        <LinuxdoIcon :size="18" />
-        {{ t('auth.oauthLinuxdo', 'LinuxDO') }}
+        <span class="i-carbon-fingerprint-recognition text-base" />
+        {{ t('auth.passkeyLogin', 'Login with Passkey') }}
       </Button>
-      <TxBadge v-if="lastMethod === 'linuxdo'" class="auth-last-badge">
+      <TxBadge v-if="lastMethod === 'passkey'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>
     </div>

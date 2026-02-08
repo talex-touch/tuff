@@ -63,6 +63,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/api/temp-file',
     '/docs/dev/api/download',
     '/docs/dev/api/platform-capabilities',
+    '/docs/dev/api/power',
     '/docs/dev/api/account',
     '/docs/dev/api/intelligence',
     '/docs/dev/api/permission',
@@ -683,7 +684,12 @@ watch(
               :class="isLinkActive(linkTarget(currentSectionData) || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(currentSectionData) || '') ? 'page' : undefined"
             >
-              {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+              <span
+                class="truncate"
+                :title="itemTitle(currentSectionData.title, currentSectionData.path)"
+              >
+                {{ itemTitle(currentSectionData.title, currentSectionData.path) }}
+              </span>
             </NuxtLink>
           </li>
         </ul>
@@ -699,7 +705,12 @@ watch(
         >
           <template #header>
             <span class="flex flex-1 items-center gap-1.5 truncate">
-              <span class="flex-1 truncate">{{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}</span>
+              <span
+                class="flex-1 truncate"
+                :title="itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined)"
+              >
+                {{ itemTitle(section.title, section.path ?? linkTarget(section) ?? undefined) }}
+              </span>
               <span
                 v-if="section.children?.length"
                 class="docs-nav-section-count"
@@ -720,7 +731,12 @@ watch(
               :class="isLinkActive(linkTarget(child) || child.path || '') ? 'is-active' : ''"
               :aria-current="isLinkActive(linkTarget(child) || child.path || '') ? 'page' : undefined"
             >
-              <span class="truncate">{{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}</span>
+              <span
+                class="truncate"
+                :title="itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined)"
+              >
+                {{ itemTitle(child.title, child.path ?? linkTarget(child) ?? undefined) }}
+              </span>
               <span
                 v-if="componentSyncBadge(child)"
                 class="docs-nav-sync-badge"
@@ -775,7 +791,7 @@ watch(
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.2);
   color: rgba(51, 65, 85, 0.9);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
 }
@@ -791,7 +807,7 @@ watch(
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: rgba(226, 232, 240, 0.35);
   color: rgba(71, 85, 105, 0.92);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
@@ -820,7 +836,7 @@ watch(
   display: flex;
   align-items: center;
   padding: 6px 8px 6px 6px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.4;
   color: rgba(15, 23, 42, 0.58);
   background: transparent;
