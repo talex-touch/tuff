@@ -7,6 +7,9 @@
  */
 
 import type { TuffItem } from '../../core-box/tuff'
+import { createPluginTuffTransport } from '../../transport'
+import { defineRawEvent } from '../../transport/event/builder'
+import { createDisposableBag } from '../../transport/sdk'
 import { useBoxItems } from './box-items'
 import { ensureRendererChannel } from './channel'
 
@@ -32,6 +35,9 @@ export interface ForwardedKeyEvent {
  * Key event handler
  */
 export type KeyEventHandler = (event: ForwardedKeyEvent) => void
+
+const featureInputChangeEvent = defineRawEvent<unknown, unknown>('core-box:input-change')
+const featureKeyEvent = defineRawEvent<unknown, unknown>('core-box:key-event')
 
 /**
  * Feature SDK interface for plugins
@@ -174,6 +180,11 @@ export interface FeatureSDK {
    * ```
    */
   onKeyEvent: (handler: KeyEventHandler) => () => void
+
+  /**
+   * 释放内部监听器，避免重复注册导致的内存泄漏
+   */
+  dispose: () => void
 }
 
 /**
@@ -188,52 +199,70 @@ export interface FeatureSDK {
 export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
   const inputChangeHandlers: Set<InputChangeHandler> = new Set()
   const keyEventHandlers: Set<KeyEventHandler> = new Set()
+  const disposables = createDisposableBag()
+  const transport = createPluginTuffTransport(channel)
+  let disposed = false
 
-  // Register listener for input change events from main process
-  const registerInputListener = () => {
-    if (channel.onMain) {
-      // Main process plugin context
-      channel.onMain('core-box:input-change', (event: any) => {
-        const input = event.data?.input || event.data?.query?.text || event.input || ''
-        inputChangeHandlers.forEach(handler => handler(input))
-      })
-    }
-    else if (channel.on) {
-      // Renderer process context
-      channel.on('core-box:input-change', (data: any) => {
-        const input = data?.input || data?.query?.text || data || ''
-        inputChangeHandlers.forEach(handler => handler(input))
-      })
+  const emitInput = (payload: any) => {
+    const input = payload?.input || payload?.query?.text || payload || ''
+    for (const handler of inputChangeHandlers) {
+      try {
+        handler(input)
+      }
+      catch (error) {
+        console.error('[Feature SDK] onInputChange handler error:', error)
+      }
     }
   }
 
-  // Register listener for key events from main process
-  const registerKeyListener = () => {
-    if (channel.onMain) {
-      // Main process plugin context
-      channel.onMain('core-box:key-event', (event: any) => {
-        const keyEvent = event.data as ForwardedKeyEvent
-        if (keyEvent) {
-          keyEventHandlers.forEach(handler => handler(keyEvent))
-        }
-      })
+  const emitKeyEvent = (payload: any) => {
+    const keyEvent = payload as ForwardedKeyEvent
+    if (!keyEvent) {
+      return
     }
-    else if (channel.on) {
-      // Renderer process context
-      channel.on('core-box:key-event', (data: any) => {
-        const keyEvent = data as ForwardedKeyEvent
-        if (keyEvent) {
-          keyEventHandlers.forEach(handler => handler(keyEvent))
-        }
-      })
+
+    for (const handler of keyEventHandlers) {
+      try {
+        handler(keyEvent)
+      }
+      catch (error) {
+        console.error('[Feature SDK] onKeyEvent handler error:', error)
+      }
     }
   }
 
-  registerInputListener()
-  registerKeyListener()
+  const ensureActive = (method: string) => {
+    if (disposed) {
+      throw new Error(`[Feature SDK] Cannot call ${method} after dispose`)
+    }
+  }
+
+  const dispose = () => {
+    if (disposed) {
+      return
+    }
+
+    disposed = true
+    inputChangeHandlers.clear()
+    keyEventHandlers.clear()
+    disposables.dispose()
+    transport.destroy()
+  }
+
+  disposables.add(
+    transport.on(featureInputChangeEvent, emitInput),
+    transport.on(featureKeyEvent, emitKeyEvent),
+  )
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    const onBeforeUnload = () => dispose()
+    window.addEventListener('beforeunload', onBeforeUnload, { once: true })
+    disposables.add(() => window.removeEventListener('beforeunload', onBeforeUnload))
+  }
 
   return {
     pushItems(items: TuffItem[]): void {
+      ensureActive('pushItems')
       if (!boxItemsAPI || !boxItemsAPI.pushItems) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
@@ -241,6 +270,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     updateItem(id: string, updates: Partial<TuffItem>): void {
+      ensureActive('updateItem')
       if (!boxItemsAPI || !boxItemsAPI.update) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
@@ -248,6 +278,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     removeItem(id: string): void {
+      ensureActive('removeItem')
       if (!boxItemsAPI || !boxItemsAPI.remove) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
@@ -255,6 +286,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     clearItems(): void {
+      ensureActive('clearItems')
       if (!boxItemsAPI || !boxItemsAPI.clear) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
@@ -262,6 +294,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     getItems(): TuffItem[] {
+      ensureActive('getItems')
       if (!boxItemsAPI || !boxItemsAPI.getItems) {
         throw new Error('[Feature SDK] boxItems API not available')
       }
@@ -269,6 +302,7 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     onInputChange(handler: InputChangeHandler): () => void {
+      ensureActive('onInputChange')
       inputChangeHandlers.add(handler)
 
       return () => {
@@ -277,12 +311,15 @@ export function createFeatureSDK(boxItemsAPI: any, channel: any): FeatureSDK {
     },
 
     onKeyEvent(handler: KeyEventHandler): () => void {
+      ensureActive('onKeyEvent')
       keyEventHandlers.add(handler)
 
       return () => {
         keyEventHandlers.delete(handler)
       }
     },
+
+    dispose,
   }
 }
 
