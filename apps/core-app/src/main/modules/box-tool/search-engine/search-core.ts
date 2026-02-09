@@ -1328,7 +1328,6 @@ export class SearchEngineCore
         return
       }
 
-      const { anonymous } = sentryService.getConfig()
       const startedAt = this.searchSessionStartTimes.get(sessionId)
       if (startedAt) {
         this.searchSessionStartTimes.delete(sessionId)
@@ -1354,13 +1353,9 @@ export class SearchEngineCore
       if (pluginName) metadata.pluginName = pluginName
       if (featureId) metadata.featureId = featureId
 
-      if (!anonymous) {
-        const entity = this.resolveTelemetryEntity(item, meta)
-        if (entity) {
-          metadata.entityType = entity.type
-          metadata.entityId = entity.id
-        }
-      }
+      const usageCategory = this.resolveTelemetryCategory(item, meta)
+      metadata.usageCategoryL1 = usageCategory.level1
+      metadata.usageCategoryL2 = usageCategory.level2
 
       sentryService.queueNexusTelemetry({
         eventType: 'feature_use',
@@ -1371,19 +1366,133 @@ export class SearchEngineCore
     }
   }
 
-  private resolveTelemetryEntity(
+  private resolveTelemetryCategory(
     item: TuffItem,
     meta?: Record<string, unknown>
-  ): { type: string; id: string } | null {
+  ): { level1: string; level2: string } {
     if (item.kind === 'app') {
       const appMeta = meta?.app as { bundle_id?: string } | undefined
-      if (appMeta?.bundle_id) return { type: 'app', id: appMeta.bundle_id }
+      const bundleId = typeof appMeta?.bundle_id === 'string' ? appMeta.bundle_id : ''
+      const level2 = this.resolveAppUsageCategory(bundleId, item.title, item.source.id)
+      return { level1: 'app', level2 }
     }
 
-    const pluginName = typeof meta?.pluginName === 'string' ? meta.pluginName : undefined
-    if (pluginName) return { type: 'plugin', id: pluginName }
+    if (item.source.type === 'plugin') {
+      return { level1: 'plugin', level2: 'others' }
+    }
 
-    return null
+    if (item.kind === 'feature') {
+      return { level1: 'feature', level2: 'others' }
+    }
+
+    const level1 =
+      typeof item.source.type === 'string' && item.source.type ? item.source.type : 'others'
+
+    return { level1, level2: 'others' }
+  }
+
+  private resolveAppUsageCategory(bundleId: string, title?: string, sourceId?: string): string {
+    const fingerprint = `${bundleId}|${title || ''}|${sourceId || ''}`.toLowerCase()
+    if (!fingerprint.trim()) {
+      return 'others'
+    }
+
+    const rules: Array<{ category: string; keywords: string[] }> = [
+      {
+        category: 'developer_tools',
+        keywords: [
+          'code',
+          'cursor',
+          'codex',
+          'warp',
+          'iterm',
+          'terminal',
+          'xcode',
+          'android-studio',
+          'jetbrains',
+          'intellij',
+          'webstorm',
+          'pycharm',
+          'clion',
+          'goland',
+          'dev.',
+          'devtools',
+          'docker',
+          'postman'
+        ]
+      },
+      {
+        category: 'browser',
+        keywords: ['chrome', 'safari', 'firefox', 'edge', 'brave', 'arc', 'opera', 'browser']
+      },
+      {
+        category: 'communication',
+        keywords: [
+          'wechat',
+          'qq',
+          'telegram',
+          'slack',
+          'discord',
+          'whatsapp',
+          'teams',
+          'zoom',
+          'feishu',
+          'lark',
+          'im',
+          'messenger'
+        ]
+      },
+      {
+        category: 'productivity',
+        keywords: ['notion', 'obsidian', 'todo', 'evernote', 'calendar', 'notes', 'memo', 'notepad']
+      },
+      {
+        category: 'media',
+        keywords: [
+          'music',
+          'spotify',
+          'netease',
+          'qqmusic',
+          'video',
+          'vlc',
+          'iina',
+          'player',
+          'podcast'
+        ]
+      },
+      {
+        category: 'design',
+        keywords: [
+          'figma',
+          'sketch',
+          'photoshop',
+          'illustrator',
+          'canva',
+          'premiere',
+          'finalcut',
+          'affinity'
+        ]
+      },
+      {
+        category: 'system',
+        keywords: [
+          'activitymonitor',
+          'systempreferences',
+          'system settings',
+          'finder',
+          'explorer',
+          'taskmgr'
+        ]
+      }
+    ]
+
+    for (const rule of rules) {
+      if (rule.keywords.some((keyword) => fingerprint.includes(keyword))) {
+        return rule.category
+      }
+    }
+
+    return 'others'
   }
 
   maintain(): void {

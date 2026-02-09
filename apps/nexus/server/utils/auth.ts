@@ -4,7 +4,8 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
-import { ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import { createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import { ensurePersonalTeam } from './creditsStore'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
@@ -26,7 +27,7 @@ interface AppTokenPayload {
 }
 
 function shouldDebugAuth() {
-  return process.env.NODE_ENV !== 'production' || process.env.NUXT_AUTH_DEBUG === 'true'
+  return process.env.NUXT_AUTH_DEBUG === 'true'
 }
 
 function logSessionDebug(stage: string, event: H3Event, payload: Record<string, unknown>) {
@@ -34,6 +35,27 @@ function logSessionDebug(stage: string, event: H3Event, payload: Record<string, 
     return
   const path = event.path || event.node.req.url || ''
   console.info('[auth][session]', stage, { path, ...payload })
+}
+
+async function resolveSessionUserByEmail(event: H3Event, email: string, name: string) {
+  const existing = await getUserByEmail(event, email)
+  if (existing)
+    return existing
+
+  try {
+    const user = await createUser(event, {
+      email,
+      name: name || null,
+      emailVerified: new Date().toISOString(),
+      emailState: 'verified',
+    })
+    await ensurePersonalTeam(event, user.id)
+    logSessionDebug('email-auto-provisioned', event, { email, userId: user.id })
+    return user
+  }
+  catch {
+    return await getUserByEmail(event, email)
+  }
 }
 
 function getAppJwtSecret(): string {
@@ -199,7 +221,7 @@ export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
 
 export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
   const session = await getServerSession(event)
-  const sessionUser = session?.user as { id?: string, email?: string } | undefined
+  const sessionUser = session?.user as { id?: string, email?: string, name?: string } | undefined
 
   const directUserId = typeof sessionUser?.id === 'string' ? sessionUser.id.trim() : ''
   let user = directUserId ? await getUserById(event, directUserId) : null
@@ -217,7 +239,9 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
       })
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
     }
-    user = await getUserByEmail(event, email)
+
+    const name = typeof sessionUser?.name === 'string' ? sessionUser.name.trim() : ''
+    user = await resolveSessionUserByEmail(event, email, name)
     if (!user) {
       logSessionDebug('email-not-found', event, { email })
     }
