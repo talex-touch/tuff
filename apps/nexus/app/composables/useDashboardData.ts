@@ -1,6 +1,12 @@
 import type { DashboardPluginResponse } from '~/types/dashboard-plugin'
 import { computed } from 'vue'
 
+type RequestLike = typeof $fetch
+
+function resolveRequest(): RequestLike {
+  return (import.meta.server ? useRequestFetch() : $fetch) as RequestLike
+}
+
 interface DashboardUpdate {
   id: string
   title: string
@@ -44,8 +50,9 @@ interface DashboardImage {
 }
 
 export function useDashboardPluginsData() {
+  const request = resolveRequest()
   const state = useAsyncData('dashboard-plugins', () =>
-    $fetch<DashboardPluginResponse>('/api/dashboard/plugins'))
+    request<DashboardPluginResponse>('/api/dashboard/plugins'))
 
   const plugins = computed(() => state.data.value?.plugins ?? [])
   const featured = computed(() => state.data.value?.featured ?? [])
@@ -60,8 +67,9 @@ export function useDashboardPluginsData() {
 }
 
 export function useDashboardUpdatesData() {
+  const request = resolveRequest()
   const state = useAsyncData('dashboard-updates', () =>
-    $fetch<{ updates: DashboardUpdate[] }>('/api/dashboard/updates'))
+    request<{ updates: DashboardUpdate[] }>('/api/dashboard/updates'))
 
   const updates = computed(() => state.data.value?.updates ?? [])
 
@@ -72,8 +80,9 @@ export function useDashboardUpdatesData() {
 }
 
 export function useDashboardTeamData() {
+  const request = resolveRequest()
   const state = useAsyncData('dashboard-team', () =>
-    $fetch<{ team: DashboardTeam }>('/api/dashboard/team'))
+    request<{ team: DashboardTeam }>('/api/dashboard/team'))
 
   const team = computed(() => state.data.value?.team)
 
@@ -84,9 +93,10 @@ export function useDashboardTeamData() {
 }
 
 export function useDashboardImagesData(options: { lazy?: boolean } = {}) {
+  const request = resolveRequest()
   const state = useAsyncData(
     'dashboard-images',
-    () => $fetch<{ images: DashboardImage[], total: number }>('/api/images/list'),
+    () => request<{ images: DashboardImage[], total: number }>('/api/images/list'),
     {
       lazy: options.lazy ?? true,
     },
@@ -117,8 +127,9 @@ interface SubscriptionStatus {
 }
 
 export function useSubscriptionData() {
+  const request = resolveRequest()
   const state = useAsyncData('subscription-status', () =>
-    $fetch<SubscriptionStatus>('/api/subscription/status'))
+    request<SubscriptionStatus>('/api/subscription/status'))
 
   const subscription = computed(() => state.data.value)
   const plan = computed(() => state.data.value?.plan ?? 'FREE')
@@ -143,8 +154,9 @@ interface TeamInvite {
 }
 
 export function useTeamInvitesData() {
+  const request = resolveRequest()
   const state = useAsyncData('team-invites', () =>
-    $fetch<{ invites: TeamInvite[] }>('/api/dashboard/team/invites'))
+    request<{ invites: TeamInvite[] }>('/api/dashboard/team/invites'))
 
   const invites = computed(() => state.data.value?.invites ?? [])
 

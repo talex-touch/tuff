@@ -65,7 +65,7 @@ interface AnalyticsData {
     featureUseSourceTypeDistribution: Record<string, number>
     featureUseItemKindDistribution: Record<string, number>
     featureUsePluginDistribution: Record<string, number>
-    featureUseEntityDistribution: Record<string, number>
+    featureUseCategoryDistribution: Record<string, number>
     moduleLoadMetrics: Array<{
       module: string
       avgDuration: number
@@ -194,11 +194,19 @@ function toSortedList(source?: Record<string, number>, limit = 6) {
     .slice(0, limit)
 }
 
-function formatEntityKey(key: string) {
-  const [type, id] = key.split(':')
+function formatCategoryLabel(value: string) {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map(part => part[0] ? part[0].toUpperCase() + part.slice(1) : part)
+    .join(' ')
+}
+
+function formatCategoryKey(key: string) {
+  const [level1, level2] = key.split(':')
   return {
-    type: type || 'entity',
-    id: id || key,
+    level1: formatCategoryLabel(level1 || 'others'),
+    level2: formatCategoryLabel(level2 || 'others'),
   }
 }
 
@@ -709,7 +717,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <div v-if="activeSection === 'usage'" class="rounded-2xl bg-white/60 p-5 dark:bg-dark/40">
           <div class="mb-3 flex items-center justify-between">
             <h3 class="font-semibold text-black dark:text-light">
-              Most Executed
+              Top Categories
             </h3>
             <TxButton
               variant="bare"
@@ -722,9 +730,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </TxButton>
           </div>
           <div class="space-y-2 text-sm text-black/70 dark:text-light/70">
-            <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+            <div v-for="item in toSortedList(analytics.summary.featureUseCategoryDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
               <span class="truncate">
-                {{ formatEntityKey(item[0]).type }} · {{ formatEntityKey(item[0]).id }}
+                {{ formatCategoryKey(item[0]).level1 }} · {{ formatCategoryKey(item[0]).level2 }}
               </span>
               <span class="text-xs text-black/40 dark:text-light/40">{{ item[1] }}</span>
             </div>
@@ -916,11 +924,11 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
             <div>
               <h4 class="mb-2 font-semibold text-black dark:text-light">
-                Entities
+                Usage Categories
               </h4>
               <div class="space-y-2">
-                <div v-for="item in toSortedList(analytics.summary.featureUseEntityDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
-                  <span class="truncate">{{ formatEntityKey(item[0]).type }} · {{ formatEntityKey(item[0]).id }}</span>
+                <div v-for="item in toSortedList(analytics.summary.featureUseCategoryDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="truncate">{{ formatCategoryKey(item[0]).level1 }} · {{ formatCategoryKey(item[0]).level2 }}</span>
                   <span class="text-black/40 dark:text-light/40">{{ item[1] }}</span>
                 </div>
               </div>

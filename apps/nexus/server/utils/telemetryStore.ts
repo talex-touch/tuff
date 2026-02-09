@@ -314,6 +314,157 @@ interface NormalizedTelemetryResult {
   reason?: string
 }
 
+function normalizeUsageCategoryPart(value: unknown, maxLength = 48): string | undefined {
+  const normalized = normalizeString(value, maxLength)
+  if (!normalized)
+    return undefined
+
+  const cleaned = normalized
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+  return cleaned || undefined
+}
+
+function resolveLegacyAppCategory(bundleId: string): string {
+  const fingerprint = bundleId.toLowerCase()
+
+  const rules: Array<{ category: string; keywords: string[] }> = [
+    {
+      category: 'developer_tools',
+      keywords: [
+        'code',
+        'cursor',
+        'codex',
+        'warp',
+        'iterm',
+        'terminal',
+        'xcode',
+        'android-studio',
+        'jetbrains',
+        'intellij',
+        'webstorm',
+        'pycharm',
+        'clion',
+        'goland',
+        'dev.',
+        'devtools',
+        'docker',
+        'postman',
+      ],
+    },
+    {
+      category: 'browser',
+      keywords: ['chrome', 'safari', 'firefox', 'edge', 'brave', 'arc', 'opera', 'browser'],
+    },
+    {
+      category: 'communication',
+      keywords: [
+        'wechat',
+        'qq',
+        'telegram',
+        'slack',
+        'discord',
+        'whatsapp',
+        'teams',
+        'zoom',
+        'feishu',
+        'lark',
+        'messenger',
+      ],
+    },
+    {
+      category: 'productivity',
+      keywords: ['notion', 'obsidian', 'todo', 'evernote', 'calendar', 'notes', 'memo', 'notepad'],
+    },
+    {
+      category: 'media',
+      keywords: ['music', 'spotify', 'netease', 'qqmusic', 'video', 'vlc', 'iina', 'player', 'podcast'],
+    },
+    {
+      category: 'design',
+      keywords: ['figma', 'sketch', 'photoshop', 'illustrator', 'canva', 'premiere', 'finalcut', 'affinity'],
+    },
+    {
+      category: 'system',
+      keywords: ['activitymonitor', 'systempreferences', 'system settings', 'finder', 'explorer', 'taskmgr'],
+    },
+  ]
+
+  for (const rule of rules) {
+    if (rule.keywords.some(keyword => fingerprint.includes(keyword))) {
+      return rule.category
+    }
+  }
+
+  return 'others'
+}
+
+function resolveFeatureUseCategory(meta: Record<string, unknown>): { level1: string; level2: string } {
+  const categoryL1 = normalizeUsageCategoryPart(meta.usageCategoryL1)
+  const categoryL2 = normalizeUsageCategoryPart(meta.usageCategoryL2)
+  if (categoryL1 && categoryL2) {
+    return { level1: categoryL1, level2: categoryL2 }
+  }
+
+  const legacyType = normalizeUsageCategoryPart(meta.entityType)
+  const legacyId = normalizeString(meta.entityId, MAX_METADATA_STRING_LENGTH)?.toLowerCase()
+  if (legacyType === 'app') {
+    return {
+      level1: 'app',
+      level2: resolveLegacyAppCategory(legacyId || ''),
+    }
+  }
+
+  if (legacyType === 'plugin') {
+    return { level1: 'plugin', level2: 'others' }
+  }
+
+  const sourceType = normalizeUsageCategoryPart(meta.sourceType)
+  if (sourceType) {
+    return { level1: sourceType, level2: 'others' }
+  }
+
+  return { level1: 'others', level2: 'others' }
+}
+
+function sanitizeFeatureUseMetadata(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  if (!value)
+    return undefined
+
+  const metadata: Record<string, unknown> = {}
+
+  const stringFields: Array<[key: string, maxLength?: number]> = [
+    ['sessionId', 64],
+    ['action', 32],
+    ['sourceType', 64],
+    ['sourceId', 128],
+    ['sourceName', 128],
+    ['sourceVersion', 64],
+    ['itemKind', 64],
+    ['pluginName', 128],
+    ['featureId', 128],
+  ]
+
+  for (const [field, maxLength] of stringFields) {
+    const normalized = normalizeString(value[field], maxLength)
+    if (normalized)
+      metadata[field] = normalized
+  }
+
+  const executeLatencyMs = normalizeNumber(value.executeLatencyMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
+  if (typeof executeLatencyMs === 'number') {
+    metadata.executeLatencyMs = executeLatencyMs
+  }
+
+  const category = resolveFeatureUseCategory(value)
+  metadata.usageCategoryL1 = category.level1
+  metadata.usageCategoryL2 = category.level2
+
+  return Object.keys(metadata).length ? metadata : undefined
+}
+
 function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedTelemetryResult {
   if (!input || typeof input !== 'object')
     return { telemetry: null, reason: 'invalid_payload' }
@@ -322,6 +473,10 @@ function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedTelemetr
     return { telemetry: null, reason: 'invalid_event_type' }
 
   const isAnonymous = input.isAnonymous !== false
+  const metadata = sanitizeMetadata(input.metadata)
+  const normalizedMetadata = input.eventType === 'feature_use'
+    ? sanitizeFeatureUseMetadata(metadata)
+    : metadata
 
   return {
     telemetry: {
@@ -337,7 +492,7 @@ function normalizeTelemetryInput(input: TelemetryEventInput): NormalizedTelemetr
       searchResultCount: normalizeNumber(input.searchResultCount, { min: 0, max: MAX_SEARCH_RESULT_COUNT }),
       providerTimings: sanitizeProviderTimings(input.providerTimings),
       inputTypes: sanitizeStringArray(input.inputTypes),
-      metadata: sanitizeMetadata(input.metadata),
+      metadata: normalizedMetadata,
       isAnonymous,
     },
   }
@@ -557,10 +712,9 @@ export async function recordTelemetryEvent(
       if (typeof meta.pluginName === 'string') {
         await incrementDailyStat(db, today, 'feature_use_plugin', meta.pluginName, 1)
       }
-      if (typeof meta.entityId === 'string') {
-        const entityType = typeof meta.entityType === 'string' ? meta.entityType : 'entity'
-        await incrementDailyStat(db, today, 'feature_use_entity', `${entityType}:${meta.entityId}`, 1)
-      }
+      const categoryL1 = normalizeUsageCategoryPart(meta.usageCategoryL1) || 'others'
+      const categoryL2 = normalizeUsageCategoryPart(meta.usageCategoryL2) || 'others'
+      await incrementDailyStat(db, today, 'feature_use_category', `${categoryL1}:${categoryL2}`, 1)
       const executeLatencyMs = normalizeNumber(meta.executeLatencyMs, { min: 0, max: MAX_SEARCH_DURATION_MS })
       if (typeof executeLatencyMs === 'number') {
         await incrementDailyStat(db, today, 'execute_latency_total', '', executeLatencyMs)
@@ -732,7 +886,7 @@ export async function getAnalyticsSummary(
   featureUseSourceTypeDistribution: Record<string, number>
   featureUseItemKindDistribution: Record<string, number>
   featureUsePluginDistribution: Record<string, number>
-  featureUseEntityDistribution: Record<string, number>
+  featureUseCategoryDistribution: Record<string, number>
   moduleLoadMetrics: Array<{
     module: string
     avgDuration: number
@@ -774,7 +928,7 @@ export async function getAnalyticsSummary(
   const featureUseSourceTypeDist: Record<string, number> = {}
   const featureUseItemKindDist: Record<string, number> = {}
   const featureUsePluginDist: Record<string, number> = {}
-  const featureUseEntityDist: Record<string, number> = {}
+  const featureUseCategoryDist: Record<string, number> = {}
   const moduleLoadTotals: Record<string, number> = {}
   const moduleLoadCounts: Record<string, number> = {}
   const moduleLoadMax: Record<string, number> = {}
@@ -875,9 +1029,19 @@ export async function getAnalyticsSummary(
       case 'feature_use_plugin':
         featureUsePluginDist[row.stat_key] = (featureUsePluginDist[row.stat_key] || 0) + row.value
         break
-      case 'feature_use_entity':
-        featureUseEntityDist[row.stat_key] = (featureUseEntityDist[row.stat_key] || 0) + row.value
+      case 'feature_use_category':
+        featureUseCategoryDist[row.stat_key] = (featureUseCategoryDist[row.stat_key] || 0) + row.value
         break
+      case 'feature_use_entity': {
+        const [legacyType, legacyId = ''] = row.stat_key.split(':')
+        const level1 = normalizeUsageCategoryPart(legacyType) || 'others'
+        const level2 = level1 === 'app'
+          ? resolveLegacyAppCategory(legacyId)
+          : 'others'
+        const categoryKey = `${level1}:${level2}`
+        featureUseCategoryDist[categoryKey] = (featureUseCategoryDist[categoryKey] || 0) + row.value
+        break
+      }
       case 'module_load_total':
         moduleLoadTotals[row.stat_key] = (moduleLoadTotals[row.stat_key] || 0) + row.value
         break
@@ -1003,7 +1167,7 @@ export async function getAnalyticsSummary(
     featureUseSourceTypeDistribution: featureUseSourceTypeDist,
     featureUseItemKindDistribution: featureUseItemKindDist,
     featureUsePluginDistribution: featureUsePluginDist,
-    featureUseEntityDistribution: featureUseEntityDist,
+    featureUseCategoryDistribution: featureUseCategoryDist,
     moduleLoadMetrics,
   }
 }

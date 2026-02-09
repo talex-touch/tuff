@@ -199,7 +199,7 @@ function getAuthOptions(): AuthOptions {
           if (resolvedUserId) {
             ;(session.user as { id?: string }).id = resolvedUserId
           }
-          else if (process.env.NODE_ENV !== 'production' || process.env.NUXT_AUTH_DEBUG === 'true') {
+          else if (process.env.NUXT_AUTH_DEBUG === 'true') {
             console.info('[auth][session-callback] missing user id in token', {
               hasTokenUserId: Boolean(token.userId),
               hasTokenSub: Boolean(token.sub)

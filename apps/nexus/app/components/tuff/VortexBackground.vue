@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { templateRef } from '@vueuse/core'
+import { Motion } from 'motion-v'
 import { createNoise3D } from 'simplex-noise'
 import { onMounted, onUnmounted } from 'vue'
 
