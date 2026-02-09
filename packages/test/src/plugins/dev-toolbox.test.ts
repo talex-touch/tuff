@@ -1,27 +1,25 @@
-import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { loadPluginModule } from './plugin-loader'
 
-const require = createRequire(import.meta.url)
-const toolboxPlugin = require('../../../../plugins/touch-dev-toolbox/index.js')
+const toolboxPlugin = loadPluginModule(new URL('../../../../plugins/touch-dev-toolbox/index.js', import.meta.url))
 const { __test: toolboxTest } = toolboxPlugin
 
 describe('dev toolbox config', () => {
   it('uses defaults when empty', () => {
     const config = toolboxTest.parseToolboxConfig(null)
-    expect(config.workspacePath).toBe('')
-    expect(Array.isArray(config.commands)).toBe(true)
     expect(Array.isArray(config.links)).toBe(true)
+    expect(config.links.length).toBe(0)
   })
 
-  it('normalizes config fields', () => {
+  it('normalizes links only', () => {
     const config = toolboxTest.parseToolboxConfig({
       workspacePath: '/tmp/project',
       commands: [{ id: 'lint', command: 'pnpm lint' }],
       links: [{ title: 'Docs', url: 'https://example.com' }],
     })
 
-    expect(config.workspacePath).toBe('/tmp/project')
-    expect(config.commands.length).toBe(1)
     expect(config.links.length).toBe(1)
+    expect(config.workspacePath).toBeUndefined()
+    expect(config.commands).toBeUndefined()
   })
 })

@@ -1,9 +1,8 @@
-import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { loadPluginModule } from './plugin-loader'
 
-const require = createRequire(import.meta.url)
-const codePlugin = require('../../../../plugins/touch-code-snippets/index.js')
-const textPlugin = require('../../../../plugins/touch-text-snippets/index.js')
+const codePlugin = loadPluginModule(new URL('../../../../plugins/touch-code-snippets/index.js', import.meta.url))
+const textPlugin = loadPluginModule(new URL('../../../../plugins/touch-text-snippets/index.js', import.meta.url))
 const { __test: codeTest } = codePlugin
 const { __test: textTest } = textPlugin
 

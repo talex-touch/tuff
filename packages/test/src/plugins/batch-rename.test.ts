@@ -1,8 +1,7 @@
-import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { loadPluginModule } from './plugin-loader'
 
-const require = createRequire(import.meta.url)
-const renamePlugin = require('../../../../plugins/touch-batch-rename/index.js')
+const renamePlugin = loadPluginModule(new URL('../../../../plugins/touch-batch-rename/index.js', import.meta.url))
 const { __test: renameTest } = renamePlugin
 
 describe('batch rename rules', () => {
