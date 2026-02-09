@@ -1,0 +1,24 @@
+# Intelligence Ask (`touch-intelligence`)
+
+## When to Use
+- Ask AI directly in CoreBox and copy responses fast.
+
+## Trigger
+- Feature ID: `intelligence.ask`
+- Commands: `ai / @ai / /ai / 智能 / 问答`
+
+## Core Capabilities
+- 智能问答：在 CoreBox 里直接提问并复制回答
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: None (no manual config file needed for MVP)
+- Plugin directory: `plugins/touch-intelligence`
+
+## Permissions
+- Required: `ai.basic`; Optional: `clipboard.write`
+
+## Quick Start
+1. In CoreBox, type `ai`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

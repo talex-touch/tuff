@@ -1,0 +1,24 @@
+# 系统快捷动作（`touch-quick-actions`）
+
+## 适用场景
+- 高频、低风险的系统动作和设置入口。
+
+## 触发方式
+- Feature ID：`quick.actions`
+- Commands：`quick / actions / 快捷 / 系统快捷`
+
+## 核心能力
+- 系统快捷动作：锁屏、静音与常用设置入口
+- 支持平台：`win32, darwin`
+
+## 配置与数据
+- 配置/数据文件：无（运行态数据无需手动维护）
+- 插件目录：`plugins/touch-quick-actions`
+
+## 权限说明
+- 必需：`system.shell`
+
+## 快速上手
+1. 在 CoreBox 输入 `quick`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

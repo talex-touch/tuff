@@ -1,0 +1,24 @@
+# Dev Toolbox (`touch-dev-toolbox`)
+
+## When to Use
+- Centralize docs, dashboards, and team links.
+
+## Trigger
+- Feature ID: `dev-toolbox`
+- Commands: `dev / toolbox / 工具箱 / 链接`
+
+## Core Capabilities
+- 开发工具箱：常用链接导航
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `toolbox.json`
+- Plugin directory: `plugins/touch-dev-toolbox`
+
+## Permissions
+- No extra permissions required
+
+## Quick Start
+1. In CoreBox, type `dev`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

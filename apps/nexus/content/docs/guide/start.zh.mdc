@@ -28,3 +28,7 @@
 - 系统日志位于 `~/Library/Logs/Tuff` 或 `%LOCALAPPDATA%/Tuff/logs`。
 - 打开 CoreBox 输入 `diagnose` 可生成自检报告。
 - 常见故障可查看《../tips/faq.zh.md》。
+
+## 6. 推荐插件入口
+- 新用户建议从《[推荐插件组合](./features/recommended-plugins.zh.md)》开始。
+- 每个内置插件都有单独说明页，见《[内置插件目录](./features/plugins/index.zh.md)》。

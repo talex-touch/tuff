@@ -28,3 +28,7 @@
 - Logs: `~/Library/Logs/Tuff` or `%LOCALAPPDATA%/Tuff/logs`.
 - CoreBox `diagnose` command exports a health report.
 - Refer to `../tips/faq.en.md` for common fixes.
+
+## 6. Plugin Recommendations
+- New users can start from [Recommended Plugin Bundles](./features/recommended-plugins.en.md).
+- Every built-in plugin now has a dedicated page in [Built-in Plugin Catalog](./features/plugins/index.en.md).
