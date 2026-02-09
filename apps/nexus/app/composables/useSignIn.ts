@@ -17,9 +17,29 @@ import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
+type TurnstileAction = 'login' | 'signup'
+type TurnstileState = 'idle' | 'loading' | 'ready' | 'error'
 
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
+const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+
+type TurnstileWidgetId = string | number
+interface TurnstileRenderOptions {
+  sitekey: string
+  theme?: 'light' | 'dark' | 'auto'
+  action?: string
+  callback?: (token: string) => void
+  'expired-callback'?: () => void
+  'error-callback'?: (errorCode?: string) => void
+}
+interface TurnstileApi {
+  render: (container: string | HTMLElement, options: TurnstileRenderOptions) => TurnstileWidgetId
+  reset: (widgetId?: TurnstileWidgetId) => void
+  remove?: (widgetId?: TurnstileWidgetId) => void
+}
+
+let turnstileScriptPromise: Promise<void> | null = null
 
 function resolveErrorMessage(error: any, fallback: string) {
   return error?.data?.statusMessage || error?.message || fallback
@@ -41,6 +61,7 @@ export function useSignIn() {
   const { t, locale, setLocale } = useI18n()
   const route = useRoute()
   const { signIn, status } = useAuth()
+  const runtimeConfig = useRuntimeConfig()
 
   const step = ref<AuthStep>('email')
   const email = ref('')
@@ -66,9 +87,14 @@ export function useSignIn() {
   const storedOauthContext = ref<OauthContext | null>(import.meta.client ? readOauthContext() : null)
   const passkeyPhase = ref<'idle' | 'prepare' | 'prompt' | 'verifying' | 'error' | 'success'>('idle')
   const passkeyError = ref('')
+  const turnstileToken = ref('')
+  const turnstileWidgetId = ref<TurnstileWidgetId | null>(null)
+  const turnstileAction = ref<TurnstileAction | null>(null)
+  const turnstileState = ref<TurnstileState>('idle')
 
   let passkeyTimer: ReturnType<typeof setTimeout> | null = null
   let successTimer: ReturnType<typeof setTimeout> | null = null
+  let turnstileRenderSeq = 0
 
   if (hasWindow()) {
     const storedMethod = window.localStorage.getItem(LAST_LOGIN_METHOD_KEY)
@@ -77,6 +103,12 @@ export function useSignIn() {
   }
 
   const canToast = import.meta.client
+  const turnstileSiteKey = computed(() => {
+    return typeof runtimeConfig.public?.turnstile?.siteKey === 'string'
+      ? runtimeConfig.public.turnstile.siteKey.trim()
+      : ''
+  })
+  const turnstileEnabled = computed(() => Boolean(turnstileSiteKey.value))
 
   function notify(type: 'error' | 'success' | 'warning', message: string) {
     if (!canToast)
@@ -87,6 +119,283 @@ export function useSignIn() {
       toast.success(message)
     if (type === 'warning')
       toast.warning(message)
+  }
+
+  function resolveCredentialsSignInMessage(errorCode: string) {
+    const normalized = errorCode.trim()
+    if (normalized.includes('CredentialsSignin'))
+      return t('auth.credentialsInvalid', '邮箱或密码错误')
+    if (normalized.includes('AccessDenied'))
+      return t('auth.accountDisabled', '账号不可用')
+    return t('auth.loginFailed', '登录失败')
+  }
+
+  function getTurnstileApi() {
+    if (!hasWindow())
+      return null
+    return (window as any).turnstile as TurnstileApi | undefined
+  }
+
+  function getExpectedTurnstileAction(): TurnstileAction {
+    return step.value === 'signup' ? 'signup' : 'login'
+  }
+
+  function maskTurnstileSiteKey(siteKey: string) {
+    if (!siteKey)
+      return 'empty'
+    if (siteKey.length <= 8)
+      return siteKey
+    return `${siteKey.slice(0, 4)}...${siteKey.slice(-4)}`
+  }
+
+  function isStaleTurnstileRender(seq: number) {
+    return seq !== turnstileRenderSeq || !showTurnstile.value
+  }
+
+  function logTurnstileContext(stage: string, action?: TurnstileAction) {
+    if (!hasWindow())
+      return
+
+    console.info('[turnstile] context', {
+      stage,
+      action,
+      state: turnstileState.value,
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      siteKey: maskTurnstileSiteKey(turnstileSiteKey.value),
+      hasWidget: turnstileWidgetId.value !== null,
+    })
+  }
+
+  function markTurnstileError(stage: string, error?: unknown) {
+    turnstileRenderSeq += 1
+
+    logTurnstileContext(stage, turnstileAction.value || getExpectedTurnstileAction())
+    if (hasWindow())
+      console.error('[turnstile]', stage, error)
+
+    const turnstile = getTurnstileApi()
+    const widgetId = turnstileWidgetId.value
+    if (turnstile && widgetId !== null) {
+      try {
+        turnstile.remove?.(widgetId)
+      }
+      catch (removeError) {
+        if (hasWindow())
+          console.error('[turnstile]', 'remove_failed', removeError)
+      }
+    }
+
+    turnstileToken.value = ''
+    turnstileWidgetId.value = null
+    turnstileAction.value = null
+    turnstileState.value = 'error'
+  }
+
+  function removeTurnstileWidget() {
+    turnstileRenderSeq += 1
+
+    const turnstile = getTurnstileApi()
+    const widgetId = turnstileWidgetId.value
+    if (turnstile && widgetId !== null) {
+      try {
+        turnstile.remove?.(widgetId)
+      }
+      catch (error) {
+        if (hasWindow())
+          console.error('[turnstile]', 'remove_failed', error)
+      }
+    }
+
+    turnstileToken.value = ''
+    turnstileWidgetId.value = null
+    turnstileAction.value = null
+    turnstileState.value = 'idle'
+  }
+
+  async function loadTurnstileScript() {
+    if (!turnstileEnabled.value || !hasWindow())
+      return
+
+    if (getTurnstileApi())
+      return
+
+    if (!turnstileScriptPromise) {
+      turnstileScriptPromise = new Promise<void>((resolve, reject) => {
+        const script = window.document.createElement('script')
+        script.src = TURNSTILE_SCRIPT_SRC
+        script.async = true
+        script.defer = true
+        script.onload = () => resolve()
+        script.onerror = () => reject(new Error('Failed to load Turnstile script'))
+        window.document.head.appendChild(script)
+      }).catch((error) => {
+        turnstileScriptPromise = null
+        throw error
+      })
+    }
+
+    await turnstileScriptPromise
+  }
+
+  function resetTurnstileWidget() {
+    turnstileToken.value = ''
+
+    if (!turnstileEnabled.value || !showTurnstile.value)
+      return
+
+    const turnstile = getTurnstileApi()
+    const widgetId = turnstileWidgetId.value
+    if (!turnstile || widgetId === null || turnstileState.value === 'loading')
+      return
+
+    try {
+      turnstile.reset(widgetId)
+      turnstileState.value = 'ready'
+    }
+    catch (error) {
+      turnstileRenderSeq += 1
+      if (hasWindow())
+        console.error('[turnstile]', 'reset_failed', error)
+
+      try {
+        turnstile.remove?.(widgetId)
+      }
+      catch (removeError) {
+        if (hasWindow())
+          console.error('[turnstile]', 'remove_failed', removeError)
+      }
+
+      turnstileWidgetId.value = null
+      turnstileAction.value = null
+      turnstileState.value = 'error'
+    }
+  }
+
+  function requireTurnstileToken() {
+    if (!turnstileEnabled.value)
+      return true
+
+    if (turnstileToken.value)
+      return true
+
+    if (turnstileState.value === 'loading') {
+      notify('warning', t('auth.turnstileLoading', '安全验证准备中，请稍候'))
+      return false
+    }
+
+    if (turnstileState.value === 'error') {
+      notify('warning', t('auth.turnstilePending', '安全验证暂未就绪，请点击重试'))
+      return false
+    }
+
+    notify('error', t('auth.turnstileRequired', '请先完成人机验证'))
+    return false
+  }
+
+  async function ensureTurnstileWidget() {
+    if (!turnstileEnabled.value || !showTurnstile.value || !hasWindow())
+      return
+
+    const renderSeq = ++turnstileRenderSeq
+    turnstileState.value = 'loading'
+
+    try {
+      await loadTurnstileScript()
+    }
+    catch (error) {
+      if (isStaleTurnstileRender(renderSeq))
+        return
+      markTurnstileError('load_script_failed', error)
+      return
+    }
+
+    if (isStaleTurnstileRender(renderSeq))
+      return
+
+    await nextTick()
+
+    if (isStaleTurnstileRender(renderSeq))
+      return
+
+    const expectedAction = getExpectedTurnstileAction()
+    logTurnstileContext('before_render', expectedAction)
+
+    const container = window.document.getElementById('turnstile-container')
+    const turnstile = getTurnstileApi()
+    if (!container || !turnstile) {
+      markTurnstileError('container_or_api_missing')
+      return
+    }
+
+    if (turnstileWidgetId.value !== null) {
+      if (turnstileAction.value === expectedAction) {
+        turnstileState.value = 'ready'
+        return
+      }
+      try {
+        turnstile.remove?.(turnstileWidgetId.value)
+      }
+      catch (error) {
+        if (hasWindow())
+          console.error('[turnstile]', 'remove_failed', error)
+      }
+      turnstileWidgetId.value = null
+      turnstileToken.value = ''
+    }
+
+    try {
+      turnstileWidgetId.value = turnstile.render(container, {
+        sitekey: turnstileSiteKey.value,
+        theme: 'dark',
+        action: expectedAction,
+        callback: (token: string) => {
+          if (isStaleTurnstileRender(renderSeq))
+            return
+          turnstileToken.value = token
+          turnstileState.value = 'ready'
+        },
+        'expired-callback': () => {
+          if (isStaleTurnstileRender(renderSeq))
+            return
+          turnstileToken.value = ''
+          turnstileState.value = 'ready'
+        },
+        'error-callback': (errorCode?: string) => {
+          if (isStaleTurnstileRender(renderSeq))
+            return
+          markTurnstileError('widget_error', errorCode)
+        },
+      })
+
+      if (isStaleTurnstileRender(renderSeq)) {
+        const widgetId = turnstileWidgetId.value
+        if (widgetId !== null) {
+          try {
+            turnstile.remove?.(widgetId)
+          }
+          catch (error) {
+            if (hasWindow())
+              console.error('[turnstile]', 'remove_failed', error)
+          }
+        }
+        return
+      }
+
+      turnstileAction.value = expectedAction
+      turnstileState.value = 'ready'
+      logTurnstileContext('render_ok', expectedAction)
+    }
+    catch (error) {
+      markTurnstileError('render_failed', error)
+    }
+  }
+
+  async function retryTurnstile() {
+    if (!showTurnstile.value)
+      return
+    removeTurnstileWidget()
+    await ensureTurnstileWidget()
   }
 
   function resolveOauthRouteErrorMessage() {
@@ -312,7 +621,9 @@ export function useSignIn() {
     return t('auth.loginStepSubtitle', '请输入密码或使用 Magic Link 登录。')
   })
 
-  const showTurnstile = computed(() => step.value === 'login' || step.value === 'signup')
+  const showTurnstile = computed(() => {
+    return turnstileEnabled.value && (step.value === 'login' || step.value === 'signup')
+  })
   const passkeyBusy = computed(() => {
     return passkeyPhase.value === 'prepare'
       || passkeyPhase.value === 'prompt'
@@ -334,6 +645,13 @@ export function useSignIn() {
     magicSent.value = false
     if (value !== 'passkey' && value !== 'success')
       resetPasskeyState()
+
+    if (value !== 'login' && value !== 'signup') {
+      removeTurnstileWidget()
+      return
+    }
+
+    void ensureTurnstileWidget()
   })
 
   onMounted(() => {
@@ -344,11 +662,15 @@ export function useSignIn() {
       clearOauthContext()
       storedOauthContext.value = null
     }
+
+    if (showTurnstile.value)
+      void ensureTurnstileWidget()
   })
 
   onBeforeUnmount(() => {
     clearPasskeyTimer()
     clearSuccessTimer()
+    removeTurnstileWidget()
   })
 
   async function clearOauthQuery() {
@@ -362,7 +684,17 @@ export function useSignIn() {
     delete nextQuery.redirect_url
     delete nextQuery.error
     delete nextQuery.error_description
+
+    const scrollY = hasWindow() ? window.scrollY : 0
     await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
+
+    if (!hasWindow())
+      return
+
+    await nextTick()
+    window.requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollY, left: 0, behavior: 'auto' })
+    })
   }
 
   async function clearOauthRuntime(clearQuery = true) {
@@ -537,16 +869,23 @@ export function useSignIn() {
   }
 
   async function handlePasswordSignIn() {
+    if (!requireTurnstileToken())
+      return
+
+    const token = turnstileToken.value
     magicSent.value = false
     loading.value = true
     try {
       const result = await signIn('credentials', {
         email: emailPreview.value,
         password: password.value,
+        turnstileToken: token,
         redirect: false,
       })
       if (result?.error) {
-        notify('error', result.error)
+        if (hasWindow())
+          console.warn('[auth]', 'credentials_signin_failed', result.error)
+        notify('error', resolveCredentialsSignInMessage(result.error))
         return
       }
       recordLoginMethod('password')
@@ -557,6 +896,7 @@ export function useSignIn() {
     }
     finally {
       loading.value = false
+      resetTurnstileWidget()
     }
   }
 
@@ -609,6 +949,10 @@ export function useSignIn() {
       notify('error', t('auth.passwordMismatch', '两次密码不一致'))
       return
     }
+    if (!requireTurnstileToken())
+      return
+
+    const token = turnstileToken.value
 
     signupLoading.value = true
     try {
@@ -617,6 +961,7 @@ export function useSignIn() {
         body: {
           email: emailPreview.value,
           password: password.value,
+          turnstileToken: token,
         },
       })
       await navigateTo({
@@ -629,6 +974,7 @@ export function useSignIn() {
     }
     finally {
       signupLoading.value = false
+      resetTurnstileWidget()
     }
   }
 
@@ -815,7 +1161,9 @@ export function useSignIn() {
     stepTitle,
     stepSubtitle,
     showTurnstile,
+    turnstileState,
     forgotUrl,
+    retryTurnstile,
     handleEmailNext,
     resetToEmailStep,
     handlePasswordSignIn,

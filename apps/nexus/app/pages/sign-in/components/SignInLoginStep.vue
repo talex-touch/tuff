@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
 
@@ -20,9 +20,25 @@ const emit = defineEmits<{
   (e: 'forgot'): void
 }>()
 
+const showPassword = ref(false)
+
 const passwordValue = computed({
   get: () => props.password,
   set: (value: string) => emit('update:password', value),
+})
+
+const passwordInputType = computed(() => (showPassword.value ? 'text' : 'password'))
+
+const passwordToggleLabel = computed(() => {
+  return showPassword.value
+    ? props.t('auth.hidePassword', '隐藏')
+    : props.t('auth.showPassword', '显示')
+})
+
+const signInLabel = computed(() => {
+  return props.loading
+    ? props.t('auth.signingIn', '登录中...')
+    : props.t('auth.signIn', '登录')
 })
 </script>
 
@@ -34,20 +50,53 @@ const passwordValue = computed({
         {{ t('auth.changeEmail', '更换邮箱') }}
       </Button>
     </div>
-    <Input v-model="passwordValue" type="password" :placeholder="t('auth.password', '密码')" class="auth-input" />
+
+    <Input v-model="passwordValue" :type="passwordInputType" :placeholder="t('auth.password', '密码')" class="auth-input">
+      <template #suffix>
+        <button
+          type="button"
+          class="auth-password-toggle"
+          :aria-label="passwordToggleLabel"
+          @click="showPassword = !showPassword"
+        >
+          <span :class="showPassword ? 'i-carbon-view-off' : 'i-carbon-view'" />
+          <span>{{ passwordToggleLabel }}</span>
+        </button>
+      </template>
+    </Input>
+
     <div class="auth-row">
       <Button variant="ghost" size="sm" class="auth-text-button" @click="emit('forgot')">
         {{ t('auth.forgotPassword', '忘记密码？') }}
       </Button>
       <Button variant="ghost" size="sm" class="auth-text-button" @click="emit('reset-email')">
-        {{ t('auth.changeEmail', '更换邮箱') }}
+        {{ t('auth.backToMethods', '返回') }}
       </Button>
     </div>
+
     <Button class="auth-button auth-button--primary" size="lg" block :loading="loading" @click="emit('sign-in')">
-      {{ t('auth.signIn', '登录') }}
+      {{ signInLabel }}
     </Button>
+
     <Button class="auth-button auth-button--ghost" size="lg" block :loading="magicLoading" @click="emit('magic-link')">
       {{ magicSent ? t('auth.magicSent', '已发送 Magic Link') : t('auth.magicLink', '发送 Magic Link') }}
     </Button>
   </div>
 </template>
+
+<style scoped>
+.auth-password-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.auth-password-toggle:hover {
+  color: rgba(255, 255, 255, 0.88);
+}
+</style>

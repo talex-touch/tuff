@@ -138,6 +138,7 @@ const showRetry = computed(() => isError.value)
   font-size: 13px;
   color: rgba(255, 255, 255, 0.65);
   min-height: 34px;
+  max-width: 320px;
   display: flex;
   align-items: center;
   text-align: center;
@@ -146,11 +147,15 @@ const showRetry = computed(() => isError.value)
 .auth-oauth-actions {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 12px;
+  width: min(320px, 100%);
   min-height: 46px;
+  margin: 0 auto;
 }
 
 .auth-oauth-back {
   align-self: center;
+  margin-top: -2px;
 }
 </style>
