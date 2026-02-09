@@ -76,7 +76,7 @@
 | src/main/modules/box-tool/search-engine/search-core.ts | B | 搜索 fallback 路径 |
 | src/main/modules/box-tool/search-engine/search-logger.ts | B | legacy setting fallback |
 | src/main/modules/box-tool/core-box/window.ts | B | 输入修饰键兼容说明 |
-| src/main/modules/box-tool/addon/system/system-provider.ts | B | fallback 匹配逻辑 |
+| plugins/touch-system-actions/index.js | B | fallback 匹配逻辑 |
 | src/main/modules/box-tool/addon/files/file-provider.ts | B | legacy 通道迁移说明 |
 | src/main/modules/box-tool/addon/files/everything-provider.ts | B | mapFileToTuffItem 兼容说明 |
 | src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts | B | API fallback |

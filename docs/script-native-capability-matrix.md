@@ -11,7 +11,7 @@
 
 ## References
 - apps/core-app/src/main/modules/terminal/terminal.manager.ts
-- apps/core-app/src/main/modules/box-tool/addon/system/system-provider.ts
+- plugins/touch-system-actions/index.js
 - apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts
 - apps/core-app/src/main/modules/update/update-system.ts
 - docs/script-native-constraints.md

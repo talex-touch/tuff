@@ -177,7 +177,7 @@ const quickLaunchFeature: TuffItem = {
   sublabel: '将当前复制的程序添加到搜索列表',
   icon: { type: 'lucide', name: 'Plus' },
   kind: 'action',
-  source: { type: 'system', providerId: 'system-provider' }
+  source: { type: 'plugin', providerId: 'plugin-features' }
 }
 ```
 
@@ -497,9 +497,9 @@ export interface ISearchProvider<TContext = unknown> {
 | Provider | Priority | Expected Duration |
 |----------|----------|-------------------|
 | `app-provider` | `fast` | 50ms |
-| `system-provider` | `fast` | 20ms |
+| `plugin-features(system.actions)` | `fast` | 20ms |
 | `plugin-features` | `fast` | 30ms |
-| `url-provider` | `deferred` | 100ms |
+| `plugin-features(browser.open)` | `deferred` | 100ms |
 | `preview-provider` | `deferred` | 200ms |
 | `file-provider` | `deferred` | 500ms |
 
@@ -754,14 +754,14 @@ function runDeferredLayer(
 debounce      │     ●────► 触发搜索
               │           │
 Fast Layer    │           ├─app-provider──────●(30ms) 结果1
-              │           ├─system-provider──●(15ms) 结果2
+              │           ├─plugin-features(system.actions)──●(15ms) 结果2
               │           └─plugin-provider────●(45ms) 结果3
               │           │
 首批返回      │           │                    ●═══════════► UI 渲染
               │           │                    │
 Deferred      │           │                    ├─50ms delay─┤
 Layer Start   │           │                    │            ●
-              │           │                    │            ├─url-provider────●(80ms)
+              │           │                    │            ├─plugin-features(browser.open)────●(80ms)
               │           │                    │            ├─preview-provider──────●(180ms)
               │           │                    │            └─file-provider──────────────────●(450ms)
               │           │                    │                                              │

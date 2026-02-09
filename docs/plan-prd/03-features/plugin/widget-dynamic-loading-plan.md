@@ -19,7 +19,7 @@
 - 用户需求：① 内置插件（internal）可以继续预注册默认渲染；② 非 internal 的 `widget` 要从 `widgets` 目录/路径实时获取 Vue 源码、编译并加载到渲染器，做到可扩展、热更新的插件 widget 体验。
 
 ## 术语定义
-- **Internal 插件**：主进程内置模块（例如 `internal-ai`）创建的 Plugin 实例，名称固定、受控、安全，渲染器可直接在启动时注册对应组件。
+- **Internal 插件**：主进程内置模块创建的 Plugin 实例，名称固定、受控、安全；当前 AI 能力已迁到外部 `touch-intelligence` 插件。
 - **非 internal 插件**：从磁盘/网络加载的第三方或开发者插件，其 `manifest.features[]` 中可能声明 `interaction.type === 'widget'`，`interaction.path` 指向 `widgets/{name}`。
 - **Widget 组件标识**：建议用 `${plugin.name}::${feature.id}` 或 `${plugin.name}::${path}` 组成唯一 `custom.content`，交给 renderer registry 使用。
 
@@ -109,14 +109,10 @@
    - 在 `apps/docs/docs/plugins/widget.md` 增补“如何编写 widget vue 源码、如何声明 interaction”章节。
    - 在 `plan-prd` 内新增“widget loader 实施计划”章节，列出验收标准。
 
-## AI Internal Widget 流程梳理
-- `apps/core-app/src/main/plugins/internal/internal-ai-plugin.ts#L1` 通过 `createInternalAiPlugin` 构造 `TouchPlugin`（路径在 `apps/core-app/src/main/plugins/internal/index.ts#L1`）并注册名为 `internal-ai-ask` 的 feature（`interaction.type === 'widget'`）。
-- 触发后 `createAiLifecycle` 负责往 `CoreBox` 推送 `TuffItem`：
-  1. `buildBaseItem` 创建带插件元数据的 `TuffItemBuilder`。
-  2. `setCustomRender('vue', DEFAULT_WIDGET_RENDERERS.CORE_INTELLIGENCE_ANSWER, payload)` 指定 `custom.content` 为 `core-intelligence-answer`，`payload` 携带请求状态/回答等。
-  3. `usePluginStore` + `CoreBoxRender` 的 `customRenderer` 通过 `getCustomRenderer` 拿到 `CoreIntelligenceAnswer` 组件（`apps/core-app/src/renderer/src/modules/box/custom-render/index.ts#L1`）。
-- 内部 widget 不走动态编译，依赖 `apps/core-app/src/renderer/src/modules/box/custom-render/registerDefaultCustomRenderers()` 在渲染器启动时 `registerCustomRenderer('core-intelligence-answer', CoreIntelligenceAnswer)`，并由 `TouchPlugin` 的 item 直接渲染。
-- 该流程与新 widget loader 保持一致的契约：shared const `DEFAULT_WIDGET_RENDERERS`（`packages/utils/plugin/widget.ts#L1`）让内置组件与第三方组件共享命名、`IMeta` 结构也保持一致。
+## AI 插件抽离说明
+- `internal-ai` / `internal-ai-ask` 已移除，当前 AI 入口是外部插件 `touch-intelligence`。
+- `touch-intelligence` 使用列表模式呈现 `pending -> ready/error`，动作包含复制与重试。
+- 若后续恢复 AI widget，可直接复用本方案的 `WidgetLoader` + `plugin:widget:*` 通道。
 
 ## Widget Loader 运行时概览
 - `WidgetLoader`（`apps/core-app/src/main/modules/plugin/widget/widget-loader.ts#L1`）负责解析 `widgets/` 目录、校验路径、读取 `.vue` 源码并缓存 `WidgetSource{ widgetId, hash, source }`。

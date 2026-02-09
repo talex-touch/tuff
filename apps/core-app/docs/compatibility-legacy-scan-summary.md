@@ -73,7 +73,7 @@
 - src/main/modules/box-tool/search-engine/search-core.ts — trigger: 搜索 fallback 路径; alternative: 主队列可用; risk: medium
 - src/main/modules/box-tool/search-engine/search-logger.ts — trigger: legacy setting fallback; alternative: 新配置项; risk: low
 - src/main/modules/box-tool/core-box/window.ts — trigger: Electron 输入兼容说明; alternative: 统一事件映射; risk: low
-- src/main/modules/box-tool/addon/system/system-provider.ts — trigger: 字符匹配 fallback; alternative: 精准匹配; risk: low
+- plugins/touch-system-actions/index.js — trigger: 字符匹配 fallback; alternative: 精准匹配; risk: low
 - src/main/modules/box-tool/addon/files/file-provider.ts — trigger: legacy 通道迁移说明/平台分支; alternative: transport 通道; risk: medium
 - src/main/modules/box-tool/addon/files/everything-provider.ts — trigger: compatible mapping 说明; alternative: 统一 map 输出; risk: low
 - src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts — trigger: 备用 API fallback; alternative: 主 API 可用; risk: low
