@@ -183,11 +183,28 @@ function getAuthOptions(): AuthOptions {
         if (user) {
           token.userId = (user as { id?: string }).id
         }
+        if (!token.userId && typeof token.sub === 'string') {
+          token.userId = token.sub
+        }
         return token
       },
       async session({ session, token }: { session: Session, token: JWT }) {
         if (session.user) {
-          (session.user as { id?: string }).id = token.userId as string
+          const resolvedUserId =
+            typeof token.userId === 'string' && token.userId
+              ? token.userId
+              : typeof token.sub === 'string'
+                ? token.sub
+                : ''
+          if (resolvedUserId) {
+            ;(session.user as { id?: string }).id = resolvedUserId
+          }
+          else if (process.env.NODE_ENV !== 'production' || process.env.NUXT_AUTH_DEBUG === 'true') {
+            console.info('[auth][session-callback] missing user id in token', {
+              hasTokenUserId: Boolean(token.userId),
+              hasTokenSub: Boolean(token.sub)
+            })
+          }
         }
         return session
       }

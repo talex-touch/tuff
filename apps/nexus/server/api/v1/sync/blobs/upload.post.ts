@@ -1,6 +1,6 @@
 import { getHeader, readFormData } from 'h3'
 import type { paths } from '../../../../../types/sync-api'
-import { requireAuth } from '../../../../utils/auth'
+import { requireAppAuth } from '../../../../utils/auth'
 import { readDeviceId } from '../../../../utils/authStore'
 import { createSyncError } from '../../../../utils/syncErrors'
 import { applyQuotaDelta, getSyncSession, uploadSyncBlob, validateQuota } from '../../../../utils/syncStoreV1'
@@ -10,7 +10,7 @@ type UploadResponse = paths['/api/v1/sync/blobs/upload']['post']['responses']['2
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAppAuth(event)
   const deviceId = readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')

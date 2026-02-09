@@ -1,6 +1,6 @@
 import { getHeader, readBody } from 'h3'
 import type { paths } from '../../../../types/sync-api'
-import { requireAuth } from '../../../utils/auth'
+import { requireAppAuth } from '../../../utils/auth'
 import { countActiveDevices, readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import { applyQuotaDelta, ensureDeviceForSync, getOrInitQuota, getSyncSession, pushSyncItemsV1 } from '../../../utils/syncStoreV1'
@@ -9,7 +9,7 @@ type PushBody = paths['/api/v1/sync/push']['post']['requestBody']['content']['ap
 type PushResponse = paths['/api/v1/sync/push']['post']['responses']['200']['content']['application/json']
 
 export default defineEventHandler(async (event) => {
-  const { userId, deviceId: tokenDeviceId } = await requireAuth(event)
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
   const deviceId = tokenDeviceId ?? readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')

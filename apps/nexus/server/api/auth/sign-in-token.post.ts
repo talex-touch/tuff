@@ -1,11 +1,11 @@
-import { createAppToken, requireAuth } from '../../utils/auth'
+import { createAppToken, requireSessionAuth } from '../../utils/auth'
 
 /**
  * Create a sign-in token for the current user
  * This allows the desktop app to authenticate using the browser session
  */
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
 
   try {
     let appToken: string | null = null

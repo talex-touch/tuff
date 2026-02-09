@@ -4,7 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
-import { ensureDeviceForRequest, getDevice, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import { ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
@@ -23,6 +23,17 @@ interface AppTokenPayload {
   iss: string
   aud: string
   typ: 'app'
+}
+
+function shouldDebugAuth() {
+  return process.env.NODE_ENV !== 'production' || process.env.NUXT_AUTH_DEBUG === 'true'
+}
+
+function logSessionDebug(stage: string, event: H3Event, payload: Record<string, unknown>) {
+  if (!shouldDebugAuth())
+    return
+  const path = event.path || event.node.req.url || ''
+  console.info('[auth][session]', stage, { path, ...payload })
 }
 
 function getAppJwtSecret(): string {
@@ -153,44 +164,99 @@ export interface AuthContext {
   deviceId?: string | null
 }
 
-export async function requireAuth(event: H3Event): Promise<AuthContext> {
-  const bearerToken = parseBearerToken(event)
-  if (bearerToken) {
-    const payload = verifyAppToken(bearerToken)
-    if (payload?.sub) {
-      const user = await getUserById(event, payload.sub)
-      if (!user || user.status !== 'active') {
-        throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
-      }
-      if (payload.deviceId) {
-        const device = await getDevice(event, payload.sub, payload.deviceId)
-        if (!device || device.revokedAt) {
-          throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-        }
-        if (typeof payload.dv === 'number' && payload.dv !== device.tokenVersion) {
-          throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-        }
-      }
-      return { userId: payload.sub, deviceId: payload.deviceId ?? null }
-    }
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-
-  const session = await getServerSession(event)
-  const userId = (session?.user as { id?: string } | undefined)?.id
-  if (!userId) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
-  const user = await getUserById(event, userId)
+async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload): Promise<AuthContext> {
+  const user = await getUserById(event, payload.sub)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
   }
-  await ensureDeviceForRequest(event, userId)
-  return { userId }
+
+  if (payload.deviceId) {
+    const device = await getDevice(event, payload.sub, payload.deviceId)
+    if (!device || device.revokedAt) {
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
+    if (typeof payload.dv === 'number' && payload.dv !== device.tokenVersion) {
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
+  }
+
+  return { userId: payload.sub, deviceId: payload.deviceId ?? null }
+}
+
+export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
+  const bearerToken = parseBearerToken(event)
+  if (!bearerToken) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+
+  const payload = verifyAppToken(bearerToken)
+  if (!payload?.sub) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+
+  return await resolveAppTokenContext(event, payload)
+}
+
+export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
+  const session = await getServerSession(event)
+  const sessionUser = session?.user as { id?: string, email?: string } | undefined
+
+  const directUserId = typeof sessionUser?.id === 'string' ? sessionUser.id.trim() : ''
+  let user = directUserId ? await getUserById(event, directUserId) : null
+
+  if (!user) {
+    const email = typeof sessionUser?.email === 'string' ? sessionUser.email.trim().toLowerCase() : ''
+    if (!email) {
+      logSessionDebug('missing-session-user', event, {
+        hasSession: Boolean(session),
+        hasUser: Boolean(sessionUser),
+        hasUserId: Boolean(sessionUser?.id),
+        hasEmail: Boolean(sessionUser?.email),
+        hasAuthorization: Boolean(getHeader(event, 'authorization')),
+        hasCookie: Boolean(getHeader(event, 'cookie'))
+      })
+      throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    }
+    user = await getUserByEmail(event, email)
+    if (!user) {
+      logSessionDebug('email-not-found', event, { email })
+    }
+  }
+
+  if (!user) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+  if (user.status !== 'active') {
+    throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
+  }
+
+  logSessionDebug('resolved', event, { userId: user.id, via: directUserId ? 'id' : 'email' })
+  await ensureDeviceForRequest(event, user.id)
+  return { userId: user.id }
+}
+
+/**
+ * 兼容入口：优先使用 session，其次回退 app token。
+ * 新代码请显式使用 requireSessionAuth 或 requireAppAuth。
+ */
+export async function requireAuth(event: H3Event): Promise<AuthContext> {
+  try {
+    return await requireSessionAuth(event)
+  }
+  catch (error: any) {
+    if (error?.statusCode !== 401)
+      throw error
+
+    const bearerToken = parseBearerToken(event)
+    if (!bearerToken)
+      throw error
+
+    return await requireAppAuth(event)
+  }
 }
 
 export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext> {
-  const context = await requireAuth(event)
+  const context = await requireSessionAuth(event)
   const user = await getUserById(event, context.userId)
   if (!user || user.status !== 'active') {
     throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
@@ -203,7 +269,7 @@ export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext>
 
 export async function getOptionalAuth(event: H3Event): Promise<AuthContext | null> {
   try {
-    return await requireAuth(event)
+    return await requireSessionAuth(event)
   }
   catch {
     return null
@@ -211,7 +277,7 @@ export async function getOptionalAuth(event: H3Event): Promise<AuthContext | nul
 }
 
 export async function requireAdmin(event: H3Event) {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
   const user = await getUserById(event, userId)
   if (!user || user.status !== 'active' || user.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
