@@ -90,7 +90,7 @@ interface ReleaseAsset {
  *
  * Key Features:
  * - GitHub Releases API integration
- * - Multi-channel support (RELEASE, BETA, SNAPSHOT)
+ * - Multi-channel support (RELEASE, BETA; SNAPSHOT falls back to BETA)
  * - Semantic version comparison
  * - SHA256 checksum verification
  * - Platform-specific installer detection
@@ -120,7 +120,7 @@ export class UpdateSystem {
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
-    [AppPreviewChannel.SNAPSHOT]: 2
+    [AppPreviewChannel.SNAPSHOT]: 1
   }
 
   /**
@@ -991,29 +991,20 @@ export class UpdateSystem {
       return newChannelPriority > currentChannelPriority
     }
 
-    // Compare version numbers
-    if (this.currentVersion.major !== newVersion.major) {
-      return newVersion.major > this.currentVersion.major
-    }
-
-    if (this.currentVersion.minor !== newVersion.minor) {
-      return newVersion.minor > this.currentVersion.minor
-    }
-
-    if (this.currentVersion.patch !== newVersion.patch) {
-      return newVersion.patch > this.currentVersion.patch
-    }
-
-    return false
+    return this.compareSemverVersions(newVersion.raw, this.currentVersion.raw) === 1
   }
 
   /**
    * Get effective update channel
    */
   private getEffectiveChannel(): AppPreviewChannel {
-    // If current version is SNAPSHOT, always check SNAPSHOT channel
+    // Snapshot channel is currently disabled; fallback to beta.
     if (this.currentVersion.channel === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.SNAPSHOT
+      return AppPreviewChannel.BETA
+    }
+
+    if (this.config.updateChannel === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.BETA
     }
 
     // Otherwise use configured channel

@@ -112,7 +112,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
-    [AppPreviewChannel.SNAPSHOT]: 2
+    [AppPreviewChannel.SNAPSHOT]: 1
   }
   private readonly onMacUpdateDownloaded = (info: { version?: string }): void => {
     const version = info?.version || 'unknown'
@@ -373,6 +373,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         try {
           this.cache.clear()
           this.clearReleaseCache()
+          await this.updateRepository?.clearAllRecords()
           return { success: true }
         } catch (error) {
           updateLog.error('Failed to clear cache', { error })
@@ -385,8 +386,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       tx.on(UpdateEvents.getCachedRelease, async (payload) => {
         try {
-          const requestedChannel = payload?.channel as AppPreviewChannel | undefined
-          const targetChannel = requestedChannel ?? this.getEffectiveChannel()
+          const requestedChannel = this.normalizeStoredChannel(payload?.channel)
+          const targetChannel = requestedChannel
+            ? this.enforceChannelPreference(requestedChannel)
+            : this.getEffectiveChannel()
           const record = this.updateRepository
             ? await this.updateRepository.getLatestRecord(targetChannel)
             : null
@@ -400,7 +403,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
                     status: record.status,
                     snoozeUntil: record.snoozeUntil ?? null,
                     fetchedAt: record.fetchedAt,
-                    channel: record.channel as AppPreviewChannel,
+                    channel: this.enforceChannelPreference(record.channel),
                     tag: record.tag,
                     source: record.source
                   }
@@ -717,7 +720,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       if (result.hasUpdate && result.release) {
         await this.persistRelease(targetChannel, result.release, result.source)
-        if (this.updateRepository) {
+        if (!force && this.updateRepository) {
           const persistedForRelease = await this.updateRepository.getRecordByTag(
             result.release.tag_name
           )
@@ -732,7 +735,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const newVersion = this.parseVersion(result.release.tag_name)
 
         if (this.isUpdateNeeded(newVersion)) {
-          if (this.settings.ignoredVersions.includes(result.release.tag_name)) {
+          if (!force && this.settings.ignoredVersions.includes(result.release.tag_name)) {
             const ignoredResult = {
               hasUpdate: false,
               error: 'Version ignored by user',
@@ -1303,6 +1306,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     major: number
     minor: number
     patch: number
+    raw: string
   } {
     const { version, channelLabel } = splitUpdateTag(versionStr)
     const versionNum = version
@@ -1313,7 +1317,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       channel: this.parseChannelLabel(channelLabel),
       major: +versionNumArr[0],
       minor: Number.parseInt(versionNumArr[1]),
-      patch: Number.parseInt(versionNumArr[2])
+      patch: Number.parseInt(versionNumArr[2]),
+      raw: versionStr
     }
   }
 
@@ -1338,10 +1343,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     major: number
     minor: number
     patch: number
+    raw: string
   }): boolean {
     const currentVersion = this.parseVersion(this.currentVersion)
 
-    // Compare versions (prioritize: channel > major > minor > patch)
+    // Compare versions (prioritize: channel > semantic version)
     if (currentVersion.channel !== newVersion.channel) {
       return (
         this.getChannelPriority(newVersion.channel) >
@@ -1349,19 +1355,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       )
     }
 
-    if (currentVersion.major === newVersion.major) {
-      if (currentVersion.minor === newVersion.minor) {
-        if (currentVersion.patch === newVersion.patch) {
-          return false
-        } else {
-          return newVersion.patch > currentVersion.patch
-        }
-      } else {
-        return newVersion.minor > currentVersion.minor
-      }
-    } else {
-      return newVersion.major > currentVersion.major
-    }
+    return this.compareSemverVersions(newVersion.raw, currentVersion.raw) === 1
   }
 
   /**
@@ -1381,14 +1375,128 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return this.parseChannelLabel(channelLabel)
   }
 
-  private enforceChannelPreference(preferred?: AppPreviewChannel): AppPreviewChannel {
-    if (this.currentChannel === AppPreviewChannel.SNAPSHOT) {
-      return AppPreviewChannel.SNAPSHOT
+  private normalizeStoredChannel(channel: unknown): AppPreviewChannel | undefined {
+    if (channel === null || channel === undefined) {
+      return undefined
     }
-    if (!preferred) {
+
+    if (typeof channel === 'number') {
+      switch (channel) {
+        case 0:
+          return AppPreviewChannel.RELEASE
+        case 1:
+        case 2:
+          return AppPreviewChannel.BETA
+        default:
+          return undefined
+      }
+    }
+
+    if (typeof channel === 'string') {
+      const trimmed = channel.trim()
+      if (!trimmed) {
+        return undefined
+      }
+
+      if (/^\d+$/.test(trimmed)) {
+        return this.normalizeStoredChannel(Number.parseInt(trimmed, 10))
+      }
+
+      return resolveUpdateChannelLabel(trimmed)
+    }
+
+    return undefined
+  }
+
+  private enforceChannelPreference(preferred?: unknown): AppPreviewChannel {
+    const normalizedPreferred = this.normalizeStoredChannel(preferred)
+
+    // Snapshot channel is currently disabled; fallback to beta.
+    if (this.currentChannel === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.BETA
+    }
+    if (!normalizedPreferred) {
       return AppPreviewChannel.RELEASE
     }
-    return preferred
+    if (normalizedPreferred === AppPreviewChannel.SNAPSHOT) {
+      return AppPreviewChannel.BETA
+    }
+    return normalizedPreferred
+  }
+
+  private compareSemverVersions(a: string | undefined, b: string | undefined): -1 | 0 | 1 {
+    if (!a && !b) return 0
+    if (!a) return -1
+    if (!b) return 1
+
+    const parsedA = this.parseSemverVersion(a)
+    const parsedB = this.parseSemverVersion(b)
+
+    if (parsedA.major !== parsedB.major) {
+      return parsedA.major < parsedB.major ? -1 : 1
+    }
+    if (parsedA.minor !== parsedB.minor) {
+      return parsedA.minor < parsedB.minor ? -1 : 1
+    }
+    if (parsedA.patch !== parsedB.patch) {
+      return parsedA.patch < parsedB.patch ? -1 : 1
+    }
+
+    return this.comparePrereleases(parsedA.prerelease, parsedB.prerelease)
+  }
+
+  private parseSemverVersion(version: string): {
+    major: number
+    minor: number
+    patch: number
+    prerelease: string[]
+  } {
+    const cleaned = version.replace(/^v/i, '').trim()
+    const [main, prerelease] = cleaned.split('-', 2)
+    const [major = 0, minor = 0, patch = 0] = (main || '')
+      .split('.')
+      .map((value) => Number.parseInt(value, 10) || 0)
+
+    return {
+      major,
+      minor,
+      patch,
+      prerelease: prerelease ? prerelease.split('.') : []
+    }
+  }
+
+  private comparePrereleases(a: string[], b: string[]): -1 | 0 | 1 {
+    if (a.length === 0 && b.length > 0) return 1
+    if (a.length > 0 && b.length === 0) return -1
+    if (a.length === 0 && b.length === 0) return 0
+
+    const maxLen = Math.max(a.length, b.length)
+    for (let index = 0; index < maxLen; index += 1) {
+      const aPart = a[index]
+      const bPart = b[index]
+
+      if (aPart === undefined) return -1
+      if (bPart === undefined) return 1
+
+      const aNum = Number.parseInt(aPart, 10)
+      const bNum = Number.parseInt(bPart, 10)
+      const aIsNum = !Number.isNaN(aNum)
+      const bIsNum = !Number.isNaN(bNum)
+
+      if (aIsNum && !bIsNum) return -1
+      if (!aIsNum && bIsNum) return 1
+
+      if (aIsNum && bIsNum) {
+        if (aNum < bNum) return -1
+        if (aNum > bNum) return 1
+        continue
+      }
+
+      if (aPart < bPart) return -1
+      if (aPart > bPart) return 1
+    }
+
+    return 0
   }
 
   private getEffectiveChannel(): AppPreviewChannel {
@@ -1727,10 +1835,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       if (fs.existsSync(settingsFile)) {
         const settingsData = fs.readFileSync(settingsFile, 'utf8')
         const persisted = JSON.parse(settingsData)
+        const normalizedChannel = this.enforceChannelPreference(persisted.updateChannel)
         this.settings = {
           ...defaults,
           ...persisted,
-          updateChannel: this.enforceChannelPreference(persisted.updateChannel)
+          updateChannel: normalizedChannel
         }
         this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
         if (typeof this.settings.lastCheckedAt !== 'number') {
@@ -1739,6 +1848,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         if (typeof this.settings.autoDownload !== 'boolean') {
           this.settings.autoDownload = defaults.autoDownload
         }
+
+        if (persisted.updateChannel !== normalizedChannel) {
+          this.saveSettings()
+        }
+
         updateLog.info(`Settings loaded from: ${settingsFile}`)
       } else {
         this.settings = defaults

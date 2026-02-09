@@ -158,8 +158,7 @@ export const defaultUpdateSettings: UpdateSettings = {
 }
 
 const UPDATE_CHANNEL_LABELS = {
-  snapshot: ['SNAPSHOT', 'ALPHA'],
-  beta: ['BETA'],
+  beta: ['BETA', 'SNAPSHOT', 'ALPHA'],
   release: ['RELEASE', 'MASTER'],
 }
 
@@ -169,9 +168,6 @@ const UPDATE_CHANNEL_LABELS = {
 export function resolveUpdateChannelLabel(label?: string): AppPreviewChannel {
   const normalized = (label || '').trim().toUpperCase()
 
-  if (UPDATE_CHANNEL_LABELS.snapshot.some((value) => normalized.startsWith(value))) {
-    return AppPreviewChannel.SNAPSHOT
-  }
   if (UPDATE_CHANNEL_LABELS.beta.some((value) => normalized.startsWith(value))) {
     return AppPreviewChannel.BETA
   }

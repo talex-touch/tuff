@@ -1,6 +1,6 @@
 name = "tuff"
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "no_nodejs_compat_v2"]
 pages_build_output_dir = "apps/nexus/dist"
 
 [[d1_databases]]
@@ -15,7 +15,7 @@ preview_bucket_name = "tuff-nexus-imgable-dev"
 
 [env.preview]
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "no_nodejs_compat_v2"]
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-dev"

@@ -13,12 +13,8 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useAppState } from '~/modules/hooks/useAppStates'
 import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
-import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
-const buildInfo = getBuildInfo()
-const buildChannel = normalizeBuildChannel(buildInfo.channel)
-const isSnapshotBuild = buildChannel === AppPreviewChannel.SNAPSHOT
 const githubProvider = new GithubUpdateProvider()
 
 const { appStates } = useAppState()
@@ -49,13 +45,10 @@ const clearingCache = ref(false)
 const lastResultMessage = ref<string>('')
 
 const channelOptions = computed(() => {
-  const base = [
+  return [
     { value: AppPreviewChannel.RELEASE, label: t('settings.settingUpdate.channels.release') },
-    { value: AppPreviewChannel.BETA, label: t('settings.settingUpdate.channels.beta') },
-    { value: AppPreviewChannel.SNAPSHOT, label: t('settings.settingUpdate.channels.snapshot') }
+    { value: AppPreviewChannel.BETA, label: t('settings.settingUpdate.channels.beta') }
   ]
-
-  return isSnapshotBuild ? base.filter((item) => item.value === AppPreviewChannel.SNAPSHOT) : base
 })
 
 const frequencyOptions = computed(() => [
@@ -67,9 +60,7 @@ const frequencyOptions = computed(() => [
   { value: 'never', label: t('settings.settingUpdate.frequency.never') }
 ])
 
-const channelSelectDisabled = computed(
-  () => fetching.value || channelSaving.value || isSnapshotBuild
-)
+const channelSelectDisabled = computed(() => fetching.value || channelSaving.value)
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 
 const statusDescription = computed(() => {
@@ -81,13 +72,21 @@ const statusDescription = computed(() => {
   })
 })
 
-const updateStateMessage = computed(() => {
-  if (appStates.hasUpdate) return t('settings.settingUpdate.status.updateAvailable')
-  if (appStates.noUpdateAvailable) return t('settings.settingUpdate.status.upToDate')
-  return ''
+const statusMessage = computed(() => {
+  if (lastResultMessage.value) {
+    return { text: lastResultMessage.value, warning: false }
+  }
+  if (appStates.updateErrorMessage) {
+    return { text: appStates.updateErrorMessage, warning: true }
+  }
+  if (appStates.hasUpdate) {
+    return { text: t('settings.settingUpdate.status.updateAvailable'), warning: false }
+  }
+  if (appStates.noUpdateAvailable) {
+    return { text: t('settings.settingUpdate.status.upToDate'), warning: false }
+  }
+  return null
 })
-
-const updateErrorMessage = computed(() => appStates.updateErrorMessage)
 const assetsSummary = computed(() => {
   if (!cachedRelease.value?.release) {
     return t('settings.settingUpdate.assetsEmpty')
@@ -159,6 +158,7 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
 
   const previous = selectedChannel.value
   selectedChannel.value = value
+  lastResultMessage.value = ''
   channelSaving.value = true
   try {
     await updateSettings({ updateChannel: value })
@@ -286,13 +286,6 @@ async function handleCopyAssetUrl(asset: DownloadAsset): Promise<void> {
   }
 }
 
-function normalizeBuildChannel(channel?: string): AppPreviewChannel {
-  const normalized = (channel || '').toUpperCase()
-  if (normalized === AppPreviewChannel.SNAPSHOT) return AppPreviewChannel.SNAPSHOT
-  if (normalized === AppPreviewChannel.BETA) return AppPreviewChannel.BETA
-  return AppPreviewChannel.RELEASE
-}
-
 function formatTimestamp(value: number): string {
   return new Date(value).toLocaleString()
 }
@@ -368,11 +361,7 @@ function openAssetsDialog(): void {
     <TuffBlockSelect
       v-model="selectedChannel"
       :title="t('settings.settingUpdate.channelTitle')"
-      :description="
-        isSnapshotBuild
-          ? t('settings.settingUpdate.channelSnapshotLocked')
-          : t('settings.settingUpdate.channelDesc')
-      "
+      :description="t('settings.settingUpdate.channelDesc')"
       default-icon="i-carbon-software"
       active-icon="i-carbon-software-resource"
       :disabled="channelSelectDisabled"
@@ -413,21 +402,8 @@ function openAssetsDialog(): void {
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <div v-if="updateStateMessage" class="status-message">
-        {{ updateStateMessage }}
-      </div>
-      <div v-if="updateErrorMessage" class="status-message warning">
-        {{ updateErrorMessage }}
-      </div>
-      <div v-if="lastResultMessage" class="status-message">
-        {{ lastResultMessage }}
-      </div>
-      <div v-if="cachedRelease?.release" class="status-message">
-        {{
-          t('settings.settingUpdate.status.cachedRelease', {
-            version: cachedRelease.release.tag_name
-          })
-        }}
+      <div v-if="statusMessage" class="status-message" :class="{ warning: statusMessage.warning }">
+        {{ statusMessage.text }}
       </div>
     </TuffBlockSlot>
 

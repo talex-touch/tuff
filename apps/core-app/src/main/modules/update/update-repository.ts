@@ -16,6 +16,10 @@ type UpdateRecordInsert = typeof schema.appUpdateRecords.$inferInsert
 export class UpdateRepository {
   constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
 
+  async clearAllRecords(): Promise<void> {
+    await this.db.delete(schema.appUpdateRecords)
+  }
+
   async saveRelease(
     release: GitHubRelease,
     channel: AppPreviewChannel,
