@@ -216,7 +216,7 @@ const recommendation = computed(() => props.item.meta?.recommendation)
 
 <style scoped lang="scss">
 .BoxItem {
-  border-radius: var(--corebox-result-radius, 8px) !important;
+  border-radius: var(--corebox-result-radius, 16px) !important;
   padding: var(--corebox-result-padding, 6px) !important;
   border-bottom: var(--corebox-result-divider, none);
 }
@@ -228,7 +228,7 @@ const recommendation = computed(() => props.item.meta?.recommendation)
   padding: 0 6px;
   min-width: 22px;
   height: 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 10px;
   font-weight: 600;
   background: var(--el-fill-color-dark);

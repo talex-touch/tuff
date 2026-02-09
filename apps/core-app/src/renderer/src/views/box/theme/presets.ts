@@ -5,7 +5,7 @@ export const coreBoxThemePresets: Record<string, CoreBoxThemeConfig> = {
     preset: 'default',
     logo: { position: 'left', size: 24, style: 'default' },
     input: { border: 'bottom', radius: 8, background: 'transparent' },
-    results: { itemRadius: 6, itemPadding: 8, divider: false, hoverStyle: 'background' },
+    results: { itemRadius: 12, itemPadding: 8, divider: false, hoverStyle: 'background' },
     container: { radius: 0, shadow: 'none', border: false }
   },
   rounded: {

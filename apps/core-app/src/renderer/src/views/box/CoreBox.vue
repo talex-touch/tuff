@@ -619,10 +619,6 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
   height: 100%;
 }
 
-.CoreBox-Wrapper.CoreBoxInputBorder-bottom .BoxInput-Wrapper input {
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
 .CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {
   border: 1px solid var(--el-border-color-lighter);
 }
