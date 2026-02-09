@@ -1783,11 +1783,14 @@
         "lastChecked": "Last check: {time}",
         "updateAvailable": "A new version is available. See the popup dialog.",
         "upToDate": "You are already on the latest version.",
+        "downloadReady": "Update package {version} is ready. Restart now to finish installing.",
+        "unknownVersion": "this version",
         "cachedRelease": "Cached release: {version}"
       },
       "actionsTitle": "Actions",
       "actionsDesc": "Trigger update checks or maintenance tasks.",
       "actions": {
+        "installNow": "Restart to Update",
         "manualCheck": "Check Now",
         "clearCache": "Clear Cache"
       },
@@ -1818,6 +1821,8 @@
         "manualCheckNoUpdate": "Latest release: {version}",
         "manualCheckFailedWithReason": "Update check failed: {reason}",
         "manualCheckFailed": "Failed to start update check",
+        "installStarted": "Restarting to apply update",
+        "installFailedWithReason": "Failed to start update install: {reason}",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache"
       }

@@ -14,6 +14,7 @@ import {
   AppPreviewChannel,
   DownloadModule,
   DownloadPriority,
+  DownloadStatus,
   UPDATE_GITHUB_RELEASES_API,
   UPDATE_RELEASE_MANIFEST_NAME,
   type UpdateReleaseArtifact,
@@ -24,10 +25,13 @@ import {
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import axios from 'axios'
 import compressing from 'compressing'
+import { and, eq } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
+import { downloadTasks } from '../../db/schema'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
+import { databaseModule } from '../database'
 
 /**
  * Version information interface
@@ -80,6 +84,8 @@ interface ReleaseAsset {
   sha256?: string
   signatureUrl?: string
   signatureKeyUrl?: string
+  component?: UpdateArtifactComponent
+  coreRange?: string
 }
 
 /**
@@ -219,6 +225,14 @@ export class UpdateSystem {
   async downloadUpdate(release: GitHubRelease): Promise<string> {
     try {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
+
+      const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
+      if (reusableTaskId) {
+        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
+        console.log(`[UpdateSystem] Reusing existing update task: ${reusableTaskId}`)
+        return reusableTaskId
+      }
+
       // Find appropriate asset for current platform
       const asset = this.findAssetForPlatform(resolvedRelease.assets)
 
@@ -258,6 +272,48 @@ export class UpdateSystem {
     } catch (error) {
       console.error('[UpdateSystem] Failed to download update:', error)
       throw error
+    }
+  }
+
+  private async findReusableUpdateTaskId(tag: string): Promise<string | null> {
+    const tasks = this.downloadCenterModule.getAllTasks()
+
+    for (const task of tasks) {
+      if (task.module !== DownloadModule.APP_UPDATE) {
+        continue
+      }
+
+      const version = typeof task.metadata?.version === 'string' ? task.metadata.version : ''
+      if (version !== tag) {
+        continue
+      }
+
+      if (task.status === DownloadStatus.COMPLETED) {
+        const filePath = path.join(task.destination, task.filename)
+        if (await this.fileExists(filePath)) {
+          return task.id
+        }
+        continue
+      }
+
+      if (
+        task.status === DownloadStatus.PENDING ||
+        task.status === DownloadStatus.DOWNLOADING ||
+        task.status === DownloadStatus.PAUSED
+      ) {
+        return task.id
+      }
+    }
+
+    return null
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.stat(filePath)
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -575,33 +631,39 @@ export class UpdateSystem {
    */
   async installUpdate(taskId: string): Promise<void> {
     try {
-      const task = this.downloadCenterModule.getTaskStatus(taskId)
+      const task = await this.resolveInstallTask(taskId)
 
       if (!task) {
         throw new Error(`Task ${taskId} not found`)
       }
 
-      if (task.status !== 'completed') {
+      if (task.status !== DownloadStatus.COMPLETED) {
         throw new Error(`Task ${taskId} is not completed`)
       }
 
-      // Verify checksum if available
-      if (task.metadata?.checksum) {
-        const filePath = path.join(task.destination, task.filename)
-        const isValid = await this.verifyChecksum(filePath, task.metadata.checksum)
+      const filePath = path.join(task.destination, task.filename)
+      if (!(await this.fileExists(filePath))) {
+        throw new Error(`Update package not found: ${filePath}`)
+      }
+
+      const checksum = typeof task.metadata?.checksum === 'string' ? task.metadata.checksum : null
+      if (checksum) {
+        const isValid = await this.verifyChecksum(filePath, checksum)
 
         if (!isValid) {
           throw new Error('Checksum verification failed')
         }
       }
 
-      const signatureUrl = task.metadata?.signatureUrl
+      const signatureUrl =
+        typeof task.metadata?.signatureUrl === 'string' ? task.metadata.signatureUrl : undefined
       if (signatureUrl) {
-        const filePath = path.join(task.destination, task.filename)
         const verifyResult = await this.signatureVerifier.verifyFileSignature(
           filePath,
           signatureUrl,
-          task.metadata?.signatureKeyUrl
+          typeof task.metadata?.signatureKeyUrl === 'string'
+            ? task.metadata.signatureKeyUrl
+            : undefined
         )
 
         if (!verifyResult.valid) {
@@ -617,6 +679,79 @@ export class UpdateSystem {
       console.error('[UpdateSystem] Failed to install update:', error)
       throw error
     }
+  }
+
+  private async resolveInstallTask(taskId: string): Promise<{
+    status: string
+    destination: string
+    filename: string
+    metadata?: Record<string, unknown>
+  } | null> {
+    const runtimeTask = this.downloadCenterModule.getTaskStatus(taskId)
+    if (runtimeTask) {
+      return {
+        status: runtimeTask.status,
+        destination: runtimeTask.destination,
+        filename: runtimeTask.filename,
+        metadata: this.parseUpdateTaskMetadata(runtimeTask.metadata)
+      }
+    }
+
+    try {
+      const db = databaseModule.getDb()
+      const records = await db
+        .select({
+          status: downloadTasks.status,
+          destination: downloadTasks.destination,
+          filename: downloadTasks.filename,
+          metadata: downloadTasks.metadata
+        })
+        .from(downloadTasks)
+        .where(
+          and(eq(downloadTasks.id, taskId), eq(downloadTasks.module, DownloadModule.APP_UPDATE))
+        )
+        .limit(1)
+
+      const record = records[0]
+      if (!record) {
+        return null
+      }
+
+      return {
+        status: record.status,
+        destination: record.destination,
+        filename: record.filename,
+        metadata: this.parseUpdateTaskMetadata(record.metadata)
+      }
+    } catch (error) {
+      console.warn('[UpdateSystem] Failed to query update task from database:', error)
+      return null
+    }
+  }
+
+  private parseUpdateTaskMetadata(metadata: unknown): Record<string, unknown> | undefined {
+    if (!metadata) {
+      return undefined
+    }
+
+    if (typeof metadata === 'object' && !Array.isArray(metadata)) {
+      return metadata as Record<string, unknown>
+    }
+
+    if (typeof metadata !== 'string') {
+      return undefined
+    }
+
+    try {
+      const parsed = JSON.parse(metadata)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+    } catch (error) {
+      console.warn('[UpdateSystem] Failed to parse update task metadata:', error)
+    }
+
+    return undefined
   }
 
   /**
@@ -764,6 +899,8 @@ export class UpdateSystem {
 
       asset.sha256 = manifestEntry.sha256
       asset.checksum = manifestEntry.sha256
+      asset.component = manifestEntry.component
+      asset.coreRange = manifestEntry.coreRange
 
       if (manifestEntry.signature) {
         const signatureAsset = assetMap.get(this.normalizeAssetKey(manifestEntry.signature))
@@ -1016,15 +1153,8 @@ export class UpdateSystem {
    */
   private findAssetForPlatform(assets: ReleaseAsset[]): ReleaseAsset | null {
     const platform = process.platform
-    const arch = process.arch
+    const arch: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64'
 
-    const platformTokensMap: Record<string, string[]> = {
-      darwin: ['darwin', 'mac', 'macos'],
-      win32: ['win32', 'win', 'windows'],
-      linux: ['linux']
-    }
-
-    const platformTokens = platformTokensMap[platform] || [platform]
     const signatureMap = new Map<string, string>()
 
     for (const asset of assets) {
@@ -1041,29 +1171,43 @@ export class UpdateSystem {
       }
     }
 
-    // Find matching asset
+    const candidates: Array<{ asset: ReleaseAsset; score: number }> = []
+
     for (const asset of assets) {
       const name = String(asset?.name || '')
       if (!name) {
         continue
       }
 
-      if (this.isSignatureAsset(name) || this.isChecksumAsset(name)) {
+      if (
+        this.isSignatureAsset(name) ||
+        this.isChecksumAsset(name) ||
+        this.isManifestAsset(name) ||
+        this.isMetadataAsset(name)
+      ) {
         continue
       }
 
       const normalizedName = name.toLowerCase()
 
-      // Check platform match
-      if (!platformTokens.some((token) => normalizedName.includes(token))) {
+      if (asset.component && asset.component !== 'core') {
         continue
       }
 
-      // Check architecture match (if specified)
-      if (arch === 'arm64' && !normalizedName.includes('arm64')) {
+      if (!asset.component && this.isAuxiliaryComponentAsset(normalizedName)) {
         continue
       }
-      if (arch === 'x64' && normalizedName.includes('arm64')) {
+
+      if (!this.matchesPlatform(normalizedName, platform)) {
+        continue
+      }
+
+      if (!this.matchesArch(normalizedName, arch)) {
+        continue
+      }
+
+      const downloadUrl = asset.browser_download_url || asset.url
+      if (!downloadUrl) {
         continue
       }
 
@@ -1076,19 +1220,133 @@ export class UpdateSystem {
             ? asset.checksum
             : undefined
 
-      return {
+      const candidate: ReleaseAsset = {
         name: asset.name,
-        url: asset.browser_download_url || asset.url,
+        url: downloadUrl,
         size: asset.size,
         platform,
         arch,
         checksum,
         signatureUrl,
-        signatureKeyUrl
+        signatureKeyUrl,
+        component: asset.component,
+        coreRange: asset.coreRange
       }
+
+      candidates.push({
+        asset: candidate,
+        score: this.calculateAssetScore(normalizedName, asset, platform)
+      })
     }
 
-    return null
+    if (!candidates.length) {
+      return null
+    }
+
+    candidates.sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score
+      }
+      return (right.asset.size || 0) - (left.asset.size || 0)
+    })
+
+    return candidates[0].asset
+  }
+
+  private matchesPlatform(filename: string, platform: string): boolean {
+    const platformTokensMap: Record<string, string[]> = {
+      darwin: ['darwin', 'macos', 'mac', 'osx'],
+      win32: ['win32', 'windows', 'win'],
+      linux: ['linux', 'ubuntu', 'debian']
+    }
+
+    const tokens = platformTokensMap[platform] || [platform]
+    return tokens.some((token) => filename.includes(token))
+  }
+
+  private matchesArch(filename: string, arch: 'x64' | 'arm64'): boolean {
+    const hasArm64Token = filename.includes('arm64') || filename.includes('aarch64')
+    const hasX64Token =
+      filename.includes('x64') || filename.includes('amd64') || filename.includes('x86_64')
+
+    if (!hasArm64Token && !hasX64Token) {
+      return true
+    }
+
+    if (arch === 'arm64') {
+      return hasArm64Token
+    }
+
+    return hasX64Token && !hasArm64Token
+  }
+
+  private calculateAssetScore(filename: string, asset: ReleaseAsset, platform: string): number {
+    let score = 0
+
+    if (asset.component === 'core') {
+      score += 200
+    }
+
+    if (filename.includes('tuff')) {
+      score += 20
+    }
+
+    if (filename.includes('latest-release')) {
+      score += 10
+    }
+
+    score += this.getInstallerExtensionScore(filename, platform)
+
+    return score
+  }
+
+  private getInstallerExtensionScore(filename: string, platform: string): number {
+    if (platform === 'darwin') {
+      if (filename.endsWith('.dmg')) return 140
+      if (filename.endsWith('.pkg')) return 130
+      if (filename.endsWith('.app.zip')) return 120
+      if (filename.endsWith('.zip')) return 90
+      return 0
+    }
+
+    if (platform === 'win32') {
+      if (filename.endsWith('.exe')) return 140
+      if (filename.endsWith('.msi')) return 130
+      if (filename.endsWith('.zip')) return 90
+      if (filename.endsWith('.7z')) return 80
+      return 0
+    }
+
+    if (filename.endsWith('.appimage')) return 140
+    if (filename.endsWith('.deb')) return 130
+    if (filename.endsWith('.rpm')) return 120
+    if (filename.endsWith('.tar.gz') || filename.endsWith('.tgz')) return 100
+    if (filename.endsWith('.zip')) return 80
+    return 0
+  }
+
+  private isManifestAsset(filename: string): boolean {
+    return this.normalizeAssetKey(filename) === UPDATE_RELEASE_MANIFEST_NAME
+  }
+
+  private isMetadataAsset(filename: string): boolean {
+    const lower = filename.toLowerCase()
+
+    return (
+      lower.endsWith('.yml') ||
+      lower.endsWith('.yaml') ||
+      lower.endsWith('.json') ||
+      lower.endsWith('.blockmap') ||
+      lower.includes('builder-debug')
+    )
+  }
+
+  private isAuxiliaryComponentAsset(filename: string): boolean {
+    return (
+      filename.includes('renderer') ||
+      filename.includes('extensions') ||
+      filename.includes('extension')
+    )
   }
 
   private isSignatureAsset(filename: string): boolean {
@@ -1123,7 +1381,7 @@ export class UpdateSystem {
    * Get update download path
    */
   private async getUpdateDownloadPath(): Promise<string> {
-    const downloadPath = path.join(app.getPath('downloads'), 'tuff-updates')
+    const downloadPath = path.join(this.storageRoot, 'modules', 'update-packages')
 
     try {
       await fs.mkdir(downloadPath, { recursive: true })
