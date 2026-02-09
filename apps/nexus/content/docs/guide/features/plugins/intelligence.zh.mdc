@@ -1,0 +1,24 @@
+# 智能问答（`touch-intelligence`）
+
+## 适用场景
+- 在 CoreBox 里直接提问并复制答案。
+
+## 触发方式
+- Feature ID：`intelligence.ask`
+- Commands：`ai / @ai / /ai / 智能 / 问答`
+
+## 核心能力
+- 智能问答：在 CoreBox 里直接提问并复制回答
+- 支持平台：`win32, darwin, linux`
+
+## 配置与数据
+- 配置/数据文件：无（运行态数据无需手动维护）
+- 插件目录：`plugins/touch-intelligence`
+
+## 权限说明
+- 必需：`ai.basic`；可选：`clipboard.write`
+
+## 快速上手
+1. 在 CoreBox 输入 `ai`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

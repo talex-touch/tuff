@@ -1,0 +1,24 @@
+# Quick Actions (`touch-quick-actions`)
+
+## When to Use
+- Trigger frequent low-risk system actions and settings.
+
+## Trigger
+- Feature ID: `quick.actions`
+- Commands: `quick / actions / 快捷 / 系统快捷`
+
+## Core Capabilities
+- 系统快捷动作：锁屏、静音与常用设置入口
+- Supported platforms: `win32, darwin`
+
+## Config & Data
+- Config/data files: None (no manual config file needed for MVP)
+- Plugin directory: `plugins/touch-quick-actions`
+
+## Permissions
+- Required: `system.shell`
+
+## Quick Start
+1. In CoreBox, type `quick`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

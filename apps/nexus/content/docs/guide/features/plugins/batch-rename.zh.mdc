@@ -1,0 +1,24 @@
+# 批量重命名（`touch-batch-rename`）
+
+## 适用场景
+- 对文件做前后缀、替换、序号等批量重命名。
+
+## 触发方式
+- Feature ID：`batch-rename`
+- Commands：`rename / 批量重命名 / rename-files`
+
+## 核心能力
+- 文件批量重命名：前后缀、编号、正则替换
+- 支持平台：`win32, darwin, linux`
+
+## 配置与数据
+- 配置/数据文件：`last-rename.json`
+- 插件目录：`plugins/touch-batch-rename`
+
+## 权限说明
+- 必需：`fs.read, fs.write`
+
+## 快速上手
+1. 在 CoreBox 输入 `rename`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

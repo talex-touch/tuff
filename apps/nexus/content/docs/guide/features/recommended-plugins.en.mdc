@@ -1,0 +1,23 @@
+# Recommended Plugin Bundles
+
+This onboarding page helps new users set up a practical plugin stack in minutes.
+
+## Default Starter Bundle
+1. **Browser Open** (`touch-browser-open`) for URL launching.
+2. **Intelligence Ask** (`touch-intelligence`) for quick AI Q&A.
+3. **Workspace Scripts** (`touch-workspace-scripts`) for lint/test/build actions.
+4. **Quick Actions** (`touch-quick-actions`) for lock/mute/settings shortcuts.
+
+## Engineering Bundle
+- **Code Snippets** + **Text Snippets** for repeatable input.
+- **Batch Rename** for asset/file naming work.
+- **Window Manager / Window Presets** for desktop orchestration.
+- **Dev Toolbox** for team links and docs.
+
+## Content Ops Bundle
+- **Browser Bookmarks** for URL collections.
+- **Browser Open** for quick cross-channel checks.
+- **Intelligence Ask** for draft generation and rewriting.
+
+## Next Step
+- Open the [Built-in Plugin Catalog](./plugins/index.en.md) and drill down plugin by plugin.
