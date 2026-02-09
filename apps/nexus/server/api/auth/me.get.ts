@@ -1,5 +1,5 @@
 import { requireAuth } from '../../utils/auth'
-import { ensureDeviceForRequest, getUserById } from '../../utils/authStore'
+import { ensureDeviceForRequest, getUserById, listPasskeys } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -7,6 +7,9 @@ export default defineEventHandler(async (event) => {
   const user = await getUserById(event, userId)
   if (!user)
     return null
+
+  const passkeys = await listPasskeys(event, userId)
+
   return {
     id: user.id,
     email: user.email,
@@ -16,6 +19,7 @@ export default defineEventHandler(async (event) => {
     locale: user.locale,
     emailVerified: Boolean(user.emailVerified),
     emailState: user.emailState,
-    isRestricted: user.emailState !== 'verified'
+    isRestricted: user.emailState !== 'verified',
+    passkeyCount: passkeys.length,
   }
 })
