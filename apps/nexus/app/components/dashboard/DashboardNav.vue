@@ -24,7 +24,7 @@ watch(
 )
 
 const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
+  return String(user.value?.role || '').toLowerCase() === 'admin'
 })
 
 const sectionPaths: Record<string, string> = {

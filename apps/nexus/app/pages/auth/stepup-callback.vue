@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 definePageMeta({
@@ -33,7 +34,7 @@ async function startStepUp() {
     status.value = 'verifying'
     errorMessage.value = ''
 
-    const me = await $fetch<{ email?: string | null } | null>('/api/auth/me')
+    const me = await fetchCurrentUserProfile()
     const email = typeof me?.email === 'string' ? me.email : ''
 
     const options = await $fetch<any>(

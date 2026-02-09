@@ -1,17 +1,8 @@
 import { computed, watch } from 'vue'
 
-export interface AuthUserProfile {
-  id: string
-  email: string
-  name: string | null
-  image: string | null
-  role: string
-  locale: string | null
-  emailVerified: boolean
-  emailState: 'verified' | 'unverified' | 'missing'
-  isRestricted: boolean
-  passkeyCount?: number
-}
+import { fetchCurrentUserProfile, type CurrentUserProfile } from '~/composables/useCurrentUserApi'
+
+export interface AuthUserProfile extends CurrentUserProfile {}
 
 export function useAuthUser() {
   const { status } = useAuth()
@@ -29,15 +20,18 @@ export function useAuthUser() {
     }
     if (pendingState.value)
       return
+
     pendingState.value = true
     errorState.value = null
+
     try {
-      const data = await $fetch<AuthUserProfile | null>('/api/auth/me')
+      const data = await fetchCurrentUserProfile()
       userState.value = data ?? null
     }
     catch (error: any) {
       errorState.value = error?.data?.statusMessage || error?.message || 'Failed to load user.'
-      userState.value = null
+      if (!userState.value)
+        userState.value = null
     }
     finally {
       pendingState.value = false
@@ -48,7 +42,7 @@ export function useAuthUser() {
     () => status.value,
     (value) => {
       if (value === 'authenticated') {
-        fetchUser()
+        void fetchUser()
       }
       else {
         userState.value = null

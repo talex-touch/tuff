@@ -1,5 +1,6 @@
 import { watch } from 'vue'
 
+import { fetchCurrentUserProfile, patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 const LOCALE_STORAGE_KEY = 'tuff_locale_sync'
 
 export function useUserLocale() {
@@ -21,7 +22,7 @@ export function useUserLocale() {
     if (status.value !== 'authenticated')
       return
     try {
-      const me = await $fetch<{ locale?: unknown } | null>('/api/auth/me')
+      const me = await fetchCurrentUserProfile()
       const remoteLocale = typeof me?.locale === 'string' ? me.locale : null
       if (remoteLocale) {
         persistLocal(remoteLocale)
@@ -39,7 +40,7 @@ export function useUserLocale() {
     if (status.value !== 'authenticated')
       return
     try {
-      await $fetch('/api/auth/profile', { method: 'PATCH', body: { locale: newLocale } })
+      await patchCurrentUserProfile({ locale: newLocale })
     }
     catch (error) {
       console.error('[useUserLocale] Failed to save locale:', error)

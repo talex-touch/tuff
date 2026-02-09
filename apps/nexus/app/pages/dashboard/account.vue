@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
 import { buildOauthCallbackUrl, persistOauthContext, type OauthProvider } from '~/composables/useOauthContext'
+import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
 defineI18nRoute(false)
@@ -63,11 +64,8 @@ async function saveProfile() {
   savingProfile.value = true
   profileMessage.value = ''
   try {
-    await $fetch('/api/auth/profile', {
-      method: 'PATCH',
-      body: {
-        name: displayName.value.trim(),
-      },
+    await patchCurrentUserProfile({
+      name: displayName.value.trim(),
     })
     await refresh()
     profileMessage.value = t('dashboard.account.profileSaved', '已保存')

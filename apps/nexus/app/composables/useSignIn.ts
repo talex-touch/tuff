@@ -15,6 +15,7 @@ import {
 import { useAuthLoadingState } from '~/composables/useAuthState'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
+import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 type AuthStep = 'email' | 'login' | 'signup' | 'bind-email' | 'passkey' | 'oauth' | 'success'
 export type LoginMethod = 'passkey' | 'password' | 'magic' | 'github' | 'linuxdo'
 type TurnstileAction = 'login' | 'signup'
@@ -771,7 +772,7 @@ export function useSignIn() {
         return
       }
 
-      const profile = await $fetch<any>('/api/auth/me')
+      const profile = await fetchCurrentUserProfile()
       if (profile?.emailState === 'missing') {
         await clearOauthRuntime()
         step.value = 'bind-email'
