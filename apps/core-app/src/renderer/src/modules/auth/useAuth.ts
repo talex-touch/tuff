@@ -84,9 +84,50 @@ function applyLocalAuth(token?: string): void {
   writeLocalAuthUser(user, token)
 }
 
+interface RemoteUserProfilePayload {
+  id: string
+  email: string
+  name: string | null
+  image: string | null
+  role?: string | null
+  locale?: string | null
+  emailVerified?: boolean
+}
+
+function toAuthUserProfile(data: RemoteUserProfilePayload): AuthUser {
+  return {
+    id: data.id,
+    email: data.email,
+    name: data.name ?? data.email,
+    avatar: data.image ?? null,
+    role: data.role ?? null,
+    locale: data.locale ?? null,
+    emailVerified: data.emailVerified ?? false
+  }
+}
+
+async function patchRemoteUserProfile(
+  token: string,
+  payload: { name?: string | null; image?: string | null }
+): Promise<RemoteUserProfilePayload> {
+  const url = new URL('/api/v1/auth/profile', getAuthBaseUrl()).toString()
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`)
+  }
+  return (await response.json()) as RemoteUserProfilePayload
+}
+
 async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
   try {
-    const url = new URL('/api/auth/me', getAuthBaseUrl()).toString()
+    const url = new URL('/api/v1/auth/me', getAuthBaseUrl()).toString()
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`
@@ -95,24 +136,8 @@ async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
     if (!response.ok) {
       return null
     }
-    const data = (await response.json()) as {
-      id: string
-      email: string
-      name: string | null
-      image: string | null
-      role?: string | null
-      locale?: string | null
-      emailVerified?: boolean
-    }
-    return {
-      id: data.id,
-      email: data.email,
-      name: data.name ?? data.email,
-      avatar: data.image ?? null,
-      role: data.role ?? null,
-      locale: data.locale ?? null,
-      emailVerified: data.emailVerified ?? false
-    }
+    const data = (await response.json()) as RemoteUserProfilePayload
+    return toAuthUserProfile(data)
   } catch (error) {
     console.warn('[useAuth] Failed to fetch user profile', error)
     return null
@@ -280,7 +305,7 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
       await transport.send(SentryEvents.api.updateUser, { user: safeUser })
       try {
         const { updateSentryUserContext } = await import('~/modules/sentry/sentry-renderer')
-        updateSentryUserContext(nextUser as any)
+        updateSentryUserContext(safeUser)
       } catch {
         // ignore
       }
@@ -330,24 +355,12 @@ async function updateUserProfile(payload: {
     throw new Error('Not authenticated')
   }
 
-  const url = new URL('/api/auth/profile', getAuthBaseUrl()).toString()
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      name: payload.displayName ?? authState.user?.name ?? null
-    })
+  const data = await patchRemoteUserProfile(token, {
+    name: payload.displayName ?? authState.user?.name ?? null
   })
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
-  }
-  const data = (await response.json()) as AuthUser
   const nextUser: AuthUser = {
     ...authState.user,
-    ...data,
+    ...toAuthUserProfile(data),
     bio: payload.bio ?? authState.user?.bio ?? null
   }
   updateAuthState(nextUser, authState.sessionId)
@@ -382,23 +395,11 @@ async function updateUserAvatar(file: File): Promise<AuthUser | null> {
     throw new Error('Not authenticated')
   }
   const dataUrl = await fileToDataUrl(file)
-  const url = new URL('/api/auth/profile', getAuthBaseUrl()).toString()
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({ image: dataUrl })
-  })
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
-  }
-  const data = (await response.json()) as AuthUser
+  const data = await patchRemoteUserProfile(token, { image: dataUrl })
   const nextUser: AuthUser = {
     ...authState.user,
-    ...data,
-    avatar: data.avatar ?? dataUrl
+    ...toAuthUserProfile(data),
+    avatar: data.image ?? dataUrl
   }
   updateAuthState(nextUser, authState.sessionId)
   return nextUser
