@@ -386,7 +386,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
           startCalled
         })
         timer.end('Module failed', {
-          level: 'error',
+          level: 'warn',
           meta: { module: moduleName, phase: 'created' },
           error: createdResult.error
         })
@@ -404,7 +404,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
         startCalled
       })
       timer.end('Module failed', {
-        level: 'error',
+        level: 'warn',
         meta: { module: moduleName, phase: 'init' },
         error: initResult.error
       })
@@ -427,7 +427,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
           startCalled
         })
         timer.end('Module failed', {
-          level: 'error',
+          level: 'warn',
           meta: { module: moduleName, phase: 'start' },
           error: startResult.error
         })
@@ -546,7 +546,6 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     }
   ): Promise<void> {
     let stopAttempted = false
-    let destroyAttempted = false
 
     if (state.startCalled && typeof module.stop === 'function') {
       stopAttempted = true
@@ -561,7 +560,6 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       (state.createdCalled || state.initCalled || state.initOk) &&
       typeof module.destroy === 'function'
     ) {
-      destroyAttempted = true
       await this.runLifecyclePhase('destroy', () => module.destroy(destroyCtx), {
         ...meta,
         reason: 'error',

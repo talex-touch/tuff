@@ -95,7 +95,7 @@ describe('device-attest', () => {
     expect(appSettingMock.security.machineSeedMigratedAt).toBeTruthy()
     expect(appSettingMock.security.machineCodeHash).toHaveLength(64)
 
-    const [url, init] = fetchMock.mock.calls[0] as [RequestInfo | URL, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit]
     expect(String(url)).toBe('https://nexus.example/api/v1/devices/attest')
     const headers = new Headers(init.headers)
     expect(headers.get('authorization')).toBe('Bearer token-1')

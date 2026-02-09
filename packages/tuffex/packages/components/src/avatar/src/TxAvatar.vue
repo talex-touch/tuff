@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AvatarProps } from './types'
+import type { CSSProperties } from 'vue'
 import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
 
@@ -74,8 +75,8 @@ const sizeVars = computed(() => {
   }
 })
 
-const customStyle = computed(() => {
-  const style: Record<string, string> = {
+const customStyle = computed<CSSProperties>(() => {
+  const style: CSSProperties = {
     ...sizeVars.value,
   }
 

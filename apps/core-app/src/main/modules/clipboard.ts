@@ -668,8 +668,8 @@ export class ClipboardModule extends BaseModule {
     }
 
     const lowBatteryPolicy = settings.lowBatteryPolicy
-    if (lowBatteryPolicy?.enable !== false && this.isLowBatteryState()) {
-      return this.parseLowBatteryInterval(lowBatteryPolicy.interval) * 1000
+    if (this.isLowBatteryState() && (lowBatteryPolicy?.enable ?? true)) {
+      return this.parseLowBatteryInterval(lowBatteryPolicy?.interval) * 1000
     }
 
     return interval * 1000

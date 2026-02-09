@@ -14,6 +14,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { defaultDownloadConfig, DownloadStatus } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import type { TuffEvent } from '@talex-touch/utils/transport'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { desc, eq } from 'drizzle-orm'
@@ -867,13 +868,16 @@ export class DownloadCenterModule extends BaseModule {
 
     const tx = this.transport
 
-    const registerSafeHandler = <TExtra extends Record<string, unknown> = Record<string, never>>(
-      event: { toEventName: () => string },
-      handler: (payload: any) => Promise<void | TExtra> | void | TExtra
+    const registerSafeHandler = <
+      TReq,
+      TExtra extends Record<string, unknown> = Record<string, never>
+    >(
+      event: TuffEvent<TReq, unknown>,
+      handler: (payload: TReq) => Promise<void | TExtra> | void | TExtra
     ) => {
       return tx.on(
-        event as any,
-        safeOpHandler<any, TExtra>(
+        event,
+        safeOpHandler<TReq, TExtra>(
           async (payload) => {
             return await handler(payload)
           },
@@ -1357,7 +1361,7 @@ export class DownloadCenterModule extends BaseModule {
    * Diagnostic method to help troubleshoot download issues
    */
   async diagnose(): Promise<{
-    health: ReturnType<typeof this.getHealthStatus>
+    health: ReturnType<DownloadCenterModule['getHealthStatus']>
     taskDetails: Array<{
       id: string
       status: string
@@ -1415,13 +1419,27 @@ export class DownloadCenterModule extends BaseModule {
     // Get recent errors from error logger
     const recentErrors: Array<{ timestamp: number; message: string; taskId?: string }> = []
     try {
-      const errorLogs = await this.errorLogger.getRecentErrors(10)
+      const errorLogs = await this.errorLogger.readLogs(10)
+      const now = Date.now()
       recentErrors.push(
-        ...errorLogs.map((log) => ({
-          timestamp: log.timestamp,
-          message: log.message,
-          taskId: log.metadata?.taskId
-        }))
+        ...errorLogs
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            const match = line.match(
+              /^\[(?<timestamp>[^\]]+)\]\s+\[(?<level>[^\]]+)\]\s*(?<message>.*)$/
+            )
+            if (!match?.groups) {
+              return { timestamp: now, message: line }
+            }
+
+            const parsedTime = Date.parse(match.groups.timestamp)
+            return {
+              timestamp: Number.isNaN(parsedTime) ? now : parsedTime,
+              message: match.groups.message || line
+            }
+          })
       )
     } catch (error) {
       console.warn('[DownloadCenter] Failed to get recent errors:', error)

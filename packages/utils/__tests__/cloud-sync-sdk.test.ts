@@ -13,7 +13,7 @@ const createJsonResponse = (payload: unknown, status = 200) => new Response(
 )
 
 const createBinaryResponse = (payload: Uint8Array, status = 200, headers?: Record<string, string>) => new Response(
-  payload,
+  new Uint8Array(payload).buffer,
   {
     status,
     headers: { 'content-type': 'application/octet-stream', ...(headers ?? {}) },

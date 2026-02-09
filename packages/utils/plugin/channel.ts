@@ -26,7 +26,7 @@ type PluginWindow = Window & {
 }
 
 function getPluginWindow(): PluginWindow | undefined {
-  return hasWindow() ? (window as PluginWindow) : undefined
+  return hasWindow() ? (window as unknown as PluginWindow) : undefined
 }
 
 // 使用惰性解析避免在打包阶段静态引入 electron

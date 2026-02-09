@@ -298,7 +298,7 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
       const safeUser = nextUser
         ? {
             id: nextUser.id,
-            username: nextUser.name ?? null,
+            username: nextUser.name ?? undefined,
             emailAddresses: nextUser.email ? [{ emailAddress: nextUser.email }] : []
           }
         : null

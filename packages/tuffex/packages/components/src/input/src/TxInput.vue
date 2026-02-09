@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { StyleValue } from 'vue'
 import { computed, ref, useAttrs } from 'vue'
 
 defineOptions({
@@ -41,6 +42,8 @@ const inputAttrs = computed(() => {
   const { class: _class, style: _style, ...rest } = attrs
   return rest
 })
+
+const wrapperStyle = computed(() => attrs.style as StyleValue)
 
 const inputValue = computed({
   get: () => props.modelValue ?? '',
@@ -92,7 +95,7 @@ defineExpose({
       },
       attrs.class,
     ]"
-    :style="attrs.style"
+    :style="wrapperStyle"
   >
     <slot name="prefix" />
 
