@@ -121,26 +121,60 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           DIST_DIR="apps/core-app/dist"
-          mkdir -p "$DIST_DIR/release"
+          RELEASE_DIR="$DIST_DIR/release"
+          mkdir -p "$RELEASE_DIR"
+
+          find_first_file() {
+            local pattern="$1"
+            find "$DIST_DIR" -type f -name "$pattern" | head -n 1 || true
+          }
+
           case "${{ matrix.os }}" in
             windows-latest)
-              SRC=$(ls "$DIST_DIR"/*-setup.exe | head -n 1)
-              DEST="$DIST_DIR/release/tuff-core-${VERSION}-win32-x64-setup.exe"
+              SRC=$(find_first_file "*-setup.exe")
+              if [ -z "$SRC" ]; then
+                echo "No Windows installer (*.exe) found in $DIST_DIR"
+                exit 1
+              fi
+              DEST="$RELEASE_DIR/tuff-core-${VERSION}-win32-x64-setup.exe"
               mv "$SRC" "$DEST"
               ;;
             macos-latest)
-              SRC=$(ls "$DIST_DIR"/*.dmg | head -n 1)
-              DEST="$DIST_DIR/release/tuff-core-${VERSION}-darwin-arm64.dmg"
-              mv "$SRC" "$DEST"
+              DMG_SRC=$(find_first_file "*.dmg")
+              if [ -n "$DMG_SRC" ]; then
+                mv "$DMG_SRC" "$RELEASE_DIR/tuff-core-${VERSION}-darwin-arm64.dmg"
+              fi
+
+              ZIP_SRC=$(find "$DIST_DIR" -type f \( -name "*mac*.zip" -o -name "*darwin*.zip" \) | head -n 1 || true)
+              if [ -n "$ZIP_SRC" ]; then
+                mv "$ZIP_SRC" "$RELEASE_DIR/tuff-core-${VERSION}-darwin-arm64.zip"
+              fi
+
+              if [ -z "$DMG_SRC" ] && [ -z "$ZIP_SRC" ]; then
+                APP_SRC=$(find "$DIST_DIR" -type d -name "*.app" -path "*/mac-*/*.app" | head -n 1 || true)
+                if [ -n "$APP_SRC" ]; then
+                  DEST_ZIP="$RELEASE_DIR/tuff-core-${VERSION}-darwin-arm64.zip"
+                  echo "No dmg/zip found, packaging app bundle: $APP_SRC"
+                  ditto -c -k --sequesterRsrc --keepParent "$APP_SRC" "$DEST_ZIP"
+                else
+                  echo "No macOS artifacts found (.dmg/.zip/.app) in $DIST_DIR"
+                  exit 1
+                fi
+              fi
               ;;
             ubuntu-latest)
-              APPIMAGE_SRC=$(ls "$DIST_DIR"/*.AppImage 2>/dev/null | head -n 1 || true)
+              APPIMAGE_SRC=$(find_first_file "*.AppImage")
               if [ -n "$APPIMAGE_SRC" ]; then
-                mv "$APPIMAGE_SRC" "$DIST_DIR/release/tuff-core-${VERSION}-linux-x64.AppImage"
+                mv "$APPIMAGE_SRC" "$RELEASE_DIR/tuff-core-${VERSION}-linux-x64.AppImage"
               fi
-              DEB_SRC=$(ls "$DIST_DIR"/*.deb 2>/dev/null | head -n 1 || true)
+              DEB_SRC=$(find_first_file "*.deb")
               if [ -n "$DEB_SRC" ]; then
-                mv "$DEB_SRC" "$DIST_DIR/release/tuff-core-${VERSION}-linux-x64.deb"
+                mv "$DEB_SRC" "$RELEASE_DIR/tuff-core-${VERSION}-linux-x64.deb"
+              fi
+
+              if [ -z "$APPIMAGE_SRC" ] && [ -z "$DEB_SRC" ]; then
+                echo "No Linux artifacts found (.AppImage/.deb) in $DIST_DIR"
+                exit 1
               fi
               ;;
           esac
