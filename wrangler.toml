@@ -1,5 +1,6 @@
 name = "tuff"
-compatibility_date = "2024-08-14"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "apps/nexus/dist"
 
 [[d1_databases]]
@@ -13,6 +14,8 @@ bucket_name = "tuff-nexus-imgable-prod"
 preview_bucket_name = "tuff-nexus-imgable-dev"
 
 [env.preview]
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-dev"

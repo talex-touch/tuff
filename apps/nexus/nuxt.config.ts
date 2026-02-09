@@ -143,7 +143,7 @@ export default defineNuxtConfig({
     typedPages: true,
   },
 
-  compatibilityDate: '2024-08-14',
+  compatibilityDate: '2024-09-23',
 
   nitro: {
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',

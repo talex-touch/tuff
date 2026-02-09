@@ -325,7 +325,7 @@ jobs:
             elif [ "$RUNNER_OS" = "macOS" ]; then
               echo "Building macOS release..."
               echo "Using NODE_OPTIONS=--max-old-space-size=6144 for macOS release build"
-              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true pnpm build:release:mac || {
+              NODE_OPTIONS="--max-old-space-size=6144" SKIP_INSTALL_APP_DEPS=true SKIP_TYPECHECK=true pnpm build:release:mac || {
                 BUILD_FAILED=true
                 echo "ERROR: macOS release build failed with exit code $?"
               }

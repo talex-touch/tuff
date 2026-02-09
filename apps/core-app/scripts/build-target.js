@@ -1,5 +1,5 @@
 /* eslint-disable */
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -191,6 +191,36 @@ function verifyNativeOcrModule(strict) {
   console.warn(`Warning: ${message}`);
 }
 
+function ensureBuildNodeOptions(buildEnv) {
+  const defaultHeapSize = process.env.BUILD_HEAP_MB || '6144';
+  const hasHeapLimit = /--max-old-space-size(?:=|\s+)\d+/.test(buildEnv.NODE_OPTIONS || '');
+
+  if (!hasHeapLimit) {
+    const currentOptions = buildEnv.NODE_OPTIONS || '';
+    buildEnv.NODE_OPTIONS = `${currentOptions} --max-old-space-size=${defaultHeapSize}`.trim();
+    console.log(`[build-target] Injected NODE_OPTIONS: ${buildEnv.NODE_OPTIONS}`);
+  } else {
+    console.log(`[build-target] Using NODE_OPTIONS from environment: ${buildEnv.NODE_OPTIONS}`);
+  }
+
+  try {
+    const heapLimitMb = execFileSync(
+      process.execPath,
+      [
+        '-e',
+        'const v8=require("node:v8");process.stdout.write(String(Math.round(v8.getHeapStatistics().heap_size_limit/1024/1024)))'
+      ],
+      { env: buildEnv, encoding: 'utf8' }
+    ).trim();
+
+    if (heapLimitMb) {
+      console.log(`[build-target] Effective V8 heap limit: ${heapLimitMb} MB`);
+    }
+  } catch (error) {
+    console.warn(`[build-target] Failed to detect V8 heap limit: ${error.message}`);
+  }
+}
+
 function build() {
   const cleanupTempLock = ensureLocalPnpmLockfile();
   try {
@@ -310,6 +340,7 @@ function build() {
     if (finalVersion !== packageVersion) {
       buildEnv.APP_VERSION = finalVersion;
     }
+    ensureBuildNodeOptions(buildEnv);
     execSync(buildCmd, {
       stdio: 'inherit',
       env: buildEnv
