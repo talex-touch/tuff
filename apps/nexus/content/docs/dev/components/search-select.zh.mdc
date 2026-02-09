@@ -18,21 +18,84 @@ import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelec
 
 ## 基础用法
 
-<DemoBlock title="SearchSelect" :code="SearchSelectBasicDemoSource">
-  <template #preview>
-    <SearchSelectBasicDemo />
+### SearchSelect
+:::TuffDemoWrapper{demo="SearchSelectSearchSelectDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref<string | number>('')
+
+  const options = [
+    { value: 'foo', label: 'Foo' },
+    { value: 'bar', label: 'Bar' },
+    { value: 'baz', label: 'Baz' },
+    { value: 'disabled', label: 'Disabled', disabled: true },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
+      <TxSearchSelect v-model="value" :options="options" placeholder="Search and pick" />
+      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+        Value: {{ value }}
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 远程搜索
 
 `remote=true` 时，将在输入变化（防抖）与 Enter 时触发 `search` 事件，你需要外部请求并将结果写回 `options`。
 
-<DemoBlock title="SearchSelect (remote)" :code="SearchSelectRemoteDemoSource">
-  <template #preview>
-    <SearchSelectRemoteDemo />
+### SearchSelect (remote)
+:::TuffDemoWrapper{demo="SearchSelectSearchSelectRemoteDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref<string | number>('')
+  const query = ref('')
+  const loading = ref(false)
+
+  const options = ref<Array<{ value: string, label: string }>>([])
+
+  async function onSearch(q: string) {
+    query.value = q
+    loading.value = true
+    await new Promise(resolve => setTimeout(resolve, 220))
+
+    const base = Array.from({ length: 18 }).map((_, i) => `Result ${i + 1}`)
+    const list = base
+      .filter(s => s.toLowerCase().includes(q.trim().toLowerCase()))
+      .slice(0, 12)
+
+    options.value = list.map(s => ({ value: s, label: s }))
+    loading.value = false
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 10px; width: 320px;">
+      <TxSearchSelect
+        v-model="value"
+        remote
+        :loading="loading"
+        :options="options"
+        placeholder="Type to remote-search"
+        @search="onSearch"
+      />
+
+      <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+        Query: {{ query || '-' }}
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 注意事项
 
@@ -74,10 +137,13 @@ import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelec
 
 ### Types
 
-```ts
-export interface TxSearchSelectOption {
-  value: string | number
-  label: string
-  disabled?: boolean
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  export interface TxSearchSelectOption {
+    value: string | number
+    label: string
+    disabled?: boolean
+  }
+---
+:::

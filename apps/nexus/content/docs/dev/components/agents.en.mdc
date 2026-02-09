@@ -47,49 +47,32 @@ const agents = [
 
 ## 基础用法
 
-<DemoBlock title="AgentsList">
-<template #preview>
-<div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
-  <div style="display: flex; gap: 8px;">
-    <TxButton @click="loading = !loading">Toggle loading</TxButton>
-  </div>
+### AgentsList
+:::TuffDemoWrapper{demo="AgentsAgentsListDemo" code-lang="vue"}
+---
+code: |
+  &lt;script setup lang="ts"&gt;
+  import { ref } from 'vue'
 
-  <div style="height: 360px;">
+  const selectedId = ref<string | null>('chat')
+  const loading = ref(false)
+  const agents = [
+    { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
+    { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
+    { id: 'disabled', name: 'Disabled Agent', disabled: true },
+  ]
+  &lt;/script&gt;
+
+  <template>
     <TxAgentsList
       :agents="agents"
       :loading="loading"
       :selected-id="selectedId"
       @select="(id) => (selectedId = id)"
     />
-  </div>
-</div>
-</template>
-
-<template #code>
-```vue
-&lt;script setup lang="ts"&gt;
-import { ref } from 'vue'
-
-const selectedId = ref<string | null>('chat')
-const loading = ref(false)
-const agents = [
-  { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
-  { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
-  { id: 'disabled', name: 'Disabled Agent', disabled: true },
-]
-&lt;/script&gt;
-
-<template>
-  <TxAgentsList
-    :agents="agents"
-    :loading="loading"
-    :selected-id="selectedId"
-    @select="(id) => (selectedId = id)"
-  />
-</template>
-```
-</template>
-</DemoBlock>
+  </template>
+---
+:::
 
 ## API
 

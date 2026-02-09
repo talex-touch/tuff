@@ -181,6 +181,8 @@ export class TouchStorage<T extends object> {
   #currentVersion = 0
   #isRemoteUpdate = false
   #hydrated = false
+  readonly #hydratedPromise: Promise<void>
+  #resolveHydratedPromise: (() => void) | null = null
   #pendingSave = false
   #localDirty = false
   #lastSyncedSnapshot: T | null = null
@@ -231,6 +233,9 @@ export class TouchStorage<T extends object> {
     this.originalData = initData
     this.data = reactive({ ...initData }) as UnwrapNestedRefs<T>
     this.#lastSyncedSnapshot = cloneValue(initData) as T
+    this.#hydratedPromise = new Promise((resolve) => {
+      this.#resolveHydratedPromise = resolve
+    })
 
     if (onUpdate)
       this._onUpdate.push(onUpdate)
@@ -267,6 +272,15 @@ export class TouchStorage<T extends object> {
 
   public initializeChannel(): void {
     this.#initializeChannel()
+  }
+
+  #notifyHydrated(): void {
+    if (!this.#hydrated)
+      return
+    if (this.#resolveHydratedPromise) {
+      this.#resolveHydratedPromise()
+      this.#resolveHydratedPromise = null
+    }
   }
 
   async #getVersionedAsync(): Promise<StorageGetVersionedResponse | null> {
@@ -346,49 +360,57 @@ export class TouchStorage<T extends object> {
     if (!channel && !transport) {
       return
     }
+    try {
+      const versionedResult = await this.#getVersionedAsync()
+      if (versionedResult) {
+        const shouldApply = versionedResult.version > this.#currentVersion || !this.#hydrated
+        if (shouldApply) {
+          const patch = this.#localDirty
+            ? buildPatch(this.#lastSyncedSnapshot ?? {}, toRaw(this.data))
+            : null
+          const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
+          const remoteData = (versionedResult.data ?? {}) as Partial<T>
 
-    const versionedResult = await this.#getVersionedAsync()
-    if (versionedResult) {
-      const shouldApply = versionedResult.version > this.#currentVersion || !this.#hydrated
-      if (shouldApply) {
-        const patch = this.#localDirty
-          ? buildPatch(this.#lastSyncedSnapshot ?? {}, toRaw(this.data))
-          : null
-        const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
-        const remoteData = (versionedResult.data ?? {}) as Partial<T>
+          this.#currentVersion = versionedResult.version
+          this.#isRemoteUpdate = true
+          this.assignData(remoteData, true, true)
+          if (patchHasChanges && patch) {
+            this.#applyPatchSilently(patch)
+            this.#localDirty = true
+          }
+          else {
+            this.#localDirty = false
+          }
+          this.#isRemoteUpdate = false
 
-        this.#currentVersion = versionedResult.version
-        this.#isRemoteUpdate = true
-        this.assignData(remoteData, true, true)
-        if (patchHasChanges && patch) {
-          this.#applyPatchSilently(patch)
-          this.#localDirty = true
+          this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+          this.#hydrated = true
+          this.#notifyHydrated()
+          if (this.#pendingSave || patchHasChanges) {
+            this.#pendingSave = false
+            void this.saveToRemote({ force: true })
+          }
         }
-        else {
-          this.#localDirty = false
-        }
-        this.#isRemoteUpdate = false
-
-        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
-        this.#hydrated = true
-        if (this.#pendingSave || patchHasChanges) {
-          this.#pendingSave = false
-          void this.saveToRemote({ force: true })
-        }
+        return
       }
-      return
-    }
 
-    const result = await this.#getAsync()
-    this.#currentVersion = Math.max(this.#currentVersion, 1)
-    this.#isRemoteUpdate = true
-    this.assignData(result as Partial<T>, true, true)
-    this.#isRemoteUpdate = false
-    this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
-    this.#hydrated = true
-    if (this.#pendingSave) {
-      this.#pendingSave = false
-      void this.saveToRemote({ force: true })
+      const result = await this.#getAsync()
+      this.#currentVersion = Math.max(this.#currentVersion, 1)
+      this.#isRemoteUpdate = true
+      this.assignData(result as Partial<T>, true, true)
+      this.#isRemoteUpdate = false
+      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+      this.#hydrated = true
+      this.#notifyHydrated()
+      if (this.#pendingSave) {
+        this.#pendingSave = false
+        void this.saveToRemote({ force: true })
+      }
+    }
+    catch (error) {
+      console.error(`[TouchStorage] Failed to load "${this.#qualifiedName}" from remote:`, error)
+      this.#hydrated = true
+      this.#notifyHydrated()
     }
   }
 
@@ -402,6 +424,16 @@ export class TouchStorage<T extends object> {
    */
   getQualifiedName(): string {
     return this.#qualifiedName
+  }
+
+  isHydrated(): boolean {
+    return this.#hydrated
+  }
+
+  whenHydrated(): Promise<void> {
+    if (this.#hydrated)
+      return Promise.resolve()
+    return this.#hydratedPromise
   }
 
   /**
@@ -667,6 +699,7 @@ export class TouchStorage<T extends object> {
       this.#isRemoteUpdate = false
       this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
       this.#hydrated = true
+      this.#notifyHydrated()
       return this
     }
 
@@ -676,6 +709,7 @@ export class TouchStorage<T extends object> {
     this.#isRemoteUpdate = false
     this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
     this.#hydrated = true
+    this.#notifyHydrated()
 
     return this
   }
@@ -816,13 +850,18 @@ function setByPath(target: Record<string, unknown>, path: string[], value: unkno
   let cursor: Record<string, unknown> = target
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]
+    if (!key)
+      continue
     const next = cursor[key]
     if (!isPlainObject(next)) {
       cursor[key] = {}
     }
     cursor = cursor[key] as Record<string, unknown>
   }
-  cursor[path[path.length - 1]] = value
+  const lastKey = path[path.length - 1]
+  if (!lastKey)
+    return
+  cursor[lastKey] = value
 }
 
 function unsetByPath(target: Record<string, unknown>, path: string[]): void {
@@ -832,13 +871,18 @@ function unsetByPath(target: Record<string, unknown>, path: string[]): void {
   let cursor: Record<string, unknown> = target
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i]
+    if (!key)
+      return
     const next = cursor[key]
     if (!isPlainObject(next)) {
       return
     }
     cursor = next as Record<string, unknown>
   }
-  delete cursor[path[path.length - 1]]
+  const lastKey = path[path.length - 1]
+  if (!lastKey)
+    return
+  delete cursor[lastKey]
 }
 
 function isEqual(left: unknown, right: unknown): boolean {

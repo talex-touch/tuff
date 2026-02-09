@@ -107,8 +107,8 @@ export function isIndexableFile(
 
   // 检查文件名前缀和后缀
   if (fileName) {
-    const firstChar = fileName[0]
-    const lastChar = fileName[fileName.length - 1]
+    const firstChar = fileName.charAt(0)
+    const lastChar = fileName.charAt(fileName.length - 1)
 
     if (BLACKLISTED_FILE_PREFIXES.has(firstChar))
       return false

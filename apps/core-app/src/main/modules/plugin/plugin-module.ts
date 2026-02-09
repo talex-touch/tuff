@@ -1062,6 +1062,8 @@ function createPluginModuleInternal(
     }
   }
 
+  let readyFired = false
+
   const __init__ = (): void => {
     void (async () => {
       const exists = await fse.pathExists(pluginPath)
@@ -1227,6 +1229,11 @@ function createPluginModuleInternal(
           await unloadPlugin(pluginName)
         },
         onReady: async () => {
+          if (readyFired) {
+            logDebug('File watcher ready event already processed, skipping duplicate')
+            return
+          }
+          readyFired = true
           logModuleInfo('File watcher ready for changes.', pluginPath)
           logDebug(`Waiting for ${initialLoadPromises.length} initial plugin load operation(s)...`)
           await Promise.allSettled(initialLoadPromises)
@@ -1280,6 +1287,26 @@ export class PluginModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
+
+    const requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
+      const sendMain = (
+        channel as { sendMain?: (event: string, arg?: unknown) => Promise<unknown> }
+      ).sendMain
+      if (!sendMain) {
+        pluginLog.warn(`[PluginModule] TouchChannel sendMain unavailable for ${eventName}`)
+        return null
+      }
+      try {
+        const response = await sendMain(eventName)
+        if (response && typeof response === 'object' && 'data' in response) {
+          return (response as { data?: T }).data ?? null
+        }
+        return (response as T) ?? null
+      } catch (error) {
+        pluginLog.warn(`[PluginModule] Failed to resolve ${eventName}`, { error })
+        return null
+      }
+    }
 
     TouchPlugin.setTransport(this.transport)
 
@@ -1789,6 +1816,15 @@ export class PluginModule extends BaseModule {
           console.error('Error in plugin:performance:get-paths handler:', error)
           throw error instanceof Error ? error : new Error('Unknown error')
         }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(defineRawEvent('account:get-auth-token'), async () => {
+        return requestRendererValue<string>('account:get-auth-token')
+      }),
+      transport.on(defineRawEvent('account:get-device-id'), async () => {
+        return requestRendererValue<string>('account:get-device-id')
       })
     )
 

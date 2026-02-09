@@ -27,6 +27,7 @@ import {
 } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import {
+  INTERNAL_SYSTEM_OCR_PROVIDER_ID,
   ensureAiConfigLoaded,
   getCapabilityOptions,
   getCapabilityPrompt
@@ -803,10 +804,19 @@ class OcrService {
       }
     }
 
+    const allowedProviderIds = [
+      INTERNAL_SYSTEM_OCR_PROVIDER_ID,
+      ...(capabilityOptions.allowedProviderIds ?? [])
+    ].filter((id, index, all) => Boolean(id) && all.indexOf(id) === index)
+
+    const modelPreference = ['system-ocr', ...(capabilityOptions.modelPreference ?? [])].filter(
+      (model, index, all) => Boolean(model) && all.indexOf(model) === index
+    )
+
     try {
       const invocation = await ai.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, {
-        modelPreference: capabilityOptions.modelPreference,
-        allowedProviderIds: capabilityOptions.allowedProviderIds
+        modelPreference,
+        allowedProviderIds
       })
       await this.persistAgentSuccess(job, invocation)
     } catch (error) {

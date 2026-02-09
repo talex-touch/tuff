@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Layout Placeholder" description="The wrapper controls the size." code-lang="vue"}
+### Layout Placeholder
+The wrapper controls the size.
+:::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -24,14 +26,7 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <div style="width: 100%; height: 240px;">
-    <tx-layout-skeleton />
-  </div>
-</div>
-::
-
+:::
 ## Basic Usage
 ::TuffCodeBlock{lang="vue"}
 ---
@@ -60,7 +55,9 @@ rows:
 ::
 
 ## Composite Patterns
-::TuffDemo{title="Panel Placeholder" description="Skeleton paired with card containers." code-lang="vue"}
+### Panel Placeholder
+Skeleton paired with card containers.
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -69,10 +66,4 @@ code: |
     </TxCard>
   </template>
 ---
-#preview
-<div class="tuff-demo-row" style="width: 100%;">
-  <tx-card style="width: 100%;">
-    <tx-layout-skeleton />
-  </tx-card>
-</div>
-::
+:::

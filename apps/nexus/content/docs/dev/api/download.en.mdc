@@ -24,23 +24,26 @@ Use this SDK when you need progress-aware downloads in the renderer without mana
 
 ## Usage
 
-```typescript
-import { useDownloadSdk } from '@talex-touch/utils/renderer'
-
-const download = useDownloadSdk()
-const res = await download.addTask({
-  url: 'https://example.com/file.zip',
-  destination: '/path/to/save',
-  filename: 'file.zip',
-  priority: 50,
-  module: 'resource_download',
-  metadata: { hidden: true }
-})
-
-if (!res.success) {
-  throw new Error(res.error || 'Download failed')
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDownloadSdk } from '@talex-touch/utils/renderer'
+  
+  const download = useDownloadSdk()
+  const res = await download.addTask({
+    url: 'https://example.com/file.zip',
+    destination: '/path/to/save',
+    filename: 'file.zip',
+    priority: 50,
+    module: 'resource_download',
+    metadata: { hidden: true }
+  })
+  
+  if (!res.success) {
+    throw new Error(res.error || 'Download failed')
+  }
+---
+:::
 
 ## Examples
 

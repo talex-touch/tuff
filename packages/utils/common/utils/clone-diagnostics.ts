@@ -85,7 +85,10 @@ export function findCloneIssue(
           }
           const limit = Math.min(entries.length, MAX_INSPECT_ITEMS)
           for (let i = 0; i < limit; i += 1) {
-            const [key, entryValue] = entries[i]
+            const entry = entries[i]
+            if (!entry)
+              continue
+            const [key, entryValue] = entry
             const result = inspect(entryValue, `${path}.${key}`, depth + 1)
             if (result) return result
           }

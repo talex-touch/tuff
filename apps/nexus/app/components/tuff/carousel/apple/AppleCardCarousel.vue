@@ -91,7 +91,10 @@ provide(CarouselKey, {
       </div>
     </div>
     <div class="mr-10 flex justify-end gap-2">
-      <button
+      <TxButton
+        variant="bare"
+        circle
+        native-type="button"
         class="bg-black-900 relative z-40 size-10 flex cursor-pointer items-center justify-center rounded-full disabled:opacity-75"
         :disabled="!canScrollLeft"
         @click="scrollLeft"
@@ -100,8 +103,11 @@ provide(CarouselKey, {
           name="i-carbon-arrow-left"
           class="text-white-500 size-6"
         />
-      </button>
-      <button
+      </TxButton>
+      <TxButton
+        variant="bare"
+        circle
+        native-type="button"
         class="bg-black-900 relative z-40 size-10 flex cursor-pointer items-center justify-center rounded-full disabled:opacity-75"
         :disabled="!canScrollRight"
         @click="scrollRight"
@@ -110,7 +116,7 @@ provide(CarouselKey, {
           name="i-carbon-arrow-right"
           class="text-white-500 size-6"
         />
-      </button>
+      </TxButton>
     </div>
   </div>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
 
 const query = ref('')
@@ -17,8 +18,32 @@ const isComponentDoc = computed(() => {
   const path = typeof docMetaState.value?.path === 'string' ? docMetaState.value.path : ''
   return path.includes('/docs/dev/components/')
 })
-const isVerified = computed(() => docMetaState.value?.verified === true)
-const showAiNotice = computed(() => isComponentDoc.value && !isVerified.value)
+const SYNC_STATUS_ALIASES: Record<string, 'not_started' | 'in_progress' | 'migrated' | 'verified'> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+const normalizedSyncStatus = computed(() => {
+  if (docMetaState.value?.verified === true)
+    return 'verified'
+  const raw = typeof docMetaState.value?.syncStatus === 'string'
+    ? docMetaState.value.syncStatus.trim()
+    : ''
+  return SYNC_STATUS_ALIASES[raw] ?? 'not_started'
+})
+
+const isVerified = computed(() => normalizedSyncStatus.value === 'verified')
+const showAiNotice = computed(() => (
+  isComponentDoc.value
+  && !isVerified.value
+  && normalizedSyncStatus.value === 'migrated'
+))
 const aiTitle = computed(() => (locale.value === 'zh' ? 'AI Generated' : 'AI Generated'))
 const aiDescription = computed(() => (locale.value === 'zh'
   ? 'AI 生成内容，仅供参考。最终以 Verified 文档为准。'
@@ -27,7 +52,7 @@ const aiDescription = computed(() => (locale.value === 'zh'
 
 function handleAsk() {
   const text = query.value.trim()
-  if (!text || typeof window === 'undefined')
+  if (!text || !hasWindow())
     return
   const url = `https://github.com/talex-touch/tuff/discussions/new?category=Q%26A&title=${encodeURIComponent(text)}`
   window.open(url, '_blank', 'noopener')
@@ -55,15 +80,18 @@ function handleAsk() {
         Get instant help with component implementation.
       </p>
       <form class="docs-aside-card__field" @submit.prevent="handleAsk">
-        <input
-          v-model="query"
-          type="text"
-          placeholder="Ask docs..."
-          class="docs-aside-card__input"
-        >
-        <button type="submit" class="docs-aside-card__send" aria-label="Ask Zen Assistant">
-          <span class="i-carbon-arrow-right" />
-        </button>
+        <TuffInput v-model="query" placeholder="Ask docs..." clearable>
+          <template #suffix>
+            <TxButton
+              circle
+              size="small"
+              variant="ghost"
+              native-type="submit"
+              icon="i-carbon-arrow-right"
+              aria-label="Ask Zen Assistant"
+            />
+          </template>
+        </TuffInput>
       </form>
     </div>
 
@@ -149,45 +177,6 @@ function handleAsk() {
   position: relative;
 }
 
-.docs-aside-card__input {
-  width: 100%;
-  border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 1);
-  padding: 10px 36px 10px 14px;
-  font-size: 13px;
-  background: rgba(248, 250, 252, 0.9);
-  color: rgba(15, 23, 42, 0.9);
-  outline: none;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.docs-aside-card__input:focus {
-  border-color: rgba(147, 197, 253, 0.9);
-  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.25);
-}
-
-.docs-aside-card__send {
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: rgba(148, 163, 184, 0.9);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  transform: translateY(-50%);
-}
-
-.docs-aside-card__send:hover {
-  background: rgba(226, 232, 240, 0.7);
-  color: rgba(71, 85, 105, 0.9);
-}
 
 .docs-aside-card__list {
   list-style: none;

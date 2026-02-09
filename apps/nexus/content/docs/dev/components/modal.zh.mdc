@@ -9,14 +9,13 @@ syncStatus: migrated
 
 用于简短任务或确认操作的模态窗口。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-</script>
-
 ## 基础用法
-::TuffDemo{title="模态框" description="点击按钮打开模态窗口。" code-lang="vue"}
+
+### 模态框
+
+点击按钮打开模态窗口。
+
+::TuffDemoWrapper{demo="ModalBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -36,18 +35,7 @@ code: |
     </TxModal>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-button variant="primary" @click="open = true">打开模态框</tx-button>
-  <tx-modal v-model="open" title="快速操作">
-    <p>在这里让用户完成一个小任务。</p>
-    <template #footer>
-      <tx-button variant="ghost" @click="open = false">取消</tx-button>
-      <tx-button variant="primary" @click="open = false">确认</tx-button>
-    </template>
-  </tx-modal>
-</div>
-:::
+::
 
 ## API（Lite）
 ::TuffPropsTable

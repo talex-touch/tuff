@@ -10,7 +10,9 @@ syncStatus: migrated
 用于展示计数或状态提示。
 
 ## 基础用法
-::TuffDemo{title="徽标样式" description="数量、文本与点状提示。" code-lang="vue"}
+### 徽标样式
+数量、文本与点状提示。
+:::TuffDemoWrapper{demo="BadgeBadgeVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -20,15 +22,7 @@ code: |
     <TxBadge dot variant="error" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-badge :value="8" />
-  <tx-badge value="New" variant="primary" />
-  <tx-badge value="99+" variant="success" />
-  <tx-badge dot variant="error" />
-</div>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

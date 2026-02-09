@@ -9,14 +9,13 @@ syncStatus: migrated
 
 Expandable panels to group dense content.
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const active = ref<string[]>(['first'])
-</script>
-
 ## Basic Usage
-::TuffDemo{title="Accordion" description="Toggle detail panels." code-lang="vue"}
+
+### Accordion
+
+Toggle detail panels.
+
+::TuffDemoWrapper{demo="CollapseBasicDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -36,16 +35,7 @@ code: |
     </TxCollapse>
   </template>
 ---
-#preview
-<tx-collapse v-model="active">
-  <tx-collapse-item title="Getting Started" name="first">
-    Starter content goes here.
-  </tx-collapse-item>
-  <tx-collapse-item title="Advanced" name="second">
-    Extra options and settings.
-  </tx-collapse-item>
-</tx-collapse>
-:::
+::
 
 ## API (Lite)
 ::TuffPropsTable

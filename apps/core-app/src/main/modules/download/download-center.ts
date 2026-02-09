@@ -32,6 +32,7 @@ import { NotificationService } from './notification-service'
 import { PriorityCalculator } from './priority-calculator'
 import { RetryStrategy } from './retry-strategy'
 import { TaskQueue } from './task-queue'
+import { safeOpHandler, toErrorMessage } from '../../utils/safe-handler'
 
 /**
  * DownloadCenterModule - Unified download management system
@@ -67,6 +68,7 @@ export class DownloadCenterModule extends BaseModule {
   // Core components
   private taskQueue!: TaskQueue
   private downloadWorkers!: DownloadWorker[]
+  private taskWorkerMap: Map<string, DownloadWorker> = new Map() // Track which worker is handling which task
   private chunkManager!: ChunkManager
   private networkMonitor!: NetworkMonitor
   private priorityCalculator!: PriorityCalculator
@@ -253,6 +255,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PAUSED
+    task.updatedAt = new Date()
     await this.getDb()
       .update(downloadTasks)
       .set({
@@ -261,6 +264,7 @@ export class DownloadCenterModule extends BaseModule {
       })
       .where(eq(downloadTasks.id, taskId))
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
@@ -272,6 +276,7 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     task.status = DownloadStatus.PENDING
+    task.updatedAt = new Date()
     await this.getDb()
       .update(downloadTasks)
       .set({
@@ -280,22 +285,45 @@ export class DownloadCenterModule extends BaseModule {
       })
       .where(eq(downloadTasks.id, taskId))
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
   // 取消任务
   async cancelTask(taskId: string): Promise<void> {
-    const task = this.taskQueue.remove(taskId)
+    const task = this.taskQueue.getTask(taskId) || this.taskQueue.remove(taskId)
     if (!task) {
       throw new Error(`Task ${taskId} not found`)
     }
 
+    // If task is actively downloading, cancel it in the worker
+    const worker = this.taskWorkerMap.get(taskId)
+    if (worker) {
+      try {
+        await worker.cancelTask(taskId)
+      } catch (error) {
+        console.warn(`[DownloadCenter] Error cancelling task in worker ${taskId}:`, error)
+      }
+      this.taskWorkerMap.delete(taskId)
+    }
+
+    // Remove from queue if it's still there
+    if (this.taskQueue.getTask(taskId)) {
+      this.taskQueue.remove(taskId)
+    }
+
     task.status = DownloadStatus.CANCELLED
+    task.updatedAt = new Date()
     await this.updateTaskStatusInDb(taskId, DownloadStatus.CANCELLED)
 
     // 立即清理切片文件和任务临时目录
-    await this.chunkManager.cleanupChunks(task.chunks)
-    await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    try {
+      await this.chunkManager.cleanupChunks(task.chunks)
+      await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    } catch (cleanupError) {
+      // Log cleanup errors but don't fail the cancellation
+      console.warn(`[DownloadCenter] Cleanup error for task ${taskId}:`, cleanupError)
+    }
 
     // Clear from cache
     this.clearTaskCache(taskId)
@@ -331,10 +359,16 @@ export class DownloadCenterModule extends BaseModule {
     await this.updateTaskErrorInDb(taskId, '')
 
     // 清理旧的切片和临时目录
-    await this.chunkManager.cleanupChunks(task.chunks)
-    await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    try {
+      await this.chunkManager.cleanupChunks(task.chunks)
+      await this.chunkManager.cleanupTaskTempDir(task, this.config.storage.tempDir)
+    } catch (cleanupError) {
+      // Log cleanup errors but don't fail the retry
+      console.warn(`[DownloadCenter] Cleanup error during retry for task ${taskId}:`, cleanupError)
+    }
     task.chunks = []
 
+    this.updateTaskCache(task) // Ensure cache is updated
     this.broadcastTaskUpdated(task)
   }
 
@@ -832,276 +866,126 @@ export class DownloadCenterModule extends BaseModule {
     }
 
     const tx = this.transport
-    const toErrorMessage = (error: unknown) =>
-      error instanceof Error ? error.message : String(error)
+
+    const registerSafeHandler = <TExtra extends Record<string, unknown> = Record<string, never>>(
+      event: { toEventName: () => string },
+      handler: (payload: any) => Promise<void | TExtra> | void | TExtra
+    ) => {
+      return tx.on(
+        event as any,
+        safeOpHandler<any, TExtra>(
+          async (payload) => {
+            return await handler(payload)
+          },
+          {
+            onError: (error) => {
+              console.warn(
+                `[DownloadCenter] Handler failed: ${event.toEventName()}`,
+                toErrorMessage(error)
+              )
+            }
+          }
+        )
+      )
+    }
 
     this.transportDisposers.push(
-      tx.on(DownloadEvents.task.add, async (request) => {
-        try {
-          const taskId = await this.addTask(request)
-          return { success: true, taskId }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.add, async (request) => {
+        const taskId = await this.addTask(request)
+        return { taskId }
       }),
-
-      tx.on(DownloadEvents.task.pause, async (payload) => {
-        try {
-          await this.pauseTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.pause, async (payload) => {
+        await this.pauseTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.resume, async (payload) => {
-        try {
-          await this.resumeTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.resume, async (payload) => {
+        await this.resumeTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.cancel, async (payload) => {
-        try {
-          await this.cancelTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.cancel, async (payload) => {
+        await this.cancelTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.list.getAll, async () => {
-        try {
-          const tasks = this.getAllTasks()
-          return { success: true, tasks }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.list.getAll, async () => {
+        return { tasks: this.getAllTasks() }
       }),
-
-      tx.on(DownloadEvents.task.getStatus, async (payload) => {
-        try {
-          const task = this.getTaskStatus(payload.taskId)
-          return { success: true, task }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.getStatus, async (payload) => {
+        return { task: this.getTaskStatus(payload.taskId) }
       }),
-
-      tx.on(DownloadEvents.config.update, async (payload) => {
-        try {
-          this.updateConfig(payload.config)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.update, async (payload) => {
+        this.updateConfig(payload.config)
       }),
-
-      tx.on(DownloadEvents.task.retry, async (payload) => {
-        try {
-          await this.retryTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.retry, async (payload) => {
+        await this.retryTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.task.pauseAll, async () => {
-        try {
-          await this.pauseAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.pauseAll, async () => {
+        await this.pauseAllTasks()
       }),
-
-      tx.on(DownloadEvents.task.resumeAll, async () => {
-        try {
-          await this.resumeAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.resumeAll, async () => {
+        await this.resumeAllTasks()
       }),
-
-      tx.on(DownloadEvents.task.cancelAll, async () => {
-        try {
-          await this.cancelAllTasks()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.cancelAll, async () => {
+        await this.cancelAllTasks()
       }),
-
-      tx.on(DownloadEvents.list.getByStatus, async (payload) => {
-        try {
-          const tasks = this.getTasksByStatus(payload.status)
-          return { success: true, tasks }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.list.getByStatus, async (payload) => {
+        return { tasks: this.getTasksByStatus(payload.status) }
       }),
-
-      tx.on(DownloadEvents.task.updatePriority, async (payload) => {
-        try {
-          await this.updateTaskPriority(payload.taskId, payload.priority)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.updatePriority, async (payload) => {
+        await this.updateTaskPriority(payload.taskId, payload.priority)
       }),
-
-      tx.on(DownloadEvents.task.remove, async (payload) => {
-        try {
-          await this.removeTask(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.task.remove, async (payload) => {
+        await this.removeTask(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.history.get, async (payload, _context) => {
-        try {
-          const history = await this.getTaskHistory(payload?.limit)
-          return { success: true, history }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.get, async (payload) => {
+        return { history: await this.getTaskHistory(payload?.limit) }
       }),
-
-      tx.on(DownloadEvents.history.clear, async () => {
-        try {
-          await this.clearHistory()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.clear, async () => {
+        await this.clearHistory()
       }),
-
-      tx.on(DownloadEvents.history.clearItem, async (payload) => {
-        try {
-          await this.clearHistoryItem(payload.historyId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.history.clearItem, async (payload) => {
+        await this.clearHistoryItem(payload.historyId)
       }),
-
-      tx.on(DownloadEvents.file.open, async (payload) => {
-        try {
-          await this.openFile(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.open, async (payload) => {
+        await this.openFile(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.file.showInFolder, async (payload) => {
-        try {
-          await this.showInFolder(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.showInFolder, async (payload) => {
+        await this.showInFolder(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.file.delete, async (payload) => {
-        try {
-          await this.deleteFile(payload.taskId)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.file.delete, async (payload) => {
+        await this.deleteFile(payload.taskId)
       }),
-
-      tx.on(DownloadEvents.maintenance.cleanupTemp, async () => {
-        try {
-          await this.cleanupTempFiles()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.maintenance.cleanupTemp, async () => {
+        await this.cleanupTempFiles()
       }),
-
-      tx.on(DownloadEvents.config.get, async () => {
-        try {
-          const config = this.getConfig()
-          return { success: true, config }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.get, async () => {
+        return { config: this.getConfig() }
       }),
-
-      tx.on(DownloadEvents.config.updateNotification, async (payload) => {
-        try {
-          this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.updateNotification, async (payload) => {
+        this.updateNotificationConfig(payload.config as Partial<NotificationConfig>)
       }),
-
-      tx.on(DownloadEvents.config.getNotification, async () => {
-        try {
-          const config = this.getNotificationConfig()
-          return { success: true, config }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.config.getNotification, async () => {
+        return { config: this.getNotificationConfig() }
       }),
-
-      tx.on(DownloadEvents.logs.get, async (payload) => {
-        try {
-          const logs = await this.errorLogger.readLogs(payload?.limit)
-          return { success: true, logs }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.get, async (payload) => {
+        return { logs: await this.errorLogger.readLogs(payload?.limit) }
       }),
-
-      tx.on(DownloadEvents.logs.getErrorStats, async () => {
-        try {
-          const stats = await this.errorLogger.getErrorStats()
-          return { success: true, stats }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.getErrorStats, async () => {
+        return { stats: await this.errorLogger.getErrorStats() }
       }),
-
-      tx.on(DownloadEvents.logs.clear, async () => {
-        try {
-          await this.errorLogger.clearLogs()
-          return { success: true }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.logs.clear, async () => {
+        await this.errorLogger.clearLogs()
       }),
-
-      tx.on(DownloadEvents.temp.getStats, async () => {
-        try {
-          const stats = await this.getTempFileStats()
-          return { success: true, stats }
-        } catch (error) {
-          return { success: false, error: toErrorMessage(error) }
-        }
+      registerSafeHandler(DownloadEvents.temp.getStats, async () => {
+        return { stats: await this.getTempFileStats() }
       }),
-
-      tx.on(DownloadEvents.migration.checkNeeded, async () => {
-        return { success: true, needed: false }
+      registerSafeHandler(DownloadEvents.migration.checkNeeded, async () => {
+        return { needed: false }
       }),
-
-      tx.on(DownloadEvents.migration.start, async () => {
-        return { success: true, result: { migrated: true } }
+      registerSafeHandler(DownloadEvents.migration.start, async () => {
+        return { result: { migrated: true } }
       }),
-
-      tx.on(DownloadEvents.migration.retry, async () => {
-        return { success: true, result: { migrated: true } }
+      registerSafeHandler(DownloadEvents.migration.retry, async () => {
+        return { result: { migrated: true } }
       }),
-
-      tx.on(DownloadEvents.migration.status, async () => {
-        return { success: true, currentVersion: 1, appliedMigrations: [] }
+      registerSafeHandler(DownloadEvents.migration.status, async () => {
+        return { currentVersion: 1, appliedMigrations: [] }
       })
     )
   }
@@ -1217,9 +1101,15 @@ export class DownloadCenterModule extends BaseModule {
 
   // 启动下载任务
   private async startDownloadTask(task: DownloadTask, worker: DownloadWorker): Promise<void> {
+    // Track which worker is handling this task
+    this.taskWorkerMap.set(task.id, worker)
+
     try {
       task.status = DownloadStatus.DOWNLOADING
+      task.updatedAt = new Date()
       await this.updateTaskStatusInDb(task.id, DownloadStatus.DOWNLOADING)
+      this.updateTaskCache(task) // Ensure cache is updated
+      this.broadcastTaskUpdated(task) // Broadcast status change
 
       // 使用重试策略启动下载
       const result = await this.retryStrategy.executeWithRetry(
@@ -1253,7 +1143,11 @@ export class DownloadCenterModule extends BaseModule {
       if (result.success) {
         // 下载完成
         task.status = DownloadStatus.COMPLETED
+        task.updatedAt = new Date()
+        task.completedAt = new Date()
         await this.updateTaskStatusInDb(task.id, DownloadStatus.COMPLETED)
+        this.updateTaskCache(task) // Ensure cache is updated
+
         if (!this.shouldSuppressHistory(task)) {
           await this.saveToHistoryDb(task)
         }
@@ -1263,29 +1157,39 @@ export class DownloadCenterModule extends BaseModule {
         throw result.error || new Error('Download failed')
       }
     } catch (error) {
-      // 转换为 DownloadErrorClass
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const downloadError =
-        error instanceof DownloadErrorClass
-          ? error
-          : DownloadErrorClass.fromError(normalizedError, {
-              taskId: task.id,
-              url: task.url,
-              filename: task.filename,
-              module: task.module,
-              timestamp: Date.now()
-            })
+      // Check if error is due to cancellation
+      const isCancelled = error instanceof Error && error.message.includes('cancelled')
 
-      // 记录错误
-      await this.errorLogger.logError(downloadError.toErrorObject())
+      if (!isCancelled) {
+        // 转换为 DownloadErrorClass
+        const normalizedError = error instanceof Error ? error : new Error(String(error))
+        const downloadError =
+          error instanceof DownloadErrorClass
+            ? error
+            : DownloadErrorClass.fromError(normalizedError, {
+                taskId: task.id,
+                url: task.url,
+                filename: task.filename,
+                module: task.module,
+                timestamp: Date.now()
+              })
 
-      // 更新任务状态
-      task.status = DownloadStatus.FAILED
-      task.error = downloadError.userMessage
-      await this.updateTaskStatusInDb(task.id, DownloadStatus.FAILED)
-      await this.updateTaskErrorInDb(task.id, downloadError.userMessage)
+        // 记录错误
+        await this.errorLogger.logError(downloadError.toErrorObject())
 
-      this.broadcastTaskFailed(task)
+        // 更新任务状态
+        task.status = DownloadStatus.FAILED
+        task.error = downloadError.userMessage
+        task.updatedAt = new Date()
+        await this.updateTaskStatusInDb(task.id, DownloadStatus.FAILED)
+        await this.updateTaskErrorInDb(task.id, downloadError.userMessage)
+        this.updateTaskCache(task) // Ensure cache is updated
+
+        this.broadcastTaskFailed(task)
+      }
+    } finally {
+      // Remove from worker map when task completes or fails
+      this.taskWorkerMap.delete(task.id)
     }
   }
 
@@ -1369,6 +1273,167 @@ export class DownloadCenterModule extends BaseModule {
       taskId,
       action
     })
+  }
+
+  /**
+   * Health check for the download module
+   * Returns diagnostic information about the module's state
+   */
+  getHealthStatus(): {
+    healthy: boolean
+    status: string
+    details: {
+      isRunning: boolean
+      workerCount: number
+      activeTasks: number
+      pendingTasks: number
+      failedTasks: number
+      completedTasks: number
+      networkStatus: string
+      cacheSize: number
+      workerMapSize: number
+      issues: string[]
+    }
+  } {
+    const issues: string[] = []
+    const activeTasks = this.taskQueue.getActiveTasks()
+    const pendingTasks = this.taskQueue.getPendingTasks()
+    const allTasks = this.taskQueue.getAllTasks()
+    const failedTasks = allTasks.filter((t) => t.status === DownloadStatus.FAILED)
+    const completedTasks = allTasks.filter((t) => t.status === DownloadStatus.COMPLETED)
+
+    // Check for issues
+    if (!this.isRunning) {
+      issues.push('Module is not running')
+    }
+
+    if (this.downloadWorkers.length === 0) {
+      issues.push('No download workers initialized')
+    }
+
+    if (
+      this.taskWorkerMap.size >
+      this.downloadWorkers.length * this.config.concurrency.maxConcurrent
+    ) {
+      issues.push('Task-worker mapping size exceeds expected limit')
+    }
+
+    const networkStatus = this.networkMonitor.getNetworkQuality()
+    if (networkStatus === 'poor') {
+      issues.push('Network quality is poor')
+    }
+
+    // Check for stuck tasks (downloading for more than 1 hour)
+    const now = Date.now()
+    const stuckTasks = activeTasks.filter((task) => {
+      const startTime = task.updatedAt instanceof Date ? task.updatedAt.getTime() : task.updatedAt
+      return now - startTime > 60 * 60 * 1000 // 1 hour
+    })
+    if (stuckTasks.length > 0) {
+      issues.push(`${stuckTasks.length} task(s) appear to be stuck`)
+    }
+
+    const healthy = issues.length === 0
+
+    return {
+      healthy,
+      status: healthy ? 'healthy' : 'degraded',
+      details: {
+        isRunning: this.isRunning,
+        workerCount: this.downloadWorkers.length,
+        activeTasks: activeTasks.length,
+        pendingTasks: pendingTasks.length,
+        failedTasks: failedTasks.length,
+        completedTasks: completedTasks.length,
+        networkStatus,
+        cacheSize: this.taskCache.size,
+        workerMapSize: this.taskWorkerMap.size,
+        issues
+      }
+    }
+  }
+
+  /**
+   * Diagnostic method to help troubleshoot download issues
+   */
+  async diagnose(): Promise<{
+    health: ReturnType<typeof this.getHealthStatus>
+    taskDetails: Array<{
+      id: string
+      status: string
+      url: string
+      filename: string
+      progress: number
+      error?: string
+      worker?: string
+      createdAt: number
+      updatedAt: number
+    }>
+    workerStats: Array<{
+      index: number
+      activeTasks: number
+      canAcceptTask: boolean
+      stats: ReturnType<DownloadWorker['getDownloadStats']>
+    }>
+    networkDiagnostics: {
+      quality: string
+      status: ReturnType<NetworkMonitor['getCurrentStatus']>
+    }
+    recentErrors: Array<{
+      timestamp: number
+      message: string
+      taskId?: string
+    }>
+  }> {
+    const health = this.getHealthStatus()
+    const allTasks = this.taskQueue.getAllTasks()
+
+    const taskDetails = allTasks.map((task) => ({
+      id: task.id,
+      status: task.status,
+      url: task.url,
+      filename: task.filename,
+      progress: task.progress.percentage || 0,
+      error: task.error,
+      worker: this.taskWorkerMap.has(task.id) ? 'assigned' : 'none',
+      createdAt: task.createdAt instanceof Date ? task.createdAt.getTime() : task.createdAt,
+      updatedAt: task.updatedAt instanceof Date ? task.updatedAt.getTime() : task.updatedAt
+    }))
+
+    const workerStats = this.downloadWorkers.map((worker, index) => ({
+      index,
+      activeTasks: worker.getActiveTasks().length,
+      canAcceptTask: worker.canAcceptTask(),
+      stats: worker.getDownloadStats()
+    }))
+
+    const networkDiagnostics = {
+      quality: this.networkMonitor.getNetworkQuality(),
+      status: this.networkMonitor.getCurrentStatus()
+    }
+
+    // Get recent errors from error logger
+    const recentErrors: Array<{ timestamp: number; message: string; taskId?: string }> = []
+    try {
+      const errorLogs = await this.errorLogger.getRecentErrors(10)
+      recentErrors.push(
+        ...errorLogs.map((log) => ({
+          timestamp: log.timestamp,
+          message: log.message,
+          taskId: log.metadata?.taskId
+        }))
+      )
+    } catch (error) {
+      console.warn('[DownloadCenter] Failed to get recent errors:', error)
+    }
+
+    return {
+      health,
+      taskDetails,
+      workerStats,
+      networkDiagnostics,
+      recentErrors
+    }
   }
 }
 

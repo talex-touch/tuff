@@ -2,8 +2,11 @@
 import type {
   FilterCategory,
   MarketplacePluginDetail,
+  MarketplacePluginRatingResponse,
   MarketplacePluginRatingSummary,
   MarketplacePluginReview,
+  MarketplacePluginReviewListResponse,
+  MarketplacePluginReviewSubmitResponse,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
 import { SharedPluginDetailContent } from '@talex-touch/utils/renderer'
@@ -33,6 +36,8 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 const toast = useToast()
+const { user, isLoaded } = useUser()
+const isLoggedIn = computed(() => isLoaded.value && Boolean(user.value))
 
 const filters = reactive({
   search: '',
@@ -60,6 +65,13 @@ const detailError = ref<string | null>(null)
 const reviews = ref<MarketplacePluginReview[]>([])
 const reviewsPending = ref(false)
 const reviewsError = ref<string | null>(null)
+const reviewsMeta = reactive({
+  total: 0,
+  limit: 20,
+  offset: 0,
+})
+const reviewsLoadingMore = ref(false)
+const canLoadMoreReviews = computed(() => reviews.value.length < reviewsMeta.total)
 const reviewSubmitting = ref(false)
 const ratingSummary = ref<MarketplacePluginRatingSummary | null>(null)
 const reviewForm = reactive({
@@ -153,10 +165,18 @@ async function loadPluginCommunity(slug: string) {
   reviewsError.value = null
   try {
     const [reviewsResponse, ratingResponse] = await Promise.all([
-      $fetch<{ reviews: MarketplacePluginReview[] }>(`/api/market/plugins/${slug}/reviews`),
-      $fetch<{ rating: MarketplacePluginRatingSummary }>(`/api/market/plugins/${slug}/rating`),
+      $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${slug}/reviews`, {
+      query: {
+        limit: reviewsMeta.limit,
+        offset: 0,
+      },
+    }),
+      $fetch<MarketplacePluginRatingResponse>(`/api/market/plugins/${slug}/rating`),
     ])
     reviews.value = reviewsResponse.reviews ?? []
+    reviewsMeta.total = reviewsResponse.total ?? 0
+    reviewsMeta.limit = reviewsResponse.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = reviewsResponse.offset ?? 0
     ratingSummary.value = ratingResponse.rating
   }
   catch (error: unknown) {
@@ -167,9 +187,40 @@ async function loadPluginCommunity(slug: string) {
   }
 }
 
+async function loadMoreReviews() {
+  if (!selectedSlug.value || reviewsLoadingMore.value || reviewsPending.value || !canLoadMoreReviews.value)
+    return
+
+  reviewsLoadingMore.value = true
+  try {
+    const response = await $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${selectedSlug.value}/reviews`, {
+      query: {
+        limit: reviewsMeta.limit,
+        offset: reviews.value.length,
+      },
+    })
+    reviews.value = [...reviews.value, ...(response.reviews ?? [])]
+    reviewsMeta.total = response.total ?? reviewsMeta.total
+    reviewsMeta.limit = response.limit ?? reviewsMeta.limit
+    reviewsMeta.offset = response.offset ?? reviewsMeta.offset
+  }
+  catch (error: unknown) {
+    const fallback = t('market.detail.reviews.loadMoreFailed', 'Failed to load more reviews.')
+    toast.warning(error instanceof Error ? error.message : fallback)
+  }
+  finally {
+    reviewsLoadingMore.value = false
+  }
+}
+
 async function submitReview() {
   if (!selectedSlug.value)
     return
+
+  if (!isLoggedIn.value) {
+    toast.warning(t('market.detail.reviews.signInHint', 'Sign in to submit your review.'))
+    return
+  }
 
   if (reviewForm.rating < 1 || reviewForm.rating > 5) {
     toast.warning(t('market.detail.reviews.ratingRequired', 'Please provide a rating.'))
@@ -184,7 +235,7 @@ async function submitReview() {
 
   reviewSubmitting.value = true
   try {
-    const response = await $fetch<{ review: MarketplacePluginReview, rating: MarketplacePluginRatingSummary }>(
+    const response = await $fetch<MarketplacePluginReviewSubmitResponse>(
       `/api/market/plugins/${selectedSlug.value}/reviews`,
       {
         method: 'POST',
@@ -423,22 +474,21 @@ useSeoMeta({
               <h4 class="text-sm text-black font-semibold dark:text-light">
                 {{ t('market.detail.reviews.writeTitle') }}
               </h4>
-              <div class="mt-3 space-y-3">
+              <div v-if="!isLoaded" class="mt-3 text-xs text-black/60 dark:text-light/60">
+                {{ t('market.detail.reviews.authLoading', 'Checking sign-in status...') }}
+              </div>
+              <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
+                <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
+                <Button size="small" @click="navigateTo('/sign-in')">
+                  {{ t('market.detail.reviews.signInAction', 'Sign in') }}
+                </Button>
+              </div>
+              <div v-else class="mt-3 space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="text-xs text-black/60 dark:text-light/60">
                     {{ t('market.detail.reviews.ratingLabel') }}
                   </span>
-                  <div class="flex items-center gap-1">
-                    <button
-                      v-for="value in 5"
-                      :key="`rate-${value}`"
-                      type="button"
-                      class="transition"
-                      @click="setReviewRating(value)"
-                    >
-                      <span :class="resolveStarClass(value, reviewForm.rating)" class="text-base" />
-                    </button>
-                  </div>
+                  <TxRating v-model="reviewForm.rating" :max-stars="5" />
                   <span class="text-xs text-black/50 dark:text-light/60">
                     {{ reviewForm.rating || '-' }}
                   </span>
@@ -477,6 +527,7 @@ useSeoMeta({
             <p v-else-if="!reviews.length" class="text-sm text-black/60 dark:text-light/60">
               {{ t('market.detail.reviews.empty') }}
             </p>
+            <div v-else class="space-y-4">
             <article
               v-for="review in reviews"
               :key="review.id"
@@ -526,6 +577,12 @@ useSeoMeta({
                 </p>
               </div>
             </article>
+            <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
+              <Button size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+                {{ t('market.detail.reviews.loadMore', 'Load more') }}
+              </Button>
+            </div>
+          </div>
           </div>
         </section>
       </div>

@@ -20,19 +20,87 @@ import SegmentedSliderCustomDemoSource from '~/components/content/demos/Segmente
 
 ## 基础用法
 
-<DemoBlock title="SegmentedSlider" :code="SegmentedSliderBasicDemoSource">
-  <template #preview>
-    <SegmentedSliderBasicDemo />
+### SegmentedSlider
+:::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref(1)
+  const segments = [
+    { value: 0, label: 'Small' },
+    { value: 1, label: 'Medium' },
+    { value: 2, label: 'Large' },
+    { value: 3, label: 'XL' },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 16px; width: 400px;">
+      <div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
+          当前值: {{ value }}
+        </div>
+        <TxSegmentedSlider v-model="value" :segments="segments" />
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 自定义选项
 
-<DemoBlock title="SegmentedSlider (custom)" :code="SegmentedSliderCustomDemoSource">
-  <template #preview>
-    <SegmentedSliderCustomDemo />
+### SegmentedSlider (custom)
+:::TuffDemoWrapper{demo="SegmentedSliderSegmentedSliderCustomDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const priceValue = ref('pro')
+  const priceSegments = [
+    { value: 'free', label: 'Free' },
+    { value: 'pro', label: 'Pro' },
+    { value: 'team', label: 'Team' },
+    { value: 'enterprise', label: 'Enterprise' },
+  ]
+
+  const ratingValue = ref(3)
+  const ratingSegments = [
+    { value: 1, label: '⭐' },
+    { value: 2, label: '⭐⭐' },
+    { value: 3, label: '⭐⭐⭐' },
+    { value: 4, label: '⭐⭐⭐⭐' },
+    { value: 5, label: '⭐⭐⭐⭐⭐' },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 24px; width: 400px;">
+      <div>
+        <div style="font-size: 14px; margin-bottom: 12px;">
+          价格档位选择
+        </div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
+          当前: {{ priceValue }}
+        </div>
+        <TxSegmentedSlider v-model="priceValue" :segments="priceSegments" />
+      </div>
+
+      <div>
+        <div style="font-size: 14px; margin-bottom: 12px;">
+          评分选择
+        </div>
+        <div style="font-size: 12px; opacity: 0.72; margin-bottom: 8px;">
+          当前: {{ ratingValue }} 星
+        </div>
+        <TxSegmentedSlider v-model="ratingValue" :segments="ratingSegments" />
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

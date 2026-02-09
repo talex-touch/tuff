@@ -1,110 +1,96 @@
 ---
-title: "Tree 树形"
-description: "基础树形组件，支持搜索过滤、单选/多选与展开控制。"
+title: "Tree"
+description: "Tree component with filtering, single/multi select, and expand controls."
 category: Data
 syncStatus: migrated
 ---
-# Tree 树形
+# Tree
 
-基础树形组件，支持搜索过滤、单选/多选与展开控制。
+Tree component with filtering, single/multi select, and expand controls.
 
-<script setup lang="ts">
-import { ref } from 'vue'
+## Basic Usage
 
-const query = ref('')
-const value = ref()
+::TuffDemoWrapper{demo="TreeTreeDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
 
-const nodes = [
-  {
-    key: 'design',
-    label: 'Design',
-    children: [
-      { key: 'design-ui', label: 'UI' },
-      { key: 'design-ux', label: 'UX' },
-    ],
-  },
-  {
-    key: 'dev',
-    label: 'Development',
-    children: [
-      { key: 'dev-web', label: 'Web' },
-      { key: 'dev-app', label: 'App' },
-    ],
-  },
-]
-</script>
+  const query = ref('')
+  const value = ref()
 
-## 基础用法
+  const nodes = [
+    {
+      key: 'design',
+      label: 'Design',
+      children: [
+        { key: 'design-ui', label: 'UI' },
+        { key: 'design-ux', label: 'UX' },
+      ],
+    },
+    {
+      key: 'dev',
+      label: 'Development',
+      children: [
+        { key: 'dev-web', label: 'Web' },
+        { key: 'dev-app', label: 'App' },
+      ],
+    },
+  ]
+  </script>
 
-<ClientOnly>
-<div class="group" style="max-width: 320px;">
-  <TxSearchInput v-model="query" placeholder="过滤节点" />
-  <TxTree
-    v-model="value"
-    :nodes="nodes"
-    :default-expanded-keys="['design']"
-    :filter-text="query"
-  />
-</div>
-</ClientOnly>
-
-::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const query = ref('')
-const value = ref()
-const nodes = [{ key: 'design', label: 'Design' }]
-</script>
-
-<template>
-  <TxSearchInput v-model="query" placeholder="过滤节点" />
-  <TxTree v-model="value" :nodes="nodes" :filter-text="query" />
-</template>
-```
-:::
+  <template>
+    <TxSearchInput v-model="query" placeholder="Filter nodes" />
+    <TxTree
+      v-model="value"
+      :nodes="nodes"
+      :default-expanded-keys="['design']"
+      :filter-text="query"
+    />
+  </template>
+---
+::
 
 ## API
 
 ### TxTree Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `nodes` | `TreeNode[]` | `[]` | 数据源 |
-| `modelValue` | `string \| number \| Array<string \| number>` | - | 选中值 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `selectable` | `boolean` | `true` | 是否可选 |
-| `checkable` | `boolean` | `false` | 是否显示复选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 默认展开 |
-| `expandedKeys` | `Array<string \| number>` | - | 受控展开 |
-| `indent` | `number` | `16` | 缩进 |
-| `filterText` | `string` | `''` | 搜索文本 |
-| `filterMethod` | `(node, query) => boolean` | - | 自定义过滤 |
+| `nodes` | `TreeNode[]` | `[]` | Data source |
+| `modelValue` | `string \| number \| Array<string \| number>` | - | Selected value |
+| `multiple` | `boolean` | `false` | Enable multi-select |
+| `selectable` | `boolean` | `true` | Selectable nodes |
+| `checkable` | `boolean` | `false` | Show checkboxes |
+| `disabled` | `boolean` | `false` | Disabled state |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | Default expanded keys |
+| `expandedKeys` | `Array<string \| number>` | - | Controlled expanded keys |
+| `indent` | `number` | `16` | Indent width |
+| `filterText` | `string` | `''` | Filter text |
+| `filterMethod` | `(node, query) => boolean` | - | Custom filter function |
 
 ### TreeNode
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `key` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 禁用 |
-| `children` | `TreeNode[]` | 子节点 |
-| `icon` | `TxIconSource \| string` | 节点图标 |
+| `key` | `string \| number` | Unique key |
+| `label` | `string` | Display label |
+| `disabled` | `boolean` | Disabled state |
+| `children` | `TreeNode[]` | Child nodes |
+| `icon` | `TxIconSource \| string` | Node icon |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | 选中变化 |
-| `select` | `({ key, node })` | 选择节点 |
-| `toggle` | `({ key, expanded })` | 展开切换 |
-| `update:expandedKeys` | `(keys)` | 展开变化 |
+| `update:modelValue` | `(value)` | Selection update |
+| `select` | `({ key, node })` | Node selected |
+| `toggle` | `({ key, expanded })` | Expand/collapse |
+| `update:expandedKeys` | `(keys)` | Expanded keys update |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `item` | 自定义节点 |
-| `empty` | 空状态 |
+| `item` | Custom item renderer |
+| `empty` | Empty state |

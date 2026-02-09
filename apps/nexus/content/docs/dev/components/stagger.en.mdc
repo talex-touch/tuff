@@ -29,36 +29,17 @@ function remove() {
 
 ## 基础用法
 
-<DemoBlock title="Stagger">
-<template #preview>
-<div style="display: grid; gap: 12px; width: 420px;">
-  <div style="display: flex; gap: 8px;">
-    <TxButton @click="add">Add</TxButton>
-    <TxButton @click="remove">Remove</TxButton>
-  </div>
-
-  <TxStagger tag="div" :delay-step="30" :duration="180">
-    <div
-      v-for="item in items"
-      :key="item.id"
-      style="padding: 10px 12px; border-radius: 12px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);"
-    >
-      {{ item.text }}
-    </div>
-  </TxStagger>
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxStagger tag="div" :delay-step="30" :duration="180">
-    <div v-for="item in items" :key="item.id">{{ item.text }}</div>
-  </TxStagger>
-</template>
-```
-</template>
-</DemoBlock>
+### Stagger
+:::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStagger tag="div" :delay-step="30" :duration="180">
+      <div v-for="item in items" :key="item.id">{{ item.text }}</div>
+    </TxStagger>
+  </template>
+---
+:::
 
 ## API
 

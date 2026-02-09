@@ -20,17 +20,20 @@ The Platform Capabilities SDK provides a catalog of platform-level capabilities 
 
 ## Usage
 
-```typescript
-import { usePlatformSdk } from '@talex-touch/utils/renderer'
-
-const platform = usePlatformSdk()
-
-// List all capabilities
-const all = await platform.listCapabilities()
-
-// Filter by scope
-const systemCaps = await platform.listCapabilities({ scope: 'system' })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePlatformSdk } from '@talex-touch/utils/renderer'
+  
+  const platform = usePlatformSdk()
+  
+  // List all capabilities
+  const all = await platform.listCapabilities()
+  
+  // Filter by scope
+  const systemCaps = await platform.listCapabilities({ scope: 'system' })
+---
+:::
 
 ## Examples
 

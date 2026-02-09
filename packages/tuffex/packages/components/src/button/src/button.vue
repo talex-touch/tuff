@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ButtonEmits, ButtonProps } from './types'
 import VWave from 'v-wave'
-import { computed, nextTick, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, ref, useAttrs, useSlots, watch } from 'vue'
 import { useFlip } from '../../../../utils/animation/flip'
 import { useVibrate } from '../../../../utils/vibrate'
 import Spinner from '../../spinner'
@@ -19,7 +19,9 @@ const props = withDefaults(defineProps<ButtonProps>(), {
   round: false,
   circle: false,
   loading: false,
+  loadingVariant: 'spinner',
   disabled: false,
+  border: true,
   icon: undefined,
   autofocus: false,
   nativeType: 'button',
@@ -34,6 +36,7 @@ const { vWave } = VWave.createLocalWaveDirective()
 const buttonRef = ref<HTMLButtonElement | null>(null)
 const innerRef = ref<HTMLElement | null>(null)
 void innerRef.value
+const attrs = useAttrs()
 const slots = useSlots()
 
 const autoWidthEnabled = computed(() => {
@@ -108,6 +111,17 @@ const innerStyle = computed(() => {
   }
 })
 
+const resolvedLoadingVariant = computed(() => {
+  if (props.loadingVariant)
+    return props.loadingVariant
+  const raw = attrs['loading-variant'] ?? attrs.loadingVariant
+  return typeof raw === 'string' ? raw : undefined
+})
+
+const showLoadingBar = computed(() => {
+  return props.loading && props.block && resolvedLoadingVariant.value === 'bar'
+})
+
 function hasDefaultContent(): boolean {
   const vnodes = slots.default?.()
   if (!vnodes || !vnodes.length)
@@ -122,6 +136,8 @@ function hasDefaultContent(): boolean {
 }
 
 const isIconOnly = computed(() => {
+  if (props.block && props.circle)
+    return false
   const slotHasContent = hasDefaultContent()
   return props.circle || (props.icon && !slotHasContent)
 })
@@ -140,11 +156,13 @@ const classList = computed(() => {
     {
       'block': props.block,
       'loading': props.loading,
+      'loading-bar': showLoadingBar.value,
       'disabled': props.disabled,
       'plain': props.plain,
       'dashed': props.dashed,
       'round': props.round,
       'circle': props.circle,
+      'borderless': props.border === false,
       'auto-width': autoWidthEnabled.value,
     },
   ]
@@ -197,23 +215,26 @@ if (props.autofocus) {
     :disabled="disabled || loading"
     @click="handleClick"
   >
+    <span v-if="showLoadingBar" class="tx-button__loading-layer" aria-hidden="true" />
     <span ref="innerRef" class="tx-button__inner" :style="innerStyle">
-      <template v-if="isIconOnly">
-        <Spinner
-          class="tx-button__spinner is-overlay"
-
-          :visible="loading"
-          :size="spinnerSize"
-        />
-      </template>
-      <template v-else>
-        <span class="tx-button__spinner-slot" :class="{ 'is-visible': loading }">
+      <template v-if="!showLoadingBar">
+        <template v-if="isIconOnly">
           <Spinner
-            class="tx-button__spinner"
+            class="tx-button__spinner is-overlay"
+
             :visible="loading"
             :size="spinnerSize"
           />
-        </span>
+        </template>
+        <template v-else>
+          <span class="tx-button__spinner-slot" :class="{ 'is-visible': loading }">
+            <Spinner
+              class="tx-button__spinner"
+              :visible="loading"
+              :size="spinnerSize"
+            />
+          </span>
+        </template>
       </template>
 
       <i v-if="icon" class="tx-button__icon" :class="icon" />

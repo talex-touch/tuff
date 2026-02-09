@@ -1,13 +1,10 @@
 import { watch } from 'vue'
 
 const LOCALE_STORAGE_KEY = 'tuff_locale_sync'
-const LOCALE_SYNC_NAMESPACE = 'ui'
-const LOCALE_SYNC_KEY = 'locale'
 
 export function useUserLocale() {
   const { locale, setLocale } = useI18n()
-  const { status } = useSession()
-  const { deviceId } = useDeviceIdentity()
+  const { status } = useAuth()
 
   const getSavedLocale = (): string | null => {
     if (import.meta.server)
@@ -24,12 +21,12 @@ export function useUserLocale() {
     if (status.value !== 'authenticated')
       return
     try {
-      const items = await $fetch<Array<{ namespace: string, key: string, value: unknown, updatedAt?: string }>>('/api/sync/pull')
-      const localeItem = items.find(item => item.namespace === LOCALE_SYNC_NAMESPACE && item.key === LOCALE_SYNC_KEY)
-      if (localeItem && typeof localeItem.value === 'string') {
-        persistLocal(localeItem.value)
-        if (localeItem.value !== locale.value)
-          setLocale(localeItem.value as 'en' | 'zh')
+      const me = await $fetch<{ locale?: unknown } | null>('/api/auth/me')
+      const remoteLocale = typeof me?.locale === 'string' ? me.locale : null
+      if (remoteLocale) {
+        persistLocal(remoteLocale)
+        if (remoteLocale !== locale.value)
+          setLocale(remoteLocale as 'en' | 'zh')
       }
     }
     catch (error) {
@@ -42,20 +39,7 @@ export function useUserLocale() {
     if (status.value !== 'authenticated')
       return
     try {
-      await $fetch('/api/sync/push', {
-        method: 'POST',
-        body: {
-          items: [
-            {
-              namespace: LOCALE_SYNC_NAMESPACE,
-              key: LOCALE_SYNC_KEY,
-              value: newLocale,
-              updatedAt: new Date().toISOString(),
-              deviceId: deviceId.value ?? null,
-            },
-          ],
-        },
-      })
+      await $fetch('/api/auth/profile', { method: 'PATCH', body: { locale: newLocale } })
     }
     catch (error) {
       console.error('[useUserLocale] Failed to save locale:', error)

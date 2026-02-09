@@ -198,6 +198,11 @@ export interface ReadFileRequest {
    * File path or local file URL (file://, tfile://).
    */
   source: string
+
+  /**
+   * If true, ENOENT returns an empty string instead of throwing.
+   */
+  allowMissing?: boolean
 }
 
 /**
@@ -208,6 +213,31 @@ export interface GetPathRequest {
    * Electron app.getPath key.
    */
   name: string
+}
+
+/**
+ * Request to read a value from secure local storage.
+ */
+export interface SecureValueGetRequest {
+  /**
+   * Storage key.
+   */
+  key: string
+}
+
+/**
+ * Request to write a value into secure local storage.
+ */
+export interface SecureValueSetRequest {
+  /**
+   * Storage key.
+   */
+  key: string
+
+  /**
+   * Plain value before encryption. Null removes the key.
+   */
+  value: string | null
 }
 
 /**

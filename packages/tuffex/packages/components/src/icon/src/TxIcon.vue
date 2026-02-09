@@ -218,6 +218,11 @@ watch(
         <img :alt="alt" :src="resolvedUrl">
       </template>
     </template>
+
+    <!-- Fallback: if icon type is unknown or invalid, show error state -->
+    <span v-else class="tuff-icon__error">
+      <i class="i-ri-image-line" />
+    </span>
   </span>
 </template>
 
@@ -227,6 +232,10 @@ watch(
   align-items: center;
   justify-content: center;
   line-height: 1;
+  flex-shrink: 0;
+  overflow: hidden;
+  max-width: 1em;
+  max-height: 1em;
 
   img {
     display: block;
@@ -234,6 +243,31 @@ watch(
     height: 1em;
     object-fit: contain;
   }
+}
+
+.tuff-icon__class {
+  width: 1em;
+  height: 1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  i {
+    font-size: 1em;
+    line-height: 1;
+    display: block;
+  }
+}
+
+.tuff-icon__emoji {
+  display: inline-block;
+  font-size: 1em;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 1em;
 }
 
 .tuff-icon__svg-mask {

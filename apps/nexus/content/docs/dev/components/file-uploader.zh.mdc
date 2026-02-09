@@ -8,33 +8,22 @@ syncStatus: migrated
 
 通用文件上传组件，支持多文件、拖拽与列表管理。
 
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const files = ref([])
-</script>
-
 ## 基础用法
 
-<ClientOnly>
-<div class="group" style="max-width: 480px;">
-  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
-</div>
-</ClientOnly>
+::TuffDemoWrapper{demo="FileUploaderFileUploaderDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
 
-::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
+  const files = ref([])
+  </script>
 
-const files = ref([])
-</script>
-
-<template>
-  <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
-</template>
-```
-:::
+  <template>
+    <TxFileUploader v-model="files" accept=".pdf,.png,.jpg" :max="5" />
+  </template>
+---
+::
 
 ## API
 

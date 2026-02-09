@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await getUserByEmail(event, email)
-  if (user) {
+  if (user && user.status === 'active') {
     const token = await createPasswordResetToken(event, user.id, 1000 * 60 * 30)
     const origin = useRuntimeConfig().auth?.origin as string | undefined
     const resetUrl = origin ? `${origin}/reset-password?email=${encodeURIComponent(email)}&token=${token}` : ''

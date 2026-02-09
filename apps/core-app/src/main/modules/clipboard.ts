@@ -1,4 +1,4 @@
-import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { AppSetting, MaybePromise, ModuleKey } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
@@ -22,13 +22,15 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { and, desc, eq, gt, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
-import { clipboard, nativeImage } from 'electron'
+import { clipboard, nativeImage, powerMonitor } from 'electron'
 import { genTouchApp } from '../core'
+import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
 import { appTaskGate } from '../service/app-task-gate'
 import { tempFileService } from '../service/temp-file.service'
@@ -41,6 +43,7 @@ import { detectClipboardTags } from './clipboard-tagging'
 import { databaseModule } from './database'
 import { ocrService } from './ocr/ocr-service'
 import { activeAppService } from './system/active-app'
+import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storage'
 
 const clipboardLog = createLogger('Clipboard')
 const coreBoxClipboardChangeEvent = defineRawEvent<{ item: IClipboardItem }, void>(
@@ -77,7 +80,8 @@ const clipboardLegacyQueryEvent = defineRawEvent<ClipboardMetaQueryRequest, ICli
 )
 const clipboardLegacyNewItemEvent = defineRawEvent<IClipboardItem, void>('clipboard:new-item')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
-const CLIPBOARD_POLL_INTERVAL_SECONDS = 2
+const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
+const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 5000
 const pollingService = PollingService.getInstance()
 
 const FILE_URL_FORMATS = new Set([
@@ -167,6 +171,30 @@ interface ClipboardReadImageResult {
   tfileUrl?: string
 }
 
+type ClipboardPollingIntervalOption = 1 | 3 | 5 | 10 | 15 | -1
+
+interface ClipboardPollingLowBatteryPolicy {
+  enable?: boolean
+  interval?: 10 | 15
+}
+
+interface ClipboardPollingSettings {
+  interval?: ClipboardPollingIntervalOption
+  lowBatteryPolicy?: ClipboardPollingLowBatteryPolicy
+}
+
+function isOnBatteryPowerSafe(): boolean {
+  try {
+    if (typeof powerMonitor.isOnBatteryPower === 'function') {
+      return powerMonitor.isOnBatteryPower()
+    }
+    const monitor = powerMonitor as { onBatteryPower?: boolean }
+    return monitor.onBatteryPower ?? false
+  } catch {
+    return false
+  }
+}
+
 function includesAny(formats: string[], candidates: Set<string>): boolean {
   return formats.some((format) => candidates.has(format))
 }
@@ -207,7 +235,71 @@ const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
 
 function toTfileUrl(filePath: string): string {
-  return `tfile://${filePath}`
+  const raw = filePath?.trim()
+  if (!raw) return ''
+
+  const decodeStable = (value: string): string => {
+    let decoded = value
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
+    }
+    return decoded
+  }
+
+  const normalizeAbsolutePath = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
+    }
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
+  }
+
+  let resolvedPath = raw
+  if (raw.startsWith('tfile:')) {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+        resolvedPath = decodeStable(`${parsed.hostname}:${parsed.pathname}`)
+      } else {
+        const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+        resolvedPath = decodeStable(merged)
+      }
+    } catch {
+      const fallback = raw.replace(/^tfile:\/\//i, '').split(/[?#]/)[0] ?? ''
+      resolvedPath = decodeStable(fallback)
+    }
+  } else if (raw.startsWith('file:')) {
+    try {
+      resolvedPath = fileURLToPath(raw)
+    } catch {
+      resolvedPath = raw
+    }
+  } else {
+    resolvedPath = decodeStable(raw)
+  }
+
+  const absolutePath = normalizeAbsolutePath(resolvedPath)
+  const encoded = absolutePath
+    .split('/')
+    .map((segment) => {
+      try {
+        return encodeURIComponent(decodeURIComponent(segment))
+      } catch {
+        return encodeURIComponent(segment)
+      }
+    })
+    .join('/')
+
+  return `tfile://${encoded}`
 }
 
 function isDataUrl(value: string): boolean {
@@ -486,6 +578,35 @@ export class ClipboardModule extends BaseModule {
   private monitoringStarted = false
   private clipboardCheckCooldownUntil = 0
   private clipboardCheckInFlight = false
+  private coreBoxVisible = false
+  private currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
+  private appSettingSnapshot: AppSetting | null = null
+  private unsubscribeAppSetting: (() => void) | null = null
+  private pollingSubscriptionsSetup = false
+  private powerListenersSetup = false
+  private readonly handlePowerStateChanged = (): void => {
+    if (this.coreBoxVisible) return
+    this.updateClipboardPolling()
+  }
+  private readonly handleAppSettingChange = (value: AppSetting): void => {
+    this.appSettingSnapshot = value
+    this.updateClipboardPolling()
+  }
+  private readonly handleCoreBoxShown = (): void => {
+    this.coreBoxVisible = true
+    this.updateClipboardPolling()
+    setImmediate(() => {
+      void this.runClipboardMonitor()
+    })
+  }
+  private readonly handleCoreBoxHidden = (): void => {
+    this.coreBoxVisible = false
+    this.updateClipboardPolling()
+  }
+  private readonly handleAllModulesLoaded = (): void => {
+    this.ensureAppSettingSubscription()
+    this.updateClipboardPolling()
+  }
   private activeAppCache: {
     value: Awaited<ReturnType<typeof activeAppService.getActiveApp>> | null
     fetchedAt: number
@@ -501,6 +622,128 @@ export class ClipboardModule extends BaseModule {
       create: true,
       dirName: 'clipboard'
     })
+  }
+
+  private parsePollingInterval(value: unknown): ClipboardPollingIntervalOption {
+    const num = typeof value === 'number' ? value : Number.NaN
+    if (num === -1 || num === 1 || num === 3 || num === 5 || num === 10 || num === 15) {
+      return num
+    }
+    return 5
+  }
+
+  private parseLowBatteryInterval(value: unknown): 10 | 15 {
+    return value === 15 ? 15 : 10
+  }
+
+  private resolvePollingSettings(): ClipboardPollingSettings {
+    const appSetting = this.appSettingSnapshot
+    const raw = appSetting?.tools?.clipboardPolling
+
+    const interval = this.parsePollingInterval(
+      (raw as ClipboardPollingSettings | undefined)?.interval
+    )
+    const rawLowBattery = (raw as ClipboardPollingSettings | undefined)?.lowBatteryPolicy
+    const lowBatteryPolicy: ClipboardPollingLowBatteryPolicy = {
+      enable: rawLowBattery?.enable !== false,
+      interval: this.parseLowBatteryInterval(rawLowBattery?.interval)
+    }
+
+    return {
+      interval,
+      lowBatteryPolicy
+    }
+  }
+
+  private isLowBatteryState(): boolean {
+    return isOnBatteryPowerSafe()
+  }
+
+  private resolveNormalPollingIntervalMs(): number {
+    const settings = this.resolvePollingSettings()
+    const interval = settings.interval ?? 5
+
+    if (interval === -1) {
+      return -1
+    }
+
+    const lowBatteryPolicy = settings.lowBatteryPolicy
+    if (lowBatteryPolicy?.enable !== false && this.isLowBatteryState()) {
+      return this.parseLowBatteryInterval(lowBatteryPolicy.interval) * 1000
+    }
+
+    return interval * 1000
+  }
+
+  private resolveTargetPollingIntervalMs(): number {
+    if (this.coreBoxVisible) {
+      return CLIPBOARD_VISIBLE_POLL_INTERVAL_MS
+    }
+    return this.resolveNormalPollingIntervalMs()
+  }
+
+  private restartClipboardPolling(intervalMs: number): void {
+    if (this.isDestroyed) return
+    if (!this.clipboardHelper) return
+
+    if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
+      pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
+    }
+
+    this.currentPollIntervalMs = intervalMs
+
+    if (intervalMs < 0) {
+      return
+    }
+
+    const initialDelayMs = this.coreBoxVisible ? 0 : 1000
+    pollingService.register(
+      CLIPBOARD_POLL_TASK_ID,
+      () => {
+        setImmediate(() => {
+          void this.runClipboardMonitor()
+        })
+      },
+      { interval: intervalMs, unit: 'milliseconds', initialDelayMs }
+    )
+    pollingService.start()
+  }
+
+  private updateClipboardPolling(force = false): void {
+    const targetIntervalMs = this.resolveTargetPollingIntervalMs()
+    if (!force && this.currentPollIntervalMs === targetIntervalMs) {
+      return
+    }
+    this.restartClipboardPolling(targetIntervalMs)
+  }
+
+  private ensureAppSettingSubscription(): void {
+    if (this.unsubscribeAppSetting) return
+    if (!isMainStorageReady()) return
+
+    this.appSettingSnapshot = getMainConfig(StorageList.APP_SETTING)
+    this.unsubscribeAppSetting = subscribeMainConfig(StorageList.APP_SETTING, (value) => {
+      this.handleAppSettingChange(value as AppSetting)
+    })
+  }
+
+  private setupPollingSubscriptions(): void {
+    if (this.pollingSubscriptionsSetup) return
+    this.pollingSubscriptionsSetup = true
+
+    this.ensureAppSettingSubscription()
+
+    touchEventBus.on(TalexEvents.COREBOX_WINDOW_SHOWN, this.handleCoreBoxShown)
+    touchEventBus.on(TalexEvents.COREBOX_WINDOW_HIDDEN, this.handleCoreBoxHidden)
+    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, this.handleAllModulesLoaded)
+  }
+
+  private setupPowerListeners(): void {
+    if (this.powerListenersSetup) return
+    this.powerListenersSetup = true
+
+    powerMonitor.on('on-ac', this.handlePowerStateChanged)
+    powerMonitor.on('on-battery', this.handlePowerStateChanged)
   }
 
   private async hydrateWithMeta<T extends { id?: number | null; metadata?: string | null }>(
@@ -930,9 +1173,14 @@ export class ClipboardModule extends BaseModule {
       return nativeImage.createFromDataURL(source)
     }
 
-    if (source.startsWith('tfile://')) {
-      const rawPath = decodeURIComponent(source.slice('tfile://'.length))
-      return nativeImage.createFromPath(rawPath)
+    if (source.startsWith('tfile:')) {
+      const normalizedUrl = toTfileUrl(source)
+      const rawPath = normalizedUrl.slice('tfile://'.length)
+      try {
+        return nativeImage.createFromPath(decodeURIComponent(rawPath))
+      } catch {
+        return nativeImage.createFromPath(rawPath)
+      }
     }
 
     if (source.startsWith('file://')) {
@@ -1300,19 +1548,8 @@ export class ClipboardModule extends BaseModule {
       this.clipboardHelper.bootstrap()
       this.monitoringStarted = true
     }
-    if (pollingService.isRegistered(CLIPBOARD_POLL_TASK_ID)) {
-      pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
-    }
-    pollingService.register(
-      CLIPBOARD_POLL_TASK_ID,
-      () => {
-        setImmediate(() => {
-          void this.runClipboardMonitor()
-        })
-      },
-      { interval: CLIPBOARD_POLL_INTERVAL_SECONDS, unit: 'seconds', initialDelayMs: 1000 }
-    )
-    pollingService.start()
+
+    this.updateClipboardPolling(true)
   }
 
   private async runClipboardMonitor(): Promise<void> {
@@ -1572,10 +1809,12 @@ export class ClipboardModule extends BaseModule {
     } finally {
       const duration = performance.now() - startAt
       if (duration > 500) {
-        this.clipboardCheckCooldownUntil = Date.now() + 2000
+        this.clipboardCheckCooldownUntil = Date.now() + 5000
       }
       if (duration > 200) {
-        clipboardLog.warn('Clipboard check slow', { meta: { durationMs: Math.round(duration) } })
+        clipboardLog.warn('Clipboard check slow', {
+          meta: { durationMs: Math.round(duration) }
+        })
       }
       dispose()
     }
@@ -2041,6 +2280,26 @@ export class ClipboardModule extends BaseModule {
     this.isDestroyed = true
     pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
 
+    if (this.unsubscribeAppSetting) {
+      try {
+        this.unsubscribeAppSetting()
+      } catch {
+        // ignore unsubscribe errors
+      }
+      this.unsubscribeAppSetting = null
+    }
+
+    touchEventBus.off(TalexEvents.COREBOX_WINDOW_SHOWN, this.handleCoreBoxShown)
+    touchEventBus.off(TalexEvents.COREBOX_WINDOW_HIDDEN, this.handleCoreBoxHidden)
+    touchEventBus.off(TalexEvents.ALL_MODULES_LOADED, this.handleAllModulesLoaded)
+    this.pollingSubscriptionsSetup = false
+
+    if (this.powerListenersSetup) {
+      powerMonitor.off('on-ac', this.handlePowerStateChanged)
+      powerMonitor.off('on-battery', this.handlePowerStateChanged)
+      this.powerListenersSetup = false
+    }
+
     for (const dispose of this.transportDisposers) {
       try {
         dispose()
@@ -2053,11 +2312,16 @@ export class ClipboardModule extends BaseModule {
     this.transport = null
     this.monitoringStarted = false
     this.activeAppCache = null
+    this.appSettingSnapshot = null
+    this.coreBoxVisible = false
+    this.currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   }
 
   onInit(): MaybePromise<void> {
     this.db = databaseModule.getDb()
     this.clipboardHelper = new ClipboardHelper()
+    this.setupPollingSubscriptions()
+    this.setupPowerListeners()
     this.registerTransportHandlers()
     this.startTempCleanupTasks()
     setImmediate(() => {

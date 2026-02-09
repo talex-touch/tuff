@@ -23,9 +23,12 @@ DivisionBox 是一个轻量级的子窗口系统，基于 `WebContentsView` 实�
 
 DivisionBox 有六个生命周期状态：
 
-```
-prepare → attach → active → inactive → detach → destroy
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  prepare → attach → active → inactive → detach → destroy
+---
+:::
 
 | 状态 | 说明 |
 |------|------|
@@ -38,42 +41,45 @@ prepare → attach → active → inactive → detach → destroy
 
 **DivisionBox 配置**
 
-```typescript
-interface DivisionBoxConfig {
-  /** 加载的 URL */
-  url: string
-  
-  /** 窗口标题 */
-  title: string
-  
-  /** 图标（可选） */
-  icon?: string
-  
-  /** 窗口大小 */
-  size?: 'compact' | 'medium' | 'expanded'
-  
-  /** 是否保持活跃（后台缓存） */
-  keepAlive?: boolean
-  
-  /** 关联的插件 ID */
-  pluginId?: string
-  
-  /** Header 配置（可选） */
-  header?: {
-    show: boolean
-    title?: string
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface DivisionBoxConfig {
+    /** 加载的 URL */
+    url: string
+    
+    /** 窗口标题 */
+    title: string
+    
+    /** 图标（可选） */
     icon?: string
+    
+    /** 窗口大小 */
+    size?: 'compact' | 'medium' | 'expanded'
+    
+    /** 是否保持活跃（后台缓存） */
+    keepAlive?: boolean
+    
+    /** 关联的插件 ID */
+    pluginId?: string
+    
+    /** Header 配置（可选） */
+    header?: {
+      show: boolean
+      title?: string
+      icon?: string
+    }
+  
+    /** CoreBox 头部 UI 控制（可选） */
+    ui?: {
+      showInput?: boolean
+      inputPlaceholder?: string
+      showResults?: boolean
+      initialInput?: string
+    }
   }
-
-  /** CoreBox 头部 UI 控制（可选） */
-  ui?: {
-    showInput?: boolean
-    inputPlaceholder?: string
-    showResults?: boolean
-    initialInput?: string
-  }
-}
-```
+---
+:::
 
 ## 快捷键
 
@@ -87,108 +93,126 @@ interface DivisionBoxConfig {
 
 **插件 SDK（推荐）**
 
-```typescript
-import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-
-const divisionBox = useDivisionBox()
-
-// 打开 DivisionBox
-const { sessionId } = await divisionBox.open({
-  url: 'https://example.com/tool',
-  title: '我的工具',
-  size: 'medium',
-  keepAlive: true
-})
-
-// 监听生命周期变化
-const unsubscribe = divisionBox.onLifecycleChange((event) => {
-  console.log(event.sessionId, event.oldState, event.newState)
-})
-
-// 关闭 DivisionBox
-await divisionBox.close(sessionId)
-unsubscribe()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+  
+  const divisionBox = useDivisionBox()
+  
+  // 打开 DivisionBox
+  const { sessionId } = await divisionBox.open({
+    url: 'https://example.com/tool',
+    title: '我的工具',
+    size: 'medium',
+    keepAlive: true
+  })
+  
+  // 监听生命周期变化
+  const unsubscribe = divisionBox.onLifecycleChange((event) => {
+    console.log(event.sessionId, event.oldState, event.newState)
+  })
+  
+  // 关闭 DivisionBox
+  await divisionBox.close(sessionId)
+  unsubscribe()
+---
+:::
 
 **从渲染进程打开 DivisionBox**
 
-```typescript
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-
-async function openDivisionBox() {
-  const transport = useTuffTransport()
-  const response = await transport.send(DivisionBoxEvents.open, {
-    url: 'plugin://my-plugin/panel.html',
-    title: '我的面板',
-    icon: 'ri:dashboard-line',
-    size: 'medium',
-    keepAlive: true,
-    pluginId: 'my-plugin'
-  })
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useTuffTransport } from '@talex-touch/utils/transport'
+  import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
   
-  if (response?.success) {
-    console.log('Session ID:', response.data.sessionId)
+  async function openDivisionBox() {
+    const transport = useTuffTransport()
+    const response = await transport.send(DivisionBoxEvents.open, {
+      url: 'plugin://my-plugin/panel.html',
+      title: '我的面板',
+      icon: 'ri:dashboard-line',
+      size: 'medium',
+      keepAlive: true,
+      pluginId: 'my-plugin'
+    })
+    
+    if (response?.success) {
+      console.log('Session ID:', response.data.sessionId)
+    }
   }
-}
-```
+---
+:::
 
 **关闭 DivisionBox**
 
-```typescript
-async function closeDivisionBox(sessionId: string) {
-  const transport = useTuffTransport()
-  await transport.send(DivisionBoxEvents.close, {
-    sessionId,
-    options: {
-      delay: 0,
-      animation: false,
-      force: false
-    }
-  })
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  async function closeDivisionBox(sessionId: string) {
+    const transport = useTuffTransport()
+    await transport.send(DivisionBoxEvents.close, {
+      sessionId,
+      options: {
+        delay: 0,
+        animation: false,
+        force: false
+      }
+    })
+  }
+---
+:::
 
 **获取会话状态**
 
-```typescript
-async function getSessionState(sessionId: string) {
-  const transport = useTuffTransport()
-  const response = await transport.send(DivisionBoxEvents.getState, {
-    sessionId
-  })
-  
-  if (response?.success) {
-    console.log('State:', response.data.state)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  async function getSessionState(sessionId: string) {
+    const transport = useTuffTransport()
+    const response = await transport.send(DivisionBoxEvents.getState, {
+      sessionId
+    })
+    
+    if (response?.success) {
+      console.log('State:', response.data.state)
+    }
   }
-}
-```
+---
+:::
 
 **更新会话状态**
 
-```typescript
-async function updateSessionState(sessionId: string, key: string, value: any) {
-  const transport = useTuffTransport()
-  await transport.send(DivisionBoxEvents.updateState, {
-    sessionId,
-    key,
-    value
-  })
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  async function updateSessionState(sessionId: string, key: string, value: any) {
+    const transport = useTuffTransport()
+    await transport.send(DivisionBoxEvents.updateState, {
+      sessionId,
+      key,
+      value
+    })
+  }
+---
+:::
 
 **获取所有活跃会话**
 
-```typescript
-async function getActiveSessions() {
-  const transport = useTuffTransport()
-  const response = await transport.send(DivisionBoxEvents.getActiveSessions, {})
-  
-  if (response?.success) {
-    console.log('Active sessions:', response.data)
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  async function getActiveSessions() {
+    const transport = useTuffTransport()
+    const response = await transport.send(DivisionBoxEvents.getActiveSessions, {})
+    
+    if (response?.success) {
+      console.log('Active sessions:', response.data)
+    }
   }
-}
-```
+---
+:::
 
 ## 插件 SDK
 
@@ -198,41 +222,47 @@ async function getActiveSessions() {
 
 打开新的 DivisionBox 窗口。
 
-```typescript
-import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-
-const divisionBox = useDivisionBox()
-
-const { sessionId } = await divisionBox.open({
-  url: 'https://example.com',
-  title: 'Web Tool',
-  icon: 'ri:tools-line',
-  size: 'medium',
-  keepAlive: true,
-  header: {
-    show: true,
-    title: 'Custom Title'
-  }
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
+  
+  const divisionBox = useDivisionBox()
+  
+  const { sessionId } = await divisionBox.open({
+    url: 'https://example.com',
+    title: 'Web Tool',
+    icon: 'ri:tools-line',
+    size: 'medium',
+    keepAlive: true,
+    header: {
+      show: true,
+      title: 'Custom Title'
+    }
+  })
+---
+:::
 
 **`close(sessionId, options?)`**
 
 关闭 DivisionBox 窗口。
 
-```typescript
-// 简单关闭
-await divisionBox.close(sessionId)
-
-// 带延迟和动画
-await divisionBox.close(sessionId, {
-  delay: 1000,
-  animation: true
-})
-
-// 强制关闭（忽略 keepAlive）
-await divisionBox.close(sessionId, { force: true })
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 简单关闭
+  await divisionBox.close(sessionId)
+  
+  // 带延迟和动画
+  await divisionBox.close(sessionId, {
+    delay: 1000,
+    animation: true
+  })
+  
+  // 强制关闭（忽略 keepAlive）
+  await divisionBox.close(sessionId, { force: true })
+---
+:::
 
 **`onStateChange(handler)`**
 
@@ -240,51 +270,63 @@ await divisionBox.close(sessionId, { force: true })
 
 > `onStateChange` 提供简化的状态变更回调；需要完整生命周期信息时使用 `onLifecycleChange`。
 
-```typescript
-const unsubscribe = divisionBox.onStateChange((data) => {
-  console.log(`Session ${data.sessionId} changed to ${data.state}`)
-})
-
-// 停止监听
-unsubscribe()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unsubscribe = divisionBox.onStateChange((data) => {
+    console.log(`Session ${data.sessionId} changed to ${data.state}`)
+  })
+  
+  // 停止监听
+  unsubscribe()
+---
+:::
 
 **`onLifecycleChange(handler)`**
 
 监听完整生命周期变化事件。
 
-```typescript
-const unsubscribe = divisionBox.onLifecycleChange((event) => {
-  console.log(event.sessionId, event.oldState, event.newState)
-})
-
-// 停止监听
-unsubscribe()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const unsubscribe = divisionBox.onLifecycleChange((event) => {
+    console.log(event.sessionId, event.oldState, event.newState)
+  })
+  
+  // 停止监听
+  unsubscribe()
+---
+:::
 
 **`updateState(sessionId, key, value)`**
 
 更新会话状态数据。
 
-```typescript
-// 保存滚动位置
-await divisionBox.updateState(sessionId, 'scrollY', 150)
-
-// 保存草稿
-await divisionBox.updateState(sessionId, 'draft', {
-  text: 'Hello world',
-  timestamp: Date.now()
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // 保存滚动位置
+  await divisionBox.updateState(sessionId, 'scrollY', 150)
+  
+  // 保存草稿
+  await divisionBox.updateState(sessionId, 'draft', {
+    text: 'Hello world',
+    timestamp: Date.now()
+  })
+---
+:::
 
 **`getState(sessionId, key)`**
 
 获取会话状态数据。
 
-```typescript
-const scrollY = await divisionBox.getState(sessionId, 'scrollY')
-const draft = await divisionBox.getState(sessionId, 'draft')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const scrollY = await divisionBox.getState(sessionId, 'scrollY')
+  const draft = await divisionBox.getState(sessionId, 'draft')
+---
+:::
 
 ## URL 协议
 
@@ -301,34 +343,40 @@ DivisionBox 支持多种 URL 协议：
 
 DivisionBox 可以作为 Flow Transfer 的目标：
 
-```json
-{
-  "flowTargets": [
-    {
-      "id": "open-in-panel",
-      "name": "在面板中打开",
-      "supportedTypes": ["json", "text"],
-      "featureId": "open-panel"
-    }
-  ]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "flowTargets": [
+      {
+        "id": "open-in-panel",
+        "name": "在面板中打开",
+        "supportedTypes": ["json", "text"],
+        "featureId": "open-panel"
+      }
+    ]
+  }
+---
+:::
 
 当 Flow 触发时，可以在 Feature 中打开 DivisionBox：
 
-```typescript
-function onFeatureTriggered(featureId: string, query: TuffQuery) {
-  if (isFlowTriggered(query)) {
-    const flowData = extractFlowData(query)
-    
-    // 打开 DivisionBox 显示 Flow 数据
-    divisionBox.open({
-      url: `/viewer.html?sessionId=${flowData.sessionId}`,
-      title: '查看数据'
-    })
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  function onFeatureTriggered(featureId: string, query: TuffQuery) {
+    if (isFlowTriggered(query)) {
+      const flowData = extractFlowData(query)
+      
+      // 打开 DivisionBox 显示 Flow 数据
+      divisionBox.open({
+        url: `/viewer.html?sessionId=${flowData.sessionId}`,
+        title: '查看数据'
+      })
+    }
   }
-}
-```
+---
+:::
 
 ## IPC 通道
 

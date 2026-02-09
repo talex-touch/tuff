@@ -15,7 +15,9 @@ syncStatus: migrated
 
 
 ## Demo
-::TuffDemo{title="Tags" description="Color and size variations" code-lang="vue"}
+### Tags
+Color and size variations
+:::TuffDemoWrapper{demo="TagTagsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -25,15 +27,7 @@ code: |
     <TxTag label="Danger" color="var(--tx-color-danger)" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag label="Default" />
-  <tx-tag label="Success" color="var(--tx-color-success)" />
-  <tx-tag label="Warning" color="var(--tx-color-warning)" />
-  <tx-tag label="Danger" color="var(--tx-color-danger)" />
-</div>
-::
-
+:::
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -54,7 +48,9 @@ rows:
 ::
 
 ## Composite Patterns
-::TuffDemo{title="Tag + Button" description="Tags paired with actions." code-lang="vue"}
+### Tag + Button
+Tags paired with actions.
+:::TuffDemoWrapper{demo="TagTagButtonDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -62,9 +58,4 @@ code: |
     <TxButton size="sm">Upgrade</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-tag label="Beta" />
-  <tx-button size="sm">Upgrade</tx-button>
-</div>
-::
+:::

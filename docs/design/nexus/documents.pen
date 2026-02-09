@@ -1,0 +1,1469 @@
+{
+  "version": "2.7",
+  "children": [
+    {
+      "type": "frame",
+      "id": "art01",
+      "x": 0,
+      "y": 0,
+      "name": "Tuff Docs — Apple Design Language",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "#F5F5F7",
+      "layout": "none",
+      "children": [
+        {
+          "type": "frame",
+          "id": "nav00",
+          "name": "Navigation Bar",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "height": 52,
+          "fill": "#FFFFFF",
+          "layout": "none",
+          "children": [
+            {
+              "type": "ellipse",
+              "id": "lgico",
+              "x": 28,
+              "y": 14,
+              "width": 24,
+              "height": 24,
+              "fill": "#0071E3"
+            },
+            {
+              "type": "text",
+              "id": "lgtxt",
+              "x": 60,
+              "y": 16,
+              "content": "Tuff Docs",
+              "fontSize": 17,
+              "fontWeight": 600,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "frame",
+              "id": "betab",
+              "x": 146,
+              "y": 18,
+              "width": 40,
+              "height": 18,
+              "fill": "#E8F1FD",
+              "borderRadius": 9,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "betat",
+                  "x": 7,
+                  "y": 2,
+                  "content": "BETA",
+                  "fontSize": 10,
+                  "fontWeight": 700,
+                  "color": "#0071E3",
+                  "letterSpacing": 0.8
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "nl001",
+              "x": 840,
+              "y": 17,
+              "content": "Market",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "nl002",
+              "x": 920,
+              "y": 17,
+              "content": "Tutorial",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "nl003",
+              "x": 1000,
+              "y": 12,
+              "width": 84,
+              "height": 28,
+              "fill": "#0071E3",
+              "borderRadius": 14,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "nl03t",
+                  "x": 12,
+                  "y": 6,
+                  "content": "Developer",
+                  "fontSize": 13,
+                  "fontWeight": 500,
+                  "color": "#FFFFFF"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "nl004",
+              "x": 1108,
+              "y": 17,
+              "content": "Updates",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "ellipse",
+              "id": "avtr0",
+              "x": 1388,
+              "y": 13,
+              "width": 26,
+              "height": 26,
+              "fill": "#F2F2F7",
+              "stroke": "#D2D2D7",
+              "strokeWidth": 1
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "nsep0",
+          "x": 0,
+          "y": 52,
+          "width": 1440,
+          "height": 1,
+          "fill": "#E5E5EA"
+        },
+        {
+          "type": "frame",
+          "id": "sbar0",
+          "name": "Left Sidebar",
+          "x": 0,
+          "y": 53,
+          "width": 244,
+          "height": 847,
+          "fill": "#F7F7F8",
+          "layout": "none",
+          "clip": true,
+          "children": [
+            {
+              "type": "frame",
+              "id": "srch0",
+              "name": "Search",
+              "x": 16,
+              "y": 16,
+              "width": 212,
+              "height": 32,
+              "fill": "#FFFFFF",
+              "borderRadius": 8,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "srci0",
+                  "x": 10,
+                  "y": 8,
+                  "content": "⌕",
+                  "fontSize": 14,
+                  "color": "#8E8E93"
+                },
+                {
+                  "type": "text",
+                  "id": "srct0",
+                  "x": 28,
+                  "y": 8,
+                  "content": "Search components...",
+                  "fontSize": 13,
+                  "color": "#8E8E93",
+                  "fontFamily": "SF Pro Text"
+                },
+                {
+                  "type": "frame",
+                  "id": "srck0",
+                  "x": 170,
+                  "y": 6,
+                  "width": 32,
+                  "height": 20,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 4,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "srck1",
+                      "x": 7,
+                      "y": 3,
+                      "content": "⌘K",
+                      "fontSize": 11,
+                      "fontWeight": 500,
+                      "color": "#8E8E93"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "cat00",
+              "x": 20,
+              "y": 68,
+              "content": "TUFFEX COMPONENTS",
+              "fontSize": 10,
+              "fontWeight": 700,
+              "color": "#A1A1A6",
+              "letterSpacing": 1.5,
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "cat01",
+              "x": 20,
+              "y": 100,
+              "content": "Basic",
+              "fontSize": 12,
+              "fontWeight": 600,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "itm00",
+              "name": "Active: Button",
+              "x": 0,
+              "y": 122,
+              "width": 244,
+              "height": 32,
+              "fill": "rgba(0,113,227,0.12)",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "ind00",
+                  "x": 0,
+                  "y": 0,
+                  "width": 3,
+                  "height": 32,
+                  "fill": "#0071E3",
+                  "borderRadius": 2
+                },
+                {
+                  "type": "text",
+                  "id": "itx00",
+                  "x": 32,
+                  "y": 8,
+                  "content": "Button",
+                  "fontSize": 14,
+                  "fontWeight": 500,
+                  "color": "#0071E3",
+                  "fontFamily": "SF Pro Text"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "itm01",
+              "x": 32,
+              "y": 164,
+              "content": "Icon",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm02",
+              "x": 32,
+              "y": 192,
+              "content": "Tag",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm03",
+              "x": 32,
+              "y": 220,
+              "content": "Avatar",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm04",
+              "x": 32,
+              "y": 248,
+              "content": "Avatar Variants",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm05",
+              "x": 32,
+              "y": 276,
+              "content": "CornerOverlay",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm06",
+              "x": 32,
+              "y": 304,
+              "content": "FlatButton",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm07",
+              "x": 32,
+              "y": 332,
+              "content": "Fusion",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm08",
+              "x": 32,
+              "y": 360,
+              "content": "GlowText",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm09",
+              "x": 32,
+              "y": 388,
+              "content": "GradientBorder",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm10",
+              "x": 32,
+              "y": 416,
+              "content": "OutlineBorder",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm11",
+              "x": 32,
+              "y": 444,
+              "content": "TextTransformer",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "rectangle",
+              "id": "csep1",
+              "x": 20,
+              "y": 478,
+              "width": 204,
+              "height": 1,
+              "fill": "#E5E5EA"
+            },
+            {
+              "type": "text",
+              "id": "cat02",
+              "x": 20,
+              "y": 496,
+              "content": "Form",
+              "fontSize": 12,
+              "fontWeight": 600,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm12",
+              "x": 32,
+              "y": 520,
+              "content": "Input",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm13",
+              "x": 32,
+              "y": 548,
+              "content": "Switch",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm14",
+              "x": 32,
+              "y": 576,
+              "content": "Cascader",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm15",
+              "x": 32,
+              "y": 604,
+              "content": "ChatComposer",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm16",
+              "x": 32,
+              "y": 632,
+              "content": "Checkbox",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm17",
+              "x": 32,
+              "y": 660,
+              "content": "CommandPalette",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "itm18",
+              "x": 32,
+              "y": 688,
+              "content": "DatePicker",
+              "fontSize": 14,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "ssep0",
+          "x": 244,
+          "y": 53,
+          "width": 1,
+          "height": 847,
+          "fill": "#E5E5EA"
+        },
+        {
+          "type": "frame",
+          "id": "main0",
+          "name": "Main Content",
+          "x": 245,
+          "y": 53,
+          "width": 975,
+          "height": 847,
+          "fill": "#F5F5F7",
+          "layout": "none",
+          "clip": true,
+          "children": [
+            {
+              "type": "text",
+              "id": "ttl00",
+              "x": 56,
+              "y": 48,
+              "content": "Button",
+              "fontSize": 34,
+              "fontWeight": 700,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "text",
+              "id": "sub00",
+              "x": 56,
+              "y": 96,
+              "content": "Trigger actions and navigation with elegant, accessible button controls.",
+              "fontSize": 17,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text",
+              "lineHeight": 1.5
+            },
+            {
+              "type": "rectangle",
+              "id": "div00",
+              "x": 56,
+              "y": 140,
+              "width": 660,
+              "height": 1,
+              "fill": "#E5E5EA"
+            },
+            {
+              "type": "text",
+              "id": "sec00",
+              "x": 56,
+              "y": 168,
+              "content": "Variants",
+              "fontSize": 28,
+              "fontWeight": 700,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "text",
+              "id": "ssc00",
+              "x": 56,
+              "y": 224,
+              "content": "Appearance",
+              "fontSize": 22,
+              "fontWeight": 600,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "text",
+              "id": "dsc00",
+              "x": 56,
+              "y": 260,
+              "content": "Base visual styles and semantic variants for communicating intent.",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "pvc00",
+              "name": "Appearance Preview",
+              "x": 56,
+              "y": 296,
+              "width": 660,
+              "height": 148,
+              "fill": "#FFFFFF",
+              "borderRadius": 12,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "dot01",
+                  "x": 16,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FF5F57"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dot02",
+                  "x": 32,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FEBC2E"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dot03",
+                  "x": 48,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#28C840"
+                },
+                {
+                  "type": "frame",
+                  "id": "btn00",
+                  "x": 24,
+                  "y": 52,
+                  "width": 72,
+                  "height": 36,
+                  "fill": "#FFFFFF",
+                  "borderRadius": 8,
+                  "stroke": "#D2D2D7",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt000",
+                      "x": 10,
+                      "y": 9,
+                      "content": "Default",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#1D1D1F"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn01",
+                  "x": 108,
+                  "y": 52,
+                  "width": 80,
+                  "height": 36,
+                  "fill": "#0071E3",
+                  "borderRadius": 8,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt010",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Primary",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn02",
+                  "x": 200,
+                  "y": 52,
+                  "width": 96,
+                  "height": 36,
+                  "fill": "#E8F1FD",
+                  "borderRadius": 8,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt020",
+                      "x": 10,
+                      "y": 9,
+                      "content": "Secondary",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#0071E3"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn03",
+                  "x": 308,
+                  "y": 52,
+                  "width": 68,
+                  "height": 36,
+                  "fill": "transparent",
+                  "borderRadius": 8,
+                  "stroke": "#D2D2D7",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt030",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Ghost",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#6E6E73"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn04",
+                  "x": 388,
+                  "y": 52,
+                  "width": 72,
+                  "height": 36,
+                  "fill": "#D70015",
+                  "borderRadius": 8,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt040",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Danger",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn05",
+                  "x": 472,
+                  "y": 52,
+                  "width": 80,
+                  "height": 36,
+                  "fill": "#34C759",
+                  "borderRadius": 8,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt050",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Success",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "btn06",
+                  "x": 564,
+                  "y": 52,
+                  "width": 80,
+                  "height": 36,
+                  "fill": "#FF9500",
+                  "borderRadius": 8,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "bt060",
+                      "x": 10,
+                      "y": 9,
+                      "content": "Warning",
+                      "fontSize": 14,
+                      "fontWeight": 500,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "scbt0",
+                  "x": 250,
+                  "y": 108,
+                  "width": 140,
+                  "height": 28,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 14,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sctx0",
+                      "x": 20,
+                      "y": 6,
+                      "content": "↓  Show Code",
+                      "fontSize": 13,
+                      "fontWeight": 500,
+                      "color": "#6E6E73"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ssc01",
+              "x": 56,
+              "y": 472,
+              "content": "Disabled",
+              "fontSize": 22,
+              "fontWeight": 600,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "text",
+              "id": "dsc01",
+              "x": 56,
+              "y": 508,
+              "content": "Inactive states for buttons that are not currently actionable.",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "pvc01",
+              "name": "Disabled Preview",
+              "x": 56,
+              "y": 540,
+              "width": 660,
+              "height": 130,
+              "fill": "#FFFFFF",
+              "borderRadius": 12,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "dt011",
+                  "x": 16,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FF5F57"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dt012",
+                  "x": 32,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FEBC2E"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dt013",
+                  "x": 48,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#28C840"
+                },
+                {
+                  "type": "frame",
+                  "id": "db001",
+                  "x": 24,
+                  "y": 48,
+                  "width": 72,
+                  "height": 36,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 8,
+                  "opacity": 0.35,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dbt01",
+                      "x": 10,
+                      "y": 9,
+                      "content": "Default",
+                      "fontSize": 14,
+                      "color": "#8E8E93"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "db002",
+                  "x": 108,
+                  "y": 48,
+                  "width": 80,
+                  "height": 36,
+                  "fill": "#0071E3",
+                  "borderRadius": 8,
+                  "opacity": 0.35,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dbt02",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Primary",
+                      "fontSize": 14,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "db003",
+                  "x": 200,
+                  "y": 48,
+                  "width": 96,
+                  "height": 36,
+                  "fill": "#E8F1FD",
+                  "borderRadius": 8,
+                  "opacity": 0.35,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dbt03",
+                      "x": 10,
+                      "y": 9,
+                      "content": "Secondary",
+                      "fontSize": 14,
+                      "color": "#0071E3"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "db004",
+                  "x": 308,
+                  "y": 48,
+                  "width": 68,
+                  "height": 36,
+                  "fill": "transparent",
+                  "borderRadius": 8,
+                  "stroke": "#D2D2D7",
+                  "strokeWidth": 1,
+                  "opacity": 0.35,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dbt04",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Ghost",
+                      "fontSize": 14,
+                      "color": "#8E8E93"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "db005",
+                  "x": 388,
+                  "y": 48,
+                  "width": 72,
+                  "height": 36,
+                  "fill": "#D70015",
+                  "borderRadius": 8,
+                  "opacity": 0.35,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dbt05",
+                      "x": 12,
+                      "y": 9,
+                      "content": "Danger",
+                      "fontSize": 14,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "scbt1",
+                  "x": 250,
+                  "y": 96,
+                  "width": 140,
+                  "height": 28,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 14,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sctx1",
+                      "x": 20,
+                      "y": 6,
+                      "content": "↓  Show Code",
+                      "fontSize": 13,
+                      "fontWeight": 500,
+                      "color": "#6E6E73"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ssc02",
+              "x": 56,
+              "y": 698,
+              "content": "Loading",
+              "fontSize": 22,
+              "fontWeight": 600,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Display"
+            },
+            {
+              "type": "text",
+              "id": "dsc02",
+              "x": 56,
+              "y": 734,
+              "content": "Show loading feedback during asynchronous actions.",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "color": "#6E6E73",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "pvc02",
+              "name": "Loading Preview",
+              "x": 56,
+              "y": 766,
+              "width": 660,
+              "height": 76,
+              "fill": "#FFFFFF",
+              "borderRadius": 12,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "dt021",
+                  "x": 16,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FF5F57"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dt022",
+                  "x": 32,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#FEBC2E"
+                },
+                {
+                  "type": "ellipse",
+                  "id": "dt023",
+                  "x": 48,
+                  "y": 16,
+                  "width": 10,
+                  "height": 10,
+                  "fill": "#28C840"
+                },
+                {
+                  "type": "frame",
+                  "id": "lb001",
+                  "x": 24,
+                  "y": 40,
+                  "width": 110,
+                  "height": 28,
+                  "fill": "#0071E3",
+                  "borderRadius": 7,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lbt01",
+                      "x": 14,
+                      "y": 6,
+                      "content": "◎  Loading...",
+                      "fontSize": 13,
+                      "fontWeight": 500,
+                      "color": "#FFFFFF"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "lb002",
+                  "x": 146,
+                  "y": 40,
+                  "width": 100,
+                  "height": 28,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 7,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lbt02",
+                      "x": 10,
+                      "y": 6,
+                      "content": "Click to load",
+                      "fontSize": 13,
+                      "fontWeight": 500,
+                      "color": "#1D1D1F"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "rectangle",
+          "id": "rsep0",
+          "x": 1219,
+          "y": 53,
+          "width": 1,
+          "height": 847,
+          "fill": "#E5E5EA"
+        },
+        {
+          "type": "frame",
+          "id": "otln0",
+          "name": "Right Outline",
+          "x": 1220,
+          "y": 53,
+          "width": 220,
+          "height": 847,
+          "fill": "#F7F7F8",
+          "layout": "none",
+          "clip": true,
+          "children": [
+            {
+              "type": "text",
+              "id": "olbl0",
+              "x": 24,
+              "y": 28,
+              "content": "ON THIS PAGE",
+              "fontSize": 10,
+              "fontWeight": 700,
+              "color": "#A1A1A6",
+              "letterSpacing": 1.8,
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln00",
+              "x": 24,
+              "y": 60,
+              "content": "Usage",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "frame",
+              "id": "oln01",
+              "name": "Active Outline Item",
+              "x": 20,
+              "y": 86,
+              "width": 180,
+              "height": 24,
+              "fill": "transparent",
+              "layout": "none",
+              "children": [
+                {
+                  "type": "rectangle",
+                  "id": "oind0",
+                  "x": 0,
+                  "y": 0,
+                  "width": 2,
+                  "height": 24,
+                  "fill": "#0071E3",
+                  "borderRadius": 1
+                },
+                {
+                  "type": "text",
+                  "id": "otx01",
+                  "x": 12,
+                  "y": 4,
+                  "content": "Variants",
+                  "fontSize": 13,
+                  "fontWeight": 600,
+                  "color": "#0071E3",
+                  "fontFamily": "SF Pro Text"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "oln02",
+              "x": 44,
+              "y": 120,
+              "content": "Appearance",
+              "fontSize": 13,
+              "fontWeight": 500,
+              "color": "#1D1D1F",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln03",
+              "x": 44,
+              "y": 146,
+              "content": "Disabled",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln04",
+              "x": 44,
+              "y": 172,
+              "content": "Loading",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln05",
+              "x": 44,
+              "y": 198,
+              "content": "Sizes",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln06",
+              "x": 44,
+              "y": 224,
+              "content": "Block",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln07",
+              "x": 44,
+              "y": 250,
+              "content": "Shapes",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln08",
+              "x": 44,
+              "y": 276,
+              "content": "Haptics",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln09",
+              "x": 24,
+              "y": 314,
+              "content": "API Specifications",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln10",
+              "x": 24,
+              "y": 340,
+              "content": "Types",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "oln11",
+              "x": 24,
+              "y": 366,
+              "content": "Convention Notes",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "rectangle",
+              "id": "osep0",
+              "x": 24,
+              "y": 404,
+              "width": 172,
+              "height": 1,
+              "fill": "#E5E5EA"
+            },
+            {
+              "type": "frame",
+              "id": "aibg0",
+              "name": "AI Generated Badge",
+              "x": 24,
+              "y": 424,
+              "width": 172,
+              "height": 72,
+              "fill": "#FFFFFF",
+              "borderRadius": 12,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ailbl",
+                  "x": 14,
+                  "y": 12,
+                  "content": "✦  AI Generated",
+                  "fontSize": 12,
+                  "fontWeight": 600,
+                  "color": "#AF52DE",
+                  "fontFamily": "SF Pro Text"
+                },
+                {
+                  "type": "text",
+                  "id": "aitxt",
+                  "x": 14,
+                  "y": 36,
+                  "content": "AI generated content for\nreference only. Rely on\nVerified docs.",
+                  "fontSize": 11,
+                  "fontWeight": 400,
+                  "color": "#8E8E93",
+                  "fontFamily": "SF Pro Text",
+                  "lineHeight": 1.4
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zenb0",
+              "name": "Zen Assistant",
+              "x": 24,
+              "y": 516,
+              "width": 172,
+              "height": 80,
+              "fill": "#FFFFFF",
+              "borderRadius": 12,
+              "stroke": "#E5E5EA",
+              "strokeWidth": 1,
+              "layout": "none",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "zenlb",
+                  "x": 14,
+                  "y": 12,
+                  "content": "✦  Zen Assistant",
+                  "fontSize": 12,
+                  "fontWeight": 600,
+                  "color": "#0071E3",
+                  "fontFamily": "SF Pro Text"
+                },
+                {
+                  "type": "text",
+                  "id": "zentx",
+                  "x": 14,
+                  "y": 34,
+                  "content": "Get instant help with\ncomponent implementation.",
+                  "fontSize": 11,
+                  "fontWeight": 400,
+                  "color": "#8E8E93",
+                  "fontFamily": "SF Pro Text",
+                  "lineHeight": 1.4
+                },
+                {
+                  "type": "frame",
+                  "id": "zenin",
+                  "x": 10,
+                  "y": 58,
+                  "width": 152,
+                  "height": 14,
+                  "fill": "#F2F2F7",
+                  "borderRadius": 7,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zenit",
+                      "x": 8,
+                      "y": 1,
+                      "content": "Ask docs...",
+                      "fontSize": 10,
+                      "color": "#8E8E93"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "rectangle",
+              "id": "osep1",
+              "x": 24,
+              "y": 616,
+              "width": 172,
+              "height": 1,
+              "fill": "#E5E5EA"
+            },
+            {
+              "type": "text",
+              "id": "hlbl0",
+              "x": 24,
+              "y": 636,
+              "content": "HELP",
+              "fontSize": 10,
+              "fontWeight": 700,
+              "color": "#A1A1A6",
+              "letterSpacing": 1.8,
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "hlnk0",
+              "x": 24,
+              "y": 664,
+              "content": "Report an Issue",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "hlnk1",
+              "x": 24,
+              "y": 690,
+              "content": "Request Feature",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            },
+            {
+              "type": "text",
+              "id": "hlnk2",
+              "x": 24,
+              "y": 716,
+              "content": "View Repository",
+              "fontSize": 13,
+              "fontWeight": 400,
+              "color": "#8E8E93",
+              "fontFamily": "SF Pro Text"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

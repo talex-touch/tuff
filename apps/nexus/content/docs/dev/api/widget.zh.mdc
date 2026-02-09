@@ -25,77 +25,89 @@ Widgets 是插件在 CoreBox 或 DivisionBox 中渲染的轻量 UI 组件。
 
 ## Manifest 配置
 
-```json
-{
-  "type": "widget",
-  "id": "todo.widget",
-  "title": "任务面板",
-  "size": { "width": 4, "height": 3 },
-  "interaction": {
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
     "type": "widget",
-    "path": "todo-panel.vue"
+    "id": "todo.widget",
+    "title": "任务面板",
+    "size": { "width": 4, "height": 3 },
+    "interaction": {
+      "type": "widget",
+      "path": "todo-panel.vue"
+    }
   }
-}
-```
+---
+:::
 
 ## 文件结构
 
-```
-my-plugin/
-├── widgets/
-│   ├── todo-panel.vue      # Vue SFC
-│   ├── quick-action.tsx    # TSX component
-│   └── helper.ts           # Plain TS module
-├── manifest.json
-└── index.js
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  my-plugin/
+  ├── widgets/
+  │   ├── todo-panel.vue      # Vue SFC
+  │   ├── quick-action.tsx    # TSX component
+  │   └── helper.ts           # Plain TS module
+  ├── manifest.json
+  └── index.js
+---
+:::
 
 ## Vue Widget 示例
 
 `widgets/todo-panel.vue`
-```vue
-<template>
-  <div class="todo-panel">
-    <h3>{{ title }}</h3>
-    <ul>
-      <li v-for="item in items" :key="item.id">{{ item.text }}</li>
-    </ul>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref } from 'vue'
-import { usePluginContext } from '@talex-touch/utils/plugin/sdk'
-
-const ctx = usePluginContext()
-const title = ref('My Tasks')
-const items = ref([{ id: 1, text: 'Learn Widgets' }])
-</script>
-
-<style scoped>
-.todo-panel { padding: 16px; }
-</style>
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <div class="todo-panel">
+      <h3>{{ title }}</h3>
+      <ul>
+        <li v-for="item in items" :key="item.id">{{ item.text }}</li>
+      </ul>
+    </div>
+  </template>
+  
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  import { usePluginContext } from '@talex-touch/utils/plugin/sdk'
+  
+  const ctx = usePluginContext()
+  const title = ref('My Tasks')
+  const items = ref([{ id: 1, text: 'Learn Widgets' }])
+  </script>
+  
+  <style scoped>
+  .todo-panel { padding: 16px; }
+  </style>
+---
+:::
 
 ## TSX Widget 示例
 
 `widgets/quick-action.tsx`
-```tsx
-import { defineComponent, ref } from 'vue'
-
-export default defineComponent({
-  setup() {
-    const count = ref(0)
-    return () => (
-      <div class="action-panel">
-        <button onClick={() => count.value++}>
-          Clicked {count.value} times
-        </button>
-      </div>
-    )
-  }
-})
-```
+:::TuffCodeBlock{lang="tsx"}
+---
+code: |
+  import { defineComponent, ref } from 'vue'
+  
+  export default defineComponent({
+    setup() {
+      const count = ref(0)
+      return () => (
+        <div class="action-panel">
+          <button onClick={() => count.value++}>
+            Clicked {count.value} times
+          </button>
+        </div>
+      )
+    }
+  })
+---
+:::
 
 ## 允许的依赖
 
@@ -129,15 +141,18 @@ Widgets 运行在受控环境，仅允许以下包：
 
 `{dev.address}/widgets/{interaction.path}`（未提供扩展名时默认 `.vue`）。
 
-```json
-{
-  "dev": {
-    "enable": true,
-    "source": true,
-    "address": "http://localhost:5173/"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "dev": {
+      "enable": true,
+      "source": true,
+      "address": "http://localhost:5173/"
+    }
   }
-}
-```
+---
+:::
 
 远程源码会在每次触发时拉取；文件监听只对本地路径生效。
 

@@ -1,77 +1,62 @@
 ---
-title: "VirtualList 虚拟列表"
-description: "用于长列表渲染场景，降低 DOM 数量提升性能。"
+title: "VirtualList"
+description: "Virtualized list for long data sets with lower DOM cost."
 category: Data
 syncStatus: migrated
 ---
-# VirtualList 虚拟列表
+# VirtualList
 
-用于长列表渲染场景，降低 DOM 数量提升性能。
+Virtualized list for long data sets with lower DOM cost.
 
-<script setup lang="ts">
-const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
-</script>
+## Basic Usage
 
-## 基础用法
+::TuffDemoWrapper{demo="VirtualListVirtualListDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
+  </script>
 
-<ClientOnly>
-<div class="group">
-  <TxVirtualList :items="items" :item-height="36" height="240px">
-    <template #item="{ item, index }">
-      <div style="padding: 6px 12px; width: 100%;">
-        {{ index + 1 }}. {{ item }}
-      </div>
-    </template>
-  </TxVirtualList>
-</div>
-</ClientOnly>
-
-::: details Show Code
-```vue
-<script setup lang="ts">
-const items = Array.from({ length: 100 }, (_, i) => `Item ${i + 1}`)
-</script>
-
-<template>
-  <TxVirtualList :items="items" :item-height="36" height="240px">
-    <template #item="{ item, index }">
-      <div style="padding: 6px 12px; width: 100%;">
-        {{ index + 1 }}. {{ item }}
-      </div>
-    </template>
-  </TxVirtualList>
-</template>
-```
-:::
+  <template>
+    <TxVirtualList :items="items" :item-height="36" height="240px">
+      <template #item="{ item, index }">
+        <div style="padding: 6px 12px; width: 100%;">
+          {{ index + 1 }}. {{ item }}
+        </div>
+      </template>
+    </TxVirtualList>
+  </template>
+---
+::
 
 ## API
 
 ### TxVirtualList Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `items` | `any[]` | `[]` | 数据列表 |
-| `itemHeight` | `number` | - | 单项高度 |
-| `height` | `number \| string` | `320` | 容器高度 |
-| `overscan` | `number` | `4` | 预渲染数量 |
-| `itemKey` | `string \| (item, index) => string \| number` | `index` | 唯一 key |
+| `items` | `any[]` | `[]` | Data items |
+| `itemHeight` | `number` | - | Item height |
+| `height` | `number \| string` | `320` | Container height |
+| `overscan` | `number` | `4` | Pre-render count |
+| `itemKey` | `string \| (item, index) => string \| number` | `index` | Unique key |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `scroll` | `({ scrollTop, startIndex, endIndex })` | 滚动事件 |
+| `scroll` | `({ scrollTop, startIndex, endIndex })` | Scroll event |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `item` | 自定义项渲染 |
+| `item` | Custom item renderer |
 
 ### Expose
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `scrollToIndex(index)` | 滚动到指定索引 |
-| `scrollToTop()` | 滚动到顶部 |
-| `scrollToBottom()` | 滚动到底部 |
+| `scrollToIndex(index)` | Scroll to index |
+| `scrollToTop()` | Scroll to top |
+| `scrollToBottom()` | Scroll to bottom |

@@ -19,47 +19,31 @@ const loading = ref(false)
 
 ## 容器内遮罩
 
-<DemoBlock title="LoadingOverlay (container)">
-<template #preview>
-<div style="border: 1px solid var(--tx-border-color); border-radius: 12px; padding: 12px;">
-  <TxButton @click="loading = !loading">Toggle</TxButton>
-  <TxLoadingOverlay :loading="loading" text="Loading...">
-    <div style="height: 120px; display: flex; align-items: center; justify-content: center; color: var(--tx-text-color-secondary);">
-      Content
-    </div>
-  </TxLoadingOverlay>
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxButton @click="loading = !loading">Toggle</TxButton>
-  <TxLoadingOverlay :loading="loading" text="Loading...">
-    <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
-  </TxLoadingOverlay>
-</template>
-```
-</template>
-</DemoBlock>
+### LoadingOverlay (container)
+:::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayContainerDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="loading = !loading">Toggle</TxButton>
+    <TxLoadingOverlay :loading="loading" text="Loading...">
+      <div style="height: 120px; display: flex; align-items: center; justify-content: center;">Content</div>
+    </TxLoadingOverlay>
+  </template>
+---
+:::
 
 ## 全屏遮罩
 
-<DemoBlock title="LoadingOverlay (fullscreen)">
-<template #preview>
-<TxButton @click="loading = !loading">Toggle</TxButton>
-<TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxButton @click="loading = !loading">Toggle</TxButton>
-  <TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
-</template>
-```
-</template>
-</DemoBlock>
+### LoadingOverlay (fullscreen)
+:::TuffDemoWrapper{demo="LoadingOverlayLoadingOverlayFullscreenDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxButton @click="loading = !loading">Toggle</TxButton>
+    <TxLoadingOverlay fullscreen :loading="loading" text="Loading..." />
+  </template>
+---
+:::
 
 ## API
 

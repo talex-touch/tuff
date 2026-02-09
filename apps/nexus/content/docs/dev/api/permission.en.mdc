@@ -10,22 +10,25 @@ Permissions follow a least-privilege model and pair `permissions` with `permissi
 
 **1. Declare Permissions in manifest.json**
 
-```json
-{
-  "id": "com.example.plugin",
-  "name": "My Plugin",
-  "version": "1.0.0",
-  "sdkapi": 251212,
-  "permissions": {
-    "required": ["clipboard.read", "network.internet"],
-    "optional": ["storage.shared"]
-  },
-  "permissionReasons": {
-    "clipboard.read": "Read clipboard to get text for translation",
-    "network.internet": "Access translation API services"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.example.plugin",
+    "name": "My Plugin",
+    "version": "1.0.0",
+    "sdkapi": 251212,
+    "permissions": {
+      "required": ["clipboard.read", "network.internet"],
+      "optional": ["storage.shared"]
+    },
+    "permissionReasons": {
+      "clipboard.read": "Read clipboard to get text for translation",
+      "network.internet": "Access translation API services"
+    }
   }
-}
-```
+---
+:::
 
 **2. Permission Categories**
 
@@ -80,15 +83,18 @@ The `sdkapi` field determines whether permission checking is enabled:
 
 If your plugin doesn't declare `sdkapi` or has a lower version:
 
-```json
-{
-  "sdkapi": 251212,
-  "permissions": {
-    "required": ["clipboard.read"],
-    "optional": []
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 251212,
+    "permissions": {
+      "required": ["clipboard.read"],
+      "optional": []
+    }
   }
-}
-```
+---
+:::
 
 ## Technical Notes
 - Permission enforcement is managed by the centralized permission center once `sdkapi` meets the threshold.
@@ -98,37 +104,43 @@ If your plugin doesn't declare `sdkapi` or has a lower version:
 
 **Check Permissions in Prelude (index.js)**
 
-```javascript
-const { permission } = globalThis
-
-// Check if permission is granted
-const hasPermission = await permission.check('clipboard.read')
-
-// Request permission (triggers user confirmation dialog)
-const granted = await permission.request('clipboard.read', 'Need to read clipboard content')
-
-if (granted) {
-  // Use clipboard API
-  const text = clipboard.readText()
-}
-```
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const { permission } = globalThis
+  
+  // Check if permission is granted
+  const hasPermission = await permission.check('clipboard.read')
+  
+  // Request permission (triggers user confirmation dialog)
+  const granted = await permission.request('clipboard.read', 'Need to read clipboard content')
+  
+  if (granted) {
+    // Use clipboard API
+    const text = clipboard.readText()
+  }
+---
+:::
 
 **Use in Surface (Vue)**
 
-```typescript
-import { usePermission } from '@talex-touch/utils/plugin/sdk'
-
-const { check, request, status } = usePermission()
-
-// Check permission
-const hasClipboard = await check('clipboard.read')
-
-// Request permission
-const granted = await request('network.internet', 'Need to access translation service')
-
-// Get all permission status
-const allStatus = await status()
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePermission } from '@talex-touch/utils/plugin/sdk'
+  
+  const { check, request, status } = usePermission()
+  
+  // Check permission
+  const hasClipboard = await check('clipboard.read')
+  
+  // Request permission
+  const granted = await request('network.internet', 'Need to access translation service')
+  
+  // Get all permission status
+  const allStatus = await status()
+---
+:::
 
 ## Best Practices
 
@@ -136,55 +148,67 @@ const allStatus = await status()
 
 Only declare permissions you actually need:
 
-```json
-// ✅ Good
-"permissions": {
-  "required": ["clipboard.read"],
-  "optional": []
-}
-
-// ❌ Avoid
-"permissions": {
-  "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  // ✅ Good
+  "permissions": {
+    "required": ["clipboard.read"],
+    "optional": []
+  }
+  
+  // ❌ Avoid
+  "permissions": {
+    "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
+  }
+---
+:::
 
 **2. Provide Permission Reasons**
 
-```json
-"permissionReasons": {
-  "clipboard.read": "Read text from clipboard for translation",
-  "network.internet": "Connect to Google Translate API"
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissionReasons": {
+    "clipboard.read": "Read text from clipboard for translation",
+    "network.internet": "Connect to Google Translate API"
+  }
+---
+:::
 
 **3. Graceful Degradation**
 
-```javascript
-async function translateText(text) {
-  const hasNetwork = await permission.check('network.internet')
-  
-  if (!hasNetwork) {
-    // Request permission or prompt user
-    const granted = await permission.request('network.internet')
-    if (!granted) {
-      return { error: 'Network permission required for translation' }
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  async function translateText(text) {
+    const hasNetwork = await permission.check('network.internet')
+    
+    if (!hasNetwork) {
+      // Request permission or prompt user
+      const granted = await permission.request('network.internet')
+      if (!granted) {
+        return { error: 'Network permission required for translation' }
+      }
     }
+    
+    // Normal translation logic
+    return await http.post('...')
   }
-  
-  // Normal translation logic
-  return await http.post('...')
-}
-```
+---
+:::
 
 **4. Distinguish Required vs Optional**
 
-```json
-"permissions": {
-  "required": ["clipboard.read"],  // Core functionality
-  "optional": ["network.internet"] // Enhanced features
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissions": {
+    "required": ["clipboard.read"],  // Core functionality
+    "optional": ["network.internet"] // Enhanced features
+  }
+---
+:::
 
 ## User Interface
 
@@ -199,24 +223,30 @@ Users can manage plugin permissions at:
 
 A: Your `manifest.json` doesn't declare `sdkapi` or the version is below `251212`. Add:
 
-```json
-"sdkapi": 251212
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "sdkapi": 251212
+---
+:::
 
 **Q: How to handle permission denial?**
 
 A: Provide degraded experience or clear error message:
 
-```javascript
-const granted = await permission.request('clipboard.read')
-if (!granted) {
-  // Show hint, guide user to manual input or authorize
-  feature.pushItems([{
-    title: 'Clipboard Permission Required',
-    subtitle: 'Please grant permission in plugin settings'
-  }])
-}
-```
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const granted = await permission.request('clipboard.read')
+  if (!granted) {
+    // Show hint, guide user to manual input or authorize
+    feature.pushItems([{
+      title: 'Clipboard Permission Required',
+      subtitle: 'Please grant permission in plugin settings'
+    }])
+  }
+---
+:::
 
 **Q: Where is permission data stored?**
 

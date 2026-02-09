@@ -174,8 +174,9 @@ class Particle {
 }
 
 function pickColor() {
-  const colors = palettes[props.palette]
-  return colors[Math.floor(Math.random() * colors.length)]
+  const colors = palettes[props.palette] ?? palettes.apple
+  const fallback = colors[0] ?? { r: 255, g: 255, b: 255 }
+  return colors[Math.floor(Math.random() * colors.length)] ?? fallback
 }
 
 function initParticles() {
@@ -196,9 +197,10 @@ function syncParticleCount() {
 }
 
 function applyPalette() {
-  const colors = palettes[props.palette]
+  const colors = palettes[props.palette] ?? palettes.apple
+  const fallback = colors[0] ?? { r: 255, g: 255, b: 255 }
   particles.forEach((particle) => {
-    particle.color = colors[Math.floor(Math.random() * colors.length)]
+    particle.color = colors[Math.floor(Math.random() * colors.length)] ?? fallback
   })
 }
 
@@ -229,8 +231,12 @@ function connectParticles(context: CanvasRenderingContext2D) {
 
   for (let i = 0; i < particles.length; i += 1) {
     const current = particles[i]
+    if (!current)
+      continue
     for (let j = i + 1; j < particles.length; j += 1) {
       const target = particles[j]
+      if (!target)
+        continue
       const dx = current.x - target.x
       const dy = current.y - target.y
       const dist = Math.hypot(dx, dy)

@@ -47,6 +47,31 @@ const _appSettingOriginData = {
   beginner: {
     init: false,
   },
+  security: {
+    /**
+     * 本地随机种子，用于生成 machine_code_hash。
+     * 只存本地；用户清空应用数据后自然会重置（符合“删除数据即删除机器码”语义）。
+     */
+    machineSeed: '',
+    /**
+     * 最近一次已上报的 machine_code_hash（用于避免重复上报）。
+     * 注意：这是 hash（摘要），不含原始硬件信息。
+     */
+    machineCodeHash: '',
+    /**
+     * 最近一次上报时间（ISO 字符串，可选，仅用于调试/排查）。
+     */
+    machineCodeAttestedAt: '',
+    /**
+     * 明文 seed 迁移完成时间（用于排查历史版本遗留）。
+     */
+    machineSeedMigratedAt: '',
+    /**
+     * 安全回退开关：当系统安全存储不可用时，是否允许继续使用明文 seed。
+     * 默认关闭，避免退回不安全路径。
+     */
+    allowLegacyMachineSeedFallback: false,
+  },
   tools: {
     autoPaste: {
       enable: true,
@@ -54,6 +79,13 @@ const _appSettingOriginData = {
     },
     autoHide: true,
     autoClear: 600,
+    clipboardPolling: {
+      interval: 5,
+      lowBatteryPolicy: {
+        enable: true,
+        interval: 10,
+      },
+    },
   },
   dashboard: {
     enable: false,

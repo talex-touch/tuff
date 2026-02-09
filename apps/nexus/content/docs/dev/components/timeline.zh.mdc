@@ -10,7 +10,9 @@ syncStatus: migrated
 按时间顺序展示事件记录。
 
 ## 基础用法
-::TuffDemo{title="时间线" description="展示近期动态。" code-lang="vue"}
+### 时间线
+展示近期动态。
+:::TuffDemoWrapper{demo="TimelineTimelineDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -21,14 +23,7 @@ code: |
     </TxTimeline>
   </template>
 ---
-#preview
-<tx-timeline>
-  <tx-timeline-item title="设计阶段" time="09:30" color="primary" />
-  <tx-timeline-item title="开发构建" time="12:00" color="success" />
-  <tx-timeline-item title="上线发布" time="16:10" color="warning" />
-</tx-timeline>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

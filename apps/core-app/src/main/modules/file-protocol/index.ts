@@ -1,9 +1,66 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import url from 'node:url'
+import fsSync from 'node:fs'
 import chalk from 'chalk'
 import { net, session } from 'electron'
 import { FILE_SCHEMA } from '../../config/default'
 import { BaseModule } from '../abstract-base-module'
+
+/** Deduplicate error logs -- only log each failing path once per session. */
+const loggedErrorPaths = new Set<string>()
+
+/**
+ * Extract an absolute file path from a tfile:// URL.
+ *
+ * Handles both `tfile:///absolute/path` (3 slashes, correct) and the legacy
+ * `tfile://relative/path` (2 slashes, path accidentally used as hostname)
+ * by always ensuring the result starts with `/`.
+ *
+ * Robust against double-encoding: if the URL was percent-encoded by the
+ * renderer's `buildTfileUrl()`, Chromium may or may not re-encode it before
+ * delivering it to the protocol handler. We decode until the result stabilises.
+ */
+function extractAbsolutePath(rawUrl: string): string {
+  const normalizeDecodedPath = (value: string): string => {
+    const normalized = value.replace(/\\/g, '/')
+    if (/^\/[a-z]:\//i.test(normalized)) {
+      return normalized.slice(1)
+    }
+    if (/^[a-z]:\//i.test(normalized)) {
+      return normalized
+    }
+    return normalized.startsWith('/') ? normalized : `/${normalized}`
+  }
+
+  const decodeStable = (value: string): string => {
+    let decoded = value
+    for (let i = 0; i < 3; i++) {
+      try {
+        const next = decodeURIComponent(decoded)
+        if (next === decoded) break
+        decoded = next
+      } catch {
+        break
+      }
+    }
+    return decoded
+  }
+
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
+      return normalizeDecodedPath(decodeStable(`${parsed.hostname}:${parsed.pathname}`))
+    }
+    const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
+    return normalizeDecodedPath(decodeStable(merged))
+  } catch {
+    const prefix = `${FILE_SCHEMA}://`
+    const rawWithTail = rawUrl.startsWith(prefix) ? rawUrl.slice(prefix.length) : rawUrl
+    const tailIndex = rawWithTail.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    return normalizeDecodedPath(decodeStable(body))
+  }
+}
 
 class FileProtocolModule extends BaseModule {
   static key: symbol = Symbol.for('FileProtocolModule')
@@ -19,20 +76,30 @@ class FileProtocolModule extends BaseModule {
     const ses = session.defaultSession
 
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
-      console.debug('tfile request:', request.url)
-      const filePath = decodeURIComponent(request.url.slice(FILE_SCHEMA.length + 3))
-      const fileUrl = url.pathToFileURL(`/${filePath}`).toString()
-      console.debug('tfile resolved path:', fileUrl)
+      const filePath = extractAbsolutePath(request.url)
+      const fileUrl = url.pathToFileURL(filePath).toString()
+
+      // Fast-fail if the file does not exist, avoids net::ERR_FAILED noise
+      if (!fsSync.existsSync(filePath)) {
+        if (!loggedErrorPaths.has(filePath)) {
+          loggedErrorPaths.add(filePath)
+          console.warn(chalk.yellow(`[FileProtocolModule] File not found: ${filePath}`))
+        }
+        return new Response('File not found', { status: 404 })
+      }
 
       try {
-        const response = await net.fetch(fileUrl)
-        return response
+        return await net.fetch(fileUrl)
       } catch (error) {
-        console.error(chalk.red('[FileProtocolModule] tfile request error:'), error, {
-          filePath,
-          fileUrl,
-          url: request.url
-        })
+        if (!loggedErrorPaths.has(filePath)) {
+          loggedErrorPaths.add(filePath)
+          console.error(chalk.red('[FileProtocolModule] tfile request error:'), {
+            filePath,
+            fileUrl,
+            url: request.url,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
         return new Response('File not found', { status: 404 })
       }
     })

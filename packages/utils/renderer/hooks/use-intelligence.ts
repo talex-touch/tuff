@@ -49,7 +49,7 @@ import type {
   IntelligenceVisionOcrResult,
 } from '../../types/intelligence'
 import { ref } from 'vue'
-import { useChannel } from './use-channel'
+import { useIntelligenceSdk } from './use-intelligence-sdk'
 
 interface UseIntelligenceOptions {
   // Reserved for future options
@@ -180,39 +180,20 @@ interface IntelligenceComposable {
  * })
  * ```
  */
+/**
+ * @deprecated 请优先使用 useIntelligenceSdk() 直接调用 domain SDK。
+ */
 export function useIntelligence(_options: UseIntelligenceOptions = {}): IntelligenceComposable {
   const isLoading = ref(false)
   const lastError = ref<string | null>(null)
+  const intelligenceSdk = useIntelligenceSdk()
 
-  // Get the TouchChannel instance
-  const channel = useChannel()
-
-  // Helper for consistent response handling
-  interface ChannelResponse<T> {
-    ok: boolean
-    result?: T
-    error?: string
-  }
-
-  async function sendChannelRequest<T>(
-    eventName: string,
-    payload: any,
-  ): Promise<T> {
-    const response = await channel.send<any, ChannelResponse<T>>(eventName, payload)
-    if (!response?.ok) {
-      throw new Error(response?.error || 'Intelligence request failed')
-    }
-    return response.result as T
-  }
-
-  // Wrapper function that handles loading state and errors
   async function withLoadingState<T>(operation: () => Promise<T>): Promise<T> {
     isLoading.value = true
     lastError.value = null
 
     try {
-      const result = await operation()
-      return result
+      return await operation()
     }
     catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
@@ -224,283 +205,129 @@ export function useIntelligence(_options: UseIntelligenceOptions = {}): Intellig
     }
   }
 
-  return {
-    // Core invoke
-    invoke: <T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) =>
-      withLoadingState(() =>
-        sendChannelRequest<IntelligenceInvokeResult<T>>('intelligence:invoke', { capabilityId, payload, options }),
-      ),
+  const invokeCapability = <T = unknown>(
+    capabilityId: string,
+    payload: unknown,
+    options?: IntelligenceInvokeOptions,
+  ) => withLoadingState(() => intelligenceSdk.invoke<T>(capabilityId, payload, options))
 
-    // Provider testing
+  return {
+    invoke: <T = any>(capabilityId: string, payload: any, options?: IntelligenceInvokeOptions) =>
+      withLoadingState(() => intelligenceSdk.invoke<T>(capabilityId, payload, options)),
+
     testProvider: (config: IntelligenceProviderConfig) =>
       withLoadingState(() =>
-        sendChannelRequest<{
+        intelligenceSdk.testProvider(config) as Promise<{
           success: boolean
           message: string
           latency?: number
           timestamp: number
-        }>('intelligence:test-provider', { provider: config }),
+        }>,
       ),
 
-    // Capability testing
     testCapability: (params: { capabilityId: string, providerId?: string, userInput?: string, source?: any }) =>
       withLoadingState(() =>
-        sendChannelRequest<{
+        intelligenceSdk.testCapability(params) as Promise<{
           ok: boolean
           result: any
-        }>('intelligence:test-capability', params),
+        }>,
       ),
 
-    // Get capability test metadata
     getCapabilityTestMeta: (params: { capabilityId: string }) =>
-      sendChannelRequest<{
+      intelligenceSdk.getCapabilityTestMeta(params) as Promise<{
         requiresUserInput: boolean
         inputHint: string
-      }>('intelligence:get-capability-test-meta', params),
+      }>,
 
-    // Text methods
     text: {
       chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:invoke', {
-            capabilityId: 'text.chat',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<string>('text.chat', payload, options),
 
       chatLangChain: params =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:chat-langchain', params),
-        ),
+        withLoadingState(() => intelligenceSdk.chatLangChain(params)),
 
       translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:invoke', {
-            capabilityId: 'text.translate',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<string>('text.translate', payload, options),
 
       summarize: (payload: IntelligenceSummarizePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:invoke', {
-            capabilityId: 'text.summarize',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<string>('text.summarize', payload, options),
 
       rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<string>>('intelligence:invoke', {
-            capabilityId: 'text.rewrite',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<string>('text.rewrite', payload, options),
 
       grammarCheck: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>('intelligence:invoke', {
-            capabilityId: 'text.grammar',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
     },
 
-    // Embedding methods
     embedding: {
       generate: (payload: IntelligenceEmbeddingPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<number[]>>('intelligence:invoke', {
-            capabilityId: 'embedding.generate',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<number[]>('embedding.generate', payload, options),
     },
 
-    // Code methods
     code: {
       generate: (payload: IntelligenceCodeGeneratePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>('intelligence:invoke', {
-            capabilityId: 'code.generate',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceCodeGenerateResult>('code.generate', payload, options),
 
       explain: (payload: IntelligenceCodeExplainPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>('intelligence:invoke', {
-            capabilityId: 'code.explain',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceCodeExplainResult>('code.explain', payload, options),
 
       review: (payload: IntelligenceCodeReviewPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>('intelligence:invoke', {
-            capabilityId: 'code.review',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceCodeReviewResult>('code.review', payload, options),
 
       refactor: (payload: IntelligenceCodeRefactorPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>('intelligence:invoke', {
-            capabilityId: 'code.refactor',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceCodeRefactorResult>('code.refactor', payload, options),
 
       debug: (payload: IntelligenceCodeDebugPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>('intelligence:invoke', {
-            capabilityId: 'code.debug',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceCodeDebugResult>('code.debug', payload, options),
     },
 
-    // Analysis methods
     analysis: {
       detectIntent: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>('intelligence:invoke', {
-            capabilityId: 'intent.detect',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceIntentDetectResult>('intent.detect', payload, options),
 
       analyzeSentiment: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>('intelligence:invoke', {
-            capabilityId: 'sentiment.analyze',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
 
       extractContent: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceContentExtractResult>>('intelligence:invoke', {
-            capabilityId: 'content.extract',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceContentExtractResult>('content.extract', payload, options),
 
       extractKeywords: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>('intelligence:invoke', {
-            capabilityId: 'keywords.extract',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
 
       classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceClassificationResult>>('intelligence:invoke', {
-            capabilityId: 'text.classify',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceClassificationResult>('text.classify', payload, options),
     },
 
-    // Vision methods
     vision: {
       ocr: (payload: IntelligenceVisionOcrPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>('intelligence:invoke', {
-            capabilityId: 'vision.ocr',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
 
       caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>('intelligence:invoke', {
-            capabilityId: 'image.caption',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceImageCaptionResult>('image.caption', payload, options),
 
       analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>('intelligence:invoke', {
-            capabilityId: 'image.analyze',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
 
       generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>('intelligence:invoke', {
-            capabilityId: 'image.generate',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceImageGenerateResult>('image.generate', payload, options),
     },
 
-    // RAG methods
     rag: {
       query: (payload: IntelligenceRAGQueryPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>('intelligence:invoke', {
-            capabilityId: 'rag.query',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceRAGQueryResult>('rag.query', payload, options),
 
       semanticSearch: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>('intelligence:invoke', {
-            capabilityId: 'search.semantic',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
 
       rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceRerankResult>>('intelligence:invoke', {
-            capabilityId: 'search.rerank',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceRerankResult>('search.rerank', payload, options),
     },
 
-    // Agent methods
     agent: {
       run: (payload: IntelligenceAgentPayload, options?: IntelligenceInvokeOptions) =>
-        withLoadingState(() =>
-          sendChannelRequest<IntelligenceInvokeResult<IntelligenceAgentResult>>('intelligence:invoke', {
-            capabilityId: 'agent.run',
-            payload,
-            options,
-          }),
-        ),
+        invokeCapability<IntelligenceAgentResult>('agent.run', payload, options),
     },
 
-    // Reactive state
     isLoading,
     lastError,
   }

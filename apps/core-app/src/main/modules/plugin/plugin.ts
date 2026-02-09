@@ -9,7 +9,6 @@ import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
   IFeatureLifeCycle,
   IPlatform,
-  IPluginChannelBridge,
   IPluginDev,
   IPluginFeature,
   ITargetFeatureLifeCycle,
@@ -17,24 +16,26 @@ import type {
   PluginIssue,
   PluginMeta
 } from '@talex-touch/utils/plugin'
+import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
+import { PluginStatus } from '@talex-touch/utils/plugin'
 import {
   createBoxSDK,
   createClipboardManager,
   createDivisionBoxSDK,
   createFeatureSDK,
-  createMetaSDK,
-  PluginStatus
-} from '@talex-touch/utils/plugin'
+  createMetaSDK
+} from '@talex-touch/utils/plugin/sdk'
+
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, NotificationEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import axios from 'axios'
 import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
@@ -786,15 +787,8 @@ export class TouchPlugin implements ITouchPlugin {
     }
   }
 
-  getFeatureUtil() {
-    const pluginName = this.name
-    const appInstance = genTouchApp()
-    const channel = appInstance.channel as ITouchChannel
-    const transport = this.resolveTransport()
-    const mainWindowId = appInstance.window.window.id
-
-    const http = axios
-    const storage = {
+  private createPluginStorageAPI(pluginName: string) {
+    return {
       getFile: (fileName: string) => {
         return this.getPluginFile(fileName)
       },
@@ -826,6 +820,217 @@ export class TouchPlugin implements ITouchPlugin {
         }
       }
     }
+  }
+
+  private createPowerSDK(
+    pluginName: string,
+    touchChannel: { send: (eventName: string, payload?: unknown) => Promise<unknown> }
+  ) {
+    const normalizeLowPowerThreshold = (threshold?: number): number => {
+      if (typeof threshold !== 'number' || !Number.isFinite(threshold)) {
+        return 20
+      }
+      const normalized = Math.floor(threshold)
+      if (normalized <= 0) return 1
+      if (normalized > 100) return 100
+      return normalized
+    }
+
+    const getLowPowerStatus = async (options: { threshold?: number } = {}) => {
+      const threshold = normalizeLowPowerThreshold(options.threshold)
+
+      try {
+        const battery = await touchChannel.send(AppEvents.fileIndex.batteryLevel.toEventName())
+        const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
+        const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
+
+        const percent =
+          typeof levelRaw === 'number' && Number.isFinite(levelRaw)
+            ? Math.max(0, Math.min(100, levelRaw))
+            : null
+        const charging = typeof chargingRaw === 'boolean' ? chargingRaw : true
+        const onBattery = percent !== null ? !charging : false
+
+        return {
+          lowPower: onBattery && percent !== null && percent <= threshold,
+          onBattery,
+          percent,
+          threshold
+        }
+      } catch (error) {
+        pluginSystemLog.debug('[Plugin ' + pluginName + '] Failed to query low power status.', {
+          error: toError(error)
+        })
+        return {
+          lowPower: false,
+          onBattery: false,
+          percent: null,
+          threshold
+        }
+      }
+    }
+
+    return {
+      getLowPowerStatus,
+
+      async isLowPower(options: { threshold?: number } = {}): Promise<boolean> {
+        const status = await getLowPowerStatus(options)
+        return status.lowPower
+      },
+
+      onLowPowerChanged(
+        callback: (status: {
+          lowPower: boolean
+          onBattery: boolean
+          percent: number | null
+          threshold: number
+        }) => void,
+        options: { threshold?: number; emitImmediately?: boolean } = {}
+      ): () => void {
+        const intervalMs = 60_000
+        let disposed = false
+        let lastSignature = ''
+
+        const emit = async (force = false) => {
+          if (disposed) return
+
+          const status = await getLowPowerStatus({ threshold: options.threshold })
+          const signature = [
+            status.lowPower,
+            status.onBattery,
+            status.percent ?? 'null',
+            status.threshold
+          ].join(':')
+          if (!force && signature === lastSignature) {
+            return
+          }
+
+          lastSignature = signature
+
+          try {
+            callback(status)
+          } catch (error) {
+            pluginSystemLog.warn(
+              '[Plugin ' + pluginName + '] Low power listener callback failed.',
+              {
+                error: toError(error)
+              }
+            )
+          }
+        }
+
+        if (options.emitImmediately !== false) {
+          void emit(true)
+        }
+
+        const timer = setInterval(() => {
+          void emit()
+        }, intervalMs)
+
+        return () => {
+          disposed = true
+          clearInterval(timer)
+        }
+      }
+    }
+  }
+
+  private async resolvePluginManager() {
+    const { pluginModule } = await import('./plugin-module')
+    return pluginModule.pluginManager
+  }
+
+  private createPluginsAPI(pluginName: string) {
+    return {
+      list: async (filters?: unknown) => {
+        try {
+          const manager = await this.resolvePluginManager()
+          if (!manager) {
+            return []
+          }
+
+          const resolvedFilters = (filters ?? {}) as {
+            status?: number
+            enabled?: boolean
+            dev?: boolean
+          }
+          let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
+
+          if (resolvedFilters.status !== undefined) {
+            plugins = plugins.filter((plugin) => plugin.status === resolvedFilters.status)
+          }
+          if (resolvedFilters.enabled !== undefined) {
+            const enabledNames = manager.enabledPlugins
+            plugins = plugins.filter(
+              (plugin) => enabledNames.has(plugin.name) === resolvedFilters.enabled
+            )
+          }
+          if (resolvedFilters.dev !== undefined) {
+            plugins = plugins.filter((plugin) => plugin.dev?.enable === resolvedFilters.dev)
+          }
+
+          return plugins.map((plugin) => plugin.toJSONObject())
+        } catch (error) {
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to list plugins`, {
+            error: toError(error)
+          })
+          return []
+        }
+      },
+
+      get: async (name: string) => {
+        try {
+          if (!name) {
+            return null
+          }
+
+          const manager = await this.resolvePluginManager()
+          if (!manager) {
+            return null
+          }
+
+          const plugin = manager.plugins.get(name) as TouchPlugin | undefined
+          return plugin ? plugin.toJSONObject() : null
+        } catch (error) {
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin ${name}`, {
+            error: toError(error)
+          })
+          return null
+        }
+      },
+
+      getStatus: async (name: string) => {
+        try {
+          if (!name) {
+            return -1
+          }
+
+          const manager = await this.resolvePluginManager()
+          if (!manager) {
+            return -1
+          }
+
+          const plugin = manager.plugins.get(name)
+          return plugin ? plugin.status : -1
+        } catch (error) {
+          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}`, {
+            error: toError(error)
+          })
+          throw error
+        }
+      }
+    }
+  }
+
+  getFeatureUtil() {
+    const pluginName = this.name
+    const appInstance = genTouchApp()
+    const channel = appInstance.channel as ITouchChannel
+    const transport = this.resolveTransport()
+    const mainWindowId = appInstance.window.window.id
+
+    const http = axios
+    const storage = this.createPluginStorageAPI(pluginName)
     const clipboardUtil = createClipboardManager(clipboard)
 
     const onTransport = (
@@ -1103,6 +1308,8 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    const powerSDK = this.createPowerSDK(pluginName, touchChannel)
+
     const featuresManager = {
       /**
        * Dynamically adds a feature to the plugin
@@ -1266,105 +1473,7 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const resolvePluginManager = async () => {
-      const { pluginModule } = await import('./plugin-module')
-      return pluginModule.pluginManager
-    }
-
-    const pluginsAPI = {
-      /**
-       * Get list of all plugins (read-only access)
-       * @param filters Optional filters for plugin list
-       * @returns Promise resolving to array of plugin objects
-       */
-      list: async (filters?: unknown) => {
-        try {
-          const manager = await resolvePluginManager()
-          if (!manager) {
-            return []
-          }
-
-          const resolvedFilters = (filters ?? {}) as {
-            status?: number
-            enabled?: boolean
-            dev?: boolean
-          }
-          let plugins = Array.from(manager.plugins.values()) as TouchPlugin[]
-
-          if (resolvedFilters.status !== undefined) {
-            plugins = plugins.filter((plugin) => plugin.status === resolvedFilters.status)
-          }
-          if (resolvedFilters.enabled !== undefined) {
-            const enabledNames = manager.enabledPlugins
-            plugins = plugins.filter(
-              (plugin) => enabledNames.has(plugin.name) === resolvedFilters.enabled
-            )
-          }
-          if (resolvedFilters.dev !== undefined) {
-            plugins = plugins.filter((plugin) => plugin.dev?.enable === resolvedFilters.dev)
-          }
-
-          return plugins.map((plugin) => plugin.toJSONObject())
-        } catch (error) {
-          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to list plugins`, {
-            error: toError(error)
-          })
-          return []
-        }
-      },
-
-      /**
-       * Get specific plugin information (read-only access)
-       * @param name Plugin name
-       * @returns Promise resolving to plugin object or null
-       */
-      get: async (name: string) => {
-        try {
-          if (!name) {
-            return null
-          }
-
-          const manager = await resolvePluginManager()
-          if (!manager) {
-            return null
-          }
-
-          const plugin = manager.plugins.get(name) as TouchPlugin | undefined
-          return plugin ? plugin.toJSONObject() : null
-        } catch (error) {
-          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin ${name}`, {
-            error: toError(error)
-          })
-          return null
-        }
-      },
-
-      /**
-       * Get plugin status (read-only access)
-       * @param name Plugin name
-       * @returns Promise resolving to plugin status number
-       */
-      getStatus: async (name: string) => {
-        try {
-          if (!name) {
-            return -1
-          }
-
-          const manager = await resolvePluginManager()
-          if (!manager) {
-            return -1
-          }
-
-          const plugin = manager.plugins.get(name)
-          return plugin ? plugin.status : -1
-        } catch (error) {
-          pluginSystemLog.error(`[Plugin ${pluginName}] Failed to get plugin status for ${name}`, {
-            error: toError(error)
-          })
-          throw error
-        }
-      }
-    }
+    const pluginsAPI = this.createPluginsAPI(pluginName)
 
     // 新版 API: 统一使用 plugin.* 前缀
     const pluginAPI = {
@@ -1374,7 +1483,8 @@ export class TouchPlugin implements ITouchPlugin {
       search: searchManager,
       box: createBoxSDK(boxChannel),
       divisionBox: createDivisionBoxSDK(channelBridge),
-      meta: createMetaSDK(channelBridge, this.name)
+      meta: createMetaSDK(channelBridge, this.name),
+      power: powerSDK
     }
 
     return {
@@ -1391,6 +1501,7 @@ export class TouchPlugin implements ITouchPlugin {
       box: createBoxSDK(boxChannel),
       feature: createFeatureSDK(boxItems, channelBridge),
       meta: createMetaSDK(channelBridge, this.name),
+      power: powerSDK,
       // 新的 BoxItemSDK API
       boxItems,
       // 废弃的 API - 直接抛出错误

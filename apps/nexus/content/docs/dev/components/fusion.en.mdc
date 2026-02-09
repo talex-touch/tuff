@@ -42,85 +42,1433 @@ import FusionTwoIconButtonsDemoSource from '~/components/content/demos/FusionTwo
 
 ## 基础用法
 
-<DemoBlock title="Fusion" :code="FusionBasicDemoSource">
-<template #preview>
-<FusionBasicDemo />
-</template>
-</DemoBlock>
+### Fusion
+:::TuffDemoWrapper{demo="FusionFusionDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(false)
+  </script>
+
+  <template>
+    <div style="display: grid; gap: 12px; width: 520px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <TxButton type="primary" @click="active = !active">
+          Toggle
+        </TxButton>
+        <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
+          Click button or hover the fusion area
+        </div>
+      </div>
+
+      <div
+        style="
+          height: 320px;
+          border-radius: 16px;
+          background: radial-gradient(120% 120% at 20% 30%, rgba(20, 90, 130, 0.95), rgba(10, 30, 80, 0.95));
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+        "
+      >
+        <TxFusion v-model="active" trigger="hover" :gap="240" :blur="19" :alpha="29" :alpha-offset="-10">
+          <template #a>
+            <div
+              style="
+                width: 260px;
+                height: 260px;
+                border-radius: 999px;
+                background: hsla(256, 65%, 60%, 0.76);
+              "
+            />
+          </template>
+
+          <template #b>
+            <div
+              style="
+                width: 110px;
+                height: 110px;
+                border-radius: 999px;
+                background: hsla(77, 100%, 55%, 0.78);
+              "
+            />
+          </template>
+        </TxFusion>
+      </div>
+
+      <TxFusion :gap="46" direction="y" trigger="click" :blur="19" :alpha="29" :alpha-offset="-10">
+        <template #a>
+          <div
+            style="
+              width: 92px;
+              height: 56px;
+              border-radius: 999px;
+              background: color-mix(in srgb, var(--tx-color-primary, #409eff) 66%, rgba(255, 255, 255, 0.20));
+              box-shadow: 0 18px 42px rgba(0, 0, 0, 0.14);
+            "
+          />
+        </template>
+
+        <template #b>
+          <div
+            style="
+              width: 92px;
+              height: 56px;
+              border-radius: 999px;
+              background: color-mix(in srgb, var(--tx-color-success, #67c23a) 66%, rgba(255, 255, 255, 0.20));
+              box-shadow: 0 18px 42px rgba(0, 0, 0, 0.14);
+            "
+          />
+        </template>
+      </TxFusion>
+    </div>
+  </template>
+---
+:::
 
 ## 实际场景
 
 ### Button + Tooltip Bubble
 
-<DemoBlock title="Fusion ButtonTooltip" :code="FusionButtonTooltipDemoSource">
-<template #preview>
-<FusionButtonTooltipDemo />
-</template>
-</DemoBlock>
+### Fusion ButtonTooltip
+:::TuffDemoWrapper{demo="FusionFusionButtonTooltipDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(false)
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent), color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 84%, transparent));
+        border: 1px solid var(--vp-c-divider);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <TxButton size="small" type="primary" @click="active = !active">
+          Toggle
+        </TxButton>
+        <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
+          Hover the group or toggle
+        </div>
+      </div>
+
+      <div style="display: grid; place-items: center; padding: 18px;">
+        <TxFusion v-model="active" trigger="hover" :gap="44" direction="y" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+          <template #a>
+            <div
+              style="
+                display: inline-flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                border-radius: 999px;
+                background: color-mix(in srgb, var(--tx-color-primary, #409eff) 76%, rgba(255, 255, 255, 0.10));
+                color: #fff;
+                box-shadow: 0 12px 26px rgba(0, 0, 0, 0.18);
+                font-weight: 600;
+                letter-spacing: 0.2px;
+                user-select: none;
+              "
+            >
+              <span style="font-size: 13px; line-height: 1;">Save</span>
+              <span
+                style="
+                  font-size: 11px;
+                  line-height: 1;
+                  padding: 4px 8px;
+                  border-radius: 999px;
+                  background: rgba(255, 255, 255, 0.16);
+                  border: 1px solid rgba(255, 255, 255, 0.22);
+                  opacity: 0.95;
+                "
+              >
+                ⌘S
+              </span>
+            </div>
+          </template>
+
+          <template #b>
+            <div
+              style="
+                padding: 8px 10px;
+                border-radius: 999px;
+                background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 18%, transparent);
+                border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
+                backdrop-filter: blur(14px) saturate(160%);
+                -webkit-backdrop-filter: blur(14px) saturate(160%);
+                color: var(--tx-text-color-primary, #303133);
+                font-size: 12px;
+                box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12);
+                user-select: none;
+                white-space: nowrap;
+              "
+            >
+              Saved to drafts
+            </div>
+          </template>
+        </TxFusion>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Two Buttons
 
-<DemoBlock title="Fusion TwoButtons" :code="FusionTwoButtonsDemoSource">
-<template #preview>
-<FusionTwoButtonsDemo />
-</template>
-</DemoBlock>
+### Fusion TwoButtons
+:::TuffDemoWrapper{demo="FusionFusionTwoButtonsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  type Variant = 'membrane' | 'glass' | 'gummy'
+
+  const active = ref<Record<Variant, boolean>>({
+    membrane: true,
+    glass: true,
+    gummy: true,
+  })
+
+  const variants: Array<{ key: Variant, title: string, hint: string }> = [
+    { key: 'membrane', title: 'Membrane', hint: 'softer rim / cell-like' },
+    { key: 'glass', title: 'Glass', hint: 'ui-ish / translucent' },
+    { key: 'gummy', title: 'Gummy', hint: 'strong / candy' },
+  ]
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(140% 120% at 10% 0%, rgba(129, 230, 217, 0.14), transparent 60%),
+          radial-gradient(120% 120% at 90% 10%, rgba(250, 204, 21, 0.12), transparent 55%),
+          linear-gradient(180deg, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.86));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <TxButton size="small" @click="active.membrane = !active.membrane">
+          Toggle membrane
+        </TxButton>
+        <TxButton size="small" @click="active.glass = !active.glass">
+          Toggle glass
+        </TxButton>
+        <TxButton size="small" @click="active.gummy = !active.gummy">
+          Toggle gummy
+        </TxButton>
+      </div>
+
+      <div style="display: grid; gap: 14px;">
+        <div
+          v-for="item in variants"
+          :key="item.key"
+          style="
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+          "
+        >
+          <div style="display: grid; gap: 4px;">
+            <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+              {{ item.title }}
+            </div>
+            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+              {{ item.hint }}
+            </div>
+          </div>
+
+          <div style="display: grid; place-items: center;">
+            <TxFusion
+              v-model="active[item.key]"
+              trigger="hover"
+              :gap="56"
+              direction="x"
+              :duration="260"
+              :blur="19"
+              :alpha="29"
+              :alpha-offset="-10"
+            >
+              <template #a>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(56, 189, 248, 0.78), rgba(167, 139, 250, 0.66));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    color: rgba(255, 255, 255, 0.92);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.32);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                  "
+                >
+                  <span style="font-size: 13px; font-weight: 700;">Primary</span>
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    color: rgba(255, 255, 255, 0.92);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                  "
+                >
+                  <span style="font-size: 13px; font-weight: 700;">Cancel</span>
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(59, 130, 246, 0.82));
+                    color: rgba(255, 255, 255, 0.95);
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                  "
+                >
+                  Action
+                </div>
+              </template>
+
+              <template #b>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(14, 165, 233, 0.76), rgba(244, 114, 182, 0.70));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    color: rgba(255, 255, 255, 0.92);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.32);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                  "
+                >
+                  <span style="font-size: 13px; font-weight: 700;">Secondary</span>
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    color: rgba(255, 255, 255, 0.92);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                  "
+                >
+                  <span style="font-size: 13px; font-weight: 700;">OK</span>
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    padding: 10px 14px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(244, 63, 94, 0.80), rgba(249, 115, 22, 0.80));
+                    color: rgba(255, 255, 255, 0.95);
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+                    user-select: none;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 700;
+                  "
+                >
+                  Danger
+                </div>
+              </template>
+            </TxFusion>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Two Options
 
-<DemoBlock title="Fusion TwoOptions" :code="FusionTwoOptionsDemoSource">
-<template #preview>
-<FusionTwoOptionsDemo />
-</template>
-</DemoBlock>
+### Fusion TwoOptions
+:::TuffDemoWrapper{demo="FusionFusionTwoOptionsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  type Variant = 'membrane' | 'glass' | 'gummy'
+
+  const active = ref<Record<Variant, boolean>>({
+    membrane: false,
+    glass: false,
+    gummy: false,
+  })
+
+  const variants: Array<{ key: Variant, title: string, hint: string }> = [
+    { key: 'membrane', title: 'Membrane', hint: 'soft merge between two pills' },
+    { key: 'glass', title: 'Glass', hint: 'option group in UI' },
+    { key: 'gummy', title: 'Gummy', hint: 'strong / playful' },
+  ]
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(140% 120% at 10% 0%, rgba(129, 230, 217, 0.14), transparent 60%),
+          radial-gradient(120% 120% at 90% 10%, rgba(250, 204, 21, 0.12), transparent 55%),
+          linear-gradient(180deg, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.86));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <TxButton size="small" @click="active.membrane = !active.membrane">
+          Toggle membrane
+        </TxButton>
+        <TxButton size="small" @click="active.glass = !active.glass">
+          Toggle glass
+        </TxButton>
+        <TxButton size="small" @click="active.gummy = !active.gummy">
+          Toggle gummy
+        </TxButton>
+      </div>
+
+      <div style="display: grid; gap: 14px;">
+        <div
+          v-for="item in variants"
+          :key="item.key"
+          style="
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+          "
+        >
+          <div style="display: grid; gap: 4px;">
+            <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+              {{ item.title }}
+            </div>
+            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+              {{ item.hint }}
+            </div>
+          </div>
+
+          <div style="display: grid; place-items: center;">
+            <TxFusion
+              v-model="active[item.key]"
+              trigger="hover"
+              :gap="62"
+              direction="x"
+              :duration="260"
+              :blur="19"
+              :alpha="29"
+              :alpha-offset="-10"
+            >
+              <template #a>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(56, 189, 248, 0.78), rgba(167, 139, 250, 0.66));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.32);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Option A
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Light
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(59, 130, 246, 0.82));
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.95);
+                    font-size: 12px;
+                    font-weight: 900;
+                    user-select: none;
+                  "
+                >
+                  Monthly
+                </div>
+              </template>
+
+              <template #b>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(14, 165, 233, 0.76), rgba(244, 114, 182, 0.70));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.32);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Option B
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Dark
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    width: 156px;
+                    height: 42px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(34, 211, 238, 0.78), rgba(99, 102, 241, 0.82));
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.36);
+                    display: grid;
+                    place-items: center;
+                    color: rgba(255, 255, 255, 0.95);
+                    font-size: 12px;
+                    font-weight: 900;
+                    user-select: none;
+                  "
+                >
+                  Yearly
+                </div>
+              </template>
+            </TxFusion>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Two Chips
 
-<DemoBlock title="Fusion TwoChips" :code="FusionTwoChipsDemoSource">
-<template #preview>
-<FusionTwoChipsDemo />
-</template>
-</DemoBlock>
+### Fusion TwoChips
+:::TuffDemoWrapper{demo="FusionFusionTwoChipsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  type Variant = 'membrane' | 'glass' | 'gummy'
+
+  const active = ref<Record<Variant, boolean>>({
+    membrane: true,
+    glass: true,
+    gummy: true,
+  })
+
+  const variants: Array<{ key: Variant, title: string, hint: string }> = [
+    { key: 'membrane', title: 'Membrane', hint: 'tag pair / segmented filter' },
+    { key: 'glass', title: 'Glass', hint: 'ui-ish / premium' },
+    { key: 'gummy', title: 'Gummy', hint: 'strong / playful' },
+  ]
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(140% 120% at 10% 0%, rgba(129, 230, 217, 0.14), transparent 60%),
+          radial-gradient(120% 120% at 90% 10%, rgba(250, 204, 21, 0.12), transparent 55%),
+          linear-gradient(180deg, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.86));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <TxButton size="small" @click="active.membrane = !active.membrane">
+          Toggle membrane
+        </TxButton>
+        <TxButton size="small" @click="active.glass = !active.glass">
+          Toggle glass
+        </TxButton>
+        <TxButton size="small" @click="active.gummy = !active.gummy">
+          Toggle gummy
+        </TxButton>
+      </div>
+
+      <div style="display: grid; gap: 14px;">
+        <div
+          v-for="item in variants"
+          :key="item.key"
+          style="
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+          "
+        >
+          <div style="display: grid; gap: 4px;">
+            <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+              {{ item.title }}
+            </div>
+            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+              {{ item.hint }}
+            </div>
+          </div>
+
+          <div style="display: grid; place-items: center;">
+            <TxFusion
+              v-model="active[item.key]"
+              trigger="hover"
+              :gap="72"
+              direction="x"
+              :duration="260"
+              :blur="19"
+              :alpha="29"
+              :alpha-offset="-10"
+            >
+              <template #a>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(56, 189, 248, 0.72), rgba(167, 139, 250, 0.60));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  iOS
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Feature
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(34, 197, 94, 0.76), rgba(59, 130, 246, 0.80));
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+                    display: inline-flex;
+                    align-items: center;
+                    color: rgba(255, 255, 255, 0.95);
+                    font-size: 12px;
+                    font-weight: 900;
+                    user-select: none;
+                  "
+                >
+                  Stable
+                </div>
+              </template>
+
+              <template #b>
+                <div
+                  v-if="item.key === 'membrane'"
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.30), rgba(255, 255, 255, 0.06)),
+                      linear-gradient(135deg, rgba(14, 165, 233, 0.70), rgba(244, 114, 182, 0.64));
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Android
+                </div>
+
+                <div
+                  v-else-if="item.key === 'glass'"
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background: rgba(255, 255, 255, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.18);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.28);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 8px;
+                    color: rgba(255, 255, 255, 0.92);
+                    font-size: 12px;
+                    font-weight: 800;
+                    user-select: none;
+                  "
+                >
+                  Bugfix
+                </div>
+
+                <div
+                  v-else
+                  style="
+                    height: 34px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    background:
+                      radial-gradient(120% 120% at 30% 20%, rgba(255, 255, 255, 0.20), rgba(255, 255, 255, 0.02)),
+                      linear-gradient(135deg, rgba(244, 63, 94, 0.80), rgba(249, 115, 22, 0.80));
+                    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+                    display: inline-flex;
+                    align-items: center;
+                    color: rgba(255, 255, 255, 0.95);
+                    font-size: 12px;
+                    font-weight: 900;
+                    user-select: none;
+                  "
+                >
+                  Beta
+                </div>
+              </template>
+            </TxFusion>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Two Status Dots
 
-<DemoBlock title="Fusion TwoStatusDots" :code="FusionTwoStatusDotsDemoSource">
-<template #preview>
-<FusionTwoStatusDotsDemo />
-</template>
-</DemoBlock>
+### Fusion TwoStatusDots
+:::TuffDemoWrapper{demo="FusionFusionTwoStatusDotsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  type Variant = 'membrane' | 'glass' | 'gummy'
+
+  const active = ref<Record<Variant, boolean>>({
+    membrane: true,
+    glass: true,
+    gummy: true,
+  })
+
+  const variants: Array<{ key: Variant, title: string, hint: string }> = [
+    { key: 'membrane', title: 'Membrane', hint: 'status dots + labels' },
+    { key: 'glass', title: 'Glass', hint: 'ui-ish / subtle' },
+    { key: 'gummy', title: 'Gummy', hint: 'strong / playful' },
+  ]
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(140% 120% at 10% 0%, rgba(129, 230, 217, 0.14), transparent 60%),
+          radial-gradient(120% 120% at 90% 10%, rgba(250, 204, 21, 0.12), transparent 55%),
+          linear-gradient(180deg, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.86));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <TxButton size="small" @click="active.membrane = !active.membrane">
+          Toggle membrane
+        </TxButton>
+        <TxButton size="small" @click="active.glass = !active.glass">
+          Toggle glass
+        </TxButton>
+        <TxButton size="small" @click="active.gummy = !active.gummy">
+          Toggle gummy
+        </TxButton>
+      </div>
+
+      <div style="display: grid; gap: 14px;">
+        <div
+          v-for="item in variants"
+          :key="item.key"
+          style="
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+          "
+        >
+          <div style="display: grid; gap: 4px;">
+            <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+              {{ item.title }}
+            </div>
+            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+              {{ item.hint }}
+            </div>
+          </div>
+
+          <div style="display: grid; place-items: center;">
+            <TxFusion
+              v-model="active[item.key]"
+              trigger="hover"
+              :gap="68"
+              direction="x"
+              :duration="260"
+              :blur="19"
+              :alpha="29"
+              :alpha-offset="-10"
+            >
+              <template #a>
+                <div
+                  style="
+                    height: 38px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    user-select: none;
+                    border: 1px solid rgba(255, 255, 255, 0.16);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                  "
+                  :style="
+                    item.key === 'glass'
+                      ? { background: 'rgba(255, 255, 255, 0.12)', color: 'rgba(255, 255, 255, 0.92)' }
+                      : item.key === 'membrane'
+                        ? { background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.78), rgba(167, 139, 250, 0.66))', color: 'rgba(255, 255, 255, 0.92)' }
+                        : { background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(59, 130, 246, 0.82))', color: 'rgba(255, 255, 255, 0.95)' }
+                  "
+                >
+                  <span
+                    style="
+                      width: 10px;
+                      height: 10px;
+                      border-radius: 999px;
+                      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+                    "
+                    :style="
+                      item.key === 'glass'
+                        ? { background: 'rgba(255, 255, 255, 0.70)' }
+                        : item.key === 'membrane'
+                          ? { background: 'rgba(129, 230, 217, 0.95)' }
+                          : { background: 'rgba(34, 197, 94, 0.95)' }
+                    "
+                  />
+                  Online
+                </div>
+              </template>
+
+              <template #b>
+                <div
+                  style="
+                    height: 38px;
+                    padding: 0 12px;
+                    border-radius: 999px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    user-select: none;
+                    border: 1px solid rgba(255, 255, 255, 0.16);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                  "
+                  :style="
+                    item.key === 'glass'
+                      ? { background: 'rgba(255, 255, 255, 0.12)', color: 'rgba(255, 255, 255, 0.92)' }
+                      : item.key === 'membrane'
+                        ? { background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.76), rgba(244, 114, 182, 0.70))', color: 'rgba(255, 255, 255, 0.92)' }
+                        : { background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.80), rgba(249, 115, 22, 0.80))', color: 'rgba(255, 255, 255, 0.95)' }
+                  "
+                >
+                  <span
+                    style="
+                      width: 10px;
+                      height: 10px;
+                      border-radius: 999px;
+                      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+                    "
+                    :style="
+                      item.key === 'glass'
+                        ? { background: 'rgba(255, 255, 255, 0.70)' }
+                        : item.key === 'membrane'
+                          ? { background: 'rgba(244, 114, 182, 0.95)' }
+                          : { background: 'rgba(244, 63, 94, 0.95)' }
+                    "
+                  />
+                  Offline
+                </div>
+              </template>
+            </TxFusion>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Two Icon Buttons
 
-<DemoBlock title="Fusion TwoIconButtons" :code="FusionTwoIconButtonsDemoSource">
-<template #preview>
-<FusionTwoIconButtonsDemo />
-</template>
-</DemoBlock>
+### Fusion TwoIconButtons
+:::TuffDemoWrapper{demo="FusionFusionTwoIconButtonsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  type Variant = 'membrane' | 'glass' | 'gummy'
+
+  const active = ref<Record<Variant, boolean>>({
+    membrane: true,
+    glass: true,
+    gummy: true,
+  })
+
+  const variants: Array<{ key: Variant, title: string, hint: string }> = [
+    { key: 'membrane', title: 'Membrane', hint: 'icon buttons (like/save)' },
+    { key: 'glass', title: 'Glass', hint: 'ui-ish / subtle' },
+    { key: 'gummy', title: 'Gummy', hint: 'strong / playful' },
+  ]
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(140% 120% at 10% 0%, rgba(129, 230, 217, 0.14), transparent 60%),
+          radial-gradient(120% 120% at 90% 10%, rgba(250, 204, 21, 0.12), transparent 55%),
+          linear-gradient(180deg, rgba(10, 12, 18, 0.92), rgba(10, 12, 18, 0.86));
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <TxButton size="small" @click="active.membrane = !active.membrane">
+          Toggle membrane
+        </TxButton>
+        <TxButton size="small" @click="active.glass = !active.glass">
+          Toggle glass
+        </TxButton>
+        <TxButton size="small" @click="active.gummy = !active.gummy">
+          Toggle gummy
+        </TxButton>
+      </div>
+
+      <div style="display: grid; gap: 14px;">
+        <div
+          v-for="item in variants"
+          :key="item.key"
+          style="
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+          "
+        >
+          <div style="display: grid; gap: 4px;">
+            <div style="font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.92);">
+              {{ item.title }}
+            </div>
+            <div style="font-size: 11px; color: rgba(255, 255, 255, 0.60);">
+              {{ item.hint }}
+            </div>
+          </div>
+
+          <div style="display: grid; place-items: center;">
+            <TxFusion
+              v-model="active[item.key]"
+              trigger="hover"
+              :gap="74"
+              direction="x"
+              :duration="260"
+              :blur="19"
+              :alpha="29"
+              :alpha-offset="-10"
+            >
+              <template #a>
+                <div
+                  style="
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 999px;
+                    display: grid;
+                    place-items: center;
+                    user-select: none;
+                    border: 1px solid rgba(255, 255, 255, 0.16);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                    font-weight: 900;
+                    font-size: 18px;
+                  "
+                  :style="
+                    item.key === 'glass'
+                      ? { background: 'rgba(255, 255, 255, 0.12)', color: 'rgba(255, 255, 255, 0.92)' }
+                      : item.key === 'membrane'
+                        ? { background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.78), rgba(167, 139, 250, 0.66))', color: 'rgba(255, 255, 255, 0.92)' }
+                        : { background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.82), rgba(249, 115, 22, 0.82))', color: 'rgba(255, 255, 255, 0.95)' }
+                  "
+                >
+                  ♥
+                </div>
+              </template>
+
+              <template #b>
+                <div
+                  style="
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 999px;
+                    display: grid;
+                    place-items: center;
+                    user-select: none;
+                    border: 1px solid rgba(255, 255, 255, 0.16);
+                    backdrop-filter: blur(16px) saturate(160%);
+                    -webkit-backdrop-filter: blur(16px) saturate(160%);
+                    box-shadow: 0 18px 52px rgba(0, 0, 0, 0.30);
+                    font-weight: 900;
+                    font-size: 18px;
+                  "
+                  :style="
+                    item.key === 'glass'
+                      ? { background: 'rgba(255, 255, 255, 0.12)', color: 'rgba(255, 255, 255, 0.92)' }
+                      : item.key === 'membrane'
+                        ? { background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.76), rgba(244, 114, 182, 0.70))', color: 'rgba(255, 255, 255, 0.92)' }
+                        : { background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(59, 130, 246, 0.82))', color: 'rgba(255, 255, 255, 0.95)' }
+                  "
+                >
+                  ⌁
+                </div>
+              </template>
+            </TxFusion>
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ### Avatar + Badge
 
-<DemoBlock title="Fusion AvatarBadge" :code="FusionAvatarBadgeDemoSource">
-<template #preview>
-<FusionAvatarBadgeDemo />
-</template>
-</DemoBlock>
+### Fusion AvatarBadge
+:::TuffDemoWrapper{demo="FusionFusionAvatarBadgeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(120% 120% at 20% 20%, color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent), color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 78%, transparent));
+        border: 1px solid var(--vp-c-divider);
+        display: grid;
+        place-items: center;
+      "
+    >
+      <TxFusion trigger="hover" :gap="64" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+        <template #a>
+          <div
+            style="
+              width: 84px;
+              height: 84px;
+              border-radius: 999px;
+              background: linear-gradient(135deg, color-mix(in srgb, var(--tx-color-primary, #409eff) 70%, #fff), color-mix(in srgb, var(--tx-color-primary, #409eff) 30%, #000));
+              box-shadow: 0 16px 42px rgba(0, 0, 0, 0.16);
+              display: grid;
+              place-items: center;
+              color: rgba(255, 255, 255, 0.92);
+              font-weight: 700;
+              letter-spacing: 0.4px;
+              user-select: none;
+            "
+          >
+            TA
+          </div>
+        </template>
+
+        <template #b>
+          <div
+            style="
+              width: 34px;
+              height: 34px;
+              border-radius: 999px;
+              background: color-mix(in srgb, var(--tx-color-danger, #f56c6c) 78%, rgba(255, 255, 255, 0.10));
+              box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+              display: grid;
+              place-items: center;
+              color: rgba(255, 255, 255, 0.94);
+              font-size: 12px;
+              font-weight: 700;
+              user-select: none;
+            "
+          >
+            8
+          </div>
+        </template>
+      </TxFusion>
+    </div>
+  </template>
+---
+:::
 
 ### Chip + Icon
 
-<DemoBlock title="Fusion ChipIcon" :code="FusionChipIconDemoSource">
-<template #preview>
-<FusionChipIconDemo />
-</template>
-</DemoBlock>
+### Fusion ChipIcon
+:::TuffDemoWrapper{demo="FusionFusionChipIconDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent), color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 86%, transparent));
+        border: 1px solid var(--vp-c-divider);
+        display: grid;
+        place-items: center;
+      "
+    >
+      <TxFusion trigger="hover" :gap="54" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+        <template #a>
+          <div
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 10px;
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 26%, transparent);
+              border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+              backdrop-filter: blur(14px) saturate(160%);
+              -webkit-backdrop-filter: blur(14px) saturate(160%);
+              box-shadow: 0 14px 36px rgba(0, 0, 0, 0.12);
+              user-select: none;
+            "
+          >
+            <span
+              style="
+                width: 22px;
+                height: 22px;
+                border-radius: 8px;
+                background: color-mix(in srgb, var(--tx-color-success, #67c23a) 66%, rgba(255, 255, 255, 0.14));
+                box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+              "
+            />
+            <span style="font-size: 13px; color: var(--tx-text-color-primary, #303133); font-weight: 600;">Synced</span>
+          </div>
+        </template>
+
+        <template #b>
+          <div
+            style="
+              width: 40px;
+              height: 40px;
+              border-radius: 999px;
+              background: color-mix(in srgb, var(--tx-color-success, #67c23a) 70%, rgba(255, 255, 255, 0.10));
+              box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
+              display: grid;
+              place-items: center;
+              color: rgba(255, 255, 255, 0.95);
+              font-weight: 900;
+              user-select: none;
+            "
+          >
+            ✓
+          </div>
+        </template>
+      </TxFusion>
+    </div>
+  </template>
+---
+:::
 
 ### Mini Card + FAB
 
-<DemoBlock title="Fusion MiniCardFab" :code="FusionMiniCardFabDemoSource">
-<template #preview>
-<FusionMiniCardFabDemo />
-</template>
-</DemoBlock>
+### Fusion MiniCardFab
+:::TuffDemoWrapper{demo="FusionFusionMiniCardFabDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref(false)
+  </script>
+
+  <template>
+    <div
+      style="
+        width: 560px;
+        border-radius: 16px;
+        padding: 18px;
+        background:
+          radial-gradient(120% 120% at 10% 20%, color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent), color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 82%, transparent));
+        border: 1px solid var(--vp-c-divider);
+        display: grid;
+        gap: 12px;
+      "
+    >
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <TxButton size="small" @click="active = !active">
+          Toggle
+        </TxButton>
+        <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
+          Card + Floating Action
+        </div>
+      </div>
+
+      <div style="display: grid; place-items: center; padding: 18px;">
+        <TxFusion v-model="active" trigger="hover" :gap="92" :duration="260" :blur="19" :alpha="29" :alpha-offset="-10">
+          <template #a>
+            <div
+              style="
+                width: 320px;
+                height: 108px;
+                border-radius: 18px;
+                background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
+                border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
+                backdrop-filter: blur(18px) saturate(160%);
+                -webkit-backdrop-filter: blur(18px) saturate(160%);
+                box-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+                padding: 14px 16px;
+                display: grid;
+                gap: 6px;
+                align-content: center;
+                user-select: none;
+              "
+            >
+              <div style="font-size: 13px; font-weight: 700; color: var(--tx-text-color-primary, #303133);">
+                Quick Note
+              </div>
+              <div style="font-size: 12px; color: var(--tx-text-color-secondary);">
+                Hover to merge with the action button
+              </div>
+            </div>
+          </template>
+
+          <template #b>
+            <div
+              style="
+                width: 56px;
+                height: 56px;
+                border-radius: 999px;
+                background: color-mix(in srgb, var(--tx-color-primary, #409eff) 74%, rgba(255, 255, 255, 0.10));
+                box-shadow: 0 18px 46px rgba(0, 0, 0, 0.20);
+                display: grid;
+                place-items: center;
+                color: rgba(255, 255, 255, 0.95);
+                font-size: 22px;
+                font-weight: 900;
+                user-select: none;
+              "
+            >
+              +
+            </div>
+          </template>
+        </TxFusion>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## API
 

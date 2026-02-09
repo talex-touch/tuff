@@ -80,7 +80,10 @@ export async function runAdaptiveTaskQueue<T>(
   )
 
   for (let index = 0; index < total; index++) {
-    await handler(items[index], index)
+    const item = items[index]
+    if (item === undefined)
+      continue
+    await handler(item, index)
 
     const processed = index + 1
     if (processed % batchSize === 0 && processed < total) {

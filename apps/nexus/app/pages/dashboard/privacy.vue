@@ -6,6 +6,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 
 const loading = ref(false)
+const PRIVACY_STORAGE_KEY = 'tuff_privacy_settings'
 
 const privacySettings = ref({
   analytics: true,
@@ -17,19 +18,9 @@ const privacySettings = ref({
 async function saveSettings() {
   loading.value = true
   try {
-    await $fetch('/api/sync/push', {
-      method: 'POST',
-      body: {
-        items: [
-          {
-            namespace: 'preferences',
-            key: 'privacy',
-            value: privacySettings.value,
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      },
-    })
+    if (import.meta.client) {
+      window.localStorage.setItem(PRIVACY_STORAGE_KEY, JSON.stringify(privacySettings.value))
+    }
   }
   catch (error) {
     console.error('Failed to save privacy settings:', error)
@@ -41,10 +32,14 @@ async function saveSettings() {
 
 async function loadSettings() {
   try {
-    const items = await $fetch<Array<{ namespace: string, key: string, value: any }>>('/api/sync/pull')
-    const item = items.find(entry => entry.namespace === 'preferences' && entry.key === 'privacy')
-    if (item?.value) {
-      privacySettings.value = { ...privacySettings.value, ...item.value }
+    if (import.meta.client) {
+      const raw = window.localStorage.getItem(PRIVACY_STORAGE_KEY)
+      if (!raw)
+        return
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        privacySettings.value = { ...privacySettings.value, ...(parsed as any) }
+      }
     }
   }
   catch (error) {
@@ -91,12 +86,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.analytics"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
+          <TuffSwitch v-model="privacySettings.analytics" @change="saveSettings" />
         </label>
 
         <!-- Crash Reports -->
@@ -112,12 +102,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.crashReports"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
+          <TuffSwitch v-model="privacySettings.crashReports" @change="saveSettings" />
         </label>
 
         <!-- Usage Data -->
@@ -133,12 +118,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.usageData"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
+          <TuffSwitch v-model="privacySettings.usageData" @change="saveSettings" />
         </label>
 
         <!-- Personalization -->
@@ -154,12 +134,7 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <input
-            v-model="privacySettings.personalization"
-            type="checkbox"
-            class="h-5 w-5 rounded accent-primary"
-            @change="saveSettings"
-          >
+          <TuffSwitch v-model="privacySettings.personalization" @change="saveSettings" />
         </label>
       </div>
     </section>
@@ -171,7 +146,10 @@ onMounted(() => {
       </h2>
 
       <div class="mt-4 space-y-3">
-        <button
+        <TxButton
+          variant="bare"
+          block
+          native-type="button"
           class="w-full flex items-center justify-between border border-primary/15 rounded-2xl bg-dark/5 px-4 py-3 text-left text-sm text-black font-medium transition dark:border-light/15 hover:border-primary/30 dark:bg-light/10 hover:bg-light/5 dark:text-light"
         >
           <div class="flex items-center gap-3">
@@ -179,9 +157,12 @@ onMounted(() => {
             {{ t('dashboard.privacy.exportData', '导出我的数据') }}
           </div>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </TxButton>
 
-        <button
+        <TxButton
+          variant="bare"
+          block
+          native-type="button"
           class="w-full flex items-center justify-between border border-red-500/20 rounded-2xl bg-red-500/5 px-4 py-3 text-left text-sm text-red-600 font-medium transition hover:border-red-500/40 hover:bg-red-500/10 dark:text-red-400"
         >
           <div class="flex items-center gap-3">
@@ -189,7 +170,7 @@ onMounted(() => {
             {{ t('dashboard.privacy.deleteData', '删除我的数据') }}
           </div>
           <span class="i-carbon-arrow-right text-base opacity-50" />
-        </button>
+        </TxButton>
       </div>
     </section>
 
