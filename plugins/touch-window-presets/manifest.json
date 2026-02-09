@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.window-presets",
+  "name": "touch-window-presets",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "窗口预设：一键应用常用桌面布局",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "查询窗口并执行贴边与置顶布局"
+  },
+  "features": [
+    {
+      "id": "window.presets",
+      "name": "窗口预设",
+      "desc": "一键布局窗口组合",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["window", "preset", "layout", "分屏", "布局", "窗口预设"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": false,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["window", "preset", "layout", "分屏", "布局"]
+        }
+      ]
+    }
+  ]
+}
