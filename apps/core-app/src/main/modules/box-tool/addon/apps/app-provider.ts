@@ -1106,6 +1106,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.isMac) {
       if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
       if (!appPath.endsWith('.app')) return
+      if (!this._isWatchPathCandidate(appPath)) {
+        logApp(`Ignoring app change outside watch roots: ${chalk.gray(appPath)}`, LogStyle.info)
+        return
+      }
     }
 
     logApp(`App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
@@ -1187,6 +1191,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.isMac) {
       if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
       if (!appPath.endsWith('.app')) return
+      if (!this._isWatchPathCandidate(appPath)) {
+        return
+      }
     }
 
     logApp(`App deletion detected: ${chalk.cyan(appPath)}`, LogStyle.process)
@@ -1527,6 +1534,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const depth = this.isMac && (p === '/Applications' || p.endsWith('/Applications')) ? 1 : 4
       FileSystemWatcher.addPath(p, depth)
     }
+  }
+
+  private _isWatchPathCandidate(appPath: string): boolean {
+    if (!this.isMac) {
+      return true
+    }
+
+    const normalizedPath = path.resolve(appPath)
+    const watchRoots = appScanner
+      .getWatchPaths()
+      .filter((watchPath) => Boolean(watchPath) && existsSync(watchPath))
+      .map((watchPath) => path.resolve(watchPath))
+
+    if (watchRoots.length === 0) {
+      return true
+    }
+
+    return watchRoots.some(
+      (root) => normalizedPath === root || normalizedPath.startsWith(`${root}${path.sep}`)
+    )
   }
 
   private async _waitForItemStable(itemPath: string, delay = 500, retries = 5): Promise<boolean> {

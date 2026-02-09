@@ -57,6 +57,7 @@ type UpdateSettings = SharedUpdateSettings & {
   maxRetries: number
   retryDelay: number // Base retry delay in milliseconds
   lastCheckedAt: number | null
+  pendingInstallVersion: string | null
 }
 
 interface ReleaseCacheRateLimit {
@@ -117,6 +118,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private readonly onMacUpdateDownloaded = (info: { version?: string }): void => {
     const version = info?.version || 'unknown'
     this.macUpdateDownloadedVersion = version
+    this.macUpdateReadyNotifiedVersion = null
+    this.settings.pendingInstallVersion = version
+    this.saveSettings()
     this.showMacUpdateReadyNotification(version)
   }
   private readonly onMacUpdaterError = (error: unknown): void => {
@@ -356,6 +360,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ),
 
       tx.on(UpdateEvents.getStatus, async () => {
+        const readyStatus = await this.resolveReadyUpdateStatus()
+
         return {
           success: true,
           data: {
@@ -364,7 +370,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             source: this.settings.source,
             channel: this.getEffectiveChannel(),
             polling: this.pollingService.isRegistered(UPDATE_POLL_TASK_ID),
-            lastCheck: this.settings.lastCheckedAt ?? null
+            lastCheck: this.settings.lastCheckedAt ?? null,
+            downloadReady: readyStatus.downloadReady,
+            downloadReadyVersion: readyStatus.version,
+            downloadTaskId: readyStatus.taskId
           }
         }
       }),
@@ -374,6 +383,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           this.cache.clear()
           this.clearReleaseCache()
           await this.updateRepository?.clearAllRecords()
+          this.macUpdateDownloadedVersion = null
+          this.macUpdateReadyNotifiedVersion = null
+          this.settings.pendingInstallVersion = null
+          this.saveSettings()
           return { success: true }
         } catch (error) {
           updateLog.error('Failed to clear cache', { error })
@@ -467,6 +480,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           }
           if (!this.updateSystem) {
             throw new Error('UpdateSystem not initialized')
+          }
+          if (!payload?.taskId) {
+            throw new Error('Missing update task id')
           }
           await this.updateSystem.installUpdate(payload.taskId)
           return { success: true }
@@ -597,9 +613,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private async installMacUpdate(): Promise<void> {
-    if (!this.macUpdateDownloadedVersion) {
+    const pendingVersion = this.macUpdateDownloadedVersion
+    if (!pendingVersion) {
       throw new Error('macOS update has not been downloaded')
     }
+
+    this.macUpdateDownloadedVersion = null
+    this.macUpdateReadyNotifiedVersion = null
+    this.settings.pendingInstallVersion = null
+
+    try {
+      await this.flushSettingsToDisk()
+    } catch (error) {
+      updateLog.warn('Failed to persist macOS pending update state before install', { error })
+    }
+
     autoUpdater.quitAndInstall()
   }
 
@@ -870,6 +898,69 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     return null
+  }
+
+  private async resolveReadyUpdateStatus(): Promise<{
+    downloadReady: boolean
+    version: string | null
+    taskId: string | null
+  }> {
+    if (this.isMacAutoUpdaterEnabled() && this.macUpdateDownloadedVersion) {
+      return {
+        downloadReady: true,
+        version: this.macUpdateDownloadedVersion,
+        taskId: null
+      }
+    }
+
+    try {
+      const db = databaseModule.getDb()
+      const tasks = await db
+        .select({
+          id: downloadTasks.id,
+          destination: downloadTasks.destination,
+          filename: downloadTasks.filename,
+          metadata: downloadTasks.metadata
+        })
+        .from(downloadTasks)
+        .where(
+          and(
+            eq(downloadTasks.module, DownloadModule.APP_UPDATE),
+            eq(downloadTasks.status, DownloadStatus.COMPLETED)
+          )
+        )
+        .orderBy(desc(downloadTasks.completedAt))
+        .limit(20)
+
+      for (const task of tasks) {
+        const filePath = path.join(task.destination, task.filename)
+        if (!(await this.fileExists(filePath))) {
+          continue
+        }
+
+        const metadata = this.parseDownloadTaskMetadata(task.metadata)
+        const version = typeof metadata?.version === 'string' ? metadata.version : null
+
+        return {
+          downloadReady: true,
+          version,
+          taskId: task.id
+        }
+      }
+    } catch (error) {
+      updateLog.warn('Failed to resolve ready update status', { error })
+    }
+
+    return {
+      downloadReady: false,
+      version: null,
+      taskId: null
+    }
+  }
+
+  private isSameVersionToken(versionA: string, versionB: string): boolean {
+    const normalize = (value: string): string => value.trim().replace(/^v/i, '').toLowerCase()
+    return normalize(versionA) === normalize(versionB)
   }
 
   private parseDownloadTaskMetadata(metadata?: string | null): Record<string, unknown> | null {
@@ -1548,7 +1639,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       rateLimitEnabled: true,
       maxRetries: 3,
       retryDelay: 2000, // 2 seconds base retry delay
-      lastCheckedAt: null
+      lastCheckedAt: null,
+      pendingInstallVersion: null
     }
   }
 
@@ -1834,22 +1926,40 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       if (fs.existsSync(settingsFile)) {
         const settingsData = fs.readFileSync(settingsFile, 'utf8')
-        const persisted = JSON.parse(settingsData)
+        const persisted = JSON.parse(settingsData) as Record<string, unknown>
         const normalizedChannel = this.enforceChannelPreference(persisted.updateChannel)
+
         this.settings = {
           ...defaults,
-          ...persisted,
+          ...(persisted as Partial<UpdateSettings>),
           updateChannel: normalizedChannel
         }
         this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
+
         if (typeof this.settings.lastCheckedAt !== 'number') {
           this.settings.lastCheckedAt = defaults.lastCheckedAt
         }
         if (typeof this.settings.autoDownload !== 'boolean') {
           this.settings.autoDownload = defaults.autoDownload
         }
+        if (typeof this.settings.pendingInstallVersion !== 'string') {
+          this.settings.pendingInstallVersion = defaults.pendingInstallVersion
+        }
 
-        if (persisted.updateChannel !== normalizedChannel) {
+        this.macUpdateDownloadedVersion = null
+        let shouldSaveSettings = persisted.updateChannel !== normalizedChannel
+
+        const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()
+        if (pendingVersion.length > 0) {
+          if (this.isSameVersionToken(pendingVersion, this.currentVersion)) {
+            this.settings.pendingInstallVersion = null
+            shouldSaveSettings = true
+          } else if (this.isMacAutoUpdaterEnabled()) {
+            this.macUpdateDownloadedVersion = pendingVersion
+          }
+        }
+
+        if (shouldSaveSettings) {
           this.saveSettings()
         }
 

@@ -368,9 +368,11 @@ export class GithubUpdateProvider extends UpdateProvider {
       return 'darwin'
     } else if (
       lower.includes('linux') ||
+      lower.includes('ubuntu') ||
+      lower.includes('debian') ||
       lower.includes('.deb') ||
       lower.includes('.rpm') ||
-      lower.includes('.AppImage')
+      lower.includes('.appimage')
     ) {
       return 'linux'
     }

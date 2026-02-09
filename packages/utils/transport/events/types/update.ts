@@ -24,6 +24,9 @@ export type UpdateGetStatusResponse = UpdateOpResponse<{
   channel: AppPreviewChannel
   polling: boolean
   lastCheck: number | null
+  downloadReady?: boolean
+  downloadReadyVersion?: string | null
+  downloadTaskId?: string | null
 }>
 
 export interface UpdateCachedReleaseRequest {
@@ -42,7 +45,7 @@ export type UpdateDownloadResponse = UpdateOpResponse<{
 }>
 
 export interface UpdateInstallRequest {
-  taskId: string
+  taskId?: string
 }
 
 export interface UpdateIgnoreVersionRequest {

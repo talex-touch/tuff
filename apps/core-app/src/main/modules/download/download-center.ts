@@ -255,6 +255,14 @@ export class DownloadCenterModule extends BaseModule {
       throw new Error(`Task ${taskId} not found`)
     }
 
+    if (task.status === DownloadStatus.DOWNLOADING) {
+      const worker = this.taskWorkerMap.get(taskId)
+      if (worker) {
+        await worker.pauseTask(taskId)
+      }
+      this.taskWorkerMap.delete(taskId)
+    }
+
     task.status = DownloadStatus.PAUSED
     task.updatedAt = new Date()
     await this.getDb()
@@ -274,6 +282,14 @@ export class DownloadCenterModule extends BaseModule {
     const task = this.taskQueue.getTask(taskId)
     if (!task) {
       throw new Error(`Task ${taskId} not found`)
+    }
+
+    if (task.status === DownloadStatus.COMPLETED || task.status === DownloadStatus.CANCELLED) {
+      throw new Error(`Task ${taskId} is not resumable`)
+    }
+
+    for (const worker of this.downloadWorkers) {
+      await worker.resumeTask(taskId)
     }
 
     task.status = DownloadStatus.PENDING
@@ -1082,6 +1098,10 @@ export class DownloadCenterModule extends BaseModule {
 
         // 分配任务给可用的工作器
         for (const task of pendingTasks) {
+          if (this.taskWorkerMap.has(task.id)) {
+            continue
+          }
+
           const availableWorker = this.findAvailableWorker()
           if (availableWorker) {
             // 启动下载任务

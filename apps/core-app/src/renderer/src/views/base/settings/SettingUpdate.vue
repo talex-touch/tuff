@@ -21,6 +21,7 @@ const { appStates } = useAppState()
 const {
   checkApplicationUpgrade,
   handleDownloadUpdate,
+  installDownloadedUpdate,
   getUpdateSettings,
   updateSettings,
   clearUpdateCache,
@@ -33,6 +34,9 @@ const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(false)
 const lastCheck = ref<number | null>(null)
+const downloadReady = ref(false)
+const downloadReadyVersion = ref<string | null>(null)
+const downloadTaskId = ref<string | null>(null)
 const cachedRelease = ref<CachedUpdateRecord | null>(null)
 const assetsDialogVisible = ref(false)
 
@@ -42,6 +46,7 @@ const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
 const manualChecking = ref(false)
 const clearingCache = ref(false)
+const installingUpdate = ref(false)
 const lastResultMessage = ref<string>('')
 
 const channelOptions = computed(() => {
@@ -73,6 +78,14 @@ const statusDescription = computed(() => {
 })
 
 const statusMessage = computed(() => {
+  if (downloadReady.value) {
+    return {
+      text: t('settings.settingUpdate.status.downloadReady', {
+        version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
+      }),
+      warning: false
+    }
+  }
   if (lastResultMessage.value) {
     return { text: lastResultMessage.value, warning: false }
   }
@@ -117,6 +130,7 @@ async function loadSettings(): Promise<void> {
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
+    await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
   } catch (error) {
     console.error('[SettingUpdate] Failed to load settings:', error)
@@ -128,7 +142,13 @@ async function loadSettings(): Promise<void> {
 
 async function refreshStatus(): Promise<void> {
   try {
-    const status = (await getUpdateStatus()) as { lastCheck?: string | number | null }
+    const status = (await getUpdateStatus()) as {
+      lastCheck?: string | number | null
+      downloadReady?: boolean
+      downloadReadyVersion?: string | null
+      downloadTaskId?: string | null
+    }
+
     if (typeof status.lastCheck === 'number') {
       lastCheck.value = status.lastCheck
     } else if (typeof status.lastCheck === 'string') {
@@ -137,8 +157,26 @@ async function refreshStatus(): Promise<void> {
     } else {
       lastCheck.value = null
     }
+
+    downloadReady.value = status.downloadReady === true
+    downloadReadyVersion.value =
+      typeof status.downloadReadyVersion === 'string' && status.downloadReadyVersion.length > 0
+        ? status.downloadReadyVersion
+        : null
+    downloadTaskId.value =
+      typeof status.downloadTaskId === 'string' && status.downloadTaskId.length > 0
+        ? status.downloadTaskId
+        : null
+
+    if (!downloadReady.value) {
+      downloadReadyVersion.value = null
+      downloadTaskId.value = null
+    }
   } catch (error) {
     console.warn('[SettingUpdate] Failed to refresh status:', error)
+    downloadReady.value = false
+    downloadReadyVersion.value = null
+    downloadTaskId.value = null
   }
 }
 
@@ -248,6 +286,7 @@ async function handleClearCache(): Promise<void> {
     await clearUpdateCache()
     toast.success(t('settings.settingUpdate.messages.cacheCleared'))
     cachedRelease.value = null
+    await refreshStatus()
   } catch (error) {
     console.error('[SettingUpdate] Failed to clear cache:', error)
     toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
@@ -269,6 +308,22 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
     await handleDownloadUpdate(cachedRelease.value.release)
   } catch (error) {
     console.error('[SettingUpdate] Failed to download update:', error)
+  }
+}
+
+async function handleInstallUpdate(): Promise<void> {
+  if (installingUpdate.value || !downloadReady.value) {
+    return
+  }
+
+  installingUpdate.value = true
+  try {
+    const ok = await installDownloadedUpdate(downloadTaskId.value ?? undefined)
+    if (ok) {
+      await refreshStatus()
+    }
+  } finally {
+    installingUpdate.value = false
   }
 }
 
@@ -413,6 +468,15 @@ function openAssetsDialog(): void {
       default-icon="i-carbon-settings-adjust"
       active-icon="i-carbon-settings-adjust"
     >
+      <TxButton
+        v-if="downloadReady"
+        variant="flat"
+        type="primary"
+        :loading="installingUpdate"
+        @click="handleInstallUpdate"
+      >
+        {{ t('settings.settingUpdate.actions.installNow') }}
+      </TxButton>
       <TxButton variant="flat" type="primary" :loading="manualChecking" @click="handleManualCheck">
         {{ t('settings.settingUpdate.actions.manualCheck') }}
       </TxButton>

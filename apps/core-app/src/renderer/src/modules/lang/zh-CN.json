@@ -1775,11 +1775,14 @@
         "lastChecked": "上次检查：{time}",
         "updateAvailable": "发现新版本，请关注弹出的更新提示。",
         "upToDate": "当前已是最新版本。",
+        "downloadReady": "更新包 {version} 已下载完成，可立即重启并完成更新。",
+        "unknownVersion": "该版本",
         "cachedRelease": "缓存更新：{version}"
       },
       "actionsTitle": "操作",
       "actionsDesc": "手动触发更新检查或维护任务。",
       "actions": {
+        "installNow": "立即重启更新",
         "manualCheck": "立即检查",
         "clearCache": "清空缓存"
       },
@@ -1810,6 +1813,8 @@
         "manualCheckNoUpdate": "最新版本：{version}",
         "manualCheckFailedWithReason": "检测失败：{reason}",
         "manualCheckFailed": "手动检测更新失败",
+        "installStarted": "正在重启并应用更新",
+        "installFailedWithReason": "启动更新失败：{reason}",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败"
       }

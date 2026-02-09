@@ -60,6 +60,9 @@ type UpdateStatusInfo = {
   channel: AppPreviewChannel
   polling: boolean
   lastCheck: number | null
+  downloadReady?: boolean
+  downloadReadyVersion?: string | null
+  downloadTaskId?: string | null
 }
 
 type UpdateAvailablePayload = {
@@ -67,6 +70,136 @@ type UpdateAvailablePayload = {
   release?: GitHubRelease
   source?: string
   channel?: AppPreviewChannel
+}
+
+type NormalizedPlatform = 'win32' | 'darwin' | 'linux'
+type NormalizedArch = 'x64' | 'arm64'
+
+function resolvePlatformFallback(): NormalizedPlatform {
+  const runtimePlatform = typeof process !== 'undefined' ? process.platform : ''
+
+  if (runtimePlatform === 'win32') return 'win32'
+  if (runtimePlatform === 'darwin') return 'darwin'
+  if (runtimePlatform === 'linux') return 'linux'
+
+  return 'darwin'
+}
+
+function resolveArchFallback(): NormalizedArch {
+  const runtimeArch = typeof process !== 'undefined' ? process.arch : ''
+  return runtimeArch === 'arm64' ? 'arm64' : 'x64'
+}
+
+function normalizeAssetPlatform(platformValue: unknown, filename: string): NormalizedPlatform {
+  const platform = typeof platformValue === 'string' ? platformValue.toLowerCase() : ''
+  const lowerName = filename.toLowerCase()
+
+  if (platform.includes('win') || lowerName.includes('win')) return 'win32'
+  if (
+    platform.includes('darwin') ||
+    platform.includes('mac') ||
+    lowerName.includes('darwin') ||
+    lowerName.includes('mac')
+  ) {
+    return 'darwin'
+  }
+  if (
+    platform.includes('linux') ||
+    platform.includes('ubuntu') ||
+    platform.includes('debian') ||
+    lowerName.includes('linux') ||
+    lowerName.includes('ubuntu') ||
+    lowerName.includes('debian') ||
+    lowerName.endsWith('.appimage')
+  ) {
+    return 'linux'
+  }
+
+  return resolvePlatformFallback()
+}
+
+function normalizeAssetArch(archValue: unknown, filename: string): NormalizedArch {
+  const arch = typeof archValue === 'string' ? archValue.toLowerCase() : ''
+  const lowerName = filename.toLowerCase()
+
+  if (
+    arch.includes('arm64') ||
+    arch.includes('aarch64') ||
+    lowerName.includes('arm64') ||
+    lowerName.includes('aarch64')
+  ) {
+    return 'arm64'
+  }
+
+  if (
+    arch.includes('x64') ||
+    arch.includes('amd64') ||
+    arch.includes('x86_64') ||
+    lowerName.includes('x64') ||
+    lowerName.includes('amd64') ||
+    lowerName.includes('x86_64')
+  ) {
+    return 'x64'
+  }
+
+  return resolveArchFallback()
+}
+
+function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
+  const source = release as unknown as Record<string, unknown>
+  const rawAssets = Array.isArray(source.assets) ? source.assets : []
+
+  const normalizedAssets = rawAssets
+    .map((asset) => {
+      const raw = asset as Record<string, unknown>
+      const name = typeof raw.name === 'string' ? raw.name : ''
+      const browserDownloadUrl =
+        typeof raw.browser_download_url === 'string' ? raw.browser_download_url : ''
+      const fallbackUrl = typeof raw.url === 'string' ? raw.url : ''
+      const url = browserDownloadUrl || fallbackUrl
+
+      if (!name || !url) {
+        return null
+      }
+
+      const size = typeof raw.size === 'number' && Number.isFinite(raw.size) ? raw.size : 0
+      const checksum =
+        typeof raw.checksum === 'string'
+          ? raw.checksum
+          : typeof raw.sha256 === 'string'
+            ? raw.sha256
+            : undefined
+
+      const normalized: Record<string, unknown> = {
+        name,
+        url,
+        size,
+        platform: normalizeAssetPlatform(raw.platform, name),
+        arch: normalizeAssetArch(raw.arch, name)
+      }
+
+      if (browserDownloadUrl) normalized.browser_download_url = browserDownloadUrl
+      if (checksum) normalized.checksum = checksum
+      if (typeof raw.sha256 === 'string') normalized.sha256 = raw.sha256
+      if (typeof raw.signatureUrl === 'string') normalized.signatureUrl = raw.signatureUrl
+      if (typeof raw.signatureKeyUrl === 'string') normalized.signatureKeyUrl = raw.signatureKeyUrl
+      if (typeof raw.component === 'string') normalized.component = raw.component
+      if (typeof raw.coreRange === 'string') normalized.coreRange = raw.coreRange
+
+      return normalized
+    })
+    .filter((asset): asset is Record<string, unknown> => asset !== null)
+
+  const tagName = typeof source.tag_name === 'string' ? source.tag_name : ''
+
+  return {
+    tag_name: tagName,
+    name: typeof source.name === 'string' ? source.name : tagName,
+    published_at:
+      typeof source.published_at === 'string' ? source.published_at : new Date().toISOString(),
+    body: typeof source.body === 'string' ? source.body : '',
+    assets: normalizedAssets as unknown as GitHubRelease['assets']
+  }
 }
 
 /**
@@ -181,11 +314,21 @@ export class AppUpdate {
    * @returns Promise that resolves when download is started
    */
   public async downloadUpdate(release: GitHubRelease): Promise<void> {
+    const payload = normalizeReleaseForDownload(release)
     const response = await this.sendRequest('update:download', () =>
-      this.updateSdk.download(release)
+      this.updateSdk.download(payload)
     )
     if (!response.success) {
       throw new Error(response.error || 'Failed to start update download')
+    }
+  }
+
+  public async installUpdate(taskId?: string): Promise<void> {
+    const response = await this.sendRequest('update:install', () =>
+      this.updateSdk.install(taskId ? { taskId } : {})
+    )
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to install update')
     }
   }
 
@@ -392,7 +535,7 @@ export function useApplicationUpgrade() {
           await blowMention(t('update.new_version_available'), () => {
             return h(AppUpdateView, {
               release: currentRelease as unknown as Record<string, unknown>,
-              onUpdateNow: () => handleUpdateAcknowledged(currentRelease),
+              onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
               onSkipVersion: () => handleIgnoreVersion(currentRelease),
               onRemindLater: () => handleRemindLaterSelection(currentRelease)
             })
@@ -422,13 +565,14 @@ export function useApplicationUpgrade() {
    * Handle download update
    * @param release - GitHub release information
    */
-  async function handleDownloadUpdate(release: GitHubRelease): Promise<void> {
+  async function handleDownloadUpdate(release: GitHubRelease): Promise<boolean> {
     try {
       await appUpdate.downloadUpdate(release)
       toast.success(t('update.download_started'))
 
       // 可以在这里打开下载中心
       // openDownloadCenter()
+      return true
     } catch (err) {
       console.error('[useApplicationUpgrade] Download failed:', err)
       toast.error(
@@ -436,7 +580,32 @@ export function useApplicationUpgrade() {
           reason: err instanceof Error ? err.message : 'Unknown error'
         })
       )
+      return false
     }
+  }
+
+  async function installDownloadedUpdate(taskId?: string): Promise<boolean> {
+    try {
+      await appUpdate.installUpdate(taskId)
+      toast.success(t('settings.settingUpdate.messages.installStarted'))
+      return true
+    } catch (err) {
+      console.error('[useApplicationUpgrade] Install update failed:', err)
+      toast.error(
+        t('settings.settingUpdate.messages.installFailedWithReason', {
+          reason: err instanceof Error ? err.message : 'Unknown error'
+        })
+      )
+      return false
+    }
+  }
+
+  async function handleUpdateNowSelection(release: GitHubRelease): Promise<void> {
+    const started = await handleDownloadUpdate(release)
+    if (!started) {
+      return
+    }
+    await handleUpdateAcknowledged(release)
   }
 
   async function handleUpdateAcknowledged(release: GitHubRelease): Promise<void> {
@@ -574,9 +743,13 @@ export function useApplicationUpgrade() {
         if (data.hasUpdate && data.release) {
           appStates.hasUpdate = true
 
+          const currentRelease = data.release
           blowMention(t('update.new_version_available'), () => {
             return h(AppUpdateView, {
-              release: data.release as unknown as Record<string, unknown>
+              release: currentRelease as unknown as Record<string, unknown>,
+              onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
+              onSkipVersion: () => void handleIgnoreVersion(currentRelease),
+              onRemindLater: () => void handleRemindLaterSelection(currentRelease)
             })
           })
         }
@@ -589,6 +762,7 @@ export function useApplicationUpgrade() {
   return {
     checkApplicationUpgrade,
     handleDownloadUpdate,
+    installDownloadedUpdate,
     handleIgnoreVersion,
     getUpdateSettings,
     updateSettings,

@@ -91,15 +91,12 @@ export class DownloadWorker {
 
   // 暂停下载任务
   async pauseTask(taskId: string): Promise<void> {
-    // 实现暂停逻辑
-    // 这里需要与具体的下载实现配合
-    console.log(`Pausing task ${taskId}`)
+    await this.cancelTask(taskId)
   }
 
   // 恢复下载任务
   async resumeTask(taskId: string): Promise<void> {
-    // 实现恢复逻辑
-    console.log(`Resuming task ${taskId}`)
+    this.cancelledTasks.delete(taskId)
   }
 
   // 取消下载任务
@@ -164,14 +161,28 @@ export class DownloadWorker {
         return
       }
 
-      // 初始化进度跟踪器
-      progressTracker.updateProgress(0, totalSize)
-
-      // 创建切片
-      const chunks = this.chunkManager.createChunks(task, totalSize)
-
       // 确保临时目录存在（使用配置的临时目录）
       await this.chunkManager.ensureTempDir(task, this.config.storage.tempDir)
+
+      // 创建或复用切片
+      const chunks = this.resolveTaskChunks(task, totalSize)
+      task.chunks = chunks
+
+      // 从已有临时文件恢复切片进度
+      await this.restoreChunkProgress(chunks)
+
+      const resumedDownloaded = chunks.reduce((sum, chunk) => sum + chunk.downloaded, 0)
+      progressTracker.updateProgress(resumedDownloaded, totalSize)
+
+      if (onProgress && resumedDownloaded > 0) {
+        onProgress(task.id, {
+          percentage: totalSize > 0 ? (resumedDownloaded / totalSize) * 100 : 0,
+          totalSize,
+          downloadedSize: resumedDownloaded,
+          speed: 0,
+          remainingTime: undefined
+        })
+      }
 
       // Check for cancellation before starting chunk downloads
       if (abortSignal?.aborted) {
@@ -215,6 +226,91 @@ export class DownloadWorker {
       console.error(`Download failed for task ${task.id}:`, downloadError.userMessage)
 
       throw downloadError
+    }
+  }
+
+  private resolveTaskChunks(task: DownloadTask, totalSize: number): ChunkInfo[] {
+    const existingChunks = Array.isArray(task.chunks)
+      ? [...task.chunks].sort((left, right) => left.index - right.index)
+      : []
+
+    if (this.hasCompatibleChunkLayout(existingChunks, totalSize)) {
+      return existingChunks
+    }
+
+    return this.chunkManager.createChunks(task, totalSize)
+  }
+
+  private hasCompatibleChunkLayout(chunks: ChunkInfo[], totalSize: number): boolean {
+    if (!chunks.length) {
+      return false
+    }
+
+    let expectedStart = 0
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index]
+      if (chunk.index !== index) {
+        return false
+      }
+      if (chunk.start !== expectedStart) {
+        return false
+      }
+      if (chunk.end < chunk.start) {
+        return false
+      }
+      if (chunk.size !== chunk.end - chunk.start + 1) {
+        return false
+      }
+      if (chunk.downloaded < 0 || chunk.downloaded > chunk.size) {
+        return false
+      }
+      if (!chunk.filePath) {
+        return false
+      }
+
+      expectedStart = chunk.end + 1
+    }
+
+    return expectedStart === totalSize
+  }
+
+  private async restoreChunkProgress(chunks: ChunkInfo[]): Promise<void> {
+    for (const chunk of chunks) {
+      if (chunk.status === ChunkStatus.DOWNLOADING) {
+        chunk.status = ChunkStatus.PENDING
+      }
+
+      try {
+        const stats = await fs.stat(chunk.filePath)
+        const fileSize = Number.isFinite(stats.size) ? stats.size : 0
+
+        if (fileSize <= 0) {
+          chunk.downloaded = 0
+          chunk.status = ChunkStatus.PENDING
+          continue
+        }
+
+        if (fileSize >= chunk.size) {
+          chunk.downloaded = chunk.size
+          chunk.status = ChunkStatus.COMPLETED
+          continue
+        }
+
+        chunk.downloaded = fileSize
+        chunk.status = ChunkStatus.PENDING
+      } catch (error: unknown) {
+        const code =
+          typeof error === 'object' && error !== null && 'code' in error
+            ? (error as { code?: string }).code
+            : undefined
+
+        if (code && code !== 'ENOENT') {
+          throw error
+        }
+
+        chunk.downloaded = 0
+        chunk.status = ChunkStatus.PENDING
+      }
     }
   }
 
@@ -284,44 +380,51 @@ export class DownloadWorker {
     _onProgress?: (taskId: string, progress: DownloadProgress) => void,
     abortSignal?: AbortSignal
   ): Promise<void> {
-    const concurrentLimit = Math.min(this.maxConcurrent, chunks.length)
-    const semaphore = new Array(concurrentLimit).fill(null)
-    let completedChunks = 0
+    const runnableChunks = chunks.filter(
+      (chunk) => chunk.status !== ChunkStatus.COMPLETED && chunk.downloaded < chunk.size
+    )
 
-    const downloadPromises = chunks.map(async (chunk, index) => {
-      // Check for cancellation before starting chunk download
+    if (!runnableChunks.length) {
+      const progress = this.chunkManager.getChunkProgress(chunks)
+      progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
+      progressTracker.forceUpdate()
+      return
+    }
+
+    const concurrentLimit = Math.min(this.maxConcurrent, runnableChunks.length)
+    const lanes: Promise<void>[] = Array.from({ length: concurrentLimit }, () => Promise.resolve())
+    let completedChunks = chunks.filter(
+      (chunk) => chunk.status === ChunkStatus.COMPLETED || chunk.downloaded >= chunk.size
+    ).length
+    const completionCheckpoint = Math.max(1, Math.floor(chunks.length / 10))
+
+    const downloadPromises = runnableChunks.map(async (chunk, index) => {
       if (abortSignal?.aborted) {
         throw new Error('Task was cancelled')
       }
 
-      await semaphore[index % concurrentLimit]
-      semaphore[index % concurrentLimit] = this.downloadChunk(
-        chunk,
-        task,
-        progressTracker,
-        abortSignal
-      )
+      const laneIndex = index % concurrentLimit
+      await lanes[laneIndex]
+
+      const downloadPromise = this.downloadChunk(chunk, task, progressTracker, abortSignal)
+      lanes[laneIndex] = downloadPromise
 
       try {
-        await semaphore[index % concurrentLimit]
+        await downloadPromise
 
-        // Check for cancellation after chunk download
         if (abortSignal?.aborted) {
           throw new Error('Task was cancelled')
         }
 
-        completedChunks++
+        completedChunks += 1
 
-        // 更新进度（通过 ProgressTracker）
         const progress = this.chunkManager.getChunkProgress(chunks)
         progressTracker.updateProgress(progress.downloadedSize, progress.totalSize)
 
-        // 如果需要立即更新（例如切片完成时），可以强制更新
-        if (completedChunks % Math.max(1, Math.floor(chunks.length / 10)) === 0) {
+        if (completedChunks % completionCheckpoint === 0 || completedChunks === chunks.length) {
           progressTracker.forceUpdate()
         }
       } catch (error) {
-        // Don't throw if task was cancelled - let the cancellation handler deal with it
         if (abortSignal?.aborted) {
           return
         }
@@ -340,6 +443,12 @@ export class DownloadWorker {
     _progressTracker: ProgressTracker,
     abortSignal?: AbortSignal
   ): Promise<void> {
+    if (chunk.downloaded >= chunk.size) {
+      chunk.downloaded = chunk.size
+      chunk.status = ChunkStatus.COMPLETED
+      return
+    }
+
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
 
@@ -357,9 +466,8 @@ export class DownloadWorker {
     }
 
     while (retryCount <= maxRetries) {
-      // Check for cancellation before each retry
       if (abortSignal?.aborted) {
-        chunk.status = ChunkStatus.FAILED
+        chunk.status = chunk.downloaded > 0 ? ChunkStatus.PENDING : ChunkStatus.FAILED
         throw new Error('Task was cancelled')
       }
 
@@ -367,17 +475,27 @@ export class DownloadWorker {
         chunk.status = ChunkStatus.DOWNLOADING
 
         const headers = (task.metadata?.headers as Record<string, string>) || {}
+        const rangeStart = chunk.start + chunk.downloaded
+
+        if (rangeStart > chunk.end) {
+          chunk.downloaded = chunk.size
+          chunk.status = ChunkStatus.COMPLETED
+          return
+        }
+
+        const requiresPartialContent = rangeStart > chunk.start
         const config: AxiosRequestConfig = {
           method: 'GET',
           url: task.url,
           headers: {
             ...headers,
-            Range: `bytes=${chunk.start + chunk.downloaded}-${chunk.end}`
+            Range: `bytes=${rangeStart}-${chunk.end}`
           },
           responseType: 'stream',
           timeout: this.config.network.timeout,
-          validateStatus: (status) => status === 206 || status === 200, // Accept partial content
-          signal: abortSignal // Pass abort signal to axios
+          validateStatus: (status) =>
+            requiresPartialContent ? status === 206 : status === 206 || status === 200,
+          signal: abortSignal
         }
 
         const response = await axios(config)
@@ -386,38 +504,79 @@ export class DownloadWorker {
         })
 
         try {
-          // 流式写入
           await new Promise<void>((resolve, reject) => {
-            response.data.pipe(writeStream)
+            let settled = false
 
-            response.data.on('data', (data: Buffer) => {
+            const cleanup = () => {
+              response.data.off('data', onData)
+              response.data.off('error', onError)
+              writeStream.off('error', onError)
+              writeStream.off('finish', onFinish)
+            }
+
+            const onData = (data: Buffer) => {
               chunk.downloaded += data.length
+            }
 
-              // 实时更新进度跟踪器（会自动节流）
-              // 注意：这里我们需要计算所有切片的总下载量
-              // 这个会在 downloadChunksConcurrently 中统一处理
-            })
+            const onError = (error: unknown) => {
+              if (settled) {
+                return
+              }
+              settled = true
+              cleanup()
+              reject(error)
+            }
 
-            response.data.on('end', () => {
+            const onFinish = () => {
+              if (settled) {
+                return
+              }
+
+              if (chunk.downloaded < chunk.size) {
+                settled = true
+                cleanup()
+                reject(
+                  new Error(`Chunk ${chunk.index} incomplete: ${chunk.downloaded}/${chunk.size}`)
+                )
+                return
+              }
+
+              chunk.downloaded = chunk.size
               chunk.status = ChunkStatus.COMPLETED
-              writeStream.end()
+              settled = true
+              cleanup()
               resolve()
-            })
+            }
 
-            response.data.on('error', reject)
-            writeStream.on('error', reject)
-            writeStream.on('finish', resolve)
+            response.data.on('data', onData)
+            response.data.on('error', onError)
+            writeStream.on('error', onError)
+            writeStream.on('finish', onFinish)
+
+            response.data.pipe(writeStream)
           })
         } finally {
           writeStream.destroy()
         }
 
-        // 下载成功
         return
       } catch (error) {
+        if (abortSignal?.aborted) {
+          chunk.status = chunk.downloaded > 0 ? ChunkStatus.PENDING : ChunkStatus.FAILED
+          throw new Error('Task was cancelled')
+        }
+
+        const isRangeIgnored =
+          axios.isAxiosError(error) && error.response?.status === 200 && chunk.downloaded > 0
+
+        if (isRangeIgnored) {
+          chunk.downloaded = 0
+          chunk.status = ChunkStatus.PENDING
+          continue
+        }
+
         retryCount++
 
-        // 转换为 DownloadErrorClass
         const downloadError =
           error instanceof DownloadErrorClass
             ? error
@@ -433,13 +592,6 @@ export class DownloadWorker {
           throw downloadError
         }
 
-        // Check for cancellation before retry delay
-        if (abortSignal?.aborted) {
-          chunk.status = ChunkStatus.FAILED
-          throw new Error('Task was cancelled')
-        }
-
-        // 等待重试
         await new Promise((resolve) => setTimeout(resolve, this.config.network.retryDelay))
       }
     }
