@@ -1,0 +1,24 @@
+# Window Manager (`touch-window-manager`)
+
+## When to Use
+- Control windows with activate, snap, topmost, and close actions.
+
+## Trigger
+- Feature ID: `window.app`
+- Commands: `window / app / 应用 / 窗口管理`
+
+## Core Capabilities
+- 桌面窗口调度：激活、关闭、贴边、置顶、启动
+- Supported platforms: `win32, darwin`
+
+## Config & Data
+- Config/data files: `recent-windows.json`
+- Plugin directory: `plugins/touch-window-manager`
+
+## Permissions
+- Required: `system.shell`
+
+## Quick Start
+1. In CoreBox, type `window`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

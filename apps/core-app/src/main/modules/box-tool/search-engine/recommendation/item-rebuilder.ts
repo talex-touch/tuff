@@ -24,7 +24,6 @@ export class ItemRebuilder {
       this.rebuildAppItems(grouped.get('app-provider') || []),
       this.rebuildFileItems(grouped.get('file-provider') || []),
       this.rebuildPluginFeatureItems(grouped.get('plugin-features') || []),
-      this.rebuildSystemItems(grouped.get('system-provider') || []),
       this.rebuildClipboardItems(grouped.get('clipboard-history') || [])
     ])
 
@@ -37,7 +36,6 @@ export class ItemRebuilder {
       application: 'app-provider',
       app: 'app-provider',
       file: 'file-provider',
-      system: 'system-provider',
       clipboard: 'clipboard-history'
     }
 
@@ -162,36 +160,6 @@ export class ItemRebuilder {
       return rebuiltItems
     } catch (error) {
       console.error('[ItemRebuilder] Failed to rebuild plugin feature items:', error)
-      return []
-    }
-  }
-
-  private async rebuildSystemItems(items: ScoredItem[]): Promise<TuffItem[]> {
-    if (items.length === 0) return []
-
-    try {
-      const { systemProvider } = await import('../../addon/system/system-provider')
-      const rebuiltItems: TuffItem[] = []
-
-      for (const item of items) {
-        const actionId = item.itemId
-        const searchResult = await systemProvider.onSearch(
-          { text: actionId, inputs: [] },
-          new AbortController().signal
-        )
-
-        const matchedItem = searchResult.items.find(
-          (resultItem) => resultItem.meta?.raw?.systemActionId === actionId
-        )
-
-        if (matchedItem) {
-          rebuiltItems.push(matchedItem)
-        }
-      }
-
-      return rebuiltItems
-    } catch (error) {
-      console.error('[ItemRebuilder] Failed to rebuild system items:', error)
       return []
     }
   }

@@ -1,0 +1,72 @@
+{
+  "id": "com.tuffex.text-snippets",
+  "name": "touch-text-snippets",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "文本片段库：话术与常用文本模板",
+  "main": "index.js",
+  "permissions": {
+    "required": ["clipboard.write"],
+    "optional": ["clipboard.read"]
+  },
+  "permissionReasons": {
+    "clipboard.write": "复制文本片段到剪贴板",
+    "clipboard.read": "支持 {{clipboard}} 占位符替换"
+  },
+  "features": [
+    {
+      "id": "text-snippets.search",
+      "name": "文本片段",
+      "desc": "搜索并复制文本模板",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["text", "snippet", "模板", "话术", "文案"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["text", "snippet", "模板", "话术"]
+        }
+      ]
+    },
+    {
+      "id": "text-snippets.manage",
+      "name": "文本片段管理",
+      "desc": "管理文本片段配置",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["text-manage", "话术管理", "模板管理", "配置"],
+      "push": true,
+      "priority": 3,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["text-manage", "话术管理"]
+        }
+      ]
+    }
+  ]
+}

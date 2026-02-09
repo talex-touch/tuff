@@ -92,7 +92,7 @@
 - src/main/modules/box-tool/search-engine/search-core.ts
 - src/main/modules/box-tool/search-engine/search-logger.ts
 - src/main/modules/box-tool/core-box/window.ts
-- src/main/modules/box-tool/addon/system/system-provider.ts
+- plugins/touch-system-actions/index.js
 - src/main/modules/box-tool/addon/files/file-provider.ts
 - src/main/modules/box-tool/addon/files/everything-provider.ts
 - src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts

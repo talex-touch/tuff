@@ -1,0 +1,23 @@
+# Built-in Plugin Catalog
+
+This catalog is used in onboarding: each built-in plugin has its own page so users can learn incrementally.
+
+## Pages
+| Plugin | Feature ID | Doc |
+| --- | --- | --- |
+| Browser Open | `browser.open` | [Read](./browser-open.en.md) |
+| Browser Bookmarks | `browser.bookmarks` | [Read](./browser-bookmarks.en.md) |
+| Intelligence Ask | `intelligence.ask` | [Read](./intelligence.en.md) |
+| Code Snippets | `code-snippets.search` | [Read](./code-snippets.en.md) |
+| Text Snippets | `text-snippets.search` | [Read](./text-snippets.en.md) |
+| Batch Rename | `batch-rename` | [Read](./batch-rename.en.md) |
+| Workspace Scripts | `workspace.scripts` | [Read](./workspace-scripts.en.md) |
+| Dev Toolbox | `dev-toolbox` | [Read](./dev-toolbox.en.md) |
+| Window Manager | `window.app` | [Read](./window-manager.en.md) |
+| Window Presets | `window.presets` | [Read](./window-presets.en.md) |
+| System Actions | `system.actions` | [Read](./system-actions.en.md) |
+| Quick Actions | `quick.actions` | [Read](./quick-actions.en.md) |
+
+## Suggested Reading
+- Start with [Recommended Plugin Bundles](../recommended-plugins.en.md).
+- Then open individual plugin pages as needed.

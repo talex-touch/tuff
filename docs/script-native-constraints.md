@@ -14,7 +14,7 @@
 - apps/core-app/src/main/modules/plugin/plugin.ts
 - apps/core-app/src/main/modules/terminal/terminal.manager.ts
 - apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts
-- apps/core-app/src/main/modules/box-tool/addon/system/system-provider.ts
+- plugins/touch-system-actions/index.js
 - apps/core-app/electron-builder.yml
 
 ---
@@ -41,10 +41,10 @@
 - 非 Windows 平台直接跳过初始化。
 - 位置：`src/main/modules/box-tool/addon/files/everything-provider.ts:62-142`
 
-### 模式 E：系统指令调用（System Provider）
+### 模式 E：系统指令调用（System Actions 插件）
 - 使用 `exec` 调用 `osascript`/`shutdown` 等系统命令。
 - 含管理员权限提示与错误处理。
-- 位置：`src/main/modules/box-tool/addon/system/system-provider.ts:83-176`
+- 位置：`plugins/touch-system-actions/index.js`
 
 ---
 
@@ -54,7 +54,7 @@
    参考：`src/main/modules/box-tool/addon/files/everything-provider.ts:62-142`
 
 2) **系统指令权限**：关机/重启在 macOS/Windows 均需要管理员权限并可能弹窗提示。  
-   参考：`src/main/modules/box-tool/addon/system/system-provider.ts:89-156`
+   参考：`plugins/touch-system-actions/index.js`
 
 3) **Shell 差异**：命令执行依赖 OS Shell，Windows 为 `cmd.exe`，macOS/Linux 为 `$SHELL` 或 `/bin/bash`。  
    参考：`src/main/modules/terminal/terminal.manager.ts:12-89`
@@ -82,7 +82,7 @@
 - 运行时二进制仍处于 asar 内部直接加载（需解包）。  
   参考：`apps/core-app/electron-builder.yml:3-13`
 - 在未获得管理员权限时执行关机/重启类系统指令。  
-  参考：`src/main/modules/box-tool/addon/system/system-provider.ts:89-156`
+  参考：`plugins/touch-system-actions/index.js`
 - 直接在渲染进程执行系统命令（现有执行入口均位于主进程）。  
   参考：`src/main/modules/terminal/terminal.manager.ts:1-89`
 
@@ -95,4 +95,4 @@
 - macOS 发布版需额外签名/公证，否则可能触发 Gatekeeper 风险。  
   参考：`apps/core-app/electron-builder.yml:81-92`
 - 系统级操作（关机/重启/锁屏）依赖系统权限，需明确提示与失败降级。  
-  参考：`src/main/modules/box-tool/addon/system/system-provider.ts:89-176`
+  参考：`plugins/touch-system-actions/index.js`

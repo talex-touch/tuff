@@ -1,0 +1,24 @@
+# 工作区脚本（`touch-workspace-scripts`）
+
+## 适用场景
+- 读取 workspace 的 package.json scripts 并一键执行。
+
+## 触发方式
+- Feature ID：`workspace.scripts`
+- Commands：`script / workspace / 脚本 / run`
+
+## 核心能力
+- 工作区脚本：读取 package.json 脚本并一键执行
+- 支持平台：`win32, darwin, linux`
+
+## 配置与数据
+- 配置/数据文件：`workspace-scripts.json`
+- 插件目录：`plugins/touch-workspace-scripts`
+
+## 权限说明
+- 必需：`system.shell, fs.read`
+
+## 快速上手
+1. 在 CoreBox 输入 `script`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

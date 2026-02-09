@@ -1,0 +1,23 @@
+# 内置插件目录
+
+这份目录用于用户引导：把当前官方内置插件按“一个插件一篇文档”整理，方便按需查阅。
+
+## 文档列表
+| 插件 | Feature ID | 文档 |
+| --- | --- | --- |
+| 浏览器打开 | `browser.open` | [查看文档](./browser-open.zh.md) |
+| 浏览器收藏 | `browser.bookmarks` | [查看文档](./browser-bookmarks.zh.md) |
+| 智能问答 | `intelligence.ask` | [查看文档](./intelligence.zh.md) |
+| 代码片段库 | `code-snippets.search` | [查看文档](./code-snippets.zh.md) |
+| 文本片段库 | `text-snippets.search` | [查看文档](./text-snippets.zh.md) |
+| 批量重命名 | `batch-rename` | [查看文档](./batch-rename.zh.md) |
+| 工作区脚本 | `workspace.scripts` | [查看文档](./workspace-scripts.zh.md) |
+| 开发工具箱 | `dev-toolbox` | [查看文档](./dev-toolbox.zh.md) |
+| 窗口管理 | `window.app` | [查看文档](./window-manager.zh.md) |
+| 窗口预设 | `window.presets` | [查看文档](./window-presets.zh.md) |
+| 系统操作 | `system.actions` | [查看文档](./system-actions.zh.md) |
+| 系统快捷动作 | `quick.actions` | [查看文档](./quick-actions.zh.md) |
+
+## 推荐阅读
+- 先看《[推荐插件组合](../recommended-plugins.zh.md)》拿到场景化组合。
+- 再按你用到的插件逐篇看细节。

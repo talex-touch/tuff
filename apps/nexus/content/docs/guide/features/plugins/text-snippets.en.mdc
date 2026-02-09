@@ -1,0 +1,24 @@
+# Text Snippets (`touch-text-snippets`)
+
+## When to Use
+- Store reusable text for emails, support replies, and templates.
+
+## Trigger
+- Feature ID: `text-snippets.search`
+- Commands: `text / snippet / 模板 / 话术`
+
+## Core Capabilities
+- 文本片段库：话术与常用文本模板
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `snippets.json`
+- Plugin directory: `plugins/touch-text-snippets`
+
+## Permissions
+- Required: `clipboard.write`; Optional: `clipboard.read`
+
+## Quick Start
+1. In CoreBox, type `text`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

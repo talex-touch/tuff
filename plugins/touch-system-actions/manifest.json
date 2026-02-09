@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.system-actions",
+  "name": "touch-system-actions",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "系统操作中心：电源、锁屏、音量、亮度、主窗口",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "执行系统命令完成关机、重启、锁屏、音量与亮度操作"
+  },
+  "features": [
+    {
+      "id": "system.actions",
+      "name": "系统操作",
+      "desc": "全量系统动作入口",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["system", "sys", "系统", "关机", "重启", "锁屏", "音量", "亮度", "主窗口"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["system", "sys", "系统", "系统操作"]
+        }
+      ]
+    }
+  ]
+}

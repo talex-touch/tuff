@@ -1,0 +1,24 @@
+# Browser Open (`touch-browser-open`)
+
+## When to Use
+- Open URLs quickly with default or specific browsers.
+
+## Trigger
+- Feature ID: `browser.open`
+- Commands: `url / link / open / 浏览器 / 网页`
+
+## Core Capabilities
+- 浏览器打开：默认浏览器与指定浏览器快速打开链接
+- Supported platforms: `win32, darwin`
+
+## Config & Data
+- Config/data files: `recent-browsers.json`
+- Plugin directory: `plugins/touch-browser-open`
+
+## Permissions
+- Required: `system.shell`; Optional: `clipboard.write`
+
+## Quick Start
+1. In CoreBox, type `url`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

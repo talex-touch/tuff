@@ -1,0 +1,24 @@
+# 窗口管理（`touch-window-manager`）
+
+## 适用场景
+- 按窗口粒度执行激活、贴边、置顶、关闭。
+
+## 触发方式
+- Feature ID：`window.app`
+- Commands：`window / app / 应用 / 窗口管理`
+
+## 核心能力
+- 桌面窗口调度：激活、关闭、贴边、置顶、启动
+- 支持平台：`win32, darwin`
+
+## 配置与数据
+- 配置/数据文件：`recent-windows.json`
+- 插件目录：`plugins/touch-window-manager`
+
+## 权限说明
+- 必需：`system.shell`
+
+## 快速上手
+1. 在 CoreBox 输入 `window`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

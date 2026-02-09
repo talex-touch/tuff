@@ -36,7 +36,7 @@ This page documents the SearchEngine subsystem: core flow, provider list, recomm
 
 | Provider | Purpose | File |
 | --- | --- | --- |
-| Intelligence Provider | model/intelligence results | `apps/core-app/src/main/modules/box-tool/search-engine/providers/intelligence-provider.ts` |
+| Intelligence Plugin | AI Q&A via plugin feature | `plugins/touch-intelligence/index.js` |
 | File Provider | macOS/Linux file index | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` |
 | Everything Provider | Windows Everything search | `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts` |
 | App Provider | app index/app search | `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` |
@@ -61,7 +61,7 @@ This page documents the SearchEngine subsystem: core flow, provider list, recomm
 code: |
   flowchart LR
     input["CoreBox Input"] --> parser["Query Parser (@file)"]
-    parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
+    parser --> providers["Providers (File/App/Everything/Plugin incl. touch-intelligence)"]
     providers --> score["Scoring + Sort"]
     score --> merge["Merge & Rank"]
     merge --> output["CoreBox Results"]

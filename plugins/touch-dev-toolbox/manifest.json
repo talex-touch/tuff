@@ -1,0 +1,45 @@
+{
+  "id": "com.tuffex.dev-toolbox",
+  "name": "touch-dev-toolbox",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "开发工具箱：常用链接导航",
+  "main": "index.js",
+  "permissions": {
+    "required": [],
+    "optional": []
+  },
+  "permissionReasons": {},
+  "features": [
+    {
+      "id": "dev-toolbox",
+      "name": "开发工具箱",
+      "desc": "常用链接入口",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["dev", "toolbox", "工具箱", "链接", "docs"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["dev", "toolbox", "工具箱", "链接"]
+        }
+      ]
+    }
+  ]
+}

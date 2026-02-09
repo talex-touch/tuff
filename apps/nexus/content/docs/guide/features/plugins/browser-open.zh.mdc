@@ -1,0 +1,24 @@
+# 浏览器打开（`touch-browser-open`）
+
+## 适用场景
+- 需要快速打开 URL，并在默认浏览器与指定浏览器之间切换。
+
+## 触发方式
+- Feature ID：`browser.open`
+- Commands：`url / link / open / 浏览器 / 网页`
+
+## 核心能力
+- 浏览器打开：默认浏览器与指定浏览器快速打开链接
+- 支持平台：`win32, darwin`
+
+## 配置与数据
+- 配置/数据文件：`recent-browsers.json`
+- 插件目录：`plugins/touch-browser-open`
+
+## 权限说明
+- 必需：`system.shell`；可选：`clipboard.write`
+
+## 快速上手
+1. 在 CoreBox 输入 `url`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

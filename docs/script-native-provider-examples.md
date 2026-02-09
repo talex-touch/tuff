@@ -12,7 +12,7 @@
 ## References
 - docs/script-native-constraints.md
 - docs/script-native-capability-matrix.md
-- apps/core-app/src/main/modules/box-tool/addon/system/system-provider.ts
+- plugins/touch-system-actions/index.js
 - apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts
 
 ---
@@ -66,7 +66,7 @@ success: true
 - 权限不足 → 弹窗提示并返回 `success: false`。
 
 **能力映射**
-- `SystemProvider`：`src/main/modules/box-tool/addon/system/system-provider.ts`
+- `touch-system-actions`：`plugins/touch-system-actions/index.js`
 
 ---
 
@@ -93,7 +93,7 @@ success: true
 - 用户取消 → 返回 `cancelled: true`。
 
 **能力映射**
-- `SystemProvider`：`src/main/modules/box-tool/addon/system/system-provider.ts`
+- `touch-system-actions`：`plugins/touch-system-actions/index.js`
 
 ---
 

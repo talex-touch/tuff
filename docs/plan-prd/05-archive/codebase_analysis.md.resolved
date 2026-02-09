@@ -144,11 +144,11 @@ apps/core-app/src/main/
 **已注册 Providers**:
 - `fileProvider`: 文件搜索
 - `appProvider`: 应用搜索
-- `systemProvider`: 系统命令
-- `urlProvider`: URL 处理
+- `pluginFeatures(system.actions)`: 系统命令插件能力
+- `pluginFeatures(browser.open)`: 浏览器打开插件能力
 - `previewProvider`: 直接预览计算 (部分实现)
 - `clipboardProvider`: 剪贴板历史
-- `intelligenceProvider`: AI 搜索 (已移除,改用 internal-ai-plugin)
+- `pluginFeatures(intelligence.ask)`: AI 问答插件能力
 
 **性能优化**:
 - 搜索防抖: 300ms

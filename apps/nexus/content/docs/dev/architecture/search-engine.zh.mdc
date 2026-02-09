@@ -36,7 +36,7 @@
 
 | Provider | 作用 | 文件 |
 | --- | --- | --- |
-| Intelligence Provider | 智能推荐/模型能力结果 | `apps/core-app/src/main/modules/box-tool/search-engine/providers/intelligence-provider.ts` |
+| Intelligence 插件 | 通过插件能力提供智能问答 | `plugins/touch-intelligence/index.js` |
 | File Provider | macOS/Linux 文件索引检索 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` |
 | Everything Provider | Windows Everything 搜索 | `apps/core-app/src/main/modules/box-tool/addon/files/everything-provider.ts` |
 | App Provider | 应用索引/应用搜索 | `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` |
@@ -61,7 +61,7 @@
 code: |
   flowchart LR
     input["CoreBox Input"] --> parser["Query Parser (@file)"]
-    parser --> providers["Providers (File/App/Everything/Intelligence/Plugin)"]
+    parser --> providers["Providers (File/App/Everything/Plugin，含 touch-intelligence)"]
     providers --> score["Scoring + Sort"]
     score --> merge["Merge & Rank"]
     merge --> output["CoreBox Results"]

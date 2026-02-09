@@ -1,0 +1,24 @@
+# 窗口预设（`touch-window-presets`）
+
+## 适用场景
+- 一键套用双列布局、开发布局、清理置顶。
+
+## 触发方式
+- Feature ID：`window.presets`
+- Commands：`window / preset / layout / 分屏 / 布局`
+
+## 核心能力
+- 窗口预设：一键应用常用桌面布局
+- 支持平台：`win32`
+
+## 配置与数据
+- 配置/数据文件：无（运行态数据无需手动维护）
+- 插件目录：`plugins/touch-window-presets`
+
+## 权限说明
+- 必需：`system.shell`
+
+## 快速上手
+1. 在 CoreBox 输入 `window`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

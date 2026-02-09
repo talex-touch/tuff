@@ -26,3 +26,7 @@
 - **核心效率**：Clipbox、Universal Search、Task Capsule。
 - **研发场景**：Git Watcher、API Tester、Snippet Vault。
 - **创意场景**：Color Studio、Asset Board、Storyboard。
+
+## 内置插件文档
+- 推荐入口：《[推荐插件组合](./recommended-plugins.zh.md)》
+- 全量文档：《[内置插件目录](./plugins/index.zh.md)》
