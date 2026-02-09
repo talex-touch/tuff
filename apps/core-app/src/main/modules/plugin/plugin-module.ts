@@ -36,7 +36,6 @@ import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
-import { internalPlugins } from '../../plugins/internal'
 import { fileWatchService } from '../../service/file-watch.service'
 import {
   reportPluginUninstall,
@@ -1255,30 +1254,6 @@ function createPluginModuleInternal(
   return managerInstance
 }
 
-/**
- * Register built-in internal plugins that are created purely in code.
- * These plugins are not loaded from disk and are hidden from user-facing lists.
- */
-function registerBuiltInInternalPlugins(manager: IPluginManager): void {
-  try {
-    for (const createPlugin of internalPlugins) {
-      try {
-        const plugin = createPlugin()
-        manager.registerInternalPlugin(plugin)
-
-        // Default start: enable internal plugin, but do NOT persist to enabledPlugins
-        void plugin.enable().catch((error) => {
-          pluginLog.warn(`Failed to enable internal plugin ${plugin.name}`, { error })
-        })
-      } catch (error) {
-        pluginLog.warn('Failed to create internal plugin', { error })
-      }
-    }
-  } catch (error) {
-    pluginLog.warn('Failed to register built-in internal plugins', { error })
-  }
-}
-
 export class PluginModule extends BaseModule {
   pluginManager?: IPluginManager
   installQueue?: PluginInstallQueue
@@ -1339,9 +1314,6 @@ export class PluginModule extends BaseModule {
     this.installQueue = (this.pluginManager as IPluginManagerWithInternals).__installQueue
     this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
     this.pluginManager.healthMonitor = this.healthMonitor
-
-    // Register built-in internal plugins (e.g. internal AI)
-    registerBuiltInInternalPlugins(this.pluginManager)
 
     // Listen for permission granted events to retry enabling plugins
     touchEventBus.on(TalexEvents.PERMISSION_GRANTED, (event) => {

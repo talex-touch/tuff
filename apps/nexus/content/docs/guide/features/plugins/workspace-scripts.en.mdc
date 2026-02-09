@@ -1,0 +1,24 @@
+# Workspace Scripts (`touch-workspace-scripts`)
+
+## When to Use
+- Run scripts from workspace package.json with one action.
+
+## Trigger
+- Feature ID: `workspace.scripts`
+- Commands: `script / workspace / 脚本 / run`
+
+## Core Capabilities
+- 工作区脚本：读取 package.json 脚本并一键执行
+- Supported platforms: `win32, darwin, linux`
+
+## Config & Data
+- Config/data files: `workspace-scripts.json`
+- Plugin directory: `plugins/touch-workspace-scripts`
+
+## Permissions
+- Required: `system.shell, fs.read`
+
+## Quick Start
+1. In CoreBox, type `script`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

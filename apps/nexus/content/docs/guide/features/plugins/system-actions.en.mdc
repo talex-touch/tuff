@@ -1,0 +1,24 @@
+# System Actions (`touch-system-actions`)
+
+## When to Use
+- Run power, lock, audio, brightness, and window actions.
+
+## Trigger
+- Feature ID: `system.actions`
+- Commands: `system / sys / 系统 / 系统操作`
+
+## Core Capabilities
+- 系统操作中心：电源、锁屏、音量、亮度、主窗口
+- Supported platforms: `win32, darwin`
+
+## Config & Data
+- Config/data files: None (no manual config file needed for MVP)
+- Plugin directory: `plugins/touch-system-actions`
+
+## Permissions
+- Required: `system.shell`
+
+## Quick Start
+1. In CoreBox, type `system`.
+2. Press Enter on the action you need.
+3. Grant permissions when prompted.

@@ -5,8 +5,8 @@
 ### 1.1 当前架构问题
 
 当前搜索系统采用**双队列分层架构**：
-- **Fast Layer**: app-provider, plugin-features, system-provider, preview-provider
-- **Deferred Layer**: file-provider, url-provider (50ms 延迟启动)
+- **Fast Layer**: app-provider, plugin-features（含 system.actions/intelligence.ask）, preview-provider
+- **Deferred Layer**: file-provider, plugin-features(browser.open) (50ms 延迟启动)
 
 这种架构导致以下问题：
 

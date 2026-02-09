@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.quick-actions",
+  "name": "touch-quick-actions",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "系统快捷动作：锁屏、静音与常用设置入口",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "执行系统快捷动作和打开系统设置"
+  },
+  "features": [
+    {
+      "id": "quick.actions",
+      "name": "系统快捷动作",
+      "desc": "高频安全动作与设置入口",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["quick", "actions", "快捷", "系统", "锁屏", "静音", "settings"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["quick", "actions", "快捷", "系统快捷"]
+        }
+      ]
+    }
+  ]
+}

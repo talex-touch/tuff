@@ -1,0 +1,24 @@
+# 浏览器收藏（`touch-browser-bookmarks`）
+
+## 适用场景
+- 需要把常用链接沉淀成收藏，并自动记录最近访问。
+
+## 触发方式
+- Feature ID：`browser.bookmarks`
+- Commands：`bookmark / bookmarks / 收藏 / 网址`
+
+## 核心能力
+- 浏览器收藏：收藏网址、最近访问、快速打开
+- 支持平台：`win32, darwin, linux`
+
+## 配置与数据
+- 配置/数据文件：`bookmarks.json`、`recent-urls.json`
+- 插件目录：`plugins/touch-browser-bookmarks`
+
+## 权限说明
+- 可选：`clipboard.write`
+
+## 快速上手
+1. 在 CoreBox 输入 `bookmark`。
+2. 看到动作后直接回车执行。
+3. 若涉及权限，按提示授权即可。

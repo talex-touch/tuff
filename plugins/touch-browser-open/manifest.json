@@ -1,0 +1,48 @@
+{
+  "id": "com.tuffex.browser-open",
+  "name": "touch-browser-open",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "浏览器打开：默认浏览器与指定浏览器快速打开链接",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell"],
+    "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+    "system.shell": "调用系统命令打开浏览器",
+    "clipboard.write": "复制链接到剪贴板"
+  },
+  "features": [
+    {
+      "id": "browser.open",
+      "name": "浏览器打开",
+      "desc": "快速用默认或指定浏览器打开 URL",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["url", "link", "open", "浏览器", "网页", "打开链接", "browser", "chrome", "edge"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": false
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["url", "link", "open", "浏览器", "网页"]
+        }
+      ]
+    }
+  ]
+}

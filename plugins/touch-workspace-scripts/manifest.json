@@ -1,0 +1,48 @@
+{
+  "id": "com.tuffex.workspace-scripts",
+  "name": "touch-workspace-scripts",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "工作区脚本：读取 package.json 脚本并一键执行",
+  "main": "index.js",
+  "permissions": {
+    "required": ["system.shell", "fs.read"],
+    "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "执行用户确认后的开发命令",
+    "fs.read": "读取 workspace 的 package.json 脚本列表"
+  },
+  "features": [
+    {
+      "id": "workspace.scripts",
+      "name": "工作区脚本",
+      "desc": "读取并执行工作区脚本",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["script", "workspace", "run", "脚本", "工作区", "命令"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["script", "workspace", "脚本", "run"]
+        }
+      ]
+    }
+  ]
+}

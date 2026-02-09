@@ -1,0 +1,47 @@
+{
+  "id": "com.tuffex.browser-bookmarks",
+  "name": "touch-browser-bookmarks",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260121,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "浏览器收藏：收藏网址、最近访问、快速打开",
+  "main": "index.js",
+  "permissions": {
+    "required": [],
+    "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+    "clipboard.write": "复制网址到剪贴板"
+  },
+  "features": [
+    {
+      "id": "browser.bookmarks",
+      "name": "浏览器收藏",
+      "desc": "收藏网址与最近访问",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["bookmark", "bookmarks", "收藏", "网址", "链接", "link", "url"],
+      "push": true,
+      "priority": 7,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "over",
+          "value": ["bookmark", "bookmarks", "收藏", "网址"]
+        }
+      ]
+    }
+  ]
+}

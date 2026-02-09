@@ -26,3 +26,7 @@
 - **Core efficiency**: Clipbox, Universal Search, Task Capsule.
 - **Engineering**: Git Watcher, API Tester, Snippet Vault.
 - **Creative**: Color Studio, Asset Board, Storyboard.
+
+## Built-in Plugin Docs
+- Recommended entry: [Recommended Plugin Bundles](./recommended-plugins.en.md)
+- Full catalog: [Built-in Plugin Catalog](./plugins/index.en.md)
