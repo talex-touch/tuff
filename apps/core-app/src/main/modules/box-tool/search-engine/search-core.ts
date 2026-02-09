@@ -35,8 +35,6 @@ import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
-import { systemProvider } from '../addon/system/system-provider'
-import { urlProvider } from '../addon/url/url-provider'
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
@@ -64,7 +62,6 @@ const coreBoxIsPinnedEvent = defineRawEvent<
   { sourceId: string; itemId: string },
   { success: boolean; isPinned: boolean }
 >('core-box:is-pinned')
-// import intelligenceSearchProvider from './providers/intelligence-provider' // Removed - 使用 internal-ai-plugin
 
 /**
  * Provider filter aliases for @xxx syntax
@@ -81,8 +78,6 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   ],
   app: ['app-provider', 'applications', 'apps'],
   plugin: ['plugin-features', 'plugins', 'extension', 'extensions'],
-  system: ['system-provider', 'sys'],
-  url: ['url-provider', 'link', 'links'],
   preview: ['preview-provider']
 }
 
@@ -91,9 +86,7 @@ const PROVIDER_CATEGORY_MAP: Record<string, string> = {
   'file-provider': 'file',
   'everything-provider': 'file',
   'plugin-features': 'plugin',
-  'system-provider': 'system',
-  'preview-provider': 'preview',
-  'url-provider': 'url'
+  'preview-provider': 'preview'
 }
 
 function resolveProviderCategory(providerId: string): string {
@@ -101,8 +94,6 @@ function resolveProviderCategory(providerId: string): string {
   if (providerId.includes('file')) return 'file'
   if (providerId.includes('app')) return 'app'
   if (providerId.includes('plugin')) return 'plugin'
-  if (providerId.includes('system')) return 'system'
-  if (providerId.includes('url')) return 'url'
   return 'other'
 }
 
@@ -232,9 +223,7 @@ export class SearchEngineCore
     this.registerProvider(fileProvider)
 
     this.registerProvider(PluginFeaturesAdapter)
-    this.registerProvider(systemProvider)
     this.registerProvider(previewProvider)
-    this.registerProvider(urlProvider)
   }
 
   static getInstance(): SearchEngineCore {
