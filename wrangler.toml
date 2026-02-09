@@ -12,13 +12,13 @@ binding = "R2"
 bucket_name = "tuff-nexus-imgable-prod"
 preview_bucket_name = "tuff-nexus-imgable-dev"
 
-[env.dev]
-[[env.dev.d1_databases]]
+[env.preview]
+[[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-dev"
 database_id = "963cd4ae-2a63-408d-b3bc-fa5945f1e878"
 
-[env.dev.vars]
+[env.preview.vars]
 NODE_OPTIONS = "--max-old-space-size=6144"
 AUTH_SECRET = "change-me"
 AUTH_ORIGIN = "http://localhost:3200"
@@ -30,7 +30,7 @@ LINUXDO_ISSUER = "https://connect.linux.do"
 RESEND_API_KEY = ""
 AUTH_EMAIL_FROM = "hello@tuff.app"
 
-[[env.dev.r2_buckets]]
+[[env.preview.r2_buckets]]
 binding = "R2"
 bucket_name = "tuff-nexus-imgable-dev"
 

@@ -16,6 +16,12 @@
       "defines": [
         "NAPI_CPP_EXCEPTIONS"
       ],
+      "cflags!": [
+        "-fno-exceptions"
+      ],
+      "cflags_cc!": [
+        "-fno-exceptions"
+      ],
       "cflags_cc": [
         "-std=c++17"
       ],
