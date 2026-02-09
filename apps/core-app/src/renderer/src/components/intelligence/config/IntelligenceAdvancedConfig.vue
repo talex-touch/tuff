@@ -95,6 +95,11 @@ function handleTimeoutBlur() {
     localTimeout.value = props.modelValue.timeout || 30000
   }
 }
+
+function handleTimeoutControlBlur(onBlur: () => void) {
+  onBlur()
+  handleTimeoutBlur()
+}
 </script>
 
 <template>
@@ -152,10 +157,7 @@ function handleTimeoutBlur() {
             class="tuff-input flex-1"
             @input="update(parseTimeoutInput($event))"
             @focus="focus"
-            @blur="
-              blur()
-              handleTimeoutBlur()
-            "
+            @blur="handleTimeoutControlBlur(blur)"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.advanced.timeoutUnit') }}

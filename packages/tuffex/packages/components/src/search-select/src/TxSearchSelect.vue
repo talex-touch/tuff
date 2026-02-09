@@ -86,8 +86,9 @@ function emitSearch(q: string) {
   emit('search', q)
 }
 
-function onInput(v: string) {
-  inputText.value = v
+function onInput(v: string | number) {
+  const nextValue = typeof v === 'string' ? v : String(v)
+  inputText.value = nextValue
   if (!open.value) {
     open.value = true
     emit('open')
@@ -100,7 +101,7 @@ function onInput(v: string) {
   const delay = Math.max(0, props.searchDebounce ?? 0)
   searchTimer.value = setTimeout(() => {
     searchTimer.value = null
-    emitSearch(v)
+    emitSearch(nextValue)
   }, delay)
 }
 

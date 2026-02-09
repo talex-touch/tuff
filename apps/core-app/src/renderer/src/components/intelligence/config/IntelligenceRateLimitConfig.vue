@@ -116,6 +116,16 @@ function emitUpdate() {
   emits('update:modelValue', updated)
   emits('change')
 }
+
+function handleRequestsControlBlur(onBlur: () => void) {
+  onBlur()
+  handleRequestsPerMinuteBlur()
+}
+
+function handleTokensControlBlur(onBlur: () => void) {
+  onBlur()
+  handleTokensPerMinuteBlur()
+}
 </script>
 
 <template>
@@ -145,10 +155,7 @@ function emitUpdate() {
             class="tuff-input flex-1"
             @input="update(parseOptionalNumberInput($event))"
             @focus="focus"
-            @blur="
-              blur()
-              handleRequestsPerMinuteBlur()
-            "
+            @blur="handleRequestsControlBlur(blur)"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.requestsUnit') }}
@@ -180,10 +187,7 @@ function emitUpdate() {
             class="tuff-input flex-1"
             @input="update(parseOptionalNumberInput($event))"
             @focus="focus"
-            @blur="
-              blur()
-              handleTokensPerMinuteBlur()
-            "
+            @blur="handleTokensControlBlur(blur)"
           />
           <span class="text-sm text-[var(--el-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.tokensUnit') }}

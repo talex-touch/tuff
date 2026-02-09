@@ -1260,6 +1260,7 @@ export class PluginModule extends BaseModule {
   healthMonitor?: DevServerHealthMonitor
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private requestRendererValue = async <T>(_eventName: string): Promise<T | null> => null
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -1288,7 +1289,7 @@ export class PluginModule extends BaseModule {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
 
-    const requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
+    this.requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
       const sendMain = (
         channel as { sendMain?: (event: string, arg?: unknown) => Promise<unknown> }
       ).sendMain
@@ -1820,11 +1821,11 @@ export class PluginModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      transport.on(defineRawEvent('account:get-auth-token'), async () => {
-        return requestRendererValue<string>('account:get-auth-token')
+      transport.on(defineRawEvent<void, string | null>('account:get-auth-token'), async () => {
+        return this.requestRendererValue<string>('account:get-auth-token')
       }),
-      transport.on(defineRawEvent('account:get-device-id'), async () => {
-        return requestRendererValue<string>('account:get-device-id')
+      transport.on(defineRawEvent<void, string | null>('account:get-device-id'), async () => {
+        return this.requestRendererValue<string>('account:get-device-id')
       })
     )
 

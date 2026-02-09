@@ -218,7 +218,7 @@ vi.mock('../utils/storage-usage', () => ({
 
 import { CommonChannelModule } from './common'
 
-interface CommonChannelModuleTestInstance extends CommonChannelModule {
+type CommonChannelModuleTestInstance = {
   createSafeOperationHandler: (transport: {
     on: (
       event: unknown,
@@ -253,7 +253,7 @@ describe('CommonChannelModule private helpers', () => {
     })
 
     expect(registeredHandler).toBeTypeOf('function')
-    const result = await registeredHandler?.({}, {})
+    const result = await registeredHandler!({}, {})
 
     expect(result).toEqual({ success: false, error: 'command failed' })
     expect(loggerWarnMock).toHaveBeenCalled()
@@ -262,7 +262,7 @@ describe('CommonChannelModule private helpers', () => {
   it('readSystemFile reuses inflight promise and caches successful reads', async () => {
     const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
 
-    let resolveRead: ((value: string) => void) | null = null
+    let resolveRead!: (value: string) => void
     const readPromise = new Promise<string>((resolve) => {
       resolveRead = resolve
     })
@@ -273,7 +273,7 @@ describe('CommonChannelModule private helpers', () => {
     const first = module.readSystemFile(payload)
     const second = module.readSystemFile(payload)
 
-    resolveRead?.('hello-world')
+    resolveRead('hello-world')
 
     await expect(first).resolves.toBe('hello-world')
     await expect(second).resolves.toBe('hello-world')

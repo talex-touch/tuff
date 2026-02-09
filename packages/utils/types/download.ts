@@ -81,6 +81,7 @@ export interface DownloadTask {
   metadata: Record<string, any>
   createdAt: Date
   updatedAt: Date
+  completedAt?: Date
   error?: string
 }
 
