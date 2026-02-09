@@ -245,7 +245,7 @@ const providerSuggestions = computed(() => {
 | `@file` | file-provider, file-index |
 | `@app` | app-provider, applications |
 | `@plugin` | plugin-features |
-| `@system` | system-provider |
+| `@system` | plugin-features(system.actions) |
 | `@calc` | calculator |
 | `@web` | web-search |
 

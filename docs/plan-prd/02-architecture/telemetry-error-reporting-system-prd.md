@@ -19,7 +19,7 @@
 
 **1. SearchGatherer Provider 超时**
 ```
-[ERROR] [SearchGatherer] Provider [url-provider] failed:
+[ERROR] [SearchGatherer] Plugin [touch-browser-open/browser.open] failed:
 TimeoutError: Promise timed out after 3000 ms
 ```
 
@@ -1185,7 +1185,7 @@ export default defineEventHandler(async (event) => {
 ### 问题根因
 
 ```
-[url-provider] → getInstalledBrowsers() → appScanner.getApps()
+[touch-browser-open] → listInstalledBrowsers() → shell/open call
                                            ↓
                                     [darwin/index.ts]
                                            ↓
@@ -1200,7 +1200,7 @@ export default defineEventHandler(async (event) => {
 
 ### 临时修复
 
-1. **增加 URL Provider 超时**：`taskTimeoutMs: 5000`
+1. **增加 browser.open 插件超时**：`taskTimeoutMs: 5000`
 2. **缓存 AppScanner 结果**：避免每次搜索重新扫描
 3. **静默预期警告**：Info.plist 不存在是正常情况
 
