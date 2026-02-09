@@ -1,11 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { createError } from 'h3'
 import { useRuntimeConfig } from '#imports'
-import { requireAuth } from '../../utils/auth'
+import { requireSessionAuth } from '../../utils/auth'
 import { createWebAuthnChallenge, getUserById } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
   const user = await getUserById(event, userId)
   if (!user) {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })

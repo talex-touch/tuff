@@ -1,6 +1,6 @@
 import { getHeader, getQuery } from 'h3'
 import type { paths } from '../../../../types/sync-api'
-import { requireAuth } from '../../../utils/auth'
+import { requireAppAuth } from '../../../utils/auth'
 import { readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import { getSyncSession, pullSyncItemsV1 } from '../../../utils/syncStoreV1'
@@ -8,7 +8,7 @@ import { getSyncSession, pullSyncItemsV1 } from '../../../utils/syncStoreV1'
 type PullResponse = paths['/api/v1/sync/pull']['get']['responses']['200']['content']['application/json']
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAppAuth(event)
   const deviceId = readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')

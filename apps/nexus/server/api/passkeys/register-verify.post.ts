@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { createError, readBody } from 'h3'
 import { useRuntimeConfig } from '#imports'
-import { requireAuth } from '../../utils/auth'
+import { requireSessionAuth } from '../../utils/auth'
 import { consumeWebAuthnChallenge, createPasskey, getPasskeyByCredentialId } from '../../utils/authStore'
 import { verifyRegistrationResponse } from '../../utils/webauthn'
 
@@ -14,7 +14,7 @@ function decodeBase64Url(input: string): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
   const body = await readBody(event)
   const credential = body?.credential
   if (!credential?.response?.attestationObject || !credential?.response?.clientDataJSON) {

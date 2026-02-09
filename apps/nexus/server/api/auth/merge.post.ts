@@ -1,9 +1,9 @@
 import { createError, readBody } from 'h3'
-import { requireAuth } from '../../utils/auth'
+import { requireSessionAuth } from '../../utils/auth'
 import { consumeLoginToken, mergeUsers } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
   const body = await readBody(event)
   const token = typeof body?.token === 'string' ? body.token.trim() : ''
   const confirm = body?.confirm === true

@@ -1,5 +1,5 @@
 import type { paths } from '../../../../types/sync-api'
-import { requireAuth } from '../../../utils/auth'
+import { requireAppAuth } from '../../../utils/auth'
 import { countActiveDevices, readDeviceId, upsertDevice, readDeviceMetadata } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import { getOrInitQuota, handshakeSyncSession } from '../../../utils/syncStoreV1'
@@ -7,7 +7,7 @@ import { getOrInitQuota, handshakeSyncSession } from '../../../utils/syncStoreV1
 type HandshakeResponse = paths['/api/v1/sync/handshake']['post']['responses']['200']['content']['application/json']
 
 export default defineEventHandler(async (event) => {
-  const { userId, deviceId: tokenDeviceId } = await requireAuth(event)
+  const { userId, deviceId: tokenDeviceId } = await requireAppAuth(event)
   const deviceId = tokenDeviceId ?? readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')

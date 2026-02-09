@@ -1,10 +1,10 @@
 import { createError, readBody } from 'h3'
 import { createVerificationToken, getUserByEmail, getUserById, setEmailState, setUserEmail  } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
-import { requireAuth } from '../../utils/auth'
+import { requireSessionAuth } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireSessionAuth(event)
   const body = await readBody(event)
   const skip = Boolean(body?.skip)
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''

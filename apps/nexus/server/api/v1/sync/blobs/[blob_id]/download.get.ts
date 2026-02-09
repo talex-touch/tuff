@@ -1,12 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { getHeader, send, setResponseHeader } from 'h3'
-import { requireAuth } from '../../../../../utils/auth'
+import { requireAppAuth } from '../../../../../utils/auth'
 import { readDeviceId } from '../../../../../utils/authStore'
 import { createSyncError } from '../../../../../utils/syncErrors'
 import { getSyncBlob, getSyncSession } from '../../../../../utils/syncStoreV1'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAppAuth(event)
   const deviceId = readDeviceId(event)
   if (!deviceId)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Missing device id')
