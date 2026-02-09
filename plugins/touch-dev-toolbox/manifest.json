@@ -9,26 +9,23 @@
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "开发工具箱：快捷命令与链接入口",
+  "description": "开发工具箱：常用链接导航",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell", "fs.read"],
+    "required": [],
     "optional": []
   },
-  "permissionReasons": {
-    "system.shell": "执行用户配置的开发命令",
-    "fs.read": "读取 workspace 的 package.json 脚本列表"
-  },
+  "permissionReasons": {},
   "features": [
     {
       "id": "dev-toolbox",
       "name": "开发工具箱",
-      "desc": "常用命令与链接入口",
+      "desc": "常用链接入口",
       "icon": {
         "type": "file",
         "value": "assets/logo.svg"
       },
-      "keywords": ["dev", "toolbox", "脚本", "工具箱", "命令"],
+      "keywords": ["dev", "toolbox", "工具箱", "链接", "docs"],
       "push": true,
       "priority": 7,
       "acceptedInputTypes": ["text"],
@@ -40,7 +37,7 @@
       "commands": [
         {
           "type": "over",
-          "value": ["dev", "toolbox", "工具箱", "脚本"]
+          "value": ["dev", "toolbox", "工具箱", "链接"]
         }
       ]
     }
