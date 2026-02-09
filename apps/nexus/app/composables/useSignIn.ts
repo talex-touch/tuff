@@ -24,6 +24,7 @@ type TurnstileState = 'idle' | 'loading' | 'ready' | 'error'
 const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
 const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+const CALLBACK_FEEDBACK_MIN_MS = 800
 
 type TurnstileWidgetId = string | number
 interface TurnstileRenderOptions {
@@ -58,10 +59,15 @@ function pickFirstQueryValue(input: unknown) {
   return typeof input === 'string' ? input : null
 }
 
+function waitForCallbackFeedback(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
 export function useSignIn() {
   const { t, locale, setLocale } = useI18n()
   const route = useRoute()
-  const { signIn, status } = useAuth()
+  const router = useRouter()
+  const { signIn, status, getSession } = useAuth()
   const runtimeConfig = useRuntimeConfig()
 
   const step = ref<AuthStep>('email')
@@ -81,6 +87,11 @@ export function useSignIn() {
   const oauthPhase = ref<'idle' | 'redirect' | 'verifying' | 'error'>('idle')
   const oauthError = ref('')
   const oauthHandled = ref(false)
+  const oauthSessionCheckDone = ref(false)
+  const oauthSessionChecking = ref(false)
+  const redirectSessionCheckDone = ref(false)
+  const redirectSessionChecking = ref(false)
+  const redirectAutoNavigating = ref(false)
   const magicSent = ref(false)
   const supportsPasskey = ref(false)
   const lastLoginMethod = ref<LoginMethod | null>(null)
@@ -462,14 +473,81 @@ export function useSignIn() {
     storedOauthContext.value = readOauthContext()
   }
 
-  const oauthParam = computed(() => pickFirstQueryValue(route.query.oauth))
-  const flowParam = computed(() => pickFirstQueryValue(route.query.flow))
-  const providerParam = computed(() => pickFirstQueryValue(route.query.provider))
-  const redirectParam = computed(() => pickFirstQueryValue(route.query.redirect_url))
-  const langParam = computed(() => pickFirstQueryValue(route.query.lang))
-  const reasonParam = computed(() => pickFirstQueryValue(route.query.reason))
-  const oauthErrorParam = computed(() => pickFirstQueryValue(route.query.error))
-  const oauthErrorDescriptionParam = computed(() => pickFirstQueryValue(route.query.error_description))
+  const callbackUrlParam = computed(() => {
+    const query = route.query as Record<string, unknown>
+    return pickFirstQueryValue(query.callbackUrl) ?? pickFirstQueryValue(query.callback_url)
+  })
+
+  const callbackQueryParams = computed(() => {
+    const raw = callbackUrlParam.value
+    if (!raw)
+      return null
+
+    const parseParams = (value: string) => {
+      try {
+        const base = hasWindow() ? window.location.origin : 'http://localhost'
+        const parsed = value.startsWith('/') ? new URL(value, base) : new URL(value)
+        return parsed.searchParams
+      }
+      catch {
+        return null
+      }
+    }
+
+    const hasOauthSignal = (params: URLSearchParams | null) => {
+      if (!params)
+        return false
+      return Boolean(
+        params.get('oauth')
+        || params.get('flow')
+        || params.get('provider')
+        || params.get('redirect_url')
+        || params.get('error')
+        || params.get('error_description'),
+      )
+    }
+
+    const parsed = parseParams(raw)
+    const parsedOauth = parsed?.get('oauth') ?? null
+    const hasMergedOauth = Boolean(parsedOauth && parsedOauth.includes('&'))
+
+    if (hasOauthSignal(parsed) && !hasMergedOauth)
+      return parsed
+
+    try {
+      const decoded = decodeURIComponent(raw)
+      if (decoded !== raw) {
+        const decodedParams = parseParams(decoded)
+        if (hasOauthSignal(decodedParams))
+          return decodedParams
+        return decodedParams ?? parsed
+      }
+    }
+    catch {
+      return parsed
+    }
+
+    return parsed
+  })
+
+  function pickQueryValue(key: string) {
+    const query = route.query as Record<string, unknown>
+    const direct = pickFirstQueryValue(query[key])
+    if (direct)
+      return direct
+
+    const nested = callbackQueryParams.value?.get(key)
+    return nested && nested.length > 0 ? nested : null
+  }
+
+  const oauthParam = computed(() => pickQueryValue('oauth'))
+  const flowParam = computed(() => pickQueryValue('flow'))
+  const providerParam = computed(() => pickQueryValue('provider'))
+  const redirectParam = computed(() => pickQueryValue('redirect_url'))
+  const langParam = computed(() => pickQueryValue('lang'))
+  const reasonParam = computed(() => pickQueryValue('reason'))
+  const oauthErrorParam = computed(() => pickQueryValue('error'))
+  const oauthErrorDescriptionParam = computed(() => pickQueryValue('error_description'))
 
   const localeFromQuery = computed(() => {
     const param = langParam.value
@@ -511,6 +589,15 @@ export function useSignIn() {
   const isOauthErrorCallback = computed(() => Boolean(oauthErrorParam.value) && Boolean(storedOauthContext.value))
   const isOauthCallback = computed(() => oauthParam.value === '1' || isOauthErrorCallback.value)
   const oauthReturn = computed(() => isOauthCallback.value)
+  const hasExplicitRedirect = computed(() => Boolean(redirectParam.value))
+  const isSessionVerifying = computed(() => {
+    if (status.value === 'authenticated')
+      return false
+
+    const oauthVerifying = oauthReturn.value && oauthSessionChecking.value
+    const redirectVerifying = !oauthReturn.value && hasExplicitRedirect.value && redirectSessionChecking.value
+    return oauthVerifying || redirectVerifying
+  })
 
   const oauthContext = computed(() => {
     const fallbackFlow = flowParam.value === 'bind' || storedOauthContext.value?.flow === 'bind'
@@ -553,6 +640,68 @@ export function useSignIn() {
   })
 
   const redirectTarget = computed(() => stickyRedirectTarget.value)
+  const shouldHoldRedirectForReauth = computed(() => {
+    if (reasonParam.value !== 'reauth')
+      return false
+    return isAuthCallbackTarget(redirectTarget.value)
+  })
+
+  function isAuthCallbackTarget(target: string) {
+    return target.startsWith('/auth/app-callback')
+  }
+
+  function isSignInTarget(target: string) {
+    return target.startsWith('/sign-in')
+  }
+
+  function isProtectedTarget(target: string) {
+    try {
+      return router.resolve(target).matched.some(record => record.meta?.requiresAuth === true)
+    }
+    catch {
+      return false
+    }
+  }
+
+  function resolveSafeBackTarget(target: string, fallback = '/') {
+    const normalized = sanitizeRedirect(target, fallback)
+    if (isAuthCallbackTarget(normalized))
+      return fallback
+    if (isProtectedTarget(normalized) && status.value !== 'authenticated')
+      return fallback
+    return normalized
+  }
+
+  const backTarget = computed(() => {
+    if (oauthFlow.value === 'bind')
+      return sanitizeRedirect(redirectTarget.value, '/dashboard/account')
+    return sanitizeRedirect(redirectTarget.value, '/')
+  })
+
+  const safeBackTarget = computed(() => resolveSafeBackTarget(backTarget.value, '/'))
+
+  async function ensureCallbackProcessingFeedback(startedAt: number) {
+    const elapsed = Date.now() - startedAt
+    if (elapsed >= CALLBACK_FEEDBACK_MIN_MS)
+      return
+
+    await waitForCallbackFeedback(CALLBACK_FEEDBACK_MIN_MS - elapsed)
+  }
+
+  function withOauthBoundHint(target: string, provider: OauthProvider | null) {
+    if (!provider)
+      return target
+
+    try {
+      const base = hasWindow() ? window.location.origin : 'http://localhost'
+      const parsed = target.startsWith('/') ? new URL(target, base) : new URL(`/${target}`, base)
+      parsed.searchParams.set('oauth_bound', provider)
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`
+    }
+    catch {
+      return target
+    }
+  }
 
   const emailPreview = computed(() => email.value.trim().toLowerCase())
   const lastLoginLabel = computed(() => {
@@ -640,6 +789,7 @@ export function useSignIn() {
     bindLoading,
     oauthLoading,
     passkeyBusy,
+    isSessionVerifying,
   ])
 
   watch(step, (value) => {
@@ -675,7 +825,7 @@ export function useSignIn() {
   })
 
   async function clearOauthQuery() {
-    if (!route.query.oauth && !route.query.provider && !route.query.flow && !route.query.redirect_url && !route.query.error && !route.query.error_description)
+    if (!route.query.oauth && !route.query.provider && !route.query.flow && !route.query.redirect_url && !route.query.error && !route.query.error_description && !route.query.callbackUrl && !route.query.callback_url)
       return
 
     const nextQuery = { ...route.query } as Record<string, string | string[]>
@@ -685,9 +835,11 @@ export function useSignIn() {
     delete nextQuery.redirect_url
     delete nextQuery.error
     delete nextQuery.error_description
+    delete nextQuery.callbackUrl
+    delete nextQuery.callback_url
 
     const scrollY = hasWindow() ? window.scrollY : 0
-    await navigateTo({ path: route.path, query: nextQuery }, { replace: true })
+    await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
 
     if (!hasWindow())
       return
@@ -745,10 +897,26 @@ export function useSignIn() {
     }
   }
 
+  async function handleOauthRouteError(routeOauthError: string) {
+    const callbackStartedAt = Date.now()
+    oauthLoading.value = true
+    oauthPhase.value = 'verifying'
+    step.value = 'oauth'
+
+    await ensureCallbackProcessingFeedback(callbackStartedAt)
+
+    clearOauthContext()
+    storedOauthContext.value = null
+    oauthPhase.value = 'error'
+    oauthError.value = routeOauthError
+    oauthLoading.value = false
+  }
+
   async function handleOauthCallback() {
     if (oauthHandled.value || oauthLoading.value)
       return
 
+    const callbackStartedAt = Date.now()
     oauthHandled.value = true
     oauthLoading.value = true
     oauthError.value = ''
@@ -767,14 +935,17 @@ export function useSignIn() {
 
     try {
       if (flow === 'bind') {
+        const bindTarget = withOauthBoundHint(target, provider)
         await clearOauthRuntime()
-        await navigateTo(target)
+        await ensureCallbackProcessingFeedback(callbackStartedAt)
+        await navigateTo(bindTarget)
         return
       }
 
       const profile = await fetchCurrentUserProfile()
       if (profile?.emailState === 'missing') {
         await clearOauthRuntime()
+        await ensureCallbackProcessingFeedback(callbackStartedAt)
         step.value = 'bind-email'
         bindEmail.value = ''
         resetOauthState()
@@ -782,10 +953,12 @@ export function useSignIn() {
       }
 
       await clearOauthRuntime()
+      await ensureCallbackProcessingFeedback(callbackStartedAt)
       await navigateTo(target)
     }
     catch (error: any) {
       await clearOauthRuntime()
+      await ensureCallbackProcessingFeedback(callbackStartedAt)
       oauthPhase.value = 'error'
       oauthError.value = resolveErrorMessage(error, t('auth.loginFailed', 'Login failed'))
       if (provider)
@@ -805,13 +978,11 @@ export function useSignIn() {
 
     const routeOauthError = resolveOauthRouteErrorMessage()
     if (routeOauthError) {
-      clearOauthContext()
-      storedOauthContext.value = null
-      oauthPhase.value = 'error'
-      oauthError.value = routeOauthError
-      step.value = 'oauth'
+      if (oauthHandled.value || oauthLoading.value)
+        return
+
       oauthHandled.value = true
-      oauthLoading.value = false
+      void handleOauthRouteError(routeOauthError)
       return
     }
 
@@ -820,6 +991,31 @@ export function useSignIn() {
 
     if (oauthPhase.value === 'idle')
       oauthPhase.value = 'verifying'
+  })
+
+  watchEffect(() => {
+    if (import.meta.server)
+      return
+
+    if (!oauthReturn.value) {
+      oauthSessionCheckDone.value = false
+      oauthSessionChecking.value = false
+      return
+    }
+    if (resolveOauthRouteErrorMessage())
+      return
+    if (status.value === 'authenticated')
+      return
+    if (oauthSessionCheckDone.value || oauthSessionChecking.value)
+      return
+
+    oauthSessionChecking.value = true
+    void getSession()
+      .catch(() => {})
+      .finally(() => {
+        oauthSessionChecking.value = false
+        oauthSessionCheckDone.value = true
+      })
   })
 
   watchEffect(() => {
@@ -832,6 +1028,61 @@ export function useSignIn() {
     if (oauthLoading.value || oauthHandled.value)
       return
     void handleOauthCallback()
+  })
+
+  watchEffect(() => {
+    if (import.meta.server)
+      return
+
+    if (!hasExplicitRedirect.value || oauthReturn.value) {
+      redirectSessionCheckDone.value = false
+      redirectSessionChecking.value = false
+      return
+    }
+
+    if (shouldHoldRedirectForReauth.value)
+      return
+
+    if (status.value === 'authenticated')
+      return
+    if (redirectSessionCheckDone.value || redirectSessionChecking.value)
+      return
+
+    redirectSessionChecking.value = true
+    void getSession()
+      .catch(() => {})
+      .finally(() => {
+        redirectSessionChecking.value = false
+        redirectSessionCheckDone.value = true
+      })
+  })
+
+  watchEffect(() => {
+    if (import.meta.server)
+      return
+
+    if (!hasExplicitRedirect.value || oauthReturn.value)
+      return
+    if (shouldHoldRedirectForReauth.value)
+      return
+    if (status.value !== 'authenticated')
+      return
+    if (redirectAutoNavigating.value)
+      return
+
+    const target = sanitizeRedirect(redirectTarget.value, '/dashboard')
+    if (isSignInTarget(target))
+      return
+
+    redirectAutoNavigating.value = true
+    void (async () => {
+      try {
+        await navigateTo(target, { replace: true })
+      }
+      finally {
+        redirectAutoNavigating.value = false
+      }
+    })()
   })
 
   async function handleEmailNext() {
@@ -1038,6 +1289,24 @@ export function useSignIn() {
     await startOauth(provider, oauthFlow.value)
   }
 
+  async function handleOauthBack() {
+    if (oauthFlow.value !== 'bind') {
+      await resetToEmailStep()
+      return
+    }
+
+    await clearOauthRuntime()
+    resetOauthState()
+    await router.push(safeBackTarget.value)
+  }
+
+  async function handleHeaderBack() {
+    if (oauthReturn.value || storedOauthContext.value)
+      await clearOauthRuntime()
+
+    await router.push(safeBackTarget.value)
+  }
+
   async function handlePasskeySignIn() {
     if (passkeyLoading.value)
       return
@@ -1156,6 +1425,7 @@ export function useSignIn() {
     oauthPhase,
     oauthError,
     authLoading,
+    isSessionVerifying,
     lastLoginMethod,
     lastLoginLabel,
     emailPreview,
@@ -1175,6 +1445,8 @@ export function useSignIn() {
     handleGithubSignIn,
     handleLinuxdoSignIn,
     handleOauthRetry,
+    handleOauthBack,
+    handleHeaderBack,
     handlePasskeySignIn,
   }
 }

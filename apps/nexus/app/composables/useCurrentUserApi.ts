@@ -1,3 +1,8 @@
+export interface LinkedProviderAccount {
+  provider: string
+  providerAccountId: string
+}
+
 export interface CurrentUserProfile {
   id: string
   email: string
@@ -9,6 +14,8 @@ export interface CurrentUserProfile {
   emailState: 'verified' | 'unverified' | 'missing'
   isRestricted: boolean
   passkeyCount?: number
+  linkedProviders?: string[]
+  linkedAccounts?: LinkedProviderAccount[]
 }
 
 interface CurrentUserProfilePatch {

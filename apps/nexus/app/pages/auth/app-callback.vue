@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { TxSpinner } from '@talex-touch/tuffex'
+import Button from '~/components/ui/Button.vue'
+
 definePageMeta({
   layout: false,
 })
@@ -11,6 +14,7 @@ const route = useRoute()
 
 const status = ref<'loading' | 'success' | 'error'>('loading')
 const errorMessage = ref('')
+const callbackInFlight = ref(false)
 const sessionToken = ref('')
 const showDevMode = ref(false)
 const copied = ref(false)
@@ -18,13 +22,54 @@ const copied = ref(false)
 const APP_SCHEMA = 'tuff'
 const isDev = import.meta.dev
 
-async function handleCallback() {
-  try {
-    if (sessionStatus.value !== 'authenticated') {
-      await getSession()
-    }
+function hasActiveSession(session: unknown) {
+  const user = (session as { user?: unknown } | null | undefined)?.user
+  return Boolean(user)
+}
 
-    if (sessionStatus.value !== 'authenticated') {
+async function ensureAuthenticatedSession() {
+  const firstSession = await getSession().catch(() => null)
+  if (hasActiveSession(firstSession))
+    return true
+
+  await new Promise(resolve => setTimeout(resolve, 200))
+
+  const secondSession = await getSession().catch(() => null)
+  return hasActiveSession(secondSession)
+}
+
+function goTo(path: string) {
+  return navigateTo(path)
+}
+
+function goBack() {
+  return goTo('/sign-in')
+}
+
+const CALLBACK_FEEDBACK_MIN_MS = 800
+
+async function ensureCallbackProcessingFeedback(startedAt: number) {
+  const elapsed = Date.now() - startedAt
+  if (elapsed >= CALLBACK_FEEDBACK_MIN_MS)
+    return
+
+  await new Promise(resolve => setTimeout(resolve, CALLBACK_FEEDBACK_MIN_MS - elapsed))
+}
+
+async function handleCallback() {
+  if (import.meta.server)
+    return
+  if (callbackInFlight.value || status.value !== 'loading')
+    return
+
+  callbackInFlight.value = true
+  const callbackStartedAt = Date.now()
+
+  try {
+    const authenticated = await ensureAuthenticatedSession()
+
+    if (!authenticated) {
+      await ensureCallbackProcessingFeedback(callbackStartedAt)
       await navigateTo({
         path: '/sign-in',
         query: {
@@ -47,18 +92,21 @@ async function handleCallback() {
     if (devicePlatform)
       headers['x-device-platform'] = devicePlatform
 
-    const { data, error } = await useFetch('/api/auth/sign-in-token', {
+    const data = await $fetch<{ appToken?: string | null }>('/api/app-auth/sign-in-token', {
       method: 'POST',
       headers,
+      credentials: 'include',
     })
 
-    if (error.value || !data.value?.appToken) {
+    if (!data?.appToken) {
+      await ensureCallbackProcessingFeedback(callbackStartedAt)
       errorMessage.value = t('auth.tokenFailed', 'Failed to get authentication token.')
       status.value = 'error'
       return
     }
 
-    const appToken = data.value.appToken
+    const appToken = data.appToken
+    await ensureCallbackProcessingFeedback(callbackStartedAt)
     sessionToken.value = appToken
     status.value = 'success'
 
@@ -75,10 +123,29 @@ async function handleCallback() {
       }, 2000)
     }
   }
-  catch (error) {
+  catch (error: any) {
+    await ensureCallbackProcessingFeedback(callbackStartedAt)
     console.error('[AppCallback] Error:', error)
-    errorMessage.value = error instanceof Error ? error.message : 'Unknown error'
+
+    if (error?.status === 401 || error?.statusCode === 401) {
+      await navigateTo({
+        path: '/sign-in',
+        query: {
+          redirect_url: route.fullPath,
+          reason: 'reauth',
+        },
+      }, { replace: true })
+      return
+    }
+
+    errorMessage.value = error?.data?.statusMessage
+      || error?.statusMessage
+      || error?.message
+      || 'Unknown error'
     status.value = 'error'
+  }
+  finally {
+    callbackInFlight.value = false
   }
 }
 
@@ -92,74 +159,81 @@ async function copyToken() {
   }
 }
 
+onMounted(() => {
+  if (sessionStatus.value !== 'loading')
+    void handleCallback()
+})
+
 watch(
   () => sessionStatus.value,
   (current) => {
-    if (current !== 'loading') {
-      handleCallback()
-    }
+    if (import.meta.server)
+      return
+    if (current !== 'loading')
+      void handleCallback()
   },
-  { immediate: true },
 )
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-white px-4 py-16 dark:bg-gray-900">
-    <div class="w-full max-w-md text-center">
-      <!-- Loading -->
+  <AuthVisualShell :loading="status === 'loading'">
+    <template #header>
+      <AuthTopbar
+        :back-label="t('auth.backToPrevious', '返回上一页')"
+        @back="goBack"
+      />
+    </template>
+
+    <div class="mb-16 w-full max-w-md text-center">
       <div v-if="status === 'loading'" class="flex flex-col items-center gap-4">
-        <span class="i-carbon-circle-dash animate-spin text-4xl text-primary" />
-        <p class="text-gray-600 dark:text-gray-300">
-          {{ t('auth.redirectingToApp', 'Redirecting to Tuff...') }}
+        <TxSpinner :size="30" />
+        <p class="text-base text-white/90">
+          {{ t('auth.callbackProcessing', '正在处理登录回调，请稍候…') }}
         </p>
       </div>
 
-      <!-- Success -->
       <div v-else-if="status === 'success'" class="flex flex-col items-center gap-4">
-        <span class="i-carbon-checkmark-filled text-4xl text-green-500" />
-        <p class="text-gray-600 dark:text-gray-300">
+        <span class="i-carbon-checkmark-filled text-4xl text-emerald-400" />
+        <p class="text-base text-white/90">
           {{ t('auth.redirectSuccess', 'Authentication successful! Opening Tuff...') }}
         </p>
-        <p class="text-sm text-gray-400">
+        <p class="text-sm text-white/65">
           {{ t('auth.manualOpen', 'If the app does not open automatically, please open Tuff manually.') }}
         </p>
 
-        <!-- Dev mode fallback -->
-        <div v-if="showDevMode" class="mt-6 w-full rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
-          <p class="mb-2 text-sm font-medium text-yellow-600 dark:text-yellow-400">
+        <div v-if="showDevMode" class="w-full space-y-2 text-left">
+          <p class="text-sm text-amber-200/95">
             🔧 Dev Mode: Protocol handler may not work
           </p>
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <p class="text-xs text-white/65">
             Copy the token and paste it in the app's dev console:
           </p>
-          <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
-            {{ sessionToken }}
-          </code>
-          <Button size="small" variant="warning" @click="copyToken">
+          <code class="block max-h-24 overflow-auto text-xs text-white/85">{{ sessionToken }}</code>
+          <Button variant="primary" size="small" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
           </Button>
-          <p class="mt-2 text-xs text-gray-400">
-            Then run in Electron DevTools console: <code class="rounded bg-gray-100 px-1 dark:bg-gray-800">__devAuthToken("PASTE_TOKEN_HERE")</code>
+          <p class="text-xs text-white/58">
+            Then run in Electron DevTools console: <code>__devAuthToken("PASTE_TOKEN_HERE")</code>
           </p>
         </div>
       </div>
 
-      <!-- Error -->
       <div v-else class="flex flex-col items-center gap-4">
-        <span class="i-carbon-warning-filled text-4xl text-red-500" />
-        <p class="text-gray-600 dark:text-gray-300">
+        <span class="i-carbon-warning-filled text-4xl text-red-400" />
+        <p class="text-base text-white/90">
           {{ t('auth.authFailed', 'Authentication failed') }}
         </p>
-        <p class="text-sm text-red-400">
+        <p class="text-sm text-red-300/90">
           {{ errorMessage }}
         </p>
-        <NuxtLink
-          to="/sign-in"
-          class="mt-4 rounded-lg bg-primary px-6 py-2 text-white transition hover:bg-primary/80"
-        >
+        <Button variant="primary" size="lg" @click="goTo('/sign-in')">
           {{ t('auth.tryAgain', 'Try Again') }}
-        </NuxtLink>
+        </Button>
       </div>
     </div>
-  </div>
+
+    <template #footer>
+      <AuthLegalFooter />
+    </template>
+  </AuthVisualShell>
 </template>

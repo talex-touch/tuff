@@ -38,9 +38,7 @@ const message = computed(() => {
       return props.t('auth.oauthBindRedirect', `正在跳转到 ${providerLabel.value} 完成绑定...`)
     return props.t('auth.oauthRedirect', `正在跳转到 ${providerLabel.value}...`)
   }
-  if (props.flow === 'bind')
-    return props.t('auth.oauthBindVerifying', '正在验证绑定状态...')
-  return props.t('auth.oauthVerifying', '正在验证账号信息...')
+  return props.t('auth.callbackProcessing', '正在处理登录回调，请稍候…')
 })
 
 const showRetry = computed(() => isError.value)
