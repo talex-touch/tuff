@@ -20,7 +20,7 @@ const outlineVisible = ref(false)
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-[88rem] w-full flex gap-6 lg:gap-8">
-          <aside class="hidden w-[200px] shrink-0 xl:block">
+          <aside class="hidden w-[230px] shrink-0 xl:block">
             <div class="docs-sidebar sticky top-24 h-[calc(100vh-6rem)] overflow-y-auto pb-8 pr-1.5 relative z-30">
               <DocsSidebar />
             </div>
@@ -28,22 +28,26 @@ const outlineVisible = ref(false)
           <main class="flex-1">
             <div class="mx-auto max-w-[53rem] space-y-10">
               <div class="flex items-center gap-2 xl:hidden">
-                <button
-                  type="button"
+                <TxButton
+                  variant="bare"
+                  size="small"
+                  native-type="button"
                   class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40"
                   @click="sidebarVisible = true"
                 >
                   <span class="i-carbon-menu text-base" />
                   {{ t('docs.sidebarLabel') }}
-                </button>
-                <button
-                  type="button"
+                </TxButton>
+                <TxButton
+                  variant="bare"
+                  size="small"
+                  native-type="button"
                   class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40 lg:hidden"
                   @click="outlineVisible = true"
                 >
                   <span class="i-carbon-list text-base" />
                   {{ t('docs.outlineLabel') }}
-                </button>
+                </TxButton>
               </div>
               <slot />
             </div>

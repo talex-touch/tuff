@@ -22,6 +22,7 @@ const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/uti
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
+const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
 export default defineNuxtConfig({
   modules: [
@@ -95,11 +96,16 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     auth: {
-      secret: process.env.AUTH_SECRET,
+      secret: authSecret,
       origin: process.env.AUTH_ORIGIN,
       github: {
         clientId: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      },
+      linuxdo: {
+        clientId: process.env.LINUXDO_CLIENT_ID,
+        clientSecret: process.env.LINUXDO_CLIENT_SECRET,
+        issuer: process.env.LINUXDO_ISSUER,
       },
       email: {
         from: process.env.AUTH_EMAIL_FROM,
@@ -107,10 +113,13 @@ export default defineNuxtConfig({
         resendApiKey: process.env.RESEND_API_KEY,
       },
     },
+    turnstile: {
+      secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
+    },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
-      auth: {
-        origin: process.env.AUTH_ORIGIN,
+      turnstile: {
+        siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
       },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
@@ -140,9 +149,11 @@ export default defineNuxtConfig({
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
       ? {
-          cloudflareDev: {
-            environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
-          },
+        cloudflareDev: {
+          environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
+          configPath: resolve(workspaceRoot, 'wrangler.toml'),
+          persistDir: resolve(workspaceRoot, '.wrangler/state/v3'),
+        },
         }
       : {}),
     esbuild: {

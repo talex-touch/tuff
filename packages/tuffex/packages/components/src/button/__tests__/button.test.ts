@@ -66,6 +66,19 @@ describe('txButton', () => {
     expect(wrapper.find('.tx-button__spinner').exists()).toBe(true)
   })
 
+  it('renders loading bar for block loading variant', () => {
+    const wrapper = mount(Button, {
+      props: {
+        block: true,
+        loading: true,
+        loadingVariant: 'bar',
+      },
+    })
+
+    expect(wrapper.find('.tx-button__loading-layer').exists()).toBe(true)
+    expect(wrapper.find('.tx-button__spinner').exists()).toBe(false)
+  })
+
   it('emits click event', async () => {
     const wrapper = mount(Button)
 
@@ -120,6 +133,22 @@ describe('txButton', () => {
     expect(wrapper.classes()).toContain('circle')
   })
 
+  it('renders block circle button with regular layout', () => {
+    const wrapper = mount(Button, {
+      props: {
+        block: true,
+        circle: true,
+      },
+      slots: {
+        default: 'Block Circle',
+      },
+    })
+
+    expect(wrapper.classes()).toContain('block')
+    expect(wrapper.classes()).toContain('circle')
+    expect(wrapper.find('.tx-button__spinner-slot').exists()).toBe(true)
+  })
+
   it('renders plain button correctly', () => {
     const wrapper = mount(Button, {
       props: {
@@ -140,6 +169,16 @@ describe('txButton', () => {
     })
 
     expect(wrapper.classes()).toContain('round')
+  })
+
+  it('renders borderless button correctly', () => {
+    const wrapper = mount(Button, {
+      props: {
+        border: false,
+      },
+    })
+
+    expect(wrapper.classes()).toContain('borderless')
   })
 
   it('sets correct native type', () => {

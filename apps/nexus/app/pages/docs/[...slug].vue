@@ -169,9 +169,13 @@ function buildTocTree(entries: TocEntry[]) {
   const stack: TocEntry[] = []
   for (const entry of entries) {
     const node: TocEntry = { ...entry, children: [] }
-    while (stack.length && stack[stack.length - 1].depth >= node.depth)
+    while (stack.length) {
+      const last = stack.at(-1)
+      if (!last || last.depth < node.depth)
+        break
       stack.pop()
-    const parent = stack[stack.length - 1]
+    }
+    const parent = stack.at(-1)
     if (parent)
       parent.children?.push(node)
     else
@@ -453,6 +457,55 @@ const heroUpdatedLabel = computed(() => {
     : `Updated ${heroUpdatedAgo.value}`
 })
 const heroVerifiedLabel = computed(() => (docMeta.value?.verified ? 'Verified' : ''))
+
+type DocSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const DOC_SYNC_STATUS_ALIASES: Record<string, DocSyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+const docSyncStatus = computed<DocSyncStatusKey>(() => {
+  if (docMeta.value?.verified === true)
+    return 'verified'
+
+  const raw = typeof docMeta.value?.syncStatus === 'string'
+    ? docMeta.value.syncStatus.trim()
+    : ''
+
+  return DOC_SYNC_STATUS_ALIASES[raw] ?? 'not_started'
+})
+
+const heroSyncBanner = computed(() => {
+  if (!docScope.value.isComponent || docSyncStatus.value === 'verified')
+    return null
+
+  if (docSyncStatus.value === 'in_progress' || docSyncStatus.value === 'not_started') {
+    return {
+      status: 'in_progress',
+      icon: 'i-carbon-in-progress',
+      title: locale.value === 'zh' ? '当前组件文档正在开发中' : 'This component doc is in progress',
+      description: locale.value === 'zh'
+        ? '该页面正在持续迁移，示例与 API 可能会继续调整。'
+        : 'This page is still being migrated. Demos and API details may change.',
+    }
+  }
+
+  return {
+    status: 'migrated',
+    icon: 'i-carbon-warning-alt',
+    title: locale.value === 'zh' ? '该页面由 AI 迁移生成，请谨慎使用' : 'This page was migrated by AI, please review carefully',
+    description: locale.value === 'zh'
+      ? '内容已迁移完成，但仍建议结合源码和人工评审结果使用。'
+      : 'Migration is complete, but please validate against source code and manual review.',
+  }
+})
 
 const formattedLastUpdated = computed(() => {
   if (!lastUpdatedDate.value)
@@ -758,6 +811,21 @@ watch(
               :verified-label="heroVerifiedLabel"
             />
           </div>
+          <div
+            v-if="heroSyncBanner"
+            class="docs-sync-banner"
+            :data-status="heroSyncBanner.status"
+          >
+            <span class="docs-sync-banner__icon" :class="heroSyncBanner.icon" />
+            <div class="docs-sync-banner__content">
+              <p class="docs-sync-banner__title">
+                {{ heroSyncBanner.title }}
+              </p>
+              <p class="docs-sync-banner__desc">
+                {{ heroSyncBanner.description }}
+              </p>
+            </div>
+          </div>
           <ContentRenderer
             :value="doc ?? {}"
             :class="[
@@ -911,6 +979,86 @@ watch(
   gap: 12px;
 }
 
+.docs-sync-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.75);
+  background: rgba(248, 250, 252, 0.7);
+  padding: 12px 14px;
+}
+
+.docs-sync-banner__icon {
+  margin-top: 1px;
+  font-size: 16px;
+  color: rgba(71, 85, 105, 0.9);
+}
+
+.docs-sync-banner__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docs-sync-banner__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.docs-sync-banner__desc {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(71, 85, 105, 0.9);
+}
+
+.docs-sync-banner[data-status='in_progress'] {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.docs-sync-banner[data-status='in_progress'] .docs-sync-banner__icon {
+  color: rgba(180, 83, 9, 0.92);
+}
+
+.docs-sync-banner[data-status='migrated'] {
+  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.docs-sync-banner[data-status='migrated'] .docs-sync-banner__icon {
+  color: rgba(217, 119, 6, 0.92);
+}
+
+::global(.dark .docs-sync-banner),
+::global([data-theme='dark'] .docs-sync-banner) {
+  border-color: rgba(71, 85, 105, 0.55);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+::global(.dark .docs-sync-banner__title),
+::global([data-theme='dark'] .docs-sync-banner__title) {
+  color: rgba(248, 250, 252, 0.95);
+}
+
+::global(.dark .docs-sync-banner__desc),
+::global([data-theme='dark'] .docs-sync-banner__desc) {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+::global(.dark .docs-sync-banner[data-status='in_progress']),
+::global([data-theme='dark'] .docs-sync-banner[data-status='in_progress']) {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(120, 53, 15, 0.3);
+}
+
+::global(.dark .docs-sync-banner[data-status='migrated']),
+::global([data-theme='dark'] .docs-sync-banner[data-status='migrated']) {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(120, 53, 15, 0.24);
+}
 .docs-hero-breadcrumb {
   display: flex;
   flex-wrap: wrap;
@@ -973,8 +1121,8 @@ a.docs-hero-crumb:hover {
 
 
 :deep(.docs-prose) {
-  --docs-accent: #1bb5f4;
-  --docs-accent-strong: #0ea5e9;
+  --docs-accent: #6a5546;
+  --docs-accent-strong: #2f241c;
   --docs-ink: var(--fgColor-default);
   --docs-muted: var(--fgColor-muted);
   --docs-border: var(--borderColor-muted);
@@ -1004,10 +1152,10 @@ a.docs-hero-crumb:hover {
 
 :deep(.dark .docs-prose),
 :deep([data-theme='dark'] .docs-prose) {
-  --docs-accent: #7dd3fc;
-  --docs-accent-strong: #38bdf8;
-  --docs-ink: #f8fafc;
-  --docs-muted: rgba(226, 232, 240, 0.8);
+  --docs-accent: #d8b899;
+  --docs-accent-strong: #ffe5c8;
+  --docs-ink: #f3ede5;
+  --docs-muted: rgba(235, 224, 213, 0.85);
   --docs-border: var(--borderColor-muted);
   --docs-code-bg: var(--bgColor-muted);
   --docs-code-border: var(--borderColor-default);
@@ -1180,7 +1328,7 @@ a.docs-hero-crumb:hover {
 :deep(.docs-prose a) {
   color: var(--docs-accent);
   text-decoration: none;
-  border-bottom: 1px solid rgba(27, 181, 244, 0.35);
+  border-bottom: 1px solid color-mix(in srgb, var(--docs-accent) 40%, transparent);
 }
 
 :deep(.docs-prose hr) {

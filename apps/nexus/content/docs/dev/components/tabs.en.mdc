@@ -8,73 +8,432 @@ syncStatus: migrated
 
 用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
 
-<script setup lang="ts">
-import TabsBasicDemo from '~/components/content/demos/TabsBasicDemo.vue'
-import TabsBasicDemoSource from '~/components/content/demos/TabsBasicDemo.vue?raw'
-
-import TabsPlacementDemo from '~/components/content/demos/TabsPlacementDemo.vue'
-import TabsPlacementDemoSource from '~/components/content/demos/TabsPlacementDemo.vue?raw'
-
-import TabsAutoSizeDemo from '~/components/content/demos/TabsAutoSizeDemo.vue'
-import TabsAutoSizeDemoSource from '~/components/content/demos/TabsAutoSizeDemo.vue?raw'
-
-import TabsDynamicContentDemo from '~/components/content/demos/TabsDynamicContentDemo.vue'
-import TabsDynamicContentDemoSource from '~/components/content/demos/TabsDynamicContentDemo.vue?raw'
-
-import TabsIndicatorShowcaseDemo from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue'
-import TabsIndicatorShowcaseDemoSource from '~/components/content/demos/TabsIndicatorShowcaseDemo.vue?raw'
-
-import TabsDisableAnimDemo from '~/components/content/demos/TabsDisableAnimDemo.vue'
-import TabsDisableAnimDemoSource from '~/components/content/demos/TabsDisableAnimDemo.vue?raw'
-</script>
 
 ## 基础用法
 
-<DemoBlock title="Tabs" :code="TabsBasicDemoSource">
-  <template #preview>
-    <TabsBasicDemo />
+### Tabs
+:::TuffDemoWrapper{demo="TabsTabsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('General')
+  </script>
+
+  <template>
+    <div style="height: 320px;">
+      <TxTabs v-model="active">
+        <TxTabItem name="General" icon-class="i-carbon-settings" activation>
+          <div style="padding: 8px;">
+            <h3 style="margin: 0 0 8px;">
+              General
+            </h3>
+            <p style="margin: 0; color: var(--tx-text-color-secondary);">
+              Basic settings content
+            </p>
+          </div>
+        </TxTabItem>
+        <TxTabItem name="Account" icon-class="i-carbon-user">
+          <div style="padding: 8px;">
+            <h3 style="margin: 0 0 8px;">
+              Account
+            </h3>
+            <p style="margin: 0; color: var(--tx-text-color-secondary);">
+              Account settings content
+            </p>
+          </div>
+        </TxTabItem>
+        <TxTabItem name="About" icon-class="i-carbon-information">
+          <div style="padding: 8px;">
+            <h3 style="margin: 0 0 8px;">
+              About
+            </h3>
+            <p style="margin: 0; color: var(--tx-text-color-secondary);">
+              About content
+            </p>
+          </div>
+        </TxTabItem>
+      </TxTabs>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## Indicator Showcase
 
-<DemoBlock title="Indicator variants & motions" :code="TabsIndicatorShowcaseDemoSource">
-<template #preview>
-<TabsIndicatorShowcaseDemo />
-</template>
-</DemoBlock>
+### Indicator variants & motions
+:::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  type Motion = 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
+
+  type TabValue = 'A' | 'B' | 'C'
+
+  const motion = ref<Motion>('stretch')
+  const active = ref<TabValue>('A')
+
+  const variants = computed(() => {
+    return [
+      { value: 'line', label: 'line' },
+      { value: 'pill', label: 'pill' },
+      { value: 'block', label: 'block' },
+      { value: 'dot', label: 'dot' },
+      { value: 'outline', label: 'outline' },
+    ] as const
+  })
+
+  const motionOptions = [
+    { value: 'stretch', label: 'stretch' },
+    { value: 'warp', label: 'warp' },
+    { value: 'glide', label: 'glide' },
+    { value: 'snap', label: 'snap' },
+    { value: 'spring', label: 'spring' },
+  ] as const
+
+  function next() {
+    active.value = active.value === 'A' ? 'B' : active.value === 'B' ? 'C' : 'A'
+  }
+  </script>
+
+  <template>
+    <div class="tx-demo tx-demo__col" style="max-width: 860px;">
+      <TxCard variant="plain" background="mask" :padding="14" :radius="14">
+        <div class="tx-demo__row" style="gap: 10px; flex-wrap: wrap;">
+          <label class="tx-demo__row" style="gap: 8px;">
+            <span class="tx-demo__label">motion</span>
+            <TuffSelect v-model="motion" style="min-width: 190px;">
+              <TuffSelectItem v-for="opt in motionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+            </TuffSelect>
+          </label>
+
+          <label class="tx-demo__row" style="gap: 8px;">
+            <span class="tx-demo__label">auto</span>
+            <TxButton size="small" @click="next">Next</TxButton>
+          </label>
+
+          <div style="opacity: 0.7; font-size: 12px;">
+            active: <b>{{ active }}</b>
+          </div>
+        </div>
+      </TxCard>
+
+      <div class="tx-demo__col" style="gap: 12px;">
+        <TxCard
+          v-for="v in variants"
+          :key="v.value"
+          variant="plain"
+          background="mask"
+          :padding="12"
+          :radius="14"
+        >
+          <div class="tx-demo__label" style="margin-bottom: 8px;">
+            {{ v.label }}
+          </div>
+
+          <TxTabs
+            v-model="active"
+            placement="top"
+            :content-scrollable="false"
+            :indicator-variant="v.value"
+            :indicator-motion="motion"
+            :animation="{ indicator: { durationMs: 180 }, content: true }"
+          >
+            <TxTabItem name="A" activation>
+              Overview
+            </TxTabItem>
+            <TxTabItem name="B">
+              Features
+            </TxTabItem>
+            <TxTabItem name="C">
+              Pricing
+            </TxTabItem>
+          </TxTabs>
+        </TxCard>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## 动态内容尺寸（manual, rich content）
 
-<DemoBlock title="Dynamic Content (manual)" :code="TabsDynamicContentDemoSource">
-  <template #preview>
-    <TabsDynamicContentDemo />
+### Dynamic Content (manual)
+:::TuffDemoWrapper{demo="TabsDynamicContentManualDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const active = ref<'Overview' | 'Details' | 'Form'>('Overview')
+
+  const expanded = ref(false)
+  const count = ref(3)
+  const items = computed(() => Array.from({ length: count.value }).map((_, i) => `Item ${i + 1}`))
+
+  const query = ref('')
+  </script>
+
+  <template>
+    <div style="display: grid; gap: 10px; min-height: 120px; max-width: 100%;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+        <TxButton size="small" @click="expanded = !expanded">
+          Toggle details
+        </TxButton>
+        <TxButton size="small" :disabled="count <= 0" @click="count--">
+          - Item
+        </TxButton>
+        <TxButton size="small" @click="count++">
+          + Item
+        </TxButton>
+      </div>
+
+      <TxTabs
+        v-model="active"
+        placement="left"
+        :content-scrollable="false"
+        auto-width
+        :animation="{ size: { enabled: true, durationMs: 260, easing: 'ease' } }"
+      >
+        <TxTabItem name="Overview" activation icon-class="i-carbon-dashboard">
+          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-weight: 650;">
+                Overview
+              </div>
+              <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+                This tab is intentionally compact.
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <div style="font-size: 12px;">
+                  Search
+                </div>
+                <div style="width: 220px; max-width: 100%;">
+                  <TxSearchInput v-model="query" placeholder="Try typing..." />
+                </div>
+              </div>
+            </div>
+          </TxCard>
+        </TxTabItem>
+
+        <TxTabItem name="Details" icon-class="i-carbon-list">
+          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                <div style="font-weight: 650;">
+                  Details
+                </div>
+                <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+                  Items: {{ items.length }}
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;">
+                <div
+                  v-for="it in items"
+                  :key="it"
+                  style="border-radius: 12px; padding: 10px; border: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 65%, transparent);"
+                >
+                  <div style="font-weight: 600;">
+                    {{ it }}
+                  </div>
+                  <div style="margin-top: 4px; font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+                    Dynamic grid cell
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="expanded" style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="font-weight: 600;">
+                  Expanded block
+                </div>
+                <div style="font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
+                  This area appears/disappears and should trigger AutoSizer refresh.
+                </div>
+                <div
+                  style="height: 110px; border-radius: 12px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);"
+                />
+              </div>
+            </div>
+          </TxCard>
+        </TxTabItem>
+
+        <TxTabItem name="Form" icon-class="i-carbon-settings">
+          <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="12">
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-weight: 650;">
+                Form
+              </div>
+              <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;">
+                <TxSearchInput v-model="query" placeholder="Field A" />
+                <TxSearchInput v-model="query" placeholder="Field B" />
+              </div>
+
+              <div
+                style="height: 160px; border-radius: 12px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 10%, transparent);"
+              />
+            </div>
+          </TxCard>
+        </TxTabItem>
+      </TxTabs>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 布局方向（placement）
 
-<DemoBlock title="Placement + Header Slot" :code="TabsPlacementDemoSource">
-  <template #preview>
-    <TabsPlacementDemo />
+### Placement + Header Slot
+:::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const activeTop = ref('A')
+  const activeRight = ref('General')
+  const actionWide = ref(false)
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px; align-items: stretch;">
+      <div style="height: 240px;">
+        <TxTabs v-model="activeTop" placement="top" auto-width :animation="{ indicator: { durationMs: 220, easing: 'ease' } }">
+          <TxTabHeader v-slot="{ props }">
+            <div style="display: flex; align-items: center; width: 100%; padding: 10px 12px;">
+              <div style="font-weight: 600;">
+                {{ props.node?.props?.name }}
+              </div>
+            </div>
+          </TxTabHeader>
+
+          <template #nav-right>
+            <TxButton size="small" type="primary" @click="actionWide = !actionWide">
+              {{ actionWide ? 'More Actions' : 'Action' }}
+            </TxButton>
+          </template>
+
+          <TxTabItem name="A" activation>
+            <div style="padding: 8px;">
+              Top - A
+            </div>
+          </TxTabItem>
+          <TxTabItem name="B">
+            <div style="padding: 8px;">
+              Top - B
+            </div>
+          </TxTabItem>
+          <TxTabItem name="C">
+            <div style="padding: 8px;">
+              Top - C
+            </div>
+          </TxTabItem>
+        </TxTabs>
+      </div>
+
+      <div style="height: 240px;">
+        <TxTabs v-model="activeRight" placement="right">
+          <TxTabItem name="General" icon-class="i-carbon-settings" activation>
+            <div style="padding: 8px;">
+              Right - General
+            </div>
+          </TxTabItem>
+          <TxTabItem name="Account" icon-class="i-carbon-user">
+            <div style="padding: 8px;">
+              Right - Account
+            </div>
+          </TxTabItem>
+        </TxTabs>
+      </div>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 高度跟随内容（animation.size）
 
-<DemoBlock title="Auto Size (contentScrollable=false)" :code="TabsAutoSizeDemoSource">
-  <template #preview>
-    <TabsAutoSizeDemo />
+### Auto Size (contentScrollable=false)
+:::TuffDemoWrapper{demo="TabsAutoSizeContentScrollableFalseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('Long')
+  </script>
+
+  <template>
+    <div style="min-height: 120px;">
+      <TxTabs
+        v-model="active"
+        placement="left"
+        :content-scrollable="false"
+        :animation="{ size: { enabled: true, durationMs: 260, easing: 'ease' } }"
+      >
+        <TxTabItem name="Long" activation>
+          <div style="padding: 10px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">
+              Long Content
+            </div>
+            <div style="height: 260px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-primary, #409eff) 12%, transparent);" />
+          </div>
+        </TxTabItem>
+        <TxTabItem name="Short">
+          <div style="padding: 10px;">
+            <div style="font-weight: 600; margin-bottom: 8px;">
+              Short Content
+            </div>
+            <div style="height: 90px; border-radius: 10px; background: color-mix(in srgb, var(--tx-color-success, #67c23a) 12%, transparent);" />
+          </div>
+        </TxTabItem>
+      </TxTabs>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## 关闭动画（indicator/content）
 
-<DemoBlock title="Disable Animations" :code="TabsDisableAnimDemoSource">
-  <template #preview>
-    <TabsDisableAnimDemo />
+### Disable Animations
+:::TuffDemoWrapper{demo="TabsDisableAnimationsDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const active = ref('Left1')
+  </script>
+
+  <template>
+    <div style="height: 240px;">
+      <TxTabs
+        v-model="active"
+        placement="bottom"
+        :animation="{ indicator: false, content: false }"
+      >
+        <TxTabItem name="Left1" activation>
+          <div style="padding: 10px;">
+            Bottom - No animations
+          </div>
+        </TxTabItem>
+        <TxTabItem name="Left2">
+          <div style="padding: 10px;">
+            Bottom - No animations 2
+          </div>
+        </TxTabItem>
+        <TxTabItem name="Left3">
+          <div style="padding: 10px;">
+            Bottom - No animations 3
+          </div>
+        </TxTabItem>
+      </TxTabs>
+    </div>
   </template>
-</DemoBlock>
+---
+:::
 
 ## API
 

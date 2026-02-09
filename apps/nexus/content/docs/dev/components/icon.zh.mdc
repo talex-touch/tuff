@@ -159,7 +159,9 @@ code: |
 
 用于在图标右下角叠加状态指示器（如插件运行状态/健康状态）。
 
-::TuffDemo{title="TxStatusIcon" description="在角标上展示不同状态。" code-lang="vue"}
+### TxStatusIcon
+在角标上展示不同状态。
+:::TuffDemoWrapper{demo="IconTxStatusIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -170,16 +172,7 @@ code: |
     <TxStatusIcon name="i-ri-translate-2" :size="22" tone="loading" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="success" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="warning" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="error" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="info" />
-  <tx-status-icon name="i-ri-translate-2" :size="22" tone="loading" />
-</div>
-::
-
+:::
 ## 类型与来源
 - `class`：使用图标类名（推荐）。
 - `emoji`：用于轻量强调。

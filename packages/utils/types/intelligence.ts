@@ -122,6 +122,10 @@ export interface IntelligenceVisionOcrResult {
   suggestions?: string[]
   /** Structured text blocks. */
   blocks?: IntelligenceVisionOcrBlock[]
+  /** OCR engine identifier. */
+  engine?: 'apple-vision' | 'windows-ocr' | 'cloud'
+  /** OCR execution latency in milliseconds. */
+  durationMs?: number
   /** Raw provider response. */
   raw?: any
 }

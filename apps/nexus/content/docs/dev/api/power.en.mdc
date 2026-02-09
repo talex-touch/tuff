@@ -1,0 +1,94 @@
+# PowerSDK
+
+## Overview
+
+PowerSDK exposes low-power state to plugins so features can degrade gracefully when the device is on battery.
+
+## Quick Start
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { usePowerSDK } from '@talex-touch/utils/plugin/sdk'
+
+  const power = usePowerSDK()
+
+  const status = await power.getLowPowerStatus()
+  if (status.lowPower) {
+    console.log('Enable lightweight mode')
+  }
+---
+:::
+
+## API Reference
+
+### `usePowerSDK()`
+
+Returns a PowerSDK instance in plugin renderer context.
+
+### `getLowPowerStatus(options?)`
+
+Get current low-power status.
+
+**Options**:
+- `threshold?: number` (default `20`, range `1-100`)
+
+**Returns**:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `lowPower` | `boolean` | Whether low-power mode is active |
+| `onBattery` | `boolean` | Whether device is currently on battery |
+| `percent` | `number \| null` | Battery percent, `null` when unavailable |
+| `threshold` | `number` | Effective threshold used in calculation |
+
+### `isLowPower(options?)`
+
+Convenience method. Equivalent to `getLowPowerStatus(options).lowPower`.
+
+### `onLowPowerChanged(callback, options?)`
+
+Subscribe to low-power changes.
+
+**Options**:
+- `threshold?: number` (default `20`)
+- `emitImmediately?: boolean` (default `true`)
+
+Returns an unsubscribe function.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const dispose = power.onLowPowerChanged((status) => {
+    console.log('low power changed', status)
+  })
+
+  // Later
+  dispose()
+---
+:::
+
+## index.js Context API
+
+`globalThis.power` is available in plugin `index.js`:
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  const status = await power.getLowPowerStatus({ threshold: 25 })
+  if (status.lowPower) {
+    logger.info('skip heavy tasks while low power')
+  }
+---
+:::
+
+## Technical Notes
+
+- In plugin renderer context, `usePowerSDK().onLowPowerChanged` listens to battery events from transport.
+- In plugin `index.js` global context (`globalThis.power`), `onLowPowerChanged` currently uses polling (about 60s), not strict real-time push.
+
+## Best Practices
+
+1. Pause expensive background work when `lowPower` is `true`.
+2. Keep a user-facing fallback when battery percent is unavailable.
+3. Use a slightly higher threshold (for example `25`) for heavy AI/OCR tasks.

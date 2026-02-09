@@ -1,5 +1,6 @@
 <script name="App" lang="ts" setup>
 import { isCoreBox } from '@talex-touch/utils/renderer'
+import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { useI18n } from 'vue-i18n'
 import TouchMenu from '~/components/menu/TouchMenu.vue'
 import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
@@ -42,6 +43,7 @@ async function init(): Promise<void> {
 
   useDropperResolver()
 
+  await appSettings.whenHydrated()
   if (!appSetting?.beginner?.init) beginner.value = true
 }
 </script>

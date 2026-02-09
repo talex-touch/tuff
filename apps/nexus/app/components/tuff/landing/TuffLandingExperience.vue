@@ -86,10 +86,11 @@ function selectScenario(id: string) {
 
     <div class="grid mt-14 gap-10 lg:grid-cols-[0.9fr_1.1fr]">
       <nav data-reveal class="flex flex-wrap justify-center gap-4 lg:justify-start">
-        <button
+        <TxButton
           v-for="scenario in proactive.scenarios"
           :key="scenario.id"
-          type="button"
+          variant="bare"
+          native-type="button"
           class="w-44 flex flex-col items-center gap-3 border border-white/10 rounded-[24px] bg-white/10 px-5 py-5 text-center text-white/70 shadow-[0_22px_70px_rgba(10,18,44,0.28)] transition duration-300 sm:w-48 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
           :class="scenario.id === activeScenarioId
             ? 'border-white/40 bg-white/20 text-white shadow-[0_28px_90px_rgba(15,29,74,0.6)]'
@@ -102,7 +103,7 @@ function selectScenario(id: string) {
           <span class="text-sm font-semibold tracking-[0.28em] uppercase">
             {{ scenario.tab }}
           </span>
-        </button>
+        </TxButton>
       </nav>
 
       <article

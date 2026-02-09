@@ -4,43 +4,46 @@ The Intelligence System provides a unified AI capability framework with multi-pr
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Intelligence SDK                         │
-│  (Unified API for AI capabilities across all providers)     │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Capability Registry                        │
-│  • 30+ registered capabilities (chat, vision, code, etc.)   │
-│  • Capability metadata and type definitions                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Strategy Manager                           │
-│  • Provider selection strategies                            │
-│  • Model preference matching                                │
-│  • Fallback provider chains                                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Provider Manager                           │
-│  • OpenAI, Anthropic, DeepSeek, SiliconFlow, Local, Custom │
-│  • Provider lifecycle management                            │
-│  • Dynamic provider registration                            │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Provider Adapters                          │
-│  • Unified interface implementation                         │
-│  • Provider-specific API calls                              │
-│  • Response normalization                                   │
-└─────────────────────────────────────────────────────────────┘
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  ┌─────────────────────────────────────────────────────────────┐
+  │                     Intelligence SDK                         │
+  │  (Unified API for AI capabilities across all providers)     │
+  └─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   Capability Registry                        │
+  │  • 30+ registered capabilities (chat, vision, code, etc.)   │
+  │  • Capability metadata and type definitions                 │
+  └─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   Strategy Manager                           │
+  │  • Provider selection strategies                            │
+  │  • Model preference matching                                │
+  │  • Fallback provider chains                                 │
+  └─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   Provider Manager                           │
+  │  • OpenAI, Anthropic, DeepSeek, SiliconFlow, Local, Custom │
+  │  • Provider lifecycle management                            │
+  │  • Dynamic provider registration                            │
+  └─────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+  ┌─────────────────────────────────────────────────────────────┐
+  │                   Provider Adapters                          │
+  │  • Unified interface implementation                         │
+  │  • Provider-specific API calls                              │
+  │  • Response normalization                                   │
+  └─────────────────────────────────────────────────────────────┘
+---
+:::
 
 ## Core Components
 
@@ -50,14 +53,17 @@ The Intelligence System provides a unified AI capability framework with multi-pr
 
 Manages all available AI capabilities in the system.
 
-```typescript
-class AiCapabilityRegistry {
-  register(capability: AiCapabilityDescriptor): void
-  get(capabilityId: string): AiCapabilityDescriptor | undefined
-  getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[]
-  getAll(): AiCapabilityDescriptor[]
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class AiCapabilityRegistry {
+    register(capability: AiCapabilityDescriptor): void
+    get(capabilityId: string): AiCapabilityDescriptor | undefined
+    getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[]
+    getAll(): AiCapabilityDescriptor[]
+  }
+---
+:::
 
 **Registered Capabilities**:
 - **Text**: chat, translate, summarize, rewrite, grammar-check
@@ -74,15 +80,18 @@ class AiCapabilityRegistry {
 
 Manages AI provider instances and their lifecycle.
 
-```typescript
-class IntelligenceProviderManager {
-  registerFactory(type: IntelligenceProviderType, factory): void
-  registerFromConfig(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
-  getEnabled(): IntelligenceProviderAdapter[]
-  get(providerId: string): IntelligenceProviderAdapter | undefined
-  createProviderInstance(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class IntelligenceProviderManager {
+    registerFactory(type: IntelligenceProviderType, factory): void
+    registerFromConfig(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
+    getEnabled(): IntelligenceProviderAdapter[]
+    get(providerId: string): IntelligenceProviderAdapter | undefined
+    createProviderInstance(config: IntelligenceProviderConfig): IntelligenceProviderAdapter
+  }
+---
+:::
 
 **Supported Providers**:
 - **OpenAI**: GPT-4, GPT-3.5, DALL-E, Whisper, TTS
@@ -104,13 +113,16 @@ Selects the optimal provider for each capability invocation.
 3. **Priority-Based Selection**: Select highest priority enabled provider
 4. **Fallback Chain**: Return ordered list of fallback providers
 
-```typescript
-interface StrategySelectionResult {
-  selectedProvider: IntelligenceProviderConfig
-  fallbackProviders: IntelligenceProviderConfig[]
-  reasoning?: string
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface StrategySelectionResult {
+    selectedProvider: IntelligenceProviderConfig
+    fallbackProviders: IntelligenceProviderConfig[]
+    reasoning?: string
+  }
+---
+:::
 
 **4. Intelligence SDK**
 
@@ -118,18 +130,21 @@ interface StrategySelectionResult {
 
 Main entry point for all AI capability invocations.
 
-```typescript
-class AiSDK {
-  async invoke<T>(
-    capabilityId: string,
-    payload: any,
-    options?: IntelligenceInvokeOptions
-  ): Promise<IntelligenceInvokeResult<T>>
-  
-  updateConfig(config: Partial<IntelligenceSDKConfig>): void
-  async testProvider(config: IntelligenceProviderConfig): Promise<TestResult>
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class AiSDK {
+    async invoke<T>(
+      capabilityId: string,
+      payload: any,
+      options?: IntelligenceInvokeOptions
+    ): Promise<IntelligenceInvokeResult<T>>
+    
+    updateConfig(config: Partial<IntelligenceSDKConfig>): void
+    async testProvider(config: IntelligenceProviderConfig): Promise<TestResult>
+  }
+---
+:::
 
 **Key Features**:
 - Unified invocation interface
@@ -145,43 +160,46 @@ class AiSDK {
 
 **Location**: `<user-data>/config/intelligence.json`
 
-```json
-{
-  "providers": [
-    {
-      "id": "openai-default",
-      "type": "openai",
-      "name": "OpenAI",
-      "enabled": true,
-      "priority": 1,
-      "apiKey": "sk-...",
-      "baseUrl": "https://api.openai.com/v1",
-      "defaultModel": "gpt-4",
-      "models": ["gpt-4", "gpt-3.5-turbo"],
-      "timeout": 30000
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "providers": [
+      {
+        "id": "openai-default",
+        "type": "openai",
+        "name": "OpenAI",
+        "enabled": true,
+        "priority": 1,
+        "apiKey": "sk-...",
+        "baseUrl": "https://api.openai.com/v1",
+        "defaultModel": "gpt-4",
+        "models": ["gpt-4", "gpt-3.5-turbo"],
+        "timeout": 30000
+      }
+    ],
+    "capabilities": {
+      "text.chat": {
+        "providers": [
+          {
+            "providerId": "openai-default",
+            "enabled": true,
+            "priority": 1,
+            "models": ["gpt-4"]
+          }
+        ],
+        "promptTemplate": "You are a helpful assistant."
+      }
+    },
+    "globalConfig": {
+      "defaultStrategy": "adaptive-default",
+      "enableAudit": true,
+      "enableCache": false,
+      "cacheExpiration": 3600000
     }
-  ],
-  "capabilities": {
-    "text.chat": {
-      "providers": [
-        {
-          "providerId": "openai-default",
-          "enabled": true,
-          "priority": 1,
-          "models": ["gpt-4"]
-        }
-      ],
-      "promptTemplate": "You are a helpful assistant."
-    }
-  },
-  "globalConfig": {
-    "defaultStrategy": "adaptive-default",
-    "enableAudit": true,
-    "enableCache": false,
-    "cacheExpiration": 3600000
   }
-}
-```
+---
+:::
 
 **Capability Routing**
 
@@ -195,15 +213,18 @@ Each capability can be configured with:
 
 **Location**: `apps/core-app/src/main/modules/ai/intelligence-config.ts`
 
-```typescript
-export function ensureAiConfigLoaded(force?: boolean): void
-export function getCapabilityOptions(capabilityId: string): {
-  allowedProviderIds?: string[]
-  modelPreference?: string[]
-  promptTemplate?: string
-}
-export function getCapabilityPrompt(capabilityId: string): string | undefined
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  export function ensureAiConfigLoaded(force?: boolean): void
+  export function getCapabilityOptions(capabilityId: string): {
+    allowedProviderIds?: string[]
+    modelPreference?: string[]
+    promptTemplate?: string
+  }
+  export function getCapabilityPrompt(capabilityId: string): string | undefined
+---
+:::
 
 Configuration is loaded:
 1. On module initialization
@@ -214,94 +235,103 @@ Configuration is loaded:
 
 **1. Capability Invocation**
 
-```typescript
-// User code
-const result = await intelligence.text.chat({
-  messages: [{ role: 'user', content: 'Hello' }]
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // User code
+  const result = await intelligence.text.chat({
+    messages: [{ role: 'user', content: 'Hello' }]
+  })
+---
+:::
 
 **2. SDK Processing**
 
-```typescript
-// intelligence-sdk.ts
-async invoke(capabilityId, payload, options) {
-  // 1. Validate capability exists
-  const capability = aiCapabilityRegistry.get(capabilityId)
-  
-  // 2. Load capability routing config
-  const routing = config.capabilities[capabilityId]
-  
-  // 3. Merge runtime options with config
-  const runtimeOptions = mergeOptions(options, routing)
-  
-  // 4. Check cache (if enabled)
-  if (enableCache && !stream) {
-    const cached = getFromCache(cacheKey)
-    if (cached) return cached
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // intelligence-sdk.ts
+  async invoke(capabilityId, payload, options) {
+    // 1. Validate capability exists
+    const capability = aiCapabilityRegistry.get(capabilityId)
+    
+    // 2. Load capability routing config
+    const routing = config.capabilities[capabilityId]
+    
+    // 3. Merge runtime options with config
+    const runtimeOptions = mergeOptions(options, routing)
+    
+    // 4. Check cache (if enabled)
+    if (enableCache && !stream) {
+      const cached = getFromCache(cacheKey)
+      if (cached) return cached
+    }
+    
+    // 5. Get enabled providers that support this capability
+    const availableProviders = filterProviders(capability, runtimeOptions)
+    
+    // 6. Select provider via strategy
+    const { selectedProvider, fallbackProviders } = 
+      await strategyManager.select({
+        capabilityId,
+        options: runtimeOptions,
+        availableProviders
+      })
+    
+    // 7. Invoke provider
+    const provider = providerManager.get(selectedProvider.id)
+    const result = await provider[capability.type](payload, runtimeOptions)
+    
+    // 8. Cache result (if enabled)
+    if (enableCache) setToCache(cacheKey, result)
+    
+    // 9. Audit log (if enabled)
+    if (enableAudit) await logAudit(...)
+    
+    return result
   }
-  
-  // 5. Get enabled providers that support this capability
-  const availableProviders = filterProviders(capability, runtimeOptions)
-  
-  // 6. Select provider via strategy
-  const { selectedProvider, fallbackProviders } = 
-    await strategyManager.select({
-      capabilityId,
-      options: runtimeOptions,
-      availableProviders
-    })
-  
-  // 7. Invoke provider
-  const provider = providerManager.get(selectedProvider.id)
-  const result = await provider[capability.type](payload, runtimeOptions)
-  
-  // 8. Cache result (if enabled)
-  if (enableCache) setToCache(cacheKey, result)
-  
-  // 9. Audit log (if enabled)
-  if (enableAudit) await logAudit(...)
-  
-  return result
-}
-```
+---
+:::
 
 **3. Provider Execution**
 
-```typescript
-// providers/openai-provider.ts
-async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions) {
-  const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${this.config.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: payload.model || this.config.defaultModel,
-      messages: payload.messages,
-      temperature: payload.temperature,
-      max_tokens: payload.maxTokens
-    }),
-    signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
-  })
-  
-  const data = await response.json()
-  
-  return {
-    result: data.choices[0].message.content,
-    usage: {
-      promptTokens: data.usage.prompt_tokens,
-      completionTokens: data.usage.completion_tokens,
-      totalTokens: data.usage.total_tokens
-    },
-    model: data.model,
-    latency: Date.now() - startTime,
-    traceId: generateTraceId(),
-    provider: this.config.id
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // providers/openai-provider.ts
+  async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions) {
+    const response = await fetch(`${this.config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: payload.model || this.config.defaultModel,
+        messages: payload.messages,
+        temperature: payload.temperature,
+        max_tokens: payload.maxTokens
+      }),
+      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
+    })
+    
+    const data = await response.json()
+    
+    return {
+      result: data.choices[0].message.content,
+      usage: {
+        promptTokens: data.usage.prompt_tokens,
+        completionTokens: data.usage.completion_tokens,
+        totalTokens: data.usage.total_tokens
+      },
+      model: data.model,
+      latency: Date.now() - startTime,
+      traceId: generateTraceId(),
+      provider: this.config.id
+    }
   }
-}
-```
+---
+:::
 
 ## Prompt Management
 
@@ -311,49 +341,58 @@ async chat(payload: IntelligenceChatPayload, options: IntelligenceInvokeOptions)
 
 Prompts are stored as JSON files with metadata:
 
-```json
-{
-  "id": "summarize-article",
-  "name": "Article Summarization",
-  "category": "text",
-  "description": "Summarize articles with key points",
-  "content": "You are an expert at summarizing articles...",
-  "variables": ["article", "maxLength"],
-  "builtin": false,
-  "createdAt": 1703001234567,
-  "updatedAt": 1703001234567
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "summarize-article",
+    "name": "Article Summarization",
+    "category": "text",
+    "description": "Summarize articles with key points",
+    "content": "You are an expert at summarizing articles...",
+    "variables": ["article", "maxLength"],
+    "builtin": false,
+    "createdAt": 1703001234567,
+    "updatedAt": 1703001234567
+  }
+---
+:::
 
 **Prompt Manager**
 
 **Location**: `apps/core-app/src/renderer/src/modules/intelligence/prompt-manager.ts`
 
-```typescript
-class PromptManager {
-  loadPrompts(): void
-  addCustomPrompt(prompt: Partial<PromptTemplate>): string
-  updatePrompt(id: string, updates: Partial<PromptTemplate>): boolean
-  deleteCustomPrompt(id: string): boolean
-  getPrompt(id: string): PromptTemplate | undefined
-  exportCustomPrompts(): PromptTemplate[]
-  importPrompts(prompts: PromptTemplate[]): number
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class PromptManager {
+    loadPrompts(): void
+    addCustomPrompt(prompt: Partial<PromptTemplate>): string
+    updatePrompt(id: string, updates: Partial<PromptTemplate>): boolean
+    deleteCustomPrompt(id: string): boolean
+    getPrompt(id: string): PromptTemplate | undefined
+    exportCustomPrompts(): PromptTemplate[]
+    importPrompts(prompts: PromptTemplate[]): number
+  }
+---
+:::
 
 **Capability-Prompt Binding**
 
 Prompts can be bound to capabilities in the configuration:
 
-```json
-{
-  "capabilities": {
-    "text.summarize": {
-      "promptTemplate": "{{prompt:summarize-article}}"
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "capabilities": {
+      "text.summarize": {
+        "promptTemplate": "{{prompt:summarize-article}}"
+      }
     }
   }
-}
-```
+---
+:::
 
 ## Testing System
 
@@ -363,62 +402,71 @@ Prompts can be bound to capabilities in the configuration:
 
 Each capability has a dedicated tester:
 
-```typescript
-interface CapabilityTester {
-  generateTestPayload(options?: any): Promise<any>
-  formatTestResult(result: IntelligenceInvokeResult): CapabilityTestResult
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface CapabilityTester {
+    generateTestPayload(options?: any): Promise<any>
+    formatTestResult(result: IntelligenceInvokeResult): CapabilityTestResult
+  }
+---
+:::
 
 **Example**: Text Chat Tester
 
-```typescript
-class TextChatTester implements CapabilityTester {
-  async generateTestPayload({ userInput }) {
-    return {
-      messages: [
-        { role: 'user', content: userInput || 'Hello! Please respond with a greeting.' }
-      ],
-      maxTokens: 100
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class TextChatTester implements CapabilityTester {
+    async generateTestPayload({ userInput }) {
+      return {
+        messages: [
+          { role: 'user', content: userInput || 'Hello! Please respond with a greeting.' }
+        ],
+        maxTokens: 100
+      }
+    }
+    
+    formatTestResult(result) {
+      return {
+        success: true,
+        message: result.result,
+        latency: result.latency,
+        model: result.model,
+        provider: result.provider
+      }
     }
   }
-  
-  formatTestResult(result) {
-    return {
-      success: true,
-      message: result.result,
-      latency: result.latency,
-      model: result.model,
-      provider: result.provider
-    }
-  }
-}
-```
+---
+:::
 
 **Test Execution**
 
-```typescript
-// Main process
-channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
-  const { capabilityId, providerId, userInput } = data
-  
-  // Get tester
-  const tester = capabilityTesterRegistry.get(capabilityId)
-  
-  // Generate test payload
-  const payload = await tester.generateTestPayload({ providerId, userInput })
-  
-  // Execute test
-  const result = await ai.invoke(capabilityId, payload, {
-    allowedProviderIds: providerId ? [providerId] : undefined
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // Main process
+  channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
+    const { capabilityId, providerId, userInput } = data
+    
+    // Get tester
+    const tester = capabilityTesterRegistry.get(capabilityId)
+    
+    // Generate test payload
+    const payload = await tester.generateTestPayload({ providerId, userInput })
+    
+    // Execute test
+    const result = await ai.invoke(capabilityId, payload, {
+      allowedProviderIds: providerId ? [providerId] : undefined
+    })
+    
+    // Format result
+    const formattedResult = tester.formatTestResult(result)
+    
+    reply(DataCode.SUCCESS, { ok: true, result: formattedResult })
   })
-  
-  // Format result
-  const formattedResult = tester.formatTestResult(result)
-  
-  reply(DataCode.SUCCESS, { ok: true, result: formattedResult })
-})
-```
+---
+:::
 
 ## Audit & Monitoring
 
@@ -428,21 +476,24 @@ channel.regChannel('intelligence:test-capability', async ({ data, reply }) => {
 
 Tracks all AI invocations for monitoring and debugging:
 
-```typescript
-interface IntelligenceAuditLogEntry {
-  traceId: string
-  timestamp: number
-  capabilityId: string
-  provider: string
-  model: string
-  usage: TokenUsage
-  latency: number
-  success: boolean
-  error?: string
-  caller?: string
-  userId?: string
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceAuditLogEntry {
+    traceId: string
+    timestamp: number
+    capabilityId: string
+    provider: string
+    model: string
+    usage: TokenUsage
+    latency: number
+    success: boolean
+    error?: string
+    caller?: string
+    userId?: string
+  }
+---
+:::
 
 **Quota Manager**
 
@@ -450,13 +501,16 @@ interface IntelligenceAuditLogEntry {
 
 Manages usage quotas and rate limiting:
 
-```typescript
-class IntelligenceQuotaManager {
-  async checkQuota(caller: string): Promise<QuotaCheckResult>
-  async recordUsage(caller: string, usage: TokenUsage): Promise<void>
-  async getUsageStats(caller: string): Promise<UsageStats>
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class IntelligenceQuotaManager {
+    async checkQuota(caller: string): Promise<QuotaCheckResult>
+    async recordUsage(caller: string, usage: TokenUsage): Promise<void>
+    async getUsageStats(caller: string): Promise<UsageStats>
+  }
+---
+:::
 
 ## IPC Channels
 
@@ -470,20 +524,23 @@ class IntelligenceQuotaManager {
 
 **Renderer Process Hooks**
 
-```typescript
-// useIntelligence composable
-const { text, vision, code, analysis, embedding, rag, agent } = useIntelligence()
-
-// Direct invocation
-await text.chat({ messages: [...] })
-
-// With options
-await text.chat({ messages: [...] }, {
-  preferredProviderId: 'openai-default',
-  modelPreference: ['gpt-4'],
-  timeout: 30000
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  // useIntelligence composable
+  const { text, vision, code, analysis, embedding, rag, agent } = useIntelligence()
+  
+  // Direct invocation
+  await text.chat({ messages: [...] })
+  
+  // With options
+  await text.chat({ messages: [...] }, {
+    preferredProviderId: 'openai-default',
+    modelPreference: ['gpt-4'],
+    timeout: 30000
+  })
+---
+:::
 
 ## Best Practices
 
@@ -521,49 +578,58 @@ await text.chat({ messages: [...] }, {
 
 Create custom provider adapters:
 
-```typescript
-class CustomProvider implements IntelligenceProviderAdapter {
-  async chat(payload, options) {
-    // Custom implementation
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class CustomProvider implements IntelligenceProviderAdapter {
+    async chat(payload, options) {
+      // Custom implementation
+    }
+    
+    async translate(payload, options) {
+      // Custom implementation
+    }
+    
+    // ... other capabilities
   }
   
-  async translate(payload, options) {
-    // Custom implementation
-  }
-  
-  // ... other capabilities
-}
-
-// Register factory
-providerManager.registerFactory('custom', (config) => {
-  return new CustomProvider(config)
-})
-```
+  // Register factory
+  providerManager.registerFactory('custom', (config) => {
+    return new CustomProvider(config)
+  })
+---
+:::
 
 **Custom Capabilities**
 
 Register new capabilities:
 
-```typescript
-aiCapabilityRegistry.register({
-  id: 'custom.capability',
-  type: 'custom-type',
-  name: 'Custom Capability',
-  description: 'My custom AI capability',
-  supportedProviders: [IntelligenceProviderType.CUSTOM]
-})
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  aiCapabilityRegistry.register({
+    id: 'custom.capability',
+    type: 'custom-type',
+    name: 'Custom Capability',
+    description: 'My custom AI capability',
+    supportedProviders: [IntelligenceProviderType.CUSTOM]
+  })
+---
+:::
 
 **Custom Strategies**
 
 Implement custom provider selection strategies:
 
-```typescript
-class CustomStrategy implements StrategyManager {
-  async select(request: StrategySelectionRequest): Promise<StrategySelectionResult> {
-    // Custom selection logic
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  class CustomStrategy implements StrategyManager {
+    async select(request: StrategySelectionRequest): Promise<StrategySelectionResult> {
+      // Custom selection logic
+    }
   }
-}
-
-strategyManager.setDefaultStrategy('custom-strategy')
-```
+  
+  strategyManager.setDefaultStrategy('custom-strategy')
+---
+:::

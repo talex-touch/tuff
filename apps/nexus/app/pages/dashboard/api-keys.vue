@@ -113,6 +113,16 @@ async function copyKey() {
   setTimeout(() => { copied.value = false }, 2000)
 }
 
+function toggleScope(scopeId: string, enabled: boolean) {
+  const current = newKeyScopes.value
+  if (enabled) {
+    if (!current.includes(scopeId))
+      newKeyScopes.value = [...current, scopeId]
+    return
+  }
+  newKeyScopes.value = current.filter(item => item !== scopeId)
+}
+
 function formatDate(date: string | null): string {
   if (!date)
     return '-'
@@ -156,13 +166,13 @@ const expiryOptions = [
           Manage API keys for CLI tools and integrations
         </p>
       </div>
-      <button
-        class="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-black dark:hover:bg-light/80"
+      <Button
+        variant="primary"
         @click="showCreateModal = true"
       >
         <span class="i-carbon-add text-base" />
         Create Key
-      </button>
+      </Button>
     </div>
 
     <!-- Newly Created Key Alert -->
@@ -179,20 +189,21 @@ const expiryOptions = [
             <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-light">
               {{ newlyCreatedKey.secretKey }}
             </code>
-            <button
-              class="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-700"
-              @click="copyKey"
-            >
+            <Button size="small" variant="success" @click="copyKey">
               {{ copied ? 'Copied!' : 'Copy' }}
-            </button>
+            </Button>
           </div>
         </div>
-        <button
+        <TxButton
+          variant="bare"
+          circle
+          size="mini"
+          native-type="button"
           class="text-green-600/60 transition hover:text-green-600"
           @click="newlyCreatedKey = null"
         >
           <span class="i-carbon-close text-lg" />
-        </button>
+        </TxButton>
       </div>
     </div>
 
@@ -248,12 +259,16 @@ const expiryOptions = [
             </div>
           </div>
         </div>
-        <button
+        <TxButton
+          variant="bare"
+          circle
+          size="mini"
+          native-type="button"
           class="rounded-lg p-2 text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
           @click="deleteKey(key.id)"
         >
           <span class="i-carbon-trash-can text-lg" />
-        </button>
+        </TxButton>
       </div>
     </div>
 
@@ -268,12 +283,9 @@ const expiryOptions = [
       <p class="mt-1 text-sm text-black/50 dark:text-light/50">
         Create an API key to use with tuffcli and other integrations
       </p>
-      <button
-        class="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-black/80 dark:bg-light dark:text-black"
-        @click="showCreateModal = true"
-      >
+      <Button variant="primary" class="mt-4" @click="showCreateModal = true">
         Create Your First Key
-      </button>
+      </Button>
     </div>
 
     <!-- Create Modal -->
@@ -297,12 +309,12 @@ const expiryOptions = [
               <label class="mb-1 block text-xs font-medium text-black/60 dark:text-light/60">
                 Key Name
               </label>
-              <input
+              <Input
                 v-model="newKeyName"
                 type="text"
                 placeholder="e.g., My Laptop, CI/CD"
-                class="w-full rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
-              >
+                class="w-full"
+              />
             </div>
 
             <!-- Scopes -->
@@ -316,12 +328,11 @@ const expiryOptions = [
                   :key="scope.id"
                   class="flex cursor-pointer items-start gap-3 rounded-lg bg-black/5 p-3 transition hover:bg-black/10 dark:bg-light/5 dark:hover:bg-light/10"
                 >
-                  <input
-                    v-model="newKeyScopes"
-                    type="checkbox"
-                    :value="scope.id"
+                  <TxCheckbox
                     class="mt-0.5"
-                  >
+                    :model-value="newKeyScopes.includes(scope.id)"
+                    @change="(value) => toggleScope(scope.id, value)"
+                  />
                   <div>
                     <p class="text-sm font-medium text-black dark:text-light">{{ scope.label }}</p>
                     <p class="text-xs text-black/50 dark:text-light/50">{{ scope.description }}</p>
@@ -335,31 +346,33 @@ const expiryOptions = [
               <label class="mb-1 block text-xs font-medium text-black/60 dark:text-light/60">
                 Expiration
               </label>
-              <select
-                v-model="newKeyExpiry"
-                class="w-full rounded-lg border-0 bg-black/5 px-3 py-2 text-sm text-black outline-none dark:bg-light/5 dark:text-light"
-              >
-                <option v-for="opt in expiryOptions" :key="opt.value ?? 'never'" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+              <TuffSelect v-model="newKeyExpiry" class="w-full">
+                <TuffSelectItem
+                  v-for="opt in expiryOptions"
+                  :key="opt.value ?? 'never'"
+                  :value="opt.value"
+                  :label="opt.label"
+                />
+              </TuffSelect>
             </div>
           </div>
 
           <div class="mt-6 flex gap-3">
-            <button
-              class="flex-1 rounded-lg bg-black/5 py-2 text-sm font-medium text-black/60 transition hover:bg-black/10 dark:bg-light/5 dark:text-light/60"
+            <Button
+              variant="secondary"
+              class="flex-1"
               @click="showCreateModal = false"
             >
               Cancel
-            </button>
-            <button
-              class="flex-1 rounded-lg bg-black py-2 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-light dark:text-black"
+            </Button>
+            <Button
+              variant="primary"
+              class="flex-1"
               :disabled="!newKeyName.trim() || creating"
               @click="createKey"
             >
               {{ creating ? 'Creating...' : 'Create Key' }}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

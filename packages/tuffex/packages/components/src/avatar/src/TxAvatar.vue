@@ -23,14 +23,68 @@ interface Emits {
 
 const imageError = ref(false)
 
-const customStyle = computed(() => {
-  if (props.backgroundColor) {
-    return {
-      '--tx-avatar-bg': props.backgroundColor,
-      '--tx-avatar-text': props.textColor || '#ffffff',
-    }
+const sizePresets = new Set(['small', 'medium', 'large', 'xlarge'])
+
+const normalizedSize = computed(() => {
+  const size = props.size
+  if (typeof size === 'number') {
+    return size > 0 ? size : null
   }
-  return {}
+
+  if (typeof size === 'string') {
+    if (sizePresets.has(size))
+      return null
+
+    const pxMatch = size.match(/^(\d+(?:\.\d+)?)px$/)
+    if (pxMatch) {
+      const value = Number(pxMatch[1])
+      return value > 0 ? value : null
+    }
+
+    const value = Number(size)
+    if (!Number.isNaN(value) && value > 0)
+      return value
+  }
+
+  return null
+})
+
+const sizeClass = computed(() => {
+  const size = props.size
+  if (typeof size === 'string' && sizePresets.has(size))
+    return `tx-avatar--${size}`
+
+  return undefined
+})
+
+const sizeVars = computed(() => {
+  const size = normalizedSize.value
+  if (!size)
+    return {}
+
+  const statusSize = Math.max(4, Math.round(size * 0.25))
+  const fontSize = Math.round(size * 0.25 + 4)
+  const statusBorder = Math.max(1, Math.round(statusSize * 0.16 * 2) / 2)
+
+  return {
+    '--tx-avatar-size': `${size}px`,
+    '--tx-avatar-font-size': `${fontSize}px`,
+    '--tx-avatar-status-size': `${statusSize}px`,
+    '--tx-avatar-status-border': `${statusBorder}px`,
+  }
+})
+
+const customStyle = computed(() => {
+  const style: Record<string, string> = {
+    ...sizeVars.value,
+  }
+
+  if (props.backgroundColor) {
+    style['--tx-avatar-bg'] = props.backgroundColor
+    style['--tx-avatar-text'] = props.textColor || '#ffffff'
+  }
+
+  return style
 })
 
 const fallbackText = computed(() => {
@@ -64,7 +118,7 @@ function handleClick() {
 <template>
   <div
     class="tx-avatar" :class="[
-      `tx-avatar--${size}`,
+      sizeClass,
       `tx-avatar--${shape}`,
       { 'tx-avatar--clickable': clickable },
     ]"
@@ -99,10 +153,13 @@ function handleClick() {
   align-items: center;
   justify-content: center;
   font-weight: 500;
+  width: var(--tx-avatar-size, var(--tx-avatar-size-preset, auto));
+  height: var(--tx-avatar-size, var(--tx-avatar-size-preset, auto));
+  font-size: var(--tx-avatar-font-size, var(--tx-avatar-font-size-preset, inherit));
   overflow: hidden;
   user-select: none;
-  background: var(--tx-avatar-bg, #f3f4f6);
-  color: var(--tx-avatar-text, #374151);
+  background: var(--tx-avatar-bg, var(--tx-avatar-background, #f3f4f6));
+  color: var(--tx-avatar-text, var(--tx-avatar-color, #374151));
 }
 
 .tx-avatar--circle {
@@ -118,27 +175,31 @@ function handleClick() {
 }
 
 .tx-avatar--small {
-  width: 32px;
-  height: 32px;
-  font-size: 12px;
+  --tx-avatar-size-preset: 32px;
+  --tx-avatar-font-size-preset: 12px;
+  --tx-avatar-status-size-preset: 8px;
+  --tx-avatar-status-border-preset: 1.5px;
 }
 
 .tx-avatar--medium {
-  width: 40px;
-  height: 40px;
-  font-size: 14px;
+  --tx-avatar-size-preset: 40px;
+  --tx-avatar-font-size-preset: 14px;
+  --tx-avatar-status-size-preset: 10px;
+  --tx-avatar-status-border-preset: 2px;
 }
 
 .tx-avatar--large {
-  width: 48px;
-  height: 48px;
-  font-size: 16px;
+  --tx-avatar-size-preset: 48px;
+  --tx-avatar-font-size-preset: 16px;
+  --tx-avatar-status-size-preset: 12px;
+  --tx-avatar-status-border-preset: 2px;
 }
 
 .tx-avatar--xlarge {
-  width: 64px;
-  height: 64px;
-  font-size: 20px;
+  --tx-avatar-size-preset: 64px;
+  --tx-avatar-font-size-preset: 20px;
+  --tx-avatar-status-size-preset: 16px;
+  --tx-avatar-status-border-preset: 2.5px;
 }
 
 .tx-avatar--clickable {
@@ -178,34 +239,10 @@ function handleClick() {
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 12px;
-  height: 12px;
+  width: var(--tx-avatar-status-size, var(--tx-avatar-status-size-preset, 12px));
+  height: var(--tx-avatar-status-size, var(--tx-avatar-status-size-preset, 12px));
   border-radius: 50%;
-  border: 2px solid #ffffff;
-}
-
-.tx-avatar--small .tx-avatar__status {
-  width: 8px;
-  height: 8px;
-  border-width: 1.5px;
-}
-
-.tx-avatar--medium .tx-avatar__status {
-  width: 10px;
-  height: 10px;
-  border-width: 2px;
-}
-
-.tx-avatar--large .tx-avatar__status {
-  width: 12px;
-  height: 12px;
-  border-width: 2px;
-}
-
-.tx-avatar--xlarge .tx-avatar__status {
-  width: 16px;
-  height: 16px;
-  border-width: 2.5px;
+  border: var(--tx-avatar-status-border, var(--tx-avatar-status-border-preset, 2px)) solid #ffffff;
 }
 
 .tx-avatar__status--online {

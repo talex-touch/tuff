@@ -51,54 +51,46 @@ const richContent = ref(
 
 ## 基础用法
 
-<DemoBlock title="MarkdownView">
-<template #preview>
-<div style="width: 560px; padding: 12px; border-radius: 14px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);">
-  <TxMarkdownView :content="content" />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxMarkdownView :content="content" />
-</template>
-```
-</template>
-</DemoBlock>
+### MarkdownView
+:::TuffDemoWrapper{demo="MarkdownViewMarkdownViewDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMarkdownView :content="content" />
+  </template>
+---
+:::
 
 ## 渲染示例
 
-<DemoBlock title="常见 Markdown 结构">
-<template #preview>
-<div style="width: 680px; padding: 12px; border-radius: 14px; border: 1px solid var(--tx-border-color-lighter); background: var(--tx-fill-color-blank);">
-  <TxMarkdownView :content="richContent" />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxMarkdownView :content="richContent" />
-</template>
-```
-</template>
-</DemoBlock>
+### 常见 Markdown 结构
+:::TuffDemoWrapper{demo="MarkdownViewMarkdownDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxMarkdownView :content="richContent" />
+  </template>
+---
+:::
 
 ## 主题预览
 
-<DemoBlock title="Light / Dark">
-<template #preview>
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; width: 100%;">
-  <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #ffffff;">
-    <TxMarkdownView :content="richContent" theme="light" />
+### Light / Dark
+:::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
+---
+code: |
+  <template>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; width: 100%;">
+    <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #ffffff;">
+      <TxMarkdownView :content="richContent" theme="light" />
+    </div>
+    <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
+      <TxMarkdownView :content="richContent" theme="dark" />
+    </div>
   </div>
-  <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
-    <TxMarkdownView :content="richContent" theme="dark" />
-  </div>
-</div>
-</template>
-</DemoBlock>
+  </template>
+---
+:::
 
 ## API
 

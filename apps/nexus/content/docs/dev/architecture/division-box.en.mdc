@@ -38,12 +38,15 @@ DivisionBox separates CoreBox UI views into standalone windows with session mana
 
 ## 5. Main Flow (Mermaid)
 
-```mermaid
-flowchart LR
-  corebox["CoreBox UI View"] --> transfer["Transfer View"]
-  transfer --> division["DivisionBox Session"]
-  division --> window["TouchWindow + WebContentsView"]
-```
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    corebox["CoreBox UI View"] --> transfer["Transfer View"]
+    transfer --> division["DivisionBox Session"]
+    division --> window["TouchWindow + WebContentsView"]
+---
+:::
 
 ## 6. Related Docs
 

@@ -42,4 +42,24 @@ export default antfu(
       'no-console': 'off',
     },
   },
+  {
+    files: ['**/*.{ts,tsx,mts,js,jsx,vue}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='window']",
+          message: 'Use hasWindow() from @talex-touch/utils/env instead of typeof window.',
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='document']",
+          message: 'Use hasDocument() from @talex-touch/utils/env instead of typeof document.',
+        },
+        {
+          selector: "UnaryExpression[operator='typeof'][argument.name='navigator']",
+          message: 'Use hasNavigator() from @talex-touch/utils/env instead of typeof navigator.',
+        },
+      ],
+    },
+  },
 )

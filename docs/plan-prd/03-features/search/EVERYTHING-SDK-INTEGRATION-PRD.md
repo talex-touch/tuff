@@ -4,6 +4,30 @@
 
 集成 [Everything SDK](https://www.voidtools.com/support/everything/sdk/) 为 Windows 提供即时文件搜索。Everything 是 Windows 上最快的文件搜索工具，基于 NTFS 索引可实现亚毫秒级查询。
 
+## 实施状态（2026-02-08）
+
+> 详细执行轨迹见：`docs/engineering/everything-sdk-rollout-status.md`
+
+### 已完成
+
+- [x] Provider 已支持 `sdk-napi -> cli -> unavailable` 回退链路
+- [x] 设置页已展示 backend / fallback chain / last backend error
+- [x] `everything:status` / `everything:test` 返回 backend 相关字段
+- [x] `packages/tuff-native` 已提供 `everything` 导出与类型声明
+- [x] Windows N-API 查询实现已落地（动态加载 Everything SDK DLL）
+- [x] fallback 单测已补齐（SDK 失败回退、双后端失败降级）
+- [x] 自检脚本已提供：`pnpm -C "packages/tuff-native" run check:everything -- --query "*.txt" --max 10`
+
+### 进行中
+
+- [ ] Windows 真机回归（自检 JSON 留档 + 样本截图）
+- [ ] AI 能力联动第 1 步（将 Everything 检索结果接入 AI 上下文）
+
+### 待办
+
+- [ ] 完善 SDK/CLI 错误码分层与统计
+- [ ] 建立 SDK 与 CLI 性能对照基线
+
 ## 背景
 
 ### Windows 文件搜索现状问题

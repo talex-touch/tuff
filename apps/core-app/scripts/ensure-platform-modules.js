@@ -14,7 +14,8 @@ const baseModules = [
   '@libsql/isomorphic-ws',
   'libsql',
   '@neon-rs/load',
-  'detect-libc'
+  'detect-libc',
+  '@talex-touch/tuff-native'
 ]
 
 const platformModuleMap = {

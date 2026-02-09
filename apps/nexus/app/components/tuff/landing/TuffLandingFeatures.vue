@@ -256,7 +256,9 @@ const extensibility = computed<ExtensibilityContent>(() => ({
 const sdkRows = computed(() => {
   const rows: SdkItem[][] = [[], [], []]
   sdkItems.forEach((item, index) => {
-    rows[index % rows.length].push(item)
+    const row = rows[index % rows.length]
+    if (row)
+      row.push(item)
   })
   return rows
 })

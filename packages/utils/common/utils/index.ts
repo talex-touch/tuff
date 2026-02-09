@@ -53,7 +53,7 @@ export function anyStr2Num(str: string): bigint {
  * ```
  */
 export function num2anyStr(num: bigint): string {
-  const [baseStr, encoded] = num.toString().split('000')
+  const [baseStr, encoded = ''] = num.toString().split('000')
   const base = Number(baseStr)
 
   let result = ''

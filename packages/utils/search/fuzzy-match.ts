@@ -168,17 +168,32 @@ function editDistanceWithPath(
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from({ length: n + 1 }, () => 0))
 
   // Initialize
-  for (let i = 0; i <= m; i++) dp[i][0] = i
-  for (let j = 0; j <= n; j++) dp[0][j] = j
+  for (let i = 0; i <= m; i++) {
+    const row = dp[i]
+    if (row)
+      row[0] = i
+  }
+  const firstRow = dp[0]
+  if (firstRow) {
+    for (let j = 0; j <= n; j++)
+      firstRow[j] = j
+  }
 
   // Fill DP table
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
+      const row = dp[i]
+      const prevRow = dp[i - 1]
+      if (!row || !prevRow)
+        continue
       if (s1[i - 1] === s2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1]
+        row[j] = prevRow[j - 1] ?? 0
       }
       else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1])
+        const up = prevRow[j] ?? 0
+        const left = row[j - 1] ?? 0
+        const diag = prevRow[j - 1] ?? 0
+        row[j] = 1 + Math.min(up, left, diag)
       }
     }
   }
@@ -194,12 +209,13 @@ function editDistanceWithPath(
       i--
       j--
     }
-    else if (dp[i - 1][j - 1] <= dp[i - 1][j] && dp[i - 1][j - 1] <= dp[i][j - 1]) {
+    else if ((dp[i - 1]?.[j - 1] ?? 0) <= (dp[i - 1]?.[j] ?? 0)
+      && (dp[i - 1]?.[j - 1] ?? 0) <= (dp[i]?.[j - 1] ?? 0)) {
       // Substitution
       i--
       j--
     }
-    else if (dp[i - 1][j] <= dp[i][j - 1]) {
+    else if ((dp[i - 1]?.[j] ?? 0) <= (dp[i]?.[j - 1] ?? 0)) {
       // Deletion from s1
       i--
     }
@@ -209,7 +225,7 @@ function editDistanceWithPath(
     }
   }
 
-  return { distance: dp[m][n], matchedIndices }
+  return { distance: dp[m]?.[n] ?? 0, matchedIndices }
 }
 
 /**
@@ -243,17 +259,23 @@ export function indicesToRanges(indices: number[]): Array<{ start: number, end: 
   const sorted = Array.from(new Set(indices)).sort((a, b) => a - b)
   const ranges: Array<{ start: number, end: number }> = []
 
-  let start = sorted[0]
-  let end = sorted[0] + 1
+  const first = sorted[0]
+  if (first === undefined)
+    return []
+  let start = first
+  let end = first + 1
 
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i] === end) {
+    const current = sorted[i]
+    if (current === undefined)
+      continue
+    if (current === end) {
       end++
     }
     else {
       ranges.push({ start, end })
-      start = sorted[i]
-      end = sorted[i] + 1
+      start = current
+      end = current + 1
     }
   }
   ranges.push({ start, end })

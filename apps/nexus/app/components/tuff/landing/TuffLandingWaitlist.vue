@@ -59,14 +59,15 @@ function goToSignIn() {
         <p class="text-base text-white/70 sm:text-lg">
           {{ pioneer.subheadline }}
         </p>
-        <button
-          type="button"
+        <TxButton
+          variant="bare"
+          native-type="button"
           class="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-white px-8 py-3.5 text-sm font-semibold text-black shadow-md transition motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           @click="goToSignIn"
         >
           <span class="i-carbon-login text-base" />
           {{ pioneer.ctaPrimary }}
-        </button>
+        </TxButton>
         <p class="text-xs text-white/55">
           {{ pioneer.guidance }}
         </p>

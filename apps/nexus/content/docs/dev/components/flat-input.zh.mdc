@@ -17,7 +17,9 @@ const secret = ref('')
 </script>
 
 ## 基础用法
-::TuffDemo{title="扁平输入" description="文本与密码输入。" code-lang="vue"}
+### 扁平输入
+文本与密码输入。
+:::TuffDemoWrapper{demo="FlatInputFlatInputDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -32,13 +34,7 @@ code: |
     <FlatInput v-model="secret" placeholder="密码" password />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 12px; max-width: 360px;">
-  <flat-input v-model="text" placeholder="请输入内容" />
-  <flat-input v-model="secret" placeholder="密码" password />
-</div>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

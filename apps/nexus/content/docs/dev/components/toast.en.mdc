@@ -14,7 +14,9 @@ Lightweight notifications (similar to shadcn/sonner). Mount a single `<TxToastHo
 
 ## Basic Usage
 
-::TuffDemo{title="Toast" description="Mount host once, then trigger toasts." code-lang="vue"}
+### Toast
+Mount host once, then trigger toasts.
+:::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -30,20 +32,7 @@ code: |
     </TxButton>
   </template>
 ---
-#preview
-<tuff-toast-demo
-  success-label="Success"
-  warning-label="Warning"
-  error-label="Error"
-  success-title="Saved"
-  success-description="Changes stored"
-  warning-title="Network unstable"
-  warning-description="Retry later"
-  error-title="Save failed"
-  error-description="Check permissions"
-/>
-::
-
+:::
 ## API
 
 ### toast(options)

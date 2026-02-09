@@ -20,6 +20,7 @@ import { appSetting } from '~/modules/channel/storage'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
+import { isUrlLikeClipboardText } from './clipboard-text-utils'
 import { useResize } from './useResize'
 
 interface SearchEndData {
@@ -219,7 +220,10 @@ export function useSearch(
       })
     } else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
       const content = clipboardOptions.last.content ?? ''
-      if (content.length >= MIN_TEXT_ATTACHMENT_LENGTH) {
+      const shouldAttachText =
+        isUrlLikeClipboardText(clipboardOptions.last) ||
+        content.length >= MIN_TEXT_ATTACHMENT_LENGTH
+      if (shouldAttachText) {
         if (clipboardOptions.last.rawContent) {
           inputs.push({
             type: TuffInputType.Html,

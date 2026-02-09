@@ -25,6 +25,7 @@ const addonOpenerLog = createLogger('AddonOpener')
 const authExternalCallbackEvent = defineRawEvent<{ token: string; appToken?: string }, void>(
   'auth:external-callback'
 )
+const authStepUpCallbackEvent = defineRawEvent<{ loginToken: string }, void>('auth:stepup-callback')
 const openPluginEvent = defineRawEvent<string, void>('@open-plugin')
 const installPluginEvent = defineRawEvent<
   { name: string; buffer: Buffer; forceUpdate?: boolean },
@@ -84,6 +85,24 @@ const schemaHandlers: SchemaHandler[] = [
         })
       } else {
         addonOpenerLog.warn('Auth callback received without token')
+      }
+    }
+  },
+  {
+    pattern: /^\/auth\/stepup/,
+    handler: (url) => {
+      const loginToken = url.searchParams.get('login_token') || ''
+      if (loginToken) {
+        addonOpenerLog.debug('Step-up callback received', {
+          meta: { tokenLength: loginToken.length }
+        })
+        const channel = $app.channel
+        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+        void transport.sendTo($app.window.window.webContents, authStepUpCallbackEvent, {
+          loginToken
+        })
+      } else {
+        addonOpenerLog.warn('Step-up callback received without token')
       }
     }
   }

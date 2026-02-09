@@ -13,10 +13,12 @@ import { ProgressTracker } from './progress-tracker'
 export class DownloadWorker {
   private readonly maxConcurrent: number
   private activeTasks: Set<string> = new Set()
+  private cancelledTasks: Set<string> = new Set()
   private networkMonitor: NetworkMonitor
   private chunkManager: ChunkManager
   private config: DownloadConfig
   private progressTrackers: Map<string, ProgressTracker> = new Map()
+  private taskAbortControllers: Map<string, AbortController> = new Map()
 
   constructor(
     maxConcurrent: number,
@@ -43,7 +45,17 @@ export class DownloadWorker {
       throw new Error('Maximum concurrent downloads reached')
     }
 
+    // Check if task was cancelled before starting
+    if (this.cancelledTasks.has(task.id)) {
+      this.cancelledTasks.delete(task.id)
+      throw new Error(`Task ${task.id} was cancelled`)
+    }
+
     this.activeTasks.add(task.id)
+
+    // Create abort controller for cancellation
+    const abortController = new AbortController()
+    this.taskAbortControllers.set(task.id, abortController)
 
     // 创建进度跟踪器
     const progressTracker = new ProgressTracker(task.id, {
@@ -62,10 +74,18 @@ export class DownloadWorker {
     this.progressTrackers.set(task.id, progressTracker)
 
     try {
-      await this.downloadTask(task, progressTracker, onProgress)
+      await this.downloadTask(task, progressTracker, onProgress, abortController.signal)
+    } catch (error) {
+      // Check if error is due to cancellation
+      if (this.cancelledTasks.has(task.id) || abortController.signal.aborted) {
+        throw new Error(`Task ${task.id} was cancelled`)
+      }
+      throw error
     } finally {
       this.activeTasks.delete(task.id)
       this.progressTrackers.delete(task.id)
+      this.taskAbortControllers.delete(task.id)
+      this.cancelledTasks.delete(task.id)
     }
   }
 
@@ -84,16 +104,26 @@ export class DownloadWorker {
 
   // 取消下载任务
   async cancelTask(taskId: string): Promise<void> {
-    // 实现取消逻辑
+    this.cancelledTasks.add(taskId)
+
+    // Abort the task if it's active
+    const abortController = this.taskAbortControllers.get(taskId)
+    if (abortController) {
+      abortController.abort()
+    }
+
+    // Remove from active tasks
     this.activeTasks.delete(taskId)
-    console.log(`Cancelling task ${taskId}`)
+    this.progressTrackers.delete(taskId)
+    this.taskAbortControllers.delete(taskId)
   }
 
   // 下载单个任务
   private async downloadTask(
     task: DownloadTask,
     progressTracker: ProgressTracker,
-    onProgress?: (taskId: string, progress: DownloadProgress) => void
+    onProgress?: (taskId: string, progress: DownloadProgress) => void,
+    abortSignal?: AbortSignal
   ): Promise<void> {
     const errorContext = {
       taskId: task.id,
@@ -143,8 +173,13 @@ export class DownloadWorker {
       // 确保临时目录存在（使用配置的临时目录）
       await this.chunkManager.ensureTempDir(task, this.config.storage.tempDir)
 
+      // Check for cancellation before starting chunk downloads
+      if (abortSignal?.aborted) {
+        throw new Error('Task was cancelled')
+      }
+
       // 并发下载切片
-      await this.downloadChunksConcurrently(task, chunks, progressTracker, onProgress)
+      await this.downloadChunksConcurrently(task, chunks, progressTracker, onProgress, abortSignal)
 
       // 验证切片完整性
       const isValid = await this.chunkManager.validateChunks(chunks)
@@ -246,18 +281,35 @@ export class DownloadWorker {
     task: DownloadTask,
     chunks: ChunkInfo[],
     progressTracker: ProgressTracker,
-    _onProgress?: (taskId: string, progress: DownloadProgress) => void
+    _onProgress?: (taskId: string, progress: DownloadProgress) => void,
+    abortSignal?: AbortSignal
   ): Promise<void> {
     const concurrentLimit = Math.min(this.maxConcurrent, chunks.length)
     const semaphore = new Array(concurrentLimit).fill(null)
     let completedChunks = 0
 
     const downloadPromises = chunks.map(async (chunk, index) => {
+      // Check for cancellation before starting chunk download
+      if (abortSignal?.aborted) {
+        throw new Error('Task was cancelled')
+      }
+
       await semaphore[index % concurrentLimit]
-      semaphore[index % concurrentLimit] = this.downloadChunk(chunk, task, progressTracker)
+      semaphore[index % concurrentLimit] = this.downloadChunk(
+        chunk,
+        task,
+        progressTracker,
+        abortSignal
+      )
 
       try {
         await semaphore[index % concurrentLimit]
+
+        // Check for cancellation after chunk download
+        if (abortSignal?.aborted) {
+          throw new Error('Task was cancelled')
+        }
+
         completedChunks++
 
         // 更新进度（通过 ProgressTracker）
@@ -269,6 +321,10 @@ export class DownloadWorker {
           progressTracker.forceUpdate()
         }
       } catch (error) {
+        // Don't throw if task was cancelled - let the cancellation handler deal with it
+        if (abortSignal?.aborted) {
+          return
+        }
         console.error(`Chunk ${chunk.index} download failed:`, error)
         throw error
       }
@@ -281,7 +337,8 @@ export class DownloadWorker {
   private async downloadChunk(
     chunk: ChunkInfo,
     task: DownloadTask,
-    _progressTracker: ProgressTracker
+    _progressTracker: ProgressTracker,
+    abortSignal?: AbortSignal
   ): Promise<void> {
     const maxRetries = this.config.chunk.maxRetries
     let retryCount = 0
@@ -300,6 +357,12 @@ export class DownloadWorker {
     }
 
     while (retryCount <= maxRetries) {
+      // Check for cancellation before each retry
+      if (abortSignal?.aborted) {
+        chunk.status = ChunkStatus.FAILED
+        throw new Error('Task was cancelled')
+      }
+
       try {
         chunk.status = ChunkStatus.DOWNLOADING
 
@@ -313,7 +376,8 @@ export class DownloadWorker {
           },
           responseType: 'stream',
           timeout: this.config.network.timeout,
-          validateStatus: (status) => status === 206 || status === 200 // Accept partial content
+          validateStatus: (status) => status === 206 || status === 200, // Accept partial content
+          signal: abortSignal // Pass abort signal to axios
         }
 
         const response = await axios(config)
@@ -367,6 +431,12 @@ export class DownloadWorker {
         if (retryCount > maxRetries) {
           chunk.status = ChunkStatus.FAILED
           throw downloadError
+        }
+
+        // Check for cancellation before retry delay
+        if (abortSignal?.aborted) {
+          chunk.status = ChunkStatus.FAILED
+          throw new Error('Task was cancelled')
         }
 
         // 等待重试

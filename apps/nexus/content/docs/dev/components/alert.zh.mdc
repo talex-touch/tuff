@@ -10,7 +10,9 @@ syncStatus: migrated
 用于展示提示或状态信息，强调当前状态的可见性。
 
 ## 基础用法
-::TuffDemo{title="提示类型" description="信息 / 成功 / 警告 / 错误。" code-lang="vue"}
+### 提示类型
+信息 / 成功 / 警告 / 错误。
+:::TuffDemoWrapper{demo="AlertAlertVariantsDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -20,15 +22,7 @@ code: |
     <TxAlert title="失败" message="保存失败。" type="error" />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 12px;">
-  <tx-alert title="提示" message="检查一下配置项。" type="info" />
-  <tx-alert title="成功" message="已保存。" type="success" />
-  <tx-alert title="注意" message="有需要处理的内容。" type="warning" />
-  <tx-alert title="失败" message="保存失败。" type="error" />
-</div>
 :::
-
 ## API（Lite）
 ::TuffPropsTable
 ---

@@ -35,9 +35,13 @@ function toneClass(type: string) {
               {{ toast.message }}
             </p>
           </div>
-          <button
-            type="button"
-            class="i-carbon-close text-xs opacity-60 transition hover:opacity-100"
+          <TxButton
+            circle
+            size="mini"
+            variant="bare"
+            native-type="button"
+            icon="i-carbon-close"
+            class="opacity-60 transition hover:opacity-100"
             aria-label="Dismiss"
             @click="remove(toast.id)"
           />

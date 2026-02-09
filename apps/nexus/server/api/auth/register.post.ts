@@ -3,12 +3,14 @@ import { useRuntimeConfig } from '#imports'
 import { createUser, createVerificationToken, getUserByEmail, setUserPassword } from '../../utils/authStore'
 import { ensurePersonalTeam } from '../../utils/creditsStore'
 import { sendEmail } from '../../utils/email'
+import { verifyTurnstileToken } from '../../utils/turnstile'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const password = typeof body?.password === 'string' ? body.password : ''
   const name = typeof body?.name === 'string' ? body.name.trim() : null
+  const turnstileToken = body?.turnstileToken
 
   if (!email || !email.includes('@')) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid email.' })
@@ -17,12 +19,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Password too short.' })
   }
 
+  await verifyTurnstileToken(event, {
+    token: turnstileToken,
+    action: 'signup',
+  })
+
   const existing = await getUserByEmail(event, email)
   if (existing) {
     throw createError({ statusCode: 400, statusMessage: 'Email already registered.' })
   }
 
-  const user = await createUser(event, { email, name })
+  const user = await createUser(event, { email, name, emailState: 'unverified' })
   await setUserPassword(event, user.id, password)
   await ensurePersonalTeam(event, user.id)
 

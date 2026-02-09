@@ -1,91 +1,76 @@
 ---
-title: "CommandPalette 命令面板"
-description: "用于全局快捷指令/搜索的命令面板。"
+title: "CommandPalette"
+description: "Global command/search palette for quick actions."
 category: Form
 syncStatus: migrated
 ---
-# CommandPalette 命令面板
+# CommandPalette
 
-用于全局快捷指令/搜索的命令面板。
+A global command palette for quick actions and search.
 
-<script setup lang="ts">
-import { ref } from 'vue'
+## Basic Usage
 
-const open = ref(false)
-const selected = ref('')
+::TuffDemoWrapper{demo="CommandPaletteCommandPaletteDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
 
-const commands = [
-  { id: 'open', title: 'Open File', description: '打开文件', shortcut: '⌘O' },
-  { id: 'search', title: 'Search', description: '全局搜索', shortcut: '⌘K' },
-  { id: 'settings', title: 'Settings', description: '应用设置', shortcut: '⌘,' },
-]
+  const open = ref(false)
+  const selected = ref('')
 
-function onSelect(cmd: { title: string }) {
-  selected.value = cmd.title
-}
-</script>
+  const commands = [
+    { id: 'open', title: 'Open File', description: 'Quickly open a file', shortcut: 'Cmd/Ctrl+O' },
+    { id: 'search', title: 'Global Search', description: 'Search across content', shortcut: 'Cmd/Ctrl+K' },
+    { id: 'settings', title: 'Settings', description: 'Open preferences', shortcut: 'Cmd/Ctrl+,' },
+  ]
 
-## 基础用法
+  function onSelect(command: { title: string }) {
+    selected.value = command.title
+  }
+  </script>
 
-<ClientOnly>
-<div class="group" style="max-width: 360px;">
-  <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
-  <span style="margin-left: 8px; font-size: 12px; color: var(--tx-text-color-secondary, #909399);">
-    选中：{{ selected || '—' }}
-  </span>
-</div>
-
-<TxCommandPalette v-model="open" :commands="commands" @select="onSelect" />
-</ClientOnly>
-
-::: details Show Code
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-const commands = [{ id: 'open', title: 'Open File' }]
-</script>
-
-<template>
-  <TxButton variant="primary" @click="open = true">打开命令面板</TxButton>
-  <TxCommandPalette v-model="open" :commands="commands" />
-</template>
-```
-:::
+  <template>
+    <TxButton variant="primary" @click="open = true">
+      Open command palette
+    </TxButton>
+    <TxCommandPalette v-model="open" :commands="commands" @select="onSelect" />
+  </template>
+---
+::
 
 ## API
 
 ### TxCommandPalette Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Name | Type | Default | Description |
 |------|------|------|------|
-| `modelValue` | `boolean` | - | 显示状态 |
-| `commands` | `CommandPaletteItem[]` | `[]` | 命令列表 |
-| `placeholder` | `string` | `'Search commands'` | 搜索占位 |
-| `emptyText` | `string` | `'No commands found'` | 空提示 |
-| `maxHeight` | `number` | `320` | 列表最大高度 |
-| `autoFocus` | `boolean` | `true` | 自动聚焦 |
-| `closeOnSelect` | `boolean` | `true` | 选中后关闭 |
+| `modelValue` | `boolean` | - | Visibility state |
+| `commands` | `CommandPaletteItem[]` | `[]` | Command list |
+| `placeholder` | `string` | `'Search commands'` | Search placeholder |
+| `emptyText` | `string` | `'No commands found'` | Empty text |
+| `maxHeight` | `number` | `320` | Max list height |
+| `autoFocus` | `boolean` | `true` | Auto focus input |
+| `closeOnSelect` | `boolean` | `true` | Close after select |
 
 ### CommandPaletteItem
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `id` | `string` | 唯一标识 |
-| `title` | `string` | 标题 |
-| `description` | `string` | 描述 |
-| `keywords` | `string[]` | 关键词 |
-| `icon` | `TxIconSource \| string` | 图标 |
-| `shortcut` | `string` | 快捷键 |
-| `disabled` | `boolean` | 禁用 |
+| `id` | `string` | Unique id |
+| `title` | `string` | Title |
+| `description` | `string` | Description |
+| `keywords` | `string[]` | Keywords |
+| `icon` | `TxIconSource \| string` | Icon |
+| `shortcut` | `string` | Shortcut |
+| `disabled` | `boolean` | Disabled state |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Payload | Description |
 |------|------|------|
-| `update:modelValue` | `(value)` | 显示状态 |
-| `select` | `(item)` | 选中命令 |
-| `open` | - | 打开 |
-| `close` | - | 关闭 |
-| `update:query` | `(value)` | 搜索输入 |
+| `update:modelValue` | `(value)` | Visibility state |
+| `select` | `(item)` | Select command |
+| `open` | - | Opened |
+| `close` | - | Closed |
+| `update:query` | `(value)` | Search input update |

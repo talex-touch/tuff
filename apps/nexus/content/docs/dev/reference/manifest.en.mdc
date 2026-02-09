@@ -34,16 +34,19 @@ The permission system controls plugin access to sensitive APIs. See [Permission 
 
 **Declaration Format**
 
-```json
-"permissions": {
-  "required": ["clipboard.read", "network.internet"],
-  "optional": ["storage.shared"]
-},
-"permissionReasons": {
-  "clipboard.read": "Read text from clipboard for translation",
-  "network.internet": "Connect to translation API"
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  "permissions": {
+    "required": ["clipboard.read", "network.internet"],
+    "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+    "clipboard.read": "Read text from clipboard for translation",
+    "network.internet": "Connect to translation API"
+  }
+---
+:::
 
 **Available Permissions**
 
@@ -69,37 +72,40 @@ The permission system controls plugin access to sensitive APIs. See [Permission 
 | `window.capture` | High | Screen capture |
 
 ## Example
-```json
-{
-  "id": "com.tuff.todo",
-  "name": {
-    "default": "Todo",
-    "zh-CN": "待办"
-  },
-  "description": "Capture and sync todos",
-  "version": "1.3.0",
-  "sdkapi": 260114,
-  "category": "utilities",
-  "entry": "init/index.ts",
-  "features": [
-    {
-      "type": "corebox",
-      "id": "todo.new",
-      "title": "Create Todo",
-      "keywords": ["todo", "task"],
-      "queryMode": "text"
-    }
-  ],
-  "permissions": {
-    "required": ["clipboard.read"],
-    "optional": ["storage.shared"]
-  },
-  "permissionReasons": {
-    "clipboard.read": "Read todo content from clipboard"
-  },
-  "acceptedInputTypes": ["text", "files"]
-}
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "id": "com.tuff.todo",
+    "name": {
+      "default": "Todo",
+      "zh-CN": "待办"
+    },
+    "description": "Capture and sync todos",
+    "version": "1.3.0",
+    "sdkapi": 260114,
+    "category": "utilities",
+    "entry": "init/index.ts",
+    "features": [
+      {
+        "type": "corebox",
+        "id": "todo.new",
+        "title": "Create Todo",
+        "keywords": ["todo", "task"],
+        "queryMode": "text"
+      }
+    ],
+    "permissions": {
+      "required": ["clipboard.read"],
+      "optional": ["storage.shared"]
+    },
+    "permissionReasons": {
+      "clipboard.read": "Read todo content from clipboard"
+    },
+    "acceptedInputTypes": ["text", "files"]
+  }
+---
+:::
 
 ## Validation Checklist
 - `id` must be unique and alphanumeric with dots.

@@ -1,9 +1,8 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AgentsEvents } from '@talex-touch/utils/transport/events'
+import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
 import { ElMessage } from 'element-plus'
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -11,38 +10,236 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const transport = useTuffTransport()
+const agentsSdk = useAgentsSdk()
 
 const taskInput = ref('')
 const executing = ref(false)
+const canceling = ref(false)
 const taskResult = ref<unknown>(null)
+const taskError = ref<string | null>(null)
+const currentTaskId = ref<string | null>(null)
+const taskProgress = ref(0)
+const taskStep = ref('')
+
+const STATUS_POLL_INTERVAL_MS = 1500
+let taskStatusPollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopTaskStatusPolling() {
+  if (taskStatusPollTimer) {
+    clearInterval(taskStatusPollTimer)
+    taskStatusPollTimer = null
+  }
+}
+
+function finalizeTaskByPolledStatus(status: string) {
+  const normalized = status.toLowerCase()
+
+  if (normalized === 'completed') {
+    taskProgress.value = Math.max(taskProgress.value, 100)
+    taskStep.value = t('intelligence.agents.task_completed')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+
+    if (!taskResult.value) {
+      ElMessage.info(t('intelligence.agents.task_completed_no_result'))
+    }
+    return
+  }
+
+  if (normalized === 'failed') {
+    taskError.value = t('intelligence.agents.task_failed')
+    taskStep.value = t('intelligence.agents.task_failed')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+    ElMessage.error(taskError.value)
+    return
+  }
+
+  if (normalized === 'cancelled') {
+    taskError.value = t('intelligence.agents.task_cancelled')
+    taskStep.value = t('intelligence.agents.task_cancelled')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+    ElMessage.warning(taskError.value)
+  }
+}
+
+async function pollTaskStatus() {
+  const taskId = currentTaskId.value
+  if (!taskId || !executing.value) {
+    stopTaskStatusPolling()
+    return
+  }
+
+  try {
+    const statusResult = await agentsSdk.getTaskStatus(taskId)
+    finalizeTaskByPolledStatus(statusResult?.status || '')
+  } catch {
+    // Keep retrying during execution; transient query failure should not interrupt UI state.
+  }
+}
+
+function startTaskStatusPolling() {
+  if (taskStatusPollTimer) {
+    return
+  }
+
+  taskStatusPollTimer = setInterval(() => {
+    void pollTaskStatus()
+  }, STATUS_POLL_INTERVAL_MS)
+
+  void pollTaskStatus()
+}
+
+function isCurrentTask(taskId?: string, agentId?: string): boolean {
+  return Boolean(taskId) && taskId === currentTaskId.value && agentId === props.agent.id
+}
+
+const taskListeners = [
+  agentsSdk.onTaskStarted((payload) => {
+    if (!isCurrentTask(payload.taskId, payload.agentId)) {
+      return
+    }
+    canceling.value = false
+    taskStep.value = t('intelligence.agents.task_running')
+  }),
+  agentsSdk.onTaskProgress((payload) => {
+    if (!isCurrentTask(payload.taskId, payload.agentId)) {
+      return
+    }
+    taskProgress.value = Math.max(0, Math.min(100, Math.round(payload.progress || 0)))
+    taskStep.value = payload.step || t('intelligence.agents.task_running')
+  }),
+  agentsSdk.onTaskCompleted((payload) => {
+    if (!isCurrentTask(payload.taskId, payload.result?.agentId)) {
+      return
+    }
+
+    taskResult.value = payload.result
+    taskError.value = payload.result?.success
+      ? null
+      : payload.result?.error || t('intelligence.agents.task_failed')
+    taskProgress.value = 100
+    taskStep.value = t('intelligence.agents.task_completed')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+
+    if (payload.result?.success) {
+      ElMessage.success(t('intelligence.agents.task_success'))
+    } else {
+      ElMessage.error(taskError.value || t('intelligence.agents.task_failed'))
+    }
+  }),
+  agentsSdk.onTaskFailed((payload) => {
+    if (!isCurrentTask(payload.taskId, props.agent.id)) {
+      return
+    }
+
+    taskError.value = payload.error || t('intelligence.agents.task_failed')
+    taskStep.value = t('intelligence.agents.task_failed')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+    ElMessage.error(taskError.value)
+  }),
+  agentsSdk.onTaskCancelled((payload) => {
+    if (!isCurrentTask(payload.taskId, props.agent.id)) {
+      return
+    }
+
+    taskError.value = t('intelligence.agents.task_cancelled')
+    taskStep.value = t('intelligence.agents.task_cancelled')
+    executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+    ElMessage.warning(taskError.value)
+  })
+]
+
+onBeforeUnmount(() => {
+  stopTaskStatusPolling()
+  taskListeners.forEach((dispose) => dispose())
+})
+
+function createTaskId(): string {
+  const now = Date.now().toString(36)
+  const rand = Math.random().toString(36).slice(2, 8)
+  return `quick-${props.agent.id}-${now}-${rand}`
+}
 
 async function executeTask() {
   if (!taskInput.value.trim()) return
 
+  const taskId = createTaskId()
+
+  stopTaskStatusPolling()
   executing.value = true
+  currentTaskId.value = taskId
   taskResult.value = null
+  taskError.value = null
+  taskProgress.value = 0
+  canceling.value = false
+  taskStep.value = t('intelligence.agents.task_queued')
 
   try {
     const task: AgentTask = {
+      id: taskId,
       agentId: props.agent.id,
       type: 'execute',
       input: { query: taskInput.value }
     }
 
-    const result = await transport.send(AgentsEvents.api.executeImmediate, task)
-    taskResult.value = result
-
-    if (result?.success) {
-      ElMessage.success(t('intelligence.agents.task_success'))
-    } else {
-      ElMessage.error(result?.error || t('intelligence.agents.task_failed'))
+    const queued = await agentsSdk.execute(task)
+    if (!queued?.taskId) {
+      throw new Error('Missing task id from execute response')
     }
+    if (queued.taskId !== taskId) {
+      currentTaskId.value = queued.taskId
+    }
+
+    startTaskStatusPolling()
   } catch (err) {
     console.error('Task execution failed:', err)
-    ElMessage.error(t('intelligence.agents.task_failed'))
-  } finally {
+    taskError.value = err instanceof Error ? err.message : t('intelligence.agents.task_failed')
+    taskStep.value = t('intelligence.agents.task_failed')
     executing.value = false
+    canceling.value = false
+    currentTaskId.value = null
+    stopTaskStatusPolling()
+    ElMessage.error(taskError.value)
+  }
+}
+
+async function cancelTask() {
+  const taskId = currentTaskId.value
+  if (!taskId || !executing.value || canceling.value) {
+    return
+  }
+
+  canceling.value = true
+
+  try {
+    const result = await agentsSdk.cancel(taskId)
+    if (!result?.success) {
+      throw new Error(t('intelligence.agents.cancel_failed'))
+    }
+
+    taskStep.value = t('intelligence.agents.task_cancel_requested')
+    ElMessage.info(t('intelligence.agents.task_cancel_requested'))
+  } catch (err) {
+    canceling.value = false
+    const message = err instanceof Error ? err.message : t('intelligence.agents.cancel_failed')
+    ElMessage.error(message)
   }
 }
 
@@ -129,15 +326,39 @@ function getCapabilityIcon(type: string): string {
           :rows="3"
           :disabled="executing"
         />
-        <el-button
-          type="primary"
-          :loading="executing"
-          :disabled="!taskInput.trim()"
-          @click="executeTask"
-        >
-          <span class="i-carbon-play mr-1" />
-          {{ t('intelligence.agents.execute') }}
-        </el-button>
+        <div class="execute-actions">
+          <el-button
+            type="primary"
+            :loading="executing"
+            :disabled="!taskInput.trim() || executing"
+            @click="executeTask"
+          >
+            <span class="i-carbon-play mr-1" />
+            {{ t('intelligence.agents.execute') }}
+          </el-button>
+          <el-button
+            v-if="executing && currentTaskId"
+            text
+            type="warning"
+            :loading="canceling"
+            :disabled="canceling"
+            @click="cancelTask"
+          >
+            {{ t('intelligence.agents.cancel') }}
+          </el-button>
+        </div>
+      </div>
+
+      <div v-if="executing" class="execute-status">
+        <div class="status-line">
+          <span>{{ taskStep || t('intelligence.agents.task_running') }}</span>
+          <span>{{ taskProgress }}%</span>
+        </div>
+        <el-progress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
+      </div>
+
+      <div v-if="taskError" class="execute-error">
+        {{ taskError }}
       </div>
 
       <!-- Result -->
@@ -251,6 +472,33 @@ function getCapabilityIcon(type: string): string {
   gap: 0.75rem;
 }
 
+.execute-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.execute-status {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
+}
+
+.status-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.execute-error {
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--el-color-danger);
+}
+
 .execute-result {
   margin-top: 1rem;
   padding: 1rem;
@@ -276,4 +524,3 @@ function getCapabilityIcon(type: string): string {
   margin: 0;
 }
 </style>
-const transport = useTuffTransport()

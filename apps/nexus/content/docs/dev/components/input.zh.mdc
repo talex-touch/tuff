@@ -15,24 +15,23 @@ syncStatus: migrated
 
 ## 基础用法
 
-:::TuffDemo{title="基础输入" description="最常见的文本输入用法。" code-lang="vue"}
+### 基础输入
+最常见的文本输入用法。
+:::TuffDemoWrapper{demo="InputBasicInputDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TuffInput v-model="value" placeholder="请输入内容" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="value" placeholder="请输入内容" />
-</div>
 :::
-
 ## 输入框类型
 
 目前支持：`text` / `password` / `textarea`。
 
-:::TuffDemo{title="Input Types" description="文本、密码与多行文本。" code-lang="vue"}
+### Input Types
+文本、密码与多行文本。
+:::TuffDemoWrapper{demo="InputInputTypesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -41,21 +40,12 @@ code: |
     <TuffInput v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
   </template>
 ---
-#preview
-<div style="display: flex; flex-direction: column; gap: 10px;">
-  <div class="tuff-demo-row">
-    <tuff-input v-model="text" placeholder="文本输入" />
-    <tuff-input v-model="password" type="password" placeholder="密码输入" />
-  </div>
-  <div class="tuff-demo-row">
-    <tuff-input v-model="content" type="textarea" placeholder="多行文本" :rows="4" />
-  </div>
-</div>
 :::
-
 ## 只读 / 禁用
 
-:::TuffDemo{title="Readonly / Disabled" description="只读与禁用状态。" code-lang="vue"}
+### Readonly / Disabled
+只读与禁用状态。
+:::TuffDemoWrapper{demo="InputReadonlyDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -63,31 +53,24 @@ code: |
     <TuffInput v-model="disabledValue" disabled placeholder="禁用" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="readonlyValue" readonly placeholder="只读" />
-  <tuff-input v-model="disabledValue" disabled placeholder="禁用" />
-</div>
 :::
-
 ## 可清空
 
-:::TuffDemo{title="Clearable" description="支持一键清空内容。" code-lang="vue"}
+### Clearable
+支持一键清空内容。
+:::TuffDemoWrapper{demo="InputClearableDemo" code-lang="vue"}
 ---
 code: |
   <template>
     <TuffInput v-model="clearableValue" clearable placeholder="可清空" />
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="clearableValue" clearable placeholder="可清空" />
-</div>
 :::
-
 ## 前后缀插槽
 
-:::TuffDemo{title="Prefix / Suffix" description="使用图标增强提示。" code-lang="vue"}
+### Prefix / Suffix
+使用图标增强提示。
+:::TuffDemoWrapper{demo="InputPrefixSuffixDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -103,21 +86,7 @@ code: |
     </TuffInput>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input v-model="withPrefix" placeholder="Search">
-    <template #prefix>
-      <tx-icon icon="i-carbon-search" />
-    </template>
-  </tuff-input>
-  <tuff-input v-model="withSuffix" placeholder="User">
-    <template #suffix>
-      <tx-icon icon="i-carbon-user" />
-    </template>
-  </tuff-input>
-</div>
 :::
-
 ## API
 
 ### Props
@@ -206,7 +175,9 @@ rows:
 
 ## 组合示例
 
-:::TuffDemo{title="搜索行" description="输入框配合按钮完成快速检索。" code-lang="vue"}
+### 搜索行
+输入框配合按钮完成快速检索。
+:::TuffDemoWrapper{demo="InputSearchRowDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -214,23 +185,4 @@ code: |
     <TxButton size="sm">搜索</TxButton>
   </template>
 ---
-#preview
-<div class="tuff-demo-row">
-  <tuff-input placeholder="搜索..." />
-  <tx-button size="sm">搜索</tx-button>
-</div>
 :::
-
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const value = ref('')
-const text = ref('')
-const password = ref('')
-const content = ref('')
-const readonlyValue = ref('readonly')
-const disabledValue = ref('disabled')
-const clearableValue = ref('hello')
-const withPrefix = ref('')
-const withSuffix = ref('')
-</script>

@@ -9,29 +9,32 @@
 ## 技术原理
 **架构概览**
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        TuffTransport 架构                                │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│   插件渲染进程                               主进程                       │
-│   ┌─────────────────────┐                  ┌─────────────────────┐      │
-│   │  useTuffTransport() │                  │  TuffTransportMain  │      │
-│   │  ┌───────────────┐  │                  │  ┌───────────────┐  │      │
-│   │  │ Event Builder │  │                  │  │ Event Router  │  │      │
-│   │  └───────┬───────┘  │                  │  └───────┬───────┘  │      │
-│   │          │          │                  │          │          │      │
-│   │  ┌───────▼───────┐  │   ipc.invoke    │  ┌───────▼───────┐  │      │
-│   │  │ BatchManager  │──┼──────────────────┼──│ BatchHandler  │  │      │
-│   │  └───────────────┘  │                  │  └───────────────┘  │      │
-│   │                     │                  │                     │      │
-│   │  ┌───────────────┐  │   MessagePort   │  ┌───────────────┐  │      │
-│   │  │ StreamClient  │◄─┼──────────────────┼─►│ StreamServer  │  │      │
-│   │  └───────────────┘  │                  │  └───────────────┘  │      │
-│   └─────────────────────┘                  └─────────────────────┘      │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                        TuffTransport 架构                                │
+  ├─────────────────────────────────────────────────────────────────────────┤
+  │                                                                          │
+  │   插件渲染进程                               主进程                       │
+  │   ┌─────────────────────┐                  ┌─────────────────────┐      │
+  │   │  useTuffTransport() │                  │  TuffTransportMain  │      │
+  │   │  ┌───────────────┐  │                  │  ┌───────────────┐  │      │
+  │   │  │ Event Builder │  │                  │  │ Event Router  │  │      │
+  │   │  └───────┬───────┘  │                  │  └───────┬───────┘  │      │
+  │   │          │          │                  │          │          │      │
+  │   │  ┌───────▼───────┐  │   ipc.invoke    │  ┌───────▼───────┐  │      │
+  │   │  │ BatchManager  │──┼──────────────────┼──│ BatchHandler  │  │      │
+  │   │  └───────────────┘  │                  │  └───────────────┘  │      │
+  │   │                     │                  │                     │      │
+  │   │  ┌───────────────┐  │   MessagePort   │  ┌───────────────┐  │      │
+  │   │  │ StreamClient  │◄─┼──────────────────┼─►│ StreamServer  │  │      │
+  │   │  └───────────────┘  │                  │  └───────────────┘  │      │
+  │   └─────────────────────┘                  └─────────────────────┘      │
+  │                                                                          │
+  └─────────────────────────────────────────────────────────────────────────┘
+---
+:::
 
 ---
 
@@ -39,12 +42,15 @@
 
 TuffTransport 抽象为“传输核心 + Port”。Port 是在同一传输层之上的**逻辑通道**，用于隔离不同能力域（如 storage、corebox、plugin、worker）。
 
-```
-TuffTransport
-  ├─ port('storage')     // 配置/订阅
-  ├─ port('corebox')     // 搜索/渲染
-  └─ port('plugin:xxx')  // 插件隔离
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  TuffTransport
+    ├─ port('storage')     // 配置/订阅
+    ├─ port('corebox')     // 搜索/渲染
+    └─ port('plugin:xxx')  // 插件隔离
+---
+:::
 
 **要点：**
 - Port 只负责 `onMessage/onStream` 与路由规则，不关心 IPC 实现细节。
@@ -59,11 +65,14 @@ TuffTransport
 
 传统 Channel API 使用字符串事件名：
 
-```ts
-// 字符串事件的问题：
-channel.send('core-box:serch:query', data)  // 拼写错误："serch" - 没有报错！
-channel.send('core-box:search:query', { txt: 'hi' })  // 字段错误 - 没有报错！
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 字符串事件的问题：
+  channel.send('core-box:serch:query', data)  // 拼写错误："serch" - 没有报错！
+  channel.send('core-box:search:query', { txt: 'hi' })  // 字段错误 - 没有报错！
+---
+:::
 
 **问题：**
 1. **无自动补全** - 必须记住准确的事件名
@@ -75,18 +84,21 @@ channel.send('core-box:search:query', { txt: 'hi' })  // 字段错误 - 没有�
 
 TuffEvent 使用 TypeScript 类型系统强制正确性：
 
-```ts
-// TuffEvent 定义（简化版）
-interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
-  readonly __brand: 'TuffEvent'  // 用于运行时检查的品牌标识
-  readonly namespace: TNamespace
-  readonly module: TModule
-  readonly action: TAction
-  readonly _request: TRequest    // 请求的幻影类型
-  readonly _response: TResponse  // 响应的幻影类型
-  toString(): string
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // TuffEvent 定义（简化版）
+  interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
+    readonly __brand: 'TuffEvent'  // 用于运行时检查的品牌标识
+    readonly namespace: TNamespace
+    readonly module: TModule
+    readonly action: TAction
+    readonly _request: TRequest    // 请求的幻影类型
+    readonly _response: TResponse  // 响应的幻影类型
+    toString(): string
+  }
+---
+:::
 
 **关键设计决策：**
 
@@ -99,12 +111,15 @@ interface TuffEvent<TRequest, TResponse, TNamespace, TModule, TAction> {
 
 构建器模式确保事件正确构造：
 
-```ts
-defineEvent('namespace')     // 返回 TuffEventBuilder<'namespace'>
-  .module('module')          // 返回 TuffModuleBuilder<'namespace', 'module'>
-  .event('action')           // 返回 TuffActionBuilder<'namespace', 'module', 'action'>
-  .define<Req, Res>(opts)    // 返回 TuffEvent<Req, Res, 'namespace', 'module', 'action'>
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  defineEvent('namespace')     // 返回 TuffEventBuilder<'namespace'>
+    .module('module')          // 返回 TuffModuleBuilder<'namespace', 'module'>
+    .event('action')           // 返回 TuffActionBuilder<'namespace', 'module', 'action'>
+    .define<Req, Res>(opts)    // 返回 TuffEvent<Req, Res, 'namespace', 'module', 'action'>
+---
+:::
 
 **为什么用构建器？**
 - 强制完整的事件定义
@@ -120,83 +135,101 @@ defineEvent('namespace')     // 返回 TuffEventBuilder<'namespace'>
 
 每次 IPC 调用都有开销（约 1-5ms）。多次顺序调用会累积：
 
-```ts
-// 无批量：3 次 IPC 调用 = 3-15ms 开销
-const a = await channel.send('storage:get', { key: 'a' })  // IPC #1
-const b = await channel.send('storage:get', { key: 'b' })  // IPC #2
-const c = await channel.send('storage:get', { key: 'c' })  // IPC #3
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 无批量：3 次 IPC 调用 = 3-15ms 开销
+  const a = await channel.send('storage:get', { key: 'a' })  // IPC #1
+  const b = await channel.send('storage:get', { key: 'b' })  // IPC #2
+  const c = await channel.send('storage:get', { key: 'c' })  // IPC #3
+---
+:::
 
 **批量流程**
 
-```
-请求 1 ─┐
-请求 2 ─┼─► BatchManager ─► [窗口期 50ms] ─► 单次 IPC
-请求 3 ─┘       │                              │
-                │                              ▼
-         windowMs 定时器              主进程处理器
-                │                              │
-                ▼                              ▼
-         强制刷新条件：                处理所有请求
-         - 定时器到期                       │
-         - 达到最大数量                     ▼
-         - 调用 flush()               返回所有结果
-                                            │
-响应 1 ◄─┐                                  │
-响应 2 ◄─┼─ 分发结果 ◄─────────────────────┘
-响应 3 ◄─┘
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  请求 1 ─┐
+  请求 2 ─┼─► BatchManager ─► [窗口期 50ms] ─► 单次 IPC
+  请求 3 ─┘       │                              │
+                  │                              ▼
+           windowMs 定时器              主进程处理器
+                  │                              │
+                  ▼                              ▼
+           强制刷新条件：                处理所有请求
+           - 定时器到期                       │
+           - 达到最大数量                     ▼
+           - 调用 flush()               返回所有结果
+                                              │
+  响应 1 ◄─┐                                  │
+  响应 2 ◄─┼─ 分发结果 ◄─────────────────────┘
+  响应 3 ◄─┘
+---
+:::
 
 **BatchManager 实现**
 
-```ts
-class BatchManager {
-  private groups: Map<string, BatchGroup> = new Map()
-  
-  async add<TReq, TRes>(event: TuffEvent<TReq, TRes>, payload: TReq): Promise<TRes> {
-    const config = event._batch
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  class BatchManager {
+    private groups: Map<string, BatchGroup> = new Map()
     
-    // 如果未启用批量，直接发送
-    if (!config?.enabled) {
-      return this.sendSingle(event, payload)
-    }
-    
-    return new Promise((resolve, reject) => {
-      const group = this.getOrCreateGroup(event)
+    async add<TReq, TRes>(event: TuffEvent<TReq, TRes>, payload: TReq): Promise<TRes> {
+      const config = event._batch
       
-      // 应用合并策略
-      this.applyStrategy(group, { payload, resolve, reject }, config)
-      
-      // 检查刷新条件
-      if (group.requests.length >= config.maxSize) {
-        this.flush(event.toString())
-      } else if (!group.timer) {
-        group.timer = setTimeout(() => this.flush(event.toString()), config.windowMs)
+      // 如果未启用批量，直接发送
+      if (!config?.enabled) {
+        return this.sendSingle(event, payload)
       }
-    })
+      
+      return new Promise((resolve, reject) => {
+        const group = this.getOrCreateGroup(event)
+        
+        // 应用合并策略
+        this.applyStrategy(group, { payload, resolve, reject }, config)
+        
+        // 检查刷新条件
+        if (group.requests.length >= config.maxSize) {
+          this.flush(event.toString())
+        } else if (!group.timer) {
+          group.timer = setTimeout(() => this.flush(event.toString()), config.windowMs)
+        }
+      })
+    }
   }
-}
-```
+---
+:::
 
 **合并策略**
 
 **1. Queue（默认）**
 所有请求按顺序保留并处理：
-```
-[{key:'a'}, {key:'b'}, {key:'a'}] → 处理全部 3 个
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  [{key:'a'}, {key:'b'}, {key:'a'}] → 处理全部 3 个
+---
+:::
 
 **2. Dedupe**
 相同参数共享一个请求：
-```
-[{key:'a'}, {key:'b'}, {key:'a'}] → 处理 2 个，两个 'a' 获得相同结果
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  [{key:'a'}, {key:'b'}, {key:'a'}] → 处理 2 个，两个 'a' 获得相同结果
+---
+:::
 
 **3. Latest**
 相同 key 只保留最新请求：
-```
-[{key:'a',v:1}, {key:'b'}, {key:'a',v:2}] → 处理 [{key:'a',v:2}, {key:'b'}]
-```
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  [{key:'a',v:1}, {key:'b'}, {key:'a',v:2}] → 处理 [{key:'a',v:2}, {key:'b'}]
+---
+:::
 
 ---
 
@@ -217,63 +250,72 @@ class BatchManager {
 
 **流式流程**
 
-```
-渲染进程                                主进程
-   │                                       │
-   │─── 1. 请求流 ─────────────────────►  │
-   │    (通过 ipc.invoke)                  │
-   │                                       │
-   │◄── 2. 返回 { streamId, port2 } ──────│
-   │    (port2 被传递)                     │
-   │                                       │
-   │◄══ 3. 数据块 ═════════════════════════│
-   │    (通过 MessagePort)                 │
-   │                                       │
-   │◄══ 4. 更多数据... ════════════════════│
-   │                                       │
-   │◄══ 5. 结束信号 ═══════════════════════│
-   │                                       │
-   │─── 6. 关闭端口 ──────────────────────►│
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  渲染进程                                主进程
+     │                                       │
+     │─── 1. 请求流 ─────────────────────►  │
+     │    (通过 ipc.invoke)                  │
+     │                                       │
+     │◄── 2. 返回 { streamId, port2 } ──────│
+     │    (port2 被传递)                     │
+     │                                       │
+     │◄══ 3. 数据块 ═════════════════════════│
+     │    (通过 MessagePort)                 │
+     │                                       │
+     │◄══ 4. 更多数据... ════════════════════│
+     │                                       │
+     │◄══ 5. 结束信号 ═══════════════════════│
+     │                                       │
+     │─── 6. 关闭端口 ──────────────────────►│
+---
+:::
 
 **StreamServer（主进程）**
 
-```ts
-class StreamServer {
-  async handleStreamRequest(eventName: string, payload: any, webContents: WebContents) {
-    const { port1, port2 } = new MessageChannelMain()
-    const streamId = generateId()
-    
-    // 发送 port2 给渲染进程
-    webContents.postMessage('@tuff:stream:port', { streamId }, [port2])
-    
-    // 创建处理器上下文
-    const context: StreamContext = {
-      emit: (chunk) => port1.postMessage({ type: 'data', chunk }),
-      error: (err) => port1.postMessage({ type: 'error', message: err.message }),
-      end: () => port1.postMessage({ type: 'end' }),
-      isCancelled: () => this.cancelled.has(streamId)
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  class StreamServer {
+    async handleStreamRequest(eventName: string, payload: any, webContents: WebContents) {
+      const { port1, port2 } = new MessageChannelMain()
+      const streamId = generateId()
+      
+      // 发送 port2 给渲染进程
+      webContents.postMessage('@tuff:stream:port', { streamId }, [port2])
+      
+      // 创建处理器上下文
+      const context: StreamContext = {
+        emit: (chunk) => port1.postMessage({ type: 'data', chunk }),
+        error: (err) => port1.postMessage({ type: 'error', message: err.message }),
+        end: () => port1.postMessage({ type: 'end' }),
+        isCancelled: () => this.cancelled.has(streamId)
+      }
+      
+      // 执行处理器
+      await this.handlers.get(eventName)?.(payload, context)
+      
+      return { streamId }
     }
-    
-    // 执行处理器
-    await this.handlers.get(eventName)?.(payload, context)
-    
-    return { streamId }
   }
-}
-```
+---
+:::
 
 **背压处理**
 
 当消费者处理不过来时：
 
-```ts
-const config: StreamConfig = {
-  enabled: true,
-  bufferSize: 100,
-  backpressure: 'buffer' // 'drop' | 'buffer' | 'error'
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const config: StreamConfig = {
+    enabled: true,
+    bufferSize: 100,
+    backpressure: 'buffer' // 'drop' | 'buffer' | 'error'
+  }
+---
+:::
 
 - **drop** - 缓冲区满时丢弃新数据
 - **buffer** - 缓冲数据（有内存风险）
@@ -287,56 +329,65 @@ const config: StreamConfig = {
 
 插件运行在隔离的 WebContentsView 中。为防止未授权访问：
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    插件安全流程                                   │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  1. 插件加载                                                      │
-│     │                                                            │
-│     ▼                                                            │
-│  2. 主进程生成唯一 key                                            │
-│     key = randomString() → 存入 keyToNameMap                     │
-│     │                                                            │
-│     ▼                                                            │
-│  3. Key 注入插件的 preload                                        │
-│     window.$plugin.uniqueKey = key                               │
-│     │                                                            │
-│     ▼                                                            │
-│  4. 所有插件消息在 header 中包含 key                              │
-│     { header: { uniqueKey: key }, ... }                          │
-│     │                                                            │
-│     ▼                                                            │
-│  5. 主进程验证 key                                                │
-│     pluginName = keyToNameMap.get(key)                          │
-│     if (!pluginName) reject()                                    │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  ┌─────────────────────────────────────────────────────────────────┐
+  │                    插件安全流程                                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                  │
+  │  1. 插件加载                                                      │
+  │     │                                                            │
+  │     ▼                                                            │
+  │  2. 主进程生成唯一 key                                            │
+  │     key = randomString() → 存入 keyToNameMap                     │
+  │     │                                                            │
+  │     ▼                                                            │
+  │  3. Key 注入插件的 preload                                        │
+  │     window.$plugin.uniqueKey = key                               │
+  │     │                                                            │
+  │     ▼                                                            │
+  │  4. 所有插件消息在 header 中包含 key                              │
+  │     { header: { uniqueKey: key }, ... }                          │
+  │     │                                                            │
+  │     ▼                                                            │
+  │  5. 主进程验证 key                                                │
+  │     pluginName = keyToNameMap.get(key)                          │
+  │     if (!pluginName) reject()                                    │
+  │                                                                  │
+  └─────────────────────────────────────────────────────────────────┘
+---
+:::
 
 **PluginKeyManager**
 
-```ts
-interface PluginKeyManager {
-  requestKey(pluginName: string): string   // 生成新 key
-  revokeKey(key: string): boolean          // 使 key 失效
-  resolveKey(key: string): string | undefined  // 获取插件名
-  isValidKey(key: string): boolean         // 验证 key
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  interface PluginKeyManager {
+    requestKey(pluginName: string): string   // 生成新 key
+    revokeKey(key: string): boolean          // 使 key 失效
+    resolveKey(key: string): string | undefined  // 获取插件名
+    isValidKey(key: string): boolean         // 验证 key
+  }
+---
+:::
 
 **安全上下文**
 
 每个处理器都接收安全上下文：
 
-```ts
-transport.on(SomeEvent, (payload, context) => {
-  if (context.plugin) {
-    console.log(`请求来自插件: ${context.plugin.name}`)
-    console.log(`Key 已验证: ${context.plugin.verified}`)
-  }
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  transport.on(SomeEvent, (payload, context) => {
+    if (context.plugin) {
+      console.log(`请求来自插件: ${context.plugin.name}`)
+      console.log(`Key 已验证: ${context.plugin.verified}`)
+    }
+  })
+---
+:::
 
 ---
 
@@ -344,47 +395,53 @@ transport.on(SomeEvent, (payload, context) => {
 
 **错误流程**
 
-```
-渲染进程                                主进程
-   │                                       │
-   │─── 请求 ─────────────────────────────►│
-   │                                       │
-   │                               处理器抛出错误
-   │                                       │
-   │◄── TuffTransportError ────────────────│
-   │    { code, message, eventName }       │
-   │                                       │
-   ▼
-catch (err) {
-  if (err instanceof TuffTransportError) {
-    // 结构化错误处理
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  渲染进程                                主进程
+     │                                       │
+     │─── 请求 ─────────────────────────────►│
+     │                                       │
+     │                               处理器抛出错误
+     │                                       │
+     │◄── TuffTransportError ────────────────│
+     │    { code, message, eventName }       │
+     │                                       │
+     ▼
+  catch (err) {
+    if (err instanceof TuffTransportError) {
+      // 结构化错误处理
+    }
   }
-}
-```
+---
+:::
 
 **错误序列化**
 
 错误被序列化用于 IPC：
 
-```ts
-class TuffTransportError extends Error {
-  toJSON() {
-    return {
-      name: 'TuffTransportError',
-      code: this.code,
-      message: this.message,
-      eventName: this.eventName,
-      timestamp: this.timestamp
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  class TuffTransportError extends Error {
+    toJSON() {
+      return {
+        name: 'TuffTransportError',
+        code: this.code,
+        message: this.message,
+        eventName: this.eventName,
+        timestamp: this.timestamp
+      }
+    }
+    
+    static fromJSON(obj) {
+      return new TuffTransportError(obj.code, obj.message, {
+        eventName: obj.eventName
+      })
     }
   }
-  
-  static fromJSON(obj) {
-    return new TuffTransportError(obj.code, obj.message, {
-      eventName: obj.eventName
-    })
-  }
-}
-```
+---
+:::
 
 ---
 
@@ -409,19 +466,22 @@ class TuffTransportError extends Error {
 
 **内存管理**
 
-```ts
-// 清理模式
-onUnmounted(() => {
-  // 取消待处理请求
-  controller.cancel()
-  
-  // 移除处理器
-  cleanup()
-  
-  // 刷新批量
-  transport.flush()
-})
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 清理模式
+  onUnmounted(() => {
+    // 取消待处理请求
+    controller.cancel()
+    
+    // 移除处理器
+    cleanup()
+    
+    // 刷新批量
+    transport.flush()
+  })
+---
+:::
 
 ---
 
@@ -440,15 +500,18 @@ onUnmounted(() => {
 
 **迁移路径**
 
-```ts
-// 传统代码继续工作
-channel.send('event', data)
-
-// 新代码使用 TuffTransport
-transport.send(TuffEvent, data)
-
-// 它们共享相同的 IPC 基础设施
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  // 传统代码继续工作
+  channel.send('event', data)
+  
+  // 新代码使用 TuffTransport
+  transport.send(TuffEvent, data)
+  
+  // 它们共享相同的 IPC 基础设施
+---
+:::
 
 ---
 

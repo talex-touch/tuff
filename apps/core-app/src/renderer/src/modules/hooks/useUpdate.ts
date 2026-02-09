@@ -13,8 +13,7 @@ import {
   splitUpdateTag
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { UpdateEvents } from '@talex-touch/utils/transport/events'
+import { useUpdateSdk } from '@talex-touch/utils/renderer'
 import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
@@ -54,8 +53,6 @@ export interface AppVersion {
   patch: number
 }
 
-type UpdateTransportResponse<T> = { success: true; data: T } | { success: false; error?: string }
-
 type UpdateStatusInfo = {
   enabled: boolean
   frequency: UpdateSettings['frequency']
@@ -64,11 +61,6 @@ type UpdateStatusInfo = {
   polling: boolean
   lastCheck: number | null
 }
-
-type UpdateCheckPayload = { force?: boolean }
-type UpdateSettingsPayload = { settings: Partial<UpdateSettings> }
-type UpdateCachedReleasePayload = { channel?: AppPreviewChannel }
-type UpdateRecordActionPayload = { tag: string; action: UpdateUserAction }
 
 type UpdateAvailablePayload = {
   hasUpdate: boolean
@@ -80,10 +72,14 @@ type UpdateAvailablePayload = {
 /**
  * Simplified application update manager that communicates with main process
  */
+/**
+ * @deprecated 请优先使用 useUpdateSdk() 直接调用 update domain SDK，该类仅保留兼容壳。
+ */
+
 export class AppUpdate {
   private static instance: AppUpdate
   private settings: UpdateSettings
-  private transport = useTuffTransport()
+  private updateSdk = useUpdateSdk()
   private static readonly CHANNEL_TIMEOUT = 4000
 
   version: AppVersion
@@ -159,16 +155,15 @@ export class AppUpdate {
    */
   public async check(force = false): Promise<UpdateCheckResult> {
     try {
-      const response = await this.sendRequest<UpdateCheckResult>('update:check', { force })
+      const response = await this.sendRequest('update:check', () => this.updateSdk.check({ force }))
 
-      if (response.success) {
+      if (response.success && response.data) {
         return response.data
-      } else {
-        return {
-          hasUpdate: false,
-          error: response.error || 'Update check failed',
-          source: 'Unknown'
-        }
+      }
+      return {
+        hasUpdate: false,
+        error: response.error || 'Update check failed',
+        source: 'Unknown'
       }
     } catch (error) {
       console.error('[AppUpdate] Check failed:', error)
@@ -186,7 +181,9 @@ export class AppUpdate {
    * @returns Promise that resolves when download is started
    */
   public async downloadUpdate(release: GitHubRelease): Promise<void> {
-    const response = await this.sendRequest<{ taskId?: string }>('update:download', release)
+    const response = await this.sendRequest('update:download', () =>
+      this.updateSdk.download(release)
+    )
     if (!response.success) {
       throw new Error(response.error || 'Failed to start update download')
     }
@@ -231,8 +228,10 @@ export class AppUpdate {
    */
   public async getSettings(): Promise<UpdateSettings> {
     try {
-      const response = await this.sendRequest<UpdateSettings>('update:get-settings')
-      if (response.success) {
+      const response = await this.sendRequest('update:get-settings', () =>
+        this.updateSdk.getSettings()
+      )
+      if (response.success && response.data) {
         const serverSettings = response.data
         serverSettings.frequency = this.normalizeFrequencyLabel(serverSettings.frequency)
         this.settings = serverSettings
@@ -264,7 +263,9 @@ export class AppUpdate {
         payload.frequency = this.normalizeFrequencyLabel(payload.frequency)
       }
 
-      const response = await this.sendRequest<void>('update:update-settings', payload)
+      const response = await this.sendRequest('update:update-settings', () =>
+        this.updateSdk.updateSettings(payload)
+      )
       if (response.success) {
         this.settings = { ...this.settings, ...payload }
       } else {
@@ -281,7 +282,9 @@ export class AppUpdate {
    */
   public async clearCache(): Promise<void> {
     try {
-      const response = await this.sendRequest<void>('update:clear-cache')
+      const response = await this.sendRequest('update:clear-cache', () =>
+        this.updateSdk.clearCache()
+      )
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
       }
@@ -296,12 +299,11 @@ export class AppUpdate {
    */
   public async getStatus(): Promise<UpdateStatusInfo> {
     try {
-      const response = await this.sendRequest<UpdateStatusInfo>('update:get-status')
-      if (response.success) {
+      const response = await this.sendRequest('update:get-status', () => this.updateSdk.getStatus())
+      if (response.success && response.data) {
         return response.data
-      } else {
-        throw new Error(response.error || 'Failed to get status')
       }
+      throw new Error(response.error || 'Failed to get status')
     } catch (error) {
       console.error('[AppUpdate] Failed to get status:', error)
       throw error
@@ -310,9 +312,8 @@ export class AppUpdate {
 
   public async getCachedRelease(channel?: AppPreviewChannel): Promise<CachedUpdateRecord | null> {
     try {
-      const response = await this.sendRequest<CachedUpdateRecord | null>(
-        'update:get-cached-release',
-        { channel }
+      const response = await this.sendRequest('update:get-cached-release', () =>
+        this.updateSdk.getCachedRelease({ channel })
       )
       if (response.success) {
         return (response.data as CachedUpdateRecord) || null
@@ -326,7 +327,9 @@ export class AppUpdate {
 
   public async recordAction(tag: string, action: UpdateUserAction): Promise<void> {
     try {
-      const response = await this.sendRequest<void>('update:record-action', { tag, action })
+      const response = await this.sendRequest('update:record-action', () =>
+        this.updateSdk.recordAction({ tag, action })
+      )
       if (!response.success) {
         throw new Error(response.error || 'Failed to record action')
       }
@@ -336,75 +339,9 @@ export class AppUpdate {
     }
   }
 
-  private async sendRequest<T>(
-    channel: string,
-    payload?: unknown
-  ): Promise<UpdateTransportResponse<T>> {
+  private async sendRequest<T>(channel: string, operation: () => Promise<T>): Promise<T> {
     try {
-      switch (channel) {
-        case 'update:check': {
-          const requestPayload: UpdateCheckPayload =
-            payload && typeof payload === 'object' ? (payload as UpdateCheckPayload) : {}
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.check, requestPayload),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        }
-        case 'update:get-settings':
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.getSettings),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        case 'update:update-settings': {
-          const settings =
-            payload && typeof payload === 'object' ? (payload as Partial<UpdateSettings>) : {}
-          const requestPayload: UpdateSettingsPayload = { settings }
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.updateSettings, requestPayload),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        }
-        case 'update:clear-cache':
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.clearCache),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        case 'update:get-status':
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.getStatus),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        case 'update:get-cached-release': {
-          const requestPayload: UpdateCachedReleasePayload =
-            payload && typeof payload === 'object' ? (payload as UpdateCachedReleasePayload) : {}
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.getCachedRelease, requestPayload),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        }
-        case 'update:record-action': {
-          if (!payload || typeof payload !== 'object') {
-            throw new Error('Invalid update action payload')
-          }
-          const requestPayload = payload as UpdateRecordActionPayload
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.recordAction, requestPayload),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        }
-        case 'update:download': {
-          if (!payload || typeof payload !== 'object') {
-            throw new Error('Invalid update download payload')
-          }
-          const requestPayload = payload as GitHubRelease
-          return (await withTimeout(
-            this.transport.send(UpdateEvents.download, requestPayload),
-            AppUpdate.CHANNEL_TIMEOUT
-          )) as UpdateTransportResponse<T>
-        }
-        default:
-          throw new Error(`Unsupported update channel: ${channel}`)
-      }
+      return await withTimeout(operation(), AppUpdate.CHANNEL_TIMEOUT)
     } catch (error) {
       if (error instanceof TimeoutError) {
         throw new Error(`Update request timed out for channel: ${channel}`)
@@ -418,6 +355,10 @@ export class AppUpdate {
  * Application upgrade related hooks
  * @returns Application upgrade utilities
  */
+/**
+ * @deprecated 请优先在页面内组合 useUpdateSdk() + 自定义 UI 逻辑，该 hook 仅保留兼容壳。
+ */
+
 export function useApplicationUpgrade() {
   const appUpdate = AppUpdate.getInstance()
   const { appStates } = useAppState()
@@ -625,9 +566,9 @@ export function useApplicationUpgrade() {
    */
   function setupUpdateListener(): void {
     try {
-      const transport = useTuffTransport()
+      const updateSdk = useUpdateSdk()
 
-      transport.on(UpdateEvents.available, (data: UpdateAvailablePayload) => {
+      updateSdk.onAvailable((data: UpdateAvailablePayload) => {
         console.log('[useApplicationUpgrade] Received update notification:', data)
 
         if (data.hasUpdate && data.release) {

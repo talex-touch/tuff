@@ -1,4 +1,4 @@
-# Account API
+# Account SDK
 
 ## Overview
 
@@ -8,20 +8,23 @@ Account SDK provides user information, subscription status, and quota management
 
 **Quick Start**
 
-```ts
-import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
-
-// Check if user is logged in
-const isLoggedIn = await accountSDK.isLoggedIn()
-
-// Get current subscription plan
-const plan = await accountSDK.getPlan()
-
-// Check if paid user
-if (await accountSDK.isPaidUser()) {
-  // Show premium features
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
+  
+  // Check if user is logged in
+  const isLoggedIn = await accountSDK.isLoggedIn()
+  
+  // Get current subscription plan
+  const plan = await accountSDK.getPlan()
+  
+  // Check if paid user
+  if (await accountSDK.isPaidUser()) {
+    // Show premium features
+  }
+---
+:::
 
 ---
 
@@ -37,20 +40,42 @@ if (await accountSDK.isPaidUser()) {
 
 ---
 
-## API Reference
+## SDK Reference
 
 **Get SDK Instance**
 
-```ts
-import { accountSDK } from '@talex-touch/utils'
-
-// Singleton, use directly
-await accountSDK.getProfile()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { accountSDK } from '@talex-touch/utils'
+  
+  // Singleton, use directly
+  await accountSDK.getProfile()
+---
+:::
 
 ::alert{type="warning"}
 **Note**: When using in Prelude script (`index.js`), you need to call `accountSDK.setChannelSend(send)` to inject the communication function first.
 ::
+
+---
+
+**Auth Token & Device**
+
+Used by SDKs that need authenticated API access (e.g., Cloud Sync SDK).
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const token = await accountSDK.getAuthToken()
+  const deviceId = await accountSDK.getDeviceId()
+---
+:::
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `getAuthToken()` | `string \| null` | Bearer auth token (null if unavailable) |
+| `getDeviceId()` | `string \| null` | Current device id (null if unavailable) |
 
 ---
 
@@ -60,19 +85,22 @@ await accountSDK.getProfile()
 
 Get complete user profile.
 
-```ts
-const profile = await accountSDK.getProfile()
-// {
-//   id: 'user_xxx',
-//   displayName: 'John Doe',
-//   email: 'john@example.com',
-//   avatarUrl: 'https://...',
-//   emailVerified: true,
-//   createdAt: 1702123456789,
-//   twoFactorEnabled: false,
-//   socialConnections: [...]
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const profile = await accountSDK.getProfile()
+  // {
+  //   id: 'user_xxx',
+  //   displayName: 'John Doe',
+  //   email: 'john@example.com',
+  //   avatarUrl: 'https://...',
+  //   emailVerified: true,
+  //   createdAt: 1702123456789,
+  //   twoFactorEnabled: false,
+  //   socialConnections: [...]
+  // }
+---
+:::
 
 | Return | Type | Description |
 |--------|------|-------------|
@@ -82,47 +110,62 @@ const profile = await accountSDK.getProfile()
 
 Check if user is logged in.
 
-```ts
-if (await accountSDK.isLoggedIn()) {
-  // Logged in
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isLoggedIn()) {
+    // Logged in
+  }
+---
+:::
 
 **`getUserId()`**
 
 Get user ID.
 
-```ts
-const userId = await accountSDK.getUserId()
-// 'user_xxx' or null
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const userId = await accountSDK.getUserId()
+  // 'user_xxx' or null
+---
+:::
 
 **`getDisplayName()`**
 
 Get display name.
 
-```ts
-const name = await accountSDK.getDisplayName()
-// 'John Doe'
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const name = await accountSDK.getDisplayName()
+  // 'John Doe'
+---
+:::
 
 **`getEmail()`**
 
 Get user email.
 
-```ts
-const email = await accountSDK.getEmail()
-// 'john@example.com'
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const email = await accountSDK.getEmail()
+  // 'john@example.com'
+---
+:::
 
 **`getAvatarUrl()`**
 
 Get avatar URL.
 
-```ts
-const avatar = await accountSDK.getAvatarUrl()
-// 'https://...'
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const avatar = await accountSDK.getAvatarUrl()
+  // 'https://...'
+---
+:::
 
 ---
 
@@ -132,98 +175,125 @@ const avatar = await accountSDK.getAvatarUrl()
 
 Get current subscription plan.
 
-```ts
-const plan = await accountSDK.getPlan()
-// SubscriptionPlan.PRO
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const plan = await accountSDK.getPlan()
+  // SubscriptionPlan.PRO
+---
+:::
 
 **`getSubscription()`**
 
 Get full subscription details.
 
-```ts
-const subscription = await accountSDK.getSubscription()
-// {
-//   id: 'sub_xxx',
-//   plan: 'pro',
-//   status: 'active',
-//   billingCycle: 'monthly',
-//   quota: { aiRequestsPerDay: 500, ... },
-//   usage: { aiRequestsToday: 123, ... },
-//   currentPeriodEnd: 1704067200000,
-//   autoRenew: true
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const subscription = await accountSDK.getSubscription()
+  // {
+  //   id: 'sub_xxx',
+  //   plan: 'pro',
+  //   status: 'active',
+  //   billingCycle: 'monthly',
+  //   quota: { aiRequestsPerDay: 500, ... },
+  //   usage: { aiRequestsToday: 123, ... },
+  //   currentPeriodEnd: 1704067200000,
+  //   autoRenew: true
+  // }
+---
+:::
 
 **`isPaidUser()`**
 
 Check if user is a paid subscriber.
 
-```ts
-if (await accountSDK.isPaidUser()) {
-  // Show paid features
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPaidUser()) {
+    // Show paid features
+  }
+---
+:::
 
 **`isProOrAbove()`**
 
 Check if Pro tier or higher.
 
-```ts
-if (await accountSDK.isProOrAbove()) {
-  // Pro / Plus / Team / Enterprise
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isProOrAbove()) {
+    // Pro / Plus / Team / Enterprise
+  }
+---
+:::
 
 **`isPlusOrAbove()`**
 
 Check if Plus tier or higher.
 
-```ts
-if (await accountSDK.isPlusOrAbove()) {
-  // Plus / Team / Enterprise
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isPlusOrAbove()) {
+    // Plus / Team / Enterprise
+  }
+---
+:::
 
 **`isTeamOrAbove()`**
 
 Check if Team tier or higher.
 
-```ts
-if (await accountSDK.isTeamOrAbove()) {
-  // Team / Enterprise
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOrAbove()) {
+    // Team / Enterprise
+  }
+---
+:::
 
 **`isEnterprise()`**
 
 Check if Enterprise tier.
 
-```ts
-if (await accountSDK.isEnterprise()) {
-  // Enterprise only
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isEnterprise()) {
+    // Enterprise only
+  }
+---
+:::
 
 **`isTrialing()`**
 
 Check if in trial period.
 
-```ts
-if (await accountSDK.isTrialing()) {
-  const days = await accountSDK.getTrialDaysRemaining()
-  console.log(`Trial ends in ${days} days`)
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTrialing()) {
+    const days = await accountSDK.getTrialDaysRemaining()
+    console.log(`Trial ends in ${days} days`)
+  }
+---
+:::
 
 **`getDaysRemaining()`**
 
 Get days remaining in current billing period.
 
-```ts
-const days = await accountSDK.getDaysRemaining()
-// 28
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const days = await accountSDK.getDaysRemaining()
+  // 28
+---
+:::
 
 ---
 
@@ -233,58 +303,70 @@ const days = await accountSDK.getDaysRemaining()
 
 Get current plan quota limits.
 
-```ts
-const quota = await accountSDK.getQuota()
-// {
-//   aiRequestsPerDay: 500,
-//   aiTokensPerMonth: 1000000,
-//   maxPlugins: 20,
-//   maxStorageBytes: 1073741824,
-//   customModelAccess: true,
-//   apiAccess: true,
-//   ...
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const quota = await accountSDK.getQuota()
+  // {
+  //   aiRequestsPerDay: 500,
+  //   aiTokensPerMonth: 1000000,
+  //   maxPlugins: 20,
+  //   maxStorageBytes: 1073741824,
+  //   customModelAccess: true,
+  //   apiAccess: true,
+  //   ...
+  // }
+---
+:::
 
 **`getUsage()`**
 
 Get current usage statistics.
 
-```ts
-const usage = await accountSDK.getUsage()
-// {
-//   aiRequestsToday: 123,
-//   aiRequestsThisMonth: 2456,
-//   aiTokensThisMonth: 456789,
-//   storageUsedBytes: 52428800,
-//   pluginsInstalled: 8
-// }
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const usage = await accountSDK.getUsage()
+  // {
+  //   aiRequestsToday: 123,
+  //   aiRequestsThisMonth: 2456,
+  //   aiTokensThisMonth: 456789,
+  //   storageUsedBytes: 52428800,
+  //   pluginsInstalled: 8
+  // }
+---
+:::
 
 **`checkAiRequestQuota()`**
 
 Check AI request quota.
 
-```ts
-const result = await accountSDK.checkAiRequestQuota()
-if (!result.allowed) {
-  console.log(result.reason) // 'Daily AI request limit reached'
-  console.log(`Resets at: ${new Date(result.resetAt)}`)
-} else {
-  console.log(`Remaining: ${result.remaining}`)
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiRequestQuota()
+  if (!result.allowed) {
+    console.log(result.reason) // 'Daily AI request limit reached'
+    console.log(`Resets at: ${new Date(result.resetAt)}`)
+  } else {
+    console.log(`Remaining: ${result.remaining}`)
+  }
+---
+:::
 
 **`checkAiTokenQuota(estimatedTokens)`**
 
 Check AI token quota.
 
-```ts
-const result = await accountSDK.checkAiTokenQuota(1000)
-if (!result.allowed) {
-  // Quota exceeded
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkAiTokenQuota(1000)
+  if (!result.allowed) {
+    // Quota exceeded
+  }
+---
+:::
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -294,37 +376,46 @@ if (!result.allowed) {
 
 Check storage quota.
 
-```ts
-const result = await accountSDK.checkStorageQuota(1024 * 1024) // 1MB
-if (!result.allowed) {
-  console.log('Insufficient storage')
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkStorageQuota(1024 * 1024) // 1MB
+  if (!result.allowed) {
+    console.log('Insufficient storage')
+  }
+---
+:::
 
 **`checkPluginQuota()`**
 
 Check plugin installation quota.
 
-```ts
-const result = await accountSDK.checkPluginQuota()
-if (!result.allowed) {
-  console.log('Plugin limit reached')
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const result = await accountSDK.checkPluginQuota()
+  if (!result.allowed) {
+    console.log('Plugin limit reached')
+  }
+---
+:::
 
 **`getUsagePercentage(type)`**
 
 Get usage percentage for specific quota type.
 
-```ts
-const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
-console.log(`AI usage: ${aiUsage.toFixed(1)}%`)
-
-const storageUsage = await accountSDK.getUsagePercentage('storage')
-if (storageUsage > 80) {
-  console.warn('Storage running low')
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
+  console.log(`AI usage: ${aiUsage.toFixed(1)}%`)
+  
+  const storageUsage = await accountSDK.getUsagePercentage('storage')
+  if (storageUsage > 80) {
+    console.warn('Storage running low')
+  }
+---
+:::
 
 | Parameter | Type | Values |
 |-----------|------|--------|
@@ -338,51 +429,66 @@ if (storageUsage > 80) {
 
 Check if user has API access.
 
-```ts
-if (await accountSDK.hasApiAccess()) {
-  // Allow API usage
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasApiAccess()) {
+    // Allow API usage
+  }
+---
+:::
 
 **`hasCustomModelAccess()`**
 
 Check if user can use custom models.
 
-```ts
-if (await accountSDK.hasCustomModelAccess()) {
-  // Show custom model options
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasCustomModelAccess()) {
+    // Show custom model options
+  }
+---
+:::
 
 **`hasPrioritySupport()`**
 
 Check if user has priority support.
 
-```ts
-if (await accountSDK.hasPrioritySupport()) {
-  // Show priority support entry
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasPrioritySupport()) {
+    // Show priority support entry
+  }
+---
+:::
 
 **`hasAdvancedAnalytics()`**
 
 Check if user has advanced analytics.
 
-```ts
-if (await accountSDK.hasAdvancedAnalytics()) {
-  // Show analytics dashboard
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasAdvancedAnalytics()) {
+    // Show analytics dashboard
+  }
+---
+:::
 
 **`hasFeature(featureId)`**
 
 Check if specific feature flag is enabled.
 
-```ts
-if (await accountSDK.hasFeature('beta-ai-v2')) {
-  // Enable beta feature
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.hasFeature('beta-ai-v2')) {
+    // Enable beta feature
+  }
+---
+:::
 
 ---
 
@@ -392,47 +498,59 @@ if (await accountSDK.hasFeature('beta-ai-v2')) {
 
 Get all teams user belongs to.
 
-```ts
-const teams = await accountSDK.getTeams()
-// [
-//   { id: 'team_xxx', name: 'Dev Team', role: 'admin', memberCount: 5 },
-//   { id: 'team_yyy', name: 'Design', role: 'member', memberCount: 3 }
-// ]
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const teams = await accountSDK.getTeams()
+  // [
+  //   { id: 'team_xxx', name: 'Dev Team', role: 'admin', memberCount: 5 },
+  //   { id: 'team_yyy', name: 'Design', role: 'member', memberCount: 3 }
+  // ]
+---
+:::
 
 **`isInTeam()`**
 
 Check if user is in any team.
 
-```ts
-if (await accountSDK.isInTeam()) {
-  // Show team features
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isInTeam()) {
+    // Show team features
+  }
+---
+:::
 
 **`isTeamOwner(teamId?)`**
 
 Check if user is team owner.
 
-```ts
-if (await accountSDK.isTeamOwner()) {
-  // User owns some team
-}
-
-if (await accountSDK.isTeamOwner('team_xxx')) {
-  // User owns specific team
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamOwner()) {
+    // User owns some team
+  }
+  
+  if (await accountSDK.isTeamOwner('team_xxx')) {
+    // User owns specific team
+  }
+---
+:::
 
 **`isTeamAdmin(teamId?)`**
 
 Check if user is team admin (includes owner).
 
-```ts
-if (await accountSDK.isTeamAdmin()) {
-  // Show admin features
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  if (await accountSDK.isTeamAdmin()) {
+    // Show admin features
+  }
+---
+:::
 
 ---
 
@@ -442,42 +560,54 @@ if (await accountSDK.isTeamAdmin()) {
 
 Get available upgrade options.
 
-```ts
-const options = accountSDK.getUpgradeOptions()
-// [
-//   { plan: 'pro', name: 'Pro', priceMonthly: 9.99, features: [...] },
-//   { plan: 'plus', name: 'Plus', priceMonthly: 19.99, recommended: true, ... }
-// ]
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const options = accountSDK.getUpgradeOptions()
+  // [
+  //   { plan: 'pro', name: 'Pro', priceMonthly: 9.99, features: [...] },
+  //   { plan: 'plus', name: 'Plus', priceMonthly: 19.99, recommended: true, ... }
+  // ]
+---
+:::
 
 **`getPlanComparison()`**
 
 Get plan comparison table.
 
-```ts
-const comparison = accountSDK.getPlanComparison()
-// [
-//   { feature: 'AI Requests/Day', free: 50, pro: 500, plus: 2000, ... },
-//   { feature: 'Custom Models', free: false, pro: true, ... }
-// ]
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const comparison = accountSDK.getPlanComparison()
+  // [
+  //   { feature: 'AI Requests/Day', free: 50, pro: 500, plus: 2000, ... },
+  //   { feature: 'Custom Models', free: false, pro: true, ... }
+  // ]
+---
+:::
 
 **`openUpgradePage(plan?)`**
 
 Open upgrade page.
 
-```ts
-await accountSDK.openUpgradePage() // Open upgrade page
-await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // Jump to Plus
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openUpgradePage() // Open upgrade page
+  await accountSDK.openUpgradePage(SubscriptionPlan.PLUS) // Jump to Plus
+---
+:::
 
 **`openBillingPage()`**
 
 Open billing management page.
 
-```ts
-await accountSDK.openBillingPage()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openBillingPage()
+---
+:::
 
 ---
 
@@ -487,28 +617,37 @@ await accountSDK.openBillingPage()
 
 Request user login (opens login dialog).
 
-```ts
-const success = await accountSDK.requestLogin()
-if (success) {
-  // User logged in
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const success = await accountSDK.requestLogin()
+  if (success) {
+    // User logged in
+  }
+---
+:::
 
 **`logout()`**
 
 Logout current user.
 
-```ts
-await accountSDK.logout()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.logout()
+---
+:::
 
 **`openAccountSettings()`**
 
 Open account settings page.
 
-```ts
-await accountSDK.openAccountSettings()
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  await accountSDK.openAccountSettings()
+---
+:::
 
 ---
 
@@ -521,93 +660,105 @@ await accountSDK.openAccountSettings()
 
 **1. Premium Feature Gating**
 
-```ts
-async function showPremiumFeature() {
-  if (!await accountSDK.isPaidUser()) {
-    // Show upgrade prompt
-    const options = accountSDK.getUpgradeOptions()
-    showUpgradeDialog(options)
-    return
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function showPremiumFeature() {
+    if (!await accountSDK.isPaidUser()) {
+      // Show upgrade prompt
+      const options = accountSDK.getUpgradeOptions()
+      showUpgradeDialog(options)
+      return
+    }
+    
+    // Show premium feature
   }
-  
-  // Show premium feature
-}
-```
+---
+:::
 
 **2. Quota Pre-check**
 
-```ts
-async function beforeAiRequest(estimatedTokens: number) {
-  const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
-  
-  if (!quotaCheck.allowed) {
-    throw new Error(`Quota exceeded: ${quotaCheck.reason}`)
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function beforeAiRequest(estimatedTokens: number) {
+    const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
+    
+    if (!quotaCheck.allowed) {
+      throw new Error(`Quota exceeded: ${quotaCheck.reason}`)
+    }
+    
+    // Proceed with request
   }
-  
-  // Proceed with request
-}
-```
+---
+:::
 
 **3. Team Feature Adaptation**
 
-```ts
-async function initTeamFeatures() {
-  if (!await accountSDK.isTeamOrAbove()) {
-    return // Not team tier, skip
-  }
-  
-  const teams = await accountSDK.getTeams()
-  
-  for (const team of teams) {
-    if (team.role === 'owner' || team.role === 'admin') {
-      // Show admin features
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  async function initTeamFeatures() {
+    if (!await accountSDK.isTeamOrAbove()) {
+      return // Not team tier, skip
+    }
+    
+    const teams = await accountSDK.getTeams()
+    
+    for (const team of teams) {
+      if (team.role === 'owner' || team.role === 'admin') {
+        // Show admin features
+      }
     }
   }
-}
-```
+---
+:::
 
 ---
 
 ## Type Definitions
 
-```ts
-enum SubscriptionPlan {
-  FREE = 'free',
-  PRO = 'pro',
-  PLUS = 'plus',
-  TEAM = 'team',
-  ENTERPRISE = 'enterprise',
-}
-
-interface UserProfile {
-  id: string
-  displayName: string
-  username?: string
-  email: string
-  emailVerified: boolean
-  avatarUrl?: string
-  createdAt: number
-  twoFactorEnabled: boolean
-  socialConnections: SocialConnection[]
-}
-
-interface Subscription {
-  id: string
-  plan: SubscriptionPlan
-  status: SubscriptionStatus
-  quota: PlanQuota
-  usage: UsageStats
-  currentPeriodEnd: number
-  autoRenew: boolean
-}
-
-interface QuotaCheckResult {
-  allowed: boolean
-  reason?: string
-  remaining?: number
-  resetAt?: number
-}
-```
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  enum SubscriptionPlan {
+    FREE = 'free',
+    PRO = 'pro',
+    PLUS = 'plus',
+    TEAM = 'team',
+    ENTERPRISE = 'enterprise',
+  }
+  
+  interface UserProfile {
+    id: string
+    displayName: string
+    username?: string
+    email: string
+    emailVerified: boolean
+    avatarUrl?: string
+    createdAt: number
+    twoFactorEnabled: boolean
+    socialConnections: SocialConnection[]
+  }
+  
+  interface Subscription {
+    id: string
+    plan: SubscriptionPlan
+    status: SubscriptionStatus
+    quota: PlanQuota
+    usage: UsageStats
+    currentPeriodEnd: number
+    autoRenew: boolean
+  }
+  
+  interface QuotaCheckResult {
+    allowed: boolean
+    reason?: string
+    remaining?: number
+    resetAt?: number
+  }
+---
+:::
 
 ---
 

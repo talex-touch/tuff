@@ -6,12 +6,14 @@ interface Props {
   githubUrl?: string
   showSearchButton?: boolean
   showDarkToggle?: boolean
+  showLanguageToggle?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  githubUrl: 'https://github.com/talex-touch/tuff',
+  githubUrl: '',
   showSearchButton: false,
   showDarkToggle: true,
+  showLanguageToggle: true,
 })
 
 const { locale } = useI18n()
@@ -131,14 +133,24 @@ onBeforeUnmount(() => {
     </div> -->
 
     <div class="relative flex items-center gap-[1.5] sm:ml-auto">
-      <div class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10" />
-      <LanguageToggle />
-      <div v-if="props.showDarkToggle" class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10" />
-      <DarkToggle
-        v-if="props.showDarkToggle"
+      <template v-if="props.showLanguageToggle">
+        <LanguageToggle />
+      </template>
+      <div
+        v-if="props.showLanguageToggle && (props.showDarkToggle || props.githubUrl)"
+        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
       />
-      <div class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10" />
+      <DarkToggle v-if="props.showDarkToggle" />
+      <div
+        v-if="props.showDarkToggle && props.githubUrl"
+        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
+      />
+      <div
+        v-if="props.githubUrl && !props.showDarkToggle && !props.showLanguageToggle"
+        class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10"
+      />
       <a
+        v-if="props.githubUrl"
         :href="props.githubUrl"
         target="_blank"
         rel="noopener noreferrer"
@@ -146,7 +158,6 @@ onBeforeUnmount(() => {
       >
         <span class="i-carbon-logo-github text-lg" />
       </a>
-      <div class="mx-2 block h-6 w-[1px] bg-black/10 dark:bg-white/10" />
     </div>
   </div>
 </template>

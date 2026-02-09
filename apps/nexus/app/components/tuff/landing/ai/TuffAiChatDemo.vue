@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { gsap } from 'gsap'
 import CoreBoxMock from './CoreBoxMock.vue'
@@ -77,8 +78,10 @@ const promptBank = computed(() => [
   },
 ])
 
+interface PromptItem { question: string, intro: string, bullets: string[], note?: string }
 const activePromptIndex = ref(0)
-const activePrompt = computed(() => promptBank.value[activePromptIndex.value])
+const fallbackPrompt: PromptItem = { question: '', intro: '', bullets: [], note: '' }
+const activePrompt = computed<PromptItem>(() => promptBank.value[activePromptIndex.value] ?? fallbackPrompt)
 const codeExample = ref(`<script setup>
 import { ref, computed, onMounted } from 'vue'
 
@@ -155,7 +158,7 @@ function resetState() {
 }
 
 function revealAnswerContent() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   answerTimeline?.kill()
   answerTimeline = null
@@ -204,7 +207,7 @@ function revealAnswerContent() {
 }
 
 function queueReveal(attempt = 0) {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   if (answerRef.value) {
     revealAnswerContent()
@@ -218,7 +221,7 @@ function queueReveal(attempt = 0) {
 }
 
 function startSequence() {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   resetState()
 
@@ -278,7 +281,7 @@ function handleCommandSelect(command: CoreBoxCommand) {
 }
 
 watch(() => [props.active, props.autoPlay], ([active, autoPlay]) => {
-  if (typeof window === 'undefined')
+  if (!hasWindow())
     return
   if (active && autoPlay) {
     startSequence()
@@ -290,7 +293,7 @@ watch(() => [props.active, props.autoPlay], ([active, autoPlay]) => {
 watch(showAnswer, (visible) => {
   if (visible) {
     nextTick(() => {
-      if (typeof window === 'undefined')
+      if (!hasWindow())
         return
       queueReveal()
     })
@@ -350,9 +353,14 @@ onBeforeUnmount(() => {
                 <div class="ai-chat-demo__code-block" data-reveal-block>
                   <div class="ai-chat-demo__code-header">
                     <span class="ai-chat-demo__code-lang">vue</span>
-                    <button type="button" class="ai-chat-demo__code-copy">
+                    <TxButton
+                      variant="bare"
+                      size="mini"
+                      native-type="button"
+                      class="ai-chat-demo__code-copy"
+                    >
                       <span class="i-carbon-copy" />
-                    </button>
+                    </TxButton>
                   </div>
                   <pre class="ai-chat-demo__code-content"><code>{{ codeExample }}</code></pre>
                 </div>

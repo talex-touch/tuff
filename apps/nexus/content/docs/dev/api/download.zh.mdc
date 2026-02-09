@@ -24,23 +24,26 @@ Download SDK 提供统一的下载任务管理能力，适用于应用更新、�
 
 ## 如何使用
 
-```typescript
-import { useDownloadSdk } from '@talex-touch/utils/renderer'
-
-const download = useDownloadSdk()
-const res = await download.addTask({
-  url: 'https://example.com/file.zip',
-  destination: '/path/to/save',
-  filename: 'file.zip',
-  priority: 50,
-  module: 'resource_download',
-  metadata: { hidden: true }
-})
-
-if (!res.success) {
-  throw new Error(res.error || 'Download failed')
-}
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { useDownloadSdk } from '@talex-touch/utils/renderer'
+  
+  const download = useDownloadSdk()
+  const res = await download.addTask({
+    url: 'https://example.com/file.zip',
+    destination: '/path/to/save',
+    filename: 'file.zip',
+    priority: 50,
+    module: 'resource_download',
+    metadata: { hidden: true }
+  })
+  
+  if (!res.success) {
+    throw new Error(res.error || 'Download failed')
+  }
+---
+:::
 
 ## 常见例子
 

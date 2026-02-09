@@ -60,22 +60,22 @@ async function joinTeam(): Promise<void> {
       </p>
 
       <div class="mt-5 space-y-3">
-        <input
+        <Input
           v-model="code"
           type="text"
           autocomplete="off"
           placeholder="ABCDEFGH"
-          class="w-full rounded-lg border-0 bg-black/5 px-4 py-3 text-sm font-mono text-black placeholder-black/30 outline-none dark:bg-light/5 dark:text-light dark:placeholder-light/30"
+          class="w-full"
           @keyup.enter="joinTeam"
-        >
+        />
 
-        <button
-          class="w-full rounded-lg bg-black px-4 py-3 text-sm font-medium text-white transition hover:bg-black/80 disabled:opacity-50 dark:bg-light dark:text-dark dark:hover:bg-light/80"
+        <Button
+          block
           :disabled="!canSubmit"
           @click="joinTeam"
         >
           {{ pending ? t('team.join.joining', 'Joining...') : t('team.join.join', 'Join') }}
-        </button>
+        </Button>
 
         <p v-if="errorMessage" class="text-sm text-red-500">
           {{ errorMessage }}

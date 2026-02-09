@@ -14,7 +14,11 @@ Avatar 头像组件用于展示用户头像、品牌标识或其他圆形内容�
 
 ## 基础用法
 
-::TuffDemo{title="Avatar" description="图片、名称、图标与默认内容。" code-lang="vue"}
+### Avatar
+
+图片、名称、图标与默认内容。
+
+::TuffDemoWrapper{demo="AvatarBasicDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -26,18 +30,13 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar name="Talex DreamSoul" />
-  <tx-avatar icon="user" />
-  <tx-avatar>U</tx-avatar>
-</div>
 ::
 
 ## 头像尺寸
 
-::TuffDemo{title="Sizes" description="提供 small/medium/large/xlarge 四种预设尺寸。" code-lang="vue"}
+提供 small/medium/large/xlarge 四种预设尺寸。
+
+::TuffDemoWrapper{demo="AvatarSizesDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -49,18 +48,13 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar size="small" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="medium" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="large" src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar size="xlarge" src="https://avatars.githubusercontent.com/u/1?v=4" />
-</div>
 ::
 
 ## 文字头像
 
-::TuffDemo{title="Text" description="使用文字作为头像内容。" code-lang="vue"}
+使用文字作为头像内容。
+
+::TuffDemoWrapper{demo="AvatarTextDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -71,17 +65,13 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar>张</tx-avatar>
-  <tx-avatar>AB</tx-avatar>
-  <tx-avatar>User</tx-avatar>
-</div>
 ::
 
 ## 图标头像
 
-::TuffDemo{title="Icon" description="使用图标作为头像内容。" code-lang="vue"}
+使用图标作为头像内容。
+
+::TuffDemoWrapper{demo="AvatarIconDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -91,16 +81,13 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar icon="user" />
-  <tx-avatar icon="team" />
-</div>
 ::
 
 ## 头像组
 
-::TuffDemo{title="AvatarGroup" description="叠放头像并限制最大数量。" code-lang="vue"}
+叠放头像并限制最大数量。
+
+::TuffDemoWrapper{demo="AvatarGroupDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -113,19 +100,13 @@ code: |
     </TxAvatarGroup>
   </template>
 ---
-#preview
-<tx-avatar-group :max="3" size="small" :overlap="10">
-  <tx-avatar src="https://avatars.githubusercontent.com/u/1?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/2?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/3?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/4?v=4" />
-  <tx-avatar src="https://avatars.githubusercontent.com/u/5?v=4" />
-</tx-avatar-group>
 ::
 
 ## 状态
 
-::TuffDemo{title="Status" description="展示在线状态角标。" code-lang="vue"}
+展示在线状态角标。
+
+::TuffDemoWrapper{demo="AvatarStatusDemo" code-lang="vue"}
 ---
 code: |
   <template>
@@ -137,13 +118,6 @@ code: |
     </div>
   </template>
 ---
-#preview
-<div style="display: flex; gap: 12px; align-items: center;">
-  <tx-avatar status="online" name="Online" />
-  <tx-avatar status="offline" name="Offline" />
-  <tx-avatar status="busy" name="Busy" />
-  <tx-avatar status="away" name="Away" />
-</div>
 ::
 
 ## 可点击头像

@@ -52,6 +52,7 @@ declare global {
     $channel: import('@talex-touch/utils/channel').ITouchClientChannel
     __VUE_ROUTER__?: import('vue-router').Router
     __devAuthToken?: (token: string) => void
+    __devStepUpToken?: (token: string) => void
     $startupInfo: IStartupInfo
     api: import('@talex-touch/utils/preload').PreloadAPI
     ipcRenderer: {

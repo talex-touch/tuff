@@ -3,8 +3,7 @@ import type {
   FileIndexRebuildRequest,
   FileIndexRebuildResult
 } from '@talex-touch/utils/transport/events/types'
-import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents } from '@talex-touch/utils/transport/events'
+import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { ref } from 'vue'
 
 /**
@@ -12,7 +11,7 @@ import { ref } from 'vue'
  * 提供索引状态查询和手动重建功能
  */
 export function useFileIndexMonitor() {
-  const transport = useTuffTransport()
+  const settingsSdk = useSettingsSdk()
 
   const indexProgress = ref<FileIndexProgress | null>(null)
 
@@ -21,7 +20,7 @@ export function useFileIndexMonitor() {
    */
   const getIndexStatus = async () => {
     try {
-      const status = await transport.send(AppEvents.fileIndex.status)
+      const status = await settingsSdk.fileIndex.getStatus()
       return status
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get index status:', error)
@@ -34,7 +33,7 @@ export function useFileIndexMonitor() {
    */
   const getBatteryLevel = async () => {
     try {
-      const battery = await transport.send(AppEvents.fileIndex.batteryLevel)
+      const battery = await settingsSdk.fileIndex.getBatteryLevel()
       return battery
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get battery level:', error)
@@ -47,7 +46,7 @@ export function useFileIndexMonitor() {
    */
   const getIndexStats = async () => {
     try {
-      const stats = await transport.send(AppEvents.fileIndex.stats)
+      const stats = await settingsSdk.fileIndex.getStats()
       return stats
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
@@ -69,7 +68,7 @@ export function useFileIndexMonitor() {
   ): Promise<FileIndexRebuildResult> => {
     try {
       console.log('[FileIndexMonitor] Triggering manual index rebuild...')
-      const result = await transport.send(AppEvents.fileIndex.rebuild, request)
+      const result = await settingsSdk.fileIndex.rebuild(request)
 
       if (result?.requiresConfirm) {
         console.log('[FileIndexMonitor] Rebuild requires confirmation before proceeding')
@@ -95,8 +94,8 @@ export function useFileIndexMonitor() {
     let cancelled = false
     let controller: { cancel: () => void } | null = null
 
-    transport
-      .stream(AppEvents.fileIndex.progress, undefined, {
+    settingsSdk.fileIndex
+      .streamProgress({
         onData: (data) => {
           indexProgress.value = data as FileIndexProgress
           callback(data as FileIndexProgress)

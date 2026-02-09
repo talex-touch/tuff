@@ -293,10 +293,15 @@ function setCardRef(el: any, index: number) {
                 </div>
 
                 <div class="ai-preview-demo__card-footer">
-                  <button type="button" class="ai-preview-demo__card-action-btn">
+                  <TxButton
+                    variant="bare"
+                    size="small"
+                    native-type="button"
+                    class="ai-preview-demo__card-action-btn"
+                  >
                     <span class="i-carbon-copy" />
                     <span>{{ t('landing.os.aiOverview.demo.preview.copyResult') }}</span>
-                  </button>
+                  </TxButton>
                   <div class="ai-preview-demo__card-powered">
                     TuffIntelligence
                   </div>
@@ -313,10 +318,11 @@ function setCardRef(el: any, index: number) {
           {{ t('landing.os.aiOverview.demo.preview.label') }}
         </div>
         <div class="ai-preview-demo__selector-list">
-          <button
+          <TxButton
             v-for="(scenario, index) in scenarios"
             :key="index"
-            type="button"
+            variant="bare"
+            native-type="button"
             class="ai-preview-demo__selector-item"
             :class="{ 'is-active': currentIndex === index }"
             @click="selectScenario(index)"
@@ -330,7 +336,7 @@ function setCardRef(el: any, index: number) {
                 {{ scenario.extra }}
               </div>
             </div>
-          </button>
+          </TxButton>
         </div>
       </div>
     </div>

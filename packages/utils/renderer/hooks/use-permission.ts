@@ -8,14 +8,17 @@ import type {
   PluginPermissionStatus,
 } from '../../permission/types'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useTuffTransport } from '../../transport'
-import { PermissionEvents } from '../../transport/events'
+import { usePermissionSdk } from './use-permission-sdk'
 
 /**
  * Hook for managing plugin permissions
  */
+/**
+ * @deprecated 请优先使用 usePermissionSdk()，该 hook 仅保留兼容壳。
+ */
+
 export function usePermission(pluginId: string) {
-  const transport = useTuffTransport()
+  const permissionSdk = usePermissionSdk()
   const permissions = ref<PermissionGrant[]>([])
   const loading = ref(true)
   const error = ref<string | null>(null)
@@ -27,7 +30,7 @@ export function usePermission(pluginId: string) {
     loading.value = true
     error.value = null
     try {
-      const result = await transport.send(PermissionEvents.api.getPlugin, { pluginId })
+      const result = await permissionSdk.getPlugin({ pluginId })
       permissions.value = result || []
     }
     catch (e) {
@@ -43,7 +46,7 @@ export function usePermission(pluginId: string) {
    */
   async function grant(permissionId: string): Promise<boolean> {
     try {
-      const result = await transport.send(PermissionEvents.api.grant, {
+      const result = await permissionSdk.grant({
         pluginId,
         permissionId,
         grantedBy: 'user',
@@ -63,7 +66,7 @@ export function usePermission(pluginId: string) {
    */
   async function revoke(permissionId: string): Promise<boolean> {
     try {
-      const result = await transport.send(PermissionEvents.api.revoke, {
+      const result = await permissionSdk.revoke({
         pluginId,
         permissionId,
       })
@@ -82,7 +85,7 @@ export function usePermission(pluginId: string) {
    */
   async function grantMultiple(permissionIds: string[]): Promise<boolean> {
     try {
-      const result = await transport.send(PermissionEvents.api.grantMultiple, {
+      const result = await permissionSdk.grantMultiple({
         pluginId,
         permissionIds,
         grantedBy: 'user',
@@ -102,7 +105,7 @@ export function usePermission(pluginId: string) {
    */
   async function revokeAll(): Promise<boolean> {
     try {
-      const result = await transport.send(PermissionEvents.api.revokeAll, {
+      const result = await permissionSdk.revokeAll({
         pluginId,
       })
       if (result?.success) {
@@ -132,7 +135,7 @@ export function usePermission(pluginId: string) {
 
   onMounted(() => {
     refresh()
-    unsubscribe = transport.on(PermissionEvents.push.updated, (payload) => {
+    unsubscribe = permissionSdk.onUpdated((payload) => {
       if (payload?.pluginId === pluginId) {
         refresh()
       }
@@ -160,19 +163,23 @@ export function usePermission(pluginId: string) {
 /**
  * Hook for getting plugin permission status
  */
+/**
+ * @deprecated 请优先使用 usePermissionSdk().getStatus()，该 hook 仅保留兼容壳。
+ */
+
 export function usePermissionStatus(
   pluginId: string,
   sdkapi: number | undefined,
   declared: { required: string[], optional: string[] },
 ) {
-  const transport = useTuffTransport()
+  const permissionSdk = usePermissionSdk()
   const status = ref<PluginPermissionStatus | null>(null)
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await transport.send(PermissionEvents.api.getStatus, {
+      const result = await permissionSdk.getStatus({
         pluginId,
         sdkapi,
         required: declared.required,
@@ -212,15 +219,19 @@ export function usePermissionStatus(
 /**
  * Hook for getting permission registry (all available permissions)
  */
+/**
+ * @deprecated 请优先使用 usePermissionSdk().getRegistry()，该 hook 仅保留兼容壳。
+ */
+
 export function usePermissionRegistry() {
-  const transport = useTuffTransport()
+  const permissionSdk = usePermissionSdk()
   const registry = ref<PermissionDefinition[]>([])
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await transport.send(PermissionEvents.api.getRegistry)
+      const result = await permissionSdk.getRegistry()
       registry.value = result || []
     }
     catch {
@@ -269,15 +280,19 @@ export function usePermissionRegistry() {
 /**
  * Hook for getting all plugin permissions
  */
+/**
+ * @deprecated 请优先使用 usePermissionSdk().getAll()，该 hook 仅保留兼容壳。
+ */
+
 export function useAllPluginPermissions() {
-  const transport = useTuffTransport()
+  const permissionSdk = usePermissionSdk()
   const permissions = ref<Record<string, PermissionGrant[]>>({})
   const loading = ref(true)
 
   async function refresh(): Promise<void> {
     loading.value = true
     try {
-      const result = await transport.send(PermissionEvents.api.getAll)
+      const result = await permissionSdk.getAll()
       permissions.value = result || {}
     }
     catch {
@@ -293,7 +308,7 @@ export function useAllPluginPermissions() {
 
   onMounted(() => {
     refresh()
-    unsubscribe = transport.on(PermissionEvents.push.updated, () => {
+    unsubscribe = permissionSdk.onUpdated(() => {
       refresh()
     })
   })

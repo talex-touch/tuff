@@ -92,10 +92,8 @@ function handleClipboardChange() {
 
 const {
   handlePaste,
-  handleAutoFill,
   clearClipboard,
   resetAutoPasteState,
-  autoPasteActive,
   cleanup: cleanupClipboard
 } = useClipboard(boxOptions, clipboardOptions, handleClipboardChange, searchVal)
 
@@ -218,7 +216,6 @@ const { cleanup: cleanupVisibility, checkAutoClear } = useVisibility({
   boxOptions,
   searchVal,
   clipboardOptions,
-  handleAutoFill,
   handlePaste,
   boxInputRef,
   deactivateAllProviders
@@ -525,7 +522,6 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
           v-if="!isUIMode"
           :box-options="boxOptions"
           :clipboard-options="clipboardOptions"
-          :auto-paste-active="autoPasteActive"
         />
 
         <div class="CoreBox-Configure">
@@ -581,7 +577,7 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
             class="CoreBoxFooter-Sticky"
           />
         </div>
-        <TuffItemAddon :type="addon" :item="activeItem" />
+        <TuffItemAddon :type="addon" :item="activeItem" :search-query="searchVal" />
       </template>
 
       <!-- Preview History Panel - Always mounted to listen to events -->

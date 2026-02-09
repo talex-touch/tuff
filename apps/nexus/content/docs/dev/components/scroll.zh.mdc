@@ -28,53 +28,214 @@ import scrollPullDownUpSource from '~/components/content/demos/ScrollPullDownUpD
 
 ## 基础用法
 
-<DemoBlock title="Scroll" :code="scrollBasicSource" code-lang="vue">
-<template #preview>
-<ScrollBasicDemo />
-</template>
-</DemoBlock>
+### Scroll
+:::TuffDemoWrapper{demo="ScrollScrollDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="demo-container" style="height: 220px;">
+      <div style="height: 100%;">
+        <TouchScroll style="height: 100%;">
+          <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
+            <div v-for="i in 60" :key="i" class="demo-scroll-item">
+              Row {{ i }}
+            </div>
+          </div>
+        </TouchScroll>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## 方向与滚动条
 
-<DemoBlock title="Scroll (horizontal)" :code="scrollHorizontalSource" code-lang="vue">
-<template #preview>
-<ScrollHorizontalDemo />
-</template>
-</DemoBlock>
+### Scroll (horizontal)
+:::TuffDemoWrapper{demo="ScrollScrollHorizontalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="demo-container" style="height: 140px;">
+      <div style="height: 100%;">
+        <TxScroll direction="horizontal" style="height: 100%;">
+          <div style="width: 920px; height: 100%; display: flex; align-items: center; gap: 12px;">
+            <div v-for="i in 24" :key="i" class="demo-scroll-item" style="min-width: 120px;">
+              Col {{ i }}
+            </div>
+          </div>
+        </TxScroll>
+      </div>
+    </div>
+  </template>
+---
+:::
 
-<DemoBlock title="Scroll (bounce + always show scrollbar)" :code="scrollBounceScrollbarSource" code-lang="vue">
-<template #preview>
-<ScrollBounceScrollbarDemo />
-</template>
-</DemoBlock>
+### Scroll (bounce + always show scrollbar)
+:::TuffDemoWrapper{demo="ScrollScrollBounceAlwaysShowScrollbarDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="demo-container" style="height: 220px;">
+      <div style="height: 100%;">
+        <TxScroll :bounce="true" :scrollbar-always-visible="true" style="height: 100%;">
+          <div style="height: 160px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="demo-scroll-item">
+              Short content
+            </div>
+            <div class="demo-scroll-item">
+              No boundary but scrollbar should be visible
+            </div>
+          </div>
+        </TxScroll>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## 滚动链（Scroll Chaining）
 
 默认会阻止内层滚动把外层一起带着滚动（到边界时也不会继续传递）。如果你希望滚到顶/底后继续滚动外层，需要显式开启 `scrollChaining`。
 
-<DemoBlock title="Scroll (scroll chaining)" :code="scrollChainingSource" code-lang="vue">
-<template #preview>
-<ScrollChainingDemo />
-</template>
-</DemoBlock>
+### Scroll (scroll chaining)
+:::TuffDemoWrapper{demo="ScrollScrollScrollChainingDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="demo-container" style="height: 320px;">
+      <div style="height: 100%; overflow: auto; padding: 12px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12);">
+        <div style="height: 720px; display: flex; flex-direction: column; gap: 12px;">
+          <div class="demo-scroll-item">
+            Outer scroll area (top)
+          </div>
+
+          <div style="height: 160px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;">
+            <TxScroll style="height: 100%;" :bounce="true">
+              <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
+                <div class="demo-scroll-item">
+                  Inner (default): scrollChaining = false
+                </div>
+                <div v-for="i in 18" :key="i" class="demo-scroll-item">
+                  Item {{ i }}
+                </div>
+              </div>
+            </TxScroll>
+          </div>
+
+          <div class="demo-scroll-item">
+            Outer content (middle)
+          </div>
+
+          <div style="height: 160px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;">
+            <TxScroll style="height: 100%;" :bounce="true" :scroll-chaining="true">
+              <div style="height: 520px; display: flex; flex-direction: column; gap: 8px;">
+                <div class="demo-scroll-item">
+                  Inner (opt-in): scrollChaining = true
+                </div>
+                <div v-for="i in 18" :key="i" class="demo-scroll-item">
+                  Item {{ i }}
+                </div>
+              </div>
+            </TxScroll>
+          </div>
+
+          <div class="demo-scroll-item">
+            Outer scroll area (bottom)
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## 使用原生滚动
 
 当你不需要 BetterScroll 行为时，可以切换为原生滚动（仍保持统一容器结构）。
 
-<DemoBlock title="Scroll (native)" :code="scrollNativeSource" code-lang="vue">
-<template #preview>
-<ScrollNativeDemo />
-</template>
-</DemoBlock>
+### Scroll (native)
+:::TuffDemoWrapper{demo="ScrollScrollNativeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div class="demo-container" style="height: 220px;">
+      <div style="height: 100%;">
+        <TxScroll native style="height: 100%;">
+          <div style="height: 1200px; display: flex; flex-direction: column; gap: 8px;">
+            <div v-for="i in 60" :key="i" class="demo-scroll-item">
+              Native Row {{ i }}
+            </div>
+          </div>
+        </TxScroll>
+      </div>
+    </div>
+  </template>
+---
+:::
 
 ## 下拉刷新与上拉加载
 
-<DemoBlock title="Scroll (pull down + pull up)" :code="scrollPullDownUpSource" code-lang="vue">
-<template #preview>
-<ScrollPullDownUpDemo />
-</template>
-</DemoBlock>
+### Scroll (pull down + pull up)
+:::TuffDemoWrapper{demo="ScrollScrollPullDownPullUpDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const items = ref(Array.from({ length: 30 }, (_, i) => i + 1))
+  const scrollRef = ref<any>(null)
+  const loading = ref(false)
+
+  function sleep(ms: number) {
+    return new Promise<void>(resolve => setTimeout(resolve, ms))
+  }
+
+  async function onPullingDown() {
+    loading.value = true
+    await sleep(600)
+    items.value = Array.from({ length: 30 }, (_, i) => i + 1)
+    loading.value = false
+    scrollRef.value?.finishPullDown?.()
+  }
+
+  async function onPullingUp() {
+    if (loading.value)
+      return
+    loading.value = true
+    await sleep(600)
+    const last = items.value[items.value.length - 1] ?? 0
+    items.value.push(...Array.from({ length: 20 }, (_, i) => last + i + 1))
+    loading.value = false
+    scrollRef.value?.finishPullUp?.()
+  }
+  </script>
+
+  <template>
+    <div class="demo-container" style="height: 260px;">
+      <TxScroll
+        ref="scrollRef"
+        style="height: 100%;"
+        :pull-down-refresh="true"
+        :pull-up-load="true"
+        @pulling-down="onPullingDown"
+        @pulling-up="onPullingUp"
+      >
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div v-for="i in items" :key="i" class="demo-scroll-item">
+            Item {{ i }}
+          </div>
+        </div>
+
+        <template #footer>
+          <div style="padding: 10px 0; color: var(--tx-text-color-secondary); text-align: center;">
+            {{ loading ? 'Loading...' : 'Pull up to load more' }}
+          </div>
+        </template>
+      </TxScroll>
+    </div>
+  </template>
+---
+:::
 
 ## API
 

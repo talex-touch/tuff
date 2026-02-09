@@ -26,9 +26,9 @@ const autoUpdate = ref(false)
         description="选择显示语言"
         default-icon="i-carbon-language"
       >
-        <button class="demo-button">
+        <TxButton size="small" variant="secondary">
           English
-        </button>
+        </TxButton>
       </TxBlockSlot>
 
       <TxBlockLine
@@ -65,12 +65,4 @@ const autoUpdate = ref(false)
   max-width: 600px;
 }
 
-.demo-button {
-  padding: 4px 12px;
-  border: 1px solid var(--tx-border-color, #dcdfe6);
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
-  cursor: pointer;
-}
 </style>

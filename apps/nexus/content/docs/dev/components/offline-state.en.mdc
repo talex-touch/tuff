@@ -13,27 +13,18 @@ syncStatus: migrated
 
 ## 基础用法
 
-<DemoBlock title="OfflineState">
-<template #preview>
-<div style="max-width: 420px;">
-  <TxOfflineState
-    description="Network connection lost."
-    :primary-action="{ label: 'Retry', type: 'primary' }"
-  />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxOfflineState
-    description="Network connection lost."
-    :primary-action="{ label: 'Retry', type: 'primary' }"
-  />
-</template>
-```
-</template>
-</DemoBlock>
+### OfflineState
+:::TuffDemoWrapper{demo="OfflineStateOfflineStateDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxOfflineState
+      description="Network connection lost."
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+    />
+  </template>
+---
+:::
 
 ## API
 

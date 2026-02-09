@@ -1,15 +1,16 @@
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, ref, useAttrs } from 'vue'
 
 defineOptions({
   name: 'TuffInput',
+  inheritAttrs: false,
 })
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string
+    modelValue?: string | number
     placeholder?: string
-    type?: 'text' | 'password' | 'textarea'
+    type?: 'text' | 'password' | 'textarea' | 'date' | 'email' | 'number'
     disabled?: boolean
     readonly?: boolean
     clearable?: boolean
@@ -27,25 +28,35 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string]
-  'input': [value: string]
+  'update:modelValue': [value: string | number]
+  'input': [value: string | number]
   'focus': [event: FocusEvent]
   'blur': [event: FocusEvent]
   'clear': []
 }>()
 
+const attrs = useAttrs()
+
+const inputAttrs = computed(() => {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+})
+
 const inputValue = computed({
-  get: () => props.modelValue,
+  get: () => props.modelValue ?? '',
   set: (val: string) => {
-    emit('update:modelValue', val)
-    emit('input', val)
+    const normalized = props.type === 'number'
+      ? (val === '' ? '' : Number(val))
+      : val
+    emit('update:modelValue', normalized)
+    emit('input', normalized)
   },
 })
 
 const inputEl = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
 const showClear = computed(() => {
-  return props.clearable && inputValue.value && !props.disabled && !props.readonly
+  return props.clearable && inputValue.value !== '' && inputValue.value !== null && inputValue.value !== undefined && !props.disabled && !props.readonly
 })
 
 function handleClear() {
@@ -79,7 +90,9 @@ defineExpose({
         'is-readonly': readonly,
         'is-textarea': type === 'textarea',
       },
+      attrs.class,
     ]"
+    :style="attrs.style"
   >
     <slot name="prefix" />
 
@@ -92,6 +105,7 @@ defineExpose({
       :readonly="readonly"
       :rows="rows"
       class="tx-input__inner tx-input__textarea"
+      v-bind="inputAttrs"
       @focus="handleFocus"
       @blur="handleBlur"
     />
@@ -104,6 +118,7 @@ defineExpose({
       :disabled="disabled"
       :readonly="readonly"
       class="tx-input__inner"
+      v-bind="inputAttrs"
       @focus="handleFocus"
       @blur="handleBlur"
     >

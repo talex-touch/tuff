@@ -15,43 +15,52 @@ TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的�
 
 ## 安装
 
-```bash
-# npm
-npm install @talex-touch/tuffex
-
-# yarn
-yarn add @talex-touch/tuffex
-
-# pnpm（推荐）
-pnpm add @talex-touch/tuffex
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # npm
+  npm install @talex-touch/tuffex
+  
+  # yarn
+  yarn add @talex-touch/tuffex
+  
+  # pnpm（推荐）
+  pnpm add @talex-touch/tuffex
+---
+:::
 
 ## 快速开始
 
 **完整导入**
 
-```typescript
-import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TuffUI)
-app.mount('#app')
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import TuffUI from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+  
+  const app = createApp(App)
+  app.use(TuffUI)
+  app.mount('#app')
+---
+:::
 
 **按需导入（推荐）**
 
-```typescript
-import { createApp } from 'vue'
-import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-app.use(TuffButton)
-app.use(TuffSwitch)
-app.use(TuffFlatButton)
-```
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  import { createApp } from 'vue'
+  import { TuffButton, TuffSwitch, TuffFlatButton } from '@talex-touch/tuffex'
+  import '@talex-touch/tuffex/style.css'
+  
+  const app = createApp(App)
+  app.use(TuffButton)
+  app.use(TuffSwitch)
+  app.use(TuffFlatButton)
+---
+:::
 
 ## 核心特性
 
@@ -91,24 +100,27 @@ app.use(TuffFlatButton)
 
 TUFF UI 通过 CSS 变量支持自定义主题：
 
-```css
-:root {
-  /* 主色调 */
-  --tx-color-primary: #409eff;
-  --tx-color-primary-light-3: #79bbff;
-  
-  /* 文本颜色 */
-  --tx-text-color-primary: #303133;
-  --tx-text-color-secondary: #909399;
-  
-  /* 边框和圆角 */
-  --tx-border-color: #dcdfe6;
-  --tx-border-radius-base: 4px;
-  
-  /* 过渡 */
-  --tx-transition-duration: 0.3s;
-}
-```
+:::TuffCodeBlock{lang="css"}
+---
+code: |
+  :root {
+    /* 主色调 */
+    --tx-color-primary: #409eff;
+    --tx-color-primary-light-3: #79bbff;
+    
+    /* 文本颜色 */
+    --tx-text-color-primary: #303133;
+    --tx-text-color-secondary: #909399;
+    
+    /* 边框和圆角 */
+    --tx-border-color: #dcdfe6;
+    --tx-border-radius-base: 4px;
+    
+    /* 过渡 */
+    --tx-transition-duration: 0.3s;
+  }
+---
+:::
 
 ## 技术栈
 
@@ -122,14 +134,17 @@ TUFF UI 通过 CSS 变量支持自定义主题：
 
 ## 开发
 
-```bash
-# 在 monorepo 根目录
-pnpm install
-
-# 在 packages/tuffex 目录
-pnpm docs:dev    # 启动文档服务器 :8000
-pnpm build       # 构建库
-```
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  # 在 monorepo 根目录
+  pnpm install
+  
+  # 在 packages/tuffex 目录
+  pnpm docs:dev    # 启动文档服务器 :8000
+  pnpm build       # 构建库
+---
+:::
 
 ## 设计理念
 

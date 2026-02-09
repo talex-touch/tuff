@@ -5,7 +5,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
 import type { ElMessageBoxOptions } from 'element-plus'
 import { ElButton, ElInput, ElMessageBox } from 'element-plus'
-import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
 import { appSetting } from '../channel/storage/index'
@@ -21,8 +21,10 @@ import {
   isLocalAuthMode,
   setAppAuthToken
 } from './auth-env'
+import { attestCurrentDevice } from './device-attest'
 
 let authCallbackCleanup: (() => void) | null = null
+let stepUpCallbackCleanup: (() => void) | null = null
 let focusPromptCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
@@ -131,6 +133,99 @@ const authLoadingState = reactive({
   loginProgress: 0,
   loginTimeRemaining: 0
 })
+
+const STEP_UP_TOKEN_TTL_MS = 1000 * 60 * 10
+const stepUpToken = ref<string | null>(null)
+const stepUpTokenExpiresAt = ref<number>(0)
+
+function setStepUpToken(token: string): void {
+  const trimmed = token.trim()
+  if (!trimmed) return
+  stepUpToken.value = trimmed
+  stepUpTokenExpiresAt.value = Date.now() + STEP_UP_TOKEN_TTL_MS
+}
+
+function clearStepUpToken(): void {
+  stepUpToken.value = null
+  stepUpTokenExpiresAt.value = 0
+}
+
+function getStepUpToken(): string | null {
+  if (!stepUpToken.value) return null
+  if (stepUpTokenExpiresAt.value && stepUpTokenExpiresAt.value <= Date.now()) {
+    clearStepUpToken()
+    return null
+  }
+  return stepUpToken.value
+}
+
+function isStepUpRequiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+
+  const candidate = error as {
+    errorCode?: unknown
+    message?: unknown
+    data?: unknown
+  }
+  const errorCode = typeof candidate.errorCode === 'string' ? candidate.errorCode : ''
+  if (errorCode !== 'DEVICE_NOT_AUTHORIZED') {
+    return false
+  }
+
+  const message = typeof candidate.message === 'string' ? candidate.message : ''
+  const detail =
+    candidate.data && typeof candidate.data === 'object' && 'message' in candidate.data
+      ? typeof (candidate.data as { message?: unknown }).message === 'string'
+        ? (candidate.data as { message: string }).message
+        : ''
+      : ''
+
+  return /mf2a|step[-\s]?up|required/i.test(String(message) + ' ' + String(detail))
+}
+
+async function waitForStepUpToken(timeoutMs = 2 * 60 * 1000): Promise<string> {
+  const existing = getStepUpToken()
+  if (existing) {
+    return existing
+  }
+
+  return await new Promise((resolve, reject) => {
+    const timer = setInterval(() => {
+      const token = getStepUpToken()
+      if (!token) {
+        return
+      }
+      clearInterval(timer)
+      clearTimeout(timeout)
+      resolve(token)
+    }, 250)
+
+    const timeout = setTimeout(() => {
+      clearInterval(timer)
+      reject(new Error('Step-up verification timeout'))
+    }, timeoutMs)
+  })
+}
+
+async function runWithStepUpToken<T>(
+  executor: (stepUpToken: string | null) => Promise<T>
+): Promise<T> {
+  const currentToken = getStepUpToken()
+  try {
+    return await executor(currentToken)
+  } catch (error) {
+    if (!isStepUpRequiredError(error)) {
+      throw error
+    }
+
+    clearStepUpToken()
+    await requestStepUp()
+    const refreshedToken = await waitForStepUpToken()
+    return await executor(refreshedToken)
+  }
+}
 
 const ERROR_MESSAGES = {
   INITIALIZATION_FAILED: '认证系统初始化失败，请检查网络连接或稍后重试',
@@ -313,6 +408,16 @@ async function openLoginSettings(): Promise<boolean> {
   return false
 }
 
+async function requestStepUp(): Promise<void> {
+  if (isLocalAuthMode()) {
+    toast.info('本地模式无需二次验证')
+    return
+  }
+  const url = `${getAuthBaseUrl()}/auth/stepup-callback`
+  await appSdk.openExternal(url)
+  toast.info('请在浏览器中完成二次验证')
+}
+
 async function initializeAuth() {
   if (isInitialized) return
 
@@ -333,6 +438,13 @@ async function initializeAuth() {
       const remoteUser = await fetchRemoteUser(appToken)
       if (remoteUser) {
         updateAuthState(remoteUser, appToken)
+        void attestCurrentDevice(appToken, {
+          getOS: appSdk.getOS,
+          getSecureValue: appSdk.getSecureValue,
+          setSecureValue: appSdk.setSecureValue
+        }).catch((error) => {
+          console.debug('[useAuth] Device attestation skipped:', error)
+        })
       } else {
         clearAppAuthToken()
         updateAuthState(null)
@@ -494,6 +606,13 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       throw new Error('Failed to fetch user profile')
     }
     updateAuthState(remoteUser, resolvedToken)
+    void attestCurrentDevice(resolvedToken, {
+      getOS: appSdk.getOS,
+      getSecureValue: appSdk.getSecureValue,
+      setSecureValue: appSdk.setSecureValue
+    }).catch((error) => {
+      console.debug('[useAuth] Device attestation skipped:', error)
+    })
     authLoadingState.loginProgress = 100
     toast.success('登录成功')
 
@@ -518,7 +637,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
 }
 
 function setupAuthCallbackListener(): void {
-  if (authCallbackCleanup) return
+  if (authCallbackCleanup && stepUpCallbackCleanup) return
   const authCallbackEvent = defineRawEvent<{ token?: string; appToken?: string }, void>(
     'auth:external-callback'
   )
@@ -528,6 +647,14 @@ function setupAuthCallbackListener(): void {
     if (token || appToken) {
       handleExternalAuthCallback(token, appToken)
     }
+  })
+
+  const stepUpCallbackEvent = defineRawEvent<{ loginToken?: string }, void>('auth:stepup-callback')
+  stepUpCallbackCleanup = transport.on(stepUpCallbackEvent, (payload) => {
+    const loginToken = payload?.loginToken || ''
+    if (!loginToken) return
+    setStepUpToken(loginToken)
+    toast.success('二次验证完成')
   })
 
   if (isDevEnv()) {
@@ -540,6 +667,10 @@ function setupAuthCallbackListener(): void {
     window.__devAuthToken = (token: string) => {
       handleExternalAuthCallback(token)
     }
+    window.__devStepUpToken = (token: string) => {
+      setStepUpToken(token)
+      toast.success('二次验证完成')
+    }
   }
 }
 
@@ -547,6 +678,10 @@ function cleanupAuthCallbackListener(): void {
   if (authCallbackCleanup) {
     authCallbackCleanup()
     authCallbackCleanup = null
+  }
+  if (stepUpCallbackCleanup) {
+    stepUpCallbackCleanup()
+    stepUpCallbackCleanup = null
   }
 }
 
@@ -791,6 +926,10 @@ export function useAuth() {
     getUserBio,
     updateUserProfile,
     updateUserAvatar,
-    openLoginSettings
+    openLoginSettings,
+    requestStepUp,
+    runWithStepUpToken,
+    getStepUpToken,
+    clearStepUpToken
   }
 }

@@ -14,6 +14,7 @@
 - [basic-usage.js](./basic-usage.js) - SDK sendMessage 基础
 - [complete-example.js](./complete-example.js) - 完整插件示例
 - [index.js](./index.js) - SDK 封装样例
+- [power-sdk-example.js](./power-sdk-example.js) - PowerSDK 低电量适配示例
 - [plugin-index-example.js](./plugin-index-example.js) - IFeatureLifeCycle index.js 示例
 - [plugin-receiver-example.js](./plugin-receiver-example.js) - 插件接收消息示例
 

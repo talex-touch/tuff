@@ -44,6 +44,8 @@ export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv
     if (arg.startsWith('--') && arg.includes('=')) {
       const [key, ...valueParts] = arg.slice(2).split('=')
       const value = valueParts.join('=')
+      if (!key)
+        continue
       const camelCaseKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
       mapper[camelCaseKey] = value
     }

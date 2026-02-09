@@ -38,23 +38,12 @@ const messages = ref([
 
 ## 基础用法
 
-<DemoBlock title="ChatList">
-<template #preview>
-<div style="width: 680px;">
-  <TxChatList
-    :messages="messages"
-    :markdown="true"
-    :stagger="true"
-    @imageClick="(e) => console.log('imageClick', e)"
-  />
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxChatList :messages="messages" :markdown="true" :stagger="true" />
-</template>
-```
-</template>
-</DemoBlock>
+### ChatList
+:::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxChatList :messages="messages" :markdown="true" :stagger="true" />
+  </template>
+---
+:::

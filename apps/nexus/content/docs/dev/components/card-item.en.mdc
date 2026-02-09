@@ -16,49 +16,20 @@ const enabled = ref(true)
 
 ## 基础用法
 
-<DemoBlock title="CardItem">
-<template #preview>
-<div style="display: flex; flex-direction: column; gap: 10px; width: 360px;">
-  <TxCardItem
-    title="Talex"
-    subtitle="@talex"
-    description="A reusable card item with avatar on the left and content on the right."
-    avatar-text="T"
-    clickable
-  />
-
-  <TxCardItem
-    title="Downloads"
-    description="Show as icon avatar"
-    icon-class="i-carbon-download"
-  />
-
-  <TxCardItem
-    title="Enable feature"
-    description="Right area supports arbitrary actions"
-    icon-class="i-carbon-settings"
-  >
-    <template #right>
-      <TxSwitch v-model="enabled" />
-      <i class="i-carbon-chevron-right" style="font-size: 18px; color: var(--tx-text-color-secondary);" />
-    </template>
-  </TxCardItem>
-</div>
-</template>
-
-<template #code>
-```vue
-<template>
-  <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
-    <template #right>
-      <TxSwitch v-model="enabled" />
-      <i class="i-carbon-chevron-right" />
-    </template>
-  </TxCardItem>
-</template>
-```
-</template>
-</DemoBlock>
+### CardItem
+:::TuffDemoWrapper{demo="CardItemCardItemDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxCardItem title="Enable feature" description="Right area supports actions" icon-class="i-carbon-settings">
+      <template #right>
+        <TxSwitch v-model="enabled" />
+        <i class="i-carbon-chevron-right" />
+      </template>
+    </TxCardItem>
+  </template>
+---
+:::
 
 ## API
 

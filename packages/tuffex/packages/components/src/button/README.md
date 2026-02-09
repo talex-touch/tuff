@@ -80,7 +80,9 @@ import { TxButton } from '@talex-touch/touchx-ui'
 | round | `boolean` | `false` | 是否为圆角按钮 |
 | circle | `boolean` | `false` | 是否为圆形按钮 |
 | loading | `boolean` | `false` | 是否显示加载状态 |
+| loadingVariant | `'spinner' \| 'bar'` | `'spinner'` | 加载样式变体 |
 | disabled | `boolean` | `false` | 是否禁用 |
+| border | `boolean` | `true` | 是否显示边框 |
 | icon | `string` | - | 图标名称 |
 | autofocus | `boolean` | `false` | 是否自动聚焦 |
 | nativeType | `'button' \| 'submit' \| 'reset'` | `'button'` | 原生 type 属性 |
