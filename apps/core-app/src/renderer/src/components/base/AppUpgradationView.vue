@@ -1,5 +1,5 @@
 <script lang="ts" name="AppUpgradationView" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxScroll } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -54,23 +54,29 @@ const publishedAt = computed<string>(() => {
 </script>
 
 <template>
-  <div class="AppUpgradation-Container flex flex-col items-center justify-center">
-    <p>{{ t('updateModal.title') }}</p>
-    <span>{{ t('updateModal.publishedAt', { time: publishedAt }) }}</span>
+  <div class="AppUpgradation-Container">
+    <div class="AppUpgradation-Header">
+      <p>{{ t('settings.updateModal.title') }}</p>
+      <span>{{ t('settings.updateModal.publishedAt', { time: publishedAt }) }}</span>
+    </div>
 
-    <div class="AppUpgradation-Content-Markdown h-full overflow-hidden">
-      <FlatMarkdown :model-value="release.body" :readonly="true" />
+    <div class="AppUpgradation-Body">
+      <TxScroll class="AppUpgradation-Scroll" :no-padding="true" :bar-size="6">
+        <div class="AppUpgradation-Content-Markdown">
+          <FlatMarkdown :model-value="release.body" :readonly="true" />
+        </div>
+      </TxScroll>
     </div>
 
     <div class="AppUpgradation-Content">
       <TxButton variant="flat" @click="handleSkip">
-        {{ t('updateModal.skip') }}
+        {{ t('settings.updateModal.skip') }}
       </TxButton>
       <TxButton variant="flat" @click="handleRemindLater">
-        {{ t('updateModal.remindLater') }}
+        {{ t('settings.updateModal.remindLater') }}
       </TxButton>
       <TxButton variant="flat" type="primary" @click="handleUpdateNow">
-        {{ t('updateModal.updateNow') }}
+        {{ t('settings.updateModal.updateNow') }}
       </TxButton>
     </div>
   </div>
@@ -79,33 +85,69 @@ const publishedAt = computed<string>(() => {
 <style lang="scss" scoped>
 :deep(.FlatMarkdown-Container) {
   position: relative;
-
-  max-height: calc(85vh - 220px);
-
+  width: 100%;
+  height: 100%;
   font-size: 12px;
 }
 
 .AppUpgradation-Container {
   position: relative;
-
+  display: flex;
+  flex-direction: column;
   min-width: 480px;
+  width: min(720px, 90vw);
+  height: min(70vh, 560px);
+  min-height: 360px;
+  overflow: hidden;
+  gap: 8px;
+}
+
+.AppUpgradation-Header {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+
+  p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  span {
+    display: block;
+    font-size: 12px;
+    text-align: center;
+    color: var(--el-text-color-secondary);
+  }
+}
+
+.AppUpgradation-Body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.AppUpgradation-Scroll {
   width: 100%;
   height: 100%;
+  min-height: 0;
+}
 
-  overflow: hidden;
+.AppUpgradation-Content-Markdown {
+  height: 100%;
+  min-height: 100%;
 }
 
 .AppUpgradation-Content {
   position: relative;
   margin: 8px 5px;
   display: flex;
-
   justify-content: space-around;
-
   gap: 2rem;
-
   height: 40px;
-
-  // bottom: 1.5rem;
+  flex: 0 0 auto;
 }
 </style>

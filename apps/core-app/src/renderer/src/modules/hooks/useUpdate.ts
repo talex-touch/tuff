@@ -196,7 +196,7 @@ export class AppUpdate {
   private getDefaultSettings(): UpdateSettings {
     const defaultChannel =
       this.version.channel === AppPreviewChannel.SNAPSHOT
-        ? AppPreviewChannel.SNAPSHOT
+        ? AppPreviewChannel.BETA
         : AppPreviewChannel.RELEASE
 
     return {
@@ -252,7 +252,7 @@ export class AppUpdate {
       const payload: Partial<UpdateSettings> = { ...settings }
 
       if (this.version.channel === AppPreviewChannel.SNAPSHOT) {
-        payload.updateChannel = AppPreviewChannel.SNAPSHOT
+        payload.updateChannel = AppPreviewChannel.BETA
       }
 
       if ('lastCheckedAt' in payload) {

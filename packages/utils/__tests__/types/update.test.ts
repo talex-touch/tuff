@@ -19,9 +19,9 @@ describe('update tag helpers', () => {
       expect(resolveUpdateChannelLabel('BETA.1')).toBe(AppPreviewChannel.BETA)
     })
 
-    it('maps snapshot labels to SNAPSHOT', () => {
-      expect(resolveUpdateChannelLabel('snapshot')).toBe(AppPreviewChannel.SNAPSHOT)
-      expect(resolveUpdateChannelLabel('alpha')).toBe(AppPreviewChannel.SNAPSHOT)
+    it('maps snapshot labels to BETA', () => {
+      expect(resolveUpdateChannelLabel('snapshot')).toBe(AppPreviewChannel.BETA)
+      expect(resolveUpdateChannelLabel('alpha')).toBe(AppPreviewChannel.BETA)
     })
 
     it('maps release labels to RELEASE', () => {
@@ -56,8 +56,12 @@ describe('update tag helpers', () => {
       expect(parseUpdateTag('1.2.3').channel).toBe(AppPreviewChannel.RELEASE)
     })
 
-    it('parses alpha tags as snapshot', () => {
-      expect(parseUpdateTag('v1.2.3-alpha').channel).toBe(AppPreviewChannel.SNAPSHOT)
+    it('parses alpha tags as beta', () => {
+      expect(parseUpdateTag('v1.2.3-alpha').channel).toBe(AppPreviewChannel.BETA)
+    })
+
+    it('parses snapshot tags as beta', () => {
+      expect(parseUpdateTag('v1.2.3-snapshot.2').channel).toBe(AppPreviewChannel.BETA)
     })
   })
 })
