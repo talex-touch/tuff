@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from '#imports'
-import { computed, onMounted, watch, watchEffect } from 'vue'
+import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -14,10 +14,12 @@ const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { locale, setLocale } = useI18n()
 const { syncLocaleChanges, getSavedLocale } = useUserLocale()
 const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
-const { status } = useAuth()
+const { status, getSession } = useAuth()
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
+const protectedSessionRecheckDone = ref(false)
+const protectedSessionRecheckRunning = ref(false)
 
 type SupportedLocale = 'en' | 'zh'
 
@@ -152,10 +154,35 @@ watchEffect(() => {
 })
 
 watchEffect(() => {
+  if (import.meta.server)
+    return
+
   if (!isProtectedRoute.value)
     return
+
+  if (status.value === 'authenticated') {
+    protectedSessionRecheckDone.value = false
+    protectedSessionRecheckRunning.value = false
+    return
+  }
+
   if (status.value !== 'unauthenticated')
     return
+
+  if (!protectedSessionRecheckDone.value && !protectedSessionRecheckRunning.value) {
+    protectedSessionRecheckRunning.value = true
+    void getSession()
+      .catch(() => {})
+      .finally(() => {
+        protectedSessionRecheckRunning.value = false
+        protectedSessionRecheckDone.value = true
+      })
+    return
+  }
+
+  if (protectedSessionRecheckRunning.value)
+    return
+
   router.replace({
     path: '/sign-in',
     query: {

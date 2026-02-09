@@ -258,6 +258,11 @@ export interface AuthDevice {
   tokenVersion: number
 }
 
+export interface LinkedAccount {
+  provider: string
+  providerAccountId: string
+}
+
 function mapUser(row: Record<string, any> | null): AuthUser | null {
   if (!row)
     return null
@@ -580,6 +585,25 @@ export async function getUserByAccount(event: H3Event, provider: string, provide
     WHERE a.provider = ? AND a.provider_account_id = ?
   `).bind(provider, providerAccountId).first()
   return mapUser(row as Record<string, any> | null)
+}
+
+export async function listUserLinkedAccounts(event: H3Event, userId: string): Promise<LinkedAccount[]> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const result = await db.prepare(`
+    SELECT provider, provider_account_id
+    FROM ${ACCOUNTS_TABLE}
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+  `).bind(userId).all()
+
+  const rows = (result.results ?? []) as Array<{ provider?: string, provider_account_id?: string }>
+  return rows
+    .filter(row => typeof row.provider === 'string' && typeof row.provider_account_id === 'string')
+    .map(row => ({
+      provider: row.provider as string,
+      providerAccountId: row.provider_account_id as string,
+    }))
 }
 
 export async function listPasskeys(event: H3Event, userId: string) {

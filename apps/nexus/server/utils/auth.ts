@@ -111,7 +111,8 @@ export async function createAppToken(
 ): Promise<string> {
   const secret = getAppJwtSecret()
   const now = Math.floor(Date.now() / 1000)
-  const deviceId = options?.deviceId ?? readDeviceId(event)
+  const hasExplicitDeviceId = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'deviceId'))
+  const deviceId = hasExplicitDeviceId ? options?.deviceId ?? null : readDeviceId(event)
   let deviceTokenVersion: number | undefined
 
   if (deviceId) {

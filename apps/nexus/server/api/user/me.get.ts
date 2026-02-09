@@ -1,5 +1,5 @@
 import { requireSessionAuth } from '../../utils/auth'
-import { ensureDeviceForRequest, getUserById, listPasskeys } from '../../utils/authStore'
+import { ensureDeviceForRequest, getUserById, listPasskeys, listUserLinkedAccounts } from '../../utils/authStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireSessionAuth(event)
@@ -10,6 +10,8 @@ export default defineEventHandler(async (event) => {
     return null
 
   const passkeys = await listPasskeys(event, userId)
+  const linkedAccounts = await listUserLinkedAccounts(event, userId)
+  const linkedProviders = [...new Set(linkedAccounts.map(account => account.provider))]
 
   return {
     id: user.id,
@@ -22,5 +24,7 @@ export default defineEventHandler(async (event) => {
     emailState: user.emailState,
     isRestricted: user.emailState !== 'verified',
     passkeyCount: passkeys.length,
+    linkedProviders,
+    linkedAccounts,
   }
 })

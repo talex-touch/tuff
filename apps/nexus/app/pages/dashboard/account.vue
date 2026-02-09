@@ -10,6 +10,8 @@ import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const { user, refresh } = useAuthUser()
 const { signIn } = useAuth()
 
@@ -27,6 +29,64 @@ const passkeyLoading = ref(false)
 const passkeyMessage = ref('')
 
 const hasBoundPasskey = computed(() => (user.value?.passkeyCount ?? 0) > 0)
+const linkedAccounts = computed(() => user.value?.linkedAccounts ?? [])
+
+const githubAccount = computed(() => linkedAccounts.value.find(account => account.provider === 'github') ?? null)
+const linuxdoAccount = computed(() => linkedAccounts.value.find(account => account.provider === 'linuxdo') ?? null)
+
+const isGithubBound = computed(() => Boolean(githubAccount.value))
+const isLinuxdoBound = computed(() => Boolean(linuxdoAccount.value))
+
+function providerLabel(provider: OauthProvider) {
+  return provider === 'github' ? 'GitHub' : 'LinuxDO'
+}
+
+function boundTarget(provider: OauthProvider, accountId?: string | null) {
+  const label = providerLabel(provider)
+  return accountId ? `${label} (${accountId})` : label
+}
+
+function boundMessage(provider: OauthProvider, accountId?: string | null) {
+  const target = boundTarget(provider, accountId)
+  return t('dashboard.account.boundTo', { target }, `已绑定到 ${target}`)
+}
+
+function normalizeQueryValue(value: string | string[] | undefined) {
+  if (Array.isArray(value))
+    return value[0] ?? null
+  return typeof value === 'string' ? value : null
+}
+
+function parseBoundProvider(value: string | null): OauthProvider | null {
+  if (value === 'github' || value === 'linuxdo')
+    return value
+  return null
+}
+
+async function clearOauthBoundQuery() {
+  if (!('oauth_bound' in route.query))
+    return
+
+  const nextQuery = { ...route.query } as Record<string, string | string[]>
+  delete nextQuery.oauth_bound
+  await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
+}
+
+watch(
+  () => route.query.oauth_bound,
+  (value) => {
+    const provider = parseBoundProvider(normalizeQueryValue(value as string | string[] | undefined))
+    if (!provider)
+      return
+
+    const accountId = provider === 'github'
+      ? githubAccount.value?.providerAccountId
+      : linuxdoAccount.value?.providerAccountId
+    oauthMessage.value = boundMessage(provider, accountId)
+    void clearOauthBoundQuery()
+  },
+  { immediate: true },
+)
 
 const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
@@ -82,6 +142,12 @@ async function startOauthBind(provider: OauthProvider) {
   const loadingState = provider === 'github' ? linkingGithub : linkingLinuxdo
   if (loadingState.value)
     return
+
+  const linkedAccount = provider === 'github' ? githubAccount.value : linuxdoAccount.value
+  if (linkedAccount) {
+    oauthMessage.value = boundMessage(provider, linkedAccount.providerAccountId)
+    return
+  }
 
   loadingState.value = true
   oauthMessage.value = ''
@@ -347,9 +413,12 @@ GitHub
               <p class="text-xs text-black/50 dark:text-light/50">
                 {{ t('dashboard.account.githubDesc', '用于绑定 GitHub 账号与同步开发者信息') }}
               </p>
+              <p v-if="isGithubBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
+                {{ boundMessage('github', githubAccount?.providerAccountId) }}
+              </p>
             </div>
-            <Button size="small" variant="secondary" :loading="linkingGithub" @click="handleGithubLink">
-              {{ t('auth.githubLogin', '绑定') }}
+            <Button size="small" variant="secondary" :disabled="isGithubBound" :loading="linkingGithub" @click="handleGithubLink">
+              {{ isGithubBound ? t('dashboard.account.bound', '已绑定') : t('auth.githubLogin', '绑定') }}
             </Button>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40">
@@ -360,9 +429,12 @@ LinuxDO
               <p class="text-xs text-black/50 dark:text-light/50">
                 {{ t('dashboard.account.linuxdoDesc', '用于连接 LinuxDO 社区账号') }}
               </p>
+              <p v-if="isLinuxdoBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
+                {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
+              </p>
             </div>
-            <Button size="small" variant="secondary" :loading="linkingLinuxdo" @click="handleLinuxdoLink">
-              {{ t('dashboard.account.bind', '绑定') }}
+            <Button size="small" variant="secondary" :disabled="isLinuxdoBound" :loading="linkingLinuxdo" @click="handleLinuxdoLink">
+              {{ isLinuxdoBound ? t('dashboard.account.bound', '已绑定') : t('dashboard.account.bind', '绑定') }}
             </Button>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40">

@@ -25,7 +25,7 @@ export default {
   },
   auth: {
     callbackProcessing: 'Processing your sign-in callback…',
-    backToHome: 'Back to homepage',
+    backToPrevious: 'Back',
     // App callback translations
     notSignedIn: 'You are not signed in.',
     tokenFailed: 'Failed to get authentication token.',
@@ -97,6 +97,7 @@ export default {
     restrictedAccount: 'Email not verified. Billing and sync are temporarily unavailable.',
     accountNoEmail: 'No email bound',
     redirectingToSignIn: 'Redirecting to sign-in…',
+    sessionBlocking: 'Processing sign-in, please wait...',
     oauthGithub: 'GitHub',
     oauthLinuxdo: 'LinuxDO',
     oauthPasskey: 'Passkey',
@@ -646,6 +647,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       githubDesc: 'Bind your GitHub account and sync developer profile data.',
       linuxdoDesc: 'Connect your LinuxDO community account.',
       bind: 'Bind',
+      bound: 'Bound',
+      boundTo: 'Bound to {target}',
       passkeyDesc: 'Use system Passkey for faster sign-in.',
       loginAbnormal: 'Abnormal sign-ins',
       noAbnormal: 'No abnormal sign-in records',
