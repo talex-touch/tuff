@@ -1,8 +1,7 @@
-import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
+import { loadPluginModule } from './plugin-loader'
 
-const require = createRequire(import.meta.url)
-const windowPlugin = require('../../../../plugins/touch-window-manager/index.js')
+const windowPlugin = loadPluginModule(new URL('../../../../plugins/touch-window-manager/index.js', import.meta.url))
 const { __test: windowTest } = windowPlugin
 
 describe('window manager', () => {
