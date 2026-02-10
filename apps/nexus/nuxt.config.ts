@@ -69,7 +69,7 @@ export default defineNuxtConfig({
 
   content: {
     experimental: {
-      nativeSqlite: true,
+      nativeSqlite: false,
     },
     build: {
       markdown: {
@@ -164,7 +164,7 @@ export default defineNuxtConfig({
     prerender: {
       crawlLinks: false,
       routes: ['/'],
-      ignore: ['/hi'],
+      ignore: ['/hi', '/__nuxt_content/**'],
     },
   },
 

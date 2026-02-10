@@ -819,7 +819,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async _generateKeywordsForApp(appInfo: ScannedAppInfo): Promise<Set<string>> {
     const generatedKeywords = new Set<string>()
-    const names = [appInfo.name, appInfo.displayName, appInfo.fileName].filter(Boolean) as string[]
+    // Prioritize displayName as it may contain localized (e.g., Chinese) names
+    const names = [appInfo.displayName, appInfo.name, appInfo.fileName].filter(Boolean) as string[]
     const CHINESE_REGEX = /[\u4E00-\u9FA5]/
     const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]/i
 
@@ -838,12 +839,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (CHINESE_REGEX.test(name)) {
         try {
           const { pinyin } = await import('pinyin-pro')
-          const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '')
+          const pinyinFull = pinyin(name, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
           generatedKeywords.add(pinyinFull)
-          const pinyinFirst = pinyin(name, { pattern: 'first', toneType: 'none' }).replace(
-            /\s/g,
-            ''
-          )
+          const pinyinFirst = pinyin(name, { pattern: 'first', toneType: 'none' })
+            .replace(/\s/g, '')
+            .toLowerCase()
           generatedKeywords.add(pinyinFirst)
         } catch {
           logApp(`Failed to get pinyin for: ${name}`, LogStyle.warning)
