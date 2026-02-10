@@ -743,3 +743,62 @@ export const appUpdateRecords = sqliteTable(
     channelIdx: index('idx_app_update_records_channel').on(table.channel, table.fetchedAt)
   })
 )
+
+// =============================================================================
+// 13. 自定义应用 (Custom Apps)
+// =============================================================================
+
+/**
+ * 存储用户手动添加的自定义应用/文件
+ * 支持 JAR、脚本、可执行文件等任意可启动的文件
+ */
+export const customApps = sqliteTable(
+  'custom_apps',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    
+    // 文件路径（绝对路径）
+    path: text('path').notNull().unique(),
+    
+    // 显示名称
+    displayName: text('display_name').notNull(),
+    
+    // 可选的图标路径
+    iconPath: text('icon_path'),
+    
+    // 启动命令（可选，如果为空则直接打开文件）
+    launchCommand: text('launch_command'),
+    
+    // 工作目录（可选）
+    workingDirectory: text('working_directory'),
+    
+    // 环境变量（JSON 格式）
+    environmentVars: text('environment_vars'),
+    
+    // 文件类型
+    fileType: text('file_type').notNull(), // 'jar', 'exe', 'app', 'sh', 'py', 'other'
+    
+    // 是否启用
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    
+    // 创建时间
+    createdAt: integer('created_at').notNull(),
+    
+    // 最后修改时间
+    updatedAt: integer('updated_at').notNull(),
+    
+    // 最后使用时间
+    lastUsedAt: integer('last_used_at'),
+    
+    // 使用次数
+    useCount: integer('use_count').notNull().default(0),
+    
+    // 备注
+    notes: text('notes')
+  },
+  (table) => ({
+    pathIdx: index('idx_custom_apps_path').on(table.path),
+    enabledIdx: index('idx_custom_apps_enabled').on(table.enabled),
+    lastUsedIdx: index('idx_custom_apps_last_used').on(table.lastUsedAt)
+  })
+)

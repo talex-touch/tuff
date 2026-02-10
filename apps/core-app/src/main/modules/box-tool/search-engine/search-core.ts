@@ -33,6 +33,7 @@ import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter
 import { getSentryService } from '../../sentry'
 import { storageModule } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
+import { customAppSearchProvider } from '../addon/apps/custom-app-search-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
@@ -237,6 +238,7 @@ export class SearchEngineCore
     this.sorter.register(tuffSorter)
 
     this.registerProvider(appProvider)
+    this.registerProvider(customAppSearchProvider)
     //  this.registerProvider(new ClipboardProvider())
     // NOTE: ClipboardProvider is intentionally disabled for now due to cost.
 
