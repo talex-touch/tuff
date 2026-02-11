@@ -17,8 +17,6 @@ import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const route = useRoute()
-const router = useRouter()
 const { user, refresh } = useAuthUser()
 const { subscription, pending: subscriptionPending } = useSubscriptionData()
 

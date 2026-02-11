@@ -16,7 +16,7 @@ const { t } = useI18n()
 
 <template>
   <div class="AssetBetaStep">
-    <div class="AssetBetaStep-Card">
+    <TxCard variant="plain" background="mask" :radius="18" :padding="18" class="AssetBetaStep-Card">
       <div class="AssetBetaStep-Header">
         <p class="AssetBetaStep-Title">
           {{ props.title }}
@@ -49,7 +49,7 @@ const { t } = useI18n()
           {{ t('dashboard.sections.plugins.assetCreate.backToTypes', 'Back to Type Selection') }}
         </TxButton>
       </div>
-    </div>
+    </TxCard>
   </div>
 </template>
 
@@ -60,15 +60,7 @@ const { t } = useI18n()
 }
 
 .AssetBetaStep-Card {
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 18px;
-
-  .dark & {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
-  }
+  width: 100%;
 }
 
 .AssetBetaStep-Header {

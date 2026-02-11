@@ -19,32 +19,34 @@ function handleSelect(option: AssetTypeOption) {
 
 <template>
   <div class="AssetTypePickerStep">
-    <div class="AssetTypePickerStep-Grid">
-      <button
-        v-for="option in props.options"
-        :key="option.type"
-        class="AssetTypePickerStep-Card"
-        :class="{ disabled: option.disabled }"
-        type="button"
-        :disabled="option.disabled"
-        @click="handleSelect(option)"
-      >
-        <div class="AssetTypePickerStep-CardHeader">
-          <span :class="[option.icon, 'AssetTypePickerStep-Icon']" />
-          <div class="AssetTypePickerStep-Tags">
-            <TxStatusBadge v-if="option.beta" text="Beta" status="warning" size="sm" />
-            <TxStatusBadge v-if="option.disabled" text="Locked" status="info" size="sm" />
+    <TxCard variant="plain" background="mask" :radius="18" :padding="14" class="AssetTypePickerStep-CardShell">
+      <div class="AssetTypePickerStep-Grid">
+        <button
+          v-for="option in props.options"
+          :key="option.type"
+          class="AssetTypePickerStep-Card"
+          :class="{ disabled: option.disabled }"
+          type="button"
+          :disabled="option.disabled"
+          @click="handleSelect(option)"
+        >
+          <div class="AssetTypePickerStep-CardHeader">
+            <span :class="[option.icon, 'AssetTypePickerStep-Icon']" />
+            <div class="AssetTypePickerStep-Tags">
+              <TxStatusBadge v-if="option.beta" text="Beta" status="warning" size="sm" />
+              <TxStatusBadge v-if="option.disabled" text="Locked" status="info" size="sm" />
+            </div>
           </div>
-        </div>
 
-        <p class="AssetTypePickerStep-Title">
-          {{ option.title }}
-        </p>
-        <p class="AssetTypePickerStep-Desc">
-          {{ option.description }}
-        </p>
-      </button>
-    </div>
+          <p class="AssetTypePickerStep-Title">
+            {{ option.title }}
+          </p>
+          <p class="AssetTypePickerStep-Desc">
+            {{ option.description }}
+          </p>
+        </button>
+      </div>
+    </TxCard>
   </div>
 </template>
 
@@ -52,6 +54,10 @@ function handleSelect(option: AssetTypeOption) {
 .AssetTypePickerStep {
   width: min(760px, 90vw);
   padding: 12px;
+}
+
+.AssetTypePickerStep-CardShell {
+  width: 100%;
 }
 
 .AssetTypePickerStep-Grid {

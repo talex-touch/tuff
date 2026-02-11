@@ -737,21 +737,6 @@ export function useSignIn() {
     await waitForCallbackFeedback(CALLBACK_FEEDBACK_MIN_MS - elapsed)
   }
 
-  function withOauthBoundHint(target: string, provider: OauthProvider | null) {
-    if (!provider)
-      return target
-
-    try {
-      const base = hasWindow() ? window.location.origin : 'http://localhost'
-      const parsed = target.startsWith('/') ? new URL(target, base) : new URL(`/${target}`, base)
-      parsed.searchParams.set('oauth_bound', provider)
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`
-    }
-    catch {
-      return target
-    }
-  }
-
   const emailPreview = computed(() => email.value.trim().toLowerCase())
   const lastLoginLabel = computed(() => {
     switch (lastLoginMethod.value) {
@@ -1027,10 +1012,9 @@ export function useSignIn() {
           return
         }
 
-        const bindTarget = withOauthBoundHint(target, provider)
         await clearOauthRuntime()
         await ensureCallbackProcessingFeedback(callbackStartedAt)
-        await navigateTo(bindTarget)
+        await navigateTo(target)
         return
       }
 

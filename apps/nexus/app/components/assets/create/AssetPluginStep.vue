@@ -8,7 +8,7 @@ const { t } = useI18n()
 
 <template>
   <div class="AssetPluginStep">
-    <div class="AssetPluginStep-Card">
+    <TxCard variant="plain" background="mask" :radius="18" :padding="18" class="AssetPluginStep-Card">
       <p class="AssetPluginStep-Title">
         {{ t('dashboard.sections.plugins.assetCreate.pluginTitle', 'Plugin Publishing') }}
       </p>
@@ -47,7 +47,7 @@ const { t } = useI18n()
           }}
         </TxButton>
       </div>
-    </div>
+    </TxCard>
   </div>
 </template>
 
@@ -58,15 +58,7 @@ const { t } = useI18n()
 }
 
 .AssetPluginStep-Card {
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 18px;
-
-  .dark & {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.04);
-  }
+  width: 100%;
 }
 
 .AssetPluginStep-Title {
