@@ -16,6 +16,8 @@ const props = withDefaults(
     readonly?: boolean
     clearable?: boolean
     rows?: number
+    prefixIcon?: string
+    suffixIcon?: string
   }>(),
   {
     modelValue: '',
@@ -25,6 +27,8 @@ const props = withDefaults(
     readonly: false,
     clearable: false,
     rows: 3,
+    prefixIcon: '',
+    suffixIcon: '',
   },
 )
 
@@ -57,9 +61,15 @@ const inputValue = computed({
 })
 
 const inputEl = ref<HTMLInputElement | HTMLTextAreaElement | null>(null)
+const isFocused = ref(false)
+const capsLockOn = ref(false)
 
 const showClear = computed(() => {
   return props.clearable && inputValue.value !== '' && inputValue.value !== null && inputValue.value !== undefined && !props.disabled && !props.readonly
+})
+
+const showCapsLock = computed(() => {
+  return props.type === 'password' && capsLockOn.value && isFocused.value
 })
 
 function handleClear() {
@@ -68,11 +78,20 @@ function handleClear() {
 }
 
 function handleFocus(e: FocusEvent) {
+  isFocused.value = true
   emit('focus', e)
 }
 
 function handleBlur(e: FocusEvent) {
+  isFocused.value = false
+  capsLockOn.value = false
   emit('blur', e)
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (props.type === 'password') {
+    capsLockOn.value = e.getModifierState('CapsLock')
+  }
 }
 
 defineExpose({
@@ -92,12 +111,15 @@ defineExpose({
         'is-disabled': disabled,
         'is-readonly': readonly,
         'is-textarea': type === 'textarea',
+        'is-focused': isFocused,
       },
       attrs.class,
     ]"
     :style="wrapperStyle"
   >
-    <slot name="prefix" />
+    <slot name="prefix">
+      <i v-if="prefixIcon" class="tx-input__icon tx-input__icon--prefix" :class="prefixIcon" />
+    </slot>
 
     <textarea
       v-if="type === 'textarea'"
@@ -111,6 +133,7 @@ defineExpose({
       v-bind="inputAttrs"
       @focus="handleFocus"
       @blur="handleBlur"
+      @keydown="handleKeydown"
     />
     <input
       v-else
@@ -124,7 +147,14 @@ defineExpose({
       v-bind="inputAttrs"
       @focus="handleFocus"
       @blur="handleBlur"
+      @keydown="handleKeydown"
     >
+
+    <span v-if="showCapsLock" class="tx-input__capslock" title="CapsLock is on">
+      <svg viewBox="0 0 24 24" width="14" height="14">
+        <path fill="currentColor" d="M12 2L4 10h3v4h10v-4h3L12 2zm-5 14v2h10v-2H7z" />
+      </svg>
+    </span>
 
     <span v-if="showClear" class="tx-input__clear" @click="handleClear">
       <svg viewBox="0 0 24 24" width="16" height="16">
@@ -132,7 +162,9 @@ defineExpose({
       </svg>
     </span>
 
-    <slot name="suffix" />
+    <slot name="suffix">
+      <i v-if="suffixIcon" class="tx-input__icon tx-input__icon--suffix" :class="suffixIcon" />
+    </slot>
   </div>
 </template>
 
@@ -153,10 +185,27 @@ defineExpose({
     border-color: var(--tx-color-primary-light-3, #79bbff);
   }
 
-  &:focus-within:not(.is-disabled) {
+  &:focus-within:not(.is-disabled),
+  &.is-focused:not(.is-disabled) {
     border-color: var(--tx-color-primary, #409eff);
-    border-bottom-width: 2px;
-    box-shadow: 0 1px 4px 1px var(--tx-color-primary-light-7, #c6e2ff);
+    box-shadow: 0 0 0 3px var(--tx-color-primary-light-9, #ecf5ff);
+  }
+
+  &__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: var(--tx-text-color-placeholder, #a8abb2);
+    flex-shrink: 0;
+
+    &--prefix {
+      margin-right: 6px;
+    }
+
+    &--suffix {
+      margin-left: 6px;
+    }
   }
 
   &__inner {
@@ -182,6 +231,15 @@ defineExpose({
     line-height: 1.5;
   }
 
+  &__capslock {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    color: var(--tx-color-warning, #e6a23c);
+    flex-shrink: 0;
+  }
+
   &__clear {
     display: flex;
     align-items: center;
@@ -189,6 +247,7 @@ defineExpose({
     cursor: pointer;
     color: var(--tx-text-color-placeholder, #a8abb2);
     transition: color 0.2s;
+    flex-shrink: 0;
 
     &:hover {
       color: var(--tx-text-color-secondary, #909399);
@@ -205,14 +264,14 @@ defineExpose({
     background-color: var(--tx-disabled-bg-color, #f5f7fa);
     cursor: not-allowed;
 
-    .tuff-input__inner {
+    .tx-input__inner {
       cursor: not-allowed;
       color: var(--tx-disabled-text-color, #c0c4cc);
     }
   }
 
   &.is-readonly {
-    .tuff-input__inner {
+    .tx-input__inner {
       cursor: default;
     }
   }
