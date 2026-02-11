@@ -268,7 +268,7 @@ watch(
 <style scoped>
 .AssetCreateOverlay {
   width: 100%;
-  height: 100%;
+  height: auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -303,7 +303,7 @@ watch(
 }
 
 .AssetCreateOverlay-Body {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   overflow: hidden;
   padding: 12px;

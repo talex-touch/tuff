@@ -104,7 +104,7 @@ watch(() => props.visible, async (visible) => {
   }
 
   cleanupFormObserver()
-})
+}, { immediate: true })
 
 function slugify(input: string): string {
   const normalized = input

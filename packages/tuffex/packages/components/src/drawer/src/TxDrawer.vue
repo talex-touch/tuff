@@ -171,7 +171,7 @@ onUnmounted(() => {
 
 <style lang="scss">
 .tx-drawer {
-  --tx-drawer-transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --tx-drawer-transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 
   position: fixed;
   inset: 0;
@@ -215,8 +215,8 @@ onUnmounted(() => {
   &__mask {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
     opacity: 0;
     transition: opacity var(--tx-drawer-transition);
   }
@@ -230,7 +230,7 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     background: var(--tx-bg-color, #fff);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
     transition: transform var(--tx-drawer-transition);
     z-index: 1;
   }

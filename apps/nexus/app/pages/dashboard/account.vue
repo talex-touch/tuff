@@ -31,7 +31,6 @@ const manageOverlayVisible = ref(false)
 const manageOverlaySource = ref<HTMLElement | null>(null)
 const avatarInputRef = ref<HTMLInputElement | null>(null)
 
-const oauthMessage = ref('')
 const linkingGithub = ref(false)
 const linkingLinuxdo = ref(false)
 const unlinkingGithub = ref(false)
@@ -108,69 +107,7 @@ function boundMessage(provider: OauthProvider, accountId?: string | null) {
   return t('dashboard.account.boundTo', { target }, `已绑定到 ${target}`)
 }
 
-function normalizeQueryValue(value: string | string[] | undefined) {
-  if (Array.isArray(value))
-    return value[0] ?? null
-  return typeof value === 'string' ? value : null
-}
-
-function parseBoundProvider(value: string | null): OauthProvider | null {
-  if (value === 'github' || value === 'linuxdo')
-    return value
-  return null
-}
-
-function getLinkedAccountByProvider(provider: OauthProvider) {
-  return provider === 'github' ? githubAccount.value : linuxdoAccount.value
-}
-
-function resolveBindFailedMessage(provider: OauthProvider) {
-  return provider === 'github'
-    ? t('dashboard.account.githubBindNotDetected', 'GitHub 授权已返回，但未检测到绑定结果，请重试。')
-    : t('dashboard.account.linuxdoBindNotDetected', 'LinuxDO 授权已返回，但未检测到绑定结果，请重试。')
-}
-
-async function clearOauthHintQuery() {
-  if (!('oauth_bound' in route.query) && !('oauth_bind_failed' in route.query))
-    return
-
-  const nextQuery = { ...route.query } as Record<string, string | string[]>
-  delete nextQuery.oauth_bound
-  delete nextQuery.oauth_bind_failed
-  await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
-}
-
-watch(
-  () => route.query.oauth_bound,
-  async (value) => {
-    const provider = parseBoundProvider(normalizeQueryValue(value as string | string[] | undefined))
-    if (!provider)
-      return
-
-    await refresh()
-    const account = getLinkedAccountByProvider(provider)
-    if (account?.providerAccountId) {
-      oauthMessage.value = boundMessage(provider, account.providerAccountId)
-    }
-    else {
-      oauthMessage.value = resolveBindFailedMessage(provider)
-    }
-    await clearOauthHintQuery()
-  },
-  { immediate: true },
-)
-
-watch(
-  () => route.query.oauth_bind_failed,
-  async (value) => {
-    const provider = parseBoundProvider(normalizeQueryValue(value as string | string[] | undefined))
-    if (!provider)
-      return
-    oauthMessage.value = resolveBindFailedMessage(provider)
-    await clearOauthHintQuery()
-  },
-  { immediate: true },
-)
+// OAuth bind feedback is handled on the sign-in page now.
 
 const { data: loginHistory, pending: historyPending, refresh: refreshHistory } = useFetch<any[]>('/api/login-history')
 const handleRefreshHistory = () => refreshHistory()
@@ -280,12 +217,10 @@ async function startOauthBind(provider: OauthProvider) {
 
   const linkedAccount = provider === 'github' ? githubAccount.value : linuxdoAccount.value
   if (linkedAccount) {
-    oauthMessage.value = boundMessage(provider, linkedAccount.providerAccountId)
     return
   }
 
   loadingState.value = true
-  oauthMessage.value = ''
 
   try {
     const redirect = '/dashboard/account'
@@ -305,11 +240,7 @@ async function startOauthBind(provider: OauthProvider) {
     await navigateTo(relayUrl)
   }
   catch (error: any) {
-    oauthMessage.value = error?.data?.statusMessage
-      || error?.message
-      || (provider === 'github'
-        ? t('auth.githubFailed', 'GitHub 绑定失败')
-        : t('auth.linuxdoFailed', 'LinuxDO 绑定失败'))
+    console.warn('[account] oauth bind failed', error)
   }
   finally {
     loadingState.value = false
@@ -331,14 +262,12 @@ async function unbindOauth(provider: OauthProvider) {
     return
 
   loadingState.value = true
-  oauthMessage.value = ''
   try {
     await $fetch(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
     await refresh()
-    oauthMessage.value = t('dashboard.account.unboundTo', { target: providerLabel(provider) }, `已解绑 ${providerLabel(provider)}`)
   }
   catch (error: any) {
-    oauthMessage.value = error?.data?.statusMessage || error?.message || t('dashboard.account.unbindFailed', '解绑失败，请稍后重试。')
+    console.warn('[account] oauth unbind failed', error)
   }
   finally {
     loadingState.value = false
@@ -526,9 +455,6 @@ Passkey
             </Button>
           </div>
         </div>
-        <p v-if="oauthMessage" class="text-xs text-black/60 dark:text-white/60">
-          {{ oauthMessage }}
-        </p>
         <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-white/60">
           {{ passkeyMessage }}
         </p>

@@ -278,3 +278,165 @@ export interface BlockSwitchEmits {
    */
   (e: 'click', event: MouseEvent): void
 }
+
+/**
+ * Props interface for the TxBlockInput component.
+ *
+ * @public
+ */
+export interface BlockInputProps {
+  /**
+   * The title text of the block input.
+   */
+  title?: string
+
+  /**
+   * The description text displayed below the title.
+   */
+  description?: string
+
+  /**
+   * The current input value for v-model binding.
+   */
+  modelValue?: string | number
+
+  /**
+   * Default icon to display.
+   */
+  defaultIcon?: IconValue
+
+  /**
+   * Active icon to display when focused.
+   */
+  activeIcon?: IconValue
+
+  /**
+   * Whether the block input is disabled.
+   * @default false
+   */
+  disabled?: boolean
+
+  /**
+   * Input placeholder text.
+   * @default ''
+   */
+  placeholder?: string
+
+  /**
+   * Whether the input is clearable.
+   * @default false
+   */
+  clearable?: boolean
+
+  /**
+   * Input type (text, password, number, etc.).
+   * @default 'text'
+   */
+  inputType?: 'text' | 'password' | 'number' | 'email'
+
+  /**
+   * Legacy icon class name (alias for defaultIcon).
+   * @deprecated Use defaultIcon instead.
+   */
+  icon?: string
+}
+
+/**
+ * Emits interface for the TxBlockInput component.
+ *
+ * @public
+ */
+export interface BlockInputEmits {
+  /**
+   * Emitted when the input value changes.
+   * @param value - The new input value
+   */
+  (e: 'update:modelValue', value: string | number): void
+
+  /**
+   * Emitted on input event.
+   * @param value - The new input value
+   */
+  (e: 'input', value: string | number): void
+
+  /**
+   * Emitted when the input is focused.
+   * @param event - The focus event
+   */
+  (e: 'focus', event: FocusEvent): void
+
+  /**
+   * Emitted when the input loses focus.
+   * @param event - The focus event
+   */
+  (e: 'blur', event: FocusEvent): void
+}
+
+/**
+ * Props interface for the TxBlockSelect component.
+ *
+ * @public
+ */
+export interface BlockSelectProps {
+  /**
+   * The title text of the block select.
+   */
+  title?: string
+
+  /**
+   * The description text displayed below the title.
+   */
+  description?: string
+
+  /**
+   * The current select value for v-model binding.
+   */
+  modelValue?: string | number
+
+  /**
+   * Default icon to display.
+   */
+  defaultIcon?: IconValue
+
+  /**
+   * Active icon to display when a value is selected.
+   */
+  activeIcon?: IconValue
+
+  /**
+   * Whether the block select is disabled.
+   * @default false
+   */
+  disabled?: boolean
+
+  /**
+   * Select placeholder text.
+   * @default ''
+   */
+  placeholder?: string
+
+  /**
+   * Legacy icon class name (alias for defaultIcon).
+   * @deprecated Use defaultIcon instead.
+   */
+  icon?: string
+}
+
+/**
+ * Emits interface for the TxBlockSelect component.
+ *
+ * @public
+ */
+export interface BlockSelectEmits {
+  /**
+   * Emitted when the select value changes.
+   * @param value - The new select value
+   */
+  (e: 'update:modelValue', value: string | number): void
+
+  /**
+   * Emitted when the select value changes.
+   * @param value - The new select value
+   */
+  (e: 'change', value: string | number): void
+}

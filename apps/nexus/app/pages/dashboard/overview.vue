@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 defineI18nRoute(false)
-
-type OverviewRange = '7d' | '30d'
 
 interface LoginHistoryItem {
   id: string
@@ -54,7 +52,6 @@ interface OverviewKpis {
 }
 
 interface OverviewViewModel {
-  range: OverviewRange
   kpis: OverviewKpis
   searchTrend: {
     points: TelemetryDailyPoint[]
@@ -68,14 +65,9 @@ const { t, locale } = useI18n()
 const { user, pending: userPending } = useAuthUser()
 const { deviceId: currentDeviceId } = useDeviceIdentity()
 
-const selectedRange = ref<OverviewRange>('7d')
-const rangeDays = computed(() => (selectedRange.value === '7d' ? 7 : 30))
-const rangeOptions = computed<Array<{ key: OverviewRange, label: string }>>(() => [
-  { key: '7d', label: t('dashboard.overview.range.last7Days') },
-  { key: '30d', label: t('dashboard.overview.range.last30Days') },
-])
+const rangeDays = 7
 
-const { data: telemetryData, pending: telemetryPending, error: telemetryError, refresh: refreshTelemetry } = useFetch<TelemetryOverviewResponse>('/api/dashboard/telemetry/me?days=30')
+const { data: telemetryData, pending: telemetryPending, error: telemetryError, refresh: refreshTelemetry } = useFetch<TelemetryOverviewResponse>('/api/dashboard/telemetry/me?days=7')
 const { data: loginHistoryData, pending: historyPending, error: historyError, refresh: refreshHistory } = useFetch<LoginHistoryItem[]>('/api/login-history')
 const { data: devicesData, pending: devicesPending, error: devicesError, refresh: refreshDevices } = useFetch<DeviceItem[]>('/api/devices')
 
@@ -91,7 +83,7 @@ const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const dayFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { month: 'numeric', day: 'numeric' }))
 
 const allTelemetryPoints = computed(() => telemetryData.value?.daily ?? [])
-const currentTelemetryPoints = computed(() => allTelemetryPoints.value.slice(-rangeDays.value))
+const currentTelemetryPoints = computed(() => allTelemetryPoints.value.slice(-rangeDays))
 
 const historyItems = computed(() => loginHistoryData.value ?? [])
 const deviceItems = computed(() => devicesData.value ?? [])
@@ -186,7 +178,6 @@ const rangeLabels = computed(() => {
 })
 
 const viewModel = computed<OverviewViewModel>(() => ({
-  range: selectedRange.value,
   kpis: overviewKpis.value,
   searchTrend: {
     points: currentTelemetryPoints.value,
@@ -305,40 +296,25 @@ function isCurrentDevice(device: DeviceItem) {
 </script>
 
 <template>
-  <div class="space-y-8">
-    <header>
+  <div class="space-y-6">
+    <header class="space-y-3">
       <p class="apple-section-title">
         {{ t('dashboard.header.badge') }}
       </p>
-      <h1 class="mt-3 apple-heading-lg">
+      <h1 class="apple-heading-lg">
         {{ greetingLine }}
       </h1>
-      <p class="mt-2 max-w-2xl apple-body text-black/60 dark:text-white/60">
+      <p class="max-w-2xl apple-body text-black/60 dark:text-white/60">
         {{ t('dashboard.overview.subtitle') }}
       </p>
-
-      <div class="mt-4 inline-flex rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
-        <button
-          v-for="item in rangeOptions"
-          :key="item.key"
-          type="button"
-          class="rounded-lg px-3 py-1.5 text-xs transition"
-          :class="selectedRange === item.key
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'text-black/60 hover:bg-black/[0.06] dark:text-white/70 dark:hover:bg-white/[0.08]'"
-          @click="selectedRange = item.key"
-        >
-          {{ item.label }}
-        </button>
-      </div>
     </header>
 
-    <section v-if="showInitialLoading" class="apple-card-lg p-6 space-y-4">
+    <section v-if="showInitialLoading" class="apple-card-lg p-5 space-y-3">
       <div class="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
         <TxSpinner :size="16" />
         {{ t('dashboard.overview.loading') }}
       </div>
-      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div v-for="item in 4" :key="`overview-skeleton-${item}`" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
           <TxSkeleton :loading="true" :lines="2" />
         </div>
@@ -346,8 +322,8 @@ function isCurrentDevice(device: DeviceItem) {
     </section>
 
     <template v-else>
-      <section class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <div class="apple-card p-5">
+      <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="apple-card p-4">
           <p class="apple-section-title">
             {{ t('dashboard.overview.kpis.searchCount') }}
           </p>
@@ -355,11 +331,11 @@ function isCurrentDevice(device: DeviceItem) {
             {{ formatNumber(viewModel.kpis.searches) }}
           </p>
           <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ selectedRange === '7d' ? t('dashboard.overview.range.last7Days') : t('dashboard.overview.range.last30Days') }}
+            {{ t('dashboard.overview.range.last7Days') }}
           </p>
         </div>
 
-        <div class="apple-card p-5">
+        <div class="apple-card p-4">
           <p class="apple-section-title">
             {{ t('dashboard.overview.kpis.searchEfficiency') }}
           </p>
@@ -371,7 +347,7 @@ function isCurrentDevice(device: DeviceItem) {
           </p>
         </div>
 
-        <div class="apple-card p-5">
+        <div class="apple-card p-4">
           <p class="apple-section-title">
             {{ t('dashboard.overview.kpis.loginHealth') }}
           </p>
@@ -383,7 +359,7 @@ function isCurrentDevice(device: DeviceItem) {
           </p>
         </div>
 
-        <div class="apple-card p-5">
+        <div class="apple-card p-4">
           <p class="apple-section-title">
             {{ t('dashboard.overview.kpis.activeDevices') }}
           </p>
@@ -396,8 +372,8 @@ function isCurrentDevice(device: DeviceItem) {
         </div>
       </section>
 
-      <section class="grid gap-4 xl:grid-cols-12">
-        <div class="apple-card-lg p-6 xl:col-span-8">
+      <section class="grid gap-3 xl:grid-cols-12">
+        <div class="apple-card-lg p-5 xl:col-span-8">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.trends.searchTitle') }}
           </h2>
@@ -428,7 +404,7 @@ function isCurrentDevice(device: DeviceItem) {
               </div>
             </div>
 
-            <div class="relative mt-3 h-56 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+            <div class="relative mt-3 h-52 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
               <div class="pointer-events-none absolute inset-0 grid grid-rows-4 px-3 py-2">
                 <div v-for="line in 4" :key="`search-grid-${line}`" class="border-b border-black/[0.05] dark:border-white/[0.07]" />
               </div>
@@ -453,7 +429,7 @@ function isCurrentDevice(device: DeviceItem) {
           </template>
         </div>
 
-        <div class="apple-card-lg p-6 xl:col-span-4">
+        <div class="apple-card-lg p-5 xl:col-span-4">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.trends.latencyTitle') }}
           </h2>
@@ -472,7 +448,7 @@ function isCurrentDevice(device: DeviceItem) {
           <template v-else>
             <div class="mt-4 overflow-x-auto pb-1">
               <div class="min-w-[260px]">
-                <div class="h-44 flex items-end gap-1.5">
+                <div class="h-40 flex items-end gap-1.5">
                   <div
                     v-for="point in viewModel.searchTrend.points"
                     :key="`latency-bar-${point.date}`"
@@ -491,8 +467,8 @@ function isCurrentDevice(device: DeviceItem) {
         </div>
       </section>
 
-      <section class="grid gap-4 xl:grid-cols-12">
-        <div class="apple-card-lg p-6 space-y-4 xl:col-span-7">
+      <section class="grid gap-3 xl:grid-cols-12">
+        <div class="apple-card-lg p-5 space-y-3 xl:col-span-7">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.stream.title') }}
           </h2>
@@ -535,7 +511,7 @@ function isCurrentDevice(device: DeviceItem) {
           </div>
         </div>
 
-        <div class="apple-card-lg p-6 space-y-4 xl:col-span-5">
+        <div class="apple-card-lg p-5 space-y-3 xl:col-span-5">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.devices.title') }}
           </h2>
