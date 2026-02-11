@@ -151,41 +151,46 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">
-          {{ t('dashboard.sections.reviews.title', 'Review Moderation') }}
-        </h1>
-        <p class="mt-1 text-sm text-black/60 dark:text-light/60">
-          {{ t('dashboard.sections.reviews.subtitle', 'Review and manage community feedback.') }}
-        </p>
-      </div>
+  <div class="mx-auto max-w-5xl space-y-6">
+    <div>
+      <h1 class="apple-heading-md">
+        {{ t('dashboard.sections.reviews.title', 'Review Moderation') }}
+      </h1>
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
+        {{ t('dashboard.sections.reviews.subtitle', 'Review and manage community feedback.') }}
+      </p>
     </div>
 
-    <section class="rounded-2xl border border-primary/10 bg-white/80 p-5 dark:border-light/10 dark:bg-dark/60">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="text-base font-semibold text-black dark:text-light">
-            {{ t('dashboard.sections.reviews.pendingTitle', 'Pending reviews') }}
-          </h2>
-          <p class="text-xs text-black/50 dark:text-light/50">
-            {{ t('dashboard.sections.reviews.pendingCount', { count: pendingTotal }) }}
-          </p>
-        </div>
-        <Button size="small" type="secondary" :loading="pendingLoading" @click="refreshReviews">
-          <span
-            :class="pendingLoading ? 'i-carbon-rotate-360 animate-spin' : 'i-carbon-refresh'"
-            class="text-base"
-          />
+    <section class="apple-card-lg p-5">
+      <div>
+        <h2 class="text-base font-semibold text-black dark:text-white">
+          {{ t('dashboard.sections.reviews.pendingTitle', 'Pending reviews') }}
+        </h2>
+        <p class="text-xs text-black/50 dark:text-white/50">
+          {{ t('dashboard.sections.reviews.pendingCount', { count: pendingTotal }) }}
+        </p>
+      </div>
+
+      <div class="mt-3">
+        <Button size="small" type="secondary" :disabled="pendingLoading" @click="refreshReviews">
+          <TxSpinner v-if="pendingLoading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.reviews.refresh', 'Refresh') }}
           </span>
         </Button>
       </div>
 
-      <div v-if="pendingLoading && !pendingReviews.length" class="mt-4 text-sm text-black/60 dark:text-light/60">
-        {{ t('dashboard.sections.reviews.loading', 'Loading pending reviews...') }}
+      <div v-if="pendingLoading && !pendingReviews.length" class="mt-4 space-y-3">
+        <div class="flex items-center gap-2 text-sm text-black/60 dark:text-white/60">
+          <TxSpinner :size="16" />
+          {{ t('dashboard.sections.reviews.loading', 'Loading pending reviews...') }}
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
       <div v-else-if="pendingError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
         {{ pendingError }}
@@ -193,21 +198,21 @@ onMounted(() => {
       <div v-else-if="actionError" class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
         {{ actionError }}
       </div>
-      <div v-else-if="!pendingReviews.length" class="mt-4 text-sm text-black/60 dark:text-light/60">
+      <div v-else-if="!pendingReviews.length" class="mt-4 text-sm text-black/60 dark:text-white/60">
         {{ t('dashboard.sections.reviews.empty', 'No pending reviews yet.') }}
       </div>
       <div v-else class="mt-4 space-y-4">
         <article
           v-for="review in pendingReviews"
           :key="review.id"
-          class="rounded-xl border border-black/5 bg-white/70 p-4 shadow-sm dark:border-light/10 dark:bg-dark/70"
+          class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 class="text-sm font-semibold text-black dark:text-light">
+              <h3 class="text-sm font-semibold text-black dark:text-white">
                 {{ review.plugin?.name || t('dashboard.sections.reviews.unknownPlugin', 'Unknown plugin') }}
               </h3>
-              <p class="text-xs text-black/50 dark:text-light/50">
+              <p class="text-xs text-black/50 dark:text-white/50">
                 {{ review.plugin?.slug || review.pluginId }}
               </p>
             </div>
@@ -216,8 +221,8 @@ onMounted(() => {
             </div>
           </div>
 
-          <div class="mt-3 text-sm text-black/70 dark:text-light/70">
-            <p class="font-medium text-black dark:text-light">
+          <div class="mt-3 text-sm text-black/70 dark:text-white/70">
+            <p class="font-medium text-black dark:text-white">
               {{ review.title || review.content.slice(0, 40) }}
             </p>
             <p class="mt-1 whitespace-pre-line">
@@ -225,7 +230,7 @@ onMounted(() => {
             </p>
           </div>
 
-          <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-black/50 dark:text-light/50">
+          <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-black/50 dark:text-white/50">
             <div class="flex items-center gap-2">
               <span>{{ review.author?.name || t('market.detail.reviews.anonymous', 'Anonymous') }}</span>
               <span>•</span>

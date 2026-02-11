@@ -15,6 +15,63 @@ const DEFAULT_TEAM_QUOTA = 10000
 const DEFAULT_PERSONAL_QUOTA = 5000
 const DEFAULT_PLAN_ID = 'default'
 
+export type TeamType = 'personal' | 'organization'
+export type TeamMemberRole = 'owner' | 'admin' | 'member'
+
+interface D1TeamRow {
+  id: string
+  name: string
+  type: string
+  owner_user_id: string
+  created_at: string
+}
+
+interface D1TeamMemberRow {
+  team_id: string
+  user_id: string
+  role: string
+  joined_at: string
+}
+
+export interface TeamRecord {
+  id: string
+  name: string
+  type: TeamType
+  ownerUserId: string
+  createdAt: string
+}
+
+export interface TeamMemberRecord {
+  teamId: string
+  userId: string
+  role: TeamMemberRole
+  joinedAt: string
+}
+
+export interface UserTeamRecord extends TeamRecord {
+  role: TeamMemberRole
+  joinedAt: string
+}
+
+function mapTeamRow(row: D1TeamRow): TeamRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type === 'organization' ? 'organization' : 'personal',
+    ownerUserId: row.owner_user_id,
+    createdAt: row.created_at,
+  }
+}
+
+function mapTeamMemberRow(row: D1TeamMemberRow): TeamMemberRecord {
+  return {
+    teamId: row.team_id,
+    userId: row.user_id,
+    role: (row.role || 'member') as TeamMemberRole,
+    joinedAt: row.joined_at,
+  }
+}
+
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
@@ -115,6 +172,187 @@ export async function ensurePersonalTeam(event: H3Event, userId: string): Promis
   return teamId
 }
 
+export async function getTeamById(event: H3Event, teamId: string): Promise<TeamRecord | null> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const row = await db.prepare(`
+    SELECT * FROM ${TEAMS_TABLE}
+    WHERE id = ?
+    LIMIT 1
+  `).bind(teamId).first<D1TeamRow>()
+
+  return row ? mapTeamRow(row) : null
+}
+
+export async function listUserTeams(event: H3Event, userId: string): Promise<UserTeamRecord[]> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const result = await db.prepare(`
+    SELECT
+      t.id,
+      t.name,
+      t.type,
+      t.owner_user_id,
+      t.created_at,
+      tm.role,
+      tm.joined_at
+    FROM ${TEAM_MEMBERS_TABLE} tm
+    INNER JOIN ${TEAMS_TABLE} t ON t.id = tm.team_id
+    WHERE tm.user_id = ?
+    ORDER BY
+      CASE WHEN t.type = 'organization' THEN 0 ELSE 1 END,
+      tm.joined_at ASC
+  `).bind(userId).all<D1TeamRow & { role: string, joined_at: string }>()
+
+  return (result.results ?? []).map((row) => {
+    const team = mapTeamRow(row)
+    return {
+      ...team,
+      role: (row.role || 'member') as TeamMemberRole,
+      joinedAt: row.joined_at,
+    }
+  })
+}
+
+export async function listTeamMembers(event: H3Event, teamId: string): Promise<TeamMemberRecord[]> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const result = await db.prepare(`
+    SELECT team_id, user_id, role, joined_at
+    FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ?
+    ORDER BY joined_at ASC
+  `).bind(teamId).all<D1TeamMemberRow>()
+
+  return (result.results ?? []).map(mapTeamMemberRow)
+}
+
+export async function getUserRoleInTeam(
+  event: H3Event,
+  teamId: string,
+  userId: string,
+): Promise<TeamMemberRole | null> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const row = await db.prepare(`
+    SELECT role
+    FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ? AND user_id = ?
+    LIMIT 1
+  `).bind(teamId, userId).first<{ role: string }>()
+
+  return row?.role ? (row.role as TeamMemberRole) : null
+}
+
+export async function isUserTeamMember(
+  event: H3Event,
+  teamId: string,
+  userId: string,
+): Promise<boolean> {
+  const role = await getUserRoleInTeam(event, teamId, userId)
+  return Boolean(role)
+}
+
+export async function countTeamMembers(event: H3Event, teamId: string): Promise<number> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS total
+    FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ?
+  `).bind(teamId).first<{ total: number | string }>()
+
+  return Number(row?.total ?? 0)
+}
+
+export async function addTeamMember(
+  event: H3Event,
+  teamId: string,
+  userId: string,
+  role: TeamMemberRole = 'member',
+): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const now = new Date().toISOString()
+
+  await db.prepare(`
+    INSERT OR IGNORE INTO ${TEAM_MEMBERS_TABLE} (team_id, user_id, role, joined_at)
+    VALUES (?, ?, ?, ?)
+  `).bind(teamId, userId, role, now).run()
+
+  await db.prepare(`
+    UPDATE ${TEAM_MEMBERS_TABLE}
+    SET role = ?
+    WHERE team_id = ? AND user_id = ?
+  `).bind(role, teamId, userId).run()
+}
+
+export async function removeTeamMember(
+  event: H3Event,
+  teamId: string,
+  userId: string,
+): Promise<boolean> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const result = await db.prepare(`
+    DELETE FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ? AND user_id = ?
+  `).bind(teamId, userId).run()
+
+  const changes = (result.meta as { changes?: number } | undefined)?.changes ?? 0
+  return changes > 0
+}
+
+export async function createOrganizationTeam(
+  event: H3Event,
+  ownerUserId: string,
+  name?: string,
+): Promise<TeamRecord> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const teamId = `org_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`
+  const now = new Date().toISOString()
+  const teamName = (name || '').trim() || 'My Team'
+
+  await db.prepare(`
+    INSERT INTO ${TEAMS_TABLE} (id, name, type, owner_user_id, created_at)
+    VALUES (?, ?, 'organization', ?, ?)
+  `).bind(teamId, teamName, ownerUserId, now).run()
+
+  await addTeamMember(event, teamId, ownerUserId, 'owner')
+
+  return {
+    id: teamId,
+    name: teamName,
+    type: 'organization',
+    ownerUserId,
+    createdAt: now,
+  }
+}
+
+export async function deleteTeam(event: H3Event, teamId: string): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  await db.prepare(`
+    DELETE FROM ${TEAM_MEMBERS_TABLE}
+    WHERE team_id = ?
+  `).bind(teamId).run()
+
+  await db.prepare(`
+    DELETE FROM ${TEAMS_TABLE}
+    WHERE id = ?
+  `).bind(teamId).run()
+}
+
 async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: string): Promise<void> {
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
@@ -204,4 +442,3 @@ export async function listCreditLedger(event: H3Event, userId: string) {
   `).bind(teamId).all()
   return result.results
 }
-

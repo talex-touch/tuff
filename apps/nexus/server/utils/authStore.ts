@@ -437,6 +437,13 @@ export async function verifyUserPassword(event: H3Event, email: string, password
   return ok ? user : null
 }
 
+export async function hasUserPasswordCredential(event: H3Event, userId: string): Promise<boolean> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`SELECT user_id FROM ${CREDENTIALS_TABLE} WHERE user_id = ? LIMIT 1`).bind(userId).first()
+  return Boolean(row?.user_id)
+}
+
 function generateToken(bytes = 32): string {
   const data = new Uint8Array(bytes)
   crypto.getRandomValues(data)
@@ -654,12 +661,30 @@ export async function updatePasskeyCounter(event: H3Event, credentialId: string,
 export async function linkAccount(event: H3Event, userId: string, provider: string, providerAccountId: string): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  const existing = await db.prepare(`
+    SELECT user_id FROM ${ACCOUNTS_TABLE}
+    WHERE provider = ? AND provider_account_id = ?
+    LIMIT 1
+  `).bind(provider, providerAccountId).first() as { user_id?: string } | null
+
+  if (existing?.user_id && existing.user_id !== userId) {
+    throw new Error(`OAuth account already linked to another user (${provider}:${providerAccountId})`)
+  }
+  if (existing?.user_id === userId) {
+    return
+  }
+
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
-  await db.prepare(`
-    INSERT OR IGNORE INTO ${ACCOUNTS_TABLE} (id, user_id, provider, provider_account_id, created_at)
+  const result = await db.prepare(`
+    INSERT INTO ${ACCOUNTS_TABLE} (id, user_id, provider, provider_account_id, created_at)
     VALUES (?, ?, ?, ?, ?)
   `).bind(id, userId, provider, providerAccountId, now).run()
+
+  const changes = Number((result as any)?.meta?.changes ?? 0)
+  if (changes < 1) {
+    throw new Error(`OAuth account link insert affected no rows (${provider}:${providerAccountId})`)
+  }
 }
 
 export async function unlinkAccount(event: H3Event, userId: string, provider: string): Promise<void> {

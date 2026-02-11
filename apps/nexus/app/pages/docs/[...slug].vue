@@ -3,6 +3,7 @@ import { TxButton, TxLoadingState } from '@talex-touch/tuffex'
 import { defineComponent, h, render } from 'vue'
 import { toast, Toaster } from 'vue-sonner'
 import DocHero from '~/components/docs/DocHero.vue'
+import DocsFeedback from '~/components/docs/DocsFeedback.vue'
 
 definePageMeta({
   layout: 'docs',
@@ -611,6 +612,26 @@ async function writeToClipboard(text: string) {
   document.body.removeChild(textarea)
 }
 
+const GITHUB_REPO = 'AJLoveChina/talex-touch'
+const editOnGitHubUrl = computed(() => {
+  const path = doc.value?.path
+  if (!path)
+    return null
+  return `https://github.com/${GITHUB_REPO}/edit/master/apps/nexus/content${path}.mdc`
+})
+
+async function shareCurrentPage() {
+  if (!import.meta.client)
+    return
+  try {
+    await writeToClipboard(window.location.href)
+    toast.success(t('docs.shareCopied', 'Link copied!'))
+  }
+  catch {
+    toast.error(t('docs.shareFailed', 'Copy failed'))
+  }
+}
+
 const CodeHeader = defineComponent({
   name: 'DocsCodeHeader',
   props: {
@@ -855,7 +876,28 @@ watch(
                 <span class="font-medium">{{ viewCount }}</span>
               </div>
             </div>
+            <div class="flex items-center gap-3">
+              <button
+                class="flex items-center gap-1.5 text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+                @click="shareCurrentPage"
+              >
+                <span class="i-carbon-share text-sm" />
+                <span class="text-xs">{{ t('docs.share', 'Share') }}</span>
+              </button>
+              <a
+                v-if="editOnGitHubUrl"
+                :href="editOnGitHubUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="flex items-center gap-1.5 text-black/40 no-underline transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+              >
+                <span class="i-carbon-edit text-sm" />
+                <span class="text-xs">{{ t('docs.editOnGitHub', 'Edit this page') }}</span>
+              </a>
+            </div>
           </div>
+
+          <DocsFeedback :doc-path="docPath" />
 
           <div v-if="pagerPrevPath || pagerNextPath" class="space-y-4">
             <div v-if="docPager.sectionTitle" class="text-xs text-black/40 tracking-[0.12em] uppercase dark:text-light/40">
@@ -890,6 +932,8 @@ watch(
               </NuxtLink>
             </div>
           </div>
+
+          <DocsComments :doc-path="docPath" />
         </div>
 
         <div

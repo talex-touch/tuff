@@ -60,16 +60,15 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   let sectionElements: HTMLElement[] = []
   let sectionHashes: string[] = []
   let lastSectionHash = ''
-  let wheelListener: ((event: WheelEvent) => void) | null = null
   let scrollListener: (() => void) | null = null
-  let touchStartY = 0
-  let touchMoveHandled = false
-  let touchStartListener: ((event: TouchEvent) => void) | null = null
-  let touchMoveListener: ((event: TouchEvent) => void) | null = null
   let resizeListener: (() => void) | null = null
   let heroSectionElement: HTMLElement | null = null
   let heroVisibleLast = true
-  let heroJustExited = false
+
+  // Snap-after-scroll-idle state
+  let snapTimer: ReturnType<typeof setTimeout> | null = null
+  let userScrolling = false
+  const SNAP_DELAY = 100 // ms after last scroll event to snap
 
   function collectSectionElements() {
     sectionElements = []
@@ -101,11 +100,11 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
 
     let closest = 0
     let minDistance = Number.POSITIVE_INFINITY
-    const viewportMiddle = window.innerHeight / 2
 
     sectionElements.forEach((section, index) => {
       const rect = section.getBoundingClientRect()
-      const distance = Math.abs(rect.top - viewportMiddle)
+      // Whichever section top is closest to viewport top = nearest page
+      const distance = Math.abs(rect.top)
 
       if (distance < minDistance) {
         closest = index
@@ -114,6 +113,21 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     })
 
     return closest
+  }
+
+  function isInsideContainer() {
+    const container = smoothScrollContainerRef.value
+    if (!container)
+      return false
+
+    if (heroSectionElement) {
+      const heroRect = heroSectionElement.getBoundingClientRect()
+      if (heroRect.bottom > 0)
+        return false
+    }
+
+    const rect = container.getBoundingClientRect()
+    return rect.top < window.innerHeight && rect.bottom > 0
   }
 
   function refreshCurrentSectionIndex() {
@@ -126,25 +140,10 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
 
       if (heroVisible) {
         heroVisibleLast = true
-        heroJustExited = false
         currentSectionIndex = -1
         updateSectionHash('')
         return
       }
-
-      if (heroVisibleLast && !heroVisible) {
-        heroVisibleLast = false
-        heroJustExited = true
-        currentSectionIndex = -1
-        updateSectionHash('')
-        return
-      }
-    }
-
-    if (heroJustExited) {
-      currentSectionIndex = -1
-      updateSectionHash('')
-      return
     }
 
     heroVisibleLast = false
@@ -162,7 +161,6 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
 
     heroSectionElement = document.querySelector<HTMLElement>(heroSelector)
     heroVisibleLast = heroSectionElement ? (heroSectionElement.getBoundingClientRect().bottom > 0) : true
-    heroJustExited = false
 
     collectSectionElements()
 
@@ -206,174 +204,96 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       smoothScrollTween = null
     }
 
-    const clampIndex = (index: number) => {
-      if (!sectionElements.length)
-        return 0
-      const maxIndex = sectionElements.length - 1
-      return Math.min(Math.max(index, 0), maxIndex)
-    }
+    const snapToClosest = () => {
+      collectSectionElements()
 
-    const scrollToSection = (section: HTMLElement, hash?: string) => {
+      if (!sectionElements.length)
+        return
+      if (!isInsideContainer())
+        return
+
+      const closestIndex = getClosestSectionIndex()
+      const target = sectionElements[closestIndex]
+      if (!target)
+        return
+
+      // Only snap if the section isn't already roughly aligned
+      const rect = target.getBoundingClientRect()
+      if (Math.abs(rect.top) < 8) {
+        currentSectionIndex = closestIndex
+        const hash = sectionHashes[closestIndex]
+        if (hash)
+          updateSectionHash(hash)
+        return
+      }
+
+      // Dynamic duration based on travel distance
+      const distance = Math.abs(rect.top)
+      const vh = window.innerHeight
+      // Small nudge (~0.45s) → full page (~0.75s) → multi-page (~1.1s)
+      const duration = Math.min(1.1, Math.max(0.45, 0.45 + (distance / vh) * 0.5))
+
+      currentSectionIndex = closestIndex
+      userScrolling = false // Reset before animation so GSAP scroll events aren't treated as user input
       smoothScrollTween?.kill()
       smoothScrollActive = true
       smoothScrollTween = gsap.to(window, {
         scrollTo: {
-          y: section,
+          y: target,
           offsetY: 0,
         },
-        duration: 1.12,
-        ease: 'power3.out',
+        duration,
+        ease: 'back.out(1.1)',
         autoKill: false,
         overwrite: 'auto',
         onComplete: () => {
-          releaseScrollTween()
+          const hash = sectionHashes[closestIndex]
           if (hash)
             updateSectionHash(hash)
+          releaseScrollTween()
         },
         onInterrupt: releaseScrollTween,
       })
     }
 
-    const shouldControlScroll = (eventTarget: EventTarget | null) => {
-      const activeContainer = smoothScrollContainerRef.value
-
-      if (!activeContainer)
-        return false
-
-      collectSectionElements()
-
-      if (!sectionElements.length)
-        return false
-
-      if (heroSectionElement) {
-        const heroRect = heroSectionElement.getBoundingClientRect()
-        if (heroRect.bottom > 0)
-          return false
+    const cancelSnap = () => {
+      if (snapTimer) {
+        clearTimeout(snapTimer)
+        snapTimer = null
       }
-
-      const rect = activeContainer.getBoundingClientRect()
-      const containerVisible = rect.top < window.innerHeight && rect.bottom > 0
-
-      if (!containerVisible)
-        return false
-
-      refreshCurrentSectionIndex()
-
-      if (eventTarget && activeContainer.contains(eventTarget as Node))
-        return true
-
-      const scrollTop = window.scrollY
-      const containerTop = activeContainer.offsetTop
-      const containerBottom = containerTop + activeContainer.offsetHeight
-
-      return scrollTop >= containerTop - 120 && scrollTop < containerBottom
     }
 
-    const attemptSectionStep = (direction: 1 | -1) => {
-      if (smoothScrollActive)
-        return false
-      if (!sectionElements.length)
-        return false
-
-      if (currentSectionIndex < 0) {
-        if (direction > 0) {
-          heroJustExited = false
-          currentSectionIndex = clampIndex(0)
-          const target = sectionElements[currentSectionIndex]
-          if (!target)
-            return false
-          scrollToSection(target, sectionHashes[currentSectionIndex])
-          return true
-        }
-
-        return false
-      }
-
-      if (direction > 0 && currentSectionIndex >= sectionElements.length - 1)
-        return false
-
-      if (direction < 0 && currentSectionIndex === 0) {
-        const firstRect = sectionElements[0]?.getBoundingClientRect()
-        if (!firstRect || firstRect.top >= 0) {
-          currentSectionIndex = -1
-          heroJustExited = false
-          return false
-        }
-      }
-
-      const targetIndex = clampIndex(currentSectionIndex + direction)
-
-      if (targetIndex === currentSectionIndex)
-        return false
-
-      currentSectionIndex = targetIndex
-      const target = sectionElements[targetIndex]
-      if (!target)
-        return false
-      scrollToSection(target, sectionHashes[targetIndex])
-      heroJustExited = false
-      return true
+    const scheduleSnap = () => {
+      cancelSnap()
+      snapTimer = setTimeout(() => {
+        snapTimer = null
+        snapToClosest()
+      }, SNAP_DELAY)
     }
 
-    wheelListener = (event: WheelEvent) => {
-      if (!shouldControlScroll(event.target))
-        return
-
+    // User-initiated scroll: cancel any active snap animation and reschedule
+    const onUserScroll = () => {
+      userScrolling = true
       if (smoothScrollActive) {
-        event.preventDefault()
-        return
+        smoothScrollTween?.kill()
+        releaseScrollTween()
       }
-
-      const direction = event.deltaY > 0 ? 1 : event.deltaY < 0 ? -1 : 0
-      if (direction === 0)
-        return
-
-      const moved = attemptSectionStep(direction as 1 | -1)
-      if (moved)
-        event.preventDefault()
+      cancelSnap()
     }
 
-    touchStartListener = (event: TouchEvent) => {
-      if (!shouldControlScroll(event.target))
-        return
-      touchMoveHandled = false
-      touchStartY = event.touches[0]?.clientY ?? 0
-    }
-
-    touchMoveListener = (event: TouchEvent) => {
-      if (!shouldControlScroll(event.target))
-        return
-
-      if (smoothScrollActive) {
-        event.preventDefault()
-        return
-      }
-
-      if (touchMoveHandled)
-        return
-
-      const currentY = event.touches[0]?.clientY ?? touchStartY
-      const deltaY = touchStartY - currentY
-
-      if (Math.abs(deltaY) < 40)
-        return
-
-      const direction = deltaY > 0 ? 1 : -1
-      const moved = attemptSectionStep(direction as 1 | -1)
-      if (moved) {
-        touchMoveHandled = true
-        event.preventDefault()
-      }
-    }
-
+    // Passive scroll listener — never blocks native scrolling
     scrollListener = () => {
       collectSectionElements()
       refreshCurrentSectionIndex()
+
+      // Only schedule snap when NOT animating — GSAP scroll events must not retrigger
+      if (!smoothScrollActive && isInsideContainer()) {
+        scheduleSnap()
+      }
     }
 
-    window.addEventListener('wheel', wheelListener, { passive: false })
-    window.addEventListener('touchstart', touchStartListener, { passive: true })
-    window.addEventListener('touchmove', touchMoveListener, { passive: false })
+    window.addEventListener('wheel', onUserScroll, { passive: true })
+    window.addEventListener('touchstart', onUserScroll, { passive: true })
     window.addEventListener('scroll', scrollListener, { passive: true })
 
     resizeListener = () => {
@@ -381,39 +301,43 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
       collectSectionElements()
       refreshCurrentSectionIndex()
     }
-
     window.addEventListener('resize', resizeListener)
 
     refreshCurrentSectionIndex()
+
+    // Store references for cleanup
+    const _wheelHandler = onUserScroll
+    const _touchHandler = onUserScroll
+
+    onBeforeUnmount(() => {
+      window.removeEventListener('wheel', _wheelHandler)
+      window.removeEventListener('touchstart', _touchHandler)
+      if (scrollListener)
+        window.removeEventListener('scroll', scrollListener)
+      if (resizeListener)
+        window.removeEventListener('resize', resizeListener)
+
+      scrollListener = null
+      resizeListener = null
+      sectionElements = []
+      currentSectionIndex = -1
+      heroSectionElement = null
+      heroVisibleLast = true
+
+      cancelSnap()
+
+      smoothScrollTween?.kill()
+      smoothScrollTween = null
+      smoothScrollActive = false
+    })
   })
 
+  // Fallback cleanup for non-smooth-scroll mode
   onBeforeUnmount(() => {
-    if (wheelListener)
-      window.removeEventListener('wheel', wheelListener)
-    if (touchStartListener)
-      window.removeEventListener('touchstart', touchStartListener)
-    if (touchMoveListener)
-      window.removeEventListener('touchmove', touchMoveListener)
     if (scrollListener)
       window.removeEventListener('scroll', scrollListener)
     if (resizeListener)
       window.removeEventListener('resize', resizeListener)
-
-    wheelListener = null
-    touchStartListener = null
-    touchMoveListener = null
-    scrollListener = null
-    resizeListener = null
-    sectionElements = []
-    currentSectionIndex = -1
-    heroSectionElement = null
-    heroVisibleLast = true
-    heroJustExited = false
-
-    smoothScrollTween?.kill()
-    smoothScrollTween = null
-
-    smoothScrollActive = false
   })
 
   return {

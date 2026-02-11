@@ -1,15 +1,40 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-const { t } = useI18n()
-const route = useRoute()
+definePageMeta({
+  requiresAuth: true,
+})
 
 defineI18nRoute(false)
 
+interface InvitePreview {
+  invite: {
+    code: string
+    teamId: string
+    teamName: string
+    expiresAt: string | null
+    status: string
+    role: 'admin' | 'member'
+    seats: {
+      used: number
+      total: number
+    }
+  }
+  validation: {
+    canJoin: boolean
+    reason: string
+  }
+}
+
+const { t } = useI18n()
+const route = useRoute()
+
 const code = ref('')
 const pending = ref(false)
+const previewPending = ref(false)
 const errorMessage = ref('')
 const success = ref(false)
+const preview = ref<InvitePreview | null>(null)
 
 watch(
   () => route.query.code,
@@ -21,7 +46,39 @@ watch(
   { immediate: true },
 )
 
-const canSubmit = computed(() => !pending.value && code.value.trim().length > 0)
+watch(
+  () => code.value,
+  async (nextCode) => {
+    if (import.meta.server)
+      return
+
+    const trimmed = nextCode.trim()
+    preview.value = null
+    errorMessage.value = ''
+
+    if (!trimmed)
+      return
+
+    previewPending.value = true
+    try {
+      preview.value = await $fetch<InvitePreview>(`/api/team/invite/${encodeURIComponent(trimmed)}`)
+    }
+    catch (error: any) {
+      errorMessage.value = error?.data?.statusMessage || error?.message || 'Failed to load invite preview'
+    }
+    finally {
+      previewPending.value = false
+    }
+  },
+)
+
+const canSubmit = computed(() => {
+  if (pending.value || !code.value.trim())
+    return false
+  if (!preview.value)
+    return false
+  return preview.value.validation.canJoin
+})
 
 async function joinTeam(): Promise<void> {
   if (!canSubmit.value)
@@ -68,6 +125,22 @@ async function joinTeam(): Promise<void> {
           class="w-full"
           @keyup.enter="joinTeam"
         />
+
+        <div v-if="previewPending" class="text-xs text-black/50 dark:text-light/50">
+          {{ t('dashboard.team.pending', '正在加载团队信息…') }}
+        </div>
+
+        <div v-if="preview" class="rounded-xl bg-black/[0.03] p-3 text-xs text-black/70 dark:bg-white/[0.06] dark:text-white/70">
+          <p class="font-medium text-black dark:text-white">
+            {{ preview.invite.teamName }}
+          </p>
+          <p>
+            {{ preview.invite.seats.used }}/{{ preview.invite.seats.total }} seats · {{ preview.invite.role }}
+          </p>
+          <p>
+            {{ preview.validation.reason }}
+          </p>
+        </div>
 
         <Button
           block

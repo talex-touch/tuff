@@ -13,11 +13,11 @@ let teamSchemaInitialized = false
 
 // Plan-based configuration
 export const PLAN_CONFIG = {
-  FREE: { seats: 3, aiRequests: 100, aiTokens: 50000 },
-  PLUS: { seats: 5, aiRequests: 500, aiTokens: 250000 },
-  PRO: { seats: 8, aiRequests: 2000, aiTokens: 1000000 },
-  ENTERPRISE: { seats: 10, aiRequests: 10000, aiTokens: 5000000 },
-  TEAM: { seats: 5, aiRequests: 1000, aiTokens: 500000 },
+  FREE: { seats: 1, aiRequests: 50, aiTokens: 10000 },
+  PLUS: { seats: 1, aiRequests: 2000, aiTokens: 500000 },
+  PRO: { seats: 1, aiRequests: 500, aiTokens: 100000 },
+  ENTERPRISE: { seats: 10, aiRequests: 50000, aiTokens: 10000000 },
+  TEAM: { seats: 5, aiRequests: 5000, aiTokens: 1000000 },
 } as const
 
 export interface TeamQuota {
@@ -166,6 +166,18 @@ function generateInviteCode(): string {
   return code
 }
 
+function normalizeEmail(value?: string | null): string {
+  return (value || '').trim().toLowerCase()
+}
+
+function getPlanConfig(plan?: SubscriptionPlan) {
+  return PLAN_CONFIG[plan || 'FREE'] || PLAN_CONFIG.FREE
+}
+
+function isInviteExpired(invite: TeamInvite): boolean {
+  return Boolean(invite.expiresAt && new Date(invite.expiresAt).getTime() <= Date.now())
+}
+
 export async function createInvite(
   event: H3Event,
   userId: string,
@@ -179,6 +191,8 @@ export async function createInvite(
   await ensureTeamSchema(db)
 
   const now = new Date()
+  const normalizedEmail = normalizeEmail(input.email)
+  const maxUses = normalizedEmail ? 1 : Math.max(1, Number(input.maxUses || 1))
   const expiresAt = input.expiresInDays
     ? new Date(now.getTime() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
     : null
@@ -188,9 +202,9 @@ export async function createInvite(
     code: generateInviteCode(),
     organizationId: input.organizationId,
     createdBy: userId,
-    email: input.email || null,
+    email: normalizedEmail || null,
     role: input.role || 'member',
-    maxUses: input.maxUses || 1,
+    maxUses,
     uses: 0,
     expiresAt,
     createdAt: now.toISOString(),
@@ -284,7 +298,7 @@ export async function hasInviteForEmail(
     return false
   }
 
-  const normalizedEmail = email.trim().toLowerCase()
+  const normalizedEmail = normalizeEmail(email)
   if (!normalizedEmail) {
     return false
   }
@@ -321,7 +335,7 @@ export async function useInvite(
     throw createError({ statusCode: 400, statusMessage: `Invite is ${invite.status}` })
   }
 
-  if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
+  if (isInviteExpired(invite)) {
     await db.prepare(`
       UPDATE ${INVITES_TABLE} SET status = 'expired' WHERE id = ?1;
     `).bind(invite.id).run()
@@ -472,20 +486,31 @@ export async function getTeamQuota(
   `).bind(organizationId).first<D1QuotaRow>()
 
   if (row) {
-    // Check if we need to reset for new week
-    if (row.week_start_date !== currentWeek) {
-      const plan = (ownerPlan || row.plan) as SubscriptionPlan
-      const config = PLAN_CONFIG[plan] || PLAN_CONFIG.FREE
+    const plan = (ownerPlan || row.plan) as SubscriptionPlan
+    const config = getPlanConfig(plan)
+    const weekChanged = row.week_start_date !== currentWeek
+    const limitsChanged = row.plan !== plan
+      || row.ai_requests_limit !== config.aiRequests
+      || row.ai_tokens_limit !== config.aiTokens
+      || row.seats_limit !== config.seats
+
+    if (weekChanged || limitsChanged) {
+      const nextRequestsUsed = weekChanged ? 0 : row.ai_requests_used
+      const nextTokensUsed = weekChanged ? 0 : row.ai_tokens_used
+      const nextWeekStartDate = weekChanged ? currentWeek : row.week_start_date
+      const updatedAt = new Date().toISOString()
 
       await db.prepare(`
         UPDATE ${TEAM_QUOTA_TABLE}
-        SET ai_requests_used = 0, ai_tokens_used = 0,
-            week_start_date = ?1, updated_at = ?2,
-            plan = ?3, ai_requests_limit = ?4, ai_tokens_limit = ?5, seats_limit = ?6
-        WHERE organization_id = ?7;
+        SET ai_requests_used = ?1, ai_tokens_used = ?2,
+            week_start_date = ?3, updated_at = ?4,
+            plan = ?5, ai_requests_limit = ?6, ai_tokens_limit = ?7, seats_limit = ?8
+        WHERE organization_id = ?9;
       `).bind(
-        currentWeek,
-        new Date().toISOString(),
+        nextRequestsUsed,
+        nextTokensUsed,
+        nextWeekStartDate,
+        updatedAt,
         plan,
         config.aiRequests,
         config.aiTokens,
@@ -496,22 +521,23 @@ export async function getTeamQuota(
       return {
         organizationId,
         plan,
-        aiRequestsUsed: 0,
+        aiRequestsUsed: nextRequestsUsed,
         aiRequestsLimit: config.aiRequests,
-        aiTokensUsed: 0,
+        aiTokensUsed: nextTokensUsed,
         aiTokensLimit: config.aiTokens,
         seatsUsed: row.seats_used,
         seatsLimit: config.seats,
-        weekStartDate: currentWeek,
-        updatedAt: new Date().toISOString(),
+        weekStartDate: nextWeekStartDate,
+        updatedAt,
       }
     }
+
     return mapQuotaRow(row)
   }
 
   // Create new quota record
   const plan = ownerPlan || 'FREE'
-  const config = PLAN_CONFIG[plan] || PLAN_CONFIG.FREE
+  const config = getPlanConfig(plan)
   const now = new Date().toISOString()
 
   await db.prepare(`
@@ -684,6 +710,43 @@ export async function getOrInitTeamMemberUsage(
     weekStartDate: currentWeek,
     updatedAt: now,
   }
+}
+
+export async function listTeamMemberUsage(
+  event: H3Event,
+  organizationId: string,
+  userId?: string,
+): Promise<TeamMemberUsage[]> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureTeamSchema(db)
+  const currentWeek = getWeekStartDate()
+  const now = new Date().toISOString()
+
+  await db.prepare(`
+    UPDATE ${TEAM_MEMBER_USAGE_TABLE}
+    SET ai_requests_used = 0, ai_tokens_used = 0, week_start_date = ?1, updated_at = ?2
+    WHERE organization_id = ?3 AND week_start_date != ?1;
+  `).bind(currentWeek, now, organizationId).run()
+
+  if (userId) {
+    const row = await db.prepare(`
+      SELECT * FROM ${TEAM_MEMBER_USAGE_TABLE}
+      WHERE organization_id = ?1 AND user_id = ?2;
+    `).bind(organizationId, userId).first<D1MemberUsageRow>()
+    return row ? [mapMemberUsageRow(row)] : []
+  }
+
+  const result = await db.prepare(`
+    SELECT * FROM ${TEAM_MEMBER_USAGE_TABLE}
+    WHERE organization_id = ?1
+    ORDER BY updated_at DESC;
+  `).bind(organizationId).all<D1MemberUsageRow>()
+
+  return (result.results ?? []).map(mapMemberUsageRow)
 }
 
 export async function addTeamMemberUsage(

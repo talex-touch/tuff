@@ -18,11 +18,11 @@ const { isAuthenticated } = useAuthUser()
   <div class="relative">
     <section
       v-if="isAuthenticated"
-      class="grid gap-8 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]"
+      class="grid gap-10 lg:grid-cols-[240px_1fr] xl:grid-cols-[260px_1fr]"
     >
       <DashboardNav />
 
-      <div class="space-y-8">
+      <div class="space-y-10">
         <NuxtPage />
       </div>
     </section>

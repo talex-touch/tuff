@@ -90,6 +90,10 @@ async function ensureSubscriptionSchema(db: D1Database) {
   subscriptionSchemaInitialized = true
 }
 
+function normalizeActivationCode(code: string): string {
+  return code.trim().toUpperCase()
+}
+
 function mapCodeRow(row: D1ActivationCodeRow): ActivationCode {
   return {
     id: row.id,
@@ -185,9 +189,11 @@ export async function getActivationCodeByCode(
 
   await ensureSubscriptionSchema(db)
 
+  const normalizedCode = normalizeActivationCode(code)
+
   const row = await db.prepare(`
     SELECT * FROM ${ACTIVATION_CODES_TABLE} WHERE code = ?1;
-  `).bind(code.toUpperCase()).first<D1ActivationCodeRow>()
+  `).bind(normalizedCode).first<D1ActivationCodeRow>()
 
   return row ? mapCodeRow(row) : null
 }

@@ -35,7 +35,9 @@ function resolveRequest(): RequestLike {
 
 export async function fetchCurrentUserProfile(request?: RequestLike) {
   const caller = request ?? resolveRequest()
-  return await caller<CurrentUserProfile | null>(USER_ME_ENDPOINT)
+  return await caller<CurrentUserProfile | null>(USER_ME_ENDPOINT, {
+    cache: 'no-store',
+  })
 }
 
 export async function patchCurrentUserProfile(payload: CurrentUserProfilePatch, request?: RequestLike) {

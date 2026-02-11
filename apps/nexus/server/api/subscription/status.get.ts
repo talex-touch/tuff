@@ -1,14 +1,12 @@
 import { requireAuth } from '../../utils/auth'
 import { getPlanFeatures, getUserSubscription } from '../../utils/subscriptionStore'
-import { getCreditSummary } from '../../utils/creditsStore'
+import { resolveActiveTeamContext } from '../../utils/teamContext'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
   const subscription = await getUserSubscription(event, userId)
   const features = getPlanFeatures(subscription.plan)
-  const credits = await getCreditSummary(event, userId)
-  const teamUsed = Number((credits.team as any)?.used ?? 0)
-  const teamLimit = Number((credits.team as any)?.quota ?? features.aiRequestsLimit)
+  const teamContext = await resolveActiveTeamContext(event, userId)
 
   return {
     plan: subscription.plan,
@@ -17,16 +15,41 @@ export default defineEventHandler(async (event) => {
     isActive: subscription.isActive,
     features: {
       aiRequests: {
-        limit: teamLimit,
-        used: teamUsed,
+        limit: features.aiRequestsLimit,
+        used: teamContext.quota.aiRequestsUsed,
       },
       aiTokens: {
         limit: features.aiTokensLimit,
-        used: 0,
+        used: teamContext.quota.aiTokensUsed,
       },
       customModels: features.customModels,
       prioritySupport: features.prioritySupport,
       apiAccess: features.apiAccess,
+    },
+    team: {
+      id: teamContext.team.id,
+      name: teamContext.team.name,
+      type: teamContext.team.type,
+      role: teamContext.role,
+      collaborationEnabled: teamContext.collaborationEnabled,
+      seats: {
+        used: teamContext.seatsUsed,
+        total: teamContext.seatsLimit,
+      },
+      permissions: {
+        canInvite: teamContext.permissions.canInvite,
+        canManageMembers: teamContext.permissions.canManageMembers,
+        canDisband: teamContext.permissions.canDisband,
+        canCreateTeam: teamContext.permissions.canCreateTeam,
+      },
+      upgrade: teamContext.upgrade,
+      manageUrl: '/dashboard/team',
+      organization: teamContext.team.type === 'organization'
+        ? {
+            id: teamContext.team.id,
+            role: teamContext.role,
+          }
+        : null,
     },
   }
 })

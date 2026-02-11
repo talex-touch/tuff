@@ -97,14 +97,14 @@ function toggleRejectForm() {
   >
     <template #header>
       <div v-if="item" class="flex items-start gap-4">
-        <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-black/5 dark:border-white/10 dark:bg-white/10">
+        <div class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
           <img
             v-if="item.plugin.iconUrl"
             :src="item.plugin.iconUrl"
             :alt="item.plugin.name"
             class="size-full object-cover"
           >
-          <span v-else class="text-xl font-semibold text-black/60 dark:text-white/60">
+          <span v-else class="text-xl font-semibold text-black/50 dark:text-white/50">
             {{ item.plugin.name.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -125,7 +125,7 @@ function toggleRejectForm() {
     <div v-if="item" class="max-h-80 overflow-y-auto">
       <!-- Plugin Review -->
       <template v-if="item.type === 'plugin'">
-        <div class="space-y-4">
+        <div class="space-y-4 rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
           <div>
             <p class="text-xs font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
               {{ t('dashboard.sections.plugins.form.identifier') }}
@@ -169,7 +169,7 @@ function toggleRejectForm() {
 
       <!-- Version Review -->
       <template v-else-if="item.type === 'version' && item.version">
-        <div class="space-y-4">
+        <div class="space-y-4 rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
           <div class="flex items-center gap-3">
             <span class="text-lg font-semibold text-black dark:text-white">
               v{{ item.version.version }}

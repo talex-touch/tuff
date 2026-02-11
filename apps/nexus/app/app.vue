@@ -237,6 +237,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.plan-display-font {
+  font-family: 'Poppins', 'Avenir Next', 'DM Sans', 'PingFang SC', 'Segoe UI', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+
 html.dark {
   color-scheme: dark;
 }

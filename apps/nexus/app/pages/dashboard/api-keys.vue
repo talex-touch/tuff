@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Modal from '~/components/ui/Modal.vue'
+
 definePageMeta({
   layout: 'dashboard',
 })
@@ -91,18 +93,34 @@ async function createKey() {
   }
 }
 
-async function deleteKey(keyId: string) {
-  if (!confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
-    return
-  }
+// Delete confirmation
+const deleteConfirmVisible = ref(false)
+const pendingDeleteKeyId = ref<string | null>(null)
 
+function requestDeleteKey(keyId: string) {
+  pendingDeleteKeyId.value = keyId
+  deleteConfirmVisible.value = true
+}
+
+async function confirmDeleteKey(): Promise<boolean> {
+  if (!pendingDeleteKeyId.value)
+    return true
   try {
-    await $fetch(`/api/dashboard/api-keys/${keyId}`, { method: 'DELETE' })
+    await $fetch(`/api/dashboard/api-keys/${pendingDeleteKeyId.value}`, { method: 'DELETE' })
     await fetchKeys()
   }
   catch (e: any) {
     error.value = e.data?.message || 'Failed to delete API key'
   }
+  finally {
+    pendingDeleteKeyId.value = null
+  }
+  return true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirmVisible.value = false
+  pendingDeleteKeyId.value = null
 }
 
 async function copyKey() {
@@ -155,17 +173,18 @@ const expiryOptions = [
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="mx-auto max-w-5xl space-y-6">
     <!-- Header -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">
-          API Keys
-        </h1>
-        <p class="text-sm text-black/50 dark:text-light/50">
-          Manage API keys for CLI tools and integrations
-        </p>
-      </div>
+    <div>
+      <h1 class="apple-heading-md">
+        API Keys
+      </h1>
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
+        Manage API keys for CLI tools and integrations
+      </p>
+    </div>
+
+    <div>
       <Button
         variant="primary"
         @click="showCreateModal = true"
@@ -186,7 +205,7 @@ const expiryOptions = [
             Copy your secret key now. It won't be shown again.
           </p>
           <div class="mt-3 flex items-center gap-2">
-            <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-light">
+            <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-white">
               {{ newlyCreatedKey.secretKey }}
             </code>
             <Button size="small" variant="success" @click="copyKey">
@@ -208,8 +227,18 @@ const expiryOptions = [
     </div>
 
     <!-- Loading -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
-      <span class="i-carbon-circle-dash animate-spin text-2xl text-black/30 dark:text-light/30" />
+    <div v-if="loading" class="space-y-4 py-6">
+      <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
+        <TxSpinner :size="22" />
+      </div>
+      <div class="space-y-3">
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+      </div>
     </div>
 
     <!-- Error -->
@@ -222,18 +251,18 @@ const expiryOptions = [
       <div
         v-for="key in keys"
         :key="key.id"
-        class="flex items-center justify-between rounded-2xl bg-white/60 p-4 dark:bg-dark/40"
+        class="flex items-center justify-between rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]"
         :class="{ 'opacity-50': isExpired(key.expiresAt) }"
       >
         <div class="flex items-center gap-4">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-black/5 dark:bg-light/5">
-            <span class="i-carbon-password text-lg text-black/60 dark:text-light/60" />
+          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-black/[0.04] dark:bg-white/[0.06]">
+            <span class="i-carbon-password text-lg text-black/60 dark:text-white/60" />
           </div>
           <div>
-            <p class="font-medium text-black dark:text-light">
+            <p class="font-medium text-black dark:text-white">
               {{ key.name }}
             </p>
-            <div class="flex items-center gap-2 text-xs text-black/40 dark:text-light/40">
+            <div class="flex items-center gap-2 text-xs text-black/40 dark:text-white/40">
               <code class="font-mono">{{ key.keyPrefix }}</code>
               <span>·</span>
               <span>Created {{ formatDate(key.createdAt) }}</span>
@@ -265,7 +294,7 @@ const expiryOptions = [
           size="mini"
           native-type="button"
           class="rounded-lg p-2 text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
-          @click="deleteKey(key.id)"
+          @click="requestDeleteKey(key.id)"
         >
           <span class="i-carbon-trash-can text-lg" />
         </TxButton>
@@ -273,14 +302,14 @@ const expiryOptions = [
     </div>
 
     <!-- Empty State -->
-    <div v-else class="rounded-2xl bg-white/60 p-8 text-center dark:bg-dark/40">
-      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/5 dark:bg-light/5">
-        <span class="i-carbon-password text-2xl text-black/30 dark:text-light/30" />
+    <div v-else class="rounded-2xl bg-black/[0.02] p-8 text-center dark:bg-white/[0.03]">
+      <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-black/[0.04] dark:bg-white/[0.06]">
+        <span class="i-carbon-password text-2xl text-black/30 dark:text-white/30" />
       </div>
-      <h3 class="font-medium text-black dark:text-light">
+      <h3 class="font-medium text-black dark:text-white">
         No API Keys
       </h3>
-      <p class="mt-1 text-sm text-black/50 dark:text-light/50">
+      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
         Create an API key to use with tuffcli and other integrations
       </p>
       <Button variant="primary" class="mt-4" @click="showCreateModal = true">
@@ -289,93 +318,96 @@ const expiryOptions = [
     </div>
 
     <!-- Create Modal -->
-    <Teleport to="body">
-      <div
-        v-if="showCreateModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-        @click.self="showCreateModal = false"
-      >
-        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-dark">
-          <h3 class="text-lg font-semibold text-black dark:text-light">
-            Create API Key
-          </h3>
-          <p class="mt-1 text-sm text-black/50 dark:text-light/50">
-            Generate a new API key for CLI tools
-          </p>
+    <Modal v-model="showCreateModal" title="Create API Key" width="480px">
+      <p class="text-sm text-black/50 dark:text-white/50">
+        Generate a new API key for CLI tools
+      </p>
 
-          <div class="mt-6 space-y-4">
-            <!-- Name -->
-            <div>
-              <label class="mb-1 block text-xs font-medium text-black/60 dark:text-light/60">
-                Key Name
-              </label>
-              <Input
-                v-model="newKeyName"
-                type="text"
-                placeholder="e.g., My Laptop, CI/CD"
-                class="w-full"
+      <div class="mt-6 space-y-4">
+        <!-- Name -->
+        <div>
+          <label class="apple-section-title mb-1 block">
+            Key Name
+          </label>
+          <Input
+            v-model="newKeyName"
+            type="text"
+            placeholder="e.g., My Laptop, CI/CD"
+            class="w-full"
+          />
+        </div>
+
+        <!-- Scopes -->
+        <div>
+          <label class="apple-section-title mb-2 block">
+            Permissions
+          </label>
+          <div class="space-y-2">
+            <label
+              v-for="scope in availableScopes"
+              :key="scope.id"
+              class="flex cursor-pointer items-start gap-3 rounded-xl bg-black/[0.03] p-3 transition hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+            >
+              <TxCheckbox
+                class="mt-0.5"
+                :model-value="newKeyScopes.includes(scope.id)"
+                @change="(value: boolean) => toggleScope(scope.id, value)"
               />
-            </div>
-
-            <!-- Scopes -->
-            <div>
-              <label class="mb-2 block text-xs font-medium text-black/60 dark:text-light/60">
-                Permissions
-              </label>
-              <div class="space-y-2">
-                <label
-                  v-for="scope in availableScopes"
-                  :key="scope.id"
-                  class="flex cursor-pointer items-start gap-3 rounded-lg bg-black/5 p-3 transition hover:bg-black/10 dark:bg-light/5 dark:hover:bg-light/10"
-                >
-                  <TxCheckbox
-                    class="mt-0.5"
-                    :model-value="newKeyScopes.includes(scope.id)"
-                    @change="(value) => toggleScope(scope.id, value)"
-                  />
-                  <div>
-                    <p class="text-sm font-medium text-black dark:text-light">{{ scope.label }}</p>
-                    <p class="text-xs text-black/50 dark:text-light/50">{{ scope.description }}</p>
-                  </div>
-                </label>
+              <div>
+                <p class="text-sm font-medium text-black dark:text-white">{{ scope.label }}</p>
+                <p class="text-xs text-black/50 dark:text-white/50">{{ scope.description }}</p>
               </div>
-            </div>
-
-            <!-- Expiry -->
-            <div>
-              <label class="mb-1 block text-xs font-medium text-black/60 dark:text-light/60">
-                Expiration
-              </label>
-              <TuffSelect v-model="newKeyExpiry" class="w-full">
-                <TuffSelectItem
-                  v-for="opt in expiryOptions"
-                  :key="opt.value ?? 'never'"
-                  :value="opt.value"
-                  :label="opt.label"
-                />
-              </TuffSelect>
-            </div>
-          </div>
-
-          <div class="mt-6 flex gap-3">
-            <Button
-              variant="secondary"
-              class="flex-1"
-              @click="showCreateModal = false"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              class="flex-1"
-              :disabled="!newKeyName.trim() || creating"
-              @click="createKey"
-            >
-              {{ creating ? 'Creating...' : 'Create Key' }}
-            </Button>
+            </label>
           </div>
         </div>
+
+        <!-- Expiry -->
+        <div>
+          <label class="apple-section-title mb-1 block">
+            Expiration
+          </label>
+          <TuffSelect v-model="newKeyExpiry" class="w-full">
+            <TuffSelectItem
+              v-for="opt in expiryOptions"
+              :key="opt.value ?? 'never'"
+              :value="opt.value"
+              :label="opt.label"
+            />
+          </TuffSelect>
+        </div>
       </div>
-    </Teleport>
+
+      <template #footer>
+        <div class="flex gap-3">
+          <Button
+            variant="secondary"
+            class="flex-1"
+            @click="showCreateModal = false"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            class="flex-1"
+            :disabled="!newKeyName.trim() || creating"
+            @click="createKey"
+          >
+            {{ creating ? 'Creating...' : 'Create Key' }}
+          </Button>
+        </div>
+      </template>
+    </Modal>
+
+    <!-- Delete Confirmation Dialog -->
+    <TxBottomDialog
+      v-if="deleteConfirmVisible"
+      title="Delete API Key"
+      message="Are you sure you want to delete this API key? This action cannot be undone."
+      :btns="[
+        { content: 'Cancel', type: 'info', onClick: () => true },
+        { content: 'Delete', type: 'error', onClick: confirmDeleteKey },
+      ]"
+      :close="closeDeleteConfirm"
+    />
   </div>
 </template>

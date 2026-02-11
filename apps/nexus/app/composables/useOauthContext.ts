@@ -18,6 +18,11 @@ interface BuildOauthCallbackInput {
   lang?: string | null
 }
 
+interface RequestOauthAuthorizationInput {
+  provider: OauthProvider
+  callbackUrl: string
+}
+
 interface ResolveOauthContextInput {
   query?: {
     flow?: string | null
@@ -68,6 +73,74 @@ export function buildOauthCallbackUrl(input: BuildOauthCallbackInput) {
     params.set('lang', input.lang)
 
   return `/sign-in?${params.toString()}`
+}
+
+function parseUrlLike(value: string) {
+  try {
+    const base = hasWindow() ? window.location.origin : 'http://localhost'
+    return value.startsWith('/') ? new URL(value, base) : new URL(value)
+  }
+  catch {
+    return null
+  }
+}
+
+function isOauthFallbackUrl(value: string, callbackUrl: string) {
+  if (value === callbackUrl)
+    return true
+
+  const parsed = parseUrlLike(value)
+  if (!parsed)
+    return false
+
+  if (parsed.pathname.startsWith('/api/auth/signin') || parsed.pathname.startsWith('/sign-in'))
+    return true
+
+  return false
+}
+
+function resolveOauthRedirectErrorHint(value: string) {
+  const parsed = parseUrlLike(value)
+  if (!parsed)
+    return ''
+  return parsed.searchParams.get('error') ?? ''
+}
+
+export async function requestOauthAuthorizationUrl(input: RequestOauthAuthorizationInput) {
+  const csrfData = await $fetch<{ csrfToken?: string }>('/api/auth/csrf', {
+    credentials: 'include',
+  })
+  const csrfToken = csrfData?.csrfToken
+  if (!csrfToken)
+    throw new Error('oauth_csrf_unavailable')
+
+  const body = new URLSearchParams({
+    csrfToken,
+    callbackUrl: input.callbackUrl,
+    json: 'true',
+  })
+
+  const response = await $fetch<{ url?: string }>(`/api/auth/signin/${input.provider}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: body.toString(),
+  })
+
+  const redirectUrl = typeof response?.url === 'string' ? response.url.trim() : ''
+  if (!redirectUrl)
+    throw new Error('oauth_redirect_missing')
+
+  if (isOauthFallbackUrl(redirectUrl, input.callbackUrl)) {
+    const errorHint = resolveOauthRedirectErrorHint(redirectUrl)
+    if (errorHint)
+      throw new Error(`oauth_redirect_fallback:${errorHint}`)
+    throw new Error('oauth_redirect_fallback')
+  }
+
+  return redirectUrl
 }
 
 export function persistOauthContext(input: Omit<OauthContext, 'ts' | 'ver'> & { ts?: number }) {
@@ -144,4 +217,3 @@ export function resolveOauthContext(input: ResolveOauthContextInput) {
     redirect,
   }
 }
-

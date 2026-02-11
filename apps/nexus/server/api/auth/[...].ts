@@ -96,13 +96,18 @@ function getAuthOptions(): AuthOptions {
     const linuxdoProvider: OAuthConfig<Record<string, any>> = {
       id: 'linuxdo',
       name: 'LinuxDO',
-      type: 'oidc',
+      // Use OAuth-only flow to avoid LinuxDO returning id_token.
+      // When scope includes `openid`, openid-client throws:
+      // "id_token detected in the response, you must use client.callback()".
+      type: 'oauth',
       clientId: linuxdoClientId,
       clientSecret: linuxdoClientSecret,
-      wellKnown: `${linuxdoIssuer}/.well-known/openid-configuration`,
+      // Keep LinuxDO behavior consistent with GitHub: when OAuth email matches an existing
+      // local account, allow linking instead of returning without creating provider linkage.
+      allowDangerousEmailAccountLinking: true,
       authorization: {
         url: `${linuxdoIssuer}/oauth2/authorize`,
-        params: { scope: 'openid profile email' },
+        params: { scope: 'profile email' },
       },
       token: { url: `${linuxdoIssuer}/oauth2/token` },
       userinfo: { url: `${linuxdoIssuer}/api/user` },
