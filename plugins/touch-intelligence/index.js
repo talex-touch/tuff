@@ -187,57 +187,72 @@ async function copyAnswer(answer) {
 
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
-    const prompt = normalizePrompt(getQueryText(query))
+    try {
+      const prompt = normalizePrompt(getQueryText(query))
 
-    plugin.feature.clearItems()
+      plugin.feature.clearItems()
 
-    if (!prompt) {
-      plugin.feature.pushItems([buildPlaceholderItem(featureId)])
+      if (!prompt) {
+        plugin.feature.pushItems([buildPlaceholderItem(featureId)])
+        return true
+      }
+
+      plugin.feature.pushItems([buildSendItem(featureId, prompt)])
       return true
     }
-
-    plugin.feature.pushItems([buildSendItem(featureId, prompt)])
-    return true
+    catch (error) {
+      logger?.error?.('[touch-intelligence] Failed to handle feature', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildErrorItem(featureId, '', error?.message || '未知错误'),
+      ])
+      return true
+    }
   },
 
   async onItemAction(item) {
-    if (item?.meta?.defaultAction !== ACTION_ID)
-      return
-
-    const actionId = item.meta?.actionId
-    const payload = item.meta?.payload || {}
-    const prompt = normalizePrompt(payload.prompt)
-
-    if (actionId === 'copy-answer') {
-      const answer = normalizeText(payload.answer)
-      if (!answer)
+    try {
+      if (item?.meta?.defaultAction !== ACTION_ID)
         return
 
-      const copied = await copyAnswer(answer)
-      if (!copied) {
-        return {
-          externalAction: true,
-          success: false,
-          message: '复制失败：缺少 clipboard.write 权限',
+      const actionId = item.meta?.actionId
+      const payload = item.meta?.payload || {}
+      const prompt = normalizePrompt(payload.prompt)
+
+      if (actionId === 'copy-answer') {
+        const answer = normalizeText(payload.answer)
+        if (!answer)
+          return
+
+        const copied = await copyAnswer(answer)
+        if (!copied) {
+          return {
+            externalAction: true,
+            success: false,
+            message: '复制失败：缺少 clipboard.write 权限',
+          }
         }
+
+        return { externalAction: true }
       }
 
-      return { externalAction: true }
+      if (actionId === 'send' || actionId === 'retry') {
+        if (!prompt)
+          return
+
+        const hasPermission = await ensurePermission('ai.basic', '需要 AI 权限以执行智能问答')
+        if (!hasPermission)
+          return
+
+        const requestId = crypto.randomUUID()
+        plugin.feature.clearItems()
+        plugin.feature.pushItems([buildPendingItem(item.meta?.featureId || 'intelligence.ask', prompt, requestId)])
+        void dispatchPrompt(item.meta?.featureId || 'intelligence.ask', prompt, requestId)
+        return { externalAction: true }
+      }
     }
-
-    if (actionId === 'send' || actionId === 'retry') {
-      if (!prompt)
-        return
-
-      const hasPermission = await ensurePermission('ai.basic', '需要 AI 权限以执行智能问答')
-      if (!hasPermission)
-        return
-
-      const requestId = crypto.randomUUID()
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([buildPendingItem(item.meta?.featureId || 'intelligence.ask', prompt, requestId)])
-      void dispatchPrompt(item.meta?.featureId || 'intelligence.ask', prompt, requestId)
-      return { externalAction: true }
+    catch (error) {
+      logger?.error?.('[touch-intelligence] Action failed', error)
     }
   },
 }

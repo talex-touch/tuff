@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
  
  > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
- > 更新时间: 2026-01-18
+ > 更新时间: 2026-02-10
 
  ## PRD Index（以代码实现为准）
  
@@ -18,47 +18,58 @@
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
 
- ## 近期（近 3 个月）关键里程碑
+## 近期（近 3 个月）关键里程碑
 
- - **插件权限中心**（Phase 1-4 已落地）
-   - **代码**
-     - `apps/core-app/src/main/modules/permission/`
-     - `packages/utils/permission/`
-   - **状态**
-     - 核心已完成；Phase 5（测试/性能验证）已落地（performance test）
+- **CoreBox 内置能力抽离为 7 个独立插件**（2026-02，已落地）
+  - **插件列表**
+    - `touch-browser-open` - 浏览器打开 / URL 系统
+    - `touch-browser-bookmarks` - 浏览器书签搜索
+    - `touch-quick-actions` - 快捷操作
+    - `touch-window-presets` - 窗口预设
+    - `touch-workspace-scripts` - 工作区脚本
+    - `touch-system-actions` - 系统操作
+    - `touch-intelligence-actions` - AI 智能操作
+  - **代码**
+    - `plugins/` 目录（各插件独立包 + 测试 + 文档）
+    - `apps/core-app/src/main/` 移除对应内置实现
+  - **状态**：已完成抽离 + 测试 + Nexus 文档
+
+- **SDK 统一 Hard-Cut**（2026-01 ~ 02，进行中）
+  - **代码**
+    - `packages/utils/transport/` - Typed Transport Domain SDKs
+    - `packages/utils/renderer/hooks/` - SDK Hooks 迁移
+  - **状态**
+    - 批次 A~D 已完成（Settings/Permission/Download/Cloud Sync/Channel → SDK Hooks）
+    - 批次 E~F（renderer 直连点清理）进行中
+  - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+
+- **Nexus OAuth 修复**（2026-02，已落地）
+  - **代码**
+    - `apps/nexus/server/` - sign-in callback 稳定化
+    - `apps/nexus/middleware/` - session/app auth guard 拆分
+  - **状态**：OAuth flow + Turnstile + Passkey step-up 已闭环
+
+- **更新系统增强**（2026-02，已落地）
+  - **代码**
+    - `apps/core-app/src/main/modules/download/` - reusable update tasks
+  - **状态**：下载管理增强 + 更新任务复用
+
+- **插件权限中心**（Phase 1-4 已落地）
+  - **代码**
+    - `apps/core-app/src/main/modules/permission/`
+    - `packages/utils/permission/`
+  - **状态**
+    - 核心已完成；Phase 5（测试/性能验证）已落地
 
 - **模块日志系统**（Phase 1-4 已落地）
-   - **PRD**：`./02-architecture/module-logging-system-prd.md`
-   - **代码**（已落地的 utils 实现）
-     - `packages/utils/common/logger/`
-   - **缺口**
-     - SearchEngine/Providers/核心模块迁移
-     - UI 配置界面（可选）
+  - **PRD**：`./02-architecture/module-logging-system-prd.md`
+  - **代码**
+    - `packages/utils/common/logger/`
+  - **缺口**
+    - UI 配置界面（可选）
 
- - **插件市场多源**（核心已落地，仍需验收/文档）
-   - **PRD**：`./03-features/plugin/plugin-market-provider-frontend-plan.md`
-   - **代码**
-     - `apps/core-app/src/renderer/src/modules/market/providers/`
-     - `apps/core-app/src/renderer/src/views/base/Market.vue`
-   - **近期开销点**
-     - icon 加载（已修复：TPEX iconUrl + UI fallback）
-     - 文档补齐（market source editor / provider 配置说明）
+> **已归档**（超过 3 个月）：插件市场多源、Search DSL、Nexus Team Invite、直接预览计算、Widget 动态加载 → 详见 `01-project/CHANGES.md` 和 `05-archive/`
 
- - **Search DSL**（`@xxx` provider filter + pinned）
-   - **PRD**：`./03-features/search/SEARCH-DSL-PRD.md`
-   - **代码**
-     - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`（`@xxx` 解析与筛 provider）
-     - `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`（pinned 置顶排序）
-     - `apps/core-app/src/main/db/utils.ts`（pinned 表与 toggle）
-   - **说明**
-     - pinned 当前以 `item.meta.pinned.isPinned` 驱动 UI 与排序
-
- - **Nexus Team Invite**（已闭环：邀请 + join 页面）
-   - **PRD**：`./03-features/nexus/NEXUS-TEAM-INVITE-PRD.md`
-   - **代码**
-     - `apps/nexus/server/api/dashboard/team/invites.*`
-     - `apps/nexus/server/api/team/join.post.ts`
-     - `apps/nexus/app/pages/team/join.vue`
 
  ## 仍未闭环（以代码为准）
 
@@ -111,11 +122,19 @@
    - **PRD**：`./02-architecture/intelligence-agents-system-prd.md`
    - **代码**
      - `apps/core-app/src/main/modules/ai/agents/`
+     - `apps/core-app/src/renderer/src/views/base/intelligence/` - 管理 UI
    - **已完成**
      - WorkflowAgent 基础执行（workflow.run/plan）
      - 记忆系统基础实现（MemoryStore + ContextManager）
+     - Intelligence 管理 UI（Capabilities/Channels/AuditLogs/Header 组件）
    - **缺口**
      - Workflow 编辑器、用户自定义代理、协作与测试
+
+ - **SDK 统一 Hard-Cut 剩余**（批次 E~F）
+   - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+   - **缺口**
+     - renderer 直连 IPC 点清理（使用 SDK hooks 替换）
+     - 旧 Channel 通道最终移除
 
  - **平台能力体系（能力目录 + 管理 UI 基础已落地）**
    - **PRD**：`./02-architecture/platform-capabilities-prd.md`

@@ -194,7 +194,9 @@ export class TouchPlugin implements ITouchPlugin {
   _runtimeStats = {
     startedAt: 0,
     requestCount: 0,
-    lastActiveAt: 0
+    lastActiveAt: 0,
+    errorCount: 0,
+    errorTimestamps: [] as number[]
   }
 
   /**
@@ -383,13 +385,22 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const result = this.pluginLifecycle?.onFeatureTriggered(
-      feature.id,
-      query,
-      feature,
-      controller.signal
-    )
-    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
+    let result: boolean | void = undefined
+    try {
+      result = this.pluginLifecycle?.onFeatureTriggered(
+        feature.id,
+        query,
+        feature,
+        controller.signal
+      )
+    } catch (error) {
+      this.handleRuntimeError('onFeatureTriggered', error)
+    }
+    try {
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
+    } catch (error) {
+      this.handleRuntimeError('onLaunch', error)
+    }
     return result
   }
 
@@ -399,11 +410,19 @@ export class TouchPlugin implements ITouchPlugin {
     this.markActive()
 
     // Pass query (can be string for backward compatibility or TuffQuery object)
-    this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+    try {
+      this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
+    } catch (error) {
+      this.handleRuntimeError('onFeatureTriggered', error)
+    }
 
     // For backward compatibility, extract text if query is object
     const queryText = typeof query === 'string' ? query : (query?.text ?? '')
-    this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
+    try {
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(queryText))
+    } catch (error) {
+      this.handleRuntimeError('onInputChanged', error)
+    }
   }
 
   public clearCoreBoxItems(): void {
@@ -535,6 +554,53 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   /**
+   * Handle runtime errors from plugin lifecycle calls.
+   * Logs the error, pushes a PluginIssue, tracks error frequency,
+   * and auto-disables the plugin if errors exceed threshold (>10 in 60s).
+   */
+  private handleRuntimeError(source: string, error: unknown): void {
+    const err = error instanceof Error ? error : new Error(String(error))
+
+    this.logger.error(`[Runtime] ${source} failed: ${err.message}`, err)
+
+    this.issues.push({
+      type: 'error',
+      message: `Runtime error in ${source}: ${err.message}`,
+      source: `runtime:${source}`,
+      code: 'RUNTIME_ERROR',
+      meta: { error: err.stack },
+      timestamp: Date.now()
+    })
+
+    this._runtimeStats.errorCount += 1
+
+    const now = Date.now()
+    this._runtimeStats.errorTimestamps.push(now)
+
+    // Sliding window: keep only timestamps within 60s
+    const windowMs = 60_000
+    this._runtimeStats.errorTimestamps = this._runtimeStats.errorTimestamps.filter(
+      (t) => now - t < windowMs
+    )
+
+    // Auto-disable if >10 errors in sliding window
+    if (this._runtimeStats.errorTimestamps.length > 10) {
+      this.logger.error(
+        `[Runtime] Plugin auto-disabled: ${this._runtimeStats.errorTimestamps.length} errors in 60s window`
+      )
+      this.issues.push({
+        type: 'error',
+        message: `Plugin auto-disabled due to excessive runtime errors (${this._runtimeStats.errorTimestamps.length} errors in 60s).`,
+        source: `runtime:${source}`,
+        code: 'AUTO_DISABLED_EXCESSIVE_ERRORS',
+        timestamp: Date.now()
+      })
+      this.status = PluginStatus.CRASHED
+      this.pluginLifecycle = null
+    }
+  }
+
+  /**
    * Get performance metrics for the plugin
    */
   getPerformanceMetrics(): {
@@ -589,6 +655,8 @@ export class TouchPlugin implements ITouchPlugin {
     this.logger.info('[Lifecycle] enable start')
 
     this.issues.length = 0
+    this._runtimeStats.errorCount = 0
+    this._runtimeStats.errorTimestamps = []
 
     try {
       const shouldBundlePrelude = !app.isPackaged && this.dev.enable
@@ -682,7 +750,11 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.requestCount = 0
     this._runtimeStats.lastActiveAt = now
 
-    this.pluginLifecycle?.onInit?.()
+    try {
+      this.pluginLifecycle?.onInit?.()
+    } catch (error) {
+      this.handleRuntimeError('onInit', error)
+    }
     transport
       .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
       .catch(() => {})

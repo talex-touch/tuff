@@ -6,7 +6,8 @@ import path from 'node:path'
 import {
   generatePermissionIssue,
   getPluginPermissionStatus,
-  parseManifestPermissions
+  parseManifestPermissions,
+  permissionRegistry
 } from '@talex-touch/utils/permission'
 import {
   CATEGORY_REQUIRED_MIN_VERSION,
@@ -101,6 +102,26 @@ abstract class BasePluginLoader {
       })
     }
 
+    // B.3: Validate required manifest fields
+    if (!pluginInfo.name) {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: 'Missing required "name" field in manifest.json.',
+        source: 'manifest.json',
+        code: 'MANIFEST_MISSING_NAME',
+        timestamp: Date.now()
+      })
+    }
+    if (!pluginInfo.version) {
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message: 'Missing "version" field in manifest.json. Defaulting to "0.0.0".',
+        source: 'manifest.json',
+        code: 'MANIFEST_MISSING_VERSION',
+        timestamp: Date.now()
+      })
+    }
+
     this.touchPlugin.name = pluginInfo.name || this.pluginName
     this.touchPlugin.version = pluginInfo.version || '0.0.0'
     this.touchPlugin.desc = pluginInfo.description || 'No description.'
@@ -157,6 +178,27 @@ abstract class BasePluginLoader {
         },
         timestamp: Date.now()
       })
+    }
+
+    // C.1: Validate permission IDs against registry before parsing
+    if (pluginInfo.permissions) {
+      const rawIds: string[] = Array.isArray(pluginInfo.permissions)
+        ? pluginInfo.permissions
+        : [...(pluginInfo.permissions.required || []), ...(pluginInfo.permissions.optional || [])]
+      const unknownIds = rawIds.filter(
+        (id) => typeof id === 'string' && !permissionRegistry.has(id)
+      )
+      if (unknownIds.length > 0) {
+        this.touchPlugin.issues.push({
+          type: 'warning',
+          message: `Unknown permission IDs in manifest: ${unknownIds.join(', ')}`,
+          source: 'manifest.json',
+          code: 'UNKNOWN_PERMISSION_IDS',
+          suggestion: 'Check permission IDs against the Permission Registry documentation.',
+          meta: { unknownIds },
+          timestamp: Date.now()
+        })
+      }
     }
 
     // Parse permissions from manifest
@@ -229,6 +271,18 @@ abstract class BasePluginLoader {
     if (pluginInfo.features) {
       const iconInitPromises: Promise<void>[] = []
       ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
+        // C.2: Validate feature commands structure
+        if (!feature.commands || !Array.isArray(feature.commands)) {
+          this.touchPlugin.issues.push({
+            type: 'warning',
+            message: `Feature '${feature.name || feature.id}' has missing or invalid "commands" (expected array).`,
+            source: `feature:${feature.id}`,
+            code: 'INVALID_FEATURE_COMMANDS',
+            meta: { featureId: feature.id },
+            timestamp: Date.now()
+          })
+        }
+
         const pluginFeature = new PluginFeature(this.pluginPath, feature, this.touchPlugin.dev)
         if (!this.touchPlugin.addFeature(pluginFeature)) {
           this.touchPlugin.issues.push({
@@ -378,7 +432,16 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
  */
 export function createPluginLoader(pluginName: string, pluginPath: string): IPluginLoader {
   const manifestPath = path.resolve(pluginPath, 'manifest.json')
-  const localPluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+
+  let localPluginInfo: PluginManifest
+  try {
+    localPluginInfo = fse.readJSONSync(manifestPath) as PluginManifest
+  } catch {
+    // Manifest unreadable/invalid JSON — fall back to LocalPluginLoader
+    // which has its own error handling in load()
+    return new LocalPluginLoader(pluginName, pluginPath)
+  }
+
   const devConfig = localPluginInfo.dev || { enable: false, address: '', source: false }
 
   if (devConfig.enable) {

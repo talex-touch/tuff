@@ -10,8 +10,15 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const { getAuditLogs, exportToCSV, exportToJSON, downloadAsFile, isLoading } =
-  useIntelligenceStats()
+const {
+  getAuditLogs,
+  exportToCSV,
+  exportToJSON,
+  downloadAsFile,
+  isLoading: _isLoading
+} = useIntelligenceStats()
+
+const loading = computed(() => _isLoading.value)
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
 const selectedLog = ref<IntelligenceAuditLogEntry | null>(null)
@@ -88,7 +95,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       </div>
     </div>
 
-    <div v-if="isLoading.value && logs.length === 0" class="loading">
+    <div v-if="loading && logs.length === 0" class="loading">
       <i class="i-carbon-circle-dash animate-spin" />
       {{ t('common.loading') }}
     </div>
@@ -161,7 +168,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
       </div>
 
       <div v-if="hasMore" class="load-more">
-        <TxButton variant="flat" :loading="isLoading.value" @click="loadLogs(true)">
+        <TxButton variant="flat" :loading="loading" @click="loadLogs(true)">
           <i class="i-carbon-add" />
           {{ t('common.loadMore') }}
         </TxButton>

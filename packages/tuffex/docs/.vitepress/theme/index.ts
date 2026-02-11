@@ -13,15 +13,18 @@ import {
   TuffSwitch,
   TxAgentItem,
   TxAgentsList,
+  TxAlert,
   TxAutoSizer,
   TxAvatar,
   TxAvatarGroup,
+  TxBadge,
   TxBlankSlate,
   TxBlockLine,
   TxBlockSlot,
   TxBlockSwitch,
   TxBlowDialog,
   TxBottomDialog,
+  TxBreadcrumb,
   TxButton,
   TxCard,
   TxCardItem,
@@ -33,17 +36,25 @@ import {
   TxCodeEditor,
   TxCodeEditorToolbar,
   TxCol,
+  TxCollapse,
+  TxCollapseItem,
+  TxCommandPalette,
   TxContainer,
   TxContextMenu,
   TxContextMenuItem,
   TxCornerOverlay,
+  TxDataTable,
   TxDatePicker,
   TxDrawer,
   TxDropdownItem,
   TxDropdownMenu,
   TxEmpty,
   TxEmptyState,
+  TxFileUploader,
   TxFlex,
+  TxFlipOverlay,
+  TxForm,
+  TxFormItem,
   TxFusion,
   TxGlassSurface,
   TxGlowText,
@@ -61,11 +72,13 @@ import {
   TxLoadingOverlay,
   TxLoadingState,
   TxMarkdownView,
+  TxModal,
   TxNavBar,
   TxNoData,
   TxNoSelection,
   TxOfflineState,
   TxOutlineBorder,
+  TxPagination,
   TxPermissionState,
   TxPicker,
   TxPopover,
@@ -73,6 +86,7 @@ import {
   TxProgressBar,
   TxRadio,
   TxRadioGroup,
+  TxRating,
   TxRow,
   TxScroll,
   TxSearchEmpty,
@@ -88,12 +102,17 @@ import {
   TxStagger,
   TxStatCard,
   TxStatusBadge,
+  TxStep,
+  TxSteps,
   TxTabBar,
   TxTabHeader,
   TxTabItem,
   TxTabs,
   TxTag,
+  TxTagInput,
   TxTextTransformer,
+  TxTimeline,
+  TxTimelineItem,
   TxToastHost,
   TxTooltip,
   TxTouchTip,
@@ -102,8 +121,10 @@ import {
   TxTransitionRebound,
   TxTransitionSlideFade,
   TxTransitionSmoothSize,
+  TxTree,
   TxTreeSelect,
   TxTypingIndicator,
+  TxVirtualList,
 } from '../../../packages/components/src'
 // 导入 Demo 容器组件
 import DemoBlock from './components/DemoBlock.vue'
@@ -143,27 +164,21 @@ export default {
     if (typeof window !== 'undefined') {
       document.documentElement.classList.add('touch-blur')
     }
-    // 注册 TuffEx 组件
+    // 注册 TuffEx 组件 —— 基础
+    app.component('TxButton', TxButton)
+    app.component('TxIcon', TxIcon)
+    app.component('TuffIcon', TxIcon)
     app.component('TxTag', TxTag)
     app.component('TxStatusBadge', TxStatusBadge)
     app.component('TxAvatar', TxAvatar)
     app.component('TxAvatarGroup', TxAvatarGroup)
     app.component('TxOutlineBorder', TxOutlineBorder)
     app.component('TxCornerOverlay', TxCornerOverlay)
-    app.component('TxDrawer', TxDrawer)
-    app.component('TxGroupBlock', TxGroupBlock)
-    app.component('TxBlockLine', TxBlockLine)
-    app.component('TxBlockSlot', TxBlockSlot)
-    app.component('TxBlockSwitch', TxBlockSwitch)
-    app.component('TxBottomDialog', TxBottomDialog)
-    app.component('TxBlowDialog', TxBlowDialog)
-    app.component('TxPopperDialog', TxPopperDialog)
-    app.component('TxTouchTip', TxTouchTip)
-    app.component('TxProgressBar', TxProgressBar)
-    app.component('TxButton', TxButton)
-    app.component('TxCard', TxCard)
-    app.component('TxIcon', TxIcon)
-    app.component('TuffIcon', TxIcon)
+    app.component('TxBadge', TxBadge)
+    app.component('TxAlert', TxAlert)
+    app.component('TxBreadcrumb', TxBreadcrumb)
+
+    // 表单
     app.component('TxSwitch', TuffSwitch)
     app.component('TuffSwitch', TuffSwitch)
     app.component('TxInput', TuffInput)
@@ -174,45 +189,28 @@ export default {
     app.component('TuffSelect', TuffSelect)
     app.component('TxSelectItem', TuffSelectItem)
     app.component('TuffSelectItem', TuffSelectItem)
-
     app.component('TxSearchInput', TxSearchInput)
     app.component('TxSearchSelect', TxSearchSelect)
     app.component('TxTreeSelect', TxTreeSelect)
+    app.component('TxTree', TxTree)
     app.component('TxCascader', TxCascader)
-    app.component('TxProgress', TuffProgress)
-    app.component('TxFlatButton', TuffFlatButton)
-    app.component('TxScroll', TxScroll)
-    app.component('TouchScroll', TouchScroll)
-
     app.component('TxSlider', TxSlider)
     app.component('TxSegmentedSlider', TxSegmentedSlider)
-    app.component('TxSpinner', TxSpinner)
-    app.component('TxLoadingOverlay', TxLoadingOverlay)
-    app.component('TxSkeleton', TxSkeleton)
-    app.component('TxCardSkeleton', TxCardSkeleton)
-    app.component('TxListItemSkeleton', TxListItemSkeleton)
-    app.component('TxToastHost', TxToastHost)
-    app.component('TxGlassSurface', TxGlassSurface)
-    app.component('TxGradualBlur', TxGradualBlur)
-    app.component('TxGradientBorder', TxGradientBorder)
-    app.component('TxGlowText', TxGlowText)
-    app.component('TxGridLayout', TxGridLayout)
-    app.component('TxLayoutSkeleton', TxLayoutSkeleton)
-    app.component('TxStatCard', TxStatCard)
+    app.component('TxPicker', TxPicker)
+    app.component('TxDatePicker', TxDatePicker)
+    app.component('TxRadio', TxRadio)
+    app.component('TxRadioGroup', TxRadioGroup)
+    app.component('TxTagInput', TxTagInput)
+    app.component('TxRating', TxRating)
+    app.component('TxForm', TxForm)
+    app.component('TxFormItem', TxFormItem)
+    app.component('TxFlatButton', TuffFlatButton)
+
+    // 数据展示
+    app.component('TxCard', TxCard)
     app.component('TxCardItem', TxCardItem)
-    app.component('TxAutoSizer', TxAutoSizer)
-    app.component('TxTextTransformer', TxTextTransformer)
-
-    app.component('TxTabs', TxTabs)
-    app.component('TxTabItem', TxTabItem)
-    app.component('TxTabHeader', TxTabHeader)
-
-    app.component('TxTooltip', TxTooltip)
-    app.component('TxPopover', TxPopover)
-    app.component('TxDropdownMenu', TxDropdownMenu)
-    app.component('TxDropdownItem', TxDropdownItem)
-    app.component('TxContextMenu', TxContextMenu)
-    app.component('TxContextMenuItem', TxContextMenuItem)
+    app.component('TxDataTable', TxDataTable)
+    app.component('TxStatCard', TxStatCard)
     app.component('TxEmpty', TxEmpty)
     app.component('TxEmptyState', TxEmptyState)
     app.component('TxBlankSlate', TxBlankSlate)
@@ -222,44 +220,97 @@ export default {
     app.component('TxSearchEmpty', TxSearchEmpty)
     app.component('TxOfflineState', TxOfflineState)
     app.component('TxPermissionState', TxPermissionState)
-    app.component('TxRadio', TxRadio)
-    app.component('TxRadioGroup', TxRadioGroup)
+    app.component('TxMarkdownView', TxMarkdownView)
+    app.component('TxProgress', TuffProgress)
+    app.component('TxProgressBar', TxProgressBar)
+    app.component('TxTimeline', TxTimeline)
+    app.component('TxTimelineItem', TxTimelineItem)
+    app.component('TxPagination', TxPagination)
+    app.component('TxCollapse', TxCollapse)
+    app.component('TxCollapseItem', TxCollapseItem)
+    app.component('TxSteps', TxSteps)
+    app.component('TxStep', TxStep)
+
+    // 导航
+    app.component('TxTabs', TxTabs)
+    app.component('TxTabItem', TxTabItem)
+    app.component('TxTabHeader', TxTabHeader)
+    app.component('TxNavBar', TxNavBar)
+    app.component('TxTabBar', TxTabBar)
+    app.component('TxTooltip', TxTooltip)
+    app.component('TxPopover', TxPopover)
+    app.component('TxDropdownMenu', TxDropdownMenu)
+    app.component('TxDropdownItem', TxDropdownItem)
+    app.component('TxContextMenu', TxContextMenu)
+    app.component('TxContextMenuItem', TxContextMenuItem)
+
+    // 布局
+    app.component('TxContainer', TxContainer)
+    app.component('TxRow', TxRow)
+    app.component('TxCol', TxCol)
+    app.component('TxGrid', TxGrid)
+    app.component('TxGridItem', TxGridItem)
+    app.component('TxGridLayout', TxGridLayout)
+    app.component('TxSplitter', TxSplitter)
+    app.component('TxStack', TxStack)
+    app.component('TxFlex', TxFlex)
+    app.component('TxScroll', TxScroll)
+    app.component('TouchScroll', TouchScroll)
+    app.component('TxVirtualList', TxVirtualList)
+    app.component('TxLayoutSkeleton', TxLayoutSkeleton)
     app.component('TxAgentsList', TxAgentsList)
     app.component('TxAgentItem', TxAgentItem)
-    app.component('TxStagger', TxStagger)
-    app.component('TxSortableList', TxSortableList)
-    app.component('TxMarkdownView', TxMarkdownView)
-    app.component('TxChatList', TxChatList)
-    app.component('TxChatMessage', TxChatMessage)
-    app.component('TxCodeEditor', TxCodeEditor)
-    app.component('TxCodeEditorToolbar', TxCodeEditorToolbar)
-    app.component('TxChatComposer', TxChatComposer)
-    app.component('TxTypingIndicator', TxTypingIndicator)
-    app.component('TxImageUploader', TxImageUploader)
-    app.component('TxImageGallery', TxImageGallery)
+    app.component('TxGroupBlock', TxGroupBlock)
+    app.component('TxBlockLine', TxBlockLine)
+    app.component('TxBlockSlot', TxBlockSlot)
+    app.component('TxBlockSwitch', TxBlockSwitch)
 
+    // 反馈
+    app.component('TxSpinner', TxSpinner)
+    app.component('TxLoadingOverlay', TxLoadingOverlay)
+    app.component('TxSkeleton', TxSkeleton)
+    app.component('TxCardSkeleton', TxCardSkeleton)
+    app.component('TxListItemSkeleton', TxListItemSkeleton)
+    app.component('TxToastHost', TxToastHost)
+
+    // 覆盖层
+    app.component('TxDrawer', TxDrawer)
+    app.component('TxBottomDialog', TxBottomDialog)
+    app.component('TxBlowDialog', TxBlowDialog)
+    app.component('TxPopperDialog', TxPopperDialog)
+    app.component('TxTouchTip', TxTouchTip)
+    app.component('TxModal', TxModal)
+    app.component('TxCommandPalette', TxCommandPalette)
+    app.component('TxFlipOverlay', TxFlipOverlay)
+
+    // 动效
+    app.component('TxAutoSizer', TxAutoSizer)
+    app.component('TxTextTransformer', TxTextTransformer)
     app.component('TxTransition', TxTransition)
     app.component('TxTransitionFade', TxTransitionFade)
     app.component('TxTransitionSlideFade', TxTransitionSlideFade)
     app.component('TxTransitionRebound', TxTransitionRebound)
     app.component('TxTransitionSmoothSize', TxTransitionSmoothSize)
-
     app.component('TxFusion', TxFusion)
+    app.component('TxStagger', TxStagger)
+    app.component('TxSortableList', TxSortableList)
 
-    app.component('TxPicker', TxPicker)
-    app.component('TxDatePicker', TxDatePicker)
+    // AI
+    app.component('TxChatList', TxChatList)
+    app.component('TxChatMessage', TxChatMessage)
+    app.component('TxChatComposer', TxChatComposer)
+    app.component('TxTypingIndicator', TxTypingIndicator)
+    app.component('TxCodeEditor', TxCodeEditor)
+    app.component('TxCodeEditorToolbar', TxCodeEditorToolbar)
+    app.component('TxImageUploader', TxImageUploader)
+    app.component('TxImageGallery', TxImageGallery)
+    app.component('TxFileUploader', TxFileUploader)
 
-    app.component('TxNavBar', TxNavBar)
-    app.component('TxTabBar', TxTabBar)
-
-    app.component('TxSplitter', TxSplitter)
-    app.component('TxStack', TxStack)
-    app.component('TxFlex', TxFlex)
-    app.component('TxGrid', TxGrid)
-    app.component('TxGridItem', TxGridItem)
-    app.component('TxContainer', TxContainer)
-    app.component('TxRow', TxRow)
-    app.component('TxCol', TxCol)
+    // 视觉
+    app.component('TxGlassSurface', TxGlassSurface)
+    app.component('TxGradualBlur', TxGradualBlur)
+    app.component('TxGradientBorder', TxGradientBorder)
+    app.component('TxGlowText', TxGlowText)
 
     // 注册 Demo 容器
     app.component('DemoBlock', DemoBlock)

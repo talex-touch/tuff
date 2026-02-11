@@ -1,13 +1,18 @@
-# Splitter 分割面板
+# Splitter
 
-可拖拽分割面板，支持水平/垂直。
+A draggable split panel that divides two content areas with an adjustable divider. Splitter supports horizontal and vertical orientations, min/max constraints, and optional snap points.
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import SplitterBasicDemo from '../.vitepress/theme/components/demos/SplitterBasicDemo.vue'
 import SplitterBasicDemoSource from '../.vitepress/theme/components/demos/SplitterBasicDemo.vue?raw'
+
+const ratio = ref(0.4)
 </script>
 
-## 基础用法
+## Basic Usage
+
+Place content in the `#a` (left/top) and `#b` (right/bottom) slots. The divider position is controlled via `v-model` as a ratio between 0 and 1.
 
 <DemoBlock title="Splitter" :code="SplitterBasicDemoSource">
   <template #preview>
@@ -15,32 +20,70 @@ import SplitterBasicDemoSource from '../.vitepress/theme/components/demos/Splitt
   </template>
 </DemoBlock>
 
+## Vertical Split
+
+Set `direction="vertical"` for a top/bottom layout.
+
+<DemoBlock title="Vertical Splitter">
+<template #preview>
+<div style="height: 240px; border: 1px solid var(--vp-c-divider); border-radius: 8px; overflow: hidden;">
+  <TxSplitter v-model="ratio" direction="vertical">
+    <template #a>
+      <div style="padding: 16px; background: var(--vp-c-bg-soft);">Top Panel</div>
+    </template>
+    <template #b>
+      <div style="padding: 16px;">Bottom Panel</div>
+    </template>
+  </TxSplitter>
+</div>
+</template>
+
+<template #code>
+
+```vue
+<template>
+  <TxSplitter v-model="ratio" direction="vertical">
+    <template #a>Top Panel</template>
+    <template #b>Bottom Panel</template>
+  </TxSplitter>
+</template>
+```
+
+</template>
+</DemoBlock>
+
+## Design Notes
+
+- The `min` and `max` props prevent the divider from being dragged beyond usable bounds.
+- Use `snap` to create magnetic stops — the divider will lock to the nearest multiple of the snap value while dragging.
+- The divider bar size is adjustable via `barSize`. A larger bar is easier to grab on touch devices.
+- Listen to `drag-start` and `drag-end` to coordinate with surrounding layout (e.g., disabling pointer events on iframes during drag).
+
 ## API
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `modelValue` | `number` | `0.5` | 分割比例（0-1） |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | 分割方向 |
-| `min` | `number` | `0.1` | 最小比例 |
-| `max` | `number` | `0.9` | 最大比例 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `barSize` | `number` | `10` | 分割条尺寸（px） |
-| `snap` | `number` | `0` | 吸附步进（0 表示不吸附） |
-
-### Slots
-
-| 名称 | 说明 |
-|------|------|
-| `a` | 左/上面板 |
-| `b` | 右/下面板 |
+<ApiSpecTable :rows="[
+  { name: 'modelValue / v-model', description: 'Split ratio between 0 and 1.', type: 'number', default: '0.5' },
+  { name: 'direction', description: 'Orientation of the split.', type: '\"horizontal\" | \"vertical\"', default: '\"horizontal\"' },
+  { name: 'min', description: 'Minimum ratio for the first panel.', type: 'number', default: '0.1' },
+  { name: 'max', description: 'Maximum ratio for the first panel.', type: 'number', default: '0.9' },
+  { name: 'disabled', description: 'Prevents dragging the divider.', type: 'boolean', default: 'false' },
+  { name: 'barSize', description: 'Width/height of the divider bar in pixels.', type: 'number', default: '10' },
+  { name: 'snap', description: 'Snap step for the ratio. 0 disables snapping.', type: 'number', default: '0' },
+]" />
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:modelValue` | `(ratio)` | v-model 更新 |
-| `change` | `(ratio)` | 值变化 |
-| `drag-start` | - | 开始拖拽 |
-| `drag-end` | - | 结束拖拽 |
+<ApiSpecTable title="Events" :rows="[
+  { name: 'change', description: 'Fires when the ratio changes.', type: '(ratio: number) => void' },
+  { name: 'drag-start', description: 'Fires when the user begins dragging the divider.' },
+  { name: 'drag-end', description: 'Fires when the user stops dragging.' },
+]" />
+
+### Slots
+
+<ApiSpecTable title="Slots" :rows="[
+  { name: 'a', description: 'Content for the first panel (left or top).' },
+  { name: 'b', description: 'Content for the second panel (right or bottom).' },
+]" />

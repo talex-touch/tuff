@@ -1,91 +1,117 @@
-# Switch 开关
+# Switch
 
-开关用于两种状态之间的切换，具有流畅的动画效果。
+A toggle control that switches between two mutually exclusive states. The switch animates smoothly between on and off positions with spring-physics feedback, providing a tactile, responsive feel.
+
+Use a switch when the user needs to toggle a single setting with an immediate effect — such as enabling a feature, activating a mode, or turning a preference on or off.
 
 <script setup lang="ts">
 import { ref } from 'vue'
 
-const value1 = ref(false)
-const value2 = ref(true)
-const value3 = ref(false)
-const value4 = ref(true)
-const value5 = ref(true)
-const value6 = ref(true)
+const basic = ref(false)
+const disabledOn = ref(true)
+const disabledOff = ref(false)
+const small = ref(true)
+const medium = ref(true)
+const large = ref(true)
 </script>
 
-## 基础用法
+## Basic Usage
 
-基础的开关用法。
+Bind a boolean value with `v-model`. Clicking or tapping the switch toggles the state.
 
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-  <TuffSwitch v-model="value1" />
+<DemoBlock title="Basic Switch">
+<template #preview>
+<div style="display: flex; gap: 16px; align-items: center;">
+  <TxSwitch v-model="basic" />
+  <span style="font-size: 13px; color: var(--vp-c-text-2);">{{ basic ? 'On' : 'Off' }}</span>
 </div>
+</template>
 
-::: details Show Code
+<template #code>
 
 ```vue
+<script setup>
+import { ref } from 'vue'
+const enabled = ref(false)
+</script>
+
 <template>
-  <TuffSwitch v-model="checked" />
+  <TxSwitch v-model="enabled" />
 </template>
 ```
 
-:::
+</template>
+</DemoBlock>
 
-## 禁用状态
+## Disabled
 
-开关不可用状态。
+Set `disabled` to prevent interaction. The switch renders in a muted state to visually communicate that it is not actionable.
 
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-  <TuffSwitch v-model="value2" disabled />
-  <TuffSwitch v-model="value3" disabled />
+<DemoBlock title="Disabled">
+<template #preview>
+<div style="display: flex; gap: 16px; align-items: center;">
+  <TxSwitch v-model="disabledOn" disabled />
+  <TxSwitch v-model="disabledOff" disabled />
 </div>
+</template>
 
-::: details Show Code
+<template #code>
 
 ```vue
 <template>
-  <TuffSwitch v-model="checked" disabled />
+  <TxSwitch v-model="value" disabled />
 </template>
 ```
 
-:::
+</template>
+</DemoBlock>
 
-## 不同尺寸
+## Sizes
 
-提供三种尺寸的开关。
+Three sizes are available to fit different contexts: `small` for compact layouts, the default for standard forms, and `large` for prominent, touch-friendly surfaces.
 
-<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-  <TuffSwitch v-model="value4" size="small" />
-  <TuffSwitch v-model="value5" />
-  <TuffSwitch v-model="value6" size="large" />
+<DemoBlock title="Sizes">
+<template #preview>
+<div style="display: flex; gap: 16px; align-items: center;">
+  <TxSwitch v-model="small" size="small" />
+  <TxSwitch v-model="medium" />
+  <TxSwitch v-model="large" size="large" />
 </div>
+</template>
 
-::: details Show Code
+<template #code>
 
 ```vue
 <template>
-  <TuffSwitch size="small" />
-  <TuffSwitch />
-  <TuffSwitch size="large" />
+  <TxSwitch v-model="value" size="small" />
+  <TxSwitch v-model="value" />
+  <TxSwitch v-model="value" size="large" />
 </template>
 ```
 
-:::
+</template>
+</DemoBlock>
+
+## Design Notes
+
+- The switch uses a spring-based animation curve for the thumb movement, creating a natural, physical feel when toggling.
+- On press, the thumb gently stretches along the travel axis — a subtle cue inspired by iOS that confirms the user's touch.
+- When disabled, opacity is reduced and pointer events are removed. No additional styling is needed.
+- Color transitions between the on/off track states are eased to avoid abrupt visual changes.
 
 ## API
 
 ### Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
-|--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `boolean` | `false` |
-| disabled | 是否禁用 | `boolean` | `false` |
-| size | 开关尺寸 | `'small' \| 'default' \| 'large'` | `'default'` |
+<ApiSpecTable :rows="[
+  { name: 'modelValue / v-model', description: 'The bound boolean state of the switch.', type: 'boolean', default: 'false' },
+  { name: 'disabled', description: 'When true, the switch cannot be toggled and appears visually muted.', type: 'boolean', default: 'false' },
+  { name: 'size', description: 'Controls the physical dimensions of the switch.', type: '\"small\" | \"default\" | \"large\"', default: '\"default\"' },
+]" />
 
 ### Events
 
-| 事件名 | 说明 | 回调参数 |
-|--------|------|----------|
-| change | 状态改变时触发 | `(value: boolean) => void` |
-| update:modelValue | 值更新时触发 | `(value: boolean) => void` |
-
+<ApiSpecTable title="Events" :rows="[
+  { name: 'change', description: 'Fires after the switch state changes. Useful for side effects like API calls.', type: '(value: boolean) => void' },
+  { name: 'update:modelValue', description: 'Fires when the internal value updates. Used by v-model.', type: '(value: boolean) => void' },
+]" />

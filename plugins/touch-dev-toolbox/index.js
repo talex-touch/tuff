@@ -14,6 +14,15 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
+}
+
 function getQueryText(query) {
   if (typeof query === 'string')
     return query
@@ -162,30 +171,45 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-dev-toolbox] Failed to handle feature', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
+      return true
     }
   },
 
   async onItemAction(item) {
-    if (item?.meta?.defaultAction !== ACTION_ID)
-      return
+    try {
+      if (item?.meta?.defaultAction !== ACTION_ID)
+        return
 
-    const actionId = item.meta?.actionId
-    if (actionId === 'config-init') {
-      await ensureToolboxFile()
-      return { externalAction: true }
-    }
-
-    if (actionId === 'config-open') {
-      await plugin.storage.openFolder()
-      return { externalAction: true }
-    }
-
-    if (actionId === 'open-link') {
-      const url = item.meta?.payload?.url
-      if (typeof url === 'string' && url) {
-        openUrl?.(url)
+      const actionId = item.meta?.actionId
+      if (actionId === 'config-init') {
+        await ensureToolboxFile()
         return { externalAction: true }
       }
+
+      if (actionId === 'config-open') {
+        await plugin.storage.openFolder()
+        return { externalAction: true }
+      }
+
+      if (actionId === 'open-link') {
+        const url = item.meta?.payload?.url
+        if (typeof url === 'string' && url) {
+          openUrl?.(url)
+          return { externalAction: true }
+        }
+      }
+    }
+    catch (error) {
+      logger?.error?.('[touch-dev-toolbox] Action failed', error)
     }
   },
 }

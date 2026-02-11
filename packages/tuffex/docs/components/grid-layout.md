@@ -1,42 +1,49 @@
-# GridLayout 网格布局
+# GridLayout
 
-用于快速构建响应式网格，并可选启用 hover 光斑交互效果。
+A responsive auto-fit grid with an optional interactive hover spotlight effect. GridLayout uses CSS Grid to automatically distribute items into columns based on available width.
 
-## 基础用法
+## Basic Usage
 
-<DemoBlock title="GridLayout">
+Place items directly inside `TxGridLayout`. Each item should have the `tx-grid-layout__item` class to opt into the hover spotlight effect.
+
+<DemoBlock title="Grid Layout">
 <template #preview>
 <TxGridLayout>
-  <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 16px;">
+  <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 24px; text-align: center;">
     Item {{ i }}
   </div>
 </TxGridLayout>
 </template>
 
 <template #code>
+
 ```vue
 <template>
   <TxGridLayout>
-    <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 16px;">
+    <div v-for="i in 6" :key="i" class="tx-grid-layout__item" style="padding: 24px;">
       Item {{ i }}
     </div>
   </TxGridLayout>
 </template>
 ```
+
 </template>
 </DemoBlock>
+
+## Design Notes
+
+- The grid uses `auto-fit` with `minmax()` — items automatically wrap to the next row when they can't fit at their minimum width.
+- The `interactive` prop enables a hover spotlight that follows the cursor across grid items. Items must have the `tx-grid-layout__item` class for this to work.
+- Use `maxColumns` to cap the column count on wide screens, preventing items from becoming too narrow on ultra-wide displays.
+- For manual grid control, consider using [Grid](/components/grid) instead.
 
 ## API
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `minItemWidth` | `string` | `'300px'` | 子项最小宽度 |
-| `gap` | `string` | `'1.5rem'` | 间距 |
-| `maxColumns` | `number` | `4` | >= 1400px 时最大列数 |
-| `interactive` | `boolean` | `true` | 是否启用 hover 光斑交互 |
-
-## Notes
-
-- 子项请添加 class：`tx-grid-layout__item`，用于启用 hover 效果样式。
+<ApiSpecTable :rows="[
+  { name: 'minItemWidth', description: 'Minimum width per grid item (CSS value).', type: 'string', default: '\"300px\"' },
+  { name: 'gap', description: 'Gap between grid items (CSS value).', type: 'string', default: '\"1.5rem\"' },
+  { name: 'maxColumns', description: 'Maximum column count at ≥1400px viewport.', type: 'number', default: '4' },
+  { name: 'interactive', description: 'Enable hover spotlight effect on items.', type: 'boolean', default: 'true' },
+]" />

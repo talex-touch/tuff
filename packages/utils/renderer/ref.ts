@@ -1,38 +1,47 @@
+import type { WritableComputedRef } from 'vue'
 import { computed, customRef } from 'vue'
 
-export function useModelWrapper(props: any, emit: any, name = 'modelValue') {
+export function useModelWrapper<
+  P extends Record<string, unknown>,
+  K extends string = 'modelValue'
+>(
+  props: P,
+  emit: (event: `update:${K}`, value: P[K]) => void,
+  name?: K
+): WritableComputedRef<P[K]> {
+  const key = (name ?? 'modelValue') as K
   return computed({
-    get: () => props[name],
-    set: value => emit(`update:${name}`, value),
+    get: () => props[key] as P[K],
+    set: value => emit(`update:${key}` as `update:${K}`, value),
   })
 }
 
-export function throttleRef(value: any, time: number) {
+export function throttleRef<T>(value: T, time: number) {
   let ts = 0
 
-  return customRef((track, trigger) => {
+  return customRef<T>((track, trigger) => {
     return {
       get() {
         track()
         return value
       },
       set(newValue) {
-        if (new Date().getTime() - ts < time)
+        if (Date.now() - ts < time)
           return
 
         value = newValue
         track()
         trigger()
-        ts = new Date().getTime()
+        ts = Date.now()
       },
     }
   })
 }
 
-export function debounceRef(value: any, delay: number) {
-  let timer: any
+export function debounceRef<T>(value: T, delay: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined
 
-  return customRef((track, trigger) => {
+  return customRef<T>((track, trigger) => {
     return {
       get() {
         track()

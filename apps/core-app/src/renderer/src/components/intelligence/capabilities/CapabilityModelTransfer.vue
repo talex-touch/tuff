@@ -1,6 +1,7 @@
 <script lang="ts" setup name="CapabilityModelTransfer">
 import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -18,6 +19,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string[]): void
 }>()
+
+const { t } = useI18n()
 
 const availableSelection = ref<string[]>([])
 const selectedSelection = ref<string[]>([])
@@ -151,13 +154,13 @@ function handleKeyAdd(event: KeyboardEvent): void {
     <div class="capability-transfer__panel" aria-label="Available models">
       <header>
         <div>
-          <p>可用模型</p>
+          <p>{{ t('settings.intelligence.transferAvailableModels') }}</p>
           <span class="capability-transfer__hint">({{ availableList.length }})</span>
         </div>
       </header>
       <div class="capability-transfer__list" role="listbox">
         <p v-if="availableList.length === 0" class="capability-transfer__empty">
-          暂无可选模型，先在渠道配置里同步一下吧。
+          {{ t('settings.intelligence.transferEmptyAvailable') }}
         </p>
         <TxButton
           v-for="model in availableList"
@@ -179,7 +182,7 @@ function handleKeyAdd(event: KeyboardEvent): void {
           v-model="customModelInput"
           :disabled="disabled"
           type="text"
-          placeholder="自定义模型 ID"
+          :placeholder="t('settings.intelligence.transferCustomPlaceholder')"
           @keyup="handleKeyAdd"
         />
         <TxButton
@@ -189,7 +192,7 @@ function handleKeyAdd(event: KeyboardEvent): void {
           @click="handleAddCustom"
         >
           <i class="i-carbon-add" />
-          添加
+          {{ t('settings.intelligence.transferAddButton') }}
         </TxButton>
       </div>
     </div>
@@ -221,13 +224,13 @@ function handleKeyAdd(event: KeyboardEvent): void {
     >
       <header>
         <div>
-          <p>已绑定模型</p>
+          <p>{{ t('settings.intelligence.transferSelectedModels') }}</p>
           <span class="capability-transfer__hint">({{ selectedList.length }})</span>
         </div>
       </header>
       <div class="capability-transfer__list capability-transfer__list--selected" role="listbox">
         <p v-if="selectedList.length === 0" class="capability-transfer__empty">
-          右侧列表为空，至少加一个模型才能调用这个渠道。
+          {{ t('settings.intelligence.transferEmptySelected') }}
         </p>
         <div
           v-for="(model, index) in selectedList"

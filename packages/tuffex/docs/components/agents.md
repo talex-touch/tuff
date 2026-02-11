@@ -1,6 +1,6 @@
-# Agents 智能体列表
+# Agents
 
-用于展示智能体列表（分组、选中、loading、badge）。这是一个纯展示组件，不包含执行/请求等业务逻辑。
+A presentation-only list component for displaying AI agents with selection state, loading indicators, and badge counts. Agents is designed for sidebar navigation in AI-powered applications.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -39,15 +39,16 @@ const agents = [
 ]
 </script>
 
-## 基础用法
+## Basic Usage
+
+Pass an `agents` array and bind `selectedId` to track the active agent. The list handles selection, loading states, and badge rendering.
 
 <DemoBlock title="AgentsList">
 <template #preview>
 <div style="display: flex; flex-direction: column; gap: 12px; width: 420px;">
   <div style="display: flex; gap: 8px;">
-    <TxButton @click="loading = !loading">Toggle loading</TxButton>
+    <TxButton size="sm" @click="loading = !loading">Toggle Loading</TxButton>
   </div>
-
   <div style="height: 360px;">
     <TxAgentsList
       :agents="agents"
@@ -60,59 +61,62 @@ const agents = [
 </template>
 
 <template #code>
+
 ```vue
-&lt;script setup lang="ts"&gt;
+<script setup>
 import { ref } from 'vue'
 
-const selectedId = ref<string | null>('chat')
-const loading = ref(false)
+const selectedId = ref('chat')
 const agents = [
   { id: 'chat', name: 'Chat Agent', iconClass: 'i-carbon-chat', badgeText: 6 },
   { id: 'code', name: 'Code Agent', iconClass: 'i-carbon-code', badgeText: 12 },
   { id: 'disabled', name: 'Disabled Agent', disabled: true },
 ]
-&lt;/script&gt;
+</script>
 
 <template>
   <TxAgentsList
     :agents="agents"
-    :loading="loading"
     :selected-id="selectedId"
     @select="(id) => (selectedId = id)"
   />
 </template>
 ```
+
 </template>
 </DemoBlock>
 
+## Design Notes
+
+- This is a **presentation-only** component — it does not include business logic for executing requests or managing agent sessions.
+- Each agent item supports `disabled` state, which grays out the item and prevents selection.
+- Use `badgeText` to show unread counts or status indicators alongside agent names.
+- The `loading` prop shows a loading indicator over the entire list — useful during initial data fetch.
+
 ## API
 
-### TxAgentsList
+### TxAgentsList Props
 
-#### Props
+<ApiSpecTable :rows="[
+  { name: 'agents', description: 'Array of agent objects to display.', type: 'AgentItemProps[]' },
+  { name: 'selectedId', description: 'ID of the currently selected agent.', type: 'string | null', default: 'null' },
+  { name: 'loading', description: 'Show a loading overlay on the list.', type: 'boolean', default: 'false' },
+]" />
 
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `agents` | `AgentItemProps[]` | - | 数据源 |
-| `selectedId` | `string \| null` | `null` | 当前选中 |
-| `loading` | `boolean` | `false` | 是否显示 loading |
+### TxAgentsList Events
 
-#### Events
+<ApiSpecTable title="Events" :rows="[
+  { name: 'select', description: 'Fires when an agent item is clicked.', type: '(id: string) => void' },
+]" />
 
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `select` | `(id: string)` | 点击条目触发 |
+### TxAgentItem Props
 
-### TxAgentItem
-
-#### Props
-
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|---------|------|
-| `id` | `string` | - | 唯一标识 |
-| `name` | `string` | - | 标题 |
-| `description` | `string` | `''` | 描述 |
-| `iconClass` | `string` | `'i-carbon-bot'` | 图标 class |
-| `selected` | `boolean` | `false` | 是否选中 |
-| `disabled` | `boolean` | `false` | 是否禁用 |
-| `badgeText` | `string \| number` | `''` | badge 文本 |
+<ApiSpecTable title="TxAgentItem Props" :rows="[
+  { name: 'id', description: 'Unique agent identifier.', type: 'string' },
+  { name: 'name', description: 'Agent display name.', type: 'string' },
+  { name: 'description', description: 'Short agent description.', type: 'string', default: '\"\"' },
+  { name: 'iconClass', description: 'Icon class for the agent avatar.', type: 'string', default: '\"i-carbon-bot\"' },
+  { name: 'selected', description: 'Whether this item is selected.', type: 'boolean', default: 'false' },
+  { name: 'disabled', description: 'Prevents interaction.', type: 'boolean', default: 'false' },
+  { name: 'badgeText', description: 'Badge content (count or label).', type: 'string | number', default: '\"\"' },
+]" />

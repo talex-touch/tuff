@@ -27,7 +27,7 @@ function handleAgentsClick() {
   >
     <TuffBlockSlot
       :title="t('intelligence.agents.title')"
-      description="智能体系统，自动化任务执行"
+      :description="t('settings.intelligence.agentsDescription')"
       default-icon="i-carbon-bot"
       active-icon="i-carbon-bot"
       @click="handleAgentsClick"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
 import { Clock, Delete, Search } from '@element-plus/icons-vue'
+import { TxBottomDialog } from '@talex-touch/tuffex'
 import { DownloadModule } from '@talex-touch/utils'
-import { ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -126,55 +126,68 @@ async function handleShowInFolder(historyId: string) {
   }
 }
 
+// Unified confirmation dialog
+const confirmVisible = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const pendingConfirmAction = ref<(() => Promise<void>) | null>(null)
+
+function requestConfirm(title: string, message: string, action: () => Promise<void>) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  pendingConfirmAction.value = action
+  confirmVisible.value = true
+}
+
+async function executeConfirm(): Promise<boolean> {
+  if (pendingConfirmAction.value) await pendingConfirmAction.value()
+  pendingConfirmAction.value = null
+  return true
+}
+
+function closeConfirm() {
+  confirmVisible.value = false
+  pendingConfirmAction.value = null
+}
+
 async function handleClearHistoryItem(historyId: string) {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_history_item_confirm_message'),
-      t('download.clear_history_item_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
+  requestConfirm(
+    t('download.clear_history_item_confirm_title'),
+    t('download.clear_history_item_confirm_message'),
+    async () => {
+      try {
+        await clearHistoryItem(historyId)
+
+        // 从列表中移除
+        const index = historyList.value.findIndex((h) => h.id === historyId)
+        if (index !== -1) {
+          historyList.value.splice(index, 1)
+        }
+
+        toast.success(t('download.history_item_cleared'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
       }
-    )
-
-    await clearHistoryItem(historyId)
-
-    // 从列表中移除
-    const index = historyList.value.findIndex((h) => h.id === historyId)
-    if (index !== -1) {
-      historyList.value.splice(index, 1)
     }
-
-    toast.success(t('download.history_item_cleared'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.clear_history_item_failed')}: ${message}`)
-  }
+  )
 }
 
 async function handleClearAllHistory() {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_all_history_confirm_message'),
-      t('download.clear_all_history_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger'
+  requestConfirm(
+    t('download.clear_all_history_confirm_title'),
+    t('download.clear_all_history_confirm_message'),
+    async () => {
+      try {
+        await clearHistory()
+        historyList.value = []
+        toast.success(t('download.all_history_cleared'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
       }
-    )
-
-    await clearHistory()
-    historyList.value = []
-    toast.success(t('download.all_history_cleared'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.clear_all_history_failed')}: ${message}`)
-  }
+    }
+  )
 }
 
 onMounted(() => {
@@ -271,6 +284,17 @@ onMounted(() => {
         @current-change="handlePageChange"
       />
     </div>
+
+    <TxBottomDialog
+      v-if="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :btns="[
+        { content: t('common.cancel'), type: 'info', onClick: () => true },
+        { content: t('common.confirm'), type: 'error', onClick: executeConfirm }
+      ]"
+      :close="closeConfirm"
+    />
   </div>
 </template>
 

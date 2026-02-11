@@ -26,6 +26,15 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
+}
+
 function getQueryText(query) {
   if (typeof query === 'string')
     return query
@@ -263,6 +272,16 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-text-snippets] Failed to handle feature', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
+      return true
     }
   },
 

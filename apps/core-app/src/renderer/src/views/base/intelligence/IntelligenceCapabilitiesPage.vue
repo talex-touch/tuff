@@ -12,7 +12,7 @@ import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-// import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
+import IntelligenceCapabilityInfo from '~/components/intelligence/capabilities/IntelligenceCapabilityInfo.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
 
 const { t } = useI18n()
@@ -281,7 +281,7 @@ async function handleCapabilityTest(
               </span>
               <span v-else class="capability-card__badge capability-card__badge--inactive">
                 <i class="i-carbon-warning-alt" />
-                未配置
+                {{ t('settings.intelligence.capabilityNotConfigured') }}
               </span>
             </div>
             <p class="capability-card__description">
@@ -385,7 +385,7 @@ async function handleCapabilityTest(
 
   i {
     position: absolute;
-    opacity: 8.33;
+    opacity: 1;
     color: inherit;
   }
 }

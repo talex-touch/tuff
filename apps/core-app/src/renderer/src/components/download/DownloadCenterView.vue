@@ -11,7 +11,7 @@ import {
   VideoPause,
   VideoPlay
 } from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
+import { TxBottomDialog } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -128,24 +128,44 @@ async function pauseTask(taskId: string) {
 
 // Note: resumeTask is now inlined in the event handlers of TaskList component
 
+// Unified confirmation dialog
+const confirmVisible = ref(false)
+const confirmTitle = ref('')
+const confirmMessage = ref('')
+const pendingConfirmAction = ref<(() => Promise<void>) | null>(null)
+
+function requestConfirm(title: string, message: string, action: () => Promise<void>) {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  pendingConfirmAction.value = action
+  confirmVisible.value = true
+}
+
+async function executeConfirm(): Promise<boolean> {
+  if (pendingConfirmAction.value) await pendingConfirmAction.value()
+  pendingConfirmAction.value = null
+  return true
+}
+
+function closeConfirm() {
+  confirmVisible.value = false
+  pendingConfirmAction.value = null
+}
+
 async function cancelTask(taskId: string) {
-  try {
-    await ElMessageBox.confirm(
-      t('download.cancel_confirm_message'),
-      t('download.cancel_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
+  requestConfirm(
+    t('download.cancel_confirm_title'),
+    t('download.cancel_confirm_message'),
+    async () => {
+      try {
+        await cancelTaskHook(taskId)
+        toast.success(t('download.task_cancelled'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.cancel_failed')}: ${message}`)
       }
-    )
-    await cancelTaskHook(taskId)
-    toast.success(t('download.task_cancelled'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.cancel_failed')}: ${message}`)
-  }
+    }
+  )
 }
 
 async function retryTask(taskId: string) {
@@ -159,23 +179,19 @@ async function retryTask(taskId: string) {
 }
 
 async function removeTask(taskId: string) {
-  try {
-    await ElMessageBox.confirm(
-      t('download.remove_confirm_message'),
-      t('download.remove_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
+  requestConfirm(
+    t('download.remove_confirm_title'),
+    t('download.remove_confirm_message'),
+    async () => {
+      try {
+        await removeTaskHook(taskId)
+        toast.success(t('download.task_removed'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.remove_failed')}: ${message}`)
       }
-    )
-    await removeTaskHook(taskId)
-    toast.success(t('download.task_removed'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.remove_failed')}: ${message}`)
-  }
+    }
+  )
 }
 
 async function openFile(taskId: string) {
@@ -198,24 +214,19 @@ async function showInFolder(taskId: string) {
 }
 
 async function deleteTask(taskId: string) {
-  try {
-    await ElMessageBox.confirm(
-      t('download.delete_confirm_message'),
-      t('download.delete_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-        confirmButtonClass: 'el-button--danger'
+  requestConfirm(
+    t('download.delete_confirm_title'),
+    t('download.delete_confirm_message'),
+    async () => {
+      try {
+        await deleteFileHook(taskId)
+        toast.success(t('download.file_deleted'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.delete_failed')}: ${message}`)
       }
-    )
-    await deleteFileHook(taskId)
-    toast.success(t('download.file_deleted'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.delete_failed')}: ${message}`)
-  }
+    }
+  )
 }
 
 function showTaskDetails(taskId: string) {
@@ -247,23 +258,19 @@ async function resumeAllTasks() {
 }
 
 async function clearHistory() {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_history_confirm_message'),
-      t('download.clear_history_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
+  requestConfirm(
+    t('download.clear_history_confirm_title'),
+    t('download.clear_history_confirm_message'),
+    async () => {
+      try {
+        await clearHistoryHook()
+        toast.success(t('download.history_cleared'))
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        toast.error(`${t('download.clear_history_failed')}: ${message}`)
       }
-    )
-    await clearHistoryHook()
-    toast.success(t('download.history_cleared'))
-  } catch (err: unknown) {
-    if (err === 'cancel') return
-    const message = err instanceof Error ? err.message : String(err)
-    toast.error(`${t('download.clear_history_failed')}: ${message}`)
-  }
+    }
+  )
 }
 
 async function handlePriorityChange(taskId: string, newPriority: number) {
@@ -459,6 +466,17 @@ async function updateConfig(config: DownloadConfig) {
 
     <!-- 错误日志查看器 -->
     <ErrorLogViewer v-model="logsVisible" />
+
+    <TxBottomDialog
+      v-if="confirmVisible"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :btns="[
+        { content: t('common.cancel'), type: 'info', onClick: () => true },
+        { content: t('common.confirm'), type: 'error', onClick: executeConfirm }
+      ]"
+      :close="closeConfirm"
+    />
   </div>
 </template>
 

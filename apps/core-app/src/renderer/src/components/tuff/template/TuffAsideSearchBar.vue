@@ -105,6 +105,11 @@ function handleClear(): void {
   border: none;
   background: transparent;
   color: var(--el-text-color-placeholder);
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.15s ease;
+  animation: search-clear-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .TuffAsideSearch-Clear > div {
@@ -114,7 +119,22 @@ function handleClear(): void {
 }
 
 .TuffAsideSearch-Clear:hover {
-  background: transparent;
+  background: var(--el-fill-color-lighter);
   color: var(--el-text-color-primary);
+}
+
+.TuffAsideSearch-Clear:active {
+  transform: scale(0.9);
+}
+
+@keyframes search-clear-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7) rotate(-90deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
 }
 </style>

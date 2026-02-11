@@ -67,6 +67,9 @@ export default defineConfig({
             { text: '角标容器 CornerOverlay', link: '/components/corner-overlay' },
             { text: '标签 Tag', link: '/components/tag' },
             { text: '状态徽标 StatusBadge', link: '/components/status-badge' },
+            { text: '提示 Alert', link: '/components/alert' },
+            { text: '徽标 Badge', link: '/components/badge' },
+            { text: '面包屑 Breadcrumb', link: '/components/breadcrumb' },
           ],
         },
         {
@@ -89,6 +92,7 @@ export default defineConfig({
             { text: '级联选择 Cascader', link: '/components/cascader' },
             { text: '滑块 Slider', link: '/components/slider' },
             { text: '分段滑块 SegmentedSlider', link: '/components/segmented-slider' },
+            { text: '评分 Rating', link: '/components/rating' },
           ],
         },
         {
@@ -108,6 +112,10 @@ export default defineConfig({
             { text: '权限不足 PermissionState', link: '/components/permission-state' },
             { text: '指标卡片 StatCard', link: '/components/stat-card' },
             { text: 'Markdown渲染 MarkdownView', link: '/components/markdown-view' },
+            { text: '折叠面板 Collapse', link: '/components/collapse' },
+            { text: '时间线 Timeline', link: '/components/timeline' },
+            { text: '步骤条 Steps', link: '/components/steps' },
+            { text: '分页 Pagination', link: '/components/pagination' },
           ],
         },
         {
@@ -155,6 +163,8 @@ export default defineConfig({
             { text: '抽屉 Drawer', link: '/components/drawer' },
             { text: '对话框 Dialog', link: '/components/dialog' },
             { text: '命令面板 CommandPalette', link: '/components/command-palette' },
+            { text: '模态框 Modal', link: '/components/modal' },
+            { text: '翻转覆盖 FlipOverlay', link: '/components/flip-overlay' },
           ],
         },
         {

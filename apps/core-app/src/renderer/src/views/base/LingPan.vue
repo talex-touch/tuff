@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
+import { TxBottomDialog } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { ElMessageBox, ElProgress, ElTabPane, ElTabs } from 'element-plus'
+import { ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
@@ -235,25 +236,23 @@ const verboseLogsEnabled = computed({
   }
 })
 
-async function requestVerboseLogs(): Promise<void> {
+const verboseConfirmVisible = ref(false)
+
+function requestVerboseLogs(): void {
   if (verboseLogsEnabled.value) {
     return
   }
-  try {
-    await ElMessageBox.confirm(
-      '启用详细日志会增加 CPU / 内存 / 磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。',
-      '启用详细日志',
-      {
-        confirmButtonText: '启用',
-        cancelButtonText: '暂不',
-        type: 'warning'
-      }
-    )
-    verboseLogsEnabled.value = true
-    verboseWarningDismissed.value = true
-  } catch {
-    // user canceled
-  }
+  verboseConfirmVisible.value = true
+}
+
+async function confirmVerboseLogs(): Promise<boolean> {
+  verboseLogsEnabled.value = true
+  verboseWarningDismissed.value = true
+  return true
+}
+
+function closeVerboseConfirm(): void {
+  verboseConfirmVisible.value = false
 }
 
 async function toggleVerboseLogs(): Promise<void> {
@@ -1060,6 +1059,17 @@ onUnmounted(() => {
         </ElTabPane>
       </ElTabs>
     </div>
+
+    <TxBottomDialog
+      v-if="verboseConfirmVisible"
+      title="启用详细日志"
+      message="启用详细日志会增加 CPU / 内存 / 磁盘占用，并可能记录路径等敏感信息。建议仅在排查问题时短时开启。"
+      :btns="[
+        { content: '暂不', type: 'info', onClick: () => true },
+        { content: '启用', type: 'error', onClick: confirmVerboseLogs }
+      ]"
+      :close="closeVerboseConfirm"
+    />
   </div>
 </template>
 

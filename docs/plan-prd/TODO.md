@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-01-18
+> 更新时间: 2026-02-10
 
 ---
 
@@ -9,8 +9,8 @@
 
 | 状态 | 数量 | 说明 |
 |------|------|------|
-| ✅ 已完成 | 11 | 可归档或精简 |
-| 🟡 进行中 | 7 | 部分实现 |
+| ✅ 已完成 | 15 | 可归档或精简 |
+| 🟡 进行中 | 6 | 部分实现 |
 | 📝 待实现 | 2 | 规划中 |
 | 📁 参考文档 | 6 | 指南/参考 |
 
@@ -42,6 +42,35 @@
 - [ ] 文档与示例统一新包名（PRD + Nexus docs + README）
 - [ ] CLI 回归验证：help/create/build/dev/publish + dry-run
 
+---
+
+## 🧩 2026-02 新增进展
+
+### ✅ 已落地
+- [x] **CoreBox 内置能力抽离为 7 个独立插件**
+  - `touch-browser-open`、`touch-browser-bookmarks`、`touch-quick-actions`、`touch-window-presets`、`touch-workspace-scripts`、`touch-system-actions`、`touch-intelligence-actions`
+  - 移除内置 URL 系统和内部 AI providers
+  - 含测试 + Nexus 文档
+- [x] **SDK 统一 Hard-Cut 批次 A~D**
+  - Settings/Permission/Download/Cloud Sync/Channel → SDK Hooks 迁移
+  - Typed Transport Domain SDKs + event payloads
+- [x] **Nexus OAuth 稳定化**
+  - sign-in callback 修复 + session/app auth guard 拆分
+  - Turnstile + Passkey step-up flow
+- [x] **更新系统增强**
+  - reusable update tasks + 下载管理增强
+- [x] **原生能力集成**
+  - tuff-native workspace 包 + 构建接入
+  - 本地系统 OCR provider
+  - Everything SDK fallback chain + 后端诊断
+- [x] **代码质量治理**
+  - B+ 评级（`docs/engineering/reports/code-quality-2026-02-03.md`）
+  - Safe handler wrappers for channel/download modules
+
+### 🟡 进行中
+- [ ] **SDK Hard-Cut 批次 E~F**：renderer 直连点清理
+- [ ] **Intelligence 管理 UI**：Capabilities/Channels/AuditLogs 组件开发中
+
 ### 📝 待实现
 - [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
@@ -64,18 +93,18 @@
 #### 📝 待实现
 - [ ] 自动更新方案梳理与落地（`apps/core-app/plan/2026-01-21_13-31-08-auto-update-plan.md`）
 
-### ✅ 已完成 PRD (可归档)
+### ✅ 已完成 PRD (已归档到 `05-archive/`)
 - `05-archive/plugin-loading-refactor.md` - 插件加载重构
 - `02-architecture/intelligence-power-generic-api-prd.md` - Intelligence API (核心完成)
 - `03-features/download-update/DOWNLOAD_CENTER_REFERENCE.md` - 下载中心
-- `03-features/plugin/widget-dynamic-loading-plan.md` - Widget 动态加载 (核心完成)
-- `03-features/plugin/permission-center-prd.md` - 权限中心 (Phase 1-4 完成)
-- `03-features/tuff-transport/*` - TuffTransport 系列 (已实现)
-- `03-features/search/SEARCH-DSL-PRD.md` - 搜索 DSL (已实现)
-- `03-features/nexus/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (已落地)
-- `03-features/plugin/plugin-market-provider-frontend-plan.md` - 插件市场多源 (已落地)
-- `03-features/search/intelligent-recommendation-system-prd.md` - 智能推荐 (已落地)
-- `04-implementation/performance/direct-preview-calculation-prd.md` - 直接预览计算 (已落地)
+- `05-archive/widget-dynamic-loading-plan.md` - Widget 动态加载 (核心完成) ← 已归档
+- `05-archive/permission-center-prd.md` - 权限中心 (Phase 1-4 完成) ← 已归档
+- `05-archive/TUFF-TRANSPORT-PRD.md` - TuffTransport (已实现) ← 已归档
+- `05-archive/SEARCH-DSL-PRD.md` - 搜索 DSL (已实现) ← 已归档
+- `05-archive/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (已落地) ← 已归档
+- `05-archive/plugin-market-provider-frontend-plan.md` - 插件市场多源 (已落地) ← 已归档
+- `05-archive/intelligent-recommendation-system-prd.md` - 智能推荐 (已落地) ← 已归档
+- `05-archive/direct-preview-calculation-prd.md` - 直接预览计算 (已落地) ← 已归档
 
 ### 🟡 进行中 PRD
 - `02-architecture/module-logging-system-prd.md` - 模块日志系统 (Phase 1-4 完成, SearchLogger 已集成)
@@ -563,6 +592,15 @@
 > - ✅ **Intelligence SDK** - 5 家 Provider + 策略引擎完成
 > - ✅ **插件市场多源** - TpexApi + Nexus Provider 完成
 
+> **2026-02 重大更新**: 6 项核心进展
+>
+> - ✅ **CoreBox 插件抽离** - 7 个内置能力独立为插件
+> - ✅ **SDK 统一 Hard-Cut** - 批次 A~D 完成，Typed Transport SDKs
+> - ✅ **Nexus OAuth 稳定化** - sign-in callback + auth guard 拆分
+> - ✅ **更新系统增强** - reusable update tasks
+> - ✅ **原生能力集成** - tuff-native + OCR + Everything SDK
+> - ✅ **代码质量治理** - B+ 评级 + safe handler wrappers
+
 > **2025-11 UI/UX 改进**: 完成 15+ 项页面重构与优化
 >
 > - 登录/个人资料/欢迎/打卡/统计页面重构
@@ -577,21 +615,25 @@
 
 | 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
 |--------|--------|--------|------|------|
-| P0 紧急 | 1 | 1 | 0 | 模块日志系统 Phase 1-4 完成 |
-| P1 重要 | 5 | 3 | 2 | 托盘+计算+NPM完成, 新增权限中心 |
-| P2 增强 | 6 | 5 | 1 | Widget+Flow+Division+推荐+多文件类型完成 |
-| P3 长期 | 5 | 4 | 1 | Intelligence + 下载中心 + Agents + Everything PRD |
-| **总计** | **17** | **13** | **4** | **76% 完成** |
+| P0 紧急 | 2 | 2 | 0 | 模块日志系统 Phase 1-4 + TuffEx 迁移收尾 |
+| P1 重要 | 6 | 5 | 1 | 托盘+计算+NPM+权限中心+OAuth 完成, View Mode 剩余 |
+| P2 增强 | 7 | 6 | 1 | 插件抽离+SDK Hard-Cut A~D+原生集成 完成 |
+| P3 长期 | 5 | 4 | 1 | Intelligence Agents Phase 3 剩余 |
+| **总计** | **20** | **17** | **3** | **85% 完成** |
 
 ---
 
 ## 🎯 建议实施顺序 (更新)
 
 ### Q1 2026 (1-3月)
-1. 模块日志系统 (P0) - 8-11天
-2. 🆕 **插件权限中心 (P1)** - 12-15天 - 安全优先
-3. View Mode 增强 (P1) - 10-15天
-4. Intelligence Agents Phase 1 (P3) - 5天
+1. ~~模块日志系统 (P0)~~ - ✅ Phase 1-4 完成
+2. ~~插件权限中心 (P1)~~ - ✅ Phase 1-4 完成
+3. ~~CoreBox 插件抽离 (P1)~~ - ✅ 7 个插件已落地
+4. ~~SDK 统一 Hard-Cut A~D (P1)~~ - ✅ 已完成
+5. ~~Nexus OAuth 稳定化 (P1)~~ - ✅ 已闭环
+6. ~~更新系统增强 (P2)~~ - ✅ 已落地
+7. View Mode 增强 (P1) - 10-15天 - 待推进
+8. SDK Hard-Cut E~F (P1) - 进行中
 
 ### Q2 2026 (4-6月)
 5. 多视图并行 (P2) - 10-15天
@@ -624,9 +666,15 @@
 - ~~插件权限中心 Phase 1+4 (P1)~~ - 2025-12-12 ✨ NEW - 基础框架 + Hooks
 - ~~插件权限中心 Phase 2 (P1)~~ - 2025-12-12 ✨ NEW - 运行时拦截
 - ~~插件权限中心 Phase 3 (P1)~~ - 2025-12-12 ✨ NEW - UI 集成
+- ~~CoreBox 插件抽离 (P1)~~ - 2026-02 ✨ NEW - 7 个独立插件
+- ~~SDK Hard-Cut A~D (P1)~~ - 2026-02 ✨ NEW - Transport SDK + Hooks
+- ~~Nexus OAuth 稳定化 (P1)~~ - 2026-02 ✨ NEW - callback + auth guard
+- ~~更新系统增强 (P2)~~ - 2026-02 ✨ NEW - reusable update tasks
+- ~~原生能力集成 (P2)~~ - 2026-02 ✨ NEW - tuff-native + OCR + Everything
+- ~~代码质量治理 (P2)~~ - 2026-02 ✨ NEW - B+ 评级
 
 ---
 
-**文档版本**: v1.11
-**更新时间**: 2026-01-18
+**文档版本**: v1.12
+**更新时间**: 2026-02-10
 **维护者**: Development Team

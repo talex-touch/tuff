@@ -1,9 +1,8 @@
 <script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
-import { ElMessageBox } from 'element-plus'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -72,21 +71,19 @@ const providerIcon = computed<ITuffIcon>(() => {
   return providerIconMap[props.provider.type as IntelligenceProviderType] ?? defaultIcon
 })
 
+const deleteConfirmVisible = ref(false)
+
 function handleDelete() {
-  ElMessageBox.confirm(
-    t('settings.intelligence.deleteConfirmMessage', { name: props.provider.name }),
-    t('settings.intelligence.deleteConfirmTitle'),
-    {
-      confirmButtonText: t('settings.intelligence.deleteConfirmButton'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger'
-    }
-  )
-    .then(() => {
-      emits('delete')
-    })
-    .catch(() => {})
+  deleteConfirmVisible.value = true
+}
+
+async function confirmDelete(): Promise<boolean> {
+  emits('delete')
+  return true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirmVisible.value = false
 }
 </script>
 
@@ -134,6 +131,21 @@ function handleDelete() {
       <TSwitch v-model="localEnabled" :aria-label="`Toggle ${provider.name}`" />
     </div>
   </header>
+
+  <TxBottomDialog
+    v-if="deleteConfirmVisible"
+    :title="t('settings.intelligence.deleteConfirmTitle')"
+    :message="t('settings.intelligence.deleteConfirmMessage', { name: provider.name })"
+    :btns="[
+      { content: t('common.cancel'), type: 'info', onClick: () => true },
+      {
+        content: t('settings.intelligence.deleteConfirmButton'),
+        type: 'error',
+        onClick: confirmDelete
+      }
+    ]"
+    :close="closeDeleteConfirm"
+  />
 </template>
 
 <style lang="scss" scoped>

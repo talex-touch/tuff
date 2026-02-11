@@ -67,7 +67,19 @@ function handleClick(event: MouseEvent) {
       </div>
     </template>
     <template v-else>
-      <i class="i-carbon-chevron-right text-lg text-[var(--el-text-color-secondary)]" />
+      <i
+        class="TuffBlockSwitch-Chevron i-carbon-chevron-right text-lg text-[var(--el-text-color-secondary)]"
+      />
     </template>
   </TuffBlockSlot>
 </template>
+
+<style lang="scss" scoped>
+.TuffBlockSwitch-Chevron {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.TBlockSlot-Container:hover .TuffBlockSwitch-Chevron {
+  transform: translateX(3px);
+}
+</style>

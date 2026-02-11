@@ -4,7 +4,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
-import { onMounted, ref } from 'vue'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'
 import IntelligenceInfo from '~/components/intelligence/layout/IntelligenceInfo.vue'
@@ -65,7 +65,8 @@ async function handleTestProvider(): Promise<void> {
   } catch (error) {
     testResult.value = {
       success: false,
-      message: error instanceof Error ? error.message : '连接测试失败',
+      message:
+        error instanceof Error ? error.message : t('settings.intelligence.connectionTestFailed'),
       timestamp: Date.now()
     }
   } finally {
@@ -116,12 +117,6 @@ function navigateToPreviousProvider(): void {
 useKeyboardNavigation({
   onNavigateDown: navigateToNextProvider,
   onNavigateUp: navigateToPreviousProvider
-})
-
-// Debug: Log providers data on mount
-onMounted(() => {
-  console.log('[IntelligenceChannels] Providers loaded:', providers.value)
-  console.log('[IntelligenceChannels] Providers count:', providers.value.length)
 })
 </script>
 

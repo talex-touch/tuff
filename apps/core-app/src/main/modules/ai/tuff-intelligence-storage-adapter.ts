@@ -129,10 +129,10 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
   }
 
   async setQuota(caller: string, quota: TuffQuota): Promise<void> {
-    const window = quota.windowSeconds
-    const useMinute = typeof window === 'number' && window > 0 && window <= 60
-    const useDay = typeof window === 'number' && window > 60 && window <= 86400
-    const useMonth = typeof window === 'number' && window > 86400
+    const windowSec = quota.windowSeconds
+    const useMinute = typeof windowSec === 'number' && windowSec > 0 && windowSec <= 60
+    const useDay = typeof windowSec === 'number' && windowSec > 60 && windowSec <= 86400
+    const useMonth = typeof windowSec === 'number' && windowSec > 86400
 
     await intelligenceQuotaManager.setQuota({
       callerId: caller,

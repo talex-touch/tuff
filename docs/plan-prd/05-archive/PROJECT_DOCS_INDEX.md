@@ -1,3 +1,23 @@
+---
+
+## 📦 归档 PRD 索引（2026-02-10 归档）
+
+以下 PRD 已完成核心目标，从活跃目录归档至此。
+
+| 文件 | 原位置 | 归档原因 | 完成时间 |
+|------|--------|----------|----------|
+| `permission-center-prd.md` | `03-features/plugin/` | Phase 1-4 完成，核心能力已落地 | 2025-12 |
+| `SEARCH-DSL-PRD.md` | `03-features/search/` | `@xxx` provider filter + pinned 已实现 | 2025-12 |
+| `NEXUS-TEAM-INVITE-PRD.md` | `03-features/nexus/` | 邀请 + join 页面已闭环 | 2025-12 |
+| `TUFF-TRANSPORT-PRD.md` | `03-features/tuff-transport/` | TuffTransport 全量迁移已完成 | 2025-12 |
+| `intelligent-recommendation-system-prd.md` | `03-features/search/` | RecommendationEngine 已上线 | 2025-12 |
+| `direct-preview-calculation-prd.md` | `04-implementation/performance/` | 表达式+单位+汇率+时间计算已落地 | 2025-12 |
+| `widget-dynamic-loading-plan.md` | `03-features/plugin/` | Loader+Compiler+Manager 核心完成 | 2025-12 |
+| `plugin-market-provider-frontend-plan.md` | `03-features/plugin/` | TpexApi+Nexus+NPM+GitHub Provider 已落地 | 2025-12 |
+
+---
+
+
 # Tuff 项目文档索引
 
 > 快速导航项目所有核心文档
