@@ -14,6 +14,30 @@ const { createIntelligenceClient } = require('@talex-touch/utils/intelligence')
 const { makeWidgetId } = require('@talex-touch/utils/plugin/widget')
 
 const PLUGIN_NAME = 'touch-translation'
+const SOURCE_ID = 'plugin-features'
+
+function normalizeText(value) {
+  return String(value ?? '').trim()
+}
+
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
+}
+
+function buildInfoItem({ id, featureId, title, subtitle }) {
+  return new TuffItemBuilder(id)
+    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setTitle(title)
+    .setSubtitle(subtitle)
+    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .setMeta({ pluginName: PLUGIN_NAME, featureId })
+    .build()
+}
 const WIDGET_ITEM_ID = 'translation-widget'
 
 const latestRequestSeqByFeature = new Map()
@@ -359,7 +383,7 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
   }
   catch (error) {
     if (!signal?.aborted) {
-      logger.error('Error processing translation feature (async):', error)
+      logger?.error?.('Error processing translation feature (async):', error)
     }
     const state = widgetStateByFeature.get(featureId)
     if (state) {
@@ -403,7 +427,7 @@ async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
     }
   }
   catch (error) {
-    logger.error('TuffIntelligence Translate error:', error)
+    logger?.error?.('TuffIntelligence Translate error:', error)
     return {
       text: `[TuffIntelligence Failed] ${text}`,
       from,
@@ -465,7 +489,7 @@ async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
     }
   }
   catch (error) {
-    logger.error('Google Translate error:', error)
+    logger?.error?.('Google Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -519,7 +543,7 @@ async function translateWithDeepL(text, from = 'auto', to = 'zh', apiKey, signal
     }
   }
   catch (error) {
-    logger.error('DeepL Translate error:', error)
+    logger?.error?.('DeepL Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -588,7 +612,7 @@ async function translateWithBing(text, from = 'auto', to = 'zh', apiKey, region,
     }
   }
   catch (error) {
-    logger.error('Bing Translate error:', error)
+    logger?.error?.('Bing Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -652,7 +676,7 @@ async function translateWithBaidu(text, from = 'auto', to = 'zh', appId, appKey,
     }
   }
   catch (error) {
-    logger.error('Baidu Translate error:', error)
+    logger?.error?.('Baidu Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -751,7 +775,7 @@ async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, se
     }
   }
   catch (error) {
-    logger.error('Tencent Translate error:', error)
+    logger?.error?.('Tencent Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -809,7 +833,7 @@ async function translateWithCaiyun(text, from = 'auto', to = 'zh', token, signal
     }
   }
   catch (error) {
-    logger.error('Caiyun Translate error:', error)
+    logger?.error?.('Caiyun Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -879,7 +903,7 @@ async function translateWithCustom(text, from = 'auto', to = 'zh', config, signa
     }
   }
   catch (error) {
-    logger.error('Custom Translate error:', error)
+    logger?.error?.('Custom Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -925,7 +949,7 @@ async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
     }
   }
   catch (error) {
-    logger.error('MyMemory Translate error:', error)
+    logger?.error?.('MyMemory Translate error:', error)
     return {
       text: `[Translation Failed] ${text}`,
       from,
@@ -1011,7 +1035,7 @@ const pluginLifecycle = {
             return
           }
           startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((e) => {
-            logger.error('Error starting translation request (debounced):', e)
+            logger?.error?.('Error starting translation request (debounced):', e)
           })
         }, 200)
         debounceTimersByFeature.set(featureId, timer)
@@ -1020,27 +1044,49 @@ const pluginLifecycle = {
       }
     }
     catch (error) {
-      logger.error('Error processing translation feature:', error)
+      logger?.error?.('Error processing translation feature:', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
+      return true
     }
   },
 
   async onItemAction(item) {
-    if (item.meta?.defaultAction === 'copy') {
-      const copyAction = item.actions.find(action => action.type === 'copy')
-      if (copyAction && copyAction.payload) {
-        clipboard.writeText(copyAction.payload)
-        logger.log('Copied to clipboard:', copyAction.payload)
+    try {
+      if (item.meta?.defaultAction === 'copy') {
+        const copyAction = item.actions.find(action => action.type === 'copy')
+        if (copyAction && copyAction.payload) {
+          clipboard.writeText(copyAction.payload)
+          logger?.log?.('Copied to clipboard:', copyAction.payload)
 
-        const isFeatureExecution = Boolean(item.meta?.featureId)
-        if (!isFeatureExecution) {
-          plugin.box.hide()
+          const isFeatureExecution = Boolean(item.meta?.featureId)
+          if (!isFeatureExecution) {
+            plugin.box.hide()
+          }
+        }
+        else {
+          logger?.warn?.('No copy action or payload found for item:', item)
         }
       }
-      else {
-        logger.warn('No copy action or payload found for item:', item)
-      }
+    }
+    catch (error) {
+      logger?.error?.('[touch-translation] Action failed', error)
     }
   },
 }
 
-module.exports = pluginLifecycle
+module.exports = {
+  ...pluginLifecycle,
+  __test: {
+    md5,
+    detectLanguage,
+    formatProviderName,
+  },
+}

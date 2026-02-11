@@ -33,6 +33,12 @@ const props = withDefaults(
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border: 1px solid transparent;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.15s ease,
+    box-shadow 0.25s ease;
 
   &.pill {
     border-radius: 999px;

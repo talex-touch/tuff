@@ -14,7 +14,16 @@ function getQueryText(query) {
 }
 
 function normalizeText(value) {
-  return String(value ?? '')
+  return String(value ?? '').trim()
+}
+
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
 }
 
 function isProbablyBase64(text) {
@@ -223,31 +232,51 @@ const pluginLifecycle = {
       return true
     }
     catch (error) {
-      logger.error('[touch-text-tools] Failed to process feature:', error)
+      logger?.error?.('[touch-text-tools] Failed to process feature:', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
       return true
     }
   },
 
   async onItemAction(item) {
-    if (item?.meta?.defaultAction !== COPY_ACTION_ID)
-      return
+    try {
+      if (item?.meta?.defaultAction !== COPY_ACTION_ID)
+        return
 
-    const copyAction = item.actions?.find((action) => action.type === COPY_ACTION_ID)
-    if (!copyAction?.payload)
-      return
+      const copyAction = item.actions?.find((action) => action.type === COPY_ACTION_ID)
+      if (!copyAction?.payload)
+        return
 
-    const payload = copyAction.payload
-    const payloadText = typeof payload === 'string' ? payload : payload.text
-    if (typeof payloadText !== 'string')
-      return
+      const payload = copyAction.payload
+      const payloadText = typeof payload === 'string' ? payload : payload.text
+      if (typeof payloadText !== 'string')
+        return
 
-    clipboard.writeText(payloadText)
-    logger.log('[touch-text-tools] Copied to clipboard')
+      clipboard.writeText(payloadText)
+      logger?.log?.('[touch-text-tools] Copied to clipboard')
 
-    const isFeatureExecution = Boolean(item.meta?.featureId)
-    if (!isFeatureExecution)
-      plugin.box.hide()
+      const isFeatureExecution = Boolean(item.meta?.featureId)
+      if (!isFeatureExecution)
+        plugin.box.hide()
+    }
+    catch (error) {
+      logger?.error?.('[touch-text-tools] Action failed', error)
+    }
   },
 }
 
-module.exports = pluginLifecycle
+module.exports = {
+  ...pluginLifecycle,
+  __test: {
+    isProbablyBase64,
+    toTitleCase,
+  },
+}

@@ -74,21 +74,42 @@ function getGroupItems(groupId: string) {
   return props.groups.find((group) => group.id === groupId)?.items ?? []
 }
 
-// Used in template v-for :key binding
-// @ts-ignore - Used in template
-function getItemKey(group: TuffListGroup<unknown>, item: unknown, index: number): string {
-  if (group.itemKey) {
-    return group.itemKey(item, index)
-  }
-  return `${group.id}-item-${index}`
-}
-
 defineExpose({
   toggleGroup,
   setGroupCollapsed,
   isGroupCollapsed,
   getGroupItems
 })
+
+function onCollapseEnter(el: Element) {
+  const htmlEl = el as HTMLElement
+  htmlEl.style.height = '0'
+  htmlEl.style.overflow = 'hidden'
+  // Force reflow
+  void htmlEl.offsetHeight
+  htmlEl.style.height = `${htmlEl.scrollHeight}px`
+}
+
+function onCollapseAfterEnter(el: Element) {
+  const htmlEl = el as HTMLElement
+  htmlEl.style.height = ''
+  htmlEl.style.overflow = ''
+}
+
+function onCollapseLeave(el: Element) {
+  const htmlEl = el as HTMLElement
+  htmlEl.style.height = `${htmlEl.scrollHeight}px`
+  htmlEl.style.overflow = 'hidden'
+  // Force reflow
+  void htmlEl.offsetHeight
+  htmlEl.style.height = '0'
+}
+
+function onCollapseAfterLeave(el: Element) {
+  const htmlEl = el as HTMLElement
+  htmlEl.style.height = ''
+  htmlEl.style.overflow = ''
+}
 </script>
 
 <template>
@@ -143,21 +164,32 @@ defineExpose({
         </template>
       </header>
 
-      <div
-        v-show="!isGroupCollapsed(group)"
-        class="TuffListTemplate-GroupBody"
-        role="list"
-        :aria-label="group.title"
+      <Transition
+        name="collapse"
+        @enter="onCollapseEnter"
+        @after-enter="onCollapseAfterEnter"
+        @leave="onCollapseLeave"
+        @after-leave="onCollapseAfterLeave"
       >
-        <template v-if="group.items.length">
-          <template v-for="(item, index) in group.items" :key="getItemKey(group, item, index)">
-            <slot name="item" :item="item" :group="group" :index="index" />
+        <div
+          v-if="!isGroupCollapsed(group)"
+          class="TuffListTemplate-GroupBody"
+          role="list"
+          :aria-label="group.title"
+        >
+          <template v-if="group.items.length">
+            <template
+              v-for="(item, index) in group.items"
+              :key="group.itemKey ? group.itemKey(item, index) : `${group.id}-item-${index}`"
+            >
+              <slot name="item" :item="item" :group="group" :index="index" />
+            </template>
           </template>
-        </template>
-        <p v-else class="TuffListTemplate-EmptyGroup" role="status">
-          {{ group.emptyText ?? props.emptyText ?? 'No items' }}
-        </p>
-      </div>
+          <p v-else class="TuffListTemplate-EmptyGroup" role="status">
+            {{ group.emptyText ?? props.emptyText ?? 'No items' }}
+          </p>
+        </div>
+      </Transition>
     </section>
   </div>
 </template>
@@ -185,10 +217,22 @@ defineExpose({
   justify-content: space-between;
   gap: 0.75rem;
   cursor: default;
+  border-radius: 8px;
+  padding: 4px 8px;
+  margin: 0 -8px;
+  transition: background-color 0.2s ease;
 }
 
 .TuffListTemplate-GroupHeader.is-collapsible {
   cursor: pointer;
+
+  &:hover {
+    background-color: var(--el-fill-color-lighter);
+  }
+
+  &:active {
+    background-color: var(--el-fill-color-light);
+  }
 }
 
 .TuffListTemplate-GroupTitle {
@@ -253,5 +297,22 @@ defineExpose({
   text-align: center;
   color: var(--el-text-color-tertiary);
   font-size: 0.85rem;
+}
+
+.collapse-enter-active,
+.collapse-leave-active {
+  transition:
+    height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+}
+
+.collapse-enter-to,
+.collapse-leave-from {
+  opacity: 1;
 }
 </style>

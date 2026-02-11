@@ -30,7 +30,7 @@ const props = withDefaults(
 )
 
 const emits = defineEmits<{
-  (e: 'update:modelValue', value: string | number | null): void
+  (e: 'update:modelValue', value: string | number | null | undefined): void
   (e: 'blur', event: FocusEvent): void
   (e: 'focus', event: FocusEvent): void
 }>()

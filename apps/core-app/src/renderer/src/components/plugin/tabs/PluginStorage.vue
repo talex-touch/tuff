@@ -1,10 +1,9 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
-import { TxButton, TxProgressBar } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton, TxProgressBar } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import { ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -209,19 +208,20 @@ async function handleOpenInEditor(): Promise<void> {
   }
 }
 
-async function handleClearStorage(): Promise<void> {
-  try {
-    await ElMessageBox.confirm(
-      t('plugin.storage.confirm.clearMessage'),
-      t('plugin.storage.confirm.clearTitle'),
-      {
-        confirmButtonText: t('plugin.storage.confirm.clearConfirm'),
-        cancelButtonText: t('plugin.storage.confirm.cancel'),
-        type: 'error'
-      }
-    )
+// Clear storage confirmation
+const clearConfirmVisible = ref(false)
 
-    clearing.value = true
+function requestClearStorage(): void {
+  clearConfirmVisible.value = true
+}
+
+function closeClearConfirm(): void {
+  clearConfirmVisible.value = false
+}
+
+async function confirmClearStorage(): Promise<boolean> {
+  clearing.value = true
+  try {
     const response = await transport.send(PluginEvents.storage.clear, {
       pluginName: props.plugin.name
     })
@@ -232,13 +232,16 @@ async function handleClearStorage(): Promise<void> {
     } else {
       toast.error(response.error || t('plugin.storage.message.clearFailed'))
     }
-  } catch (error) {
-    if (error !== 'cancel') {
-      toast.error(t('plugin.storage.message.clearFailed'))
-    }
+  } catch {
+    toast.error(t('plugin.storage.message.clearFailed'))
   } finally {
     clearing.value = false
   }
+  return true
+}
+
+async function handleClearStorage(): Promise<void> {
+  requestClearStorage()
 }
 
 async function handleOpenFolder(): Promise<void> {
@@ -474,6 +477,21 @@ watch(
         </div>
       </div>
     </div>
+
+    <TxBottomDialog
+      v-if="clearConfirmVisible"
+      :title="t('plugin.storage.confirm.clearTitle')"
+      :message="t('plugin.storage.confirm.clearMessage')"
+      :btns="[
+        { content: t('plugin.storage.confirm.cancel'), type: 'info', onClick: () => true },
+        {
+          content: t('plugin.storage.confirm.clearConfirm'),
+          type: 'error',
+          onClick: confirmClearStorage
+        }
+      ]"
+      :close="closeClearConfirm"
+    />
   </div>
 </template>
 

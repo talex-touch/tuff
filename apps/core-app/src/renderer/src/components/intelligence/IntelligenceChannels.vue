@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import IntelligenceAuditOverlay from '~/components/intelligence/audit/IntelligenceAuditOverlay.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
@@ -13,18 +14,22 @@ const { providers } = useIntelligenceManager()
 
 const providerCount = computed(() => providers.value?.length || 0)
 const enabledCount = computed(() => providers.value?.filter((p) => p.enabled).length || 0)
-const totalConsumption = ref(0) // TODO: 实际从数据存储获取
+
+const auditVisible = ref(false)
+const auditSource = ref<HTMLElement | null>(null)
 
 function handleChannelsClick() {
   router.push('/intelligence/channels')
 }
 
-function handleAudit() {
-  router.push('/intelligence/audit')
+function handleAudit(event: MouseEvent) {
+  auditSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  auditVisible.value = true
 }
 
-function handleViewStats() {
-  console.log('View channel statistics')
+function handleViewStats(event: MouseEvent) {
+  auditSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  auditVisible.value = true
 }
 </script>
 
@@ -67,7 +72,7 @@ function handleViewStats() {
     <TuffBlockSlot
       :title="
         t('settings.intelligence.landing.channels.statsTitle', {
-          amount: totalConsumption.toFixed(2)
+          amount: '—'
         })
       "
       :description="
@@ -86,6 +91,8 @@ function handleViewStats() {
       </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
+
+  <IntelligenceAuditOverlay v-model="auditVisible" :source="auditSource" />
 </template>
 
 <style lang="scss" scoped></style>

@@ -1,6 +1,19 @@
 # TODO
 
+> 更新时间: 2026-02-10
+
 ## 已完成（已归档到 docs/engineering/ARCHIVE.md，2026-02-04）
+
+## 2026-02 新增工程待办
+
+- [ ] 【P1】SDK Hard-Cut 剩余 renderer 直连点清理（批次 E~F）
+  - 参考：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+- [ ] 【P1】`typecheck:web` 既有类型错误清理（恢复 CI 可信度）
+- [ ] 【P2】测试覆盖提升：核心流程（插件加载、搜索、IPC 通信）系统测试
+- [ ] 【P2】i18n 候选 key 清理（~410 keys）
+  - 参考：已识别的 i18n ISSUES
+- [ ] 【P2】TuffEx 构建跑通：`pnpm -C packages/tuffex build` + `docs:build`
+- [ ] 【P3】`plan/` 目录索引生成（25+ 时间戳文件缺少导航）
 
 ## 待确认 / 待处理
 

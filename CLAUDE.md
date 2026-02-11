@@ -40,16 +40,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Monorepo Structure
-This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, plugin examples in `plugins/`, and documentation in `apps/docs/`.
+This is a pnpm workspace monorepo with the main application in `apps/core-app/`, utility packages in `packages/`, extracted plugins in `plugins/` (7 independent plugin packages), and documentation in `apps/docs/`.
 
 ### Technology Stack
-- **Electron**: 37.2.4+ with Node.js 22.16.0+
-- **Vue**: 3.5.18+ with Vue Router 4.5.1 and Pinia 3.0.3
-- **TypeScript**: 5.8.3
-- **Build Tools**: Electron-Vite 4.0.0, Vite 7.0.6, Electron-Builder 25.1.8
-- **UI**: Element Plus 2.10.4, UnoCSS 66.3.3, SASS 1.89.2
-- **Database**: Drizzle ORM 0.44.4 with LibSQL 0.15.10
-- **Utilities**: VueUse 13.6.0, Dayjs 1.11.13, Tesseract.js 5.0.6 (OCR), XTerm 5.3.0
+- **Electron**: 40.0.0+ with Node.js 22.16.0+
+- **Vue**: 3.5.27+ with Vue Router 4.6.4 and Pinia 3.0.4
+- **TypeScript**: 5.9.3
+- **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.1, Electron-Builder 26.4.0
+- **UI**: Element Plus 2.13.1, UnoCSS 66.6.0, SASS 1.97.2
+- **Database**: Drizzle ORM 0.44.7 with LibSQL 0.15.15
+- **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, Tesseract.js 6.0.1 (OCR), XTerm 5.3.0
 - **Logging**: log4js 6.9.1
 
 ### Core Application Architecture (apps/core-app/)
@@ -105,7 +105,16 @@ abstract class BaseModule {
 - Supports module-specific event subscriptions via TouchEventBus
 
 ### Plugin System
-Plugins are loaded from the user data directory at runtime, not bundled with the application.
+Plugins are loaded from the user data directory at runtime, not bundled with the application. As of 2026-02, 7 previously built-in CoreBox capabilities have been extracted into independent plugins in `plugins/`:
+
+**Extracted Plugins** (in `plugins/` directory):
+- `touch-browser-open` - Browser URL opening / URL system
+- `touch-browser-bookmarks` - Browser bookmarks search
+- `touch-quick-actions` - Quick actions
+- `touch-window-presets` - Window presets
+- `touch-workspace-scripts` - Workspace scripts (split from dev toolbox)
+- `touch-system-actions` - System actions
+- `touch-intelligence-actions` - AI intelligence actions
 
 **Plugin Three-Layer Architecture**:
 
@@ -302,15 +311,18 @@ packages/utils/
 ├── account/           # AccountSDK (user info, subscription, quota)
 ├── base/              # Base types and enums
 ├── channel/           # IPC channel interfaces
+├── common/            # Shared utilities (logger, etc.)
 ├── core-box/          # CoreBox SDK (result builder, search format)
 ├── eventbus/          # Event system interfaces
+├── permission/        # Permission system types and registry
 ├── plugin/            # Plugin SDK & interfaces
 │   ├── log/           # Plugin logging
 │   ├── providers/     # Plugin discovery providers
 │   └── sdk/           # Plugin runtime SDK
 ├── renderer/          # Renderer process composables
-│   ├── hooks/         # Vue composables
+│   ├── hooks/         # Vue composables (SDK hooks)
 │   └── storage/       # Storage client
+├── transport/         # TuffTransport (typed domain SDKs, events)
 └── types/             # TypeScript definitions
 ```
 
@@ -359,7 +371,7 @@ await accountSDK.hasPrioritySupport()     // Priority support
 ## Development Notes
 
 - Node.js version: 22.16.0+ (enforced by pnpm preinstall hook and Volta)
-- Uses Electron 37.2.4+ with Vue 3.5.18+
+- Uses Electron 40.0.0+ with Vue 3.5.27+
 - Development uses hot-reloading with process cleanup via DevProcessManager
 - Plugin development supports live reloading when Manifest (`manifest.json`) or Prelude (`index.js`) files change
 - CoreBox positioning is screen-aware and adapts to multi-monitor setups
@@ -395,5 +407,8 @@ await accountSDK.hasPrioritySupport()     // Priority support
 - CoreBox launcher: [apps/core-app/src/main/modules/box-tool/core-box.ts](apps/core-app/src/main/modules/box-tool/core-box.ts)
 - Channel system: [apps/core-app/src/main/core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)
 - Storage module: [apps/core-app/src/main/modules/storage/storage-provider.ts](apps/core-app/src/main/modules/storage/storage-provider.ts)
+- Permission module: [apps/core-app/src/main/modules/permission/](apps/core-app/src/main/modules/permission/)
+- Transport SDKs: [packages/utils/transport/](packages/utils/transport/)
+- Extracted plugins: [plugins/](plugins/)
 - Renderer entry: [apps/core-app/src/renderer/src/main.ts](apps/core-app/src/renderer/src/main.ts)
 - Shared utilities: [packages/utils/](packages/utils/)

@@ -41,7 +41,8 @@
     "version": "node scripts/version-sync.mjs",
     "version:patch": "node scripts/version-sync.mjs --patch",
     "version:minor": "node scripts/version-sync.mjs --minor",
-    "version:major": "node scripts/version-sync.mjs --major"
+    "version:major": "node scripts/version-sync.mjs --major",
+    "plugins:validate": "node scripts/validate-plugins.mjs"
   },
   "dependencies": {
     "@sentry/vite-plugin": "^4.6.0",

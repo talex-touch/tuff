@@ -501,18 +501,22 @@ watch(isLoggedIn, (loggedIn) => {
   &.clickable {
     cursor: pointer;
     border-radius: 8px;
-    transition: background-color 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
       background-color: var(--el-fill-color-light);
 
       .open-external-icon {
         opacity: 1;
+        transform: translate(1px, -1px);
       }
     }
 
     &:active {
       background-color: var(--el-fill-color);
+      transform: scale(0.98);
     }
   }
 
@@ -531,7 +535,9 @@ watch(isLoggedIn, (loggedIn) => {
     font-size: 14px;
     color: var(--el-text-color-secondary);
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
   }
 
   &:before {

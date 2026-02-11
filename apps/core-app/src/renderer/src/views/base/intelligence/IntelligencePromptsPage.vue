@@ -2,7 +2,7 @@
 import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -106,7 +106,8 @@ async function handlePromptTest(options: {
   } catch (error) {
     promptTestResult.value = {
       success: false,
-      message: error instanceof Error ? error.message : '能力测试失败',
+      message:
+        error instanceof Error ? error.message : t('settings.intelligence.capabilityTestFailed'),
       timestamp: Date.now()
     }
   } finally {
@@ -237,13 +238,13 @@ const totalWordsApprox = computed(() =>
 const autoSaveStatusText = computed(() => {
   switch (autoSaveStatus.value) {
     case 'pending':
-      return '待保存...'
+      return t('settings.intelligence.autoSavePending')
     case 'saving':
-      return '保存中...'
+      return t('settings.intelligence.autoSaveSaving')
     case 'saved':
-      return '已保存'
+      return t('settings.intelligence.autoSaveSaved')
     default:
-      return '自动保存已启用'
+      return t('settings.intelligence.autoSaveEnabled')
   }
 })
 
@@ -283,8 +284,7 @@ async function handleOpenFolder(): Promise<void> {
   try {
     await appSdk.openPromptsFolder()
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  } catch (error) {
-    console.error('[PromptManager] Failed to open folder', error)
+  } catch {
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
 }
@@ -384,19 +384,31 @@ watch(
   { deep: true }
 )
 
+// Delete confirmation
+const deletePromptConfirmVisible = ref(false)
+
 function handleDeletePrompt(): void {
   if (!selectedPrompt.value || !isCustomEditable.value) return
   flushPendingPromptChanges()
-  if (!window.confirm(t('settings.intelligence.promptDeleteConfirm'))) return
+  deletePromptConfirmVisible.value = true
+}
+
+async function confirmDeletePrompt(): Promise<boolean> {
+  if (!selectedPrompt.value) return true
   const deletedId = selectedPrompt.value.id
   const deleted = promptManager.deleteCustomPrompt(deletedId)
   if (!deleted) {
     toast.error(t('settings.intelligence.promptDeleteFailed'))
-    return
+    return true
   }
   toast.success(t('settings.intelligence.promptDeleteSuccess'))
   const next = visiblePrompts.value.find((prompt) => prompt.id !== deletedId)
   selectedPromptId.value = next?.id ?? orderedPrompts.value[0]?.id ?? null
+  return true
+}
+
+function closeDeletePromptConfirm() {
+  deletePromptConfirmVisible.value = false
 }
 
 async function handleCopyContent(): Promise<void> {
@@ -404,8 +416,9 @@ async function handleCopyContent(): Promise<void> {
   try {
     await navigator.clipboard.writeText(selectedPrompt.value.content)
     toast.success(t('settings.intelligence.promptCopySuccess'))
-  } catch (error) {
-    console.error('[PromptManager] Failed to copy prompt', error)
+  } catch {
+    toast.error(t('settings.intelligence.promptCopyFailed'))
+    console.error('Failed to copy prompt content to clipboard')
   }
 }
 
@@ -422,8 +435,7 @@ async function handleImport(event: Event): Promise<void> {
     const payload = JSON.parse(text)
     const imported = promptManager.importPrompts(payload)
     toast.success(t('settings.intelligence.promptImportSuccess', { count: imported }))
-  } catch (error) {
-    console.error('[PromptManager] Failed to import prompts', error)
+  } catch {
     toast.error(t('settings.intelligence.promptImportFailed'))
   } finally {
     input.value = ''
@@ -818,6 +830,17 @@ onBeforeUnmount(() => {
       type="file"
       accept="application/json"
       @change="handleImport"
+    />
+
+    <TxBottomDialog
+      v-if="deletePromptConfirmVisible"
+      :title="t('settings.intelligence.promptDeleteConfirm')"
+      :message="t('settings.intelligence.promptDeleteConfirm')"
+      :btns="[
+        { content: t('common.cancel'), type: 'info', onClick: () => true },
+        { content: t('common.confirm'), type: 'error', onClick: confirmDeletePrompt }
+      ]"
+      :close="closeDeletePromptConfirm"
     />
   </div>
 </template>

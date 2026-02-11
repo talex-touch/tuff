@@ -173,10 +173,12 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 
     &:hover:not(.is-disabled) {
       border-color: var(--el-border-color);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      transform: translateY(-1px);
     }
 
     &:active:not(.is-disabled) {
+      transform: translateY(0) scale(0.985);
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
     }
   }
@@ -190,7 +192,9 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
   &.is-selected {
     border-color: var(--el-color-primary-light-3);
     background-color: color-mix(in srgb, var(--el-color-primary) 5%, var(--el-fill-color-blank));
-    box-shadow: 0 2px 12px rgba(var(--el-color-primary-rgb), 0.15);
+    box-shadow:
+      0 2px 12px rgba(var(--el-color-primary-rgb), 0.12),
+      0 0 0 1px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
   }
 
   &.is-disabled {
@@ -277,6 +281,11 @@ function handleClick(event: MouseEvent | KeyboardEvent) {
 
   .TuffItemTemplate.is-selected & {
     background: linear-gradient(135deg, var(--el-fill-color-light) 0%, var(--el-fill-color) 100%);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+
+  .TuffItemTemplate:hover & {
+    transform: scale(1.04);
   }
 
   .TuffItemTemplate-StatusDot {

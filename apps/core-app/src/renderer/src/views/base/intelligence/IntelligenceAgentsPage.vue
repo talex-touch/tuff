@@ -3,6 +3,8 @@ import type { AgentDescriptor } from '@talex-touch/utils'
 import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
+import FlatInput from '~/components/base/input/FlatInput.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import AgentDetail from '~/components/intelligence/agents/AgentDetail.vue'
 import AgentsList from '~/components/intelligence/agents/AgentsList.vue'
@@ -35,8 +37,8 @@ async function loadAgents() {
     if (agents.value.length > 0 && !selectedAgentId.value) {
       selectedAgentId.value = agents.value[0].id
     }
-  } catch (err) {
-    console.error('Failed to load agents:', err)
+  } catch {
+    toast.error(t('intelligence.audit.loadAgentsFailed'))
   } finally {
     loading.value = false
   }
@@ -56,12 +58,9 @@ onMounted(() => {
     <div class="agents-page">
       <div class="agents-sidebar">
         <div class="sidebar-header">
-          <el-input
-            v-model="searchQuery"
-            :placeholder="t('intelligence.agents.search')"
-            prefix-icon="i-carbon-search"
-            clearable
-          />
+          <FlatInput v-model="searchQuery" :placeholder="t('intelligence.agents.search')">
+            <i class="i-carbon-search" />
+          </FlatInput>
         </div>
         <AgentsList
           :agents="filteredAgents"
@@ -88,7 +87,8 @@ onMounted(() => {
 .agents-page {
   display: flex;
   gap: 1.5rem;
-  height: calc(100vh - 180px);
+  flex: 1;
+  min-height: 0;
 }
 
 .agents-sidebar {

@@ -2,6 +2,148 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-10
+
+### CoreBox 内置能力抽离为独立插件
+
+**变更类型**: 架构重构
+
+**描述**: 将 CoreBox 的 7 个内置能力抽离为独立插件，实现核心框架与业务能力的解耦。
+
+**主要变更**:
+1. **新增 7 个独立插件**:
+   - `touch-browser-open` - 浏览器打开 / URL 系统
+   - `touch-browser-bookmarks` - 浏览器书签搜索
+   - `touch-quick-actions` - 快捷操作
+   - `touch-window-presets` - 窗口预设
+   - `touch-workspace-scripts` - 工作区脚本
+   - `touch-system-actions` - 系统操作
+   - `touch-intelligence-actions` - AI 智能操作
+2. **移除内置实现**: `apps/core-app/src/main/` 中对应内置 URL 系统和内部 AI providers 已移除
+3. **测试与文档**: 每个插件含 shared loader 测试 + Nexus onboarding 文档
+
+**相关提交**: `a304911e`, `17c48a79`, `30ba3518`, `6c2b7320`, `67c4a001`, `9fd6ca5f`
+
+---
+
+### SDK 统一 Hard-Cut 进展
+
+**变更类型**: 架构治理
+
+**描述**: 推进 SDK 统一 Hard-Cut，将 renderer 直连 IPC 迁移到 Typed Transport Domain SDKs。
+
+**主要变更**:
+1. **批次 A~D 已完成**: Settings/Permission/Download/Cloud Sync/Channel 迁移到 SDK Hooks
+2. **Typed Transport Domain SDKs**: `packages/utils/transport/` 新增类型化域 SDK 和 event payloads
+3. **Renderer SDK Hooks**: `packages/utils/renderer/hooks/` 迁移完成
+4. **Safe handler wrappers**: Channel 和 download 模块增加安全处理器包装
+
+**参考**: `docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+
+---
+
+### Nexus OAuth 稳定化
+
+**变更类型**: Bug 修复 + 安全增强
+
+**描述**: 修复 Nexus 认证流程中的多个问题，提升安全性。
+
+**主要变更**:
+1. **sign-in callback 修复**: 稳定化 OAuth 回调流程
+2. **auth guard 拆分**: session 和 app auth guard 独立，避免相互干扰
+3. **Turnstile + Passkey**: 新增 Turnstile 验证和 Passkey step-up flow
+4. **设备认证**: 新增 device attestation flow 和 secure local seed handling
+
+**相关提交**: `bf87e09e`, `1bea54ce`, `9b137b49`, `919064c2`
+
+---
+
+### 更新系统增强
+
+**变更类型**: 功能增强
+
+**描述**: 实现可复用更新任务和增强下载管理。
+
+**主要变更**:
+1. **reusable update tasks**: 更新任务可复用，减少重复代码
+2. **下载管理增强**: 改进下载流程和错误处理
+3. **版本守护**: 启动时版本校验（startup version guard）
+
+**相关提交**: `7d5b479d`, `f4cc525e`
+
+---
+
+### 原生能力集成
+
+**变更类型**: 功能增强
+
+**描述**: 引入原生能力支持，增强系统集成。
+
+**主要变更**:
+1. **tuff-native**: 新增 workspace 包和构建接入
+2. **本地 OCR**: 新增系统 OCR provider 和 native integration
+3. **Everything SDK**: fallback chain 和后端诊断功能
+4. **PowerSDK**: 低功耗适配支持
+
+**相关提交**: `3ecac208`, `846413fa`, `e0bf259b`, `1a1fce3e`
+
+---
+
+### 代码质量治理
+
+**变更类型**: 代码质量
+
+**描述**: 系统性代码质量提升，达到 B+ 评级。
+
+**参考**: `docs/engineering/reports/code-quality-2026-02-03.md`
+
+---
+
+## 2026-01
+
+### Nexus 数据同步协议与审核系统
+
+**变更类型**: 功能增强
+
+**主要变更**:
+1. **Nexus 统计扩展**: 搜索/执行细分指标、模块耗时可视化、隐私约束（不采集搜索词）
+2. **Nexus 审核系统**: Review states 细化、auth gate、回归文档（NEXUS-REV-040~060）
+3. **Nexus 文档迁移**: 组件 demo wrapper pattern、migration status banners
+
+---
+
+### 更新系统统一
+
+**变更类型**: 功能增强
+
+**主要变更**:
+1. **兼容性标志更新**: compatibility flags 和 versioning 调整
+2. **记录清理**: update repository 实现 record clearing
+3. **Release 脚本增强**: Windows/macOS/Linux artifact 处理改进
+
+---
+
+### TuffEx 迁移与 CLI 分包规划
+
+**变更类型**: 架构规划
+
+**主要变更**:
+1. **TuffEx 组件库迁移**: tuffex-ui → tuffex 重命名和构建脚本修复
+2. **Tuff CLI 分包**: `@talex-touch/tuff-cli-core` + `@talex-touch/tuff-cli` 拆分规划
+
+---
+
+### 从 README.md 归档的旧里程碑（超过 3 个月）
+
+以下条目从 README.md 近期里程碑中移出：
+- **插件市场多源**（2025-12 完成）：TpexApi + Nexus + NPM + GitHub Provider
+- **Search DSL**（2025-12 完成）：`@xxx` provider filter + pinned
+- **Nexus Team Invite**（2025-12 完成）：邀请 + join 页面
+- **直接预览计算**（2025-12 完成）：表达式 + 单位换算 + 汇率 + 时间
+- **Widget 动态加载**（2025-12 完成）：Loader + Compiler + Manager
+
+---
+
 ## 2025-11-27
 
 ### 完成: 代码质量迭代与文档整理

@@ -1,4 +1,4 @@
-import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
+import { getTuffBaseUrl, hasNavigator, isDevEnv } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/channel/storage'
 
 export const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
@@ -76,7 +76,7 @@ export function getAppDeviceId(): string | null {
 }
 
 export function getAppDevicePlatform(): string {
-  if (typeof navigator === 'undefined') {
+  if (!hasNavigator()) {
     return 'desktop'
   }
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } }

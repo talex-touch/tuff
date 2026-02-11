@@ -57,6 +57,8 @@ function close() {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -68,7 +70,9 @@ function close() {
   background: var(--el-bg-color);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 18px 65px rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   width: min(90vw, 560px);
 }
 
@@ -81,6 +85,8 @@ function close() {
   h3 {
     margin: 0;
     font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   .close-btn {
@@ -89,6 +95,24 @@ function close() {
     font-size: 18px;
     cursor: pointer;
     color: var(--el-text-color-secondary);
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background-color 0.2s ease,
+      color 0.2s ease;
+
+    &:hover {
+      background-color: var(--el-fill-color);
+      color: var(--el-text-color-primary);
+    }
+
+    &:active {
+      background-color: var(--el-fill-color-dark);
+    }
   }
 }
 
@@ -105,13 +129,46 @@ function close() {
   gap: 12px;
 }
 
-.modal-fade-enter-active,
+.modal-fade-enter-active {
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+
+  .TModal-Content {
+    animation: modal-content-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+
 .modal-fade-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 1, 1);
+
+  .TModal-Content {
+    animation: modal-content-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+  }
 }
 
 .modal-fade-enter-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+
+@keyframes modal-content-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modal-content-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
 }
 </style>

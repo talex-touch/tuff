@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Delete, Download, Refresh } from '@element-plus/icons-vue'
+import { TxBottomDialog } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
-import { ElMessageBox } from 'element-plus'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -89,18 +89,19 @@ async function loadErrorStats() {
   }
 }
 
-async function clearLogs() {
-  try {
-    await ElMessageBox.confirm(
-      t('download.clear_logs_confirm_message'),
-      t('download.clear_logs_confirm_title'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning'
-      }
-    )
+// Clear logs confirmation
+const clearConfirmVisible = ref(false)
 
+function requestClearLogs() {
+  clearConfirmVisible.value = true
+}
+
+function closeClearConfirm() {
+  clearConfirmVisible.value = false
+}
+
+async function confirmClearLogs(): Promise<boolean> {
+  try {
     const result = await transport.send(DownloadEvents.logs.clear)
     if (result.success) {
       logs.value = ''
@@ -110,10 +111,14 @@ async function clearLogs() {
       toast.error(t('download.clear_logs_failed'))
     }
   } catch (error: unknown) {
-    if (error === 'cancel') return
     const message = error instanceof Error ? error.message : String(error)
     toast.error(`${t('download.clear_logs_failed')}: ${message}`)
   }
+  return true
+}
+
+async function clearLogs() {
+  requestClearLogs()
 }
 
 function downloadLogs() {
@@ -224,6 +229,17 @@ function downloadLogs() {
       </el-button>
     </template>
   </el-dialog>
+
+  <TxBottomDialog
+    v-if="clearConfirmVisible"
+    :title="t('download.clear_logs_confirm_title')"
+    :message="t('download.clear_logs_confirm_message')"
+    :btns="[
+      { content: t('common.cancel'), type: 'info', onClick: () => true },
+      { content: t('common.confirm'), type: 'error', onClick: confirmClearLogs }
+    ]"
+    :close="closeClearConfirm"
+  />
 </template>
 
 <style scoped>

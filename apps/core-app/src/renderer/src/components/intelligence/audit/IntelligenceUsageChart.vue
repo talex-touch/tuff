@@ -4,6 +4,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   callerId?: string
@@ -55,8 +56,8 @@ async function loadChartData() {
     }
 
     chartData.value = filledData
-  } catch (error) {
-    console.error('Failed to load chart data:', error)
+  } catch {
+    toast.error(t('intelligence.audit.loadChartFailed'))
   }
 }
 
@@ -111,7 +112,8 @@ const chartBars = computed(() => {
 
     const date = new Date(d.period)
     const dayLabel = date.getDate().toString()
-    const weekday = ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]
+    const weekdays = t('intelligence.usage.weekdays') as unknown as string[]
+    const weekday = weekdays[date.getDay()]
 
     return {
       index,

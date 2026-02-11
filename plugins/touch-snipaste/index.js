@@ -80,6 +80,15 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
+}
+
 function matchesKeyword(action, keyword) {
   if (!keyword)
     return true
@@ -178,7 +187,7 @@ async function readSettings() {
         return JSON.parse(settings)
       }
       catch (error) {
-        logger.warn('[touch-snipaste] Failed to parse settings.json')
+        logger?.warn?.('[touch-snipaste] Failed to parse settings.json')
         return null
       }
     }
@@ -205,21 +214,6 @@ async function resolveActions() {
   const builtins = BUILTIN_ACTIONS.map((action) => normalizeAction(action, 'builtin')).filter(Boolean)
   const custom = await loadCustomActions()
   return [...internal, ...builtins, ...custom]
-}
-
-function buildActionItem({ id, featureId, title, subtitle, actionId }) {
-  return new TuffItemBuilder(id)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(title)
-    .setSubtitle(subtitle)
-    .setIcon(ICON)
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      defaultAction: DEFAULT_ACTION,
-      actionId,
-    })
-    .build()
 }
 
 async function getCustomPath() {
@@ -308,86 +302,112 @@ const pluginLifecycle = {
   },
 
   async onFeatureTriggered(featureId, query, _feature, signal) {
-    if (signal?.aborted)
-      return true
+    try {
+      if (signal?.aborted)
+        return true
 
-    const keyword = normalizeText(query?.text ?? query)
-    const items = []
-    const actions = await resolveActions()
-    const settings = await readSettings()
-    const configReady = Boolean(settings)
-    const customCount = Array.isArray(settings?.actions) ? settings.actions.length : 0
-    const currentPath = settings?.snipastePath || '未配置'
+      const keyword = normalizeText(query?.text ?? query)
+      const items = []
+      const actions = await resolveActions()
+      const settings = await readSettings()
+      const configReady = Boolean(settings)
+      const customCount = Array.isArray(settings?.actions) ? settings.actions.length : 0
+      const currentPath = settings?.snipastePath || '未配置'
 
-    items.push(buildInfoItem({
-      id: `${featureId}-config-status`,
-      featureId,
-      title: `配置状态：${configReady ? '已生成' : '未生成'}`,
-      subtitle: `当前路径：${currentPath}`,
-    }))
-
-    items.push(buildInfoItem({
-      id: `${featureId}-custom-count`,
-      featureId,
-      title: '自定义动作',
-      subtitle: `已配置 ${customCount} 条（settings.json actions）`,
-    }))
-
-    items.push(buildInfoItem({
-      id: `${featureId}-hint`,
-      featureId,
-      title: '提示：Snipaste 需保持运行',
-      subtitle: '命令行指令需 Snipaste 已运行才会生效',
-    }))
-
-    actions.filter((action) => matchesKeyword(action, keyword)).forEach((action) => {
-      items.push(buildActionItem({
-        id: `${featureId}-${action.key}`,
+      items.push(buildInfoItem({
+        id: `${featureId}-config-status`,
         featureId,
-        title: action.title,
-        subtitle: action.subtitle,
-        actionId: action.key,
+        title: `配置状态：${configReady ? '已生成' : '未生成'}`,
+        subtitle: `当前路径：${currentPath}`,
       }))
-    })
 
-    plugin.feature.clearItems()
-    plugin.feature.pushItems(items)
-    return true
+      items.push(buildInfoItem({
+        id: `${featureId}-custom-count`,
+        featureId,
+        title: '自定义动作',
+        subtitle: `已配置 ${customCount} 条（settings.json actions）`,
+      }))
+
+      items.push(buildInfoItem({
+        id: `${featureId}-hint`,
+        featureId,
+        title: '提示：Snipaste 需保持运行',
+        subtitle: '命令行指令需 Snipaste 已运行才会生效',
+      }))
+
+      actions.filter((action) => matchesKeyword(action, keyword)).forEach((action) => {
+        items.push(buildActionItem({
+          id: `${featureId}-${action.key}`,
+          featureId,
+          title: action.title,
+          subtitle: action.subtitle,
+          actionId: action.key,
+        }))
+      })
+
+      plugin.feature.clearItems()
+      plugin.feature.pushItems(items)
+      return true
+    }
+    catch (error) {
+      logger?.error?.('[touch-snipaste] Failed to handle feature', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
+      return true
+    }
   },
 
   async onItemAction(item) {
-    if (item?.meta?.defaultAction !== DEFAULT_ACTION)
-      return
+    try {
+      if (item?.meta?.defaultAction !== DEFAULT_ACTION)
+        return
 
-    const actionId = item?.meta?.actionId
-    if (!actionId)
-      return
+      const actionId = item?.meta?.actionId
+      if (!actionId)
+        return
 
-    const actions = await resolveActions()
-    const action = actions.find((entry) => entry.key === actionId)
-    if (!action)
-      return
+      const actions = await resolveActions()
+      const action = actions.find((entry) => entry.key === actionId)
+      if (!action)
+        return
 
-    if (action.kind === 'internal') {
-      if (action.id === 'config-init') {
-        const existing = await readSettings()
-        if (!existing)
-          await plugin.storage.setFile('settings.json', buildDefaultSettings())
-        return { externalAction: true }
+      if (action.kind === 'internal') {
+        if (action.id === 'config-init') {
+          const existing = await readSettings()
+          if (!existing)
+            await plugin.storage.setFile('settings.json', buildDefaultSettings())
+          return { externalAction: true }
+        }
+        if (action.id === 'config-open') {
+          await plugin.storage.openFolder()
+          return { externalAction: true }
+        }
+        return
       }
-      if (action.id === 'config-open') {
-        await plugin.storage.openFolder()
-        return { externalAction: true }
-      }
-      return
-    }
 
-    const result = await runSnipaste(action.args)
-    if (!result.ok) {
-      logger.warn('[touch-snipaste] Failed to run Snipaste command', result.error)
+      const result = await runSnipaste(action.args)
+      if (!result.ok) {
+        logger?.warn?.('[touch-snipaste] Failed to run Snipaste command', result.error)
+      }
+      return { externalAction: true }
     }
-    return { externalAction: true }
+    catch (error) {
+      logger?.error?.('[touch-snipaste] Action failed', error)
+    }
   },
 }
 
-module.exports = pluginLifecycle
+module.exports = {
+  ...pluginLifecycle,
+  __test: {
+    normalizeAction,
+    matchesKeyword,
+  },
+}

@@ -2,67 +2,34 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/@talex-touch/tuffex?style=flat-square&logo=npm&color=ff6b6b" alt="NPM Version">
-  <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Beta Status">
   <img src="https://img.shields.io/badge/Vue-3.5-4fc08d?style=flat-square&logo=vue.js" alt="Vue 3.5">
   <img src="https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/github/license/talex-touch/tuff?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/bundle%20size-<50kb-brightgreen?style=flat-square" alt="Bundle Size">
-  <img src="https://img.shields.io/badge/tree%20shaking-✓-success?style=flat-square" alt="Tree Shaking">
+  <img src="https://img.shields.io/badge/tree%20shaking-%E2%9C%93-success?style=flat-square" alt="Tree Shaking">
 </p>
 
 <p align="center">
-  <strong>🎭 TuffEx · Beautiful Animations · Living Component Library</strong>
+  An elegant Vue 3 component library crafted for tactile experience and smooth interaction.<br/>
+  Part of the <a href="https://tuff.tagzxia.com">Tuff</a> ecosystem.
 </p>
 
 <p align="center">
-  A modern Vue3 component library focused on <strong>tactile experience</strong> and <strong>smooth animations</strong><br/>
-  Part of the <a href="https://tuff.tagzxia.com">Tuff</a> ecosystem - bringing life to every interaction
-</p>
-
-<p align="center">
-  <a href="#-getting-started">Getting Started</a> ·
-  <a href="#-components">Components</a> ·
-  <a href="#-design-philosophy">Design Philosophy</a> ·
-  <a href="#%EF%B8%8F-tech-stack">Tech Stack</a> ·
-  <a href="#-documentation">Documentation</a>
-</p>
-
-<p align="center">
-  <strong>English</strong> | <a href="README_ZHCN.md">简体中文</a>
+  <a href="#getting-started">Getting Started</a> &middot;
+  <a href="#components">Components</a> &middot;
+  <a href="#design-philosophy">Design Philosophy</a> &middot;
+  <a href="#documentation">Documentation</a>
 </p>
 
 ---
 
-## ✨ Core Features
+## Getting Started
 
-| Feature | Description |
-|---------|-------------|
-| **🎭 Living Tactile Experience** | Life-like touch feedback with elastic responses and damping effects |
-| **🌊 Silky Animation System** | 60fps smooth animations based on Bézier curves and physics |
-| **💎 Modern Visual Language** | Glassmorphism aesthetics with frosted glass and material effects |
-| **⚡ Performance Optimized** | Vue3 Composition API with Tree Shaking, 50%+ smaller bundles |
-| **🎨 Enterprise Design System** | Complete Design Tokens with WCAG 2.1 AA accessibility |
-| **📱 Cross-Platform Ready** | Responsive design, PWA and SSR friendly |
-| **🔗 Tuff Ecosystem** | Seamlessly integrated with the Tuff desktop application |
-
-## 🚀 Getting Started
-
-### 📦 Installation
-
-Choose your preferred package manager:
+### Installation
 
 ```bash
-# npm
-npm install @talex-touch/tuffex
-
-# yarn
-yarn add @talex-touch/tuffex
-
-# pnpm (recommended)
 pnpm add @talex-touch/tuffex
 ```
 
-### 🔧 Full Import
+### Full Import
 
 ```typescript
 import { createApp } from 'vue'
@@ -71,200 +38,238 @@ import '@talex-touch/tuffex/style.css'
 
 const app = createApp(App)
 app.use(TuffUI)
-app.mount('#app')
 ```
 
-### 🎯 On-Demand Import (Recommended)
+### On-Demand Import
 
 ```typescript
-import { createApp } from 'vue'
-import { TxButton, TxAvatar } from '@talex-touch/tuffex'
+import { TxButton, TxCard, TxDrawer } from '@talex-touch/tuffex'
 import '@talex-touch/tuffex/style.css'
 
-const app = createApp(App)
 app.use(TxButton)
-app.use(TxAvatar)
+app.use(TxCard)
+app.use(TxDrawer)
 ```
 
-### 🎨 Custom Theme (Coming Soon)
+## Design Philosophy
 
-```typescript
-import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
+TuffEx is designed with one guiding principle: **interfaces should feel alive**.
 
-const app = createApp(App)
-
-// Custom theme configuration
-app.use(TuffUI, {
-  theme: {
-    primaryColor: '#6366f1',
-    borderRadius: '12px',
-    animationDuration: '0.3s'
-  }
-})
-```
-
-### 💡 Quick Experience
-
-```vue
-<template>
-  <div class="demo">
-    <!-- Tactile Button -->
-    <TxButton type="primary" @click="handleClick">
-      Feel the Touch
-    </TxButton>
-
-    <!-- Flowing Avatar -->
-    <TxAvatar
-      src="https://example.com/avatar.jpg"
-      size="large"
-      glow
-    />
-
-    <!-- Glass Card -->
-    <TxCard glass blur>
-      <h3>TuffEx</h3>
-      <p>Bringing life to every interaction</p>
-    </TxCard>
-  </div>
-</template>
-
-<script setup>
-const handleClick = () => {
-  console.log('Can you feel it? This is TuffEx!')
-}
-</script>
-```
-
-## 🎯 Design Philosophy
-
-TuffEx embodies an **interaction philosophy** - interfaces should feel alive and respond with warmth.
-
-**Touch First** - Every interaction has soul through warm, textured feedback systems.
-**Vitality** - Components breathe, express emotions, and anticipate user intentions.
-**Flow Aesthetics** - Functional animations guide users while maintaining visual continuity.
-**Material Experience** - Digital interfaces deserve real material sensations and textures.
-
-## 🎨 Components
-
-> 🚧 **Beta Version** - Currently in beta testing, more components coming soon!
-
-### Available Components
-
-| Component | Description | Status |
-|-----------|-------------|--------|
-| **TxButton** | Tactile buttons with elastic feedback and ripple effects | ✅ Stable |
-| **TxFlatButton** | Flat buttons with hover effects and loading states | ✅ Stable |
-| **TxSwitch** | Toggle switches with smooth animations | ✅ Stable |
-
-### Planned Components
-
-| Component | Description | Status |
-|-----------|-------------|--------|
-| **TxSelect** | Dropdown select with floating positioning | 🚧 In Progress |
-| **TxInput** | Input fields with smooth focus transitions | 🚧 In Progress |
-| **TxModal** | Modal dialogs with entrance animations | 📋 Planned |
-| **TxCard** | Glass-morphism cards with shadow systems | 📋 Planned |
-| **TxScroll** | Custom scrollbar with native feel | 📋 Planned |
-| **TxTabs** | Tab navigation with indicator animations | 📋 Planned |
-| **TxMenu** | Menu components with route integration | 📋 Planned |
-| **TxBadge** | Status badges with pulse effects | 📋 Planned |
-
-*🚀 Components are being migrated from the Tuff core application...*
-
-## 🏗️ Tech Stack
-
-Built with modern frontend technologies aligned with the Tuff core application:
-
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Vue** | 3.5+ | Composition API with `<script setup>` |
-| **TypeScript** | 5.8+ | Complete type safety |
-| **Vite** | 6.0+ | Lightning-fast development |
-| **VitePress** | 1.5+ | Documentation site |
-| **Sass** | 1.89+ | Advanced styling |
-| **VueUse** | 13.0+ | Composition utilities |
-
-**Design System:**
-- CSS Variables for dynamic theming
-- Tree Shaking for optimized bundle size
-- SCSS Mixins for consistent styling
-
-## 📖 Documentation
-
-- **[TuffEx Documentation](https://tuffex.tagzxia.com/docs/dev/tuffex)** - Official docs in Tuff ecosystem
-- **[Component Docs](http://localhost:8000)** - Local VitePress documentation (run `pnpm docs:dev`)
-
-## 🛠️ Development
-
-```bash
-# In monorepo root
-pnpm install
-
-# In packages/tuffex directory
-pnpm docs:dev          # Start documentation server at :8000
-pnpm build             # Build library with Gulp
-pnpm build:vite        # Build library with Vite
-pnpm docs:build        # Build documentation
-```
-
-## 🗂️ Project Structure
-
-This repository is a pnpm monorepo. TuffEx lives under `packages/tuffex`.
-
-```
-talex-touch/tuff
-├── apps/               # Applications (Electron app, Nexus site, ...)
-├── packages/
-│   ├── tuffex/         # TuffEx package (this)
-│   │   ├── packages/components/   # Component source
-│   │   ├── packages/script/       # Build scripts (gulp/vite)
-│   │   ├── docs/                  # VitePress docs
-│   │   └── utils/                 # Scaffolding utilities
-│   └── utils/          # Shared utilities
-├── plugins/            # Example plugins
-└── docs/               # Repo-level docs
-```
-
-## 🔗 Integration with Tuff
-
-TuffEx is designed to work seamlessly with the Tuff desktop application. Components are gradually being migrated from the core renderer to this standalone library for:
-
-1. **Code Reuse** - Share UI components across projects
-2. **Plugin Development** - Enable plugin developers to use consistent UI
-3. **Community** - Allow external projects to adopt Tuff's design language
-## 🤖 Intelligence & AI
-
-- Pair TuffEx with `@talex-touch/tuff-intelligence` to build AI-driven flows (capabilities, prompts, provider routing).
-- Frontend can call the unified intelligence client while reusing TuffEx components for configuration, testing, and auditing views.
-
-## 🤝 Contributing
-
-We welcome all contributions! Please read our [Contributing Guide](CONTRIBUTING.md) for details.
-
-- 🐛 [Report Issues](https://github.com/talex-touch/tuff/issues)
-- 💡 [Feature Requests](https://github.com/talex-touch/tuff/discussions)
-- 🔧 [Submit PRs](https://github.com/talex-touch/tuff/pulls)
-
-## 📄 License
-
-[MIT License](LICENSE) © 2025 TalexDreamSoul
+- **Touch First.** Every interaction responds with warm, textured feedback.
+- **Flow Aesthetics.** Functional animations guide the eye and maintain visual continuity.
+- **Material Experience.** Digital surfaces carry real weight, depth, and presence.
+- **Simplicity.** No unnecessary complexity. Every component does one thing well.
 
 ---
 
-<p align="center">
-  <img src="https://i.imgur.com/pd3YUxf.png" width="120" height="120" alt="TuffEx Logo">
-</p>
+## Components
 
-<p align="center">
-  <strong>🎭 Bringing life to every touch</strong><br/>
-  <em>TuffEx - Touchable Beautiful Animations</em>
-</p>
+TuffEx ships **90+ components** organized into 10 categories. Every component is tree-shakeable, fully typed, and works with both Options API and Composition API.
 
-<p align="center">
-  <a href="https://tuffex.tagzxia.com/docs/dev/tuffex">📖 Documentation</a> ·
-  <a href="https://github.com/talex-touch/tuff/tree/master/packages/tuffex">⭐ GitHub</a> ·
-  <a href="https://www.npmjs.com/package/@talex-touch/tuffex">📦 NPM</a> ·
-  <a href="https://github.com/talex-touch/tuff/discussions">💬 Discussions</a>
-</p>
+### Basic
+
+Foundational elements used across your entire application.
+
+| Component | Description |
+|-----------|-------------|
+| `TxButton` | Tactile buttons with elastic feedback and variant system |
+| `TxFlatButton` | Flat-style buttons with hover effects and loading states |
+| `TxIcon` | Unified icon component supporting class and SVG icons |
+| `TxAvatar` / `TxAvatarGroup` | User avatars with size, shape, status, and stacking |
+| `TxTag` | Inline tags with variant, closable, and animation support |
+| `TxStatusBadge` | Status indicators with pulse, glow, and color modes |
+| `TxBadge` | Numeric and dot badges for notifications |
+| `TxOutlineBorder` | Decorative outline borders with animated effects |
+| `TxCornerOverlay` | Corner-positioned overlays on any element |
+| `TxAlert` | Contextual alert banners for information, warning, and error |
+| `TxBreadcrumb` | Navigation breadcrumbs with separator customization |
+
+### Form
+
+Input controls for collecting and validating user data.
+
+| Component | Description |
+|-----------|-------------|
+| `TxInput` | Text input with focus transitions and validation states |
+| `TxSelect` / `TxSelectItem` | Dropdown select with floating positioning |
+| `TxSwitch` | Toggle switch with spring animation |
+| `TxCheckbox` | Checkbox with indeterminate state and label placement |
+| `TxRadio` / `TxRadioGroup` | Radio buttons with group management |
+| `TxSlider` | Range slider with marks and tooltip |
+| `TxSegmentedSlider` | Segmented control slider |
+| `TxPicker` / `TxDatePicker` | Value and date pickers |
+| `TxCascader` | Multi-level cascading selection |
+| `TxTreeSelect` | Tree-structured dropdown selection |
+| `TxSearchInput` | Search input with debounce and clear |
+| `TxSearchSelect` | Searchable select with async data loading |
+| `TxTagInput` | Multi-value tag input |
+| `TxCodeEditor` / `TxCodeEditorToolbar` | Code editing with syntax highlighting |
+| `TxForm` / `TxFormItem` | Form layout with validation rules |
+| `TxRating` | Star rating input |
+
+### Data Display
+
+Components for presenting structured content and states.
+
+| Component | Description |
+|-----------|-------------|
+| `TxCard` / `TxCardItem` | Cards with glass, solid, and outlined variants |
+| `TxDataTable` | Data table with sorting, selection, and column config |
+| `TxStatCard` | Statistic card for dashboards |
+| `TxMarkdownView` | Markdown renderer with syntax highlighting |
+| `TxTree` | Tree view with expand, select, and search |
+| `TxTimeline` / `TxTimelineItem` | Vertical timeline for events and steps |
+| `TxSteps` / `TxStep` | Step indicator for multi-step flows |
+| `TxCollapse` / `TxCollapseItem` | Collapsible content panels |
+| `TxPagination` | Page navigation with size options |
+| `TxEmpty` | Simple empty placeholder |
+| `TxEmptyState` | Rich empty state with icon, title, and action |
+| `TxBlankSlate` | Blank slate for first-time-use experiences |
+| `TxLoadingState` | Loading placeholder state |
+| `TxNoSelection` | "No item selected" placeholder |
+| `TxNoData` | "No data" placeholder |
+| `TxSearchEmpty` | "No search results" placeholder |
+| `TxOfflineState` | Offline status placeholder |
+| `TxPermissionState` | Permission denied placeholder |
+
+### Navigation
+
+Components for moving between views and content.
+
+| Component | Description |
+|-----------|-------------|
+| `TxTabs` / `TxTabItem` / `TxTabHeader` | Tabbed navigation with animated indicator |
+| `TxTabBar` | Bottom tab bar for mobile layouts |
+| `TxNavBar` | Top navigation bar |
+| `TxTooltip` | Hover tooltips with placement and delay |
+| `TxPopover` | Click-triggered popovers with rich content |
+| `TxDropdownMenu` / `TxDropdownItem` | Dropdown menus with icon and shortcut support |
+| `TxContextMenu` / `TxContextMenuItem` | Right-click context menus |
+| `TxCommandPalette` | Keyboard-first command palette (Cmd+K style) |
+
+### Layout
+
+Structural components for arranging content.
+
+| Component | Description |
+|-----------|-------------|
+| `TxContainer` / `TxRow` / `TxCol` | 24-column responsive grid system |
+| `TxGrid` / `TxGridItem` | CSS Grid-based layout |
+| `TxGridLayout` | Draggable grid layout |
+| `TxFlex` | Flexbox wrapper with gap and direction props |
+| `TxStack` | Vertical or horizontal stack layout |
+| `TxSplitter` | Resizable split panel |
+| `TxScroll` | Custom scrollbar with pull-to-refresh |
+| `TxVirtualList` | Virtualized list for large datasets |
+| `TxLayoutSkeleton` | Page layout skeleton placeholder |
+| `TxGroupBlock` | Settings-style collapsible group |
+| `TxBlockSlot` / `TxBlockLine` / `TxBlockSwitch` | Group block child items |
+| `TxAgentsList` / `TxAgentItem` | Agent listing layout |
+
+### Feedback
+
+Visual indicators for progress, loading, and notifications.
+
+| Component | Description |
+|-----------|-------------|
+| `TxProgressBar` | Horizontal progress bar with segments and animation |
+| `TxProgress` | Circular or linear progress indicator |
+| `TxSpinner` | Loading spinner with size variants |
+| `TxLoadingOverlay` | Full-area loading overlay |
+| `TxSkeleton` / `TxCardSkeleton` / `TxListItemSkeleton` | Content skeleton placeholders |
+| `TxToastHost` | Toast notification host |
+
+### Overlay
+
+Modal and panel components that appear above the page.
+
+| Component | Description |
+|-----------|-------------|
+| `TxDrawer` | Side panel with spring slide-in animation |
+| `TxModal` | Modal dialog with backdrop blur |
+| `TxBottomDialog` | Bottom sheet dialog |
+| `TxBlowDialog` | Expanding dialog from a trigger element |
+| `TxPopperDialog` | Popper-positioned dialog |
+| `TxTouchTip` | Touch-friendly tooltip dialog |
+| `TxFlipOverlay` | Flip-card overlay transition |
+| `TxCommandPalette` | Quick-access command palette |
+
+### Animation
+
+Motion primitives and transition components.
+
+| Component | Description |
+|-----------|-------------|
+| `TxAutoSizer` | Smooth auto-sizing container |
+| `TxTransition` / `TxTransitionFade` / `TxTransitionSlideFade` | Enter/leave transitions |
+| `TxTransitionRebound` | Spring-physics rebound transition |
+| `TxTransitionSmoothSize` | Smooth size change transition |
+| `TxTextTransformer` | Animated text transitions (typing, morphing) |
+| `TxFusion` | Multi-element orchestrated animation |
+| `TxStagger` | Staggered children animation |
+| `TxSortableList` | Drag-and-drop sortable list |
+
+### AI
+
+Components for building AI-powered interfaces.
+
+| Component | Description |
+|-----------|-------------|
+| `TxChatList` / `TxChatMessage` | Chat message list with markdown and attachments |
+| `TxChatComposer` | Chat input with file attachment support |
+| `TxTypingIndicator` | AI typing indicator animation |
+| `TxImageUploader` | Image upload with preview and crop |
+| `TxFileUploader` | File upload with drag-and-drop |
+| `TxImageGallery` | Image gallery with lightbox |
+
+### Visual
+
+Decorative and visual effect components.
+
+| Component | Description |
+|-----------|-------------|
+| `TxGlassSurface` | Frosted glass panel with blur and noise |
+| `TxGradualBlur` | Gradual blur effect |
+| `TxGradientBorder` | Animated gradient border |
+| `TxGlowText` | Glowing text effect |
+
+---
+
+## Tech Stack
+
+| Technology | Version | Purpose |
+|------------|---------|---------|
+| Vue | 3.5+ | Composition API with `<script setup>` |
+| TypeScript | 5.8+ | Full type safety and IntelliSense |
+| Vite | 6.0+ | Development and build tooling |
+| VitePress | 1.5+ | Documentation |
+| Sass | 1.89+ | Advanced styling |
+| VueUse | 13.0+ | Composition utilities |
+
+## Documentation
+
+- **[Online Documentation](https://tuffex.tagzxia.com/docs/dev/tuffex)** - Component guides, API reference, and design system
+- **Local Development** - Run `pnpm docs:dev` for the VitePress documentation site at `localhost:8000`
+
+## Development
+
+```bash
+pnpm install            # Install dependencies
+pnpm docs:dev           # Start documentation server
+pnpm build              # Build the library
+pnpm docs:build         # Build documentation for production
+```
+
+## Integration with Tuff
+
+TuffEx is the UI foundation of the [Tuff](https://tuff.tagzxia.com) desktop application. Components are shared between the core app and external plugin developers through this standalone library.
+
+## Contributing
+
+- [Report Issues](https://github.com/talex-touch/tuff/issues)
+- [Feature Requests](https://github.com/talex-touch/tuff/discussions)
+- [Submit PRs](https://github.com/talex-touch/tuff/pulls)
+
+## License
+
+[MIT License](LICENSE) &copy; 2025 TalexDreamSoul

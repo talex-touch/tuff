@@ -9,7 +9,7 @@
     "type": "file",
     "value": "assets/logo.svg"
   },
-  "description": "系统操作中心：电源、锁屏、音量、亮度、主窗口",
+  "description": "系统高级控制：关机 / 重启 / 锁屏 / 音量 / 亮度 / 主窗口",
   "main": "index.js",
   "permissions": {
     "required": ["system.shell"],

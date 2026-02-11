@@ -1373,7 +1373,11 @@ export class SearchEngineCore
     if (item.kind === 'app') {
       const appMeta = meta?.app as { bundle_id?: string } | undefined
       const bundleId = typeof appMeta?.bundle_id === 'string' ? appMeta.bundle_id : ''
-      const level2 = this.resolveAppUsageCategory(bundleId, item.title, item.source.id)
+      const level2 = this.resolveAppUsageCategory(
+        bundleId,
+        item.render?.basic?.title,
+        item.source.id
+      )
       return { level1: 'app', level2 }
     }
 

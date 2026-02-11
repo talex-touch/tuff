@@ -1,6 +1,6 @@
-# DataTable 数据表格
+# DataTable
 
-轻量数据表格组件，提供排序、行选择与自定义渲染能力。
+A lightweight data table with built-in sorting, row selection, and custom cell rendering. DataTable is designed for small-to-medium datasets that don't require virtualization.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -20,15 +20,19 @@ const data = [
 const selectedKeys = ref<number[]>([])
 </script>
 
-## 基础用法
+## Basic Usage
 
-<div class="group">
-  <TxDataTable :columns="columns" :data="data" striped bordered />
-</div>
+Define `columns` for the header and pass `data` as the row source. Enable `striped` and `bordered` for visual clarity.
 
-:::: details Show Code
+<DemoBlock title="DataTable">
+<template #preview>
+<TxDataTable :columns="columns" :data="data" striped bordered />
+</template>
+
+<template #code>
+
 ```vue
-<script setup lang="ts">
+<script setup>
 const columns = [
   { key: 'name', title: 'Name' },
   { key: 'role', title: 'Role' },
@@ -46,11 +50,17 @@ const data = [
   <TxDataTable :columns="columns" :data="data" striped bordered />
 </template>
 ```
-::::
 
-## 行选择
+</template>
+</DemoBlock>
 
-<div class="group">
+## Row Selection
+
+Enable `selectable` and bind `v-model:selected-keys` to track which rows are checked. Each row needs a unique `row-key`.
+
+<DemoBlock title="Selectable">
+<template #preview>
+<div>
   <TxDataTable
     v-model:selected-keys="selectedKeys"
     :columns="columns"
@@ -58,13 +68,15 @@ const data = [
     row-key="id"
     selectable
   />
+  <p style="margin-top: 8px; font-size: 13px; color: var(--vp-c-text-2);">Selected: {{ selectedKeys }}</p>
 </div>
+</template>
 
-:::: details Show Code
+<template #code>
+
 ```vue
-<script setup lang="ts">
+<script setup>
 import { ref } from 'vue'
-
 const selectedKeys = ref([])
 </script>
 
@@ -78,55 +90,61 @@ const selectedKeys = ref([])
   />
 </template>
 ```
-::::
+
+</template>
+</DemoBlock>
+
+## Design Notes
+
+- Click a sortable column header to cycle through ascending, descending, and unsorted states.
+- Use the `#cell-<columnKey>` slot to render custom content (buttons, badges, avatars) in any column.
+- For large datasets (1000+ rows), consider using [VirtualList](/components/virtual-list) with a custom row template instead.
+- Set `sortOnClient` to `false` when sorting is handled server-side — the table will emit `sortChange` without reordering data.
 
 ## API
 
-### TxDataTable Props
+### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
-|------|------|------|------|
-| `columns` | `DataTableColumn[]` | `[]` | 列配置 |
-| `data` | `any[]` | `[]` | 数据源 |
-| `rowKey` | `string \| (row, index) => string \| number` | `index` | 行唯一标识 |
-| `loading` | `boolean` | `false` | 加载状态 |
-| `emptyText` | `string` | `'No data'` | 空数据提示 |
-| `striped` | `boolean` | `false` | 斑马纹 |
-| `bordered` | `boolean` | `false` | 表格边框 |
-| `hover` | `boolean` | `true` | 悬浮高亮 |
-| `selectable` | `boolean` | `false` | 是否可选择 |
-| `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
-| `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 默认排序 |
-| `sortOnClient` | `boolean` | `true` | 是否前端排序 |
+<ApiSpecTable :rows="[
+  { name: 'columns', description: 'Column definitions.', type: 'DataTableColumn[]', default: '[]' },
+  { name: 'data', description: 'Row data source.', type: 'any[]', default: '[]' },
+  { name: 'rowKey', description: 'Unique key field or function for each row.', type: 'string | ((row, index) => string | number)', default: '\"index\"' },
+  { name: 'loading', description: 'Show loading overlay.', type: 'boolean', default: 'false' },
+  { name: 'emptyText', description: 'Text shown when data is empty.', type: 'string', default: '\"No data\"' },
+  { name: 'striped', description: 'Alternate row background.', type: 'boolean', default: 'false' },
+  { name: 'bordered', description: 'Show table borders.', type: 'boolean', default: 'false' },
+  { name: 'hover', description: 'Highlight row on hover.', type: 'boolean', default: 'true' },
+  { name: 'selectable', description: 'Enable row checkboxes.', type: 'boolean', default: 'false' },
+  { name: 'selectedKeys', description: 'Array of selected row keys.', type: 'Array<string | number>', default: '[]' },
+  { name: 'defaultSort', description: 'Initial sort state.', type: '{ key: string, order: \"asc\" | \"desc\" | null }', default: 'null' },
+  { name: 'sortOnClient', description: 'Whether to sort data client-side.', type: 'boolean', default: 'true' },
+]" />
 
 ### DataTableColumn
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `key` | `string` | 列 key |
-| `title` | `string` | 表头文本 |
-| `dataIndex` | `string` | 数据字段名 |
-| `width` | `string \| number` | 列宽 |
-| `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
-| `sortable` | `boolean` | 是否可排序 |
-| `sorter` | `(a, b) => number` | 自定义排序器 |
-| `format` | `(value, row, index) => string` | 默认文本格式化 |
-| `headerClass` | `string` | 表头 class |
-| `cellClass` | `string` | 单元格 class |
+<ApiSpecTable title="DataTableColumn" :rows="[
+  { name: 'key', description: 'Column identifier.', type: 'string' },
+  { name: 'title', description: 'Header text.', type: 'string' },
+  { name: 'dataIndex', description: 'Data field name (defaults to key).', type: 'string' },
+  { name: 'width', description: 'Column width.', type: 'string | number' },
+  { name: 'align', description: 'Text alignment.', type: '\"left\" | \"center\" | \"right\"' },
+  { name: 'sortable', description: 'Enable sorting for this column.', type: 'boolean' },
+  { name: 'sorter', description: 'Custom sort comparator.', type: '(a, b) => number' },
+  { name: 'format', description: 'Format cell value as text.', type: '(value, row, index) => string' },
+]" />
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
-|------|------|------|
-| `update:selectedKeys` | `(keys)` | 选中变化 |
-| `selectionChange` | `(keys)` | 选中变化 |
-| `sortChange` | `(sort)` | 排序变化 |
-| `rowClick` | `({ row, index })` | 行点击 |
+<ApiSpecTable title="Events" :rows="[
+  { name: 'selectionChange', description: 'Fires when selected rows change.', type: '(keys: Array<string | number>) => void' },
+  { name: 'sortChange', description: 'Fires when sort state changes.', type: '(sort: { key: string, order: string }) => void' },
+  { name: 'rowClick', description: 'Fires when a row is clicked.', type: '(payload: { row: any, index: number }) => void' },
+]" />
 
 ### Slots
 
-| 名称 | 说明 |
-|------|------|
-| `header-<columnKey>` | 自定义表头 |
-| `cell-<columnKey>` | 自定义单元格 |
-| `empty` | 空状态 |
+<ApiSpecTable title="Slots" :rows="[
+  { name: 'header-{columnKey}', description: 'Custom header content for a specific column.' },
+  { name: 'cell-{columnKey}', description: 'Custom cell content for a specific column.', type: '{ row: any, value: any, index: number }' },
+  { name: 'empty', description: 'Custom empty state content.' },
+]" />

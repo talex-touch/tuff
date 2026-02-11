@@ -1,11 +1,10 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { VNode } from 'vue'
-import { TxSplitButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxSplitButton } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElMessageBox } from 'element-plus'
 import { computed, ref, useSlots, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -138,22 +137,19 @@ async function handleOpenDevTools(): Promise<void> {
   }
 }
 
-async function handleUninstallPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.uninstall) return
+// Uninstall confirmation
+const uninstallConfirmVisible = ref(false)
 
-  try {
-    await ElMessageBox.confirm(
-      t('plugin.uninstall.confirmMessage', { name: props.plugin.name }),
-      t('plugin.uninstall.confirmTitle'),
-      {
-        type: 'warning',
-        confirmButtonText: t('plugin.uninstall.confirmButton'),
-        cancelButtonText: t('plugin.uninstall.cancelButton')
-      }
-    )
-  } catch {
-    return
-  }
+function requestUninstall(): void {
+  uninstallConfirmVisible.value = true
+}
+
+function closeUninstallConfirm(): void {
+  uninstallConfirmVisible.value = false
+}
+
+async function confirmUninstall(): Promise<boolean> {
+  if (!props.plugin) return true
 
   loadingStates.value.uninstall = true
   try {
@@ -169,6 +165,12 @@ async function handleUninstallPlugin(): Promise<void> {
   } finally {
     loadingStates.value.uninstall = false
   }
+  return true
+}
+
+async function handleUninstallPlugin(): Promise<void> {
+  if (!props.plugin || loadingStates.value.uninstall) return
+  requestUninstall()
 }
 
 type PrimaryAction = 'run' | 'stop' | 'reload' | 'reconnect' | 'none'
@@ -433,6 +435,17 @@ async function handlePrimaryAction(): Promise<void> {
         </TvTabs>
       </div>
     </div>
+
+    <TxBottomDialog
+      v-if="uninstallConfirmVisible"
+      :title="t('plugin.uninstall.confirmTitle')"
+      :message="t('plugin.uninstall.confirmMessage', { name: plugin.name })"
+      :btns="[
+        { content: t('plugin.uninstall.cancelButton'), type: 'info', onClick: () => true },
+        { content: t('plugin.uninstall.confirmButton'), type: 'error', onClick: confirmUninstall }
+      ]"
+      :close="closeUninstallConfirm"
+    />
   </div>
 </template>
 

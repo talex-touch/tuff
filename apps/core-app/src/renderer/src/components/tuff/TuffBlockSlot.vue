@@ -1,9 +1,7 @@
 <script lang="ts" name="TuffBlockSlot" setup>
-import type { ITuffIcon } from '@talex-touch/utils'
 import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-
-type IconValue = ITuffIcon | string | null | undefined
+import { type IconValue, toIcon } from './tuff-icon-utils'
 
 const props = withDefaults(
   defineProps<{
@@ -27,17 +25,6 @@ const props = withDefaults(
 const emits = defineEmits<{
   (e: 'click', event: MouseEvent): void
 }>()
-
-function toIcon(icon?: IconValue): ITuffIcon | null {
-  if (!icon) return null
-  if (typeof icon === 'string') {
-    return {
-      type: 'class',
-      value: icon
-    }
-  }
-  return icon
-}
 
 const defaultIcon = computed(() => toIcon(props.defaultIcon))
 const activeIcon = computed(() => toIcon(props.activeIcon))
@@ -169,7 +156,6 @@ function handleClick(event: MouseEvent) {
   }
 
   position: relative;
-  margin-bottom: 10px;
   padding: 4px 16px;
   display: flex;
 
@@ -185,9 +171,16 @@ function handleClick(event: MouseEvent) {
   --fake-color: var(--el-fill-color-dark);
   --fake-radius: 12px;
   --fake-opacity: 0.5;
+  transition:
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s ease;
 
   &:hover {
     --fake-color: var(--el-fill-color);
+  }
+
+  &:active:not(.disabled) {
+    transform: scale(0.985);
   }
 }
 

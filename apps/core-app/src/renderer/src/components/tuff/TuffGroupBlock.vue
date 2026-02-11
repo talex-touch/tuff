@@ -1,11 +1,9 @@
 <script lang="ts" name="TuffGroupBlock" setup>
-import type { ITuffIcon } from '@talex-touch/utils'
 import { hasWindow } from '@talex-touch/utils/env'
 import gsap from 'gsap'
 import { computed, onMounted, ref, watch } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-
-type IconValue = ITuffIcon | string | null | undefined
+import { type IconValue, toIcon } from './tuff-icon-utils'
 const props = withDefaults(
   defineProps<{
     name: string
@@ -36,14 +34,6 @@ const STORAGE_PREFIX = 'tuff-block-storage-'
 function resolveDefaultExpand(): boolean {
   if (typeof props.defaultExpand === 'boolean') return props.defaultExpand
   return !props.collapsed
-}
-
-function toIcon(icon?: IconValue): ITuffIcon | null {
-  if (!icon) return null
-  if (typeof icon === 'string') {
-    return { type: 'class', value: icon }
-  }
-  return icon
 }
 
 const defaultIcon = computed(() => toIcon(props.defaultIcon))
@@ -108,6 +98,7 @@ function animateContent(state: boolean) {
 
   if (state) {
     el.style.display = 'block'
+    el.style.overflow = 'hidden'
     const target = el.scrollHeight || 0
     gsap.fromTo(
       el,
@@ -119,11 +110,13 @@ function animateContent(state: boolean) {
         ease: 'power3.out',
         onComplete: () => {
           el.style.height = 'auto'
+          el.style.overflow = ''
         }
       }
     )
   } else {
     const current = el.scrollHeight || el.offsetHeight || 0
+    el.style.overflow = 'hidden'
     gsap.fromTo(
       el,
       { height: current, opacity: 1 },
@@ -134,6 +127,7 @@ function animateContent(state: boolean) {
         ease: 'power2.inOut',
         onComplete: () => {
           el.style.display = 'none'
+          el.style.overflow = ''
         }
       }
     )
@@ -200,8 +194,8 @@ onMounted(() => {
       <slot name="header-extra" :active="expanded" />
       <div
         v-if="collapsible"
-        class="TGroupBlock-Mode"
-        :class="expanded ? 'i-carbon-subtract' : 'i-carbon-add'"
+        class="TGroupBlock-Mode i-carbon-chevron-down"
+        :class="{ 'is-expanded': expanded }"
       />
     </div>
     <div ref="contentRef" class="TGroupBlock-Main">
@@ -242,7 +236,12 @@ onMounted(() => {
   }
   .TGroupBlock-Mode {
     position: relative;
-    font-size: 20px;
+    font-size: 18px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &.is-expanded {
+      transform: rotate(180deg);
+    }
   }
   padding: 4px 22px 4px 12px;
   display: flex;
@@ -256,27 +255,37 @@ onMounted(() => {
   border-bottom: 1px solid var(--el-border-color-lighter);
   --fake-color: var(--el-fill-color-dark);
   --fake-inner-opacity: 0.5;
-  transition: background-color 0.25s;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease;
 
   &.is-static {
     cursor: default;
+
+    &:hover {
+      --fake-color: var(--el-fill-color-dark);
+    }
   }
 
-  &:hover {
+  &:not(.is-static):hover {
     --fake-color: var(--el-fill-color);
-    transition: all 1s;
+  }
+
+  &:not(.is-static):active {
+    --fake-color: var(--el-fill-color-dark);
   }
 }
 
 .touch-blur .TGroupBlock-Header {
   --fake-color: var(--el-fill-color);
-  &:hover {
+  &:not(.is-static):hover {
     --fake-color: var(--el-fill-color-light);
   }
 }
 
 .TGroupBlock-Main {
   padding: 0;
+  overflow: hidden;
 
   .TBlockSelection {
     margin: 0;
@@ -297,6 +306,12 @@ onMounted(() => {
         --fake-color: var(--el-fill-color-light) !important;
       }
     }
+
+    &:last-child {
+      border-bottom-left-radius: 11px !important;
+      border-bottom-right-radius: 11px !important;
+      --fake-radius: 0 0 11px 11px !important;
+    }
   }
 }
 
@@ -307,7 +322,7 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   --fake-radius: 0 !important;
-
   border: 1px solid var(--el-border-color-lighter);
+  transition: border-color 0.25s ease;
 }
 </style>

@@ -36,25 +36,23 @@ function toggle() {
 .TSwitch-Container {
   &.disabled {
     opacity: 0.5;
-
     pointer-events: none;
   }
 
   &:before {
     content: '';
     position: absolute;
-
-    //width: 25%;
     height: 70%;
-
     aspect-ratio: 1 / 1;
-
     top: 15%;
     left: 10%;
-
     border-radius: 5px;
     background-color: var(--el-text-color-secondary);
-    transition: all 0.25s ease-in-out;
+    transition:
+      left 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 0.25s ease,
+      filter 0.25s ease,
+      transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &.select {
@@ -69,22 +67,22 @@ function toggle() {
   }
 
   &:hover {
-    box-shadow: 0 0 16px 1px var(--el-color-primary-light-3);
+    box-shadow: 0 0 12px 1px color-mix(in srgb, var(--el-color-primary) 20%, transparent);
   }
 
   &:active:before {
-    transform: scale(0.75);
+    transform: scaleX(1.2) scaleY(0.85);
   }
 
   position: relative;
-
   width: 44px;
   height: 24px;
-
   cursor: pointer;
   border-radius: 8px;
   background-color: var(--el-fill-color);
-  //border: 1px solid var(--el-text-color-secondary);
-  transition: all 0.125s ease-in-out;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 </style>

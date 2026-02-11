@@ -30,9 +30,7 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
         <div class="group-header">
           <span class="i-carbon-checkmark-filled text-green-500" />
           <span>{{ t('intelligence.agents.enabled') }}</span>
-          <el-tag size="small" type="success">
-            {{ enabledAgents.length }}
-          </el-tag>
+          <span class="agent-count-badge success">{{ enabledAgents.length }}</span>
         </div>
         <div class="group-items">
           <AgentItem
@@ -50,9 +48,7 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
         <div class="group-header">
           <span class="i-carbon-close-filled text-gray-400" />
           <span>{{ t('intelligence.agents.disabled') }}</span>
-          <el-tag size="small" type="info">
-            {{ disabledAgents.length }}
-          </el-tag>
+          <span class="agent-count-badge info">{{ disabledAgents.length }}</span>
         </div>
         <div class="group-items">
           <AgentItem
@@ -105,6 +101,29 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.agent-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+
+  &.success {
+    background: var(--el-color-success-light-9);
+    color: var(--el-color-success);
+  }
+
+  &.info {
+    background: var(--el-fill-color);
+    color: var(--el-text-color-secondary);
+  }
 }
 
 .empty-list {

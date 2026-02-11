@@ -1,9 +1,9 @@
 <script name="Storagable" setup lang="ts">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, onMounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
 
@@ -166,37 +166,54 @@ function formatCleanupResult(result: unknown): string {
   return parts.length > 0 ? `（${parts.join('，')}）` : ''
 }
 
+// Cleanup confirmation dialog
+const cleanupConfirmVisible = ref(false)
+const cleanupConfirmTitle = ref('')
+const cleanupConfirmMessage = ref('')
+const cleanupConfirmType = ref<'warning' | 'error'>('warning')
+const pendingCleanupAction = ref<(() => Promise<void>) | null>(null)
+
+function closeCleanupConfirm() {
+  cleanupConfirmVisible.value = false
+  pendingCleanupAction.value = null
+}
+
+async function executeCleanupConfirm(): Promise<boolean> {
+  if (pendingCleanupAction.value) await pendingCleanupAction.value()
+  pendingCleanupAction.value = null
+  return true
+}
+
 async function runCleanup(action: CleanupAction): Promise<void> {
   if (cleaningKey.value) return
-  try {
-    await ElMessageBox.confirm(action.confirm.message, action.confirm.title, {
-      confirmButtonText: '继续',
-      cancelButtonText: '取消',
-      type: action.confirm.type ?? 'warning'
-    })
+  cleanupConfirmTitle.value = action.confirm.title
+  cleanupConfirmMessage.value = action.confirm.message
+  cleanupConfirmType.value = action.confirm.type ?? 'warning'
+  pendingCleanupAction.value = async () => {
     cleaningKey.value = action.key
-    const result = await sendRaw<CleanupAction['payload'], StorageCleanupResult>(
-      action.channel,
-      action.payload ?? {}
-    )
-    if (!result || typeof result !== 'object' || !('success' in result)) {
-      ElMessage.error('清理失败：返回数据异常')
-      return
+    try {
+      const result = await sendRaw<CleanupAction['payload'], StorageCleanupResult>(
+        action.channel,
+        action.payload ?? {}
+      )
+      if (!result || typeof result !== 'object' || !('success' in result)) {
+        toast.error('清理失败：返回数据异常')
+        return
+      }
+      if (!(result as { success: boolean }).success) {
+        toast.error('清理失败，请重试')
+        return
+      }
+      const detail = formatCleanupResult(result)
+      toast.success(`${action.label}完成${detail}`)
+      await loadAll()
+    } catch {
+      toast.error('清理失败，请稍后重试')
+    } finally {
+      cleaningKey.value = null
     }
-    if (!(result as { success: boolean }).success) {
-      ElMessage.error('清理失败，请重试')
-      return
-    }
-    const detail = formatCleanupResult(result)
-    ElMessage.success(`${action.label}完成${detail}`)
-    await loadAll()
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('清理失败，请稍后重试')
-    }
-  } finally {
-    cleaningKey.value = null
   }
+  cleanupConfirmVisible.value = true
 }
 
 const modulesSorted = computed(() => {
@@ -885,6 +902,21 @@ onMounted(() => {
       </template>
     </div>
   </ViewTemplate>
+
+  <TxBottomDialog
+    v-if="cleanupConfirmVisible"
+    :title="cleanupConfirmTitle"
+    :message="cleanupConfirmMessage"
+    :btns="[
+      { content: '取消', type: 'info', onClick: () => true },
+      {
+        content: '继续',
+        type: cleanupConfirmType === 'error' ? 'error' : 'warning',
+        onClick: executeCleanupConfirm
+      }
+    ]"
+    :close="closeCleanupConfirm"
+  />
 </template>
 
 <style lang="scss" scoped>

@@ -3,6 +3,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import IntelligenceAuditOverlay from '~/components/intelligence/audit/IntelligenceAuditOverlay.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useIntelligenceManager } from '~/modules/hooks/useIntelligenceManager'
@@ -17,19 +18,22 @@ const boundCapabilities = computed(
     Object.values(capabilities.value || {}).filter((c) => c.providers && c.providers.length > 0)
       .length
 )
-const totalCalls = ref(0) // TODO: 实际从数据存储获取
-const avgFrequency = ref(0) // TODO: 每小时平均调用次数
+
+const auditVisible = ref(false)
+const auditSource = ref<HTMLElement | null>(null)
 
 function handleCapabilitiesClick() {
   router.push('/intelligence/capabilities')
 }
 
-function handleAudit() {
-  console.log('Open capability audit')
+function handleAudit(event: MouseEvent) {
+  auditSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  auditVisible.value = true
 }
 
-function handleViewMetrics() {
-  console.log('View capability metrics')
+function handleViewMetrics(event: MouseEvent) {
+  auditSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  auditVisible.value = true
 }
 </script>
 
@@ -71,12 +75,12 @@ function handleViewMetrics() {
 
     <!-- 消耗统计 -->
     <TuffBlockSlot
-      :title="t('settings.intelligence.landing.capabilities.statsTitle', { count: totalCalls })"
+      :title="t('settings.intelligence.landing.capabilities.statsTitle', { count: '—' })"
       :description="
         t('settings.intelligence.landing.capabilities.statsDesc', {
           total: capabilityCount,
           bound: boundCapabilities,
-          freq: avgFrequency
+          freq: '—'
         })
       "
       default-icon="i-carbon-chart-line"
@@ -89,6 +93,8 @@ function handleViewMetrics() {
       </TxButton>
     </TuffBlockSlot>
   </TuffGroupBlock>
+
+  <IntelligenceAuditOverlay v-model="auditVisible" :source="auditSource" />
 </template>
 
 <style lang="scss" scoped></style>

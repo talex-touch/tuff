@@ -1,6 +1,11 @@
 import type { DownloadAsset, GitHubRelease, UpdateSourceConfig } from '@talex-touch/utils'
 import type { AxiosRequestConfig } from 'axios'
-import { AppPreviewChannel, UpdateErrorType, UpdateProviderType } from '@talex-touch/utils'
+import {
+  AppPreviewChannel,
+  UpdateErrorType,
+  UpdateProviderType,
+  hasNavigator
+} from '@talex-touch/utils'
 import axios from 'axios'
 import { appSetting } from '~/modules/channel/storage'
 import { UpdateProvider } from './UpdateProvider'
@@ -61,8 +66,7 @@ interface NexusRelease {
 }
 
 function resolveReleaseLocale(): 'zh' | 'en' {
-  const locale =
-    appSetting?.lang?.locale || (typeof navigator !== 'undefined' ? navigator.language : 'en')
+  const locale = appSetting?.lang?.locale || (hasNavigator() ? navigator.language : 'en')
   return locale.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 

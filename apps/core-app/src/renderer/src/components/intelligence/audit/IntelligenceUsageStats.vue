@@ -3,6 +3,7 @@ import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
 import { useIntelligenceStats } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{
   callerId?: string
@@ -22,8 +23,8 @@ async function loadStats() {
     ])
     todayStats.value = today
     monthStats.value = month
-  } catch (error) {
-    console.error('Failed to load stats:', error)
+  } catch {
+    toast.error(t('intelligence.audit.loadStatsFailed'))
   }
 }
 

@@ -19,6 +19,15 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
+function truncateText(value, max = 96) {
+  const text = normalizeText(value)
+  if (!text)
+    return ''
+  if (text.length <= max)
+    return text
+  return `${text.slice(0, max - 1)}…`
+}
+
 function getQueryText(query) {
   if (typeof query === 'string')
     return query
@@ -299,51 +308,66 @@ const pluginLifecycle = {
     }
     catch (error) {
       logger?.error?.('[touch-workspace-scripts] Failed to handle feature', error)
+      plugin.feature.clearItems()
+      plugin.feature.pushItems([
+        buildInfoItem({
+          id: `${featureId}-error`,
+          featureId,
+          title: '加载失败',
+          subtitle: truncateText(error?.message || '未知错误', 120),
+        }),
+      ])
+      return true
     }
   },
 
   async onItemAction(item) {
-    if (item?.meta?.defaultAction !== ACTION_ID)
-      return
+    try {
+      if (item?.meta?.defaultAction !== ACTION_ID)
+        return
 
-    const actionId = item.meta?.actionId
-    if (actionId === 'config-init') {
-      await ensureConfigFile()
-      return { externalAction: true }
-    }
-
-    if (actionId === 'config-open') {
-      await plugin.storage.openFolder()
-      return { externalAction: true }
-    }
-
-    if (actionId === 'workspace-select') {
-      const config = parseScriptsConfig(await plugin.storage.getFile(CONFIG_FILE))
-      const selected = await selectWorkspace()
-      if (selected) {
-        config.workspacePath = selected
-        await saveConfig(config)
+      const actionId = item.meta?.actionId
+      if (actionId === 'config-init') {
+        await ensureConfigFile()
+        return { externalAction: true }
       }
-      return { externalAction: true }
+
+      if (actionId === 'config-open') {
+        await plugin.storage.openFolder()
+        return { externalAction: true }
+      }
+
+      if (actionId === 'workspace-select') {
+        const config = parseScriptsConfig(await plugin.storage.getFile(CONFIG_FILE))
+        const selected = await selectWorkspace()
+        if (selected) {
+          config.workspacePath = selected
+          await saveConfig(config)
+        }
+        return { externalAction: true }
+      }
+
+      if (actionId === 'run-command') {
+        const payload = item.meta?.payload || {}
+        const command = typeof payload.command === 'string' ? payload.command : ''
+        const cwd = typeof payload.cwd === 'string' ? payload.cwd : process.cwd()
+        if (!command)
+          return
+
+        const canRun = await ensurePermission('system.shell', '需要系统命令权限以执行开发命令')
+        if (!canRun)
+          return
+
+        const confirmed = await confirmRun(command)
+        if (!confirmed)
+          return
+
+        runCommand(command, cwd)
+        return { externalAction: true }
+      }
     }
-
-    if (actionId === 'run-command') {
-      const payload = item.meta?.payload || {}
-      const command = typeof payload.command === 'string' ? payload.command : ''
-      const cwd = typeof payload.cwd === 'string' ? payload.cwd : process.cwd()
-      if (!command)
-        return
-
-      const canRun = await ensurePermission('system.shell', '需要系统命令权限以执行开发命令')
-      if (!canRun)
-        return
-
-      const confirmed = await confirmRun(command)
-      if (!confirmed)
-        return
-
-      runCommand(command, cwd)
-      return { externalAction: true }
+    catch (error) {
+      logger?.error?.('[touch-workspace-scripts] Action failed', error)
     }
   },
 }

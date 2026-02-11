@@ -59,13 +59,17 @@ function handleClose(): void {
   &-Mask {
     --fake-inner-opacity: 0.75;
     opacity: var(--tuff-drawer-opacity);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   &-Main {
     transform: translateX(var(--tuff-drawer-xoffset));
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  --tuff-drawer-xoffset: 120%;
+  --tuff-drawer-xoffset: 100%;
   --tuff-drawer-opacity: 0;
   pointer-events: none;
 }

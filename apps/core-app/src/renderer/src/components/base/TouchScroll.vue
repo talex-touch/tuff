@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TxScroll as TuffTouchScroll } from '@talex-touch/tuffex'
+import { hasNavigator } from '@talex-touch/utils/env'
 
 defineOptions({
   name: 'TouchScroll'
@@ -44,7 +45,7 @@ const useNative = computed(() => {
 })
 
 const isMacLike =
-  typeof navigator !== 'undefined' &&
+  hasNavigator() &&
   (String(navigator.platform).includes('Mac') || String(navigator.userAgent).includes('Mac OS X'))
 
 const resolvedBScrollOptions = computed(() => {

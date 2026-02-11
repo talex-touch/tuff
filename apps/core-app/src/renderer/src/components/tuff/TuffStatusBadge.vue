@@ -77,7 +77,17 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   color: var(--tuff-status-color, var(--el-text-color-primary));
   background: var(--tuff-status-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tuff-status-border, color-mix(in srgb, currentColor 32%, transparent));
-  transition: background-color 0.25s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.15s ease;
+  animation: badge-appear 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  &:hover {
+    box-shadow: 0 0 0 3px var(--tuff-status-bg, color-mix(in srgb, currentColor 8%, transparent));
+  }
 
   i {
     font-size: 14px;
@@ -89,6 +99,17 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
 
   &.tuff-status-size-md {
     padding: 4px 12px;
+  }
+}
+
+@keyframes badge-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 </style>

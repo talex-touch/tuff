@@ -12,8 +12,11 @@
   "description": "Snipaste 快捷控制：截图、贴图、取色",
   "main": "index.js",
   "permissions": {
-    "required": [],
+    "required": ["system.shell"],
     "optional": []
+  },
+  "permissionReasons": {
+    "system.shell": "通过 spawn 启动 Snipaste 程序执行截图、贴图等命令"
   },
   "features": [
     {

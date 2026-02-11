@@ -74,7 +74,14 @@ export function loadPluginFeatureContextFromContent(
   }
 
   vm.createContext(sandbox)
-  vm.runInContext(scriptContent, sandbox)
+  try {
+    vm.runInContext(scriptContent, sandbox)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    throw new Error(`Plugin script execution failed for ${plugin.name}: ${message}`, {
+      cause: err
+    })
+  }
 
   const exported = sandbox.module.exports
   const lifecycle =

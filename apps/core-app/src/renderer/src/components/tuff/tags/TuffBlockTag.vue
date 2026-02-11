@@ -68,6 +68,16 @@ const styleVars = computed(() => ({
   letter-spacing: 0.05em;
   line-height: 1;
   white-space: nowrap;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.15s ease;
+  animation: tag-fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+
+  &:hover {
+    box-shadow: 0 0 0 2px var(--tuff-tag-bg, color-mix(in srgb, currentColor 8%, transparent));
+  }
 
   i {
     font-size: 12px;
@@ -81,6 +91,17 @@ const styleVars = computed(() => ({
   &.tuff-block-tag-size-md {
     padding: 3px 9px;
     font-size: 12px;
+  }
+}
+
+@keyframes tag-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 </style>

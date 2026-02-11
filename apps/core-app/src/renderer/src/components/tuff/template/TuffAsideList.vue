@@ -142,9 +142,10 @@ function handleSelect(item: T): void {
   gap: 0.75rem;
   text-align: left;
   transition:
-    border-color 0.15s ease,
-    background 0.15s ease,
-    transform 0.15s ease;
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.2s ease;
   cursor: pointer;
 
   &:hover {
@@ -152,9 +153,14 @@ function handleSelect(item: T): void {
     background: var(--el-fill-color);
   }
 
+  &:active:not(.is-disabled) {
+    transform: scale(0.98);
+  }
+
   &.is-active {
     border-color: rgba(99, 102, 241, 0.6);
     background: rgba(99, 102, 241, 0.08);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
   }
 
   &.is-disabled {

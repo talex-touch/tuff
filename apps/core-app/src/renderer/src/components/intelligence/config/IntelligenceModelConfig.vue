@@ -315,9 +315,6 @@ async function handleFetchModels() {
   modelsError.value = ''
 
   try {
-    console.log('[Model Config] Fetching available models...')
-
-    // 创建用于获取模型的临时配置
     const fetchConfig = {
       id: props.modelValue.id,
       type: props.modelValue.type,
@@ -332,19 +329,20 @@ async function handleFetchModels() {
     const result = await aiClient.fetchModels(fetchConfig)
 
     if (result.success && result.models) {
-      // 合并现有模型和新获取的模型并应用
       applyModelUpdates([...localModels.value, ...result.models])
 
-      toast.success(`已获取 ${result.models.length} 个模型`)
+      toast.success(
+        t('intelligence.config.api.modelsFetchedToast', { count: result.models.length })
+      )
     } else {
-      modelsError.value = result.message || '获取模型失败'
-      toast.error(`获取模型失败: ${result.message}`)
+      modelsError.value = result.message || t('intelligence.config.api.modelsFetchFailed')
+      toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message: result.message }))
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : '获取模型失败'
+    const message =
+      error instanceof Error ? error.message : t('intelligence.config.api.modelsFetchFailed')
     modelsError.value = message
-    toast.error(`获取模型失败: ${message}`)
-    console.error('[Model Config] Failed to fetch models:', error)
+    toast.error(t('intelligence.config.api.modelsFetchFailedToast', { message }))
   } finally {
     isFetching.value = false
   }

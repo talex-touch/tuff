@@ -1,21 +1,34 @@
 <script setup name="IntelligencePrompts" lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { toast } from 'vue-sonner'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { usePromptManager } from '~/modules/hooks/usePromptManager'
 
 const { t } = useI18n()
 const router = useRouter()
 const appSdk = useAppSdk()
+const promptManager = usePromptManager()
 
-// TODO: 从存储中获取实际数据
-const promptFiles = ref<string[]>([])
-const promptCount = computed(() => promptFiles.value.length)
-const totalWords = ref(0)
+const promptCount = computed(() => {
+  const builtin = promptManager.prompts.builtin?.length ?? 0
+  const custom = promptManager.prompts.custom?.length ?? 0
+  return builtin + custom
+})
+
+const totalWords = computed(() => {
+  const allPrompts = [
+    ...(promptManager.prompts.builtin ?? []),
+    ...(promptManager.prompts.custom ?? [])
+  ]
+  return allPrompts.reduce((sum, prompt) => {
+    return sum + prompt.content.trim().split(/\s+/).filter(Boolean).length
+  }, 0)
+})
 
 function handlePromptsClick() {
   router.push('/intelligence/prompts')
@@ -25,15 +38,13 @@ async function handleOpenFolder() {
   try {
     await appSdk.openPromptsFolder()
     toast.success(t('settings.intelligence.landing.prompts.folderOpenSuccess'))
-  } catch (error) {
-    console.error('Failed to open prompts folder:', error)
+  } catch {
     toast.error(t('settings.intelligence.landing.prompts.folderOpenFailed'))
   }
 }
 
 function handleCreatePrompt() {
-  console.log('Create new prompt file')
-  toast.info(t('settings.intelligence.landing.prompts.createPromptHint'))
+  router.push('/intelligence/prompts')
 }
 </script>
 
