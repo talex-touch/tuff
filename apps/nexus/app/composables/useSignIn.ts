@@ -5,6 +5,7 @@ import {
   buildOauthCallbackUrl,
   clearOauthContext,
   persistOauthContext,
+  requestOauthAuthorizationUrl,
   readOauthContext,
   resolveOauthContext,
   sanitizeRedirect,
@@ -59,9 +60,35 @@ function pickFirstQueryValue(input: unknown) {
   return typeof input === 'string' ? input : null
 }
 
-function waitForCallbackFeedback(ms: number) {
-  return new Promise<void>(resolve => setTimeout(resolve, ms))
-}
+  function waitForCallbackFeedback(ms: number) {
+    return new Promise<void>(resolve => setTimeout(resolve, ms))
+  }
+
+  async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, intervalMs = 250) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      try {
+        const profile = await $fetch<{ linkedAccounts?: Array<{ provider?: string }> }>('/api/user/me', {
+          query: { _oauthCheckAt: Date.now() },
+          cache: 'no-store',
+          headers: {
+            'cache-control': 'no-cache',
+            pragma: 'no-cache',
+          },
+        })
+        const linked = Boolean(profile?.linkedAccounts?.some(account => account.provider === provider))
+        if (linked)
+          return true
+      }
+      catch {
+        // Ignore transient read errors during OAuth callback convergence and retry.
+      }
+
+      if (attempt < maxAttempts - 1)
+        await waitForCallbackFeedback(intervalMs)
+    }
+
+    return false
+  }
 
 export function useSignIn() {
   const { t, locale, setLocale } = useI18n()
@@ -420,6 +447,12 @@ export function useSignIn() {
     if (normalized.includes('accessdenied') || normalized.includes('access_denied')) {
       return t('auth.oauthCancelled', '你已取消授权，可返回并选择其他方式。')
     }
+    if (normalized.includes('oauthaccountnotlinked')) {
+      return t('auth.oauthAccountNotLinked', 'This OAuth account is already linked to another user.')
+    }
+    if (normalized.includes('oauthsignin') || normalized.includes('oauthcallback')) {
+      return t('auth.oauthProviderError', 'OAuth provider callback failed. Please check provider configuration and try again.')
+    }
 
     if (description)
       return description
@@ -540,7 +573,19 @@ export function useSignIn() {
     return nested && nested.length > 0 ? nested : null
   }
 
-  const oauthParam = computed(() => pickQueryValue('oauth'))
+  const directOauthParam = computed(() => {
+    const query = route.query as Record<string, unknown>
+    return pickFirstQueryValue(query.oauth)
+  })
+  const directOauthRelayParam = computed(() => {
+    const query = route.query as Record<string, unknown>
+    return pickFirstQueryValue(query.oauth_relay)
+  })
+  const directOauthErrorParam = computed(() => {
+    const query = route.query as Record<string, unknown>
+    return pickFirstQueryValue(query.error)
+  })
+
   const flowParam = computed(() => pickQueryValue('flow'))
   const providerParam = computed(() => pickQueryValue('provider'))
   const redirectParam = computed(() => pickQueryValue('redirect_url'))
@@ -586,15 +631,17 @@ export function useSignIn() {
     return `/forgot-password?${params.toString()}`
   })
 
-  const isOauthErrorCallback = computed(() => Boolean(oauthErrorParam.value) && Boolean(storedOauthContext.value))
-  const isOauthCallback = computed(() => oauthParam.value === '1' || isOauthErrorCallback.value)
-  const oauthReturn = computed(() => isOauthCallback.value)
+  const oauthRelayRequested = computed(() => directOauthRelayParam.value === '1')
+  const isOauthErrorCallback = computed(() => Boolean(directOauthErrorParam.value) && Boolean(storedOauthContext.value))
+  const isOauthCallback = computed(() => (directOauthParam.value === '1' || isOauthErrorCallback.value) && !oauthRelayRequested.value)
+  const oauthReturn = computed(() => isOauthCallback.value || oauthRelayRequested.value)
+  const oauthCallbackReady = computed(() => isOauthCallback.value)
   const hasExplicitRedirect = computed(() => Boolean(redirectParam.value))
   const isSessionVerifying = computed(() => {
     if (status.value === 'authenticated')
       return false
 
-    const oauthVerifying = oauthReturn.value && oauthSessionChecking.value
+    const oauthVerifying = oauthCallbackReady.value && oauthSessionChecking.value
     const redirectVerifying = !oauthReturn.value && hasExplicitRedirect.value && redirectSessionChecking.value
     return oauthVerifying || redirectVerifying
   })
@@ -617,6 +664,8 @@ export function useSignIn() {
   })
 
   const stickyRedirectTarget = ref('/dashboard')
+  const oauthRelayLaunching = ref(false)
+  const oauthRelayAttempted = ref(false)
 
   watchEffect(() => {
     if (redirectParam.value)
@@ -825,7 +874,7 @@ export function useSignIn() {
   })
 
   async function clearOauthQuery() {
-    if (!route.query.oauth && !route.query.provider && !route.query.flow && !route.query.redirect_url && !route.query.error && !route.query.error_description && !route.query.callbackUrl && !route.query.callback_url)
+    if (!route.query.oauth && !route.query.provider && !route.query.flow && !route.query.redirect_url && !route.query.error && !route.query.error_description && !route.query.callbackUrl && !route.query.callback_url && !route.query.oauth_relay)
       return
 
     const nextQuery = { ...route.query } as Record<string, string | string[]>
@@ -837,6 +886,7 @@ export function useSignIn() {
     delete nextQuery.error_description
     delete nextQuery.callbackUrl
     delete nextQuery.callback_url
+    delete nextQuery.oauth_relay
 
     const scrollY = hasWindow() ? window.scrollY : 0
     await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
@@ -856,6 +906,30 @@ export function useSignIn() {
     oauthHandled.value = false
     if (clearQuery)
       await clearOauthQuery()
+  }
+
+  function resolveOauthStartErrorMessage(error: any, provider: OauthProvider) {
+    const message = typeof error?.message === 'string' ? error.message : ''
+    const [code, detail] = message.split(':')
+
+    if (code === 'oauth_csrf_unavailable')
+      return t('auth.oauthCsrfUnavailable', 'Unable to start OAuth flow. Please refresh and try again.')
+    if (code === 'oauth_redirect_missing')
+      return t('auth.oauthRedirectMissing', 'Authorization redirect is missing. Please try again later.')
+    if (code === 'oauth_redirect_fallback') {
+      if (detail && (detail.includes('AccessDenied') || detail.includes('access_denied')))
+        return t('auth.oauthCancelled', '你已取消授权，可返回并选择其他方式。')
+      if (detail && (detail.includes('Configuration') || detail.includes('OAuthSignin') || detail.includes('OAuthCallback')))
+        return t('auth.oauthProviderConfigError', 'OAuth provider configuration is invalid. Please contact admin to verify callback URL and app credentials.')
+      return t('auth.oauthProviderUnavailable', 'OAuth provider is unavailable right now. Please contact admin.')
+    }
+
+    return resolveErrorMessage(
+      error,
+      provider === 'github'
+        ? t('auth.githubFailed', 'GitHub sign-in failed')
+        : t('auth.linuxdoFailed', 'LinuxDO sign-in failed'),
+    )
   }
 
   async function startOauth(provider: OauthProvider, flow: AuthFlow) {
@@ -881,18 +955,21 @@ export function useSignIn() {
     refreshStoredOauthContext()
 
     try {
+      const authorizationUrl = await requestOauthAuthorizationUrl({
+        provider,
+        callbackUrl,
+      })
       recordLoginMethod(provider)
-      await signIn(provider, { callbackUrl })
+      if (hasWindow()) {
+        window.location.assign(authorizationUrl)
+        return
+      }
+      await navigateTo(authorizationUrl, { external: true })
     }
     catch (error: any) {
       await clearOauthRuntime(false)
       oauthPhase.value = 'error'
-      oauthError.value = resolveErrorMessage(
-        error,
-        provider === 'github'
-          ? t('auth.githubFailed', 'GitHub sign-in failed')
-          : t('auth.linuxdoFailed', 'LinuxDO sign-in failed'),
-      )
+      oauthError.value = resolveOauthStartErrorMessage(error, provider)
       notify('error', oauthError.value)
     }
   }
@@ -935,6 +1012,21 @@ export function useSignIn() {
 
     try {
       if (flow === 'bind') {
+        const linked = provider ? await waitForLinkedProvider(provider) : false
+        if (!linked) {
+          await clearOauthRuntime()
+          await ensureCallbackProcessingFeedback(callbackStartedAt)
+          oauthPhase.value = 'error'
+          oauthError.value = provider === 'github'
+            ? t('auth.githubBindNotDetected', 'GitHub authorization returned, but link was not detected. Please try again.')
+            : t('auth.linuxdoBindNotDetected', 'LinuxDO authorization returned, but link was not detected. Please try again.')
+          if (provider)
+            oauthProvider.value = provider
+          oauthFlow.value = flow
+          step.value = 'oauth'
+          return
+        }
+
         const bindTarget = withOauthBoundHint(target, provider)
         await clearOauthRuntime()
         await ensureCallbackProcessingFeedback(callbackStartedAt)
@@ -994,10 +1086,35 @@ export function useSignIn() {
   })
 
   watchEffect(() => {
+    if (!oauthRelayRequested.value) {
+      oauthRelayLaunching.value = false
+      oauthRelayAttempted.value = false
+      return
+    }
+    if (resolveOauthRouteErrorMessage())
+      return
+    if (oauthRelayAttempted.value)
+      return
+    if (oauthLoading.value || oauthRelayLaunching.value)
+      return
+
+    const provider = oauthContext.value.provider
+    if (!provider)
+      return
+
+    oauthRelayAttempted.value = true
+    oauthRelayLaunching.value = true
+    void startOauth(provider, oauthContext.value.flow)
+      .finally(() => {
+        oauthRelayLaunching.value = false
+      })
+  })
+
+  watchEffect(() => {
     if (import.meta.server)
       return
 
-    if (!oauthReturn.value) {
+    if (!oauthCallbackReady.value) {
       oauthSessionCheckDone.value = false
       oauthSessionChecking.value = false
       return
@@ -1019,7 +1136,7 @@ export function useSignIn() {
   })
 
   watchEffect(() => {
-    if (!oauthReturn.value)
+    if (!oauthCallbackReady.value)
       return
     if (resolveOauthRouteErrorMessage())
       return

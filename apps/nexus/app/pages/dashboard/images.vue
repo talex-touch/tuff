@@ -74,26 +74,38 @@ async function handleImageUpload(files: FileUploaderFile[]) {
   }
 }
 
-async function deleteImage(imageKey: string) {
+// Delete confirmation
+const deleteConfirmVisible = ref(false)
+const pendingDeleteKey = ref<string | null>(null)
+
+function requestDeleteImage(imageKey: string) {
   if (!isAdmin.value)
     return
+  pendingDeleteKey.value = imageKey
+  deleteConfirmVisible.value = true
+}
 
-  if (import.meta.client) {
-    const confirmed = window.confirm(t('dashboard.sections.images.confirmDelete', { key: imageKey }))
-    if (!confirmed)
-      return
-  }
-
+async function confirmDeleteImage(): Promise<boolean> {
+  if (!pendingDeleteKey.value)
+    return true
   try {
-    await $fetch(`/api/images/${imageKey}`, {
+    await $fetch(`/api/images/${pendingDeleteKey.value}`, {
       method: 'DELETE',
     })
-
     await refreshImages()
   }
   catch (error: unknown) {
     imageError.value = error instanceof Error ? error.message : t('dashboard.sections.images.errors.unknown', 'Delete failed')
   }
+  finally {
+    pendingDeleteKey.value = null
+  }
+  return true
+}
+
+function closeDeleteConfirm() {
+  deleteConfirmVisible.value = false
+  pendingDeleteKey.value = null
 }
 
 async function copyImageUrl(imageUrl: string, imageKey: string) {
@@ -122,41 +134,39 @@ watchEffect(() => {
 </script>
 
 <template>
-  <section class="rounded-3xl border border-primary/10 bg-white/80 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/70">
-    <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h2 class="text-lg font-semibold text-black dark:text-light">
-          {{ t('dashboard.sections.images.title', 'Resources') }}
-        </h2>
-        <p class="mt-1 text-sm text-black/70 dark:text-light/80">
-          {{ t('dashboard.sections.images.subtitle', 'Manage your shared assets') }}
-        </p>
-      </div>
+  <section class="mx-auto max-w-5xl apple-card-lg p-6">
+    <div>
+      <h2 class="apple-heading-sm">
+        {{ t('dashboard.sections.images.title', 'Resources') }}
+      </h2>
+      <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+        {{ t('dashboard.sections.images.subtitle', 'Manage your shared assets') }}
+      </p>
     </div>
 
     <div
       v-if="!isAdmin"
-      class="mt-6 rounded-2xl border border-primary/15 bg-white/80 p-6 text-sm text-black/70 dark:border-light/15 dark:bg-dark/40 dark:text-light/80"
+      class="mt-6 rounded-2xl border border-black/[0.06] bg-black/[0.02] p-6 text-sm text-black/70 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white/70"
     >
       {{ t('dashboard.sections.images.adminOnly', 'Only administrators can manage shared resources.') }}
     </div>
 
     <div v-else class="mt-6">
-      <div class="rounded-2xl border border-primary/20 border-dashed bg-white/70 p-4 text-sm text-black dark:border-light/20 dark:bg-dark/50 dark:text-light">
+      <div class="rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] p-4 text-sm text-black dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white">
         <div class="flex flex-col gap-4">
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 class="text-sm font-semibold text-black dark:text-light">
+              <h3 class="text-sm font-semibold text-black dark:text-white">
                 {{ t('dashboard.sections.images.uploadTitle', 'Upload Resource') }}
               </h3>
-              <p class="text-xs text-black/60 dark:text-light/70">
+              <p class="text-xs text-black/60 dark:text-white/70">
                 {{ t('dashboard.sections.images.uploadSubtitle', 'Upload assets to use in plugins and updates') }}
               </p>
             </div>
           </div>
 
           <div class="flex flex-col gap-3">
-            <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
+            <label class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-white/60">
               {{ t('dashboard.sections.images.selectFile', 'Select File') }}
               <TxFileUploader
                 v-model="imageFiles"
@@ -180,9 +190,9 @@ watchEffect(() => {
 
             <div
               v-if="imageUploading"
-              class="flex items-center gap-2 text-xs text-black/60 dark:text-light/70"
+              class="flex items-center gap-2 text-xs text-black/60 dark:text-white/70"
             >
-              <span class="i-carbon-circle-dash animate-spin text-base" />
+              <TxSpinner :size="16" />
               {{ t('dashboard.sections.images.uploading', 'Uploading...') }}
             </div>
           </div>
@@ -192,15 +202,23 @@ watchEffect(() => {
       <div class="mt-6 space-y-4">
         <div
           v-if="imagesPending"
-          class="flex items-center gap-3 rounded-2xl border border-primary/20 border-dashed bg-dark/5 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-light/5 dark:text-light/70"
+          class="space-y-3 rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] px-4 py-6 text-sm text-black/60 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white/50"
         >
-          <span class="i-carbon-circle-dash animate-spin text-base" />
-          <span>{{ t('dashboard.sections.images.loading', 'Loading resources...') }}</span>
+          <div class="flex items-center gap-3">
+            <TxSpinner :size="16" />
+            <span>{{ t('dashboard.sections.images.loading', 'Loading resources...') }}</span>
+          </div>
+          <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
+            <TxSkeleton :loading="true" :lines="2" />
+          </div>
+          <div class="rounded-xl bg-black/[0.02] p-3 dark:bg-white/[0.04]">
+            <TxSkeleton :loading="true" :lines="2" />
+          </div>
         </div>
 
         <div
           v-else-if="!images.length"
-          class="rounded-2xl border border-primary/15 border-dashed bg-white/70 px-4 py-6 text-sm text-black/60 dark:border-light/20 dark:bg-dark/60 dark:text-light/70"
+          class="rounded-2xl border border-black/[0.08] border-dashed bg-black/[0.02] px-4 py-6 text-sm text-black/60 dark:border-white/[0.1] dark:bg-white/[0.03] dark:text-white/50"
         >
           {{ t('dashboard.sections.images.empty', 'No resources uploaded yet') }}
         </div>
@@ -212,9 +230,9 @@ watchEffect(() => {
           <article
             v-for="image in images as DashboardImage[]"
             :key="image.key"
-            class="group relative overflow-hidden rounded-2xl border border-primary/10 bg-white/70 transition hover:border-primary/30 hover:shadow-lg dark:border-light/10 dark:bg-dark/60"
+            class="group relative overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.02] transition hover:border-black/[0.08] hover:shadow-lg dark:border-white/[0.06] dark:bg-white/[0.03]"
           >
-            <div class="aspect-video w-full overflow-hidden bg-dark/5 dark:bg-light/5 flex items-center justify-center">
+            <div class="aspect-video w-full overflow-hidden bg-black/[0.03] dark:bg-white/[0.04] flex items-center justify-center">
               <img
                 v-if="isImageResource(image.key)"
                 :src="image.url"
@@ -224,11 +242,11 @@ watchEffect(() => {
               >
               <span
                 v-else
-                class="i-carbon-document text-3xl text-black/30 transition group-hover:text-black/60 dark:text-light/30 dark:group-hover:text-light/60"
+                class="i-carbon-document text-3xl text-black/30 transition group-hover:text-black/60 dark:text-white/30 dark:group-hover:text-white/60"
               />
             </div>
             <div class="p-4">
-              <p class="truncate font-mono text-xs text-black/60 dark:text-light/60">
+              <p class="truncate font-mono text-xs text-black/60 dark:text-white/60">
                 {{ image.key }}
               </p>
               <div class="mt-3 flex items-center gap-2">
@@ -236,7 +254,7 @@ watchEffect(() => {
                   variant="bare"
                   block
                   native-type="button"
-                  class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-primary/20 bg-dark/5 px-3 py-1.5 text-xs font-medium text-black transition hover:bg-dark/10 dark:border-light/20 dark:bg-light/10 dark:text-light"
+                  class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-black/[0.08] bg-black/[0.03] px-3 py-1.5 text-xs font-medium text-black transition hover:bg-black/[0.06] dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-white"
                   @click="copyImageUrl(image.url, image.key)"
                 >
                   <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
@@ -248,7 +266,7 @@ watchEffect(() => {
                   size="mini"
                   native-type="button"
                   class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 transition hover:border-red-300 hover:text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200"
-                  @click="deleteImage(image.key)"
+                  @click="requestDeleteImage(image.key)"
                 >
                   <span class="i-carbon-trash-can text-sm" />
                 </TxButton>
@@ -259,4 +277,16 @@ watchEffect(() => {
       </div>
     </div>
   </section>
+
+  <!-- Delete Confirmation Dialog -->
+  <TxBottomDialog
+    v-if="deleteConfirmVisible"
+    :title="t('dashboard.sections.images.confirmDeleteTitle', 'Delete Resource')"
+    :message="t('dashboard.sections.images.confirmDelete', { key: pendingDeleteKey })"
+    :btns="[
+      { content: t('dashboard.sections.images.cancel', 'Cancel'), type: 'info', onClick: () => true },
+      { content: t('dashboard.sections.images.delete', 'Delete'), type: 'error', onClick: confirmDeleteImage },
+    ]"
+    :close="closeDeleteConfirm"
+  />
 </template>

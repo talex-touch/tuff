@@ -1,9 +1,16 @@
 <script setup lang="ts">
+import { TxFlipOverlay } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
+import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
 import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
-import { buildOauthCallbackUrl, persistOauthContext, type OauthProvider } from '~/composables/useOauthContext'
+import { useSubscriptionData } from '~/composables/useDashboardData'
+import {
+  buildOauthCallbackUrl,
+  persistOauthContext,
+  type OauthProvider,
+} from '~/composables/useOauthContext'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
@@ -13,16 +20,22 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { user, refresh } = useAuthUser()
-const { signIn } = useAuth()
+const { subscription, pending: subscriptionPending } = useSubscriptionData()
 
 
 const displayName = ref('')
 const savingProfile = ref(false)
+const avatarUploading = ref(false)
 const profileMessage = ref('')
+const manageOverlayVisible = ref(false)
+const manageOverlaySource = ref<HTMLElement | null>(null)
+const avatarInputRef = ref<HTMLInputElement | null>(null)
 
 const oauthMessage = ref('')
 const linkingGithub = ref(false)
 const linkingLinuxdo = ref(false)
+const unlinkingGithub = ref(false)
+const unlinkingLinuxdo = ref(false)
 
 const supportsPasskey = ref(false)
 const passkeyLoading = ref(false)
@@ -36,6 +49,50 @@ const linuxdoAccount = computed(() => linkedAccounts.value.find(account => accou
 
 const isGithubBound = computed(() => Boolean(githubAccount.value))
 const isLinuxdoBound = computed(() => Boolean(linuxdoAccount.value))
+const avatarUrl = computed(() => user.value?.image || '')
+const profileInitial = computed(() => {
+  const seed = displayName.value || emailLabel.value
+  return seed ? seed.trim().charAt(0).toUpperCase() : 'U'
+})
+const planCode = computed(() => {
+  const raw = subscription.value?.plan
+  if (!raw || typeof raw !== 'string')
+    return null
+  return raw.toUpperCase()
+})
+const hasPlanData = computed(() => Boolean(planCode.value))
+const showPlanSkeleton = computed(() => subscriptionPending.value || !hasPlanData.value)
+const planLabel = computed(() => {
+  switch (planCode.value) {
+    case 'PRO':
+      return t('dashboard.account.planPro', 'Pro Plan')
+    case 'PLUS':
+      return t('dashboard.account.planPlus', 'Plus Plan')
+    case 'TEAM':
+      return t('dashboard.account.planTeam', 'Team Plan')
+    case 'ENTERPRISE':
+      return t('dashboard.account.planEnterprise', 'Enterprise Plan')
+    case 'FREE':
+      return t('dashboard.account.planFree', 'Free Plan')
+    default:
+      return ''
+  }
+})
+const planStatusLabel = computed(() => (subscription.value?.isActive === false
+  ? t('dashboard.account.planStatusInactive', 'Inactive')
+  : t('dashboard.account.planStatusActive', 'Active')))
+
+const daysLeftText = computed(() => {
+  const raw = subscription.value?.expiresAt
+  if (!raw)
+    return t('dashboard.account.daysLeftUnknown', '-- days left')
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime()))
+    return t('dashboard.account.daysLeftUnknown', '-- days left')
+  const diff = Math.max(0, Math.ceil((date.getTime() - Date.now()) / 86400000))
+  return t('dashboard.account.daysLeft', { n: diff }, `${diff} days left`)
+})
+const hasProfileChanges = computed(() => displayName.value.trim() !== (user.value?.name || '').trim())
 
 function providerLabel(provider: OauthProvider) {
   return provider === 'github' ? 'GitHub' : 'LinuxDO'
@@ -63,27 +120,54 @@ function parseBoundProvider(value: string | null): OauthProvider | null {
   return null
 }
 
-async function clearOauthBoundQuery() {
-  if (!('oauth_bound' in route.query))
+function getLinkedAccountByProvider(provider: OauthProvider) {
+  return provider === 'github' ? githubAccount.value : linuxdoAccount.value
+}
+
+function resolveBindFailedMessage(provider: OauthProvider) {
+  return provider === 'github'
+    ? t('dashboard.account.githubBindNotDetected', 'GitHub 授权已返回，但未检测到绑定结果，请重试。')
+    : t('dashboard.account.linuxdoBindNotDetected', 'LinuxDO 授权已返回，但未检测到绑定结果，请重试。')
+}
+
+async function clearOauthHintQuery() {
+  if (!('oauth_bound' in route.query) && !('oauth_bind_failed' in route.query))
     return
 
   const nextQuery = { ...route.query } as Record<string, string | string[]>
   delete nextQuery.oauth_bound
+  delete nextQuery.oauth_bind_failed
   await router.replace({ path: route.path, query: nextQuery, hash: route.hash })
 }
 
 watch(
   () => route.query.oauth_bound,
-  (value) => {
+  async (value) => {
     const provider = parseBoundProvider(normalizeQueryValue(value as string | string[] | undefined))
     if (!provider)
       return
 
-    const accountId = provider === 'github'
-      ? githubAccount.value?.providerAccountId
-      : linuxdoAccount.value?.providerAccountId
-    oauthMessage.value = boundMessage(provider, accountId)
-    void clearOauthBoundQuery()
+    await refresh()
+    const account = getLinkedAccountByProvider(provider)
+    if (account?.providerAccountId) {
+      oauthMessage.value = boundMessage(provider, account.providerAccountId)
+    }
+    else {
+      oauthMessage.value = resolveBindFailedMessage(provider)
+    }
+    await clearOauthHintQuery()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => route.query.oauth_bind_failed,
+  async (value) => {
+    const provider = parseBoundProvider(normalizeQueryValue(value as string | string[] | undefined))
+    if (!provider)
+      return
+    oauthMessage.value = resolveBindFailedMessage(provider)
+    await clearOauthHintQuery()
   },
   { immediate: true },
 )
@@ -118,9 +202,60 @@ onMounted(() => {
   supportsPasskey.value = hasWindow() && Boolean(window.PublicKeyCredential)
 })
 
+function openManageProfile(source: HTMLElement | null = null) {
+  manageOverlaySource.value = source
+  manageOverlayVisible.value = true
+  profileMessage.value = ''
+}
+
+function handlePlanAction() {
+  void navigateTo('/dashboard/team')
+}
+
+function triggerAvatarSelect() {
+  avatarInputRef.value?.click()
+}
+
+async function fileToDataUrl(file: File): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function handleAvatarChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !user.value)
+    return
+
+  avatarUploading.value = true
+  profileMessage.value = ''
+  try {
+    const dataUrl = await fileToDataUrl(file)
+    await patchCurrentUserProfile({ image: dataUrl })
+    await refresh()
+    profileMessage.value = t('dashboard.account.avatarSaved', '头像已更新')
+  }
+  catch (error: any) {
+    profileMessage.value = error?.data?.statusMessage || error?.message || t('dashboard.account.avatarSaveFailed', '头像更新失败')
+  }
+  finally {
+    avatarUploading.value = false
+    input.value = ''
+  }
+}
+
 async function saveProfile() {
   if (!user.value)
     return
+  if (!hasProfileChanges.value) {
+    profileMessage.value = t('dashboard.account.noProfileChanges', '没有可保存的更改')
+    return
+  }
+
   savingProfile.value = true
   profileMessage.value = ''
   try {
@@ -166,7 +301,8 @@ async function startOauthBind(provider: OauthProvider) {
       redirect,
     })
 
-    await signIn(provider, { callbackUrl })
+    const relayUrl = `${callbackUrl}${callbackUrl.includes('?') ? '&' : '?'}oauth_relay=1`
+    await navigateTo(relayUrl)
   }
   catch (error: any) {
     oauthMessage.value = error?.data?.statusMessage
@@ -186,6 +322,43 @@ async function handleGithubLink() {
 
 async function handleLinuxdoLink() {
   await startOauthBind('linuxdo')
+}
+
+async function unbindOauth(provider: OauthProvider) {
+  const loadingState = provider === 'github' ? unlinkingGithub : unlinkingLinuxdo
+  const linkedAccount = provider === 'github' ? githubAccount.value : linuxdoAccount.value
+  if (loadingState.value || !linkedAccount)
+    return
+
+  loadingState.value = true
+  oauthMessage.value = ''
+  try {
+    await $fetch(`/api/user/linked-accounts/${provider}`, { method: 'DELETE' })
+    await refresh()
+    oauthMessage.value = t('dashboard.account.unboundTo', { target: providerLabel(provider) }, `已解绑 ${providerLabel(provider)}`)
+  }
+  catch (error: any) {
+    oauthMessage.value = error?.data?.statusMessage || error?.message || t('dashboard.account.unbindFailed', '解绑失败，请稍后重试。')
+  }
+  finally {
+    loadingState.value = false
+  }
+}
+
+async function handleGithubToggle() {
+  if (isGithubBound.value) {
+    await unbindOauth('github')
+    return
+  }
+  await handleGithubLink()
+}
+
+async function handleLinuxdoToggle() {
+  if (isLinuxdoBound.value) {
+    await unbindOauth('linuxdo')
+    return
+  }
+  await handleLinuxdoLink()
 }
 
 async function handlePasskeyRegister() {
@@ -238,211 +411,106 @@ function formatHistoryTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
-
-interface DeviceItem {
-  id: string
-  deviceName: string | null
-  platform: string | null
-  userAgent: string | null
-  lastSeenAt: string | null
-  createdAt: string
-  revokedAt: string | null
-}
-
-const { deviceId: currentDeviceId, deviceName: currentDeviceName, setDeviceName } = useDeviceIdentity()
-const { data: deviceData, pending: devicePending, refresh: refreshDevices } = useFetch<DeviceItem[]>('/api/devices')
-const actionLoading = ref(false)
-const editingId = ref<string | null>(null)
-const renameValue = ref('')
-
-const devices = computed(() => deviceData.value ?? [])
-
-function isCurrent(device: DeviceItem) {
-  return device.id === currentDeviceId.value
-}
-
-function formatLastActive(value: string | null) {
-  if (!value)
-    return t('dashboard.devices.unknown', '未知')
-  const date = new Date(value)
-  const diff = Date.now() - date.getTime()
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1)
-    return t('dashboard.devices.justNow', '刚刚')
-  if (minutes < 60)
-    return t('dashboard.devices.minutesAgo', { n: minutes })
-  if (hours < 24)
-    return t('dashboard.devices.hoursAgo', { n: hours })
-  return t('dashboard.devices.daysAgo', { n: days })
-}
-
-function startRename(device: DeviceItem) {
-  editingId.value = device.id
-  renameValue.value = device.deviceName || currentDeviceName.value || ''
-}
-
-function cancelRename() {
-  editingId.value = null
-  renameValue.value = ''
-}
-
-async function saveRename(device: DeviceItem) {
-  if (!renameValue.value.trim())
-    return
-  actionLoading.value = true
-  try {
-    await $fetch('/api/devices/rename', {
-      method: 'POST',
-      body: { deviceId: device.id, name: renameValue.value.trim() },
-    })
-    if (isCurrent(device))
-      setDeviceName(renameValue.value.trim())
-    await refreshDevices()
-    cancelRename()
-  }
-  catch (error) {
-    console.error('Failed to rename device:', error)
-  }
-  finally {
-    actionLoading.value = false
-  }
-}
-
-async function revokeDevice(device: DeviceItem) {
-  if (isCurrent(device))
-    return
-  actionLoading.value = true
-  try {
-    await $fetch('/api/devices/revoke', {
-      method: 'POST',
-      body: { deviceId: device.id },
-    })
-    await refreshDevices()
-  }
-  catch (error) {
-    console.error('Failed to revoke device:', error)
-  }
-  finally {
-    actionLoading.value = false
-  }
-}
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="mx-auto max-w-5xl space-y-6">
     <header>
-      <h1 class="text-2xl text-black font-semibold tracking-tight dark:text-light">
+      <h1 class="apple-heading-md">
         {{ t('dashboard.account.title', '账户设置') }}
       </h1>
-      <p class="mt-2 text-sm text-black/70 dark:text-light/80">
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.account.description', '管理账户信息与登录方式') }}
       </p>
     </header>
 
-    <section class="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
-      <div class="border border-primary/10 rounded-3xl bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/60 space-y-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <h2 class="text-lg text-black font-semibold dark:text-light">
-            {{ t('dashboard.account.profile', '个人资料') }}
-          </h2>
-          <span class="rounded-full px-2 py-0.5 text-xs" :class="roleClass">
-            {{ roleLabel }}
-          </span>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 text-sm dark:border-light/10 dark:bg-dark/40">
-            <p class="text-xs text-black/60 dark:text-light/60">
-              {{ t('auth.email', '邮箱') }}
-            </p>
-            <div class="mt-2 flex flex-wrap items-center gap-2 text-black dark:text-light">
-              <span>{{ emailLabel }}</span>
-              <span
-                class="rounded-full px-2 py-0.5 text-xs"
-                :class="isEmailVerified ? 'bg-green-500/20 text-green-600 dark:text-green-400' : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400'"
-              >
-                {{ isEmailVerified ? t('auth.verified', '已验证') : t('auth.unverified', '未验证') }}
-              </span>
-            </div>
-          </div>
-          <div class="rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 text-sm dark:border-light/10 dark:bg-dark/40">
-            <p class="text-xs text-black/60 dark:text-light/60">
-              {{ t('dashboard.account.displayName', '显示名称') }}
-            </p>
-            <p class="mt-2 text-black dark:text-light">
-              {{ user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称') }}
-            </p>
-          </div>
-        </div>
-        <p
-          v-if="isRestricted"
-          class="rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-        >
-          {{ t('auth.restrictedAccount', '邮箱未验证，充值与同步功能暂不可用。') }}
-        </p>
-        <div class="grid gap-3 sm:grid-cols-[1fr_auto] items-end">
-          <div class="space-y-2">
-            <label class="text-xs text-black/60 dark:text-light/60">
-              {{ t('dashboard.account.displayName', '显示名称') }}
-            </label>
-            <Input v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
-          </div>
-          <div class="flex items-center gap-2">
-            <Button size="small" :loading="savingProfile" @click="saveProfile">
-              {{ t('common.save', '保存') }}
-            </Button>
-            <span v-if="profileMessage" class="text-xs text-black/60 dark:text-light/60">
-              {{ profileMessage }}
-            </span>
-          </div>
-        </div>
-      </div>
+    <DashboardAccountProfilePlanCard
+      :display-name="user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称')"
+      :email-label="emailLabel"
+      :avatar-url="avatarUrl"
+      :profile-initial="profileInitial"
+      :is-email-verified="isEmailVerified"
+      :verified-text="t('auth.verified', '已验证')"
+      :unverified-text="t('dashboard.account.unverifiedTag', 'Unverified')"
+      :role-label="roleLabel"
+      :role-class="roleClass"
+      :manage-text="t('dashboard.account.manageProfile', '管理')"
+      :current-plan-text="t('dashboard.account.subscriptionTitle', 'Subscription')"
+      :plan-status-label="planStatusLabel"
+      :plan-active="subscription?.isActive ?? true"
+      :plan-label="planLabel"
+      :plan-action-text="t('dashboard.account.managePlan', 'Manage')"
+      :days-left-text="daysLeftText"
+      :show-plan-skeleton="showPlanSkeleton"
+      :plan-code="planCode"
+      @manage="openManageProfile"
+      @plan-action="handlePlanAction"
+    />
 
-      <div class="border border-primary/10 rounded-3xl bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/60 space-y-4">
-        <h2 class="text-lg text-black font-semibold dark:text-light">
+    <p
+      v-if="isRestricted"
+      class="mx-auto mt-2 w-full max-w-[920px] rounded-lg bg-yellow-50 px-3 py-2 text-xs text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
+    >
+      {{ t('auth.restrictedAccount', '邮箱未验证，充值与同步功能暂不可用。') }}
+    </p>
+
+    <section id="login-methods-card" class="apple-card-lg p-6 space-y-4">
+        <h2 class="apple-heading-sm">
           {{ t('dashboard.account.loginMethods', '登录方式') }}
         </h2>
         <div class="space-y-3 text-sm">
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40">
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
             <div>
-              <p class="text-black dark:text-light">
+              <p class="text-black dark:text-white">
 GitHub
 </p>
-              <p class="text-xs text-black/50 dark:text-light/50">
+              <p class="text-xs text-black/50 dark:text-white/50">
                 {{ t('dashboard.account.githubDesc', '用于绑定 GitHub 账号与同步开发者信息') }}
               </p>
               <p v-if="isGithubBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
                 {{ boundMessage('github', githubAccount?.providerAccountId) }}
               </p>
             </div>
-            <Button size="small" variant="secondary" :disabled="isGithubBound" :loading="linkingGithub" @click="handleGithubLink">
-              {{ isGithubBound ? t('dashboard.account.bound', '已绑定') : t('auth.githubLogin', '绑定') }}
+            <Button
+              size="small"
+              :variant="isGithubBound ? 'danger' : 'secondary'"
+              :loading="linkingGithub || unlinkingGithub"
+              :disabled="linkingLinuxdo || unlinkingLinuxdo"
+              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
+              @click="handleGithubToggle"
+            >
+              {{ isGithubBound ? t('dashboard.account.unbind', '解绑') : t('auth.githubLogin', '绑定') }}
             </Button>
           </div>
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40">
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
             <div>
-              <p class="text-black dark:text-light">
+              <p class="text-black dark:text-white">
 LinuxDO
 </p>
-              <p class="text-xs text-black/50 dark:text-light/50">
+              <p class="text-xs text-black/50 dark:text-white/50">
                 {{ t('dashboard.account.linuxdoDesc', '用于连接 LinuxDO 社区账号') }}
               </p>
               <p v-if="isLinuxdoBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
                 {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
               </p>
             </div>
-            <Button size="small" variant="secondary" :disabled="isLinuxdoBound" :loading="linkingLinuxdo" @click="handleLinuxdoLink">
-              {{ isLinuxdoBound ? t('dashboard.account.bound', '已绑定') : t('dashboard.account.bind', '绑定') }}
+            <Button
+              size="small"
+              :variant="isLinuxdoBound ? 'danger' : 'secondary'"
+              :loading="linkingLinuxdo || unlinkingLinuxdo"
+              :disabled="linkingGithub || unlinkingGithub"
+              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
+              @click="handleLinuxdoToggle"
+            >
+              {{ isLinuxdoBound ? t('dashboard.account.unbind', '解绑') : t('dashboard.account.bind', '绑定') }}
             </Button>
           </div>
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40">
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
             <div>
-              <p class="text-black dark:text-light">
+              <p class="text-black dark:text-white">
 Passkey
 </p>
-              <p class="text-xs text-black/50 dark:text-light/50">
+              <p class="text-xs text-black/50 dark:text-white/50">
                 {{ t('dashboard.account.passkeyDesc', '使用系统 Passkey 快速登录') }}
               </p>
             </div>
@@ -451,128 +519,63 @@ Passkey
               variant="secondary"
               :disabled="!supportsPasskey || hasBoundPasskey"
               :loading="passkeyLoading"
+              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
               @click="handlePasskeyRegister"
             >
               {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
             </Button>
           </div>
         </div>
-        <p v-if="oauthMessage" class="text-xs text-black/60 dark:text-light/60">
+        <p v-if="oauthMessage" class="text-xs text-black/60 dark:text-white/60">
           {{ oauthMessage }}
         </p>
-        <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-light/60">
+        <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-white/60">
           {{ passkeyMessage }}
         </p>
-        <p v-if="!supportsPasskey" class="text-xs text-black/50 dark:text-light/50">
+        <p v-if="!supportsPasskey" class="text-xs text-black/50 dark:text-white/50">
           {{ t('auth.passkeyNotSupported', '当前浏览器不支持 Passkey') }}
         </p>
-      </div>
     </section>
 
-    <section class="border border-primary/10 rounded-3xl bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/60 space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-lg text-black font-semibold dark:text-light">
-          {{ t('dashboard.devices.title', '设备与会话') }}
-        </h2>
-        <Button size="small" variant="secondary" @click="refreshDevices">
-          {{ t('common.refresh', '刷新') }}
-        </Button>
-      </div>
-      <div v-if="devicePending" class="flex items-center justify-center py-6">
-        <span class="i-carbon-circle-dash animate-spin text-primary" />
-      </div>
-      <ul v-else-if="devices.length" class="space-y-2 text-sm">
-        <li
-          v-for="device in devices"
-          :key="device.id"
-          class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40"
-        >
-          <div class="space-y-1">
-            <p class="text-black dark:text-light">
-              {{ device.deviceName || t('dashboard.devices.unnamed', '未命名设备') }}
-              <span
-                v-if="isCurrent(device)"
-                class="ml-2 rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-600 dark:text-green-400"
-              >
-                {{ t('dashboard.devices.currentDevice', '当前设备') }}
-              </span>
-              <span
-                v-if="device.revokedAt"
-                class="ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-600 dark:text-red-400"
-              >
-                {{ t('dashboard.devices.revoked', '已撤销') }}
-              </span>
-            </p>
-            <p class="text-xs text-black/50 dark:text-light/50">
-              {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }}
-            </p>
-            <p v-if="device.userAgent" class="text-xs text-black/40 dark:text-light/40">
-              {{ device.userAgent }}
-            </p>
-          </div>
-          <div class="flex items-center gap-2">
-            <Button
-              v-if="editingId !== device.id"
-              size="small"
-              variant="secondary"
-              @click="startRename(device)"
-            >
-              {{ t('dashboard.devices.rename', '重命名') }}
-            </Button>
-            <Button
-              size="small"
-              variant="secondary"
-              :disabled="actionLoading || isCurrent(device) || Boolean(device.revokedAt)"
-              @click="revokeDevice(device)"
-            >
-              {{ t('dashboard.devices.revoke', '踢出') }}
-            </Button>
-          </div>
-          <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2 w-full">
-            <Input v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
-            <Button size="small" :loading="actionLoading" @click="saveRename(device)">
-              {{ t('common.save', '保存') }}
-            </Button>
-            <Button size="small" variant="secondary" @click="cancelRename">
-              {{ t('common.cancel', '取消') }}
-            </Button>
-          </div>
-        </li>
-      </ul>
-      <p v-else class="text-sm text-black/60 dark:text-light/70">
-        {{ t('dashboard.devices.noSessions', '暂无设备') }}
-      </p>
-    </section>
-
-    <section class="border border-primary/10 rounded-3xl bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/60 space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg text-black font-semibold dark:text-light">
+    <section class="apple-card-lg p-6 space-y-4">
+      <div>
+        <h2 class="apple-heading-sm">
           {{ t('dashboard.account.loginHistory', '登录历史') }}
         </h2>
+      </div>
+      <div>
         <Button size="small" variant="secondary" @click="handleRefreshHistory">
           {{ t('common.refresh', '刷新') }}
         </Button>
       </div>
-      <div v-if="historyPending" class="flex items-center justify-center py-4">
-        <span class="i-carbon-circle-dash animate-spin text-primary" />
+      <div v-if="historyPending" class="space-y-3 py-3">
+        <div class="flex items-center justify-center">
+          <TxSpinner :size="18" />
+        </div>
+        <div class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
       <div v-else class="grid gap-4 lg:grid-cols-2">
         <div class="space-y-2">
-          <p class="text-xs text-black/60 dark:text-light/60">
+          <p class="text-xs text-black/60 dark:text-white/60">
             {{ t('dashboard.account.loginAbnormal', '异常登录') }}
           </p>
           <ul v-if="abnormalHistory.length" class="space-y-2 text-sm">
             <li
               v-for="item in abnormalHistory"
               :key="item.id"
-              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/[0.04] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
             >
               <div class="space-y-1">
-                <p class="text-black dark:text-light">
+                <p class="text-black dark:text-white">
                   {{ t('dashboard.account.loginFailed', '登录失败') }}
-                  <span class="text-xs text-black/50 dark:text-light/50">· {{ item.reason || '-' }}</span>
+                  <span class="text-xs text-black/50 dark:text-white/50">· {{ item.reason || '-' }}</span>
                 </p>
-                <p class="text-xs text-black/50 dark:text-light/50">
+                <p class="text-xs text-black/50 dark:text-white/50">
                   {{ formatHistoryTime(item.created_at) }} · {{ item.ip || 'unknown' }}
                 </p>
               </div>
@@ -581,26 +584,26 @@ Passkey
               </span>
             </li>
           </ul>
-          <p v-else class="text-sm text-black/60 dark:text-light/70">
+          <p v-else class="text-sm text-black/60 dark:text-white/70">
             {{ t('dashboard.account.noAbnormal', '暂无异常记录') }}
           </p>
         </div>
         <div class="space-y-2">
-          <p class="text-xs text-black/60 dark:text-light/60">
+          <p class="text-xs text-black/60 dark:text-white/60">
             {{ t('dashboard.account.loginCommon', '常用登录') }}
           </p>
           <ul v-if="commonHistory.length" class="space-y-2 text-sm">
             <li
               v-for="item in commonHistory"
               :key="item.id"
-              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/[0.04] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
             >
               <div class="space-y-1">
-                <p class="text-black dark:text-light">
+                <p class="text-black dark:text-white">
                   {{ t('dashboard.account.loginSuccess', '登录成功') }}
-                  <span class="text-xs text-black/50 dark:text-light/50">· {{ item.reason || '-' }}</span>
+                  <span class="text-xs text-black/50 dark:text-white/50">· {{ item.reason || '-' }}</span>
                 </p>
-                <p class="text-xs text-black/50 dark:text-light/50">
+                <p class="text-xs text-black/50 dark:text-white/50">
                   {{ formatHistoryTime(item.created_at) }} · {{ item.ip || 'unknown' }}
                 </p>
               </div>
@@ -609,11 +612,176 @@ Passkey
               </span>
             </li>
           </ul>
-          <p v-else class="text-sm text-black/60 dark:text-light/70">
+          <p v-else class="text-sm text-black/60 dark:text-white/70">
             {{ t('dashboard.account.noHistory', '暂无登录记录') }}
           </p>
         </div>
       </div>
     </section>
+
+    <Teleport to="body">
+      <TxFlipOverlay
+        v-model="manageOverlayVisible"
+        :source="manageOverlaySource"
+        :duration="420"
+        :rotate-x="6"
+        :rotate-y="8"
+        transition-name="AccountManageOverlay-Mask"
+        mask-class="AccountManageOverlay-Mask"
+        card-class="AccountManageOverlay-Card"
+      >
+        <template #default="{ close }">
+          <div class="AccountManageOverlay-Inner">
+            <div class="space-y-1">
+              <h2 class="AccountManageOverlay-Title">
+                {{ t('dashboard.account.manageSection', 'Profile Manage') }}
+              </h2>
+              <p class="AccountManageOverlay-Desc">
+                {{ t('dashboard.account.manageDialogDesc', '更新头像、显示名称与基础资料。') }}
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] p-3 dark:border-white/[0.12]">
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full border border-black/[0.1] bg-black/[0.03] dark:border-white/[0.12] dark:bg-white/[0.04]">
+                  <img
+                    v-if="avatarUrl"
+                    :src="avatarUrl"
+                    :alt="displayName || emailLabel || 'User'"
+                    class="h-full w-full object-cover"
+                  >
+                  <div v-else class="flex h-full w-full items-center justify-center text-sm font-semibold text-black/65 dark:text-white/75">
+                    {{ profileInitial }}
+                  </div>
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-black dark:text-white">
+                    {{ user?.name || t('dashboard.account.displayNamePlaceholder', '输入显示名称') }}
+                  </p>
+                  <p class="truncate text-xs text-black/50 dark:text-white/50">
+                    {{ emailLabel }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <Button size="small" variant="secondary" :loading="avatarUploading" @click="triggerAvatarSelect">
+                  {{ t('dashboard.account.changeAvatar', '修改头像') }}
+                </Button>
+                <input
+                  ref="avatarInputRef"
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="handleAvatarChange"
+                >
+              </div>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2">
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('dashboard.account.displayName', '显示名称') }}
+                </label>
+                <Input v-model="displayName" type="text" :placeholder="t('dashboard.account.displayNamePlaceholder', '输入显示名称')" />
+              </div>
+              <div class="space-y-2 rounded-xl border border-black/[0.08] p-3 dark:border-white/[0.12]">
+                <p class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('auth.email', '邮箱') }}
+                </p>
+                <p class="truncate text-sm text-black dark:text-white">
+                  {{ emailLabel }}
+                </p>
+                <p class="text-xs text-black/50 dark:text-white/50">
+                  {{ t('dashboard.account.emailHint', '邮箱修改由登录方式提供方管理。') }}
+                </p>
+              </div>
+            </div>
+
+            <p v-if="profileMessage" class="text-xs text-black/60 dark:text-white/60">
+              {{ profileMessage }}
+            </p>
+
+            <div class="AccountManageOverlay-Actions">
+              <Button size="small" variant="secondary" @click="close">
+                {{ t('common.cancel', '取消') }}
+              </Button>
+              <Button size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
+                {{ t('common.save', '保存') }}
+              </Button>
+            </div>
+          </div>
+        </template>
+      </TxFlipOverlay>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.AccountManageOverlay-Inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 18px;
+}
+
+.AccountManageOverlay-Title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.AccountManageOverlay-Desc {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.AccountManageOverlay-Actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>
+
+<style>
+.AccountManageOverlay-Mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  background: rgba(12, 12, 16, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+
+.AccountManageOverlay-Mask-enter-active,
+.AccountManageOverlay-Mask-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.AccountManageOverlay-Mask-enter-from,
+.AccountManageOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.AccountManageOverlay-Card {
+  width: min(560px, 92vw);
+  min-height: 320px;
+  max-height: 82vh;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 1rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  overflow: auto;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+}
+</style>

@@ -128,15 +128,15 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
   >
     <div v-if="plugin" class="flex h-full flex-col">
       <!-- Header -->
-      <div class="flex shrink-0 items-start gap-4 border-b border-black/5 pb-4 dark:border-white/5">
-        <div class="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-black/5 dark:border-white/10 dark:bg-white/10">
+      <div class="flex shrink-0 items-start gap-4 border-b border-black/[0.04] pb-5 dark:border-white/[0.06]">
+        <div class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
           <img
             v-if="plugin.iconUrl"
             :src="plugin.iconUrl"
             :alt="plugin.name"
             class="size-full object-cover"
           >
-          <span v-else class="text-2xl font-semibold text-black/60 dark:text-white/60">
+          <span v-else class="text-2xl font-semibold text-black/50 dark:text-white/50">
             {{ plugin.name.charAt(0).toUpperCase() }}
           </span>
         </div>
@@ -180,28 +180,28 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
         </div>
 
         <!-- Stats -->
-        <div class="grid grid-cols-3 gap-4 border-b border-black/5 py-4 dark:border-white/5">
-          <div>
-            <p class="text-xs text-black/40 dark:text-white/40">
+        <div class="grid grid-cols-3 gap-3 border-b border-black/[0.04] py-5 dark:border-white/[0.06]">
+          <div class="rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <p class="apple-section-title">
               {{ t('dashboard.sections.plugins.stats.category') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-black dark:text-white">
+            <p class="mt-2 text-lg font-semibold text-black dark:text-white">
               {{ categoryLabel || plugin.category }}
             </p>
           </div>
-          <div>
-            <p class="text-xs text-black/40 dark:text-white/40">
+          <div class="rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <p class="apple-section-title">
               {{ t('dashboard.sections.plugins.stats.installs', { count: '' }).replace('{count}', '').trim() || 'Installs' }}
             </p>
-            <p class="mt-1 text-sm font-medium text-black dark:text-white">
+            <p class="mt-2 text-lg font-semibold text-black dark:text-white">
               {{ formatNumber(plugin.installs) }}
             </p>
           </div>
-          <div>
-            <p class="text-xs text-black/40 dark:text-white/40">
+          <div class="rounded-xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <p class="apple-section-title">
               {{ t('dashboard.sections.plugins.stats.created') }}
             </p>
-            <p class="mt-1 text-sm font-medium text-black dark:text-white">
+            <p class="mt-2 text-lg font-semibold text-black dark:text-white">
               {{ formatDate(plugin.createdAt) }}
             </p>
           </div>
@@ -252,7 +252,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
             <div
               v-for="version in plugin.versions"
               :key="version.id"
-              class="rounded-xl border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]"
+              class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-5 transition-all duration-200 hover:shadow-sm dark:border-white/[0.06] dark:bg-white/[0.02]"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0 flex-1">
@@ -306,7 +306,7 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
     </div>
 
     <template #footer>
-      <div v-if="plugin" class="flex flex-wrap items-center justify-end gap-2">
+      <div v-if="plugin" class="flex flex-wrap items-center justify-end gap-3">
         <Button
           v-if="canSubmitReview"
           size="small"

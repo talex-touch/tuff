@@ -54,6 +54,7 @@ async function dbgLog(
 export type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 export type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 export type PluginVersionStatus = 'pending' | 'approved' | 'rejected'
+export type PluginArtifactType = 'plugin' | 'layout' | 'theme'
 
 export interface DashboardPluginAuthor {
   name: string
@@ -89,6 +90,7 @@ export interface DashboardPlugin {
   name: string
   summary: string
   category: string
+  artifactType: PluginArtifactType
   installs: number
   homepage?: string | null
   isOfficial: boolean
@@ -111,6 +113,7 @@ interface D1PluginRow {
   name: string
   summary: string
   category: string
+  artifact_type: string | null
   installs: number
   homepage: string | null
   icon: string | null
@@ -166,6 +169,7 @@ interface CreatePluginInput {
   name: string
   summary: string
   category: string
+  artifactType?: PluginArtifactType
   homepage?: string | null
   isOfficial?: boolean
   badges?: string[]
@@ -271,6 +275,7 @@ async function ensurePluginSchema(db: D1Database) {
       name TEXT NOT NULL,
       summary TEXT NOT NULL,
       category TEXT NOT NULL,
+      artifact_type TEXT NOT NULL DEFAULT 'plugin',
       installs INTEGER NOT NULL DEFAULT 0,
       homepage TEXT,
       icon TEXT,
@@ -330,6 +335,7 @@ async function ensurePluginSchema(db: D1Database) {
   await addColumnIfMissing('name', 'name TEXT')
   await addColumnIfMissing('summary', 'summary TEXT')
   await addColumnIfMissing('category', 'category TEXT')
+  await addColumnIfMissing('artifact_type', "artifact_type TEXT DEFAULT 'plugin'")
   await addColumnIfMissing('installs', 'installs INTEGER DEFAULT 0')
   await addColumnIfMissing('homepage', 'homepage TEXT')
   await addColumnIfMissing('icon', 'icon TEXT')
@@ -376,6 +382,10 @@ function parseJsonArray(value: string | null): string[] {
   catch {
     return []
   }
+}
+
+function normalizeArtifactType(value: unknown): PluginArtifactType {
+  return value === 'layout' || value === 'theme' ? value : 'plugin'
 }
 
 function parseJsonObject<T>(value: string | null): T | null {
@@ -430,6 +440,7 @@ function mapPluginRow(row: D1PluginRow): DashboardPlugin {
     name: row.name,
     summary: row.summary,
     category: row.category,
+    artifactType: normalizeArtifactType(row.artifact_type),
     installs: Number(row.installs ?? 0),
     homepage: row.homepage,
     isOfficial: Boolean(row.is_official),
@@ -493,6 +504,10 @@ function validatePluginInput(input: CreatePluginInput, forUpdate = false) {
     if (input.readmeMarkdown !== undefined && input.readmeMarkdown !== null && !input.readmeMarkdown.trim())
       throw createError({ statusCode: 400, statusMessage: 'Plugin README cannot be empty.' })
   }
+
+  const allowedArtifactTypes: PluginArtifactType[] = ['plugin', 'layout', 'theme']
+  if (input.artifactType && !allowedArtifactTypes.includes(input.artifactType))
+    throw createError({ statusCode: 400, statusMessage: 'Publish type is invalid.' })
 
   if (input.slug) {
     const normalized = input.slug.trim()
@@ -773,6 +788,7 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
         name,
         summary,
         category,
+        artifact_type,
         installs,
         homepage,
         is_official,
@@ -850,6 +866,7 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     badges: Array.isArray(plugin.badges) ? plugin.badges : [],
     author: plugin.author ?? null,
     slug: plugin.slug ?? plugin.id,
+    artifactType: normalizeArtifactType(plugin.artifactType),
     status: (plugin.status ?? 'draft') as PluginStatus,
   }))
 
@@ -927,6 +944,9 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
     ...item,
     badges: Array.isArray(item.badges) ? item.badges : [],
     author: item.author ?? null,
+    artifactType: normalizeArtifactType(item.artifactType),
+    slug: item.slug ?? item.id,
+    status: (item.status ?? 'draft') as PluginStatus,
   }))
 
   const plugin = normalized.find(item => item.id === id)
@@ -994,6 +1014,7 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
     name: input.name,
     summary: input.summary,
     category: input.category,
+    artifactType: input.artifactType ?? 'plugin',
     installs: 0,
     homepage: input.homepage ?? null,
     isOfficial: Boolean(input.isOfficial),
@@ -1021,6 +1042,7 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
         name,
         summary,
         category,
+        artifact_type,
         installs,
         homepage,
         icon,
@@ -1038,7 +1060,7 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
         created_at,
         updated_at,
         latest_version_id
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?19, '', ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?21, ?7, ?8, ?9, ?10, ?19, '', ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, NULL);
     `).bind(
       plugin.id,
       plugin.userId,
@@ -1060,6 +1082,7 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
       plugin.iconUrl ?? null,
       plugin.createdAt,
       plugin.updatedAt,
+      plugin.artifactType,
     ).run()
 
     return plugin
@@ -1087,6 +1110,7 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
     name: input.name ?? existing.name,
     summary: input.summary ?? existing.summary,
     category: input.category ?? existing.category,
+    artifactType: input.artifactType ?? existing.artifactType,
     homepage: input.homepage ?? existing.homepage ?? null,
     isOfficial: input.isOfficial ?? existing.isOfficial,
     badges: input.badges ?? existing.badges,
@@ -1120,6 +1144,7 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
         name = ?1,
         summary = ?2,
         category = ?3,
+        artifact_type = ?17,
         homepage = ?4,
         is_official = ?5,
         badges = ?6,
@@ -1150,6 +1175,7 @@ export async function updatePlugin(event: H3Event, id: string, input: UpdatePlug
       updated.iconUrl ?? null,
       updated.updatedAt,
       updated.id,
+      updated.artifactType,
     ).run()
 
     if (existing.iconKey && existing.iconKey !== updated.iconKey)

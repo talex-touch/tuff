@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
-import { computed, ref, watch } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Button from '~/components/ui/Button.vue'
-import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
@@ -14,6 +14,7 @@ interface Props {
   loading?: boolean
   error?: string | null
   isAdmin?: boolean
+  source?: HTMLElement | null
 }
 
 const props = defineProps<Props>()
@@ -28,6 +29,7 @@ export interface PluginFormData {
   name: string
   summary: string
   category: string
+  artifactType: 'plugin' | 'layout' | 'theme'
   homepage: string
   isOfficial: boolean
   badges: string
@@ -49,6 +51,7 @@ const formData = ref<PluginFormData>({
   name: '',
   summary: '',
   category: PLUGIN_CATEGORIES[0]?.id ?? '',
+  artifactType: 'plugin',
   homepage: '',
   isOfficial: false,
   badges: '',
@@ -69,16 +72,22 @@ const readmePreview = ref('')
 const iconPreviewUrl = ref<string | null>(null)
 const packageHasIcon = ref(false)
 const iconFiles = ref<FileUploaderFile[]>([])
+const formContentRef = ref<HTMLElement | null>(null)
+const scrollAreaHeight = ref(420)
+const maxScrollableHeight = ref(620)
+let formResizeObserver: ResizeObserver | null = null
+let viewportResizeHandler: (() => void) | null = null
 
 const PACKAGE_PREVIEW_ENDPOINT = '/api/dashboard/plugins/package/preview'
 
-watch(() => props.isOpen, (isOpen) => {
+watch(() => props.isOpen, async (isOpen) => {
   if (isOpen) {
     formData.value = {
       slug: '',
       name: '',
       summary: '',
       category: PLUGIN_CATEGORIES[0]?.id ?? '',
+      artifactType: 'plugin',
       homepage: '',
       isOfficial: false,
       badges: '',
@@ -99,7 +108,14 @@ watch(() => props.isOpen, (isOpen) => {
     packageHasIcon.value = false
     iconFiles.value = []
     inputMode.value = 'upload'
+    maxScrollableHeight.value = resolveMaxScrollableHeight()
+    await nextTick()
+    setupFormObserver()
+    scheduleLayoutMeasure()
+    return
   }
+
+  cleanupFormObserver()
 })
 
 const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/
@@ -132,6 +148,12 @@ const pluginCategoryOptions = computed(() =>
     label: t(category.i18nKey),
   })),
 )
+
+const artifactTypeOptions = computed(() => [
+  { value: 'plugin' as const, label: t('dashboard.sections.plugins.form.artifactTypes.plugin', 'Plugin') },
+  { value: 'layout' as const, label: t('dashboard.sections.plugins.form.artifactTypes.layout', 'Layout Preset') },
+  { value: 'theme' as const, label: t('dashboard.sections.plugins.form.artifactTypes.theme', 'Theme Pack') },
+])
 
 interface PackagePreviewResult {
   manifest: TpexExtractedManifest | null
@@ -168,6 +190,12 @@ function applyManifestToForm(manifest: TpexExtractedManifest | null, readme: str
 
   if (manifest.category && typeof manifest.category === 'string' && isPluginCategoryId(manifest.category))
     formData.value.category = manifest.category
+
+  const manifestType = typeof (manifest as Record<string, unknown>).type === 'string'
+    ? String((manifest as Record<string, unknown>).type).toLowerCase()
+    : ''
+  if (manifestType === 'plugin' || manifestType === 'layout' || manifestType === 'theme')
+    formData.value.artifactType = manifestType as PluginFormData['artifactType']
 
   if (readme && !formData.value.readme.trim())
     formData.value.readme = readme
@@ -249,6 +277,102 @@ const canSubmit = computed(() => {
   )
 })
 
+const visibleModel = computed({
+  get: () => props.isOpen,
+  set: (nextVisible) => {
+    if (!nextVisible)
+      emit('close')
+  },
+})
+
+const scrollWrapStyle = computed(() => ({
+  '--plugin-form-scroll-height': `${scrollAreaHeight.value}px`,
+  '--plugin-form-scroll-max-height': `${maxScrollableHeight.value}px`,
+}))
+
+function resolveMaxScrollableHeight() {
+  if (!hasWindow())
+    return 620
+
+  const viewportLimitedHeight = Math.floor(window.innerHeight * 0.68)
+  return Math.max(280, Math.min(viewportLimitedHeight, 680))
+}
+
+function scheduleLayoutMeasure() {
+  if (!props.isOpen)
+    return
+
+  nextTick(() => {
+    const contentEl = formContentRef.value
+    if (!contentEl)
+      return
+
+    const measuredHeight = Math.ceil(contentEl.scrollHeight)
+    if (measuredHeight <= 0)
+      return
+
+    const minHeight = 220
+    scrollAreaHeight.value = Math.max(minHeight, Math.min(measuredHeight, maxScrollableHeight.value))
+  })
+}
+
+function cleanupFormObserver() {
+  if (!formResizeObserver)
+    return
+
+  formResizeObserver.disconnect()
+  formResizeObserver = null
+}
+
+function setupFormObserver() {
+  cleanupFormObserver()
+  if (typeof ResizeObserver === 'undefined')
+    return
+  if (!formContentRef.value)
+    return
+
+  formResizeObserver = new ResizeObserver(() => {
+    scheduleLayoutMeasure()
+  })
+  formResizeObserver.observe(formContentRef.value)
+}
+
+function handleOverlayClose(close?: () => void) {
+  if (close)
+    close()
+  else
+    emit('close')
+}
+
+watch(inputMode, () => {
+  scheduleLayoutMeasure()
+})
+
+watch([manifestPreview, packageLoading, packageError], () => {
+  scheduleLayoutMeasure()
+})
+
+onMounted(() => {
+  if (!hasWindow())
+    return
+
+  viewportResizeHandler = () => {
+    maxScrollableHeight.value = resolveMaxScrollableHeight()
+    scheduleLayoutMeasure()
+  }
+  window.addEventListener('resize', viewportResizeHandler, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  cleanupFormObserver()
+  if (!hasWindow())
+    return
+  if (!viewportResizeHandler)
+    return
+  window.removeEventListener('resize', viewportResizeHandler)
+  viewportResizeHandler = null
+})
+
 function onSubmit() {
   if (!canSubmit.value)
     return
@@ -257,220 +381,411 @@ function onSubmit() {
 </script>
 
 <template>
-  <Drawer
-    :visible="isOpen"
-    width="640px"
-    @update:visible="(v) => {
-      if (!v)
-        emit('close')
-    }"
-    @close="emit('close')"
-  >
-    <div class="flex h-full flex-col">
-      <div class="flex items-center justify-between border-b border-black/5 pb-4 dark:border-white/5">
-        <div>
-          <h2 class="text-lg font-medium text-black dark:text-white">
-            {{ t('dashboard.sections.plugins.addButton') }}
-          </h2>
-          <p class="text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.plugins.manageSubtitle') }}
-          </p>
-        </div>
-        <FlatButton @click="emit('close')">
-          <span class="i-carbon-close text-lg" />
-        </FlatButton>
-      </div>
-
-      <div class="mt-4 flex gap-2">
-        <Button
-          size="small"
-          :type="inputMode === 'upload' ? 'primary' : 'text'"
-          @click="inputMode = 'upload'"
+  <Teleport to="body">
+    <TxFlipOverlay
+      v-model="visibleModel"
+      :source="props.source"
+      :duration="380"
+      :rotate-x="5"
+      :rotate-y="7"
+      :speed-boost="1.06"
+      transition-name="CreatePluginOverlay-Mask"
+      mask-class="CreatePluginOverlay-Mask"
+      card-class="CreatePluginOverlay-Card"
+    >
+      <template #default="overlaySlot">
+        <TxAutoSizer
+          :width="true"
+          :height="true"
+          :duration-ms="260"
+          easing="cubic-bezier(0.4, 0, 0.2, 1)"
+          outer-class="CreatePluginOverlay-SizerOuter"
         >
-          <span class="i-carbon-upload mr-1" />
-          {{ t('dashboard.sections.plugins.form.uploadPackage') }}
-        </Button>
-        <Button
-          size="small"
-          :type="inputMode === 'manual' ? 'primary' : 'text'"
-          @click="inputMode = 'manual'"
-        >
-          <span class="i-carbon-edit mr-1" />
-          {{ t('dashboard.sections.plugins.form.manualInput') }}
-        </Button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto pt-4">
-        <form class="space-y-5" @submit.prevent="onSubmit">
-          <div v-if="inputMode === 'upload'" class="space-y-4">
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                {{ t('dashboard.sections.plugins.form.packageUpload') }}
-              </label>
-              <TxFileUploader
-                v-model="packageFiles"
-                :multiple="false"
-                :max="1"
-                accept=".tpex"
-                :disabled="packageLoading"
-                :button-text="t('dashboard.sections.plugins.form.uploadPackage')"
-                :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
-                :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
-                @change="handlePackageChange"
-              />
-              <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
-                <span class="i-carbon-circle-dash animate-spin" />
-                {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
-              </p>
-              <p v-if="packageError" class="text-xs text-red-500">
-                {{ packageError }}
-              </p>
-            </div>
-
-            <div v-if="manifestPreview" class="rounded-lg bg-black/5 p-4 dark:bg-white/5">
-              <p class="mb-2 text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                {{ t('dashboard.sections.plugins.manifestPreview') }}
-              </p>
-              <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
-                <p v-if="manifestPreview.id">
-                  <span class="font-medium">ID:</span> {{ manifestPreview.id }}
-                </p>
-                <p v-if="manifestPreview.name">
-                  <span class="font-medium">Name:</span> {{ manifestPreview.name }}
-                </p>
-                <p v-if="manifestPreview.version">
-                  <span class="font-medium">Version:</span> {{ manifestPreview.version }}
-                </p>
-                <p v-if="manifestPreview.channel">
-                  <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
+          <div class="CreatePluginOverlay-Panel">
+            <div class="CreatePluginOverlay-Header">
+              <div>
+                <h2 class="text-xl font-semibold text-black dark:text-white">
+                  {{ t('dashboard.sections.plugins.addButton') }}
+                </h2>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.sections.plugins.manageSubtitle') }}
                 </p>
               </div>
+              <FlatButton @click="handleOverlayClose(overlaySlot?.close)">
+                <span class="i-carbon-close text-lg" />
+              </FlatButton>
             </div>
 
-            <div v-if="formData.initialVersion" class="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
-              <p class="text-xs text-green-700 dark:text-green-300">
-                <span class="i-carbon-checkmark-filled mr-1" />
-                {{ t('dashboard.sections.plugins.form.autoPublishHint', { version: formData.initialVersion }) }}
-              </p>
-            </div>
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.identifier') }}
-            </label>
-            <Input v-model="formData.slug" placeholder="com.example.plugin" />
-            <p class="text-[11px] text-black/40 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.identifierHelp') }}
-            </p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                {{ t('dashboard.sections.plugins.form.name') }}
-              </label>
-              <Input v-model="formData.name" />
+            <div class="CreatePluginOverlay-Mode">
+              <button
+                type="button"
+                class="CreatePluginOverlay-ModeButton"
+                :class="inputMode === 'upload' ? 'is-active' : ''"
+                @click="inputMode = 'upload'"
+              >
+                <span class="i-carbon-upload" />
+                {{ t('dashboard.sections.plugins.form.uploadPackage') }}
+              </button>
+              <button
+                type="button"
+                class="CreatePluginOverlay-ModeButton"
+                :class="inputMode === 'manual' ? 'is-active' : ''"
+                @click="inputMode = 'manual'"
+              >
+                <span class="i-carbon-edit" />
+                {{ t('dashboard.sections.plugins.form.manualInput') }}
+              </button>
             </div>
 
-            <div class="flex flex-col gap-2">
-              <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-                {{ t('dashboard.sections.plugins.form.category') }}
-              </label>
-              <TuffSelect v-model="formData.category" class="w-full">
-                <TuffSelectItem
-                  v-for="category in pluginCategoryOptions"
-                  :key="category.id"
-                  :value="category.id"
-                  :label="category.label"
-                />
-              </TuffSelect>
+            <div class="CreatePluginOverlay-ScrollWrap" :style="scrollWrapStyle">
+              <TxScroll native no-padding class="CreatePluginOverlay-Scroll">
+                <form ref="formContentRef" class="CreatePluginOverlay-Form space-y-6" @submit.prevent="onSubmit">
+                  <div v-if="inputMode === 'upload'" class="space-y-4">
+                    <div class="flex flex-col gap-2">
+                      <label class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.form.packageUpload') }}
+                      </label>
+                      <TxFileUploader
+                        v-model="packageFiles"
+                        :multiple="false"
+                        :max="1"
+                        accept=".tpex"
+                        :disabled="packageLoading"
+                        :button-text="t('dashboard.sections.plugins.form.uploadPackage')"
+                        :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
+                        :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
+                        @change="handlePackageChange"
+                      />
+                      <p v-if="packageLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                        <span class="i-carbon-circle-dash animate-spin" />
+                        {{ t('dashboard.sections.plugins.loading', 'Loading...') }}
+                      </p>
+                      <p v-if="packageError" class="text-xs text-red-500">
+                        {{ packageError }}
+                      </p>
+                    </div>
+
+                    <div v-if="manifestPreview" class="rounded-lg bg-black/5 p-4 dark:bg-white/5">
+                      <p class="mb-2 apple-section-title">
+                        {{ t('dashboard.sections.plugins.manifestPreview') }}
+                      </p>
+                      <div class="space-y-1 text-xs text-black/70 dark:text-white/70">
+                        <p v-if="manifestPreview.id">
+                          <span class="font-medium">ID:</span> {{ manifestPreview.id }}
+                        </p>
+                        <p v-if="manifestPreview.name">
+                          <span class="font-medium">Name:</span> {{ manifestPreview.name }}
+                        </p>
+                        <p v-if="manifestPreview.version">
+                          <span class="font-medium">Version:</span> {{ manifestPreview.version }}
+                        </p>
+                        <p v-if="manifestPreview.channel">
+                          <span class="font-medium">Channel:</span> {{ manifestPreview.channel }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div v-if="formData.initialVersion" class="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-900/20">
+                      <p class="text-xs text-green-700 dark:text-green-300">
+                        <span class="i-carbon-checkmark-filled mr-1" />
+                        {{ t('dashboard.sections.plugins.form.autoPublishHint', { version: formData.initialVersion }) }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.form.identifier') }}
+                    </label>
+                    <Input v-model="formData.slug" placeholder="com.example.plugin" />
+                    <p class="text-[11px] text-black/40 dark:text-white/50">
+                      {{ t('dashboard.sections.plugins.form.identifierHelp') }}
+                    </p>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="flex flex-col gap-2">
+                      <label class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.form.name') }}
+                      </label>
+                      <Input v-model="formData.name" />
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                      <label class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.form.artifactType', 'Publish Type') }}
+                      </label>
+                      <TuffSelect v-model="formData.artifactType" class="w-full">
+                        <TuffSelectItem
+                          v-for="artifactType in artifactTypeOptions"
+                          :key="artifactType.value"
+                          :value="artifactType.value"
+                          :label="artifactType.label"
+                        />
+                      </TuffSelect>
+                      <p class="text-[11px] text-black/40 dark:text-white/50">
+                        {{ t('dashboard.sections.plugins.form.artifactTypeHelp', 'Choose what kind of package you are publishing.') }}
+                      </p>
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                      <label class="apple-section-title">
+                        {{ t('dashboard.sections.plugins.form.category') }}
+                      </label>
+                      <TuffSelect v-model="formData.category" class="w-full">
+                        <TuffSelectItem
+                          v-for="category in pluginCategoryOptions"
+                          :key="category.id"
+                          :value="category.id"
+                          :label="category.label"
+                        />
+                      </TuffSelect>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.form.summary') }}
+                    </label>
+                    <Input v-model="formData.summary" type="textarea" :rows="2" />
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.form.homepage') }}
+                    </label>
+                    <Input v-model="formData.homepage" placeholder="https://github.com/..." />
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.form.icon') }}
+                      <span v-if="packageHasIcon && !formData.iconFile" class="ml-1 text-emerald-500">(from package)</span>
+                    </label>
+                    <div class="flex items-center gap-3">
+                      <div class="flex size-12 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
+                        <img
+                          v-if="hasIconPreview"
+                          :src="displayIconUrl!"
+                          alt="Plugin icon preview"
+                          class="size-full object-contain"
+                        >
+                        <span v-else class="text-lg font-medium text-black/40 dark:text-white/40">
+                          {{ formData.name ? formData.name.charAt(0).toUpperCase() : '?' }}
+                        </span>
+                      </div>
+                      <TxFileUploader
+                        v-model="iconFiles"
+                        class="flex-1"
+                        :multiple="false"
+                        :max="1"
+                        accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                        @change="handleIconChange"
+                      />
+                    </div>
+                    <p class="text-[11px] text-black/40 dark:text-white/50">
+                      <template v-if="packageHasIcon && !formData.iconFile">
+                        {{ t('dashboard.sections.plugins.form.iconFromPackage', 'Icon from package (click to override)') }}
+                      </template>
+                      <template v-else>
+                        {{ t('dashboard.sections.plugins.form.iconHelp') }}
+                      </template>
+                    </p>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <label class="apple-section-title">
+                      {{ t('dashboard.sections.plugins.form.readme') }}
+                    </label>
+                    <Input
+                      v-model="formData.readme"
+                      type="textarea"
+                      :rows="6"
+                      :placeholder="readmePreview || '# My Plugin\n\nDescribe your plugin here...'"
+                    />
+                    <p class="text-[11px] text-black/40 dark:text-white/50">
+                      {{ t('dashboard.sections.plugins.form.readmeHelp') }}
+                    </p>
+                  </div>
+
+                  <label v-if="isAdmin" class="flex items-center gap-3">
+                    <Switch v-model="formData.isOfficial" />
+                    <span class="text-sm text-black/80 dark:text-white/80">
+                      {{ t('dashboard.sections.plugins.form.isOfficial') }}
+                    </span>
+                  </label>
+
+                  <div class="pt-4">
+                    <Button block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
+                      <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
+                      {{ t('dashboard.sections.plugins.createSubmit') }}
+                    </Button>
+                    <p v-if="error" class="mt-2 text-center text-xs text-red-500">
+                      {{ error }}
+                    </p>
+                  </div>
+                </form>
+              </TxScroll>
             </div>
           </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.summary') }}
-            </label>
-            <Input v-model="formData.summary" type="textarea" :rows="2" />
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.homepage') }}
-            </label>
-            <Input v-model="formData.homepage" placeholder="https://github.com/..." />
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.icon') }}
-              <span v-if="packageHasIcon && !formData.iconFile" class="ml-1 text-emerald-500">(from package)</span>
-            </label>
-            <div class="flex items-center gap-3">
-              <div class="flex size-12 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10 dark:bg-white/5">
-                <img
-                  v-if="hasIconPreview"
-                  :src="displayIconUrl!"
-                  alt="Plugin icon preview"
-                  class="size-full object-contain"
-                >
-                <span v-else class="text-lg font-medium text-black/40 dark:text-white/40">
-                  {{ formData.name ? formData.name.charAt(0).toUpperCase() : '?' }}
-                </span>
-              </div>
-              <TxFileUploader
-                v-model="iconFiles"
-                class="flex-1"
-                :multiple="false"
-                :max="1"
-                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                @change="handleIconChange"
-              />
-            </div>
-            <p class="text-[11px] text-black/40 dark:text-white/50">
-              <template v-if="packageHasIcon && !formData.iconFile">
-                {{ t('dashboard.sections.plugins.form.iconFromPackage', 'Icon from package (click to override)') }}
-              </template>
-              <template v-else>
-                {{ t('dashboard.sections.plugins.form.iconHelp') }}
-              </template>
-            </p>
-          </div>
-
-          <div class="flex flex-col gap-2">
-            <label class="text-xs font-medium uppercase tracking-wider text-black/50 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.readme') }}
-            </label>
-            <Input
-              v-model="formData.readme"
-              type="textarea"
-              :rows="6"
-              :placeholder="readmePreview || '# My Plugin\n\nDescribe your plugin here...'"
-            />
-            <p class="text-[11px] text-black/40 dark:text-white/50">
-              {{ t('dashboard.sections.plugins.form.readmeHelp') }}
-            </p>
-          </div>
-
-          <label v-if="isAdmin" class="flex items-center gap-3">
-            <Switch v-model="formData.isOfficial" />
-            <span class="text-sm text-black/80 dark:text-white/80">
-              {{ t('dashboard.sections.plugins.form.isOfficial') }}
-            </span>
-          </label>
-
-          <div class="pt-2">
-            <Button block :disabled="loading || !canSubmit" native-type="submit">
-              <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
-              {{ t('dashboard.sections.plugins.createSubmit') }}
-            </Button>
-            <p v-if="error" class="mt-2 text-center text-xs text-red-500">
-              {{ error }}
-            </p>
-          </div>
-        </form>
-      </div>
-    </div>
-  </Drawer>
+        </TxAutoSizer>
+      </template>
+    </TxFlipOverlay>
+  </Teleport>
 </template>
+
+<style scoped>
+.CreatePluginOverlay-Panel {
+  width: min(900px, 94vw);
+  min-height: 360px;
+  max-height: min(90vh, 920px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 1.2rem;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color-overlay);
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.CreatePluginOverlay-Header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.CreatePluginOverlay-Mode {
+  margin: 14px 18px 0;
+  display: inline-flex;
+  border-radius: 0.82rem;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.04);
+
+  .dark & {
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.CreatePluginOverlay-ModeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 0.68rem;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.54);
+  transition: all 0.2s ease;
+
+  &:hover {
+    color: rgba(0, 0, 0, 0.72);
+  }
+
+  &.is-active {
+    color: rgba(0, 0, 0, 0.88);
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  }
+
+  .dark & {
+    color: rgba(255, 255, 255, 0.58);
+
+    &:hover {
+      color: rgba(255, 255, 255, 0.76);
+    }
+
+    &.is-active {
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.14);
+    }
+  }
+}
+
+.CreatePluginOverlay-ScrollWrap {
+  --plugin-form-scroll-height: 420px;
+  --plugin-form-scroll-max-height: 620px;
+
+  height: var(--plugin-form-scroll-height);
+  max-height: var(--plugin-form-scroll-max-height);
+  min-height: 220px;
+  padding: 0 16px 16px;
+  overflow: hidden;
+}
+
+.CreatePluginOverlay-Scroll {
+  height: 100%;
+}
+
+.CreatePluginOverlay-Form {
+  padding: 18px 4px 8px;
+}
+
+:deep(.CreatePluginOverlay-SizerOuter) {
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+:deep(.CreatePluginOverlay-Scroll .tx-scroll__content) {
+  padding: 0;
+  min-height: auto;
+}
+
+@media (max-width: 768px) {
+  .CreatePluginOverlay-Panel {
+    width: min(96vw, 900px);
+    min-height: 320px;
+  }
+
+  .CreatePluginOverlay-Header {
+    padding: 14px 14px 10px;
+  }
+
+  .CreatePluginOverlay-Mode {
+    margin: 10px 12px 0;
+  }
+
+  .CreatePluginOverlay-ScrollWrap {
+    min-height: 200px;
+    padding: 0 10px 10px;
+  }
+}
+</style>
+
+<style>
+.CreatePluginOverlay-Mask {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 12, 0.44);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 1860;
+  perspective: 1200px;
+}
+
+.CreatePluginOverlay-Mask-enter-active,
+.CreatePluginOverlay-Mask-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.CreatePluginOverlay-Mask-enter-from,
+.CreatePluginOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.CreatePluginOverlay-Card {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+</style>

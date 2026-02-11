@@ -100,35 +100,43 @@ async function revokeDevice(device: DeviceItem) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="mx-auto max-w-5xl space-y-6">
     <header>
-      <h1 class="text-2xl text-black font-semibold tracking-tight dark:text-light">
+      <h1 class="apple-heading-md">
         {{ t('dashboard.devices.title', '设备管理') }}
       </h1>
-      <p class="mt-2 text-sm text-black/70 dark:text-light/80">
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.devices.description', '查看和管理您登录的设备') }}
       </p>
     </header>
 
-    <section class="border border-primary/10 rounded-3xl bg-white/70 p-6 shadow-sm backdrop-blur-sm dark:border-light/10 dark:bg-dark/60">
-      <h2 class="text-lg text-black font-semibold dark:text-light">
+    <section class="apple-card-lg p-6">
+      <h2 class="apple-heading-sm">
         {{ t('dashboard.devices.activeSessions', '设备列表') }}
       </h2>
 
-      <div v-if="pending" class="mt-4 flex items-center justify-center py-8">
-        <span class="i-carbon-circle-dash animate-spin text-2xl text-primary" />
+      <div v-if="pending" class="mt-4 space-y-3 py-6">
+        <div class="flex items-center justify-center">
+          <TxSpinner :size="22" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
 
-      <ul v-else-if="devices.length" class="mt-4 space-y-3">
+      <ul v-else-if="devices.length" class="mt-5 space-y-3">
         <li
           v-for="device in devices"
           :key="device.id"
-          class="flex flex-col gap-3 border border-primary/10 rounded-2xl p-4 transition dark:border-light/10"
-          :class="isCurrent(device) ? 'bg-primary/5 dark:bg-primary/10' : 'bg-white/50 dark:bg-dark/40'"
+          class="flex flex-col gap-3 rounded-2xl border border-black/[0.04] p-4 transition dark:border-white/[0.06]"
+          :class="isCurrent(device) ? 'bg-primary/5 dark:bg-primary/10' : 'bg-black/[0.02] dark:bg-white/[0.03]'"
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p class="text-sm text-black font-medium dark:text-light">
+              <p class="text-sm font-medium text-black dark:text-white">
                 {{ device.deviceName || t('dashboard.devices.unnamed', '未命名设备') }}
                 <span
                   v-if="isCurrent(device)"
@@ -143,10 +151,10 @@ async function revokeDevice(device: DeviceItem) {
                   {{ t('dashboard.devices.revoked', '已撤销') }}
                 </span>
               </p>
-              <p class="mt-0.5 text-xs text-black/60 dark:text-light/60">
+              <p class="mt-0.5 text-xs text-black/50 dark:text-white/50">
                 {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }}
               </p>
-              <p v-if="device.userAgent" class="mt-0.5 text-xs text-black/50 dark:text-light/50">
+              <p v-if="device.userAgent" class="mt-0.5 text-xs text-black/40 dark:text-white/40">
                 {{ device.userAgent }}
               </p>
             </div>
@@ -182,7 +190,7 @@ async function revokeDevice(device: DeviceItem) {
         </li>
       </ul>
 
-      <div v-else class="mt-4 py-8 text-center text-sm text-black/60 dark:text-light/60">
+      <div v-else class="mt-4 py-8 text-center text-sm text-black/40 dark:text-white/40">
         {{ t('dashboard.devices.noSessions', '暂无设备') }}
       </div>
     </section>

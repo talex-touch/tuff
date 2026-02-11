@@ -1,7 +1,13 @@
-import { createError } from 'h3'
 import { requireAuth } from '../../../utils/auth'
+import { assertTeamCapability, resolveActiveTeamContext } from '../../../utils/teamContext'
+import { listInvites } from '../../../utils/teamStore'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
-  throw createError({ statusCode: 501, statusMessage: 'Team features are not available yet.' })
+  const { userId } = await requireAuth(event)
+  const context = await resolveActiveTeamContext(event, userId)
+
+  assertTeamCapability(context, 'canInvite', 'Only team owner/admin can view invites')
+
+  const invites = await listInvites(event, context.team.id)
+  return { invites }
 })

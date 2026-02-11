@@ -17,31 +17,45 @@ interface DashboardUpdate {
 }
 
 interface DashboardTeam {
+  id: string
   name: string
+  type: 'personal' | 'organization'
+  role: 'owner' | 'admin' | 'member'
   plan: string
-  slots: {
+  collaborationEnabled: boolean
+  seats: {
     total: number
     used: number
   }
+  quota: {
+    aiRequests: {
+      limit: number
+      used: number
+    }
+    aiTokens: {
+      limit: number
+      used: number
+    }
+  }
+  permissions: {
+    canInvite: boolean
+    canManageMembers: boolean
+    canDisband: boolean
+    canCreateTeam: boolean
+  }
+  upgrade: {
+    required: boolean
+    targetPlan: 'TEAM' | null
+  }
   members: Array<{
     id: string
+    userId: string
     name: string
     role: string
     status: string
     email?: string
   }>
-  invitations: unknown[]
-  upcoming?: {
-    label: string
-    date: string
-  }
-  notes?: string
-  organization?: {
-    id: string
-    name: string
-    role: string
-    membersCount?: number
-  } | null
+  invites: unknown[]
 }
 
 interface DashboardImage {
@@ -51,8 +65,17 @@ interface DashboardImage {
 
 export function useDashboardPluginsData() {
   const request = resolveRequest()
-  const state = useAsyncData('dashboard-plugins', () =>
-    request<DashboardPluginResponse>('/api/dashboard/plugins'))
+  const state = useAsyncData(
+    'dashboard-plugins',
+    () => request<DashboardPluginResponse>('/api/dashboard/plugins', { timeout: 10000 }),
+    {
+      default: () => ({
+        plugins: [],
+        featured: [],
+        total: 0,
+      }),
+    },
+  )
 
   const plugins = computed(() => state.data.value?.plugins ?? [])
   const featured = computed(() => state.data.value?.featured ?? [])
@@ -123,6 +146,25 @@ interface SubscriptionStatus {
     customModels: boolean
     prioritySupport: boolean
     apiAccess: boolean
+  }
+  team?: {
+    id: string
+    name: string
+    type: 'personal' | 'organization'
+    role: 'owner' | 'admin' | 'member'
+    collaborationEnabled: boolean
+    seats: { total: number, used: number }
+    permissions: {
+      canInvite: boolean
+      canManageMembers: boolean
+      canDisband: boolean
+      canCreateTeam: boolean
+    }
+    upgrade: {
+      required: boolean
+      targetPlan: 'TEAM' | null
+    }
+    manageUrl: string
   }
 }
 

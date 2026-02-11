@@ -18,6 +18,13 @@ export default defineConfig({
   shortcuts: [
     ['btn', 'px-4 py-1 rounded inline-block bg-teal-600 text-white cursor-pointer hover:bg-teal-700 disabled:cursor-default disabled:bg-gray-600 disabled:opacity-50'],
     ['icon-btn', 'inline-block cursor-pointer select-none opacity-75 transition duration-200 ease-in-out hover:opacity-100 hover:text-teal-600'],
+    ['apple-card', 'rounded-2xl border border-black/[0.04] bg-white/80 backdrop-blur-xl shadow-sm dark:border-white/[0.06] dark:bg-white/[0.04]'],
+    ['apple-card-lg', 'rounded-3xl border border-black/[0.04] bg-white/80 backdrop-blur-xl shadow-sm dark:border-white/[0.06] dark:bg-white/[0.04]'],
+    ['apple-section-title', 'text-[11px] font-semibold uppercase tracking-wider text-black/40 dark:text-white/40'],
+    ['apple-body', 'text-[15px] leading-relaxed text-black/70 dark:text-white/70'],
+    ['apple-heading-lg', 'text-3xl font-bold tracking-tight text-black dark:text-white sm:text-4xl'],
+    ['apple-heading-md', 'text-xl font-semibold tracking-tight text-black dark:text-white'],
+    ['apple-heading-sm', 'text-base font-semibold text-black dark:text-white'],
   ],
   theme: {
     colors: {

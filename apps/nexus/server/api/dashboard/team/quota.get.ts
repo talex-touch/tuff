@@ -1,7 +1,30 @@
-import { createError } from 'h3'
 import { requireAuth } from '../../../utils/auth'
+import { assertTeamCapability, resolveActiveTeamContext } from '../../../utils/teamContext'
 
 export default defineEventHandler(async (event) => {
-  await requireAuth(event)
-  throw createError({ statusCode: 501, statusMessage: 'Team features are not available yet.' })
+  const { userId } = await requireAuth(event)
+  const context = await resolveActiveTeamContext(event, userId)
+
+  assertTeamCapability(context, 'canViewUsage', 'Only team owner/admin can view team quota')
+
+  return {
+    quota: {
+      organizationId: context.quota.organizationId,
+      plan: context.quota.plan,
+      aiRequests: {
+        used: context.quota.aiRequestsUsed,
+        limit: context.quota.aiRequestsLimit,
+      },
+      aiTokens: {
+        used: context.quota.aiTokensUsed,
+        limit: context.quota.aiTokensLimit,
+      },
+      seats: {
+        used: context.seatsUsed,
+        total: context.seatsLimit,
+      },
+      weekStartDate: context.quota.weekStartDate,
+      updatedAt: context.quota.updatedAt,
+    },
+  }
 })

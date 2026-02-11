@@ -1233,3 +1233,111 @@ export async function getRealTimeStats(event: H3Event): Promise<{
     avgLatency,
   }
 }
+
+export interface UserTelemetryOverview {
+  summary: {
+    searches: number
+    avgLatency: number
+    avgResultCount: number
+    lastSearchAt: string | null
+  }
+  daily: Array<{
+    date: string
+    searches: number
+    avgLatency: number
+    avgResultCount: number
+  }>
+}
+
+export async function getUserTelemetryOverview(
+  event: H3Event,
+  userId: string,
+  options: { days?: number } = {},
+): Promise<UserTelemetryOverview> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureTelemetrySchema(db)
+
+  const days = Math.max(1, Math.min(90, Number(options.days) || 30))
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days + 1)
+  startDate.setHours(0, 0, 0, 0)
+  const startDateStr = startDate.toISOString()
+
+  const summaryRow = await db.prepare(`
+    SELECT
+      COUNT(*) AS searches,
+      AVG(search_duration_ms) AS avg_latency,
+      AVG(search_result_count) AS avg_result_count,
+      MAX(created_at) AS last_search_at
+    FROM ${TELEMETRY_TABLE}
+    WHERE user_id = ?1
+      AND event_type = 'search'
+      AND created_at >= ?2;
+  `).bind(userId, startDateStr).first<{
+    searches?: number
+    avg_latency?: number | null
+    avg_result_count?: number | null
+    last_search_at?: string | null
+  }>()
+
+  const dailyRows = await db.prepare(`
+    SELECT
+      substr(created_at, 1, 10) AS date,
+      COUNT(*) AS searches,
+      AVG(search_duration_ms) AS avg_latency,
+      AVG(search_result_count) AS avg_result_count
+    FROM ${TELEMETRY_TABLE}
+    WHERE user_id = ?1
+      AND event_type = 'search'
+      AND created_at >= ?2
+    GROUP BY substr(created_at, 1, 10)
+    ORDER BY date ASC;
+  `).bind(userId, startDateStr).all<{
+    date?: string
+    searches?: number
+    avg_latency?: number | null
+    avg_result_count?: number | null
+  }>()
+
+  const dailyMap = new Map<string, { searches: number, avgLatency: number, avgResultCount: number }>()
+  for (const row of dailyRows.results ?? []) {
+    const date = row.date || ''
+    if (!date)
+      continue
+
+    dailyMap.set(date, {
+      searches: Number(row.searches ?? 0),
+      avgLatency: Math.round(Number(row.avg_latency ?? 0)),
+      avgResultCount: Math.round(Number(row.avg_result_count ?? 0)),
+    })
+  }
+
+  const daily: UserTelemetryOverview['daily'] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const pointDate = new Date()
+    pointDate.setHours(0, 0, 0, 0)
+    pointDate.setDate(pointDate.getDate() - i)
+    const date = pointDate.toISOString().slice(0, 10)
+    const existing = dailyMap.get(date)
+    daily.push({
+      date,
+      searches: existing?.searches ?? 0,
+      avgLatency: existing?.avgLatency ?? 0,
+      avgResultCount: existing?.avgResultCount ?? 0,
+    })
+  }
+
+  return {
+    summary: {
+      searches: Number(summaryRow?.searches ?? 0),
+      avgLatency: Math.round(Number(summaryRow?.avg_latency ?? 0)),
+      avgResultCount: Math.round(Number(summaryRow?.avg_result_count ?? 0)),
+      lastSearchAt: summaryRow?.last_search_at ?? null,
+    },
+    daily,
+  }
+}

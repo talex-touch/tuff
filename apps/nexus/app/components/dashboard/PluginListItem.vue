@@ -38,6 +38,11 @@ function channelTone(channel: PluginVersion['channel']) {
       return 'muted'
   }
 }
+
+function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
+  const artifactType = type ?? 'plugin'
+  return t(`dashboard.sections.plugins.form.artifactTypes.${artifactType}`, artifactType)
+}
 </script>
 
 <template>
@@ -45,18 +50,18 @@ function channelTone(channel: PluginVersion['channel']) {
     variant="bare"
     block
     native-type="button"
-    class="group flex w-full items-center gap-4 rounded-xl border border-transparent bg-white/60 p-3 text-left transition hover:border-primary/20 hover:bg-white dark:bg-white/5 dark:hover:border-white/10 dark:hover:bg-white/10"
+    class="group flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white/60 p-4 text-left transition-all duration-200 hover:border-black/[0.04] hover:bg-white hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5 dark:hover:border-white/[0.06] dark:hover:bg-white/8"
     @click="emit('click', plugin)"
   >
     <!-- Icon -->
-    <div class="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/5 bg-black/5 dark:border-white/10 dark:bg-white/10">
+    <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
       <img
         v-if="plugin.iconUrl"
         :src="plugin.iconUrl"
         :alt="plugin.name"
         class="size-full object-cover"
       >
-      <span v-else class="text-lg font-semibold text-black/60 dark:text-white/60">
+      <span v-else class="text-lg font-semibold text-black/50 dark:text-white/50">
         {{ plugin.name.charAt(0).toUpperCase() }}
       </span>
     </div>
@@ -73,7 +78,7 @@ function channelTone(channel: PluginVersion['channel']) {
           :title="t('dashboard.sections.plugins.officialBadge')"
         />
       </div>
-      <p class="truncate text-xs text-black/50 dark:text-white/50">
+      <p class="truncate text-xs text-black/40 dark:text-white/40">
         {{ plugin.summary || plugin.slug }}
       </p>
     </div>
@@ -96,17 +101,14 @@ function channelTone(channel: PluginVersion['channel']) {
           size="sm"
         />
       </template>
-      <span v-else class="text-xs text-black/30 dark:text-white/30">—</span>
+      <span v-else class="text-xs text-black/20 dark:text-white/20">—</span>
     </div>
 
     <!-- Category -->
     <div class="hidden shrink-0 lg:block">
-      <span class="text-xs text-black/40 dark:text-white/40">
-        {{ categoryLabel || plugin.category }}
+      <span class="text-xs text-black/35 dark:text-white/35">
+        {{ resolveArtifactTypeLabel(plugin.artifactType) }} · {{ categoryLabel || plugin.category }}
       </span>
     </div>
-
-    <!-- Arrow -->
-    <span class="i-carbon-chevron-right shrink-0 text-black/20 transition group-hover:text-black/40 dark:text-white/20 dark:group-hover:text-white/40" />
   </TxButton>
 </template>

@@ -57,7 +57,7 @@ const planOptions = [
 
 const statusColors: Record<string, string> = {
   active: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  exhausted: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+  exhausted: 'bg-black/[0.06] text-black/60 dark:bg-white/[0.08] dark:text-white/60',
   expired: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400',
   revoked: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
 }
@@ -113,27 +113,25 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-semibold text-black dark:text-light">
-          {{ t('dashboard.sections.codes.title', 'Activation Codes') }}
-        </h1>
-        <p class="mt-1 text-sm text-black/60 dark:text-light/60">
-          {{ t('dashboard.sections.codes.subtitle', 'Generate and manage activation codes') }}
-        </p>
-      </div>
+  <div class="mx-auto max-w-5xl space-y-6">
+    <div>
+      <h1 class="apple-heading-md">
+        {{ t('dashboard.sections.codes.title', 'Activation Codes') }}
+      </h1>
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
+        {{ t('dashboard.sections.codes.subtitle', 'Generate and manage activation codes') }}
+      </p>
     </div>
 
     <!-- Generation Form -->
-    <section class="rounded-2xl border border-primary/10 bg-white/80 p-5 dark:border-light/10 dark:bg-dark/60">
-      <h2 class="text-base font-semibold text-black dark:text-light">
+    <section class="apple-card-lg p-5">
+      <h2 class="apple-heading-sm">
         {{ t('dashboard.sections.codes.generateTitle', 'Generate New Codes') }}
       </h2>
 
       <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Plan</label>
+          <label class="apple-section-title mb-1 block">Plan</label>
           <TuffSelect v-model="genForm.plan" class="w-full">
             <TuffSelectItem
               v-for="opt in planOptions"
@@ -145,22 +143,22 @@ onMounted(() => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Duration (days)</label>
+          <label class="apple-section-title mb-1 block">Duration (days)</label>
           <Input v-model="genForm.durationDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Max Uses</label>
+          <label class="apple-section-title mb-1 block">Max Uses</label>
           <Input v-model="genForm.maxUses" type="number" min="1" max="1000" class="w-full" />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In (days)</label>
+          <label class="apple-section-title mb-1 block">Expires In (days)</label>
           <Input v-model="genForm.expiresInDays" type="number" min="1" max="365" class="w-full" />
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Count</label>
+          <label class="apple-section-title mb-1 block">Count</label>
           <Input v-model="genForm.count" type="number" min="1" max="100" class="w-full" />
         </div>
       </div>
@@ -171,7 +169,7 @@ onMounted(() => {
         variant="primary"
         @click="generateCodes"
       >
-        <span v-if="generating" class="i-carbon-rotate-360 animate-spin" />
+        <TxSpinner v-if="generating" :size="14" />
         <span>{{ generating ? t('dashboard.sections.codes.generating', 'Generating...') : t('dashboard.sections.codes.generateButton', 'Generate Codes') }}</span>
       </Button>
     </section>
@@ -182,70 +180,82 @@ onMounted(() => {
     </div>
 
     <!-- Codes List -->
-    <section class="rounded-2xl border border-primary/10 bg-white/80 dark:border-light/10 dark:bg-dark/60 overflow-hidden">
-      <div class="flex items-center justify-between border-b border-primary/10 p-5 dark:border-light/10">
-        <h2 class="text-base font-semibold text-black dark:text-light">
+    <section class="apple-card-lg overflow-hidden">
+      <div class="border-b border-black/[0.04] p-5 dark:border-white/[0.06]">
+        <h2 class="text-base font-semibold text-black dark:text-white">
           {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
         </h2>
-        <TxButton
-          variant="bare"
-          size="small"
-          native-type="button"
-          :disabled="loading"
-          class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-light/60 dark:hover:text-light"
-          @click="fetchCodes"
-        >
-          <span :class="loading ? 'i-carbon-rotate-360 animate-spin' : 'i-carbon-refresh'" class="text-base" />
-          {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
-        </TxButton>
+        <div class="mt-3">
+          <TxButton
+            variant="bare"
+            size="small"
+            native-type="button"
+            :disabled="loading"
+            class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-white/60 dark:hover:text-light"
+            @click="fetchCodes"
+          >
+            <TxSpinner v-if="loading" :size="14" />
+            <span v-else class="i-carbon-refresh text-base" />
+            {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
+          </TxButton>
+        </div>
       </div>
 
-      <div v-if="loading && !codes.length" class="p-8 text-center text-black/50 dark:text-light/50">
-        {{ t('dashboard.sections.codes.loading', 'Loading...') }}
+      <div v-if="loading && !codes.length" class="space-y-3 p-5">
+        <div class="flex items-center justify-center gap-2 text-sm text-black/50 dark:text-white/50">
+          <TxSpinner :size="16" />
+          {{ t('dashboard.sections.codes.loading', 'Loading...') }}
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
 
-      <div v-else-if="!codes.length" class="p-8 text-center text-black/50 dark:text-light/50">
+      <div v-else-if="!codes.length" class="p-8 text-center text-black/50 dark:text-white/50">
         {{ t('dashboard.sections.codes.empty', 'No activation codes yet. Generate some above.') }}
       </div>
 
       <div v-else class="overflow-x-auto">
         <table class="w-full min-w-[700px]">
-          <thead class="bg-black/5 dark:bg-light/5">
+          <thead class="bg-black/5 dark:bg-white/[0.04]">
             <tr>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.code', 'Code') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.plan', 'Plan') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.duration', 'Duration') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.uses', 'Uses') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.status', 'Status') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.created', 'Created') }}
               </th>
-              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-light/60">
+              <th class="px-4 py-3 text-left text-xs font-medium text-black/60 uppercase dark:text-white/60">
                 {{ t('dashboard.sections.codes.table.expires', 'Expires') }}
               </th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-primary/10 dark:divide-light/10">
-            <tr v-for="code in codes" :key="code.id" class="transition hover:bg-black/5 dark:hover:bg-light/5">
+          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+            <tr v-for="code in codes" :key="code.id" class="transition hover:bg-black/[0.04] dark:hover:bg-white/[0.04]">
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
-                  <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-light/10 dark:text-light">{{ code.code }}</code>
+                  <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
                   <TxButton
                     variant="bare"
                     size="mini"
                     native-type="button"
                     icon="i-carbon-copy"
-                    class="text-black/40 transition hover:text-black/70 dark:text-light/40 dark:hover:text-light/70"
+                    class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70"
                     :title="t('dashboard.sections.codes.copy', 'Copy')"
                     @click="copyCode(code.code)"
                   />
@@ -256,24 +266,24 @@ onMounted(() => {
                   {{ code.plan }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-light/60">
+              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
                 {{ code.duration_days }} {{ t('dashboard.sections.codes.days', 'days') }}
               </td>
-              <td class="px-4 py-3 text-sm text-black dark:text-light">
+              <td class="px-4 py-3 text-sm text-black dark:text-white">
                 {{ code.uses }} / {{ code.max_uses }}
               </td>
               <td class="px-4 py-3">
                 <span
                   class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
-                  :class="statusColors[code.status] || 'bg-black/10 text-black/60 dark:bg-light/10 dark:text-light/60'"
+                  :class="statusColors[code.status] || 'bg-black/10 text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
                 >
                   {{ code.status }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-light/60">
+              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
                 {{ formatDate(code.created_at) }}
               </td>
-              <td class="px-4 py-3 text-sm text-black/60 dark:text-light/60">
+              <td class="px-4 py-3 text-sm text-black/60 dark:text-white/60">
                 {{ code.expires_at ? formatDate(code.expires_at) : '-' }}
               </td>
             </tr>

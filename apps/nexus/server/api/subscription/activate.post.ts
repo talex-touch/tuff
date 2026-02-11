@@ -5,8 +5,8 @@ export default defineEventHandler(async (event) => {
   const { userId } = await requireVerifiedEmail(event)
   const body = await readBody(event)
 
-  const { code } = body
-  if (!code || typeof code !== 'string') {
+  const code = typeof body?.code === 'string' ? body.code.trim() : ''
+  if (!code) {
     throw createError({ statusCode: 400, statusMessage: 'Activation code is required' })
   }
 

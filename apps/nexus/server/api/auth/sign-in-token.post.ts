@@ -1,4 +1,4 @@
-import { createAppToken, requireSessionAuth } from '../../utils/auth'
+import { createAppToken, requireAuth } from '../../utils/auth'
 
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message)
@@ -10,16 +10,21 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
 /**
  * Create a sign-in token for the current user
- * This allows the desktop app to authenticate using the browser session
+ * This allows the desktop app to authenticate using browser session or app bearer token.
  */
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireSessionAuth(event)
+  const { userId, deviceId } = await requireAuth(event)
 
   let appToken: string | null = null
   let primaryError: unknown = null
 
   try {
-    appToken = await createAppToken(event, userId)
+    if (deviceId !== undefined) {
+      appToken = await createAppToken(event, userId, { deviceId })
+    }
+    else {
+      appToken = await createAppToken(event, userId)
+    }
   }
   catch (error) {
     primaryError = error

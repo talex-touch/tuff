@@ -4,6 +4,8 @@ export type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 
 export type VersionStatus = 'pending' | 'approved' | 'rejected'
 
+export type DashboardArtifactType = 'plugin' | 'layout' | 'theme'
+
 export interface DashboardPluginAuthor {
   name: string
   avatarColor?: string
@@ -35,6 +37,7 @@ export interface DashboardPlugin {
   name: string
   summary: string
   category: string
+  artifactType?: DashboardArtifactType
   installs: number
   homepage?: string | null
   isOfficial: boolean

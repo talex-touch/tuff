@@ -9,6 +9,11 @@ const communityChannelIcons = {
   github: 'i-carbon-logo-github',
   events: 'i-carbon-calendar-heat-map',
 } as const
+const communityChannelColors = {
+  slack: '#a78bfa',
+  github: '#f8fafc',
+  events: '#60a5fa',
+} as const
 
 const communitySpotlightKeys = ['learning', 'newsletter'] as const
 const communitySpotlightIcons = {
@@ -23,6 +28,7 @@ const community = computed(() => ({
   channels: communityChannelKeys.map(key => ({
     id: key,
     icon: communityChannelIcons[key],
+    color: communityChannelColors[key],
     title: t(`landing.os.community.channels.${key}.title`),
     meta: t(`landing.os.community.channels.${key}.meta`),
     description: t(`landing.os.community.channels.${key}.description`),
@@ -45,7 +51,7 @@ const community = computed(() => ({
     :title="community.headline"
     :subtitle="community.subheadline"
     section-class="min-h-screen flex flex-col justify-center"
-    container-class="max-w-6xl w-full space-y-10"
+    container-class="max-w-5xl w-full space-y-8"
     :reveal-options="{
       from: {
         opacity: 0,
@@ -55,69 +61,66 @@ const community = computed(() => ({
     }"
   >
     <template #decoration>
-      <div class="absolute left-[-260px] top-1/2 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(192,132,252,0.22),_transparent_68%)] blur-3xl -translate-y-1/2" />
-      <div class="absolute right-[-200px] top-[15%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.18),_transparent_70%)] blur-3xl" />
+      <div class="absolute left-[-260px] top-1/2 h-[520px] w-[520px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(168,85,247,0.12),_transparent_68%)] blur-3xl -translate-y-1/2" />
+      <div class="absolute right-[-200px] top-[15%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle_at_center,_rgba(59,130,246,0.10),_transparent_70%)] blur-3xl" />
     </template>
 
-    <div
-      class="grid gap-7 lg:grid-cols-3"
-      data-reveal
-    >
-      <article
+    <!-- Channel cards -->
+    <div class="grid gap-4 lg:grid-cols-3" data-reveal>
+      <NuxtLink
         v-for="channel in community.channels"
         :key="channel.id"
-        class="group relative h-full min-h-[320px] flex flex-col justify-between gap-7 overflow-hidden border border-white/12 rounded-[30px] bg-[linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-8 text-center text-white shadow-[0_26px_95px_rgba(6,18,52,0.4)] backdrop-blur-[6px] transition duration-300 hover:border-white/30 hover:bg-[linear-gradient(160deg,rgba(255,255,255,0.14),rgba(255,255,255,0.04))] hover:-translate-y-1"
+        :to="channel.href"
+        class="group flex flex-col gap-5 border border-white/[0.08] rounded-2xl bg-white/[0.03] px-6 py-6 no-underline"
       >
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.2),_transparent_72%)] opacity-70 transition duration-300 group-hover:opacity-100" />
-        <div class="relative flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.32em] text-white/50">
-          <span>{{ channel.meta }}</span>
-          <span class="i-carbon-arrow-up-right text-base text-white/40 transition group-hover:text-white/70" aria-hidden="true" />
-        </div>
-        <div class="relative flex flex-col items-center gap-5">
-          <span class="size-14 inline-flex items-center justify-center rounded-[22px] bg-white/15 text-white shadow-[0_20px_45px_rgba(4,16,52,0.38)]">
-            <span :class="channel.icon" class="text-2xl" aria-hidden="true" />
-          </span>
-          <div class="space-y-2">
-            <h3 class="text-2xl font-semibold">
+        <!-- Icon -->
+        <span
+          class="size-11 inline-flex items-center justify-center rounded-xl"
+          :style="{ background: `${channel.color}15` }"
+        >
+          <span :class="channel.icon" class="text-xl" :style="{ color: channel.color }" aria-hidden="true" />
+        </span>
+
+        <!-- Text -->
+        <div class="flex flex-1 flex-col gap-2">
+          <div class="flex items-center gap-2">
+            <h3 class="text-[15px] font-semibold text-white/90">
               {{ channel.title }}
             </h3>
-            <p class="text-sm text-white/70 leading-relaxed">
-              {{ channel.description }}
-            </p>
+            <span class="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium text-white/35 uppercase tracking-wider">
+              {{ channel.meta }}
+            </span>
           </div>
+          <p class="text-[13px] text-white/45 leading-relaxed">
+            {{ channel.description }}
+          </p>
         </div>
-        <NuxtLink
-          :to="channel.href"
-          class="relative inline-flex items-center justify-center gap-2 text-sm text-white font-semibold transition hover:text-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-        >
+
+        <!-- CTA -->
+        <span class="inline-flex items-center gap-1.5 text-[13px] font-medium text-white/50">
           {{ channel.cta }}
-          <span class="i-carbon-arrow-right text-base" aria-hidden="true" />
-        </NuxtLink>
-      </article>
+          <span class="i-carbon-arrow-right text-xs" aria-hidden="true" />
+        </span>
+      </NuxtLink>
     </div>
 
-    <div
-      class="grid gap-4 md:grid-cols-2"
-      data-reveal
-    >
+    <!-- Spotlight row -->
+    <div class="grid gap-4 md:grid-cols-2" data-reveal>
       <article
         v-for="spotlight in community.spotlights"
         :key="spotlight.id"
-        class="relative overflow-hidden border border-white/10 rounded-[26px] bg-white/4 px-7 py-6 text-left text-white shadow-[0_20px_70px_rgba(5,16,52,0.32)]"
+        class="flex items-start gap-4 border border-white/[0.06] rounded-xl bg-white/[0.02] px-5 py-4"
       >
-        <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.12),_transparent_70%)] opacity-70" />
-        <div class="relative flex items-start gap-4">
-          <span class="size-10 inline-flex flex-shrink-0 items-center justify-center rounded-2xl bg-white/12 text-white shadow-[0_16px_36px_rgba(5,16,52,0.32)]">
-            <span :class="spotlight.icon" class="text-lg" aria-hidden="true" />
-          </span>
-          <div class="space-y-1.5">
-            <h3 class="text-lg font-semibold leading-tight">
-              {{ spotlight.title }}
-            </h3>
-            <p class="text-sm text-white/70 leading-relaxed">
-              {{ spotlight.copy }}
-            </p>
-          </div>
+        <span class="size-9 mt-0.5 inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-white/50">
+          <span :class="spotlight.icon" class="text-base" aria-hidden="true" />
+        </span>
+        <div>
+          <h3 class="text-sm font-semibold text-white/85">
+            {{ spotlight.title }}
+          </h3>
+          <p class="mt-1 text-[13px] text-white/40 leading-relaxed">
+            {{ spotlight.copy }}
+          </p>
         </div>
       </article>
     </div>

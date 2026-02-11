@@ -25,86 +25,94 @@ function formatLedgerTime(value: string) {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="mx-auto max-w-5xl space-y-6">
     <header>
-      <h1 class="text-2xl text-black font-semibold tracking-tight dark:text-light">
+      <h1 class="apple-heading-md">
         {{ t('dashboard.credits.title', 'AI 积分') }}
       </h1>
-      <p class="mt-2 text-sm text-black/70 dark:text-light/80">
+      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
         {{ t('dashboard.credits.subtitle', '个人额度与团队池按月重置') }}
       </p>
     </header>
 
     <section class="grid gap-4 md:grid-cols-2">
-      <div class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60">
-        <p class="text-sm text-black/60 dark:text-light/70">
+      <div class="apple-card-lg p-6">
+        <p class="apple-section-title">
           {{ t('dashboard.credits.teamPool', '团队池额度') }}
         </p>
         <div class="mt-3 flex items-end gap-3">
-          <span class="text-3xl font-semibold text-black dark:text-light">
+          <span class="text-3xl font-semibold text-black dark:text-white">
             {{ formatNumber((teamBalance?.quota ?? 0) - (teamBalance?.used ?? 0)) }}
           </span>
-          <span class="text-xs text-black/50 dark:text-light/50">
+          <span class="text-xs text-black/40 dark:text-white/40">
             / {{ formatNumber(teamBalance?.quota ?? 0) }}
           </span>
         </div>
-        <p class="mt-2 text-xs text-black/50 dark:text-light/60">
+        <p class="mt-2 text-xs text-black/40 dark:text-white/40">
           {{ t('dashboard.credits.used', { n: formatNumber(teamBalance?.used ?? 0) }) }}
         </p>
       </div>
 
-      <div class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60">
-        <p class="text-sm text-black/60 dark:text-light/70">
+      <div class="apple-card-lg p-6">
+        <p class="apple-section-title">
           {{ t('dashboard.credits.personalPool', '个人额度') }}
         </p>
         <div class="mt-3 flex items-end gap-3">
-          <span class="text-3xl font-semibold text-black dark:text-light">
+          <span class="text-3xl font-semibold text-black dark:text-white">
             {{ formatNumber((userBalance?.quota ?? 0) - (userBalance?.used ?? 0)) }}
           </span>
-          <span class="text-xs text-black/50 dark:text-light/50">
+          <span class="text-xs text-black/40 dark:text-white/40">
             / {{ formatNumber(userBalance?.quota ?? 0) }}
           </span>
         </div>
-        <p class="mt-2 text-xs text-black/50 dark:text-light/60">
+        <p class="mt-2 text-xs text-black/40 dark:text-white/40">
           {{ t('dashboard.credits.used', { n: formatNumber(userBalance?.used ?? 0) }) }}
         </p>
       </div>
     </section>
 
-    <section class="rounded-3xl border border-primary/10 bg-white/70 p-6 shadow-sm dark:border-light/10 dark:bg-dark/60">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg text-black font-semibold dark:text-light">
-          {{ t('dashboard.credits.ledger', '积分流水') }}
-        </h2>
+    <section class="apple-card-lg p-6">
+      <h2 class="apple-heading-sm">
+        {{ t('dashboard.credits.ledger', '积分流水') }}
+      </h2>
+      <div class="mt-3">
         <Button size="small" variant="secondary" @click="() => { refreshSummary(); refreshLedger() }">
           {{ t('common.refresh', '刷新') }}
         </Button>
       </div>
 
-      <div v-if="summaryPending || ledgerPending" class="mt-4 flex items-center justify-center py-4">
-        <span class="i-carbon-circle-dash animate-spin text-primary" />
+      <div v-if="summaryPending || ledgerPending" class="mt-4 space-y-3 py-4">
+        <div class="flex items-center justify-center">
+          <TxSpinner :size="18" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
+        <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <TxSkeleton :loading="true" :lines="2" />
+        </div>
       </div>
 
-      <ul v-else-if="ledger?.length" class="mt-4 space-y-2 text-sm">
+      <ul v-else-if="ledger?.length" class="mt-5 space-y-2 text-sm">
         <li
           v-for="entry in ledger"
           :key="entry.id"
-          class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-primary/10 bg-white/60 px-4 py-3 dark:border-light/10 dark:bg-dark/40"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-black/[0.02] px-4 py-3 transition hover:bg-black/[0.04] dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
         >
           <div>
-            <p class="text-black dark:text-light">
+            <p class="text-black dark:text-white">
               {{ entry.reason }}
             </p>
-            <p class="text-xs text-black/50 dark:text-light/50">
+            <p class="text-xs text-black/40 dark:text-white/40">
               {{ formatLedgerTime(entry.created_at) }}
             </p>
           </div>
-          <span class="text-sm font-semibold text-black dark:text-light">
+          <span class="text-sm font-semibold text-black dark:text-white">
             {{ entry.delta }}
           </span>
         </li>
       </ul>
-      <p v-else class="mt-4 text-sm text-black/60 dark:text-light/70">
+      <p v-else class="mt-4 text-sm text-black/40 dark:text-white/40">
         {{ t('dashboard.credits.empty', '暂无记录') }}
       </p>
     </section>

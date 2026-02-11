@@ -7,6 +7,7 @@ import { createPlugin } from '../../utils/pluginsStore'
 import { extractTpexMetadata } from '../../utils/tpex'
 
 const ALLOWED_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
+const ALLOWED_ARTIFACT_TYPES = ['plugin', 'layout', 'theme'] as const
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
@@ -34,6 +35,7 @@ export default defineEventHandler(async (event) => {
   const readmeField = formData.get('readme')
   const statusField = getString('status')
   const isOfficialField = getString('isOfficial')
+  const artifactTypeField = getString('artifactType')
 
   let readmeMarkdown = ''
   if (typeof readmeField === 'string')
@@ -109,6 +111,10 @@ export default defineEventHandler(async (event) => {
     ? (statusField as (typeof ALLOWED_STATUSES)[number])
     : 'draft'
 
+  const artifactType = artifactTypeField && (ALLOWED_ARTIFACT_TYPES as readonly string[]).includes(artifactTypeField)
+    ? (artifactTypeField as (typeof ALLOWED_ARTIFACT_TYPES)[number])
+    : 'plugin'
+
   let plugin
   try {
     plugin = await createPlugin(event, {
@@ -118,6 +124,7 @@ export default defineEventHandler(async (event) => {
       name,
       summary,
       category,
+      artifactType,
       homepage,
       isOfficial: isAdmin ? isOfficialField === 'true' || isOfficialField === '1' : false,
       badges,
