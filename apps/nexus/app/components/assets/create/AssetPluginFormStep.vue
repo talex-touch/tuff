@@ -259,8 +259,8 @@ const canSubmit = computed(() => {
 })
 
 const scrollWrapStyle = computed(() => ({
-  '--asset-plugin-scroll-height': `${scrollAreaHeight.value}px`,
-  '--asset-plugin-scroll-max-height': `${maxScrollableHeight.value}px`,
+  height: `${scrollAreaHeight.value}px`,
+  maxHeight: `${maxScrollableHeight.value}px`,
 }))
 
 function resolveMaxScrollableHeight() {
@@ -279,12 +279,21 @@ function scheduleLayoutMeasure() {
     if (!contentEl)
       return
 
-    const measuredHeight = Math.ceil(contentEl.scrollHeight)
-    if (measuredHeight <= 0)
-      return
+    const measure = () => {
+      const measuredHeight = Math.ceil(contentEl.scrollHeight)
+      if (measuredHeight <= 0)
+        return
 
-    const minHeight = 240
-    scrollAreaHeight.value = Math.max(minHeight, Math.min(measuredHeight, maxScrollableHeight.value))
+      const minHeight = 240
+      scrollAreaHeight.value = Math.max(minHeight, Math.min(measuredHeight, maxScrollableHeight.value))
+    }
+
+    if (hasWindow()) {
+      requestAnimationFrame(() => requestAnimationFrame(measure))
+      return
+    }
+
+    measure()
   })
 }
 
@@ -336,30 +345,31 @@ function onSubmit() {
 
 <template>
   <div class="AssetPluginFormStep">
-    <div class="AssetPluginFormStep-Mode">
-      <button
-        type="button"
-        class="AssetPluginFormStep-ModeBtn"
-        :class="inputMode === 'upload' ? 'is-active' : ''"
-        @click="inputMode = 'upload'"
-      >
-        <span class="i-carbon-upload" />
-        {{ t('dashboard.sections.plugins.form.uploadPackage') }}
-      </button>
-      <button
-        type="button"
-        class="AssetPluginFormStep-ModeBtn"
-        :class="inputMode === 'manual' ? 'is-active' : ''"
-        @click="inputMode = 'manual'"
-      >
-        <span class="i-carbon-edit" />
-        {{ t('dashboard.sections.plugins.form.manualInput') }}
-      </button>
-    </div>
+    <TxCard variant="plain" background="mask" :radius="18" :padding="16" class="AssetPluginFormStep-Card">
+      <div class="AssetPluginFormStep-Mode">
+        <button
+          type="button"
+          class="AssetPluginFormStep-ModeBtn"
+          :class="inputMode === 'upload' ? 'is-active' : ''"
+          @click="inputMode = 'upload'"
+        >
+          <span class="i-carbon-upload" />
+          {{ t('dashboard.sections.plugins.form.uploadPackage') }}
+        </button>
+        <button
+          type="button"
+          class="AssetPluginFormStep-ModeBtn"
+          :class="inputMode === 'manual' ? 'is-active' : ''"
+          @click="inputMode = 'manual'"
+        >
+          <span class="i-carbon-edit" />
+          {{ t('dashboard.sections.plugins.form.manualInput') }}
+        </button>
+      </div>
 
-    <div class="AssetPluginFormStep-ScrollWrap" :style="scrollWrapStyle">
-      <TxScroll native no-padding class="AssetPluginFormStep-Scroll">
-        <form ref="formContentRef" class="AssetPluginFormStep-Form space-y-6" @submit.prevent="onSubmit">
+      <div class="AssetPluginFormStep-ScrollWrap" :style="scrollWrapStyle">
+        <TxScroll native no-padding class="AssetPluginFormStep-Scroll" style="height: 100%;">
+          <form ref="formContentRef" class="AssetPluginFormStep-Form space-y-6" @submit.prevent="onSubmit">
           <div v-if="inputMode === 'upload'" class="space-y-4">
             <div class="flex flex-col gap-2">
               <label class="apple-section-title">
@@ -530,9 +540,10 @@ function onSubmit() {
               {{ error }}
             </p>
           </div>
-        </form>
-      </TxScroll>
-    </div>
+          </form>
+        </TxScroll>
+      </div>
+    </TxCard>
   </div>
 </template>
 
@@ -540,6 +551,10 @@ function onSubmit() {
 .AssetPluginFormStep {
   width: min(900px, 92vw);
   padding: 8px 10px 0;
+}
+
+.AssetPluginFormStep-Card {
+  width: 100%;
 }
 
 .AssetPluginFormStep-Mode {
@@ -589,12 +604,7 @@ function onSubmit() {
 }
 
 .AssetPluginFormStep-ScrollWrap {
-  --asset-plugin-scroll-height: 420px;
-  --asset-plugin-scroll-max-height: 620px;
-
   margin-top: 12px;
-  height: var(--asset-plugin-scroll-height);
-  max-height: var(--asset-plugin-scroll-max-height);
   min-height: 240px;
   overflow: hidden;
 }

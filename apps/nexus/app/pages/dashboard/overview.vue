@@ -296,8 +296,8 @@ function isCurrentDevice(device: DeviceItem) {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <header class="space-y-3">
+  <div class="space-y-5">
+    <header class="space-y-2">
       <p class="apple-section-title">
         {{ t('dashboard.header.badge') }}
       </p>
@@ -309,7 +309,7 @@ function isCurrentDevice(device: DeviceItem) {
       </p>
     </header>
 
-    <section v-if="showInitialLoading" class="apple-card-lg p-5 space-y-3">
+    <section v-if="showInitialLoading" class="apple-card-lg p-4 space-y-3">
       <div class="flex items-center gap-2 text-sm text-black/50 dark:text-white/50">
         <TxSpinner :size="16" />
         {{ t('dashboard.overview.loading') }}
@@ -323,57 +323,69 @@ function isCurrentDevice(device: DeviceItem) {
 
     <template v-else>
       <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div class="apple-card p-4">
-          <p class="apple-section-title">
-            {{ t('dashboard.overview.kpis.searchCount') }}
-          </p>
-          <p class="mt-2 text-xl font-semibold text-black dark:text-white sm:text-2xl">
-            {{ formatNumber(viewModel.kpis.searches) }}
-          </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.overview.range.last7Days') }}
-          </p>
-        </div>
+        <TxStatCard
+          :value="formatNumber(viewModel.kpis.searches)"
+          :label="t('dashboard.overview.kpis.searchCount')"
+          icon-class="i-carbon-search text-5xl text-[var(--tx-color-primary)] sm:text-6xl"
+        >
+          <template #label>
+            <div class="space-y-1">
+              <span>{{ t('dashboard.overview.kpis.searchCount') }}</span>
+              <span class="text-[11px] text-black/45 dark:text-white/45">
+                {{ t('dashboard.overview.range.last7Days') }}
+              </span>
+            </div>
+          </template>
+        </TxStatCard>
 
-        <div class="apple-card p-4">
-          <p class="apple-section-title">
-            {{ t('dashboard.overview.kpis.searchEfficiency') }}
-          </p>
-          <p class="mt-2 text-xl font-semibold text-black dark:text-white sm:text-2xl">
-            {{ formatNumber(viewModel.kpis.avgLatency) }} ms
-          </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.overview.kpis.avgResultsHint', { n: formatNumber(viewModel.kpis.avgResults) }) }}
-          </p>
-        </div>
+        <TxStatCard
+          :value="`${formatNumber(viewModel.kpis.avgLatency)} ms`"
+          :label="t('dashboard.overview.kpis.searchEfficiency')"
+          icon-class="i-carbon-speedometer text-5xl text-[var(--tx-color-success)] sm:text-6xl"
+        >
+          <template #label>
+            <div class="space-y-1">
+              <span>{{ t('dashboard.overview.kpis.searchEfficiency') }}</span>
+              <span class="text-[11px] text-black/45 dark:text-white/45">
+                {{ t('dashboard.overview.kpis.avgResultsHint', { n: formatNumber(viewModel.kpis.avgResults) }) }}
+              </span>
+            </div>
+          </template>
+        </TxStatCard>
 
-        <div class="apple-card p-4">
-          <p class="apple-section-title">
-            {{ t('dashboard.overview.kpis.loginHealth') }}
-          </p>
-          <p class="mt-2 text-xl font-semibold text-black dark:text-white sm:text-2xl">
-            {{ viewModel.kpis.login.successRate }}%
-          </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.overview.kpis.loginSplit', { success: viewModel.kpis.login.success, failed: viewModel.kpis.login.failed }) }}
-          </p>
-        </div>
+        <TxStatCard
+          :value="`${viewModel.kpis.login.successRate}%`"
+          :label="t('dashboard.overview.kpis.loginHealth')"
+          icon-class="i-carbon-shield text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
+        >
+          <template #label>
+            <div class="space-y-1">
+              <span>{{ t('dashboard.overview.kpis.loginHealth') }}</span>
+              <span class="text-[11px] text-black/45 dark:text-white/45">
+                {{ t('dashboard.overview.kpis.loginSplit', { success: viewModel.kpis.login.success, failed: viewModel.kpis.login.failed }) }}
+              </span>
+            </div>
+          </template>
+        </TxStatCard>
 
-        <div class="apple-card p-4">
-          <p class="apple-section-title">
-            {{ t('dashboard.overview.kpis.activeDevices') }}
-          </p>
-          <p class="mt-2 text-xl font-semibold text-black dark:text-white sm:text-2xl">
-            {{ formatNumber(viewModel.kpis.devices.active) }}
-          </p>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.overview.kpis.activeNow', { active: viewModel.kpis.devices.active, total: viewModel.kpis.devices.total }) }}
-          </p>
-        </div>
+        <TxStatCard
+          :value="formatNumber(viewModel.kpis.devices.active)"
+          :label="t('dashboard.overview.kpis.activeDevices')"
+          icon-class="i-carbon-devices text-5xl text-[var(--tx-color-info)] sm:text-6xl"
+        >
+          <template #label>
+            <div class="space-y-1">
+              <span>{{ t('dashboard.overview.kpis.activeDevices') }}</span>
+              <span class="text-[11px] text-black/45 dark:text-white/45">
+                {{ t('dashboard.overview.kpis.activeNow', { active: viewModel.kpis.devices.active, total: viewModel.kpis.devices.total }) }}
+              </span>
+            </div>
+          </template>
+        </TxStatCard>
       </section>
 
       <section class="grid gap-3 xl:grid-cols-12">
-        <div class="apple-card-lg p-5 xl:col-span-8">
+        <div class="apple-card-lg p-4 xl:col-span-8">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.trends.searchTitle') }}
           </h2>
@@ -404,7 +416,7 @@ function isCurrentDevice(device: DeviceItem) {
               </div>
             </div>
 
-            <div class="relative mt-3 h-52 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
+            <div class="relative mt-3 h-44 overflow-hidden rounded-2xl border border-black/[0.05] bg-black/[0.02] p-2 dark:border-white/[0.08] dark:bg-white/[0.03]">
               <div class="pointer-events-none absolute inset-0 grid grid-rows-4 px-3 py-2">
                 <div v-for="line in 4" :key="`search-grid-${line}`" class="border-b border-black/[0.05] dark:border-white/[0.07]" />
               </div>
@@ -429,7 +441,7 @@ function isCurrentDevice(device: DeviceItem) {
           </template>
         </div>
 
-        <div class="apple-card-lg p-5 xl:col-span-4">
+        <div class="apple-card-lg p-4 xl:col-span-4">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.trends.latencyTitle') }}
           </h2>
@@ -448,7 +460,7 @@ function isCurrentDevice(device: DeviceItem) {
           <template v-else>
             <div class="mt-4 overflow-x-auto pb-1">
               <div class="min-w-[260px]">
-                <div class="h-40 flex items-end gap-1.5">
+                <div class="h-32 flex items-end gap-1.5">
                   <div
                     v-for="point in viewModel.searchTrend.points"
                     :key="`latency-bar-${point.date}`"
@@ -468,7 +480,7 @@ function isCurrentDevice(device: DeviceItem) {
       </section>
 
       <section class="grid gap-3 xl:grid-cols-12">
-        <div class="apple-card-lg p-5 space-y-3 xl:col-span-7">
+        <div class="apple-card-lg p-4 space-y-3 xl:col-span-7">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.stream.title') }}
           </h2>
@@ -511,7 +523,7 @@ function isCurrentDevice(device: DeviceItem) {
           </div>
         </div>
 
-        <div class="apple-card-lg p-5 space-y-3 xl:col-span-5">
+        <div class="apple-card-lg p-4 space-y-3 xl:col-span-5">
           <h2 class="apple-heading-sm">
             {{ t('dashboard.overview.devices.title') }}
           </h2>
