@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Component, computed, defineAsyncComponent, ref } from 'vue'
+import { type Component, type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, ref } from 'vue'
 
 interface DemoWrapperProps {
   demo: string
@@ -7,6 +7,15 @@ interface DemoWrapperProps {
   codeLang?: string
   title?: string
   description?: string
+}
+
+type DemoResetMethod = () => void | Promise<void>
+
+type DemoResetController = ComponentPublicInstance & {
+  replayDemo?: DemoResetMethod
+  resetDemo?: DemoResetMethod
+  replay?: DemoResetMethod
+  reset?: DemoResetMethod
 }
 
 const props = withDefaults(defineProps<DemoWrapperProps>(), {
@@ -38,6 +47,9 @@ const resolvedCode = computed(() => {
 
 const hasCode = computed(() => Boolean(resolvedCode.value))
 const showCode = ref(false)
+const demoRenderKey = ref(0)
+const demoInstanceRef = ref<DemoResetController | null>(null)
+const isResetting = ref(false)
 
 const toggleLabel = computed(() => {
   if (showCode.value)
@@ -45,8 +57,46 @@ const toggleLabel = computed(() => {
   return locale.value === 'zh' ? '展开代码' : 'Show code'
 })
 
+const resetLabel = computed(() => (locale.value === 'zh' ? '重置' : 'Reset'))
+
 function toggleCode() {
   showCode.value = !showCode.value
+}
+
+async function hardResetDemo() {
+  demoRenderKey.value += 1
+  await nextTick()
+}
+
+async function tryInvokeDemoReset() {
+  const instance = demoInstanceRef.value
+  if (!instance)
+    return false
+
+  const resetHandler = instance.resetDemo ?? instance.replayDemo ?? instance.reset ?? instance.replay
+  if (!resetHandler)
+    return false
+
+  await resetHandler.call(instance)
+  return true
+}
+
+async function resetDemo() {
+  if (isResetting.value)
+    return
+
+  isResetting.value = true
+  try {
+    const handled = await tryInvokeDemoReset()
+    if (!handled)
+      await hardResetDemo()
+  }
+  catch {
+    await hardResetDemo()
+  }
+  finally {
+    isResetting.value = false
+  }
 }
 
 const demoModules = import.meta.glob<{ default: Component }>('./demos/*.vue')
@@ -82,10 +132,24 @@ const demoComponent = computed(() => {
             <span class="tuff-demo__dot is-yellow" />
             <span class="tuff-demo__dot is-green" />
           </div>
+          <div class="tuff-demo__window-actions">
+            <TxButton
+              variant="ghost"
+              size="small"
+              native-type="button"
+              class="tuff-demo__reset-btn"
+              :aria-label="resetLabel"
+              :disabled="isResetting"
+              @click="resetDemo"
+            >
+              <span class="tuff-demo__reset-icon i-carbon-renew" aria-hidden="true" />
+              {{ resetLabel }}
+            </TxButton>
+          </div>
         </div>
         <div class="tuff-demo__window-body">
           <div class="tuff-demo__preview">
-            <component :is="demoComponent" v-if="demoComponent" />
+            <component :is="demoComponent" v-if="demoComponent" :key="demoRenderKey" ref="demoInstanceRef" />
             <div v-else class="tuff-demo__placeholder">
               Demo component "{{ props.demo }}" not found.
             </div>
@@ -127,6 +191,16 @@ const demoComponent = computed(() => {
   border: none;
   background: transparent;
   box-shadow: none;
+  --tuff-demo-window-bg: var(--tx-bg-color);
+  --tuff-demo-window-border: var(--tx-border-color-light);
+  /* --tuff-demo-window-shadow: var(--tx-box-shadow); */
+  --tuff-demo-divider: var(--tx-border-color-lighter);
+  --tuff-demo-bar-bg-start: var(--tx-bg-color);
+  --tuff-demo-bar-bg-end: var(--tx-fill-color-light);
+  --tuff-demo-preview-bg: var(--tx-bg-color);
+  --tuff-demo-row-bg: var(--tx-bg-color);
+  --tuff-demo-code-bg-start: var(--tx-fill-color);
+  --tuff-demo-code-bg-end: var(--tx-fill-color-light);
 }
 
 .tuff-demo__header {
@@ -144,25 +218,39 @@ const demoComponent = computed(() => {
 
 .tuff-demo__desc {
   font-size: 14px;
-  color: var(--docs-muted);
+  color: var(--tx-text-color-secondary);
   margin: 0;
 }
 
 .tuff-demo__window {
   border-radius: 26px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--tuff-demo-window-border);
+  background: var(--tuff-demo-window-bg);
+  box-shadow: var(--tuff-demo-window-shadow);
   overflow: hidden;
 }
 
 .tuff-demo__window-bar {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9));
+  border-bottom: 1px solid var(--tuff-demo-divider);
+  background: linear-gradient(90deg, var(--tuff-demo-bar-bg-start), var(--tuff-demo-bar-bg-end));
+}
+
+.tuff-demo__window-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+.tuff-demo__reset-btn {
+  gap: 6px;
+}
+
+.tuff-demo__reset-icon {
+  font-size: 12px;
 }
 
 .tuff-demo__dots {
@@ -175,19 +263,19 @@ const demoComponent = computed(() => {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color);
 }
 
 .tuff-demo__dot.is-red {
-  background: #ff5f57;
+  background: var(--tx-color-danger);
 }
 
 .tuff-demo__dot.is-yellow {
-  background: #febc2e;
+  background: var(--tx-color-warning);
 }
 
 .tuff-demo__dot.is-green {
-  background: #28c840;
+  background: var(--tx-color-success);
 }
 
 .tuff-demo__window-body {
@@ -197,12 +285,12 @@ const demoComponent = computed(() => {
 
 .tuff-demo__preview {
   padding: 28px;
-  background: rgba(255, 255, 255, 0.98);
+  background: var(--tuff-demo-preview-bg);
 }
 
 .tuff-demo__placeholder {
   font-size: 13px;
-  color: var(--docs-muted);
+  color: var(--tx-text-color-secondary);
   text-align: center;
   padding: 12px 0;
 }
@@ -212,6 +300,7 @@ const demoComponent = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 0;
+  color: var(--tx-text-color-primary);
   align-items: stretch;
   width: 100%;
 }
@@ -220,8 +309,8 @@ const demoComponent = computed(() => {
   display: flex;
   justify-content: center;
   padding: 16px 18px 20px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-  background: rgba(255, 255, 255, 0.98);
+  border-top: 1px solid var(--tuff-demo-divider);
+  background: var(--tuff-demo-row-bg);
 }
 
 .tuff-demo__toggle-icon {
@@ -252,8 +341,8 @@ const demoComponent = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  background: linear-gradient(180deg, rgba(12, 14, 18, 0.98), rgba(6, 8, 12, 0.98));
+  border-top: 1px solid var(--tuff-demo-divider);
+  background: linear-gradient(180deg, var(--tuff-demo-code-bg-start), var(--tuff-demo-code-bg-end));
 }
 
 .tuff-demo__code:not(.is-open) .tuff-demo__code-body-inner {
@@ -265,46 +354,5 @@ const demoComponent = computed(() => {
   flex-wrap: wrap;
   gap: 12px;
   align-items: center;
-}
-
-:global(.dark .tuff-demo),
-:global([data-theme='dark'] .tuff-demo) {
-  background: transparent;
-  box-shadow: none;
-}
-
-:global(.dark .tuff-demo__preview),
-:global([data-theme='dark'] .tuff-demo__preview) {
-  background: rgba(15, 23, 42, 0.65);
-}
-
-:global(.dark .tuff-demo__toggle-row),
-:global([data-theme='dark'] .tuff-demo__toggle-row) {
-  border-top-color: rgba(148, 163, 184, 0.15);
-  background: rgba(15, 23, 42, 0.6);
-}
-
-:global(.dark .tuff-demo__code),
-:global([data-theme='dark'] .tuff-demo__code) {
-  color: rgba(255, 255, 255, 0.92);
-}
-
-:global(.dark .tuff-demo__window),
-:global([data-theme='dark'] .tuff-demo__window) {
-  border-color: rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.75);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-}
-
-:global(.dark .tuff-demo__window-bar),
-:global([data-theme='dark'] .tuff-demo__window-bar) {
-  border-bottom-color: rgba(148, 163, 184, 0.15);
-  background: linear-gradient(90deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.7));
-}
-
-:global(.dark .tuff-demo__code-body-inner),
-:global([data-theme='dark'] .tuff-demo__code-body-inner) {
-  border-top-color: rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(8, 10, 16, 0.98), rgba(6, 8, 12, 0.98));
 }
 </style>

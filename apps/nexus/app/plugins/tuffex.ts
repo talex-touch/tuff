@@ -1,191 +1,50 @@
-import {
-  TuffFlatButton,
-  TuffIcon,
-  TuffInput,
-  TuffProgress,
-  TuffSelect,
-  TuffSelectItem,
-  TuffSwitch,
-  TxAgentsList,
-  TxAlert,
-  TxAutoSizer,
-  TxAvatar,
-  TxAvatarGroup,
-  TxBadge,
-  TxBlankSlate,
-  TxBlockLine,
-  TxBlockSlot,
-  TxBlockSwitch,
-  TxBlowDialog,
-  TxBottomDialog,
-  TxBreadcrumb,
-  TxButton,
-  TxCard,
-  TxCardItem,
-  TxChatComposer,
-  TxChatList,
-  TxCheckbox,
-  TxCol,
-  TxCollapse,
-  TxCollapseItem,
-  TxCommandPalette,
-  TxContainer,
-  TxCornerOverlay,
-  TxDataTable,
-  TxDrawer,
-  TxDropdownItem,
-  TxDropdownMenu,
-  TxEmpty,
-  TxEmptyState,
-  TxFileUploader,
-  TxFloating,
-  TxFloatingElement,
-  TxForm,
-  TxFormItem,
-  TxGlassSurface,
-  TxGradientBorder,
-  TxGrid,
-  TxGridItem,
-  TxGridLayout,
-  TxGroupBlock,
-  TxIcon,
-  TxImageGallery,
-  TxImageUploader,
-  TxLayoutSkeleton,
-  TxLoadingOverlay,
-  TxLoadingState,
-  TxMarkdownView,
-  TxModal,
-  TxNoData,
-  TxNoSelection,
-  TxOfflineState,
-  TxOutlineBorder,
-  TxPagination,
-  TxPermissionState,
-  TxPopover,
-  TxPopperDialog,
-  TxProgressBar,
-  TxRating,
-  TxRow,
-  TxSearchEmpty,
-  TxSearchInput,
-  TxSkeleton,
-  TxSortableList,
-  TxSplitButton,
-  TxSpinner,
-  TxStatCard,
-  TxStagger,
-  TxStatusBadge,
-  TxStatusIcon,
-  TxStep,
-  TxSteps,
-  TxTag,
-  TxTagInput,
-  TxTimeline,
-  TxTimelineItem,
-  TxToastHost,
-  TxTooltip,
-  TxTouchTip,
-  TxTree,
-  TxTypingIndicator,
-  TxVirtualList,
-} from '@talex-touch/tuffex'
+import type { App, Component } from 'vue'
+import * as tuffexComponents from '@talex-touch/tuffex'
+
+type InstallableComponent = Component & {
+  install?: (app: App) => unknown
+}
+
+function isInstallableComponent(value: unknown): value is InstallableComponent {
+  if (!value)
+    return false
+
+  const valueType = typeof value
+  if (valueType !== 'object' && valueType !== 'function')
+    return false
+
+  return typeof (value as InstallableComponent).install === 'function'
+}
 
 export default defineNuxtPlugin((nuxtApp) => {
-  const globalComponents: Record<string, any> = {
-    TuffFlatButton,
-    TuffIcon,
-    TuffInput,
-    TuffProgress,
-    TuffSelect,
-    TuffSelectItem,
-    TuffSwitch,
-    TxAgentsList,
-    TxAlert,
-    TxAutoSizer,
-    TxAvatar,
-    TxAvatarGroup,
-    TxBadge,
-    TxBlankSlate,
-    TxBlockLine,
-    TxBlockSlot,
-    TxBlockSwitch,
-    TxBlowDialog,
-    TxBottomDialog,
-    TxBreadcrumb,
-    TxButton,
-    TxCard,
-    TxCardItem,
-    TxChatComposer,
-    TxChatList,
-    TxCheckbox,
-    TxCol,
-    TxCollapse,
-    TxCollapseItem,
-    TxCommandPalette,
-    TxContainer,
-    TxCornerOverlay,
-    TxDataTable,
-    TxDrawer,
-    TxDropdownItem,
-    TxDropdownMenu,
-    TxEmpty,
-    TxEmptyState,
-    TxFileUploader,
-    TxFloating,
-    TxFloatingElement,
-    TxForm,
-    TxFormItem,
-    TxGlassSurface,
-    TxGradientBorder,
-    TxGrid,
-    TxGridItem,
-    TxGridLayout,
-    TxGroupBlock,
-    TxIcon,
-    TxImageGallery,
-    TxImageUploader,
-    TxLayoutSkeleton,
-    TxLoadingOverlay,
-    TxLoadingState,
-    TxMarkdownView,
-    TxModal,
-    TxNoData,
-    TxNoSelection,
-    TxOfflineState,
-    TxOutlineBorder,
-    TxPagination,
-    TxPermissionState,
-    TxPopover,
-    TxPopperDialog,
-    TxProgressBar,
-    TxRating,
-    TxRow,
-    TxSearchEmpty,
-    TxSearchInput,
-    TxSkeleton,
-    TxSortableList,
-    TxSplitButton,
-    TxSpinner,
-    TxStatCard,
-    TxStagger,
-    TxStatusBadge,
-    TxStatusIcon,
-    TxStep,
-    TxSteps,
-    TxTag,
-    TxTagInput,
-    TxTimeline,
-    TxTimelineItem,
-    TxToastHost,
-    TxTooltip,
-    TxTouchTip,
-    TxTree,
-    TxTypingIndicator,
-    TxVirtualList,
+  const exportsMap = tuffexComponents as Record<string, unknown>
+  const registered = new Set<string>()
+
+  const registerComponent = (name: string, exported: unknown) => {
+    if (!isInstallableComponent(exported))
+      return
+    if (registered.has(name))
+      return
+    nuxtApp.vueApp.component(name, exported)
+    registered.add(name)
   }
 
-  for (const [name, component] of Object.entries(globalComponents)) {
-    nuxtApp.vueApp.component(name, component)
+  for (const [name, exported] of Object.entries(exportsMap)) {
+    if (name === 'default')
+      continue
+
+    registerComponent(name, exported)
+  }
+
+  for (const [name, exported] of Object.entries(exportsMap)) {
+    if (!name.startsWith('Tuff'))
+      continue
+
+    const txAlias = `Tx${name.slice(4)}`
+    const hasRealTxComponent = isInstallableComponent(exportsMap[txAlias])
+    if (hasRealTxComponent)
+      continue
+
+    registerComponent(txAlias, exported)
   }
 })

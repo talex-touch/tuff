@@ -724,12 +724,12 @@ function openManagePlan() {
 .TeamOverlay-Title {
   font-size: 18px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .TeamOverlay-Desc {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TeamOverlay-Actions {
@@ -768,8 +768,8 @@ function openManagePlan() {
   width: min(520px, 92vw);
   min-height: 260px;
   max-height: 82vh;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
   overflow: auto;

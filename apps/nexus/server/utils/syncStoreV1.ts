@@ -215,6 +215,9 @@ async function ensureSyncSchemaV1(db: D1Database) {
       sync_token TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       last_cursor INTEGER NOT NULL,
+      last_push_at TEXT,
+      last_pull_at TEXT,
+      last_error_code TEXT,
       UNIQUE (user_id, device_id)
     );
   `).run()
@@ -224,6 +227,20 @@ async function ensureSyncSchemaV1(db: D1Database) {
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sync_items_user_updated ON ${SYNC_ITEMS_TABLE}(user_id, updated_at);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_sync_items_user_type ON ${SYNC_ITEMS_TABLE}(user_id, type);`).run()
   await db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_blobs_object ON ${SYNC_BLOBS_TABLE}(user_id, object_key);`).run()
+
+  // Backward compatibility for existing deployments where sync_sessions_v1 was created without extended columns.
+  for (const statement of [
+    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_push_at TEXT`,
+    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_pull_at TEXT`,
+    `ALTER TABLE ${SYNC_SESSIONS_TABLE} ADD COLUMN last_error_code TEXT`,
+  ]) {
+    try {
+      await db.prepare(statement).run()
+    }
+    catch {
+      // ignore duplicate-column errors
+    }
+  }
 
   syncSchemaInitialized = true
 }
@@ -402,6 +419,74 @@ export async function getSyncSession(event: H3Event, userId: string, deviceId: s
   }
 
   return { syncToken: row.sync_token, expiresAt: row.expires_at }
+}
+
+async function updateSyncSessionState(
+  db: D1Database,
+  userId: string,
+  deviceId: string,
+  payload: {
+    lastCursor?: number
+    lastPushAt?: string | null
+    lastPullAt?: string | null
+    lastErrorCode?: string | null
+  }
+): Promise<void> {
+  await ensureSyncSchemaV1(db)
+  const statements: Promise<unknown>[] = []
+
+  if (typeof payload.lastCursor === 'number' && Number.isFinite(payload.lastCursor)) {
+    statements.push(
+      db.prepare(`
+        UPDATE ${SYNC_SESSIONS_TABLE}
+        SET last_cursor = ?
+        WHERE user_id = ? AND device_id = ?
+      `).bind(Math.max(0, Math.floor(payload.lastCursor)), userId, deviceId).run()
+    )
+  }
+
+  if (payload.lastPushAt !== undefined) {
+    statements.push(
+      db.prepare(`
+        UPDATE ${SYNC_SESSIONS_TABLE}
+        SET last_push_at = ?, last_error_code = ?
+        WHERE user_id = ? AND device_id = ?
+      `).bind(payload.lastPushAt, payload.lastErrorCode ?? null, userId, deviceId).run()
+    )
+  }
+
+  if (payload.lastPullAt !== undefined) {
+    statements.push(
+      db.prepare(`
+        UPDATE ${SYNC_SESSIONS_TABLE}
+        SET last_pull_at = ?, last_error_code = ?
+        WHERE user_id = ? AND device_id = ?
+      `).bind(payload.lastPullAt, payload.lastErrorCode ?? null, userId, deviceId).run()
+    )
+  } else if (payload.lastErrorCode !== undefined && payload.lastPushAt === undefined) {
+    statements.push(
+      db.prepare(`
+        UPDATE ${SYNC_SESSIONS_TABLE}
+        SET last_error_code = ?
+        WHERE user_id = ? AND device_id = ?
+      `).bind(payload.lastErrorCode ?? null, userId, deviceId).run()
+    )
+  }
+
+  if (!statements.length) {
+    return
+  }
+  await Promise.all(statements)
+}
+
+export async function markSyncSessionError(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  errorCode: string
+): Promise<void> {
+  const db = requireDatabase(event)
+  await updateSyncSessionState(db, userId, deviceId, { lastErrorCode: errorCode || null })
 }
 
 export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: string, items: SyncItemInput[]) {
@@ -597,6 +682,11 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
   }
 
   const ackCursor = await getServerCursor(db, userId)
+  await updateSyncSessionState(db, userId, deviceId, {
+    lastCursor: ackCursor,
+    lastPushAt: new Date().toISOString(),
+    lastErrorCode: null,
+  })
   return { conflicts, ackCursor, appliedStorageDelta, appliedObjectsDelta }
 }
 
@@ -605,7 +695,13 @@ async function getServerCursor(db: D1Database, userId: string) {
   return Number(row?.cursor ?? 0)
 }
 
-export async function pullSyncItemsV1(event: H3Event, userId: string, cursor: number, limit: number) {
+export async function pullSyncItemsV1(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  cursor: number,
+  limit: number
+) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const safeLimit = Math.min(Math.max(limit, 1), 200)
@@ -651,11 +747,11 @@ export async function pullSyncItemsV1(event: H3Event, userId: string, cursor: nu
 
   const lastOplog = oplog.at(-1)
   const nextCursor = lastOplog ? lastOplog.cursor : cursor
-  await db.prepare(`
-    UPDATE ${SYNC_SESSIONS_TABLE}
-    SET last_cursor = ?
-    WHERE user_id = ? AND device_id = ?
-  `).bind(nextCursor, userId, readDeviceId(event) ?? '').run()
+  await updateSyncSessionState(db, userId, deviceId, {
+    lastCursor: nextCursor,
+    lastPullAt: new Date().toISOString(),
+    lastErrorCode: null,
+  })
 
   return { items, oplog, nextCursor }
 }
@@ -775,6 +871,357 @@ export interface KeyringMeta {
   rotated_at: string | null
   created_at: string
   has_recovery_code: boolean
+}
+
+export interface SyncSessionStatus {
+  device_id: string
+  expires_at: string
+  last_cursor: number
+  last_push_at: string | null
+  last_pull_at: string | null
+  last_error_code: string | null
+}
+
+export interface SyncCatalogCategory {
+  key: string
+  label: string
+  count: number
+  total_payload_bytes: number
+  last_updated_at: string
+  sample_items: string[]
+}
+
+export interface SyncCatalogItem {
+  item_id: string
+  type: string
+  qualified_name: string | null
+  category: string
+  category_label: string
+  payload_size: number
+  updated_at: string
+  deleted_at: string | null
+  has_payload_enc: boolean
+  has_payload_ref: boolean
+}
+
+export interface SyncCatalogSummary {
+  total_items: number
+  live_items: number
+  deleted_items: number
+  total_payload_bytes: number
+  last_updated_at: string
+}
+
+export interface SyncItemCatalog {
+  summary: SyncCatalogSummary
+  categories: SyncCatalogCategory[]
+  items: SyncCatalogItem[]
+  generated_at: string
+}
+
+export interface RecentSyncActivity {
+  cursor: number
+  device_id: string
+  item_id: string
+  op_type: 'upsert' | 'delete'
+  updated_at: string
+  payload_size: number
+  status: 'success' | 'failed'
+  error_code: string | null
+}
+
+export async function getLatestSyncSessionStatus(
+  event: H3Event,
+  userId: string
+): Promise<SyncSessionStatus | null> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const row = await db.prepare(`
+    SELECT device_id, expires_at, last_cursor, last_push_at, last_pull_at, last_error_code
+    FROM ${SYNC_SESSIONS_TABLE}
+    WHERE user_id = ?
+    ORDER BY COALESCE(last_pull_at, last_push_at, expires_at) DESC
+    LIMIT 1
+  `).bind(userId).first<{
+    device_id: string
+    expires_at: string
+    last_cursor: number
+    last_push_at: string | null
+    last_pull_at: string | null
+    last_error_code: string | null
+  }>()
+
+  if (!row) {
+    return null
+  }
+
+  return {
+    device_id: row.device_id,
+    expires_at: row.expires_at,
+    last_cursor: Number(row.last_cursor ?? 0),
+    last_push_at: row.last_push_at ?? null,
+    last_pull_at: row.last_pull_at ?? null,
+    last_error_code: row.last_error_code ?? null,
+  }
+}
+
+function parseMetaPlain(value: string | null): Record<string, unknown> | null {
+  if (!value) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    return parsed as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function resolveQualifiedName(itemId: string, metaPlain: Record<string, unknown> | null): string | null {
+  const fromMeta =
+    metaPlain && typeof metaPlain.qualified_name === 'string'
+      ? metaPlain.qualified_name.trim()
+      : ''
+  if (fromMeta) {
+    return fromMeta
+  }
+
+  if (itemId.startsWith('storage::')) {
+    const normalized = itemId.slice('storage::'.length).trim()
+    return normalized || null
+  }
+
+  return null
+}
+
+function resolveCatalogCategory(
+  itemType: string,
+  itemId: string,
+  qualifiedName: string | null
+): { key: string, label: string } {
+  const normalizedType = itemType.trim().toLowerCase()
+  const normalizedQualified = (qualifiedName ?? '').toLowerCase()
+  const normalizedItemId = itemId.toLowerCase()
+
+  if (normalizedType === 'storage.snapshot') {
+    if (normalizedQualified.includes('plugin')) {
+      return { key: 'plugin', label: '插件数据' }
+    }
+    if (/(aisdk|intelligence)/.test(normalizedQualified)) {
+      return { key: 'intelligence', label: '智能配置' }
+    }
+    if (
+      /(app-setting|shortcut|setting|settings|config|theme-style|flow-consent|sentry|notification|telemetry|startup)/.test(
+        normalizedQualified
+      )
+    ) {
+      return { key: 'settings', label: '应用设置' }
+    }
+    if (
+      /(openers|market|agent-market|everything|file-index|app-index|device-idle|search-engine)/.test(
+        normalizedQualified
+      )
+    ) {
+      return { key: 'launcher', label: '启动器与索引' }
+    }
+    return { key: 'storage', label: '其他存储快照' }
+  }
+
+  if (
+    normalizedType.includes('blob')
+    || normalizedItemId.startsWith('blob:')
+    || normalizedItemId.startsWith('blob::')
+  ) {
+    return { key: 'blob', label: '大对象附件' }
+  }
+
+  return { key: 'other', label: '未分类数据' }
+}
+
+function maxIso(left: string, right: string): string {
+  if (!left) {
+    return right
+  }
+  if (!right) {
+    return left
+  }
+  return left > right ? left : right
+}
+
+function normalizePayloadSize(value: unknown): number {
+  const size = Number(value ?? 0)
+  if (!Number.isFinite(size) || size < 0) {
+    return 0
+  }
+  return Math.floor(size)
+}
+
+export async function getSyncItemCatalog(
+  event: H3Event,
+  userId: string,
+  limit = 120
+): Promise<SyncItemCatalog> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit) || 120, 20), 300)
+  const rows = await db.prepare(`
+    SELECT item_id, type, meta_plain, payload_size, updated_at, deleted_at, payload_enc, payload_ref
+    FROM ${SYNC_ITEMS_TABLE}
+    WHERE user_id = ?
+    ORDER BY updated_at DESC
+    LIMIT ?
+  `).bind(userId, safeLimit).all<{
+    item_id: string
+    type: string
+    meta_plain: string | null
+    payload_size: number | null
+    updated_at: string
+    deleted_at: string | null
+    payload_enc: string | null
+    payload_ref: string | null
+  }>()
+
+  const items: SyncCatalogItem[] = []
+  const categoryMap = new Map<string, SyncCatalogCategory>()
+  let deletedItems = 0
+  let liveItems = 0
+  let totalPayloadBytes = 0
+  let lastUpdatedAt = ''
+
+  for (const row of rows.results ?? []) {
+    const metaPlain = parseMetaPlain(row.meta_plain)
+    const qualifiedName = resolveQualifiedName(row.item_id, metaPlain)
+    const category = resolveCatalogCategory(row.type, row.item_id, qualifiedName)
+    const payloadSize = normalizePayloadSize(row.payload_size)
+    const deletedAt = row.deleted_at ?? null
+    const sampleName = qualifiedName || row.item_id
+
+    items.push({
+      item_id: row.item_id,
+      type: row.type,
+      qualified_name: qualifiedName,
+      category: category.key,
+      category_label: category.label,
+      payload_size: payloadSize,
+      updated_at: row.updated_at,
+      deleted_at: deletedAt,
+      has_payload_enc: Boolean(row.payload_enc),
+      has_payload_ref: Boolean(row.payload_ref),
+    })
+
+    totalPayloadBytes += payloadSize
+    lastUpdatedAt = maxIso(lastUpdatedAt, row.updated_at)
+    if (deletedAt) {
+      deletedItems += 1
+    } else {
+      liveItems += 1
+    }
+
+    const existing = categoryMap.get(category.key) ?? {
+      key: category.key,
+      label: category.label,
+      count: 0,
+      total_payload_bytes: 0,
+      last_updated_at: '',
+      sample_items: [],
+    }
+    existing.count += 1
+    existing.total_payload_bytes += payloadSize
+    existing.last_updated_at = maxIso(existing.last_updated_at, row.updated_at)
+    if (existing.sample_items.length < 3 && !existing.sample_items.includes(sampleName)) {
+      existing.sample_items.push(sampleName)
+    }
+    categoryMap.set(category.key, existing)
+  }
+
+  const categories = Array.from(categoryMap.values()).sort((left, right) => {
+    if (right.count !== left.count) {
+      return right.count - left.count
+    }
+    return left.key.localeCompare(right.key)
+  })
+
+  return {
+    summary: {
+      total_items: items.length,
+      live_items: liveItems,
+      deleted_items: deletedItems,
+      total_payload_bytes: totalPayloadBytes,
+      last_updated_at: lastUpdatedAt,
+    },
+    categories,
+    items,
+    generated_at: new Date().toISOString(),
+  }
+}
+
+export async function listRecentSyncActivities(
+  event: H3Event,
+  userId: string,
+  limit = 24
+): Promise<RecentSyncActivity[]> {
+  const db = requireDatabase(event)
+  await ensureSyncSchemaV1(db)
+
+  const safeLimit = Math.min(Math.max(Math.floor(limit) || 24, 10), 200)
+  const rows = await db.prepare(`
+    SELECT
+      o.cursor,
+      o.device_id,
+      o.item_id,
+      o.op_type,
+      o.updated_at,
+      o.payload_size,
+      s.last_error_code
+    FROM ${SYNC_OPLOG_TABLE} o
+    LEFT JOIN ${SYNC_SESSIONS_TABLE} s
+      ON s.user_id = o.user_id AND s.device_id = o.device_id
+    WHERE o.user_id = ?
+    ORDER BY o.cursor DESC
+    LIMIT ?
+  `).bind(userId, safeLimit).all<{
+    cursor: number
+    device_id: string
+    item_id: string
+    op_type: string
+    updated_at: string
+    payload_size: number | null
+    last_error_code: string | null
+  }>()
+
+  const latestCursorByDevice = new Map<string, number>()
+  for (const row of rows.results ?? []) {
+    const cursor = Number(row.cursor ?? 0)
+    const previous = latestCursorByDevice.get(row.device_id) ?? -1
+    if (cursor > previous) {
+      latestCursorByDevice.set(row.device_id, cursor)
+    }
+  }
+
+  return (rows.results ?? []).map((row) => {
+    const cursor = Number(row.cursor ?? 0)
+    const isLatestForDevice = latestCursorByDevice.get(row.device_id) === cursor
+    const errorCode =
+      isLatestForDevice && typeof row.last_error_code === 'string' && row.last_error_code.trim()
+        ? row.last_error_code.trim()
+        : null
+
+    return {
+      cursor,
+      device_id: row.device_id,
+      item_id: row.item_id,
+      op_type: row.op_type === 'delete' ? 'delete' : 'upsert',
+      updated_at: row.updated_at,
+      payload_size: normalizePayloadSize(row.payload_size),
+      status: errorCode ? 'failed' : 'success',
+      error_code: errorCode,
+    }
+  })
 }
 
 export interface KeyringSecret {

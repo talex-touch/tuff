@@ -121,7 +121,7 @@ function resolveTypeLabel(type: string) {
     :title="instantPreview.headline"
     :subtitle="instantPreview.subheadline"
     section-class="min-h-screen flex flex-col justify-center"
-    container-class="max-w-6xl w-full space-y-6"
+    container-class="w-full max-w-none space-y-6 px-[clamp(1.5rem,4vw,4.5rem)]"
     title-class="text-[clamp(.7rem,1vw+1.4rem,1.2rem)] font-bold leading-tight"
     subtitle-class="mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70"
     :reveal-options="{
@@ -138,7 +138,7 @@ function resolveTypeLabel(type: string) {
     <div class="InstantPreview-Layout">
       <div class="InstantPreview-Stage" data-reveal>
         <div class="InstantPreview-Glow" aria-hidden="true" />
-        <TxFloating class="InstantPreview-FloatLayer" :sensitivity="1.15" :easing-factor="0.08">
+        <TxFloating class="InstantPreview-FloatLayer" :sensitivity="0.6" :easing-factor="0.08">
           <TxFloatingElement
             v-for="widget in previewWidgets"
             :key="widget.id"
@@ -238,11 +238,11 @@ function resolveTypeLabel(type: string) {
 .InstantPreview-Layout {
   display: flex;
   flex-direction: column;
-  gap: clamp(2rem, 4vh, 3.5rem);
+  gap: clamp(3rem, 6.5vh, 4.75rem);
   align-items: stretch;
   width: 100%;
   height: 100%;
-  min-height: clamp(560px, 78vh, 760px);
+  min-height: clamp(900px, 110vh, 1180px);
   box-sizing: border-box;
 }
 
@@ -250,10 +250,15 @@ function resolveTypeLabel(type: string) {
   position: relative;
   width: 100%;
   flex: 1;
-  min-height: clamp(360px, 52vh, 520px);
+  min-height: clamp(860px, 105vh, 1120px);
   border: none;
   background: transparent;
   isolation: isolate;
+  overflow: hidden;
+  --instant-preview-card-scale: 1;
+  --instant-preview-right-top: 1%;
+  --instant-preview-right-gap: 0.5%;
+  --instant-preview-card-block: clamp(240px, 28vh, 320px);
 }
 
 .InstantPreview-SectionBackdrop {
@@ -279,39 +284,116 @@ function resolveTypeLabel(type: string) {
 
 .InstantPreview-CardSlot {
   position: absolute;
-  width: clamp(220px, 26vw, 320px);
+  width: 27vw;
+  min-width: 220px;
 }
 
 .InstantPreview-CardSlot.is-expression {
-  top: 6%;
-  left: 6%;
+  top: 4%;
+  left: 18%;
 }
 
 .InstantPreview-CardSlot.is-unit {
-  top: 6%;
-  right: 6%;
+  top: var(--instant-preview-right-top);
+  right: 18%;
 }
 
 .InstantPreview-CardSlot.is-time {
-  bottom: 10%;
-  left: 10%;
+  top: 30%;
+  left: 6%;
 }
 
 .InstantPreview-CardSlot.is-color {
-  bottom: 24%;
-  right: 14%;
+  top: calc(var(--instant-preview-right-top) + (var(--instant-preview-card-block) + var(--instant-preview-right-gap)) * 2);
+  right: 18%;
 }
 
 .InstantPreview-CardSlot.is-currency {
-  top: 42%;
-  left: 40%;
-  width: clamp(220px, 30vw, 300px);
+  top: calc(var(--instant-preview-right-top) + var(--instant-preview-card-block) + var(--instant-preview-right-gap));
+  right: 6%;
 }
 
 .InstantPreview-CardSlot.is-constant {
-  bottom: 4%;
-  right: 2%;
-  width: clamp(200px, 24vw, 280px);
+  top: 56%;
+  left: 18%;
+}
+
+@media (min-width: 1600px) {
+  .InstantPreview-CardSlot {
+    width: 27vw;
+    min-width: 250px;
+  }
+
+  .InstantPreview-CardSlot.is-expression {
+    top: 2%;
+    left: 18%;
+  }
+
+  .InstantPreview-CardSlot.is-unit {
+    top: var(--instant-preview-right-top);
+    right: 18%;
+  }
+
+  .InstantPreview-CardSlot.is-currency {
+    top: calc(var(--instant-preview-right-top) + var(--instant-preview-card-block) + var(--instant-preview-right-gap));
+    right: 6%;
+  }
+
+  .InstantPreview-CardSlot.is-time {
+    top: 28%;
+    left: 6%;
+  }
+
+  .InstantPreview-CardSlot.is-color {
+    top: calc(var(--instant-preview-right-top) + (var(--instant-preview-card-block) + var(--instant-preview-right-gap)) * 2);
+    right: 18%;
+  }
+
+  .InstantPreview-CardSlot.is-constant {
+    top: 54%;
+    left: 18%;
+  }
+}
+
+@media (max-width: 1200px) {
+  .InstantPreview-Layout {
+    min-height: clamp(900px, 110vh, 1180px);
+  }
+
+  .InstantPreview-CardSlot {
+    width: 27vw;
+    min-width: 200px;
+  }
+
+  .InstantPreview-CardSlot.is-expression {
+    top: 4%;
+    left: 16%;
+  }
+
+  .InstantPreview-CardSlot.is-unit {
+    top: var(--instant-preview-right-top);
+    right: 16%;
+  }
+
+  .InstantPreview-CardSlot.is-currency {
+    top: calc(var(--instant-preview-right-top) + var(--instant-preview-card-block) + var(--instant-preview-right-gap));
+    right: 8%;
+  }
+
+  .InstantPreview-CardSlot.is-time {
+    top: 30%;
+    left: 8%;
+  }
+
+  .InstantPreview-CardSlot.is-color {
+    top: calc(var(--instant-preview-right-top) + (var(--instant-preview-card-block) + var(--instant-preview-right-gap)) * 2);
+    right: 16%;
+  }
+
+  .InstantPreview-CardSlot.is-constant {
+    top: 56%;
+    left: 16%;
+  }
 }
 
 .InstantPreview-CardInput {
@@ -397,6 +479,8 @@ function resolveTypeLabel(type: string) {
   box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+  transform: scale(var(--instant-preview-card-scale));
+  transform-origin: top left;
 }
 
 .ai-preview-demo__card::before {
@@ -540,9 +624,15 @@ function resolveTypeLabel(type: string) {
 }
 
 @media (max-width: 960px) {
+  .InstantPreview-Layout {
+    min-height: auto;
+  }
+
   .InstantPreview-Stage {
     height: auto;
+    min-height: auto;
     padding: 24px;
+    --instant-preview-card-scale: 1;
   }
 
   .InstantPreview-FloatLayer {

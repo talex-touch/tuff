@@ -137,6 +137,11 @@ export interface KeysRecoverDeviceResponse {
   keyrings: KeyringSecret[]
 }
 
+export interface DeviceAttestPayload {
+  machine_code_hash: string
+  fingerprint_hash?: string
+}
+
 export interface DeviceAttestResponse {
   ok: boolean
   device_id: string

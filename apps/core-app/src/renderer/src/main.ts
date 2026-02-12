@@ -23,6 +23,7 @@ import { setupI18n } from '~/modules/lang/i18n'
 import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
 import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
+import { startAutoSync } from '~/modules/sync'
 
 import { usePluginStore } from '~/stores/plugin'
 
@@ -145,6 +146,12 @@ async function bootstrap() {
   await runBootStep('Mounting renderer root container', 0.05, () => {
     app.mount('#app')
   })
+
+  if (!isCoreBox()) {
+    void startAutoSync().catch(() => {
+      // ignore bootstrap sync failures; runtime flow will retry after login/network recovery
+    })
+  }
 
   preloadDebugStep('Renderer shell mounted', 0.02)
 }

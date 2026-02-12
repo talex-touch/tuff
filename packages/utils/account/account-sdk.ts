@@ -238,6 +238,32 @@ export class AccountSDK {
     }
   }
 
+  /**
+   * Get user sync preference switch from host app.
+   * Defaults to true for backward compatibility when channel is not implemented.
+   */
+  async getSyncEnabled(): Promise<boolean> {
+    try {
+      const enabled = await this.send<boolean | null>('account:get-sync-enabled')
+      return typeof enabled === 'boolean' ? enabled : true
+    }
+    catch {
+      return true
+    }
+  }
+
+  /**
+   * Report sync activity to host app for status display.
+   */
+  async recordSyncActivity(kind: 'push' | 'pull'): Promise<void> {
+    try {
+      await this.send('account:record-sync-activity', { kind })
+    }
+    catch {
+      // ignore, best-effort telemetry
+    }
+  }
+
   // ============================================================================
   // User Profile
   // ============================================================================

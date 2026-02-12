@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -82,6 +84,46 @@ interface AnalyticsData {
   }
 }
 
+interface GeoAnalyticsData {
+  summary: {
+    totalSearches: number
+    uniqueIps: number
+    countryCount: number
+    subdivisionCount: number
+  }
+  countries: Array<{
+    countryCode: string
+    count: number
+    latitude: number | null
+    longitude: number | null
+  }>
+  subdivisions: Array<{
+    countryCode: string
+    regionCode: string | null
+    regionName: string | null
+    count: number
+    latitude: number | null
+    longitude: number | null
+  }>
+  topIps: Array<{
+    ip: string
+    count: number
+    lastSeenAt: string
+    countryCode: string | null
+    regionCode: string | null
+    city: string | null
+  }>
+  generatedAt: string
+}
+
+interface GeoMapPoint {
+  id: string
+  label: string
+  latitude: number | null
+  longitude: number | null
+  value: number
+}
+
 interface TelemetryMessage {
   id: string
   source: string
@@ -96,10 +138,14 @@ const analytics = ref<AnalyticsData | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
 const selectedDays = ref(30)
+const geoAnalytics = ref<GeoAnalyticsData | null>(null)
+const geoLoading = ref(false)
+const geoError = ref<string | null>(null)
+const selectedGeoCountry = ref<string | null>(null)
 const messages = ref<TelemetryMessage[]>([])
 const messagesLoading = ref(false)
 const messagesError = ref<string | null>(null)
-const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'messages'>('overview')
+const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'geo' | 'messages'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
@@ -139,6 +185,42 @@ const hourlySeries = computed(() => {
   return { series, max }
 })
 const hasHourlyData = computed(() => hourlySeries.value.series.some(item => item.count > 0))
+const geoMapPoints = computed<GeoMapPoint[]>(() => {
+  if (!geoAnalytics.value) {
+    return []
+  }
+  if (selectedGeoCountry.value) {
+    return geoAnalytics.value.subdivisions.map(item => ({
+      id: `${item.countryCode}:${item.regionCode || item.regionName || 'unknown'}`,
+      label: [item.countryCode, item.regionName || item.regionCode || 'Unknown'].join(' · '),
+      latitude: item.latitude,
+      longitude: item.longitude,
+      value: item.count,
+    }))
+  }
+
+  return geoAnalytics.value.countries.map(item => ({
+    id: item.countryCode,
+    label: item.countryCode,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    value: item.count,
+  }))
+})
+const geoCountries = computed(() => geoAnalytics.value?.countries ?? [])
+const geoSubdivisions = computed(() => geoAnalytics.value?.subdivisions ?? [])
+const geoTopIps = computed(() => geoAnalytics.value?.topIps.slice(0, 12) ?? [])
+
+function resolveCountryLabel(countryCode: string | null): string {
+  if (!countryCode || countryCode === 'Unknown') {
+    return 'Unknown'
+  }
+  return regionDisplayNames.value?.of(countryCode) ?? countryCode
+}
+
+function resolveSubdivisionLabel(item: GeoAnalyticsData['subdivisions'][number]): string {
+  return item.regionName || item.regionCode || 'Unknown'
+}
 
 async function fetchAnalytics() {
   loading.value = true
@@ -152,6 +234,27 @@ async function fetchAnalytics() {
   }
   finally {
     loading.value = false
+  }
+}
+
+async function fetchGeoAnalytics() {
+  geoLoading.value = true
+  geoError.value = null
+  try {
+    const data = await $fetch<GeoAnalyticsData>('/api/admin/analytics/geo', {
+      query: {
+        days: selectedDays.value,
+        country: selectedGeoCountry.value || undefined,
+        limit: 240,
+      },
+    })
+    geoAnalytics.value = data
+  }
+  catch (e: any) {
+    geoError.value = e.data?.message || e.message || 'Failed to load geo analytics'
+  }
+  finally {
+    geoLoading.value = false
   }
 }
 
@@ -173,11 +276,17 @@ async function fetchMessages() {
 
 onMounted(() => {
   fetchAnalytics()
+  fetchGeoAnalytics()
   fetchMessages()
 })
 
 watch(selectedDays, () => {
   fetchAnalytics()
+  fetchGeoAnalytics()
+})
+
+watch(selectedGeoCountry, () => {
+  fetchGeoAnalytics()
 })
 
 function formatNumber(num: number): string {
@@ -215,6 +324,23 @@ function formatMessageTime(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
 
+function drilldownCountry(countryCode: string) {
+  if (!countryCode || countryCode === 'Unknown') {
+    return
+  }
+  selectedGeoCountry.value = countryCode
+}
+
+function resetGeoDrilldown() {
+  selectedGeoCountry.value = null
+}
+
+function handleMapPointClick(point: GeoMapPoint) {
+  if (!selectedGeoCountry.value) {
+    drilldownCountry(point.id)
+  }
+}
+
 const deviceColors: Record<string, string> = {
   darwin: 'bg-blue-500',
   win32: 'bg-green-500',
@@ -236,11 +362,18 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           {{ t('dashboard.sections.analytics.subtitle', 'Usage statistics and insights') }}
         </p>
       </div>
-      <TuffSelect v-model="selectedDays" class="w-44">
-        <TuffSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days', 'Last 7 days')" />
-        <TuffSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days', 'Last 30 days')" />
-        <TuffSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
-      </TuffSelect>
+      <ClientOnly>
+        <TuffSelect v-model="selectedDays" class="w-44">
+          <TuffSelectItem :value="7" :label="t('dashboard.sections.analytics.last7Days', 'Last 7 days')" />
+          <TuffSelectItem :value="30" :label="t('dashboard.sections.analytics.last30Days', 'Last 30 days')" />
+          <TuffSelectItem :value="90" :label="t('dashboard.sections.analytics.last90Days', 'Last 90 days')" />
+        </TuffSelect>
+        <template #fallback>
+          <div class="w-44 rounded-xl bg-black/[0.04] px-3 py-2 text-xs text-black/60 dark:bg-white/[0.08] dark:text-white/60">
+            {{ t('dashboard.sections.analytics.last30Days', 'Last 30 days') }}
+          </div>
+        </template>
+      </ClientOnly>
     </div>
 
     <!-- Loading -->
@@ -311,6 +444,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'usage'">
           Usage
+        </TxButton>
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'geo' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'geo'">
+          Geo
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'messages' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'messages'">
           Alerts
@@ -680,6 +816,149 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Geo Analytics -->
+      <div v-if="activeSection === 'geo'" class="space-y-4">
+        <div class="grid gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Searches
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(geoAnalytics?.summary.totalSearches || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Unique IPs
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(geoAnalytics?.summary.uniqueIps || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Countries
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(geoAnalytics?.summary.countryCount || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Subdivisions
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(geoAnalytics?.summary.subdivisionCount || 0) }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between rounded-2xl bg-black/[0.02] px-4 py-3 text-sm dark:bg-white/[0.03]">
+          <div class="flex items-center gap-2">
+            <span class="text-black/60 dark:text-white/60">Scope:</span>
+            <span class="font-medium text-black dark:text-white">Global</span>
+            <span v-if="selectedGeoCountry" class="text-black/40 dark:text-white/40">></span>
+            <span v-if="selectedGeoCountry" class="font-medium text-black dark:text-white">{{ resolveCountryLabel(selectedGeoCountry) }}</span>
+          </div>
+          <TxButton
+            v-if="selectedGeoCountry"
+            variant="bare"
+            size="small"
+            native-type="button"
+            class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
+            @click="resetGeoDrilldown"
+          >
+            Back to Global
+          </TxButton>
+        </div>
+
+        <div v-if="geoLoading" class="flex items-center gap-2 rounded-2xl bg-black/[0.02] p-4 text-sm text-black/45 dark:bg-white/[0.03] dark:text-white/50">
+          <TxSpinner :size="16" />
+          Loading geo analytics...
+        </div>
+        <div v-else-if="geoError" class="rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
+          {{ geoError }}
+        </div>
+
+        <template v-else-if="geoAnalytics">
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <GeoLeafletMap
+              :points="geoMapPoints"
+              :height="320"
+              @point-click="handleMapPointClick"
+            />
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                {{ selectedGeoCountry ? 'State / Province Breakdown' : 'Country Breakdown' }}
+              </h3>
+              <div v-if="selectedGeoCountry ? geoSubdivisions.length === 0 : geoCountries.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No data in current range
+              </div>
+              <div v-else class="space-y-2">
+                <template v-if="selectedGeoCountry">
+                  <button
+                    v-for="item in geoSubdivisions.slice(0, 12)"
+                    :key="`${item.countryCode}:${item.regionCode || item.regionName || 'unknown'}`"
+                    type="button"
+                    class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                  >
+                    <span class="truncate text-black/75 dark:text-white/75">
+                      {{ resolveSubdivisionLabel(item) }}
+                    </span>
+                    <span class="text-xs text-black/45 dark:text-white/50">
+                      {{ formatNumber(item.count) }}
+                    </span>
+                  </button>
+                </template>
+                <template v-else>
+                  <button
+                    v-for="item in geoCountries.slice(0, 12)"
+                    :key="item.countryCode"
+                    type="button"
+                    class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                    @click="drilldownCountry(item.countryCode)"
+                  >
+                    <span class="truncate text-black/75 dark:text-white/75">
+                      {{ resolveCountryLabel(item.countryCode) }}
+                    </span>
+                    <span class="text-xs text-black/45 dark:text-white/50">
+                      {{ formatNumber(item.count) }}
+                    </span>
+                  </button>
+                </template>
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                Top IPs
+              </h3>
+              <div v-if="geoTopIps.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No IP data in current range
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="item in geoTopIps"
+                  :key="`${item.ip}:${item.lastSeenAt}`"
+                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-sm dark:bg-white/[0.05]"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-medium text-black/80 dark:text-white/80">{{ item.ip }}</span>
+                    <span class="text-xs text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
+                  </div>
+                  <p class="mt-1 text-xs text-black/45 dark:text-white/50">
+                    {{ resolveCountryLabel(item.countryCode) }} · {{ item.regionCode || '-' }} · {{ item.city || '-' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- Telemetry Messages -->

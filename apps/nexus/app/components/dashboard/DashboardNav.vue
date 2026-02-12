@@ -29,11 +29,11 @@ const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
   assets: '/dashboard/assets',
   plugins: '/dashboard/assets',
+  intelligence: '/dashboard/admin/intelligence',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   credits: '/dashboard/credits',
   updates: '/dashboard/updates',
-  releases: '/dashboard/releases',
   images: '/dashboard/images',
   codes: '/dashboard/admin/codes',
   reviews: '/dashboard/admin/reviews',
@@ -42,6 +42,7 @@ const sectionPaths: Record<string, string> = {
   privacy: '/dashboard/privacy',
   account: '/dashboard/account',
   devices: '/dashboard/devices',
+  storage: '/dashboard/storage',
 }
 
 function mapItems(items: Array<{ id: string, label: string, icon: string }>) {
@@ -91,6 +92,11 @@ const accountMenuItems = computed(() => mapItems([
     icon: 'i-carbon-laptop',
   },
   {
+    id: 'storage',
+    label: t('dashboard.sections.menu.storage', 'Storage & Sync'),
+    icon: 'i-carbon-data-base-alt',
+  },
+  {
     id: 'privacy',
     label: t('dashboard.sections.menu.privacy', '隐私设置'),
     icon: 'i-carbon-security',
@@ -109,9 +115,9 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-notification',
     },
     {
-      id: 'releases',
-      label: t('dashboard.sections.menu.releases', 'Release Notes'),
-      icon: 'i-carbon-document',
+      id: 'intelligence',
+      label: t('dashboard.sections.menu.intelligence', 'AI 渠道'),
+      icon: 'i-carbon-machine-learning-model',
     },
     {
       id: 'images',
@@ -150,6 +156,8 @@ const activeSection = computed(() => {
     return 'doc-comments'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
+  if (route.path.startsWith('/dashboard/admin/intelligence'))
+    return 'intelligence'
   if (route.path.startsWith('/dashboard/credits'))
     return 'credits'
   if (route.path.startsWith('/dashboard/account'))
@@ -158,8 +166,8 @@ const activeSection = computed(() => {
     return 'api-keys'
   if (route.path.startsWith('/dashboard/devices'))
     return 'devices'
-  if (route.path.startsWith('/dashboard/releases'))
-    return 'releases'
+  if (route.path.startsWith('/dashboard/storage'))
+    return 'storage'
   if (route.path.startsWith('/dashboard/assets') || route.path.startsWith('/dashboard/plugins'))
     return 'assets'
   const segments = route.path.split('/').filter(Boolean)
@@ -218,31 +226,29 @@ const activeSection = computed(() => {
       </ul>
     </nav>
 
-    <template v-if="adminMenuItems.length">
-      <div class="mx-4 border-t border-black/[0.04] dark:border-white/[0.06]" />
+    <div v-show="adminMenuItems.length > 0" class="mx-4 border-t border-black/[0.04] dark:border-white/[0.06]" />
 
-      <nav class="relative p-4 pt-0" aria-label="Admin panels">
-        <p class="apple-section-title mb-4 px-3">
-          {{ t('dashboard.sections.menu.adminTitle', '管理员') }}
-        </p>
-        <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Admin panels">
-          <li v-for="item in adminMenuItems" :key="item.id">
-            <NuxtLink
-              :to="item.to"
-              class="dashboard-nav-link group w-full flex items-center rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
-              :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
-              role="option"
-              :aria-selected="activeSection === item.id"
-            >
-              <span class="flex items-center gap-3">
-                <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
-                <span>{{ item.label }}</span>
-              </span>
-            </NuxtLink>
-          </li>
-        </ul>
-      </nav>
-    </template>
+    <nav v-show="adminMenuItems.length > 0" class="relative p-4 pt-0" aria-label="Admin panels">
+      <p class="apple-section-title mb-4 px-3">
+        {{ t('dashboard.sections.menu.adminTitle', '管理员') }}
+      </p>
+      <ul class="flex flex-col list-none gap-1 p-0 text-sm" role="listbox" aria-label="Admin panels">
+        <li v-for="item in adminMenuItems" :key="item.id">
+          <NuxtLink
+            :to="item.to"
+            class="dashboard-nav-link group w-full flex items-center rounded-xl px-3 py-2 text-left no-underline transition-all duration-200"
+            :class="activeSection === item.id ? 'dashboard-nav-link--active' : ''"
+            role="option"
+            :aria-selected="activeSection === item.id"
+          >
+            <span class="flex items-center gap-3">
+              <span :class="['dashboard-nav-icon text-[15px]', item.icon]" aria-hidden="true" />
+              <span>{{ item.label }}</span>
+            </span>
+          </NuxtLink>
+        </li>
+      </ul>
+    </nav>
   </aside>
 </template>
 

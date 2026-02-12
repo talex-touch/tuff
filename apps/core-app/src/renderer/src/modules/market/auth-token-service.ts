@@ -1,21 +1,17 @@
 import { useAuthState } from '@talex-touch/utils/renderer'
 import {
   clearAppAuthToken,
-  clearDevAuthUser,
   getAppAuthToken,
   getAppDeviceId,
   getAppDeviceName,
   getAppDevicePlatform,
   getAuthBaseUrl,
-  getDevAuthToken,
-  isLocalAuthMode,
   setAppAuthToken
 } from '../auth/auth-env'
 
 let cachedToken: string | null = null
 let tokenExpiry: number = 0
 let unauthorizedHandling = false
-let lastUnauthorizedAt = 0
 
 const APP_TOKEN_REFRESH_WINDOW_MS = 12 * 60 * 60 * 1000
 
@@ -41,7 +37,7 @@ function getJwtExpiryMs(token: string): number | null {
 }
 
 async function refreshAppToken(appToken: string): Promise<string | null> {
-  const url = new URL('/api/auth/sign-in-token', getAuthBaseUrl()).toString()
+  const url = new URL('/api/app-auth/sign-in-token', getAuthBaseUrl()).toString()
   try {
     const deviceId = getAppDeviceId()
     const deviceName = getAppDeviceName()
@@ -98,13 +94,6 @@ export async function getAuthToken(): Promise<string | null> {
     return appToken
   }
 
-  const devToken = getDevAuthToken()
-  if (devToken) {
-    cachedToken = devToken
-    tokenExpiry = now + 50 * 1000
-    return devToken
-  }
-
   return null
 }
 
@@ -117,18 +106,13 @@ export function clearAuthToken(): void {
   clearAppAuthToken()
 }
 
-export async function handleUnauthorized(context?: string): Promise<void> {
+export async function handleUnauthorized(_context?: string): Promise<void> {
   if (unauthorizedHandling) {
     return
   }
 
   unauthorizedHandling = true
   try {
-    const now = Date.now()
-    if (now - lastUnauthorizedAt > 1000) {
-      lastUnauthorizedAt = now
-      console.warn('[AuthTokenService] Unauthorized, clearing auth state', { context })
-    }
     clearAuthToken()
 
     const { authState } = useAuthState()
@@ -136,11 +120,6 @@ export async function handleUnauthorized(context?: string): Promise<void> {
     authState.isSignedIn = false
     authState.user = null
     authState.sessionId = null
-
-    if (isLocalAuthMode()) {
-      clearDevAuthUser()
-      return
-    }
   } finally {
     unauthorizedHandling = false
   }

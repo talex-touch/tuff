@@ -36,8 +36,9 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 const toast = useToast()
-const { user, isLoaded } = useUser()
-const isLoggedIn = computed(() => isLoaded.value && Boolean(user.value))
+const { user, status, isAuthenticated } = useAuthUser()
+const isLoaded = computed(() => status.value !== 'loading')
+const isLoggedIn = computed(() => isLoaded.value && isAuthenticated.value && Boolean(user.value))
 
 const filters = reactive({
   search: '',

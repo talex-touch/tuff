@@ -55,9 +55,9 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
-import { app, shell } from 'electron'
-import extractFileIcon from 'extract-file-icon'
+import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { app, nativeImage, shell } from 'electron'
+// extract-file-icon removed — sync native call blocks event loop; icon extraction is done via IconWorkerClient only
 import plist from 'plist'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
 import { FileAddedEvent, TalexEvents, touchEventBus } from '../../../../core/eventbus/touch-event'
@@ -91,16 +91,21 @@ import {
   getContentSizeLimitMB,
   getTypeTagsForExtension,
   KEYWORD_MAP,
-  TYPE_TAG_EXTENSION_MAP
+  TYPE_TAG_EXTENSION_MAP,
+  WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
+import { EmbeddingService } from './embedding-service'
 import { IconWorkerClient } from './workers/icon-worker-client'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
+const THUMBNAIL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'])
+const THUMBNAIL_MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+const THUMBNAIL_SIZE = 64
 const fileProviderLog = getLogger('file-provider')
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
@@ -257,6 +262,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
   private searchIndex: SearchIndexService | null = null
+  private embeddingService: EmbeddingService | null = null
   private fsEventsSubscribed = false
   private watchPathsRegistered = false
   private incrementalTaskChain: Promise<void> = Promise.resolve()
@@ -846,6 +852,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   async onLoad(context: ProviderContext): Promise<void> {
+    // 最先赋值 initializationContext，确保即使后续任何步骤失败，rebuildIndex 也能使用
+    this.initializationContext = context
+
     const loadStart = performance.now()
 
     // Keep a reference to internal helpers (no-op) so TS doesn't treat them as unused.
@@ -856,7 +865,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.dbUtils = createDbUtils(context.databaseManager.getDb())
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
-    this.initializationContext = context // 保存 context 用于重建
+
+    // EmbeddingService is best-effort; failures must not block the rest of onLoad
+    try {
+      this.embeddingService = new EmbeddingService(context.databaseManager.getDb())
+    } catch (error) {
+      this.logWarn('EmbeddingService init failed, semantic search disabled', error)
+    }
     // Store the database file path to exclude it from scanning
     // Prefer database module path when available.
     const databaseDir = context.databaseManager.filePath
@@ -1142,6 +1157,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       batteryCharging: batteryStatus?.charging ?? null
     })
 
+    // 如果 onLoad 中途失败导致 dbUtils 为空，尝试用 initializationContext 重新初始化
+    if (!this.dbUtils && this.initializationContext) {
+      try {
+        this.dbUtils = createDbUtils(this.initializationContext.databaseManager.getDb())
+        this.searchIndex = this.initializationContext.searchIndex
+        this.touchApp = this.initializationContext.touchApp
+        this.logInfo('Re-initialized dbUtils from saved context')
+      } catch (err) {
+        this.logError('Failed to re-initialize dbUtils', err)
+        return {
+          success: false,
+          reason: 'missing-context',
+          error: 'Database initialization failed'
+        }
+      }
+    }
+
     // 清空 scan_progress 表，强制全量扫描
     if (this.dbUtils) {
       const db = this.dbUtils.getDb()
@@ -1354,10 +1386,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.pendingIndexWorkerResults.set(payload.fileId, payload)
 
     if (!this.indexWorkerFlushTimer) {
+      // Use a longer flush interval to accumulate more results per batch,
+      // reducing the number of heavy indexItems calls on the main thread.
+      const flushDelay = this.pendingIndexWorkerResults.size > 50 ? 300 : 120
       this.indexWorkerFlushTimer = setTimeout(() => {
         this.indexWorkerFlushTimer = null
         void this.flushIndexWorkerResults()
-      }, 60)
+      }, flushDelay)
     }
   }
 
@@ -1370,17 +1405,50 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const entries = Array.from(this.pendingIndexWorkerResults.values())
-    this.pendingIndexWorkerResults.clear()
+    // Take at most FLUSH_BATCH_SIZE items per flush to avoid blocking the
+    // main thread with heavy FTS5 + keyword_mappings writes inside indexItems.
+    // Each document involves DELETE+INSERT on FTS5 + keyword table, which are
+    // synchronous SQLite operations that block the event loop.
+    const FLUSH_BATCH_SIZE = 2
+    let entries: IndexWorkerFileResult[]
+    if (this.pendingIndexWorkerResults.size <= FLUSH_BATCH_SIZE) {
+      entries = Array.from(this.pendingIndexWorkerResults.values())
+      this.pendingIndexWorkerResults.clear()
+    } else {
+      entries = []
+      const keysToDelete: number[] = []
+      for (const [key, value] of this.pendingIndexWorkerResults) {
+        entries.push(value)
+        keysToDelete.push(key)
+        if (entries.length >= FLUSH_BATCH_SIZE) break
+      }
+      for (const key of keysToDelete) {
+        this.pendingIndexWorkerResults.delete(key)
+      }
+      // Schedule another flush for remaining items
+      if (this.pendingIndexWorkerResults.size > 0 && !this.indexWorkerFlushTimer) {
+        this.indexWorkerFlushTimer = setTimeout(() => {
+          this.indexWorkerFlushTimer = null
+          void this.flushIndexWorkerResults()
+        }, 200)
+      }
+    }
 
     const db = this.dbUtils.getDb()
     const indexItems = entries.map((entry) => entry.indexItem)
+    const withContent = indexItems.filter((item) => item.content && item.content.length > 0).length
+    if (withContent > 0) {
+      this.logDebug(`Flushing ${entries.length} worker results (${withContent} with content)`)
+    }
 
-    await dbWriteScheduler.schedule('file-index.worker.persist', async () => {
-      await withSqliteRetry(
-        () =>
-          db.transaction(async (tx) => {
-            for (const entry of entries) {
+    // Persist each entry in its own scheduled transaction so the
+    // dbWriteScheduler can yield between entries, keeping the event loop responsive.
+    for (const entry of entries) {
+      await dbWriteScheduler.waitForCapacity(8)
+      await dbWriteScheduler.schedule('file-index.worker.persist', () =>
+        withSqliteRetry(
+          () =>
+            db.transaction(async (tx) => {
               const progress = entry.progress
 
               if (entry.fileUpdate) {
@@ -1429,13 +1497,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                     updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date()
                   }
                 })
-            }
-          }),
-        { label: 'file-index.worker.persist' }
+            }),
+          { label: 'file-index.worker.persist' }
+        )
       )
+    }
 
-      await this.searchIndex!.indexItems(indexItems)
-    })
+    // Index search items outside dbWriteScheduler to avoid scheduler nesting
+    // (indexItems internally schedules its own DB writes)
+    await this.searchIndex!.indexItems(indexItems)
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -1449,16 +1519,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       try {
         return await this.iconWorker.extract(filePath)
       } catch (error) {
-        this.logWarn('Icon worker failed, falling back to direct extraction', error, {
+        // Do NOT fall back to sync extractFileIcon — it blocks the event loop.
+        // The worker is the only safe extraction path; if it fails, skip the icon.
+        this.logWarn('Icon worker extraction failed; skipping icon', error, {
           path: filePath
         })
-        try {
-          const buffer = extractFileIcon(filePath)
-          return buffer && buffer.length > 0 ? buffer : null
-        } catch (fallbackError) {
-          this.logWarn('Direct icon extraction failed', fallbackError, { path: filePath })
-          return null
-        }
+        return null
       }
     })()
 
@@ -1945,6 +2011,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private readonly pendingIconExtractions = new Set<number>()
+  private _thumbnailTaskRunning = false
 
   private async ensureFileIcon(
     fileId: number,
@@ -2002,6 +2069,91 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.logWarn('Failed to extract icon', error, { path: filePath })
     } finally {
       this.pendingIconExtractions.delete(fileId)
+    }
+  }
+
+  private generateThumbnail(filePath: string): string | null {
+    try {
+      const img = nativeImage.createFromPath(filePath)
+      if (img.isEmpty()) return null
+
+      const size = img.getSize()
+      if (size.width <= THUMBNAIL_SIZE && size.height <= THUMBNAIL_SIZE) return null
+
+      const resized = img.resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, quality: 'low' })
+      const jpegBuffer = resized.toJPEG(50)
+      if (jpegBuffer.length === 0) return null
+
+      return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Background thumbnail generation — runs after scan completes.
+   * Processes one file at a time with setImmediate yields to avoid blocking the event loop.
+   */
+  private async generateMissingThumbnails(): Promise<void> {
+    if (this._thumbnailTaskRunning || !this.dbUtils) return
+    this._thumbnailTaskRunning = true
+
+    try {
+      const db = this.dbUtils.getDb()
+
+      // Build extension filter: WHERE extension IN ('.png', '.jpg', ...)
+      const imageExtensions = [...THUMBNAIL_EXTENSIONS].map((e) => `.${e}`)
+
+      // Find image files that don't have a thumbnail extension yet
+      const candidates = await db
+        .select({
+          id: filesSchema.id,
+          path: filesSchema.path,
+          extension: filesSchema.extension,
+          size: filesSchema.size
+        })
+        .from(filesSchema)
+        .leftJoin(
+          fileExtensions,
+          and(eq(fileExtensions.fileId, filesSchema.id), eq(fileExtensions.key, 'thumbnail'))
+        )
+        .where(and(isNull(fileExtensions.value), inArray(filesSchema.extension, imageExtensions)))
+        .limit(500)
+
+      if (candidates.length === 0) return
+
+      this.logDebug('Starting deferred thumbnail generation', { count: candidates.length })
+      let generated = 0
+
+      for (const file of candidates) {
+        if (!this._thumbnailTaskRunning) break // allow cancellation
+
+        const fileSize = typeof file.size === 'number' ? file.size : 0
+        if (fileSize <= 0 || fileSize > THUMBNAIL_MAX_FILE_SIZE) continue
+
+        // Yield to event loop before each thumbnail
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        await appTaskGate.waitForIdle()
+
+        const thumbnail = this.generateThumbnail(file.path)
+        if (thumbnail && typeof file.id === 'number') {
+          await this.withDbWrite('thumbnail.deferred', () =>
+            this.dbUtils!.addFileExtensions([
+              { fileId: file.id, key: 'thumbnail', value: thumbnail }
+            ])
+          )
+          generated++
+        }
+      }
+
+      this.logDebug('Deferred thumbnail generation completed', {
+        generated,
+        total: candidates.length
+      })
+    } catch (error) {
+      this.logWarn('Deferred thumbnail generation failed', error)
+    } finally {
+      this._thumbnailTaskRunning = false
     }
   }
 
@@ -2132,11 +2284,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const idsToDelete = existing.map((file) => file.id)
+    const pathsToDelete = existing.map((file) => file.path)
     await this.withDbWrite('file-index.incremental.delete', async () => {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
-      await this.searchIndex?.removeItems(existing.map((file) => file.path))
     })
+    // Remove from FTS5 OUTSIDE withDbWrite to avoid inline re-entrancy
+    await this.searchIndex?.removeItems(pathsToDelete)
     this.logDebug('Incremental remove completed', {
       removed: existing.length
     })
@@ -2213,7 +2367,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .returning()
       )
 
-      await this.processFileExtensions(inserted)
+      // Fire-and-forget: keyword/icon processing should not block the incremental pipeline
+      void this.processFileExtensions(inserted).catch((e) =>
+        this.logWarn('processFileExtensions failed (incremental)', e)
+      )
       this.scheduleIndexing(inserted, 'incremental-insert')
       this.logDebug('Incremental index completed', {
         inserted: inserted.length
@@ -2328,6 +2485,100 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.emitProgressStream(payload)
   }
 
+  /**
+   * Lightweight cross-table integrity check.
+   *
+   * When an inconsistency is detected (e.g. FTS5 was dropped/emptied but
+   * files table still has data), we only:
+   *   1. Clear scan_progress  — forces the normal worker-based scan pipeline
+   *      to do a full re-scan and naturally re-index everything into FTS5.
+   *   2. Clear stale FTS5/keyword_mappings entries for this provider so the
+   *      re-scan starts from a clean slate.
+   *
+   * This avoids doing a heavy `indexItems` rebuild on the main thread which
+   * previously caused the app to freeze.
+   */
+  private async runIntegrityCheck(db: LibSQLDatabase<typeof schema>): Promise<void> {
+    const start = performance.now()
+    this.logInfo('Running cross-table integrity check')
+
+    const searchIndex = this.searchIndex!
+    const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+    // 1. Compare FTS5 row count vs files table count
+    // Each query is a synchronous SQLite operation — yield between them
+    // to keep the event loop responsive.
+    const ftsCount = await searchIndex.countByProvider(this.id)
+    await yieldToEventLoop()
+
+    const fileCountResult = await db
+      .select({ cnt: sql<number>`count(*)` })
+      .from(filesSchema)
+      .where(eq(filesSchema.type, 'file'))
+    const filesCount = fileCountResult[0]?.cnt ?? 0
+    await yieldToEventLoop()
+
+    this.logInfo('Integrity check: row counts', {
+      ftsRows: ftsCount,
+      filesRows: filesCount
+    })
+
+    // 2. Check if FTS is significantly out-of-sync
+    const needsRebuild = filesCount > 0 && (ftsCount === 0 || ftsCount < filesCount * 0.8)
+
+    if (needsRebuild) {
+      this.logInfo(
+        `FTS5 index inconsistency detected (fts=${ftsCount}, files=${filesCount}) — clearing scan_progress for full re-scan`
+      )
+
+      // Clear stale FTS5 entries so the re-scan writes fresh data
+      if (ftsCount > 0) {
+        await searchIndex.removeByProvider(this.id)
+        this.logInfo('Cleared stale FTS5 entries')
+      }
+
+      // Clear scan_progress so the normal scan pipeline does a full re-scan.
+      // The worker-based indexing pipeline will naturally rebuild FTS5 as
+      // each file is scanned — no need to do it synchronously here.
+      const scanProgressCount = await db.select({ cnt: sql<number>`count(*)` }).from(scanProgress)
+      if ((scanProgressCount[0]?.cnt ?? 0) > 0) {
+        this.logInfo('Clearing scan_progress to trigger full re-scan')
+        await this.withDbWrite('file-index.integrity-reset', () => db.delete(scanProgress))
+      }
+    } else if (ftsCount > 0) {
+      // 3. Clean orphaned keyword_mappings (entries without corresponding FTS5 row)
+      // NOTE: Do NOT use LEFT JOIN here — search_index is an FTS5 virtual table
+      // which does not support efficient JOINs (no B-tree index on item_id).
+      await yieldToEventLoop()
+      const orphanedKeywords = await db.all<{ cnt: number }>(sql`
+        SELECT count(*) as cnt FROM keyword_mappings km
+        WHERE km.provider_id = ${this.id}
+          AND km.item_id NOT IN (
+            SELECT item_id FROM search_index WHERE provider = ${this.id}
+          )
+      `)
+      await yieldToEventLoop()
+      const orphanCount = orphanedKeywords[0]?.cnt ?? 0
+      if (orphanCount > 0) {
+        this.logInfo(`Removing ${orphanCount} orphaned keyword_mappings entries`)
+        await this.withDbWrite('file-index.integrity-keywords', () =>
+          db.run(sql`
+            DELETE FROM keyword_mappings
+            WHERE provider_id = ${this.id}
+              AND item_id NOT IN (
+                SELECT item_id FROM search_index WHERE provider = ${this.id}
+              )
+          `)
+        )
+      }
+    }
+
+    this.logInfo('Integrity check completed', {
+      duration: formatDuration(performance.now() - start),
+      needsRebuild
+    })
+  }
+
   private async _initialize(): Promise<void> {
     const initStart = performance.now()
     this.logDebug('Starting index process')
@@ -2342,6 +2593,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 
+    // If FTS5 table was recreated (schema migration), clear scan_progress
+    // so all watch paths go through full scan and content gets re-indexed.
+    if (this.searchIndex?.didMigrate) {
+      this.logInfo('FTS5 table was migrated — clearing scan_progress for full re-index')
+      await this.withDbWrite('file-index.migration-reset', () => db.delete(scanProgress))
+    }
+
+    // --- Cross-table integrity check ---
+    // Detects inconsistencies between files table, FTS5 index, keyword_mappings,
+    // and scan_progress. These can arise from interrupted migrations, crashes,
+    // or previous schema changes that dropped the FTS5 table.
+    if (this.searchIndex) {
+      await this.runIntegrityCheck(db)
+    }
+    // Yield after heavy integrity check queries
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
     // --- 1. Index Cleanup (FR-IX-4) ---
     const cleanupStart = performance.now()
     this.logInfo('Cleaning stale index entries from removed watch paths')
@@ -2350,6 +2618,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .select({ path: filesSchema.path, id: filesSchema.id })
       .from(filesSchema)
       .where(eq(filesSchema.type, 'file'))
+    // Yield after heavy SELECT on files table
+    await new Promise<void>((resolve) => setImmediate(resolve))
     const filesToDelete = allDbFilePaths.filter(
       (file) => !this.WATCH_PATHS.some((watchPath) => file.path.startsWith(watchPath))
     )
@@ -2360,13 +2630,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         removed: idsToDelete.length
       })
 
+      // Delete files + embeddings in the scheduler
       await this.withDbWrite('file-index.cleanup.delete', async () => {
         await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
         await this.deleteEmbeddingsByFileIds(db, idsToDelete)
         const pathsToDelete = filesToDelete.map((f) => f.path)
         await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
-        await this.searchIndex?.removeItems(pathsToDelete)
       })
+
+      // Remove from FTS5 index OUTSIDE of withDbWrite — removeItems
+      // schedules its own tasks; calling it inside a scheduled task would
+      // run all sub-tasks inline without yielding (taskContext re-entrancy).
+      const pathsToRemove = filesToDelete.map((f) => f.path)
+      if (pathsToRemove.length > 0) {
+        const removeChunkSize = 50
+        for (let i = 0; i < pathsToRemove.length; i += removeChunkSize) {
+          const chunk = pathsToRemove.slice(i, i + removeChunkSize)
+          await this.searchIndex?.removeItems(chunk)
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
     }
     this.emitIndexingProgress('cleanup', 1, 1)
     this.logDebug('Cleanup stage finished', {
@@ -2377,6 +2660,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // --- 2. Determine Scan Strategy (FR-IX-3: Resumable Indexing) ---
     const strategyStart = performance.now()
     const completedScans = await db.select().from(scanProgress)
+    // Yield after scan_progress read
+    await new Promise<void>((resolve) => setImmediate(resolve))
     const completedScanPaths = new Set(completedScans.map((s) => s.path))
 
     const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
@@ -2425,6 +2710,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           scannedPaths++
           this.emitIndexingProgress('scanning', scannedPaths, newPathsToScan.length)
 
+          // Yield after scan completes — the worker result deserialization and
+          // the subsequent .map() below are synchronous and can stall the event loop
+          // for large directories (7000+ files).
+          await new Promise<void>((resolve) => setImmediate(resolve))
+
+          const lastIndexedAt = new Date()
           const newFileRecords = diskFiles.map((file) => ({
             path: file.path,
             name: file.name,
@@ -2432,7 +2723,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             size: file.size,
             mtime: file.mtime,
             ctime: file.ctime,
-            lastIndexedAt: new Date(),
+            lastIndexedAt,
             isDir: false,
             type: 'file'
           }))
@@ -2442,7 +2733,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               path: newPath,
               files: newFileRecords.length
             })
-            const chunkSize = 100
+            const chunkSize = 20
             const chunks: (typeof newFileRecords)[] = []
             for (let i = 0; i < newFileRecords.length; i += chunkSize) {
               chunks.push(newFileRecords.slice(i, i + chunkSize))
@@ -2454,6 +2745,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               chunks,
               async (chunk, chunkIndex) => {
                 await appTaskGate.waitForIdle()
+                // Backpressure: wait if the DB scheduler queue is too deep.
+                // Fire-and-forget processFileExtensions + index worker flushes
+                // can flood the queue — slow down the producer to let it drain.
+                await dbWriteScheduler.waitForCapacity(8)
                 const chunkStart = performance.now()
                 const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
                   db
@@ -2478,13 +2773,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                   size: chunk.length,
                   duration: formatDuration(performance.now() - chunkStart)
                 })
-                await this.processFileExtensions(inserted)
+                // Fire-and-forget: keyword/icon processing should not block the scan pipeline
+                void this.processFileExtensions(inserted).catch((e) =>
+                  this.logWarn('processFileExtensions failed (full-scan)', e)
+                )
                 this.scheduleIndexing(inserted, 'full-scan')
                 indexedFiles += chunk.length
                 this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
               },
               {
-                estimatedTaskTimeMs: 6,
+                estimatedTaskTimeMs: 20,
                 label: `FileProvider::fullScan(${newPath})`
               }
             )
@@ -2525,6 +2823,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           .where(
             pathWhere ? and(eq(filesSchema.type, 'file'), pathWhere) : eq(filesSchema.type, 'file')
           )
+
+        // Yield after heavy SELECT to let pending microtasks/IO run
+        await new Promise<void>((resolve) => setImmediate(resolve))
 
         const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
@@ -2594,13 +2895,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         if (deletedFileIds.length > 0) {
           const deleteChunks: number[][] = []
-          const deleteChunkSize = 500
+          const deleteChunkSize = 50
           for (let i = 0; i < deletedFileIds.length; i += deleteChunkSize) {
             deleteChunks.push(deletedFileIds.slice(i, i + deleteChunkSize))
           }
 
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
+            await dbWriteScheduler.waitForCapacity(8)
             await this.withDbWrite('file-index.reconcile.delete', async () => {
               await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
               await this.deleteEmbeddingsByFileIds(db, chunk)
@@ -2614,7 +2916,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
           if (removedPaths.length > 0) {
             const pathChunks: string[][] = []
-            const pathChunkSize = 500
+            const pathChunkSize = 100
             for (let i = 0; i < removedPaths.length; i += pathChunkSize) {
               pathChunks.push(removedPaths.slice(i, i + pathChunkSize))
             }
@@ -2642,7 +2944,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             type: 'file'
           }))
 
-          const chunkSize = 500
+          const chunkSize = 20
           const chunks: (typeof newFileRecords)[] = []
           for (let i = 0; i < newFileRecords.length; i += chunkSize) {
             chunks.push(newFileRecords.slice(i, i + chunkSize))
@@ -2654,6 +2956,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks,
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
+              await dbWriteScheduler.waitForCapacity(8)
               const chunkStart = performance.now()
               const inserted = await this.withDbWrite('file-index.reconcile.upsert', () =>
                 db
@@ -2677,13 +2980,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
                 size: chunk.length,
                 duration: formatDuration(performance.now() - chunkStart)
               })
-              await this.processFileExtensions(inserted)
+              // Fire-and-forget: keyword/icon processing should not block reconciliation
+              void this.processFileExtensions(inserted).catch((e) =>
+                this.logWarn('processFileExtensions failed (reconciliation)', e)
+              )
               this.scheduleIndexing(inserted, 'reconciliation-insert')
               reconciledFiles += chunk.length
               this.emitIndexingProgress('indexing', reconciledFiles, filesToAdd.length)
             },
             {
-              estimatedTaskTimeMs: 6,
+              estimatedTaskTimeMs: 20,
               label: 'FileProvider::reconciliationInsert'
             }
           )
@@ -2715,6 +3021,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.logInfo('Index process complete', {
       duration: formatDuration(performance.now() - initStart)
     })
+
+    // Schedule deferred thumbnail generation (low-priority, non-blocking)
+    void this.generateMissingThumbnails()
   }
 
   private async _processFileUpdates(filesToUpdate: FileUpdateRecord[], chunkSize = 10) {
@@ -2734,29 +3043,36 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       chunks,
       async (chunk) => {
         await appTaskGate.waitForIdle()
+        await dbWriteScheduler.waitForCapacity(8)
         const chunkStart = performance.now()
 
-        const updatePromises = chunk.map((file) =>
-          db
-            .update(filesSchema)
-            .set({
-              extension: file.extension,
-              size: file.size,
-              ctime: file.ctime,
-              mtime: file.mtime,
-              name: file.name,
-              type: file.type,
-              isDir: file.isDir,
-              lastIndexedAt: new Date()
-            })
-            .where(eq(filesSchema.id, file.id))
-        )
-        await Promise.all(updatePromises)
-
+        // Run each UPDATE as a separate scheduled task so the scheduler
+        // can yield between them. Do NOT batch them in a single withDbWrite
+        // — that blocks the event loop for the entire chunk duration.
+        for (const file of chunk) {
+          await this.withDbWrite('file-index.file-update.single', () =>
+            db
+              .update(filesSchema)
+              .set({
+                extension: file.extension,
+                size: file.size,
+                ctime: file.ctime,
+                mtime: file.mtime,
+                name: file.name,
+                type: file.type,
+                isDir: file.isDir,
+                lastIndexedAt: new Date()
+              })
+              .where(eq(filesSchema.id, file.id))
+          )
+        }
         const ids = chunk.map((file) => file.id)
         const refreshed = await db.select().from(filesSchema).where(inArray(filesSchema.id, ids))
 
-        await this.processFileExtensions(refreshed)
+        // Fire-and-forget: keyword/icon processing should not block file updates
+        void this.processFileExtensions(refreshed).catch((e) =>
+          this.logWarn('processFileExtensions failed (file-update)', e)
+        )
         this.scheduleIndexing(refreshed, 'file-update')
 
         processedCount += chunk.length
@@ -2773,7 +3089,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         }
       },
       {
-        estimatedTaskTimeMs: 10,
+        estimatedTaskTimeMs: 20,
         label: 'FileProvider::processFileUpdates'
       }
     )
@@ -2803,6 +3119,30 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       value: keyword,
       priority: 1.05
     }))
+
+    // Split file name (without extension) into tokens for better keyword matching
+    const baseName = path.basename(file.name, extension)
+    const nameTokens = baseName
+      .split(/[-_.\s]+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 1)
+    for (const token of nameTokens) {
+      keywords.push({ value: token, priority: 1.1 })
+    }
+
+    // Add path directory names as keywords for path-based search
+    if (file.path) {
+      const dirPath = path.dirname(file.path)
+      const segments = dirPath
+        .split(/[\\/]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.length > 1)
+      // Take last 3 meaningful segments to avoid noise from root paths
+      const relevantSegments = segments.slice(-3)
+      for (const segment of relevantSegments) {
+        keywords.push({ value: segment, priority: 0.8 })
+      }
+    }
 
     const tags = new Set<string>()
     if (extension) {
@@ -2839,7 +3179,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const limitedTokens = tokens.slice(0, 5)
-    return limitedTokens.map((token) => `${token}*`).join(' AND ')
+    return limitedTokens.join(' ')
   }
 
   private async processFileExtensions(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
@@ -2873,11 +3213,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             const cached = iconCache.get(fileId)
             if (this.needsIconExtraction(file, cached)) {
               try {
-                if (files.length > 200) {
-                  void this.ensureFileIcon(fileId, file.path, file)
-                } else {
-                  await this.ensureFileIcon(fileId, file.path, file)
-                }
+                // Always fire-and-forget — icon extraction goes through the worker thread
+                // and should never block the scan/index pipeline
+                void this.ensureFileIcon(fileId, file.path, file)
               } catch {
                 /* ignore icon failures */
               }
@@ -3372,6 +3710,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           path: file.path,
           embeddings: result.embeddings.length
         })
+      } else if (this.embeddingService && trimmedContent.length > 50) {
+        // No parser-provided embeddings — generate via Intelligence SDK (best-effort, non-blocking)
+        this.embeddingService.indexFile(file.path, trimmedContent).catch(() => {
+          // Graceful degradation: ignore embedding generation failures
+        })
       }
 
       this.clearContentFailure(fileId)
@@ -3457,15 +3800,38 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private extractSearchFilters(rawText: string): { text: string; typeFilters: Set<FileTypeTag> } {
+  private extractSearchFilters(rawText: string): {
+    text: string
+    typeFilters: Set<FileTypeTag>
+    extensionFilters: string[]
+  } {
     const tokens = rawText.split(/\s+/).filter(Boolean)
     const retained: string[] = []
     const typeFilters = new Set<FileTypeTag>()
+    const extensionFilters: string[] = []
 
     for (const token of tokens) {
       const trimmed = token.trim()
       if (!trimmed) continue
       const normalized = trimmed.toLowerCase()
+
+      // *.txt or *.{mp4,mov} glob pattern
+      if (/^\*\.\w+$/.test(normalized) || /^\*\.\{[\w,]+\}$/.test(normalized)) {
+        const extensions = this.parseExtensionGlob(normalized)
+        if (extensions.length > 0) {
+          extensionFilters.push(...extensions)
+          continue
+        }
+      }
+
+      // ext:pdf pattern
+      if (normalized.startsWith('ext:')) {
+        const ext = '.' + normalized.slice(4)
+        if (WHITELISTED_EXTENSIONS.has(ext)) {
+          extensionFilters.push(ext)
+          continue
+        }
+      }
 
       if (normalized.startsWith('type:')) {
         const resolved = this.resolveTypeTag(normalized.slice(5))
@@ -3483,7 +3849,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       retained.push(trimmed)
     }
 
-    return { text: retained.join(' ').trim(), typeFilters }
+    return { text: retained.join(' ').trim(), typeFilters, extensionFilters }
   }
 
   private resolveTypeTag(raw: string): FileTypeTag | null {
@@ -3508,6 +3874,24 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     return null
+  }
+
+  private parseExtensionGlob(pattern: string): string[] {
+    // *.txt → ['.txt']
+    const simpleMatch = pattern.match(/^\*\.(\w+)$/)
+    if (simpleMatch) {
+      const ext = '.' + simpleMatch[1]
+      return WHITELISTED_EXTENSIONS.has(ext) ? [ext] : []
+    }
+    // *.{mp4,mov} → ['.mp4', '.mov']
+    const braceMatch = pattern.match(/^\*\.\{([\w,]+)\}$/)
+    if (braceMatch) {
+      return braceMatch[1]
+        .split(',')
+        .map((e) => '.' + e.trim())
+        .filter((ext) => WHITELISTED_EXTENSIONS.has(ext))
+    }
+    return []
   }
 
   private resolveExtensionsForTypeFilters(typeFilters: Set<FileTypeTag>): string[] {
@@ -3570,6 +3954,70 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       if (!this.matchesTypeFilters(row.file, typeFilters)) {
         continue
       }
+      if (!filesMap.has(row.file.path)) {
+        filesMap.set(row.file.path, { file: row.file, extensions: {} })
+      }
+      if (row.extensionKey && row.extensionValue) {
+        filesMap.get(row.file.path)!.extensions[row.extensionKey] = row.extensionValue
+      }
+    }
+
+    const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
+        if (typeof file.id === 'number') {
+          this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+            this.logWarn('Failed to lazy load icon', error, { path: file.path })
+          })
+        }
+      })
+      tuffItem.scoring = {
+        final: 0.4,
+        match: 0.4,
+        recency: 0,
+        frequency: 0,
+        base: 0
+      }
+      tuffItem.meta = {
+        ...tuffItem.meta,
+        file: {
+          path: tuffItem.meta?.file?.path || '',
+          ...tuffItem.meta?.file
+        }
+      }
+      return tuffItem
+    })
+
+    return new TuffSearchResultBuilder(query).setItems(items).build()
+  }
+
+  private async buildExtensionOnlySearchResult(
+    query: TuffQuery,
+    extensionFilters: string[]
+  ): Promise<TuffSearchResult> {
+    if (!this.dbUtils || extensionFilters.length === 0) {
+      return new TuffSearchResultBuilder(query).build()
+    }
+
+    const db = this.dbUtils.getDb()
+    const normalizedExts = extensionFilters.map((e) => e.toLowerCase())
+    const rows = await db
+      .select({
+        file: filesSchema,
+        extensionKey: fileExtensions.key,
+        extensionValue: fileExtensions.value
+      })
+      .from(filesSchema)
+      .leftJoin(fileExtensions, eq(filesSchema.id, fileExtensions.fileId))
+      .where(and(eq(filesSchema.type, 'file'), inArray(filesSchema.extension, normalizedExts)))
+      .orderBy(desc(filesSchema.mtime))
+      .limit(50)
+
+    const filesMap = new Map<
+      string,
+      { file: typeof filesSchema.$inferSelect; extensions: Record<string, string> }
+    >()
+
+    for (const row of rows) {
       if (!filesMap.has(row.file.path)) {
         filesMap.set(row.file.path, { file: row.file, extensions: {} })
       }
@@ -3716,7 +4164,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const searchStart = performance.now()
     const rawText = query.text.trim()
-    const { text: searchText, typeFilters } = this.extractSearchFilters(rawText)
+    const { text: searchText, typeFilters, extensionFilters } = this.extractSearchFilters(rawText)
     searchLogger.fileSearchText(searchText, typeFilters.size)
 
     const logTerms = searchText
@@ -3725,12 +4173,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .filter(Boolean)
     searchLogger.logKeywordAnalysis(searchText, logTerms, typeFilters.size)
 
-    if (!searchText && typeFilters.size === 0) {
+    if (!searchText && typeFilters.size === 0 && extensionFilters.length === 0) {
       return new TuffSearchResultBuilder(query).build()
     }
 
     if (!searchText && typeFilters.size > 0) {
       return this.buildTypeOnlySearchResult(query, typeFilters)
+    }
+
+    if (!searchText && extensionFilters.length > 0) {
+      return this.buildExtensionOnlySearchResult(query, extensionFilters)
     }
 
     const db = this.dbUtils.getDb()
@@ -3790,6 +4242,27 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
+    // Prefix recall for short queries (e.g. "wind" → "windsurf")
+    if (normalizedQuery.length <= 5) {
+      const prefixStart = performance.now()
+      const prefixResults = await this.searchIndex.lookupByKeywordPrefix(
+        this.id,
+        normalizedQuery,
+        200
+      )
+      if (prefixResults.length > 0) {
+        const prefixSet = new Set(prefixResults.map((r) => r.itemId))
+        preciseMatchPaths = preciseMatchPaths
+          ? new Set([...preciseMatchPaths, ...prefixSet])
+          : prefixSet
+      }
+      this.logDebug('Prefix keyword lookup completed', {
+        query: normalizedQuery,
+        matches: prefixResults.length,
+        duration: formatDuration(performance.now() - prefixStart)
+      })
+    }
+
     const ftsQuery = this.buildFtsQuery(terms.length > 0 ? terms : [normalizedQuery])
     searchLogger.fileFtsQuery(ftsQuery || '')
     const ftsStart = performance.now()
@@ -3803,6 +4276,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
+    // Semantic search via embeddings (non-blocking, best-effort)
+    let semanticMatches: Array<{ sourceId: string; score: number }> = []
+    if (this.embeddingService && normalizedQuery.length >= 3) {
+      try {
+        semanticMatches = await this.embeddingService.semanticSearch(normalizedQuery, 30)
+      } catch {
+        // Graceful degradation: ignore embedding failures
+      }
+    }
+
     const preciseCandidates = preciseMatchPaths ? Array.from(preciseMatchPaths) : []
     const maxCandidateCount = 120
     const candidateIds = new Set<string>(preciseCandidates)
@@ -3810,6 +4293,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     for (const match of ftsMatches) {
       if (candidateIds.size >= maxCandidateCount) break
       candidateIds.add(match.itemId)
+    }
+
+    // Merge semantic search results (sourceId is file path)
+    const semanticScoreMap = new Map<string, number>()
+    for (const match of semanticMatches) {
+      if (candidateIds.size >= maxCandidateCount) break
+      candidateIds.add(match.sourceId)
+      semanticScoreMap.set(match.sourceId, match.score)
     }
 
     if (candidateIds.size === 0) {
@@ -3870,6 +4361,20 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
+    if (extensionFilters.length > 0) {
+      const extSet = new Set(extensionFilters.map((e) => e.toLowerCase()))
+      for (const [path, entry] of Array.from(filesMap.entries())) {
+        const fileExt = (entry.file.extension || '').toLowerCase()
+        if (!extSet.has(fileExt)) {
+          filesMap.delete(path)
+        }
+      }
+
+      if (filesMap.size === 0) {
+        return new TuffSearchResultBuilder(query).build()
+      }
+    }
+
     const validPaths = Array.from(filesMap.keys())
     const usageStart = performance.now()
     const usageSummaries = await this.dbUtils.getUsageSummaryByItemIds(validPaths)
@@ -3911,6 +4416,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         const frequencyScore = usage ? Math.log10(usage.clickCount + 1) / 2 : 0
         const keywordScore = preciseMatchPaths?.has(file.path) ? 1 : 0
         const ftsScore = ftsScoreMap.get(file.path) ?? 0
+        const semanticScore = semanticScoreMap.get(file.path) ?? 0
 
         const typeScore = typeFilters.size > 0 ? 1 : 0
 
@@ -3920,7 +4426,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           weights.lastUsed * lastUsedScore +
           weights.frequency * frequencyScore +
           weights.lastModified * lastModifiedScore +
-          (typeFilters.size > 0 ? 0.15 * typeScore : 0)
+          (typeFilters.size > 0 ? 0.15 * typeScore : 0) +
+          0.25 * semanticScore
 
         const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
           if (typeof file.id === 'number') {
@@ -3929,7 +4436,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             })
           }
         })
-        const matchScore = Math.max(keywordScore, ftsScore)
+        const matchScore = Math.max(keywordScore, ftsScore, semanticScore)
         tuffItem.scoring = {
           final: finalScore,
           match: matchScore,
@@ -3941,7 +4448,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               ? { type: 'exact', query: rawText }
               : ftsScore > 0
                 ? { type: 'semantic', query: rawText, confidence: ftsScore }
-                : undefined
+                : semanticScore > 0
+                  ? { type: 'semantic', query: rawText, confidence: semanticScore }
+                  : undefined
         }
 
         if (!tuffItem.meta) {
@@ -3964,7 +4473,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           ...extensionMeta,
           search: {
             keywordMatch: keywordScore > 0,
-            ftsScore
+            ftsScore,
+            semanticScore
           }
         }
 

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { upsertReleaseUpdate } from './dashboardStore'
 
 const RELEASES_KEY = 'app:releases'
 const RELEASE_ASSETS_KEY = 'app:release_assets'
@@ -724,6 +725,9 @@ export async function createRelease(
       release.updatedAt,
     ).run()
 
+    if (release.status === 'published')
+      await upsertReleaseUpdate(event, release)
+
     return release
   }
 
@@ -731,6 +735,9 @@ export async function createRelease(
   const releases = await readCollection<AppRelease>(RELEASES_KEY)
   releases.unshift(release)
   await writeCollection(RELEASES_KEY, releases)
+
+  if (release.status === 'published')
+    await upsertReleaseUpdate(event, release)
 
   return release
 }
@@ -794,6 +801,9 @@ export async function updateRelease(
       tag,
     ).run()
 
+    if (updated.status === 'published')
+      await upsertReleaseUpdate(event, updated)
+
     return updated
   }
 
@@ -804,6 +814,9 @@ export async function updateRelease(
     releases[index] = updated
     await writeCollection(RELEASES_KEY, releases)
   }
+
+  if (updated.status === 'published')
+    await upsertReleaseUpdate(event, updated)
 
   return updated
 }

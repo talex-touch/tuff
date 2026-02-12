@@ -25,16 +25,20 @@ import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDem
 ---
 code: |
   <template>
-    <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="display: flex; flex-direction: column; gap: 12px;">
       <TxGlowText style="font-size: 20px; font-weight: 700;">
         GlowText
       </TxGlowText>
 
-      <TxGlowText :angle="-15" :band-size="26" :duration-ms="1100" color="rgba(99, 102, 241, 0.9)" style="font-size: 14px;">
+      <TxGlowText :angle="12" :band-size="42" :duration-ms="2200" :opacity="0.6" style="font-size: 14px; font-weight: 500;">
+        Subtle sweep for captions
+      </TxGlowText>
+
+      <TxGlowText :angle="-18" :band-size="30" :duration-ms="1400" color="rgba(99, 102, 241, 0.9)" style="font-size: 15px; font-weight: 600;">
         Sweep highlight over text
       </TxGlowText>
 
-      <TxGlowText :angle="18" :band-size="32" :duration-ms="1500" style="font-size: 16px; font-weight: 700;">
+      <TxGlowText :angle="20" :band-size="34" :duration-ms="1600" style="font-size: 16px; font-weight: 700;">
         <span style="background: linear-gradient(90deg, #f59e0b, #ef4444, #8b5cf6); -webkit-background-clip: text; color: transparent;">
           Colorful text still shines
         </span>
@@ -51,11 +55,51 @@ code: |
 ---
 code: |
   <template>
-    <TxGlowText tag="div" :radius="14" :angle="20" :band-size="34" :duration-ms="1600" color="rgba(255, 255, 255, 0.95)">
-      <div
-        style="width: 240px; height: 120px; border-radius: 14px; background: linear-gradient(135deg, #111827, #0f766e); border: 1px solid var(--tx-border-color-light);"
-      />
-    </TxGlowText>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <TxGlowText tag="div" :radius="14" :angle="20" :band-size="34" :duration-ms="1600" color="rgba(255, 255, 255, 0.95)">
+        <div
+          style="width: 240px; height: 120px; border-radius: 14px; background: linear-gradient(135deg, #111827, #0f766e); border: 1px solid var(--tx-border-color-light);"
+        />
+      </TxGlowText>
+
+      <TxGlowText tag="div" :radius="12" :angle="-12" :band-size="40" :duration-ms="2000" :opacity="0.55" color="rgba(255, 255, 255, 0.85)" blend-mode="soft-light">
+        <div
+          style="width: 240px; height: 120px; border-radius: 12px; background: linear-gradient(135deg, #f8fafc, #e2e8f0); border: 1px solid rgba(148, 163, 184, 0.25);"
+        />
+      </TxGlowText>
+    </div>
+  </template>
+---
+:::
+
+## 更多案例
+
+### GlowText in UI
+:::TuffDemoWrapper{demo="GlowTextGlowTextCasesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <TxGlowText tag="div" :radius="999" :angle="-20" :band-size="28" :duration-ms="1200" :repeat="false">
+        <div
+          style="padding: 8px 14px; border-radius: 999px; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; font-weight: 600; font-size: 13px; letter-spacing: 0.02em;"
+        >
+          New Feature
+        </div>
+      </TxGlowText>
+
+      <TxGlowText tag="div" :radius="12" :angle="16" :band-size="36" :duration-ms="1800" :opacity="0.6" color="rgba(255, 255, 255, 0.85)">
+        <div
+          style="padding: 12px 14px; border-radius: 12px; background: #0b1220; color: #e2e8f0; border: 1px solid rgba(148, 163, 184, 0.2); display: flex; align-items: center; gap: 10px;"
+        >
+          <div style="width: 8px; height: 8px; border-radius: 999px; background: #22c55e;"></div>
+          <div>
+            <div style="font-size: 12px; opacity: 0.8;">Connected</div>
+            <div style="font-size: 14px; font-weight: 600;">Realtime Sync</div>
+          </div>
+        </div>
+      </TxGlowText>
+    </div>
   </template>
 ---
 :::

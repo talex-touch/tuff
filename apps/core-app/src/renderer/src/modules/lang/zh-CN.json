@@ -208,11 +208,14 @@
     "verified": "已验证",
     "defaultName": "用户",
     "loggedIn": "已登录",
+    "syncEnabledTitle": "默认同步",
+    "syncStatusTitle": "同步状态",
     "editProfile": "编辑资料",
     "loginSettings": "登录方式",
     "deviceManagement": "设备管理",
     "logoutSuccess": "已登出",
-    "logoutFailed": "登出失败"
+    "logoutFailed": "登出失败",
+    "devAuthServer": "本地服务器"
   },
   "userProfile": {
     "title": "账户",
@@ -221,6 +224,7 @@
     "id": "用户 ID",
     "status": "状态",
     "statusSignedIn": "已登录",
+    "statusSignedOut": "未登录",
     "subscription": "订阅与配额",
     "plan": "套餐",
     "planStatus": "状态",
@@ -920,6 +924,13 @@
       "execute": "执行",
       "actions": "操作",
       "quickSelect": "快速选择"
+    },
+    "footer": {
+      "indexing": "索引中 {progress}%"
+    },
+    "indexingHint": {
+      "remaining": "{time} 后完成索引",
+      "inProgress": "索引中..."
     },
     "intelligence": {
       "emptyPrompt": "输入要询问 AI 的问题",

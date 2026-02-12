@@ -182,6 +182,30 @@ export const EXTENSION_METADATA: Record<string, ExtensionMetadata> = {
     enableContentIndexing: true,
     maxContentSizeMB: 1
   },
+  '.toml': {
+    tags: ['data', 'code'],
+    keywords: ['toml', 'config'],
+    enableContentIndexing: true,
+    maxContentSizeMB: 2
+  },
+  '.org': {
+    tags: ['text', 'document'],
+    keywords: ['org', 'emacs', 'note'],
+    enableContentIndexing: true,
+    maxContentSizeMB: 5
+  },
+  '.rst': {
+    tags: ['text', 'document'],
+    keywords: ['restructuredtext', 'document'],
+    enableContentIndexing: true,
+    maxContentSizeMB: 5
+  },
+  '.tex': {
+    tags: ['text', 'document'],
+    keywords: ['latex', 'tex', 'document'],
+    enableContentIndexing: true,
+    maxContentSizeMB: 10
+  },
 
   // Code files
   '.js': {

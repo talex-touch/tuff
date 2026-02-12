@@ -7,11 +7,18 @@ function resolveRequest(): RequestLike {
   return (import.meta.server ? useRequestFetch() : $fetch) as RequestLike
 }
 
+interface LocalizedText {
+  zh: string
+  en: string
+}
+
 interface DashboardUpdate {
   id: string
-  title: string
+  type: 'news' | 'release'
+  releaseTag: string | null
+  title: LocalizedText
   timestamp: string
-  summary: string
+  summary: LocalizedText
   tags: string[]
   link: string
 }

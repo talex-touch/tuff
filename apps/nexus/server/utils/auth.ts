@@ -5,6 +5,7 @@ import { useRuntimeConfig } from '#imports'
 import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
 import { createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import { validateApiKey } from './apiKeyStore'
 import { ensurePersonalTeam } from './creditsStore'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
@@ -60,16 +61,22 @@ async function resolveSessionUserByEmail(event: H3Event, email: string, name: st
 
 function getAppJwtSecret(): string {
   const config = useRuntimeConfig()
-  const secret = config.appAuthJwtSecret
-  if (typeof secret === 'string' && secret.length >= APP_SECRET_MIN_LENGTH) {
-    return secret
+  const secretCandidates = [
+    config.appAuthJwtSecret,
+    config.auth?.secret,
+  ]
+
+  for (const candidate of secretCandidates) {
+    if (typeof candidate === 'string' && candidate.length >= APP_SECRET_MIN_LENGTH) {
+      return candidate
+    }
   }
 
   if (!ephemeralJwtSecret) {
     ephemeralJwtSecret = base64UrlEncode(randomBytes(32))
     if (!appSecretWarned) {
       appSecretWarned = true
-      console.warn('[auth] APP_AUTH_JWT_SECRET missing or too short, using ephemeral secret.')
+      console.warn('[auth] APP_AUTH_JWT_SECRET/Auth secret missing or too short, using ephemeral secret.')
     }
   }
   return ephemeralJwtSecret
@@ -102,6 +109,49 @@ function parseBearerToken(event: H3Event): string | null {
     return null
   }
   return value.trim()
+}
+
+export async function requireApiKey(event: H3Event, requiredScopes: string[] = []) {
+  const token = parseBearerToken(event)
+  if (!token) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+
+  const result = await validateApiKey(event, token)
+  if (!result) {
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  }
+
+  const { userId, scopes } = result
+  const user = await getUserById(event, userId)
+  if (!user || user.status !== 'active') {
+    throw createError({ statusCode: 403, statusMessage: 'Account disabled.' })
+  }
+
+  if (requiredScopes.length > 0) {
+    const hasScopes = requiredScopes.every(scope => scopes.includes(scope))
+    if (!hasScopes) {
+      throw createError({ statusCode: 403, statusMessage: 'Insufficient API key scopes.' })
+    }
+  }
+
+  const requiresAdmin = requiredScopes.some(scope => scope.startsWith('release:'))
+  if (requiresAdmin && user.role !== 'admin') {
+    throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
+  }
+
+  return { userId, scopes, user }
+}
+
+export async function requireAdminOrApiKey(event: H3Event, requiredScopes: string[] = []) {
+  try {
+    const admin = await requireAdmin(event)
+    return { ...admin, authType: 'admin' as const }
+  }
+  catch {
+    const apiKey = await requireApiKey(event, requiredScopes)
+    return { ...apiKey, authType: 'apiKey' as const }
+  }
 }
 
 export async function createAppToken(

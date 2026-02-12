@@ -52,7 +52,7 @@ function handleSelect(option: AssetTypeOption) {
 
 <style scoped>
 .AssetTypePickerStep {
-  width: min(760px, 90vw);
+  width: min(700px, 90vw);
   padding: 12px;
 }
 

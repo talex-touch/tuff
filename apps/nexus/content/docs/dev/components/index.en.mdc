@@ -56,6 +56,8 @@ code: |
 - [CornerOverlay](./corner-overlay.en.md)
 - [GradualBlur](./gradual-blur.en.md)
 - [GlowText](./glow-text.en.md)
+- [KeyframeStrokeText](./keyframe-stroke-text.en.md)
+- [TuffLogoStroke](./tuff-logo-stroke.en.md)
 - [TextTransformer](./text-transformer.en.md)
 - [Transition](./transition.en.md)
 - [Stagger](./stagger.en.md)

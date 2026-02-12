@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxFlipOverlay, TxButton } from '@talex-touch/tuffex'
+import { TxAutoSizer, TxCard, TxFlipOverlay, TxButton, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
@@ -19,11 +19,14 @@ const { t } = useI18n()
 const { user, refresh } = useAuthUser()
 const { subscription, pending: subscriptionPending } = useSubscriptionData()
 
+type LoginTabKey = 'methods' | 'history'
 
 const displayName = ref('')
 const savingProfile = ref(false)
 const avatarUploading = ref(false)
 const profileMessage = ref('')
+const activeLoginTab = ref<LoginTabKey>('methods')
+const loginTabSizerRef = ref<any>(null)
 const manageOverlayVisible = ref(false)
 const manageOverlaySource = ref<HTMLElement | null>(null)
 const avatarInputRef = ref<HTMLInputElement | null>(null)
@@ -77,6 +80,23 @@ const planLabel = computed(() => {
 const planStatusLabel = computed(() => (subscription.value?.isActive === false
   ? t('dashboard.account.planStatusInactive', 'Inactive')
   : t('dashboard.account.planStatusActive', 'Active')))
+
+const activeLoginTabModel = computed<LoginTabKey>({
+  get: () => activeLoginTab.value,
+  set: (value) => {
+    const next = value === 'history' ? 'history' : 'methods'
+    if (activeLoginTab.value === next)
+      return
+    const sizer = loginTabSizerRef.value
+    if (sizer?.action) {
+      void sizer.action(() => {
+        activeLoginTab.value = next
+      })
+      return
+    }
+    activeLoginTab.value = next
+  },
+})
 
 const daysLeftText = computed(() => {
   const raw = subscription.value?.expiresAt
@@ -330,8 +350,15 @@ async function handlePasskeyRegister() {
 }
 
 const historyItems = computed(() => loginHistory.value ?? [])
-const abnormalHistory = computed(() => historyItems.value.filter(item => !item.success))
-const commonHistory = computed(() => historyItems.value.filter(item => item.success).slice(0, 5))
+const recentHistory = computed(() => {
+  const items = [...historyItems.value]
+  items.sort((a, b) => {
+    const aTime = new Date(a?.created_at ?? 0).getTime()
+    const bTime = new Date(b?.created_at ?? 0).getTime()
+    return bTime - aTime
+  })
+  return items.slice(0, 5)
+})
 
 function formatHistoryTime(value: string) {
   const date = new Date(value)
@@ -380,145 +407,159 @@ function formatHistoryTime(value: string) {
       {{ t('auth.restrictedAccount', '邮箱未验证，充值与同步功能暂不可用。') }}
     </p>
 
-    <section id="login-methods-card" class="apple-card-lg p-6 space-y-4">
-        <h2 class="apple-heading-sm">
-          {{ t('dashboard.account.loginMethods', '登录方式') }}
-        </h2>
-        <div class="space-y-3 text-sm">
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
-            <div>
-              <p class="text-black dark:text-white">
-GitHub
-</p>
-              <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.account.githubDesc', '用于绑定 GitHub 账号与同步开发者信息') }}
+    <section id="login-methods-card" class="apple-card-lg p-4">
+      <TxAutoSizer
+        ref="loginTabSizerRef"
+        :width="false"
+        :height="true"
+        :duration-ms="260"
+        easing="cubic-bezier(0.4, 0, 0.2, 1)"
+        outer-class="overflow-hidden"
+        class="w-full"
+      >
+        <TxTabs
+          v-model="activeLoginTabModel"
+          placement="top"
+          :content-scrollable="false"
+          borderless
+          class="h-auto"
+        >
+        <TxTabItem name="methods" activation>
+            <div class="space-y-4 pt-2">
+              <div class="space-y-3 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
+                  <div>
+                    <p class="text-black dark:text-white">
+                      GitHub
+                    </p>
+                    <p class="text-xs text-black/50 dark:text-white/50">
+                      {{ t('dashboard.account.githubDesc', '用于绑定 GitHub 账号与同步开发者信息') }}
+                    </p>
+                    <p v-if="isGithubBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
+                      {{ boundMessage('github', githubAccount?.providerAccountId) }}
+                    </p>
+                  </div>
+                  <TxButton size="small" :variant="isGithubBound ? 'danger' : 'secondary'" :loading="linkingGithub || unlinkingGithub" :disabled="linkingLinuxdo || unlinkingLinuxdo" @click="handleGithubToggle">
+                    {{ isGithubBound ? t('dashboard.account.unbind', '解绑') : t('auth.githubLogin', '绑定') }}
+                  </TxButton>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
+                  <div>
+                    <p class="text-black dark:text-white">
+                      LinuxDO
+                    </p>
+                    <p class="text-xs text-black/50 dark:text-white/50">
+                      {{ t('dashboard.account.linuxdoDesc', '用于连接 LinuxDO 社区账号') }}
+                    </p>
+                    <p v-if="isLinuxdoBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
+                      {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
+                    </p>
+                  </div>
+                  <TxButton size="small" :variant="isLinuxdoBound ? 'danger' : 'secondary'" :loading="linkingLinuxdo || unlinkingLinuxdo" :disabled="linkingGithub || unlinkingGithub" @click="handleLinuxdoToggle">
+                    {{ isLinuxdoBound ? t('dashboard.account.unbind', '解绑') : t('dashboard.account.bind', '绑定') }}
+                  </TxButton>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
+                  <div>
+                    <p class="text-black dark:text-white">
+                      Passkey
+                    </p>
+                    <p class="text-xs text-black/50 dark:text-white/50">
+                      {{ t('dashboard.account.passkeyDesc', '使用系统 Passkey 快速登录') }}
+                    </p>
+                  </div>
+                  <TxButton size="small" variant="secondary" :disabled="!supportsPasskey || hasBoundPasskey" :loading="passkeyLoading" @click="handlePasskeyRegister">
+                    {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
+                  </TxButton>
+                </div>
+              </div>
+              <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-white/60">
+                {{ passkeyMessage }}
               </p>
-              <p v-if="isGithubBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
-                {{ boundMessage('github', githubAccount?.providerAccountId) }}
+              <p v-if="!supportsPasskey" class="text-xs text-black/50 dark:text-white/50">
+                {{ t('auth.passkeyNotSupported', '当前浏览器不支持 Passkey') }}
               </p>
             </div>
-            <TxButton size="small" :variant="isGithubBound ? 'danger' : 'secondary'" :loading="linkingGithub || unlinkingGithub" :disabled="linkingLinuxdo || unlinkingLinuxdo" @click="handleGithubToggle">
-              {{ isGithubBound ? t('dashboard.account.unbind', '解绑') : t('auth.githubLogin', '绑定') }}
-            </TxButton>
-          </div>
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
-            <div>
-              <p class="text-black dark:text-white">
-LinuxDO
-</p>
-              <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.account.linuxdoDesc', '用于连接 LinuxDO 社区账号') }}
-              </p>
-              <p v-if="isLinuxdoBound" class="mt-1 text-xs text-emerald-600 dark:text-emerald-300">
-                {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
-              </p>
-            </div>
-            <TxButton size="small" :variant="isLinuxdoBound ? 'danger' : 'secondary'" :loading="linkingLinuxdo || unlinkingLinuxdo" :disabled="linkingGithub || unlinkingGithub" @click="handleLinuxdoToggle">
-              {{ isLinuxdoBound ? t('dashboard.account.unbind', '解绑') : t('dashboard.account.bind', '绑定') }}
-            </TxButton>
-          </div>
-          <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
-            <div>
-              <p class="text-black dark:text-white">
-Passkey
-</p>
-              <p class="text-xs text-black/50 dark:text-white/50">
-                {{ t('dashboard.account.passkeyDesc', '使用系统 Passkey 快速登录') }}
-              </p>
-            </div>
-            <TxButton size="small" variant="secondary" :disabled="!supportsPasskey || hasBoundPasskey" :loading="passkeyLoading" @click="handlePasskeyRegister">
-              {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
-            </TxButton>
-          </div>
-        </div>
-        <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-white/60">
-          {{ passkeyMessage }}
-        </p>
-        <p v-if="!supportsPasskey" class="text-xs text-black/50 dark:text-white/50">
-          {{ t('auth.passkeyNotSupported', '当前浏览器不支持 Passkey') }}
-        </p>
-    </section>
+          </TxTabItem>
 
-    <section class="apple-card-lg p-6 space-y-4">
-      <div>
-        <h2 class="apple-heading-sm">
-          {{ t('dashboard.account.loginHistory', '登录历史') }}
-        </h2>
-      </div>
-      <div>
-        <TxButton size="small" variant="secondary" @click="handleRefreshHistory">
-          {{ t('common.refresh', '刷新') }}
-        </TxButton>
-      </div>
-      <div v-if="historyPending" class="space-y-3 py-3">
-        <div class="flex items-center justify-center">
-          <TxSpinner :size="18" />
-        </div>
-        <div class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-        <div class="rounded-2xl border border-black/[0.04] bg-black/[0.02] p-4 dark:border-white/[0.06] dark:bg-white/[0.03]">
-          <TxSkeleton :loading="true" :lines="2" />
-        </div>
-      </div>
-      <div v-else class="grid gap-4 lg:grid-cols-2">
-        <div class="space-y-2">
-          <p class="text-xs text-black/60 dark:text-white/60">
-            {{ t('dashboard.account.loginAbnormal', '异常登录') }}
-          </p>
-          <ul v-if="abnormalHistory.length" class="space-y-2 text-sm">
-            <li
-              v-for="item in abnormalHistory"
-              :key="item.id"
-              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/[0.04] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
-            >
-              <div class="space-y-1">
-                <p class="text-black dark:text-white">
-                  {{ t('dashboard.account.loginFailed', '登录失败') }}
-                  <span class="text-xs text-black/50 dark:text-white/50">· {{ item.reason || '-' }}</span>
-                </p>
-                <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatHistoryTime(item.created_at) }} · {{ item.ip || 'unknown' }}
+          <TxTabItem name="history">
+            <div class="space-y-4 pt-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex flex-wrap items-center gap-3">
+                  <p class="text-sm font-semibold text-black dark:text-white">
+                    {{ t('dashboard.account.loginHistory', '登录历史') }}
+                  </p>
+                  <span class="text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.account.historyHint', '仅展示最近 5 条') }}
+                  </span>
+                </div>
+                <TxButton size="small" variant="secondary" @click="handleRefreshHistory">
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+              </div>
+              <div v-if="historyPending" class="space-y-2 py-2">
+                <div class="flex items-center justify-center">
+                  <TxSpinner :size="18" />
+                </div>
+                <div class="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <TxSkeleton :loading="true" :lines="2" />
+                </div>
+                <div class="rounded-2xl border border-black/[0.06] bg-black/[0.02] p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                  <TxSkeleton :loading="true" :lines="2" />
+                </div>
+              </div>
+              <div v-else>
+                <TxTimeline v-if="recentHistory.length" class="LoginHistoryTimeline">
+                  <TxTimelineItem
+                    v-for="item in recentHistory"
+                    :key="item.id"
+                    :color="item.success ? 'success' : 'error'"
+                  >
+                    <TxCard
+                      variant="plain"
+                      background="mask"
+                      :radius="16"
+                      :padding="12"
+                      class="LoginHistoryCard"
+                    >
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="min-w-0 space-y-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-semibold text-black dark:text-white">
+                              {{ item.success
+                                ? t('dashboard.account.loginSuccess', '登录成功')
+                                : t('dashboard.account.loginFailed', '登录失败') }}
+                            </p>
+                            <span
+                              class="rounded-full px-2 py-0.5 text-xs"
+                              :class="item.success
+                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                                : 'bg-red-500/15 text-red-600 dark:text-red-300'"
+                            >
+                              {{ item.success
+                                ? t('dashboard.account.statusSuccess', 'Success')
+                                : t('dashboard.account.statusFailed', 'Failed') }}
+                            </span>
+                          </div>
+                          <p class="text-xs text-black/55 dark:text-white/55">
+                            {{ item.reason || '-' }} · {{ item.ip || 'unknown' }}
+                          </p>
+                        </div>
+                        <div class="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">
+                          {{ formatHistoryTime(item.created_at) }}
+                        </div>
+                      </div>
+                    </TxCard>
+                  </TxTimelineItem>
+                </TxTimeline>
+                <p v-else class="text-sm text-black/60 dark:text-white/70">
+                  {{ t('dashboard.account.noHistory', '暂无登录记录') }}
                 </p>
               </div>
-              <span class="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-600 dark:text-red-400">
-                {{ t('dashboard.account.statusFailed', 'Failed') }}
-              </span>
-            </li>
-          </ul>
-          <p v-else class="text-sm text-black/60 dark:text-white/70">
-            {{ t('dashboard.account.noAbnormal', '暂无异常记录') }}
-          </p>
-        </div>
-        <div class="space-y-2">
-          <p class="text-xs text-black/60 dark:text-white/60">
-            {{ t('dashboard.account.loginCommon', '常用登录') }}
-          </p>
-          <ul v-if="commonHistory.length" class="space-y-2 text-sm">
-            <li
-              v-for="item in commonHistory"
-              :key="item.id"
-              class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/[0.04] bg-black/[0.02] px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]"
-            >
-              <div class="space-y-1">
-                <p class="text-black dark:text-white">
-                  {{ t('dashboard.account.loginSuccess', '登录成功') }}
-                  <span class="text-xs text-black/50 dark:text-white/50">· {{ item.reason || '-' }}</span>
-                </p>
-                <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatHistoryTime(item.created_at) }} · {{ item.ip || 'unknown' }}
-                </p>
-              </div>
-              <span class="rounded-full bg-green-500/20 px-2 py-0.5 text-xs text-green-600 dark:text-green-400">
-                {{ t('dashboard.account.statusSuccess', 'Success') }}
-              </span>
-            </li>
-          </ul>
-          <p v-else class="text-sm text-black/60 dark:text-white/70">
-            {{ t('dashboard.account.noHistory', '暂无登录记录') }}
-          </p>
-        </div>
-      </div>
+            </div>
+          </TxTabItem>
+        </TxTabs>
+      </TxAutoSizer>
     </section>
 
     <Teleport to="body">
@@ -631,12 +672,12 @@ Passkey
 .AccountManageOverlay-Title {
   font-size: 18px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .AccountManageOverlay-Desc {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .AccountManageOverlay-Actions {
@@ -644,6 +685,18 @@ Passkey
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.LoginHistoryTimeline :deep(.tx-timeline-item--vertical) {
+  padding-bottom: 14px;
+}
+
+.LoginHistoryTimeline :deep(.tx-timeline-item--vertical::before) {
+  bottom: -14px;
+}
+
+.LoginHistoryTimeline :deep(.tx-timeline-item__content) {
+  width: 100%;
 }
 </style>
 
@@ -675,8 +728,8 @@ Passkey
   width: min(560px, 92vw);
   min-height: 320px;
   max-height: 82vh;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
   overflow: auto;

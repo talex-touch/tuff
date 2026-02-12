@@ -98,6 +98,8 @@ TuffEx UI 提供了丰富的组件库，涵盖了现代 Web 应用开发的各�
 - **[TxGradualBlur 渐变模糊](./gradual-blur.md)** - 渐变模糊遮罩
 - **[TxGradientBorder 渐变边框](./gradient-border.md)** - 动态渐变边框
 - **[TxGlowText 扫光](./glow-text.md)** - 高光扫过动效（文字/图片/卡片）
+- **[TxKeyframeStrokeText 关键帧描边](./keyframe-stroke-text.md)** - 任意文本先描边后填充动画
+- **[TxTuffLogoStroke Logo 描边](./tuff-logo-stroke.md)** - Tuff logo 一次/呼吸/hover 描边动画
 
 ## 快速开始
 

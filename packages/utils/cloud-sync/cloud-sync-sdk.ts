@@ -1,6 +1,7 @@
 import { getTelemetryApiBase, normalizeBaseUrl } from '../env'
 import type {
   ConflictItem,
+  DeviceAttestPayload,
   DeviceAttestResponse,
   HandshakeResponse,
   KeyRegisterResponse,
@@ -225,7 +226,7 @@ export class CloudSyncSDK {
     }
   }
 
-  async attestDevice(payload: { machine_code_hash: string }): Promise<DeviceAttestResponse> {
+  async attestDevice(payload: DeviceAttestPayload): Promise<DeviceAttestResponse> {
     const headers = await this.buildHeaders()
     return this.request<DeviceAttestResponse>('/api/v1/devices/attest', {
       method: 'POST',

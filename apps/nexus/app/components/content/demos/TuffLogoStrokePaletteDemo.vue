@@ -1,0 +1,12 @@
+<template>
+  <TxTuffLogoStroke
+    :size="128"
+    mode="breathe"
+    :duration-ms="2800"
+    stroke-color="#3b82f6"
+    fill-start-color="#0ea5e9"
+    fill-end-color="#8b5cf6"
+    outer-start-color="#fb7185"
+    outer-end-color="#7e22ce"
+  />
+</template>

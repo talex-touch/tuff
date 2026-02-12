@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import Modal from '~/components/ui/Modal.vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay, TxPopperDialog } from '@talex-touch/tuffex'
+import { defineComponent, h, inject } from 'vue'
 
 definePageMeta({
   layout: 'dashboard',
 })
 
 const { t } = useI18n()
+const { user } = useAuthUser()
+const isAdmin = computed(() => user.value?.role === 'admin')
 
 interface ApiKey {
   id: string
@@ -36,6 +38,9 @@ const error = ref<string | null>(null)
 
 // Create form
 const showCreateModal = ref(false)
+const createOverlaySource = ref<HTMLElement | null>(null)
+const createTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
+const emptyCreateTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const newKeyName = ref('')
 const newKeyScopes = ref<string[]>(['plugin:publish'])
 const newKeyExpiry = ref<number | null>(null)
@@ -43,6 +48,11 @@ const newKeyExpiry = ref<number | null>(null)
 // Newly created key (show once)
 const newlyCreatedKey = ref<{ name: string, secretKey: string } | null>(null)
 const copied = ref(false)
+
+function openCreateOverlay(source?: HTMLElement | null) {
+  createOverlaySource.value = source ?? null
+  showCreateModal.value = true
+}
 
 async function fetchKeys() {
   loading.value = true
@@ -58,6 +68,15 @@ async function fetchKeys() {
     loading.value = false
   }
 }
+
+watch(isAdmin, (admin) => {
+  if (user.value && !admin) {
+    navigateTo('/dashboard/overview')
+    return
+  }
+  if (admin)
+    fetchKeys()
+}, { immediate: true })
 
 async function createKey() {
   if (!newKeyName.value.trim())
@@ -124,6 +143,33 @@ function closeDeleteConfirm() {
   pendingDeleteKeyId.value = null
 }
 
+const DeleteConfirmDialog = defineComponent({
+  name: 'ApiKeyDeleteDialog',
+  setup() {
+    const destroy = inject<() => void>('destroy')
+
+    const handleCancel = () => {
+      destroy?.()
+    }
+
+    const handleDelete = async () => {
+      await confirmDeleteKey()
+      destroy?.()
+    }
+
+    return () => h('div', { class: 'ApiKeyDeleteDialog' }, [
+      h('div', { class: 'ApiKeyDeleteDialog-Header' }, [
+        h('h2', { class: 'ApiKeyDeleteDialog-Title' }, 'Delete API Key'),
+        h('p', { class: 'ApiKeyDeleteDialog-Desc' }, 'Are you sure you want to delete this API key? This action cannot be undone.'),
+      ]),
+      h('div', { class: 'ApiKeyDeleteDialog-Actions' }, [
+        h(TxButton, { variant: 'secondary', size: 'small', 'native-type': 'button', onClick: handleCancel }, { default: () => 'Cancel' }),
+        h(TxButton, { variant: 'danger', size: 'small', 'native-type': 'button', onClick: handleDelete }, { default: () => 'Delete' }),
+      ]),
+    ])
+  },
+})
+
 async function copyKey() {
   if (!newlyCreatedKey.value)
     return
@@ -154,15 +200,21 @@ function isExpired(date: string | null): boolean {
   return new Date(date) < new Date()
 }
 
-onMounted(() => {
-  fetchKeys()
-})
 
-const availableScopes = [
+const baseScopes = [
   { id: 'plugin:publish', label: 'Publish Plugins', description: 'Upload and publish plugins to the marketplace' },
   { id: 'plugin:read', label: 'Read Plugins', description: 'View plugin information' },
   { id: 'account:read', label: 'Read Account', description: 'View account information' },
 ]
+
+const releaseScopes = [
+  { id: 'release:sync', label: 'Sync Releases', description: 'Sync releases, assets, and publish status from CI' },
+  { id: 'release:write', label: 'Write Releases', description: 'Create or update release metadata' },
+  { id: 'release:publish', label: 'Publish Releases', description: 'Publish release notes and channels' },
+  { id: 'release:assets', label: 'Manage Release Assets', description: 'Upload or link release assets' },
+]
+
+const availableScopes = computed(() => (isAdmin.value ? [...baseScopes, ...releaseScopes] : baseScopes))
 
 const expiryOptions = [
   { value: null, label: 'Never expires' },
@@ -185,8 +237,8 @@ const expiryOptions = [
       </p>
     </div>
 
-    <div>
-      <TxButton variant="primary" @click="showCreateModal = true">
+    <div v-if="keys.length > 0">
+      <TxButton ref="createTriggerRef" variant="primary" @click="openCreateOverlay(createTriggerRef?.$el || null)">
         <span class="i-carbon-add text-base" />
         Create Key
       </TxButton>
@@ -296,93 +348,205 @@ const expiryOptions = [
       <p class="mt-1 text-sm text-black/50 dark:text-white/50">
         Create an API key to use with tuffcli and other integrations
       </p>
-      <TxButton variant="primary" class="mt-4" @click="showCreateModal = true">
+      <TxButton ref="emptyCreateTriggerRef" variant="primary" class="mt-4" @click="openCreateOverlay(emptyCreateTriggerRef?.$el || null)">
         Create Your First Key
       </TxButton>
     </div>
 
-    <!-- Create Modal -->
-    <Modal v-model="showCreateModal" title="Create API Key" width="480px">
-      <p class="text-sm text-black/50 dark:text-white/50">
-        Generate a new API key for CLI tools
-      </p>
+    <Teleport to="body">
+      <TxFlipOverlay
+        v-model="showCreateModal"
+        :source="createOverlaySource"
+        :duration="420"
+        :rotate-x="6"
+        :rotate-y="8"
+        transition-name="ApiKeyOverlay-Mask"
+        mask-class="ApiKeyOverlay-Mask"
+        card-class="ApiKeyOverlay-Card"
+      >
+        <template #default="{ close }">
+          <div class="ApiKeyOverlay-Inner">
+            <div class="space-y-1">
+              <h2 class="ApiKeyOverlay-Title">
+                Create API Key
+              </h2>
+              <p class="ApiKeyOverlay-Desc">
+                Generate a new API key for CLI tools
+              </p>
+            </div>
 
-      <div class="mt-6 space-y-4">
-        <!-- Name -->
-        <div>
-          <label class="apple-section-title mb-1 block">
-            Key Name
-          </label>
-          <Input
-            v-model="newKeyName"
-            type="text"
-            placeholder="e.g., My Laptop, CI/CD"
-            class="w-full"
-          />
-        </div>
-
-        <!-- Scopes -->
-        <div>
-          <label class="apple-section-title mb-2 block">
-            Permissions
-          </label>
-          <div class="space-y-2">
-            <label
-              v-for="scope in availableScopes"
-              :key="scope.id"
-              class="flex cursor-pointer items-start gap-3 rounded-xl bg-black/[0.03] p-3 transition hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
-            >
-              <TxCheckbox
-                class="mt-0.5"
-                :model-value="newKeyScopes.includes(scope.id)"
-                @change="(value: boolean) => toggleScope(scope.id, value)"
-              />
-              <div>
-                <p class="text-sm font-medium text-black dark:text-white">{{ scope.label }}</p>
-                <p class="text-xs text-black/50 dark:text-white/50">{{ scope.description }}</p>
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  Key Name
+                </label>
+                <TuffInput
+                  v-model="newKeyName"
+                  type="text"
+                  placeholder="e.g., My Laptop, CI/CD"
+                  class="w-full"
+                />
               </div>
-            </label>
+
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  Permissions
+                </label>
+                <div class="space-y-2">
+                  <label
+                    v-for="scope in availableScopes"
+                    :key="scope.id"
+                    class="flex cursor-pointer items-start gap-3 rounded-xl bg-black/[0.03] p-3 transition hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+                  >
+                    <TxCheckbox
+                      class="mt-0.5"
+                      :model-value="newKeyScopes.includes(scope.id)"
+                      @change="(value: boolean) => toggleScope(scope.id, value)"
+                    />
+                    <div>
+                      <p class="text-sm font-medium text-black dark:text-white">{{ scope.label }}</p>
+                      <p class="text-xs text-black/50 dark:text-white/50">{{ scope.description }}</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  Expiration
+                </label>
+                <TuffSelect v-model="newKeyExpiry" class="w-full">
+                  <TuffSelectItem
+                    v-for="opt in expiryOptions"
+                    :key="opt.value ?? 'never'"
+                    :value="opt.value"
+                    :label="opt.label"
+                  />
+                </TuffSelect>
+              </div>
+            </div>
+
+            <div class="ApiKeyOverlay-Actions">
+              <TxButton variant="secondary" size="small" @click="close">
+                Cancel
+              </TxButton>
+              <TxButton variant="primary" size="small" :disabled="!newKeyName.trim() || creating" @click="createKey">
+                {{ creating ? 'Creating...' : 'Create Key' }}
+              </TxButton>
+            </div>
           </div>
-        </div>
-
-        <!-- Expiry -->
-        <div>
-          <label class="apple-section-title mb-1 block">
-            Expiration
-          </label>
-          <TuffSelect v-model="newKeyExpiry" class="w-full">
-            <TuffSelectItem
-              v-for="opt in expiryOptions"
-              :key="opt.value ?? 'never'"
-              :value="opt.value"
-              :label="opt.label"
-            />
-          </TuffSelect>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="flex gap-3">
-          <TxButton variant="secondary" class="flex-1" @click="showCreateModal = false">
-            Cancel
-          </TxButton>
-          <TxButton variant="primary" class="flex-1" :disabled="!newKeyName.trim() || creating" @click="createKey">
-            {{ creating ? 'Creating...' : 'Create Key' }}
-          </TxButton>
-        </div>
-      </template>
-    </Modal>
+        </template>
+      </TxFlipOverlay>
+    </Teleport>
 
     <!-- Delete Confirmation Dialog -->
-    <TxBottomDialog
+    <TxPopperDialog
       v-if="deleteConfirmVisible"
-      title="Delete API Key"
-      message="Are you sure you want to delete this API key? This action cannot be undone."
-      :btns="[
-        { content: 'Cancel', type: 'info', onClick: () => true },
-        { content: 'Delete', type: 'error', onClick: confirmDeleteKey },
-      ]"
+      :comp="DeleteConfirmDialog"
       :close="closeDeleteConfirm"
     />
   </div>
 </template>
+
+<style scoped>
+.ApiKeyOverlay-Inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 18px;
+}
+
+.ApiKeyOverlay-Title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx-text-color-primary);
+}
+
+.ApiKeyOverlay-Desc {
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ApiKeyOverlay-Actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>
+
+<style>
+.ApiKeyOverlay-Mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  background: rgba(12, 12, 16, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+
+.ApiKeyOverlay-Mask-enter-active,
+.ApiKeyOverlay-Mask-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.ApiKeyOverlay-Mask-enter-from,
+.ApiKeyOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.ApiKeyOverlay-Card {
+  width: min(520px, 92vw);
+  min-height: 320px;
+  max-height: 82vh;
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 1rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  overflow: auto;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ApiKeyDeleteDialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 180px;
+}
+
+.ApiKeyDeleteDialog-Header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+}
+
+.ApiKeyDeleteDialog-Title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx-text-color-primary);
+}
+
+.ApiKeyDeleteDialog-Desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ApiKeyDeleteDialog-Actions {
+  margin-top: auto;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+</style>

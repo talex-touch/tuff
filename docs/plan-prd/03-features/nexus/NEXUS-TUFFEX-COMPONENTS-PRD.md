@@ -1,6 +1,46 @@
 # Nexus Tuffex 组件展示整合 PRD（草案）
 
 Status: Draft
+Last Updated: 2026-02-12
+
+## 当前迁移进度（截至 2026-02-12）
+
+### 统计口径
+- 源文档：`packages/tuffex/docs/components/*.md`（不含 `index.md`）。
+- 目标文档：`apps/nexus/content/docs/dev/components/*.(zh|en).mdc`（不含 `index.*.mdc`）。
+- 状态来源：组件文档 Frontmatter 中的 `syncStatus`，由 `DocsComponentSyncTable` 汇总展示。
+
+### 进度总览
+
+| 项目 | 结果 | 进度结论 |
+|------|------|----------|
+| 源组件总数 | 92 | 基线 |
+| Nexus 双语覆盖（zh+en 同时存在） | 90/92 | 97.8%，进行中 |
+| Nexus zh 文档数 | 93 | 已含扩展组件 |
+| Nexus en 文档数 | 93 | 已含扩展组件 |
+| `syncStatus: migrated`（zh） | 93/93 | 已完成 |
+| `syncStatus: migrated`（en） | 93/93 | 已完成 |
+
+### 差异清单
+- 未迁移（2）：`code-editor`、`flip-overlay`。
+- Nexus 扩展（3）：`foundations`、`flat-button`、`flat-input`（不在原 `packages/tuffex/docs/components` 基线中）。
+
+## 联调测试清单（你可一项一项执行）
+
+> 约定：每完成一项，将“当前状态”从 `待测` 改为 `通过` 或 `阻塞`，并在备注里补充问题现象。
+
+| 序号 | 测试项 | 验收标准 | 当前状态 | 备注 |
+|------|--------|----------|----------|------|
+| 1 | 组件文档入口可访问 | `/docs/dev/components` 中英入口都可打开，目录无 404 | 待测 |  |
+| 2 | 迁移看板可加载 | `DocsComponentSyncTable` 能展示组件与状态，无加载错误 | 待测 |  |
+| 3 | 双语页面一致性 | 抽样 10 个组件，zh/en 页面结构一致、示例可运行 | 待测 |  |
+| 4 | 已迁移组件基础回归 | `button`、`input`、`select`、`dialog`、`table`、`tree`、`chat` 页面示例可交互 | 进行中 | `button` 已验证（2026-02-12） |
+| 5 | 未迁移项补齐：code-editor | 新增 `code-editor.zh.mdc` 与 `code-editor.en.mdc`，看板状态可见 | 待测 |  |
+| 6 | 未迁移项补齐：flip-overlay | 新增 `flip-overlay.zh.mdc` 与 `flip-overlay.en.mdc`，看板状态可见 | 待测 |  |
+| 7 | 扩展项核对 | `foundations`、`flat-button`、`flat-input` 与组件实现一致、无失链 | 待测 |  |
+| 8 | 导航与检索回归 | 侧边栏、上一页/下一页、站内搜索能命中新增/迁移页 | 待测 |  |
+| 9 | 文档构建回归 | `pnpm -C "apps/nexus" run lint` 通过（允许记录与本次改动无关的既有失败） | 待测 |  |
+| 10 | 收口确认 | 上述项全部通过后，将 PRD 状态从 `Draft` 更新为下一状态 | 待测 |  |
 
 ## 背景
 - 组件展示目前在 `packages/tuffex/docs/components/`（VitePress）维护，Nexus 侧仅有安装/使用说明。

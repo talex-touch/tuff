@@ -7,6 +7,7 @@
  * @version 1.0.0
  */
 
+import pathBrowserify from 'path-browserify'
 import type { FileScanOptions } from './file-scan-constants'
 import { hasWindow } from '../env'
 import {
@@ -22,15 +23,21 @@ import {
 } from './file-scan-constants'
 
 const path = (() => {
-  if (!hasWindow()) {
-    return require('node:path')
+  if (hasWindow()) {
+    return pathBrowserify
   }
-  try {
-    return require('path-browserify')
+
+  const nodeRequire = typeof require === 'function' ? require : null
+  if (nodeRequire) {
+    try {
+      return nodeRequire('node:path')
+    }
+    catch {
+      return pathBrowserify
+    }
   }
-  catch {
-    return require('node:path')
-  }
+
+  return pathBrowserify
 })()
 
 // 重新导出类型

@@ -18,6 +18,7 @@ export class DbWriteScheduler {
   private processing = false
   private currentTaskLabel: string | null = null
   private drainResolvers: Array<() => void> = []
+  private capacityResolvers: Array<{ maxQueued: number; resolve: () => void }> = []
 
   private enqueue<T>(task: DbWriteTask<T>): void {
     this.queue.push(task as DbWriteTask<unknown>)
@@ -48,6 +49,19 @@ export class DbWriteScheduler {
     }
   }
 
+  /**
+   * Wait until the queue depth drops below `maxQueued`.
+   * Use this to apply backpressure on producers that generate DB tasks
+   * faster than they can be consumed (e.g. fullScan fire-and-forget chains).
+   */
+  async waitForCapacity(maxQueued: number): Promise<void> {
+    if (this.queue.length < maxQueued) return
+
+    await new Promise<void>((resolve) => {
+      this.capacityResolvers.push({ maxQueued, resolve })
+    })
+  }
+
   async drain(): Promise<void> {
     if (!this.processing && this.queue.length === 0) return
 
@@ -64,6 +78,20 @@ export class DbWriteScheduler {
     void this.processLoop()
   }
 
+  private notifyCapacityWaiters(): void {
+    if (this.capacityResolvers.length === 0) return
+
+    const remaining: typeof this.capacityResolvers = []
+    for (const waiter of this.capacityResolvers) {
+      if (this.queue.length < waiter.maxQueued) {
+        waiter.resolve()
+      } else {
+        remaining.push(waiter)
+      }
+    }
+    this.capacityResolvers = remaining
+  }
+
   private async processLoop(): Promise<void> {
     if (this.processing) return
 
@@ -75,7 +103,7 @@ export class DbWriteScheduler {
       const waitedMs = Date.now() - task.enqueuedAt
       this.currentTaskLabel = task.label
 
-      if (waitedMs > 500) {
+      if (waitedMs > 2000) {
         log.warn(`DB write task waited ${waitedMs}ms: ${task.label}`)
       }
 
@@ -88,14 +116,20 @@ export class DbWriteScheduler {
         this.currentTaskLabel = null
       }
 
-      // Yield to event loop every 3 tasks to prevent starving other operations
+      // Notify capacity waiters after completing a task
+      this.notifyCapacityWaiters()
+
+      // Yield to event loop after every task to prevent blocking.
+      // SQLite operations are synchronous at the driver level — even a single
+      // INSERT can block for 50-200ms, so yielding every 3 tasks is not enough.
       taskCount++
-      if (taskCount % 3 === 0) {
-        await new Promise<void>((resolve) => setImmediate(resolve))
-      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
     }
 
     this.processing = false
+
+    // Final capacity notification when queue is empty
+    this.notifyCapacityWaiters()
 
     if (this.queue.length === 0) {
       const resolvers = this.drainResolvers

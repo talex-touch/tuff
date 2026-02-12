@@ -61,6 +61,43 @@ function normalizeContentPath(path: string | null | undefined) {
   return stripLocalePrefix(prefixed).replace(/\.(en|zh)$/, '')
 }
 
+function toBoolean(value: unknown) {
+  if (value === true)
+    return true
+  if (typeof value === 'number')
+    return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return ['1', 'true', 'yes', 'on'].includes(normalized)
+  }
+  return false
+}
+
+function resolveDocMeta(record: Record<string, any> | null | undefined) {
+  if (!record || typeof record !== 'object')
+    return {}
+
+  const rawMeta = record.meta
+  let parsedMeta: Record<string, any> = {}
+
+  if (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) {
+    parsedMeta = rawMeta as Record<string, any>
+  }
+  else if (typeof rawMeta === 'string') {
+    try {
+      const maybeMeta = JSON.parse(rawMeta)
+      if (maybeMeta && typeof maybeMeta === 'object' && !Array.isArray(maybeMeta))
+        parsedMeta = maybeMeta as Record<string, any>
+    }
+    catch {}
+  }
+
+  return {
+    ...parsedMeta,
+    ...record,
+  }
+}
+
 const { data: doc, status } = await useAsyncData(
   () => requestKey.value,
   async () => {
@@ -86,7 +123,7 @@ const { data: doc, status } = await useAsyncData(
   { watch: [docPath, locale] },
 )
 
-const docMeta = computed(() => (doc.value ?? {}) as Record<string, any>)
+const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 
 const isLoading = ref(status.value === 'pending' || status.value === 'idle')
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
@@ -294,6 +331,8 @@ const heroSinceLabel = computed(() => {
   return locale.value === 'zh' ? `自 ${value}` : `Since ${value}`
 })
 const heroBetaLabel = computed(() => {
+  if (toBoolean(docMeta.value?.verified))
+    return ''
   const raw = docMeta.value?.status ?? docMeta.value?.meta?.status
   if (!raw)
     return ''
@@ -457,7 +496,8 @@ const heroUpdatedLabel = computed(() => {
     ? `更新于 ${heroUpdatedAgo.value}`
     : `Updated ${heroUpdatedAgo.value}`
 })
-const heroVerifiedLabel = computed(() => (docMeta.value?.verified ? 'Verified' : ''))
+const isDocVerified = computed(() => toBoolean(docMeta.value?.verified))
+const heroVerifiedLabel = computed(() => (isDocVerified.value ? 'Verified' : ''))
 
 type DocSyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
@@ -473,7 +513,7 @@ const DOC_SYNC_STATUS_ALIASES: Record<string, DocSyncStatusKey> = {
 }
 
 const docSyncStatus = computed<DocSyncStatusKey>(() => {
-  if (docMeta.value?.verified === true)
+  if (isDocVerified.value)
     return 'verified'
 
   const raw = typeof docMeta.value?.syncStatus === 'string'
@@ -542,7 +582,7 @@ watchEffect(() => {
     outlineState.value = doc.value.body?.toc?.links ?? []
     docTitleState.value = doc.value.seo?.title ?? doc.value.title ?? ''
     docLocaleState.value = resolveDocLocale(doc.value)
-    docMetaState.value = doc.value as Record<string, any>
+    docMetaState.value = docMeta.value
     if (!outlineState.value.length)
       void scheduleOutlineSync(120)
   }
@@ -1176,7 +1216,7 @@ a.docs-hero-crumb:hover {
   --docs-inline-code-border: var(--borderColor-muted);
   --docs-hr-color: rgba(15, 23, 42, 0.18);
   --tw-prose-body: var(--docs-ink);
-  --tw-prose-headings: var(--docs-accent-strong);
+  --tw-prose-headings: var(--docs-ink);
   --tw-prose-lead: var(--docs-muted);
   --tw-prose-links: var(--docs-accent);
   --tw-prose-bold: var(--docs-ink);
@@ -1214,7 +1254,7 @@ a.docs-hero-crumb:hover {
   font-weight: 700;
   margin-bottom: 1.5rem;
   letter-spacing: -0.02em;
-  color: var(--docs-accent-strong);
+  color: var(--docs-ink);
 }
 
 :deep(.docs-prose h2) {
@@ -1231,12 +1271,7 @@ a.docs-hero-crumb:hover {
   font-weight: 600;
   margin-top: 1.5rem;
   margin-bottom: 0.6rem;
-  color: rgba(15, 23, 42, 0.9);
-}
-
-:deep(.dark .docs-prose h3),
-:deep([data-theme='dark'] .docs-prose h3) {
-  color: rgba(241, 245, 249, 0.92);
+  color: var(--docs-ink);
 }
 
 :deep(.docs-prose p),

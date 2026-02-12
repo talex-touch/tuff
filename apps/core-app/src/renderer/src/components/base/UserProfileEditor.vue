@@ -1,6 +1,5 @@
 <script setup lang="ts" name="UserProfileEditor">
-import { TxButton } from '@talex-touch/tuffex'
-import { ElInput } from 'element-plus'
+import { TuffInput, TxButton } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -17,7 +16,6 @@ const props = withDefaults(
 
 const { t } = useI18n()
 const {
-  currentUser,
   isLoggedIn,
   user,
   getDisplayName,
@@ -28,17 +26,13 @@ const {
 } = useAuth()
 
 const displayName = computed(() => {
-  const name = getDisplayName()
-  if (name) return name
-  return currentUser.value?.name || ''
+  return getDisplayName()
 })
 const displayEmail = computed(() => {
-  const email = getPrimaryEmail()
-  if (email) return email
-  return currentUser.value?.email || ''
+  return getPrimaryEmail()
 })
 const profileBio = computed(() => getUserBio())
-const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
+const avatarUrl = computed(() => user.value?.avatar || '')
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'
@@ -75,8 +69,7 @@ async function handleAvatarChange(event: Event) {
   try {
     await updateUserAvatar(file)
     toast.success(t('userProfile.avatarUpdated'))
-  } catch (error) {
-    console.error('Failed to update avatar:', error)
+  } catch {
     toast.error(t('userProfile.avatarUpdateFailed'))
   } finally {
     isUpdatingAvatar.value = false
@@ -101,8 +94,7 @@ async function handleSaveProfile() {
     await updateUserProfile(payload)
     toast.success(t('userProfile.updateSuccess'))
     resetProfileForm()
-  } catch (error) {
-    console.error('Failed to update profile:', error)
+  } catch {
     toast.error(t('userProfile.updateFailed'))
   } finally {
     isSaving.value = false
@@ -168,7 +160,7 @@ watch(isLoggedIn, (loggedIn) => {
         <label class="UserProfileEditor-Label">
           {{ t('userProfile.displayName') }}
         </label>
-        <ElInput
+        <TuffInput
           v-model="profileForm.displayName"
           :placeholder="t('userProfile.displayNamePlaceholder')"
         />
@@ -178,7 +170,7 @@ watch(isLoggedIn, (loggedIn) => {
         <label class="UserProfileEditor-Label">
           {{ t('userProfile.bio') }}
         </label>
-        <ElInput
+        <TuffInput
           v-model="profileForm.bio"
           type="textarea"
           :rows="3"

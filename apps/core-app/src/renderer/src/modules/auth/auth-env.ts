@@ -1,7 +1,6 @@
 import { getTuffBaseUrl, hasNavigator, isDevEnv } from '@talex-touch/utils/env'
 import { appSetting } from '~/modules/channel/storage'
 
-export const DEV_AUTH_STORAGE_KEY = 'tuff-dev-auth-user'
 export const APP_AUTH_STORAGE_KEY = 'tuff-app-auth-token'
 export const APP_DEVICE_ID_KEY = 'tuff-app-device-id'
 export const APP_DEVICE_NAME_KEY = 'tuff-app-device-name'
@@ -27,8 +26,7 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
       .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
     const raw = atob(payload)
     return JSON.parse(raw) as { exp?: number }
-  } catch (error) {
-    console.warn('[auth-env] Failed to decode app auth token', error)
+  } catch {
     return null
   }
 }
@@ -100,33 +98,4 @@ export function setAppDeviceName(name: string): void {
     return
   }
   localStorage.setItem(APP_DEVICE_NAME_KEY, name)
-}
-
-export function clearDevAuthUser(): void {
-  if (typeof localStorage === 'undefined') {
-    return
-  }
-  localStorage.removeItem(DEV_AUTH_STORAGE_KEY)
-}
-
-export function getDevAuthToken(): string | null {
-  if (!isLocalAuthMode()) {
-    return null
-  }
-
-  if (typeof localStorage === 'undefined') {
-    return null
-  }
-
-  try {
-    const raw = localStorage.getItem(DEV_AUTH_STORAGE_KEY)
-    if (!raw) {
-      return null
-    }
-    const parsed = JSON.parse(raw)
-    return typeof parsed?.token === 'string' ? parsed.token : null
-  } catch (error) {
-    console.warn('[auth-env] Failed to read local auth token', error)
-    return null
-  }
 }

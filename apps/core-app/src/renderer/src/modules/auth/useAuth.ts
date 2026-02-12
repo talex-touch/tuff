@@ -1,27 +1,35 @@
 import type { AuthUser, LoginOptions, LoginResult } from '@talex-touch/utils/renderer'
+import type { AppContext } from 'vue'
 import { useAppSdk, useAuthState, useCurrentUser } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
-import type { ElMessageBoxOptions } from 'element-plus'
-import { ElButton, ElInput, ElMessageBox } from 'element-plus'
-import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
+import {
+  computed,
+  createVNode,
+  getCurrentInstance,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  render
+} from 'vue'
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
+import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
 import { appSetting } from '../channel/storage/index'
 import {
   clearAppAuthToken,
-  DEV_AUTH_STORAGE_KEY,
   getAppAuthToken,
   getAuthBaseUrl,
   getAppDeviceId,
   getAppDeviceName,
   getAppDevicePlatform,
-  getDevAuthToken,
-  isLocalAuthMode,
   setAppAuthToken
 } from './auth-env'
 import { attestCurrentDevice } from './device-attest'
+import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
+import { startAutoSync, stopAutoSync } from '~/modules/sync'
 
 let authCallbackCleanup: (() => void) | null = null
 let stepUpCallbackCleanup: (() => void) | null = null
@@ -32,57 +40,8 @@ let activeConsumers = 0
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
-
-function buildLocalUser(token?: string): AuthUser {
-  const now = new Date().toISOString()
-  const tokenHint = token ? token.replace(/[^a-z0-9]/gi, '').slice(0, 8) : 'local'
-  return {
-    id: `dev-${tokenHint || 'local'}`,
-    email: 'dev@local',
-    name: 'Dev Local',
-    avatar: '',
-    role: 'dev',
-    createdAt: now,
-    updatedAt: now
-  }
-}
-
-function readLocalAuthUser(): AuthUser | null {
-  if (!isLocalAuthMode()) return null
-  try {
-    const raw = localStorage.getItem(DEV_AUTH_STORAGE_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (parsed?.user?.id) return parsed.user as AuthUser
-  } catch (error) {
-    console.warn('[useAuth] Failed to read local auth cache', error)
-  }
-  return null
-}
-
-function writeLocalAuthUser(user: AuthUser, token?: string): void {
-  if (!isLocalAuthMode()) return
-  try {
-    localStorage.setItem(DEV_AUTH_STORAGE_KEY, JSON.stringify({ user, token: token ?? null }))
-  } catch (error) {
-    console.warn('[useAuth] Failed to persist local auth cache', error)
-  }
-}
-
-function clearLocalAuthUser(): void {
-  if (!isLocalAuthMode()) return
-  try {
-    localStorage.removeItem(DEV_AUTH_STORAGE_KEY)
-  } catch (error) {
-    console.warn('[useAuth] Failed to clear local auth cache', error)
-  }
-}
-
-function applyLocalAuth(token?: string): void {
-  const user = buildLocalUser(token)
-  updateAuthState(user, token ?? `dev-session-${user.id}`)
-  writeLocalAuthUser(user, token)
-}
+const BROWSER_LOGIN_CALLBACK_GRACE_MS = 5000
+const FOCUS_PROMPT_RECHECK_DELAY_MS = 400
 
 interface RemoteUserProfilePayload {
   id: string
@@ -138,8 +97,7 @@ async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
     }
     const data = (await response.json()) as RemoteUserProfilePayload
     return toAuthUserProfile(data)
-  } catch (error) {
-    console.warn('[useAuth] Failed to fetch user profile', error)
+  } catch {
     return null
   }
 }
@@ -148,7 +106,10 @@ const pendingBrowserLogin = ref<{
   resolve: (result: LoginResult) => void
   reject: (error: Error) => void
   timeoutId: NodeJS.Timeout
+  openedAt: number
 } | null>(null)
+const isHandlingExternalAuthCallback = ref(false)
+let authPromptAppContext: AppContext | null = null
 
 const authLoadingState = reactive({
   isSigningIn: false,
@@ -293,6 +254,10 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
   authState.user = nextUser
   authState.sessionId = sessionId ?? null
 
+  if (nextUser) {
+    applyDefaultSyncOnLogin()
+  }
+
   void (async () => {
     try {
       const safeUser = nextUser
@@ -309,14 +274,23 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
       } catch {
         // ignore
       }
-    } catch (error) {
-      console.debug('[useAuth] Failed to update Sentry user context', error)
+    } catch {
+      // ignore sentry sync failure
     }
   })()
 }
 
 function getDisplayName(): string {
-  return authState.user?.name || ''
+  const name = authState.user?.name?.trim()
+  if (name) {
+    return name
+  }
+  const email = authState.user?.email?.trim()
+  if (email) {
+    const alias = email.split('@')[0]?.trim()
+    return alias || email
+  }
+  return ''
 }
 
 function getPrimaryEmail(): string {
@@ -333,21 +307,6 @@ async function updateUserProfile(payload: {
 }): Promise<AuthUser | null> {
   if (!payload.displayName && payload.bio === undefined) {
     return authState.user
-  }
-
-  if (isLocalAuthMode()) {
-    const localUser = authState.user ?? buildLocalUser()
-    const updatedUser: AuthUser = { ...localUser }
-    if (payload.displayName !== undefined) {
-      updatedUser.name = payload.displayName
-    }
-    if (payload.bio !== undefined) {
-      updatedUser.bio = payload.bio
-    }
-    updatedUser.updatedAt = new Date().toISOString()
-    updateAuthState(updatedUser, authState.sessionId)
-    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
-    return updatedUser
   }
 
   const token = getAppAuthToken()
@@ -377,19 +336,6 @@ async function fileToDataUrl(file: File): Promise<string> {
 }
 
 async function updateUserAvatar(file: File): Promise<AuthUser | null> {
-  if (isLocalAuthMode()) {
-    const dataUrl = await fileToDataUrl(file)
-    const localUser = authState.user ?? buildLocalUser()
-    const updatedUser: AuthUser = {
-      ...localUser,
-      avatar: dataUrl,
-      updatedAt: new Date().toISOString()
-    }
-    updateAuthState(updatedUser, authState.sessionId)
-    writeLocalAuthUser(updatedUser, authState.sessionId ?? undefined)
-    return updatedUser
-  }
-
   const token = getAppAuthToken()
   if (!token) {
     throw new Error('Not authenticated')
@@ -410,63 +356,67 @@ async function openLoginSettings(): Promise<boolean> {
 }
 
 async function requestStepUp(): Promise<void> {
-  if (isLocalAuthMode()) {
-    toast.info('本地模式无需二次验证')
-    return
-  }
   const url = `${getAuthBaseUrl()}/auth/stepup-callback`
   await appSdk.openExternal(url)
   toast.info('请在浏览器中完成二次验证')
+}
+
+async function runSyncBootstrap(token?: string): Promise<boolean> {
+  if (!getSyncPreferenceState().enabled) {
+    return false
+  }
+
+  const resolvedToken = token ?? getAppAuthToken()
+  if (!resolvedToken) {
+    return false
+  }
+
+  await attestCurrentDevice(resolvedToken, {
+    getOS: appSdk.getOS,
+    getSecureValue: appSdk.getSecureValue,
+    setSecureValue: appSdk.setSecureValue
+  })
+  return true
 }
 
 async function initializeAuth() {
   if (isInitialized) return
 
   try {
-    if (isLocalAuthMode()) {
-      const cachedUser = readLocalAuthUser()
-      if (cachedUser) {
-        updateAuthState(cachedUser, `dev-session-${cachedUser.id}`)
-      } else {
-        updateAuthState(null)
-      }
-      isInitialized = true
-      return
-    }
-
-    const appToken = getAppAuthToken() || getDevAuthToken()
+    const appToken = getAppAuthToken()
     if (appToken) {
       const remoteUser = await fetchRemoteUser(appToken)
       if (remoteUser) {
         updateAuthState(remoteUser, appToken)
-        void attestCurrentDevice(appToken, {
-          getOS: appSdk.getOS,
-          getSecureValue: appSdk.getSecureValue,
-          setSecureValue: appSdk.setSecureValue
-        }).catch((error) => {
-          console.debug('[useAuth] Device attestation skipped:', error)
-        })
-      } else {
-        clearAppAuthToken()
-        updateAuthState(null)
+        void runSyncBootstrap(appToken)
+          .then((bootstrapped) => {
+            if (bootstrapped) {
+              return startAutoSync()
+            }
+            return undefined
+          })
+          .catch(() => {
+            // ignore sync bootstrap failure
+          })
+        isInitialized = true
+        return
       }
-    } else {
-      updateAuthState(null)
+      clearAppAuthToken()
     }
+
+    updateAuthState(null)
+    stopAutoSync('logout')
     isInitialized = true
   } catch (error) {
-    console.error('[useAuth] Failed to initialize auth:', error)
     updateAuthState(null)
+    stopAutoSync('logout')
+    isInitialized = true
     const errorMessage = getErrorMessage(error, 'INITIALIZATION_FAILED')
     toast.error(errorMessage)
   }
 }
 
 async function signIn(): Promise<void> {
-  if (isLocalAuthMode()) {
-    applyLocalAuth()
-    return
-  }
   authLoadingState.isSigningIn = true
   try {
     await loginWithBrowser()
@@ -476,10 +426,6 @@ async function signIn(): Promise<void> {
 }
 
 async function signUp(): Promise<void> {
-  if (isLocalAuthMode()) {
-    applyLocalAuth()
-    return
-  }
   authLoadingState.isSigningUp = true
   try {
     await loginWithBrowser('sign-up')
@@ -493,25 +439,25 @@ async function signOut(): Promise<void> {
   try {
     updateAuthState(null)
     clearAppAuthToken()
-    clearLocalAuthUser()
+    stopAutoSync('logout')
   } finally {
     authLoadingState.isSigningOut = false
   }
 }
 
 function checkAuthStatus() {
-  if (isLocalAuthMode()) return
   void initializeAuth()
 }
 
-function cleanup() {
+function cleanup(): boolean {
   if (activeConsumers > 0) {
     activeConsumers -= 1
   }
   if (activeConsumers > 0) {
-    return
+    return false
   }
   isInitialized = false
+  return true
 }
 
 async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<LoginResult> {
@@ -519,10 +465,10 @@ async function loginWithBrowser(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promis
   authLoadingState.loginProgress = 0
 
   return new Promise((resolve) => {
+    const openedAt = Date.now()
     const timeoutId = createBrowserLoginTimeout(resolve)
-    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId }
+    pendingBrowserLogin.value = { resolve, reject: () => {}, timeoutId, openedAt }
     openBrowserLoginPage(mode).catch((err) => {
-      console.error('[useAuth] Failed to open browser:', err)
       clearTimeout(timeoutId)
       pendingBrowserLogin.value = null
       authLoadingState.isLoggingIn = false
@@ -541,22 +487,7 @@ async function login(options: LoginOptions = {}): Promise<LoginResult> {
     return { success: true, user }
   }
 
-  const result = isLocalAuthMode()
-    ? await (async () => {
-        authLoadingState.isLoggingIn = true
-        authLoadingState.loginProgress = 0
-        authLoadingState.loginTimeRemaining = 0
-        try {
-          applyLocalAuth()
-          authLoadingState.loginProgress = 100
-          return { success: true, user: currentUser.value }
-        } catch (error) {
-          return { success: false, error }
-        } finally {
-          authLoadingState.isLoggingIn = false
-        }
-      })()
-    : await loginWithBrowser()
+  const result = await loginWithBrowser()
 
   if (result.success) {
     onSuccess?.(result.user)
@@ -573,29 +504,24 @@ async function logout(): Promise<void> {
     }
     toast.success('已登出')
   } catch (error) {
-    console.error('Logout failed:', error)
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
   } finally {
     clearAppAuthToken()
+    stopAutoSync('logout')
   }
 }
 
 async function handleExternalAuthCallback(token: string, appToken?: string): Promise<void> {
   const resolvedToken = appToken || token
-  if (!resolvedToken) {
-    toast.error(getErrorMessage(new Error('Missing token'), 'AUTH_ERROR'))
-    return
-  }
-
+  isHandlingExternalAuthCallback.value = true
   try {
-    if (isLocalAuthMode()) {
-      applyLocalAuth(resolvedToken)
-      authLoadingState.loginProgress = 100
-      toast.success('登录成功')
+    if (!resolvedToken) {
+      const error = new Error('Missing token')
+      toast.error(getErrorMessage(error, 'AUTH_ERROR'))
       if (pendingBrowserLogin.value) {
         clearTimeout(pendingBrowserLogin.value.timeoutId)
-        pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
+        pendingBrowserLogin.value.resolve({ success: false, error })
         pendingBrowserLogin.value = null
       }
       return
@@ -607,13 +533,16 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       throw new Error('Failed to fetch user profile')
     }
     updateAuthState(remoteUser, resolvedToken)
-    void attestCurrentDevice(resolvedToken, {
-      getOS: appSdk.getOS,
-      getSecureValue: appSdk.getSecureValue,
-      setSecureValue: appSdk.setSecureValue
-    }).catch((error) => {
-      console.debug('[useAuth] Device attestation skipped:', error)
-    })
+    void runSyncBootstrap(resolvedToken)
+      .then((bootstrapped) => {
+        if (bootstrapped) {
+          return startAutoSync()
+        }
+        return undefined
+      })
+      .catch(() => {
+        // ignore sync bootstrap failure
+      })
     authLoadingState.loginProgress = 100
     toast.success('登录成功')
 
@@ -623,7 +552,6 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       pendingBrowserLogin.value = null
     }
   } catch (error) {
-    console.error('[useAuth] External auth callback failed:', error)
     const errorMessage = getErrorMessage(error, 'AUTH_ERROR')
     toast.error(errorMessage)
 
@@ -633,6 +561,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       pendingBrowserLogin.value = null
     }
   } finally {
+    isHandlingExternalAuthCallback.value = false
     authLoadingState.isLoggingIn = false
   }
 }
@@ -744,12 +673,12 @@ function cancelPendingBrowserLogin(reason = 'Login cancelled'): void {
 async function retryPendingBrowserLogin(): Promise<void> {
   if (!pendingBrowserLogin.value) return
   clearTimeout(pendingBrowserLogin.value.timeoutId)
+  pendingBrowserLogin.value.openedAt = Date.now()
   pendingBrowserLogin.value.timeoutId = createBrowserLoginTimeout(pendingBrowserLogin.value.resolve)
   try {
     await openBrowserLoginPage()
     toast.info('已重新打开登录页面')
-  } catch (error) {
-    console.error('[useAuth] Failed to retry browser login:', error)
+  } catch {
     toast.error('无法重新打开浏览器')
   }
 }
@@ -771,87 +700,66 @@ async function showLoginResumePrompt(): Promise<{
   action: 'manual' | 'retry' | 'cancel'
   token?: string
 } | null> {
+  const appContext = authPromptAppContext
+  if (!appContext) {
+    return { action: 'cancel' }
+  }
+
   return new Promise((resolve) => {
-    const tokenInput = ref('')
+    const root = document.createElement('div')
+    document.body.appendChild(root)
     let resolved = false
 
     const finish = (result: { action: 'manual' | 'retry' | 'cancel'; token?: string }) => {
       if (resolved) return
       resolved = true
-      ElMessageBox.close()
+      render(null, root)
+      root.remove()
       resolve(result)
     }
 
-    const handleManual = () => {
-      const token = tokenInput.value.trim()
-      if (!token) {
-        toast.error('请输入 token')
-        return
-      }
-      finish({ action: 'manual', token })
-    }
-
-    const handleRetry = () => finish({ action: 'retry' })
-    const handleCancel = () => finish({ action: 'cancel' })
-
-    const options: ElMessageBoxOptions = {
-      title: '登录确认',
-      message: h('div', { style: 'display: flex; flex-direction: column; gap: 12px;' }, [
-        h('p', { style: 'margin: 0;' }, '检测到你已返回应用，但未拿到登录信息。是否已完成登录？'),
-        h(ElInput, {
-          modelValue: tokenInput.value,
-          'onUpdate:modelValue': (value: string) => {
-            tokenInput.value = value
-          },
-          type: 'textarea',
-          autosize: { minRows: 2, maxRows: 4 },
-          placeholder: '粘贴登录 token（可选）'
-        }),
-        h(
-          'div',
-          { style: 'display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px;' },
-          [
-            h(ElButton, { type: 'primary', onClick: handleManual }, () => '手动填入 token'),
-            h(ElButton, { onClick: handleRetry }, () => '重新获取'),
-            h(ElButton, { type: 'danger', onClick: handleCancel }, () => '取消登录')
-          ]
-        )
-      ]),
-      showConfirmButton: false,
-      showCancelButton: false,
-      closeOnClickModal: false,
-      closeOnPressEscape: false,
-      showClose: false,
-      beforeClose: (_action, _instance, done) => {
-        if (!resolved) {
-          resolved = true
-          resolve({ action: 'cancel' })
+    const vnode = createVNode(AuthLoginResumePrompt, {
+      onAction: (result: { action: 'manual' | 'retry' | 'cancel'; token?: string }) => {
+        if (result.action === 'manual' && !result.token) {
+          toast.error('请输入 token')
+          return
         }
-        done()
-      }
-    }
-    ElMessageBox(options).catch(() => {
-      if (!resolved) {
-        resolved = true
-        resolve({ action: 'cancel' })
+        finish(result)
       }
     })
+    vnode.appContext = appContext
+    render(vnode, root)
   })
 }
 
 function setupAuthFocusPrompt(): void {
   if (focusPromptCleanup) return
   let promptActive = false
+  let delayedPromptTimer: number | null = null
 
-  const handleFocus = () => {
-    if (!appSetting?.beginner?.init) return
-    if (!pendingBrowserLogin.value) return
-    if (authState.isSignedIn) return
-    if (promptActive) return
+  const clearDelayedPromptTimer = () => {
+    if (delayedPromptTimer == null) return
+    window.clearTimeout(delayedPromptTimer)
+    delayedPromptTimer = null
+  }
+
+  const canPrompt = () => {
+    if (!appSetting?.beginner?.init) return false
+    if (!pendingBrowserLogin.value) return false
+    if (authState.isSignedIn) return false
+    if (isHandlingExternalAuthCallback.value) return false
+    if (promptActive) return false
+    return true
+  }
+
+  const runPrompt = () => {
+    if (!canPrompt()) return
 
     promptActive = true
     void (async () => {
       try {
+        await new Promise((resolve) => setTimeout(resolve, FOCUS_PROMPT_RECHECK_DELAY_MS))
+        if (!canPrompt()) return
         const result = await showLoginResumePrompt()
         if (!result) return
         if (result.action === 'manual' && result.token) {
@@ -869,8 +777,40 @@ function setupAuthFocusPrompt(): void {
     })()
   }
 
+  const schedulePromptIfNeeded = () => {
+    if (!canPrompt()) return
+
+    const openedAt = pendingBrowserLogin.value?.openedAt || Date.now()
+    const elapsed = Date.now() - openedAt
+    if (elapsed < BROWSER_LOGIN_CALLBACK_GRACE_MS) {
+      clearDelayedPromptTimer()
+      delayedPromptTimer = window.setTimeout(() => {
+        delayedPromptTimer = null
+        if (!document.hasFocus()) return
+        runPrompt()
+      }, BROWSER_LOGIN_CALLBACK_GRACE_MS - elapsed)
+      return
+    }
+
+    runPrompt()
+  }
+
+  const handleFocus = () => {
+    if (!document.hasFocus()) return
+    schedulePromptIfNeeded()
+  }
+
+  const pendingPromptPollerId = window.setInterval(() => {
+    if (!document.hasFocus()) return
+    schedulePromptIfNeeded()
+  }, 1000)
+
   window.addEventListener('focus', handleFocus)
-  focusPromptCleanup = () => window.removeEventListener('focus', handleFocus)
+  focusPromptCleanup = () => {
+    clearDelayedPromptTimer()
+    window.clearInterval(pendingPromptPollerId)
+    window.removeEventListener('focus', handleFocus)
+  }
 }
 
 function cleanupAuthFocusPrompt(): void {
@@ -881,13 +821,17 @@ function cleanupAuthFocusPrompt(): void {
 }
 
 export function useAuth() {
+  const instance = getCurrentInstance()
+  if (instance?.appContext) {
+    authPromptAppContext = instance.appContext
+  }
+
   onMounted(() => {
     activeConsumers += 1
     setupAuthCallbackListener()
     setupAuthFocusPrompt()
 
     if (!appSetting?.beginner?.init) {
-      console.log('[useAuth] Skipping auth status check on first launch')
       return
     }
 
@@ -900,9 +844,12 @@ export function useAuth() {
   })
 
   onUnmounted(() => {
-    cleanup()
-    cleanupAuthCallbackListener()
-    cleanupAuthFocusPrompt()
+    const shouldCleanupGlobalResources = cleanup()
+    if (shouldCleanupGlobalResources) {
+      cleanupAuthCallbackListener()
+      cleanupAuthFocusPrompt()
+      authPromptAppContext = null
+    }
   })
 
   return {
@@ -929,6 +876,7 @@ export function useAuth() {
     updateUserAvatar,
     openLoginSettings,
     requestStepUp,
+    runSyncBootstrap,
     runWithStepUpToken,
     getStepUpToken,
     clearStepUpToken

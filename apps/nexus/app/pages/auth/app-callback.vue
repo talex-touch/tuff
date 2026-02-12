@@ -17,23 +17,33 @@ const callbackInFlight = ref(false)
 const sessionToken = ref('')
 const showDevMode = ref(false)
 const copied = ref(false)
+let callbackGuardTimer: ReturnType<typeof setTimeout> | null = null
 
 const APP_SCHEMA = 'tuff'
 const isDev = import.meta.dev
+const SESSION_FETCH_TIMEOUT_MS = 4500
+const CALLBACK_BOOTSTRAP_GUARD_MS = 2500
 
 function hasActiveSession(session: unknown) {
   const user = (session as { user?: unknown } | null | undefined)?.user
   return Boolean(user)
 }
 
+async function getSessionWithTimeout() {
+  return await Promise.race([
+    getSession().catch(() => null),
+    new Promise<null>(resolve => setTimeout(() => resolve(null), SESSION_FETCH_TIMEOUT_MS)),
+  ])
+}
+
 async function ensureAuthenticatedSession() {
-  const firstSession = await getSession().catch(() => null)
+  const firstSession = await getSessionWithTimeout()
   if (hasActiveSession(firstSession))
     return true
 
   await new Promise(resolve => setTimeout(resolve, 200))
 
-  const secondSession = await getSession().catch(() => null)
+  const secondSession = await getSessionWithTimeout()
   return hasActiveSession(secondSession)
 }
 
@@ -124,7 +134,6 @@ async function handleCallback() {
   }
   catch (error: any) {
     await ensureCallbackProcessingFeedback(callbackStartedAt)
-    console.error('[AppCallback] Error:', error)
 
     if (error?.status === 401 || error?.statusCode === 401) {
       await navigateTo({
@@ -159,8 +168,12 @@ async function copyToken() {
 }
 
 onMounted(() => {
-  if (sessionStatus.value !== 'loading')
+  void handleCallback()
+  callbackGuardTimer = setTimeout(() => {
+    if (status.value !== 'loading')
+      return
     void handleCallback()
+  }, CALLBACK_BOOTSTRAP_GUARD_MS)
 })
 
 watch(
@@ -172,6 +185,13 @@ watch(
       void handleCallback()
   },
 )
+
+onUnmounted(() => {
+  if (!callbackGuardTimer)
+    return
+  clearTimeout(callbackGuardTimer)
+  callbackGuardTimer = null
+})
 </script>
 
 <template>
@@ -193,14 +213,14 @@ watch(
 
       <div v-else-if="status === 'success'" class="flex flex-col items-center gap-4">
         <span class="i-carbon-checkmark-filled text-4xl text-emerald-400" />
-        <p class="text-base text-white/90">
+        <p class="text-base text-white/90 m-0">
           {{ t('auth.redirectSuccess', 'Authentication successful! Opening Tuff...') }}
         </p>
-        <p class="text-sm text-white/65">
+        <p class="text-sm text-white/65 m-0">
           {{ t('auth.manualOpen', 'If the app does not open automatically, please open Tuff manually.') }}
         </p>
 
-        <div v-if="showDevMode" class="w-full space-y-2 text-left">
+        <div v-if="showDevMode" class="w-full space-y-2 text-center">
           <p class="text-sm text-amber-200/95">
             🔧 Dev Mode: Protocol handler may not work
           </p>
@@ -211,9 +231,6 @@ watch(
           <TxButton variant="primary" size="small" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
           </TxButton>
-          <p class="text-xs text-white/58">
-            Then run in Electron DevTools console: <code>__devAuthToken("PASTE_TOKEN_HERE")</code>
-          </p>
         </div>
       </div>
 

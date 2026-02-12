@@ -130,6 +130,68 @@
 - 需要补充：搜索 pipeline 分段耗时（拉取/排序/过滤/渲染）与输入节流策略。
 - 建议追加：搜索链路的 perf trace，分离 “数据准备” 与 “展示排序” 的耗时。
 
+## 已完成优化（2026-02 FileProvider 性能修复）
+
+### 问题背景
+fullScan / reconciliation 期间，event loop lag 持续 500-900ms，严重时出现 4s 尖峰。
+根因：SQLite 驱动层操作是同步的（即使包裹了 async/await），单条 INSERT 可阻塞 50-200ms，
+加上批量事务、同步图标提取、串行 await 等因素叠加，导致主线程长时间被占用。
+
+### 修复清单
+
+#### 1. 移除同步图标提取回退（extractFileIconQueued）
+- **文件**: `file-provider.ts`
+- **问题**: Worker 图标提取失败时回退到同步 `extractFileIcon()` 原生调用，阻塞事件循环
+- **修复**: Worker 失败直接返回 null，不做同步回退；移除 `extract-file-icon` 同步导入
+
+#### 2. processFileExtensions 全面异步化
+- **文件**: `file-provider.ts`
+- **问题**: `ensureFileIcon` 在文件数 ≤ 200 时同步 await，`processFileExtensions` 在扫描流水线中被 await
+- **修复**:
+  - `ensureFileIcon` 改为始终 fire-and-forget（`void this.ensureFileIcon(...)`）
+  - 所有 4 处 `await this.processFileExtensions(...)` 改为 `void this.processFileExtensions(...).catch(...)`
+
+#### 3. DbWriteScheduler 逐任务让出
+- **文件**: `db-write-scheduler.ts`
+- **问题**: 原实现每 3 个任务才让出一次事件循环，SQLite 同步 I/O 导致连续阻塞
+- **修复**: 每完成 1 个任务即 `setImmediate` 让出
+
+#### 4. 分批粒度大幅缩减
+- **文件**: `file-provider.ts`, `search-index-service.ts`
+- **修复**:
+  - fullScan INSERT 分片: 100 → 50 → 30 → **20 条/批**
+  - reconciliation INSERT 分片: 500 → 50 → 30 → **20 条/批**
+  - delete 分片: 500 → **100 条/批**
+  - `FLUSH_BATCH_SIZE`: 5 → **2 条/批**
+  - `estimatedTaskTimeMs`: 6/10 → **20**（batch=1，每个任务后 yield）
+
+#### 5. 逐条事务拆分
+- **文件**: `search-index-service.ts`, `file-provider.ts`
+- **问题**: 批量事务（一次 transaction 包含多条 INSERT）阻塞时间过长
+- **修复**: `indexItems`、`removeItems`、`flushIndexWorkerResults` 拆分为逐条/逐文档独立事务，使 DbWriteScheduler 可在每条之间让出
+
+#### 6. 生产者背压机制（waitForCapacity）
+- **文件**: `db-write-scheduler.ts`, `file-provider.ts`
+- **问题**: fire-and-forget 的 DB 写入调用导致队列无限膨胀，等待时间从 500ms 增长到 1300ms+
+- **修复**:
+  - `DbWriteScheduler` 新增 `waitForCapacity(maxQueued)` 方法：队列深度 ≥ maxQueued 时挂起生产者
+  - fullScan / reconciliation / processFileUpdates 的分片处理循环中加入 `await dbWriteScheduler.waitForCapacity(15)`
+  - 每个任务完成后通过 `notifyCapacityWaiters()` 唤醒等待的生产者
+
+### 优化效果
+| 阶段 | Event Loop Lag | 说明 |
+|------|---------------|------|
+| 优化前 | 500-900ms，峰值 4s | 多任务叠加 + 同步 I/O |
+| 第一轮（同步回退移除 + fire-and-forget） | 500-900ms | 瓶颈在 SQLite 同步 I/O |
+| 第二轮（逐任务 yield + 分片缩减） | 200-217ms，首次 737ms | 明显改善 |
+| 第三轮（逐条事务 + 背压） | ~200ms，队列稳定 | 接近目标 |
+
+### 架构要点
+- **SQLite 同步本质**: LibSQL 本地模式下所有 SQL 语句在驱动层同步执行，async 包裹不改变阻塞本质
+- **串行写队列**: 所有 DB 写操作通过 `DbWriteScheduler` 串行执行，逐任务 yield 防阻塞
+- **背压控制**: 生产者（扫描循环）通过 `waitForCapacity` 自动限流，防止队列失控
+- **fire-and-forget 模式**: 非关键路径（图标提取、关键词索引、扩展信息处理）不阻塞主扫描流水线
+
 ## 预期收益
 - 启动期任务拥挤降低（任务错峰 + 统一调度）。
 - 重任务后台化，event loop lag 明显下降。

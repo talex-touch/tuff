@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 
 defineI18nRoute(false)
 
@@ -7,7 +8,16 @@ interface LoginHistoryItem {
   id: string
   success: boolean
   ip: string | null
+  ipMasked?: string | null
   created_at: string
+  location?: {
+    countryCode: string | null
+    regionCode: string | null
+    regionName: string | null
+    city: string | null
+    latitude: number | null
+    longitude: number | null
+  } | null
 }
 
 interface DeviceItem {
@@ -17,6 +27,16 @@ interface DeviceItem {
   lastSeenAt: string | null
   createdAt: string
   revokedAt?: string | null
+  lastLocation?: {
+    countryCode: string | null
+    regionCode: string | null
+    regionName: string | null
+    city: string | null
+    latitude: number | null
+    longitude: number | null
+    updatedAt: string | null
+  } | null
+  lastLoginIpMasked?: string | null
 }
 
 interface TelemetryDailyPoint {
@@ -81,6 +101,14 @@ const greetingLine = computed(() => t('dashboard.header.greeting', { name: greet
 
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const dayFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { month: 'numeric', day: 'numeric' }))
+const regionNames = computed(() => {
+  try {
+    return new Intl.DisplayNames([localeTag.value], { type: 'region' })
+  }
+  catch {
+    return null
+  }
+})
 
 const allTelemetryPoints = computed(() => telemetryData.value?.daily ?? [])
 const currentTelemetryPoints = computed(() => allTelemetryPoints.value.slice(-rangeDays))
@@ -95,6 +123,18 @@ const recentSevenDayHistory = computed(() => historyItems.value.filter((item) =>
 }))
 
 const recentLoginPreview = computed(() => historyItems.value.slice(0, 5))
+const recentLoginMapPoints = computed(() => {
+  return historyItems.value
+    .filter(item => item.success && Number.isFinite(item.location?.latitude) && Number.isFinite(item.location?.longitude))
+    .slice(0, 30)
+    .map(item => ({
+      id: item.id,
+      label: formatLoginLocation(item),
+      latitude: item.location?.latitude ?? null,
+      longitude: item.location?.longitude ?? null,
+      value: 1,
+    }))
+})
 
 const recentDevicePreview = computed(() => {
   return [...deviceItems.value]
@@ -280,6 +320,26 @@ function formatRelativeTime(value: string | null) {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat(localeTag.value).format(value)
+}
+
+function formatLoginLocation(item: LoginHistoryItem): string {
+  const location = item.location
+  if (!location) {
+    return t('dashboard.devices.locationUnknown', '位置未知')
+  }
+  const country = location.countryCode ? regionNames.value?.of(location.countryCode) || location.countryCode : null
+  const pieces = [country, location.regionName || location.regionCode, location.city].filter(Boolean)
+  return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
+}
+
+function formatDeviceLocation(device: DeviceItem): string {
+  const location = device.lastLocation
+  if (!location) {
+    return t('dashboard.devices.locationUnknown', '位置未知')
+  }
+  const country = location.countryCode ? regionNames.value?.of(location.countryCode) || location.countryCode : null
+  const pieces = [country, location.regionName || location.regionCode, location.city].filter(Boolean)
+  return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
 }
 
 function resolveErrorMessage(error: any, fallback: string) {
@@ -510,7 +570,10 @@ function isCurrentDevice(device: DeviceItem) {
                   {{ item.success ? t('dashboard.overview.stream.success') : t('dashboard.overview.stream.failed') }}
                 </p>
                 <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatDateTime(item.created_at) }} · {{ item.ip || t('dashboard.overview.ipUnknown') }}
+                  {{ formatDateTime(item.created_at) }} · {{ item.ipMasked || item.ip || t('dashboard.overview.ipUnknown') }}
+                </p>
+                <p class="text-xs text-black/45 dark:text-white/45">
+                  {{ formatLoginLocation(item) }}
                 </p>
               </div>
               <span
@@ -520,6 +583,13 @@ function isCurrentDevice(device: DeviceItem) {
                 {{ item.success ? t('dashboard.account.statusSuccess') : t('dashboard.account.statusFailed') }}
               </span>
             </div>
+          </div>
+
+          <div v-if="recentLoginMapPoints.length" class="rounded-2xl border border-black/[0.05] bg-black/[0.03] p-2 dark:border-white/[0.08] dark:bg-white/[0.04]">
+            <GeoLeafletMap
+              :height="220"
+              :points="recentLoginMapPoints"
+            />
           </div>
         </div>
 
@@ -564,6 +634,10 @@ function isCurrentDevice(device: DeviceItem) {
               </div>
               <p class="mt-1 text-xs text-black/50 dark:text-white/50">
                 {{ device.platform || t('dashboard.overview.deviceUnknown') }}
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                {{ formatDeviceLocation(device) }}
+                <span v-if="device.lastLoginIpMasked"> · {{ device.lastLoginIpMasked }}</span>
               </p>
             </div>
           </div>

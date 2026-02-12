@@ -16,10 +16,11 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody<AttestBody>(event)
   const machineCodeHash = typeof body?.machine_code_hash === 'string' ? body.machine_code_hash.trim() : ''
+  const fingerprintHash = typeof body?.fingerprint_hash === 'string' ? body.fingerprint_hash.trim() : ''
   if (!machineCodeHash)
     throw createSyncError('SYNC_INVALID_PAYLOAD', 400, 'Invalid payload')
 
-  const result = await upsertDeviceAttestation(event, userId, deviceId, machineCodeHash)
+  const result = await upsertDeviceAttestation(event, userId, deviceId, machineCodeHash, fingerprintHash || null)
 
   const response: AttestResponse = {
     ok: true,
@@ -28,4 +29,3 @@ export default defineEventHandler(async (event) => {
   }
   return response
 })
-
