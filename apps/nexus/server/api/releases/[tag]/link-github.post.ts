@@ -1,6 +1,6 @@
 import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 import { createError, readBody } from 'h3'
-import { requireAdmin } from '../../../utils/auth'
+import { requireAdminOrApiKey } from '../../../utils/auth'
 import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
 
 interface LinkGitHubAssetInput {
@@ -14,7 +14,7 @@ interface LinkGitHubAssetInput {
 }
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
+  await requireAdminOrApiKey(event, ['release:sync'])
 
   const tag = event.context.params?.tag
 

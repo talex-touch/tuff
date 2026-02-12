@@ -5,18 +5,27 @@ import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
 interface UpdateFormState {
-  title: string
-  summary: string
+  titleZh: string
+  titleEn: string
+  summaryZh: string
+  summaryEn: string
   tags: string
   link: string
   timestamp: string
 }
 
+interface LocalizedText {
+  zh: string
+  en: string
+}
+
 interface DashboardUpdate {
   id: string
-  title: string
+  type: 'news' | 'release'
+  releaseTag: string | null
+  title: LocalizedText
   timestamp: string
-  summary: string
+  summary: LocalizedText
   tags: string[]
   link: string
 }
@@ -40,8 +49,10 @@ const error = ref<string | null>(null)
 const todayInput = () => new Date().toISOString().slice(0, 10)
 
 const form = reactive<UpdateFormState>({
-  title: '',
-  summary: '',
+  titleZh: '',
+  titleEn: '',
+  summaryZh: '',
+  summaryEn: '',
   tags: '',
   link: '',
   timestamp: todayInput(),
@@ -51,15 +62,19 @@ watch(() => props.open, (isOpen) => {
   if (isOpen) {
     error.value = null
     if (props.mode === 'edit' && props.update) {
-      form.title = props.update.title
-      form.summary = props.update.summary
+      form.titleZh = (props.update.title as unknown as LocalizedText)?.zh || (props.update.title as unknown as LocalizedText)?.en || ''
+      form.titleEn = (props.update.title as unknown as LocalizedText)?.en || (props.update.title as unknown as LocalizedText)?.zh || ''
+      form.summaryZh = (props.update.summary as unknown as LocalizedText)?.zh || (props.update.summary as unknown as LocalizedText)?.en || ''
+      form.summaryEn = (props.update.summary as unknown as LocalizedText)?.en || (props.update.summary as unknown as LocalizedText)?.zh || ''
       form.tags = props.update.tags.join(', ')
       form.link = props.update.link
       form.timestamp = props.update.timestamp?.slice(0, 10) || todayInput()
     }
     else {
-      form.title = ''
-      form.summary = ''
+      form.titleZh = ''
+      form.titleEn = ''
+      form.summaryZh = ''
+      form.summaryEn = ''
       form.tags = ''
       form.link = ''
       form.timestamp = todayInput()
@@ -81,9 +96,29 @@ async function submit() {
       .map(tag => tag.trim())
       .filter(Boolean)
 
+    const titleZh = form.titleZh.trim()
+    const titleEn = form.titleEn.trim()
+    const summaryZh = form.summaryZh.trim()
+    const summaryEn = form.summaryEn.trim()
+
+    const resolvedTitle = {
+      zh: titleZh || titleEn,
+      en: titleEn || titleZh,
+    }
+    const resolvedSummary = {
+      zh: summaryZh || summaryEn,
+      en: summaryEn || summaryZh,
+    }
+
+    if (!resolvedTitle.zh && !resolvedTitle.en)
+      throw new Error(t('dashboard.sections.updates.form.titleRequired', 'Title is required.'))
+
+    if (!resolvedSummary.zh && !resolvedSummary.en)
+      throw new Error(t('dashboard.sections.updates.form.summaryRequired', 'Summary is required.'))
+
     const payload = {
-      title: form.title.trim(),
-      summary: form.summary.trim(),
+      title: resolvedTitle,
+      summary: resolvedSummary,
       link: form.link.trim(),
       tags,
       timestamp: timestampIso,
@@ -125,11 +160,19 @@ async function submit() {
       </div>
 
       <form class="flex-1 space-y-4 overflow-y-auto pt-4" @submit.prevent="submit">
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.title') }}
-          </label>
-          <Input v-model="form.title" type="text" required />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.titleZh') }}
+            </label>
+            <Input v-model="form.titleZh" type="text" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.titleEn') }}
+            </label>
+            <Input v-model="form.titleEn" type="text" />
+          </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -139,11 +182,19 @@ async function submit() {
           <Input v-model="form.timestamp" type="date" required />
         </div>
 
-        <div class="flex flex-col gap-1.5">
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.form.summary') }}
-          </label>
-          <Input v-model="form.summary" type="textarea" :rows="4" required />
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.summaryZh') }}
+            </label>
+            <Input v-model="form.summaryZh" type="textarea" :rows="4" />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.summaryEn') }}
+            </label>
+            <Input v-model="form.summaryEn" type="textarea" :rows="4" />
+          </div>
         </div>
 
         <div class="flex flex-col gap-1.5">

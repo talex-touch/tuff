@@ -1,7 +1,5 @@
 <script setup lang="ts" name="SettingUser">
-import { CloudSyncError, CloudSyncSDK, type KeyringMeta } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
@@ -9,50 +7,25 @@ import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import {
-  getAppAuthToken,
-  getAppDeviceId,
-  getAuthBaseUrl,
-  isLocalAuthMode
-} from '~/modules/auth/auth-env'
+import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
+import { startAutoSync, stopAutoSync, triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
 const {
   isLoggedIn,
-  currentUser,
   user,
   getDisplayName,
   getPrimaryEmail,
-  openLoginSettings,
   loginWithBrowser,
   logout,
-  authLoadingState,
-  requestStepUp,
-  getStepUpToken,
-  runWithStepUpToken
+  runSyncBootstrap,
+  authLoadingState
 } = useAuth()
-const appSdk = useAppSdk()
 
 const profileEditorVisible = ref(false)
-const syncSecurityVisible = ref(false)
-const syncLoading = ref(false)
 const syncSubmitting = ref(false)
-const syncStatus = ref('')
-const syncRecoveredCount = ref<number | null>(null)
-const syncKeyrings = ref<KeyringMeta[]>([])
-
-const syncIssueForm = reactive({
-  targetDeviceId: '',
-  keyType: 'uk',
-  encryptedKey: '',
-  recoveryCodeHash: ''
-})
-
-const syncRecoverForm = reactive({
-  recoveryCode: ''
-})
 
 function ensureSecuritySettings() {
   if (!appSetting.security) {
@@ -68,33 +41,96 @@ function ensureSecuritySettings() {
 
 ensureSecuritySettings()
 
-const displayName = computed(() => {
-  const name = getDisplayName()
-  if (name) return name
-  return currentUser.value?.name || ''
-})
-
-const displayEmail = computed(() => {
-  const email = getPrimaryEmail()
-  if (email) return email
-  return currentUser.value?.email || ''
-})
-
-const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
+const displayName = computed(() => getDisplayName())
+const displayEmail = computed(() => getPrimaryEmail())
+const avatarUrl = computed(() => user.value?.avatar || '')
 
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'
 })
 
-const stepUpReady = computed(() => Boolean(getStepUpToken()))
-
-const syncKeyringSummary = computed(() => {
-  const total = syncKeyrings.value.length
-  if (!total) return '暂无 keyring 记录'
-  const devices = new Set(syncKeyrings.value.map((item) => item.device_id).filter(Boolean)).size
-  return `共 ${total} 条 keyring，设备数 ${devices}`
+const syncEnabled = computed({
+  get: () => getSyncPreferenceState().enabled,
+  set: (val: boolean) => {
+    const enabled = Boolean(val)
+    setSyncPreferenceByUser(enabled)
+    if (enabled && isLoggedIn.value) {
+      void runSyncBootstrap()
+        .then((bootstrapped) => {
+          if (bootstrapped) {
+            return startAutoSync()
+          }
+          return undefined
+        })
+        .catch(() => {
+          // ignore sync bootstrap failure on manual toggle
+        })
+    } else if (!enabled) {
+      stopAutoSync('user-disabled')
+    }
+  }
 })
+
+const syncToggleDescription = computed(() => {
+  const sync = getSyncPreferenceState()
+  if (syncEnabled.value) {
+    return sync.autoEnabledAt ? '登录后默认启用，可在此关闭。' : '同步已开启。'
+  }
+  return sync.userOverridden ? '你已手动关闭，同步不会在登录时自动恢复。' : '同步已关闭。'
+})
+
+function formatIsoTime(value: string): string {
+  const normalized = value.trim()
+  if (!normalized) {
+    return '未记录'
+  }
+  const timestamp = Date.parse(normalized)
+  if (!Number.isFinite(timestamp)) {
+    return normalized
+  }
+  return new Date(timestamp).toLocaleString()
+}
+
+const syncRuntimeDescription = computed(() => {
+  const sync = getSyncPreferenceState()
+  const statusTextMap: Record<string, string> = {
+    idle: '空闲',
+    syncing: '同步中',
+    paused: '已暂停',
+    error: '异常'
+  }
+  const statusText = statusTextMap[sync.status] ?? sync.status
+  const lastSuccess = formatIsoTime(sync.lastSuccessAt ?? '')
+  const queueDepth = Number.isFinite(sync.queueDepth) ? sync.queueDepth : 0
+  const lastPush = formatIsoTime(sync.lastPushAt ?? '')
+  const lastPull = formatIsoTime(sync.lastPullAt ?? '')
+  const errorCode = (sync.lastErrorCode ?? '').trim()
+  const blockedTextMap: Record<string, string> = {
+    quota: '配额受限',
+    device: '设备未授权',
+    auth: '鉴权异常'
+  }
+  const blockedText = blockedTextMap[sync.blockedReason] ?? ''
+  const parts = [
+    `状态：${statusText}`,
+    `最近成功：${lastSuccess}`,
+    `最近推送：${lastPush}`,
+    `最近拉取：${lastPull}`,
+    `队列：${queueDepth}`
+  ]
+  if (blockedText) {
+    parts.push(`阻塞：${blockedText}`)
+  }
+  if (errorCode) {
+    parts.push(`错误：${errorCode}`)
+  }
+  return parts.join(' · ')
+})
+
+const canTriggerManualSync = computed(
+  () => isLoggedIn.value && syncEnabled.value && !syncSubmitting.value
+)
 
 const machineSeedMigratedAt = computed(() => {
   const value = appSetting.security?.machineSeedMigratedAt
@@ -105,9 +141,10 @@ const isDev = import.meta.env.DEV
 const useLocalServer = computed({
   get: () => appSetting?.dev?.authServer === 'local',
   set: (val: boolean) => {
-    if (appSetting?.dev) {
-      appSetting.dev.authServer = val ? 'local' : 'production'
+    if (!appSetting?.dev) {
+      return
     }
+    appSetting.dev.authServer = val ? 'local' : 'production'
   }
 })
 
@@ -119,181 +156,10 @@ const allowLegacySeedFallback = computed({
   }
 })
 
-function createCloudSyncSdk(): CloudSyncSDK {
-  return new CloudSyncSDK({
-    baseUrl: getAuthBaseUrl(),
-    getAuthToken: () => {
-      const token = getAppAuthToken()
-      if (!token) throw new Error('登录状态已失效，请重新登录')
-      return token
-    },
-    getDeviceId: () => {
-      const deviceId = getAppDeviceId()
-      if (!deviceId) throw new Error('设备 ID 不可用')
-      return deviceId
-    }
-  })
-}
-
-function getCloudSyncErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof CloudSyncError) {
-    if (typeof error.data === 'object' && error.data && 'message' in error.data) {
-      const detail = (error.data as { message?: unknown }).message
-      if (typeof detail === 'string' && detail.trim()) {
-        return detail
-      }
-    }
-    if (typeof error.errorCode === 'string' && error.errorCode) {
-      return error.errorCode
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-
-  return fallback
-}
-
-function formatKeyringTime(value: string | null): string {
-  if (!value) return '-'
-  const timestamp = Date.parse(value)
-  if (!Number.isFinite(timestamp)) return value
-  return new Date(timestamp).toLocaleString()
-}
-
-function resetSyncStatus() {
-  syncStatus.value = ''
-}
-
-async function refreshSyncKeyrings(showToast = false) {
-  if (isLocalAuthMode()) {
-    return
-  }
-
-  try {
-    syncLoading.value = true
-    const sdk = createCloudSyncSdk()
-    syncKeyrings.value = await sdk.listKeyrings()
-    if (showToast) {
-      toast.success('同步密钥列表已刷新')
-    }
-  } catch (error) {
-    const message = getCloudSyncErrorMessage(error, '获取同步密钥失败')
-    syncStatus.value = message
-    if (showToast) {
-      toast.error(message)
-    }
-  } finally {
-    syncLoading.value = false
-  }
-}
-
-function openSyncSecurityPanel() {
-  if (isLocalAuthMode()) {
-    toast.info('本地模式不支持云同步安全面板')
-    return
-  }
-
-  if (!syncIssueForm.targetDeviceId) {
-    syncIssueForm.targetDeviceId = getAppDeviceId() ?? ''
-  }
-  syncSecurityVisible.value = true
-  resetSyncStatus()
-  syncRecoveredCount.value = null
-  void refreshSyncKeyrings(false)
-}
-
-async function handleRecoverDeviceKeys() {
-  if (isLocalAuthMode()) {
-    toast.info('本地模式不支持云端密钥恢复')
-    return
-  }
-
-  const recoveryCode = syncRecoverForm.recoveryCode.trim()
-  if (!recoveryCode) {
-    syncStatus.value = '请先输入恢复码'
-    return
-  }
-
-  try {
-    syncSubmitting.value = true
-    resetSyncStatus()
-    const sdk = createCloudSyncSdk()
-    const keyrings = await runWithStepUpToken((stepUpToken) =>
-      sdk.recoverDevice({ recovery_code: recoveryCode }, { stepUpToken })
-    )
-    syncRecoveredCount.value = keyrings.length
-    syncStatus.value = `恢复成功，共 ${keyrings.length} 条密钥记录`
-    syncRecoverForm.recoveryCode = ''
-    await refreshSyncKeyrings(false)
-  } catch (error) {
-    syncStatus.value = getCloudSyncErrorMessage(error, '恢复密钥失败')
-  } finally {
-    syncSubmitting.value = false
-  }
-}
-
-async function handleIssueDeviceKey() {
-  if (isLocalAuthMode()) {
-    toast.info('本地模式不支持设备密钥授权')
-    return
-  }
-
-  const targetDeviceId = syncIssueForm.targetDeviceId.trim()
-  const keyType = syncIssueForm.keyType.trim()
-  const encryptedKey = syncIssueForm.encryptedKey.trim()
-  const recoveryCodeHash = syncIssueForm.recoveryCodeHash.trim()
-
-  if (!targetDeviceId) {
-    syncStatus.value = '目标设备 ID 不能为空'
-    return
-  }
-
-  if (!keyType) {
-    syncStatus.value = 'key type 不能为空'
-    return
-  }
-
-  if (!encryptedKey) {
-    syncStatus.value = 'encrypted key 不能为空'
-    return
-  }
-
-  try {
-    syncSubmitting.value = true
-    resetSyncStatus()
-    const sdk = createCloudSyncSdk()
-    const result = await runWithStepUpToken((stepUpToken) =>
-      sdk.issueDeviceKey(
-        {
-          target_device_id: targetDeviceId,
-          key_type: keyType,
-          encrypted_key: encryptedKey,
-          recovery_code_hash: recoveryCodeHash || undefined
-        },
-        { stepUpToken }
-      )
-    )
-    syncStatus.value = `授权成功：${result.keyring_id}`
-    syncIssueForm.encryptedKey = ''
-    await refreshSyncKeyrings(false)
-  } catch (error) {
-    syncStatus.value = getCloudSyncErrorMessage(error, '授权设备密钥失败')
-  } finally {
-    syncSubmitting.value = false
-  }
-}
-
 async function handleLogin() {
   try {
-    const result = await loginWithBrowser()
-
-    if (result.success) {
-      console.log('登录结果:', result)
-    }
-  } catch (error) {
-    console.error('登录过程出错:', error)
+    await loginWithBrowser()
+  } catch {
     toast.error(t('settingUser.loginError'))
   }
 }
@@ -302,8 +168,7 @@ async function handleLogout() {
   try {
     await logout()
     toast.success(t('settingUser.logoutSuccess'))
-  } catch (error) {
-    console.error('登出失败:', error)
+  } catch {
     toast.error(t('settingUser.logoutFailed'))
   }
 }
@@ -312,26 +177,27 @@ function openProfileEditor() {
   profileEditorVisible.value = true
 }
 
-function openDeviceManagement() {
-  const devicesUrl = `${getAuthBaseUrl()}/dashboard/devices`
-  void appSdk.openExternal(devicesUrl)
-}
-
-async function handleLoginMethods() {
-  if (isLocalAuthMode()) {
-    toast.info(t('userProfile.loginMethodsLocal'))
+async function handleSyncNow() {
+  if (!isLoggedIn.value) {
     return
   }
+  if (!syncEnabled.value) {
+    toast.info('请先开启同步')
+    return
+  }
+  if (syncSubmitting.value) {
+    return
+  }
+
+  syncSubmitting.value = true
   try {
-    const opened = await openLoginSettings()
-    if (!opened) {
-      const loginUrl = `${getAuthBaseUrl()}/dashboard/account`
-      await appSdk.openExternal(loginUrl)
-      toast.info(t('userProfile.loginMethodsWeb'))
-    }
+    await triggerManualSync('user')
+    toast.success('同步完成')
   } catch (error) {
-    console.error('Failed to open login methods:', error)
-    toast.error(t('userProfile.loginMethodsFailed'))
+    const message = error instanceof Error ? error.message : '同步失败'
+    toast.error(message || '同步失败')
+  } finally {
+    syncSubmitting.value = false
   }
 }
 </script>
@@ -365,41 +231,50 @@ async function handleLoginMethods() {
           </div>
         </div>
       </template>
+
       <template #tags>
         <span class="user-tag">
           <span class="i-carbon-checkmark-filled text-xs text-green-500" />
           {{ t('settingUser.verified') }}
         </span>
-        <span v-if="stepUpReady && !isLocalAuthMode()" class="user-tag user-tag-stepup">
-          <span class="i-carbon-two-factor-authentication text-xs" />
-          {{ t('settingUser.stepUpReady', '二次验证已完成') }}
-        </span>
       </template>
+
       <div class="user-actions">
         <TxButton variant="flat" size="sm" @click.stop="openProfileEditor">
           {{ t('settingUser.editProfile') }}
-        </TxButton>
-        <TxButton variant="flat" size="sm" @click.stop="handleLoginMethods">
-          {{ t('settingUser.loginSettings') }}
-        </TxButton>
-        <TxButton v-if="!isLocalAuthMode()" variant="flat" size="sm" @click.stop="requestStepUp">
-          {{ t('settingUser.stepUp', '二次验证') }}
-        </TxButton>
-        <TxButton
-          v-if="!isLocalAuthMode()"
-          variant="flat"
-          size="sm"
-          @click.stop="openSyncSecurityPanel"
-        >
-          {{ t('settingUser.syncSecurity', '同步安全') }}
-        </TxButton>
-        <TxButton variant="flat" size="sm" @click.stop="openDeviceManagement">
-          {{ t('settingUser.deviceManagement') }}
         </TxButton>
         <TxButton variant="flat" type="danger" size="sm" @click.stop="handleLogout">
           {{ t('settingUser.logout') }}
         </TxButton>
       </div>
+    </TuffBlockSlot>
+
+    <TuffBlockSwitch
+      v-if="isLoggedIn"
+      v-model="syncEnabled"
+      :title="t('settingUser.syncEnabledTitle', '默认同步')"
+      :description="syncToggleDescription"
+      default-icon="i-carbon-cloud-satellite-config"
+      active-icon="i-carbon-cloud-satellite"
+    />
+
+    <TuffBlockSlot
+      v-if="isLoggedIn"
+      :title="t('settingUser.syncStatusTitle', '同步状态')"
+      :description="syncRuntimeDescription"
+      default-icon="i-carbon-time"
+      active-icon="i-carbon-time"
+    >
+      <TxButton
+        variant="flat"
+        size="sm"
+        type="primary"
+        :loading="syncSubmitting"
+        :disabled="!canTriggerManualSync"
+        @click.stop="handleSyncNow"
+      >
+        {{ t('settingUser.syncNow', '立即同步') }}
+      </TxButton>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -421,15 +296,6 @@ async function handleLoginMethods() {
     </TuffBlockSlot>
 
     <TuffBlockSwitch
-      v-if="isDev && isLoggedIn"
-      v-model="allowLegacySeedFallback"
-      :title="t('settingUser.allowLegacySeedFallback', '允许明文 machine seed 回退（调试）')"
-      :description="machineSeedMigratedAt ? `已迁移：${machineSeedMigratedAt}` : '未检测到迁移记录'"
-      default-icon="i-carbon-security"
-      active-icon="i-carbon-security"
-    />
-
-    <TuffBlockSwitch
       v-if="isDev && !isLoggedIn"
       v-model="useLocalServer"
       :title="t('settingUser.devAuthServer', '本地服务器')"
@@ -437,131 +303,21 @@ async function handleLoginMethods() {
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
     />
+
+    <TuffBlockSwitch
+      v-if="isDev && isLoggedIn"
+      v-model="allowLegacySeedFallback"
+      :title="t('settingUser.allowLegacySeedFallback', '允许明文 machine seed 回退（调试）')"
+      :description="machineSeedMigratedAt ? `已迁移：${machineSeedMigratedAt}` : '未检测到迁移记录'"
+      default-icon="i-carbon-security"
+      active-icon="i-carbon-security"
+    />
   </TuffGroupBlock>
 
   <TModal v-model="profileEditorVisible" :title="t('userProfile.editTitle', 'Edit profile')">
     <UserProfileEditor :visible="profileEditorVisible" />
     <template #footer>
       <TxButton variant="ghost" @click="profileEditorVisible = false">
-        {{ t('common.close') }}
-      </TxButton>
-    </template>
-  </TModal>
-
-  <TModal
-    v-model="syncSecurityVisible"
-    :title="t('settingUser.syncSecurity', '同步安全')"
-    width="760px"
-  >
-    <div class="sync-panel">
-      <div class="sync-header">
-        <div class="sync-summary">{{ syncKeyringSummary }}</div>
-        <div v-if="syncRecoveredCount !== null" class="sync-summary">
-          最近恢复：{{ syncRecoveredCount }} 条
-        </div>
-        <div class="sync-actions">
-          <TxButton
-            variant="flat"
-            size="sm"
-            :loading="syncLoading"
-            @click="refreshSyncKeyrings(true)"
-          >
-            刷新
-          </TxButton>
-          <TxButton variant="flat" size="sm" @click="requestStepUp"> 二次验证 </TxButton>
-        </div>
-      </div>
-
-      <div v-if="syncStatus" class="sync-status">{{ syncStatus }}</div>
-
-      <div v-if="syncKeyrings.length" class="sync-list">
-        <div v-for="item in syncKeyrings" :key="item.keyring_id" class="sync-item">
-          <div class="sync-item-main">
-            <div class="sync-item-line">
-              <span class="sync-item-label">device</span>
-              <span class="sync-item-value">{{ item.device_id }}</span>
-            </div>
-            <div class="sync-item-line">
-              <span class="sync-item-label">type</span>
-              <span class="sync-item-value">{{ item.key_type }}</span>
-            </div>
-            <div class="sync-item-line">
-              <span class="sync-item-label">created</span>
-              <span class="sync-item-value">{{ formatKeyringTime(item.created_at) }}</span>
-            </div>
-            <div class="sync-item-line">
-              <span class="sync-item-label">rotated</span>
-              <span class="sync-item-value">{{ formatKeyringTime(item.rotated_at) }}</span>
-            </div>
-          </div>
-          <div class="sync-item-meta">
-            <span class="sync-chip" :class="item.has_recovery_code ? 'ok' : 'warn'">
-              {{ item.has_recovery_code ? 'has recovery code' : 'no recovery code' }}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div v-else class="sync-empty">暂无 keyring 数据</div>
-
-      <div class="sync-forms">
-        <div class="sync-form">
-          <div class="sync-form-title">恢复设备密钥</div>
-          <input
-            v-model="syncRecoverForm.recoveryCode"
-            class="sync-input"
-            type="password"
-            placeholder="输入 Recovery Code"
-          />
-          <TxButton
-            variant="flat"
-            type="primary"
-            :loading="syncSubmitting"
-            @click="handleRecoverDeviceKeys"
-          >
-            执行恢复
-          </TxButton>
-        </div>
-
-        <div class="sync-form">
-          <div class="sync-form-title">授权设备密钥</div>
-          <input
-            v-model="syncIssueForm.targetDeviceId"
-            class="sync-input"
-            type="text"
-            placeholder="target device id"
-          />
-          <input
-            v-model="syncIssueForm.keyType"
-            class="sync-input"
-            type="text"
-            placeholder="key type"
-          />
-          <textarea
-            v-model="syncIssueForm.encryptedKey"
-            class="sync-input sync-textarea"
-            rows="3"
-            placeholder="encrypted key"
-          />
-          <input
-            v-model="syncIssueForm.recoveryCodeHash"
-            class="sync-input"
-            type="text"
-            placeholder="recovery code hash (optional)"
-          />
-          <TxButton
-            variant="flat"
-            type="primary"
-            :loading="syncSubmitting"
-            @click="handleIssueDeviceKey"
-          >
-            执行授权
-          </TxButton>
-        </div>
-      </div>
-    </div>
-
-    <template #footer>
-      <TxButton variant="ghost" @click="syncSecurityVisible = false">
         {{ t('common.close') }}
       </TxButton>
     </template>
@@ -582,11 +338,6 @@ async function handleLoginMethods() {
 
 .user-tag + .user-tag {
   margin-left: 6px;
-}
-
-.user-tag-stepup {
-  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
-  color: var(--el-color-primary);
 }
 
 .user-avatar {
@@ -618,142 +369,5 @@ async function handleLoginMethods() {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-}
-
-.sync-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.sync-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-}
-
-.sync-summary {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.sync-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.sync-status {
-  font-size: 12px;
-  color: var(--el-color-primary);
-}
-
-.sync-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 240px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.sync-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: var(--el-fill-color-light);
-}
-
-.sync-item-main {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sync-item-line {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.sync-item-label {
-  color: var(--el-text-color-secondary);
-}
-
-.sync-item-value {
-  color: var(--el-text-color-primary);
-  word-break: break-all;
-}
-
-.sync-item-meta {
-  display: flex;
-  align-items: center;
-}
-
-.sync-chip {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-size: 11px;
-}
-
-.sync-chip.ok {
-  color: var(--el-color-success);
-  background: color-mix(in srgb, var(--el-color-success) 15%, transparent);
-}
-
-.sync-chip.warn {
-  color: var(--el-color-warning);
-  background: color-mix(in srgb, var(--el-color-warning) 15%, transparent);
-}
-
-.sync-empty {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.sync-forms {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.sync-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  padding: 10px;
-}
-
-.sync-form-title {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.sync-input {
-  width: 100%;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
-}
-
-.sync-textarea {
-  resize: vertical;
-}
-
-@media (max-width: 920px) {
-  .sync-forms {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

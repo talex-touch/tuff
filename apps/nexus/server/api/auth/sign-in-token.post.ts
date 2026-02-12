@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
   const { userId, deviceId } = await requireAuth(event)
 
   let appToken: string | null = null
-  let primaryError: unknown = null
 
   try {
     if (deviceId !== undefined) {
@@ -26,9 +25,7 @@ export default defineEventHandler(async (event) => {
       appToken = await createAppToken(event, userId)
     }
   }
-  catch (error) {
-    primaryError = error
-    console.warn('[SignInToken] Create token with device binding failed, fallback to session-only token.', error)
+  catch {
   }
 
   if (!appToken) {
@@ -37,10 +34,6 @@ export default defineEventHandler(async (event) => {
     }
     catch (fallbackError) {
       const detail = resolveErrorMessage(fallbackError, 'Failed to create app sign-in token.')
-      console.error('[SignInToken] Failed to create sign-in token (fallback failed):', {
-        primaryError: resolveErrorMessage(primaryError, 'unknown'),
-        fallbackError: detail,
-      })
       throw createError({
         statusCode: 500,
         statusMessage: detail,

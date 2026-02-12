@@ -2,10 +2,11 @@
 import { computed, ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
+import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { deviceId: currentDeviceId, deviceName: currentDeviceName, setDeviceName } = useDeviceIdentity()
 
 interface DeviceItem {
@@ -16,6 +17,16 @@ interface DeviceItem {
   lastSeenAt: string | null
   createdAt: string
   revokedAt: string | null
+  lastLocation?: {
+    countryCode: string | null
+    regionCode: string | null
+    regionName: string | null
+    city: string | null
+    latitude: number | null
+    longitude: number | null
+    updatedAt: string | null
+  } | null
+  lastLoginIpMasked?: string | null
 }
 
 const { data, pending, refresh } = useFetch<DeviceItem[]>('/api/devices')
@@ -24,6 +35,17 @@ const editingId = ref<string | null>(null)
 const renameValue = ref('')
 
 const devices = computed(() => data.value ?? [])
+const expandedMapDeviceId = ref<string | null>(null)
+const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
+
+const countryDisplayNames = computed(() => {
+  try {
+    return new Intl.DisplayNames([localeTag.value], { type: 'region' })
+  }
+  catch {
+    return null
+  }
+})
 
 function isCurrent(device: DeviceItem) {
   return device.id === currentDeviceId.value
@@ -50,6 +72,29 @@ function formatLastActive(value: string | null) {
 function startRename(device: DeviceItem) {
   editingId.value = device.id
   renameValue.value = device.deviceName || currentDeviceName.value || ''
+}
+
+function formatLocation(device: DeviceItem): string {
+  const location = device.lastLocation
+  if (!location) {
+    return t('dashboard.devices.locationUnknown', '位置未知')
+  }
+  const country = location.countryCode
+    ? countryDisplayNames.value?.of(location.countryCode) || location.countryCode
+    : null
+  const pieces = [country, location.regionName || location.regionCode, location.city].filter(Boolean)
+  return pieces.length ? pieces.join(' · ') : t('dashboard.devices.locationUnknown', '位置未知')
+}
+
+function hasCoordinates(device: DeviceItem): boolean {
+  return Number.isFinite(device.lastLocation?.latitude) && Number.isFinite(device.lastLocation?.longitude)
+}
+
+function toggleMap(device: DeviceItem) {
+  if (!hasCoordinates(device)) {
+    return
+  }
+  expandedMapDeviceId.value = expandedMapDeviceId.value === device.id ? null : device.id
 }
 
 function cancelRename() {
@@ -154,11 +199,23 @@ async function revokeDevice(device: DeviceItem) {
               <p class="mt-0.5 text-xs text-black/50 dark:text-white/50">
                 {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }}
               </p>
+              <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
+                {{ formatLocation(device) }}
+                <span v-if="device.lastLoginIpMasked"> · {{ device.lastLoginIpMasked }}</span>
+              </p>
               <p v-if="device.userAgent" class="mt-0.5 text-xs text-black/40 dark:text-white/40">
                 {{ device.userAgent }}
               </p>
             </div>
             <div class="flex items-center gap-2">
+              <TxButton
+                v-if="hasCoordinates(device)"
+                size="small"
+                variant="secondary"
+                @click="toggleMap(device)"
+              >
+                {{ expandedMapDeviceId === device.id ? t('common.collapse', '收起') : t('dashboard.devices.viewLocation', '查看位置') }}
+              </TxButton>
               <TxButton v-if="editingId !== device.id" size="small" variant="secondary" @click="startRename(device)">
                 {{ t('dashboard.devices.rename', '重命名') }}
               </TxButton>
@@ -166,6 +223,19 @@ async function revokeDevice(device: DeviceItem) {
                 {{ t('dashboard.devices.revoke', '踢出') }}
               </TxButton>
             </div>
+          </div>
+
+          <div v-if="expandedMapDeviceId === device.id && hasCoordinates(device)" class="rounded-xl border border-black/[0.05] bg-black/[0.03] p-2 dark:border-white/[0.08] dark:bg-white/[0.04]">
+            <GeoLeafletMap
+              :height="220"
+              :points="[{
+                id: device.id,
+                label: device.deviceName || t('dashboard.devices.unnamed', '未命名设备'),
+                latitude: device.lastLocation?.latitude ?? null,
+                longitude: device.lastLocation?.longitude ?? null,
+                value: 1,
+              }]"
+            />
           </div>
 
           <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2">

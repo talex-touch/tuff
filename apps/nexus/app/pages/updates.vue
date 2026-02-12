@@ -5,6 +5,22 @@ import { computed, ref, watch } from 'vue'
 import { detectArch, detectPlatform, findAssetForPlatform, formatFileSize, getArchLabel, getPlatformLabel, resolveReleaseNotesHtml } from '~/composables/useReleases'
 import { mapApiChannelToLocal, mapLocalChannelToApi, releaseChannels } from '~/data/updates'
 
+interface LocalizedText {
+  zh: string
+  en: string
+}
+
+interface DashboardUpdate {
+  id: string
+  type: 'news' | 'release'
+  releaseTag: string | null
+  title: LocalizedText
+  timestamp: string
+  summary: LocalizedText
+  tags: string[]
+  link: string
+}
+
 definePageMeta({
   layout: 'home',
   pageTransition: {
@@ -21,6 +37,9 @@ const route = useRoute()
 const router = useRouter()
 
 const { releases, loading, fetchReleases } = useReleases()
+const { data: updatesPayload } = await useAsyncData('public-updates', () =>
+  $fetch<{ updates: DashboardUpdate[] }>('/api/updates'),
+)
 const channelIds = releaseChannels.map(channel => channel.id)
 
 // Detect user's platform
@@ -136,6 +155,23 @@ const latestReleaseNotes = computed(() => {
   )
 })
 
+const updateItems = computed(() => updatesPayload.value?.updates ?? [])
+const updateList = computed(() => updateItems.value.slice(0, 6))
+const hasUpdateList = computed(() => updateList.value.length > 0)
+const isZh = computed(() => locale.value.startsWith('zh'))
+
+function resolveUpdateText(text: LocalizedText) {
+  if (isZh.value)
+    return text.zh || text.en
+  return text.en || text.zh
+}
+
+function updateTypeLabel(update: DashboardUpdate) {
+  return update.type === 'release'
+    ? t('updates.news.typeRelease', '更新')
+    : t('updates.news.typeNews', '要闻')
+}
+
 watch(historyExpanded, (expanded) => {
   const nextQuery = expanded
     ? { ...route.query, history: '1' }
@@ -189,6 +225,65 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
       </p>
     </header>
 
+    <section class="mx-auto max-w-4xl w-full animate-fade-in-up" style="animation-delay: 60ms;">
+      <div class="rounded-2xl border border-gray-200 bg-white/80 p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800/70">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('updates.news.title') }}
+            </h2>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('updates.news.subtitle') }}
+            </p>
+          </div>
+          <span class="text-xs text-gray-400 dark:text-gray-500">
+            {{ t('updates.news.latestHint') }}
+          </span>
+        </div>
+
+        <div v-if="hasUpdateList" class="mt-4 space-y-3">
+          <div
+            v-for="update in updateList"
+            :key="update.id"
+            class="rounded-xl border border-gray-200/70 bg-gray-50/70 p-4 transition hover:bg-white dark:border-gray-700/60 dark:bg-gray-900/40 dark:hover:bg-gray-900/60"
+          >
+            <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span>{{ formatReleaseDate(update.timestamp) }}</span>
+              <span
+                class="rounded-md px-2 py-0.5 text-[10px] font-medium"
+                :class="update.type === 'release'
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                  : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200'"
+              >
+                {{ updateTypeLabel(update) }}
+              </span>
+              <span
+                v-for="tag in update.tags.slice(0, 2)"
+                :key="tag"
+                class="rounded-md bg-gray-200 px-1.5 py-0.5 text-[10px] text-gray-600 dark:bg-gray-700 dark:text-gray-300"
+              >
+                {{ tag }}
+              </span>
+            </div>
+            <a
+              :href="update.link"
+              :target="update.link.startsWith('http') ? '_blank' : undefined"
+              rel="noopener"
+              class="mt-2 block text-sm font-semibold text-gray-900 transition hover:text-blue-600 dark:text-white dark:hover:text-blue-300"
+            >
+              {{ resolveUpdateText(update.title) }}
+            </a>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {{ resolveUpdateText(update.summary) }}
+            </p>
+          </div>
+        </div>
+        <p v-else class="mt-4 text-sm text-gray-500 dark:text-gray-400">
+          {{ t('updates.news.empty') }}
+        </p>
+      </div>
+    </section>
+
     <!-- Channel Selector -->
     <div class="mx-auto max-w-2xl w-full animate-fade-in-up" style="animation-delay: 100ms;">
       <div class="flex gap-2 rounded-xl bg-gray-100 p-1.5 dark:bg-gray-800/80">
@@ -219,7 +314,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
         class="mx-auto max-w-3xl w-full animate-fade-in-up"
         style="animation-delay: 200ms;"
       >
-        <div class="release-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8 dark:border-gray-700 dark:bg-gray-800/80">
+        <div :id="latestRelease.tag" class="release-card rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8 dark:border-gray-700 dark:bg-gray-800/80">
           <!-- Release Header -->
           <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
             <div class="flex flex-col gap-2">
@@ -329,6 +424,7 @@ function getDownloadLabel(asset: { platform: string, arch: string }) {
           <div class="divide-y divide-gray-100 dark:divide-gray-700">
             <div
               v-for="release in historyReleases"
+              :id="release.tag"
               :key="release.tag"
               class="release-row flex items-center justify-between gap-4 p-4 transition hover:bg-gray-50 dark:hover:bg-gray-700/50"
             >

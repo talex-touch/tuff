@@ -108,12 +108,42 @@ const schemaHandlers: SchemaHandler[] = [
   }
 ]
 
+function normalizeSchemaRoute(url: URL): string {
+  const hostname = (url.hostname || '').trim().toLowerCase()
+  const pathname = url.pathname || '/'
+
+  if (!hostname) {
+    return pathname
+  }
+
+  if (pathname === '/' || !pathname) {
+    return `/${hostname}`
+  }
+
+  return `/${hostname}${pathname.startsWith('/') ? pathname : `/${pathname}`}`
+}
+
+function maskSchemaUrlForLog(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl)
+    const sensitiveKeys = ['token', 'app_token', 'login_token']
+    sensitiveKeys.forEach((key) => {
+      if (!url.searchParams.has(key)) return
+      const value = url.searchParams.get(key) || ''
+      url.searchParams.set(key, value ? `***(${value.length})` : '***')
+    })
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
+}
+
 function onSchema(rawUrl: string): void {
-  addonOpenerLog.info(`Opened schema: ${rawUrl}`)
+  addonOpenerLog.debug(`Opened schema: ${maskSchemaUrlForLog(rawUrl)}`)
 
   try {
     const url = new URL(rawUrl)
-    const pathname = url.pathname
+    const pathname = normalizeSchemaRoute(url)
 
     for (const { pattern, handler } of schemaHandlers) {
       const matches = pathname.match(pattern)
@@ -123,7 +153,12 @@ function onSchema(rawUrl: string): void {
       }
     }
 
-    addonOpenerLog.warn(`No handler matched for path: ${pathname}`)
+    addonOpenerLog.warn(`No handler matched for path: ${pathname}`, {
+      meta: {
+        host: url.hostname,
+        rawPathname: url.pathname
+      }
+    })
   } catch (error) {
     addonOpenerLog.error('Failed to parse schema URL', { error })
   }
@@ -172,29 +207,19 @@ export class AddonOpenerModule extends BaseModule {
           }
         })
       }
-      addonOpenerLog.info(`Set as default protocol handler: ${APP_SCHEMA}`)
+      addonOpenerLog.debug(`Set as default protocol handler: ${APP_SCHEMA}`)
     }
 
     if (!$app.app.isDefaultProtocolClient(APP_SCHEMA)) {
       registerProtocol()
     } else {
-      addonOpenerLog.info(`Already registered as protocol handler: ${APP_SCHEMA}`)
+      addonOpenerLog.debug(`Already registered as protocol handler: ${APP_SCHEMA}`)
     }
-
-    // protocol.registerFileProtocol('touch-plugin', (request, callback) => {
-    //     console.log('[Addon] Protocol opened file: ' + request.url)
-    //     const url = request.url.substr(15)
-    //     const fileExt = path.extname(url)
-    //     if (fileExt === '.touch-plugin') {
-    //         return callback({ error: 1, data: 'Unsupported file type' })
-    //     }
-    //     callback({ path: path.normalize(url) })
-    // })
 
     $app.app.on('open-file', (event, filePath) => {
       event.preventDefault()
 
-      addonOpenerLog.info(`Opened file: ${filePath}`)
+      addonOpenerLog.debug(`Opened file: ${filePath}`)
 
       win.previewFile(filePath)
 

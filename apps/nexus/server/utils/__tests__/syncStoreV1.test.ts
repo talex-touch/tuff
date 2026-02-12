@@ -450,7 +450,7 @@ describe('syncStoreV1 flow', () => {
     }
     await pushSyncItemsV1(event, 'user-1', 'device-1', [item])
 
-    const pulled = await pullSyncItemsV1(event, 'user-1', 0, 10)
+    const pulled = await pullSyncItemsV1(event, 'user-1', 'device-1', 0, 10)
     expect(pulled.oplog).toHaveLength(1)
     expect(pulled.items).toHaveLength(1)
     expect(pulled.nextCursor).toBe(1)

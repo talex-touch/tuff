@@ -4,7 +4,7 @@ import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxScroll } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
@@ -14,12 +14,14 @@ interface Props {
   loading?: boolean
   error?: string | null
   isAdmin?: boolean
+  maxScrollHeight?: number | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
   error: null,
   isAdmin: false,
+  maxScrollHeight: null,
 })
 
 const emit = defineEmits<{
@@ -265,6 +267,8 @@ const scrollWrapStyle = computed(() => ({
 }))
 
 function resolveMaxScrollableHeight() {
+  if (typeof props.maxScrollHeight === 'number' && props.maxScrollHeight > 0)
+    return props.maxScrollHeight
   if (!hasWindow())
     return 620
   const viewportLimitedHeight = Math.floor(window.innerHeight * 0.66)
@@ -322,6 +326,10 @@ watch(scrollAreaHeight, () => {
 
 watch(inputMode, () => scheduleLayoutMeasure())
 watch([manifestPreview, packageLoading, packageError], () => scheduleLayoutMeasure())
+watch(() => props.maxScrollHeight, () => {
+  maxScrollableHeight.value = resolveMaxScrollableHeight()
+  scheduleLayoutMeasure()
+})
 
 onMounted(() => {
   if (!hasWindow())
@@ -560,6 +568,7 @@ function onSubmit() {
 
 .AssetPluginFormStep-Card {
   width: 100%;
+  min-height: 0;
 }
 
 .AssetPluginFormStep-Mode {
@@ -610,6 +619,9 @@ function onSubmit() {
 
 .AssetPluginFormStep-ScrollWrap {
   margin-top: 12px;
+
+  height: 420px;
+  max-height: 620px;
   min-height: 240px;
   overflow: hidden;
 }

@@ -1,0 +1,72 @@
+---
+title: "TuffLogoStroke"
+description: "Stroke animation for the current Tuff logo SVG, with once, breathe, and hover trigger modes."
+category: Basic
+syncStatus: migrated
+---
+# TuffLogoStroke
+
+Stroke animation for the current Tuff logo SVG, with once, breathe, and hover trigger modes.
+
+## Animation modes
+
+### Modes
+:::TuffDemoWrapper{demo="TuffLogoStrokeModesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; flex-wrap: wrap; gap: 18px; align-items: center;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <TxTuffLogoStroke :size="84" mode="once" />
+        <span style="font-size: 12px; opacity: 0.72;">once</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <TxTuffLogoStroke :size="84" mode="breathe" />
+        <span style="font-size: 12px; opacity: 0.72;">breathe</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+        <TxTuffLogoStroke :size="84" mode="hover" />
+        <span style="font-size: 12px; opacity: 0.72;">hover me</span>
+      </div>
+    </div>
+  </template>
+---
+:::
+
+## Palette and duration customization
+
+### Palette
+:::TuffDemoWrapper{demo="TuffLogoStrokePaletteDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTuffLogoStroke
+      :size="128"
+      mode="breathe"
+      :duration-ms="2800"
+      stroke-color="#3b82f6"
+      fill-start-color="#0ea5e9"
+      fill-end-color="#8b5cf6"
+      outer-start-color="#fb7185"
+      outer-end-color="#7e22ce"
+    />
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `size` | `string \| number` | `120` | Icon width and height |
+| `mode` | `'once' \| 'breathe' \| 'hover' \| 'loop'` | `'once'` | Animation mode (`loop` is an alias for `breathe`) |
+| `durationMs` | `number` | `2200` | Animation duration (ms) |
+| `strokeColor` | `string` | `#4C4CFF` | Outer stroke color |
+| `fillStartColor` | `string` | `#199FFE` | Start color of core gradient |
+| `fillEndColor` | `string` | `#810DC6` | End color of core gradient |
+| `outerStartColor` | `string` | `#D73E4D` | Start color of outer ring gradient |
+| `outerEndColor` | `string` | `#7F007F` | End color of outer ring gradient |

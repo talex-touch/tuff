@@ -73,7 +73,7 @@ export async function processSearchResults(
         updateMatch(
           'name-fuzzy',
           indicesToRanges(fuzzyResult.matchedIndices),
-          fuzzyResult.score * 0.3, // 模糊匹配分数较低
+          fuzzyResult.score * 0.5, // edit distance 0 → ~0.5, distance 1 → ~0.4
           displayName
         )
       } else {
@@ -95,10 +95,11 @@ export async function processSearchResults(
         if (minFuzzyDist <= 2 && bestFuzzyStart !== -1) {
           const clampedStart = Math.max(0, bestFuzzyStart)
           const clampedEnd = Math.min(displayName.length, Math.max(clampedStart + 1, bestFuzzyEnd))
+          // edit distance 1 → 0.5, distance 2 → 0.3
           updateMatch(
             'name-fuzzy',
             [{ start: clampedStart, end: clampedEnd }],
-            0.1 + (2 - minFuzzyDist) * 0.05,
+            minFuzzyDist === 1 ? 0.5 : 0.3,
             displayName
           )
         }
@@ -158,6 +159,28 @@ export async function processSearchResults(
         } else if (firstPinyin.includes(lowerCaseQuery)) {
           updateMatch('initials', calculateHighlights(title, lowerCaseQuery), 0.6, title)
         }
+      }
+    }
+
+    // Path match: check if query appears in the app path
+    if (app.path) {
+      const normalizedPath = app.path.toLowerCase()
+      if (normalizedPath.includes(lowerCaseQuery)) {
+        updateMatch('path', calculateHighlights(displayName, lowerCaseQuery), 0.35, displayName)
+      }
+    }
+
+    // Description match: check if query appears in app description (via extensions)
+    const description = app.extensions.description
+    if (description) {
+      const normalizedDesc = description.toLowerCase()
+      if (normalizedDesc.includes(lowerCaseQuery)) {
+        updateMatch(
+          'description',
+          calculateHighlights(displayName, lowerCaseQuery),
+          0.4,
+          displayName
+        )
       }
     }
 

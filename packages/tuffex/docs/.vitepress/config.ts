@@ -196,6 +196,8 @@ export default defineConfig({
             { text: '渐变模糊 GradualBlur', link: '/components/gradual-blur' },
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
             { text: '扫光 GlowText', link: '/components/glow-text' },
+            { text: '关键帧描边 KeyframeStrokeText', link: '/components/keyframe-stroke-text' },
+            { text: 'Logo 描边 TuffLogoStroke', link: '/components/tuff-logo-stroke' },
           ],
         },
       ],

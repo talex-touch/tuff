@@ -36,6 +36,7 @@ import { useCoreBoxTheme } from './theme'
 import BoxInput from './BoxInput.vue'
 import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
+import IndexingHintTag from './tag/IndexingHintTag.vue'
 import TagSection from './tag/TagSection.vue'
 
 declare global {
@@ -589,6 +590,7 @@ const customCss = computed(() => {
         />
 
         <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
+          <IndexingHintTag :query="searchVal" />
           <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
         </div>
       </template>

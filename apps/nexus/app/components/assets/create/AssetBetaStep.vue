@@ -55,7 +55,7 @@ const { t } = useI18n()
 
 <style scoped>
 .AssetBetaStep {
-  width: min(760px, 90vw);
+  width: min(700px, 90vw);
   padding: 12px;
 }
 

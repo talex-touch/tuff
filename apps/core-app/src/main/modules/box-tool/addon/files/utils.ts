@@ -62,7 +62,13 @@ export function mapFileToTuffItem(
 
   let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
-  if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
+  if (_extensions.thumbnail) {
+    // Use pre-generated thumbnail for fast display
+    icon = {
+      type: 'url',
+      value: _extensions.thumbnail
+    }
+  } else if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
     icon = {
       type: 'file',
       value: file.path

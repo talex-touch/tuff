@@ -49,6 +49,14 @@ import { getUsageStatsBatchCached, UsageStatsCache } from './usage-stats-cache'
 import { UsageStatsQueue } from './usage-stats-queue'
 import { UsageSummaryService } from './usage-summary-service'
 
+interface SearchCacheEntry {
+  result: TuffSearchResult
+  timestamp: number
+}
+
+const SEARCH_CACHE_TTL_MS = 5_000
+const SEARCH_CACHE_MAX_SIZE = 100
+
 const searchEngineLog = getLogger('search-engine')
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
@@ -207,10 +215,34 @@ export class SearchEngineCore
   private readonly pollingService = PollingService.getInstance()
   private readonly maintenanceTaskId = 'search-engine.maintenance'
   private providerHealth = new Map<string, ProviderHealth>()
+  private searchCache = new Map<string, SearchCacheEntry>()
 
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
+
+  private cacheSearchResult(
+    query: TuffQuery,
+    providerFilter: string | undefined,
+    result: TuffSearchResult
+  ): void {
+    const cacheKey = `${query.text || ''}:${providerFilter || ''}:${this.activatedProviders ? Array.from(this.activatedProviders.keys()).join(',') : ''}`
+
+    // Evict oldest entries if cache is full
+    if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
+      let oldestKey: string | null = null
+      let oldestTime = Infinity
+      for (const [key, entry] of this.searchCache) {
+        if (entry.timestamp < oldestTime) {
+          oldestTime = entry.timestamp
+          oldestKey = key
+        }
+      }
+      if (oldestKey) this.searchCache.delete(oldestKey)
+    }
+
+    this.searchCache.set(cacheKey, { result, timestamp: Date.now() })
+  }
 
   constructor() {
     if (SearchEngineCore._instance) {
@@ -463,6 +495,14 @@ export class SearchEngineCore
     if (providerFilter) {
       query.text = parsedQuery.text
       searchEngineLog.debug(`Provider filter detected: @${providerFilter}, query: "${query.text}"`)
+    }
+
+    // Fast Layer cache: return cached result for identical queries within TTL
+    const cacheKey = `${query.text || ''}:${providerFilter || ''}:${this.activatedProviders ? Array.from(this.activatedProviders.keys()).join(',') : ''}`
+    const cachedEntry = this.searchCache.get(cacheKey)
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS) {
+      searchEngineLog.debug(`Cache hit for query "${query.text}"`)
+      return cachedEntry.result
     }
 
     const sessionId = crypto.randomUUID()
@@ -798,6 +838,7 @@ export class SearchEngineCore
                   staleResult.sessionId = sessionId
                   resolve(staleResult)
                 } else {
+                  this.cacheSearchResult(query, providerFilter, initialResult)
                   resolve(initialResult)
                 }
               } else {
@@ -901,6 +942,7 @@ export class SearchEngineCore
               return
             }
 
+            this.cacheSearchResult(query, providerFilter, initialResult)
             resolve(initialResult)
             didResolveInitial = true
           } else if (update.newResults.length > 0) {
@@ -1644,6 +1686,7 @@ export class SearchEngineCore
     const db = databaseModule.getDb()
     instance.dbUtils = createDbUtils(db)
     instance.searchIndexService = new SearchIndexService(db)
+    instance.searchIndexService.preloadPinyin()
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
     instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval

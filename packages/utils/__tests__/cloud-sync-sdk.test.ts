@@ -152,6 +152,7 @@ describe('CloudSyncSDK', () => {
 
     const authSpy = vi.spyOn(accountSDK, 'getAuthToken').mockResolvedValue('auth-3')
     const deviceSpy = vi.spyOn(accountSDK, 'getDeviceId').mockResolvedValue('device-3')
+    const recordSpy = vi.spyOn(accountSDK, 'recordSyncActivity').mockResolvedValue()
 
     const sdk = new PluginCloudSyncSDK({
       baseUrl: 'https://example.com',
@@ -178,7 +179,90 @@ describe('CloudSyncSDK', () => {
     await sdk.push([item])
     expect(authSpy).toHaveBeenCalled()
     expect(deviceSpy).toHaveBeenCalled()
+    expect(recordSpy).toHaveBeenCalledWith('push')
 
+    authSpy.mockRestore()
+    deviceSpy.mockRestore()
+    recordSpy.mockRestore()
+  })
+
+  it('plugin sdk records pull activity', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/v1/sync/handshake')) {
+        return createJsonResponse({
+          sync_token: 'sync-3-pull',
+          sync_token_expires_at: '2099-01-01T00:00:00.000Z',
+          server_cursor: 0,
+          device_id: 'device-3',
+          quotas: {
+            limits: { storage_limit_bytes: 100, object_limit: 10, item_limit: 5, device_limit: 3 },
+            usage: { used_storage_bytes: 0, used_objects: 0, used_devices: 1 },
+          },
+        })
+      }
+      if (url.includes('/api/v1/sync/pull')) {
+        const headers = new Headers(init?.headers as HeadersInit)
+        expect(headers.get('x-sync-token')).toBe('sync-3-pull')
+        return createJsonResponse({ items: [], oplog: [], next_cursor: 0 })
+      }
+      return createJsonResponse({}, 404)
+    })
+
+    const authSpy = vi.spyOn(accountSDK, 'getAuthToken').mockResolvedValue('auth-3')
+    const deviceSpy = vi.spyOn(accountSDK, 'getDeviceId').mockResolvedValue('device-3')
+    const recordSpy = vi.spyOn(accountSDK, 'recordSyncActivity').mockResolvedValue()
+
+    const sdk = new PluginCloudSyncSDK({
+      baseUrl: 'https://example.com',
+      fetch: fetchMock as any,
+      channelSend: vi.fn(async () => null),
+    })
+
+    await sdk.pull({ cursor: 0, limit: 20 })
+    expect(authSpy).toHaveBeenCalled()
+    expect(deviceSpy).toHaveBeenCalled()
+    expect(recordSpy).toHaveBeenCalledWith('pull')
+
+    authSpy.mockRestore()
+    deviceSpy.mockRestore()
+    recordSpy.mockRestore()
+  })
+
+  it('plugin sdk blocks sync requests when user disabled sync preference', async () => {
+    const fetchMock = vi.fn(async () => createJsonResponse({}, 200))
+    const authSpy = vi.spyOn(accountSDK, 'getAuthToken').mockResolvedValue('auth-disabled')
+    const deviceSpy = vi.spyOn(accountSDK, 'getDeviceId').mockResolvedValue('device-disabled')
+    const syncEnabledSpy = vi.spyOn(accountSDK, 'getSyncEnabled').mockResolvedValue(false)
+
+    const sdk = new PluginCloudSyncSDK({
+      baseUrl: 'https://example.com',
+      fetch: fetchMock as any,
+      channelSend: vi.fn(async () => null),
+      now: () => 0,
+    })
+
+    const item: SyncItemInput = {
+      item_id: 'note-disabled',
+      type: 'note',
+      schema_version: 1,
+      payload_enc: 'enc',
+      payload_ref: null,
+      meta_plain: { title: 'disabled' },
+      payload_size: 10,
+      updated_at: '2026-02-12T00:00:00.000Z',
+      deleted_at: null,
+      op_seq: 1,
+      op_hash: 'hash-disabled',
+      op_type: 'upsert',
+    }
+
+    await expect(sdk.push([item])).rejects.toBeInstanceOf(CloudSyncError)
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(authSpy).not.toHaveBeenCalled()
+    expect(deviceSpy).not.toHaveBeenCalled()
+
+    syncEnabledSpy.mockRestore()
     authSpy.mockRestore()
     deviceSpy.mockRestore()
   })

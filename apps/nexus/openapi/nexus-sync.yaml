@@ -621,6 +621,8 @@ paths:
               properties:
                 machine_code_hash:
                   type: string
+                fingerprint_hash:
+                  type: string
               required:
                 - machine_code_hash
       responses:

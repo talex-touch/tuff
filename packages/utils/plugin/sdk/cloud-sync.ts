@@ -1,5 +1,6 @@
 import type { CloudSyncSDKOptions as ClientOptions } from '../../cloud-sync/cloud-sync-sdk'
 import { CloudSyncSDK as CloudSyncClientSDK, CloudSyncError } from '../../cloud-sync/cloud-sync-sdk'
+import type { PullResponse, PushResponse, SyncItemInput } from '../../types/cloud-sync'
 import { accountSDK } from '../../account'
 import { ensureRendererChannel } from './channel'
 
@@ -13,6 +14,7 @@ export interface CloudSyncSDKOptions {
   onStepUpRequired?: () => string | null | Promise<string | null>
   formDataFactory?: () => FormData
   channelSend?: (event: string, data?: any) => Promise<any>
+  ignoreSyncPreferenceCheck?: boolean
 }
 
 let accountChannelBound = false
@@ -34,6 +36,16 @@ function bindAccountChannel(options?: CloudSyncSDKOptions) {
 
 async function resolveAuthToken(options?: CloudSyncSDKOptions): Promise<string> {
   bindAccountChannel(options)
+  if (!options?.ignoreSyncPreferenceCheck) {
+    const syncEnabled = await accountSDK.getSyncEnabled()
+    if (!syncEnabled) {
+      throw new CloudSyncError(
+        '[CloudSyncSDK] Sync is disabled by user preference.',
+        403,
+        'SYNC_DISABLED'
+      )
+    }
+  }
   const token = await accountSDK.getAuthToken()
   if (!token) {
     throw new Error('[CloudSyncSDK] Auth token is not available. Ensure user is signed in and AccountSDK channel is configured.')
@@ -65,6 +77,18 @@ export class CloudSyncSDK extends CloudSyncClientSDK {
       getDeviceId: () => resolveDeviceId(options),
     }
     super(clientOptions)
+  }
+
+  async push(items: SyncItemInput[]): Promise<PushResponse> {
+    const response = await super.push(items)
+    await accountSDK.recordSyncActivity('push')
+    return response
+  }
+
+  async pull(params?: { cursor?: number, limit?: number }): Promise<PullResponse> {
+    const response = await super.pull(params)
+    await accountSDK.recordSyncActivity('pull')
+    return response
   }
 }
 

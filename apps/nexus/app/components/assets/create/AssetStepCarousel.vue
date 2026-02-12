@@ -13,6 +13,10 @@ const props = withDefaults(defineProps<{
   distance: 42,
 })
 
+const emit = defineEmits<{
+  (e: 'settled'): void
+}>()
+
 const containerRef = ref<HTMLElement | null>(null)
 let enterTween: gsap.core.Tween | null = null
 let leaveTween: gsap.core.Tween | null = null
@@ -88,6 +92,15 @@ function clearNodeStyles(el: Element) {
   gsap.set(el as HTMLElement, { clearProps: 'transform,opacity' })
 }
 
+function handleAfterEnter(el: Element) {
+  clearNodeStyles(el)
+  emit('settled')
+}
+
+function handleAfterLeave(el: Element) {
+  clearNodeStyles(el)
+}
+
 onBeforeUnmount(() => {
   clearEnterTween()
   clearLeaveTween()
@@ -105,8 +118,8 @@ onBeforeUnmount(() => {
       @enter="onEnter"
       @before-leave="onBeforeLeave"
       @leave="onLeave"
-      @after-enter="clearNodeStyles"
-      @after-leave="clearNodeStyles"
+      @after-enter="handleAfterEnter"
+      @after-leave="handleAfterLeave"
     >
       <div :key="activeKey" class="AssetStepCarousel-Item">
         <slot />

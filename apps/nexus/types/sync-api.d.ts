@@ -340,6 +340,7 @@ export interface paths {
         content: {
           "application/json": {
             machine_code_hash: string;
+            fingerprint_hash?: string;
           };
         };
       };

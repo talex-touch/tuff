@@ -1,15 +1,22 @@
+import pathBrowserify from 'path-browserify'
 import { hasWindow } from '../../env'
 
 const path = (() => {
-  if (!hasWindow()) {
-    return require('node:path')
+  if (hasWindow()) {
+    return pathBrowserify
   }
-  try {
-    return require('path-browserify')
+
+  const nodeRequire = typeof require === 'function' ? require : null
+  if (nodeRequire) {
+    try {
+      return nodeRequire('node:path')
+    }
+    catch {
+      return pathBrowserify
+    }
   }
-  catch {
-    return require('node:path')
-  }
+
+  return pathBrowserify
 })()
 
 /**

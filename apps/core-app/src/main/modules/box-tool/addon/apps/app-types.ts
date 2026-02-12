@@ -7,4 +7,5 @@ export interface ScannedAppInfo {
   lastModified: Date
   displayName?: string
   fileName?: string
+  description?: string
 }

@@ -1,0 +1,68 @@
+---
+title: "KeyframeStrokeText 关键帧描边"
+description: "把任意文本渲染为先描边、后填充的关键帧动画。"
+category: Basic
+syncStatus: migrated
+---
+# KeyframeStrokeText 关键帧描边
+
+把任意文本渲染为先描边、后填充的关键帧动画。
+
+## 基础用法
+
+### KeyframeStrokeText
+:::TuffDemoWrapper{demo="KeyframeStrokeTextKeyframeStrokeTextDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+      <TxKeyframeStrokeText text="TuffEx" :font-size="56" />
+
+      <TxKeyframeStrokeText
+        text="Stroke + Fill"
+        stroke-color="#0ea5e9"
+        fill-color="#0f172a"
+        :duration-ms="2400"
+        :stroke-width="1.8"
+        :font-size="42"
+        :font-weight="600"
+      />
+    </div>
+  </template>
+---
+:::
+
+## 中文文案示例
+
+### Chinese text
+:::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxKeyframeStrokeText
+      text="关键帧描边动画"
+      stroke-color="#16a34a"
+      fill-color="#14532d"
+      :duration-ms="2600"
+      :stroke-width="1.6"
+      :font-size="40"
+      :font-weight="700"
+    />
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `text` | `string` | `''` | 要渲染的文本内容 |
+| `strokeColor` | `string` | `#4C4CFF` | 描边颜色 |
+| `fillColor` | `string` | `#111827` | 填充颜色 |
+| `durationMs` | `number` | `1800` | 动画时长(ms) |
+| `strokeWidth` | `number` | `2` | 描边宽度 |
+| `fontSize` | `string \| number` | `64` | 字号 |
+| `fontWeight` | `string \| number` | `700` | 字重 |
+| `fontFamily` | `string` | `inherit` | 字体族 |

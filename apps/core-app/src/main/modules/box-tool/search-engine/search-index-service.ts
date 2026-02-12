@@ -1,6 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { performance } from 'node:perf_hooks'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
@@ -10,6 +10,22 @@ const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
 const INVALID_KEYWORD_REGEX = /[^a-z0-9\u4E00-\u9FA5]+/i
 const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
+const NGRAM_PREFIX = 'ng:'
+const NGRAM_MIN_WORD_LENGTH = 3
+
+/**
+ * Generate character n-grams for a word.
+ * Used for fuzzy recall: query n-grams are matched against indexed n-grams
+ * to find candidate items, which are then filtered by edit distance.
+ */
+function generateNgrams(word: string, n = 2): string[] {
+  if (word.length < n) return []
+  const ngrams: string[] = []
+  for (let i = 0; i <= word.length - n; i++) {
+    ngrams.push(NGRAM_PREFIX + word.substring(i, i + n))
+  }
+  return ngrams
+}
 
 export interface SearchIndexKeyword {
   value: string
@@ -22,6 +38,7 @@ export interface SearchIndexItem {
   type: string
   name: string
   displayName?: string | null
+  description?: string | null
   path?: string | null
   extension?: string | null
   aliases?: SearchIndexKeyword[]
@@ -48,6 +65,9 @@ export class SearchIndexService {
   private pinyinModule: typeof import('pinyin-pro') | null = null
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
 
+  /** True if the FTS5 table was dropped and recreated during initialization (schema migration). */
+  public didMigrate = false
+
   constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
 
   async indexItems(items: SearchIndexItem[]): Promise<void> {
@@ -58,19 +78,31 @@ export class SearchIndexService {
       withSqliteRetry(() => this.ensureInitialized(), { label: 'search-index.ensure' })
     )
 
-    const preparedDocs = await Promise.all(items.map((item) => this.prepareDocument(item)))
+    // Prepare documents one at a time, yielding between each to avoid
+    // long main-thread stalls from pinyin / n-gram computation.
+    const preparedDocs: PreparedIndexDocument[] = []
+    for (const item of items) {
+      preparedDocs.push(await this.prepareDocument(item))
+      // Yield to event loop between documents so UI stays responsive
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
 
-    await dbWriteScheduler.schedule('search-index.indexItems', () =>
-      withSqliteRetry(
-        () =>
-          this.db.transaction(async (tx) => {
-            for (const doc of preparedDocs) {
+    // Write each document in its own transaction so the dbWriteScheduler
+    // can yield to the event loop between documents. A single transaction
+    // for all docs blocks the event loop for the entire duration (FTS5
+    // INSERT + keyword_mappings are synchronous SQLite operations).
+    for (const doc of preparedDocs) {
+      await dbWriteScheduler.schedule('search-index.indexItem', () =>
+        withSqliteRetry(
+          () =>
+            this.db.transaction(async (tx) => {
               await this.applyDocument(tx, doc)
-            }
-          }),
-        { label: 'search-index.indexItems' }
+            }),
+          { label: 'search-index.indexItem' }
+        )
       )
-    )
+    }
+
     console.debug(
       `[SearchIndexService] Indexed ${items.length} items in ${(performance.now() - start).toFixed(
         0
@@ -82,27 +114,41 @@ export class SearchIndexService {
     if (itemIds.length === 0) return
     const start = performance.now()
 
-    await dbWriteScheduler.schedule('search-index.removeItems', () =>
-      withSqliteRetry(
-        async () => {
-          await this.ensureInitialized()
-          await this.db.transaction(async (tx) => {
-            for (const itemId of itemIds) {
+    // Remove each item in its own scheduled task so the dbWriteScheduler
+    // can yield between items, avoiding long event-loop blocks.
+    for (const itemId of itemIds) {
+      await dbWriteScheduler.schedule('search-index.removeItem', () =>
+        withSqliteRetry(
+          async () => {
+            await this.ensureInitialized()
+            await this.db.transaction(async (tx) => {
               await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
               await tx
                 .delete(schema.keywordMappings)
                 .where(eq(schema.keywordMappings.itemId, itemId))
-            }
-          })
-        },
-        { label: 'search-index.removeItems' }
+            })
+          },
+          { label: 'search-index.removeItem' }
+        )
       )
-    )
+    }
     console.debug(
       `[SearchIndexService] Removed ${itemIds.length} items in ${(
         performance.now() - start
       ).toFixed(0)}ms`
     )
+  }
+
+  /**
+   * Returns the number of rows in the FTS5 index for a given provider.
+   * Useful for detecting an empty index after a failed migration.
+   */
+  async countByProvider(providerId: string): Promise<number> {
+    await this.ensureInitialized()
+    const rows = await this.db.all<{ cnt: number }>(
+      sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
+    )
+    return rows[0]?.cnt ?? 0
   }
 
   async removeByProvider(providerId: string): Promise<void> {
@@ -136,19 +182,224 @@ export class SearchIndexService {
       return []
     }
 
+    // Build optimized FTS5 query based on query length
+    const ftsMatchExpr = this.buildFtsMatchExpr(trimmed)
+
     searchLogger.indexSearchExecuting()
     const rows = await this.db.all<{ item_id: string; score: number }>(
-      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${trimmed} ORDER BY score LIMIT ${limit}`
+      sql`SELECT item_id, bm25(search_index) as score FROM search_index WHERE provider = ${providerId} AND search_index MATCH ${ftsMatchExpr} ORDER BY score LIMIT ${limit}`
     )
 
     const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
     searchLogger.indexSearchComplete(results.length, performance.now() - start)
+
+    if (results.length === 0) {
+      // Diagnostic: check if FTS5 table has any data at all for this provider
+      const totalRows = await this.db.all<{ cnt: number }>(
+        sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
+      )
+      console.warn(
+        `[SearchIndexService] search("${ftsMatchExpr}") returned 0 results. FTS5 total rows for provider "${providerId}": ${totalRows[0]?.cnt ?? 0}`
+      )
+    }
+
     console.debug(
       `[SearchIndexService] search(provider=${providerId}, limit=${limit}) returned ${results.length} matches in ${(
         performance.now() - start
       ).toFixed(0)}ms`
     )
     return results
+  }
+
+  /**
+   * Batch lookup keywords in keywordMappings table.
+   * Returns a map of keyword -> matching itemIds with priorities.
+   * Uses WHERE IN (...) for efficiency instead of multiple single queries.
+   */
+  async lookupByKeywords(
+    providerId: string,
+    keywords: string[],
+    limit = 200
+  ): Promise<Map<string, Array<{ itemId: string; priority: number }>>> {
+    if (keywords.length === 0) return new Map()
+    await this.ensureInitialized()
+
+    const rows = await this.db
+      .select({
+        keyword: schema.keywordMappings.keyword,
+        itemId: schema.keywordMappings.itemId,
+        priority: schema.keywordMappings.priority
+      })
+      .from(schema.keywordMappings)
+      .where(
+        and(
+          inArray(schema.keywordMappings.keyword, keywords),
+          eq(schema.keywordMappings.providerId, providerId)
+        )
+      )
+      .limit(limit)
+
+    const result = new Map<string, Array<{ itemId: string; priority: number }>>()
+    for (const row of rows) {
+      const existing = result.get(row.keyword)
+      if (existing) {
+        existing.push({ itemId: row.itemId, priority: row.priority })
+      } else {
+        result.set(row.keyword, [{ itemId: row.itemId, priority: row.priority }])
+      }
+    }
+    return result
+  }
+
+  /**
+   * Prefix lookup: find items whose keywords start with the given prefix.
+   * Useful for single-character or short queries (e.g. "f" matches "feishu", "fs").
+   * Uses SQL LIKE for prefix matching on the keyword column.
+   */
+  async lookupByKeywordPrefix(
+    providerId: string,
+    prefix: string,
+    limit = 200
+  ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
+    if (!prefix) return []
+    await this.ensureInitialized()
+
+    const likePattern = `${prefix}%`
+    const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
+      sql`SELECT km.item_id, km.keyword, km.priority
+          FROM keyword_mappings km
+          WHERE km.keyword LIKE ${likePattern}
+            AND km.provider_id = ${providerId}
+            AND km.keyword NOT LIKE 'ng:%'
+          LIMIT ${limit}`
+    )
+
+    return rows.map((row) => ({
+      itemId: row.item_id,
+      keyword: row.keyword,
+      priority: row.priority
+    }))
+  }
+
+  /**
+   * Subsequence matching: find items whose keywords contain the query
+   * as a character subsequence (e.g. "nte" matches "netease").
+   * Loads keywords from DB and filters in memory for flexibility.
+   */
+  async lookupBySubsequence(
+    providerId: string,
+    query: string,
+    limit = 100
+  ): Promise<Array<{ itemId: string; keyword: string; priority: number }>> {
+    if (!query || query.length < 2) return []
+    await this.ensureInitialized()
+
+    const lowerQuery = query.toLowerCase()
+
+    // Load non-ngram keywords for this provider
+    const rows = await this.db.all<{ item_id: string; keyword: string; priority: number }>(
+      sql`SELECT item_id, keyword, priority
+          FROM keyword_mappings
+          WHERE provider_id = ${providerId}
+            AND keyword NOT LIKE 'ng:%'
+            AND length(keyword) >= ${lowerQuery.length}`
+    )
+
+    const matches: Array<{ itemId: string; keyword: string; priority: number; score: number }> = []
+    for (const row of rows) {
+      const score = subsequenceScore(lowerQuery, row.keyword)
+      if (score > 0) {
+        matches.push({
+          itemId: row.item_id,
+          keyword: row.keyword,
+          priority: row.priority,
+          score
+        })
+      }
+    }
+
+    // Sort by score descending, take top results
+    matches.sort((a, b) => b.score - a.score)
+    return matches.slice(0, limit).map(({ itemId, keyword, priority }) => ({
+      itemId,
+      keyword,
+      priority
+    }))
+  }
+
+  /**
+   * N-gram fuzzy recall: find candidate items by matching query n-grams
+   * against indexed n-grams in keywordMappings.
+   * Returns itemIds ranked by n-gram overlap count.
+   */
+  async lookupByNgrams(
+    providerId: string,
+    query: string,
+    limit = 50
+  ): Promise<Array<{ itemId: string; overlapCount: number }>> {
+    const queryNgrams = generateNgrams(query.toLowerCase(), 2)
+    if (queryNgrams.length === 0) return []
+
+    await this.ensureInitialized()
+
+    const rows = await this.db
+      .select({
+        itemId: schema.keywordMappings.itemId,
+        count: sql<number>`count(DISTINCT ${schema.keywordMappings.keyword})`
+      })
+      .from(schema.keywordMappings)
+      .where(
+        and(
+          inArray(schema.keywordMappings.keyword, queryNgrams),
+          eq(schema.keywordMappings.providerId, providerId)
+        )
+      )
+      .groupBy(schema.keywordMappings.itemId)
+      .orderBy(sql`count(DISTINCT ${schema.keywordMappings.keyword}) DESC`)
+      .limit(limit)
+
+    // Filter: require at least 40% n-gram overlap for relevance
+    const minOverlap = Math.max(1, Math.floor(queryNgrams.length * 0.4))
+    return rows
+      .filter((row) => row.count >= minOverlap)
+      .map((row) => ({ itemId: row.itemId, overlapCount: row.count }))
+  }
+
+  /**
+   * Preload pinyin-pro module eagerly to avoid cold-start latency on first search.
+   */
+  async preheatPinyin(): Promise<void> {
+    try {
+      await this.loadPinyinModule()
+    } catch {
+      // Swallow - non-critical
+    }
+  }
+
+  /**
+   * Build an optimized FTS5 MATCH expression based on query characteristics.
+   * All tokens get prefix matching (*) for better recall.
+   * - Single short query (≤2 chars): simple prefix search
+   * - Multi-word queries (>3 words): NEAR grouping for proximity relevance
+   * - Default (1-3 words): prefix search with implicit AND via FTS5
+   */
+  private buildFtsMatchExpr(query: string): string {
+    const words = query.split(WORD_SPLIT_REGEX).filter((w) => w.length > 0)
+    if (words.length === 0) return query
+
+    if (words.length === 1) {
+      // Single word: prefix matching
+      return `${words[0]}*`
+    }
+
+    if (words.length > 3) {
+      // Long multi-word query: use NEAR for proximity relevance with prefix
+      const escaped = words.map((w) => `"${w}"`).join(' ')
+      return `NEAR(${escaped}, 10)`
+    }
+
+    // 2-3 words: prefix each token for better recall
+    return words.map((w) => `${w}*`).join(' ')
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -166,6 +417,18 @@ export class SearchIndexService {
   }
 
   private async createSearchIndexTable(): Promise<void> {
+    // Check if the existing table has the content column (critical for content search).
+    const tableInfo = await this.db.all<{ name: string }>(
+      sql`SELECT name FROM pragma_table_xinfo('search_index')`
+    )
+    const hasContent = tableInfo.some((col) => col.name === 'content')
+
+    if (tableInfo.length > 0 && !hasContent) {
+      // Table exists but lacks content column - must recreate for content search
+      await this.db.run(sql`DROP TABLE IF EXISTS search_index`)
+      this.didMigrate = true
+    }
+
     await this.db.run(sql`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
       item_id UNINDEXED,
       provider UNINDEXED,
@@ -283,17 +546,35 @@ export class SearchIndexService {
       }
     }
 
-    if (item.path) {
-      const pathTokens = this.splitPath(item.path.toLowerCase())
-      for (const token of pathTokens) {
-        this.appendKeyword(keywordMap, token, 0.85)
+    if (item.description) {
+      const descLower = item.description.toLowerCase().trim()
+      if (descLower) {
+        for (const token of this.splitWords(descLower)) {
+          this.appendKeyword(keywordMap, token, 0.9)
+        }
       }
+    }
+
+    if (item.path) {
+      const pathLower = item.path.toLowerCase()
+      const pathTokens = this.splitPath(pathLower)
+      for (const token of pathTokens) {
+        this.appendKeyword(keywordMap, token, 1.0)
+      }
+      // Also index the full path as a single keyword for path-fragment searches
+      this.appendKeyword(keywordMap, pathLower, 0.7)
     }
 
     if (item.extension) {
       const ext = item.extension.trim().toLowerCase()
       if (ext) {
         this.appendKeyword(keywordMap, ext, 1.05)
+        // Also add the extension without the leading dot (e.g. "txt" for ".txt")
+        // so that plain searches like "txt" can match via keyword_mappings
+        const extNoDot = ext.replace(/^\./, '')
+        if (extNoDot && extNoDot !== ext) {
+          this.appendKeyword(keywordMap, extNoDot, 1.0)
+        }
       }
     }
 
@@ -307,13 +588,6 @@ export class SearchIndexService {
     }
 
     if (item.keywords) {
-      // Warn if too many keywords (performance concern)
-      if (item.keywords.length > 10) {
-        console.warn(
-          `[SearchIndexService] Item "${item.itemId}" has ${item.keywords.length} keywords. ` +
-            `Consider reducing to <= 10 for better performance.`
-        )
-      }
       for (const keyword of item.keywords) {
         const { value, priority } = keyword
         const normalized = value.trim().toLowerCase()
@@ -325,6 +599,19 @@ export class SearchIndexService {
     const keywordEntries = Array.from(keywordMap.entries())
       .map(([value, priority]) => ({ value, priority }))
       .filter(({ value }) => this.isKeywordValid(value))
+
+    // Generate n-gram entries for fuzzy recall (only for non-trivial keywords)
+    const ngramEntries: SearchIndexKeyword[] = []
+    for (const { value } of keywordEntries) {
+      if (value.length >= NGRAM_MIN_WORD_LENGTH && !value.startsWith(NGRAM_PREFIX)) {
+        for (const ngram of generateNgrams(value, 2)) {
+          ngramEntries.push({ value: ngram, priority: 0.5 })
+        }
+      }
+    }
+
+    // Combine regular keywords with n-gram entries for storage in keywordMappings
+    const allKeywordEntries = [...keywordEntries, ...ngramEntries]
 
     const tags = (item.tags || []).map((tag) => tag.toLowerCase()).join(' ')
     const keywordField = keywordEntries.map((entry) => entry.value).join(' ')
@@ -339,7 +626,7 @@ export class SearchIndexService {
       tags,
       path: item.path?.toLowerCase() ?? '',
       content: item.content?.toLowerCase() ?? '',
-      keywordEntries
+      keywordEntries: allKeywordEntries
     }
   }
 
@@ -397,6 +684,26 @@ export class SearchIndexService {
     return { full, first }
   }
 
+  /**
+   * Eagerly preload the pinyin-pro module to avoid cold-start latency
+   * on the first search. Call this during initialization.
+   */
+  preloadPinyin(): void {
+    if (this.pinyinModule || this.pinyinPromise) return
+    const start = performance.now()
+    this.pinyinPromise = import('pinyin-pro')
+    this.pinyinPromise
+      .then((mod) => {
+        this.pinyinModule = mod
+        console.log(
+          `[SearchIndexService] pinyin-pro preloaded in ${(performance.now() - start).toFixed(0)}ms`
+        )
+      })
+      .catch(() => {
+        /* swallow; caller handles */
+      })
+  }
+
   private async loadPinyinModule(): Promise<typeof import('pinyin-pro')> {
     if (this.pinyinModule) return this.pinyinModule
     if (!this.pinyinPromise) {
@@ -417,4 +724,37 @@ export class SearchIndexService {
     this.pinyinModule = await this.pinyinPromise
     return this.pinyinModule
   }
+}
+
+/**
+ * Score how well `query` matches `target` as a character subsequence.
+ * Returns 0 if not a subsequence, otherwise a score in (0, 1].
+ * Prefers: consecutive matches, matches at word boundaries, shorter targets.
+ * E.g. "nte" in "netease" → matches n(0) t(2) e(3), score > 0
+ */
+function subsequenceScore(query: string, target: string): number {
+  const qLen = query.length
+  const tLen = target.length
+  if (qLen === 0 || tLen === 0 || qLen > tLen) return 0
+
+  let qi = 0
+  let consecutive = 0
+  let maxConsecutive = 0
+
+  for (let ti = 0; ti < tLen && qi < qLen; ti++) {
+    if (target[ti] === query[qi]) {
+      qi++
+      consecutive++
+      if (consecutive > maxConsecutive) maxConsecutive = consecutive
+    } else {
+      consecutive = 0
+    }
+  }
+
+  if (qi < qLen) return 0 // not a subsequence
+
+  // Score: ratio of matched chars + bonus for consecutive runs + penalty for target length
+  const coverage = qLen / tLen
+  const consecutiveBonus = maxConsecutive / qLen
+  return coverage * 0.5 + consecutiveBonus * 0.5
 }

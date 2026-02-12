@@ -1,8 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
-import { createError, getHeader } from 'h3'
+import { createError } from 'h3'
 import { readCloudflareBindings, shouldUseCloudflareBindings } from './cloudflare'
 import { resolveRequestIp } from './ipSecurityStore'
+import { resolveRequestGeo } from './requestGeo'
 
 const TELEMETRY_TABLE = 'telemetry_events'
 const DAILY_STATS_TABLE = 'daily_stats'
@@ -181,6 +182,14 @@ async function ensureTelemetrySchema(db: D1Database) {
       platform TEXT,
       version TEXT,
       region TEXT,
+      country_code TEXT,
+      region_code TEXT,
+      region_name TEXT,
+      city TEXT,
+      latitude REAL,
+      longitude REAL,
+      timezone TEXT,
+      geo_source TEXT,
       ip TEXT,
       search_query TEXT,
       search_duration_ms INTEGER,
@@ -235,6 +244,16 @@ async function ensureTelemetrySchema(db: D1Database) {
     // ignore index creation failures for older schemas
   }
 
+  try {
+    await db.prepare(`
+      CREATE INDEX IF NOT EXISTS idx_telemetry_event_geo
+      ON ${TELEMETRY_TABLE}(event_type, created_at, country_code, region_code);
+    `).run()
+  }
+  catch {
+    // ignore index creation failures for older schemas
+  }
+
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON ${DAILY_STATS_TABLE}(date);
   `).run()
@@ -250,12 +269,22 @@ async function ensureTelemetryColumns(db: D1Database): Promise<void> {
   try {
     const { results } = await db.prepare(`PRAGMA table_info(${TELEMETRY_TABLE});`).all<{ name?: string }>()
     const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
-    if (!columns.has('ip')) {
-      await db.prepare(`ALTER TABLE ${TELEMETRY_TABLE} ADD COLUMN ip TEXT;`).run()
+    const addColumnIfMissing = async (column: string, ddl: string) => {
+      if (!columns.has(column)) {
+        await db.prepare(`ALTER TABLE ${TELEMETRY_TABLE} ADD COLUMN ${ddl};`).run()
+      }
     }
-    if (!columns.has('client_id')) {
-      await db.prepare(`ALTER TABLE ${TELEMETRY_TABLE} ADD COLUMN client_id TEXT;`).run()
-    }
+
+    await addColumnIfMissing('ip', 'ip TEXT')
+    await addColumnIfMissing('client_id', 'client_id TEXT')
+    await addColumnIfMissing('country_code', 'country_code TEXT')
+    await addColumnIfMissing('region_code', 'region_code TEXT')
+    await addColumnIfMissing('region_name', 'region_name TEXT')
+    await addColumnIfMissing('city', 'city TEXT')
+    await addColumnIfMissing('latitude', 'latitude REAL')
+    await addColumnIfMissing('longitude', 'longitude REAL')
+    await addColumnIfMissing('timezone', 'timezone TEXT')
+    await addColumnIfMissing('geo_source', 'geo_source TEXT')
   }
   catch {
     // ignore schema evolution failures
@@ -562,16 +591,22 @@ export async function recordTelemetryEvent(
 
   const id = crypto.randomUUID()
   const safeSearchQuery = undefined
-  const region = resolveRequestRegion(event) || normalized.telemetry.region
+  const geo = resolveRequestGeo(event)
+  const countryCode = geo.countryCode || normalized.telemetry.region || null
+  const region = countryCode
   const sanitized = normalized.telemetry
 
   // Insert telemetry event
   await db.prepare(`
     INSERT INTO ${TELEMETRY_TABLE} (
       id, event_type, user_id, client_id, device_fingerprint, platform, version,
-      region, ip, search_query, search_duration_ms, search_result_count,
+      region, country_code, region_code, region_name, city, latitude, longitude, timezone, geo_source,
+      ip, search_query, search_duration_ms, search_result_count,
       provider_timings, input_types, metadata, is_anonymous, created_at
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17);
+    ) VALUES (
+      ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+      ?19, ?20, ?21, ?22, ?23, ?24, ?25
+    );
   `).bind(
     id,
     sanitized.eventType,
@@ -581,6 +616,14 @@ export async function recordTelemetryEvent(
     sanitized.platform || null,
     sanitized.version || null,
     region || null,
+    countryCode,
+    geo.regionCode,
+    geo.regionName,
+    geo.city,
+    geo.latitude,
+    geo.longitude,
+    geo.timezone,
+    geo.source,
     ip || null,
     safeSearchQuery || null,
     sanitized.searchDurationMs ?? null,
@@ -630,7 +673,13 @@ export async function recordTelemetryEvent(
   }
 
   if (sanitized.eventType === 'search') {
+    const searchCountry = countryCode || 'Unknown'
+    const searchSubdivision = geo.regionCode || geo.regionName || 'Unknown'
+
     await incrementDailyStat(db, today, 'searches', '', 1)
+    await incrementDailyStat(db, today, 'search_geo_country', searchCountry, 1)
+    await incrementDailyStat(db, today, 'search_geo_subdivision', `${searchCountry}:${searchSubdivision}`, 1)
+
     if (typeof sanitized.searchDurationMs === 'number') {
       await incrementDailyStat(db, today, 'search_duration_total', '', sanitized.searchDurationMs)
       await updateDailyStatMax(db, today, 'search_duration_max', '', sanitized.searchDurationMs)
@@ -775,25 +824,6 @@ export async function recordTelemetryEvent(
       }
     }
   }
-}
-
-function resolveRequestRegion(event: H3Event): string | undefined {
-  const raw
-    = getHeader(event, 'cf-ipcountry')
-      || getHeader(event, 'CF-IPCountry')
-      || getHeader(event, 'x-vercel-ip-country')
-      || getHeader(event, 'x-nf-country')
-      || undefined
-
-  if (!raw)
-    return undefined
-
-  const normalized = raw.trim().toUpperCase()
-  if (!normalized || normalized === 'XX')
-    return undefined
-  if (!/^[A-Z]{2}$/.test(normalized))
-    return undefined
-  return normalized
 }
 
 async function incrementDailyStat(
@@ -1231,6 +1261,222 @@ export async function getRealTimeStats(event: H3Event): Promise<{
     visitsLast24h,
     activeUsers,
     avgLatency,
+  }
+}
+
+const GEO_COUNTRY_EXPR = `COALESCE(NULLIF(country_code, ''), NULLIF(region, ''), 'Unknown')`
+const GEO_SUBDIVISION_EXPR = `COALESCE(NULLIF(region_code, ''), NULLIF(region_name, ''), 'Unknown')`
+
+function normalizeCountryFilter(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const normalized = value.trim().toUpperCase()
+  if (!normalized) {
+    return null
+  }
+  return /^[A-Z]{2}$/.test(normalized) ? normalized : null
+}
+
+function toNullableNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+export interface AdminGeoAnalytics {
+  summary: {
+    totalSearches: number
+    uniqueIps: number
+    countryCount: number
+    subdivisionCount: number
+  }
+  countries: Array<{
+    countryCode: string
+    count: number
+    latitude: number | null
+    longitude: number | null
+  }>
+  subdivisions: Array<{
+    countryCode: string
+    regionCode: string | null
+    regionName: string | null
+    count: number
+    latitude: number | null
+    longitude: number | null
+  }>
+  topIps: Array<{
+    ip: string
+    count: number
+    lastSeenAt: string
+    countryCode: string | null
+    regionCode: string | null
+    city: string | null
+  }>
+  generatedAt: string
+}
+
+export async function getAdminGeoAnalytics(
+  event: H3Event,
+  options: { days?: number, country?: string | null, limit?: number } = {},
+): Promise<AdminGeoAnalytics> {
+  const db = getD1Database(event)
+  if (!db) {
+    throw createError({ statusCode: 500, statusMessage: 'Database not available' })
+  }
+
+  await ensureTelemetrySchema(db)
+
+  const days = Math.max(1, Math.min(90, Number(options.days) || 30))
+  const limit = Math.min(Math.max(Math.round(options.limit || 200), 10), 500)
+  const countryFilter = normalizeCountryFilter(options.country)
+
+  const startDate = new Date()
+  startDate.setDate(startDate.getDate() - days)
+  const startDateStr = startDate.toISOString()
+
+  const summary = await db.prepare(`
+    SELECT
+      COUNT(*) AS total_searches,
+      COUNT(DISTINCT CASE WHEN ip IS NOT NULL AND ip != '' THEN ip END) AS unique_ips,
+      COUNT(DISTINCT ${GEO_COUNTRY_EXPR}) AS country_count,
+      COUNT(DISTINCT (${GEO_COUNTRY_EXPR} || ':' || ${GEO_SUBDIVISION_EXPR})) AS subdivision_count
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type = 'search'
+      AND created_at >= ?1
+      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2);
+  `).bind(startDateStr, countryFilter).first<{
+    total_searches?: number
+    unique_ips?: number
+    country_count?: number
+    subdivision_count?: number
+  }>()
+
+  const countryRows = await db.prepare(`
+    SELECT
+      ${GEO_COUNTRY_EXPR} AS country_code,
+      COUNT(*) AS count,
+      AVG(latitude) AS latitude,
+      AVG(longitude) AS longitude
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type = 'search'
+      AND created_at >= ?1
+      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+    GROUP BY country_code
+    ORDER BY count DESC
+    LIMIT ?3;
+  `).bind(startDateStr, countryFilter, limit).all<{
+    country_code?: string
+    count?: number
+    latitude?: number | null
+    longitude?: number | null
+  }>()
+
+  const subdivisionRows = await db.prepare(`
+    SELECT
+      ${GEO_COUNTRY_EXPR} AS country_code,
+      NULLIF(region_code, '') AS region_code,
+      NULLIF(region_name, '') AS region_name,
+      COUNT(*) AS count,
+      AVG(latitude) AS latitude,
+      AVG(longitude) AS longitude
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type = 'search'
+      AND created_at >= ?1
+      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+    GROUP BY country_code, ${GEO_SUBDIVISION_EXPR}
+    ORDER BY count DESC
+    LIMIT ?3;
+  `).bind(startDateStr, countryFilter, limit).all<{
+    country_code?: string
+    region_code?: string | null
+    region_name?: string | null
+    count?: number
+    latitude?: number | null
+    longitude?: number | null
+  }>()
+
+  const ipRows = await db.prepare(`
+    SELECT
+      te.ip AS ip,
+      COUNT(*) AS count,
+      MAX(te.created_at) AS last_seen_at,
+      (
+        SELECT ${GEO_COUNTRY_EXPR}
+        FROM ${TELEMETRY_TABLE} latest
+        WHERE latest.ip = te.ip
+          AND latest.event_type = 'search'
+          AND latest.created_at >= ?1
+        ORDER BY latest.created_at DESC
+        LIMIT 1
+      ) AS country_code,
+      (
+        SELECT NULLIF(region_code, '')
+        FROM ${TELEMETRY_TABLE} latest
+        WHERE latest.ip = te.ip
+          AND latest.event_type = 'search'
+          AND latest.created_at >= ?1
+        ORDER BY latest.created_at DESC
+        LIMIT 1
+      ) AS region_code,
+      (
+        SELECT NULLIF(city, '')
+        FROM ${TELEMETRY_TABLE} latest
+        WHERE latest.ip = te.ip
+          AND latest.event_type = 'search'
+          AND latest.created_at >= ?1
+        ORDER BY latest.created_at DESC
+        LIMIT 1
+      ) AS city
+    FROM ${TELEMETRY_TABLE} te
+    WHERE te.event_type = 'search'
+      AND te.created_at >= ?1
+      AND te.ip IS NOT NULL
+      AND te.ip != ''
+      AND (?2 IS NULL OR ${GEO_COUNTRY_EXPR} = ?2)
+    GROUP BY te.ip
+    ORDER BY count DESC, last_seen_at DESC
+    LIMIT ?3;
+  `).bind(startDateStr, countryFilter, limit).all<{
+    ip?: string
+    count?: number
+    last_seen_at?: string
+    country_code?: string | null
+    region_code?: string | null
+    city?: string | null
+  }>()
+
+  return {
+    summary: {
+      totalSearches: Number(summary?.total_searches ?? 0),
+      uniqueIps: Number(summary?.unique_ips ?? 0),
+      countryCount: Number(summary?.country_count ?? 0),
+      subdivisionCount: Number(summary?.subdivision_count ?? 0),
+    },
+    countries: (countryRows.results ?? []).map(row => ({
+      countryCode: row.country_code || 'Unknown',
+      count: Number(row.count ?? 0),
+      latitude: toNullableNumber(row.latitude),
+      longitude: toNullableNumber(row.longitude),
+    })),
+    subdivisions: (subdivisionRows.results ?? []).map(row => ({
+      countryCode: row.country_code || 'Unknown',
+      regionCode: row.region_code ?? null,
+      regionName: row.region_name ?? null,
+      count: Number(row.count ?? 0),
+      latitude: toNullableNumber(row.latitude),
+      longitude: toNullableNumber(row.longitude),
+    })),
+    topIps: (ipRows.results ?? [])
+      .filter(row => typeof row.ip === 'string' && row.ip.trim())
+      .map(row => ({
+        ip: row.ip as string,
+        count: Number(row.count ?? 0),
+        lastSeenAt: row.last_seen_at || '',
+        countryCode: row.country_code ?? null,
+        regionCode: row.region_code ?? null,
+        city: row.city ?? null,
+      })),
+    generatedAt: new Date().toISOString(),
   }
 }
 

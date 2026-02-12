@@ -758,6 +758,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       type: this.type,
       name: appInfo.name,
       displayName: appInfo.displayName || undefined,
+      description: appInfo.description || undefined,
       path: appInfo.path,
       extension: path.extname(appInfo.path).toLowerCase(),
       aliases: aliasEntries,
@@ -1272,12 +1273,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     logApp(`Opening app: ${chalk.cyan(appPath)}`, LogStyle.process)
-    try {
-      await shell.openPath(appPath)
-      logApp(`App opened successfully: ${chalk.green(appPath)}`, LogStyle.success)
-    } catch (err) {
-      logApp(`Failed to open app: ${chalk.red((err as Error).message)}`, LogStyle.error)
-    }
+    void shell
+      .openPath(appPath)
+      .then((errorMessage) => {
+        if (errorMessage) {
+          logApp(`Failed to open app: ${chalk.red(errorMessage)}`, LogStyle.error)
+          return
+        }
+        logApp(`App opened successfully: ${chalk.green(appPath)}`, LogStyle.success)
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err)
+        logApp(`Failed to open app: ${chalk.red(message)}`, LogStyle.error)
+      })
 
     return null
   }
@@ -1368,6 +1376,35 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     }
 
+    // Prefix recall for short queries (e.g. "f" → "feishu", "wind" → "windsurf")
+    // Precise lookup uses exact match which misses prefix relationships
+    if (normalizedQuery.length <= 5) {
+      const prefixStart = startTiming()
+      const prefixResults = await this.searchIndex.lookupByKeywordPrefix(
+        this.id,
+        normalizedQuery,
+        200
+      )
+      if (prefixResults.length > 0) {
+        const prefixSet = new Set(prefixResults.map((r) => r.itemId))
+        preciseMatchedItemIds = preciseMatchedItemIds
+          ? new Set([...preciseMatchedItemIds, ...prefixSet])
+          : prefixSet
+      }
+      logAppDuration(
+        'PrefixLookup',
+        prefixStart,
+        {
+          label: 'Prefix keyword lookup',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `with ${chalk.cyan(prefixResults.length)} prefix match(es)`
+        },
+        { logger: (message) => appProviderLog.debug(message) }
+      )
+    }
+
     const ftsQuery = this.buildFtsQuery(terms)
     const ftsStart = startTiming()
     const ftsMatches = ftsQuery ? await this.searchIndex.search(this.id, ftsQuery, 150) : []
@@ -1393,6 +1430,58 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     for (const match of ftsMatches) {
       if (candidateIds.size >= maxCandidateCount) break
       candidateIds.add(match.itemId)
+    }
+
+    // N-gram fuzzy recall: when FTS + precise results are insufficient,
+    // use n-gram overlap to find candidates that may have typos (e.g. "aplpe" → "apple")
+    const NGRAM_RECALL_THRESHOLD = 5
+    if (candidateIds.size < NGRAM_RECALL_THRESHOLD && normalizedQuery.length >= 3) {
+      const ngramStart = startTiming()
+      const ngramCandidates = await this.searchIndex.lookupByNgrams(this.id, normalizedQuery, 30)
+
+      for (const candidate of ngramCandidates) {
+        if (candidateIds.size >= maxCandidateCount) break
+        candidateIds.add(candidate.itemId)
+      }
+
+      logAppDuration(
+        'NgramRecall',
+        ngramStart,
+        {
+          label: 'N-gram fuzzy recall',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `recalled ${chalk.cyan(ngramCandidates.length)} candidates`
+        },
+        { logger: (message) => appProviderLog.debug(message) }
+      )
+    }
+
+    // Subsequence recall: "nte" → "netease", "wc" → "wechat"
+    // Catches cases where query chars appear in order but not contiguously
+    const SUBSEQ_RECALL_THRESHOLD = 5
+    if (candidateIds.size < SUBSEQ_RECALL_THRESHOLD && normalizedQuery.length >= 2) {
+      const subseqStart = startTiming()
+      const subseqResults = await this.searchIndex.lookupBySubsequence(this.id, normalizedQuery, 50)
+
+      for (const result of subseqResults) {
+        if (candidateIds.size >= maxCandidateCount) break
+        candidateIds.add(result.itemId)
+      }
+
+      logAppDuration(
+        'SubseqRecall',
+        subseqStart,
+        {
+          label: 'Subsequence recall',
+          style: 'info',
+          unit: 'ms',
+          precision: 0,
+          suffix: `recalled ${chalk.cyan(subseqResults.length)} candidates`
+        },
+        { logger: (message) => appProviderLog.debug(message) }
+      )
     }
 
     if (candidateIds.size === 0) {
@@ -1487,7 +1576,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const limitedTokens = tokens.slice(0, 5)
-    return limitedTokens.map((token) => `${token}*`).join(' AND ')
+    return limitedTokens.join(' ')
   }
 
   private _subscribeToFSEvents(): void {

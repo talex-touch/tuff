@@ -1,0 +1,68 @@
+---
+title: "KeyframeStrokeText"
+description: "Render any text with a keyframe sequence: stroke first, fill later."
+category: Basic
+syncStatus: migrated
+---
+# KeyframeStrokeText
+
+Render any text with a keyframe sequence: stroke first, fill later.
+
+## Basic usage
+
+### KeyframeStrokeText
+:::TuffDemoWrapper{demo="KeyframeStrokeTextKeyframeStrokeTextDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 18px;">
+      <TxKeyframeStrokeText text="TuffEx" :font-size="56" />
+
+      <TxKeyframeStrokeText
+        text="Stroke + Fill"
+        stroke-color="#0ea5e9"
+        fill-color="#0f172a"
+        :duration-ms="2400"
+        :stroke-width="1.8"
+        :font-size="42"
+        :font-weight="600"
+      />
+    </div>
+  </template>
+---
+:::
+
+## Chinese text demo
+
+### Chinese text
+:::TuffDemoWrapper{demo="KeyframeStrokeTextChineseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxKeyframeStrokeText
+      text="关键帧描边动画"
+      stroke-color="#16a34a"
+      fill-color="#14532d"
+      :duration-ms="2600"
+      :stroke-width="1.6"
+      :font-size="40"
+      :font-weight="700"
+    />
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `text` | `string` | `''` | Text content to render |
+| `strokeColor` | `string` | `#4C4CFF` | Stroke color |
+| `fillColor` | `string` | `#111827` | Fill color |
+| `durationMs` | `number` | `1800` | Animation duration (ms) |
+| `strokeWidth` | `number` | `2` | Stroke width |
+| `fontSize` | `string \| number` | `64` | Font size |
+| `fontWeight` | `string \| number` | `700` | Font weight |
+| `fontFamily` | `string` | `inherit` | Font family |

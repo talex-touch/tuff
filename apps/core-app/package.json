@@ -36,6 +36,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@langchain/core": "^0.3.80",
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.6.0",

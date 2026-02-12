@@ -2,7 +2,9 @@ import { appSetting } from '~/modules/channel/storage'
 import { getAppDeviceId, getAuthBaseUrl, isLocalAuthMode } from './auth-env'
 
 const MACHINE_CODE_VERSION = 'mc_v1'
+const FINGERPRINT_HASH_VERSION = 'fp_v1'
 const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
+let fingerprintHashPromise: Promise<string | null> | null = null
 
 type GenericRecord = Record<string, unknown>
 
@@ -23,7 +25,7 @@ function allowLegacyMachineSeedFallback(): boolean {
   return appSetting.security.allowLegacyMachineSeedFallback === true
 }
 
-function clearLegacyMachineSeed(reason: string): void {
+function clearLegacyMachineSeed(): void {
   ensureSecuritySettings()
   const legacySeed =
     typeof appSetting.security.machineSeed === 'string'
@@ -35,7 +37,6 @@ function clearLegacyMachineSeed(reason: string): void {
 
   appSetting.security.machineSeed = ''
   appSetting.security.machineSeedMigratedAt = new Date().toISOString()
-  console.warn('[device-attest] Cleared legacy plaintext machine seed:', reason)
 }
 
 function randomHex(bytes: number): string {
@@ -59,17 +60,16 @@ async function getOrInitMachineSeed(deps: {
   try {
     const secureSeed = (await deps.getSecureValue(MACHINE_SEED_SECURE_KEY))?.trim() ?? ''
     if (secureSeed) {
-      clearLegacyMachineSeed('secure-seed-found')
+      clearLegacyMachineSeed()
       return secureSeed
     }
 
     const nextSeed = legacySeed || randomHex(32)
     await deps.setSecureValue(MACHINE_SEED_SECURE_KEY, nextSeed)
-    clearLegacyMachineSeed('migrated-to-secure-store')
+    clearLegacyMachineSeed()
     return nextSeed
-  } catch (error) {
+  } catch {
     if (allowLegacyMachineSeedFallback() && legacySeed) {
-      console.warn('[device-attest] Using legacy plaintext machine seed fallback', error)
       return legacySeed
     }
 
@@ -143,6 +143,43 @@ async function sha256Hex(input: string): Promise<string> {
     .join('')
 }
 
+async function resolveFingerprintHash(): Promise<string | null> {
+  if (fingerprintHashPromise) {
+    return await fingerprintHashPromise
+  }
+
+  fingerprintHashPromise = (async () => {
+    try {
+      const fingerprintModule = await import('@fingerprintjs/fingerprintjs')
+      const loadFn =
+        (fingerprintModule as { load?: unknown }).load ??
+        (fingerprintModule as { default?: { load?: unknown } }).default?.load
+      if (typeof loadFn !== 'function') {
+        return null
+      }
+
+      const agent = await loadFn()
+      const result = await (agent as { get?: () => Promise<unknown> })?.get?.()
+      const visitorId =
+        result && typeof result === 'object' && 'visitorId' in result
+          ? typeof (result as { visitorId?: unknown }).visitorId === 'string'
+            ? (result as { visitorId: string }).visitorId.trim()
+            : ''
+          : ''
+
+      if (!visitorId) {
+        return null
+      }
+
+      return await sha256Hex(`${FINGERPRINT_HASH_VERSION}|${visitorId}`)
+    } catch {
+      return null
+    }
+  })()
+
+  return await fingerprintHashPromise
+}
+
 function normalizeBearerToken(token: string): string {
   const trimmed = token.trim()
   if (!trimmed) return ''
@@ -165,7 +202,10 @@ export async function attestCurrentDevice(
   const seed = await getOrInitMachineSeed(deps)
   const osInfo = await deps.getOS()
   const fingerprint = extractFingerprint(osInfo)
-  const machineCodeHash = await sha256Hex(`${MACHINE_CODE_VERSION}|${seed}|${fingerprint}`)
+  const fingerprintHash = await resolveFingerprintHash()
+  const machineCodeHash = await sha256Hex(
+    `${MACHINE_CODE_VERSION}|${seed}|${fingerprint}|${fingerprintHash ?? ''}`
+  )
 
   ensureSecuritySettings()
   const lastHash =
@@ -173,6 +213,16 @@ export async function attestCurrentDevice(
       ? appSetting.security.machineCodeHash.trim()
       : ''
   if (lastHash === machineCodeHash) return
+
+  const payload: {
+    machine_code_hash: string
+    fingerprint_hash?: string
+  } = {
+    machine_code_hash: machineCodeHash
+  }
+  if (fingerprintHash) {
+    payload.fingerprint_hash = fingerprintHash
+  }
 
   const url = new URL('/api/v1/devices/attest', getAuthBaseUrl()).toString()
   const response = await fetch(url, {
@@ -182,7 +232,7 @@ export async function attestCurrentDevice(
       'content-type': 'application/json',
       'x-device-id': deviceId
     },
-    body: JSON.stringify({ machine_code_hash: machineCodeHash })
+    body: JSON.stringify(payload)
   })
   if (!response.ok) {
     throw new Error(`Attest failed: ${response.status} ${response.statusText}`)

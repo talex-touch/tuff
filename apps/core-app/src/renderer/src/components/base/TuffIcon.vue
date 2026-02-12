@@ -68,8 +68,11 @@ const {
 const effectiveUrl = computed(() => svgResolvedUrl.value || url.value)
 const isSvg = computed(() => url.value?.endsWith('.svg'))
 
-// Combine icon status error with SVG fetch error
-const combinedError = computed(() => error.value || !!svgError.value)
+// Track runtime image load failures (e.g. tfile:// 404, broken path)
+const imgError = ref(false)
+
+// Combine icon status error with SVG fetch error and runtime img error
+const combinedError = computed(() => error.value || !!svgError.value || imgError.value)
 const combinedLoading = computed(() => loading.value || svgLoading.value)
 
 const dataurl = computed(() => {
@@ -79,6 +82,7 @@ const dataurl = computed(() => {
 watch(
   () => url.value,
   (nextUrl) => {
+    imgError.value = false
     if (nextUrl && nextUrl.endsWith('.svg')) {
       setUrl(nextUrl)
       return
@@ -128,15 +132,7 @@ watch(
         <i class="TuffIcon-Svg colorful" :alt="alt" :style="{ '--un-icon': `url('${dataurl}')` }" />
       </template>
       <template v-else-if="!isSvg || !colorful">
-        <img
-          :alt="alt"
-          :src="effectiveUrl"
-          @error="
-            () => {
-              /* Handle image load error */
-            }
-          "
-        />
+        <img :alt="alt" :src="effectiveUrl" @error="imgError = true" />
       </template>
     </template>
 

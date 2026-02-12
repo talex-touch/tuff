@@ -94,27 +94,33 @@ const styleVars = computed<CSSProperties>(() => {
 
 .tx-glow-text__shine {
   position: absolute;
-  inset: -30%;
+  inset: -40%;
   z-index: 2;
   opacity: var(--tx-glow-opacity, 0.75);
   pointer-events: none;
   mix-blend-mode: var(--tx-glow-blend-mode, screen);
   -webkit-backdrop-filter: var(--tx-glow-backdrop, none);
   backdrop-filter: var(--tx-glow-backdrop, none);
+  --tx-glow-band-size: var(--tx-glow-band, 38%);
+  --tx-glow-band-half: calc(var(--tx-glow-band-size) / 2);
+  --tx-glow-band-soft: calc(var(--tx-glow-band-size) / 3);
 
   background: linear-gradient(
     var(--tx-glow-angle, 20deg),
     transparent 0%,
-    transparent calc(50% - var(--tx-glow-band, 38%) / 2),
+    transparent calc(50% - var(--tx-glow-band-half)),
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% - var(--tx-glow-band-soft)),
     var(--tx-glow-color, rgba(255, 255, 255, 0.9)) 50%,
-    transparent calc(50% + var(--tx-glow-band, 38%) / 2),
+    var(--tx-glow-color, rgba(255, 255, 255, 0.9)) calc(50% + var(--tx-glow-band-soft)),
+    transparent calc(50% + var(--tx-glow-band-half)),
     transparent 100%
   );
 
-  transform: translateX(-140%);
-  animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) linear infinite;
+  transform: translateX(-160%);
+  filter: blur(0.4px);
+  animation: tx-glow-sweep var(--tx-glow-duration, 1400ms) var(--tx-glow-ease, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
   animation-delay: var(--tx-glow-delay, 0ms);
-  will-change: transform;
+  will-change: transform, opacity, filter;
 }
 
 .tx-glow-text.is-once .tx-glow-text__shine {
@@ -130,15 +136,22 @@ const styleVars = computed<CSSProperties>(() => {
   .tx-glow-text__shine {
     animation: none;
     transform: translateX(0);
+    filter: none;
   }
 }
 
 @keyframes tx-glow-sweep {
   0% {
-    transform: translateX(-140%);
+    transform: translateX(-160%);
+    opacity: 0;
+  }
+  20%,
+  80% {
+    opacity: var(--tx-glow-opacity, 0.75);
   }
   100% {
-    transform: translateX(140%);
+    transform: translateX(160%);
+    opacity: 0;
   }
 }
 </style>

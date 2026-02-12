@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
+import { resolveRequestGeo } from './requestGeo'
 
 const USERS_TABLE = 'auth_users'
 const CREDENTIALS_TABLE = 'auth_credentials'
@@ -152,6 +153,14 @@ async function ensureAuthSchema(db: D1Database) {
       user_id TEXT,
       device_id TEXT,
       ip TEXT,
+      country_code TEXT,
+      region_code TEXT,
+      region_name TEXT,
+      city TEXT,
+      latitude REAL,
+      longitude REAL,
+      timezone TEXT,
+      geo_source TEXT,
       user_agent TEXT,
       success INTEGER NOT NULL,
       reason TEXT,
@@ -223,6 +232,22 @@ async function ensureAuthSchema(db: D1Database) {
     CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id);
   `).run()
 
+  const loginHistoryColumns = await db.prepare(`PRAGMA table_info(${LOGIN_HISTORY_TABLE});`).all<{ name: string }>()
+  const addLoginHistoryColumnIfMissing = async (column: string, ddl: string) => {
+    if (!loginHistoryColumns.results?.some(item => item.name === column)) {
+      await db.prepare(`ALTER TABLE ${LOGIN_HISTORY_TABLE} ADD COLUMN ${ddl};`).run()
+    }
+  }
+
+  await addLoginHistoryColumnIfMissing('country_code', 'country_code TEXT')
+  await addLoginHistoryColumnIfMissing('region_code', 'region_code TEXT')
+  await addLoginHistoryColumnIfMissing('region_name', 'region_name TEXT')
+  await addLoginHistoryColumnIfMissing('city', 'city TEXT')
+  await addLoginHistoryColumnIfMissing('latitude', 'latitude REAL')
+  await addLoginHistoryColumnIfMissing('longitude', 'longitude REAL')
+  await addLoginHistoryColumnIfMissing('timezone', 'timezone TEXT')
+  await addLoginHistoryColumnIfMissing('geo_source', 'geo_source TEXT')
+
   authSchemaInitialized = true
 }
 
@@ -256,6 +281,99 @@ export interface AuthDevice {
   createdAt: string
   revokedAt: string | null
   tokenVersion: number
+  lastLocation?: AuthGeoLocation | null
+  lastLoginIpMasked?: string | null
+  lastLoginAt?: string | null
+}
+
+export interface AuthGeoLocation {
+  countryCode: string | null
+  regionCode: string | null
+  regionName: string | null
+  city: string | null
+  latitude: number | null
+  longitude: number | null
+  timezone: string | null
+  updatedAt: string | null
+}
+
+export interface AuthLoginHistoryRecord {
+  id: string
+  user_id: string | null
+  device_id: string | null
+  ip: string | null
+  ip_masked: string | null
+  user_agent: string | null
+  success: boolean
+  reason: string | null
+  created_at: string
+  country_code: string | null
+  region_code: string | null
+  region_name: string | null
+  city: string | null
+  latitude: number | null
+  longitude: number | null
+  timezone: string | null
+  geo_source: string | null
+}
+
+function toNullableNumber(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function resolveLocationFromRow(row: Record<string, any>): AuthGeoLocation | null {
+  const countryCode = row.country_code ?? null
+  const regionCode = row.region_code ?? null
+  const regionName = row.region_name ?? null
+  const city = row.city ?? null
+  const latitude = toNullableNumber(row.latitude)
+  const longitude = toNullableNumber(row.longitude)
+  const timezone = row.timezone ?? null
+  const updatedAt = row.last_login_at ?? row.created_at ?? null
+
+  if (!countryCode && !regionCode && !regionName && !city && latitude == null && longitude == null && !timezone) {
+    return null
+  }
+
+  return {
+    countryCode,
+    regionCode,
+    regionName,
+    city,
+    latitude,
+    longitude,
+    timezone,
+    updatedAt,
+  }
+}
+
+export function maskIpAddress(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') {
+    return null
+  }
+
+  const normalized = value.trim()
+  if (!normalized) {
+    return null
+  }
+
+  if (normalized.includes('.')) {
+    const parts = normalized.split('.')
+    if (parts.length === 4) {
+      return `${parts[0]}.${parts[1]}.*.*`
+    }
+  }
+
+  if (normalized.includes(':')) {
+    const parts = normalized.split(':').filter(Boolean)
+    if (parts.length >= 2) {
+      return `${parts[0]}:${parts[1]}:*:*`
+    }
+    return `${normalized.slice(0, 4)}:*:*`
+  }
+
+  return '***'
 }
 
 export interface LinkedAccount {
@@ -288,6 +406,8 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
 function mapDevice(row: Record<string, any> | null): AuthDevice | null {
   if (!row)
     return null
+  const lastLocation = resolveLocationFromRow(row)
+  const lastLoginIpMasked = maskIpAddress(row.last_login_ip ?? row.ip ?? null)
   return {
     id: row.id,
     userId: row.user_id,
@@ -297,7 +417,10 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
     lastSeenAt: row.last_seen_at ?? null,
     createdAt: row.created_at,
     revokedAt: row.revoked_at ?? null,
-    tokenVersion: Number(row.token_version ?? 0)
+    tokenVersion: Number(row.token_version ?? 0),
+    lastLocation,
+    lastLoginIpMasked,
+    lastLoginAt: row.last_login_at ?? null,
   }
 }
 
@@ -939,7 +1062,33 @@ export async function getDevice(event: H3Event, userId: string, deviceId: string
 export async function listDevices(event: H3Event, userId: string): Promise<AuthDevice[]> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
-  const result = await db.prepare(`SELECT * FROM ${DEVICES_TABLE} WHERE user_id = ? ORDER BY created_at DESC`).bind(userId).all()
+
+  const result = await db.prepare(`
+    SELECT
+      d.*,
+      h.ip AS last_login_ip,
+      h.created_at AS last_login_at,
+      h.country_code,
+      h.region_code,
+      h.region_name,
+      h.city,
+      h.latitude,
+      h.longitude,
+      h.timezone
+    FROM ${DEVICES_TABLE} d
+    LEFT JOIN ${LOGIN_HISTORY_TABLE} h
+      ON h.id = (
+        SELECT lh.id
+        FROM ${LOGIN_HISTORY_TABLE} lh
+        WHERE lh.user_id = d.user_id
+          AND lh.device_id = d.id
+        ORDER BY lh.created_at DESC
+        LIMIT 1
+      )
+    WHERE d.user_id = ?
+    ORDER BY d.created_at DESC
+  `).bind(userId).all()
+
   return result.results.map(row => mapDevice(row as Record<string, any>)!).filter(Boolean)
 }
 
@@ -971,14 +1120,27 @@ export async function logLoginAttempt(event: H3Event, payload: { userId?: string
   await ensureAuthSchema(db)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
+  const geo = resolveRequestGeo(event)
   await db.prepare(`
-    INSERT INTO ${LOGIN_HISTORY_TABLE} (id, user_id, device_id, ip, user_agent, success, reason, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO ${LOGIN_HISTORY_TABLE} (
+      id, user_id, device_id, ip,
+      country_code, region_code, region_name, city, latitude, longitude, timezone, geo_source,
+      user_agent, success, reason, created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     payload.userId ?? null,
     payload.deviceId ?? null,
     getRequestIp(event),
+    geo.countryCode,
+    geo.regionCode,
+    geo.regionName,
+    geo.city,
+    geo.latitude,
+    geo.longitude,
+    geo.timezone,
+    geo.source,
     getUserAgent(event),
     payload.success ? 1 : 0,
     payload.reason ?? null,
@@ -986,7 +1148,7 @@ export async function logLoginAttempt(event: H3Event, payload: { userId?: string
   ).run()
 }
 
-export async function listLoginHistory(event: H3Event, userId: string, days = 90) {
+export async function listLoginHistory(event: H3Event, userId: string, days = 90): Promise<AuthLoginHistoryRecord[]> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
@@ -997,7 +1159,28 @@ export async function listLoginHistory(event: H3Event, userId: string, days = 90
     ORDER BY created_at DESC
     LIMIT 200
   `).bind(userId).all()
-  return result.results
+  return (result.results as Record<string, any>[]).map((row) => {
+    const location = resolveLocationFromRow(row)
+    return {
+      id: row.id,
+      user_id: row.user_id ?? null,
+      device_id: row.device_id ?? null,
+      ip: row.ip ?? null,
+      ip_masked: maskIpAddress(row.ip ?? null),
+      user_agent: row.user_agent ?? null,
+      success: Number(row.success ?? 0) === 1,
+      reason: row.reason ?? null,
+      created_at: row.created_at,
+      country_code: location?.countryCode ?? null,
+      region_code: location?.regionCode ?? null,
+      region_name: location?.regionName ?? null,
+      city: location?.city ?? null,
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      timezone: location?.timezone ?? null,
+      geo_source: row.geo_source ?? null,
+    }
+  })
 }
 
 export function readDeviceId(event: H3Event): string | null {

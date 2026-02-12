@@ -1,9 +1,9 @@
 import { createError, readBody } from 'h3'
-import { requireAdmin } from '../../utils/auth'
+import { requireAdminOrApiKey } from '../../utils/auth'
 import { createReleaseRevision, getReleaseByTag, updateRelease } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAdmin(event)
+  const { userId } = await requireAdminOrApiKey(event, ['release:sync'])
 
   const tag = event.context.params?.tag
 

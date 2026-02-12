@@ -472,8 +472,8 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   border-radius: 1.2rem;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
   overflow: hidden;
   box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
 }
@@ -484,7 +484,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .VersionOverlay-Stepper {
@@ -616,5 +616,9 @@ onBeforeUnmount(() => {
   transform-style: preserve-3d;
   backface-visibility: hidden;
   will-change: transform;
+}
+
+.VersionOverlay-Card.is-expanded {
+  transform: translate(-50%, -50%);
 }
 </style>

@@ -12,13 +12,10 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
-const { user } = useUser()
+const { user } = useAuthUser()
 const toast = useToast()
 
-const isAdmin = computed(() => {
-  const metadata = (user.value?.publicMetadata ?? {}) as Record<string, unknown>
-  return metadata?.role === 'admin'
-})
+const isAdmin = computed(() => user.value?.role === 'admin')
 
 watch(isAdmin, (admin) => {
   if (user.value && !admin) {

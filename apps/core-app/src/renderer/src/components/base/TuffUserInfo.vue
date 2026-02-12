@@ -1,28 +1,29 @@
 <script lang="ts" setup>
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxFlipOverlay, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
-import TModal from '~/components/base/tuff/TModal.vue'
-import { getAuthBaseUrl, isLocalAuthMode } from '~/modules/auth/auth-env'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
 import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
 
 const { t } = useI18n()
 const {
-  currentUser,
   isLoggedIn,
   user,
   getDisplayName,
   getPrimaryEmail,
   getUserBio,
-  openLoginSettings
+  openLoginSettings,
+  requestStepUp
 } = useAuth()
 
 const profileVisible = ref(false)
 const profileEditing = ref(false)
+const profileTab = ref<'overview' | 'security'>('overview')
+const profileTriggerRef = ref<HTMLElement | null>(null)
 const accountLoading = ref(false)
 const accountLoaded = ref(false)
 const accountError = ref('')
@@ -33,17 +34,13 @@ const lastFetchedAt = ref(0)
 const appSdk = useAppSdk()
 
 const displayName = computed(() => {
-  const name = getDisplayName()
-  if (name) return name
-  return currentUser.value?.name || ''
+  return getDisplayName()
 })
 const displayEmail = computed(() => {
-  const email = getPrimaryEmail()
-  if (email) return email
-  return currentUser.value?.email || ''
+  return getPrimaryEmail()
 })
-const displayId = computed(() => user.value?.id || currentUser.value?.id || '')
-const avatarUrl = computed(() => user.value?.avatar || currentUser.value?.avatar || '')
+const displayId = computed(() => user.value?.id || '')
+const avatarUrl = computed(() => user.value?.avatar || '')
 const displayInitial = computed(() => {
   const seed = displayName.value || displayEmail.value
   return seed ? seed.trim().charAt(0).toUpperCase() : '?'
@@ -88,6 +85,11 @@ const teamMembers = computed(() =>
 const teamRole = computed(() => (teamSummary.value?.role ? teamSummary.value.role : '-'))
 const showUpgradeTeam = computed(() => Boolean(teamSummary.value?.upgrade?.required))
 const deviceCountLabel = computed(() => (deviceCount.value === null ? '-' : `${deviceCount.value}`))
+const statusBadgeLabel = computed(() =>
+  isLoggedIn.value
+    ? t('userProfile.statusSignedIn', 'Signed in')
+    : t('userProfile.statusSignedOut', 'Signed out')
+)
 
 interface SubscriptionStatus {
   plan: string
@@ -154,10 +156,6 @@ function toggleProfileEditor() {
 }
 
 async function handleLoginMethods() {
-  if (isLocalAuthMode()) {
-    toast.info(t('userProfile.loginMethodsLocal'))
-    return
-  }
   try {
     const opened = await openLoginSettings()
     if (!opened) {
@@ -165,16 +163,22 @@ async function handleLoginMethods() {
       await appSdk.openExternal(loginUrl)
       toast.info(t('userProfile.loginMethodsWeb'))
     }
-  } catch (error) {
-    console.error('Failed to open login methods:', error)
+  } catch {
     toast.error(t('userProfile.loginMethodsFailed'))
   }
+}
+
+function openSyncSecurity() {
+  const syncSecurityUrl = `${getAuthBaseUrl()}/dashboard/account`
+  void appSdk.openExternal(syncSecurityUrl)
+  profileVisible.value = false
 }
 
 function openProfileDialog() {
   if (!isLoggedIn.value) {
     return
   }
+  profileTab.value = 'overview'
   profileVisible.value = true
 }
 
@@ -225,8 +229,10 @@ async function loadAccountOverview() {
     accountLoaded.value = true
     lastFetchedAt.value = now
   } catch (error) {
-    accountError.value =
-      error instanceof Error ? error.message : t('userProfile.loadFailed', '加载账户信息失败')
+    const errorMessage = error instanceof Error ? error.message : ''
+    accountError.value = /^401\b/.test(errorMessage)
+      ? t('userProfile.authRequired', '登录后才能获取账户信息')
+      : errorMessage || t('userProfile.loadFailed', '加载账户信息失败')
   } finally {
     accountLoading.value = false
   }
@@ -281,12 +287,17 @@ watch(profileVisible, (visible) => {
 watch(isLoggedIn, (loggedIn) => {
   if (!loggedIn) {
     resetAccountSnapshot()
+    profileEditing.value = false
+    if (profileVisible.value) {
+      profileVisible.value = false
+    }
   }
 })
 </script>
 
 <template>
   <div
+    ref="profileTriggerRef"
     :class="{ active: isLoggedIn, clickable: isLoggedIn }"
     class="FlatUserInfo"
     @click="openProfileDialog"
@@ -314,197 +325,230 @@ watch(isLoggedIn, (loggedIn) => {
       <span class="open-external-icon i-carbon-launch" />
     </template>
   </div>
-  <TModal v-model="profileVisible" :title="t('userProfile.title', 'Account')">
-    <div class="UserProfile">
-      <div class="UserProfile-TopCard">
-        <div class="UserProfile-TopIdentity">
-          <div class="UserProfile-Avatar">
-            <img
-              v-if="avatarUrl"
-              :src="avatarUrl"
-              :alt="displayName || displayEmail"
-              class="avatar-image"
-            />
-            <div v-else class="avatar-placeholder">
-              {{ displayInitial }}
-            </div>
+  <Teleport to="body">
+    <TxFlipOverlay
+      v-model="profileVisible"
+      :source="profileTriggerRef"
+      :duration="420"
+      :rotate-x="6"
+      :rotate-y="8"
+      :speed-boost="1.1"
+      transition-name="UserProfileOverlay-Mask"
+      mask-class="UserProfileOverlay-Mask"
+      card-class="UserProfileOverlay-Card"
+    >
+      <template #default="{ close }">
+        <div class="UserProfileOverlay">
+          <div class="UserProfileOverlay-Header">
+            <div class="UserProfileOverlay-Title">{{ t('userProfile.title', 'Account') }}</div>
+            <TxButton variant="flat" size="sm" class="UserProfileOverlay-CloseBtn" @click="close">
+              <i class="i-ri-close-line" />
+            </TxButton>
           </div>
-          <div class="UserProfile-Identity">
-            <div class="UserProfile-NameRow">
-              <p class="UserProfile-Name">
-                {{ displayName || t('userProfile.unknownName', 'User') }}
-              </p>
-              <span class="UserProfile-Badge">
-                {{ t('userProfile.statusSignedIn', 'Signed in') }}
-              </span>
-            </div>
-            <p class="UserProfile-Email">
-              {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
-            </p>
-            <p class="UserProfile-MetaText">
-              {{ t('userProfile.id', 'User ID') }}: {{ displayId || '-' }}
-            </p>
-            <p v-if="profileBio" class="UserProfile-MetaText">
-              {{ profileBio }}
-            </p>
-          </div>
-        </div>
-        <div class="UserProfile-TopPlan">
-          <p class="UserProfile-TopPlanLabel">
-            {{ t('userProfile.plan', 'Plan') }}
-          </p>
-          <p class="UserProfile-TopPlanValue">
-            {{ planLabel }}
-          </p>
-          <p class="UserProfile-TopPlanMeta">{{ planStatus }} · {{ planExpiresAt }}</p>
-          <TxButton variant="flat" size="sm" @click="toggleProfileEditor">
-            {{
-              profileEditing
-                ? t('userProfile.hideEditor', 'Hide editor')
-                : t('userProfile.manage', 'Manage')
-            }}
-          </TxButton>
-        </div>
-      </div>
+          <TxTabs
+            v-model="profileTab"
+            class="UserProfileOverlay-Tabs"
+            placement="top"
+            :content-padding="0"
+            :content-scrollable="true"
+            :animation="{ indicator: { durationMs: 500 } }"
+            borderless
+          >
+            <TxTabItem name="overview" activation>
+              <template #name>{{ t('userProfile.overview', '概览') }}</template>
+              <div class="UserProfile">
+                <div class="UserProfile-TopCard">
+                  <div class="UserProfile-TopIdentity">
+                    <div class="UserProfile-Avatar">
+                      <img
+                        v-if="avatarUrl"
+                        :src="avatarUrl"
+                        :alt="displayName || displayEmail"
+                        class="avatar-image"
+                      />
+                      <div v-else class="avatar-placeholder">
+                        {{ displayInitial }}
+                      </div>
+                    </div>
+                    <div class="UserProfile-Identity">
+                      <div class="UserProfile-NameRow">
+                        <p class="UserProfile-Name">
+                          {{ displayName || t('userProfile.unknownName', 'User') }}
+                        </p>
+                        <span class="UserProfile-Badge">
+                          {{ statusBadgeLabel }}
+                        </span>
+                      </div>
+                      <p class="UserProfile-Email">
+                        {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
+                      </p>
+                      <p class="UserProfile-MetaText">
+                        {{ t('userProfile.id', 'User ID') }}: {{ displayId || '-' }}
+                      </p>
+                      <p v-if="profileBio" class="UserProfile-MetaText">
+                        {{ profileBio }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="UserProfile-TopPlan">
+                    <p class="UserProfile-TopPlanLabel">
+                      {{ t('userProfile.plan', 'Plan') }}
+                    </p>
+                    <p class="UserProfile-TopPlanValue">
+                      {{ planLabel }}
+                    </p>
+                    <p class="UserProfile-TopPlanMeta">{{ planStatus }} · {{ planExpiresAt }}</p>
+                    <TxButton variant="flat" size="sm" @click="toggleProfileEditor">
+                      {{
+                        profileEditing
+                          ? t('userProfile.hideEditor', 'Hide editor')
+                          : t('userProfile.manage', 'Manage')
+                      }}
+                    </TxButton>
+                  </div>
+                </div>
 
-      <div v-if="profileEditing" class="UserProfile-ManagePanel">
-        <div class="UserProfile-SectionTitle">
-          {{ t('userProfile.editTitle', 'Edit profile') }}
-        </div>
-        <UserProfileEditor :visible="profileEditing" />
-        <div class="UserProfile-ManageFooter">
-          <div class="UserProfile-ManageInfo">
-            <span class="UserProfile-ManageLabel">
-              {{ t('userProfile.emailAccount', 'Email account') }}
-            </span>
-            <span class="UserProfile-ManageValue">
-              {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
-            </span>
-            <span class="UserProfile-ManageHint">
-              {{
-                t(
-                  'userProfile.emailManageHint',
-                  'Email updates are managed in browser account settings.'
-                )
-              }}
-            </span>
-          </div>
-          <div class="UserProfile-Actions">
-            <TxButton variant="flat" size="sm" @click="handleLoginMethods">
-              {{ t('userProfile.openEmailSettings', 'Manage email') }}
-            </TxButton>
-            <TxButton variant="flat" size="sm" @click="openDeviceManagement">
-              {{ t('userProfile.devices', 'Devices') }}
-            </TxButton>
-          </div>
-        </div>
-      </div>
+                <div v-if="profileEditing" class="UserProfile-ManagePanel">
+                  <div class="UserProfile-SectionTitle">
+                    {{ t('userProfile.editTitle', 'Edit profile') }}
+                  </div>
+                  <UserProfileEditor :visible="profileEditing" />
+                </div>
 
-      <div class="UserProfile-MetricsGrid">
-        <div class="UserProfile-Section">
-          <div class="UserProfile-SectionTitle">
-            {{ t('userProfile.subscription', 'Subscription & Quota') }}
-          </div>
-          <div class="UserProfile-Details">
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.planStatus', 'Status') }}
-              </span>
-              <span class="value">
-                {{ planStatus }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.planExpires', 'Expires') }}
-              </span>
-              <span class="value">
-                {{ planExpiresAt }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.aiRequests', 'AI Requests') }}
-              </span>
-              <span class="value">
-                {{ aiRequestsQuota }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.aiTokens', 'AI Tokens') }}
-              </span>
-              <span class="value">
-                {{ aiTokensQuota }}
-              </span>
-            </div>
-          </div>
+                <div class="UserProfile-MetricsGrid">
+                  <div class="UserProfile-Section">
+                    <div class="UserProfile-SectionTitle">
+                      {{ t('userProfile.subscription', 'Subscription & Quota') }}
+                    </div>
+                    <div class="UserProfile-Details">
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.planStatus', 'Status') }}
+                        </span>
+                        <span class="value">
+                          {{ planStatus }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.planExpires', 'Expires') }}
+                        </span>
+                        <span class="value">
+                          {{ planExpiresAt }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.aiRequests', 'AI Requests') }}
+                        </span>
+                        <span class="value">
+                          {{ aiRequestsQuota }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.aiTokens', 'AI Tokens') }}
+                        </span>
+                        <span class="value">
+                          {{ aiTokensQuota }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="UserProfile-Section">
+                    <div class="UserProfile-SectionTitle">
+                      {{ t('userProfile.teamDevices', 'Team & Devices') }}
+                    </div>
+                    <div class="UserProfile-Details">
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.teamName', 'Team') }}
+                        </span>
+                        <span class="value">
+                          {{ teamName }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.teamMembers', 'Members') }}
+                        </span>
+                        <span class="value">
+                          {{ teamMembers }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.teamRole', 'Role') }}
+                        </span>
+                        <span class="value">
+                          {{ teamRole }}
+                        </span>
+                      </div>
+                      <div class="UserProfile-Row">
+                        <span class="label">
+                          {{ t('userProfile.devices', 'Devices') }}
+                        </span>
+                        <span class="value">
+                          {{ deviceCountLabel }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="UserProfile-Actions">
+                      <TxButton variant="flat" size="sm" @click="openTeamManagement">
+                        {{ t('userProfile.manageTeam', 'Manage Team') }}
+                      </TxButton>
+                      <TxButton
+                        v-if="showUpgradeTeam"
+                        variant="flat"
+                        size="sm"
+                        @click="openTeamUpgrade"
+                      >
+                        {{ t('userProfile.upgradeTeam', 'Upgrade to Team') }}
+                      </TxButton>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="accountLoading" class="UserProfile-Loading">
+                  <TxSpinner :size="16" />
+                  {{ t('userProfile.loading', 'Loading account data...') }}
+                </div>
+                <div v-else-if="accountError" class="UserProfile-Error">
+                  {{ accountError }}
+                </div>
+                <div class="UserProfile-Actions">
+                  <TxButton variant="flat" size="sm" @click="openUserProfile">
+                    {{ t('userProfile.openWeb', 'Open on web') }}
+                  </TxButton>
+                </div>
+              </div>
+            </TxTabItem>
+            <TxTabItem name="security">
+              <template #name>{{ t('userProfile.security', '安全与登录') }}</template>
+              <div class="UserProfileTabContent">
+                <div class="UserProfile-SectionTitle">
+                  {{ t('userProfile.securityActions', '登录与安全选项') }}
+                </div>
+                <div class="UserProfile-Actions">
+                  <TxButton variant="flat" size="sm" @click="handleLoginMethods">
+                    {{ t('userProfile.openEmailSettings', 'Manage email') }}
+                  </TxButton>
+                  <TxButton variant="flat" size="sm" @click="openSyncSecurity">
+                    {{ t('settingUser.syncSecurity', '同步安全') }}
+                  </TxButton>
+                  <TxButton variant="flat" size="sm" @click="openDeviceManagement">
+                    {{ t('userProfile.devices', 'Devices') }}
+                  </TxButton>
+                  <TxButton variant="flat" size="sm" @click="requestStepUp">
+                    {{ t('settingUser.stepUp', '二次验证') }}
+                  </TxButton>
+                </div>
+              </div>
+            </TxTabItem>
+          </TxTabs>
         </div>
-        <div class="UserProfile-Section">
-          <div class="UserProfile-SectionTitle">
-            {{ t('userProfile.teamDevices', 'Team & Devices') }}
-          </div>
-          <div class="UserProfile-Details">
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.teamName', 'Team') }}
-              </span>
-              <span class="value">
-                {{ teamName }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.teamMembers', 'Members') }}
-              </span>
-              <span class="value">
-                {{ teamMembers }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.teamRole', 'Role') }}
-              </span>
-              <span class="value">
-                {{ teamRole }}
-              </span>
-            </div>
-            <div class="UserProfile-Row">
-              <span class="label">
-                {{ t('userProfile.devices', 'Devices') }}
-              </span>
-              <span class="value">
-                {{ deviceCountLabel }}
-              </span>
-            </div>
-          </div>
-          <div class="UserProfile-Actions">
-            <TxButton variant="flat" size="sm" @click="openTeamManagement">
-              {{ t('userProfile.manageTeam', 'Manage Team') }}
-            </TxButton>
-            <TxButton v-if="showUpgradeTeam" variant="flat" size="sm" @click="openTeamUpgrade">
-              {{ t('userProfile.upgradeTeam', 'Upgrade to Team') }}
-            </TxButton>
-          </div>
-        </div>
-      </div>
-      <div v-if="accountLoading" class="UserProfile-Loading">
-        <span class="i-carbon-circle-dash animate-spin" />
-        {{ t('userProfile.loading', 'Loading account data...') }}
-      </div>
-      <div v-else-if="accountError" class="UserProfile-Error">
-        {{ accountError }}
-      </div>
-    </div>
-    <template #footer>
-      <TxButton variant="ghost" @click="profileVisible = false">
-        {{ t('userProfile.close', 'Close') }}
-      </TxButton>
-      <TxButton variant="primary" @click="openUserProfile">
-        {{ t('userProfile.openWeb', 'Open on web') }}
-      </TxButton>
-    </template>
-  </TModal>
+      </template>
+    </TxFlipOverlay>
+  </Teleport>
 </template>
 
 <style lang="scss" scoped>
@@ -657,6 +701,45 @@ watch(isLoggedIn, (loggedIn) => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  padding: 14px 16px 18px;
+}
+
+.UserProfileOverlay {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.UserProfileOverlay-Header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.UserProfileOverlay-Title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.UserProfileOverlay-CloseBtn {
+  flex: 0 0 auto;
+}
+
+.UserProfileOverlay-Tabs {
+  flex: 1;
+  min-height: 0;
+}
+
+.UserProfileTabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
 }
 
 .UserProfile-TopCard {
@@ -918,5 +1001,49 @@ watch(isLoggedIn, (loggedIn) => {
   .UserProfile-MetricsGrid {
     grid-template-columns: 1fr;
   }
+}
+</style>
+
+<style lang="scss">
+.UserProfileOverlay-Mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(12, 12, 14, 0.42);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 1800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+
+.UserProfileOverlay-Mask-enter-active,
+.UserProfileOverlay-Mask-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.UserProfileOverlay-Mask-enter-from,
+.UserProfileOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.UserProfileOverlay-Card {
+  width: min(940px, 92vw);
+  height: min(760px, 88vh);
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 1.2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform;
 }
 </style>

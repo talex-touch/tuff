@@ -64,6 +64,87 @@ const _appSettingOriginData = {
     syncLatest: false,
     dataSync: false,
   },
+  sync: {
+    /**
+     * Whether sync is currently enabled.
+     * Login flow will auto-enable this unless the user has overridden it.
+     */
+    enabled: false,
+    /**
+     * Whether user manually changed sync preference.
+     * Once true, login auto-enable will no longer override this choice.
+     */
+    userOverridden: false,
+    /**
+     * Timestamp when sync was auto-enabled by login flow.
+     */
+    autoEnabledAt: '',
+    /**
+     * Timestamp of latest successful sync-related activity.
+     * Used for user-facing status display (best-effort, client-side).
+     */
+    lastActivityAt: '',
+    /**
+     * Timestamp of latest successful push activity.
+     */
+    lastPushAt: '',
+    /**
+     * Timestamp of latest successful pull activity.
+     */
+    lastPullAt: '',
+    /**
+     * Runtime sync status for UI visibility.
+     */
+    status: 'idle' as 'idle' | 'syncing' | 'paused' | 'error',
+    /**
+     * Timestamp of latest successful sync task (pull or push).
+     */
+    lastSuccessAt: '',
+    /**
+     * Timestamp of latest sync error.
+     */
+    lastErrorAt: '',
+    /**
+     * Latest sync error code.
+     */
+    lastErrorCode: '',
+    /**
+     * Latest sync error message.
+     */
+    lastErrorMessage: '',
+    /**
+     * Consecutive sync failure counter.
+     */
+    consecutiveFailures: 0,
+    /**
+     * Pending sync queue depth (best-effort).
+     */
+    queueDepth: 0,
+    /**
+     * Next scheduled pull timestamp.
+     */
+    nextPullAt: '',
+    /**
+     * Latest pulled cursor for incremental sync.
+     */
+    cursor: 0,
+    /**
+     * Local op sequence for push ordering.
+     */
+    opSeq: 0,
+    /**
+     * Timestamp of latest conflict observed during push.
+     */
+    lastConflictAt: '',
+    /**
+     * Count of latest conflicts observed during push.
+     */
+    lastConflictCount: 0,
+    /**
+     * If sync is blocked by a policy/error class.
+     */
+    blockedReason: '' as '' | 'quota' | 'device' | 'auth',
+  },
   dev: {
     autoCloseDev: true,
     authServer: 'production' as 'production' | 'local',

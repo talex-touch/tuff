@@ -2,14 +2,14 @@ import type { AssetArch, AssetPlatform } from '../../../utils/releasesStore'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { createError, readFormData } from 'h3'
-import { requireAdmin } from '../../../utils/auth'
+import { requireAdminOrApiKey } from '../../../utils/auth'
 import { uploadReleaseAsset } from '../../../utils/releaseAssetStorage'
 import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStore'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  await requireAdmin(event)
+  await requireAdminOrApiKey(event, ['release:sync'])
 
   const tag = event.context.params?.tag
 

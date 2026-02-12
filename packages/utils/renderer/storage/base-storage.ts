@@ -701,6 +701,25 @@ export class TouchStorage<T extends object> {
   }
 
   /**
+   * Applies remote snapshot data without triggering local auto-save echo.
+   *
+   * @param data Snapshot data pulled from remote sync source.
+   * @returns The current instance for chaining
+   */
+  applyRemoteSnapshot(data: Partial<T>): this {
+    this.#isRemoteUpdate = true
+    try {
+      this.assignData(data, true, true)
+      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+      this.#localDirty = false
+    }
+    finally {
+      this.#isRemoteUpdate = false
+    }
+    return this
+  }
+
+  /**
    * Reloads data from remote storage and applies it.
    *
    * @returns The current instance

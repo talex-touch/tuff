@@ -53,7 +53,7 @@ const { t } = useI18n()
 
 <style scoped>
 .AssetPluginStep {
-  width: min(860px, 92vw);
+  width: min(700px, 92vw);
   padding: 12px;
 }
 

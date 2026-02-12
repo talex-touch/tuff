@@ -1,10 +1,11 @@
 <script lang="ts" name="CoreBoxFooter" setup>
 import type { IProviderActivate, ITuffIcon, TuffFooterHints, TuffItem } from '@talex-touch/utils'
 import { useDebounce } from '@vueuse/core'
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { resolveSourceMeta } from './sourceMeta'
 
 const props = defineProps<{
@@ -22,6 +23,29 @@ const displayValue = computed(() => props.display)
 const debouncedDisplay = useDebounce(displayValue, 100)
 
 const { t } = useI18n()
+
+// --- Indexing status ---
+const { onProgressUpdate, indexProgress } = useFileIndexMonitor()
+
+const isIndexing = computed(() => {
+  const stage = indexProgress.value?.stage
+  return stage && stage !== 'idle' && stage !== 'completed'
+})
+
+const indexingLabel = computed(() => {
+  if (!isIndexing.value || !indexProgress.value) return ''
+  const p = indexProgress.value
+  const pct = Math.round(p.progress ?? 0)
+  return t('coreBox.footer.indexing', { progress: pct })
+})
+
+let unsubscribeIndex: (() => void) | null = null
+onMounted(() => {
+  unsubscribeIndex = onProgressUpdate(() => {})
+})
+onBeforeUnmount(() => {
+  unsubscribeIndex?.()
+})
 
 const displayIcon = computed(() => {
   const icon = props.item?.render?.basic?.icon
@@ -154,32 +178,44 @@ const keyHints = computed(() => {
 
 <template>
   <div
-    :class="{ display: debouncedDisplay }"
+    :class="{ display: debouncedDisplay || isIndexing }"
     class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--el-border-color-lighter)] bg-transparent text-12px text-[color:var(--el-text-color-secondary)]"
   >
     <div class="FooterInfo">
-      <TuffIcon
-        colorful
-        :icon="displayIcon"
-        :alt="title"
-        :empty="DefaultIcon"
-        :size="20"
-        class="FooterIcon"
-      />
-      <div class="FooterText">
-        <span class="FooterTitle" :title="title">{{ title }}</span>
-        <span v-if="subtitleMeta" class="FooterSubtitle" :title="subtitleMeta.label">
-          <i :class="subtitleMeta.icon" class="FooterSubtitleIcon" />
-          <span>{{ subtitleMeta.label }}</span>
-        </span>
-      </div>
-      <template v-if="item?.kind === 'feature'">
-        <span v-if="item.meta?.interaction" class="InteractionType">
-          {{ item.meta.interaction.type }}
-        </span>
+      <!-- Indexing indicator takes priority when no search results -->
+      <template v-if="isIndexing && !debouncedDisplay">
+        <span class="IndexingDot" />
+        <span class="IndexingLabel">{{ indexingLabel }}</span>
+      </template>
+      <template v-else>
+        <TuffIcon
+          colorful
+          :icon="displayIcon"
+          :alt="title"
+          :empty="DefaultIcon"
+          :size="20"
+          class="FooterIcon"
+        />
+        <div class="FooterText">
+          <span class="FooterTitle" :title="title">{{ title }}</span>
+          <span v-if="subtitleMeta" class="FooterSubtitle" :title="subtitleMeta.label">
+            <i :class="subtitleMeta.icon" class="FooterSubtitleIcon" />
+            <span>{{ subtitleMeta.label }}</span>
+          </span>
+        </div>
+        <template v-if="item?.kind === 'feature'">
+          <span v-if="item.meta?.interaction" class="InteractionType">
+            {{ item.meta.interaction.type }}
+          </span>
+        </template>
       </template>
     </div>
     <div class="FooterHints">
+      <!-- Show indexing label on the right when search results are visible -->
+      <span v-if="isIndexing && debouncedDisplay" class="IndexingHint">
+        <span class="IndexingDot" />
+        <span>{{ indexingLabel }}</span>
+      </span>
       <div v-for="hint in keyHints" :key="hint.label" class="FooterHint">
         <span class="HintKey">{{ hint.key }}</span>
         <span class="HintLabel">{{ hint.label }}</span>
@@ -247,6 +283,40 @@ const keyHints = computed(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.IndexingDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  flex-shrink: 0;
+  animation: indexing-pulse 1.5s ease-in-out infinite;
+}
+
+.IndexingLabel {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.IndexingHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+@keyframes indexing-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 .FooterHint {

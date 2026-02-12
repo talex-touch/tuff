@@ -6,6 +6,7 @@ status: beta
 since: 1.0.0
 tags: [action, tactile, primary]
 syncStatus: migrated
+verified: true
 ---
 
 # Button

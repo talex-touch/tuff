@@ -2,7 +2,8 @@
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { AssetCreateType, AssetTypeOption } from './types'
 import { TxAutoSizer, TxButton, TxFlipOverlay, TxStatusBadge } from '@talex-touch/tuffex'
-import { computed, ref, watch } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AssetBetaStep from './AssetBetaStep.vue'
 import AssetPluginFormStep from './AssetPluginFormStep.vue'
 import AssetPluginStep from './AssetPluginStep.vue'
@@ -11,6 +12,7 @@ import AssetTypePickerStep from './AssetTypePickerStep.vue'
 
 interface AutoSizerActionApi {
   action?: (fn: () => void | Promise<void>) => Promise<void> | void
+  refresh?: () => Promise<void> | void
 }
 
 const props = defineProps<{
@@ -27,9 +29,12 @@ const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
 const sizerRef = ref<AutoSizerActionApi | null>(null)
+const headerRef = ref<HTMLElement | null>(null)
 const currentType = ref<AssetCreateType | null>(null)
 const step = ref<'type' | 'detail' | 'plugin_form'>('type')
 const stepDirection = ref<1 | -1>(1)
+const maxBodyHeight = ref<number | null>(null)
+let resizeHandler: (() => void) | null = null
 
 const typeOptions = computed<AssetTypeOption[]>(() => [
   {
@@ -92,6 +97,13 @@ const currentStepKey = computed(() => {
   return `detail-${currentType.value ?? 'unknown'}`
 })
 
+const overlayCardClass = computed(() => {
+  const base = 'AssetCreateOverlay-Card'
+  if (step.value === 'plugin_form')
+    return `${base} is-wide`
+  return `${base} is-compact`
+})
+
 async function runWithAutoSizer(fn: () => void | Promise<void>) {
   const action = sizerRef.value?.action
   if (action) {
@@ -140,6 +152,28 @@ function handleSubmitPlugin(data: PluginFormData) {
   emit('submit-plugin', data)
 }
 
+async function handleChildLayoutChange() {
+  const refresh = sizerRef.value?.refresh
+  if (refresh) {
+    await refresh()
+    return
+  }
+  await runWithAutoSizer(async () => {})
+}
+
+function resolveMaxBodyHeight() {
+  if (!hasWindow())
+    return 620
+  const viewportMax = Math.floor(window.innerHeight * 0.7)
+  const headerHeight = headerRef.value?.getBoundingClientRect().height ?? 0
+  const bodyPadding = 24
+  return Math.max(260, viewportMax - headerHeight - bodyPadding)
+}
+
+function updateMaxBodyHeight() {
+  maxBodyHeight.value = resolveMaxBodyHeight()
+}
+
 function resolveBetaTitle() {
   if (!currentOption.value) {
     return t('dashboard.sections.plugins.assetCreate.betaTitle', 'Beta Asset Type')
@@ -162,6 +196,10 @@ watch(
   () => visible.value,
   (opened) => {
     if (opened) {
+      nextTick(() => {
+        updateMaxBodyHeight()
+        void handleChildLayoutChange()
+      })
       return
     }
 
@@ -170,6 +208,26 @@ watch(
     stepDirection.value = 1
   }
 )
+
+watch(maxBodyHeight, () => {
+  void handleChildLayoutChange()
+})
+
+onMounted(() => {
+  if (!hasWindow())
+    return
+  resizeHandler = () => {
+    updateMaxBodyHeight()
+  }
+  window.addEventListener('resize', resizeHandler, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  if (!hasWindow() || !resizeHandler)
+    return
+  window.removeEventListener('resize', resizeHandler)
+  resizeHandler = null
+})
 </script>
 
 <template>
@@ -183,11 +241,11 @@ watch(
       :speed-boost="1.08"
       transition-name="AssetCreateOverlay-Mask"
       mask-class="AssetCreateOverlay-Mask"
-      card-class="AssetCreateOverlay-Card"
+      :card-class="overlayCardClass"
     >
       <template #default="overlaySlot">
         <div class="AssetCreateOverlay">
-          <div class="AssetCreateOverlay-Header">
+          <div ref="headerRef" class="AssetCreateOverlay-Header">
             <div class="AssetCreateOverlay-TitleWrap">
               <p class="AssetCreateOverlay-Title">
                 {{ t('dashboard.sections.plugins.assetCreate.title', 'Create Asset') }}
@@ -223,7 +281,7 @@ watch(
               easing="cubic-bezier(0.4, 0, 0.2, 1)"
               outer-class="AssetCreateOverlay-SizerOuter"
             >
-              <AssetStepCarousel :active-key="currentStepKey" :direction="stepDirection">
+            <AssetStepCarousel :active-key="currentStepKey" :direction="stepDirection" @settled="handleChildLayoutChange">
                 <AssetTypePickerStep
                   v-if="step === 'type'"
                   :options="typeOptions"
@@ -233,9 +291,11 @@ watch(
                 <AssetPluginFormStep
                   v-else-if="step === 'plugin_form' && currentType === 'plugin'"
                   :visible="step === 'plugin_form' && visible"
+                  :max-scroll-height="maxBodyHeight"
                   :loading="props.pluginLoading"
                   :error="props.pluginError"
                   :is-admin="props.isAdmin"
+                  @layout-change="handleChildLayoutChange"
                   @submit="handleSubmitPlugin"
                 />
 
@@ -275,20 +335,20 @@ watch(
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .AssetCreateOverlay-Title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .AssetCreateOverlay-Subtitle {
   margin: 6px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .AssetCreateOverlay-Actions {
@@ -306,6 +366,7 @@ watch(
 
 :deep(.AssetCreateOverlay-SizerOuter) {
   display: flex;
+  align-items: flex-start;
   justify-content: center;
   overflow: hidden;
 }
@@ -336,12 +397,10 @@ watch(
 }
 
 .AssetCreateOverlay-Card {
-  width: min(980px, 94vw);
-  max-width: 980px;
   min-height: 320px;
   max-height: 90vh;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.2rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;
@@ -354,5 +413,19 @@ watch(
   transform-style: preserve-3d;
   backface-visibility: hidden;
   will-change: transform;
+}
+
+.AssetCreateOverlay-Card.is-compact {
+  width: min(700px, 92vw);
+  max-width: 700px;
+}
+
+.AssetCreateOverlay-Card.is-wide {
+  width: min(940px, 94vw);
+  max-width: 940px;
+}
+
+.AssetCreateOverlay-Card.is-expanded {
+  transform: translate(-50%, -50%);
 }
 </style>

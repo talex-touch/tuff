@@ -208,11 +208,14 @@
     "verified": "Verified",
     "defaultName": "User",
     "loggedIn": "Signed in",
+    "syncEnabledTitle": "Default sync",
+    "syncStatusTitle": "Sync status",
     "editProfile": "Edit profile",
     "loginSettings": "Login methods",
     "deviceManagement": "Device management",
     "logoutSuccess": "Signed out",
-    "logoutFailed": "Failed to sign out"
+    "logoutFailed": "Failed to sign out",
+    "devAuthServer": "Local auth server"
   },
   "userProfile": {
     "title": "Account",
@@ -221,6 +224,7 @@
     "id": "User ID",
     "status": "Status",
     "statusSignedIn": "Signed in",
+    "statusSignedOut": "Signed out",
     "subscription": "Subscription & Quota",
     "plan": "Plan",
     "planStatus": "Status",
@@ -920,6 +924,13 @@
       "execute": "Execute",
       "actions": "Actions",
       "quickSelect": "Quick Select"
+    },
+    "footer": {
+      "indexing": "Indexing {progress}%"
+    },
+    "indexingHint": {
+      "remaining": "Finishes in {time}",
+      "inProgress": "Indexing..."
     },
     "intelligence": {
       "emptyPrompt": "Type a question to ask the AI",
