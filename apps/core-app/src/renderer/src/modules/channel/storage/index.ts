@@ -83,7 +83,7 @@ export class StorageManager {
 // Auto-save all registered storages before the app closes
 window.onbeforeunload = () => {
   for (const storage of storages.values()) {
-    void storage.saveToRemote({ force: true })
+    storage.saveSync()
   }
 }
 

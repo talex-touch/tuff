@@ -26,6 +26,7 @@ const { canNavigateBack, navigateBack } = useSecondaryNavigation({
   debugLabel: 'AppLayout'
 })
 const { wallpaperActive, wallpaperStyle } = useWallpaper()
+const touchBlur = computed(() => mica.value || wallpaperActive.value)
 const wrapperStyle = computed(() => (wallpaperActive.value ? { '--fake-index': -2 } : undefined))
 
 const routeTransitionStartedAt = new Map<string, number>()
@@ -93,7 +94,7 @@ onMounted(() => {
 <template>
   <div
     class="AppLayout-Wrapper fake-background"
-    :class="{ mica, coloring, contrast }"
+    :class="{ mica, coloring, contrast, 'touch-blur': touchBlur }"
     :style="wrapperStyle"
   >
     <div v-if="wallpaperActive" class="AppWallpaper" :style="wallpaperStyle" />

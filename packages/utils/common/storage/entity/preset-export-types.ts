@@ -1,10 +1,16 @@
-import type { CoreBoxThemeConfig, LayoutAtomConfig } from './layout-atom-types'
+import type {
+  CoreBoxCanvasConfig,
+  CoreBoxThemeConfig,
+  LayoutAtomConfig,
+  LayoutCanvasConfig,
+  ThemePresetConfig,
+} from './layout-atom-types'
 
 /**
  * Version of the preset export format
  * Increment when breaking changes occur
  */
-export const PRESET_EXPORT_VERSION = 1
+export const PRESET_EXPORT_VERSION = 2
 
 /**
  * Preset export data structure
@@ -21,6 +27,17 @@ export interface PresetExportData {
   layout?: LayoutAtomConfig
   /** CoreBox theme configuration */
   coreBox?: CoreBoxThemeConfig
+  /** Theme-level configuration */
+  theme?: ThemePresetConfig
+  /** Main layout canvas configuration */
+  mainCanvas?: LayoutCanvasConfig
+  /** CoreBox canvas configuration */
+  coreBoxCanvas?: CoreBoxCanvasConfig
+}
+
+export interface PresetCompat {
+  minAppVersion?: string
+  maxAppVersion?: string
 }
 
 /**
@@ -43,6 +60,12 @@ export interface PresetMeta {
   createdAt?: string
   /** Last update timestamp */
   updatedAt?: string
+  /** Release channel */
+  channel?: 'stable' | 'beta'
+  /** Compatibility window */
+  compat?: PresetCompat
+  /** Preset source */
+  source?: 'local' | 'nexus'
 }
 
 /**
@@ -135,8 +158,8 @@ export function validatePresetData(data: unknown): PresetValidationResult {
   }
 
   // Check that at least one config is present
-  if (!preset.layout && !preset.coreBox) {
-    warnings.push('Preset contains no layout or CoreBox configuration')
+  if (!preset.layout && !preset.coreBox && !preset.theme && !preset.mainCanvas && !preset.coreBoxCanvas) {
+    warnings.push('Preset contains no configurable fields')
   }
 
   // Validate layout structure if present
@@ -150,8 +173,37 @@ export function validatePresetData(data: unknown): PresetValidationResult {
   // Validate coreBox structure if present
   if (preset.coreBox) {
     const coreBox = preset.coreBox as Record<string, unknown>
-    if (!coreBox.preset || !coreBox.logo || !coreBox.input || !coreBox.result) {
+    if (!coreBox.preset || !coreBox.logo || !coreBox.input || !coreBox.results) {
       errors.push('Invalid CoreBox configuration structure')
+    }
+  }
+
+  if (preset.theme) {
+    const theme = preset.theme as Record<string, unknown>
+    if (!theme.style && !theme.addon && !theme.transition && !theme.palette && !theme.window) {
+      warnings.push('Theme preset is empty')
+    }
+  }
+
+  if (preset.mainCanvas) {
+    const mainCanvas = preset.mainCanvas as Record<string, unknown>
+    if (
+      typeof mainCanvas.columns !== 'number'
+      || typeof mainCanvas.rowHeight !== 'number'
+      || !Array.isArray(mainCanvas.items)
+    ) {
+      errors.push('Invalid mainCanvas configuration structure')
+    }
+  }
+
+  if (preset.coreBoxCanvas) {
+    const coreBoxCanvas = preset.coreBoxCanvas as Record<string, unknown>
+    if (
+      typeof coreBoxCanvas.columns !== 'number'
+      || typeof coreBoxCanvas.rowHeight !== 'number'
+      || !Array.isArray(coreBoxCanvas.items)
+    ) {
+      errors.push('Invalid coreBoxCanvas configuration structure')
     }
   }
 
@@ -170,8 +222,14 @@ export function createPresetExport(options: {
   description?: string
   layout?: LayoutAtomConfig
   coreBox?: CoreBoxThemeConfig
+  theme?: ThemePresetConfig
+  mainCanvas?: LayoutCanvasConfig
+  coreBoxCanvas?: CoreBoxCanvasConfig
   author?: PresetAuthor
   tags?: string[]
+  channel?: 'stable' | 'beta'
+  source?: 'local' | 'nexus'
+  compat?: PresetCompat
 }): PresetExportData {
   const now = new Date().toISOString()
   return {
@@ -184,9 +242,15 @@ export function createPresetExport(options: {
       author: options.author,
       tags: options.tags,
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      channel: options.channel ?? 'beta',
+      source: options.source ?? 'local',
+      compat: options.compat,
     },
     layout: options.layout,
-    coreBox: options.coreBox
+    coreBox: options.coreBox,
+    theme: options.theme,
+    mainCanvas: options.mainCanvas,
+    coreBoxCanvas: options.coreBoxCanvas,
   }
 }

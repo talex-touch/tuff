@@ -63,7 +63,7 @@ const copyWriting = computed(() => {
 
     width: 100%;
 
-    opacity: 07.5;
+    opacity: 0.75;
     color: white;
     font-size: 1.1rem;
     line-height: 1.5;

@@ -1,13 +1,21 @@
-import type { CoreBoxThemeConfig, LayoutAtomConfig, PresetExportData } from '@talex-touch/utils'
+import type {
+  CoreBoxCanvasConfig,
+  CoreBoxThemeConfig,
+  LayoutAtomConfig,
+  LayoutCanvasConfig,
+  PresetExportData,
+  ThemePresetConfig
+} from '@talex-touch/utils'
 import { createPresetExport, validatePresetData } from '@talex-touch/utils'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getCoreBoxThemePreset } from '~/views/box/theme'
 import { getLayoutAtomPreset, isLayoutPresetKey } from '~/modules/layout/atoms'
+import { themeStyle } from '~/modules/storage/theme-style'
+import { getCoreBoxThemePreset } from '~/views/box/theme'
 
 const openFileEvent = defineRawEvent<
   { title?: string; filters?: { name: string; extensions: string[] }[]; properties?: string[] },
@@ -26,6 +34,14 @@ const readFileEvent = defineRawEvent<{ path: string }, { data?: string; error?: 
   'fs:read-file'
 )
 
+function deepClone<T>(value: T): T {
+  if (value === undefined || value === null) {
+    return value
+  }
+
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 /**
  * Composable for preset export/import functionality
  */
@@ -40,9 +56,9 @@ export function usePresetExport() {
    */
   function getCurrentLayoutConfig(): LayoutAtomConfig | undefined {
     const saved = appSettingsData?.layoutAtomConfig
-    if (saved?.preset === 'custom') return saved
+    if (saved?.preset === 'custom') return deepClone(saved)
     const layout = appSettingsData?.layout ?? 'simple'
-    if (layout === 'custom') return saved ?? getLayoutAtomPreset('simple')
+    if (layout === 'custom') return saved ? deepClone(saved) : getLayoutAtomPreset('simple')
     return isLayoutPresetKey(layout) ? getLayoutAtomPreset(layout) : getLayoutAtomPreset('simple')
   }
 
@@ -51,8 +67,94 @@ export function usePresetExport() {
    */
   function getCurrentCoreBoxConfig(): CoreBoxThemeConfig | undefined {
     const saved = appSettingsData?.coreBoxThemeConfig
-    if (saved?.preset === 'custom') return saved
-    return saved ?? getCoreBoxThemePreset('default')
+    if (saved?.preset === 'custom') return deepClone(saved)
+    return saved ? deepClone(saved) : getCoreBoxThemePreset('default')
+  }
+
+  function getCurrentThemeConfig(): ThemePresetConfig | undefined {
+    const theme = themeStyle.value?.theme
+    if (!theme) {
+      return undefined
+    }
+
+    return {
+      window: theme.window as ThemePresetConfig['window'],
+      style: {
+        dark: theme.style.dark,
+        auto: theme.style.auto
+      },
+      addon: {
+        contrast: theme.addon.contrast,
+        coloring: theme.addon.coloring
+      },
+      transition: {
+        route: theme.transition.route
+      }
+    }
+  }
+
+  function getCurrentMainCanvasConfig(): LayoutCanvasConfig | undefined {
+    const config = appSettingsData?.layoutCanvasConfig
+    return config ? deepClone(config) : undefined
+  }
+
+  function getCurrentCoreBoxCanvasConfig(): CoreBoxCanvasConfig | undefined {
+    const config = appSettingsData?.coreBoxCanvasConfig
+    return config ? deepClone(config) : undefined
+  }
+
+  function captureRollbackSnapshot() {
+    return {
+      layout: appSettingsData?.layout ?? 'simple',
+      layoutAtomConfig: deepClone(appSettingsData?.layoutAtomConfig),
+      coreBoxThemeConfig: deepClone(appSettingsData?.coreBoxThemeConfig),
+      layoutCanvasConfig: deepClone(appSettingsData?.layoutCanvasConfig),
+      coreBoxCanvasConfig: deepClone(appSettingsData?.coreBoxCanvasConfig),
+      themeStyle: deepClone(themeStyle.value) as unknown as Record<string, unknown>
+    }
+  }
+
+  function restoreRollbackSnapshot(
+    snapshot: NonNullable<typeof appSettingsData>['presetState']['rollbackSnapshot']
+  ): void {
+    if (!snapshot || !appSettingsData) {
+      return
+    }
+
+    appSettingsData.layout = snapshot.layout
+    appSettingsData.layoutAtomConfig = deepClone(snapshot.layoutAtomConfig)
+    appSettingsData.coreBoxThemeConfig = deepClone(snapshot.coreBoxThemeConfig)
+    appSettingsData.layoutCanvasConfig = deepClone(snapshot.layoutCanvasConfig)
+    appSettingsData.coreBoxCanvasConfig = deepClone(snapshot.coreBoxCanvasConfig)
+
+    if (snapshot.themeStyle) {
+      themeStyle.value = deepClone(snapshot.themeStyle as unknown as typeof themeStyle.value)
+    }
+  }
+
+  function applyThemePreset(theme?: ThemePresetConfig): void {
+    if (!theme) {
+      return
+    }
+
+    const next = deepClone(themeStyle.value)
+
+    if (theme.window) {
+      next.theme.window = theme.window
+    }
+    if (theme.style) {
+      next.theme.style.auto = theme.style.auto
+      next.theme.style.dark = theme.style.dark
+    }
+    if (theme.addon) {
+      next.theme.addon.contrast = theme.addon.contrast
+      next.theme.addon.coloring = theme.addon.coloring
+    }
+    if (theme.transition?.route) {
+      next.theme.transition.route = theme.transition.route
+    }
+
+    themeStyle.value = next
   }
 
   /**
@@ -62,32 +164,46 @@ export function usePresetExport() {
     name?: string
     includeLayout?: boolean
     includeCoreBox?: boolean
+    includeTheme?: boolean
+    includeMainCanvas?: boolean
+    includeCoreBoxCanvas?: boolean
   }) {
     const includeLayout = options?.includeLayout ?? true
     const includeCoreBox = options?.includeCoreBox ?? true
+    const includeTheme = options?.includeTheme ?? true
+    const includeMainCanvas = options?.includeMainCanvas ?? includeLayout
+    const includeCoreBoxCanvas = options?.includeCoreBoxCanvas ?? includeCoreBox
 
-    if (!includeLayout && !includeCoreBox) {
+    if (
+      !includeLayout &&
+      !includeCoreBox &&
+      !includeTheme &&
+      !includeMainCanvas &&
+      !includeCoreBoxCanvas
+    ) {
       ElMessage.warning(t('preset.nothingToExport', 'Nothing selected to export'))
       return
     }
 
     isExporting.value = true
     try {
-      // Prompt for preset name
       const name = options?.name || (await promptPresetName())
       if (!name) {
         isExporting.value = false
         return
       }
 
-      // Create export data
       const preset = createPresetExport({
         name,
         layout: includeLayout ? getCurrentLayoutConfig() : undefined,
-        coreBox: includeCoreBox ? getCurrentCoreBoxConfig() : undefined
+        coreBox: includeCoreBox ? getCurrentCoreBoxConfig() : undefined,
+        theme: includeTheme ? getCurrentThemeConfig() : undefined,
+        mainCanvas: includeMainCanvas ? getCurrentMainCanvasConfig() : undefined,
+        coreBoxCanvas: includeCoreBoxCanvas ? getCurrentCoreBoxCanvasConfig() : undefined,
+        channel: 'beta',
+        source: 'local'
       })
 
-      // Show save dialog
       const result = await transport.send(saveFileEvent, {
         title: t('preset.exportTitle', 'Export Preset'),
         defaultPath: `${name.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')}.tpreset.json`,
@@ -99,7 +215,6 @@ export function usePresetExport() {
         return
       }
 
-      // Write file
       await transport.send(writeFileEvent, {
         path: result.filePath,
         data: JSON.stringify(preset, null, 2)
@@ -120,7 +235,6 @@ export function usePresetExport() {
   async function importPreset() {
     isImporting.value = true
     try {
-      // Show open dialog
       const result = await transport.send(openFileEvent, {
         title: t('preset.importTitle', 'Import Preset'),
         filters: [{ name: 'Tuff Preset', extensions: ['tpreset.json', 'json'] }],
@@ -132,7 +246,6 @@ export function usePresetExport() {
         return
       }
 
-      // Read file
       const fileResult = await transport.send(readFileEvent, { path: result.filePaths[0] })
       if (fileResult.error || !fileResult.data) {
         ElMessage.error(t('preset.readError', 'Failed to read preset file'))
@@ -140,7 +253,6 @@ export function usePresetExport() {
         return
       }
 
-      // Parse JSON
       let preset: unknown
       try {
         preset = JSON.parse(fileResult.data)
@@ -150,7 +262,6 @@ export function usePresetExport() {
         return
       }
 
-      // Validate
       const validation = validatePresetData(preset)
       if (!validation.valid) {
         ElMessage.error(
@@ -164,7 +275,6 @@ export function usePresetExport() {
         console.warn('[PresetExport] Import warnings:', validation.warnings)
       }
 
-      // Confirm import
       const presetData = preset as PresetExportData
       await confirmAndApplyPreset(presetData)
     } catch (error) {
@@ -205,7 +315,10 @@ export function usePresetExport() {
   async function confirmAndApplyPreset(preset: PresetExportData) {
     const parts: string[] = []
     if (preset.layout) parts.push(t('preset.layout', 'Layout'))
+    if (preset.mainCanvas) parts.push(t('layoutSection.customizeMain', 'Main Canvas'))
     if (preset.coreBox) parts.push(t('preset.coreBox', 'CoreBox Theme'))
+    if (preset.coreBoxCanvas) parts.push(t('layoutSection.customizeCoreBox', 'CoreBox Canvas'))
+    if (preset.theme) parts.push(t('styleGlobal.title', 'Theme'))
 
     try {
       const confirmMsg = t('preset.importConfirm', {
@@ -218,7 +331,6 @@ export function usePresetExport() {
         type: 'warning'
       })
 
-      // Apply preset
       applyPreset(preset)
       ElMessage.success(t('preset.importSuccess', 'Preset imported successfully'))
     } catch {
@@ -232,14 +344,68 @@ export function usePresetExport() {
   function applyPreset(preset: PresetExportData) {
     if (!appSettingsData) return
 
-    if (preset.layout) {
-      appSettingsData.layoutAtomConfig = { ...preset.layout, preset: 'custom' }
-      appSettingsData.layout = 'custom'
+    const rollbackSnapshot = captureRollbackSnapshot()
+
+    try {
+      if (preset.layout) {
+        appSettingsData.layoutAtomConfig = { ...deepClone(preset.layout), preset: 'custom' }
+        appSettingsData.layout = 'custom'
+      }
+
+      if (preset.mainCanvas) {
+        appSettingsData.layoutCanvasConfig = {
+          ...deepClone(preset.mainCanvas),
+          preset: 'custom',
+          enabled: true
+        }
+        appSettingsData.layout = 'custom'
+      }
+
+      if (preset.coreBox) {
+        appSettingsData.coreBoxThemeConfig = { ...deepClone(preset.coreBox), preset: 'custom' }
+      }
+
+      if (preset.coreBoxCanvas) {
+        appSettingsData.coreBoxCanvasConfig = {
+          ...deepClone(preset.coreBoxCanvas),
+          preset: 'custom',
+          enabled: true
+        }
+      }
+
+      applyThemePreset(preset.theme)
+
+      if (preset.meta.source === 'nexus') {
+        appSettingsData.presetState = {
+          ...appSettingsData.presetState,
+          lastRemotePresetId: preset.meta.id || '',
+          lastRemotePresetName: preset.meta.name,
+          lastRemotePresetChannel: preset.meta.channel ?? 'beta',
+          lastRemotePresetAppliedAt: new Date().toISOString(),
+          rollbackSnapshot
+        }
+      }
+    } catch (error) {
+      console.error('[PresetExport] Apply failed, rollback in progress:', error)
+      restoreRollbackSnapshot(rollbackSnapshot)
+      throw error
+    }
+  }
+
+  function rollbackLastRemotePreset() {
+    if (!appSettingsData?.presetState?.rollbackSnapshot) {
+      ElMessage.warning(t('preset.noRollbackSnapshot', 'No rollback snapshot found'))
+      return
     }
 
-    if (preset.coreBox) {
-      appSettingsData.coreBoxThemeConfig = { ...preset.coreBox, preset: 'custom' }
+    restoreRollbackSnapshot(appSettingsData.presetState.rollbackSnapshot)
+
+    appSettingsData.presetState = {
+      ...appSettingsData.presetState,
+      rollbackSnapshot: null
     }
+
+    ElMessage.success(t('preset.rollbackSuccess', 'Restored previous preset successfully'))
   }
 
   return {
@@ -247,7 +413,12 @@ export function usePresetExport() {
     isImporting,
     exportPreset,
     importPreset,
+    applyPreset,
+    rollbackLastRemotePreset,
     getCurrentLayoutConfig,
-    getCurrentCoreBoxConfig
+    getCurrentCoreBoxConfig,
+    getCurrentThemeConfig,
+    getCurrentMainCanvasConfig,
+    getCurrentCoreBoxCanvasConfig
   }
 }
