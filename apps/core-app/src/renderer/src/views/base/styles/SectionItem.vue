@@ -18,6 +18,8 @@ function handleClick() {
 }
 
 function goRouter() {
+  if (props.disabled) return
+
   router.push({
     name: 'Theme',
     query: {
@@ -87,7 +89,7 @@ function goRouter() {
   }
 
   &.disabled {
-    &-Display {
+    .SectionItem-Display {
       opacity: 0.25;
     }
     cursor: not-allowed;

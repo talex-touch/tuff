@@ -8,7 +8,7 @@ import type {
   StorageUpdateNotification,
 } from '../../transport/events/types'
 import { useDebounceFn } from '@vueuse/core'
-import { reactive, toRaw, watch } from 'vue'
+import { reactive, ref, toRaw, watch } from 'vue'
 import { isElectronRenderer } from '../../env'
 import { StorageEvents } from '../../transport/events'
 
@@ -186,6 +186,11 @@ export class TouchStorage<T extends object> {
   #pendingSave = false
   #localDirty = false
   #lastSyncedSnapshot: T | null = null
+
+  /**
+   * Reactive saving state — true while a save is in flight.
+   */
+  public readonly savingState = ref(false)
 
   /**
    * The reactive data exposed to users.
@@ -370,6 +375,7 @@ export class TouchStorage<T extends object> {
             : null
           const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
           const remoteData = (versionedResult.data ?? {}) as Partial<T>
+          console.log(`[TouchStorage] HYDRATE("${this.#qualifiedName}") remote version=${versionedResult.version}, background.source=`, (remoteData as any)?.background?.source)
 
           this.#currentVersion = versionedResult.version
           this.#isRemoteUpdate = true
@@ -459,8 +465,9 @@ export class TouchStorage<T extends object> {
    * await store.saveToRemote();
    * ```
    */
-  saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
+  async #executeSave(options?: { force?: boolean }): Promise<void> {
     if (!channel && !transport) {
+      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: no channel/transport`)
       if (isElectronRenderer()) {
         throw new Error('TouchStorage: channel not initialized')
       }
@@ -468,36 +475,53 @@ export class TouchStorage<T extends object> {
     }
 
     if (this.#assigning && !options?.force) {
+      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: assigning (force=${options?.force})`)
       return
     }
 
     // Skip save if this is a remote update (to avoid echo)
     if (this.#isRemoteUpdate) {
+      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: isRemoteUpdate`)
       return
     }
     if (!this.#hydrated) {
+      console.warn(`[TouchStorage] #executeSave("${this.#qualifiedName}") SKIP: not hydrated, queueing`)
       this.#pendingSave = true
       this.#localDirty = true
       return
     }
 
-    const result = await this.#saveRemote({
-      key: this.#qualifiedName,
-      value: toRaw(this.data),
-      clear: false,
-      version: this.#currentVersion,
-    })
+    const rawData = toRaw(this.data)
+    console.log(`[TouchStorage] #executeSave("${this.#qualifiedName}") SAVING, background.source=`, (rawData as any)?.background?.source)
 
-    if (result.success) {
-      this.#currentVersion = result.version
-      this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
-      this.#localDirty = false
+    this.savingState.value = true
+    try {
+      const result = await this.#saveRemote({
+        key: this.#qualifiedName,
+        value: rawData,
+        clear: false,
+        version: this.#currentVersion,
+      })
+
+      if (result.success) {
+        console.log(`[TouchStorage] #executeSave("${this.#qualifiedName}") SUCCESS, version=${result.version}`)
+        this.#currentVersion = result.version
+        this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
+        this.#localDirty = false
+      }
+      else if (result.conflict) {
+        // Conflict detected - reload from remote
+        console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
+        void this.#loadFromRemoteWithVersion()
+      }
     }
-    else if (result.conflict) {
-      // Conflict detected - reload from remote
-      console.warn(`[TouchStorage] Conflict detected for "${this.#qualifiedName}", reloading...`)
-      void this.#loadFromRemoteWithVersion()
+    finally {
+      this.savingState.value = false
     }
+  }
+
+  saveToRemote = useDebounceFn(async (options?: { force?: boolean }): Promise<void> => {
+    return this.#executeSave(options)
   }, 300)
 
   /**
@@ -539,7 +563,7 @@ export class TouchStorage<T extends object> {
 
         this.#runAutoSavePipeline()
       },
-      { deep: true, immediate: true },
+      { deep: true },
     )
   }
 
@@ -753,7 +777,8 @@ export class TouchStorage<T extends object> {
     if (this.#isRemoteUpdate)
       return
 
-    void this.saveToRemote({ force: true })
+    console.log(`[TouchStorage] saveSync("${this.#qualifiedName}") called, background.source=`, (toRaw(this.data) as any)?.background?.source)
+    void this.#executeSave({ force: true })
   }
 
   /**

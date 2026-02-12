@@ -12,7 +12,12 @@ function getCurrentLayoutName(): string {
     return layout
   }
 
-  return layoutsDefinition[0].name
+  if (layoutsDefinition.simple) {
+    return layoutsDefinition.simple.name
+  }
+
+  const first = Object.keys(layoutsDefinition)[0]
+  return first && layoutsDefinition[first] ? layoutsDefinition[first].name : 'simple'
 }
 
 function setCurrentLayoutName(layoutName: string): void {
@@ -99,6 +104,7 @@ export function useDynamicTuffLayout(): {
 
   async function switchLayout(layoutName: string): Promise<void> {
     if (layoutName === currentLayoutName.value) return
+    if (!layoutsDefinition[layoutName]) return
 
     layoutComponent.value = null
     setCurrentLayoutName(layoutName)
@@ -112,10 +118,11 @@ export function useDynamicTuffLayout(): {
     (newLayout) => {
       if (newLayout && newLayout !== currentLayoutName.value && layoutsDefinition[newLayout]) {
         currentLayoutName.value = newLayout
-        loadLayout(newLayout)
+        void loadLayout(newLayout)
       } else if (!layoutComponent.value) {
-        currentLayoutName.value = newLayout
-        loadLayout(newLayout)
+        const fallback = getCurrentLayoutName()
+        currentLayoutName.value = newLayout && layoutsDefinition[newLayout] ? newLayout : fallback
+        void loadLayout(currentLayoutName.value)
       }
     },
     { immediate: true }

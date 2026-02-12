@@ -459,7 +459,7 @@ async function handleDeactivateProvider(id?: string): Promise<void> {
   await focusWindowAndInput()
 }
 
-const { themeConfig, themeCSSVars } = useCoreBoxTheme()
+const { themeConfig, themeCSSVars, canvasConfig, canvasEnabled } = useCoreBoxTheme()
 const showLogo = computed(() => themeConfig.value.logo.position !== 'hidden')
 const logoOrderRight = computed(() => themeConfig.value.logo.position === 'right')
 const inputBorderClass = computed(() => `CoreBoxInputBorder-${themeConfig.value.input.border}`)
@@ -467,7 +467,59 @@ const inputBgClass = computed(() => `CoreBoxInputBg-${themeConfig.value.input.ba
 const resultHoverClass = computed(
   () => `CoreBoxResultHover-${themeConfig.value.results.hoverStyle}`
 )
-const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? ''))
+
+type CoreBoxCanvasArea = 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'addon' | 'footer'
+
+const isCanvasLayout = computed(() => canvasEnabled.value && !isDivisionBox.value)
+
+const canvasAreaMap = computed(() => {
+  const map = new Map<string, { x: number; y: number; w: number; h: number; visible?: boolean }>()
+  for (const item of canvasConfig.value.items) {
+    map.set(item.area, item)
+  }
+  return map
+})
+
+function getCanvasAreaStyle(area: CoreBoxCanvasArea): Record<string, string> | undefined {
+  if (!isCanvasLayout.value) {
+    return undefined
+  }
+
+  const item = canvasAreaMap.value.get(area)
+  if (!item || item.visible === false) {
+    return { display: 'none' }
+  }
+
+  return {
+    gridColumn: `${item.x + 1} / span ${item.w}`,
+    gridRow: `${item.y + 1} / span ${item.h}`
+  }
+}
+
+const wrapperStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {
+    ...themeCSSVars.value
+  }
+
+  if (isCanvasLayout.value) {
+    style['--corebox-canvas-columns'] = String(canvasConfig.value.columns)
+    style['--corebox-canvas-row-height'] = `${canvasConfig.value.rowHeight}px`
+    style['--corebox-canvas-gap'] = `${canvasConfig.value.gap}px`
+  }
+
+  if (canvasConfig.value.colorVars) {
+    Object.assign(style, canvasConfig.value.colorVars)
+  }
+
+  return style
+})
+
+const customCss = computed(() => {
+  const cssText = [themeConfig.value.customCSS, canvasConfig.value.customCSS]
+    .filter(Boolean)
+    .join('\n')
+  return sanitizeUserCss(cssText)
+})
 </script>
 
 <template>
@@ -477,11 +529,20 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
 
   <div
     class="CoreBox-Wrapper"
-    :style="themeCSSVars"
-    :class="[inputBorderClass, inputBgClass, resultHoverClass]"
+    :style="wrapperStyle"
+    :class="[
+      inputBorderClass,
+      inputBgClass,
+      resultHoverClass,
+      { 'CoreBox-Wrapper--canvas': isCanvasLayout }
+    ]"
   >
     <component :is="'style'" v-if="customCss">{{ customCss }}</component>
-    <div class="CoreBox" @paste="() => handlePaste({ overrideDismissed: true })">
+    <div
+      class="CoreBox"
+      :class="{ 'CoreBox--canvas': isCanvasLayout }"
+      @paste="() => handlePaste({ overrideDismissed: true })"
+    >
       <!-- DivisionBox Mode Header -->
       <template v-if="isDivisionBox">
         <DivisionBoxHeader
@@ -499,6 +560,7 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
         <PrefixPart
           v-if="showLogo"
           :class="{ 'CoreBox-LogoRight': logoOrderRight }"
+          :style="getCanvasAreaStyle('logo')"
           :providers="activeActivations"
           @close="handleExit"
           @deactivate-provider="handleDeactivateProvider"
@@ -508,6 +570,7 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
           ref="boxInputRef"
           v-model="searchVal"
           :box-options="boxOptions"
+          :style="getCanvasAreaStyle('input')"
           :class="{ 'ui-mode-hidden': !shouldShowInput }"
           :disabled="!shouldShowInput"
         >
@@ -522,18 +585,27 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
           v-if="!isUIMode"
           :box-options="boxOptions"
           :clipboard-options="clipboardOptions"
+          :style="getCanvasAreaStyle('tags')"
         />
 
-        <div class="CoreBox-Configure">
+        <div class="CoreBox-Configure" :style="getCanvasAreaStyle('actions')">
           <TuffIcon :icon="pinIcon" alt="固定 CoreBox" @click="handleTogglePin" />
         </div>
       </template>
     </div>
 
-    <div class="CoreBoxRes flex" @contextmenu="previewHistory.handleContextMenu">
+    <div
+      class="CoreBoxRes flex"
+      :class="{ 'CoreBoxRes--canvas': isCanvasLayout }"
+      @contextmenu="previewHistory.handleContextMenu"
+    >
       <!-- Hide result area when plugin UI view is attached -->
       <template v-if="!isUIMode">
-        <div class="CoreBoxRes-Main" :class="{ compressed: !!addon }">
+        <div
+          class="CoreBoxRes-Main"
+          :style="getCanvasAreaStyle('results')"
+          :class="{ compressed: !!addon, 'CoreBoxRes-Main--canvas': isCanvasLayout }"
+        >
           <TouchScroll ref="scrollbar" no-padding class="scroll-area">
             <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
               <Transition :name="resultTransitionName" mode="out-in">
@@ -574,10 +646,15 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
             :active-activations="activeActivations"
             :result-count="res.length"
             :is-recommendation="!searchVal && !activeActivations?.length"
-            class="CoreBoxFooter-Sticky"
+            :class="['CoreBoxFooter-Sticky', { 'CoreBoxFooter-Canvas': isCanvasLayout }]"
           />
         </div>
-        <TuffItemAddon :type="addon" :item="activeItem" :search-query="searchVal" />
+        <TuffItemAddon
+          :type="addon"
+          :item="activeItem"
+          :search-query="searchVal"
+          :style="getCanvasAreaStyle('addon')"
+        />
       </template>
 
       <!-- Preview History Panel - Always mounted to listen to events -->
@@ -617,6 +694,67 @@ const customCss = computed(() => sanitizeUserCss(themeConfig.value.customCSS ?? 
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas div.CoreBox {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  height: auto;
+  display: grid;
+  grid-template-columns: repeat(var(--corebox-canvas-columns, 12), minmax(0, 1fr));
+  grid-auto-rows: var(--corebox-canvas-row-height, 24px);
+  gap: var(--corebox-canvas-gap, 8px);
+  align-items: stretch;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas .CoreBox-LogoRight {
+  order: initial;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas div.CoreBoxRes {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  border-radius: var(--corebox-container-radius, 8px);
+  border-top: none;
+  display: grid !important;
+  grid-template-columns: repeat(var(--corebox-canvas-columns, 12), minmax(0, 1fr));
+  grid-auto-rows: var(--corebox-canvas-row-height, 24px);
+  gap: var(--corebox-canvas-gap, 8px);
+  overflow: hidden;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas .CoreBoxRes-Main--canvas {
+  width: 100%;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas .CoreBoxRes-Main--canvas.compressed {
+  width: 100%;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas .CoreBoxRes-Main--canvas > .scroll-area {
+  min-height: 0;
+}
+
+.CoreBox-Wrapper.CoreBox-Wrapper--canvas .CoreBoxFooter-Canvas {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  margin-top: 6px;
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {

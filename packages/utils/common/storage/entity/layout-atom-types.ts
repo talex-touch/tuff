@@ -68,3 +68,80 @@ export interface CoreBoxThemeConfig {
 
   customCSS?: string
 }
+
+export type ThemeWindowStyle = 'Default' | 'Mica' | 'Filter'
+export type ThemeRouteTransitionStyle = 'slide' | 'fade' | 'zoom'
+
+/**
+ * Theme-level preset fields used by preset v2.
+ */
+export interface ThemePresetConfig {
+  window?: ThemeWindowStyle
+  style?: {
+    dark: boolean
+    auto: boolean
+  }
+  addon?: {
+    contrast: boolean
+    coloring: boolean
+  }
+  transition?: {
+    route: ThemeRouteTransitionStyle
+  }
+  palette?: {
+    primary?: string
+    accent?: string
+    surface?: string
+    text?: string
+  }
+}
+
+export interface LayoutCanvasItem {
+  id: string
+  area: 'header' | 'aside' | 'view' | 'nav' | 'plugins' | 'title' | 'icon'
+  x: number
+  y: number
+  w: number
+  h: number
+  minW?: number
+  minH?: number
+  maxW?: number
+  maxH?: number
+  visible?: boolean
+}
+
+export interface LayoutCanvasConfig {
+  enabled: boolean
+  preset: string | 'custom'
+  columns: number
+  rowHeight: number
+  gap: number
+  items: LayoutCanvasItem[]
+  colorVars?: Record<string, string>
+  customCSS?: string
+}
+
+export interface CoreBoxCanvasItem {
+  id: string
+  area: 'logo' | 'input' | 'tags' | 'actions' | 'results' | 'footer' | 'addon'
+  x: number
+  y: number
+  w: number
+  h: number
+  minW?: number
+  minH?: number
+  maxW?: number
+  maxH?: number
+  visible?: boolean
+}
+
+export interface CoreBoxCanvasConfig {
+  enabled: boolean
+  preset: string | 'custom'
+  columns: number
+  rowHeight: number
+  gap: number
+  items: CoreBoxCanvasItem[]
+  colorVars?: Record<string, string>
+  customCSS?: string
+}

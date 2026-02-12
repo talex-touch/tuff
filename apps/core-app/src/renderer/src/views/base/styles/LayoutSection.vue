@@ -1,18 +1,29 @@
 <script lang="ts" name="LayoutSection" setup>
 import type { Component } from 'vue'
-import { TxButton, TxCard, TxScroll } from '@talex-touch/tuffex'
+import { TxButton, TxCard, TxScroll, TxStatusBadge } from '@talex-touch/tuffex'
 import { ElMessage } from 'element-plus'
-import { computed, markRaw, reactive, watch } from 'vue'
+import { computed, markRaw, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LayoutPreviewFrame from '~/components/layout/LayoutPreviewFrame.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useDynamicTuffLayout, usePresetExport } from '~/modules/layout'
+import CoreBoxEditorOverlay from './editors/CoreBoxEditorOverlay.vue'
+import MainLayoutEditorOverlay from './editors/MainLayoutEditorOverlay.vue'
+import RemotePresetOverlay from './editors/RemotePresetOverlay.vue'
 
 const { t } = useI18n()
 
 const { currentLayoutName, availableLayouts, switchLayout } = useDynamicTuffLayout()
 const { exportPreset, importPreset, isExporting, isImporting } = usePresetExport()
+
+const mainEditorVisible = ref(false)
+const coreBoxEditorVisible = ref(false)
+const remotePresetVisible = ref(false)
+
+const mainEditorSource = ref<HTMLElement | null>(null)
+const coreBoxEditorSource = ref<HTMLElement | null>(null)
+const remotePresetSource = ref<HTMLElement | null>(null)
 
 // Only simple and flat are enabled, others are disabled (coming soon)
 const enabledLayouts = new Set(['simple', 'flat'])
@@ -61,6 +72,32 @@ function isLayoutDisabled(key: string): boolean {
 
 function getLayoutLabel(layoutKey: string, fallbackName?: string): string {
   return t(`layoutSection.layouts.${layoutKey}`, fallbackName || layoutKey)
+}
+
+function isActionElement(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest('.LayoutSection-ActionBtn'))
+}
+
+function handleOpenMainEditor(event: MouseEvent): void {
+  if (isActionElement(event.target)) return
+
+  mainEditorSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  mainEditorVisible.value = true
+}
+
+function handleOpenCoreBoxEditor(event: MouseEvent): void {
+  if (isActionElement(event.target)) return
+
+  coreBoxEditorSource.value =
+    event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  coreBoxEditorVisible.value = true
+}
+
+function handleOpenRemotePreset(event: MouseEvent): void {
+  if (isActionElement(event.target)) return
+
+  remotePresetSource.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  remotePresetVisible.value = true
 }
 
 async function handleLayoutSelect(layoutName: string): Promise<void> {
@@ -140,8 +177,16 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
       :description="t('layoutSection.customizeMainDesc', 'Adjust header, sidebar, view styles')"
       default-icon="i-ri-layout-line"
       active-icon="i-ri-layout-fill"
+      @click="handleOpenMainEditor"
     >
+      <template #tags>
+        <TxStatusBadge text="Beta" status="warning" size="sm" />
+      </template>
       <div class="LayoutSection-Actions">
+        <TxButton variant="bare" class="LayoutSection-ActionBtn" @click="mainEditorVisible = true">
+          <span class="i-ri-edit-2-line mr-1" />
+          {{ t('common.edit', 'Edit') }}
+        </TxButton>
         <TxButton
           variant="bare"
           class="LayoutSection-ActionBtn"
@@ -168,8 +213,20 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
       :description="t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')"
       default-icon="i-ri-search-line"
       active-icon="i-ri-search-fill"
+      @click="handleOpenCoreBoxEditor"
     >
+      <template #tags>
+        <TxStatusBadge text="Beta" status="warning" size="sm" />
+      </template>
       <div class="LayoutSection-Actions">
+        <TxButton
+          variant="bare"
+          class="LayoutSection-ActionBtn"
+          @click="coreBoxEditorVisible = true"
+        >
+          <span class="i-ri-edit-2-line mr-1" />
+          {{ t('common.edit', 'Edit') }}
+        </TxButton>
         <TxButton
           variant="bare"
           class="LayoutSection-ActionBtn"
@@ -183,14 +240,32 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     </TuffBlockSlot>
 
     <TuffBlockSlot
-      :title="t('preset.cloudPublish', 'Publish to Cloud')"
+      :title="t('preset.cloudPublish', 'Nexus Presets')"
       :description="
-        t('preset.cloudPublishDesc', 'Share your preset with the community (coming soon)')
+        t('preset.cloudPublishDesc', 'Download beta presets from Nexus and apply with rollback')
       "
       default-icon="i-ri-cloud-line"
       active-icon="i-ri-cloud-fill"
-      disabled
-    />
+      @click="handleOpenRemotePreset"
+    >
+      <template #tags>
+        <TxStatusBadge text="Beta" status="warning" size="sm" />
+      </template>
+      <div class="LayoutSection-Actions">
+        <TxButton
+          variant="bare"
+          class="LayoutSection-ActionBtn"
+          @click="remotePresetVisible = true"
+        >
+          <span class="i-ri-cloud-download-line mr-1" />
+          {{ t('preset.remoteBrowse', 'Browse Nexus Presets') }}
+        </TxButton>
+      </div>
+    </TuffBlockSlot>
+
+    <MainLayoutEditorOverlay v-model="mainEditorVisible" :source="mainEditorSource" />
+    <CoreBoxEditorOverlay v-model="coreBoxEditorVisible" :source="coreBoxEditorSource" />
+    <RemotePresetOverlay v-model="remotePresetVisible" :source="remotePresetSource" />
   </TuffGroupBlock>
 </template>
 

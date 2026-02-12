@@ -1,4 +1,9 @@
-import type { CoreBoxThemeConfig, LayoutAtomConfig } from './layout-atom-types'
+import type {
+  CoreBoxCanvasConfig,
+  CoreBoxThemeConfig,
+  LayoutAtomConfig,
+  LayoutCanvasConfig,
+} from './layout-atom-types'
 
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
@@ -16,6 +21,36 @@ const defaultCoreBoxTheme: CoreBoxThemeConfig = {
   input: { border: 'bottom', radius: 8, background: 'transparent' },
   results: { itemRadius: 6, itemPadding: 8, divider: false, hoverStyle: 'background' },
   container: { radius: 0, shadow: 'none', border: false },
+}
+
+const defaultLayoutCanvasConfig: LayoutCanvasConfig = {
+  enabled: false,
+  preset: 'simple',
+  columns: 12,
+  rowHeight: 24,
+  gap: 8,
+  items: [
+    { id: 'header', area: 'header', x: 0, y: 0, w: 12, h: 2, minW: 6, minH: 1 },
+    { id: 'aside', area: 'aside', x: 0, y: 2, w: 2, h: 10, minW: 1, minH: 4 },
+    { id: 'view', area: 'view', x: 2, y: 2, w: 10, h: 10, minW: 4, minH: 4 },
+  ],
+}
+
+const defaultCoreBoxCanvasConfig: CoreBoxCanvasConfig = {
+  enabled: false,
+  preset: 'default',
+  columns: 12,
+  rowHeight: 24,
+  gap: 8,
+  items: [
+    { id: 'logo', area: 'logo', x: 0, y: 0, w: 1, h: 1, minW: 1, minH: 1 },
+    { id: 'input', area: 'input', x: 1, y: 0, w: 9, h: 1, minW: 4, minH: 1 },
+    { id: 'actions', area: 'actions', x: 10, y: 0, w: 2, h: 1, minW: 1, minH: 1 },
+    { id: 'tags', area: 'tags', x: 1, y: 1, w: 11, h: 1, minW: 4, minH: 1 },
+    { id: 'results', area: 'results', x: 0, y: 2, w: 10, h: 8, minW: 5, minH: 4 },
+    { id: 'addon', area: 'addon', x: 10, y: 2, w: 2, h: 8, minW: 2, minH: 4 },
+    { id: 'footer', area: 'footer', x: 0, y: 10, w: 10, h: 1, minW: 4, minH: 1 },
+  ],
 }
 
 /**
@@ -168,6 +203,22 @@ const _appSettingOriginData = {
   layout: 'simple',
   layoutAtomConfig: defaultLayoutAtomSimple,
   coreBoxThemeConfig: defaultCoreBoxTheme,
+  layoutCanvasConfig: defaultLayoutCanvasConfig,
+  coreBoxCanvasConfig: defaultCoreBoxCanvasConfig,
+  presetState: {
+    lastRemotePresetId: '',
+    lastRemotePresetName: '',
+    lastRemotePresetChannel: 'beta' as 'stable' | 'beta',
+    lastRemotePresetAppliedAt: '',
+    rollbackSnapshot: null as null | {
+      layout: string
+      layoutAtomConfig: LayoutAtomConfig
+      coreBoxThemeConfig: CoreBoxThemeConfig
+      layoutCanvasConfig: LayoutCanvasConfig
+      coreBoxCanvasConfig: CoreBoxCanvasConfig
+      themeStyle?: Record<string, unknown>
+    },
+  },
 }
 
 export const appSettingOriginData = Object.freeze(_appSettingOriginData)

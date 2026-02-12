@@ -109,7 +109,7 @@ const previewComponent = computed(() => {
   <div class="TuffItemPreviewer">
     <TouchScroll class="h-full w-full">
       <div class="preview-area max-h-[60%]">
-        <component :is="previewComponent" :item="item" :search-query="searchQuery" />
+        <component :is="previewComponent" :key="item.id" :item="item" :search-query="searchQuery" />
       </div>
       <div class="p-4 border-t border-gray-200 dark:border-gray-700">
         <h3 class="text-sm font-semibold mb-4">

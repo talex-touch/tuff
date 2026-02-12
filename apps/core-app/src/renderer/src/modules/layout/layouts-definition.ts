@@ -45,6 +45,6 @@ export default {
   custom: {
     name: 'custom',
     displayName: 'Custom',
-    component: import('~/views/layout/simple/SimpleLayout.vue')
+    component: import('~/views/layout/custom/CustomLayout.vue')
   }
 } as Record<string, LayoutConfig>

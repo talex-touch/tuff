@@ -81,10 +81,12 @@ const aiTokensQuota = computed(() =>
 )
 const teamName = computed(() => (teamSummary.value ? teamSummary.value.name : '-'))
 const teamMembers = computed(() =>
-  teamSummary.value?.slots
-    ? `${teamSummary.value.slots.used}/${teamSummary.value.slots.total}`
+  teamSummary.value?.seats
+    ? `${teamSummary.value.seats.used}/${teamSummary.value.seats.total}`
     : '-'
 )
+const teamRole = computed(() => (teamSummary.value?.role ? teamSummary.value.role : '-'))
+const showUpgradeTeam = computed(() => Boolean(teamSummary.value?.upgrade?.required))
 const deviceCountLabel = computed(() => (deviceCount.value === null ? '-' : `${deviceCount.value}`))
 
 interface SubscriptionStatus {
@@ -99,13 +101,27 @@ interface SubscriptionStatus {
     prioritySupport: boolean
     apiAccess: boolean
   }
+  team?: TeamSummary
 }
 
 interface TeamSummary {
+  id: string
   name: string
-  plan: string
-  slots: { total: number; used: number }
-  organization?: { role?: string } | null
+  type: 'personal' | 'organization'
+  role: 'owner' | 'admin' | 'member'
+  collaborationEnabled: boolean
+  seats: { total: number; used: number }
+  permissions: {
+    canInvite: boolean
+    canManageMembers: boolean
+    canDisband: boolean
+    canCreateTeam: boolean
+  }
+  upgrade: {
+    required: boolean
+    targetPlan: 'TEAM' | null
+  }
+  manageUrl?: string
 }
 
 function openUserProfile() {
@@ -117,6 +133,19 @@ function openUserProfile() {
 function openDeviceManagement() {
   const devicesUrl = `${getAuthBaseUrl()}/dashboard/devices`
   void appSdk.openExternal(devicesUrl)
+  profileVisible.value = false
+}
+
+function openTeamManagement() {
+  const path = teamSummary.value?.manageUrl || '/dashboard/team'
+  const teamUrl = `${getAuthBaseUrl()}${path}`
+  void appSdk.openExternal(teamUrl)
+  profileVisible.value = false
+}
+
+function openTeamUpgrade() {
+  const upgradeUrl = `${getAuthBaseUrl()}/pricing`
+  void appSdk.openExternal(upgradeUrl)
   profileVisible.value = false
 }
 
@@ -188,39 +217,13 @@ async function loadAccountOverview() {
   accountLoading.value = true
   accountError.value = ''
   try {
-    const [subscriptionResult, creditsResult] = await Promise.allSettled([
-      fetchNexusJson<SubscriptionStatus>('/api/subscription/status'),
-      fetchNexusJson<{ team: { quota: number; used: number } }>('/api/credits/summary')
-    ])
-    let hasSuccess = false
-    const errors = new Set<string>()
-    if (subscriptionResult.status === 'fulfilled') {
-      subscriptionStatus.value = subscriptionResult.value
-      hasSuccess = true
-    } else {
-      const reason =
-        subscriptionResult.reason instanceof Error ? subscriptionResult.reason.message : ''
-      errors.add(reason || t('userProfile.subscriptionFailed', '订阅信息获取失败'))
-    }
-    if (creditsResult.status === 'fulfilled') {
-      teamSummary.value = {
-        name: t('userProfile.personalTeam', 'Personal'),
-        plan: subscriptionStatus.value?.plan || 'FREE',
-        slots: { total: 1, used: 1 }
-      }
-      hasSuccess = true
-    } else {
-      const reason = creditsResult.reason instanceof Error ? creditsResult.reason.message : ''
-      errors.add(reason || t('userProfile.teamFailed', '团队信息获取失败'))
-    }
+    const subscription = await fetchNexusJson<SubscriptionStatus>('/api/subscription/status')
+    subscriptionStatus.value = subscription
+    teamSummary.value = subscription.team || null
+
     await loadDeviceSummary()
-    if (hasSuccess) {
-      accountLoaded.value = true
-      lastFetchedAt.value = now
-    }
-    if (errors.size > 0) {
-      accountError.value = Array.from(errors).join(' / ')
-    }
+    accountLoaded.value = true
+    lastFetchedAt.value = now
   } catch (error) {
     accountError.value =
       error instanceof Error ? error.message : t('userProfile.loadFailed', '加载账户信息失败')
@@ -313,149 +316,175 @@ watch(isLoggedIn, (loggedIn) => {
   </div>
   <TModal v-model="profileVisible" :title="t('userProfile.title', 'Account')">
     <div class="UserProfile">
-      <div class="UserProfile-Header">
-        <div class="UserProfile-Avatar">
-          <img
-            v-if="avatarUrl"
-            :src="avatarUrl"
-            :alt="displayName || displayEmail"
-            class="avatar-image"
-          />
-          <div v-else class="avatar-placeholder">
-            {{ displayInitial }}
+      <div class="UserProfile-TopCard">
+        <div class="UserProfile-TopIdentity">
+          <div class="UserProfile-Avatar">
+            <img
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              :alt="displayName || displayEmail"
+              class="avatar-image"
+            />
+            <div v-else class="avatar-placeholder">
+              {{ displayInitial }}
+            </div>
+          </div>
+          <div class="UserProfile-Identity">
+            <div class="UserProfile-NameRow">
+              <p class="UserProfile-Name">
+                {{ displayName || t('userProfile.unknownName', 'User') }}
+              </p>
+              <span class="UserProfile-Badge">
+                {{ t('userProfile.statusSignedIn', 'Signed in') }}
+              </span>
+            </div>
+            <p class="UserProfile-Email">
+              {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
+            </p>
+            <p class="UserProfile-MetaText">
+              {{ t('userProfile.id', 'User ID') }}: {{ displayId || '-' }}
+            </p>
+            <p v-if="profileBio" class="UserProfile-MetaText">
+              {{ profileBio }}
+            </p>
           </div>
         </div>
-        <div class="UserProfile-Identity">
-          <p class="UserProfile-Name">
-            {{ displayName || t('userProfile.unknownName', 'User') }}
+        <div class="UserProfile-TopPlan">
+          <p class="UserProfile-TopPlanLabel">
+            {{ t('userProfile.plan', 'Plan') }}
           </p>
-          <p class="UserProfile-Email">
-            {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
+          <p class="UserProfile-TopPlanValue">
+            {{ planLabel }}
           </p>
-        </div>
-      </div>
-      <div v-if="profileBio" class="UserProfile-Bio">
-        {{ profileBio }}
-      </div>
-      <div class="UserProfile-Details">
-        <div class="UserProfile-Row">
-          <span class="label">
-            {{ t('userProfile.id', 'User ID') }}
-          </span>
-          <span class="value">
-            {{ displayId || '-' }}
-          </span>
-        </div>
-        <div class="UserProfile-Row">
-          <span class="label">
-            {{ t('userProfile.status', 'Status') }}
-          </span>
-          <span class="value">
-            {{ t('userProfile.statusSignedIn', 'Signed in') }}
-          </span>
-        </div>
-      </div>
-      <div class="UserProfile-Section">
-        <div class="UserProfile-SectionTitle">
-          {{ t('userProfile.actions', 'Profile actions') }}
-        </div>
-        <div class="UserProfile-Actions">
+          <p class="UserProfile-TopPlanMeta">{{ planStatus }} · {{ planExpiresAt }}</p>
           <TxButton variant="flat" size="sm" @click="toggleProfileEditor">
             {{
               profileEditing
                 ? t('userProfile.hideEditor', 'Hide editor')
-                : t('userProfile.editProfile', 'Edit profile')
+                : t('userProfile.manage', 'Manage')
             }}
-          </TxButton>
-          <TxButton variant="flat" size="sm" @click="handleLoginMethods">
-            {{ t('userProfile.loginMethods', 'Login methods') }}
-          </TxButton>
-          <TxButton variant="flat" size="sm" @click="openDeviceManagement">
-            {{ t('userProfile.devices', 'Devices') }}
           </TxButton>
         </div>
       </div>
-      <div v-if="profileEditing" class="UserProfile-Section">
+
+      <div v-if="profileEditing" class="UserProfile-ManagePanel">
         <div class="UserProfile-SectionTitle">
           {{ t('userProfile.editTitle', 'Edit profile') }}
         </div>
         <UserProfileEditor :visible="profileEditing" />
-      </div>
-      <div class="UserProfile-Section">
-        <div class="UserProfile-SectionTitle">
-          {{ t('userProfile.subscription', 'Subscription & Quota') }}
-        </div>
-        <div class="UserProfile-Details">
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.plan', 'Plan') }}
+        <div class="UserProfile-ManageFooter">
+          <div class="UserProfile-ManageInfo">
+            <span class="UserProfile-ManageLabel">
+              {{ t('userProfile.emailAccount', 'Email account') }}
             </span>
-            <span class="value">
-              {{ planLabel }}
+            <span class="UserProfile-ManageValue">
+              {{ displayEmail || t('userProfile.unknownEmail', 'No email') }}
             </span>
-          </div>
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.planStatus', 'Status') }}
-            </span>
-            <span class="value">
-              {{ planStatus }}
+            <span class="UserProfile-ManageHint">
+              {{
+                t(
+                  'userProfile.emailManageHint',
+                  'Email updates are managed in browser account settings.'
+                )
+              }}
             </span>
           </div>
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.planExpires', 'Expires') }}
-            </span>
-            <span class="value">
-              {{ planExpiresAt }}
-            </span>
-          </div>
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.aiRequests', 'AI Requests') }}
-            </span>
-            <span class="value">
-              {{ aiRequestsQuota }}
-            </span>
-          </div>
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.aiTokens', 'AI Tokens') }}
-            </span>
-            <span class="value">
-              {{ aiTokensQuota }}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div class="UserProfile-Section">
-        <div class="UserProfile-SectionTitle">
-          {{ t('userProfile.teamDevices', 'Team & Devices') }}
-        </div>
-        <div class="UserProfile-Details">
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.teamName', 'Team') }}
-            </span>
-            <span class="value">
-              {{ teamName }}
-            </span>
-          </div>
-          <div class="UserProfile-Row">
-            <span class="label">
-              {{ t('userProfile.teamMembers', 'Members') }}
-            </span>
-            <span class="value">
-              {{ teamMembers }}
-            </span>
-          </div>
-          <div class="UserProfile-Row">
-            <span class="label">
+          <div class="UserProfile-Actions">
+            <TxButton variant="flat" size="sm" @click="handleLoginMethods">
+              {{ t('userProfile.openEmailSettings', 'Manage email') }}
+            </TxButton>
+            <TxButton variant="flat" size="sm" @click="openDeviceManagement">
               {{ t('userProfile.devices', 'Devices') }}
-            </span>
-            <span class="value">
-              {{ deviceCountLabel }}
-            </span>
+            </TxButton>
+          </div>
+        </div>
+      </div>
+
+      <div class="UserProfile-MetricsGrid">
+        <div class="UserProfile-Section">
+          <div class="UserProfile-SectionTitle">
+            {{ t('userProfile.subscription', 'Subscription & Quota') }}
+          </div>
+          <div class="UserProfile-Details">
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.planStatus', 'Status') }}
+              </span>
+              <span class="value">
+                {{ planStatus }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.planExpires', 'Expires') }}
+              </span>
+              <span class="value">
+                {{ planExpiresAt }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.aiRequests', 'AI Requests') }}
+              </span>
+              <span class="value">
+                {{ aiRequestsQuota }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.aiTokens', 'AI Tokens') }}
+              </span>
+              <span class="value">
+                {{ aiTokensQuota }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="UserProfile-Section">
+          <div class="UserProfile-SectionTitle">
+            {{ t('userProfile.teamDevices', 'Team & Devices') }}
+          </div>
+          <div class="UserProfile-Details">
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.teamName', 'Team') }}
+              </span>
+              <span class="value">
+                {{ teamName }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.teamMembers', 'Members') }}
+              </span>
+              <span class="value">
+                {{ teamMembers }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.teamRole', 'Role') }}
+              </span>
+              <span class="value">
+                {{ teamRole }}
+              </span>
+            </div>
+            <div class="UserProfile-Row">
+              <span class="label">
+                {{ t('userProfile.devices', 'Devices') }}
+              </span>
+              <span class="value">
+                {{ deviceCountLabel }}
+              </span>
+            </div>
+          </div>
+          <div class="UserProfile-Actions">
+            <TxButton variant="flat" size="sm" @click="openTeamManagement">
+              {{ t('userProfile.manageTeam', 'Manage Team') }}
+            </TxButton>
+            <TxButton v-if="showUpgradeTeam" variant="flat" size="sm" @click="openTeamUpgrade">
+              {{ t('userProfile.upgradeTeam', 'Upgrade to Team') }}
+            </TxButton>
           </div>
         </div>
       </div>
@@ -627,18 +656,30 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfile {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
-.UserProfile-Header {
+.UserProfile-TopCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: stretch;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  background: var(--el-fill-color-lighter);
+  padding: 14px;
+}
+
+.UserProfile-TopIdentity {
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .UserProfile-Avatar {
-  width: 48px;
-  height: 48px;
+  width: 54px;
+  height: 54px;
   border-radius: 50%;
   overflow: hidden;
   background: var(--el-color-primary-light-8);
@@ -658,7 +699,7 @@ watch(isLoggedIn, (loggedIn) => {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--el-color-primary);
     background: var(--el-color-primary-light-8);
@@ -670,12 +711,19 @@ watch(isLoggedIn, (loggedIn) => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+}
+
+.UserProfile-NameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .UserProfile-Name {
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--el-text-color-primary);
   white-space: nowrap;
@@ -683,27 +731,122 @@ watch(isLoggedIn, (loggedIn) => {
   text-overflow: ellipsis;
 }
 
+.UserProfile-Badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+}
+
 .UserProfile-Email {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--el-text-color-regular);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.UserProfile-Bio {
+.UserProfile-MetaText {
+  margin: 0;
   font-size: 12px;
-  color: var(--el-text-color-regular);
-  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.UserProfile-TopPlan {
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 16px;
+  border-left: 1px solid var(--el-border-color-light);
+  justify-content: center;
+}
+
+.UserProfile-TopPlanLabel {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--el-text-color-secondary);
+}
+
+.UserProfile-TopPlanValue {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.UserProfile-TopPlanMeta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.UserProfile-ManagePanel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.UserProfile-ManageFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--el-fill-color-lighter);
+}
+
+.UserProfile-ManageInfo {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.UserProfile-ManageLabel {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--el-text-color-secondary);
+}
+
+.UserProfile-ManageValue {
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+}
+
+.UserProfile-ManageHint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.UserProfile-MetricsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .UserProfile-Details {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
+  padding: 12px 14px;
   border-radius: 12px;
+  border: 1px solid var(--el-border-color-light);
   background: var(--el-fill-color-lighter);
 }
 
@@ -717,7 +860,7 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfile-Section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .UserProfile-SectionTitle {
@@ -757,5 +900,23 @@ watch(isLoggedIn, (loggedIn) => {
 
 .UserProfile-Error {
   color: var(--el-color-danger);
+}
+
+@media (max-width: 760px) {
+  .UserProfile-TopCard {
+    grid-template-columns: 1fr;
+  }
+
+  .UserProfile-TopPlan {
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--el-border-color-light);
+    padding-left: 0;
+    padding-top: 12px;
+  }
+
+  .UserProfile-MetricsGrid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -1,5 +1,5 @@
 <script name="ThemeStyle" lang="ts" setup>
-import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -12,6 +12,7 @@ import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { themeStyle, triggerThemeTransition, type ThemeMode } from '~/modules/storage/app-storage'
 import { buildTfileUrl } from '~/utils/tfile-url'
 import LayoutSection from './LayoutSection.vue'
@@ -349,6 +350,8 @@ watch(
     }
   }
 )
+
+const bgSaving = computed(() => appSettings.savingState?.value ?? false)
 </script>
 
 <template>
@@ -395,7 +398,8 @@ watch(
         :description="t('themeStyle.homepageWallpaperDesc')"
       >
         <template #icon="{ active }">
-          <ThemePreviewIcon variant="wallpaper" :active="active" />
+          <TxSpinner v-if="bgSaving" :size="14" />
+          <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
         </template>
         <TSelectItem :model-value="0" name="none">
           {{ t('themeStyle.noBackground') }}

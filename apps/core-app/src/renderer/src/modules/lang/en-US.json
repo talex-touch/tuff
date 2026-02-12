@@ -246,10 +246,14 @@
     "teamFailed": "Failed to load team",
     "loadFailed": "Failed to load account data",
     "actions": "Profile actions",
+    "manage": "Manage",
     "editProfile": "Edit profile",
     "loginMethods": "Login methods",
     "editTitle": "Edit profile",
     "hideEditor": "Hide editor",
+    "emailAccount": "Email account",
+    "emailManageHint": "Email updates are managed in browser account settings.",
+    "openEmailSettings": "Manage email",
     "displayName": "Display name",
     "displayNamePlaceholder": "Enter your display name",
     "bio": "Bio",
@@ -263,7 +267,11 @@
     "avatarUpdateFailed": "Failed to update avatar",
     "loginMethodsLocal": "Login methods are unavailable in local mode",
     "loginMethodsWeb": "Login settings opened in browser",
-    "loginMethodsFailed": "Failed to open login methods"
+    "loginMethodsFailed": "Failed to open login methods",
+    "teamRole": "Role",
+    "manageTeam": "Manage Team",
+    "upgradeTeam": "Upgrade to Team",
+    "personalTeam": "Personal Team"
   },
   "layout": {
     "back": "Back"
@@ -434,24 +442,24 @@
     "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
     "docsOpen": "Open Nexus Docs",
     "categories": {
-	      "title": "Categories",
-	      "all": "All",
-	      "productivity": "Productivity",
-	      "development": "Development",
-	      "utilities": "Utilities",
-	      "design": "Design",
-	      "media": "Media",
-	      "writing": "Writing",
-	      "dev": "Dev",
-	      "uncategorized": "Uncategorized",
-	      "creativity": "Creativity",
-	      "ai": "AI",
-	      "automation": "Automation",
-	      "communication": "Communication",
-	      "analytics": "Analytics",
-	      "education": "Education",
-	      "finance": "Finance"
-	    },
+      "title": "Categories",
+      "all": "All",
+      "productivity": "Productivity",
+      "development": "Development",
+      "utilities": "Utilities",
+      "design": "Design",
+      "media": "Media",
+      "writing": "Writing",
+      "dev": "Dev",
+      "uncategorized": "Uncategorized",
+      "creativity": "Creativity",
+      "ai": "AI",
+      "automation": "Automation",
+      "communication": "Communication",
+      "analytics": "Analytics",
+      "education": "Education",
+      "finance": "Finance"
+    },
     "tags": {
       "all": "All",
       "feature": "Feature",
@@ -525,10 +533,10 @@
     "errorDetails": "Provider Status",
     "clickToViewErrors": "Click to view error details",
     "statusSuccess": "Success",
-	    "statusFailed": "Failed",
-	    "plugins": "plugins",
-	    "noProviderData": "No provider data available"
-	  },
+    "statusFailed": "Failed",
+    "plugins": "plugins",
+    "noProviderData": "No provider data available"
+  },
   "plugin": {
     "opening": "Opening...",
     "openFolder": "Open Folder",
@@ -636,37 +644,94 @@
       },
       "registry": {
         "fs": {
-          "read": { "name": "Read Files", "desc": "Read files from the user file system" },
-          "write": { "name": "Write Files", "desc": "Create, modify, or delete files" },
-          "execute": { "name": "Execute Files", "desc": "Run executable files or scripts" }
+          "read": {
+            "name": "Read Files",
+            "desc": "Read files from the user file system"
+          },
+          "write": {
+            "name": "Write Files",
+            "desc": "Create, modify, or delete files"
+          },
+          "execute": {
+            "name": "Execute Files",
+            "desc": "Run executable files or scripts"
+          }
         },
         "clipboard": {
-          "read": { "name": "Read Clipboard", "desc": "Access clipboard contents" },
-          "write": { "name": "Write Clipboard", "desc": "Copy content to clipboard" }
+          "read": {
+            "name": "Read Clipboard",
+            "desc": "Access clipboard contents"
+          },
+          "write": {
+            "name": "Write Clipboard",
+            "desc": "Copy content to clipboard"
+          }
         },
         "network": {
-          "local": { "name": "Local Network", "desc": "Access local network resources" },
-          "internet": { "name": "Internet Access", "desc": "Send and receive internet requests" },
-          "download": { "name": "Download Files", "desc": "Download files from the internet" }
+          "local": {
+            "name": "Local Network",
+            "desc": "Access local network resources"
+          },
+          "internet": {
+            "name": "Internet Access",
+            "desc": "Send and receive internet requests"
+          },
+          "download": {
+            "name": "Download Files",
+            "desc": "Download files from the internet"
+          }
         },
         "system": {
-          "shell": { "name": "Execute Commands", "desc": "Run system commands or scripts" },
-          "notification": { "name": "System Notifications", "desc": "Send system notifications" },
-          "tray": { "name": "Tray Access", "desc": "Access system tray features" },
-          "shortcut": { "name": "Global Shortcuts", "desc": "Register system-wide global shortcuts" }
+          "shell": {
+            "name": "Execute Commands",
+            "desc": "Run system commands or scripts"
+          },
+          "notification": {
+            "name": "System Notifications",
+            "desc": "Send system notifications"
+          },
+          "tray": {
+            "name": "Tray Access",
+            "desc": "Access system tray features"
+          },
+          "shortcut": {
+            "name": "Global Shortcuts",
+            "desc": "Register system-wide global shortcuts"
+          }
         },
         "ai": {
-          "basic": { "name": "Basic AI", "desc": "Use basic AI capabilities" },
-          "advanced": { "name": "Advanced AI", "desc": "Use advanced AI models" },
-          "agents": { "name": "Agents", "desc": "Invoke the agent system" }
+          "basic": {
+            "name": "Basic AI",
+            "desc": "Use basic AI capabilities"
+          },
+          "advanced": {
+            "name": "Advanced AI",
+            "desc": "Use advanced AI models"
+          },
+          "agents": {
+            "name": "Agents",
+            "desc": "Invoke the agent system"
+          }
         },
         "storage": {
-          "plugin": { "name": "Plugin Storage", "desc": "Use private plugin storage" },
-          "shared": { "name": "Shared Storage", "desc": "Access shared storage across plugins" }
+          "plugin": {
+            "name": "Plugin Storage",
+            "desc": "Use private plugin storage"
+          },
+          "shared": {
+            "name": "Shared Storage",
+            "desc": "Access shared storage across plugins"
+          }
         },
         "window": {
-          "create": { "name": "Create Window", "desc": "Create new windows or views" },
-          "capture": { "name": "Screen Capture", "desc": "Capture screen content" }
+          "create": {
+            "name": "Create Window",
+            "desc": "Create new windows or views"
+          },
+          "capture": {
+            "name": "Screen Capture",
+            "desc": "Capture screen content"
+          }
         }
       },
       "startup": {
@@ -1088,7 +1153,14 @@
     "error_info": "Error Information",
     "metadata": "Metadata",
     "filename": "Filename",
-    "status": "Status",
+    "status": {
+      "pending": "Pending",
+      "downloading": "Downloading",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Download Failed",
+      "cancelled": "Cancelled"
+    },
     "module": "Module",
     "total_size": "Total Size",
     "downloaded_size": "Downloaded",
@@ -1116,14 +1188,6 @@
     "priority_high": "High",
     "priority_normal": "Normal",
     "priority_low": "Low",
-    "status": {
-      "pending": "Pending",
-      "downloading": "Downloading",
-      "paused": "Paused",
-      "completed": "Completed",
-      "failed": "Download Failed",
-      "cancelled": "Cancelled"
-    },
     "error": {
       "network": "Network connection failed",
       "timeout": "Download timeout",
@@ -1612,7 +1676,6 @@
       "modelConfig": "Model Configuration",
       "models": "Available Models",
       "addModelPlaceholder": "Type and press Enter to add",
-      "defaultModel": "Default Model",
       "selectModel": "Select default model",
       "instructions": "System Instructions",
       "instructionsPlaceholder": "Enter system instructions for this provider...",
@@ -2011,8 +2074,24 @@
     "importConfirm": "Import \"{name}\"? This will replace your current {parts} settings.",
     "layout": "Layout",
     "coreBox": "CoreBox Theme",
-    "cloudPublish": "Publish to Cloud",
-    "cloudPublishDesc": "Share your preset with the community (coming soon)"
+    "cloudPublish": "Nexus Presets",
+    "cloudPublishDesc": "Download beta presets from Nexus and apply with rollback",
+    "remoteBrowse": "Browse Nexus Presets",
+    "remoteApply": "Apply Nexus Beta",
+    "rollback": "Undo Last Apply",
+    "remoteTitle": "Nexus Presets (Beta)",
+    "remoteDesc": "Preview and apply remote layout presets after login.",
+    "remoteCompatAny": "Compatible with current app",
+    "remoteListFailed": "Failed to load Nexus preset list",
+    "remoteApplySuccess": "Nexus preset applied",
+    "remoteApplyFailed": "Failed to apply Nexus preset",
+    "noRemotePreset": "No Nexus beta preset available",
+    "previewUnavailable": "No Preview",
+    "noDescription": "No description",
+    "compat": "Compatibility",
+    "updatedAt": "Updated",
+    "noRollbackSnapshot": "No rollback snapshot found",
+    "rollbackSuccess": "Restored previous preset successfully"
   },
   "tray": {
     "showWindow": "Show Main Window",
@@ -2071,7 +2150,9 @@
     "builtinProviders": "Built-in Providers",
     "customProviders": "Custom Providers",
     "enabled": "Enabled",
-    "disabled": "Disabled",
+    "disabled": {
+      "message": "This provider is disabled. Enable it to configure its settings."
+    },
     "selectProviderHint": "Select a provider to configure",
     "testing": "Testing...",
     "test": {
@@ -2137,9 +2218,6 @@
     "status": {
       "enabled": "Enabled",
       "disabled": "Disabled"
-    },
-    "disabled": {
-      "message": "This provider is disabled. Enable it to configure its settings."
     },
     "empty": {
       "title": "No Provider Selected",
@@ -2261,7 +2339,15 @@
       "failure": "Failure",
       "promptTokens": "Prompt Tokens",
       "completionTokens": "Completion Tokens",
-      "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      "weekdays": [
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+      ]
     },
     "audit": {
       "title": "Audit Settings",
@@ -2322,26 +2408,6 @@
         "description": "Configure priority and timeout settings"
       }
     }
-  },
-  "tray": {
-    "showWindow": "Show Main Window",
-    "hideWindow": "Hide Main Window",
-    "openCoreBox": "Open CoreBox",
-    "downloadCenter": "Download Center",
-    "downloadCenterWithCount": "Download Center ({count} tasks)",
-    "clipboardHistory": "Clipboard History",
-    "terminal": "Terminal",
-    "settings": "Settings",
-    "about": "About Talex Touch",
-    "version": "Version {version}",
-    "checkUpdate": "Check for Updates",
-    "checkUpdateAvailable": "Check for Updates • New Version Available",
-    "viewLogs": "View Logs",
-    "openDataDir": "Open Data Directory",
-    "visitWebsite": "Visit Website",
-    "restart": "Restart Application",
-    "quit": "Quit Talex Touch",
-    "tooltip": "Talex Touch"
   },
   "flow": {
     "selectTarget": "Select Target",

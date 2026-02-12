@@ -246,10 +246,14 @@
     "teamFailed": "团队信息获取失败",
     "loadFailed": "加载账户信息失败",
     "actions": "账户操作",
+    "manage": "管理",
     "editProfile": "编辑资料",
     "loginMethods": "登录方式",
     "editTitle": "编辑资料",
     "hideEditor": "收起编辑",
+    "emailAccount": "邮箱账户",
+    "emailManageHint": "邮箱修改请前往浏览器中的账户设置。",
+    "openEmailSettings": "管理邮箱",
     "displayName": "显示名称",
     "displayNamePlaceholder": "输入你的显示名称",
     "bio": "简介",
@@ -263,7 +267,11 @@
     "avatarUpdateFailed": "头像更新失败",
     "loginMethodsLocal": "本地模式不支持登录方式管理",
     "loginMethodsWeb": "已在浏览器打开登录设置",
-    "loginMethodsFailed": "登录方式打开失败"
+    "loginMethodsFailed": "登录方式打开失败",
+    "teamRole": "角色",
+    "manageTeam": "管理团队",
+    "upgradeTeam": "升级到 Team",
+    "personalTeam": "个人团队"
   },
   "layout": {
     "back": "返回"
@@ -433,25 +441,25 @@
     "docsLinkTitle": "Platform Capabilities SDK",
     "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
     "docsOpen": "打开 Nexus 文档",
-	    "categories": {
-	      "title": "分类",
-	      "all": "全部",
-	      "productivity": "生产力",
-	      "development": "开发",
-	      "utilities": "实用工具",
-	      "design": "设计",
-	      "media": "媒体",
-	      "writing": "写作",
-	      "dev": "开发",
-	      "uncategorized": "未分类",
-	      "creativity": "创意",
-	      "ai": "AI",
-	      "automation": "自动化",
-	      "communication": "沟通",
-	      "analytics": "分析",
-	      "education": "教育",
-	      "finance": "财务"
-	    },
+    "categories": {
+      "title": "分类",
+      "all": "全部",
+      "productivity": "生产力",
+      "development": "开发",
+      "utilities": "实用工具",
+      "design": "设计",
+      "media": "媒体",
+      "writing": "写作",
+      "dev": "开发",
+      "uncategorized": "未分类",
+      "creativity": "创意",
+      "ai": "AI",
+      "automation": "自动化",
+      "communication": "沟通",
+      "analytics": "分析",
+      "education": "教育",
+      "finance": "财务"
+    },
     "tags": {
       "all": "全部",
       "feature": "功能",
@@ -525,10 +533,10 @@
     "errorDetails": "数据源状态",
     "clickToViewErrors": "点击查看错误详情",
     "statusSuccess": "成功",
-	    "statusFailed": "失败",
-	    "plugins": "个插件",
-	    "noProviderData": "暂无数据源信息"
-	  },
+    "statusFailed": "失败",
+    "plugins": "个插件",
+    "noProviderData": "暂无数据源信息"
+  },
   "plugin": {
     "opening": "打开中...",
     "openFolder": "打开文件夹",
@@ -636,37 +644,94 @@
       },
       "registry": {
         "fs": {
-          "read": { "name": "读取文件", "desc": "读取用户文件系统中的文件" },
-          "write": { "name": "写入文件", "desc": "创建、修改或删除用户文件" },
-          "execute": { "name": "执行文件", "desc": "运行可执行文件或脚本" }
+          "read": {
+            "name": "读取文件",
+            "desc": "读取用户文件系统中的文件"
+          },
+          "write": {
+            "name": "写入文件",
+            "desc": "创建、修改或删除用户文件"
+          },
+          "execute": {
+            "name": "执行文件",
+            "desc": "运行可执行文件或脚本"
+          }
         },
         "clipboard": {
-          "read": { "name": "读取剪贴板", "desc": "访问剪贴板中的内容" },
-          "write": { "name": "写入剪贴板", "desc": "将内容复制到剪贴板" }
+          "read": {
+            "name": "读取剪贴板",
+            "desc": "访问剪贴板中的内容"
+          },
+          "write": {
+            "name": "写入剪贴板",
+            "desc": "将内容复制到剪贴板"
+          }
         },
         "network": {
-          "local": { "name": "本地网络", "desc": "访问本地网络资源" },
-          "internet": { "name": "互联网访问", "desc": "发送和接收互联网请求" },
-          "download": { "name": "下载文件", "desc": "从互联网下载文件到本地" }
+          "local": {
+            "name": "本地网络",
+            "desc": "访问本地网络资源"
+          },
+          "internet": {
+            "name": "互联网访问",
+            "desc": "发送和接收互联网请求"
+          },
+          "download": {
+            "name": "下载文件",
+            "desc": "从互联网下载文件到本地"
+          }
         },
         "system": {
-          "shell": { "name": "执行命令", "desc": "运行系统命令或脚本" },
-          "notification": { "name": "系统通知", "desc": "发送系统通知" },
-          "tray": { "name": "托盘交互", "desc": "访问系统托盘功能" },
-          "shortcut": { "name": "全局快捷键", "desc": "注册系统级全局快捷键" }
+          "shell": {
+            "name": "执行命令",
+            "desc": "运行系统命令或脚本"
+          },
+          "notification": {
+            "name": "系统通知",
+            "desc": "发送系统通知"
+          },
+          "tray": {
+            "name": "托盘交互",
+            "desc": "访问系统托盘功能"
+          },
+          "shortcut": {
+            "name": "全局快捷键",
+            "desc": "注册系统级全局快捷键"
+          }
         },
         "ai": {
-          "basic": { "name": "基础 AI", "desc": "使用基础 AI 能力" },
-          "advanced": { "name": "高级 AI", "desc": "使用高级 AI 模型" },
-          "agents": { "name": "智能体", "desc": "调用智能体系统" }
+          "basic": {
+            "name": "基础 AI",
+            "desc": "使用基础 AI 能力"
+          },
+          "advanced": {
+            "name": "高级 AI",
+            "desc": "使用高级 AI 模型"
+          },
+          "agents": {
+            "name": "智能体",
+            "desc": "调用智能体系统"
+          }
         },
         "storage": {
-          "plugin": { "name": "插件存储", "desc": "使用插件私有存储空间" },
-          "shared": { "name": "共享存储", "desc": "访问跨插件共享存储" }
+          "plugin": {
+            "name": "插件存储",
+            "desc": "使用插件私有存储空间"
+          },
+          "shared": {
+            "name": "共享存储",
+            "desc": "访问跨插件共享存储"
+          }
         },
         "window": {
-          "create": { "name": "创建窗口", "desc": "创建新窗口或视图" },
-          "capture": { "name": "屏幕截图", "desc": "捕获屏幕内容" }
+          "create": {
+            "name": "创建窗口",
+            "desc": "创建新窗口或视图"
+          },
+          "capture": {
+            "name": "屏幕截图",
+            "desc": "捕获屏幕内容"
+          }
         }
       },
       "startup": {
@@ -1088,7 +1153,14 @@
     "error_info": "错误信息",
     "metadata": "元数据",
     "filename": "文件名",
-    "status": "状态",
+    "status": {
+      "pending": "等待中",
+      "downloading": "下载中",
+      "paused": "已暂停",
+      "completed": "已完成",
+      "failed": "下载失败",
+      "cancelled": "已取消"
+    },
     "module": "模块",
     "total_size": "总大小",
     "downloaded_size": "已下载",
@@ -1116,14 +1188,6 @@
     "priority_high": "高",
     "priority_normal": "普通",
     "priority_low": "低",
-    "status": {
-      "pending": "等待中",
-      "downloading": "下载中",
-      "paused": "已暂停",
-      "completed": "已完成",
-      "failed": "下载失败",
-      "cancelled": "已取消"
-    },
     "error": {
       "network": "网络连接失败",
       "timeout": "下载超时",
@@ -1604,7 +1668,6 @@
       "modelConfig": "模型配置",
       "models": "可用模型",
       "addModelPlaceholder": "输入后按回车添加",
-      "defaultModel": "默认模型",
       "selectModel": "选择默认模型",
       "instructions": "系统指令",
       "instructionsPlaceholder": "输入此提供商的系统指令...",
@@ -2003,8 +2066,24 @@
     "importConfirm": "导入「{name}」？这将替换你当前的 {parts} 设置。",
     "layout": "布局",
     "coreBox": "CoreBox 主题",
-    "cloudPublish": "发布到云端",
-    "cloudPublishDesc": "与社区分享你的预设（即将推出）"
+    "cloudPublish": "Nexus 预设",
+    "cloudPublishDesc": "从 Nexus 下载 Beta 预设并支持失败回滚",
+    "remoteBrowse": "浏览 Nexus 预设",
+    "remoteApply": "应用 Nexus Beta",
+    "rollback": "撤销上次应用",
+    "remoteTitle": "Nexus 预设（Beta）",
+    "remoteDesc": "登录后可预览并应用远程布局预设。",
+    "remoteCompatAny": "与当前应用兼容",
+    "remoteListFailed": "加载 Nexus 预设列表失败",
+    "remoteApplySuccess": "Nexus 预设应用成功",
+    "remoteApplyFailed": "应用 Nexus 预设失败",
+    "noRemotePreset": "暂无可用的 Nexus Beta 预设",
+    "previewUnavailable": "暂无预览",
+    "noDescription": "暂无描述",
+    "compat": "兼容性",
+    "updatedAt": "更新时间",
+    "noRollbackSnapshot": "没有可回滚的快照",
+    "rollbackSuccess": "已恢复到上一个预设"
   },
   "tray": {
     "showWindow": "显示主窗口",
@@ -2063,7 +2142,9 @@
     "builtinProviders": "内置提供商",
     "customProviders": "自定义提供商",
     "enabled": "已启用",
-    "disabled": "已禁用",
+    "disabled": {
+      "message": "此提供商已禁用。启用后可配置其设置。"
+    },
     "selectProviderHint": "选择一个提供商进行配置",
     "testing": "测试中...",
     "test": {
@@ -2129,9 +2210,6 @@
     "status": {
       "enabled": "已启用",
       "disabled": "已禁用"
-    },
-    "disabled": {
-      "message": "此提供商已禁用。启用后可配置其设置。"
     },
     "empty": {
       "title": "未选择提供商",
@@ -2253,7 +2331,15 @@
       "failure": "失败",
       "promptTokens": "输入 Token",
       "completionTokens": "输出 Token",
-      "weekdays": ["日", "一", "二", "三", "四", "五", "六"]
+      "weekdays": [
+        "日",
+        "一",
+        "二",
+        "三",
+        "四",
+        "五",
+        "六"
+      ]
     },
     "audit": {
       "title": "审计设置",
@@ -2314,26 +2400,6 @@
         "description": "配置优先级和超时设置"
       }
     }
-  },
-  "tray": {
-    "showWindow": "显示主窗口",
-    "hideWindow": "隐藏主窗口",
-    "openCoreBox": "打开 CoreBox",
-    "downloadCenter": "下载中心",
-    "downloadCenterWithCount": "下载中心 ({count} 个任务)",
-    "clipboardHistory": "剪贴板历史",
-    "terminal": "终端",
-    "settings": "设置",
-    "about": "关于 Talex Touch",
-    "version": "版本 {version}",
-    "checkUpdate": "检查更新",
-    "checkUpdateAvailable": "检查更新 • 有新版本",
-    "viewLogs": "查看日志",
-    "openDataDir": "打开数据目录",
-    "visitWebsite": "访问官网",
-    "restart": "重启应用",
-    "quit": "退出 Talex Touch",
-    "tooltip": "Talex Touch"
   },
   "flow": {
     "selectTarget": "选择目标",
