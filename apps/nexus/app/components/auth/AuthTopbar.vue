@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 withDefaults(defineProps<{
   backLabel?: string
@@ -14,10 +14,10 @@ const emit = defineEmits<{
 
 <template>
   <header class="auth-topbar">
-    <Button variant="ghost" size="sm" @click="emit('back')">
+    <TxButton variant="ghost" size="sm" @click="emit('back')">
       <span class="i-carbon-arrow-left" />
       <span>{{ backLabel }}</span>
-    </Button>
+    </TxButton>
     <LanguageToggle />
   </header>
 </template>

@@ -6,7 +6,7 @@ import type {
   DashboardPluginVersion as PluginVersion,
   VersionStatus,
 } from '~/types/dashboard-plugin'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
@@ -237,15 +237,10 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
             <p class="text-xs font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
               {{ t('dashboard.sections.plugins.versionHistory') }}
             </p>
-            <Button
-              v-if="canPublishVersion"
-              type="primary"
-              size="small"
-              @click="emit('publishVersion', plugin)"
-            >
+            <TxButton v-if="canPublishVersion" type="primary" size="small" @click="emit('publishVersion', plugin)">
               <span class="i-carbon-cloud-upload text-sm" />
               {{ t('dashboard.sections.plugins.publishVersion') }}
-            </Button>
+            </TxButton>
           </div>
 
           <div v-if="plugin.versions?.length" class="space-y-3">
@@ -307,41 +302,22 @@ const canDelete = computed(() => props.isOwner || props.isAdmin)
 
     <template #footer>
       <div v-if="plugin" class="flex flex-wrap items-center justify-end gap-3">
-        <Button
-          v-if="canSubmitReview"
-          size="small"
-          :disabled="loading"
-          @click="emit('submitReview', plugin)"
-        >
+        <TxButton v-if="canSubmitReview" size="small" :disabled="loading" @click="emit('submitReview', plugin)">
           <span class="i-carbon-send text-sm" />
           {{ t('dashboard.sections.plugins.actions.submitReview') }}
-        </Button>
-        <Button
-          v-if="canWithdrawReview"
-          size="small"
-          :disabled="loading"
-          @click="emit('withdrawReview', plugin)"
-        >
+        </TxButton>
+        <TxButton v-if="canWithdrawReview" size="small" :disabled="loading" @click="emit('withdrawReview', plugin)">
           <span class="i-carbon-undo text-sm" />
           {{ t('dashboard.sections.plugins.actions.withdrawReview') }}
-        </Button>
-        <Button
-          v-if="canEdit"
-          size="small"
-          @click="emit('edit', plugin)"
-        >
+        </TxButton>
+        <TxButton v-if="canEdit" size="small" @click="emit('edit', plugin)">
           <span class="i-carbon-edit text-sm" />
           {{ t('dashboard.sections.plugins.editMetadata') }}
-        </Button>
-        <Button
-          v-if="canDelete"
-          type="danger"
-          size="small"
-          @click="emit('delete', plugin)"
-        >
+        </TxButton>
+        <TxButton v-if="canDelete" type="danger" size="small" @click="emit('delete', plugin)">
           <span class="i-carbon-trash-can text-sm" />
           {{ t('dashboard.sections.plugins.delete') }}
-        </Button>
+        </TxButton>
       </div>
     </template>
   </Drawer>

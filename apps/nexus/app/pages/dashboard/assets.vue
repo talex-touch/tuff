@@ -11,7 +11,7 @@ import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vu
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import PluginListItem from '~/components/dashboard/PluginListItem.vue'
 import ReviewModal from '~/components/dashboard/ReviewModal.vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
@@ -866,10 +866,10 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
         <span class="i-carbon-explore" />
         {{ t('dashboard.sections.plugins.cta') }}
       </NuxtLink>
-      <Button type="primary" size="small" @click="openCreatePluginForm($event)">
+      <TxButton type="primary" size="small" @click="openCreatePluginForm($event)">
         <span class="i-carbon-add" />
         {{ t('dashboard.sections.plugins.addButton') }}
-      </Button>
+      </TxButton>
     </div>
 
     <!-- Admin: Pending Reviews -->
@@ -1107,9 +1107,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           >
             {{ pluginFormError }}
           </p>
-          <Button native-type="submit" :loading="pluginSaving">
+          <TxButton native-type="submit" :loading="pluginSaving">
             {{ pluginFormMode === 'create' ? t('dashboard.sections.plugins.createSubmit') : t('dashboard.sections.plugins.updateSubmit') }}
-          </Button>
+          </TxButton>
         </div>
       </form>
 

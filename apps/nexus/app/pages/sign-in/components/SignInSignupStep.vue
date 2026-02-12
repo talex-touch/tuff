@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 
 const props = defineProps<{
@@ -33,14 +33,14 @@ const confirmValue = computed({
   <div class="auth-step">
     <div class="auth-row">
       <span>{{ emailPreview }}</span>
-      <Button variant="ghost" size="sm" class="auth-text-button" @click="emit('reset-email')">
+      <TxButton variant="ghost" size="sm" class="auth-text-button" @click="emit('reset-email')">
         {{ t('auth.changeEmail', '更换邮箱') }}
-      </Button>
+      </TxButton>
     </div>
     <Input v-model="passwordValue" type="password" :placeholder="t('auth.password', '密码')" class="auth-input" />
     <Input v-model="confirmValue" type="password" :placeholder="t('auth.confirmPassword', '确认密码')" class="auth-input" />
-    <Button class="auth-button auth-button--primary" size="lg" block :loading="signupLoading" @click="emit('sign-up')">
+    <TxButton class="auth-button auth-button--primary" size="lg" block :loading="signupLoading" @click="emit('sign-up')">
       {{ t('auth.signUp', '注册') }}
-    </Button>
+    </TxButton>
   </div>
 </template>

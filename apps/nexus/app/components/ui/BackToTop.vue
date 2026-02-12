@@ -46,16 +46,7 @@ onUnmounted(() => {
 
 <template>
   <Transition name="back-to-top">
-    <TxButton
-      v-show="visible"
-      circle
-      size="small"
-      variant="ghost"
-      native-type="button"
-      class="back-to-top"
-      aria-label="Back to top"
-      @click="scrollToTop"
-    >
+    <TxButton v-show="visible" circle size="small" variant="ghost" native-type="button" class="back-to-top" aria-label="Back to top" @click="scrollToTop">
       <span class="back-to-top__icon i-carbon-chevron-up" aria-hidden="true" />
     </TxButton>
   </Transition>

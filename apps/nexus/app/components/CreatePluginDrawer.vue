@@ -3,7 +3,7 @@ import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
@@ -616,10 +616,10 @@ function onSubmit() {
                   </label>
 
                   <div class="pt-4">
-                    <Button block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
+                    <TxButton block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
                       <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
                       {{ t('dashboard.sections.plugins.createSubmit') }}
-                    </Button>
+                    </TxButton>
                     <p v-if="error" class="mt-2 text-center text-xs text-red-500">
                       {{ error }}
                     </p>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 defineI18nRoute(false)
 
@@ -76,9 +76,9 @@ function formatLedgerTime(value: string) {
         {{ t('dashboard.credits.ledger', '积分流水') }}
       </h2>
       <div class="mt-3">
-        <Button size="small" variant="secondary" @click="() => { refreshSummary(); refreshLedger() }">
+        <TxButton size="small" variant="secondary" @click="() => { refreshSummary(); refreshLedger() }">
           {{ t('common.refresh', '刷新') }}
-        </Button>
+        </TxButton>
       </div>
 
       <div v-if="summaryPending || ledgerPending" class="mt-4 space-y-3 py-4">

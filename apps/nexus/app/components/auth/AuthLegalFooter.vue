@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 const props = withDefaults(defineProps<{
   showAgreement?: boolean
@@ -20,13 +20,13 @@ function goTo(path: string) {
       <div class="auth-footer-row">
         <span>{{ t('auth.copyright', '© 2026 Tuff. All rights reserved.') }}</span>
         <div class="flex items-center gap-2">
-          <Button variant="ghost" size="sm" @click="goTo('/privacy')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/privacy')">
             {{ t('auth.privacyPolicy', 'Privacy Policy') }}
-          </Button>
+          </TxButton>
           <span class="text-white/20">·</span>
-          <Button variant="ghost" size="sm" @click="goTo('/protocol')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/protocol')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
-          </Button>
+          </TxButton>
         </div>
       </div>
       <div class="auth-footer-meta">
@@ -35,13 +35,13 @@ function goTo(path: string) {
         </div>
         <div v-if="props.showAgreement" class="auth-legal">
           <span>{{ t('auth.loginAgreementPrefix', 'By logging in, you agree to') }}</span>
-          <Button variant="ghost" size="sm" @click="goTo('/protocol')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/protocol')">
             {{ t('auth.termsOfService', 'Terms of Service') }}
-          </Button>
+          </TxButton>
           <span>{{ t('auth.loginAgreementAnd', 'and') }}</span>
-          <Button variant="ghost" size="sm" @click="goTo('/privacy')">
+          <TxButton variant="ghost" size="sm" @click="goTo('/privacy')">
             {{ t('auth.privacyPolicy', 'Privacy Policy') }}
-          </Button>
+          </TxButton>
           <span>.</span>
         </div>
       </div>

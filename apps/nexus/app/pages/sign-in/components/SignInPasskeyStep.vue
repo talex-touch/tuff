@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuffex'
+import { TxSpinner, TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
-import Button from '~/components/ui/Button.vue'
 
 const props = defineProps<{
   t: (key: string, fallback?: string) => string
@@ -50,20 +49,14 @@ const showRetry = computed(() => isError.value)
     </div>
 
     <div class="auth-passkey-actions" :class="{ 'is-visible': showRetry }">
-      <Button class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
+      <TxButton class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.passkeyRetry', '重新尝试') }}
-      </Button>
+      </TxButton>
     </div>
 
-    <Button
-      variant="ghost"
-      size="sm"
-      class="auth-text-button auth-passkey-back"
-      :class="{ 'is-visible': showRetry }"
-      @click="emit('back')"
-    >
+    <TxButton variant="ghost" size="sm" class="auth-text-button auth-passkey-back" :class="{ 'is-visible': showRetry }" @click="emit('back')">
       {{ t('auth.backToMethods', '返回') }}
-    </Button>
+    </TxButton>
   </div>
 </template>
 

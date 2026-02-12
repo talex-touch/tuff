@@ -447,40 +447,16 @@ function openManagePlan() {
 
       <section class="apple-card-lg p-6">
         <div class="flex flex-wrap items-center gap-2">
-          <TxButton
-            v-if="isPersonalTeam"
-            ref="joinTriggerRef"
-            variant="secondary"
-            size="small"
-            @click="joinOverlayVisible = true"
-          >
+          <TxButton v-if="isPersonalTeam" ref="joinTriggerRef" variant="secondary" size="small" @click="joinOverlayVisible = true">
             {{ t('dashboard.team.joinByCode', '通过邀请码加入团队') }}
           </TxButton>
-          <TxButton
-            v-if="canCreateTeam"
-            ref="createTriggerRef"
-            variant="secondary"
-            size="small"
-            @click="createOverlayVisible = true"
-          >
+          <TxButton v-if="canCreateTeam" ref="createTriggerRef" variant="secondary" size="small" @click="createOverlayVisible = true">
             {{ t('dashboard.team.modal.createTitle', '创建团队') }}
           </TxButton>
-          <TxButton
-            v-if="canInvite"
-            ref="inviteTriggerRef"
-            variant="secondary"
-            size="small"
-            @click="inviteOverlayVisible = true"
-          >
+          <TxButton v-if="canInvite" ref="inviteTriggerRef" variant="secondary" size="small" @click="inviteOverlayVisible = true">
             {{ t('dashboard.team.modal.inviteTitle', '邀请成员') }}
           </TxButton>
-          <TxButton
-            v-if="canDisband"
-            ref="disbandTriggerRef"
-            variant="danger"
-            size="small"
-            @click="disbandOverlayVisible = true"
-          >
+          <TxButton v-if="canDisband" ref="disbandTriggerRef" variant="danger" size="small" @click="disbandOverlayVisible = true">
             {{ t('dashboard.team.disband', '解散团队') }}
           </TxButton>
         </div>
@@ -540,13 +516,7 @@ function openManagePlan() {
                 {{ invite.email || '-' }} · {{ invite.role }} · {{ invite.status }} · {{ formatDateTime(invite.expiresAt) }}
               </p>
             </div>
-            <TxButton
-              v-if="canInvite"
-              variant="secondary"
-              size="small"
-              :disabled="deleteInviteLoading"
-              @click="handleDeleteInvite(invite.id)"
-            >
+            <TxButton v-if="canInvite" variant="secondary" size="small" :disabled="deleteInviteLoading" @click="handleDeleteInvite(invite.id)">
               {{ t('common.delete', '删除') }}
             </TxButton>
           </div>
@@ -698,13 +668,7 @@ function openManagePlan() {
               <TxButton variant="secondary" size="small" @click="close">
                 {{ t('common.cancel', '取消') }}
               </TxButton>
-              <TxButton
-                variant="primary"
-                size="small"
-                :loading="joinLoading"
-                :disabled="!invitePreview?.validation.canJoin"
-                @click="handleJoinTeam(close)"
-              >
+              <TxButton variant="primary" size="small" :loading="joinLoading" :disabled="!invitePreview?.validation.canJoin" @click="handleJoinTeam(close)">
                 {{ t('team.join.join', '加入团队') }}
               </TxButton>
             </div>

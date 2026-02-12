@@ -10,7 +10,6 @@
 // Fake background utility (glassmorphism effect)
 .fake-background {
   position: relative;
-  border-radius: 12px;
   &.isolate {
     isolation: isolate;
   }

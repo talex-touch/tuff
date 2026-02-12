@@ -11,13 +11,7 @@ withDefaults(defineProps<Props>(), {
 </script>
 
 <template>
-  <TxButton
-    variant="ghost"
-    size="lg"
-    :loading="loading"
-    :disabled="disabled || loading"
-    v-bind="$attrs"
-  >
+  <TxButton variant="ghost" size="lg" :loading="loading" :disabled="disabled || loading" v-bind="$attrs">
     <slot />
   </TxButton>
 </template>

@@ -104,15 +104,7 @@ async function copyText(text?: string, key?: string) {
         <tr v-for="row in normalizedRows" :key="row.name">
           <td class="tuff-props-table__name">
             <span>{{ row.name }}</span>
-            <TxButton
-              circle
-              size="small"
-              variant="ghost"
-              native-type="button"
-              :icon="copiedKey === row.name ? 'i-carbon-checkmark' : 'i-carbon-copy'"
-              :aria-label="`Copy ${row.name}`"
-              @click="copyText(row.name, row.name)"
-            />
+            <TxButton circle size="small" variant="ghost" native-type="button" :icon="copiedKey === row.name ? 'i-carbon-checkmark' : 'i-carbon-copy'" :aria-label="`Copy ${row.name}`" @click="copyText(row.name, row.name)" />
           </td>
           <td class="tuff-props-table__type">
             <template v-if="row.values.length">
@@ -125,27 +117,13 @@ async function copyText(text?: string, key?: string) {
                 @click="copyText(value)"
               />
             </template>
-            <TxButton
-              v-else-if="isCopyable(row.type)"
-              native-type="button"
-              variant="bare"
-              size="small"
-              class="tuff-props-table__mono"
-              @click="copyText(row.type)"
-            >
+            <TxButton v-else-if="isCopyable(row.type)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" @click="copyText(row.type)">
               {{ row.type }}
             </TxButton>
             <span v-else class="tuff-props-table__placeholder">-</span>
           </td>
           <td class="tuff-props-table__default">
-            <TxButton
-              v-if="isCopyable(row.default)"
-              native-type="button"
-              variant="bare"
-              size="small"
-              class="tuff-props-table__mono"
-              @click="copyText(row.default)"
-            >
+            <TxButton v-if="isCopyable(row.default)" native-type="button" variant="bare" size="small" class="tuff-props-table__mono" @click="copyText(row.default)">
               {{ row.default }}
             </TxButton>
             <span v-else class="tuff-props-table__placeholder">-</span>

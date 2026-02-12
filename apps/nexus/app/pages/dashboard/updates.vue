@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
 
@@ -107,14 +107,9 @@ function closeDeleteConfirm() {
     </div>
 
     <div class="mt-4 flex flex-wrap items-center gap-2">
-      <Button
-        v-if="isAdmin"
-        icon="i-carbon-add"
-        size="small"
-        @click="openCreate"
-      >
+      <TxButton v-if="isAdmin" icon="i-carbon-add" size="small" @click="openCreate">
         {{ t('dashboard.sections.updates.addButton') }}
-      </Button>
+      </TxButton>
       <FlatButton
         icon="i-carbon-news"
         to="https://docs.tuff.chat/changelog"

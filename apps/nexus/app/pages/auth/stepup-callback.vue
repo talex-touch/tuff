@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
+import { TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
   layout: false,
@@ -111,9 +112,9 @@ async function copyToken() {
         <p class="text-gray-600 dark:text-gray-300">
           {{ t('auth.stepUpTitle', 'Verify with Passkey to continue') }}
         </p>
-        <Button class="mt-2" @click="startStepUp">
+        <TxButton class="mt-2" @click="startStepUp">
           {{ t('auth.stepUpStart', 'Verify Now') }}
-        </Button>
+        </TxButton>
       </div>
 
       <!-- Loading -->
@@ -144,9 +145,9 @@ async function copyToken() {
           <code class="mb-3 block max-h-20 overflow-auto break-all rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">
             {{ stepUpToken }}
           </code>
-          <Button size="small" variant="warning" @click="copyToken">
+          <TxButton size="small" variant="warning" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
-          </Button>
+          </TxButton>
         </div>
       </div>
 
@@ -159,9 +160,9 @@ async function copyToken() {
         <p class="text-sm text-red-400">
           {{ errorMessage }}
         </p>
-        <Button class="mt-4" @click="status = 'idle'">
+        <TxButton class="mt-4" @click="status = 'idle'">
           {{ t('auth.tryAgain', 'Try Again') }}
-        </Button>
+        </TxButton>
       </div>
     </div>
   </div>

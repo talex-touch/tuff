@@ -4,7 +4,7 @@ import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'submit', data: PluginFormData): void
+  (e: 'layout-change'): void
 }>()
 
 const { t } = useI18n()
@@ -315,6 +316,10 @@ function setupFormObserver() {
   formResizeObserver.observe(formContentRef.value)
 }
 
+watch(scrollAreaHeight, () => {
+  emit('layout-change')
+})
+
 watch(inputMode, () => scheduleLayoutMeasure())
 watch([manifestPreview, packageLoading, packageError], () => scheduleLayoutMeasure())
 
@@ -532,10 +537,10 @@ function onSubmit() {
           </label>
 
           <div class="pt-4">
-            <Button block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
+            <TxButton block :disabled="loading || !canSubmit" native-type="submit" class="h-11 rounded-xl">
               <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
               {{ t('dashboard.sections.plugins.createSubmit') }}
-            </Button>
+            </TxButton>
             <p v-if="error" class="mt-2 text-center text-xs text-red-500">
               {{ error }}
             </p>

@@ -189,13 +189,7 @@ onBeforeUnmount(() => {
       panel-shadow="medium"
     >
       <template #trigger>
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="header-user-trigger"
-          aria-label="Account"
-          @click="handleAvatarClick"
-        >
+        <TxButton variant="bare" native-type="button" class="header-user-trigger" aria-label="Account" @click="handleAvatarClick">
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
@@ -279,22 +273,10 @@ onBeforeUnmount(() => {
               @mouseenter="handleLanguagePanelHover(true)"
               @mouseleave="handleLanguagePanelHover(false)"
             >
-              <TxButton
-                variant="bare"
-                native-type="button"
-                class="header-user-submenu-item"
-                :class="{ 'is-active': locale === 'en' }"
-                @click="handleLocaleSelect('en')"
-              >
+              <TxButton variant="bare" native-type="button" class="header-user-submenu-item" :class="{ 'is-active': locale === 'en' }" @click="handleLocaleSelect('en')">
                 English
               </TxButton>
-              <TxButton
-                variant="bare"
-                native-type="button"
-                class="header-user-submenu-item"
-                :class="{ 'is-active': locale === 'zh' }"
-                @click="handleLocaleSelect('zh')"
-              >
+              <TxButton variant="bare" native-type="button" class="header-user-submenu-item" :class="{ 'is-active': locale === 'zh' }" @click="handleLocaleSelect('zh')">
                 中文
               </TxButton>
             </div>

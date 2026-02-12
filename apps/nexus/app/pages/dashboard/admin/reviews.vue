@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
 import { useToast } from '~/composables/useToast'
 
@@ -172,12 +172,12 @@ onMounted(() => {
       </div>
 
       <div class="mt-3">
-        <Button size="small" type="secondary" :disabled="pendingLoading" @click="refreshReviews">
+        <TxButton size="small" type="secondary" :disabled="pendingLoading" @click="refreshReviews">
           <TxSpinner v-if="pendingLoading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.reviews.refresh', 'Refresh') }}
           </span>
-        </Button>
+        </TxButton>
       </div>
 
       <div v-if="pendingLoading && !pendingReviews.length" class="mt-4 space-y-3">
@@ -237,33 +237,21 @@ onMounted(() => {
               <span>{{ formatDate(review.createdAt) }}</span>
             </div>
             <div class="flex items-center gap-2">
-              <Button
-                size="small"
-                type="success"
-                :loading="actionPendingId === review.id"
-                :disabled="actionsLocked"
-                @click="updateReviewStatus(review, 'approved')"
-              >
+              <TxButton size="small" type="success" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'approved')">
                 {{ t('dashboard.sections.reviews.approve', 'Approve') }}
-              </Button>
-              <Button
-                size="small"
-                type="danger"
-                :loading="actionPendingId === review.id"
-                :disabled="actionsLocked"
-                @click="updateReviewStatus(review, 'rejected')"
-              >
+              </TxButton>
+              <TxButton size="small" type="danger" :loading="actionPendingId === review.id" :disabled="actionsLocked" @click="updateReviewStatus(review, 'rejected')">
                 {{ t('dashboard.sections.reviews.reject', 'Reject') }}
-              </Button>
+              </TxButton>
             </div>
           </div>
         </article>
       </div>
 
       <div v-if="hasMore" class="mt-5 flex justify-center">
-        <Button size="small" type="secondary" :loading="pendingLoading" @click="loadMore">
+        <TxButton size="small" type="secondary" :loading="pendingLoading" @click="loadMore">
           {{ t('dashboard.sections.reviews.loadMore', 'Load more') }}
-        </Button>
+        </TxButton>
       </div>
     </section>
   </div>

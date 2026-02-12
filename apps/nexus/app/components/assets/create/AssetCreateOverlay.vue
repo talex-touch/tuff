@@ -204,12 +204,7 @@ watch(
 
             <div class="AssetCreateOverlay-Actions">
               <TxStatusBadge text="Beta" status="warning" size="sm" />
-              <TxButton
-                v-if="step !== 'type'"
-                variant="secondary"
-                size="small"
-                @click="handleBackToType"
-              >
+              <TxButton v-if="step !== 'type'" variant="secondary" size="small" @click="handleBackToType">
                 <span class="i-carbon-arrow-left mr-1" />
                 {{ t('dashboard.sections.plugins.assetCreate.back', 'Back') }}
               </TxButton>

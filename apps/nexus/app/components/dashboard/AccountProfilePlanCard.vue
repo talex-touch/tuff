@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 interface Props {
   displayName: string
@@ -122,16 +122,9 @@ function handleManage() {
             </div>
           </div>
 
-          <Button
-            ref="manageTriggerRef"
-            size="small"
-            variant="secondary"
-            icon="i-carbon-edit"
-            class="h-6 shrink-0 rounded-full border border-amber-300/75 bg-amber-100/70 px-3 text-xs text-amber-700 backdrop-blur-sm transition-colors hover:bg-amber-100 dark:border-amber-300/35 dark:bg-amber-400/16 dark:text-amber-200 dark:hover:bg-amber-300/20"
-            @click="handleManage"
-          >
+          <TxButton ref="manageTriggerRef" size="small" variant="secondary" icon="i-carbon-edit" class="h-6 shrink-0 bg-amber-100/70 text-xs text-amber-700 backdrop-blur-sm transition-colors hover:bg-amber-100 dark:bg-amber-400/16 dark:text-amber-200 dark:hover:bg-amber-300/20" @click="handleManage">
             {{ manageText }}
-          </Button>
+          </TxButton>
         </div>
       </div>
       <div class="h-[70%] w-px justify-self-center bg-gradient-to-b from-transparent via-black/[0.12] to-transparent dark:via-white/[0.16]" />
@@ -161,16 +154,9 @@ function handleManage() {
               <span class="text-black/45 dark:text-white/50">
                 {{ daysLeftText }}
               </span>
-              <Button
-                size="small"
-                variant="secondary"
-                icon="i-carbon-settings-adjust"
-                class="h-7 rounded-full border px-3 text-xs transition-colors"
-                :class="planAccent.button"
-                @click="emit('plan-action')"
-              >
+              <TxButton size="small" variant="secondary" icon="i-carbon-settings-adjust" class="h-7 text-xs transition-colors" :class="planAccent.button" @click="emit('plan-action')">
                 {{ planActionText }}
-              </Button>
+              </TxButton>
             </div>
           </template>
         </div>

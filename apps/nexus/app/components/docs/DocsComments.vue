@@ -154,12 +154,7 @@ watch(() => props.docPath, () => {
         <span class="docs-comments__form-hint">
           {{ t('docs.commentHint') }}
         </span>
-        <TxButton
-          size="sm"
-          :disabled="!newComment.trim() || submitting"
-          :loading="submitting"
-          @click="submitComment"
-        >
+        <TxButton size="sm" :disabled="!newComment.trim() || submitting" :loading="submitting" @click="submitComment">
           {{ t('docs.commentSubmit') }}
         </TxButton>
       </div>

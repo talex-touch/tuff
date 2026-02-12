@@ -46,13 +46,7 @@ function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
 </script>
 
 <template>
-  <TxButton
-    variant="bare"
-    block
-    native-type="button"
-    class="group flex w-full items-center gap-4 rounded-2xl border border-transparent bg-white/60 p-4 text-left transition-all duration-200 hover:border-black/[0.04] hover:bg-white hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5 dark:hover:border-white/[0.06] dark:hover:bg-white/8"
-    @click="emit('click', plugin)"
-  >
+  <TxButton variant="bare" block native-type="button" class="group flex w-full items-center gap-4 rounded-2xl bg-white/60 text-left transition-all duration-200 hover:bg-white hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5 dark:hover:bg-white/8" @click="emit('click', plugin)">
     <!-- Icon -->
     <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
       <img

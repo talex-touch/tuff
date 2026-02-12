@@ -45,16 +45,7 @@ function onPick(h: string) {
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto;">
-            <TxButton
-              v-for="h in hits"
-              :key="h"
-              variant="bare"
-              size="small"
-              block
-              native-type="button"
-              style="justify-content: flex-start;"
-              @click="onPick(h)"
-            >
+            <TxButton v-for="h in hits" :key="h" variant="bare" size="small" block native-type="button" style="justify-content: flex-start;" @click="onPick(h)">
               {{ h }}
             </TxButton>
 

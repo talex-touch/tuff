@@ -35,16 +35,7 @@ function getBackgroundStyle(color: string): Record<string, string> {
 
 <template>
   <div class="grid grid-cols-2 mx-auto gap-[5em] overflow-visible py-[3em] md:grid-cols-3" :class="[className]">
-    <TxButton
-      v-for="(item, index) in items"
-      :key="index"
-      variant="bare"
-      native-type="button"
-      :aria-label="item.label"
-      class="group [-webkit-tap-highlight-color:transparent] [perspective:24em] [transform-style:preserve-3d] relative h-[4.5em] w-[4.5em] bg-transparent outline-none" :class="[
-        item.customClass,
-      ]"
-    >
+    <TxButton v-for="(item, index) in items" :key="index" variant="bare" native-type="button" :aria-label="item.label" class="group [-webkit-tap-highlight-color:transparent] [perspective:24em] [transform-style:preserve-3d] relative h-[4.5em] w-[4.5em] bg-transparent outline-none" :class="[ item.customClass, ]">
       <span
         class="absolute left-0 top-0 block h-full w-full origin-[100%_100%] rotate-[15deg] rounded-[1.25em] transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.83,0,0.17,1)] group-hover:[transform:rotate(25deg)_translate3d(-0.5em,-0.5em,0.5em)]"
         :style="{

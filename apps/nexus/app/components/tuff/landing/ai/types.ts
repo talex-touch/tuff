@@ -1,5 +1,5 @@
 export interface AiDemoScenario {
-  id: 'chat' | 'assist' | 'preview'
+  id: 'chat' | 'assist' | 'preview' | 'workflow'
   label: string
   icon: string
 }

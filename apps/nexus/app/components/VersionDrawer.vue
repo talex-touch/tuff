@@ -3,7 +3,7 @@ import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
@@ -397,10 +397,10 @@ onBeforeUnmount(() => {
                     </div>
 
                     <div class="pt-2">
-                      <Button block :disabled="loading" native-type="submit">
+                      <TxButton block :disabled="loading" native-type="submit">
                         <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
                         {{ t('dashboard.sections.plugins.versionForm.submit') }}
-                      </Button>
+                      </TxButton>
                       <p v-if="error" class="mt-2 text-center text-xs text-red-500">
                         {{ error }}
                       </p>
@@ -418,9 +418,9 @@ onBeforeUnmount(() => {
                       {{ t('dashboard.sections.plugins.warnings.immutable.message') }}
                     </p>
                     <div class="flex flex-col gap-3">
-                      <Button block class="rounded-xl" @click="onWarningConfirm">
+                      <TxButton block class="rounded-xl" @click="onWarningConfirm">
                         {{ t('dashboard.sections.plugins.warnings.immutable.understand') }}
-                      </Button>
+                      </TxButton>
                       <FlatButton @click="step = 'form'">
                         {{ t('dashboard.sections.plugins.warnings.immutable.cancel') }}
                       </FlatButton>
@@ -447,14 +447,10 @@ onBeforeUnmount(() => {
                         <FlatButton class="flex-1" @click="step = 'form'">
                           {{ t('dashboard.sections.plugins.license.cancel') }}
                         </FlatButton>
-                        <Button
-                          class="flex-1 rounded-xl"
-                          :disabled="!licenseAgreed || loading"
-                          @click="onLicenseSubmit"
-                        >
+                        <TxButton class="flex-1 rounded-xl" :disabled="!licenseAgreed || loading" @click="onLicenseSubmit">
                           <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
                           {{ t('dashboard.sections.plugins.license.submit') }}
-                        </Button>
+                        </TxButton>
                       </div>
                     </div>
                   </div>

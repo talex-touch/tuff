@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 
 definePageMeta({
@@ -52,9 +52,9 @@ async function handleSubmit() {
       </header>
 
       <Input v-model="email" type="text" :placeholder="t('auth.email', '邮箱')" />
-      <Button block :loading="loading" @click="handleSubmit">
+      <TxButton block :loading="loading" @click="handleSubmit">
         {{ t('auth.sendReset', '发送重置邮件') }}
-      </Button>
+      </TxButton>
       <NuxtLink to="/sign-in" class="text-center text-xs text-black/60 underline-offset-4 hover:underline dark:text-light/70">
         {{ t('auth.backToSignIn', '返回登录') }}
       </NuxtLink>

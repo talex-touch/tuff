@@ -82,14 +82,7 @@ function handleAsk() {
       <form class="docs-aside-card__field" @submit.prevent="handleAsk">
         <TuffInput v-model="query" placeholder="Ask docs..." clearable>
           <template #suffix>
-            <TxButton
-              circle
-              size="small"
-              variant="ghost"
-              native-type="submit"
-              icon="i-carbon-arrow-right"
-              aria-label="Ask Zen Assistant"
-            />
+            <TxButton circle size="small" variant="ghost" native-type="submit" icon="i-carbon-arrow-right" aria-label="Ask Zen Assistant" />
           </template>
         </TuffInput>
       </form>

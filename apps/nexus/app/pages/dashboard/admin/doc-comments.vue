@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
   pageTransition: {
@@ -185,12 +185,12 @@ onMounted(() => {
           :placeholder="t('dashboard.sections.docComments.filterPlaceholder', 'Filter by doc path…')"
           class="h-8 w-48 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition dark:border-white/10 dark:text-white focus:border-primary/50"
         >
-        <Button size="small" type="secondary" :disabled="loading" @click="refreshComments">
+        <TxButton size="small" type="secondary" :disabled="loading" @click="refreshComments">
           <TxSpinner v-if="loading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.docComments.refresh', 'Refresh') }}
           </span>
-        </Button>
+        </TxButton>
       </div>
 
       <div v-if="loading && !comments.length" class="mt-4 space-y-3">
@@ -255,23 +255,17 @@ onMounted(() => {
           </div>
 
           <div class="mt-3 flex items-center justify-end">
-            <Button
-              size="small"
-              type="danger"
-              :loading="actionPendingId === comment.id"
-              :disabled="actionsLocked"
-              @click="handleDelete(comment)"
-            >
+            <TxButton size="small" type="danger" :loading="actionPendingId === comment.id" :disabled="actionsLocked" @click="handleDelete(comment)">
               {{ t('dashboard.sections.docComments.delete', 'Delete') }}
-            </Button>
+            </TxButton>
           </div>
         </article>
       </div>
 
       <div v-if="hasMore" class="mt-5 flex justify-center">
-        <Button size="small" type="secondary" :loading="loading" @click="loadMore">
+        <TxButton size="small" type="secondary" :loading="loading" @click="loadMore">
           {{ t('dashboard.sections.docComments.loadMore', 'Load more') }}
-        </Button>
+        </TxButton>
       </div>
     </section>
   </div>

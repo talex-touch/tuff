@@ -102,13 +102,7 @@ function toggleCode() {
         </div>
       </div>
       <div v-if="hasCode" class="tuff-demo__toggle-row">
-        <TxButton
-          variant="ghost"
-          size="small"
-          native-type="button"
-          :aria-expanded="showCode"
-          @click="toggleCode"
-        >
+        <TxButton variant="ghost" size="small" native-type="button" :aria-expanded="showCode" @click="toggleCode">
           <span class="tuff-demo__toggle-icon i-carbon-chevron-down" :class="{ 'is-open': showCode }" />
           {{ toggleLabel }}
         </TxButton>

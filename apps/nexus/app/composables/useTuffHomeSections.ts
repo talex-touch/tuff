@@ -22,6 +22,7 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   const statsSectionRef = ref<HTMLElement | null>(null)
   const pluginsSectionRef = ref<HTMLElement | null>(null)
   const aiOverviewSectionRef = ref<HTMLElement | null>(null)
+  const instantPreviewSectionRef = ref<HTMLElement | null>(null)
   const builtForYouSectionRef = ref<HTMLElement | null>(null)
   const starSnippetsSectionRef = ref<HTMLElement | null>(null)
   const aggregationSectionRef = ref<HTMLElement | null>(null)
@@ -39,6 +40,7 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     { ref: statsSectionRef, id: 'stats' },
     { ref: pluginsSectionRef, id: 'plugins' },
     { ref: aiOverviewSectionRef, id: 'ai-overview' },
+    { ref: instantPreviewSectionRef, id: 'instant-preview' },
     { ref: builtForYouSectionRef, id: 'built-for-you' },
     { ref: starSnippetsSectionRef, id: 'star-snippets' },
     { ref: aggregationSectionRef, id: 'aggregation' },
@@ -345,6 +347,7 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     statsSectionRef,
     pluginsSectionRef,
     aiOverviewSectionRef,
+    instantPreviewSectionRef,
     builtForYouSectionRef,
     starSnippetsSectionRef,
     aggregationSectionRef,

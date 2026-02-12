@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Toaster } from 'vue-sonner'
-import { TxSpinner } from '@talex-touch/tuffex'
+import { TxSpinner, TxButton } from '@talex-touch/tuffex'
 import Logo from '~/components/icon/Logo.vue'
-import Button from '~/components/ui/Button.vue'
 import { useSignIn } from '~/composables/useSignIn'
 import SignInBindEmailStep from './components/SignInBindEmailStep.vue'
 import SignInEmailStep from './components/SignInEmailStep.vue'
@@ -213,9 +212,9 @@ function goTo(path: string) {
                 <span class="auth-turnstile-label">
                   {{ turnstileState === 'loading' ? t('auth.turnstileLoading', '正在准备安全验证…') : t('auth.turnstilePending', '点击重试继续安全验证') }}
                 </span>
-                <Button v-if="turnstileState === 'error'" variant="ghost" size="sm" class="auth-turnstile-retry" @click="retryTurnstile">
+                <TxButton v-if="turnstileState === 'error'" variant="ghost" size="sm" class="auth-turnstile-retry" @click="retryTurnstile">
                   {{ t('auth.retry', '重试') }}
-                </Button>
+                </TxButton>
               </div>
             </div>
           </div>

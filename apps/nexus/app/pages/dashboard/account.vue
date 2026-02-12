@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxFlipOverlay, TxButton } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
-import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import {
@@ -398,16 +397,9 @@ GitHub
                 {{ boundMessage('github', githubAccount?.providerAccountId) }}
               </p>
             </div>
-            <Button
-              size="small"
-              :variant="isGithubBound ? 'danger' : 'secondary'"
-              :loading="linkingGithub || unlinkingGithub"
-              :disabled="linkingLinuxdo || unlinkingLinuxdo"
-              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
-              @click="handleGithubToggle"
-            >
+            <TxButton size="small" :variant="isGithubBound ? 'danger' : 'secondary'" :loading="linkingGithub || unlinkingGithub" :disabled="linkingLinuxdo || unlinkingLinuxdo" @click="handleGithubToggle">
               {{ isGithubBound ? t('dashboard.account.unbind', '解绑') : t('auth.githubLogin', '绑定') }}
-            </Button>
+            </TxButton>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
             <div>
@@ -421,16 +413,9 @@ LinuxDO
                 {{ boundMessage('linuxdo', linuxdoAccount?.providerAccountId) }}
               </p>
             </div>
-            <Button
-              size="small"
-              :variant="isLinuxdoBound ? 'danger' : 'secondary'"
-              :loading="linkingLinuxdo || unlinkingLinuxdo"
-              :disabled="linkingGithub || unlinkingGithub"
-              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
-              @click="handleLinuxdoToggle"
-            >
+            <TxButton size="small" :variant="isLinuxdoBound ? 'danger' : 'secondary'" :loading="linkingLinuxdo || unlinkingLinuxdo" :disabled="linkingGithub || unlinkingGithub" @click="handleLinuxdoToggle">
               {{ isLinuxdoBound ? t('dashboard.account.unbind', '解绑') : t('dashboard.account.bind', '绑定') }}
-            </Button>
+            </TxButton>
           </div>
           <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/[0.08] px-4 py-3 dark:border-white/[0.12]">
             <div>
@@ -441,16 +426,9 @@ Passkey
                 {{ t('dashboard.account.passkeyDesc', '使用系统 Passkey 快速登录') }}
               </p>
             </div>
-            <Button
-              size="small"
-              variant="secondary"
-              :disabled="!supportsPasskey || hasBoundPasskey"
-              :loading="passkeyLoading"
-              class="rounded-full border border-black/[0.12] dark:border-white/[0.14]"
-              @click="handlePasskeyRegister"
-            >
+            <TxButton size="small" variant="secondary" :disabled="!supportsPasskey || hasBoundPasskey" :loading="passkeyLoading" @click="handlePasskeyRegister">
               {{ hasBoundPasskey ? t('dashboard.account.passkeyBound', '已绑定') : t('auth.passkeyRegister', '添加') }}
-            </Button>
+            </TxButton>
           </div>
         </div>
         <p v-if="passkeyMessage" class="text-xs text-black/60 dark:text-white/60">
@@ -468,9 +446,9 @@ Passkey
         </h2>
       </div>
       <div>
-        <Button size="small" variant="secondary" @click="handleRefreshHistory">
+        <TxButton size="small" variant="secondary" @click="handleRefreshHistory">
           {{ t('common.refresh', '刷新') }}
-        </Button>
+        </TxButton>
       </div>
       <div v-if="historyPending" class="space-y-3 py-3">
         <div class="flex items-center justify-center">
@@ -589,9 +567,9 @@ Passkey
               </div>
 
               <div class="flex items-center gap-2">
-                <Button size="small" variant="secondary" :loading="avatarUploading" @click="triggerAvatarSelect">
+                <TxButton size="small" variant="secondary" :loading="avatarUploading" @click="triggerAvatarSelect">
                   {{ t('dashboard.account.changeAvatar', '修改头像') }}
-                </Button>
+                </TxButton>
                 <input
                   ref="avatarInputRef"
                   type="file"
@@ -627,12 +605,12 @@ Passkey
             </p>
 
             <div class="AccountManageOverlay-Actions">
-              <Button size="small" variant="secondary" @click="close">
+              <TxButton size="small" variant="secondary" @click="close">
                 {{ t('common.cancel', '取消') }}
-              </Button>
-              <Button size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
+              </TxButton>
+              <TxButton size="small" :loading="savingProfile" :disabled="!hasProfileChanges" @click="saveProfile">
                 {{ t('common.save', '保存') }}
-              </Button>
+              </TxButton>
             </div>
           </div>
         </template>

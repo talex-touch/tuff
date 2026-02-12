@@ -28,23 +28,11 @@ const outlineVisible = ref(false)
           <main class="flex-1">
             <div class="mx-auto max-w-[53rem] space-y-10">
               <div class="flex items-center gap-2 xl:hidden">
-                <TxButton
-                  variant="bare"
-                  size="small"
-                  native-type="button"
-                  class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40"
-                  @click="sidebarVisible = true"
-                >
+                <TxButton variant="bare" size="small" native-type="button" class="inline-flex items-center gap-2 bg-white/80 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40" @click="sidebarVisible = true">
                   <span class="i-carbon-menu text-base" />
                   {{ t('docs.sidebarLabel') }}
                 </TxButton>
-                <TxButton
-                  variant="bare"
-                  size="small"
-                  native-type="button"
-                  class="inline-flex items-center gap-2 rounded-full border border-dark/10 bg-white/80 px-3 py-1.5 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:border-light/10 dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40 lg:hidden"
-                  @click="outlineVisible = true"
-                >
+                <TxButton variant="bare" size="small" native-type="button" class="inline-flex items-center gap-2 bg-white/80 text-xs text-black/70 font-semibold shadow-sm transition hover:bg-white dark:bg-dark/60 dark:text-light/70 dark:hover:bg-dark/40 lg:hidden" @click="outlineVisible = true">
                   <span class="i-carbon-list text-base" />
                   {{ t('docs.outlineLabel') }}
                 </TxButton>

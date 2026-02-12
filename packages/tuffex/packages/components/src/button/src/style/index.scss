@@ -18,11 +18,12 @@
 
   user-select: none;
   color: var(--tx-text-color);
-  border-radius: 12px;
+  border-radius: var(--tx-button-radius, 12px);
   background-color: transparent;
   --fake-radius: var(--tx-button-radius, 12px);
   border: 1px solid var(--tx-button-border-color);
 
+  --tx-button-radius: 12px;
   --tx-button-bg-color-hover: var(--tx-bg-color-page);
   --tx-button-border-color: var(--tx-border-color);
 
@@ -31,13 +32,11 @@
   }
 
   &.round {
-    border-radius: 999px;
-    --fake-radius: 999px;
+    --tx-button-radius: 999px;
   }
 
   &.circle {
-    border-radius: 999px;
-    --fake-radius: 999px;
+    --tx-button-radius: 999px;
     padding: 0;
     min-width: 32px;
     width: 32px;
@@ -45,8 +44,7 @@
 
   &.circle.block {
     width: 100%;
-    border-radius: 50%;
-    --fake-radius: 50%;
+    --tx-button-radius: 50%;
     padding: 0 0.5rem;
     min-width: 80px;
   }
@@ -100,8 +98,7 @@
     color: var(--tx-text-color);
     --tx-button-bg-color-hover: var(--tx-fill-color);
     --tx-button-border-color: var(--tx-border-color);
-    border-radius: 8px;
-    --fake-radius: 8px;
+    --tx-button-radius: 8px;
     min-width: 120px;
   }
 
@@ -110,8 +107,7 @@
     height: auto;
     padding: var(--tx-button-bare-padding, 0.25rem);
     border: none;
-    border-radius: var(--tx-button-bare-radius, 8px);
-    --fake-radius: var(--tx-button-bare-radius, 8px);
+    --tx-button-radius: var(--tx-button-bare-radius, 8px);
     background: var(--tx-button-bare-bg, transparent);
     --fake-inner-opacity: var(--tx-button-bare-fake-opacity, 0);
     --tx-button-bg-color-hover: var(--tx-button-bare-hover, var(--tx-fill-color));
@@ -237,7 +233,7 @@
   .tx-button__loading-layer {
     position: absolute;
     inset: 0;
-    border-radius: var(--fake-radius, 12px);
+    border-radius: var(--tx-button-radius, 12px);
     overflow: hidden;
     z-index: 0;
     pointer-events: none;
@@ -301,22 +297,23 @@
   }
 
   &.tx-size-sm {
-    padding: 0 0.25rem;
+    padding: 0 0.5rem;
     height: 26px;
     min-width: 60px;
     font-size: 13px;
+    --tx-button-radius: 10px;
   }
 
   &.variant-flat.tx-size-sm {
-    padding: 0 0.5rem;
+    padding: 0 0.75rem;
     height: 32px;
     min-width: 32px;
     font-size: 13px;
   }
 
   &.tx-size-lg {
-    padding: 0 1.25rem;
-    height: 42px;
+    padding: 0 1.5rem;
+    height: 38px;
     font-size: 15px;
   }
 }
@@ -345,7 +342,7 @@
 
   display: inline-flex;
   align-items: stretch;
-  border-radius: 10px;
+  border-radius: var(--tx-split-button-radius, 10px);
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 

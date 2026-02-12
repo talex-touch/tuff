@@ -1093,6 +1093,45 @@ Tuff may update this agreement at any time. Continued submission indicates accep
               encode: 'Encoding Converter',
             },
           },
+          workflow: {
+            placeholder: 'Describe a task to automate...',
+            badge: 'Workflow',
+            footer: 'Powered by Tuff Workflows · Multi-step automation',
+            scenarios: {
+              translateEmail: {
+                trigger: 'Translate the clipboard into English and format as a professional email',
+                steps: {
+                  read: 'Read clipboard',
+                  translate: 'Translate to English',
+                  format: 'Format as email',
+                  copy: 'Copy to clipboard',
+                },
+                resultLabel: 'Workflow Complete',
+                resultText: 'Translated and formatted email has been copied to your clipboard.',
+              },
+              summarizeSave: {
+                trigger: 'Summarize this article and save key points to my notes',
+                steps: {
+                  fetch: 'Fetch content',
+                  extract: 'Extract key points',
+                  summarize: 'Generate summary',
+                  save: 'Save to notes',
+                },
+                resultLabel: 'Saved Successfully',
+                resultText: '3 key points extracted and saved to your workspace notes.',
+              },
+              codeReview: {
+                trigger: 'Review my latest git changes and generate a summary report',
+                steps: {
+                  diff: 'Read git diff',
+                  analyze: 'Analyze changes',
+                  report: 'Generate report',
+                },
+                resultLabel: 'Review Complete',
+                resultText: '12 files analyzed — 2 suggestions, 1 potential issue flagged.',
+              },
+            },
+          },
         },
         cards: {
           chat: {
@@ -1106,6 +1145,77 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           preview: {
             title: 'Instant Preview',
             copy: 'Smart recognition instantly previews calculations and conversions.',
+          },
+          workflow: {
+            title: 'AI Workflows',
+            copy: 'Chain multi-step tasks together — automate complex routines in one command.',
+          },
+        },
+      },
+      instantPreview: {
+        eyebrow: 'Instant Preview',
+        headline: 'Instant preview widgets that respond as you type.',
+        subheadline: 'Calculations, conversions, and color parsing surface the moment intent is recognized.',
+        highlights: {
+          speed: {
+            title: 'Instant feedback',
+            description: 'Preview cards render while you type in CoreBox.',
+          },
+          coverage: {
+            title: 'Multi-format coverage',
+            description: 'Math, units, time, currency, and constants in one surface.',
+          },
+          copy: {
+            title: 'One-tap copy',
+            description: 'Copy preview output without leaving the command bar.',
+          },
+          consistency: {
+            title: 'Consistent formatting',
+            description: 'Normalized values for fast reuse across apps.',
+          },
+        },
+        widgets: {
+          expression: {
+            input: 'sqrt(16) + 2^4',
+            result: '20',
+            extra: 'Advanced math, instant answer.',
+          },
+          unit: {
+            input: '12 cm to inch',
+            result: '4.72 in',
+            extra: 'Length, mass, temperature.',
+            details: {
+              meter: '0.12 m',
+              feet: '0.3937 ft',
+            },
+          },
+          time: {
+            input: 'now + 2h',
+            result: '2 hours later',
+            extra: 'Natural language supported.',
+          },
+          color: {
+            input: '#8B5CF6',
+            result: '#8B5CF6',
+            extra: 'RGB(139, 92, 246)',
+            details: {
+              rgb: 'rgb(139, 92, 246)',
+              hsl: 'hsl(262, 90%, 66%)',
+            },
+          },
+          currency: {
+            input: '19 usd to cny',
+            result: '¥137.75',
+            extra: 'USD → CNY',
+            details: {
+              source: '19.0000 USD',
+              target: '137.7500 CNY',
+            },
+          },
+          constant: {
+            input: 'pi * 2',
+            result: '6.28319',
+            extra: 'Built-in constants, ready.',
           },
         },
       },

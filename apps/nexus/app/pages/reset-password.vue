@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 
 definePageMeta({
@@ -69,9 +69,9 @@ async function handleReset() {
 
       <Input v-model="password" type="password" :placeholder="t('auth.password', '新密码')" />
       <Input v-model="confirmPassword" type="password" :placeholder="t('auth.confirmPassword', '确认密码')" />
-      <Button block :loading="loading" @click="handleReset">
+      <TxButton block :loading="loading" @click="handleReset">
         {{ t('auth.resetPassword', '更新密码') }}
-      </Button>
+      </TxButton>
       <NuxtLink to="/sign-in" class="text-center text-xs text-black/60 underline-offset-4 hover:underline dark:text-light/70">
         {{ t('auth.backToSignIn', '返回登录') }}
       </NuxtLink>

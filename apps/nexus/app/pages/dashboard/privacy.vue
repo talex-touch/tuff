@@ -146,12 +146,7 @@ onMounted(() => {
       </h2>
 
       <div class="mt-4 space-y-3">
-        <TxButton
-          variant="bare"
-          block
-          native-type="button"
-          class="w-full flex items-center justify-between border border-black/[0.06] rounded-2xl bg-black/[0.02] px-4 py-3 text-left text-sm text-black font-medium transition dark:border-white/[0.08] hover:border-black/[0.12] dark:bg-white/[0.03] hover:bg-black/[0.04] dark:text-white"
-        >
+        <TxButton variant="bare" block native-type="button" class="w-full flex items-center justify-between rounded-2xl bg-black/[0.02] text-left text-sm text-black font-medium transition dark:bg-white/[0.03] hover:bg-black/[0.04] dark:text-white">
           <div class="flex items-center gap-3">
             <span class="i-carbon-download text-lg" />
             {{ t('dashboard.privacy.exportData', '导出我的数据') }}
@@ -159,12 +154,7 @@ onMounted(() => {
           <span class="i-carbon-arrow-right text-base opacity-50" />
         </TxButton>
 
-        <TxButton
-          variant="bare"
-          block
-          native-type="button"
-          class="w-full flex items-center justify-between border border-red-500/20 rounded-2xl bg-red-500/5 px-4 py-3 text-left text-sm text-red-600 font-medium transition hover:border-red-500/40 hover:bg-red-500/10 dark:text-red-400"
-        >
+        <TxButton variant="bare" block native-type="button" class="w-full flex items-center justify-between rounded-2xl bg-red-500/5 text-left text-sm text-red-600 font-medium transition hover:bg-red-500/10 dark:text-red-400">
           <div class="flex items-center gap-3">
             <span class="i-carbon-trash-can text-lg" />
             {{ t('dashboard.privacy.deleteData', '删除我的数据') }}

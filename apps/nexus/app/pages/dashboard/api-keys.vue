@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Modal from '~/components/ui/Modal.vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
   layout: 'dashboard',
@@ -185,13 +186,10 @@ const expiryOptions = [
     </div>
 
     <div>
-      <Button
-        variant="primary"
-        @click="showCreateModal = true"
-      >
+      <TxButton variant="primary" @click="showCreateModal = true">
         <span class="i-carbon-add text-base" />
         Create Key
-      </Button>
+      </TxButton>
     </div>
 
     <!-- Newly Created Key Alert -->
@@ -208,19 +206,12 @@ const expiryOptions = [
             <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-white">
               {{ newlyCreatedKey.secretKey }}
             </code>
-            <Button size="small" variant="success" @click="copyKey">
+            <TxButton size="small" variant="success" @click="copyKey">
               {{ copied ? 'Copied!' : 'Copy' }}
-            </Button>
+            </TxButton>
           </div>
         </div>
-        <TxButton
-          variant="bare"
-          circle
-          size="mini"
-          native-type="button"
-          class="text-green-600/60 transition hover:text-green-600"
-          @click="newlyCreatedKey = null"
-        >
+        <TxButton variant="bare" circle size="mini" native-type="button" class="text-green-600/60 transition hover:text-green-600" @click="newlyCreatedKey = null">
           <span class="i-carbon-close text-lg" />
         </TxButton>
       </div>
@@ -288,14 +279,7 @@ const expiryOptions = [
             </div>
           </div>
         </div>
-        <TxButton
-          variant="bare"
-          circle
-          size="mini"
-          native-type="button"
-          class="rounded-lg p-2 text-red-400 transition hover:bg-red-500/10 hover:text-red-500"
-          @click="requestDeleteKey(key.id)"
-        >
+        <TxButton variant="bare" circle size="mini" native-type="button" class="rounded-lg text-red-400 transition hover:bg-red-500/10 hover:text-red-500" @click="requestDeleteKey(key.id)">
           <span class="i-carbon-trash-can text-lg" />
         </TxButton>
       </div>
@@ -312,9 +296,9 @@ const expiryOptions = [
       <p class="mt-1 text-sm text-black/50 dark:text-white/50">
         Create an API key to use with tuffcli and other integrations
       </p>
-      <Button variant="primary" class="mt-4" @click="showCreateModal = true">
+      <TxButton variant="primary" class="mt-4" @click="showCreateModal = true">
         Create Your First Key
-      </Button>
+      </TxButton>
     </div>
 
     <!-- Create Modal -->
@@ -379,21 +363,12 @@ const expiryOptions = [
 
       <template #footer>
         <div class="flex gap-3">
-          <Button
-            variant="secondary"
-            class="flex-1"
-            @click="showCreateModal = false"
-          >
+          <TxButton variant="secondary" class="flex-1" @click="showCreateModal = false">
             Cancel
-          </Button>
-          <Button
-            variant="primary"
-            class="flex-1"
-            :disabled="!newKeyName.trim() || creating"
-            @click="createKey"
-          >
+          </TxButton>
+          <TxButton variant="primary" class="flex-1" :disabled="!newKeyName.trim() || creating" @click="createKey">
             {{ creating ? 'Creating...' : 'Create Key' }}
-          </Button>
+          </TxButton>
         </div>
       </template>
     </Modal>

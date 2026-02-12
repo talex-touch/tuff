@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuffex'
-import Button from '~/components/ui/Button.vue'
+import { TxSpinner, TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
   layout: false,
@@ -209,9 +208,9 @@ watch(
             Copy the token and paste it in the app's dev console:
           </p>
           <code class="block max-h-24 overflow-auto text-xs text-white/85">{{ sessionToken }}</code>
-          <Button variant="primary" size="small" @click="copyToken">
+          <TxButton variant="primary" size="small" @click="copyToken">
             {{ copied ? '✓ Copied!' : 'Copy Token' }}
-          </Button>
+          </TxButton>
           <p class="text-xs text-white/58">
             Then run in Electron DevTools console: <code>__devAuthToken("PASTE_TOKEN_HERE")</code>
           </p>
@@ -226,9 +225,9 @@ watch(
         <p class="text-sm text-red-300/90">
           {{ errorMessage }}
         </p>
-        <Button variant="primary" size="lg" @click="goTo('/sign-in')">
+        <TxButton variant="primary" size="lg" @click="goTo('/sign-in')">
           {{ t('auth.tryAgain', 'Try Again') }}
-        </Button>
+        </TxButton>
       </div>
     </div>
 

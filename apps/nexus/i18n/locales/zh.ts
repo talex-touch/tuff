@@ -1091,6 +1091,45 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
               encode: '编码转换',
             },
           },
+          workflow: {
+            placeholder: '描述要自动化的任务...',
+            badge: '工作流',
+            footer: 'Powered by Tuff Workflows · 多步骤自动化',
+            scenarios: {
+              translateEmail: {
+                trigger: '把剪贴板内容翻译成英文并格式化为正式邮件',
+                steps: {
+                  read: '读取剪贴板',
+                  translate: '翻译为英文',
+                  format: '格式化为邮件',
+                  copy: '复制到剪贴板',
+                },
+                resultLabel: '工作流完成',
+                resultText: '已翻译并格式化的邮件已复制到剪贴板。',
+              },
+              summarizeSave: {
+                trigger: '总结这篇文章并将要点保存到笔记',
+                steps: {
+                  fetch: '获取内容',
+                  extract: '提取要点',
+                  summarize: '生成摘要',
+                  save: '保存到笔记',
+                },
+                resultLabel: '保存成功',
+                resultText: '提取了 3 个关键要点并保存到工作区笔记。',
+              },
+              codeReview: {
+                trigger: '审查最新的 git 改动并生成摘要报告',
+                steps: {
+                  diff: '读取 git diff',
+                  analyze: '分析改动',
+                  report: '生成报告',
+                },
+                resultLabel: '审查完成',
+                resultText: '分析了 12 个文件 — 2 条建议，1 个潜在问题已标记。',
+              },
+            },
+          },
         },
         cards: {
           chat: {
@@ -1104,6 +1143,77 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
           preview: {
             title: 'Instant Preview',
             copy: '智能识别输入，即时预览计算、转换结果',
+          },
+          workflow: {
+            title: 'AI Workflows',
+            copy: '将多步骤任务串联起来，一个命令自动化复杂流程',
+          },
+        },
+      },
+      instantPreview: {
+        eyebrow: '即时预览',
+        headline: '输入即预览的即时小组件。',
+        subheadline: '计算、转换与颜色解析在意图被识别时立即出现。',
+        highlights: {
+          speed: {
+            title: '即时反馈',
+            description: '在 CoreBox 输入时立即生成预览卡片。',
+          },
+          coverage: {
+            title: '多格式覆盖',
+            description: '算式、单位、时间、汇率、常量一次识别。',
+          },
+          copy: {
+            title: '一键复制',
+            description: '无需离开指令栏即可复制结果。',
+          },
+          consistency: {
+            title: '格式一致',
+            description: '输出规范化，便于快速复用。',
+          },
+        },
+        widgets: {
+          expression: {
+            input: 'sqrt(16) + 2^4',
+            result: '20',
+            extra: '高级算式一行出结果。',
+          },
+          unit: {
+            input: '12 cm to inch',
+            result: '4.72 in',
+            extra: '长度、质量、温度。',
+            details: {
+              meter: '0.12 m',
+              feet: '0.3937 ft',
+            },
+          },
+          time: {
+            input: 'now + 2h',
+            result: '2 小时后',
+            extra: '支持自然语言。',
+          },
+          color: {
+            input: '#8B5CF6',
+            result: '#8B5CF6',
+            extra: 'RGB(139, 92, 246)',
+            details: {
+              rgb: 'rgb(139, 92, 246)',
+              hsl: 'hsl(262, 90%, 66%)',
+            },
+          },
+          currency: {
+            input: '19 usd to cny',
+            result: '¥137.75',
+            extra: 'USD → CNY',
+            details: {
+              source: '19.0000 USD',
+              target: '137.7500 CNY',
+            },
+          },
+          constant: {
+            input: 'pi * 2',
+            result: '6.28319',
+            extra: '内置常量随手可用。',
           },
         },
       },
