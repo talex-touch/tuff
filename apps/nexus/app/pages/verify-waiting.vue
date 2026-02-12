@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Logo from '~/components/icon/Logo.vue'
 
 definePageMeta({
@@ -57,12 +57,12 @@ function goBack() {
       </div>
 
       <div class="mt-8 flex flex-col gap-3">
-        <Button size="lg" round block @click="goTo('/sign-in')">
+        <TxButton size="lg" round block @click="goTo('/sign-in')">
           {{ t('auth.backToSignIn', '返回登录') }}
-        </Button>
-        <Button variant="ghost" size="lg" round block @click="goTo('/sign-in')">
+        </TxButton>
+        <TxButton variant="ghost" size="lg" round block @click="goTo('/sign-in')">
           {{ t('auth.changeEmail', '更换邮箱') }}
-        </Button>
+        </TxButton>
       </div>
     </div>
 

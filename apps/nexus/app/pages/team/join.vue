@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { TxButton } from '@talex-touch/tuffex'
 
 definePageMeta({
   requiresAuth: true,
@@ -142,13 +143,9 @@ async function joinTeam(): Promise<void> {
           </p>
         </div>
 
-        <Button
-          block
-          :disabled="!canSubmit"
-          @click="joinTeam"
-        >
+        <TxButton block :disabled="!canSubmit" @click="joinTeam">
           {{ pending ? t('team.join.joining', 'Joining...') : t('team.join.join', 'Join') }}
-        </Button>
+        </TxButton>
 
         <p v-if="errorMessage" class="text-sm text-red-500">
           {{ errorMessage }}

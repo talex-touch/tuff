@@ -9,6 +9,7 @@ import TuffLandingFaq from './landing/TuffLandingFaq.vue'
 import TuffLandingFeatures from './landing/TuffLandingFeatures.vue'
 import TuffLandingHero from './landing/TuffLandingHero.vue'
 import TuffLandingIntegrations from './landing/TuffLandingIntegrations.vue'
+import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
 import TuffLandingPlugins from './landing/TuffLandingPlugins.vue'
 import TuffLandingPricing from './landing/TuffLandingPricing.vue'
 import TuffLandingStarSnippets from './landing/TuffLandingStarSnippets.vue'
@@ -26,6 +27,7 @@ const {
   statsSectionRef,
   pluginsSectionRef,
   aiOverviewSectionRef,
+  instantPreviewSectionRef,
   builtForYouSectionRef,
   starSnippetsSectionRef,
   aggregationSectionRef,
@@ -96,6 +98,15 @@ useHead({
         data-smooth-section
       >
         <TuffLandingAiOverview />
+      </section>
+
+      <section
+        id="instant-preview"
+        ref="instantPreviewSectionRef"
+        class="TuffHome-SmoothSection"
+        data-smooth-section
+      >
+        <TuffLandingInstantPreview />
       </section>
 
       <section

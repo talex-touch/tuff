@@ -35,13 +35,7 @@ function toggleExpand() {
     class="rounded-2xl border border-amber-200/50 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-500/5"
   >
     <!-- Header -->
-    <TxButton
-      variant="bare"
-      block
-      native-type="button"
-      class="flex w-full items-center justify-between p-4 text-left"
-      @click="toggleExpand"
-    >
+    <TxButton variant="bare" block native-type="button" class="flex w-full items-center justify-between text-left" @click="toggleExpand">
       <div class="flex items-center gap-3">
         <div class="flex size-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
           <span class="i-carbon-pending text-amber-600 dark:text-amber-400" />
@@ -72,15 +66,7 @@ function toggleExpand() {
     >
       <div v-if="isExpanded" class="border-t border-amber-200/50 p-4 dark:border-amber-500/20">
         <div class="space-y-2">
-          <TxButton
-            v-for="item in items"
-            :key="item.type === 'version' ? `v-${item.version?.id}` : `p-${item.plugin.id}`"
-            variant="bare"
-            block
-            native-type="button"
-            class="group flex w-full items-center gap-3 rounded-xl bg-white/80 p-3 text-left transition hover:bg-white dark:bg-white/5 dark:hover:bg-white/10"
-            @click="emit('review', item)"
-          >
+          <TxButton v-for="item in items" :key="item.type === 'version' ? `v-${item.version?.id}` : `p-${item.plugin.id}`" variant="bare" block native-type="button" class="group flex w-full items-center gap-3 rounded-xl bg-white/80 text-left transition hover:bg-white dark:bg-white/5 dark:hover:bg-white/10" @click="emit('review', item)">
             <!-- Icon -->
             <div class="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/5 bg-black/5 dark:border-white/10 dark:bg-white/10">
               <img

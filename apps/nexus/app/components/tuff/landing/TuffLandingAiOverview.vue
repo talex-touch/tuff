@@ -14,7 +14,7 @@ const aiOverview = computed(() => ({
   subheadline: t("landing.os.aiOverview.subheadline"),
 }));
 
-const scenarios = ["chat", "assist", "preview"] as const;
+const scenarios = ["chat", "assist", "workflow"] as const;
 type ScenarioType = (typeof scenarios)[number];
 
 const featureCards = computed(() => [
@@ -31,10 +31,10 @@ const featureCards = computed(() => [
     scenario: "assist" as const,
   },
   {
-    title: t("landing.os.aiOverview.cards.preview.title"),
-    copy: t("landing.os.aiOverview.cards.preview.copy"),
-    icon: "i-carbon-view",
-    scenario: "preview" as const,
+    title: t("landing.os.aiOverview.cards.workflow.title"),
+    copy: t("landing.os.aiOverview.cards.workflow.copy"),
+    icon: "i-carbon-flow",
+    scenario: "workflow" as const,
   },
 ]);
 

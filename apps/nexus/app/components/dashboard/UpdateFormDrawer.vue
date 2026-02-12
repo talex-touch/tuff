@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Drawer from '~/components/ui/Drawer.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
@@ -171,10 +171,10 @@ async function submit() {
         <FlatButton @click="emit('close')">
           {{ t('dashboard.sections.updates.closeButton') }}
         </FlatButton>
-        <Button :disabled="saving" @click="submit">
+        <TxButton :disabled="saving" @click="submit">
           <span v-if="saving" class="i-carbon-circle-dash mr-1 animate-spin" />
           {{ mode === 'create' ? t('dashboard.sections.updates.createSubmit') : t('dashboard.sections.updates.updateSubmit') }}
-        </Button>
+        </TxButton>
       </div>
     </template>
   </Drawer>

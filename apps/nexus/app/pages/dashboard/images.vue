@@ -250,24 +250,11 @@ watchEffect(() => {
                 {{ image.key }}
               </p>
               <div class="mt-3 flex items-center gap-2">
-                <TxButton
-                  variant="bare"
-                  block
-                  native-type="button"
-                  class="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-black/[0.08] bg-black/[0.03] px-3 py-1.5 text-xs font-medium text-black transition hover:bg-black/[0.06] dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-white"
-                  @click="copyImageUrl(image.url, image.key)"
-                >
+                <TxButton variant="bare" block native-type="button" class="inline-flex flex-1 items-center justify-center gap-2 bg-black/[0.03] text-xs font-medium text-black transition hover:bg-black/[0.06] dark:bg-white/[0.06] dark:text-white" @click="copyImageUrl(image.url, image.key)">
                   <span :class="copiedImageKey === image.key ? 'i-carbon-checkmark' : 'i-carbon-copy'" class="text-sm" />
                   {{ copiedImageKey === image.key ? t('dashboard.sections.images.copied', 'Copied!') : t('dashboard.sections.images.copyUrl', 'Copy URL') }}
                 </TxButton>
-                <TxButton
-                  variant="bare"
-                  circle
-                  size="mini"
-                  native-type="button"
-                  class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-red-50 text-red-500 transition hover:border-red-300 hover:text-red-600 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200"
-                  @click="requestDeleteImage(image.key)"
-                >
+                <TxButton variant="bare" circle size="mini" native-type="button" class="inline-flex h-8 w-8 items-center justify-center bg-red-50 text-red-500 transition hover:text-red-600 dark:bg-red-500/10 dark:text-red-200" @click="requestDeleteImage(image.key)">
                   <span class="i-carbon-trash-can text-sm" />
                 </TxButton>
               </div>

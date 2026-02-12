@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 definePageMeta({
   layout: false,
 })
@@ -58,24 +59,14 @@ function goHome() {
 
       <!-- Actions -->
       <div class="mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-        <Button
-          variant="primary"
-          size="lg"
-          class="w-full sm:w-auto"
-          @click="goHome"
-        >
+        <TxButton variant="primary" size="lg" class="w-full sm:w-auto" @click="goHome">
           <span class="i-carbon-home text-lg" />
           Back to Home
-        </Button>
-        <Button
-          variant="secondary"
-          size="lg"
-          class="w-full sm:w-auto"
-          @click="goBack"
-        >
+        </TxButton>
+        <TxButton variant="secondary" size="lg" class="w-full sm:w-auto" @click="goBack">
           <span class="i-carbon-arrow-left text-lg" />
           Go Back
-        </Button>
+        </TxButton>
       </div>
 
       <!-- Help links -->

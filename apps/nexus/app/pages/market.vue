@@ -14,7 +14,7 @@ import type { SharedPluginDetail } from '@talex-touch/utils/renderer'
 import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Modal from '~/components/ui/Modal.vue'
@@ -479,9 +479,9 @@ useSeoMeta({
               </div>
               <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
                 <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
-                <Button size="small" @click="navigateTo('/sign-in')">
+                <TxButton size="small" @click="navigateTo('/sign-in')">
                   {{ t('market.detail.reviews.signInAction', 'Sign in') }}
-                </Button>
+                </TxButton>
               </div>
               <div v-else class="mt-3 space-y-3">
                 <div class="flex flex-wrap items-center gap-2">
@@ -507,10 +507,10 @@ useSeoMeta({
                   <p class="text-xs text-black/50 dark:text-light/60">
                     {{ t('market.detail.reviews.submitHint') }}
                   </p>
-                  <Button size="small" :disabled="reviewSubmitting" @click="submitReview">
+                  <TxButton size="small" :disabled="reviewSubmitting" @click="submitReview">
                     <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
                     {{ t('market.detail.reviews.submit') }}
-                  </Button>
+                  </TxButton>
                 </div>
               </div>
             </div>
@@ -578,9 +578,9 @@ useSeoMeta({
               </div>
             </article>
             <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
-              <Button size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+              <TxButton size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
                 {{ t('market.detail.reviews.loadMore', 'Load more') }}
-              </Button>
+              </TxButton>
             </div>
           </div>
           </div>

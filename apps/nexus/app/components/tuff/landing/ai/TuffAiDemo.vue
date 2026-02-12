@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import TuffAiChatDemo from './TuffAiChatDemo.vue'
 import TuffAiAssistDemo from './TuffAiAssistDemo.vue'
-import TuffAiPreviewDemo from './TuffAiPreviewDemo.vue'
+import TuffAiWorkflowDemo from './TuffAiWorkflowDemo.vue'
 import type { AiDemoScenario } from './types'
 
 const props = withDefaults(defineProps<{
@@ -36,9 +36,9 @@ watch(() => props.activeScenario, (newVal) => {
           :active="true"
           :auto-play="autoPlay"
         />
-        <TuffAiPreviewDemo
-          v-else-if="activeScenario === 'preview'"
-          :key="`preview-${activeScenario}`"
+        <TuffAiWorkflowDemo
+          v-else-if="activeScenario === 'workflow'"
+          :key="`workflow-${activeScenario}`"
           :active="true"
           :auto-play="autoPlay"
         />

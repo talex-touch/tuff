@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { TxSpinner } from '@talex-touch/tuffex'
+import { TxSpinner, TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import LinuxdoIcon from '~/components/icon/LinuxdoIcon.vue'
-import Button from '~/components/ui/Button.vue'
 import type { AuthFlow, OauthProvider } from '~/composables/useOauthContext'
 
 const props = defineProps<{
@@ -64,17 +63,12 @@ const showRetry = computed(() => isError.value)
     </div>
 
     <div v-if="showRetry" class="auth-oauth-actions">
-      <Button class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
+      <TxButton class="auth-button auth-button--primary" size="lg" block @click="emit('retry')">
         {{ t('auth.oauthRetry', '重新尝试') }}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="auth-text-button auth-oauth-back"
-        @click="emit('back')"
-      >
+      </TxButton>
+      <TxButton variant="ghost" size="sm" class="auth-text-button auth-oauth-back" @click="emit('back')">
         {{ t('auth.backToMethods', '返回') }}
-      </Button>
+      </TxButton>
     </div>
   </div>
 </template>

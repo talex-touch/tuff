@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 
 defineI18nRoute(false)
@@ -159,33 +159,23 @@ async function revokeDevice(device: DeviceItem) {
               </p>
             </div>
             <div class="flex items-center gap-2">
-              <Button
-                v-if="editingId !== device.id"
-                size="small"
-                variant="secondary"
-                @click="startRename(device)"
-              >
+              <TxButton v-if="editingId !== device.id" size="small" variant="secondary" @click="startRename(device)">
                 {{ t('dashboard.devices.rename', '重命名') }}
-              </Button>
-              <Button
-                size="small"
-                variant="secondary"
-                :disabled="actionLoading || isCurrent(device) || Boolean(device.revokedAt)"
-                @click="revokeDevice(device)"
-              >
+              </TxButton>
+              <TxButton size="small" variant="secondary" :disabled="actionLoading || isCurrent(device) || Boolean(device.revokedAt)" @click="revokeDevice(device)">
                 {{ t('dashboard.devices.revoke', '踢出') }}
-              </Button>
+              </TxButton>
             </div>
           </div>
 
           <div v-if="editingId === device.id" class="flex flex-wrap items-center gap-2">
             <Input v-model="renameValue" type="text" :placeholder="t('dashboard.devices.renamePlaceholder', '输入设备名称')" />
-            <Button size="small" :loading="actionLoading" @click="saveRename(device)">
+            <TxButton size="small" :loading="actionLoading" @click="saveRename(device)">
               {{ t('common.save', '保存') }}
-            </Button>
-            <Button size="small" variant="secondary" @click="cancelRename">
+            </TxButton>
+            <TxButton size="small" variant="secondary" @click="cancelRename">
               {{ t('common.cancel', '取消') }}
-            </Button>
+            </TxButton>
           </div>
         </li>
       </ul>

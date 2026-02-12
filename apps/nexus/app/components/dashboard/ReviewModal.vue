@@ -4,7 +4,7 @@ import type {
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
 } from '~/types/dashboard-plugin'
-import Button from '~/components/ui/Button.vue'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Modal from '~/components/ui/Modal.vue'
 
@@ -261,25 +261,25 @@ function toggleRejectForm() {
           {{ t('dashboard.sections.plugins.license.cancel') }}
         </FlatButton>
         <template v-if="!showRejectForm">
-          <Button type="danger" :disabled="loading" @click="toggleRejectForm">
+          <TxButton type="danger" :disabled="loading" @click="toggleRejectForm">
             <span class="i-carbon-close" />
             {{ t('dashboard.sections.plugins.actions.reject') }}
-          </Button>
-          <Button type="success" :disabled="loading" @click="handleApprove">
+          </TxButton>
+          <TxButton type="success" :disabled="loading" @click="handleApprove">
             <span v-if="loading" class="i-carbon-circle-dash animate-spin" />
             <span v-else class="i-carbon-checkmark" />
             {{ t('dashboard.sections.plugins.actions.approve') }}
-          </Button>
+          </TxButton>
         </template>
         <template v-else>
           <FlatButton @click="toggleRejectForm">
             {{ t('dashboard.sections.plugins.warnings.immutable.cancel') }}
           </FlatButton>
-          <Button type="danger" :disabled="loading" @click="handleReject">
+          <TxButton type="danger" :disabled="loading" @click="handleReject">
             <span v-if="loading" class="i-carbon-circle-dash animate-spin" />
             <span v-else class="i-carbon-close" />
             {{ t('dashboard.sections.plugins.actions.reject') }}
-          </Button>
+          </TxButton>
         </template>
       </div>
     </template>

@@ -300,59 +300,19 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
 
       <!-- Sections -->
       <div class="flex flex-wrap items-center gap-2 rounded-2xl bg-black/[0.02] p-2 text-sm dark:bg-white/[0.04]">
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'overview'
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = 'overview'"
-        >
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'overview' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'overview'">
           Overview
         </TxButton>
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'performance'
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = 'performance'"
-        >
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'performance' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'performance'">
           Performance
         </TxButton>
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'search'
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = 'search'"
-        >
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'search' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'search'">
           Search
         </TxButton>
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'usage'
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = 'usage'"
-        >
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'usage'">
           Usage
         </TxButton>
-        <TxButton
-          variant="bare"
-          native-type="button"
-          class="rounded-full px-3 py-1 text-xs transition"
-          :class="activeSection === 'messages'
-            ? 'bg-black text-white dark:bg-white dark:text-black'
-            : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'"
-          @click="activeSection = 'messages'"
-        >
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'messages' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'messages'">
           Alerts
         </TxButton>
       </div>
@@ -675,13 +635,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-white">
               Search Scenes
             </h3>
-            <TxButton
-              variant="bare"
-              size="small"
-              native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light"
-              @click="showBreakdown = true; activeBreakdownTab = 'search'"
-            >
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
               View details
             </TxButton>
           </div>
@@ -697,13 +651,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-white">
               Result Categories
             </h3>
-            <TxButton
-              variant="bare"
-              size="small"
-              native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light"
-              @click="showBreakdown = true; activeBreakdownTab = 'search'"
-            >
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'search'">
               View details
             </TxButton>
           </div>
@@ -719,13 +667,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             <h3 class="font-semibold text-black dark:text-white">
               Top Categories
             </h3>
-            <TxButton
-              variant="bare"
-              size="small"
-              native-type="button"
-              class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light"
-              @click="showBreakdown = true; activeBreakdownTab = 'usage'"
-            >
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
               View details
             </TxButton>
           </div>
@@ -746,13 +688,7 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
           <h3 class="font-semibold text-black dark:text-white">
             Telemetry Messages
           </h3>
-          <TxButton
-            variant="bare"
-            size="small"
-            native-type="button"
-            class="rounded-lg bg-black/[0.04] px-3 py-1 text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70"
-            @click="fetchMessages"
-          >
+          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchMessages">
             Refresh
           </TxButton>
         </div>
@@ -815,39 +751,16 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
                 Secondary distributions and deep-dive signals
               </p>
             </div>
-            <TxButton
-              variant="bare"
-              circle
-              size="mini"
-              native-type="button"
-              class="rounded-full bg-black/[0.04] p-2 text-black/60 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
-              @click="showBreakdown = false"
-            >
+            <TxButton variant="bare" circle size="mini" native-type="button" class="bg-black/[0.04] text-black/60 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="showBreakdown = false">
               <span class="i-carbon-close" />
             </TxButton>
           </div>
 
           <div class="mb-4 flex gap-2">
-            <TxButton
-              variant="bare"
-              native-type="button"
-              class="rounded-full px-3 py-1 text-xs"
-              :class="activeBreakdownTab === 'search'
-                ? 'bg-black text-white dark:bg-white dark:text-black'
-                : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
-              @click="activeBreakdownTab = 'search'"
-            >
+            <TxButton variant="bare" native-type="button" class="text-xs" :class="activeBreakdownTab === 'search' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'" @click="activeBreakdownTab = 'search'">
               Search
             </TxButton>
-            <TxButton
-              variant="bare"
-              native-type="button"
-              class="rounded-full px-3 py-1 text-xs"
-              :class="activeBreakdownTab === 'usage'
-                ? 'bg-black text-white dark:bg-white dark:text-black'
-                : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
-              @click="activeBreakdownTab = 'usage'"
-            >
+            <TxButton variant="bare" native-type="button" class="text-xs" :class="activeBreakdownTab === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 dark:bg-white/[0.08] dark:text-white/60'" @click="activeBreakdownTab = 'usage'">
               Usage
             </TxButton>
           </div>

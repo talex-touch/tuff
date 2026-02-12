@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { TxBadge } from '@talex-touch/tuffex'
+import { TxBadge, TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import LinuxdoIcon from '~/components/icon/LinuxdoIcon.vue'
-import Button from '~/components/ui/Button.vue'
 import Input from '~/components/ui/Input.vue'
 import type { LoginMethod } from '~/composables/useSignIn'
 
@@ -40,51 +39,30 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
 <template>
   <div class="auth-step">
     <div class="auth-method auth-method--full">
-      <Button
-        variant="ghost"
-        class="auth-button auth-button--ghost"
-        size="lg"
-        block
-        :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')"
-        @click="emit('linuxdo')"
-      >
+      <TxButton variant="ghost" class="auth-button auth-button--ghost" size="lg" block :aria-label="t('auth.oauthLinuxdo', 'LinuxDO')" @click="emit('linuxdo')">
         <LinuxdoIcon :size="18" />
         {{ t('auth.oauthLinuxdo', 'LinuxDO') }}
-      </Button>
+      </TxButton>
       <TxBadge v-if="lastMethod === 'linuxdo'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>
     </div>
 
     <div class="auth-method auth-method--full">
-      <Button
-        variant="ghost"
-        class="auth-button auth-button--ghost"
-        size="lg"
-        block
-        :aria-label="t('auth.oauthGithub', 'GitHub')"
-        @click="emit('github')"
-      >
+      <TxButton variant="ghost" class="auth-button auth-button--ghost" size="lg" block :aria-label="t('auth.oauthGithub', 'GitHub')" @click="emit('github')">
         <span class="i-carbon-logo-github text-base" />
         {{ t('auth.oauthGithub', 'GitHub') }}
-      </Button>
+      </TxButton>
       <TxBadge v-if="lastMethod === 'github'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>
     </div>
 
     <div class="auth-method auth-method--full">
-      <Button
-        class="auth-button auth-button--passkey"
-        size="lg"
-        block
-        :loading="passkeyLoading"
-        :disabled="!supportsPasskey"
-        @click="emit('passkey')"
-      >
+      <TxButton class="auth-button auth-button--passkey" size="lg" block :loading="passkeyLoading" :disabled="!supportsPasskey" @click="emit('passkey')">
         <span class="i-carbon-fingerprint-recognition text-base" />
         {{ t('auth.passkeyLogin', 'Login with Passkey') }}
-      </Button>
+      </TxButton>
       <TxBadge v-if="lastMethod === 'passkey'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>
@@ -99,9 +77,9 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
     <Input v-model="emailValue" type="text" :placeholder="t('auth.email', '邮箱')" class="auth-input" />
 
     <div class="auth-method auth-method--full">
-      <Button class="auth-button auth-button--ghost" size="lg" block :loading="emailCheckLoading" @click="emit('email-next')">
+      <TxButton class="auth-button auth-button--ghost" size="lg" block :loading="emailCheckLoading" @click="emit('email-next')">
         {{ t('auth.continueWithEmail', 'Continue with Email') }}
-      </Button>
+      </TxButton>
       <TxBadge v-if="lastMethod === 'email'" class="auth-last-badge">
         {{ lastUsedLabel }}
       </TxBadge>

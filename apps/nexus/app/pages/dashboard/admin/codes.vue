@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TxButton } from '@talex-touch/tuffex'
 definePageMeta({
   pageTransition: {
     name: 'fade',
@@ -163,15 +164,10 @@ onMounted(() => {
         </div>
       </div>
 
-      <Button
-        class="mt-4"
-        :disabled="generating"
-        variant="primary"
-        @click="generateCodes"
-      >
+      <TxButton class="mt-4" :disabled="generating" variant="primary" @click="generateCodes">
         <TxSpinner v-if="generating" :size="14" />
         <span>{{ generating ? t('dashboard.sections.codes.generating', 'Generating...') : t('dashboard.sections.codes.generateButton', 'Generate Codes') }}</span>
-      </Button>
+      </TxButton>
     </section>
 
     <!-- Error -->
@@ -186,14 +182,7 @@ onMounted(() => {
           {{ t('dashboard.sections.codes.listTitle', 'All Codes') }}
         </h2>
         <div class="mt-3">
-          <TxButton
-            variant="bare"
-            size="small"
-            native-type="button"
-            :disabled="loading"
-            class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-white/60 dark:hover:text-light"
-            @click="fetchCodes"
-          >
+          <TxButton variant="bare" size="small" native-type="button" :disabled="loading" class="inline-flex items-center gap-1.5 text-sm text-black/60 transition hover:text-black dark:text-white/60 dark:hover:text-light" @click="fetchCodes">
             <TxSpinner v-if="loading" :size="14" />
             <span v-else class="i-carbon-refresh text-base" />
             {{ t('dashboard.sections.codes.refresh', 'Refresh') }}
@@ -250,15 +239,7 @@ onMounted(() => {
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <code class="rounded bg-black/5 px-2 py-1 font-mono text-sm text-black dark:bg-white/[0.08] dark:text-white">{{ code.code }}</code>
-                  <TxButton
-                    variant="bare"
-                    size="mini"
-                    native-type="button"
-                    icon="i-carbon-copy"
-                    class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70"
-                    :title="t('dashboard.sections.codes.copy', 'Copy')"
-                    @click="copyCode(code.code)"
-                  />
+                  <TxButton variant="bare" size="mini" native-type="button" icon="i-carbon-copy" class="text-black/40 transition hover:text-black/70 dark:text-white/40 dark:hover:text-light/70" :title="t('dashboard.sections.codes.copy', 'Copy')" @click="copyCode(code.code)" />
                 </div>
               </td>
               <td class="px-4 py-3">

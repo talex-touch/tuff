@@ -136,27 +136,13 @@ onMounted(() => {
           {{ resolvedTitle }}
         </div>
       </div>
-      <TxButton
-        v-if="canCopy"
-        variant="ghost"
-        size="small"
-        native-type="button"
-        class="tuff-code-block__copy"
-        @click="handleCopy"
-      >
+      <TxButton v-if="canCopy" variant="ghost" size="small" native-type="button" class="tuff-code-block__copy" @click="handleCopy">
         <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
         {{ copyLabel }}
       </TxButton>
     </div>
     <component :is="isMermaid ? 'div' : 'pre'" class="tuff-code-block__pre">
-      <TxButton
-        v-if="props.embedded && canCopy"
-        variant="ghost"
-        size="small"
-        native-type="button"
-        class="tuff-code-block__copy tuff-code-block__copy--floating"
-        @click="handleCopy"
-      >
+      <TxButton v-if="props.embedded && canCopy" variant="ghost" size="small" native-type="button" class="tuff-code-block__copy tuff-code-block__copy--floating" @click="handleCopy">
         <span :class="copied ? 'i-carbon-checkmark' : 'i-carbon-copy'" />
         {{ copyLabel }}
       </TxButton>
