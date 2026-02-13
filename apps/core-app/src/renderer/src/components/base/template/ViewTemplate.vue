@@ -25,10 +25,26 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
       :class="{ blur: subRouterMode }"
       class="ViewTemplate-Wrapper transition-cubic absolute w-full h-full"
     >
-      <TxGradualBlur position="top" height="24px" :strength="1.4" :opacity="0.9" :z-index="20" />
-      <TxGradualBlur position="bottom" height="24px" :strength="1.4" :opacity="0.9" :z-index="20" />
+      <TxGradualBlur
+        exponential
+        :div-count="10"
+        position="top"
+        height="24px"
+        :strength="1.4"
+        :opacity="0.9"
+        :z-index="20"
+      />
+      <TxGradualBlur
+        exponential
+        :div-count="10"
+        position="bottom"
+        height="24px"
+        :strength="1.4"
+        :opacity="0.9"
+        :z-index="20"
+      />
       <TouchScroll no-padding class="ViewTemplate-Scroll">
-        <div class="View-Container">
+        <div class="View-Container px-4 py-6">
           <slot />
         </div>
       </TouchScroll>
@@ -113,7 +129,6 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
 
   min-height: 100%;
   width: 100%;
-  padding: 1.25rem 0.75rem;
 
   box-sizing: border-box;
 }

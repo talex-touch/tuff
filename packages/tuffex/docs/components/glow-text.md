@@ -2,7 +2,9 @@
 
 用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。
 
-> 默认启用 `adaptive` 模式，在彩色/渐变文字上也能保持可见扫光；如需经典效果可设置 `mode="classic"`。
+> 默认启用 `adaptive` 模式（容器级扫光，适合图片/卡片）；文本建议使用 `mode="text-clip"`，扫光会裁切到文字字形。
+>
+> `text-clip` 当前采用右 -> 左扫动方向（与 ShinyText 参考效果一致）。
 
 <script setup lang="ts">
 import GlowTextBasicDemo from '../.vitepress/theme/components/demos/GlowTextBasicDemo.vue'
@@ -44,6 +46,6 @@ import GlowTextImageDemoSource from '../.vitepress/theme/components/demos/GlowTe
 | `color` | `string` | `rgba(255, 255, 255, 0.9)` | 高光颜色 |
 | `opacity` | `number` | `0.75` | 高光不透明度 |
 | `blendMode` | `string` | `screen` | 混合模式（`adaptive` 下会优先尝试 `plus-lighter`；如 `screen` / `overlay` / `lighten`） |
-| `mode` | `'classic' \| 'adaptive'` | `adaptive` | 扫光模式（`adaptive` 更适合彩色文字） |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | 扫光模式（`text-clip` 会把高光裁切到文字） |
 | `backdrop` | `string` | - | 自定义 `backdrop-filter`（如 `brightness(1.2) saturate(1.1)`） |
 | `radius` | `number` | `10` | 圆角(px) |
