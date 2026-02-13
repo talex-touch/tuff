@@ -236,6 +236,15 @@ function extractDocText(value: any): string {
   return ''
 }
 
+const ASSISTANT_CONTEXT_LIMIT = 8000
+
+function buildAssistantContext(value: any): string {
+  const text = extractDocText(value).replace(/\s+/g, ' ').trim()
+  if (!text)
+    return ''
+  return text.length > ASSISTANT_CONTEXT_LIMIT ? text.slice(0, ASSISTANT_CONTEXT_LIMIT) : text
+}
+
 function buildTocTree(entries: TocEntry[]) {
   const root: TocEntry[] = []
   const stack: TocEntry[] = []
@@ -619,7 +628,11 @@ watchEffect(() => {
     const rawTitle = doc.value.seo?.title ?? doc.value.title ?? ''
     docTitleState.value = normalizeTitleForLocale(String(rawTitle), doc.value.path ?? docPath.value)
     docLocaleState.value = resolveDocLocale(doc.value)
-    docMetaState.value = docMeta.value
+    docMetaState.value = {
+      ...docMeta.value,
+      assistantTitle: docTitleState.value,
+      assistantContext: buildAssistantContext(doc.value.body),
+    }
     if (!outlineState.value.length)
       void scheduleOutlineSync(120)
   }

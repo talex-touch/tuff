@@ -1349,7 +1349,7 @@
             {
               "type": "frame",
               "id": "zenb0",
-              "name": "Zen Assistant",
+              "name": "Tuff Assistant",
               "x": 24,
               "y": 516,
               "width": 172,
@@ -1365,7 +1365,7 @@
                   "id": "zenlb",
                   "x": 14,
                   "y": 12,
-                  "content": "✦  Zen Assistant",
+                  "content": "✦  Tuff Assistant",
                   "fontSize": 12,
                   "fontWeight": 600,
                   "color": "#0071E3",
@@ -1399,7 +1399,7 @@
                       "id": "zenit",
                       "x": 8,
                       "y": 1,
-                      "content": "Ask docs...",
+                      "content": "Ask assistant...",
                       "fontSize": 10,
                       "color": "#8E8E93"
                     }

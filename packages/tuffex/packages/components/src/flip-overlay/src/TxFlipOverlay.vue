@@ -3,6 +3,7 @@ import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from '.
 import gsap from 'gsap'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxFlipOverlay',
@@ -34,6 +35,7 @@ const cardRef = ref<HTMLElement | null>(null)
 const visible = ref(Boolean(props.modelValue))
 const expanded = ref(typeof props.expanded === 'boolean' ? props.expanded : false)
 const animating = ref(typeof props.animating === 'boolean' ? props.animating : false)
+const zIndex = ref(getZIndex())
 const sourceRect = ref<DOMRect | null>(null)
 const sourceRadius = ref<string | null>(null)
 const tilt = ref({ x: 0, y: 0 })
@@ -267,6 +269,7 @@ function startCloseAnimation(currentRunId: number): void {
 }
 
 function requestOpen(): void {
+  zIndex.value = nextZIndex()
   if (!hasWindow()) {
     visible.value = true
     syncExpanded(true)
@@ -337,7 +340,7 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
 
 <template>
   <Transition :name="transitionName">
-    <div v-if="visible" :class="maskClassName" @click="handleMaskClick">
+    <div v-if="visible" :class="maskClassName" :style="{ zIndex }" @click="handleMaskClick">
       <div ref="cardRef" :class="cardClassName" @click.stop>
         <slot v-bind="slotProps" />
       </div>

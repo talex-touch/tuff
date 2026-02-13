@@ -6,6 +6,7 @@ import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxSearchSelect' })
 
@@ -36,6 +37,7 @@ const emit = defineEmits<TxSearchSelectEmits>()
 const open = ref(false)
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
 
@@ -204,6 +206,7 @@ watch(
       return
     }
 
+    zIndex.value = nextZIndex()
     lastOpenedAt.value = performance.now()
     await nextTick()
     await update()
@@ -285,7 +288,7 @@ defineExpose({
           v-show="open && !props.disabled"
           ref="floatingRef"
           class="tx-search-select__dropdown"
-          :style="floatingStyles"
+          :style="[floatingStyles, { zIndex }]"
         >
           <TxCard
             class="tx-search-select__panel"
@@ -339,7 +342,6 @@ defineExpose({
 }
 
 .tx-search-select__dropdown {
-  z-index: var(--tx-index-popper, 2000);
   padding: 0;
   background: transparent;
   border: none;

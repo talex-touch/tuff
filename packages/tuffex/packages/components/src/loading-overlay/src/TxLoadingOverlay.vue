@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { LoadingOverlayProps } from '../index'
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxSpinner } from '../../spinner'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxLoadingOverlay',
@@ -16,16 +17,27 @@ const props = withDefaults(defineProps<LoadingOverlayProps>(), {
   background: 'color-mix(in srgb, var(--tx-bg-color, #fff) 70%, transparent)',
 })
 
+const zIndex = ref(getZIndex())
+
 const overlayStyle = computed<CSSProperties>(() => {
   return {
     '--tx-loading-overlay-bg': props.background,
   } as CSSProperties
 })
+
+watch(
+  () => props.loading && props.fullscreen,
+  (open) => {
+    if (open)
+      zIndex.value = nextZIndex()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <teleport v-if="fullscreen" to="body">
-    <div v-if="loading" class="tx-loading-overlay tx-loading-overlay--fullscreen" :style="overlayStyle">
+    <div v-if="loading" class="tx-loading-overlay tx-loading-overlay--fullscreen" :style="[overlayStyle, { zIndex }]">
       <div class="tx-loading-overlay__inner">
         <TxSpinner :size="spinnerSize" />
         <div v-if="text" class="tx-loading-overlay__text">
@@ -62,7 +74,7 @@ const overlayStyle = computed<CSSProperties>(() => {
   background: var(--tx-loading-overlay-bg);
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
-  z-index: 3000;
+  z-index: 1;
 }
 
 .tx-loading-overlay--fullscreen {

@@ -158,6 +158,14 @@ export const PERMISSIONS: PermissionDefinition[] = [
     descKey: 'permission.storage.shared.desc',
     icon: 'Share2',
   },
+  {
+    id: 'storage.sqlite',
+    category: PermissionCategory.STORAGE,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: 'permission.storage.sqlite.name',
+    descKey: 'permission.storage.sqlite.desc',
+    icon: 'Database',
+  },
 
   // Window permissions
   {
@@ -269,6 +277,7 @@ export const PermissionIds = {
   // Storage
   STORAGE_PLUGIN: 'storage.plugin',
   STORAGE_SHARED: 'storage.shared',
+  STORAGE_SQLITE: 'storage.sqlite',
 
   // Window
   WINDOW_CREATE: 'window.create',

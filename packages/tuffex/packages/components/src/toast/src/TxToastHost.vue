@@ -7,11 +7,12 @@ defineOptions({
 })
 
 const items = computed(() => toastStore.items)
+const zIndex = computed(() => toastStore.zIndex)
 </script>
 
 <template>
   <teleport to="body">
-    <div class="tx-toast-host" role="region" aria-label="Notifications">
+    <div class="tx-toast-host" role="region" aria-label="Notifications" :style="{ zIndex }">
       <div v-for="t in items" :key="t.id" class="tx-toast" :class="`tx-toast--${t.variant || 'default'}`">
         <div class="tx-toast__content">
           <div v-if="t.title" class="tx-toast__title">
@@ -48,7 +49,6 @@ const items = computed(() => toastStore.items)
   display: flex;
   flex-direction: column;
   gap: 10px;
-  z-index: 5000;
   width: min(360px, calc(100vw - 32px));
 }
 

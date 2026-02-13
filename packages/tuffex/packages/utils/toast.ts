@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { getZIndex, nextZIndex } from './z-index-manager'
 
 export type TxToastVariant = 'default' | 'success' | 'warning' | 'danger'
 
@@ -23,6 +24,7 @@ const DEFAULT_DURATION = 2600
 
 export const toastStore = reactive({
   items: [] as TxToastItem[],
+  zIndex: getZIndex(),
 })
 
 function generateId() {
@@ -30,6 +32,7 @@ function generateId() {
 }
 
 export function toast(options: TxToastOptions): string {
+  toastStore.zIndex = nextZIndex()
   const id = options.id ?? generateId()
   const duration = options.duration ?? DEFAULT_DURATION
 

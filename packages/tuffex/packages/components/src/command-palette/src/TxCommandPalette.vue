@@ -3,6 +3,7 @@ import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, watch } from 'vue'
 import { TxIcon } from '../../icon'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxCommandPalette' })
 
@@ -20,6 +21,7 @@ const emit = defineEmits<CommandPaletteEmits>()
 const inputRef = ref<HTMLInputElement | null>(null)
 const query = ref('')
 const activeIndex = ref(0)
+const zIndex = ref(getZIndex())
 
 const visible = computed({
   get: () => props.modelValue,
@@ -46,6 +48,7 @@ watch(
   () => props.modelValue,
   async (v) => {
     if (v) {
+      zIndex.value = nextZIndex()
       emit('open')
       activeIndex.value = 0
       await nextTick()
@@ -124,6 +127,7 @@ function onKeydown(e: KeyboardEvent) {
       <div
         v-if="visible"
         class="tx-command-palette__overlay"
+        :style="{ zIndex }"
         role="dialog"
         aria-modal="true"
         @click.self="close"
@@ -181,7 +185,6 @@ function onKeydown(e: KeyboardEvent) {
   align-items: flex-start;
   justify-content: center;
   padding: 10vh 16px 24px;
-  z-index: 1200;
 }
 
 .tx-command-palette__panel {

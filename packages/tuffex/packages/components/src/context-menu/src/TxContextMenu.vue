@@ -2,6 +2,7 @@
 import type { ContextMenuProps } from './types'
 import { autoUpdate, flip, shift, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxContextMenu' })
 
@@ -37,6 +38,7 @@ const open = computed({
 
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 const point = ref({ x: props.x, y: props.y })
 
 const lastOpenedAt = ref(0)
@@ -131,6 +133,7 @@ watch(
       cleanupAutoUpdate.value = null
       return
     }
+    zIndex.value = nextZIndex()
     await nextTick()
     await update()
     if (menuRef.value) {
@@ -167,7 +170,7 @@ onBeforeUnmount(() => {
         v-show="open"
         ref="menuRef"
         class="tx-context-menu"
-        :style="[floatingStyles, { width: `${width}px` }]"
+        :style="[floatingStyles, { width: `${width}px`, zIndex }]"
         role="menu"
       >
         <slot name="menu" />
@@ -183,7 +186,6 @@ onBeforeUnmount(() => {
 }
 
 .tx-context-menu {
-  z-index: var(--tx-index-popper, 2000);
   padding: 6px;
   border-radius: 12px;
   border: 1px solid var(--tx-border-color-light, #e4e7ed);

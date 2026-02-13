@@ -58,6 +58,9 @@ TouchX UI 的标志性设计风格，通过透明度、模糊效果和微妙的�
 ### 🎯 [设计令牌](/design/tokens)
 设计令牌是设计系统的基础，定义了所有可复用的设计属性，如颜色、尺寸、阴影等。
 
+### 🧱 [层级（Z-Index）](/design/z-index)
+统一的全局浮层层级分配策略，确保 Popover/Tooltip/Select/Modal/Drawer/Toast/Dialog 等“后打开优先”且不被固定栏遮挡，并支持外部接入与刷新监听。
+
 ## 设计工具
 
 ### Figma 设计资源

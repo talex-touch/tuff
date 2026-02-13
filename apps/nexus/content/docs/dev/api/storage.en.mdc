@@ -2,7 +2,10 @@
 
 ## Overview
 
-The Plugin Storage SDK provides file-based persistent storage that survives application restarts.
+The Plugin Storage SDK provides:
+
+- File-based persistent storage (`usePluginStorage`)
+- SQLite-based structured storage (`usePluginSqlite`, sdkapi >= 260215)
 
 ## Introduction
 
@@ -24,6 +27,28 @@ code: |
 ---
 :::
 
+**SQLite Quick Start (structured data)**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)'
+  )
+
+  await sqlite.execute('INSERT INTO todos (title, done) VALUES (?, ?)', ['Write docs', 0])
+
+  const result = await sqlite.query<{ id: number; title: string; done: number }>(
+    'SELECT id, title, done FROM todos ORDER BY id DESC LIMIT 20'
+  )
+  console.log(result.rows)
+---
+:::
+
 ---
 
 ## Limits
@@ -31,6 +56,28 @@ code: |
 - **10 MB quota per plugin**; writes past the limit are rejected
 - Data stored in `<userData>/config/plugins/<pluginName>/`
 - Automatic filename sanitization to prevent path traversal attacks
+
+---
+
+## SQLite Permission Requirement
+
+When using `usePluginSqlite()`, your plugin must declare:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260215,
+    "permissions": {
+      "required": ["storage.sqlite"],
+      "optional": []
+    },
+    "permissionReasons": {
+      "storage.sqlite": "Store plugin business data in local SQLite database"
+    }
+  }
+---
+:::
 
 ---
 
@@ -60,6 +107,37 @@ Read storage file content.
 code: |
   const config = await storage.getFile('config.json')
   // Returns null if file doesn't exist
+---
+:::
+
+---
+
+**SQLite Operations**
+
+**`execute(sql, params?)`**  
+Run insert/update/delete/DDL statements.
+
+**`query<T>(sql, params?)`**  
+Run select statements and return typed rows.
+
+**`transaction(statements)`**  
+Run multiple SQL statements in one transaction (all-or-nothing).
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const sqlite = usePluginSqlite()
+
+  await sqlite.transaction([
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['A', 0]
+    },
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['B', 0]
+    }
+  ])
 ---
 :::
 
@@ -201,3 +279,4 @@ code: |
 
 - Storage uses an isolated directory per plugin with filename sanitization.
 - Reads/writes are executed in the main process via IPC for safety and consistency.
+- SQLite data file is located at `<userData>/modules/plugins/<pluginName>/data/plugin-sdk.sqlite`.

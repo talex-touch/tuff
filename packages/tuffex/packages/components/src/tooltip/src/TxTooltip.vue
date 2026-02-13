@@ -2,6 +2,7 @@
 import type { TooltipProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxTooltip' })
 
@@ -52,6 +53,7 @@ const open = computed({
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
 const arrowRef = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 
@@ -269,6 +271,7 @@ watch(
       cleanupAutoUpdate.value = null
       return
     }
+    zIndex.value = nextZIndex()
     await nextTick()
     await update()
     stablePlacement.value = placement.value
@@ -422,7 +425,7 @@ function onBeforeEnter(el: Element) {
         :class="tooltipClass"
         :data-side="arrowSide"
         role="tooltip"
-        :style="[floatingStyles, tooltipVars]"
+        :style="[floatingStyles, tooltipVars, { zIndex }]"
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"
       >
@@ -472,7 +475,6 @@ function onBeforeEnter(el: Element) {
 }
 
 .tx-tooltip {
-  z-index: var(--tx-index-popper, 2000);
   padding: var(--tx-tooltip-padding, 8px);
   border-radius: var(--tx-tooltip-radius, 10px);
   border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);

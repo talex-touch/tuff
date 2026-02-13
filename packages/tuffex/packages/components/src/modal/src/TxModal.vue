@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxModal',
@@ -27,6 +28,17 @@ const visible = computed({
   set: (v: boolean) => emit('update:modelValue', v),
 })
 
+const zIndex = ref(getZIndex())
+
+watch(
+  visible,
+  (v) => {
+    if (v)
+      zIndex.value = nextZIndex()
+  },
+  { flush: 'sync' },
+)
+
 function close() {
   visible.value = false
   emit('close')
@@ -36,7 +48,7 @@ function close() {
 <template>
   <Teleport to="body">
     <Transition name="tx-modal">
-      <div v-if="visible" class="tx-modal__overlay" role="dialog" aria-modal="true" @click.self="close">
+      <div v-if="visible" class="tx-modal__overlay" role="dialog" aria-modal="true" :style="{ zIndex }" @click.self="close">
         <div class="tx-modal__content" :style="{ width }">
           <header v-if="title || $slots.header" class="tx-modal__header">
             <slot name="header">
@@ -71,7 +83,6 @@ function close() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
   padding: 20px;
 }
 

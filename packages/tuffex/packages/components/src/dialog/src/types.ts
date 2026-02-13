@@ -86,7 +86,7 @@ export interface BottomDialogProps {
 
   /**
    * Z-index offset for the dialog.
-   * Final z-index = 10000 + index.
+   * Final z-index = baseZIndex + index.
    * @default 0
    */
   index?: number

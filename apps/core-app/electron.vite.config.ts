@@ -26,6 +26,9 @@ const tuffexSourceEntry = path.join(tuffexRoot, 'packages', 'components', 'src',
 const tuffexStyleEntry = path.join(tuffexRoot, 'packages', 'components', 'style', 'index.scss')
 const tuffexUtilsEntry = path.join(tuffexRoot, 'packages', 'utils', 'index.ts')
 const utilsRendererEntry = path.join(utilsRoot, 'renderer', 'index.ts')
+const devServerHost = process.env.TUFF_DEV_SERVER_HOST ?? '127.0.0.1'
+const devServerPortValue = Number(process.env.TUFF_DEV_SERVER_PORT)
+const devServerPort = Number.isFinite(devServerPortValue) ? devServerPortValue : 5173
 // Disable sourcemap in production/release builds to reduce package size
 const isProduction =
   process.env.BUILD_TYPE === 'release' ||
@@ -164,6 +167,9 @@ export default defineConfig({
       ]
     },
     server: {
+      host: devServerHost,
+      port: devServerPort,
+      strictPort: true,
       fs: {
         // workspace packages (pnpm symlinks) may resolve outside renderer root
         allow: [workspaceRoot]

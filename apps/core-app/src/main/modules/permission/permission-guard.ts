@@ -86,6 +86,7 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   // Storage APIs
   { pattern: 'storage:plugin:*', permissions: ['storage.plugin'] },
   { pattern: 'storage:shared:*', permissions: ['storage.shared'] },
+  { pattern: 'storage:sqlite:*', permissions: ['storage.sqlite'] },
 
   // Window APIs
   { pattern: 'window:create', permissions: ['window.create'] },
