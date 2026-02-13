@@ -1,12 +1,12 @@
 ---
-title: "Card 卡片"
-description: "Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。"
+title: "Card"
+description: "Component documentation for Card."
 category: Layout
 syncStatus: migrated
 ---
-# Card 卡片
+# Card
 
-Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。
+Component documentation for Card.
 
 <script setup lang="ts">
 import CardBasicDemo from '~/components/content/demos/CardBasicDemo.vue'
@@ -46,7 +46,7 @@ import CardInertialDemo from '~/components/content/demos/CardInertialDemo.vue'
 import CardInertialDemoSource from '~/components/content/demos/CardInertialDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Basic
 :::TuffDemoWrapper{demo="CardBasicDemo" code-lang="vue"}
@@ -111,7 +111,7 @@ code: |
 ---
 :::
 
-## 惯性跟随回弹（inertial）
+## Inertial Follow-Back (inertial)
 
 ### inertial
 :::TuffDemoWrapper{demo="CardInertialDemo" code-lang="vue"}
@@ -167,7 +167,7 @@ code: |
 ---
 :::
 
-## 带标题的卡片
+## Card with Title
 
 ### Header
 :::TuffDemoWrapper{demo="CardHeaderDemo" code-lang="vue"}
@@ -193,7 +193,7 @@ code: |
 ---
 :::
 
-## 带操作按钮的卡片
+## Card with Action Buttons
 
 ### Header + Footer actions
 :::TuffDemoWrapper{demo="CardHeaderFooterActionsDemo" code-lang="vue"}
@@ -244,9 +244,9 @@ code: |
 ---
 :::
 
-## 卡片变体
+## Card Variants
 
-提供不同的视觉样式：
+Provides multiple visual styles:
 
 ### variants
 :::TuffDemoWrapper{demo="CardVariantsDemo" code-lang="vue"}
@@ -290,9 +290,9 @@ code: |
 ---
 :::
 
-## 不同背景下的效果（blur / glass）
+## Effects on Different Backgrounds (blur / glass)
 
-单卡片对比：背后提供文本与图形内容，通过开关切换 background（blur / glass / mask）。
+Single-card comparison: text/graphics behind the card, toggle background (blur / glass / mask) via the switch.
 
 ### Card backgrounds (scroll)
 :::TuffDemoWrapper{demo="CardCardBackgroundsScrollDemo" code-lang="vue"}
@@ -578,7 +578,7 @@ code: |
 ---
 :::
 
-## Empty 布局
+## Empty Layout
 
 ### Card with Empty
 :::TuffDemoWrapper{demo="CardCardWithEmptyDemo" code-lang="vue"}
@@ -607,7 +607,7 @@ code: |
 ---
 :::
 
-## 与组件结合方式（Popover / SearchSelect）
+## Using with Components (Popover / SearchSelect)
 
 ### Card compositions
 :::TuffDemoWrapper{demo="CardCardCompositionsDemo" code-lang="vue"}
@@ -720,7 +720,7 @@ code: |
 ---
 :::
 
-## 卡片尺寸
+## Card Sizes
 
 ### size
 :::TuffDemoWrapper{demo="CardSizeDemo" code-lang="vue"}
@@ -762,7 +762,7 @@ code: |
 ---
 :::
 
-## 布局属性（padding / radius）
+## Layout Props (padding / radius)
 
 ### layout props
 :::TuffDemoWrapper{demo="CardLayoutPropsDemo" code-lang="vue"}
@@ -806,7 +806,7 @@ code: |
 ---
 :::
 
-## 状态（clickable / loading / disabled）
+## States (clickable / loading / disabled)
 
 ### states
 :::TuffDemoWrapper{demo="CardStatesDemo" code-lang="vue"}
@@ -861,48 +861,48 @@ code: |
 :::
 
 
-## API 参考
+## API Reference
 
 ### Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|--------|------|
-| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态 |
-| background | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 背景风格（玻璃效果在 `glass` 中最明显） |
-| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度 |
-| size | `'small' \| 'medium' \| 'large'` | `'medium'` | 卡片尺寸 |
-| radius | `number` | `18` | 圆角 |
-| padding | `number` | - | 内边距（不传时由 `size` 决定） |
-| glassBlur | `boolean` | `true` | 仅 `background='glass'`：是否启用 backdrop blur |
-| glassBlurAmount | `number` | `22` | 仅 `background='glass'`：blur 强度（px） |
-| glassOverlay | `boolean` | `true` | 仅 `background='glass'`：是否启用高光遮罩层 |
-| glassOverlayOpacity | `number` | `0.22` | 仅 `background='glass'`：遮罩层透明度 |
-| clickable | `boolean` | `false` | 是否可点击（hover feedback） |
-| loading | `boolean` | `false` | 是否显示加载状态 |
-| loadingSpinnerSize | `number` | - | loading spinner 大小（px） |
-| disabled | `boolean` | `false` | 是否禁用 |
-| inertial | `boolean` | `false` | 是否启用惯性拖拽回弹 |
-| inertialMaxOffset | `number` | `22` | 拖拽最大位移（px） |
-| inertialRebound | `number` | `0.12` | 回弹弹性（0=更粘更稳，1=更弹簧） |
+| variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Description for variant. |
+| background | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Text（Text `glass` Text） |
+| shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | Description for shadow. |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | TextSize |
+| radius | `number` | `18` | Description for radius. |
+| padding | `number` | - | Description for padding. |
+| glassBlur | `boolean` | `true` | Description for glassBlur. |
+| glassBlurAmount | `number` | `22` | Description for glassBlurAmount. |
+| glassOverlay | `boolean` | `true` | Description for glassOverlay. |
+| glassOverlayOpacity | `number` | `0.22` | Description for glassOverlayOpacity. |
+| clickable | `boolean` | `false` | Description for clickable. |
+| loading | `boolean` | `false` | Description for loading. |
+| loadingSpinnerSize | `number` | - | Description for loadingSpinnerSize. |
+| disabled | `boolean` | `false` | Description for disabled. |
+| inertial | `boolean` | `false` | Description for inertial. |
+| inertialMaxOffset | `number` | `22` | Description for inertialMaxOffset. |
+| inertialRebound | `number` | `0.12` | Description for inertialRebound. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |--------|------|------|
-| click | `(event: MouseEvent)` | 点击卡片时触发 |
+| click | `(event: MouseEvent)` | Description for click. |
 
 ### Slots
 
-| 插槽名 | 说明 |
+| Column | Description |
 |--------|------|
-| default | 卡片主要内容 |
-| header | 卡片头部内容 |
-| footer | 卡片底部内容 |
-| cover | 卡片封面图片 |
+| default | Description for default. |
+| header | Description for header. |
+| footer | Description for footer. |
+| cover | Description for cover. |
 
-## 样式定制
+## Style Customization
 
-### CSS 变量
+### CSS Variables
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -914,25 +914,25 @@ code: |
 ---
 :::
 
-### 主题定制
+### Theme Customization
 
 :::TuffCodeBlock{lang="css"}
 ---
 code: |
   :root {
-    /* 卡片背景 */
+    /* text */
     --tx-card-background-default: rgba(255, 255, 255, 0.8);
     --tx-card-background-glass: rgba(255, 255, 255, 0.1);
     
-    /* 卡片边框 */
+    /* text */
     --tx-card-border-default: 1px solid rgba(0, 0, 0, 0.1);
     --tx-card-border-outlined: 1px solid var(--tx-color-border);
     
-    /* 卡片阴影 */
+    /* text */
     --tx-card-shadow-default: 0 2px 8px rgba(0, 0, 0, 0.1);
     --tx-card-shadow-elevated: 0 8px 24px rgba(0, 0, 0, 0.15);
     
-    /* 卡片尺寸 */
+    /* textSize */
     --tx-card-padding-small: 16px;
     --tx-card-padding-medium: 20px;
     --tx-card-padding-large: 24px;
@@ -940,16 +940,16 @@ code: |
 ---
 :::
 
-## 最佳实践
+## Best Practices
 
-### 使用建议
+### Usage Tips
 
-1. **内容组织**：合理使用 header、body、footer 区域组织内容
-2. **视觉层次**：通过不同的卡片变体创建视觉层次
-3. **交互反馈**：为可点击卡片提供明确的视觉反馈
-4. **响应式设计**：确保卡片在不同屏幕尺寸下的良好表现
+1. **Content structure**: use header/body/footer sections appropriately
+2. **Visual hierarchy**: use card variants to create hierarchy
+3. **Interaction feedback**: provide clear feedback for clickable cards
+4. **Responsive design**: ensure good behavior across screen sizes
 
-### 布局示例
+### Layout Examples
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -970,14 +970,14 @@ code: |
         
         <template #footer>
           <div class="card-actions">
-            <TxButton size="small" variant="text">编辑</TxButton>
-            <TxButton size="small" variant="text">删除</TxButton>
+            <TxButton size="small" variant="text">Text</TxButton>
+            <TxButton size="small" variant="text">Text</TxButton>
           </div>
         </template>
       </TxCard>
     </div>
   </template>
   
-  TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
+  TouchX UI Text Card TextContentText，Text。
 ---
 :::

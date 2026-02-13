@@ -1,17 +1,17 @@
 ---
-title: "OfflineState 离线"
-description: "用于离线或网络不可用时的提示。"
+title: "OfflineState"
+description: "Component documentation for OfflineState."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [offline, network, state]
 syncStatus: migrated
 ---
-# OfflineState 离线
+# OfflineState
 
-用于离线或网络不可用时的提示。
+Component documentation for OfflineState.
 
-## 基础用法
+## Basic Usage
 
 ### OfflineState
 :::TuffDemoWrapper{demo="OfflineStateOfflineStateDemo" code-lang="vue"}
@@ -28,4 +28,4 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+Props / Slots / Events follow `TxEmptyState`.

@@ -282,7 +282,7 @@ function onKeydown(e: KeyboardEvent) {
 
 .tx-command-palette-enter-active,
 .tx-command-palette-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 0.34s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .tx-command-palette-enter-from,

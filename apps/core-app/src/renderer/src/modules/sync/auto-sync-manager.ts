@@ -1,17 +1,30 @@
-import type { SyncItemInput } from '@talex-touch/utils'
+import type { SyncItemInput, SyncItemOutput } from '@talex-touch/utils'
 import { CloudSyncError, CloudSyncSDK } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasWindow } from '@talex-touch/utils/env'
 import { storages } from '@talex-touch/utils/renderer'
+import {
+  appSettings,
+  intelligenceStorage,
+  openersStorage
+} from '@talex-touch/utils/renderer/storage'
 import { toast } from 'vue-sonner'
 import { getSyncPreferenceState } from '~/modules/auth/sync-preferences'
 import { getAppAuthToken, getAppDeviceId, getAuthBaseUrl } from '~/modules/auth/auth-env'
+import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
+import { marketSourcesStorage } from '~/modules/storage/market-sources'
+import { promptLibraryStorage } from '~/modules/storage/prompt-library'
 import {
+  PLUGIN_SYNC_ALL_SCOPE,
+  buildPluginStorageQualifiedName,
   applyPulledStorageItems,
+  buildDeletedSyncItem,
   buildBlobSyncItem,
   buildSyncItemFromSnapshot,
   collectStorageSnapshots,
-  isLargeSnapshot
+  isLargeSnapshot,
+  isPluginStorageQualifiedName,
+  parsePluginStorageQualifiedName
 } from './sync-item-mapper'
 import {
   clearSyncError,
@@ -50,6 +63,7 @@ const FAILURE_TOAST_THRESHOLD = 3
 const pollingService = PollingService.getInstance()
 const dirtyStorages = new Set<string>()
 const pendingBlobStorages = new Set<string>()
+const knownPluginQualifiedNames = new Set<string>()
 const watcherMap = new Map<string, () => void>()
 
 let started = false
@@ -62,6 +76,27 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null
 let onlineListenerBound = false
 let beforeUnloadListenerBound = false
 let onlineHandler: (() => void) | null = null
+let pluginStorageListener: ((payload: { name?: unknown; fileName?: unknown }) => void) | null = null
+let pluginStorageListenerBound = false
+
+function warmupKnownStoragesForSync(): void {
+  const candidates = [
+    appSettings,
+    openersStorage,
+    intelligenceStorage,
+    marketSourcesStorage,
+    promptLibraryStorage,
+    divisionBoxStorage
+  ]
+
+  for (const storage of candidates) {
+    try {
+      storage.get()
+    } catch {
+      // ignore storage warmup failures; sync runtime will still continue
+    }
+  }
+}
 
 function resolveSdk(): CloudSyncSDK {
   if (sdk) {
@@ -92,6 +127,110 @@ function resolveSdk(): CloudSyncSDK {
 function setQueueDepthByBuffers(): void {
   const total = dirtyStorages.size + pendingBlobStorages.size
   setSyncQueueDepth(total)
+}
+
+function markStorageDirty(qualifiedName: string): void {
+  const normalized = qualifiedName.trim()
+  if (!normalized) {
+    return
+  }
+  dirtyStorages.add(normalized)
+  setQueueDepthByBuffers()
+  scheduleDebouncedPush()
+}
+
+function isPluginScopeMarker(qualifiedName: string): boolean {
+  const normalized = qualifiedName.trim()
+  return (
+    normalized === PLUGIN_SYNC_ALL_SCOPE ||
+    (isPluginStorageQualifiedName(normalized) && normalized.endsWith('::'))
+  )
+}
+
+function isPluginQualifiedStorage(qualifiedName: string): boolean {
+  const normalized = qualifiedName.trim()
+  return isPluginStorageQualifiedName(normalized) && normalized !== PLUGIN_SYNC_ALL_SCOPE
+}
+
+function buildDeleteOpHash(qualifiedName: string, updatedAt: string): string {
+  return `delete:${qualifiedName}:${updatedAt}`
+}
+
+function resolvePluginDeleteCandidates(
+  scope: Set<string>,
+  currentPluginQualifiedNames: Set<string>
+): string[] {
+  const deleted = new Set<string>()
+
+  const collectByPlugin = (pluginName: string) => {
+    for (const known of knownPluginQualifiedNames) {
+      const parsed = parsePluginStorageQualifiedName(known)
+      if (!parsed || parsed.pluginName !== pluginName) {
+        continue
+      }
+      if (!currentPluginQualifiedNames.has(known)) {
+        deleted.add(known)
+      }
+    }
+  }
+
+  for (const marker of scope) {
+    const normalized = marker.trim()
+    if (!isPluginScopeMarker(normalized)) {
+      continue
+    }
+
+    if (normalized === PLUGIN_SYNC_ALL_SCOPE) {
+      for (const known of knownPluginQualifiedNames) {
+        if (!currentPluginQualifiedNames.has(known)) {
+          deleted.add(known)
+        }
+      }
+      continue
+    }
+
+    const parsedMarker = parsePluginStorageQualifiedName(normalized)
+    if (!parsedMarker) {
+      continue
+    }
+    if (parsedMarker.fileName) {
+      if (
+        knownPluginQualifiedNames.has(normalized) &&
+        !currentPluginQualifiedNames.has(normalized)
+      ) {
+        deleted.add(normalized)
+      }
+      continue
+    }
+    collectByPlugin(parsedMarker.pluginName)
+  }
+
+  return Array.from(deleted)
+}
+
+function mergeKnownPluginQualifiedNamesFromPull(items: SyncItemOutput[]): void {
+  for (const item of items) {
+    if (!item.item_id.startsWith('storage::')) {
+      continue
+    }
+
+    const fromMeta =
+      item.meta_plain &&
+      typeof item.meta_plain === 'object' &&
+      typeof (item.meta_plain as { qualified_name?: unknown }).qualified_name === 'string'
+        ? String((item.meta_plain as { qualified_name: string }).qualified_name).trim()
+        : ''
+    const qualifiedName = fromMeta || item.item_id.slice('storage::'.length).trim()
+    if (!isPluginQualifiedStorage(qualifiedName)) {
+      continue
+    }
+
+    if (item.deleted_at) {
+      knownPluginQualifiedNames.delete(qualifiedName)
+      continue
+    }
+    knownPluginQualifiedNames.add(qualifiedName)
+  }
 }
 
 function clearPushTimers(): void {
@@ -260,6 +399,48 @@ function ensureOnlineListener(): void {
   onlineListenerBound = true
 }
 
+function ensurePluginStorageListener(): void {
+  if (pluginStorageListenerBound || !hasWindow() || !window.$channel) {
+    return
+  }
+
+  pluginStorageListener = (payload) => {
+    if (!started || !getSyncPreferenceState().enabled) {
+      return
+    }
+
+    const pluginName = typeof payload?.name === 'string' ? payload.name.trim() : ''
+    if (!pluginName) {
+      markStorageDirty(PLUGIN_SYNC_ALL_SCOPE)
+      return
+    }
+
+    const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : ''
+    const qualifiedName = buildPluginStorageQualifiedName(pluginName, fileName)
+    if (qualifiedName) {
+      markStorageDirty(qualifiedName)
+      return
+    }
+
+    markStorageDirty(PLUGIN_SYNC_ALL_SCOPE)
+  }
+
+  window.$channel.regChannel('plugin:storage:update', pluginStorageListener)
+  pluginStorageListenerBound = true
+}
+
+function cleanupPluginStorageListener(): void {
+  if (!pluginStorageListenerBound || !pluginStorageListener || !hasWindow() || !window.$channel) {
+    pluginStorageListener = null
+    pluginStorageListenerBound = false
+    return
+  }
+
+  window.$channel.unRegChannel('plugin:storage:update', pluginStorageListener)
+  pluginStorageListener = null
+  pluginStorageListenerBound = false
+}
+
 async function flushBeforeUnload(): Promise<void> {
   if (!started) {
     return
@@ -305,6 +486,8 @@ function scheduleBlobBatchPush(): void {
 }
 
 export function registerStorageWatchers(): () => void {
+  const newlyRegistered: string[] = []
+
   for (const [qualifiedName, storage] of storages.entries()) {
     if (watcherMap.has(qualifiedName)) {
       continue
@@ -314,15 +497,22 @@ export function registerStorageWatchers(): () => void {
       if (!started || !getSyncPreferenceState().enabled) {
         return
       }
-      dirtyStorages.add(qualifiedName)
-      setQueueDepthByBuffers()
-      scheduleDebouncedPush()
+      markStorageDirty(qualifiedName)
     }
 
     storage.onUpdate(callback)
     watcherMap.set(qualifiedName, () => {
       storage.offUpdate(callback)
     })
+    newlyRegistered.push(qualifiedName)
+  }
+
+  if (started && newlyRegistered.length > 0) {
+    for (const qualifiedName of newlyRegistered) {
+      dirtyStorages.add(qualifiedName)
+    }
+    setQueueDepthByBuffers()
+    scheduleDebouncedPush()
   }
 
   return () => {
@@ -353,6 +543,7 @@ async function performPull(reason: AutoPullReason): Promise<boolean> {
     if (!canRunSync()) {
       return false
     }
+    registerStorageWatchers()
 
     const client = resolveSdk()
     setSyncStatus('syncing')
@@ -372,6 +563,7 @@ async function performPull(reason: AutoPullReason): Promise<boolean> {
           'PULL_TIMEOUT'
         )
         await applyPulledStorageItems(response.items, client)
+        mergeKnownPluginQualifiedNamesFromPull(response.items)
         cursor = response.next_cursor
 
         if (response.oplog.length < 200) {
@@ -423,6 +615,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       for (const key of pendingBlobStorages) {
         scope.add(key)
       }
+      scope.add(PLUGIN_SYNC_ALL_SCOPE)
     } else {
       for (const key of dirtyStorages) {
         scope.add(key)
@@ -435,13 +628,19 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       pushPromise = null
       return false
     }
+    const scopeMarkers = Array.from(scope).filter(isPluginScopeMarker)
 
     try {
       const snapshots = await collectStorageSnapshots(scope)
       const items: SyncItemInput[] = []
       const processed = new Set<string>()
+      const currentPluginQualifiedNames = new Set<string>()
 
       for (const snapshot of snapshots) {
+        if (isPluginQualifiedStorage(snapshot.qualifiedName)) {
+          currentPluginQualifiedNames.add(snapshot.qualifiedName)
+        }
+
         const isLarge = isLargeSnapshot(snapshot, LARGE_PAYLOAD_THRESHOLD_BYTES)
         if (isLarge && !forceAll && reason !== 'blob-batch') {
           pendingBlobStorages.add(snapshot.qualifiedName)
@@ -465,7 +664,28 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         processed.add(snapshot.qualifiedName)
       }
 
+      const deletedPluginQualifiedNames = resolvePluginDeleteCandidates(
+        scope,
+        currentPluginQualifiedNames
+      )
+      for (const qualifiedName of deletedPluginQualifiedNames) {
+        const nowIso = new Date().toISOString()
+        items.push(
+          buildDeletedSyncItem(
+            qualifiedName,
+            nextSyncOpSeq(),
+            nowIso,
+            buildDeleteOpHash(qualifiedName, nowIso)
+          )
+        )
+        processed.add(qualifiedName)
+      }
+
       if (!items.length) {
+        for (const marker of scopeMarkers) {
+          dirtyStorages.delete(marker)
+          pendingBlobStorages.delete(marker)
+        }
         setSyncStatus('idle')
         scheduleBlobBatchPush()
         setQueueDepthByBuffers()
@@ -480,6 +700,16 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
 
       for (const key of processed) {
         dirtyStorages.delete(key)
+      }
+      for (const marker of scopeMarkers) {
+        dirtyStorages.delete(marker)
+        pendingBlobStorages.delete(marker)
+      }
+      for (const qualifiedName of currentPluginQualifiedNames) {
+        knownPluginQualifiedNames.add(qualifiedName)
+      }
+      for (const qualifiedName of deletedPluginQualifiedNames) {
+        knownPluginQualifiedNames.delete(qualifiedName)
       }
 
       if (result.conflicts.length > 0) {
@@ -524,17 +754,20 @@ export async function triggerManualSync(reason: 'user' | 'focus' | 'online'): Pr
 export async function startAutoSync(): Promise<void> {
   if (started) {
     registerStorageWatchers()
+    ensurePluginStorageListener()
     return
   }
   if (!canRunSync()) {
     return
   }
 
+  warmupKnownStoragesForSync()
   started = true
   clearPushTimers()
   clearRetryTimer()
   registerStorageWatchers()
   ensureOnlineListener()
+  ensurePluginStorageListener()
   ensureBeforeUnloadListener()
 
   setSyncStatus('idle')
@@ -562,7 +795,7 @@ export async function startAutoSync(): Promise<void> {
 }
 
 export function stopAutoSync(reason = 'stop'): void {
-  if (!started && !watcherMap.size) {
+  if (!started && !watcherMap.size && !pluginStorageListenerBound) {
     return
   }
 
@@ -571,6 +804,7 @@ export function stopAutoSync(reason = 'stop'): void {
   clearRetryTimer()
   dirtyStorages.clear()
   pendingBlobStorages.clear()
+  knownPluginQualifiedNames.clear()
   setQueueDepthByBuffers()
   cleanupStorageWatchers()
 
@@ -583,6 +817,7 @@ export function stopAutoSync(reason = 'stop'): void {
     onlineListenerBound = false
     onlineHandler = null
   }
+  cleanupPluginStorageListener()
 
   if (reason === 'logout' || reason === 'user-disabled') {
     setSyncStatus('paused')

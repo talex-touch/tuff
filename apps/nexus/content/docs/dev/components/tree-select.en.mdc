@@ -1,19 +1,19 @@
 ---
-title: "TreeSelect 树选择器"
-description: "用于在下拉浮层中选择树形数据，支持搜索、单选/多选。"
+title: "TreeSelect"
+description: "Component documentation for TreeSelect."
 category: Form
 syncStatus: migrated
 ---
-# TreeSelect 树选择器
+# TreeSelect
 
-用于在下拉浮层中选择树形数据，支持搜索、单选/多选。
+Component documentation for TreeSelect.
 
 <script setup lang="ts">
 import TreeSelectBasicDemo from '~/components/content/demos/TreeSelectBasicDemo.vue'
 import TreeSelectBasicDemoSource from '~/components/content/demos/TreeSelectBasicDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### TreeSelect
 :::TuffDemoWrapper{demo="TreeSelectTreeSelectDemo" code-lang="vue"}
@@ -82,65 +82,65 @@ code: |
 ---
 :::
 
-## 注意事项
+## Notes
 
-- `multiple` 为 true 时，`modelValue` 需要为数组；清空会回传空数组。
-- `multiple` 为 false 时，清空会回传 `undefined`。
+- When `multiple` is true, `modelValue` must be an array; clearing returns an empty array.
+- When `multiple` is false, clearing returns `undefined`.
 
 ## API
 
 ### TxTreeSelect Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | 当前值（v-model） |
-| `nodes` | `TreeSelectNode[]` | `[]` | 数据源 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `placeholder` | `string` | `'请选择'` | 占位文本 |
-| `searchable` | `boolean` | `true` | 是否可搜索 |
-| `clearable` | `boolean` | `true` | 是否可清空 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
-| `dropdownOffset` | `number` | `6` | 浮层偏移 |
-| `dropdownWidth` | `number` | `0` | 浮层宽度（0 表示跟随触发器） |
-| `dropdownMaxWidth` | `number` | `480` | 浮层最大宽度 |
-| `dropdownMaxHeight` | `number` | `320` | 浮层最大高度 |
-| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | 默认展开 key |
+| `modelValue` | `string \| number \| Array<string \| number> \| undefined` | - | TextValue（v-model） |
+| `nodes` | `TreeSelectNode[]` | `[]` | Description for nodes. |
+| `multiple` | `boolean` | `false` | Description for multiple. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `placeholder` | `string` | `'Text'` | Description for placeholder. |
+| `searchable` | `boolean` | `true` | Description for searchable. |
+| `clearable` | `boolean` | `true` | Description for clearable. |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | Description for placement. |
+| `dropdownOffset` | `number` | `6` | Description for dropdownOffset. |
+| `dropdownWidth` | `number` | `0` | Description for dropdownWidth. |
+| `dropdownMaxWidth` | `number` | `480` | Description for dropdownMaxWidth. |
+| `dropdownMaxHeight` | `number` | `320` | Description for dropdownMaxHeight. |
+| `defaultExpandedKeys` | `Array<string \| number>` | `[]` | DefaultText key |
 
 ### TreeSelectNode
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `key` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 是否禁用 |
-| `children` | `TreeSelectNode[]` | 子节点 |
+| `key` | `string \| number` | Description for key. |
+| `label` | `string` | Description for label. |
+| `disabled` | `boolean` | Description for disabled. |
+| `children` | `TreeSelectNode[]` | Description for children. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v)` | v-model 更新 |
-| `change` | `(v)` | 值变化 |
-| `open` | - | 打开浮层 |
-| `close` | - | 关闭浮层 |
+| `update:modelValue` | `(v)` | Description for update:modelValue. |
+| `change` | `(v)` | Description for change. |
+| `open` | - | Description for open. |
+| `close` | - | Description for close. |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `node` | 自定义节点内容（slot props: `node`, `level`, `expanded`, `selected`） |
+| `node` | Description for node. |
 
 ### Expose
 
-| 名称 | 类型 | 说明 |
+| Name | Type | Description |
 |------|------|------|
-| `open()` | `() => void` | 打开 |
-| `close()` | `() => void` | 关闭 |
-| `toggle()` | `() => void` | 切换 |
-| `focus()` | `() => void` | 聚焦触发器 |
-| `blur()` | `() => void` | 失焦触发器 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v) => void` | 设置值 |
-| `getValue()` | `() => any` | 获取当前值 |
-| `getCheckedKeys()` | `() => Array<string \| number>` | 获取选中 key（单选也返回数组） |
+| `open()` | `() => void` | Description for open(). |
+| `close()` | `() => void` | Description for close(). |
+| `toggle()` | `() => void` | Description for toggle(). |
+| `focus()` | `() => void` | Description for focus(). |
+| `blur()` | `() => void` | Description for blur(). |
+| `clear()` | `() => void` | Description for clear(). |
+| `setValue(v)` | `(v) => void` | Description for setValue(v). |
+| `getValue()` | `() => any` | Description for getValue(). |
+| `getCheckedKeys()` | `() => Array<string \| number>` | Text key（Text） |

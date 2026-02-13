@@ -6,10 +6,12 @@ import type {
 } from '@talex-touch/utils'
 import type { DownloadCenterModule } from '../download/download-center'
 import type { NotificationService } from '../download/notification-service'
+import { spawn } from 'node:child_process'
 import * as crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import * as path from 'node:path'
+import process from 'node:process'
 import {
   AppPreviewChannel,
   DownloadModule,
@@ -58,6 +60,7 @@ interface UpdateSystemConfig {
 
 const RENDERER_OVERRIDE_STATE_FILE = 'renderer-override.json'
 const RENDERER_OVERRIDE_DIR = 'renderer-override'
+const ENABLE_RENDERER_OVERRIDE = process.env.TUFF_ENABLE_RENDERER_OVERRIDE === '1'
 
 interface RendererOverrideState {
   version: string
@@ -318,6 +321,10 @@ export class UpdateSystem {
   }
 
   async scheduleRendererOverride(release: GitHubRelease): Promise<void> {
+    if (!ENABLE_RENDERER_OVERRIDE) {
+      return
+    }
+
     try {
       const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
       await this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest)
@@ -367,6 +374,10 @@ export class UpdateSystem {
     release: GitHubRelease,
     manifest: UpdateReleaseManifest | null
   ): Promise<void> {
+    if (!ENABLE_RENDERER_OVERRIDE) {
+      return
+    }
+
     const artifact = this.resolveManifestArtifact(manifest, 'renderer')
     if (!artifact) {
       return
@@ -1302,9 +1313,9 @@ export class UpdateSystem {
 
   private getInstallerExtensionScore(filename: string, platform: string): number {
     if (platform === 'darwin') {
+      if (filename.endsWith('.app.zip')) return 180
       if (filename.endsWith('.dmg')) return 140
       if (filename.endsWith('.pkg')) return 130
-      if (filename.endsWith('.app.zip')) return 120
       if (filename.endsWith('.zip')) return 90
       return 0
     }
@@ -1414,7 +1425,117 @@ export class UpdateSystem {
    */
   private async triggerInstallation(destination: string, filename: string): Promise<void> {
     const filePath = path.join(destination, filename)
+    if (process.platform === 'darwin' && (await this.tryInstallMacAppBundle(filePath))) {
+      return
+    }
     await shell.openPath(filePath)
     console.log(`[UpdateSystem] Opened installer: ${filePath}`)
+  }
+
+  private async tryInstallMacAppBundle(packagePath: string): Promise<boolean> {
+    const lower = packagePath.toLowerCase()
+    if (!app.isPackaged || (!lower.endsWith('.app') && !lower.endsWith('.zip'))) {
+      return false
+    }
+
+    const targetAppPath = this.resolveCurrentMacAppBundlePath()
+    if (!targetAppPath) {
+      return false
+    }
+
+    const stageRoot = path.join(
+      this.storageRoot,
+      'modules',
+      'update-packages',
+      '.mac-install-stage',
+      `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
+    )
+
+    try {
+      await fse.ensureDir(stageRoot)
+
+      const scriptPath = path.join(stageRoot, 'apply-update.sh')
+      const logPath = path.join(stageRoot, 'apply-update.log')
+      const scriptContent = [
+        '#!/bin/bash',
+        `SRC_PACKAGE=${JSON.stringify(packagePath)}`,
+        `DEST_APP=${JSON.stringify(targetAppPath)}`,
+        `STAGE_ROOT=${JSON.stringify(stageRoot)}`,
+        `PID=${process.pid}`,
+        `LOG_FILE=${JSON.stringify(logPath)}`,
+        'WORK_APP="$STAGE_ROOT/new.app"',
+        'EXTRACT_DIR="$STAGE_ROOT/extract"',
+        '',
+        'echo "[self-update] started" > "$LOG_FILE"',
+        'mkdir -p "$STAGE_ROOT" >> "$LOG_FILE" 2>&1 || exit 0',
+        'for i in {1..90}; do',
+        '  if ! kill -0 "$PID" >/dev/null 2>&1; then',
+        '    break',
+        '  fi',
+        '  sleep 1',
+        'done',
+        '',
+        'prepare_source() {',
+        '  rm -rf "$WORK_APP" >> "$LOG_FILE" 2>&1 || true',
+        '  if [[ "$SRC_PACKAGE" == *.app ]]; then',
+        '    ditto "$SRC_PACKAGE" "$WORK_APP" >> "$LOG_FILE" 2>&1',
+        '    return $?',
+        '  fi',
+        '',
+        '  rm -rf "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || true',
+        '  mkdir -p "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || return 1',
+        '  ditto -x -k "$SRC_PACKAGE" "$EXTRACT_DIR" >> "$LOG_FILE" 2>&1 || return 1',
+        '  APP_CANDIDATE="$(/usr/bin/find "$EXTRACT_DIR" -maxdepth 6 -type d -name "*.app" | /usr/bin/head -n 1)"',
+        '  if [ -z "$APP_CANDIDATE" ]; then',
+        '    echo "[self-update] cannot find .app in archive: $SRC_PACKAGE" >> "$LOG_FILE"',
+        '    return 1',
+        '  fi',
+        '  ditto "$APP_CANDIDATE" "$WORK_APP" >> "$LOG_FILE" 2>&1',
+        '}',
+        '',
+        'if prepare_source && rm -rf "$DEST_APP" >> "$LOG_FILE" 2>&1 && ditto "$WORK_APP" "$DEST_APP" >> "$LOG_FILE" 2>&1; then',
+        '  xattr -dr com.apple.quarantine "$DEST_APP" >> "$LOG_FILE" 2>&1 || true',
+        '  open "$DEST_APP" >> "$LOG_FILE" 2>&1 || true',
+        '  rm -rf "$STAGE_ROOT" >/dev/null 2>&1 || true',
+        'else',
+        '  open "$DEST_APP" >> "$LOG_FILE" 2>&1 || open "$SRC_PACKAGE" >> "$LOG_FILE" 2>&1 || true',
+        'fi',
+        'exit 0',
+        ''
+      ].join('\n')
+
+      await fs.writeFile(scriptPath, scriptContent, { mode: 0o755 })
+
+      const installerProcess = spawn('/bin/bash', [scriptPath], {
+        detached: true,
+        stdio: 'ignore'
+      })
+      installerProcess.unref()
+
+      setTimeout(() => {
+        app.quit()
+      }, 1200)
+      console.log('[UpdateSystem] Scheduled macOS app replacement install', {
+        from: packagePath,
+        to: targetAppPath
+      })
+      return true
+    } catch (error) {
+      await fse.remove(stageRoot).catch(() => null)
+      console.warn('[UpdateSystem] Failed to run macOS app replacement install:', error)
+      return false
+    }
+  }
+
+  private resolveCurrentMacAppBundlePath(): string | null {
+    if (process.platform !== 'darwin') {
+      return null
+    }
+    const exePath = app.getPath('exe')
+    const appBundlePath = path.resolve(exePath, '..', '..', '..')
+    if (!appBundlePath.toLowerCase().endsWith('.app')) {
+      return null
+    }
+    return appBundlePath
   }
 }

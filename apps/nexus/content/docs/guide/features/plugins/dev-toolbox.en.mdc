@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `dev-toolbox`
-- Commands: `dev / toolbox / 工具箱 / 链接`
+- Commands: `dev / toolbox`
 
 ## Core Capabilities
-- 开发工具箱：常用链接导航
+- Developer toolbox: quick access to common links.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

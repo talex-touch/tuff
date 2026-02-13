@@ -110,6 +110,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private macAutoUpdaterDownloadInFlight = false
   private macUpdateDownloadedVersion: string | null = null
   private macUpdateReadyNotifiedVersion: string | null = null
+  private macAutoUpdaterConfigMissingLogged = false
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
@@ -559,8 +560,28 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     )
   }
 
+  private getMacAutoUpdaterConfigPath(): string {
+    return path.join(process.resourcesPath, 'app-update.yml')
+  }
+
   private isMacAutoUpdaterEnabled(): boolean {
-    return app.isPackaged && process.platform === 'darwin'
+    if (!app.isPackaged || process.platform !== 'darwin') {
+      return false
+    }
+
+    const configPath = this.getMacAutoUpdaterConfigPath()
+    if (fs.existsSync(configPath)) {
+      return true
+    }
+
+    if (!this.macAutoUpdaterConfigMissingLogged) {
+      this.macAutoUpdaterConfigMissingLogged = true
+      updateLog.warn('macOS autoUpdater disabled because app-update.yml is missing', {
+        meta: { configPath }
+      })
+    }
+
+    return false
   }
 
   private setupMacAutoUpdater(): void {

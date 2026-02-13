@@ -1,12 +1,12 @@
 ---
-title: "Fusion 交融"
-description: "两个元素交融与分开的视觉组件。"
+title: "Fusion"
+description: "Component documentation for Fusion."
 category: Basic
 syncStatus: migrated
 ---
-# Fusion 交融
+# Fusion
 
-两个元素交融与分开的视觉组件。
+Component documentation for Fusion.
 
 <script setup lang="ts">
 import FusionBasicDemo from '~/components/content/demos/FusionBasicDemo.vue'
@@ -40,7 +40,7 @@ import FusionTwoIconButtonsDemo from '~/components/content/demos/FusionTwoIconBu
 import FusionTwoIconButtonsDemoSource from '~/components/content/demos/FusionTwoIconButtonsDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Fusion
 :::TuffDemoWrapper{demo="FusionFusionDemo" code-lang="vue"}
@@ -128,7 +128,7 @@ code: |
 ---
 :::
 
-## 实际场景
+## Real-world Scenarios
 
 ### Button + Tooltip Bubble
 
@@ -1474,22 +1474,22 @@ code: |
 
 ### TxFusion Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean \| undefined` | `undefined` | 是否交融（v-model）；`undefined` 时为非受控模式 |
-| `disabled` | `boolean` | `false` | 是否禁用 |
-| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | 触发方式；`manual` 仅由 v-model 控制 |
-| `direction` | `'x' \| 'y'` | `'x'` | 分裂方向 |
-| `gap` | `number` | `40` | 分裂距离 |
-| `duration` | `number` | `260` | 过渡时长（ms） |
+| `modelValue` | `boolean \| undefined` | `undefined` | Text（v-model）；`undefined` Text |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | TriggerText；`manual` Text v-model Text |
+| `direction` | `'x' \| 'y'` | `'x'` | TextDirection |
+| `gap` | `number` | `40` | Description for gap. |
+| `duration` | `number` | `260` | Description for duration. |
 | `easing` | `string` | `'cubic-bezier(0.2, 0.8, 0.2, 1)'` | easing |
-| `blur` | `number` | `19` | gooey blur 强度 |
-| `alpha` | `number` | `29` | gooey 阈值（越大越“粘”） |
-| `alphaOffset` | `number` | `-10` | gooey 偏移 |
+| `blur` | `number` | `19` | Description for blur. |
+| `alpha` | `number` | `29` | Description for alpha. |
+| `alphaOffset` | `number` | `-10` | Description for alphaOffset. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `change` | `(v: boolean)` | 状态变化 |
+| `change` | `(v: boolean)` | Description for change. |
 | `update:modelValue` | `(v: boolean)` | v-model |

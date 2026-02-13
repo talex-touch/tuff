@@ -121,6 +121,11 @@ export class TouchApp implements TalexTouch.TouchApp {
       return null
     }
 
+    if (process.env.TUFF_ENABLE_RENDERER_OVERRIDE !== '1') {
+      this.disableRendererOverride(state, 'renderer override disabled by default')
+      return null
+    }
+
     const indexPath = path.join(state.path, 'index.html')
     if (!fse.existsSync(indexPath)) {
       this.disableRendererOverride(state, 'override index.html missing')

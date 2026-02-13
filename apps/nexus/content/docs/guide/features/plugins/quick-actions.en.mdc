@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `quick.actions`
-- Commands: `quick / actions / 快捷 / 系统快捷`
+- Commands: `quick / actions`
 
 ## Core Capabilities
-- 系统快捷动作：锁屏、静音与常用设置入口
+- System quick actions: lock screen, mute, and common settings.
 - Supported platforms: `win32, darwin`
 
 ## Config & Data

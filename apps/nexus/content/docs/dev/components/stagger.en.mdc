@@ -1,12 +1,12 @@
 ---
-title: "Stagger 依次进入"
-description: "用于列表/节点依次进入（enter/leave）动画。"
+title: "Stagger"
+description: "/enter/leave"
 category: Layout
 syncStatus: migrated
 ---
-# Stagger 依次进入
+# Stagger
 
-用于列表/节点依次进入（enter/leave）动画。
+/enter/leave
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -27,7 +27,7 @@ function remove() {
 }
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Stagger
 :::TuffDemoWrapper{demo="StaggerStaggerDemo" code-lang="vue"}
@@ -45,12 +45,12 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `tag` | `string` | `'div'` | 容器 tag |
-| `appear` | `boolean` | `true` | 是否首屏也执行 enter |
+| `tag` | `string` | `'div'` | Description for tag. |
+| `appear` | `boolean` | `true` | Description for appear. |
 | `name` | `string` | `'tx-stagger'` | TransitionGroup name |
-| `duration` | `number` | `180` | 动画时长（ms） |
-| `delayStep` | `number` | `24` | 相邻元素延迟（ms） |
-| `delayBase` | `number` | `0` | 基础延迟（ms） |
-| `easing` | `'ease'\|'ease-in'\|'ease-out'\|'ease-in-out'\|'linear'` | `'ease-out'` | 缓动 |
+| `duration` | `number` | `180` | Description for duration. |
+| `delayStep` | `number` | `24` | Description for delayStep. |
+| `delayBase` | `number` | `0` | Description for delayBase. |
+| `easing` | `'ease'\| 'ease-in'\| 'ease-out'\| 'ease-in-out'\| 'linear'` | `'ease-out'` | Description for easing. |

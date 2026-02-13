@@ -1,34 +1,34 @@
 ---
-title: "Select 选择器"
-description: "下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。"
+title: "Select"
+description: "Floating UI"
 category: Form
 status: beta
 since: 1.0.0
 tags: [select, form, dropdown]
 syncStatus: migrated
 ---
-# Select 选择器
+# Select
 
-下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。
+Floating UI
 
 
-## 基础用法
+## Basic Usage
 
 ### Select
 :::TuffDemoWrapper{demo="SelectSelectDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffSelect v-model="value" placeholder="请选择">
-      <TuffSelectItem value="option1" label="选项 1" />
-      <TuffSelectItem value="option2" label="选项 2" />
-      <TuffSelectItem value="option3" label="选项 3" />
+    <TuffSelect v-model="value" placeholder="Select an option">
+      <TuffSelectItem value="option1" label="Option 1" />
+      <TuffSelectItem value="option2" label="Option 2" />
+      <TuffSelectItem value="option3" label="Option 3" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## 远程搜索（可编辑）
+## Remote Search (Editable)
 
 ### Select (remote searchable)
 :::TuffDemoWrapper{demo="SelectSelectRemoteSearchableDemo" code-lang="vue"}
@@ -54,7 +54,7 @@ code: |
 ---
 :::
 
-## 可搜索
+## Searchable
 
 ### Select (searchable)
 :::TuffDemoWrapper{demo="SelectSelectSearchableDemo" code-lang="vue"}
@@ -68,37 +68,37 @@ code: |
 ---
 :::
 
-## 禁用状态
+## Disabled State
 
 ### Select (disabled)
 :::TuffDemoWrapper{demo="SelectSelectDisabledDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffSelect v-model="value" placeholder="禁用状态" disabled>
-      <TuffSelectItem value="option1" label="选项 1" />
+    <TuffSelect v-model="value" placeholder="Disabled state" disabled>
+      <TuffSelectItem value="option1" label="Option 1" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## 禁用选项
+## Disabled Options
 
 ### Select (disabled option)
 :::TuffDemoWrapper{demo="SelectSelectDisabledOptionDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TuffSelect v-model="value" placeholder="请选择">
-      <TuffSelectItem value="option1" label="可选项 1" />
-      <TuffSelectItem value="option2" label="禁用选项" disabled />
-      <TuffSelectItem value="option3" label="可选项 2" />
+    <TuffSelect v-model="value" placeholder="Select an option">
+      <TuffSelectItem value="option1" label="TextOption 1" />
+      <TuffSelectItem value="option2" label="DisabledOption" disabled />
+      <TuffSelectItem value="option3" label="TextOption 2" />
     </TuffSelect>
   </template>
 ---
 :::
 
-## 滚动面板
+## Scroll Panel
 
 ### Select (scrollable dropdown)
 :::TuffDemoWrapper{demo="SelectSelectScrollableDropdownDemo" code-lang="vue"}
@@ -116,30 +116,30 @@ code: |
 
 ### TuffSelect Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
+| Prop | Description | Type | Default |
 |--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | `''` |
-| placeholder | 占位文本 | `string` | `'请选择'` |
-| disabled | 是否禁用 | `boolean` | `false` |
-| searchable | 是否可搜索 | `boolean` | `false` |
-| searchPlaceholder | 搜索框占位 | `string` | `'Search'` |
-| editable | 是否可编辑（在触发器输入） | `boolean` | `false` |
-| remote | 是否远程搜索（输入时触发 `search`） | `boolean` | `false` |
-| dropdownMaxHeight | 下拉面板最大高度 | `number` | `280` |
-| dropdownOffset | 触发器与面板间距 | `number` | `6` |
+| modelValue / v-model | Description for modelValue / v-model. | `string \| number` | `''` |
+| placeholder | Description for placeholder. | `string` | `'Text'` |
+| disabled | Description for disabled. | `boolean` | `false` |
+| searchable | Description for searchable. | `boolean` | `false` |
+| searchPlaceholder | Description for searchPlaceholder. | `string` | `'Search'` |
+| editable | Description for editable. | `boolean` | `false` |
+| remote | Description for remote. | `boolean` | `false` |
+| dropdownMaxHeight | Description for dropdownMaxHeight. | `number` | `280` |
+| dropdownOffset | Description for dropdownOffset. | `number` | `6` |
 
 ### TuffSelect Events
 
-| 事件名 | 说明 | 回调参数 |
+| Event | Description | Params |
 |--------|------|----------|
-| change | 选中值改变时触发 | `(value: string \| number) => void` |
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| search | 输入触发搜索（remote 模式） | `(query: string) => void` |
+| change | Description for change. | `(value: string \| number) => void` |
+| update:modelValue | Description for update:modelValue. | `(value: string \| number) => void` |
+| search | Description for search. | `(query: string) => void` |
 
 ### TuffSelectItem Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
+| Prop | Description | Type | Default |
 |--------|------|------|--------|
-| value | 选项值 | `string \| number` | - |
-| label | 选项标签 | `string` | - |
-| disabled | 是否禁用 | `boolean` | `false` |
+| value | Description for value. | `string \| number` | - |
+| label | Description for label. | `string` | - |
+| disabled | Description for disabled. | `boolean` | `false` |

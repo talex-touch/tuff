@@ -48,7 +48,7 @@ code: |
   
   // Resolve message
   const text = resolveI18nMessage('$i18n:devServer.disconnected')
-  // => '开发服务器已断开'
+  // => 'text'
   
   // Non-i18n strings pass through unchanged
   const plain = resolveI18nMessage('Hello World')
@@ -66,32 +66,32 @@ code: |
 
 | Key | English | Chinese |
 |-----|---------|---------|
-| `devServer.disconnected` | Dev Server Disconnected | 开发服务器已断开 |
-| `devServer.reconnected` | Dev Server Reconnected | 开发服务器已重连 |
-| `devServer.connectionLost` | Dev Server connection lost | 开发服务器连接已断开 |
-| `devServer.checkServer` | Check if Dev Server is running... | 请检查开发服务器是否正常运行... |
+| `devServer.disconnected` | Dev Server Disconnected | See zh translation. |
+| `devServer.reconnected` | Dev Server Reconnected | See zh translation. |
+| `devServer.connectionLost` | Dev Server connection lost | See zh translation. |
+| `devServer.checkServer` | Check if Dev Server is running... | See zh translation. |
 
 **FlowTransferKeys**
 
 | Key | English | Chinese |
 |-----|---------|---------|
-| `flowTransfer.shareComplete` | Share Complete | 分享完成 |
-| `flowTransfer.shareFailed` | Share Failed | 分享失败 |
-| `flowTransfer.copiedToClipboard` | Copied to Clipboard | 已复制到剪贴板 |
+| `flowTransfer.shareComplete` | Share Complete | See zh translation. |
+| `flowTransfer.shareFailed` | Share Failed | See zh translation. |
+| `flowTransfer.copiedToClipboard` | Copied to Clipboard | See zh translation. |
 
 **PluginKeys**
 
 | Key | English | Chinese |
 |-----|---------|---------|
-| `plugin.loadFailed` | Plugin Load Failed | 插件加载失败 |
-| `plugin.manifestInvalid` | Invalid Manifest | 清单文件无效 |
+| `plugin.loadFailed` | Plugin Load Failed | See zh translation. |
+| `plugin.manifestInvalid` | Invalid Manifest | See zh translation. |
 
 **SystemKeys**
 
 | Key | English | Chinese |
 |-----|---------|---------|
-| `system.networkError` | Network Error | 网络错误 |
-| `system.timeout` | Request Timeout | 请求超时 |
+| `system.networkError` | Network Error | See zh translation. |
+| `system.timeout` | Request Timeout | See zh translation. |
 
 ## Adding New Messages
 
@@ -129,8 +129,8 @@ code: |
   // packages/utils/i18n/locales/zh.json
   {
     "myModule": {
-      "success": "操作成功",
-      "error": "操作失败"
+      "success": "Text",
+      "error": "Text"
     }
   }
 ---
@@ -167,7 +167,7 @@ code: |
   
   i18nResolver.addMessages('zh', {
     myPlugin: {
-      hello: '插件问好'
+      hello: 'Text'
     }
   })
 ---

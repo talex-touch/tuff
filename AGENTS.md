@@ -443,7 +443,7 @@ provide(TX_ICON_CONFIG_KEY, {
   <TuffIcon :icon="{ type: 'class', value: 'i-ri-home-line' }" />
   <TuffIcon :icon="{ type: 'emoji', value: '🚀' }" :size="24" />
   <TuffIcon :icon="{ type: 'file', value: '/path/to/icon.svg' }" colorful />
-  
+
   <!-- 使用 name简写 -->
   <TuffIcon name="i-ri-star-line" />
   <TuffIcon name="chevron-down" /> <!-- 内置图标 -->
@@ -555,6 +555,7 @@ interface TuffMeta {
 - 使用 log4js 进行结构化日志记录，带命名空间、时间戳和彩色输出
 - 请不要写太多注释，尽量保持精简，保留必要的 EnglishTSDoc 即可
 - dev 环境中 console debug 主进程看不到日志，如果是调试可以用 console.log 打印，记得清空
+- NeuxsApp `app.vue` 中新增自定义组件请显式 import；SSR 页面里依赖浏览器态/用户态/时间或 Teleport 的组件用 `ClientOnly`，避免组件未解析或 hydration mismatch
 - 优先使用 `packages/utils/common/utils/polling.ts` 的 `PollingService` 承担周期任务，避免各模块重复实现 scheduler
 - Nexus 发布日志统一结构：`notes`/`notesHtml` 必须为 `{ zh: string, en: string }`，语言代码只允许 `zh`/`en`
 - 复杂流程优先抽取到 `packages/utils` 中的公共 utils，减少跨模块重复实现和 utils 冲突

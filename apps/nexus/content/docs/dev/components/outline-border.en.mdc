@@ -1,14 +1,14 @@
 ---
-title: "OutlineBorder 描边容器"
-description: "`TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。"
+title: "OutlineBorder"
+description: "`TxOutlineBorder` border/ring/ring-offsetoverflow/clipPath/mask slot"
 category: Basic
 syncStatus: migrated
 ---
-# OutlineBorder 描边容器
+# OutlineBorder
 
-`TxOutlineBorder` 用于给任意内容添加可配置的描边（border/ring/ring-offset），并提供多种裁切方式（overflow/clipPath/mask）。它本身不关心内部内容形态，完全通过 slot 组合。
+`TxOutlineBorder` border/ring/ring-offsetoverflow/clipPath/mask slot
 
-## 基础用法
+## Basic Usage
 
 ### Basic
 :::TuffDemoWrapper{demo="OutlineBorderBasicDemo" code-lang="vue"}
@@ -36,7 +36,7 @@ code: |
 ---
 :::
 
-## Mask 裁切（示例：六边形）
+## Mask Clipping (Example: Hexagon)
 
 ### Mask Clip
 :::TuffDemoWrapper{demo="OutlineBorderMaskClipDemo" code-lang="vue"}
@@ -63,20 +63,20 @@ code: |
 
 ### Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| as | `string` | `div` | 根节点标签 |
-| variant | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | 描边模式 |
-| shape | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | 默认形状（影响默认圆角与 auto 裁切形状） |
-| borderRadius | `string \| number` | - | 圆角（支持 px / CSS 字符串 / `inherit`） |
-| borderWidth | `string \| number` | `1px` | border 宽度（variant=border） |
-| borderColor | `string` | `var(--tx-border-color)` | border 颜色 |
-| borderStyle | `'solid' \| 'dashed' \| 'dotted'` | `solid` | border 样式 |
-| ringWidth | `string \| number` | - | ring 宽度（默认回退到 borderWidth） |
-| ringColor | `string` | - | ring 颜色（默认回退到 borderColor） |
-| offset | `string \| number` | `2px` | ring-offset 宽度（variant=ring-offset） |
-| offsetBg | `string` | `var(--tx-bg-color)` | ring-offset 颜色（variant=ring-offset） |
-| padding | `string \| number` | `0` | 内容内边距 |
-| clipMode | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `overflow` | 裁切方式 |
-| clipShape | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `auto` | 裁切形状 |
+| as | `string` | `div` | Description for as. |
+| variant | `'border' \| 'ring' \| 'ring-offset' \| 'ring-inset'` | `'ring-offset'` | Description for variant. |
+| shape | `'circle' \| 'rect' \| 'squircle'` | `'circle'` | DefaultText（TextDefaultText auto Text） |
+| borderRadius | `string \| number` | - | Text（Text px / CSS Text / `inherit`） |
+| borderWidth | `string \| number` | `1px` | border Text（variant=border） |
+| borderColor | `string` | `var(--tx-border-color)` | Description for borderColor. |
+| borderStyle | `'solid' \| 'dashed' \| 'dotted'` | `solid` | border Text |
+| ringWidth | `string \| number` | - | ring Text（DefaultText borderWidth） |
+| ringColor | `string` | - | Description for ringColor. |
+| offset | `string \| number` | `2px` | ring-offset Text（variant=ring-offset） |
+| offsetBg | `string` | `var(--tx-bg-color)` | Description for offsetBg. |
+| padding | `string \| number` | `0` | ContentText |
+| clipMode | `'none' \| 'overflow' \| 'clipPath' \| 'mask'` | `overflow` | Description for clipMode. |
+| clipShape | `'auto' \| 'circle' \| 'rounded' \| 'squircle' \| 'hexagon'` | `auto` | Description for clipShape. |
 

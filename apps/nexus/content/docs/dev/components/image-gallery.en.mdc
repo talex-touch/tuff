@@ -1,12 +1,12 @@
 ---
-title: "ImageGallery 图片预览"
-description: "用于图片网格与 Modal 预览。"
+title: "ImageGallery"
+description: "Modal"
 category: Data
 syncStatus: migrated
 ---
-# ImageGallery 图片预览
+# ImageGallery
 
-用于图片网格与 Modal 预览。
+Modal
 
 <script setup lang="ts">
 const items = [
@@ -16,7 +16,7 @@ const items = [
 ]
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### ImageGallery
 :::TuffDemoWrapper{demo="ImageGalleryImageGalleryDemo" code-lang="vue"}

@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `browser.bookmarks`
-- Commands: `bookmark / bookmarks / 收藏 / 网址`
+- Commands: `bookmark / bookmarks`
 
 ## Core Capabilities
-- 浏览器收藏：收藏网址、最近访问、快速打开
+- Browser bookmarks: saved URLs, recent visits, and quick open.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

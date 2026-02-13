@@ -22,6 +22,11 @@ const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/uti
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
+const disableNitroMinify = process.env.NUXT_DISABLE_NITRO_MINIFY === 'true'
+const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
+const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
+const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
+const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
 export default defineNuxtConfig({
@@ -38,6 +43,7 @@ export default defineNuxtConfig({
     '@sentry/nuxt/module',
     ...(useCloudflareDev ? ['nitro-cloudflare-dev'] : []),
   ],
+  ssr: !disableSsr,
 
   devtools: {
     enabled: false,
@@ -48,8 +54,12 @@ export default defineNuxtConfig({
       viewport: 'width=device-width,initial-scale=1',
       link: [
         { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
-        { rel: 'icon', type: 'image/svg+xml', href: '/nuxt.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        { rel: 'stylesheet', href: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css' },
+      ],
+      script: [
+        { src: 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js', defer: true },
       ],
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -79,13 +89,7 @@ export default defineNuxtConfig({
             instance: remarkMermaid,
           },
         },
-        highlight: {
-          theme: {
-            default: 'github-light',
-            light: 'github-light',
-            dark: 'github-dark',
-          },
-        },
+        highlight: false,
         toc: {
           depth: 4,
           searchDepth: 4,
@@ -138,7 +142,7 @@ export default defineNuxtConfig({
   experimental: {
     // when using generate, payload js assets included in sw precache manifest
     // but missing on offline, disabling extraction it until fixed
-    payloadExtraction: false,
+    payloadExtraction: enablePayloadExtraction,
     renderJsonPayloads: true,
     typedPages: true,
   },
@@ -146,6 +150,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-09-23',
 
   nitro: {
+    minify: !disableNitroMinify,
+    sourceMap: !disableNitroSourceMap,
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
       ? {
@@ -161,11 +167,17 @@ export default defineNuxtConfig({
         target: 'esnext',
       },
     },
-    prerender: {
-      crawlLinks: false,
-      routes: ['/'],
-      ignore: ['/hi'],
-    },
+    prerender: disablePrerender
+      ? {
+          crawlLinks: false,
+          ignore: ['/**'],
+          routes: [],
+        }
+      : {
+          crawlLinks: false,
+          routes: ['/'],
+          ignore: ['/hi'],
+        },
   },
 
   vite: {

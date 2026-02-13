@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `code-snippets.search`
-- Commands: `code / snippet / 代码 / 模板`
+- Commands: `code / snippet`
 
 ## Core Capabilities
-- 代码片段库：按语言/标签管理与复制模板
+- Code snippets library: manage and copy templates by language/tag.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

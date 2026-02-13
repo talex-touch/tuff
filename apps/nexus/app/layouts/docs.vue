@@ -15,8 +15,8 @@ const outlineVisible = ref(false)
       <div class="pointer-events-none absolute inset-0 overflow-hidden -z-10">
         <div class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
       </div>
-      <TxGradualBlur position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
-      <TxGradualBlur position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
+      <TxGradualBlur exponential :div-count="10" position="top" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
+      <TxGradualBlur exponential :div-count="10" position="bottom" height="72px" :strength="1.3" :opacity="0.85" :z-index="-80" target="page" />
       <TheHeader title="Tuff Docs" class="z-30" />
       <div class="relative flex flex-1 justify-center px-4 pb-20 pt-20 lg:px-10 sm:px-6">
         <div class="max-w-[88rem] w-full flex gap-6 lg:gap-8">
@@ -53,28 +53,30 @@ const outlineVisible = ref(false)
     </div>
     <TuffFooter />
     <BackToTop />
-    <Drawer
-      :visible="sidebarVisible"
-      :title="t('docs.sidebarLabel')"
-      width="82%"
-      direction="left"
-      @update:visible="(v) => (sidebarVisible = v)"
-    >
-      <div class="p-4">
-        <DocsSidebar />
-      </div>
-    </Drawer>
-    <Drawer
-      :visible="outlineVisible"
-      :title="t('docs.outlineLabel')"
-      width="82%"
-      direction="right"
-      @update:visible="(v) => (outlineVisible = v)"
-    >
-      <div class="p-4">
-        <DocsOutline />
-      </div>
-    </Drawer>
+    <ClientOnly>
+      <Drawer
+        :visible="sidebarVisible"
+        :title="t('docs.sidebarLabel')"
+        width="82%"
+        direction="left"
+        @update:visible="(v) => (sidebarVisible = v)"
+      >
+        <div class="p-4">
+          <DocsSidebar />
+        </div>
+      </Drawer>
+      <Drawer
+        :visible="outlineVisible"
+        :title="t('docs.outlineLabel')"
+        width="82%"
+        direction="right"
+        @update:visible="(v) => (outlineVisible = v)"
+      >
+        <div class="p-4">
+          <DocsOutline />
+        </div>
+      </Drawer>
+    </ClientOnly>
   </div>
 </template>
 

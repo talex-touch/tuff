@@ -22,6 +22,8 @@ import {
 const execAsync = promisify(exec)
 
 const TEMPLATE_REPO = 'https://github.com/talex-touch/tuff-plugin-template.git'
+const SQLITE_PERMISSION_ID = 'storage.sqlite'
+const SQLITE_PERMISSION_REASON = 'Store plugin business data in the local SQLite database'
 
 export interface CreateOptions {
   name?: string
@@ -77,6 +79,112 @@ async function cloneTemplate(targetDir: string, branch?: string): Promise<void> 
   }
 }
 
+function ensureSqliteManifestConfig(manifest: any): void {
+  const permissions = manifest.permissions && typeof manifest.permissions === 'object'
+    ? manifest.permissions
+    : {}
+  const required = Array.isArray(permissions.required)
+    ? permissions.required.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+  const optional = Array.isArray(permissions.optional)
+    ? permissions.optional.filter((item: unknown): item is string => typeof item === 'string' && item.trim().length > 0)
+    : []
+
+  if (!required.includes(SQLITE_PERMISSION_ID)) {
+    required.push(SQLITE_PERMISSION_ID)
+  }
+
+  manifest.permissions = {
+    required,
+    optional: optional.filter((permission: string) => permission !== SQLITE_PERMISSION_ID)
+  }
+
+  const permissionReasons =
+    manifest.permissionReasons && typeof manifest.permissionReasons === 'object'
+      ? manifest.permissionReasons
+      : {}
+
+  if (
+    typeof permissionReasons[SQLITE_PERMISSION_ID] !== 'string'
+    || permissionReasons[SQLITE_PERMISSION_ID].trim().length === 0
+  ) {
+    permissionReasons[SQLITE_PERMISSION_ID] = SQLITE_PERMISSION_REASON
+  }
+
+  manifest.permissionReasons = permissionReasons
+}
+
+async function createSqliteUsageExample(
+  targetDir: string,
+  language: 'typescript' | 'javascript'
+): Promise<void> {
+  const extension = language === 'typescript' ? 'ts' : 'js'
+  const examplePath = path.join(targetDir, `sqlite-example.${extension}`)
+
+  const content = language === 'typescript'
+    ? `import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+type NoteRow = {
+  id: number
+  title: string
+  content: string
+  created_at: string
+}
+
+export async function runSqliteExample(): Promise<NoteRow[]> {
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)'
+  )
+
+  await sqlite.transaction([
+    {
+      sql: 'INSERT INTO notes (title, content, created_at) VALUES (?, ?, ?)',
+      params: ['Welcome', 'SQLite SDK ready', new Date().toISOString()]
+    },
+    {
+      sql: 'INSERT INTO notes (title, content, created_at) VALUES (?, ?, ?)',
+      params: ['Sync', 'Plugin items are synced automatically', new Date().toISOString()]
+    }
+  ])
+
+  const result = await sqlite.query<NoteRow>(
+    'SELECT id, title, content, created_at FROM notes ORDER BY id DESC LIMIT 20'
+  )
+  return result.rows
+}
+`
+    : `import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+export async function runSqliteExample() {
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL)'
+  )
+
+  await sqlite.transaction([
+    {
+      sql: 'INSERT INTO notes (title, content, created_at) VALUES (?, ?, ?)',
+      params: ['Welcome', 'SQLite SDK ready', new Date().toISOString()]
+    },
+    {
+      sql: 'INSERT INTO notes (title, content, created_at) VALUES (?, ?, ?)',
+      params: ['Sync', 'Plugin items are synced automatically', new Date().toISOString()]
+    }
+  ])
+
+  const result = await sqlite.query(
+    'SELECT id, title, content, created_at FROM notes ORDER BY id DESC LIMIT 20'
+  )
+  return result.rows
+}
+`
+
+  fs.writeFileSync(examplePath, content)
+}
+
 /**
  * Configure manifest.json with user inputs
  */
@@ -99,8 +207,15 @@ async function configureManifest(
       description: `${config.name} - A Tuff plugin`,
       author: '',
       main: 'index.js',
-      sdkapi: 260114,
+      sdkapi: 260215,
       category: 'utilities',
+      permissions: {
+        required: [SQLITE_PERMISSION_ID],
+        optional: [],
+      },
+      permissionReasons: {
+        [SQLITE_PERMISSION_ID]: SQLITE_PERMISSION_REASON,
+      },
       features: [
         {
           id: 'main',
@@ -119,6 +234,10 @@ async function configureManifest(
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
   manifest.name = config.name
   manifest.description = `${config.name} - A Tuff plugin`
+  if (typeof manifest.sdkapi !== 'number' || manifest.sdkapi < 260215) {
+    manifest.sdkapi = 260215
+  }
+  ensureSqliteManifestConfig(manifest)
 
   // Update feature titles
   if (manifest.features && Array.isArray(manifest.features)) {
@@ -301,6 +420,7 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
         uiFramework: uiFramework || 'none',
       })
       await configurePackageJson(targetDir, { name })
+      await createSqliteUsageExample(targetDir, (language || 'typescript') as 'typescript' | 'javascript')
     })
   }
   catch (error: any) {

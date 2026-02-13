@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `system.actions`
-- Commands: `system / sys / 系统 / 系统操作`
+- Commands: `system / sys`
 
 ## Core Capabilities
-- 系统操作中心：电源、锁屏、音量、亮度、主窗口
+- System control center: power, lock screen, volume, brightness, main window.
 - Supported platforms: `win32, darwin`
 
 ## Config & Data

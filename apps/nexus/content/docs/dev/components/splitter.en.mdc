@@ -1,19 +1,19 @@
 ---
-title: "Splitter 分割面板"
-description: "可拖拽分割面板，支持水平/垂直。"
+title: "Splitter"
+description: "Component documentation for Splitter."
 category: Layout
 syncStatus: migrated
 ---
-# Splitter 分割面板
+# Splitter
 
-可拖拽分割面板，支持水平/垂直。
+Component documentation for Splitter.
 
 <script setup lang="ts">
 import SplitterBasicDemo from '~/components/content/demos/SplitterBasicDemo.vue'
 import SplitterBasicDemoSource from '~/components/content/demos/SplitterBasicDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Splitter
 :::TuffDemoWrapper{demo="SplitterSplitterDemo" code-lang="vue"}
@@ -48,28 +48,28 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number` | `0.5` | 分割比例（0-1） |
-| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | 分割方向 |
-| `min` | `number` | `0.1` | 最小比例 |
-| `max` | `number` | `0.9` | 最大比例 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `barSize` | `number` | `10` | 分割条尺寸（px） |
-| `snap` | `number` | `0` | 吸附步进（0 表示不吸附） |
+| `modelValue` | `number` | `0.5` | Description for modelValue. |
+| `direction` | `'horizontal' \| 'vertical'` | `'horizontal'` | TextDirection |
+| `min` | `number` | `0.1` | Description for min. |
+| `max` | `number` | `0.9` | Description for max. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `barSize` | `number` | `10` | Description for barSize. |
+| `snap` | `number` | `0` | Description for snap. |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `a` | 左/上面板 |
-| `b` | 右/下面板 |
+| `a` | Description for a. |
+| `b` | Description for b. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(ratio)` | v-model 更新 |
-| `change` | `(ratio)` | 值变化 |
-| `drag-start` | - | 开始拖拽 |
-| `drag-end` | - | 结束拖拽 |
+| `update:modelValue` | `(ratio)` | Description for update:modelValue. |
+| `change` | `(ratio)` | Description for change. |
+| `drag-start` | - | Description for drag-start. |
+| `drag-end` | - | Description for drag-end. |

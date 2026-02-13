@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `batch-rename`
-- Commands: `rename / 批量重命名 / rename-files`
+- Commands: `rename / rename-files`
 
 ## Core Capabilities
-- 文件批量重命名：前后缀、编号、正则替换
+- Batch rename files with prefix/suffix, numbering, and regex replace.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

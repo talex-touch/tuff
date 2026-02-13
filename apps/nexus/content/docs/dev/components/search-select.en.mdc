@@ -1,12 +1,12 @@
 ---
-title: "SearchSelect 搜索选择器"
-description: "搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。"
+title: "SearchSelect"
+description: "Select"
 category: Form
 syncStatus: migrated
 ---
-# SearchSelect 搜索选择器
+# SearchSelect
 
-搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。
+Select
 
 <script setup lang="ts">
 import SearchSelectBasicDemo from '~/components/content/demos/SearchSelectBasicDemo.vue'
@@ -16,7 +16,7 @@ import SearchSelectRemoteDemo from '~/components/content/demos/SearchSelectRemot
 import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelectRemoteDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### SearchSelect
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectDemo" code-lang="vue"}
@@ -46,9 +46,9 @@ code: |
 ---
 :::
 
-## 远程搜索
+## Remote Search
 
-`remote=true` 时，将在输入变化（防抖）与 Enter 时触发 `search` 事件，你需要外部请求并将结果写回 `options`。
+When `remote=true`, input changes (debounced) and Enter trigger the `search` event; fetch externally and write results back to `options`.
 
 ### SearchSelect (remote)
 :::TuffDemoWrapper{demo="SearchSelectSearchSelectRemoteDemo" code-lang="vue"}
@@ -97,43 +97,43 @@ code: |
 ---
 :::
 
-## 注意事项
+## Notes
 
-- 本地模式会基于 `options` 的 `label` 进行过滤，输入为空时显示全部。
-- 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
+- Local mode filters by `options.label` and shows all when input is empty.
+- Remote mode requires updating `options` in the `search` event; results are not cached.
 
 ## API
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string \| number` | `''` | 选中值（v-model） |
-| `placeholder` | `string` | `'Search'` | 占位 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `clearable` | `boolean` | `true` | 可清空 |
-| `options` | `TxSearchSelectOption[]` | `[]` | 下拉数据源 |
-| `loading` | `boolean` | `false` | loading 状态 |
-| `remote` | `boolean` | `false` | 是否远程搜索（输入触发 `search`） |
-| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
-| `dropdownMaxHeight` | `number` | `280` | 下拉最大高度 |
-| `dropdownOffset` | `number` | `6` | 下拉偏移 |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
-| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
-| `panelPadding` | `number` | `6` | 面板 padding（TxCard padding） |
+| `modelValue` | `string \| number` | `''` | TextValue（v-model） |
+| `placeholder` | `string` | `'Search'` | Description for placeholder. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `clearable` | `boolean` | `true` | Description for clearable. |
+| `options` | `TxSearchSelectOption[]` | `[]` | Description for options. |
+| `loading` | `boolean` | `false` | Description for loading. |
+| `remote` | `boolean` | `false` | Description for remote. |
+| `searchDebounce` | `number` | `200` | Description for searchDebounce. |
+| `dropdownMaxHeight` | `number` | `280` | Description for dropdownMaxHeight. |
+| `dropdownOffset` | `number` | `6` | Description for dropdownOffset. |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Text（TxCard variant） |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | Text（TxCard background） |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Text（TxCard shadow） |
+| `panelRadius` | `number` | `18` | Description for panelRadius. |
+| `panelPadding` | `number` | `6` | Description for panelPadding. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string \| number)` | v-model 更新 |
-| `change` | `(v: string \| number)` | 选中变更 |
-| `search` | `(q: string)` | 远程搜索 |
-| `select` | `(opt: TxSearchSelectOption)` | 选择某一项 |
-| `open` | - | 打开下拉 |
-| `close` | - | 关闭下拉 |
+| `update:modelValue` | `(v: string \| number)` | v-model Text |
+| `change` | `(v: string \| number)` | Description for change. |
+| `search` | `(q: string)` | Description for search. |
+| `select` | `(opt: TxSearchSelectOption)` | Description for select. |
+| `open` | - | Description for open. |
+| `close` | - | Description for close. |
 
 ### Types
 

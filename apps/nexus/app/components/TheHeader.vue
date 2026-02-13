@@ -159,7 +159,7 @@ const headerRevealStyle = computed(() => {
         </div>
 
         <HeaderControls
-          :show-search-button="isDocs"
+          :show-search-button="isDocs || isHome"
           :show-language-toggle="!isAuthenticated"
           :show-dark-toggle="!isHome && !isAuthenticated"
           :github-url="isHome ? 'https://github.com/talex-touch/tuff' : ''"

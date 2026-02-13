@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `window.presets`
-- Commands: `window / preset / layout / 分屏 / 布局`
+- Commands: `window / preset / layout`
 
 ## Core Capabilities
-- 窗口预设：一键应用常用桌面布局
+- Window presets: apply common desktop layouts with one click.
 - Supported platforms: `win32`
 
 ## Config & Data

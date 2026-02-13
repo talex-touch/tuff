@@ -214,7 +214,7 @@ code: |
 
 | Value | Binary | Description |
 |-------|--------|-------------|
-| `TEXT` | `0b0001` | Text |
+| `TEXT` | `0b0001` | Description for TEXT. |
 | `IMAGE` | `0b0010` | Image |
 | `FILE` | `0b0100` | File |
 

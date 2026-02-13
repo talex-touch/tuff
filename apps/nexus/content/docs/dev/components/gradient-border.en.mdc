@@ -1,14 +1,14 @@
 ---
-title: "GradientBorder 渐变边框"
-description: "用于给内容容器提供动态渐变边框效果。"
+title: "GradientBorder"
+description: "Component documentation for GradientBorder."
 category: Basic
 syncStatus: migrated
 ---
-# GradientBorder 渐变边框
+# GradientBorder
 
-用于给内容容器提供动态渐变边框效果。
+Component documentation for GradientBorder.
 
-## 基础用法
+## Basic Usage
 
 ### GradientBorder
 :::TuffDemoWrapper{demo="GradientBorderGradientBorderDemo" code-lang="vue"}
@@ -28,10 +28,10 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `as` | `string` | `'div'` | 根元素标签 |
-| `borderWidth` | `string \| number` | `'2px'` | 边框宽度 |
-| `borderRadius` | `string \| number` | `'12px'` | 圆角 |
-| `padding` | `string \| number` | `'12px'` | 内边距 |
-| `animationDuration` | `number` | `4` | 动画周期（秒） |
+| `as` | `string` | `'div'` | Description for as. |
+| `borderWidth` | `string \| number` | `'2px'` | Description for borderWidth. |
+| `borderRadius` | `string \| number` | `'12px'` | Description for borderRadius. |
+| `padding` | `string \| number` | `'12px'` | Description for padding. |
+| `animationDuration` | `number` | `4` | Description for animationDuration. |

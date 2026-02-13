@@ -79,7 +79,7 @@ code: |
     "id": "com.tuff.todo",
     "name": {
       "default": "Todo",
-      "zh-CN": "待办"
+      "zh-CN": "Text"
     },
     "description": "Capture and sync todos",
     "version": "1.3.0",

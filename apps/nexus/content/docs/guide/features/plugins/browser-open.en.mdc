@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `browser.open`
-- Commands: `url / link / open / 浏览器 / 网页`
+- Commands: `url / link / open`
 
 ## Core Capabilities
-- 浏览器打开：默认浏览器与指定浏览器快速打开链接
+- Open links with the default or a specified browser.
 - Supported platforms: `win32, darwin`
 
 ## Config & Data

@@ -23,6 +23,18 @@ export default {
     save: '保存',
     refresh: '刷新',
   },
+  search: {
+    open: '搜索',
+    openAria: '打开全局搜索',
+    placeholder: '搜索文档与功能',
+    empty: '没有搜索结果',
+    loading: '正在搜索...',
+    category: {
+      docs: '文档',
+      pages: '页面',
+      features: '功能',
+    },
+  },
   auth: {
     callbackProcessing: '正在处理登录回调，请稍候…',
     backToPrevious: '返回上一页',

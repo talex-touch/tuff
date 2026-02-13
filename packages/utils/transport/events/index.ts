@@ -410,15 +410,25 @@ import type {
   PluginReconnectDevServerResponse,
   PluginReloadRequest,
   PluginStorageClearRequest,
+  PluginStorageApplySyncItemRequest,
+  PluginStorageDeleteSyncItemRequest,
   PluginStorageFileDetailsRequest,
   PluginStorageFileRequest,
   PluginStorageListFilesRequest,
+  PluginStorageListSyncItemsRequest,
   PluginStorageOpenFolderRequest,
   PluginStorageOpenInEditorRequest,
   PluginStorageSetFileRequest,
+  PluginStorageSyncItem,
   PluginStorageStatsRequest,
   PluginStorageTreeRequest,
   PluginStorageUpdatePayload,
+  PluginSqliteExecuteRequest,
+  PluginSqliteExecuteResponse,
+  PluginSqliteQueryRequest,
+  PluginSqliteQueryResponse,
+  PluginSqliteTransactionRequest,
+  PluginSqliteTransactionResponse,
   PluginUnloadRequest,
 } from './types/plugin'
 
@@ -2029,6 +2039,21 @@ export const PluginEvents = {
       .event('list-files')
       .define<PluginStorageListFilesRequest, string[]>(),
 
+    listSyncItems: defineEvent('plugin')
+      .module('storage')
+      .event('list-sync-items')
+      .define<PluginStorageListSyncItemsRequest, PluginStorageSyncItem[]>(),
+
+    applySyncItem: defineEvent('plugin')
+      .module('storage')
+      .event('apply-sync-item')
+      .define<PluginStorageApplySyncItemRequest, { success: boolean, error?: string }>(),
+
+    deleteSyncItem: defineEvent('plugin')
+      .module('storage')
+      .event('delete-sync-item')
+      .define<PluginStorageDeleteSyncItemRequest, { success: boolean, error?: string }>(),
+
     getStats: defineEvent('plugin')
       .module('storage')
       .event('get-stats')
@@ -2062,6 +2087,23 @@ export const PluginEvents = {
       .module('storage')
       .event('update')
       .define<PluginStorageUpdatePayload, void>(),
+  },
+
+  sqlite: {
+    execute: defineEvent('plugin')
+      .module('sqlite')
+      .event('execute')
+      .define<PluginSqliteExecuteRequest, PluginSqliteExecuteResponse>(),
+
+    query: defineEvent('plugin')
+      .module('sqlite')
+      .event('query')
+      .define<PluginSqliteQueryRequest, PluginSqliteQueryResponse>(),
+
+    transaction: defineEvent('plugin')
+      .module('sqlite')
+      .event('transaction')
+      .define<PluginSqliteTransactionRequest, PluginSqliteTransactionResponse>(),
   },
 
   performance: {

@@ -15,6 +15,23 @@ const route = useRoute()
 const { t, locale } = useI18n()
 const localePath = useLocalePath()
 const SUPPORTED_LOCALES = ['en', 'zh']
+const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
+
+function stripCjk(value: string) {
+  return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
+}
+
+function fallbackTitleFromPath(path?: string) {
+  if (!path)
+    return 'Untitled'
+  return path
+    .split('/')
+    .filter(Boolean)
+    .pop()
+    ?.replace(/\.(en|zh)$/, '')
+    ?.replace(/[-_]/g, ' ')
+    ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
+}
 
 const TOP_SECTIONS = computed(() => ([
   {
@@ -580,22 +597,15 @@ function itemTitle(title?: string, path?: string) {
   if (path) {
     const label = docLabels.value[path]
     if (label)
-      return label
+      return locale.value === 'en' ? (stripCjk(label) || fallbackTitleFromPath(path)) : label
   }
 
-  if (title)
-    return title
-
-  if (!path)
-    return 'Untitled'
-
-  return path
-    .split('/')
-    .filter(Boolean)
-    .pop()
-    ?.replace(/\.(en|zh)$/, '')
-    ?.replace(/[-_]/g, ' ')
-    ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
+  const fallback = fallbackTitleFromPath(path)
+  const raw = title || fallback
+  if (locale.value !== 'en')
+    return raw
+  const stripped = stripCjk(raw)
+  return stripped || fallback
 }
 
 function linkTarget(item: any) {
@@ -651,8 +661,8 @@ watch(
 <template>
   <nav class="docs-nav relative flex flex-col">
     <!-- Top-level section tabs (sticky within sidebar) -->
-    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 bg-white/95 px-1 pb-1 pt-1 backdrop-blur-sm dark:bg-black/95">
-      <div class="flex gap-1 rounded-xl bg-black/[0.04] p-1 dark:bg-white/[0.08]">
+    <div v-if="!isTutorialRoute" class="sticky top-0 z-10 -mx-1 mb-3 px-1 pb-1 pt-1 backdrop-blur-sm">
+      <div class="flex gap-1 rounded-xl p-1">
         <NuxtLink
           v-for="sec in TOP_SECTIONS"
           :key="sec.key"

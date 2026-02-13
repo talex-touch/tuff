@@ -1,19 +1,19 @@
 ---
-title: "AutoSizer 自适应尺寸"
-description: "用于让容器在内容变化时自动跟随宽/高，并带过渡动画。"
+title: "AutoSizer"
+description: "Component documentation for AutoSizer."
 category: Layout
 syncStatus: migrated
 ---
-# AutoSizer 自适应尺寸
+# AutoSizer
 
-用于让容器在内容变化时自动跟随宽/高，并带过渡动画。
+Component documentation for AutoSizer.
 
-典型场景：
+Typical scenarios:
 
-- Tabs 切换内容时外层高度平滑过渡
-- Button 在 `loading` 状态切换时宽度平滑过渡
+- Smooth outer height transitions when switching Tabs content
+- Smooth width transitions when a Button toggles `loading`
 
-> 实现基于 `ResizeObserver`。当内容中包含图片/异步渲染导致尺寸再次变化时，会自动触发重新测量。
+> Built on `ResizeObserver`. When images/async rendering change size, it re-measures automatically.
 
 <script setup lang="ts">
 import AutoSizerHeightDemo from '~/components/content/demos/AutoSizerHeightDemo.vue'
@@ -38,9 +38,9 @@ import AutoSizerTextTransformerDemo from '~/components/content/demos/AutoSizerTe
 import AutoSizerTextTransformerDemoSource from '~/components/content/demos/AutoSizerTextTransformerDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
-### 仅高度（推荐用于 Tabs/Accordion）
+### Height Only (Recommended for Tabs/Accordion)
 
 ### AutoSizer height
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightDemo" code-lang="vue"}
@@ -104,9 +104,9 @@ code: |
 ---
 :::
 
-### 宽度跟随（在 flex 容器内）
+### Width Follow (Inside Flex Containers)
 
-> 当 AutoSizer 处于 flex item 且父容器把它 `flex: 1` 或者 `width: 100%` 撑满时，看起来就像“没跟随内容”。
+> When AutoSizer is a flex item and the parent stretches it with `flex: 1` or `width: 100%`, it may look like it is not following content.
 
 ### AutoSizer width in flex
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthInFlexDemo" code-lang="vue"}
@@ -147,7 +147,7 @@ code: |
 ---
 :::
 
-### 下拉内容高度跟随（用于筛选/搜索）
+### Pull-down Content Height Follow (Filters/Search)
 
 ### AutoSizer height for dropdown
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDropdownDemo" code-lang="vue"}
@@ -215,7 +215,7 @@ code: |
 ---
 :::
 
-### 弹框内容高度跟随（模拟）
+### Dialog Content Height Follow (Simulated)
 
 ### AutoSizer height for dialog
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDialogDemo" code-lang="vue"}
@@ -276,7 +276,7 @@ code: |
 ---
 :::
 
-### 仅宽度（推荐用于 Button 内容变化）
+### Width Only (Recommended for Button Content Changes)
 
 ### AutoSizer width
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerWidthDemo" code-lang="vue"}
@@ -311,7 +311,7 @@ code: |
 ---
 :::
 
-### 数字过渡 + 宽度跟随（NumberFlow）
+### Number Transition + Width Follow (NumberFlow)
 
 ### AutoSizer + NumberFlow
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerNumberFlowDemo" code-lang="vue"}
@@ -354,9 +354,9 @@ code: |
 ---
 :::
 
-### 文本丝滑变换 + 宽度跟随（TextTransformer）
+### Smooth Text Transform + Width Follow (TextTransformer)
 
-> 该示例同时开启 `width + height` 跟随，并在外层设置 `overflow-hidden`，用于裁剪 blur 的边缘溢出。
+> This example enables `width + height` follow and sets outer `overflow-hidden` to clip blur overflow.
 
 ### AutoSizer + TextTransformer
 :::TuffDemoWrapper{demo="AutoSizerAutoSizerTextTransformerDemo" code-lang="vue"}
@@ -432,26 +432,26 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `as` | `string` | `div` | outer 渲染标签 |
-| `innerAs` | `string` | `div` | inner 渲染标签 |
-| `width` | `boolean` | `true` | 是否同步宽度 |
-| `height` | `boolean` | `true` | 是否同步高度 |
-| `inline` | `boolean` | - | 是否使用 shrink-to-content（默认仅在 `width=true && height=false` 时启用） |
-| `durationMs` | `number` | `200` | 过渡时长(ms) |
-| `easing` | `string` | `ease` | 过渡曲线 |
+| `as` | `string` | `div` | Description for as. |
+| `innerAs` | `string` | `div` | Description for innerAs. |
+| `width` | `boolean` | `true` | Description for width. |
+| `height` | `boolean` | `true` | Description for height. |
+| `inline` | `boolean` | - | Description for inline. |
+| `durationMs` | `number` | `200` | Description for durationMs. |
+| `easing` | `string` | `ease` | Description for easing. |
 | `outerClass` | `string` | `overflow-hidden` | outer class |
 | `innerClass` | `string` | - | inner class |
-| `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | 测量值取整策略 |
-| `immediate` | `boolean` | `true` | mount 后是否立即测量 |
-| `rafBatch` | `boolean` | `true` | 是否使用 rAF 合并测量 |
+| `rounding` | `'none' \| 'round' \| 'floor' \| 'ceil'` | `ceil` | TextValueText |
+| `immediate` | `boolean` | `true` | Description for immediate. |
+| `rafBatch` | `boolean` | `true` | Description for rafBatch. |
 
 ### Expose
 
-| 名称 | 类型 | 说明 |
+| Name | Type | Description |
 |------|------|------|
-| `refresh()` | `() => Promise<void>` | 手动触发重新测量 |
-| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | 以 action 触发一次尺寸过渡（适合 Tabs 切换/明确动作） |
-| `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | 执行一次“事务动作”，内部自动前后快照检测并触发过渡（推荐用于 demo/复杂切换） |
-| `size` | `Ref<{ width: number; height: number } \| null>` | 最新测量结果 |
+| `refresh()` | `() => Promise<void>` | Description for refresh(). |
+| `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Text action TriggerTextSizeText（Text Tabs Text/Text） |
+| `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Text“Text”，TextTriggerText（Text demo/Text） |
+| `size` | `Ref<{ width: number; height: number } \| null>` | Description for size. |

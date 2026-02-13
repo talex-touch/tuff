@@ -1,12 +1,12 @@
 ---
-title: "GroupBlock 分组块"
-description: "用于组织相关内容的可折叠分组容器，带有平滑动画效果。"
+title: "GroupBlock"
+description: "Component documentation for GroupBlock."
 category: Layout
 syncStatus: migrated
 ---
-# GroupBlock 分组块
+# GroupBlock
 
-用于组织相关内容的可折叠分组容器，带有平滑动画效果。
+Component documentation for GroupBlock.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -18,7 +18,7 @@ const loading = ref(true)
 const dummy = ref(false)
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### GroupBlock
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockDemo" code-lang="vue"}
@@ -26,22 +26,22 @@ const dummy = ref(false)
 code: |
   <template>
     <TxGroupBlock
-      name="通用设置"
+      name="Text"
       default-icon="i-ri-settings-3-line"
       active-icon="i-ri-settings-3-fill"
-      description="配置基本选项"
+      description="TextOption"
     >
       <TxBlockSwitch
         v-model="notifications"
-        title="通知"
-        description="启用推送通知"
+        title="notification"
+        description="Textnotification"
         default-icon="i-ri-notification-line"
         active-icon="i-ri-notification-fill"
       />
-      <TxBlockSlot title="语言" description="选择显示语言" default-icon="i-carbon-translate">
+      <TxBlockSlot title="Text" description="TextDisplayText" default-icon="i-carbon-translate">
         <select v-model="language">
           <option value="en">English</option>
-          <option value="zh">中文</option>
+          <option value="zh">Text</option>
         </select>
       </TxBlockSlot>
     </TxGroupBlock>
@@ -49,9 +49,9 @@ code: |
 ---
 :::
 
-## 初始折叠
+## Initially Collapsed
 
-使用 `default-expand` 或 `collapsed` 控制初始展开状态。
+Use `default-expand` or `collapsed` to control initial expansion.
 
 ### GroupBlock (collapsed)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockCollapsedDemo" code-lang="vue"}
@@ -59,21 +59,21 @@ code: |
 code: |
   <template>
     <TxGroupBlock
-      name="高级设置"
-      description="折叠展示内容"
+      name="Text"
+      description="TextContent"
       default-icon="i-ri-folder-line"
       active-icon="i-ri-folder-open-line"
       :default-expand="false"
     >
-      <p>高级内容</p>
+      <p>TextContent</p>
     </TxGroupBlock>
   </template>
 ---
 :::
 
-## 记忆展开状态
+## Remember Expanded State
 
-为 `memory-name` 指定唯一键，组件会持久化展开状态。
+Provide a unique key for `memory-name` to persist expansion state.
 
 ### GroupBlock (memory)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockMemoryDemo" code-lang="vue"}
@@ -81,16 +81,16 @@ code: |
 code: |
   <template>
     <TxGroupBlock
-      name="更新策略"
-      description="记忆展开状态"
+      name="Text"
+      description="Text"
       default-icon="i-ri-refresh-line"
       active-icon="i-ri-refresh-line"
       memory-name="tx-group-block-demo"
     >
       <TxBlockSwitch
         v-model="autoUpdate"
-        title="自动更新"
-        description="后台自动检查更新"
+        title="Auto update"
+        description="Text"
         default-icon="i-ri-refresh-line"
         active-icon="i-ri-refresh-line"
       />
@@ -99,9 +99,9 @@ code: |
 ---
 :::
 
-## 头部扩展
+## Header Extension
 
-使用 `header-extra` 插槽放置操作区。
+Use the `header-extra` slot for actions.
 
 ### GroupBlock (header-extra)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockHeaderExtraDemo" code-lang="vue"}
@@ -109,15 +109,15 @@ code: |
 code: |
   <template>
     <TxGroupBlock
-      name="同步"
-      description="手动触发同步"
+      name="Text"
+      description="TextTriggerText"
       default-icon="i-ri-loop-left-line"
       :collapsible="false"
     >
       <template #header-extra>
-        <button>立即同步</button>
+        <button>Text</button>
       </template>
-      <TxBlockLine title="上次同步" description="刚刚" />
+      <TxBlockLine title="Text" description="Text" />
     </TxGroupBlock>
   </template>
 ---
@@ -125,84 +125,84 @@ code: |
 
 ---
 
-# BlockLine 块行
+# BlockLine
 
-用于显示标题和描述的简单行项目。
+A simple row item for displaying title and description.
 
-## 基础用法
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxBlockLine title="版本" description="1.0.0" />
-    <TxBlockLine title="构建日期" description="2024.01.15" />
-  </template>
----
-:::
-
-## 链接样式
-
-显示为可点击的链接。
+## Basic Usage
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <TxBlockLine title="查看文档" link @click="openDocs" />
+    <TxBlockLine title="Text" description="1.0.0" />
+    <TxBlockLine title="Text" description="2024.01.15" />
+  </template>
+---
+:::
+
+## Link Styles
+
+Displayed as a clickable link.
+
+:::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxBlockLine title="Text" link @click="openDocs" />
   </template>
 ---
 :::
 
 ---
 
-# BlockSlot 块插槽
+# BlockSlot
 
-带有图标、标题、描述和自定义控件插槽的块容器。
+A block container with icon, title, description, and a custom control slot.
 
-## 基础用法
+## Basic Usage
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxBlockSlot
-      title="主题"
-      description="选择您偏好的主题"
+      title="Text"
+      description="Text"
       default-icon="i-ri-palette-line"
     >
       <select v-model="theme">
-        <option value="light">浅色</option>
-        <option value="dark">深色</option>
-        <option value="auto">自动</option>
+        <option value="light">Text</option>
+        <option value="dark">Text</option>
+        <option value="auto">Text</option>
       </select>
     </TxBlockSlot>
   </template>
 ---
 :::
 
-## 激活态与标签
+## Active State and Labels
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxBlockSlot
-      title="常用设置"
-      description="已启用"
+      title="Text"
+      description="Text"
       default-icon="i-ri-star-line"
       active-icon="i-ri-star-fill"
       :active="true"
     >
       <template #tags>
-        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">推荐</span>
+        <span style="font-size: 12px; padding: 2px 6px; border-radius: 6px; background: var(--tx-fill-color);">Text</span>
       </template>
     </TxBlockSlot>
   </template>
 ---
 :::
 
-## 自定义标签
+## Custom Labels
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -210,8 +210,8 @@ code: |
   <template>
     <TxBlockSlot>
       <template #label>
-        <h3>自定义标题 <span style="color: red">*</span></h3>
-        <p>必填字段</p>
+        <h3>CustomTitle <span style="color: red">*</span></h3>
+        <p>Text</p>
       </template>
       <input type="text" />
     </TxBlockSlot>
@@ -221,11 +221,11 @@ code: |
 
 ---
 
-# BlockSwitch 块开关
+# BlockSwitch
 
-带有集成开关控件的块容器。
+A block container with an integrated switch control.
 
-## 基础用法
+## Basic Usage
 
 ### BlockSwitch
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchDemo" code-lang="vue"}
@@ -234,8 +234,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="autoUpdate"
-      title="自动更新"
-      description="启用后台更新"
+      title="Auto update"
+      description="Text"
       default-icon="i-ri-refresh-line"
       active-icon="i-ri-refresh-line"
     />
@@ -243,7 +243,7 @@ code: |
 ---
 :::
 
-## 加载状态
+## Loading State
 
 ### BlockSwitch (loading)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
@@ -252,8 +252,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="loading"
-      title="正在同步"
-      description="同步过程中暂不可用"
+      title="Text"
+      description="Text"
       default-icon="i-ri-loader-4-line"
       active-icon="i-ri-loader-4-line"
       :loading="true"
@@ -262,7 +262,7 @@ code: |
 ---
 :::
 
-## 禁用状态
+## Disabled State
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -270,8 +270,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="value"
-      title="高级功能"
-      description="需要订阅"
+      title="Text"
+      description="Text"
       default-icon="i-ri-lock-line"
       active-icon="i-ri-lock-fill"
       disabled
@@ -280,9 +280,9 @@ code: |
 ---
 :::
 
-## 引导模式
+## Guided Mode
 
-显示为导航项而非开关。
+Displayed as a navigation item instead of a switch.
 
 ### BlockSwitch (guidance)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchGuidanceDemo" code-lang="vue"}
@@ -291,8 +291,8 @@ code: |
   <template>
     <TxBlockSwitch
       v-model="dummy"
-      title="隐私设置"
-      description="管理您的隐私选项"
+      title="Text"
+      description="TextOption"
       default-icon="i-ri-shield-keyhole-line"
       guidance
       @click="handleClick"
@@ -305,64 +305,64 @@ code: |
 
 ## API
 
-### TxGroupBlock 属性
+### TxGroupBlock Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `name` | `string` | *必填* | 分组标题 |
-| `description` | `string` | `''` | 描述文本 |
-| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
-| `activeIcon` | `TxIconSource \| string` | - | 展开时图标 |
-| `iconSize` | `number` | `22` | 图标尺寸 |
-| `collapsible` | `boolean` | `true` | 是否可折叠 |
-| `collapsed` | `boolean` | `false` | 外部折叠状态 |
-| `defaultExpand` | `boolean` | `true` | 初始展开 |
-| `memoryName` | `string` | - | 展开状态持久化键 |
+| `name` | `string` | *Text* | Description for name. |
+| `description` | `string` | `''` | Description for description. |
+| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
+| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
+| `iconSize` | `number` | `22` | Description for iconSize. |
+| `collapsible` | `boolean` | `true` | Description for collapsible. |
+| `collapsed` | `boolean` | `false` | Description for collapsed. |
+| `defaultExpand` | `boolean` | `true` | Description for defaultExpand. |
+| `memoryName` | `string` | - | Description for memoryName. |
 
-### TxGroupBlock 事件
+### TxGroupBlock Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------------|-------------|
-| `update:expanded` | `expanded: boolean` | 展开状态变化时触发 |
-| `toggle` | `expanded: boolean` | 点击头部时触发 |
+| `update:expanded` | `expanded: boolean` | Description for update:expanded. |
+| `toggle` | `expanded: boolean` | Description for toggle. |
 
-### TxBlockLine 属性
+### TxBlockLine Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `''` | 标题文本 |
-| `description` | `string` | `''` | 描述文本 |
-| `link` | `boolean` | `false` | 显示为链接样式 |
+| `title` | `string` | `''` | Description for title. |
+| `description` | `string` | `''` | Description for description. |
+| `link` | `boolean` | `false` | Description for link. |
 
-### TxBlockSlot 属性
+### TxBlockSlot Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | `''` | 标题文本 |
-| `description` | `string` | `''` | 描述文本 |
-| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
-| `activeIcon` | `TxIconSource \| string` | - | 激活图标 |
-| `iconSize` | `number` | `20` | 图标尺寸 |
-| `active` | `boolean` | `false` | 激活状态 |
-| `disabled` | `boolean` | `false` | 禁用交互 |
+| `title` | `string` | `''` | Description for title. |
+| `description` | `string` | `''` | Description for description. |
+| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
+| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
+| `iconSize` | `number` | `20` | Description for iconSize. |
+| `active` | `boolean` | `false` | Description for active. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
 
-### TxBlockSwitch 属性
+### TxBlockSwitch Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `modelValue` | `boolean` | *必填* | 开关值 (v-model) |
-| `title` | `string` | *必填* | 标题文本 |
-| `description` | `string` | *必填* | 描述文本 |
-| `defaultIcon` | `TxIconSource \| string` | - | 默认图标 |
-| `activeIcon` | `TxIconSource \| string` | - | 激活图标 |
-| `disabled` | `boolean` | `false` | 禁用开关 |
-| `guidance` | `boolean` | `false` | 显示为导航项 |
-| `loading` | `boolean` | `false` | 加载状态 |
+| `modelValue` | `boolean` | *Text* | Description for modelValue. |
+| `title` | `string` | *Text* | Description for title. |
+| `description` | `string` | *Text* | Description for description. |
+| `defaultIcon` | `TxIconSource \| string` | - | DefaultIcon |
+| `activeIcon` | `TxIconSource \| string` | - | TextIcon |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `guidance` | `boolean` | `false` | Description for guidance. |
+| `loading` | `boolean` | `false` | Description for loading. |
 
-### TxBlockSwitch 事件
+### TxBlockSwitch Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------------|-------------|
-| `update:modelValue` | `value: boolean` | 值变化时触发 |
-| `change` | `value: boolean` | 值变化时触发 |
-| `click` | `event: MouseEvent` | 引导模式点击时触发 |
+| `update:modelValue` | `value: boolean` | Description for update:modelValue. |
+| `change` | `value: boolean` | Description for change. |
+| `click` | `event: MouseEvent` | Description for click. |

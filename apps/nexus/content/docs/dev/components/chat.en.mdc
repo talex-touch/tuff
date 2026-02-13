@@ -1,12 +1,12 @@
 ---
-title: "Chat 消息列表"
-description: "常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。"
+title: "Chat"
+description: "AI markdown"
 category: Data
 syncStatus: migrated
 ---
-# Chat 消息列表
+# Chat
 
-常见 AI 消息列表（支持 markdown、图片缩略图、消息依次进入）。
+AI markdown
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -36,7 +36,7 @@ const messages = ref([
 ])
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### ChatList
 :::TuffDemoWrapper{demo="ChatChatListDemo" code-lang="vue"}

@@ -1,15 +1,15 @@
 ---
-title: "Spinner 加载"
-description: "用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。"
+title: "Spinner"
+description: "Loading"
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [spinner, loading, progress]
 syncStatus: migrated
 ---
-# Spinner 加载
+# Spinner
 
-用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。
+Loading
 
 <script setup lang="ts">
 import SpinnerBasicDemo from '~/components/content/demos/SpinnerBasicDemo.vue'
@@ -22,7 +22,7 @@ import SpinnerToggleDemo from '~/components/content/demos/SpinnerToggleDemo.vue'
 import SpinnerToggleDemoSource from '~/components/content/demos/SpinnerToggleDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Spinner
 :::TuffDemoWrapper{demo="SpinnerSpinnerDemo" code-lang="vue"}
@@ -34,7 +34,7 @@ code: |
 ---
 :::
 
-## 尺寸
+## Sizes
 
 ### Spinner sizes
 :::TuffDemoWrapper{demo="SpinnerSpinnerSizesDemo" code-lang="vue"}
@@ -51,7 +51,7 @@ code: |
 ---
 :::
 
-## 显隐切换（v-if vs visible）
+## Visibility Toggle (v-if vs visible)
 
 ### Toggle
 :::TuffDemoWrapper{demo="SpinnerToggleDemo" code-lang="vue"}
@@ -104,9 +104,9 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `size` | `number` | `16` | 尺寸(px) |
-| `strokeWidth` | `number` | `2` | 线宽 |
-| `fallback` | `boolean` | `false` | 使用 SVG fallback 样式 |
-| `visible` | `boolean` | `true` | 显示/隐藏（内部 v-if，带 enter/leave 过渡动画） |
+| `size` | `number` | `16` | Description for size. |
+| `strokeWidth` | `number` | `2` | Description for strokeWidth. |
+| `fallback` | `boolean` | `false` | Description for fallback. |
+| `visible` | `boolean` | `true` | Description for visible. |

@@ -59,7 +59,7 @@ Use text as avatar content.
 code: |
   <template>
     <div style="display: flex; gap: 12px; align-items: center;">
-      <TxAvatar>张</TxAvatar>
+      <TxAvatar>U</TxAvatar>
       <TxAvatar>AB</TxAvatar>
       <TxAvatar>User</TxAvatar>
     </div>

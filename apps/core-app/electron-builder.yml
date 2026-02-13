@@ -36,6 +36,17 @@ files:
   - '!**/*.map'
   - '!patches/**'
 extraFiles: []
+extraResources:
+  - from: resources/TrayIconTemplate.png
+    to: resources/TrayIconTemplate.png
+  - from: resources/TrayIconTemplate@2x.png
+    to: resources/TrayIconTemplate@2x.png
+  - from: resources/tray_icon.png
+    to: resources/tray_icon.png
+  - from: resources/tray_icon_16x16.png
+    to: resources/tray_icon_16x16.png
+  - from: resources/tray_icon_22x22.png
+    to: resources/tray_icon_22x22.png
 
 win:
   executableName: tuff

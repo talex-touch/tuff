@@ -1,12 +1,12 @@
 ---
-title: "GradualBlur 渐变模糊"
-description: "用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。"
+title: "GradualBlur"
+description: "`backdrop-filter: blur(...)`"
 category: Layout
 syncStatus: migrated
 ---
-# GradualBlur 渐变模糊
+# GradualBlur
 
-用于在容器边缘叠加多层 `backdrop-filter: blur(...)`，实现从清晰到模糊的渐变过渡。
+`backdrop-filter: blur(...)`
 
 <script setup lang="ts">
 import GradualBlurBasicDemo from '~/components/content/demos/GradualBlurBasicDemo.vue'
@@ -31,7 +31,7 @@ import GradualBlurResponsiveDemo from '~/components/content/demos/GradualBlurRes
 import GradualBlurResponsiveDemoSource from '~/components/content/demos/GradualBlurResponsiveDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### GradualBlur
 :::TuffDemoWrapper{demo="GradualBlurGradualBlurDemo" code-lang="vue"}
@@ -73,7 +73,7 @@ code: |
 ---
 :::
 
-## 方向（Top / Bottom / Left / Right）
+## Direction (Top / Bottom / Left / Right)
 
 ### Positions
 :::TuffDemoWrapper{demo="GradualBlurPositionsDemo" code-lang="vue"}
@@ -88,7 +88,7 @@ code: |
             <span style="font-size: 20px;">↑</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            Headline content stays sharp，向上滚动时才看到模糊层。
+            Headline content stays sharp，Text。
           </p>
           <div style="height: 160px;" />
           <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -105,7 +105,7 @@ code: |
             <span style="font-size: 20px;">↓</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-            适合卡片底部补强，底部 CTA 始终可读。
+            Text，Text CTA Text。
           </p>
           <div style="height: 200px;" />
           <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -122,7 +122,7 @@ code: |
             <span style="font-size: 20px;">←</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            侧边栏文字 + 图标列表，模糊处理外侧图片。
+            SidebarText + IconText，TexthandleText。
           </p>
           <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
             <div style="height: 48px; border-radius: 8px; background: rgba(125,211,252,.35);" />
@@ -140,7 +140,7 @@ code: |
             <span style="font-size: 20px;">→</span>
           </div>
           <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-            可保护右侧媒体或聊天面板，避免抢占焦点。
+            Text，Text。
           </p>
           <div style="flex: 1; display: flex; gap: 6px;">
             <div style="flex: 1; border-radius: 10px; background: rgba(248,113,113,.15);" />
@@ -154,7 +154,7 @@ code: |
 ---
 :::
 
-## Preset 预设
+## Preset
 
 ### Presets
 :::TuffDemoWrapper{demo="GradualBlurPresetsDemo" code-lang="vue"}
@@ -226,7 +226,7 @@ code: |
 ---
 :::
 
-## Hover 强度增强（hoverIntensity）
+## Hover Intensity Boost (hoverIntensity)
 
 ### HoverIntensity
 :::TuffDemoWrapper{demo="GradualBlurHoverIntensityDemo" code-lang="vue"}
@@ -259,7 +259,7 @@ code: |
 ---
 :::
 
-## 进入视口触发（animated="scroll"）
+## Trigger on Viewport (animated="scroll")
 
 ### Animated scroll
 :::TuffDemoWrapper{demo="GradualBlurAnimatedScrollDemo" code-lang="vue"}
@@ -275,7 +275,7 @@ code: |
 ---
 :::
 
-## Page 目标（target="page"）
+## Page Target (target="page")
 
 ### Target page
 :::TuffDemoWrapper{demo="GradualBlurTargetPageDemo" code-lang="vue"}
@@ -302,7 +302,7 @@ code: |
 ---
 :::
 
-## 响应式尺寸（responsive）
+## Responsive Sizes (responsive)
 
 ### Responsive sizes
 :::TuffDemoWrapper{demo="GradualBlurResponsiveSizesDemo" code-lang="vue"}
@@ -339,36 +339,36 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | 模糊方向 |
-| `strength` | `number` | `2` | 模糊强度（倍数） |
-| `height` | `string` | `'6rem'` | 垂直方向尺寸（top/bottom） |
-| `width` | `string` | - | 水平方向尺寸（left/right） |
-| `divCount` | `number` | `5` | 分层数量 |
-| `exponential` | `boolean` | `false` | 是否指数增强模糊强度 |
-| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | 分层强度曲线 |
-| `opacity` | `number` | `1` | 整体透明度 |
-| `animated` | `boolean \| 'scroll'` | `false` | 是否启用过渡/滚动触发 |
-| `duration` | `string` | `'0.3s'` | 动画时长 |
-| `easing` | `string` | `'ease-out'` | 动画曲线 |
-| `zIndex` | `number` | `1000` | 层级 |
-| `target` | `'parent' \| 'page'` | `'parent'` | 定位目标：父容器/页面 |
-| `hoverIntensity` | `number` | - | hover 时强度倍率（启用后组件接收 pointer events） |
-| `responsive` | `boolean` | `false` | 是否根据窗口宽度切换尺寸 |
-| `mobileHeight` | `string` | - | `responsive` 模式下移动端 height |
-| `tabletHeight` | `string` | - | `responsive` 模式下平板 height |
-| `desktopHeight` | `string` | - | `responsive` 模式下桌面端 height |
-| `mobileWidth` | `string` | - | `responsive` 模式下移动端 width |
-| `tabletWidth` | `string` | - | `responsive` 模式下平板 width |
-| `desktopWidth` | `string` | - | `responsive` 模式下桌面端 width |
-| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | 预设组合 |
-| `gpuOptimized` | `boolean` | `false` | 开启后会加 `translateZ(0)` / `will-change` 以优化渲染 |
-| `onAnimationComplete` | `() => void` | - | `animated="scroll"` 进入可见区域且动画完成后回调 |
-| `className` | `string` | `''` | 额外 class |
-| `style` | `CSSProperties` | `{}` | 额外 style |
+| `position` | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | TextDirection |
+| `strength` | `number` | `2` | Description for strength. |
+| `height` | `string` | `'6rem'` | Description for height. |
+| `width` | `string` | - | Description for width. |
+| `divCount` | `number` | `5` | Description for divCount. |
+| `exponential` | `boolean` | `false` | Description for exponential. |
+| `curve` | `'linear' \| 'bezier' \| 'ease-in' \| 'ease-out' \| 'ease-in-out'` | `'linear'` | Description for curve. |
+| `opacity` | `number` | `1` | Description for opacity. |
+| `animated` | `boolean \| 'scroll'` | `false` | Text/TextTrigger |
+| `duration` | `string` | `'0.3s'` | Description for duration. |
+| `easing` | `string` | `'ease-out'` | Description for easing. |
+| `zIndex` | `number` | `1000` | Description for zIndex. |
+| `target` | `'parent' \| 'page'` | `'parent'` | Text：TextContainer/Text |
+| `hoverIntensity` | `number` | - | Description for hoverIntensity. |
+| `responsive` | `boolean` | `false` | Description for responsive. |
+| `mobileHeight` | `string` | - | Description for mobileHeight. |
+| `tabletHeight` | `string` | - | Description for tabletHeight. |
+| `desktopHeight` | `string` | - | Description for desktopHeight. |
+| `mobileWidth` | `string` | - | Description for mobileWidth. |
+| `tabletWidth` | `string` | - | Description for tabletWidth. |
+| `desktopWidth` | `string` | - | Description for desktopWidth. |
+| `preset` | `'top' \| 'bottom' \| 'left' \| 'right' \| 'subtle' \| 'intense' \| 'smooth' \| 'sharp' \| 'header' \| 'footer' \| 'sidebar' \| 'page-header' \| 'page-footer'` | - | Description for preset. |
+| `gpuOptimized` | `boolean` | `false` | Description for gpuOptimized. |
+| `onAnimationComplete` | `() => void` | - | Description for onAnimationComplete. |
+| `className` | `string` | `''` | Description for className. |
+| `style` | `CSSProperties` | `{}` | Description for style. |
 
-## 使用建议
+## Usage Tips
 
-- **[容器定位]** `target="parent"` 时父容器建议 `position: relative`，并配合 `overflow: hidden` 来裁切边缘。
-- **[兼容性]** 依赖 `backdrop-filter`，不同浏览器表现会略有差异。
+- **[Container positioning]** When `target="parent"`, set parent `position: relative` and use `overflow: hidden` to clip edges.
+- **[Compatibility]** Depends on `backdrop-filter`; browser support may vary.

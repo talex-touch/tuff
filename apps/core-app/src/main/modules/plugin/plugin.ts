@@ -1692,7 +1692,11 @@ export class TouchPlugin implements ITouchPlugin {
    * @param content 文件内容
    * @returns 保存结果
    */
-  savePluginFile(fileName: string, content: unknown): { success: boolean; error?: string } {
+  savePluginFile(
+    fileName: string,
+    content: unknown,
+    options?: { broadcast?: boolean }
+  ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
     const configData = JSON.stringify(content)
     if (typeof configData !== 'string') {
@@ -1711,8 +1715,9 @@ export class TouchPlugin implements ITouchPlugin {
     fse.ensureDirSync(configPath)
     fse.writeFileSync(p, configData)
 
-    // 发送存储更新事件
-    this.broadcastStorageUpdate(fileName)
+    if (options?.broadcast !== false) {
+      this.broadcastStorageUpdate(fileName)
+    }
 
     return { success: true }
   }
@@ -1722,14 +1727,19 @@ export class TouchPlugin implements ITouchPlugin {
    * @param fileName 文件名
    * @returns 删除结果
    */
-  deletePluginFile(fileName: string): { success: boolean; error?: string } {
+  deletePluginFile(
+    fileName: string,
+    options?: { broadcast?: boolean }
+  ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
     const p = path.join(configPath, fileName)
 
     if (fse.existsSync(p)) {
       fse.removeSync(p)
       // 发送存储更新事件
-      this.broadcastStorageUpdate(fileName)
+      if (options?.broadcast !== false) {
+        this.broadcastStorageUpdate(fileName)
+      }
       return { success: true }
     }
 

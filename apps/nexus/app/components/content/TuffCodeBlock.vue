@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   code: string
@@ -15,16 +15,6 @@ const props = withDefaults(defineProps<{
 const { locale } = useI18n()
 const copied = ref(false)
 
-function hashCode(value: string) {
-  let hash = 0
-  for (let i = 0; i < value.length; i += 1)
-    hash = (hash * 31 + value.charCodeAt(i)) | 0
-  return Math.abs(hash).toString(36)
-}
-
-const highlightSeed = `${props.lang || 'text'}:${props.code || ''}`
-const highlightedHtml = useState<string>(`tuff-code-${hashCode(highlightSeed)}`, () => '')
-let highlighterPromise: Promise<any> | null = null
 const canCopy = computed(() => Boolean(props.code?.trim()))
 const resolvedTitle = computed(() => {
   if (props.title)
@@ -57,70 +47,6 @@ async function handleCopy() {
   }
 }
 
-function extractHighlightedCode(html: string) {
-  const match = html.match(/<code[^>]*>([\s\S]*?)<\/code>/)
-  return match?.[1] ?? ''
-}
-
-async function resolveHighlighter() {
-  if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then((mod) => {
-      const { createHighlighter } = mod
-      return createHighlighter({
-        themes: ['github-dark'],
-        langs: [
-          'vue',
-          'ts',
-          'tsx',
-          'js',
-          'jsx',
-          'json',
-          'html',
-          'css',
-          'scss',
-          'bash',
-          'shell',
-          'yaml',
-          'md',
-          'typescript',
-          'javascript',
-        ],
-      })
-    })
-  }
-  return highlighterPromise
-}
-
-async function updateHighlight() {
-  if (isMermaid.value) {
-    highlightedHtml.value = ''
-    return
-  }
-  const code = props.code?.trim()
-  if (!code) {
-    highlightedHtml.value = ''
-    return
-  }
-  try {
-    const highlighter = await resolveHighlighter()
-    const html = highlighter.codeToHtml(props.code, {
-      lang: props.lang || 'text',
-      theme: 'github-dark',
-    })
-    highlightedHtml.value = extractHighlightedCode(html)
-  }
-  catch {
-    highlightedHtml.value = ''
-  }
-}
-
-if (import.meta.server)
-  await updateHighlight()
-
-onMounted(() => {
-  if (!highlightedHtml.value)
-    void updateHighlight()
-})
 </script>
 
 <template>
@@ -152,13 +78,8 @@ onMounted(() => {
         v-text="props.code"
       />
       <code
-        v-else-if="highlightedHtml"
-        :class="['tuff-code-block__code', `language-${props.lang}`]"
-        v-html="highlightedHtml"
-      />
-      <code
         v-else
-        :class="['tuff-code-block__code', `language-${props.lang}`]"
+        :class="['tuff-code-block__code', 'hljs', `language-${props.lang}`]"
         v-text="props.code"
       />
     </component>

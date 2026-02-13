@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `workspace.scripts`
-- Commands: `script / workspace / 脚本 / run`
+- Commands: `script / workspace / run`
 
 ## Core Capabilities
-- 工作区脚本：读取 package.json 脚本并一键执行
+- Workspace scripts: read package.json scripts and run with one click.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data
