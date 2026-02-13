@@ -2,7 +2,10 @@
 
 ## 概述
 
-插件存储 SDK 提供基于文件的持久化存储能力，数据在应用重启后仍然保留。
+插件存储 SDK 提供两类能力：
+
+- 文件型持久化存储（`usePluginStorage`）
+- SQLite 结构化存储（`usePluginSqlite`，需 `sdkapi >= 260215`）
 
 ## 介绍
 
@@ -24,6 +27,28 @@ code: |
 ---
 :::
 
+**SQLite 快速开始（结构化数据）**
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0)'
+  )
+
+  await sqlite.execute('INSERT INTO todos (title, done) VALUES (?, ?)', ['Write docs', 0])
+
+  const result = await sqlite.query<{ id: number; title: string; done: number }>(
+    'SELECT id, title, done FROM todos ORDER BY id DESC LIMIT 20'
+  )
+  console.log(result.rows)
+---
+:::
+
 ---
 
 ## 容量限制
@@ -31,6 +56,28 @@ code: |
 - **每个插件 10MB**，超出后写入会被拒绝
 - 数据存储在 `<userData>/config/plugins/<pluginName>/` 目录下
 - 系统自动处理文件名清理，防止路径遍历攻击
+
+---
+
+## SQLite 权限要求
+
+使用 `usePluginSqlite()` 时，插件 manifest 必须声明：
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260215,
+    "permissions": {
+      "required": ["storage.sqlite"],
+      "optional": []
+    },
+    "permissionReasons": {
+      "storage.sqlite": "将插件业务数据存储到本地 SQLite 数据库"
+    }
+  }
+---
+:::
 
 ---
 
@@ -126,6 +173,37 @@ code: |
 
 ---
 
+**SQLite 操作**
+
+**`execute(sql, params?)`**  
+执行插入/更新/删除/DDL 语句。
+
+**`query<T>(sql, params?)`**  
+执行查询语句并返回类型化行数据。
+
+**`transaction(statements)`**  
+在一个事务中执行多条语句（全成功或全回滚）。
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  const sqlite = usePluginSqlite()
+
+  await sqlite.transaction([
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['A', 0]
+    },
+    {
+      sql: 'INSERT INTO todos (title, done) VALUES (?, ?)',
+      params: ['B', 0]
+    }
+  ])
+---
+:::
+
+---
+
 **高级功能**
 
 **`getStats()`**
@@ -214,6 +292,7 @@ code: |
 
 - 数据以文件形式保存在插件独立目录中，避免跨插件访问。
 - 写入时自动进行文件名清理与 JSON 序列化，降低安全风险。
+- SQLite 数据文件位于 `<userData>/modules/plugins/<pluginName>/data/plugin-sdk.sqlite`。
 
 ## 最佳实践
 

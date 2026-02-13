@@ -530,6 +530,21 @@ export function useApplicationUpgrade() {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  async function shouldSuppressUpdateDialog(release: GitHubRelease): Promise<boolean> {
+    try {
+      const status = await appUpdate.getStatus()
+      if (!status?.downloadReady) {
+        return false
+      }
+      if (!status.downloadReadyVersion) {
+        return true
+      }
+      return status.downloadReadyVersion === release.tag_name
+    } catch {
+      return false
+    }
+  }
+
   /**
    * Check application update
    * @param force - Force check regardless of frequency settings
@@ -553,14 +568,31 @@ export function useApplicationUpgrade() {
 
         if (result.release) {
           const currentRelease = result.release
+          const suppressDialog = await shouldSuppressUpdateDialog(currentRelease)
+          if (suppressDialog) {
+            return result
+          }
+          let userActed = false
           await blowMention(t('update.new_version_available'), () => {
             return h(AppUpdateView, {
               release: currentRelease as unknown as Record<string, unknown>,
-              onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
-              onSkipVersion: () => handleIgnoreVersion(currentRelease),
-              onRemindLater: () => handleRemindLaterSelection(currentRelease)
+              onUpdateNow: () => {
+                userActed = true
+                void handleUpdateNowSelection(currentRelease)
+              },
+              onSkipVersion: () => {
+                userActed = true
+                void handleIgnoreVersion(currentRelease)
+              },
+              onRemindLater: () => {
+                userActed = true
+                void handleRemindLaterSelection(currentRelease)
+              }
             })
           })
+          if (!userActed) {
+            await handleRemindLaterSelection(currentRelease, { silent: true })
+          }
         }
       } else if (result.error) {
         appStates.noUpdateAvailable = false
@@ -648,16 +680,23 @@ export function useApplicationUpgrade() {
     }
   }
 
-  async function handleRemindLaterSelection(release: GitHubRelease): Promise<void> {
+  async function handleRemindLaterSelection(
+    release: GitHubRelease,
+    options?: { silent?: boolean }
+  ): Promise<void> {
     try {
       await appUpdate.recordAction(release.tag_name, 'remind-later')
-      toast.success(t('update.remind_later_success', { hours: 8 }))
+      if (!options?.silent) {
+        toast.success(t('update.remind_later_success', { hours: 8 }))
+      }
       appStates.hasUpdate = false
       appStates.noUpdateAvailable = true
       clearUpdateErrorMessage()
     } catch (err) {
       console.error('[useApplicationUpgrade] Failed to set remind later:', err)
-      toast.error(t('update.remind_later_failed'))
+      if (!options?.silent) {
+        toast.error(t('update.remind_later_failed'))
+      }
     }
   }
 
@@ -779,12 +818,31 @@ export function useApplicationUpgrade() {
             appStates.hasUpdate = true
 
             const currentRelease = data.release
-            blowMention(t('update.new_version_available'), () => {
-              return h(AppUpdateView, {
-                release: currentRelease as unknown as Record<string, unknown>,
-                onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
-                onSkipVersion: () => void handleIgnoreVersion(currentRelease),
-                onRemindLater: () => void handleRemindLaterSelection(currentRelease)
+            void shouldSuppressUpdateDialog(currentRelease).then((suppressDialog) => {
+              if (suppressDialog) {
+                return
+              }
+              let userActed = false
+              void blowMention(t('update.new_version_available'), () => {
+                return h(AppUpdateView, {
+                  release: currentRelease as unknown as Record<string, unknown>,
+                  onUpdateNow: () => {
+                    userActed = true
+                    void handleUpdateNowSelection(currentRelease)
+                  },
+                  onSkipVersion: () => {
+                    userActed = true
+                    void handleIgnoreVersion(currentRelease)
+                  },
+                  onRemindLater: () => {
+                    userActed = true
+                    void handleRemindLaterSelection(currentRelease)
+                  }
+                })
+              }).then(async () => {
+                if (!userActed) {
+                  await handleRemindLaterSelection(currentRelease, { silent: true })
+                }
               })
             })
           }

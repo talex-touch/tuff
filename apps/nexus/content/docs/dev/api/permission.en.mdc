@@ -50,6 +50,7 @@ code: |
 |  | `ai.agents` | High | Agent system |
 | **Storage** | `storage.plugin` | Low | Plugin private storage (auto-granted) |
 |  | `storage.shared` | Medium | Cross-plugin shared storage |
+|  | `storage.sqlite` | Medium | Plugin local SQLite database access |
 | **Window** | `window.create` | Low | Create windows (auto-granted) |
 |  | `window.capture` | High | Screen capture |
 
@@ -139,6 +140,49 @@ code: |
   
   // Get all permission status
   const allStatus = await status()
+---
+:::
+
+**SQLite SDK (sdkapi >= 260215)**
+
+When using `usePluginSqlite()`, declare `storage.sqlite` in required permissions:
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260215,
+    "permissions": {
+      "required": ["storage.sqlite"],
+      "optional": []
+    },
+    "permissionReasons": {
+      "storage.sqlite": "Store plugin business data in the local SQLite database"
+    }
+  }
+---
+:::
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
+  )
+
+  await sqlite.execute(
+    'INSERT INTO notes (title, created_at) VALUES (?, ?)',
+    ['hello', new Date().toISOString()]
+  )
+
+  const result = await sqlite.query<{ id: number; title: string }>(
+    'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
+  )
+  console.log(result.rows)
 ---
 :::
 

@@ -117,6 +117,8 @@ export const PermissionKeys = {
   STORAGE_PLUGIN_DESC: 'permission.storage.plugin.desc',
   STORAGE_SHARED_NAME: 'permission.storage.shared.name',
   STORAGE_SHARED_DESC: 'permission.storage.shared.desc',
+  STORAGE_SQLITE_NAME: 'permission.storage.sqlite.name',
+  STORAGE_SQLITE_DESC: 'permission.storage.sqlite.desc',
 
   // Window permissions
   WINDOW_CREATE_NAME: 'permission.window.create.name',

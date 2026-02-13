@@ -68,7 +68,8 @@
     },
     "storage": {
       "plugin": { "name": "Plugin Storage", "desc": "Use plugin private storage" },
-      "shared": { "name": "Shared Storage", "desc": "Access cross-plugin shared storage" }
+      "shared": { "name": "Shared Storage", "desc": "Access cross-plugin shared storage" },
+      "sqlite": { "name": "Plugin SQLite", "desc": "Read and write plugin local SQLite database" }
     },
     "window": {
       "create": { "name": "Create Windows", "desc": "Create new windows or views" },

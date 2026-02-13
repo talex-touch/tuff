@@ -68,7 +68,8 @@
     },
     "storage": {
       "plugin": { "name": "插件存储", "desc": "使用插件私有存储空间" },
-      "shared": { "name": "共享存储", "desc": "访问跨插件共享存储" }
+      "shared": { "name": "共享存储", "desc": "访问跨插件共享存储" },
+      "sqlite": { "name": "插件 SQLite", "desc": "读写插件本地 SQLite 数据库" }
     },
     "window": {
       "create": { "name": "创建窗口", "desc": "创建新窗口或视图" },

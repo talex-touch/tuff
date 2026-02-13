@@ -260,8 +260,14 @@ async function fetchFormModels() {
     }
     else {
       // For create mode, use a temporary test via the models endpoint
-      const data = await $fetch<{ models: Array<{ id: string }> }>('/api/dashboard/intelligence/models')
-      models = data.models?.map(m => m.id) || []
+      const data = await $fetch<{ models: string[] }>('/api/dashboard/intelligence/models', {
+        method: 'POST',
+        body: {
+          ...body,
+          type: form.type,
+        },
+      })
+      models = data.models || []
     }
 
     if (models.length)
@@ -630,10 +636,9 @@ function providerTypeLabel(type: string) {
                     {{ t('dashboard.sections.intelligence.form.models') }}
                   </label>
                   <TxButton
-                    v-if="formMode === 'edit'"
                     variant="bare"
                     size="mini"
-                    :disabled="fetchingFormModels"
+                    :disabled="fetchingFormModels || (formMode === 'create' && form.type !== 'local' && !form.apiKey.trim())"
                     @click="fetchFormModels"
                   >
                     {{ fetchingFormModels ? t('dashboard.sections.intelligence.form.fetchingModels') : t('dashboard.sections.intelligence.form.fetchModels') }}

@@ -16,6 +16,7 @@ import type { DrawerEmits, DrawerProps } from './types'
  * @component
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { getZIndex, nextZIndex, refreshZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxDrawer',
@@ -28,12 +29,12 @@ const props = withDefaults(defineProps<DrawerProps>(), {
   showClose: true,
   closeOnClickMask: true,
   closeOnPressEscape: true,
-  zIndex: 1998,
 })
 
 const emit = defineEmits<DrawerEmits>()
 
 const drawerRef = ref<HTMLElement | null>(null)
+const internalZIndex = ref(getZIndex())
 
 /**
  * Internal display state for animation purposes.
@@ -48,7 +49,7 @@ const display = computed({
  */
 const drawerStyle = computed(() => ({
   '--tx-drawer-width': props.width,
-  '--tx-drawer-z-index': props.zIndex,
+  '--tx-drawer-z-index': props.zIndex ?? internalZIndex.value,
 }))
 
 /**
@@ -91,6 +92,10 @@ watch(
   () => props.visible,
   (newVal) => {
     if (newVal) {
+      if (props.zIndex != null) {
+        refreshZIndex(props.zIndex, 'drawer(zIndex prop)')
+      }
+      internalZIndex.value = props.zIndex ?? nextZIndex()
       emit('open')
       trapFocus()
     }

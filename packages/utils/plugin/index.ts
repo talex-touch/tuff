@@ -141,14 +141,21 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    * @param content The content of the file.
    * @returns The result of the save operation.
    */
-  savePluginFile: (fileName: string, content: object) => { success: boolean, error?: string }
+  savePluginFile: (
+    fileName: string,
+    content: object,
+    options?: { broadcast?: boolean }
+  ) => { success: boolean, error?: string }
 
   /**
    * Delete the plugin file.
    * @param fileName The name of the file.
    * @returns The result of the delete operation.
    */
-  deletePluginFile: (fileName: string) => { success: boolean, error?: string }
+  deletePluginFile: (
+    fileName: string,
+    options?: { broadcast?: boolean }
+  ) => { success: boolean, error?: string }
 
   /**
    * List all files in the plugin.

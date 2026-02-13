@@ -10,6 +10,7 @@ import {
   ref,
 
 } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxPopperDialog',
@@ -41,6 +42,7 @@ const props = defineProps({
 const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 let previouslyFocusedElement: HTMLElement | null = null
 
 function sleep(ms: number): Promise<void> {
@@ -48,6 +50,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 onMounted(() => {
+  zIndex.value = nextZIndex()
   previouslyFocusedElement = document.activeElement as HTMLElement
 
   if (props.render) {
@@ -83,6 +86,7 @@ provide('destroy', destroy)
       ref="dialogWrapper"
       class="tx-popper-dialog"
       :class="{ 'tx-popper-dialog--closing': isClosing }"
+      :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? 'tx-popper-dialog-title' : undefined"
@@ -139,7 +143,6 @@ provide('destroy', destroy)
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
   background: rgba(0, 0, 0, 0.3);
   transition: opacity 0.25s ease;
 

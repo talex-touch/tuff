@@ -2,6 +2,7 @@
 import type { PropType } from 'vue'
 import type { TouchTipButton } from './types'
 import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxTouchTip',
@@ -35,6 +36,7 @@ interface ButtonState {
 
 const btnArray = ref<Array<{ value: ButtonState }>>([])
 const wholeDom = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 let previouslyFocusedElement: HTMLElement | null = null
 
 function sleep(ms: number): Promise<void> {
@@ -102,6 +104,7 @@ async function forClose(): Promise<void> {
 }
 
 onMounted(() => {
+  zIndex.value = nextZIndex()
   previouslyFocusedElement = document.activeElement as HTMLElement
 
   if (wholeDom.value) {
@@ -123,7 +126,7 @@ onUnmounted(() => {
 
 <template>
   <teleport to="body">
-    <div class="tx-touch-tip" role="dialog" aria-modal="true">
+    <div class="tx-touch-tip" role="dialog" aria-modal="true" :style="{ zIndex }">
       <div
         ref="wholeDom"
         class="tx-touch-tip__container fake-background"
@@ -212,7 +215,6 @@ onUnmounted(() => {
 .tx-touch-tip {
   position: fixed;
   inset: 0;
-  z-index: 10000;
 
   &::before {
     content: '';

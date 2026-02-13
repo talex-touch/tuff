@@ -3,6 +3,7 @@ import type { PopoverProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import TxCard from '../../card/src/TxCard.vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxPopover' })
 
@@ -48,6 +49,7 @@ const open = computed({
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
 const arrowRef = ref<HTMLElement | null>(null)
+const zIndex = ref(getZIndex())
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
 
@@ -291,6 +293,7 @@ watch(
       return
     }
 
+    zIndex.value = nextZIndex()
     lastOpenedAt.value = performance.now()
     await nextTick()
     await update()
@@ -343,7 +346,7 @@ onBeforeUnmount(() => {
           { 'is-fusion': !!props.fusion, 'is-motion-split': motion === 'split' },
         ]"
         :data-side="arrowSide"
-        :style="[floatingStyles, popoverVars]"
+        :style="[floatingStyles, popoverVars, { zIndex }]"
       >
         <svg class="tx-popover__fusion-filters" width="0" height="0" aria-hidden="true">
           <defs>
@@ -403,7 +406,6 @@ onBeforeUnmount(() => {
 }
 
 .tx-popover {
-  z-index: var(--tx-index-popper, 2000);
   padding: 0;
   background: transparent;
   border: none;

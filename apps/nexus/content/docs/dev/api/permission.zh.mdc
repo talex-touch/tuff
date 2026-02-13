@@ -50,6 +50,7 @@ code: |
 | | `ai.agents` | 高 | 智能体系统 |
 | **存储** | `storage.plugin` | 低 | 插件私有存储（自动授予） |
 | | `storage.shared` | 中 | 跨插件共享存储 |
+| | `storage.sqlite` | 中 | 访问插件本地 SQLite 数据库 |
 | **窗口** | `window.create` | 低 | 创建窗口（自动授予） |
 | | `window.capture` | 高 | 屏幕截图 |
 
@@ -139,6 +140,49 @@ code: |
   
   // 获取所有权限状态
   const allStatus = await status()
+---
+:::
+
+**SQLite SDK（sdkapi >= 260215）**
+
+当使用 `usePluginSqlite()` 时，需要在 manifest 中声明 `storage.sqlite` 必需权限：
+
+:::TuffCodeBlock{lang="json"}
+---
+code: |
+  {
+    "sdkapi": 260215,
+    "permissions": {
+      "required": ["storage.sqlite"],
+      "optional": []
+    },
+    "permissionReasons": {
+      "storage.sqlite": "将插件业务数据存储到本地 SQLite 数据库"
+    }
+  }
+---
+:::
+
+:::TuffCodeBlock{lang="ts"}
+---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
+
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+    'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
+  )
+
+  await sqlite.execute(
+    'INSERT INTO notes (title, created_at) VALUES (?, ?)',
+    ['hello', new Date().toISOString()]
+  )
+
+  const result = await sqlite.query<{ id: number; title: string }>(
+    'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
+  )
+  console.log(result.rows)
 ---
 :::
 

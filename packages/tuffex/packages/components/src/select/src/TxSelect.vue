@@ -4,6 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } f
 import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TuffSelect',
@@ -43,6 +44,7 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const selectRef = ref<HTMLElement | null>(null)
 const selectedLabel = ref('')
+const zIndex = ref(getZIndex())
 
 const searchInputRef = ref<any>(null)
 const searchQuery = ref('')
@@ -213,6 +215,7 @@ watch(
       return
     }
 
+    zIndex.value = nextZIndex()
     await nextTick()
     await updatePosition()
 
@@ -282,7 +285,7 @@ onBeforeUnmount(() => {
           v-show="isOpen"
           ref="dropdownRef"
           class="tuff-select__dropdown"
-          :style="floatingStyles"
+          :style="[floatingStyles, { zIndex }]"
         >
           <TxCard class="tuff-select__panel" variant="solid" background="glass" shadow="soft" :radius="18" :padding="4">
             <div v-if="searchable && !isEditable" class="tuff-select__search">
@@ -322,7 +325,6 @@ onBeforeUnmount(() => {
   }
 
   &__dropdown {
-    z-index: 1000;
     width: 100%;
     display: flex;
     flex-direction: column;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PickerColumn, PickerEmits, PickerProps, PickerValue } from './types'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxPicker' })
 
@@ -28,6 +29,7 @@ const open = computed({
 })
 
 const mountedOnce = ref(false)
+const popupZIndex = ref(getZIndex())
 
 const columns = computed<PickerColumn[]>(() => props.columns ?? [])
 
@@ -213,6 +215,8 @@ watch(
   open,
   async (v) => {
     if (v) {
+      if (props.popup)
+        popupZIndex.value = nextZIndex()
       emit('open')
       mountedOnce.value = true
       await syncScrollPositions('auto')
@@ -328,7 +332,7 @@ onBeforeUnmount(() => {
 
   <Teleport v-else to="body">
     <Transition name="tx-picker-popup">
-      <div v-if="open && (!lazyMount || mountedOnce)" class="tx-picker-popup" @pointerup="onPointerUp">
+      <div v-if="open && (!lazyMount || mountedOnce)" class="tx-picker-popup" :style="{ zIndex: popupZIndex }" @pointerup="onPointerUp">
         <div class="tx-picker-popup__mask" @click="onMaskClick" />
 
         <div class="tx-picker-popup__panel" :class="{ 'is-disabled': disabled }">
@@ -507,7 +511,6 @@ onBeforeUnmount(() => {
 .tx-picker-popup {
   position: fixed;
   inset: 0;
-  z-index: 3000;
 }
 
 .tx-picker-popup__mask {

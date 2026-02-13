@@ -55,6 +55,9 @@ export class TrayManager extends BaseModule {
     }
 
     const shouldShowTray = this.shouldShowTray()
+    if (process.env.TUFF_DEBUG_TRAY === '1') {
+      console.log('[TrayManager] shouldShowTray', { shouldShowTray })
+    }
     this.registerWindowEvents()
     this.registerEventListeners()
     this.setupAutoStart()
@@ -72,7 +75,16 @@ export class TrayManager extends BaseModule {
 
   private initializeTray(): void {
     try {
+      const debugTray = process.env.TUFF_DEBUG_TRAY === '1'
       const icon = TrayIconProvider.getIcon()
+
+      if (debugTray) {
+        console.log('[TrayManager] icon resolved', {
+          empty: icon.isEmpty(),
+          size: icon.getSize(),
+          path: TrayIconProvider.getIconPath()
+        })
+      }
 
       if (icon.isEmpty()) {
         console.error('[TrayManager] Icon is empty, cannot create tray')
@@ -85,6 +97,37 @@ export class TrayManager extends BaseModule {
       }
 
       this.tray = new Tray(icon)
+
+      if (debugTray) {
+        try {
+          const logTrayBounds = (stage: string) => {
+            const tray = this.tray
+            if (!tray) {
+              console.log('[TrayManager] tray bounds', { stage, available: false })
+              return
+            }
+            try {
+              console.log('[TrayManager] tray bounds', {
+                stage,
+                bounds: tray.getBounds(),
+                destroyed: typeof tray.isDestroyed === 'function' ? tray.isDestroyed() : undefined
+              })
+            } catch (boundsError) {
+              console.warn('[TrayManager] tray bounds failed', { stage, error: boundsError })
+            }
+          }
+
+          if (process.platform === 'darwin') {
+            this.tray.setTitle('tuff')
+          }
+          logTrayBounds('created')
+          setTimeout(() => logTrayBounds('after-1s'), 1000)
+          setTimeout(() => logTrayBounds('after-3s'), 3000)
+          setTimeout(() => logTrayBounds('after-6s'), 6000)
+        } catch (error) {
+          console.warn('[TrayManager] tray debug failed', error)
+        }
+      }
 
       if (process.platform === 'darwin') {
         icon.setTemplateImage(true)
@@ -102,6 +145,9 @@ export class TrayManager extends BaseModule {
 
   private destroyTray(): void {
     if (this.tray) {
+      if (process.env.TUFF_DEBUG_TRAY === '1') {
+        console.log('[TrayManager] destroyTray called')
+      }
       this.tray.destroy()
       this.tray = null
     }
@@ -401,6 +447,9 @@ export class TrayManager extends BaseModule {
     })
 
     this.transport.on(TrayEvents.show.set, (show) => {
+      if (process.env.TUFF_DEBUG_TRAY === '1') {
+        console.log('[TrayManager] TrayEvents.show.set', { show })
+      }
       const shouldShow = show === true
       if (shouldShow && !this.tray) {
         this.initializeTray()

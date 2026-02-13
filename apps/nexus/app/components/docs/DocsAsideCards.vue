@@ -3,9 +3,11 @@ import { hasWindow } from '@talex-touch/utils/env'
 import { computed, ref } from 'vue'
 
 const query = ref('')
+const assistantExpanded = ref(false)
 const runtimeConfig = useRuntimeConfig()
 const { locale } = useI18n()
 const docMetaState = useState<Record<string, any>>('docs-meta', () => ({}))
+const docTitleState = useState<string>('docs-title', () => '')
 const showCardChrome = computed(() => {
   const value = runtimeConfig.public?.docs?.asideCardChrome as string | boolean | undefined
   if (value === true)
@@ -49,13 +51,58 @@ const aiDescription = computed(() => (locale.value === 'zh'
   ? 'AI 生成内容，仅供参考。最终以 Verified 文档为准。'
   : 'AI generated content for reference only. Please rely on Verified docs.'
 ))
+const isZh = computed(() => locale.value === 'zh')
+const docTitle = computed(() => {
+  if (docTitleState.value)
+    return docTitleState.value
+  const rawTitle = docMetaState.value?.title
+  return typeof rawTitle === 'string' ? rawTitle.trim() : ''
+})
+const docPath = computed(() => {
+  const path = docMetaState.value?.path
+  return typeof path === 'string' ? path.trim() : ''
+})
+const assistantTitle = computed(() => 'Tuff Assistant')
+const assistantMeta = computed(() => (isZh.value
+  ? 'Tool calling · 文档解析'
+  : 'Tool calling · Doc parsing'
+))
+const assistantDescription = computed(() => (isZh.value
+  ? 'AI 需要时会解析当前文档并调用工具。'
+  : 'The assistant parses the current doc and calls tools when needed.'
+))
+const assistantPlaceholder = computed(() => (isZh.value ? '输入问题或粘贴错误...' : 'Ask docs or paste an issue...'))
+const assistantAriaLabel = computed(() => (assistantExpanded.value
+  ? (isZh.value ? '收起 Tuff Assistant' : 'Collapse Tuff Assistant')
+  : (isZh.value ? '展开 Tuff Assistant' : 'Expand Tuff Assistant')
+))
 
-function handleAsk() {
-  const text = query.value.trim()
+function buildDiscussionBody(question: string) {
+  const contextLines: string[] = []
+  if (docTitle.value)
+    contextLines.push(`Doc: ${docTitle.value}`)
+  if (docPath.value)
+    contextLines.push(`Path: ${docPath.value}`)
+  if (!contextLines.length)
+    return question
+  return `${question}\n\n---\n${contextLines.join('\n')}`
+}
+
+function handleAsk(value?: string) {
+  const text = (value ?? query.value).trim()
   if (!text || !hasWindow())
     return
-  const url = `https://github.com/talex-touch/tuff/discussions/new?category=Q%26A&title=${encodeURIComponent(text)}`
+  const params = new URLSearchParams({
+    category: 'Q&A',
+    title: text,
+    body: buildDiscussionBody(text),
+  })
+  const url = `https://github.com/talex-touch/tuff/discussions/new?${params.toString()}`
   window.open(url, '_blank', 'noopener')
+}
+
+function toggleAssistant() {
+  assistantExpanded.value = !assistantExpanded.value
 }
 </script>
 
@@ -72,19 +119,30 @@ function handleAsk() {
     </div>
 
     <div class="docs-aside-card">
-      <div class="docs-aside-card__title">
-        <span class="docs-aside-card__sparkle">✦</span>
-        Zen Assistant
+      <div class="docs-aside-card__header">
+        <div class="docs-aside-card__title">
+          <span class="docs-aside-card__sparkle">✦</span>
+          {{ assistantTitle }}
+        </div>
+        <TxButton
+          variant="ghost"
+          size="mini"
+          class="docs-aside-card__toggle"
+          native-type="button"
+          :aria-label="assistantAriaLabel"
+          @click="toggleAssistant"
+        >
+          <span :class="assistantExpanded ? 'i-carbon-chevron-up' : 'i-carbon-search'" class="text-sm" />
+        </TxButton>
       </div>
-      <p class="docs-aside-card__desc">
-        Get instant help with component implementation.
+      <p class="docs-aside-card__meta">
+        {{ assistantMeta }}
       </p>
-      <form class="docs-aside-card__field" @submit.prevent="handleAsk">
-        <TuffInput v-model="query" placeholder="Ask docs..." clearable>
-          <template #suffix>
-            <TxButton circle size="small" variant="ghost" native-type="submit" icon="i-carbon-arrow-right" aria-label="Ask Zen Assistant" />
-          </template>
-        </TuffInput>
+      <p v-if="assistantExpanded" class="docs-aside-card__desc">
+        {{ assistantDescription }}
+      </p>
+      <form v-if="assistantExpanded" class="docs-aside-card__field" @submit.prevent="handleAsk">
+        <TxSearchInput v-model="query" :placeholder="assistantPlaceholder" clearable @search="handleAsk" />
       </form>
     </div>
 
@@ -158,6 +216,23 @@ function handleAsk() {
 .docs-aside-card__sparkle {
   color: #3b82f6;
   font-size: 14px;
+}
+
+.docs-aside-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.docs-aside-card__toggle {
+  color: rgba(100, 116, 139, 0.9);
+}
+
+.docs-aside-card__meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .docs-aside-card__desc {

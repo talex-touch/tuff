@@ -21,7 +21,8 @@ import type { BottomDialogProps, DialogButton } from './types'
  *
  * @component
  */
-import { onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
   name: 'TxBottomDialog',
@@ -49,6 +50,8 @@ interface ButtonState {
 
 const wholeDom = ref<HTMLElement | null>(null)
 const btnArray = ref<Array<{ value: ButtonState }>>([])
+const baseZIndex = ref(getZIndex())
+const zIndex = computed(() => baseZIndex.value + (props.index ?? 0))
 let previouslyFocusedElement: HTMLElement | null = null
 
 /**
@@ -132,6 +135,7 @@ function scrollListener(): void {
 }
 
 onMounted(() => {
+  baseZIndex.value = nextZIndex()
   previouslyFocusedElement = document.activeElement as HTMLElement
   if (wholeDom.value) {
     wholeDom.value.focus()
@@ -166,7 +170,7 @@ async function forClose(): Promise<void> {
     <div
       ref="wholeDom"
       class="tx-bottom-dialog"
-      :style="`z-index: ${index + 10000}`"
+      :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
       :aria-labelledby="title ? 'tx-dialog-title' : undefined"
