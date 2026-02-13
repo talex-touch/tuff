@@ -2080,7 +2080,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       const size = img.getSize()
       if (size.width <= THUMBNAIL_SIZE && size.height <= THUMBNAIL_SIZE) return null
 
-      const resized = img.resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, quality: 'low' })
+      const resized = img.resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, quality: 'good' })
       const jpegBuffer = resized.toJPEG(50)
       if (jpegBuffer.length === 0) return null
 
