@@ -15,12 +15,13 @@ import TuffLandingPricing from './landing/TuffLandingPricing.vue'
 import TuffLandingStarSnippets from './landing/TuffLandingStarSnippets.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingWaitlist from './landing/TuffLandingWaitlist.vue'
+import { useTuffHomeAdaptation } from '~/composables/useTuffHomeAdaptation'
 import { useTuffHomeSections } from '~/composables/useTuffHomeSections'
 
 const showStarSnippets = false
 const showAggregation = false
 const showPricing = false
-const enableSmoothScroll = !false
+const { enableSmoothScroll } = useTuffHomeAdaptation()
 
 const {
   smoothScrollContainerRef,
@@ -39,7 +40,7 @@ const {
   faqSectionRef,
   waitlistSectionRef,
 } = useTuffHomeSections({
-  enableSmoothScroll,
+  enableSmoothScroll: enableSmoothScroll.value,
 })
 
 const colorMode = useColorMode()
@@ -232,5 +233,14 @@ useHead({
 .TuffHome-SmoothSection :deep(button) {
   border: none;
   outline: none;
+}
+
+@media (max-width: 768px) {
+  .TuffHome-SmoothSection {
+    min-height: 100svh;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
 }
 </style>

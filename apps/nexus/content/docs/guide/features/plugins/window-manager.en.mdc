@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `window.app`
-- Commands: `window / app / 应用 / 窗口管理`
+- Commands: `window / app`
 
 ## Core Capabilities
-- 桌面窗口调度：激活、关闭、贴边、置顶、启动
+- Desktop window management: activate, close, snap, pin, and launch.
 - Supported platforms: `win32, darwin`
 
 ## Config & Data

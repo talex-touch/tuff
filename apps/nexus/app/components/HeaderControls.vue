@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onClickOutside, useEventListener } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useGlobalSearch } from '~/composables/useGlobalSearch'
 
 interface Props {
   githubUrl?: string
@@ -16,93 +16,32 @@ const props = withDefaults(defineProps<Props>(), {
   showLanguageToggle: true,
 })
 
-const { locale } = useI18n()
+const { t } = useI18n()
+const { summonSearch } = useGlobalSearch()
 
-const _searchButtonLabel = computed(() => locale.value === 'zh' ? '搜索文档' : 'Search docs')
+const searchButtonLabel = computed(() => t('search.open'))
+const searchButtonAriaLabel = computed(() => t('search.openAria'))
 
-const _searchButtonAriaLabel = computed(() => locale.value === 'zh' ? '打开文档搜索' : 'Open docs search')
-
-const isSearchOpen = ref(false)
-const searchButtonRef = ref<HTMLElement | null>(null)
-const searchPanelRef = ref<HTMLElement | null>(null)
-let stopClickOutside: (() => void) | null = null
-
-function _toggleSearch() {
-  if (!props.showSearchButton)
-    return
-  isSearchOpen.value = !isSearchOpen.value
+async function onSearchClick(event: MouseEvent) {
+  const target = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  await summonSearch(target)
 }
-
-function _onSearchPanelClick(event: MouseEvent) {
-  const target = event.target as HTMLElement | null
-  if (target?.closest('a'))
-    isSearchOpen.value = false
-}
-
-watch(() => props.showSearchButton, (value) => {
-  if (!value)
-    isSearchOpen.value = false
-  registerClickOutside()
-})
-
-watch(isSearchOpen, (open) => {
-  if (!open)
-    return
-  nextTick(() => {
-    const input = searchPanelRef.value?.querySelector('input')
-    if (input instanceof HTMLInputElement)
-      input.focus()
-  })
-})
-
-useEventListener(window, 'keydown', (event: KeyboardEvent) => {
-  if (event.key === 'Escape')
-    isSearchOpen.value = false
-})
-
-function registerClickOutside() {
-  stopClickOutside?.()
-  stopClickOutside = null
-
-  if (!props.showSearchButton)
-    return
-
-  if (!searchPanelRef.value)
-    return
-
-  stopClickOutside = onClickOutside(searchPanelRef, () => {
-    isSearchOpen.value = false
-  }, { ignore: [searchButtonRef] })
-}
-
-onMounted(() => {
-  registerClickOutside()
-})
-
-watch([searchButtonRef, searchPanelRef], () => {
-  registerClickOutside()
-})
-
-onBeforeUnmount(() => {
-  stopClickOutside?.()
-  stopClickOutside = null
-})
 </script>
 
 <template>
   <div
     class="HeaderControls flex items-center justify-end gap-2 overflow-hidden text-sm"
   >
-    <!-- <div
+    <div
       v-if="props.showSearchButton"
       class="relative w-full sm:w-auto"
     >
       <button
-        ref="searchButtonRef"
         type="button"
         class="w-full inline-flex items-center justify-between gap-3 border border-transparent rounded-full bg-white/85 px-4 py-2 text-left text-black/70 font-medium shadow-[0_8px_18px_rgba(18,18,24,0.06)] transition hover:border-primary/20 dark:bg-dark/80 hover:bg-white dark:text-light/75 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 dark:hover:bg-dark/70 dark:hover:text-light dark:focus-visible:ring-light/25"
         :aria-label="searchButtonAriaLabel"
-        @click="toggleSearch"
+        data-role="global-search-trigger"
+        @click="onSearchClick"
       >
         <span class="flex items-center gap-2">
           <span class="i-carbon-search text-lg" />
@@ -112,25 +51,7 @@ onBeforeUnmount(() => {
           /
         </kbd>
       </button>
-
-      <transition
-        enter-active-class="transition duration-150 ease-out"
-        enter-from-class="transform -translate-y-2 opacity-0"
-        enter-to-class="transform translate-y-0 opacity-100"
-        leave-active-class="transition duration-100 ease-in"
-        leave-from-class="transform translate-y-0 opacity-100"
-        leave-to-class="transform -translate-y-2 opacity-0"
-      >
-        <div
-          v-if="isSearchOpen"
-          ref="searchPanelRef"
-          class="absolute right-0 top-[calc(100%+0.75rem)] z-30 w-[min(380px,85vw)] border border-primary/10 rounded-3xl bg-white/95 p-4 shadow-[0_20px_40px_rgba(18,18,28,0.18)] backdrop-blur-2xl dark:border-light/15 dark:bg-dark/90 dark:shadow-[0_24px_48px_rgba(0,0,0,0.65)]"
-          @click="onSearchPanelClick"
-        >
-          <Search />
-        </div>
-      </transition>
-    </div> -->
+    </div>
 
     <div class="relative flex items-center gap-[1.5] sm:ml-auto">
       <template v-if="props.showLanguageToggle">
@@ -161,6 +82,3 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-</style>

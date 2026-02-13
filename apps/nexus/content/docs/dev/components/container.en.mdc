@@ -7,16 +7,16 @@ since: 1.0.0
 tags: [container, layout, grid]
 syncStatus: migrated
 ---
-# Container 容器
+# Container
 
-容器组件是页面布局的基础，提供了灵活的布局选项和响应式设计支持。TouchX UI 的容器组件帮助您快速构建结构化的页面布局。
+Layout container with flexible options and responsive support
 
 <script setup lang="ts">
 import ContainerBasicDemo from '~/components/content/demos/ContainerBasicDemo.vue'
 import ContainerBasicDemoSource from '~/components/content/demos/ContainerBasicDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Container
 :::TuffDemoWrapper{demo="ContainerContainerDemo" code-lang="vue"}
@@ -43,95 +43,95 @@ code: |
 ---
 :::
 
-最简单的容器用法：
+Simplest container usage:
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxContainer>
-      <p>这是容器内的内容</p>
+      <p>Content inside the container</p>
     </TxContainer>
   </template>
 ---
 :::
 
-## 容器类型
+## Container Types
 
-### 流体容器
-占满整个父容器的宽度：
+### Fluid Containers
+Fill the full parent width:
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxContainer fluid>
-      <p>流体容器，宽度100%</p>
+      <p>Fluid container, width 100%</p>
     </TxContainer>
   </template>
 ---
 :::
 
-### 固定宽度容器
-根据断点设置最大宽度：
+### Fixed-width Containers
+Set max width by breakpoints:
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxContainer max-width="1200px">
-      <p>最大宽度1200px的容器</p>
+      <p>Container with max width 1200px</p>
     </TxContainer>
   </template>
 ---
 :::
 
-### 响应式容器
-在不同断点下有不同的最大宽度：
+### Responsive Containers
+Different max widths across breakpoints:
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxContainer responsive>
-      <p>响应式容器</p>
+      <p>Responsive container</p>
     </TxContainer>
   </template>
 ---
 :::
 
-## 容器间距
+## Container Spacing
 
-### 内边距
+### Padding
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <div class="padding-demo">
-      <TxContainer padding="small">小间距容器</TxContainer>
-      <TxContainer padding="medium">中等间距容器</TxContainer>
-      <TxContainer padding="large">大间距容器</TxContainer>
-      <TxContainer :padding="32">自定义间距容器</TxContainer>
+      <TxContainer padding="small">Small padding container</TxContainer>
+      <TxContainer padding="medium">Medium padding container</TxContainer>
+      <TxContainer padding="large">Large padding container</TxContainer>
+      <TxContainer :padding="32">Custom padding container</TxContainer>
     </div>
   </template>
 ---
 :::
 
-### 外边距
+### Margin
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <TxContainer margin="auto">
-      <p>水平居中的容器</p>
+      <p>Centered container</p>
     </TxContainer>
   </template>
 ---
 :::
 
-## 栅格系统
+## Grid System
 
-### 基础栅格
+### Basic Grid
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -139,10 +139,10 @@ code: |
     <TxContainer>
       <TxRow>
         <TxCol :span="12">
-          <div class="col-content">左侧内容</div>
+          <div class="col-content">Left content</div>
         </TxCol>
         <TxCol :span="12">
-          <div class="col-content">右侧内容</div>
+          <div class="col-content">Right content</div>
         </TxCol>
       </TxRow>
     </TxContainer>
@@ -159,7 +159,7 @@ code: |
 ---
 :::
 
-### 栅格间距
+### Grid Gutter
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -167,13 +167,13 @@ code: |
     <TxContainer>
       <TxRow :gutter="24">
         <TxCol :span="8">
-          <div class="col-content">列1</div>
+          <div class="col-content">Column 1</div>
         </TxCol>
         <TxCol :span="8">
-          <div class="col-content">列2</div>
+          <div class="col-content">Column 2</div>
         </TxCol>
         <TxCol :span="8">
-          <div class="col-content">列3</div>
+          <div class="col-content">Column 3</div>
         </TxCol>
       </TxRow>
     </TxContainer>
@@ -181,7 +181,7 @@ code: |
 ---
 :::
 
-### 响应式栅格
+### Responsive Grid
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -189,16 +189,16 @@ code: |
     <TxContainer>
       <TxRow :gutter="{ xs: 8, sm: 16, md: 24, lg: 32 }">
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列1</div>
+          <div class="col-content">ResponsiveColumn 1</div>
         </TxCol>
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列2</div>
+          <div class="col-content">ResponsiveColumn 2</div>
         </TxCol>
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列3</div>
+          <div class="col-content">ResponsiveColumn 3</div>
         </TxCol>
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
-          <div class="col-content">响应式列4</div>
+          <div class="col-content">Responsive column 4</div>
         </TxCol>
       </TxRow>
     </TxContainer>
@@ -206,41 +206,41 @@ code: |
 ---
 :::
 
-## 布局组合
+## Layout Combinations
 
-### 页面布局
+### Page Layout
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
     <div class="page-layout">
-      <!-- 页头 -->
+      <!-- Header -->
       <TxContainer class="header" fluid>
         <TxRow align="middle" justify="space-between">
           <TxCol>
             <div class="logo">Logo</div>
           </TxCol>
           <TxCol>
-            <nav class="nav">导航菜单</nav>
+            <nav class="nav">Navigation menu</nav>
           </TxCol>
         </TxRow>
       </TxContainer>
       
-      <!-- 主要内容 -->
+      <!-- Main content -->
       <TxContainer class="main-content">
         <TxRow :gutter="32">
           <TxCol :span="18">
-            <main>主要内容区域</main>
+            <main>Main content area</main>
           </TxCol>
           <TxCol :span="6">
-            <aside>侧边栏</aside>
+            <aside>Sidebar</aside>
           </TxCol>
         </TxRow>
       </TxContainer>
       
-      <!-- 页脚 -->
+      <!-- Footer -->
       <TxContainer class="footer" fluid>
-        <footer>页脚内容</footer>
+        <footer>Footer content</footer>
       </TxContainer>
     </div>
   </template>
@@ -267,7 +267,7 @@ code: |
 ---
 :::
 
-### 卡片布局
+### Card Layout
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
@@ -286,72 +286,72 @@ code: |
 ---
 :::
 
-## API 参考
+## API Reference
 
 ### Container Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|--------|------|
-| fluid | `boolean` | `false` | 是否为流体容器 |
-| maxWidth | `string \| number` | - | 最大宽度 |
-| responsive | `boolean` | `false` | 是否响应式 |
-| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | 内边距 |
-| margin | `'auto' \| string \| number` | - | 外边距 |
+| fluid | `boolean` | `false` | Description for fluid. |
+| maxWidth | `string \| number` | - | Description for maxWidth. |
+| responsive | `boolean` | `false` | Description for responsive. |
+| padding | `'small' \| 'medium' \| 'large' \| number` | `'medium'` | Description for padding. |
+| margin | `'auto' \| string \| number` | - | Description for margin. |
 
 ### Row Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|--------|------|
-| gutter | `number \| object` | `0` | 栅格间距 |
-| align | `'top' \| 'middle' \| 'bottom'` | `'top'` | 垂直对齐方式 |
-| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between'` | `'start'` | 水平对齐方式 |
-| wrap | `boolean` | `true` | 是否换行 |
+| gutter | `number \| object` | `0` | TextGap |
+| align | `'top' \| 'middle' \| 'bottom'` | `'top'` | Description for align. |
+| justify | `'start' \| 'end' \| 'center' \| 'space-around' \| 'space-between'` | `'start'` | Description for justify. |
+| wrap | `boolean` | `true` | Description for wrap. |
 
 ### Col Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|--------|------|
-| span | `number` | `24` | 栅格占据的列数 |
-| offset | `number` | `0` | 栅格左侧的间隔格数 |
-| push | `number` | `0` | 栅格向右移动格数 |
-| pull | `number` | `0` | 栅格向左移动格数 |
-| xs | `number \| object` | - | 超小屏幕 (<576px) |
-| sm | `number \| object` | - | 小屏幕 (≥576px) |
-| md | `number \| object` | - | 中等屏幕 (≥768px) |
-| lg | `number \| object` | - | 大屏幕 (≥992px) |
-| xl | `number \| object` | - | 超大屏幕 (≥1200px) |
-| xxl | `number \| object` | - | 超超大屏幕 (≥1600px) |
+| span | `number` | `24` | Description for span. |
+| offset | `number` | `0` | Description for offset. |
+| push | `number` | `0` | Description for push. |
+| pull | `number` | `0` | Description for pull. |
+| xs | `number \| object` | - | Text (<576px) |
+| sm | `number \| object` | - | Text (≥576px) |
+| md | `number \| object` | - | Text (≥768px) |
+| lg | `number \| object` | - | Text (≥992px) |
+| xl | `number \| object` | - | Text (≥1200px) |
+| xxl | `number \| object` | - | Text (≥1600px) |
 
-## 响应式断点
+## Responsive Breakpoints
 
-TouchX UI 使用以下断点：
+TouchX UI uses the following breakpoints:
 
 :::TuffCodeBlock{lang="css"}
 ---
 code: |
-  /* 超小屏幕 */
+  /* textSmall screens */
   @media (max-width: 575px) { /* xs */ }
   
-  /* 小屏幕 */
+  /* Small screens */
   @media (min-width: 576px) { /* sm */ }
   
-  /* 中等屏幕 */
+  /* Medium screens */
   @media (min-width: 768px) { /* md */ }
   
-  /* 大屏幕 */
+  /* Large screens */
   @media (min-width: 992px) { /* lg */ }
   
-  /* 超大屏幕 */
+  /* XL screens */
   @media (min-width: 1200px) { /* xl */ }
   
-  /* 超超大屏幕 */
+  /* XXL screens */
   @media (min-width: 1600px) { /* xxl */ }
 ---
 :::
 
-## 样式定制
+## Style Customization
 
-### CSS 变量
+### CSS Variables
 
 :::TuffCodeBlock{lang="css"}
 ---
@@ -370,44 +370,44 @@ code: |
 ---
 :::
 
-## 最佳实践
+## Best Practices
 
-### 使用建议
+### Usage Tips
 
-1. **响应式优先**：优先使用响应式栅格系统
-2. **语义化布局**：使用语义化的HTML标签
-3. **合理间距**：保持一致的间距规范
-4. **性能考虑**：避免过度嵌套容器
+1. **Responsive first**: prefer the responsive grid system
+2. **Semantic layout**: use semantic HTML tags
+3. **Consistent spacing**: keep spacing rules consistent
+4. **Performance**: avoid excessive container nesting
 
-### 常见布局模式
+### Common Layout Patterns
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
-    <!-- 居中布局 -->
+    <!-- TextLayout -->
     <TxContainer max-width="800px" margin="auto">
-      <div class="content">居中内容</div>
+      <div class="content">TextContent</div>
     </TxContainer>
     
-    <!-- 两栏布局 -->
+    <!-- TextLayout -->
     <TxContainer>
       <TxRow :gutter="32">
-        <TxCol :span="16">主内容</TxCol>
-        <TxCol :span="8">侧边栏</TxCol>
+        <TxCol :span="16">TextContent</TxCol>
+        <TxCol :span="8">Sidebar</TxCol>
       </TxRow>
     </TxContainer>
     
-    <!-- 三栏布局 -->
+    <!-- TextLayout -->
     <TxContainer>
       <TxRow :gutter="24">
-        <TxCol :span="6">左侧栏</TxCol>
-        <TxCol :span="12">主内容</TxCol>
-        <TxCol :span="6">右侧栏</TxCol>
+        <TxCol :span="6">Text</TxCol>
+        <TxCol :span="12">TextContent</TxCol>
+        <TxCol :span="6">Text</TxCol>
       </TxRow>
     </TxContainer>
   </template>
 ---
 :::
 
-TouchX UI 的容器组件提供了灵活强大的布局能力，帮助您快速构建响应式的页面结构。
+TouchX UI containers provide flexible layouts to quickly build responsive page structures.

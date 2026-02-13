@@ -1,14 +1,14 @@
 ---
-title: "SearchInput 搜索输入框"
-description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
+title: "SearchInput"
+description: "Enter `search`"
 category: Form
 syncStatus: migrated
 ---
-# SearchInput 搜索输入框
+# SearchInput
 
-基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。
+Enter `search`
 
-如果你需要“像 Select 一样展开结果面板”的搜索框，推荐使用 `SearchSelect`。
+If you need a search input that expands results like Select, use `SearchSelect`.
 
 <script setup lang="ts">
 import SearchInputBasicDemo from '~/components/content/demos/SearchInputBasicDemo.vue'
@@ -18,7 +18,7 @@ import SearchInputRemoteDemo from '~/components/content/demos/SearchInputRemoteD
 import SearchInputRemoteDemoSource from '~/components/content/demos/SearchInputRemoteDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### SearchInput
 :::TuffDemoWrapper{demo="SearchInputSearchInputDemo" code-lang="vue"}
@@ -53,7 +53,7 @@ code: |
 ---
 :::
 
-## 远程搜索
+## Remote Search
 
 ### SearchInput (remote)
 :::TuffDemoWrapper{demo="SearchInputSearchInputRemoteDemo" code-lang="vue"}
@@ -132,32 +132,32 @@ code: |
 
 ### TxSearchInput Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | `''` | 输入值（v-model） |
-| `placeholder` | `string` | `'Search'` | 占位 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `clearable` | `boolean` | `true` | 可清空 |
-| `remote` | `boolean` | `false` | 是否远程搜索（输入时触发 `search`） |
-| `searchDebounce` | `number` | `200` | 远程搜索防抖（ms） |
+| `modelValue` | `string` | `''` | Description for modelValue. |
+| `placeholder` | `string` | `'Search'` | Description for placeholder. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `clearable` | `boolean` | `true` | Description for clearable. |
+| `remote` | `boolean` | `false` | Description for remote. |
+| `searchDebounce` | `number` | `200` | Description for searchDebounce. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v: string)` | v-model 更新 |
-| `input` | `(v: string)` | 输入 |
-| `focus` | `(e: FocusEvent)` | 聚焦 |
-| `blur` | `(e: FocusEvent)` | 失焦 |
-| `clear` | - | 清空 |
-| `search` | `(v: string)` | Enter 或 remote 输入触发 |
+| `update:modelValue` | `(v: string)` | Description for update:modelValue. |
+| `input` | `(v: string)` | Description for input. |
+| `focus` | `(e: FocusEvent)` | Description for focus. |
+| `blur` | `(e: FocusEvent)` | Description for blur. |
+| `clear` | - | Description for clear. |
+| `search` | `(v: string)` | Description for search. |
 
 ### Expose
 
-| 名称 | 类型 | 说明 |
+| Name | Type | Description |
 |------|------|------|
-| `focus()` | `() => void` | 聚焦 |
-| `blur()` | `() => void` | 失焦 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v: string) => void` | 设置值 |
-| `getValue()` | `() => string` | 获取值 |
+| `focus()` | `() => void` | Description for focus(). |
+| `blur()` | `() => void` | Description for blur(). |
+| `clear()` | `() => void` | Description for clear(). |
+| `setValue(v)` | `(v: string) => void` | Description for setValue(v). |
+| `getValue()` | `() => string` | Description for getValue(). |

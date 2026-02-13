@@ -1,0 +1,1182 @@
+{
+  "version": "2.7",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 249,
+      "y": -60,
+      "name": "Frame",
+      "clip": true,
+      "width": 800,
+      "height": 600,
+      "fill": "#FFFFFF",
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "aw9Vy",
+      "x": 1149,
+      "y": -60,
+      "name": "Landing Page",
+      "clip": true,
+      "width": 1440,
+      "fill": "#09090B",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "6iP76",
+          "name": "Header",
+          "width": "fill_container",
+          "height": 64,
+          "padding": [
+            0,
+            48
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "xCLPv",
+              "name": "headerLeft",
+              "gap": 32,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "lYYhv",
+                  "name": "logo",
+                  "fill": "#FAFAFA",
+                  "content": "Apex",
+                  "fontFamily": "Inter",
+                  "fontSize": 20,
+                  "fontWeight": "700",
+                  "letterSpacing": -0.5
+                },
+                {
+                  "type": "frame",
+                  "id": "PQnUs",
+                  "name": "nav",
+                  "gap": 28,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KoeEZ",
+                      "name": "nav1",
+                      "fill": "#A1A1AA",
+                      "content": "Product",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "lJKkR",
+                      "name": "nav2",
+                      "fill": "#A1A1AA",
+                      "content": "Features",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "sWqip",
+                      "name": "nav3",
+                      "fill": "#A1A1AA",
+                      "content": "Pricing",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    },
+                    {
+                      "type": "text",
+                      "id": "0jkzs",
+                      "name": "nav4",
+                      "fill": "#A1A1AA",
+                      "content": "Company",
+                      "fontFamily": "Inter",
+                      "fontSize": 14
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yQ3j7",
+              "name": "headerRight",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UsBA8",
+                  "name": "loginBtn",
+                  "fill": "#A1A1AA",
+                  "content": "Sign in",
+                  "fontFamily": "Inter",
+                  "fontSize": 14
+                },
+                {
+                  "type": "frame",
+                  "id": "4dhhL",
+                  "name": "ctaBtn",
+                  "fill": "#FAFAFA",
+                  "cornerRadius": 8,
+                  "padding": [
+                    8,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gMinh",
+                      "name": "ctaBtnText",
+                      "fill": "#09090B",
+                      "content": "Get Started",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KGYpz",
+          "name": "headerDivider",
+          "width": "fill_container",
+          "height": 1,
+          "fill": "#27272A"
+        },
+        {
+          "type": "frame",
+          "id": "cZ9TE",
+          "name": "Hero Section",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 32,
+          "padding": [
+            120,
+            48,
+            80,
+            48
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "4C6Kj",
+              "name": "badge",
+              "cornerRadius": 100,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#27272A"
+              },
+              "gap": 8,
+              "padding": [
+                6,
+                16
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "SnScV",
+                  "name": "badgeDot",
+                  "fill": "#22C55E",
+                  "width": 6,
+                  "height": 6
+                },
+                {
+                  "type": "text",
+                  "id": "dp1h5",
+                  "name": "badgeText",
+                  "fill": "#A1A1AA",
+                  "content": "Now in Public Beta",
+                  "fontFamily": "Inter",
+                  "fontSize": 13,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "ESYy6",
+              "name": "headline",
+              "fill": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 180,
+                "size": {
+                  "height": 1
+                },
+                "colors": [
+                  {
+                    "color": "#FAFAFA",
+                    "position": 0
+                  },
+                  {
+                    "color": "#71717A",
+                    "position": 1
+                  }
+                ]
+              },
+              "textGrowth": "fixed-width",
+              "width": 900,
+              "content": "Build products\nthat feel inevitable.",
+              "lineHeight": 1.05,
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 72,
+              "fontWeight": "700",
+              "letterSpacing": -2.5
+            },
+            {
+              "type": "text",
+              "id": "VGqmF",
+              "name": "subheadline",
+              "fill": "#71717A",
+              "textGrowth": "fixed-width",
+              "width": 640,
+              "content": "Apex is the tool for modern teams. Streamline your workflow,\nreduce complexity, and ship with confidence.",
+              "lineHeight": 1.6,
+              "textAlign": "center",
+              "fontFamily": "Inter",
+              "fontSize": 18
+            },
+            {
+              "type": "frame",
+              "id": "S9FVW",
+              "name": "ctaRow",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "3mKZz",
+                  "name": "primaryCta",
+                  "fill": "#FAFAFA",
+                  "cornerRadius": 10,
+                  "gap": 8,
+                  "padding": [
+                    14,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "MFV0V",
+                      "name": "primaryCtaText",
+                      "fill": "#09090B",
+                      "content": "Start for free",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "icon_font",
+                      "id": "Eaizz",
+                      "name": "primaryCtaArrow",
+                      "width": 16,
+                      "height": 16,
+                      "iconFontName": "arrow-right",
+                      "iconFontFamily": "lucide",
+                      "fill": "#09090B"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GoGaq",
+                  "name": "secondaryCta",
+                  "cornerRadius": 10,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#27272A"
+                  },
+                  "padding": [
+                    14,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "VfcJR",
+                      "name": "secondaryCtaText",
+                      "fill": "#A1A1AA",
+                      "content": "Watch demo",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wjeXV",
+              "name": "Hero Visual",
+              "clip": true,
+              "width": 1100,
+              "height": 620,
+              "fill": "#111113",
+              "cornerRadius": 16,
+              "stroke": {
+                "thickness": 1,
+                "fill": "#27272A"
+              },
+              "layout": "none",
+              "children": [
+                {
+                  "type": "ellipse",
+                  "id": "GpNH3",
+                  "x": 150,
+                  "y": -100,
+                  "name": "Glow",
+                  "opacity": 0.8,
+                  "fill": {
+                    "type": "gradient",
+                    "gradientType": "radial",
+                    "enabled": true,
+                    "rotation": 0,
+                    "size": {
+                      "width": 1,
+                      "height": 1
+                    },
+                    "colors": [
+                      {
+                        "color": "#6366F120",
+                        "position": 0
+                      },
+                      {
+                        "color": "#09090B00",
+                        "position": 1
+                      }
+                    ]
+                  },
+                  "width": 800,
+                  "height": 400
+                },
+                {
+                  "type": "frame",
+                  "id": "nuFcS",
+                  "x": 30,
+                  "y": 30,
+                  "name": "Screenshot Placeholder",
+                  "width": 1040,
+                  "height": 560,
+                  "fill": "#18181B",
+                  "cornerRadius": 12,
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sleV0",
+                      "name": "placeholderText",
+                      "fill": "#3F3F46",
+                      "content": "Product Screenshot",
+                      "fontFamily": "Inter",
+                      "fontSize": 16
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "QF97E",
+          "name": "Trust Logos",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 48,
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "JqWcL",
+              "name": "trustLabel",
+              "fill": "#3F3F46",
+              "content": "TRUSTED BY TEAMS AT",
+              "fontFamily": "Inter",
+              "fontSize": 12,
+              "fontWeight": "500",
+              "letterSpacing": 2
+            },
+            {
+              "type": "frame",
+              "id": "2oRKL",
+              "name": "trustLogos",
+              "width": "fill_container",
+              "gap": 64,
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "3Gabu",
+                  "name": "tl1",
+                  "fill": "#3F3F46",
+                  "content": "Vercel",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "4UwfS",
+                  "name": "tl2",
+                  "fill": "#3F3F46",
+                  "content": "Stripe",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "GZncS",
+                  "name": "tl3",
+                  "fill": "#3F3F46",
+                  "content": "Linear",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "dMhh0",
+                  "name": "tl4",
+                  "fill": "#3F3F46",
+                  "content": "Notion",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "Fg86B",
+                  "name": "tl5",
+                  "fill": "#3F3F46",
+                  "content": "Figma",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                },
+                {
+                  "type": "text",
+                  "id": "8Enl7",
+                  "name": "tl6",
+                  "fill": "#3F3F46",
+                  "content": "Raycast",
+                  "fontFamily": "Inter",
+                  "fontSize": 18,
+                  "fontWeight": "600"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RIukB",
+          "name": "divider2",
+          "width": "fill_container",
+          "height": 1,
+          "fill": "#18181B"
+        },
+        {
+          "type": "frame",
+          "id": "HBrV8",
+          "name": "Features Section",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 100,
+          "padding": [
+            100,
+            80
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "4wYK2",
+              "name": "featHeader",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vuVcT",
+                  "name": "featLabel",
+                  "fill": "#6366F1",
+                  "content": "FEATURES",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600",
+                  "letterSpacing": 3
+                },
+                {
+                  "type": "text",
+                  "id": "etlre",
+                  "name": "featTitle",
+                  "fill": "#FAFAFA",
+                  "textGrowth": "fixed-width",
+                  "width": 700,
+                  "content": "Everything you need.\nNothing you don't.",
+                  "lineHeight": 1.1,
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 48,
+                  "fontWeight": "700",
+                  "letterSpacing": -1.5
+                },
+                {
+                  "type": "text",
+                  "id": "hfJ0C",
+                  "name": "featDesc",
+                  "fill": "#71717A",
+                  "content": "Powerful enough for enterprise teams. Simple enough to start in minutes.",
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 18
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "adWDK",
+              "name": "Feature 1",
+              "width": "fill_container",
+              "gap": 64,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "TSf1f",
+                  "name": "feat1Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ykXQq",
+                      "name": "feat1Icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "#18181B",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#27272A"
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "p9KCn",
+                          "name": "feat1IconInner",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "zap",
+                          "iconFontFamily": "lucide",
+                          "fill": "#6366F1"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "3cGQm",
+                      "name": "feat1Title",
+                      "fill": "#FAFAFA",
+                      "content": "Lightning fast workflows",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "700",
+                      "letterSpacing": -0.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "xeP0u",
+                      "name": "feat1Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": 460,
+                      "content": "Automate repetitive tasks with intelligent pipelines. Set up once and let Apex handle the rest — from staging to production.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 16
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "39opW",
+                  "name": "Feature Visual 1",
+                  "width": "fill_container",
+                  "height": 360,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lCduU",
+                      "name": "feat1Placeholder",
+                      "fill": "#3F3F46",
+                      "content": "Feature Visual",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "2upKw",
+              "name": "Feature 2",
+              "width": "fill_container",
+              "gap": 64,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "8iIPu",
+                  "name": "Feature Visual 2",
+                  "width": "fill_container",
+                  "height": 360,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "0rcnl",
+                      "name": "feat2Placeholder",
+                      "fill": "#3F3F46",
+                      "content": "Feature Visual",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tRUa2",
+                  "name": "feat2Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "x7iQl",
+                      "name": "feat2Icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "#18181B",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#27272A"
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "qTHo0",
+                          "name": "feat2IconInner",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "shield-check",
+                          "iconFontFamily": "lucide",
+                          "fill": "#22C55E"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "6iukA",
+                      "name": "feat2Title",
+                      "fill": "#FAFAFA",
+                      "content": "Enterprise-grade security",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "700",
+                      "letterSpacing": -0.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "6OniS",
+                      "name": "feat2Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": 460,
+                      "content": "SOC 2 Type II compliant with end-to-end encryption. Role-based access controls and audit logs for full visibility.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 16
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "3t573",
+              "name": "Feature 3",
+              "width": "fill_container",
+              "gap": 64,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "EeJOS",
+                  "name": "feat3Content",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "gyxpD",
+                      "name": "feat3Icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "#18181B",
+                      "cornerRadius": 12,
+                      "stroke": {
+                        "thickness": 1,
+                        "fill": "#27272A"
+                      },
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon_font",
+                          "id": "0RRy1",
+                          "name": "feat3IconInner",
+                          "width": 22,
+                          "height": 22,
+                          "iconFontName": "git-merge",
+                          "iconFontFamily": "lucide",
+                          "fill": "#F59E0B"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "tqZW1",
+                      "name": "feat3Title",
+                      "fill": "#FAFAFA",
+                      "content": "Seamless integrations",
+                      "fontFamily": "Inter",
+                      "fontSize": 28,
+                      "fontWeight": "700",
+                      "letterSpacing": -0.5
+                    },
+                    {
+                      "type": "text",
+                      "id": "JF0JU",
+                      "name": "feat3Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": 460,
+                      "content": "Connect with GitHub, Slack, Jira and 200+ tools out of the box. Build custom integrations with our open API.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 16
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "0y17o",
+                  "name": "Feature Visual 3",
+                  "width": "fill_container",
+                  "height": 360,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "R40ZI",
+                      "name": "feat3Placeholder",
+                      "fill": "#3F3F46",
+                      "content": "Feature Visual",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hCWNA",
+          "name": "Bento Grid Section",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 48,
+          "padding": [
+            100,
+            80
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "1A62q",
+              "name": "bentoHeader",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "f8Qyi",
+                  "name": "bentoLabel",
+                  "fill": "#6366F1",
+                  "content": "CAPABILITIES",
+                  "fontFamily": "Inter",
+                  "fontSize": 12,
+                  "fontWeight": "600",
+                  "letterSpacing": 3
+                },
+                {
+                  "type": "text",
+                  "id": "8bSGy",
+                  "name": "bentoTitle",
+                  "fill": "#FAFAFA",
+                  "content": "Designed for every workflow",
+                  "textAlign": "center",
+                  "fontFamily": "Inter",
+                  "fontSize": 48,
+                  "fontWeight": "700",
+                  "letterSpacing": -1.5
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "5ptbw",
+              "name": "bentoRow1",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "88mCS",
+                  "name": "card1",
+                  "width": "fill_container",
+                  "height": 280,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "N9rNS",
+                      "name": "card1Icon",
+                      "width": 24,
+                      "height": 24,
+                      "iconFontName": "command",
+                      "iconFontFamily": "lucide",
+                      "fill": "#A78BFA"
+                    },
+                    {
+                      "type": "text",
+                      "id": "SMgov",
+                      "name": "card1Title",
+                      "fill": "#FAFAFA",
+                      "content": "Command palette",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "sNYYy",
+                      "name": "card1Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Access any action instantly with a keyboard-first interface. Navigate, search, and execute without leaving your flow.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "krkwa",
+                  "name": "card2",
+                  "width": "fill_container",
+                  "height": 280,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "sUn5t",
+                      "name": "card2Icon",
+                      "width": 24,
+                      "height": 24,
+                      "iconFontName": "layout-grid",
+                      "iconFontFamily": "lucide",
+                      "fill": "#F59E0B"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yqyqo",
+                      "name": "card2Title",
+                      "fill": "#FAFAFA",
+                      "content": "Custom views",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GXzVy",
+                      "name": "card2Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Boards, lists, timelines, calendars. Switch between views seamlessly and create custom layouts for your team.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QgRkP",
+                  "name": "card3",
+                  "width": "fill_container",
+                  "height": 280,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "kOqvj",
+                      "name": "card3Icon",
+                      "width": 24,
+                      "height": 24,
+                      "iconFontName": "sparkles",
+                      "iconFontFamily": "lucide",
+                      "fill": "#6366F1"
+                    },
+                    {
+                      "type": "text",
+                      "id": "DmCgw",
+                      "name": "card3Title",
+                      "fill": "#FAFAFA",
+                      "content": "AI-powered insights",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XbyNB",
+                      "name": "card3Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Get intelligent suggestions, auto-categorize tasks, and predict bottlenecks before they happen.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "XYC2H",
+              "name": "bentoRow2",
+              "width": "fill_container",
+              "gap": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "J7cJO",
+                  "name": "bigCard1",
+                  "width": "fill_container",
+                  "height": 320,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 32,
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "cxVIM",
+                      "name": "bigCard1Icon",
+                      "width": 24,
+                      "height": 24,
+                      "iconFontName": "chart-bar",
+                      "iconFontFamily": "lucide",
+                      "fill": "#22C55E"
+                    },
+                    {
+                      "type": "text",
+                      "id": "admM4",
+                      "name": "bigCard1Title",
+                      "fill": "#FAFAFA",
+                      "content": "Real-time analytics",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "K2X5S",
+                      "name": "bigCard1Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Track velocity, throughput, and cycle time across your entire organization. Identify trends and make data-driven decisions with customizable dashboards.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "5TwrK",
+                  "name": "bigCard2",
+                  "width": "fill_container",
+                  "height": 320,
+                  "fill": "#111113",
+                  "cornerRadius": 16,
+                  "stroke": {
+                    "thickness": 1,
+                    "fill": "#1F1F23"
+                  },
+                  "layout": "vertical",
+                  "gap": 20,
+                  "padding": 32,
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "icon_font",
+                      "id": "iSZS1",
+                      "name": "bigCard2Icon",
+                      "width": 24,
+                      "height": 24,
+                      "iconFontName": "users",
+                      "iconFontFamily": "lucide",
+                      "fill": "#F472B6"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HpEnW",
+                      "name": "bigCard2Title",
+                      "fill": "#FAFAFA",
+                      "content": "Team collaboration",
+                      "fontFamily": "Inter",
+                      "fontSize": 20,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "3BcCu",
+                      "name": "bigCard2Desc",
+                      "fill": "#71717A",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Real-time multiplayer editing, threaded comments, @mentions, and smart notifications. Keep everyone in sync without the noise.",
+                      "lineHeight": 1.6,
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

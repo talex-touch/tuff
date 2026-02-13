@@ -22,6 +22,7 @@ const { user } = useAuthUser()
 const isAdmin = computed(() => user.value?.role === 'admin')
 
 const SUPPORTED_LOCALES = ['en', 'zh']
+const CJK_PATTERN = /[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]/g
 function stripLocalePrefix(path: string) {
   if (!path)
     return '/'
@@ -59,6 +60,39 @@ function normalizeContentPath(path: string | null | undefined) {
     return null
   const prefixed = path.startsWith('/') ? path : `/${path}`
   return stripLocalePrefix(prefixed).replace(/\.(en|zh)$/, '')
+}
+
+function stripCjk(value: string) {
+  return value.replace(CJK_PATTERN, '').replace(/\s{2,}/g, ' ').trim()
+}
+
+function fallbackTitleFromPath(path?: string) {
+  if (!path)
+    return 'Untitled'
+  return path
+    .split('/')
+    .filter(Boolean)
+    .pop()
+    ?.replace(/\.(en|zh)$/, '')
+    ?.replace(/[-_]/g, ' ')
+    ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
+}
+
+function normalizeTitleForLocale(value: string, path?: string) {
+  if (locale.value !== 'en')
+    return value
+  const stripped = stripCjk(value)
+  if (stripped)
+    return stripped
+  return fallbackTitleFromPath(path)
+}
+
+function normalizeDescriptionForLocale(value?: string | null) {
+  if (!value)
+    return ''
+  if (locale.value !== 'en')
+    return value
+  return stripCjk(value)
 }
 
 function toBoolean(value: unknown) {
@@ -271,15 +305,26 @@ const docScope = computed(() => {
   }
 })
 
+const docDisplayTitle = computed(() =>
+  normalizeTitleForLocale(
+    doc.value?.title ? String(doc.value.title) : '',
+    doc.value?.path ?? docPath.value,
+  ),
+)
+
+const docDisplayDescription = computed(() =>
+  normalizeDescriptionForLocale(doc.value?.description ? String(doc.value.description) : ''),
+)
+
 const heroBreadcrumbs = computed(() => {
   const isComponentDoc = docScope.value.isComponent
   const prefixLabel = isComponentDoc
     ? (locale.value === 'zh' ? '组件' : 'Components')
     : (locale.value === 'zh' ? '文档' : 'Docs')
   const prefixPath = isComponentDoc ? '/docs/dev/components' : '/docs'
-  const title = doc.value?.title ? String(doc.value.title) : ''
   const category = docMeta.value.category ? String(docMeta.value.category) : ''
-  const label = title || category
+  const categoryLabel = category ? normalizeTitleForLocale(category) : ''
+  const label = docDisplayTitle.value || categoryLabel
   const normalized = docScope.value.path
   const crumbs = [{ label: prefixLabel, path: prefixPath }]
   if (label)
@@ -378,18 +423,9 @@ function matchesLocale(target: any) {
 const normalizedDocPath = computed(() => normalizeContentPath(doc.value?.path ?? docPath.value))
 
 function itemTitle(title?: string, path?: string) {
-  if (title)
-    return title
-  if (!path)
-    return 'Untitled'
-
-  return path
-    .split('/')
-    .filter(Boolean)
-    .pop()
-    ?.replace(/\.(en|zh)$/, '')
-    ?.replace(/[-_]/g, ' ')
-    ?.replace(/\b\w/g, c => c.toUpperCase()) ?? 'Untitled'
+  const fallback = fallbackTitleFromPath(path)
+  const raw = title || fallback
+  return normalizeTitleForLocale(raw, path)
 }
 
 function collectSectionPages(node: any): any[] {
@@ -580,7 +616,8 @@ const pagerNextTitle = computed(() => {
 watchEffect(() => {
   if (doc.value) {
     outlineState.value = doc.value.body?.toc?.links ?? []
-    docTitleState.value = doc.value.seo?.title ?? doc.value.title ?? ''
+    const rawTitle = doc.value.seo?.title ?? doc.value.title ?? ''
+    docTitleState.value = normalizeTitleForLocale(String(rawTitle), doc.value.path ?? docPath.value)
     docLocaleState.value = resolveDocLocale(doc.value)
     docMetaState.value = docMeta.value
     if (!outlineState.value.length)
@@ -863,8 +900,8 @@ watch(
               </template>
             </div>
             <DocHero
-              :title="doc?.title"
-              :description="doc?.description"
+              :title="docDisplayTitle"
+              :description="docDisplayDescription"
               :since-label="heroSinceLabel"
               :beta-label="heroBetaLabel"
               :read-time-label="heroReadTimeLabel"
@@ -973,7 +1010,9 @@ watch(
             </div>
           </div>
 
-          <DocsComments :doc-path="docPath" />
+          <ClientOnly>
+            <DocsComments :doc-path="docPath" />
+          </ClientOnly>
         </div>
 
         <div

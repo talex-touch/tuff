@@ -1,14 +1,14 @@
 ---
-title: "CornerOverlay 角标容器"
-description: "`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。"
+title: "CornerOverlay"
+description: "`TxCornerOverlay` ///overlay slot"
 category: Basic
 syncStatus: migrated
 ---
-# CornerOverlay 角标容器
+# CornerOverlay
 
-`TxCornerOverlay` 用于在内容右上/右下/左上/左下叠加一个角标（overlay slot），常用于头像状态、徽章、通知数量等。
+`TxCornerOverlay` ///overlay slot
 
-## 基础用法
+## Basic Usage
 
 ### Basic
 :::TuffDemoWrapper{demo="CornerOverlayBasicDemo" code-lang="vue"}
@@ -38,9 +38,9 @@ code: |
 
 ### Props
 
-| 属性 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | 角标位置 |
-| offsetX | `string \| number` | `0` | X 偏移 |
-| offsetY | `string \| number` | `0` | Y 偏移 |
-| overlayPointerEvents | `'none' \| 'auto'` | `none` | overlay 的 pointer-events |
+| placement | `'top-left' \| 'top-right' \| 'bottom-left' \| 'bottom-right'` | `bottom-right` | TextPosition |
+| offsetX | `string \| number` | `0` | X Text |
+| offsetY | `string \| number` | `0` | Y Text |
+| overlayPointerEvents | `'none' \| 'auto'` | `none` | overlay Text pointer-events |

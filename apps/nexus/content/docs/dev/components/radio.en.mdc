@@ -1,15 +1,15 @@
 ---
-title: "Radio 单选框"
-description: "用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。"
+title: "Radio"
+description: "`TxRadioGroup` + `TxRadio`****+********"
 category: Form
 status: beta
 since: 1.0.0
 tags: [radio, form, selection]
 syncStatus: migrated
 ---
-# Radio 单选框
+# Radio
 
-用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。
+`TxRadioGroup` + `TxRadio`****+********
 
 <script setup lang="ts">
 import RadioBasicDemo from '~/components/content/demos/RadioBasicDemo.vue'
@@ -31,9 +31,9 @@ import RadioDisabledDemo from '~/components/content/demos/RadioDisabledDemo.vue'
 import RadioDisabledDemoSource from '~/components/content/demos/RadioDisabledDemo.vue?raw'
 </script>
 
-## 标准单选形式
+## Standard Single-Select
 
-前圆点+后文案的标准单选形式，适合选项较多的场景。
+Standard single-select with a dot + label, good for many options.
 
 ### Radio (standard)
 :::TuffDemoWrapper{demo="RadioRadioStandardDemo" code-lang="vue"}
@@ -63,9 +63,9 @@ code: |
 ---
 :::
 
-## 卡片单选形式
+## Card Single-Select Style
 
-更强调信息层级的单选形式，适合需要解释文本的场景。
+Single-select emphasizing hierarchy, good for explanatory text.
 
 ### Radio (card)
 :::TuffDemoWrapper{demo="RadioRadioCardDemo" code-lang="vue"}
@@ -116,9 +116,9 @@ code: |
 ---
 :::
 
-## 按钮组形式
+## Button Group Style
 
-紧凑排列的按钮组，适合选项较少的场景。
+Compact button group, good for few options.
 
 ### Radio (simple)
 :::TuffDemoWrapper{demo="RadioRadioSimpleDemo" code-lang="vue"}
@@ -154,9 +154,9 @@ code: |
 ---
 :::
 
-## Indicator 动效
+## Indicator Animation
 
-带指示器的按钮组动效示例：默认 → 普通 → 模糊 → 玻璃。
+Button group animation with indicator: default → normal → blur → glass.
 
 ### Radio (indicator)
 :::TuffDemoWrapper{demo="RadioRadioIndicatorDemo" code-lang="vue"}
@@ -245,7 +245,7 @@ code: |
 ---
 :::
 
-## 禁用状态
+## Disabled State
 
 ### Radio (disabled)
 :::TuffDemoWrapper{demo="RadioRadioDisabledDemo" code-lang="vue"}
@@ -283,7 +283,7 @@ code: |
 
 ## Playground
 
-把 `TxRadioGroup` 的主要属性做成可调节的控制面板，用于快速验证不同形态/参数组合。
+A control panel for `TxRadioGroup` props to quickly validate variants/params.
 
 ### RadioGroup (playground)
 :::TuffDemoWrapper{demo="RadioRadioGroupPlaygroundDemo" code-lang="vue"}
@@ -492,40 +492,40 @@ code: |
 
 #### Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
+| Prop | Description | Type | Default |
 |--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | - |
-| disabled | 是否禁用（整组） | `boolean` | `false` |
-| type | 形态：按钮组 / 标准单选 / 卡片 | `'button' \| 'standard' \| 'card'` | `'button'` |
-| direction | 排列方向（button 无效；standard 默认 row；card 默认 column） | `'row' \| 'column'` | - |
-| indicatorVariant | 指示器样式（button 有效） | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
-| glass | 玻璃指示器（button 有效） | `boolean` | `false` |
-| blur | 模糊指示器（button 有效） | `boolean` | `false` |
-| stiffness | 动效刚度（越大越快） | `number` | `110` |
-| damping | 动效阻尼（越大越稳） | `number` | `12` |
-| blurAmount | 模糊强度（blur 有效） | `number` | `1` |
-| elastic | 是否启用弹性形变 | `boolean` | `true` |
+| modelValue / v-model | Description for modelValue / v-model. | `string \| number` | - |
+| disabled | Description for disabled. | `boolean` | `false` |
+| type | Description for type. | `'button' \| 'standard' \| 'card'` | `'button'` |
+| direction | Description for direction. | `'row' \| 'column'` | - |
+| indicatorVariant | Description for indicatorVariant. | `'solid' \| 'outline' \| 'glass' \| 'blur'` | - |
+| glass | Description for glass. | `boolean` | `false` |
+| blur | Description for blur. | `boolean` | `false` |
+| stiffness | Description for stiffness. | `number` | `110` |
+| damping | Description for damping. | `number` | `12` |
+| blurAmount | Description for blurAmount. | `number` | `1` |
+| elastic | Description for elastic. | `boolean` | `true` |
 
 #### Events
 
-| 事件名 | 说明 | 回调参数 |
+| Event | Description | Params |
 |--------|------|----------|
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| change | 值变化时触发 | `(value: string \| number) => void` |
+| update:modelValue | Description for update:modelValue. | `(value: string \| number) => void` |
+| change | Description for change. | `(value: string \| number) => void` |
 
 ### TxRadio
 
 #### Props
 
-| 属性名 | 说明 | 类型 | 默认值 |
+| Prop | Description | Type | Default |
 |--------|------|------|--------|
-| value | 当前项的值 | `string \| number` | - |
-| label | 文案（无插槽时） | `string` | `''` |
-| disabled | 是否禁用（单项） | `boolean` | `false` |
-| type | 形态（一般由 group 决定） | `'button' \| 'standard' \| 'card'` | `'button'` |
+| value | Description for value. | `string \| number` | - |
+| label | Description for label. | `string` | `''` |
+| disabled | Description for disabled. | `boolean` | `false` |
+| type | Description for type. | `'button' \| 'standard' \| 'card'` | `'button'` |
 
 #### Events
 
-| 事件名 | 说明 | 回调参数 |
+| Event | Description | Params |
 |--------|------|----------|
-| click | 点击（仅在组内变更时触发） | `(value: string \| number) => void` |
+| click | Description for click. | `(value: string \| number) => void` |

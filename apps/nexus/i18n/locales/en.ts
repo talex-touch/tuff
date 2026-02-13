@@ -23,6 +23,18 @@ export default {
     save: 'Save',
     refresh: 'Refresh',
   },
+  search: {
+    open: 'Search',
+    openAria: 'Open global search',
+    placeholder: 'Search docs and features',
+    empty: 'No results found',
+    loading: 'Searching...',
+    category: {
+      docs: 'Docs',
+      pages: 'Pages',
+      features: 'Features',
+    },
+  },
   auth: {
     callbackProcessing: 'Processing your sign-in callback…',
     backToPrevious: 'Back',

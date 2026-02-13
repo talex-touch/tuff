@@ -1,12 +1,12 @@
 ---
-title: "ChatComposer 消息输入"
-description: "用于 AI 消息输入、发送。"
+title: "ChatComposer"
+description: "Component documentation for ChatComposer."
 category: Form
 syncStatus: migrated
 ---
-# ChatComposer 消息输入
+# ChatComposer
 
-用于 AI 消息输入、发送。
+Component documentation for ChatComposer.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -20,7 +20,7 @@ function onSend(payload: { text: string }) {
 }
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### ChatComposer
 :::TuffDemoWrapper{demo="ChatComposerChatComposerDemo" code-lang="vue"}

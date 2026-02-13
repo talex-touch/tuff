@@ -1,12 +1,12 @@
 ---
-title: "ImageUploader 图片上传"
-description: "用于图片选择、预览、删除。"
+title: "ImageUploader"
+description: "Component documentation for ImageUploader."
 category: Form
 syncStatus: migrated
 ---
-# ImageUploader 图片上传
+# ImageUploader
 
-用于图片选择、预览、删除。
+Component documentation for ImageUploader.
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -14,7 +14,7 @@ import { ref } from 'vue'
 const files = ref([])
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### ImageUploader
 :::TuffDemoWrapper{demo="ImageUploaderImageUploaderDemo" code-lang="vue"}

@@ -1,17 +1,17 @@
 ---
-title: "SearchEmpty 搜索空态"
-description: "用于搜索无结果时的状态提示。"
+title: "SearchEmpty"
+description: "Component documentation for SearchEmpty."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [search, empty, state]
 syncStatus: migrated
 ---
-# SearchEmpty 搜索空态
+# SearchEmpty
 
-用于搜索无结果时的状态提示。
+Component documentation for SearchEmpty.
 
-## 基础用法
+## Basic Usage
 
 ### SearchEmpty
 :::TuffDemoWrapper{demo="SearchEmptySearchEmptyDemo" code-lang="vue"}
@@ -25,4 +25,4 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+Props / Slots / Events follow `TxEmptyState`.

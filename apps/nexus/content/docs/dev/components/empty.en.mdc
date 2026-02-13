@@ -1,17 +1,17 @@
 ---
-title: "Empty 空状态"
-description: "统一的空状态组件。"
+title: "Empty"
+description: "Component documentation for Empty."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [empty, state, placeholder]
 syncStatus: migrated
 ---
-# Empty 空状态
+# Empty
 
-统一的空状态组件。
+Component documentation for Empty.
 
-## 基础用法
+## Basic Usage
 
 ### Empty
 :::TuffDemoWrapper{demo="EmptyEmptyDemo" code-lang="vue"}
@@ -23,7 +23,7 @@ code: |
 ---
 :::
 
-## 带操作
+## With Actions
 
 ### Empty (action)
 :::TuffDemoWrapper{demo="EmptyEmptyActionDemo" code-lang="vue"}
@@ -43,9 +43,9 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `title` | `string` | `'Nothing here'` | 标题 |
-| `description` | `string` | `''` | 描述 |
-| `iconClass` | `string` | `'i-carbon-incomplete'` | 图标 class |
-| `compact` | `boolean` | `false` | 紧凑模式 |
+| `title` | `string` | `'Nothing here'` | Description for title. |
+| `description` | `string` | `''` | Description for description. |
+| `iconClass` | `string` | `'i-carbon-incomplete'` | Description for iconClass. |
+| `compact` | `boolean` | `false` | Description for compact. |

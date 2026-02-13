@@ -1,5 +1,6 @@
 import type {
   CachedUpdateRecord,
+  DownloadTask,
   GitHubRelease,
   UpdateCheckResult,
   UpdateSettings,
@@ -7,13 +8,14 @@ import type {
 } from '@talex-touch/utils'
 import {
   AppPreviewChannel,
+  DownloadModule,
   UpdateProviderType,
   UPDATE_GITHUB_RELEASES_API,
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { useUpdateSdk } from '@talex-touch/utils/renderer'
+import { useDownloadSdk, useUpdateSdk } from '@talex-touch/utils/renderer'
 import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
@@ -74,6 +76,10 @@ type UpdateAvailablePayload = {
 
 type NormalizedPlatform = 'win32' | 'darwin' | 'linux'
 type NormalizedArch = 'x64' | 'arm64'
+
+const updateListenerDisposers: Array<() => void> = []
+const completedUpdateTaskIds = new Set<string>()
+let updateListenerInitialized = false
 
 function resolvePlatformFallback(): NormalizedPlatform {
   const runtimePlatform = typeof process !== 'undefined' ? process.platform : ''
@@ -202,6 +208,14 @@ function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
   }
 }
 
+function resolveCompletedTaskVersion(task: DownloadTask): string | null {
+  const version = task.metadata?.version
+  if (typeof version === 'string' && version.trim().length > 0) {
+    return version
+  }
+  return null
+}
+
 /**
  * Simplified application update manager that communicates with main process
  */
@@ -214,6 +228,7 @@ export class AppUpdate {
   private settings: UpdateSettings
   private updateSdk = useUpdateSdk()
   private static readonly CHANNEL_TIMEOUT = 4000
+  private static readonly INSTALL_TIMEOUT = 10 * 60 * 1000
 
   version: AppVersion
 
@@ -324,8 +339,10 @@ export class AppUpdate {
   }
 
   public async installUpdate(taskId?: string): Promise<void> {
-    const response = await this.sendRequest('update:install', () =>
-      this.updateSdk.install(taskId ? { taskId } : {})
+    const response = await this.sendRequest(
+      'update:install',
+      () => this.updateSdk.install(taskId ? { taskId } : {}),
+      AppUpdate.INSTALL_TIMEOUT
     )
     if (!response.success) {
       throw new Error(response.error || 'Failed to install update')
@@ -482,9 +499,13 @@ export class AppUpdate {
     }
   }
 
-  private async sendRequest<T>(channel: string, operation: () => Promise<T>): Promise<T> {
+  private async sendRequest<T>(
+    channel: string,
+    operation: () => Promise<T>,
+    timeout = AppUpdate.CHANNEL_TIMEOUT
+  ): Promise<T> {
     try {
-      return await withTimeout(operation(), AppUpdate.CHANNEL_TIMEOUT)
+      return await withTimeout(operation(), timeout)
     } catch (error) {
       if (error instanceof TimeoutError) {
         throw new Error(`Update request timed out for channel: ${channel}`)
@@ -590,6 +611,14 @@ export function useApplicationUpgrade() {
       toast.success(t('settings.settingUpdate.messages.installStarted'))
       return true
     } catch (err) {
+      if (
+        err instanceof Error &&
+        err.message.includes('Update request timed out for channel: update:install')
+      ) {
+        console.warn('[useApplicationUpgrade] Install request ack timeout, treating as started')
+        toast.success(t('settings.settingUpdate.messages.installStarted'))
+        return true
+      }
       console.error('[useApplicationUpgrade] Install update failed:', err)
       toast.error(
         t('settings.settingUpdate.messages.installFailedWithReason', {
@@ -734,28 +763,64 @@ export function useApplicationUpgrade() {
    * This should be called after TouchSDK is initialized
    */
   function setupUpdateListener(): void {
+    if (updateListenerInitialized) {
+      return
+    }
+
     try {
       const updateSdk = useUpdateSdk()
+      const downloadSdk = useDownloadSdk()
 
-      updateSdk.onAvailable((data: UpdateAvailablePayload) => {
-        console.log('[useApplicationUpgrade] Received update notification:', data)
+      updateListenerDisposers.push(
+        updateSdk.onAvailable((data: UpdateAvailablePayload) => {
+          console.log('[useApplicationUpgrade] Received update notification:', data)
 
-        if (data.hasUpdate && data.release) {
-          appStates.hasUpdate = true
+          if (data.hasUpdate && data.release) {
+            appStates.hasUpdate = true
 
-          const currentRelease = data.release
-          blowMention(t('update.new_version_available'), () => {
-            return h(AppUpdateView, {
-              release: currentRelease as unknown as Record<string, unknown>,
-              onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
-              onSkipVersion: () => void handleIgnoreVersion(currentRelease),
-              onRemindLater: () => void handleRemindLaterSelection(currentRelease)
+            const currentRelease = data.release
+            blowMention(t('update.new_version_available'), () => {
+              return h(AppUpdateView, {
+                release: currentRelease as unknown as Record<string, unknown>,
+                onUpdateNow: () => void handleUpdateNowSelection(currentRelease),
+                onSkipVersion: () => void handleIgnoreVersion(currentRelease),
+                onRemindLater: () => void handleRemindLaterSelection(currentRelease)
+              })
             })
-          })
-        }
-      })
+          }
+        }),
+        downloadSdk.onTaskCompleted((task) => {
+          if (task.module !== DownloadModule.APP_UPDATE) {
+            return
+          }
+
+          if (completedUpdateTaskIds.has(task.id)) {
+            return
+          }
+          completedUpdateTaskIds.add(task.id)
+
+          const version =
+            resolveCompletedTaskVersion(task) || t('settings.settingUpdate.status.unknownVersion')
+
+          toast.success(t('update.update_downloaded'))
+          void blowMention(
+            t('update.update_ready'),
+            t('settings.settingUpdate.status.downloadReady', { version })
+          )
+        })
+      )
+      updateListenerInitialized = true
     } catch (error) {
       console.warn('Failed to setup update listener:', error)
+      for (const dispose of updateListenerDisposers) {
+        try {
+          dispose()
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      updateListenerDisposers.length = 0
+      updateListenerInitialized = false
     }
   }
 

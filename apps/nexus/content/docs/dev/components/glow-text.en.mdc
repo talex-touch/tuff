@@ -1,16 +1,16 @@
 ---
-title: "GlowText 扫光"
-description: "用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。"
+title: "GlowText"
+description: "/“”"
 category: Basic
 syncStatus: migrated
 ---
-# GlowText 扫光
+# GlowText
 
-用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。
+/“”
 
-> 默认启用 `adaptive` 模式（容器级扫光，适合图片/卡片）；文本建议使用 `mode="text-clip"`，扫光会裁切到文字字形。
+> `adaptive` is enabled by default (container-level shimmer, good for images/cards); for text use `mode="text-clip"` so shimmer clips to glyphs.
 >
-> `text-clip` 当前采用右 -> 左扫动方向（与 ShinyText 参考效果一致）。
+> `text-clip` currently sweeps right → left (aligned with the ShinyText reference).
 
 <script setup lang="ts">
 import GlowTextBasicDemo from '~/components/content/demos/GlowTextBasicDemo.vue'
@@ -20,7 +20,7 @@ import GlowTextImageDemo from '~/components/content/demos/GlowTextImageDemo.vue'
 import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### GlowText
 :::TuffDemoWrapper{demo="GlowTextGlowTextDemo" code-lang="vue"}
@@ -65,7 +65,7 @@ code: |
 ---
 :::
 
-## 作用于图片/卡片
+## Applied to Images/Cards
 
 ### GlowText on image
 :::TuffDemoWrapper{demo="GlowTextGlowTextOnImageDemo" code-lang="vue"}
@@ -89,7 +89,7 @@ code: |
 ---
 :::
 
-## 更多案例
+## More Examples
 
 ### GlowText in UI
 :::TuffDemoWrapper{demo="GlowTextGlowTextCasesDemo" code-lang="vue"}
@@ -125,18 +125,18 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `tag` | `string` | `span` | 外层渲染标签 |
-| `active` | `boolean` | `true` | 是否启用扫光 |
-| `repeat` | `boolean` | `true` | 是否循环 |
-| `durationMs` | `number` | `1400` | 动画时长(ms) |
-| `delayMs` | `number` | `0` | 延迟(ms) |
-| `angle` | `number` | `20` | 扫光角度(deg) |
-| `bandSize` | `number` | `38` | 高光带宽度(%) |
-| `color` | `string` | `rgba(255, 255, 255, 0.9)` | 高光颜色 |
-| `opacity` | `number` | `0.75` | 高光不透明度 |
-| `blendMode` | `string` | `screen` | 混合模式（`adaptive` 下会优先尝试 `plus-lighter`；如 `screen` / `overlay` / `lighten`） |
-| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | 扫光模式（`text-clip` 会把高光裁切到文字） |
-| `backdrop` | `string` | - | 自定义 `backdrop-filter`（如 `brightness(1.2) saturate(1.1)`） |
-| `radius` | `number` | `10` | 圆角(px) |
+| `tag` | `string` | `span` | Description for tag. |
+| `active` | `boolean` | `true` | Description for active. |
+| `repeat` | `boolean` | `true` | Description for repeat. |
+| `durationMs` | `number` | `1400` | Description for durationMs. |
+| `delayMs` | `number` | `0` | Description for delayMs. |
+| `angle` | `number` | `20` | Description for angle. |
+| `bandSize` | `number` | `38` | Description for bandSize. |
+| `color` | `string` | `rgba(255, 255, 255, 0.9)` | Description for color. |
+| `opacity` | `number` | `0.75` | Description for opacity. |
+| `blendMode` | `string` | `screen` | Description for blendMode. |
+| `mode` | `'classic' \| 'adaptive' \| 'text-clip'` | `adaptive` | Text（`text-clip` Text） |
+| `backdrop` | `string` | - | Description for backdrop. |
+| `radius` | `number` | `10` | Description for radius. |

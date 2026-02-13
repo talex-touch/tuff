@@ -8,8 +8,8 @@ description: API documentation for the CoreBox search matching system, including
 ## Overview
 The CoreBox search system provides powerful matching capabilities:
 
-- **Chinese Pinyin Matching**: Search `fanyi` to match `翻译`
-- **Initial Abbreviations**: Search `fy` to match `翻译`
+- **Pinyin Matching**: Search `fanyi` to match `translate`
+- **Initial Abbreviations**: Search `fy` to match `translate`
 - **Fuzzy Matching**: Typo-tolerant search, e.g., `helol` matches `hello`
 - **Highlighting**: Highlight matched portions in search results
 
@@ -37,7 +37,7 @@ code: |
     "features": [
       {
         "id": "translate",
-        "name": "翻译",
+        "name": "translate",
         "desc": "Translate selected text",
         "keywords": ["translate", "translation", "fanyi", "fy"]
       }
@@ -125,9 +125,9 @@ code: |
   import { matchFeature } from '@talex-touch/utils/search'
   
   const result = matchFeature({
-    title: '翻译',
+    title: 'translate',
     desc: 'Translate selected text',
-    searchTokens: ['翻译', 'fanyi', 'fy', 'translate'],
+    searchTokens: ['translate', 'fanyi', 'fy', 'translate'],
     query: 'fanyi',
     enableFuzzy: true
   })

@@ -1880,7 +1880,7 @@
         "cachedRelease": "Cached release: {version}"
       },
       "actionsTitle": "Actions",
-      "actionsDesc": "Trigger update checks or maintenance tasks.",
+      "actionsDesc": "Restart here after the update package is downloaded.",
       "actions": {
         "installNow": "Restart to Update",
         "manualCheck": "Check Now",

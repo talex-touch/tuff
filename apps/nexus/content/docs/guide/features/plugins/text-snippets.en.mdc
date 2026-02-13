@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `text-snippets.search`
-- Commands: `text / snippet / 模板 / 话术`
+- Commands: `text / snippet`
 
 ## Core Capabilities
-- 文本片段库：话术与常用文本模板
+- Text snippets library: phrases and common templates.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

@@ -27,14 +27,6 @@ const isDark = computed(() => colorMode.value === 'dark')
 const gridColor = computed(() => (isDark.value ? '#e2e8f0' : '#0f172a'))
 const gridMaxOpacity = computed(() => (isDark.value ? 0.22 : 0.28))
 const gridFlickerChance = computed(() => (isDark.value ? 0.26 : 0.32))
-const gridOpacity = computed(() => (isDark.value ? 0.5 : 0.35))
-const heroStyle = computed(() => ({
-  '--docs-hero-grid-opacity': gridOpacity.value,
-  '--docs-hero-border': isDark.value ? 'rgba(148, 163, 184, 0.26)' : 'rgba(15, 23, 42, 0.08)',
-  '--docs-hero-tag-border': isDark.value ? 'rgba(148, 163, 184, 0.32)' : 'rgba(15, 23, 42, 0.08)',
-  '--docs-hero-tag-bg': isDark.value ? 'rgba(148, 163, 184, 0.12)' : 'rgba(15, 23, 42, 0.04)',
-  '--docs-hero-tag-text': isDark.value ? 'rgba(226, 232, 240, 0.86)' : 'rgba(71, 85, 105, 0.86)',
-}))
 const tagItems = computed(() => ([
   props.verifiedLabel
     ? { label: props.verifiedLabel, icon: 'i-carbon-checkmark-filled', variant: 'badge' }
@@ -48,7 +40,7 @@ const hasTags = computed(() => tagItems.value.length > 0)
 </script>
 
 <template>
-  <section class="docs-hero" :class="{ 'is-dark': isDark }" :style="heroStyle">
+  <section class="docs-hero">
     <FlickeringGrid
       class="docs-hero__grid"
       :color="gridColor"
@@ -87,6 +79,11 @@ const hasTags = computed(() => tagItems.value.length > 0)
   padding: 36px 44px;
   border-radius: 28px;
   border: 1px solid var(--docs-hero-border, rgba(15, 23, 42, 0.08));
+  --docs-hero-grid-opacity: 0.35;
+  --docs-hero-border: rgba(15, 23, 42, 0.08);
+  --docs-hero-tag-border: rgba(15, 23, 42, 0.08);
+  --docs-hero-tag-bg: rgba(15, 23, 42, 0.04);
+  --docs-hero-tag-text: rgba(71, 85, 105, 0.86);
   background: transparent;
   box-shadow: none;
   overflow: hidden;
@@ -183,20 +180,9 @@ const hasTags = computed(() => tagItems.value.length > 0)
   color: rgba(226, 232, 240, 0.75);
 }
 
-.docs-hero.is-dark .docs-hero__grid {
-  mix-blend-mode: screen;
-}
-
-.docs-hero.is-dark .docs-hero__title {
-  color: rgba(248, 250, 252, 0.95);
-}
-
-.docs-hero.is-dark .docs-hero__desc {
-  color: rgba(226, 232, 240, 0.75);
-}
-
 ::global(.dark .docs-hero),
 ::global([data-theme='dark'] .docs-hero) {
+  --docs-hero-grid-opacity: 0.5;
   --docs-hero-border: rgba(148, 163, 184, 0.3);
   --docs-hero-tag-border: rgba(148, 163, 184, 0.35);
   --docs-hero-tag-bg: rgba(148, 163, 184, 0.12);
@@ -206,6 +192,7 @@ const hasTags = computed(() => tagItems.value.length > 0)
 
 ::global(.dark) .docs-hero,
 ::global([data-theme='dark']) .docs-hero {
+  --docs-hero-grid-opacity: 0.5;
   --docs-hero-border: rgba(148, 163, 184, 0.3);
   --docs-hero-tag-border: rgba(148, 163, 184, 0.35);
   --docs-hero-tag-bg: rgba(148, 163, 184, 0.12);
@@ -213,12 +200,9 @@ const hasTags = computed(() => tagItems.value.length > 0)
   border-color: var(--docs-hero-border);
 }
 
-.docs-hero.is-dark {
-  --docs-hero-border: rgba(148, 163, 184, 0.3);
-  --docs-hero-tag-border: rgba(148, 163, 184, 0.35);
-  --docs-hero-tag-bg: rgba(148, 163, 184, 0.12);
-  --docs-hero-tag-text: rgba(226, 232, 240, 0.86);
-  border-color: var(--docs-hero-border);
+::global(.dark .docs-hero__grid),
+::global([data-theme='dark'] .docs-hero__grid) {
+  mix-blend-mode: screen;
 }
 
 ::global(.dark .docs-hero__badge),

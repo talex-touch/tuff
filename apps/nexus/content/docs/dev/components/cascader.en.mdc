@@ -1,19 +1,19 @@
 ---
-title: "Cascader 级联选择"
-description: "用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。"
+title: "Cascader"
+description: "Component documentation for Cascader."
 category: Form
 syncStatus: migrated
 ---
-# Cascader 级联选择
+# Cascader
 
-用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。
+Component documentation for Cascader.
 
 <script setup lang="ts">
 import CascaderBasicDemo from '~/components/content/demos/CascaderBasicDemo.vue'
 import CascaderBasicDemoSource from '~/components/content/demos/CascaderBasicDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Cascader
 :::TuffDemoWrapper{demo="CascaderCascaderDemo" code-lang="vue"}
@@ -74,66 +74,66 @@ code: |
 ---
 :::
 
-## 注意事项
+## Notes
 
-- 单选模式 `modelValue` 为路径数组，多选模式为路径数组列表。
-- `expandTrigger` 可控制点击/悬停展开（`hover` 模式下点击非叶子节点不会展开）。
-- 异步 `load` 仅在节点未提供 `children` 且未标记 `leaf` 时触发。
+- Single-select `modelValue` is a path array; multi-select is an array of path arrays.
+- `expandTrigger` controls click/hover expansion (in `hover` mode, clicking non-leaf nodes will not expand).
+- Async `load` only triggers when a node has no `children` and is not marked `leaf`.
 
 ## API
 
 ### TxCascader Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `CascaderValue` | - | 当前值（v-model） |
-| `options` | `CascaderNode[]` | `[]` | 数据源 |
-| `multiple` | `boolean` | `false` | 是否多选 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `placeholder` | `string` | `'请选择'` | 占位 |
-| `searchable` | `boolean` | `true` | 是否可搜索 |
-| `clearable` | `boolean` | `true` | 是否可清空 |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | 浮层位置 |
-| `dropdownOffset` | `number` | `6` | 浮层偏移 |
-| `dropdownWidth` | `number` | `360` | 浮层宽度 |
-| `dropdownMaxWidth` | `number` | `520` | 浮层最大宽度 |
-| `dropdownMaxHeight` | `number` | `340` | 浮层最大高度 |
-| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | 展开触发方式 |
-| `load` | `(node, level) => Promise<CascaderNode[]>` | - | 异步加载子节点（仅对未提供 children 的节点生效） |
+| `modelValue` | `CascaderValue` | - | Description for modelValue. |
+| `options` | `CascaderNode[]` | `[]` | Description for options. |
+| `multiple` | `boolean` | `false` | Description for multiple. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `placeholder` | `string` | `'Text'` | Description for placeholder. |
+| `searchable` | `boolean` | `true` | Description for searchable. |
+| `clearable` | `boolean` | `true` | Description for clearable. |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | Description for placement. |
+| `dropdownOffset` | `number` | `6` | Description for dropdownOffset. |
+| `dropdownWidth` | `number` | `360` | Description for dropdownWidth. |
+| `dropdownMaxWidth` | `number` | `520` | Description for dropdownMaxWidth. |
+| `dropdownMaxHeight` | `number` | `340` | Description for dropdownMaxHeight. |
+| `expandTrigger` | `'click' \| 'hover' \| 'both'` | `'both'` | TextTriggerText |
+| `load` | `(node, level) => Promise<CascaderNode[]>` | - | Description for load. |
 
 ### CascaderNode
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `value` | `string \| number` | 唯一标识 |
-| `label` | `string` | 展示文本 |
-| `disabled` | `boolean` | 是否禁用 |
-| `leaf` | `boolean` | 是否叶子节点 |
-| `children` | `CascaderNode[]` | 子节点（可选） |
+| `value` | `string \| number` | Description for value. |
+| `label` | `string` | Description for label. |
+| `disabled` | `boolean` | Description for disabled. |
+| `leaf` | `boolean` | Description for leaf. |
+| `children` | `CascaderNode[]` | Description for children. |
 
 ### CascaderValue
 
-- 单选：`CascaderPath`（`Array<string | number>`）
-- 多选：`CascaderPath[]`
+- Single select: `CascaderPath` (`Array<string | number>`)
+- Multi select: `CascaderPath[]`
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `(v)` | v-model 更新 |
-| `change` | `(v)` | 值变化 |
-| `open` | - | 打开浮层 |
-| `close` | - | 关闭浮层 |
+| `update:modelValue` | `(v)` | Description for update:modelValue. |
+| `change` | `(v)` | Description for change. |
+| `open` | - | Description for open. |
+| `close` | - | Description for close. |
 
 ### Expose
 
-| 名称 | 类型 | 说明 |
+| Name | Type | Description |
 |------|------|------|
-| `open()` | `() => void` | 打开 |
-| `close()` | `() => void` | 关闭 |
-| `toggle()` | `() => void` | 切换 |
-| `focus()` | `() => void` | 聚焦触发器 |
-| `blur()` | `() => void` | 失焦触发器 |
-| `clear()` | `() => void` | 清空 |
-| `setValue(v)` | `(v) => void` | 设置值 |
-| `getValue()` | `() => any` | 获取当前值 |
+| `open()` | `() => void` | Description for open(). |
+| `close()` | `() => void` | Description for close(). |
+| `toggle()` | `() => void` | Description for toggle(). |
+| `focus()` | `() => void` | Description for focus(). |
+| `blur()` | `() => void` | Description for blur(). |
+| `clear()` | `() => void` | Description for clear(). |
+| `setValue(v)` | `(v) => void` | Description for setValue(v). |
+| `getValue()` | `() => any` | Description for getValue(). |

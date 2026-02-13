@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from '#imports'
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
+import GlobalSearch from '~/components/search/GlobalSearch.vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -196,6 +197,9 @@ watchEffect(() => {
 <template>
   <VitePwaManifest />
   <ToastContainer />
+  <ClientOnly>
+    <GlobalSearch />
+  </ClientOnly>
   <template v-if="isProtectedRoute">
     <div
       v-if="isAuthLoading"

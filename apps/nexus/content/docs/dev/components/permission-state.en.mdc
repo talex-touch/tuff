@@ -1,17 +1,17 @@
 ---
-title: "PermissionState 权限不足"
-description: "用于权限不足或未授权场景。"
+title: "PermissionState"
+description: "Component documentation for PermissionState."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [permission, state, access]
 syncStatus: migrated
 ---
-# PermissionState 权限不足
+# PermissionState
 
-用于权限不足或未授权场景。
+Component documentation for PermissionState.
 
-## 基础用法
+## Basic Usage
 
 ### PermissionState
 :::TuffDemoWrapper{demo="PermissionStatePermissionStateDemo" code-lang="vue"}
@@ -28,4 +28,4 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+Props / Slots / Events follow `TxEmptyState`.

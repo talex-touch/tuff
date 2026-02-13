@@ -43,7 +43,7 @@ Supported unit types:
 | **Data** | bit, byte, kb, mb, gb, kib, mib, gib |
 | **Temperature** | c(℃), f, k |
 
-Also supports Chinese unit names like 米, 千克, 公斤.
+Also supports Chinese unit names like mi, qian ke, gong jin.
 
 ---
 

@@ -1,8 +1,14 @@
 <script setup lang="ts" name="SettingUpdate">
-import type { CachedUpdateRecord, DownloadAsset, UpdateSettings } from '@talex-touch/utils'
+import type {
+  CachedUpdateRecord,
+  DownloadAsset,
+  DownloadTask,
+  UpdateSettings
+} from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex'
-import { AppPreviewChannel } from '@talex-touch/utils'
-import { computed, onMounted, ref } from 'vue'
+import { AppPreviewChannel, DownloadModule } from '@talex-touch/utils'
+import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TSelectItem from '~/components/base/select/TSelectItem.vue'
@@ -16,15 +22,15 @@ import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
 
 const { t } = useI18n()
 const githubProvider = new GithubUpdateProvider()
+const downloadSdk = useDownloadSdk()
+const downloadStatusDisposers: Array<() => void> = []
 
 const { appStates } = useAppState()
 const {
-  checkApplicationUpgrade,
   handleDownloadUpdate,
   installDownloadedUpdate,
   getUpdateSettings,
   updateSettings,
-  clearUpdateCache,
   getUpdateStatus,
   getCachedRelease
 } = useApplicationUpgrade()
@@ -44,10 +50,7 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
-const manualChecking = ref(false)
-const clearingCache = ref(false)
 const installingUpdate = ref(false)
-const lastResultMessage = ref<string>('')
 
 const channelOptions = computed(() => {
   return [
@@ -86,9 +89,6 @@ const statusMessage = computed(() => {
       warning: false
     }
   }
-  if (lastResultMessage.value) {
-    return { text: lastResultMessage.value, warning: false }
-  }
   if (appStates.updateErrorMessage) {
     return { text: appStates.updateErrorMessage, warning: true }
   }
@@ -119,7 +119,34 @@ const cachedAssets = computed(() => {
 
 onMounted(async () => {
   await loadSettings()
+  setupDownloadStatusListener()
 })
+
+onUnmounted(() => {
+  for (const dispose of downloadStatusDisposers) {
+    try {
+      dispose()
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+  downloadStatusDisposers.length = 0
+})
+
+function setupDownloadStatusListener(): void {
+  if (downloadStatusDisposers.length > 0) {
+    return
+  }
+
+  const handleTaskCompleted = (task: DownloadTask) => {
+    if (task.module !== DownloadModule.APP_UPDATE) {
+      return
+    }
+    void refreshStatus()
+  }
+
+  downloadStatusDisposers.push(downloadSdk.onTaskCompleted(handleTaskCompleted))
+}
 
 async function loadSettings(): Promise<void> {
   fetching.value = true
@@ -196,7 +223,6 @@ async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
 
   const previous = selectedChannel.value
   selectedChannel.value = value
-  lastResultMessage.value = ''
   channelSaving.value = true
   try {
     await updateSettings({ updateChannel: value })
@@ -247,51 +273,6 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     autoDownloadSaving.value = false
-  }
-}
-
-async function handleManualCheck(): Promise<void> {
-  manualChecking.value = true
-  try {
-    const result = await checkApplicationUpgrade(true)
-    await refreshStatus()
-    await refreshCachedRelease()
-    updateLastResultMessage(result)
-    if (result?.hasUpdate && result.release) {
-      toast.success(
-        t('settings.settingUpdate.messages.manualCheckFound', {
-          version: result.release.tag_name
-        })
-      )
-    } else if (result?.release) {
-      toast.success(
-        t('settings.settingUpdate.messages.manualCheckNoUpdate', {
-          version: result.release.tag_name
-        })
-      )
-    } else {
-      toast.success(t('settings.settingUpdate.messages.manualCheckStarted'))
-    }
-  } catch (error) {
-    console.error('[SettingUpdate] Manual update check failed:', error)
-    toast.error(t('settings.settingUpdate.messages.manualCheckFailed'))
-  } finally {
-    manualChecking.value = false
-  }
-}
-
-async function handleClearCache(): Promise<void> {
-  clearingCache.value = true
-  try {
-    await clearUpdateCache()
-    toast.success(t('settings.settingUpdate.messages.cacheCleared'))
-    cachedRelease.value = null
-    await refreshStatus()
-  } catch (error) {
-    console.error('[SettingUpdate] Failed to clear cache:', error)
-    toast.error(t('settings.settingUpdate.messages.cacheClearFailed'))
-  } finally {
-    clearingCache.value = false
   }
 }
 
@@ -369,34 +350,6 @@ function formatPlatform(platform: DownloadAsset['platform']): string {
   return platform
 }
 
-function updateLastResultMessage(
-  result?: Awaited<ReturnType<typeof checkApplicationUpgrade>>
-): void {
-  if (!result) {
-    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFailed')
-    return
-  }
-  if (result.hasUpdate && result.release) {
-    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFound', {
-      version: result.release.tag_name
-    })
-    return
-  }
-  if (result.error) {
-    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckFailedWithReason', {
-      reason: result.error
-    })
-    return
-  }
-  if (result.release) {
-    lastResultMessage.value = t('settings.settingUpdate.messages.manualCheckNoUpdate', {
-      version: result.release.tag_name
-    })
-    return
-  }
-  lastResultMessage.value = ''
-}
-
 function openAssetsDialog(): void {
   if (!cachedRelease.value?.release) {
     return
@@ -469,19 +422,13 @@ function openAssetsDialog(): void {
       active-icon="i-carbon-settings-adjust"
     >
       <TxButton
-        v-if="downloadReady"
         variant="flat"
         type="primary"
+        :disabled="!downloadReady"
         :loading="installingUpdate"
         @click="handleInstallUpdate"
       >
         {{ t('settings.settingUpdate.actions.installNow') }}
-      </TxButton>
-      <TxButton variant="flat" type="primary" :loading="manualChecking" @click="handleManualCheck">
-        {{ t('settings.settingUpdate.actions.manualCheck') }}
-      </TxButton>
-      <TxButton variant="flat" :loading="clearingCache" @click="handleClearCache">
-        {{ t('settings.settingUpdate.actions.clearCache') }}
       </TxButton>
     </TuffBlockSlot>
 

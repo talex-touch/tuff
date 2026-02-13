@@ -1,17 +1,17 @@
 ---
-title: "EmptyState 空态引导"
-description: "通用空态/引导组件，适用于页面为空、未选择、无权限等场景。"
+title: "EmptyState"
+description: "Component documentation for EmptyState."
 category: Feedback
 status: beta
 since: 1.0.0
 tags: [empty, state, guide]
 syncStatus: migrated
 ---
-# EmptyState 空态引导
+# EmptyState
 
-通用空态/引导组件，适用于页面为空、未选择、无权限等场景。
+Component documentation for EmptyState.
 
-## 基础用法
+## Basic Usage
 
 ### EmptyState (variant)
 :::TuffDemoWrapper{demo="EmptyStateEmptyStateVariantDemo" code-lang="vue"}
@@ -27,7 +27,7 @@ code: |
 ---
 :::
 
-## 横向布局
+## Horizontal Layout
 
 ### EmptyState (horizontal)
 :::TuffDemoWrapper{demo="EmptyStateEmptyStateHorizontalDemo" code-lang="vue"}
@@ -45,7 +45,7 @@ code: |
 ---
 :::
 
-## 自定义插槽
+## Custom Slots
 
 ### EmptyState (slots)
 :::TuffDemoWrapper{demo="EmptyStateEmptyStateSlotsDemo" code-lang="vue"}
@@ -71,59 +71,59 @@ code: |
 ---
 :::
 
-## 预设组件
+## Preset Components
 
-- `TxBlankSlate`：大尺寸空白页（默认 `size="large"`）
-- `TxLoadingState`：加载态占位（默认 `variant="loading"`）
-- `TxNoSelection`：未选择占位（默认 `variant="no-selection"`）
-- `TxNoData`：无数据占位（默认 `variant="no-data"`）
-- `TxSearchEmpty`：搜索空态（默认 `variant="search-empty"`）
-- `TxOfflineState`：离线提示（默认 `variant="offline"`）
-- `TxPermissionState`：权限不足（默认 `variant="permission"`）
+- `TxBlankSlate`: large blank state (default `size="large"`)
+- `TxLoadingState`: loading placeholder (default `variant="loading"`)
+- `TxNoSelection`: no-selection placeholder (default `variant="no-selection"`)
+- `TxNoData`: no-data placeholder (default `variant="no-data"`)
+- `TxSearchEmpty`: empty search state (default `variant="search-empty"`)
+- `TxOfflineState`: offline hint (default `variant="offline"`)
+- `TxPermissionState`: permission denied (default `variant="permission"`)
 
 ## API
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `variant` | `EmptyStateVariant` | `'empty'` | 预设场景 |
-| `title` | `string` | - | 标题 |
-| `description` | `string` | - | 描述 |
-| `icon` | `TxIconSource \| string \| null` | - | 图标（string 为 class/name） |
-| `iconSize` | `number` | - | 图标尺寸 |
-| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向 |
-| `align` | `'start' \| 'center' \| 'end'` | `'center'` | 对齐方式 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级 |
-| `surface` | `'plain' \| 'card'` | `'plain'` | 表面风格 |
-| `primaryAction` | `EmptyStateAction` | - | 主操作配置 |
-| `secondaryAction` | `EmptyStateAction` | - | 次操作配置 |
-| `actionSize` | `TxButtonProps['size']` | `'small'` | 操作按钮尺寸 |
-| `loading` | `boolean` | `false` | 强制 loading 图标 |
+| `variant` | `EmptyStateVariant` | `'empty'` | Description for variant. |
+| `title` | `string` | - | Description for title. |
+| `description` | `string` | - | Description for description. |
+| `icon` | `TxIconSource \| string \| null` | - | Icon（string Text class/name） |
+| `iconSize` | `number` | - | Description for iconSize. |
+| `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | LayoutDirection |
+| `align` | `'start' \| 'center' \| 'end'` | `'center'` | Description for align. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | SizeText |
+| `surface` | `'plain' \| 'card'` | `'plain'` | Description for surface. |
+| `primaryAction` | `EmptyStateAction` | - | Description for primaryAction. |
+| `secondaryAction` | `EmptyStateAction` | - | Description for secondaryAction. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Description for actionSize. |
+| `loading` | `boolean` | `false` | Description for loading. |
 
 ### EmptyStateAction
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `label` | `string` | - | 按钮文本 |
-| `type` | `TxButtonProps['type']` | - | 按钮类型 |
-| `variant` | `TxButtonProps['variant']` | - | 按钮变体 |
-| `size` | `TxButtonProps['size']` | - | 按钮尺寸 |
-| `disabled` | `boolean` | `false` | 禁用状态 |
-| `icon` | `string` | - | 图标 class |
+| `label` | `string` | - | Description for label. |
+| `type` | `TxButtonProps['type']` | - | Description for type. |
+| `variant` | `TxButtonProps['variant']` | - | Description for variant. |
+| `size` | `TxButtonProps['size']` | - | Description for size. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `icon` | `string` | - | Description for icon. |
 
 ### Slots
 
-| 名称 | 说明 |
+| Name | Description |
 |------|------|
-| `icon` | 自定义图标区 |
-| `title` | 标题 |
-| `description` | 描述 |
-| `actions` | 操作区 |
+| `icon` | Description for icon. |
+| `title` | Description for title. |
+| `description` | Description for description. |
+| `actions` | Description for actions. |
 
 ### Events
 
-| 事件名 | 说明 |
+| Event | Description |
 |------|------|
-| `primary` | 主操作点击 |
-| `secondary` | 次操作点击 |
+| `primary` | Description for primary. |
+| `secondary` | Description for secondary. |

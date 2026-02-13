@@ -1,15 +1,15 @@
 ---
-title: "Tabs 标签页"
-description: "用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。"
+title: "Tabs"
+description: "Windows Tabs"
 category: Layout
 syncStatus: migrated
 ---
-# Tabs 标签页
+# Tabs
 
-用于在同一页面内切换不同内容区域（偏 Windows 风格的左侧导航 Tabs）。
+Windows Tabs
 
 
-## 基础用法
+## Basic Usage
 
 ### Tabs
 :::TuffDemoWrapper{demo="TabsTabsDemo" code-lang="vue"}
@@ -159,7 +159,7 @@ code: |
 ---
 :::
 
-## 动态内容尺寸（manual, rich content）
+## Dynamic Content Size (manual, rich content)
 
 ### Dynamic Content (manual)
 :::TuffDemoWrapper{demo="TabsDynamicContentManualDemo" code-lang="vue"}
@@ -284,7 +284,7 @@ code: |
 ---
 :::
 
-## 布局方向（placement）
+## Layout Direction (placement)
 
 ### Placement + Header Slot
 :::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
@@ -353,7 +353,7 @@ code: |
 ---
 :::
 
-## 高度跟随内容（animation.size）
+## Height Follows Content (animation.size)
 
 ### Auto Size (contentScrollable=false)
 :::TuffDemoWrapper{demo="TabsAutoSizeContentScrollableFalseDemo" code-lang="vue"}
@@ -395,7 +395,7 @@ code: |
 ---
 :::
 
-## 关闭动画（indicator/content）
+## Closing Animations (indicator/content)
 
 ### Disable Animations
 :::TuffDemoWrapper{demo="TabsDisableAnimationsDemo" code-lang="vue"}
@@ -439,58 +439,58 @@ code: |
 
 ### TxTabs Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `string` | - | 当前激活 tab（v-model） |
-| `defaultValue` | `string` | - | 默认激活 tab（当未传 modelValue 时） |
-| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs 布局位置 |
-| `offset` | `number` | `0` | 指示条定位偏移 |
-| `navMinWidth` | `number` | `220` | 左侧导航最小宽度 |
-| `navMaxWidth` | `number` | `320` | 左侧导航最大宽度 |
-| `contentPadding` | `number` | `12` | 内容区 padding |
-| `contentScrollable` | `boolean` | `true` | 内容是否可滚动（关闭后可用于 autoHeight/autoWidth 的尺寸测量） |
-| `autoHeight` | `boolean` | `false` | 自动高度（需要 `contentScrollable=false` + `animation.size.enabled=true`） |
-| `autoWidth` | `boolean` | `false` | 自动宽度（需要 `animation.size.enabled=true`） |
-| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | 指示器样式 |
-| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | 指示器动效风格 |
-| `indicatorMotionStrength` | `number` | `1` | 指示器动效强度（数值越大越“Q弹”，`0` 基本关闭 scale 弹性） |
-| `animation` | `TabsAnimation` | - | 动画配置（size/nav/indicator/content） |
-| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | 内容区尺寸动画（高度跟随内容，仅在 `contentScrollable=false` 时生效）。未传时兼容 `autoHeight*` |
-| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | 导航容器动画（nav 宽度/布局变化过渡） |
-| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | 指示条动画 |
-| `animation.content` | `boolean \| { enabled? }` | - | 内容切换过渡（zoom 动画） |
-| `autoHeight` | `boolean` | `false` | 兼容字段：等价于 `animation.size` |
-| `autoHeightDurationMs` | `number` | `250` | 兼容字段：`animation.size.durationMs` |
-| `autoHeightEasing` | `string` | `ease` | 兼容字段：`animation.size.easing` |
+| `modelValue` | `string` | - | Description for modelValue. |
+| `defaultValue` | `string` | - | Description for defaultValue. |
+| `placement` | `'left' \| 'right' \| 'top' \| 'bottom'` | `'left'` | Tabs LayoutPosition |
+| `offset` | `number` | `0` | Description for offset. |
+| `navMinWidth` | `number` | `220` | Description for navMinWidth. |
+| `navMaxWidth` | `number` | `320` | Description for navMaxWidth. |
+| `contentPadding` | `number` | `12` | Description for contentPadding. |
+| `contentScrollable` | `boolean` | `true` | Description for contentScrollable. |
+| `autoHeight` | `boolean` | `false` | Description for autoHeight. |
+| `autoWidth` | `boolean` | `false` | Description for autoWidth. |
+| `indicatorVariant` | `'line' \| 'pill' \| 'block' \| 'dot' \| 'outline'` | `'line'` | Description for indicatorVariant. |
+| `indicatorMotion` | `'stretch' \| 'warp' \| 'glide' \| 'snap' \| 'spring'` | `'stretch'` | Description for indicatorMotion. |
+| `indicatorMotionStrength` | `number` | `1` | Description for indicatorMotionStrength. |
+| `animation` | `TabsAnimation` | - | Description for animation. |
+| `animation.size` | `boolean \| { enabled?; durationMs?; easing? }` | - | ContentTextSizeText（TextContent，Text `contentScrollable=false` Text）。Text `autoHeight*` |
+| `animation.nav` | `boolean \| { enabled?; durationMs?; easing? }` | - | TextContainerText（nav Text/LayoutText） |
+| `animation.indicator` | `boolean \| { enabled?; durationMs?; easing? }` | - | Description for animation.indicator. |
+| `animation.content` | `boolean \| { enabled? }` | - | ContentText（zoom Text） |
+| `autoHeight` | `boolean` | `false` | Description for autoHeight. |
+| `autoHeightDurationMs` | `number` | `250` | Description for autoHeightDurationMs. |
+| `autoHeightEasing` | `string` | `ease` | Description for autoHeightEasing. |
 
 ### Slots
 
-| 名称 | 参数 | 说明 |
+| Name | Params | Description |
 |------|------|------|
-| `default` | - | 放置 `TxTabItem` / `TxTabItemGroup` / `TxTabHeader` |
-| `nav-right` | - | 顶部/底部 Tabs 的导航右侧区域（适合放按钮、搜索等），宽度变化会配合 `autoWidth` 跟随内容 |
+| `default` | - | Description for default. |
+| `nav-right` | - | Description for nav-right. |
 
 ### Expose
 
-| 名称 | 类型 | 说明 |
+| Name | Type | Description |
 |------|------|------|
-| `refresh` | `() => void` | 触发内容尺寸重新测量（AutoSizer passthrough） |
-| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | 包裹一次变更并使用 FLIP 尺寸过渡 |
-| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer 的 action wrapper（用于丝滑自动切换） |
-| `size` | `() => { width: number; height: number } \| undefined` | 当前测量的尺寸信息 |
+| `refresh` | `() => void` | Description for refresh. |
+| `flip` | `(action: () => void \| Promise<void>) => Promise<void>` | TextUsage FLIP SizeText |
+| `action` | `(fn: (el: HTMLElement) => void \| Promise<void>, optionsOrDetect?: any) => Promise<any>` | AutoSizer Text action wrapper（Text） |
+| `size` | `() => { width: number; height: number } \| undefined` | TextSizeText |
 
 ### TxTabItem Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `name` | `string` | - | tab 名称（唯一 key） |
-| `iconClass` | `string` | `''` | 图标 class |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `activation` | `boolean` | `false` | 是否作为初始激活项 |
+| `name` | `string` | - | Description for name. |
+| `iconClass` | `string` | `''` | Description for iconClass. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `activation` | `boolean` | `false` | Description for activation. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `change` | `string` | 切换时触发 |
-| `update:modelValue` | `string` | v-model 更新 |
+| `change` | `string` | Description for change. |
+| `update:modelValue` | `string` | Description for update:modelValue. |

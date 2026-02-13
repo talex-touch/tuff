@@ -40,7 +40,7 @@ code: |
 code: |
   <template>
     <TxKeyframeStrokeText
-      text="关键帧描边动画"
+      text="Text"
       stroke-color="#16a34a"
       fill-color="#14532d"
       :duration-ms="2600"

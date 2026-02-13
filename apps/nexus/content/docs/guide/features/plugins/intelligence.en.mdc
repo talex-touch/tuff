@@ -5,10 +5,10 @@
 
 ## Trigger
 - Feature ID: `intelligence.ask`
-- Commands: `ai / @ai / /ai / 智能 / 问答`
+- Commands: `ai / @ai / /ai`
 
 ## Core Capabilities
-- 智能问答：在 CoreBox 里直接提问并复制回答
+- AI Q&A: ask directly in CoreBox and copy the response.
 - Supported platforms: `win32, darwin, linux`
 
 ## Config & Data

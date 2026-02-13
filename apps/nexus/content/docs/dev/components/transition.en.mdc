@@ -1,12 +1,12 @@
 ---
-title: "Transition 动效"
-description: "用于内容切换（X）与列表增删（Y）的通用过渡封装。"
+title: "Transition"
+description: "Component documentation for Transition."
 category: Layout
 syncStatus: migrated
 ---
-# Transition 动效
+# Transition
 
-用于内容切换（X）与列表增删（Y）的通用过渡封装。
+Component documentation for Transition.
 
 <script setup lang="ts">
 import TransitionContentDemo from '~/components/content/demos/TransitionContentDemo.vue'
@@ -16,7 +16,7 @@ import TransitionListDemo from '~/components/content/demos/TransitionListDemo.vu
 import TransitionListDemoSource from '~/components/content/demos/TransitionListDemo.vue?raw'
 </script>
 
-## 内容切换（X）
+## Content Switch (X)
 
 ### Transition Content
 :::TuffDemoWrapper{demo="TransitionTransitionContentDemo" code-lang="vue"}
@@ -110,7 +110,7 @@ code: |
 ---
 :::
 
-## 列表增删（Y）
+## List Add/Remove (Y)
 
 ### Transition List
 :::TuffDemoWrapper{demo="TransitionTransitionListDemo" code-lang="vue"}
@@ -184,15 +184,15 @@ code: |
 
 ### TxTransition Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | 预设动效 |
-| `group` | `boolean` | `false` | 是否使用 TransitionGroup（列表场景） |
-| `tag` | `string` | `'div'` | group 模式下容器 tag |
-| `appear` | `boolean` | `true` | 是否首屏执行 enter |
-| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | 内容切换模式（非 group） |
-| `duration` | `number` | `180` | 动画时长（ms） |
-| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | 缓动 |
+| `preset` | `'fade' \| 'slide-fade' \| 'rebound' \| 'smooth-size'` | `'fade'` | Description for preset. |
+| `group` | `boolean` | `false` | Description for group. |
+| `tag` | `string` | `'div'` | Description for tag. |
+| `appear` | `boolean` | `true` | Description for appear. |
+| `mode` | `'in-out' \| 'out-in'` | `'out-in'` | ContentText（Text group） |
+| `duration` | `number` | `180` | Description for duration. |
+| `easing` | `string` | `'cubic-bezier(0.2, 0, 0, 1)'` | Description for easing. |
 
 ### Semantic Components
 
@@ -201,4 +201,4 @@ code: |
 - `TxTransitionRebound`
 - `TxTransitionSmoothSize`
 
-这些组件等价于 `TxTransition` 的不同 `preset`，用于更语义化的调用方式。
+These components are presets of `TxTransition` for more semantic usage.

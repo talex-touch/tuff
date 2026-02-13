@@ -9,26 +9,26 @@ This page mirrors the repository `examples/` directory. Update the source files 
 ---
 code: |
   /**
-   * 基本使用示例
-   * 展示如何使用SDK发送消息
+   * Basic usage example
+   * Shows how to send messages with the SDK
    */
   
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
-  // 获取SDK实例
+  // Get SDK instance
   const sdk = useTouchSDK()
   
-  // 2. 发送消息执行功能
+  // 2. Send messages to execute actions
   async function executeActions() {
     try {
-      // 执行搜索
+      // Run search
       const searchResult = await sdk.sendMessage('search', {
         query: 'hello world',
         type: 'text',
       })
       console.log('Search result:', searchResult)
   
-      // 执行翻译
+      // Run translation
       const translateResult = await sdk.sendMessage('translate', {
         text: 'Hello',
         from: 'en',
@@ -36,7 +36,7 @@ code: |
       })
       console.log('Translate result:', translateResult)
   
-      // 发送通知
+      // Send notification
       await sdk.sendMessage('notify', {
         title: 'Plugin Message',
         body: 'This is a notification from plugin',
@@ -47,23 +47,23 @@ code: |
     }
   }
   
-  // 处理函数
+  // Handlers
   function handleSearch(data) {
     console.log('Handling search:', data)
-    // 实现搜索逻辑
+    // Implement search logic
   }
   
   function handleTranslate(data) {
     console.log('Handling translate:', data)
-    // 实现翻译逻辑
+    // Implement translation logic
   }
   
   function handleNotify(data) {
     console.log('Handling notify:', data)
-    // 实现通知逻辑
+    // Implement notification logic
   }
   
-  // 导出函数供外部调用
+  // Export functions for external usage
   window.pluginBasicExample = {
     executeActions,
   }
@@ -75,15 +75,15 @@ code: |
 ---
 code: |
   /**
-   * 完整插件示例
-   * 展示一个完整的插件如何使用SDK
+   * Complete plugin example
+   * Shows a complete plugin using the SDK
    */
   
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
   const sdk = useTouchSDK()
   
-  // 插件配置
+  // Plugin config
   const PLUGIN_CONFIG = {
     name: 'Example Plugin',
     version: '1.0.0',
@@ -91,24 +91,24 @@ code: |
     author: 'Talex Touch Team',
   }
   
-  // 插件初始化
+  // Plugin initialization
   async function initializePlugin() {
     try {
       console.log(`[${PLUGIN_CONFIG.name}] Initializing...`)
   
-      // 发送初始化消息
+      // Send init message
       await sdk.sendMessage('init', {
         config: PLUGIN_CONFIG,
         timestamp: Date.now(),
       })
   
-      // 加载用户配置
+      // Load user config
       const userConfig = await sdk.sendMessage('storage:get', {
         key: 'user_config',
       })
   
       if (!userConfig) {
-        // 设置默认配置
+        // Set default config
         await sdk.sendMessage('storage:set', {
           key: 'user_config',
           value: {
@@ -126,19 +126,19 @@ code: |
     }
   }
   
-  // 演示所有功能
+  // Demonstrate all features
   async function demonstrateAllFeatures() {
     try {
       console.log('=== Demonstrating All Features ===')
   
-      // 1. 搜索功能
+      // 1. Search feature
       console.log('1. Testing search...')
       await sdk.sendMessage('search', {
         query: 'hello world',
         type: 'text',
       })
   
-      // 2. 翻译功能
+      // 2. Translation feature
       console.log('2. Testing translation...')
       await sdk.sendMessage('translate', {
         text: 'Hello World',
@@ -146,7 +146,7 @@ code: |
         to: 'zh',
       })
   
-      // 3. 通知功能
+      // 3. Notification feature
       console.log('3. Testing notification...')
       await sdk.sendMessage('notify', {
         title: 'Plugin Demo',
@@ -157,7 +157,7 @@ code: |
         },
       })
   
-      // 4. 存储功能
+      // 4. Storage feature
       console.log('4. Testing storage...')
       await sdk.sendMessage('storage:set', {
         key: 'demo_data',
@@ -172,7 +172,7 @@ code: |
       })
       console.log('Stored data:', storedData)
   
-      // 5. 剪贴板功能
+      // 5. Clipboard feature
       console.log('5. Testing clipboard...')
       await sdk.sendMessage('clipboard:write', {
         content: 'Hello from Talex Touch Plugin!',
@@ -191,53 +191,53 @@ code: |
     }
   }
   
-  // 处理函数
+  // Handlers
   function handleInit(data) {
     console.log('Plugin initialized with config:', data.config)
   }
   
   function handleSearch(data) {
     console.log('Searching for:', data.query, 'Type:', data.type)
-    // 实现搜索逻辑
+    // Implement search logic
   }
   
   function handleTranslate(data) {
     console.log('Translating:', data.text, 'From:', data.from, 'To:', data.to)
-    // 实现翻译逻辑
+    // Implement translation logic
   }
   
   function handleNotify(data) {
     console.log('Showing notification:', data.title, data.body)
-    // 实现通知逻辑
+    // Implement notification logic
   }
   
   function handleStorageGet(data) {
     console.log('Getting storage for key:', data.key)
-    // 实现存储获取逻辑
+    // Implement storage get logic
   }
   
   function handleStorageSet(data) {
     console.log('Setting storage:', data.key, data.value)
-    // 实现存储设置逻辑
+    // Implement storage set logic
   }
   
   function handleClipboardRead(data) {
     console.log('Reading clipboard, type:', data.type)
-    // 实现剪贴板读取逻辑
+    // text
   }
   
   function handleClipboardWrite(data) {
     console.log('Writing to clipboard:', data.content, 'Type:', data.type)
-    // 实现剪贴板写入逻辑
+    // text
   }
   
-  // 导出
+  // export
   window.completeExample = {
     initializePlugin,
     demonstrateAllFeatures,
   }
   
-  // 自动初始化
+  // auto init
   initializePlugin()
 ---
 :::
@@ -249,19 +249,19 @@ code: |
   /**
    * Talex Touch Plugin SDK
    *
-   * 简单的插件通信SDK - 通过 IFeatureLifeCycle 接口与主应用通信
+   * TextSDK - Text IFeatureLifeCycle Text
    */
   
   import { hasWindow } from '@talex-touch/utils/env'
   import { useChannel, usePluginInfo } from '@talex-touch/utils/plugin/sdk'
   
-  // 检查运行环境
+  // check runtime
   if (!hasWindow()) {
     throw new TypeError('[Plugin SDK] This SDK must run in a browser environment')
   }
   
   /**
-   * 简单的插件SDK
+   * TextSDK
    */
   class PluginSDK {
     constructor() {
@@ -273,9 +273,9 @@ code: |
     }
   
     /**
-     * 发送消息到主应用
-     * @param {string} message - 消息类型
-     * @param {any} data - 消息数据
+     * sendmessageText
+     * @param {string} message - messageText
+     * @param {any} data - message payload
      */
     async sendMessage(message, data = {}) {
       try {
@@ -288,10 +288,10 @@ code: |
     }
   
     /**
-     * 通过 index:communicate 通道与其他插件通信
-     * @param {string} targetPluginName - 目标插件名称
-     * @param {string} key - 消息键
-     * @param {any} info - 消息数据
+     * Text index:communicate Text
+     * @param {string} targetPluginName - Text
+     * @param {string} key - message key
+     * @param {any} info - message payload
      */
     async communicateWithPlugin(targetPluginName, key, info = {}) {
       try {
@@ -308,7 +308,7 @@ code: |
     }
   
     /**
-     * 获取插件信息
+     * get plugin info
      */
     getPluginInfo() {
       return {
@@ -320,7 +320,7 @@ code: |
     }
   
     /**
-     * 获取原始通道（高级用法）
+     * get raw channel（Text）
      */
     getChannel() {
       return this.channel
@@ -337,9 +337,9 @@ code: |
   import { usePowerSDK } from '@talex-touch/utils/plugin/sdk'
   
   /**
-   * PowerSDK 示例
-   * - 插件渲染上下文：基于电量状态做轻量/重载模式切换
-   * - 注意：index.js 全局 power 的变化监听目前是轮询策略（约 60s）
+   * PowerSDK example
+   * - Text：Text/Text
+   * - Text：index.js Text power Text（Text 60s）
    */
   
   const power = usePowerSDK()
@@ -347,7 +347,7 @@ code: |
   function applyPowerMode(status) {
     if (status.lowPower) {
       console.warn('[PowerSDK] low power on -> use lightweight mode', status)
-      // 在这里降级重任务：例如暂停 OCR/批量扫描/高频轮询
+      // text：text OCR/text/text
       return
     }
   
@@ -391,7 +391,7 @@ code: |
         console.error('[PowerSDK] demo failed', error)
       })
   
-    // 可选：30 秒后停止示例监听
+    // text：30 textexampletext
     setTimeout(() => {
       dispose()
     }, 30_000)
@@ -404,82 +404,82 @@ code: |
 ---
 code: |
   /**
-   * 插件 index.js 示例
-   * 展示如何在插件的 index.js 中使用 IFeatureLifeCycle 接口
+   * Text index.js example
+   * Text index.js TextUsage IFeatureLifeCycle Text
    */
   
-  // 这个文件会被 loadPluginFeatureContextFromContent 加载
-  // 它应该导出符合 IFeatureLifeCycle 接口的对象
+  // text loadPluginFeatureContextFromContent Loading
+  // textexporttext IFeatureLifeCycle text
   
-  // 导出 onMessage 函数 - 用于注册消息处理器
+  // export onMessage text - textregistermessage handler
   function onMessage(messageHandler) {
     console.log('Plugin: Registering message handlers')
   
-    // 注册搜索消息处理器
+    // registersearchmessage handler
     messageHandler('search', (data) => {
       console.log('Plugin: Handling search message', data)
   
-      // 实现搜索逻辑
+      // Implement search logic
       const results = performSearch(data.query, data.type)
   
-      // 发送搜索结果
+      // sendsearchtext
       messageHandler('search:results', { results })
     })
   
-    // 注册翻译消息处理器
+    // registertranslatemessage handler
     messageHandler('translate', (data) => {
       console.log('Plugin: Handling translate message', data)
   
-      // 实现翻译逻辑
+      // Implement translation logic
       const translation = performTranslation(data.text, data.from, data.to)
   
-      // 发送翻译结果
+      // sendtranslatetext
       messageHandler('translate:result', translation)
     })
   
-    // 注册通知消息处理器
+    // registernotificationmessage handler
     messageHandler('notify', (data) => {
       console.log('Plugin: Handling notify message', data)
   
-      // 实现通知逻辑
+      // Implement notification logic
       showNotification(data.title, data.body)
     })
   }
   
-  // 导出 lifecycle 函数 - 用于注册生命周期钩子
+  // export lifecycle text - textregistertext
   function lifecycle(lifecycleHooks) {
     console.log('Plugin: Registering lifecycle hooks')
   
-    // 注册初始化钩子
+    // registertext
     lifecycleHooks.onInit(() => {
       console.log('Plugin: Initialized')
-      // 初始化插件
+      // initialize plugin
       initializePlugin()
     })
   
-    // 注册启动钩子
+    // registertext
     lifecycleHooks.onStart(() => {
       console.log('Plugin: Started')
-      // 启动插件
+      // start plugin
       startPlugin()
     })
   
-    // 注册停止钩子
+    // registertext
     lifecycleHooks.onStop(() => {
       console.log('Plugin: Stopped')
-      // 停止插件
+      // stop plugin
       stopPlugin()
     })
   
-    // 注册销毁钩子
+    // registertext
     lifecycleHooks.onDestroy(() => {
       console.log('Plugin: Destroyed')
-      // 清理资源
+      // clean up resources
       cleanupPlugin()
     })
   }
   
-  // 导出符合 IFeatureLifeCycle 接口的对象
+  // exporttext IFeatureLifeCycle text
   const featureLifeCycle = {
     onInit() {
       console.log('Plugin: onInit called')
@@ -511,17 +511,17 @@ code: |
   
     onFeatureTriggered(id, data, feature, signal) {
       console.log('Plugin: onFeatureTriggered called', { id, data, feature })
-      // 处理功能触发
+      // handletextTrigger
     },
   
     onInputChanged(input) {
       console.log('Plugin: onInputChanged called', input)
-      // 处理输入变化
+      // handletext
     },
   
     onActionClick(actionId, data) {
       console.log('Plugin: onActionClick called', { actionId, data })
-      // 处理动作点击
+      // handletextClick
     },
   
     onClose(feature) {
@@ -531,7 +531,7 @@ code: |
   
     onItemAction(item) {
       console.log('Plugin: onItemAction called', item)
-      // 处理项目动作
+      // handletext
       return Promise.resolve({
         externalAction: false,
         shouldActivate: false,
@@ -539,11 +539,11 @@ code: |
     },
   }
   
-  // 辅助函数
+  // text
   function performSearch(query, type) {
     console.log(`Searching for: ${query} (type: ${type})`)
   
-    // 模拟搜索逻辑
+    // textsearchtext
     return [
       {
         id: 'search-result-1',
@@ -565,7 +565,7 @@ code: |
   function performTranslation(text, from, to) {
     console.log(`Translating: \"${text}\" from ${from} to ${to}`)
   
-    // 模拟翻译逻辑
+    // texttranslatetext
     return {
       original: text,
       translated: `[${from}→${to}] ${text}`,
@@ -577,40 +577,40 @@ code: |
   
   function showNotification(title, body) {
     console.log(`Notification: ${title} - ${body}`)
-    // 实现通知显示逻辑
+    // textnotificationDisplaytext
   }
   
   function initializePlugin() {
     console.log('Plugin: Initializing...')
-    // 初始化插件逻辑
+    // initialize plugintext
   }
   
   function startPlugin() {
     console.log('Plugin: Starting...')
-    // 启动插件逻辑
+    // start plugintext
   }
   
   function stopPlugin() {
     console.log('Plugin: Stopping...')
-    // 停止插件逻辑
+    // stop plugintext
   }
   
   function cleanupPlugin() {
     console.log('Plugin: Cleaning up...')
-    // 清理资源逻辑
+    // clean up resourcestext
   }
   
-  // 消息处理函数
+  // Message handlers
   function handleSearchMessage(info) {
     console.log('Handling search message:', info)
     const results = performSearch(info.query, info.type)
-    // 这里可以通过SDK发送结果
+    // Use the SDK to send results
   }
   
   function handleTranslateMessage(info) {
     console.log('Handling translate message:', info)
     const translation = performTranslation(info.text, info.from, info.to)
-    // 这里可以通过SDK发送结果
+    // Use the SDK to send results
   }
   
   function handleNotifyMessage(info) {
@@ -618,7 +618,7 @@ code: |
     showNotification(info.title, info.body)
   }
   
-  // 导出函数和对象
+  // exporttext
   module.exports = {
     onMessage,
     lifecycle,
@@ -632,15 +632,15 @@ code: |
 ---
 code: |
   /**
-   * 插件接收端示例
-   * 展示插件如何接收和处理来自其他插件的消息
+   * Textexample
+   * TexthandleTextmessage
    */
   
-  // 实现 IFeatureLifeCycle 接口
+  // text IFeatureLifeCycle text
   const featureLifeCycle = {
     onInit() {
       console.log('[Plugin Receiver] Plugin initialized')
-      // 插件初始化逻辑
+      // Plugin initializationtext
     },
   
     onMessage(key, info) {
@@ -702,11 +702,11 @@ code: |
     },
   }
   
-  // 消息处理函数
+  // Message handlers
   function handleTranslateMessage(info) {
     console.log('[Translate] Processing translation request:', info)
   
-    // 模拟翻译处理
+    // texttranslatehandle
     const translation = {
       original: info.text,
       translated: `Translated: ${info.text}`,
@@ -722,7 +722,7 @@ code: |
   function handleSearchMessage(info) {
     console.log('[Search] Processing search request:', info)
   
-    // 模拟搜索处理
+    // textsearchhandle
     const results = [
       {
         id: 'result-1',
@@ -745,7 +745,7 @@ code: |
   function handlePingMessage(info) {
     console.log('[Ping] Received ping:', info)
   
-    // 返回pong响应
+    // returnpongtext
     const pong = {
       message: 'pong',
       timestamp: Date.now(),
@@ -760,7 +760,7 @@ code: |
   function handleStatusMessage(info) {
     console.log('[Status] Status query:', info)
   
-    // 返回插件状态
+    // returntext
     const status = {
       status: 'active',
       version: '1.0.0',
@@ -779,7 +779,7 @@ code: |
   function handleProcessDataMessage(info) {
     console.log('[Process Data] Processing data:', info)
   
-    // 模拟数据处理
+    // texthandle
     const processedData = {
       original: info.data,
       processed: {
@@ -800,7 +800,7 @@ code: |
   function handleGetResultMessage(info) {
     console.log('[Get Result] Result request:', info)
   
-    // 返回处理结果
+    // returnhandletext
     const result = {
       requestId: info.requestId,
       status: 'completed',
@@ -817,7 +817,7 @@ code: |
   function handleHealthCheckMessage(info) {
     console.log('[Health Check] Health check request:', info)
   
-    // 返回健康状态
+    // returntext
     const health = {
       status: 'healthy',
       timestamp: Date.now(),
@@ -832,7 +832,7 @@ code: |
     return health
   }
   
-  // 导出生命周期对象
+  // exporttext
   module.exports = featureLifeCycle
 ---
 :::
@@ -844,23 +844,23 @@ code: |
 ---
 code: |
   /**
-   * 插件通信示例
-   * 展示如何使用 communicateWithPlugin 方法与其他插件通信
+   * Textexample
+   * TextUsage communicateWithPlugin Text
    */
   
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
-  // 获取SDK实例
+  // Get SDK instance
   const sdk = useTouchSDK()
   
-  // 发送消息到插件的示例
+  // sendmessagetextexample
   async function communicateWithPlugin() {
     try {
-      // 使用新的 communicateWithPlugin 方法
+      // Usagetext communicateWithPlugin text
       const result = await sdk.communicateWithPlugin(
-        'touch-translation', // 目标插件名称
-        'translate', // 消息键
-        { // 消息数据
+        'touch-translation', // text
+        'translate', // message key
+        { // message payload
           text: 'Hello World',
           from: 'en',
           to: 'zh',
@@ -874,7 +874,7 @@ code: |
     }
   }
   
-  // 发送搜索消息到插件
+  // sendsearchmessagetext
   async function sendSearchToPlugin() {
     try {
       const result = await sdk.communicateWithPlugin(
@@ -893,7 +893,7 @@ code: |
     }
   }
   
-  // 发送通知消息到插件
+  // Send notificationmessagetext
   async function sendNotificationToPlugin() {
     try {
       const result = await sdk.communicateWithPlugin(
@@ -912,7 +912,7 @@ code: |
     }
   }
   
-  // 批量发送消息到多个插件
+  // textsendmessagetext
   async function sendToMultiplePlugins() {
     const plugins = ['touch-translation', 'touch-music', 'touch-image']
     const key = 'ping'
@@ -932,7 +932,7 @@ code: |
     console.log('Batch communication results:', results)
   }
   
-  // 导出函数供外部调用
+  // Export functions for external usage
   window.communicateExample = {
     communicateWithPlugin,
     sendSearchToPlugin,
@@ -950,22 +950,22 @@ code: |
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
   /**
-   * 完整通信示例
-   * 展示插件间通信的完整流程
+   * Textexample
+   * Text
    */
   
-  // 获取SDK实例
+  // Get SDK instance
   const sdk = useTouchSDK()
   
-  // 1. 插件A发送消息给插件B
+  // 1. textAsendmessagetextB
   async function pluginAtoPluginB() {
     try {
       console.log('[Plugin A] Sending message to Plugin B')
   
       const result = await sdk.communicateWithPlugin(
-        'touch-translation', // 目标插件
-        'translate', // 消息键
-        { // 消息数据
+        'touch-translation', // text
+        'translate', // message key
+        { // message payload
           text: 'Hello from Plugin A',
           from: 'en',
           to: 'zh',
@@ -981,7 +981,7 @@ code: |
     }
   }
   
-  // 2. 批量通信示例
+  // 2. textexample
   async function batchCommunication() {
     const plugins = [
       { name: 'touch-translation', key: 'translate', info: { text: 'Hello', from: 'en', to: 'zh' } },
@@ -1007,10 +1007,10 @@ code: |
     return results
   }
   
-  // 3. 错误处理示例
+  // 3. texthandleexample
   async function errorHandlingExample() {
     try {
-      // 尝试与不存在的插件通信
+      // text
       await sdk.communicateWithPlugin('non-existent-plugin', 'test', {})
     }
     catch (error) {
@@ -1018,7 +1018,7 @@ code: |
     }
   
     try {
-      // 尝试与插件通信但缺少必要参数
+      // textParams
       await sdk.communicateWithPlugin('touch-translation', '', {})
     }
     catch (error) {
@@ -1026,11 +1026,11 @@ code: |
     }
   }
   
-  // 4. 实时通信示例
+  // 4. textexample
   async function realTimeCommunication() {
     console.log('[Real-time] Starting real-time communication...')
   
-    // 发送ping消息
+    // sendpingmessage
     const pingResult = await sdk.communicateWithPlugin('touch-translation', 'ping', {
       timestamp: Date.now(),
       source: 'plugin-a',
@@ -1038,7 +1038,7 @@ code: |
   
     console.log('[Real-time] Ping result:', pingResult)
   
-    // 发送状态查询
+    // sendtext
     const statusResult = await sdk.communicateWithPlugin('touch-translation', 'status', {
       query: 'plugin_status',
     })
@@ -1046,11 +1046,11 @@ code: |
     console.log('[Real-time] Status result:', statusResult)
   }
   
-  // 5. 数据交换示例
+  // 5. textexample
   async function dataExchange() {
     console.log('[Data Exchange] Starting data exchange...')
   
-    // 发送数据给插件处理
+    // sendtexthandle
     const processResult = await sdk.communicateWithPlugin('touch-translation', 'process_data', {
       data: {
         text: 'This is a test message',
@@ -1064,7 +1064,7 @@ code: |
   
     console.log('[Data Exchange] Process result:', processResult)
   
-    // 请求插件返回处理后的数据
+    // textreturnhandletext
     const result = await sdk.communicateWithPlugin('touch-translation', 'get_result', {
       requestId: 'test-request-123',
     })
@@ -1072,7 +1072,7 @@ code: |
     console.log('[Data Exchange] Result:', result)
   }
   
-  // 6. 插件状态监控
+  // 6. text
   async function pluginStatusMonitoring() {
     const plugins = ['touch-translation', 'touch-music', 'touch-image']
   
@@ -1091,7 +1091,7 @@ code: |
     }
   }
   
-  // 导出所有函数
+  // exporttext
   window.completeCommunicationExample = {
     pluginAtoPluginB,
     batchCommunication,
@@ -1101,11 +1101,11 @@ code: |
     pluginStatusMonitoring,
   }
   
-  // 自动运行示例（可选）
+  // textexample（text）
   if (hasWindow() && window.location.hostname === 'localhost') {
     console.log('[Auto] Running communication examples...')
   
-    // 延迟执行，确保SDK已初始化
+    // text，textSDKtext
     setTimeout(async () => {
       try {
         await pluginAtoPluginB()
@@ -1130,32 +1130,32 @@ code: |
 ---
 code: |
   /**
-   * 消息系统示例
-   * 展示如何使用SDK发送消息
+   * messageTextexample
+   * Shows how to send messages with the SDK
    */
   
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
-  // 获取SDK实例
+  // Get SDK instance
   const sdk = useTouchSDK()
   
-  // 发送消息示例
+  // sendmessageexample
   async function sendMessageExamples() {
     try {
-      // 发送搜索消息
+      // sendsearchmessage
       await sdk.sendMessage('search', {
         query: 'hello world',
         type: 'text',
       })
   
-      // 发送翻译消息
+      // sendtranslatemessage
       await sdk.sendMessage('translate', {
         text: 'Hello',
         from: 'en',
         to: 'zh',
       })
   
-      // 发送通知消息
+      // Send notificationmessage
       await sdk.sendMessage('notify', {
         title: 'Plugin Message',
         body: 'This is a notification from plugin',
@@ -1166,7 +1166,7 @@ code: |
     }
   }
   
-  // 导出函数
+  // exporttext
   window.messageSystemExample = {
     sendMessageExamples,
   }
@@ -1178,18 +1178,18 @@ code: |
 ---
 code: |
   /**
-   * 通知功能示例
-   * 展示如何使用通知功能
+   * Notification featureexample
+   * TextUsageNotification feature
    */
   
   import { useTouchSDK } from '@talex-touch/utils/plugin/sdk'
   
   const sdk = useTouchSDK()
   
-  // 通知操作示例
+  // notificationtextexample
   async function notificationExamples() {
     try {
-      // 显示简单通知
+      // Displaytextnotification
       await sdk.sendMessage('notification:show', {
         title: 'Hello World',
         body: 'This is a simple notification',
@@ -1199,7 +1199,7 @@ code: |
         },
       })
   
-      // 显示带操作的通知
+      // Displaytextnotification
       await sdk.sendMessage('notification:show', {
         title: 'Plugin Update',
         body: 'New version is available',
@@ -1212,7 +1212,7 @@ code: |
         },
       })
   
-      // 显示进度通知
+      // Displaytextnotification
       await sdk.sendMessage('notification:show', {
         title: 'Downloading',
         body: 'Downloading file...',
@@ -1222,7 +1222,7 @@ code: |
         },
       })
   
-      // 更新进度
+      // text
       for (let i = 0; i <= 100; i += 10) {
         await sdk.sendMessage('notification:update', {
           id: 'download-notification',
@@ -1235,7 +1235,7 @@ code: |
         await new Promise(resolve => setTimeout(resolve, 200))
       }
   
-      // 隐藏通知
+      // Hiddennotification
       await sdk.sendMessage('notification:hide', {
         id: 'download-notification',
       })
@@ -1245,20 +1245,20 @@ code: |
     }
   }
   
-  // 处理函数
+  // Handlers
   function handleNotificationShow(data) {
     console.log('Showing notification:', data.title, data.body)
-    // 实现显示逻辑
+    // textDisplaytext
   }
   
   function handleNotificationHide(data) {
     console.log('Hiding notification:', data.id)
-    // 实现隐藏逻辑
+    // textHiddentext
   }
   
   function handleNotificationUpdate(data) {
     console.log('Updating notification:', data.id, data.title, data.body)
-    // 实现更新逻辑
+    // text
   }
 ---
 :::

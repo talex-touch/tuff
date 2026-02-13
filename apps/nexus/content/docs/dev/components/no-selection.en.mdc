@@ -1,14 +1,14 @@
 ---
-title: "NoSelection 未选择"
-description: "用于详情面板等未选择任何项的状态提示。"
+title: "NoSelection"
+description: "Component documentation for NoSelection."
 category: Feedback
 syncStatus: migrated
 ---
-# NoSelection 未选择
+# NoSelection
 
-用于详情面板等未选择任何项的状态提示。
+Component documentation for NoSelection.
 
-## 基础用法
+## Basic Usage
 
 ### NoSelection
 :::TuffDemoWrapper{demo="NoSelectionNoSelectionDemo" code-lang="vue"}
@@ -22,4 +22,4 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+Props / Slots / Events follow `TxEmptyState`.

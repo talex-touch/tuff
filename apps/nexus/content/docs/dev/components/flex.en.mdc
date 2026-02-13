@@ -7,16 +7,16 @@ since: 1.0.0
 tags: [flex, layout]
 syncStatus: migrated
 ---
-# Flex 弹性布局
+# Flex
 
-通用 Flex 容器。
+Generic flex container
 
 <script setup lang="ts">
 import FlexBasicDemo from '~/components/content/demos/FlexBasicDemo.vue'
 import FlexBasicDemoSource from '~/components/content/demos/FlexBasicDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Flex
 :::TuffDemoWrapper{demo="FlexFlexDemo" code-lang="vue"}
@@ -39,11 +39,11 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
 | `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | flex-direction |
-| `gap` | `number \| string` | `12` | 间距 |
+| `gap` | `number \| string` | `12` | Gap |
 | `align` | `string` | `'stretch'` | align-items |
 | `justify` | `string` | `'flex-start'` | justify-content |
 | `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | flex-wrap |
-| `inline` | `boolean` | `false` | 是否使用 inline-flex |
+| `inline` | `boolean` | `false` | Description for inline. |

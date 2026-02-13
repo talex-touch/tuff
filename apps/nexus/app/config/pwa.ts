@@ -3,8 +3,10 @@ import process from 'node:process'
 import { appDescription, appName } from '../constants/index'
 
 const scope = '/'
+const disablePwa = process.env.NUXT_DISABLE_PWA === 'true'
 
 export const pwa: ModuleOptions = {
+  disable: disablePwa,
   registerType: 'autoUpdate',
   scope,
   base: scope,

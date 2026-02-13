@@ -503,61 +503,23 @@ export class DownloadWorker {
           flags: chunk.downloaded > 0 ? 'a' : 'w'
         })
 
-        try {
-          await new Promise<void>((resolve, reject) => {
-            let settled = false
-
-            const cleanup = () => {
-              response.data.off('data', onData)
-              response.data.off('error', onError)
-              writeStream.off('error', onError)
-              writeStream.off('finish', onFinish)
-            }
-
-            const onData = (data: Buffer) => {
-              chunk.downloaded += data.length
-            }
-
-            const onError = (error: unknown) => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              reject(error)
-            }
-
-            const onFinish = () => {
-              if (settled) {
-                return
-              }
-
-              if (chunk.downloaded < chunk.size) {
-                settled = true
-                cleanup()
-                reject(
-                  new Error(`Chunk ${chunk.index} incomplete: ${chunk.downloaded}/${chunk.size}`)
-                )
-                return
-              }
-
-              chunk.downloaded = chunk.size
-              chunk.status = ChunkStatus.COMPLETED
-              settled = true
-              cleanup()
-              resolve()
-            }
-
-            response.data.on('data', onData)
-            response.data.on('error', onError)
-            writeStream.on('error', onError)
-            writeStream.on('finish', onFinish)
-
-            response.data.pipe(writeStream)
-          })
-        } finally {
-          writeStream.destroy()
+        const onData = (data: Buffer) => {
+          chunk.downloaded += data.length
         }
+        response.data.on('data', onData)
+
+        try {
+          await pipeline(response.data, writeStream)
+        } finally {
+          response.data.off('data', onData)
+        }
+
+        if (chunk.downloaded < chunk.size) {
+          throw new Error(`Chunk ${chunk.index} incomplete: ${chunk.downloaded}/${chunk.size}`)
+        }
+
+        chunk.downloaded = chunk.size
+        chunk.status = ChunkStatus.COMPLETED
 
         return
       } catch (error) {

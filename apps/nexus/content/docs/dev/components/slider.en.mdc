@@ -1,15 +1,15 @@
 ---
-title: "Slider 滑块"
-description: "用于在区间内选择数值的滑块组件。"
+title: "Slider"
+description: "Component documentation for Slider."
 category: Form
 status: beta
 since: 1.0.0
 tags: [slider, form, input]
 syncStatus: migrated
 ---
-# Slider 滑块
+# Slider
 
-用于在区间内选择数值的滑块组件。
+Component documentation for Slider.
 
 <script setup>
 import SliderBasicDemo from '~/components/content/demos/SliderBasicDemo.vue'
@@ -24,7 +24,7 @@ import SliderElasticTooltipCompareDemo from '~/components/content/demos/SliderEl
 import ElasticTooltipCompareDemoCode from '~/components/content/demos/SliderElasticTooltipCompareDemo.vue?raw'
 </script>
 
-## 基础用法
+## Basic Usage
 
 ### Slider
 :::TuffDemoWrapper{demo="SliderSliderDemo" code-lang="vue"}
@@ -47,7 +47,7 @@ code: |
 ---
 :::
 
-## 禁用
+## Disabled
 
 ### Slider (disabled)
 :::TuffDemoWrapper{demo="SliderSliderDisabledDemo" code-lang="vue"}
@@ -67,7 +67,7 @@ code: |
 ---
 :::
 
-## 格式化显示
+## Formatted Display
 
 ### Slider (formatValue)
 :::TuffDemoWrapper{demo="SliderSliderFormatValueDemo" code-lang="vue"}
@@ -94,7 +94,7 @@ code: |
 ---
 :::
 
-## 显示数值
+## Show Values
 
 ### Slider (show value)
 :::TuffDemoWrapper{demo="SliderSliderShowValueDemo" code-lang="vue"}
@@ -114,7 +114,7 @@ code: |
 ---
 :::
 
-## 弹性 tooltip（速度 + 加速度）
+## Elastic Tooltip (speed + acceleration)
 
 ### Slider (elastic tooltip)
 :::TuffDemoWrapper{demo="SliderSliderElasticTooltipDemo" code-lang="vue"}
@@ -337,27 +337,27 @@ code: |
           <div style="flex: 1; min-width: 0;">
             <TxRadioGroup v-model="preset" type="button" :indicator-variant="indicatorVariant">
               <TxRadio value="current">
-                基础
+                Text
               </TxRadio>
               <TxRadio value="tofu">
-                撞豆腐
+                Text
               </TxRadio>
               <TxRadio value="jelly">
-                果冻超Q
+                TextQ
               </TxRadio>
               <TxRadio value="soft">
-                软糯
+                Text
               </TxRadio>
               <TxRadio value="snappy">
-                干脆
+                Text
               </TxRadio>
               <TxRadio value="extreme">
-                极限
+                Text
               </TxRadio>
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            预设参数
+            TextParams
           </div>
         </div>
 
@@ -368,21 +368,21 @@ code: |
           <div style="flex: 1; min-width: 0;">
             <TxRadioGroup v-model="indicatorVariant" type="button" :indicator-variant="indicatorVariant">
               <TxRadio value="solid">
-                实色
+                Text
               </TxRadio>
               <TxRadio value="outline">
-                边框
+                Text
               </TxRadio>
               <TxRadio value="glass">
-                玻璃
+                Text
               </TxRadio>
               <TxRadio value="blur">
-                模糊
+                Text
               </TxRadio>
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            指示器风格
+            Text
           </div>
         </div>
 
@@ -401,7 +401,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            是否启用倾斜/追尾
+            Text/Text
           </div>
         </div>
 
@@ -420,7 +420,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            提示位置
+            TextPosition
           </div>
         </div>
 
@@ -442,7 +442,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            显示时机
+            DisplayText
           </div>
         </div>
 
@@ -464,7 +464,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            出现/消失动效
+            Text/Text
           </div>
         </div>
 
@@ -483,7 +483,7 @@ code: |
             </TxRadioGroup>
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            果冻 Q 弹扭曲
+            Text Q Text
           </div>
         </div>
       </div>
@@ -497,7 +497,7 @@ code: |
             <TxSlider v-model="tiltMaxDeg" :min="0" :max="24" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            最大倾斜角度
+            Text
           </div>
         </div>
 
@@ -509,7 +509,7 @@ code: |
             <TxSlider v-model="offsetMaxPx" :min="0" :max="48" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            最大追尾偏移
+            Text
           </div>
         </div>
 
@@ -521,7 +521,7 @@ code: |
             <TxSlider v-model="accelBoost" :min="0" :max="1" :step="0.05" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            加速度加成
+            Text
           </div>
         </div>
 
@@ -533,7 +533,7 @@ code: |
             <TxSlider v-model="springStiffness" :min="80" :max="520" :step="10" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            弹簧刚度（硬/快）
+            Text（Text/Text）
           </div>
         </div>
 
@@ -545,7 +545,7 @@ code: |
             <TxSlider v-model="springDamping" :min="10" :max="60" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            弹簧阻尼（收敛）
+            Text（Text）
           </div>
         </div>
 
@@ -557,7 +557,7 @@ code: |
             <TxSlider v-model="tooltipMotionDuration" :min="0" :max="360" :step="10" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            动效时长（ms）
+            Text（ms）
           </div>
         </div>
 
@@ -569,7 +569,7 @@ code: |
             <TxSlider v-model="tooltipMotionBlurPx" :min="0" :max="20" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            模糊强度（px）
+            Text（px）
           </div>
         </div>
 
@@ -581,7 +581,7 @@ code: |
             <TxSlider v-model="tooltipDistortSkewDeg" :min="0" :max="18" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            挤压扭曲角度
+            Text
           </div>
         </div>
 
@@ -593,7 +593,7 @@ code: |
             <TxSlider v-model="tooltipJellyFrequency" :min="0" :max="18" :step="0.5" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            果冻频率（Hz）
+            Text（Hz）
           </div>
         </div>
 
@@ -605,7 +605,7 @@ code: |
             <TxSlider v-model="tooltipJellyDecay" :min="0" :max="30" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            衰减（越大越快停）
+            Text（Text）
           </div>
         </div>
 
@@ -617,7 +617,7 @@ code: |
             <TxSlider v-model="tooltipJellyRotateDeg" :min="0" :max="24" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            旋转角度
+            Text
           </div>
         </div>
 
@@ -629,7 +629,7 @@ code: |
             <TxSlider v-model="tooltipJellySkewDeg" :min="0" :max="24" :step="1" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            扭曲角度
+            Text
           </div>
         </div>
 
@@ -641,7 +641,7 @@ code: |
             <TxSlider v-model="tooltipJellySquash" :min="0" :max="0.5" :step="0.01" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            挤压强度
+            Text
           </div>
         </div>
 
@@ -653,7 +653,7 @@ code: |
             <TxSlider v-model="tooltipJellyTriggerAccel" :min="600" :max="6000" :step="100" show-value :show-tooltip="false" />
           </div>
           <div style="width: 140px; font-size: 12px; opacity: 0.62;">
-            触发阈值（越小越容易）
+            TriggerTextValue（Text）
           </div>
         </div>
       </div>
@@ -699,40 +699,40 @@ code: |
 
 ### Props
 
-| 属性名 | 类型 | 默认值 | 说明 |
+| Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number` | `0` | 当前值 |
-| `min` | `number` | `0` | 最小值 |
-| `max` | `number` | `100` | 最大值 |
-| `step` | `number` | `1` | 步长 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `showValue` | `boolean` | `false` | 右侧显示当前值 |
-| `formatValue` | `(value: number) => string` | - | 格式化显示值 |
-| `showTooltip` | `boolean` | `true` | 是否显示 tooltip |
-| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip 显示触发方式 |
-| `tooltipFormatter` | `(value: number) => string` | - | tooltip 文本格式化 |
-| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip 位置 |
-| `tooltipTilt` | `boolean` | `false` | tooltip 是否启用倾斜与偏移动效 |
-| `tooltipTiltMaxDeg` | `number` | `18` | tooltip 最大倾斜角度 |
-| `tooltipOffsetMaxPx` | `number` | `28` | tooltip 最大水平偏移 |
-| `tooltipAccelBoost` | `number` | `0.65` | 加速度对动效强度的加成 |
-| `tooltipSpringStiffness` | `number` | `320` | 弹簧刚度 |
-| `tooltipSpringDamping` | `number` | `24` | 弹簧阻尼 |
-| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | tooltip 显示/隐藏动效 |
-| `tooltipMotionDuration` | `number` | `160` | tooltip 显示/隐藏动效时长（ms） |
-| `tooltipMotionBlurPx` | `number` | `10` | tooltip 显示/隐藏动效模糊强度（px） |
-| `tooltipDistortSkewDeg` | `number` | `8` | tooltip 扭曲挤压（skew）最大角度 |
-| `tooltipJelly` | `boolean` | `true` | tooltip 果冻 Q 弹扭曲回弹 |
-| `tooltipJellyFrequency` | `number` | `8.5` | 果冻 wobble 频率（Hz） |
-| `tooltipJellyDecay` | `number` | `10` | 果冻 wobble 衰减（越大越快停） |
-| `tooltipJellyRotateDeg` | `number` | `10` | wobble 旋转最大角度 |
-| `tooltipJellySkewDeg` | `number` | `12` | wobble 扭曲最大角度 |
-| `tooltipJellySquash` | `number` | `0.16` | wobble 挤压强度 |
-| `tooltipJellyTriggerAccel` | `number` | `2800` | 触发 wobble 的加速度阈值 |
+| `modelValue` | `number` | `0` | Description for modelValue. |
+| `min` | `number` | `0` | Description for min. |
+| `max` | `number` | `100` | Description for max. |
+| `step` | `number` | `1` | Description for step. |
+| `disabled` | `boolean` | `false` | Description for disabled. |
+| `showValue` | `boolean` | `false` | Description for showValue. |
+| `formatValue` | `(value: number) => string` | - | Description for formatValue. |
+| `showTooltip` | `boolean` | `true` | Description for showTooltip. |
+| `tooltipTrigger` | `'drag' \| 'hover' \| 'always'` | `'drag'` | tooltip DisplayTriggerText |
+| `tooltipFormatter` | `(value: number) => string` | - | Description for tooltipFormatter. |
+| `tooltipPlacement` | `'top' \| 'bottom'` | `'top'` | tooltip Position |
+| `tooltipTilt` | `boolean` | `false` | Description for tooltipTilt. |
+| `tooltipTiltMaxDeg` | `number` | `18` | Description for tooltipTiltMaxDeg. |
+| `tooltipOffsetMaxPx` | `number` | `28` | Description for tooltipOffsetMaxPx. |
+| `tooltipAccelBoost` | `number` | `0.65` | Description for tooltipAccelBoost. |
+| `tooltipSpringStiffness` | `number` | `320` | Description for tooltipSpringStiffness. |
+| `tooltipSpringDamping` | `number` | `24` | Description for tooltipSpringDamping. |
+| `tooltipMotion` | `'blur' \| 'fade' \| 'none'` | `'blur'` | tooltip Display/HiddenText |
+| `tooltipMotionDuration` | `number` | `160` | Description for tooltipMotionDuration. |
+| `tooltipMotionBlurPx` | `number` | `10` | Description for tooltipMotionBlurPx. |
+| `tooltipDistortSkewDeg` | `number` | `8` | Description for tooltipDistortSkewDeg. |
+| `tooltipJelly` | `boolean` | `true` | Description for tooltipJelly. |
+| `tooltipJellyFrequency` | `number` | `8.5` | Description for tooltipJellyFrequency. |
+| `tooltipJellyDecay` | `number` | `10` | Description for tooltipJellyDecay. |
+| `tooltipJellyRotateDeg` | `number` | `10` | Description for tooltipJellyRotateDeg. |
+| `tooltipJellySkewDeg` | `number` | `12` | Description for tooltipJellySkewDeg. |
+| `tooltipJellySquash` | `number` | `0.16` | Description for tooltipJellySquash. |
+| `tooltipJellyTriggerAccel` | `number` | `2800` | Description for tooltipJellyTriggerAccel. |
 
 ### Events
 
-| 事件名 | 参数 | 说明 |
+| Event | Params | Description |
 |------|------|------|
-| `update:modelValue` | `number` | v-model 更新 |
-| `change` | `number` | change 事件 |
+| `update:modelValue` | `number` | Description for update:modelValue. |
+| `change` | `number` | Description for change. |

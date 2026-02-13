@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey, TalexTouch } from '@talex-touch/utils'
+import type { Client, InValue } from '@libsql/client'
 import type {
   IManifest,
   IPluginManager,
@@ -19,9 +20,10 @@ import type { PluginWithSource } from '../../service/market-api.service'
 import { exec } from 'node:child_process'
 import path from 'node:path'
 import * as util from 'node:util'
+import { createClient } from '@libsql/client'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { PluginStatus } from '@talex-touch/utils/plugin'
+import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
@@ -1260,6 +1262,7 @@ export class PluginModule extends BaseModule {
   healthMonitor?: DevServerHealthMonitor
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private pluginSqliteClients = new Map<string, Client>()
   private requestRendererValue = async <T>(_eventName: string): Promise<T | null> => null
 
   static key: symbol = Symbol.for('PluginModule')
@@ -1361,6 +1364,14 @@ export class PluginModule extends BaseModule {
       }
     }
     this.transportDisposers = []
+    for (const client of this.pluginSqliteClients.values()) {
+      try {
+        client.close()
+      } catch {
+        // ignore sqlite close errors during shutdown
+      }
+    }
+    this.pluginSqliteClients.clear()
     this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
     this.healthMonitor?.destroy()
     stopUpdateScheduler()
@@ -1695,6 +1706,124 @@ export class PluginModule extends BaseModule {
       }
     }
 
+    const PLUGIN_SYNC_QUALIFIED_PREFIX = 'plugin::'
+
+    const parsePluginSyncQualifiedName = (
+      qualifiedName: string
+    ): { pluginName: string; fileName?: string } | null => {
+      const trimmed = qualifiedName.trim()
+      if (!trimmed.startsWith(PLUGIN_SYNC_QUALIFIED_PREFIX)) {
+        return null
+      }
+
+      const body = trimmed.slice(PLUGIN_SYNC_QUALIFIED_PREFIX.length)
+      const separatorIndex = body.indexOf('::')
+      if (separatorIndex < 0) {
+        return null
+      }
+
+      const pluginName = body.slice(0, separatorIndex).trim()
+      const fileName = body.slice(separatorIndex + 2).trim()
+      if (!pluginName) {
+        return null
+      }
+
+      return {
+        pluginName,
+        fileName: fileName || undefined
+      }
+    }
+
+    const normalizeSqlParams = (params: unknown): InValue[] => {
+      if (!Array.isArray(params)) {
+        return []
+      }
+      return params.map((value) => {
+        if (value === undefined) {
+          return null
+        }
+        if (value instanceof Date) {
+          return value.toISOString()
+        }
+        if (typeof value === 'bigint') {
+          return Number(value)
+        }
+        if (typeof value === 'object' && value !== null) {
+          return JSON.stringify(value)
+        }
+        if (
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean' ||
+          value === null ||
+          value instanceof ArrayBuffer ||
+          value instanceof Uint8Array
+        ) {
+          return value
+        }
+        return String(value)
+      })
+    }
+
+    const normalizeSqlValue = (value: unknown): unknown => {
+      if (typeof value === 'bigint') {
+        return Number(value)
+      }
+      if (value instanceof Uint8Array) {
+        return Array.from(value)
+      }
+      return value
+    }
+
+    const normalizeLastInsertRowId = (value: unknown): number | null => {
+      if (typeof value === 'bigint') {
+        return Number(value)
+      }
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return Math.trunc(value)
+      }
+      return null
+    }
+
+    const getPluginSqliteClient = (plugin: TouchPlugin): Client => {
+      const existing = this.pluginSqliteClients.get(plugin.name)
+      if (existing) {
+        return existing
+      }
+
+      const sqlitePath = path.join(plugin.getDataPath(), 'plugin-sdk.sqlite')
+      fse.ensureDirSync(path.dirname(sqlitePath))
+      const client = createClient({ url: `file:${sqlitePath}` })
+      this.pluginSqliteClients.set(plugin.name, client)
+      return client
+    }
+
+    const resolveSqliteVersionError = (plugin: TouchPlugin): string | null => {
+      const sdkapi = typeof plugin.sdkapi === 'number' ? plugin.sdkapi : 0
+      if (sdkapi >= SdkApi.V260215) {
+        return null
+      }
+      return `plugin sqlite sdk requires sdkapi >= ${SdkApi.V260215}`
+    }
+
+    const resolveSqlitePermissionError = (plugin: TouchPlugin): string | null => {
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) {
+        return null
+      }
+
+      const result = permissionModule.checkPermission(
+        plugin.name,
+        'storage:sqlite:query',
+        plugin.sdkapi
+      )
+      if (result.allowed) {
+        return null
+      }
+
+      return result.reason ?? `Permission '${result.permissionId}' not granted`
+    }
+
     // Plugin Storage Channel Handlers
     this.transportDisposers.push(
       transport.on(PluginEvents.storage.getFile, async (payload, context) => {
@@ -1764,6 +1893,129 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           console.error('Error in plugin:storage:list-files handler:', error)
           return []
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.listSyncItems, async (payload) => {
+        try {
+          const requestedQualifiedNames = Array.isArray(payload?.qualifiedNames)
+            ? payload.qualifiedNames
+                .filter((item): item is string => typeof item === 'string')
+                .map((item) => item.trim())
+                .filter((item) => item.length > 0)
+            : []
+
+          const requestedPluginName =
+            typeof payload?.pluginName === 'string' ? payload.pluginName.trim() : ''
+
+          const requestedByPlugin = new Map<string, Set<string> | null>()
+          for (const qualifiedName of requestedQualifiedNames) {
+            const parsed = parsePluginSyncQualifiedName(qualifiedName)
+            if (!parsed) {
+              continue
+            }
+            if (!requestedByPlugin.has(parsed.pluginName)) {
+              requestedByPlugin.set(parsed.pluginName, new Set())
+            }
+            const targetFiles = requestedByPlugin.get(parsed.pluginName)
+            if (!targetFiles) {
+              continue
+            }
+            if (parsed.fileName) {
+              targetFiles.add(parsed.fileName)
+            } else {
+              requestedByPlugin.set(parsed.pluginName, null)
+            }
+          }
+
+          if (requestedPluginName && !requestedByPlugin.has(requestedPluginName)) {
+            requestedByPlugin.set(requestedPluginName, null)
+          }
+
+          const shouldReadAllPlugins = !requestedByPlugin.size
+          const targetPluginNames = shouldReadAllPlugins
+            ? Array.from(manager.plugins.keys())
+            : Array.from(requestedByPlugin.keys())
+
+          const items: Array<{
+            pluginName: string
+            fileName: string
+            qualifiedName: string
+            content: unknown
+          }> = []
+
+          for (const pluginName of targetPluginNames) {
+            const plugin = manager.getPluginByName(pluginName) as TouchPlugin | undefined
+            if (!plugin) {
+              continue
+            }
+            const allowedFiles = requestedByPlugin.get(pluginName) ?? null
+            const fileNames = plugin.listPluginFiles()
+            for (const fileName of fileNames) {
+              if (allowedFiles && !allowedFiles.has(fileName)) {
+                continue
+              }
+              items.push({
+                pluginName,
+                fileName,
+                qualifiedName: `${PLUGIN_SYNC_QUALIFIED_PREFIX}${pluginName}::${fileName}`,
+                content: plugin.getPluginFile(fileName)
+              })
+            }
+          }
+
+          return items
+        } catch (error) {
+          console.error('Error in plugin:storage:list-sync-items handler:', error)
+          return []
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.applySyncItem, async (payload, context) => {
+        try {
+          const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : ''
+          if (!fileName) {
+            return { success: false, error: 'fileName is required' }
+          }
+
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+
+          return resolved.plugin.savePluginFile(fileName, payload?.content, { broadcast: false })
+        } catch (error) {
+          console.error('Error in plugin:storage:apply-sync-item handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.storage.deleteSyncItem, async (payload, context) => {
+        try {
+          const fileName = typeof payload?.fileName === 'string' ? payload.fileName.trim() : ''
+          if (!fileName) {
+            return { success: false, error: 'fileName is required' }
+          }
+
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+
+          const result = resolved.plugin.deletePluginFile(fileName, { broadcast: false })
+          if (!result.success && result.error === 'File not found') {
+            return { success: true }
+          }
+          return result
+        } catch (error) {
+          console.error('Error in plugin:storage:delete-sync-item handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
         }
       })
     )
@@ -1920,6 +2172,186 @@ export class PluginModule extends BaseModule {
         } catch (error) {
           console.error('Error in plugin:storage:open-in-editor handler:', error)
           return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.sqlite.execute, async (payload, context) => {
+        try {
+          const sql = typeof payload?.sql === 'string' ? payload.sql.trim() : ''
+          if (!sql) {
+            return { success: false, error: 'sql is required' }
+          }
+
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return { success: false, error: resolved.error }
+          }
+          const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
+          if (sqliteVersionError) {
+            return { success: false, error: sqliteVersionError }
+          }
+          const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
+          if (sqlitePermissionError) {
+            return { success: false, error: sqlitePermissionError }
+          }
+
+          const client = getPluginSqliteClient(resolved.plugin)
+          const result = await client.execute({
+            sql,
+            args: normalizeSqlParams(payload?.params)
+          })
+
+          return {
+            success: true,
+            rowsAffected: Number(result.rowsAffected ?? 0),
+            lastInsertRowId: normalizeLastInsertRowId(result.lastInsertRowid)
+          }
+        } catch (error) {
+          console.error('Error in plugin:sqlite:execute handler:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.sqlite.query, async (payload, context) => {
+        try {
+          const sql = typeof payload?.sql === 'string' ? payload.sql.trim() : ''
+          if (!sql) {
+            return {
+              success: false,
+              error: 'sql is required',
+              rows: [] as Array<Record<string, unknown>>
+            }
+          }
+
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return {
+              success: false,
+              error: resolved.error,
+              rows: [] as Array<Record<string, unknown>>
+            }
+          }
+          const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
+          if (sqliteVersionError) {
+            return {
+              success: false,
+              error: sqliteVersionError,
+              rows: [] as Array<Record<string, unknown>>
+            }
+          }
+          const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
+          if (sqlitePermissionError) {
+            return {
+              success: false,
+              error: sqlitePermissionError,
+              rows: [] as Array<Record<string, unknown>>
+            }
+          }
+
+          const client = getPluginSqliteClient(resolved.plugin)
+          const result = await client.execute({
+            sql,
+            args: normalizeSqlParams(payload?.params)
+          })
+
+          const rows = (result.rows ?? []).map((row) => {
+            const normalized: Record<string, unknown> = {}
+            for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
+              normalized[key] = normalizeSqlValue(value)
+            }
+            return normalized
+          })
+
+          return {
+            success: true,
+            rows,
+            columns: Array.isArray(result.columns) ? result.columns : []
+          }
+        } catch (error) {
+          console.error('Error in plugin:sqlite:query handler:', error)
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            rows: [] as Array<Record<string, unknown>>
+          }
+        }
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.on(PluginEvents.sqlite.transaction, async (payload, context) => {
+        try {
+          const statements = Array.isArray(payload?.statements) ? payload.statements : []
+          if (!statements.length) {
+            return {
+              success: false,
+              error: 'statements are required',
+              results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
+            }
+          }
+
+          const resolved = resolveTouchPlugin(payload, context)
+          if ('error' in resolved) {
+            return {
+              success: false,
+              error: resolved.error,
+              results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
+            }
+          }
+          const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
+          if (sqliteVersionError) {
+            return {
+              success: false,
+              error: sqliteVersionError,
+              results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
+            }
+          }
+          const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
+          if (sqlitePermissionError) {
+            return {
+              success: false,
+              error: sqlitePermissionError,
+              results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
+            }
+          }
+
+          const client = getPluginSqliteClient(resolved.plugin)
+          const results: Array<{ rowsAffected: number; lastInsertRowId: number | null }> = []
+
+          await client.execute('BEGIN IMMEDIATE')
+          try {
+            for (const statement of statements) {
+              const sql = typeof statement?.sql === 'string' ? statement.sql.trim() : ''
+              if (!sql) {
+                throw new Error('sql is required in transaction statement')
+              }
+              const result = await client.execute({
+                sql,
+                args: normalizeSqlParams(statement?.params)
+              })
+              results.push({
+                rowsAffected: Number(result.rowsAffected ?? 0),
+                lastInsertRowId: normalizeLastInsertRowId(result.lastInsertRowid)
+              })
+            }
+            await client.execute('COMMIT')
+          } catch (error) {
+            await client.execute('ROLLBACK')
+            throw error
+          }
+
+          return { success: true, results }
+        } catch (error) {
+          console.error('Error in plugin:sqlite:transaction handler:', error)
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
+          }
         }
       })
     )

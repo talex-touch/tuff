@@ -76,6 +76,7 @@ export class TrayManager extends BaseModule {
 
       if (icon.isEmpty()) {
         console.error('[TrayManager] Icon is empty, cannot create tray')
+        this.ensureDockVisibleWhenTrayUnavailable('tray-icon-empty')
         return
       }
 
@@ -95,6 +96,7 @@ export class TrayManager extends BaseModule {
       this.updateMenu()
     } catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
+      this.ensureDockVisibleWhenTrayUnavailable('tray-init-failed')
     }
   }
 
@@ -297,6 +299,17 @@ export class TrayManager extends BaseModule {
     }
   }
 
+  private ensureDockVisibleWhenTrayUnavailable(reason: string): void {
+    if (process.platform !== 'darwin') return
+    if (!this.getHideDockConfig()) return
+    if (this.tray) return
+
+    console.warn(
+      `[TrayManager] Tray unavailable while hideDock is enabled (${reason}), forcing Dock visible`
+    )
+    app.dock?.show()
+  }
+
   /**
    * Setup Dock icon on macOS
    * 在 macOS 上设置 Dock 图标
@@ -347,11 +360,12 @@ export class TrayManager extends BaseModule {
 
     const mainWindow = $app.window.window
     const hideDock = this.getHideDockConfig()
+    const trayAvailable = this.tray !== null
 
     // Check if there are active DivisionBox sessions
     const hasDivisionBox = this.hasActiveDivisionBox()
 
-    if (hideDock) {
+    if (hideDock && trayAvailable) {
       // When hideDock is enabled, show dock if:
       // 1. Main window is visible, OR
       // 2. There are active DivisionBox windows
@@ -361,7 +375,7 @@ export class TrayManager extends BaseModule {
         app.dock?.hide()
       }
     } else {
-      // When hideDock is disabled, always show dock
+      // Always show dock when hideDock is disabled, or tray is unavailable.
       app.dock?.show()
     }
   }

@@ -3,6 +3,10 @@
   "type": "module",
   "version": "1.0.0",
   "private": true,
+  "imports": {
+    "#auth": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/index.js",
+    "#auth/*": "./node_modules/@sidebase/nuxt-auth/dist/runtime/server/services/*.js"
+  },
   "packageManager": "pnpm@10.13.1",
   "description": "Documentation for Tuff project",
   "scripts": {

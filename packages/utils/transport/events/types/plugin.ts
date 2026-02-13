@@ -551,6 +551,70 @@ export interface PluginStorageUpdatePayload {
   fileName?: string
 }
 
+export interface PluginStorageSyncItem {
+  pluginName: string
+  fileName: string
+  qualifiedName: string
+  content: unknown
+}
+
+export interface PluginStorageListSyncItemsRequest {
+  pluginName?: string
+  qualifiedNames?: string[]
+}
+
+export interface PluginStorageApplySyncItemRequest {
+  pluginName: string
+  fileName: string
+  content: unknown
+}
+
+export interface PluginStorageDeleteSyncItemRequest {
+  pluginName: string
+  fileName: string
+}
+
+export interface PluginSqliteExecuteRequest {
+  pluginName?: string
+  sql: string
+  params?: unknown[]
+}
+
+export interface PluginSqliteExecuteResponse {
+  success: boolean
+  rowsAffected?: number
+  lastInsertRowId?: number | null
+  error?: string
+}
+
+export interface PluginSqliteQueryRequest extends PluginSqliteExecuteRequest {}
+
+export interface PluginSqliteQueryResponse {
+  success: boolean
+  rows?: Array<Record<string, unknown>>
+  columns?: string[]
+  error?: string
+}
+
+export interface PluginSqliteTransactionStatement {
+  sql: string
+  params?: unknown[]
+}
+
+export interface PluginSqliteTransactionRequest {
+  pluginName?: string
+  statements: PluginSqliteTransactionStatement[]
+}
+
+export interface PluginSqliteTransactionResponse {
+  success: boolean
+  results?: Array<{
+    rowsAffected: number
+    lastInsertRowId: number | null
+  }>
+  error?: string
+}
+
 export type PluginPerformanceGetMetricsResponse = unknown
 
 export type PluginPerformanceGetPathsResponse = PluginApiGetPathsResponse

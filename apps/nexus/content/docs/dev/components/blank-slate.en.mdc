@@ -1,14 +1,14 @@
 ---
-title: "BlankSlate 空白页"
-description: "用于首次进入、引导用户开始操作的空白页布局。"
+title: "BlankSlate"
+description: "Component documentation for BlankSlate."
 category: Feedback
 syncStatus: migrated
 ---
-# BlankSlate 空白页
+# BlankSlate
 
-用于首次进入、引导用户开始操作的空白页布局。
+Component documentation for BlankSlate.
 
-## 基础用法
+## Basic Usage
 
 ### BlankSlate
 :::TuffDemoWrapper{demo="BlankSlateBlankSlateDemo" code-lang="vue"}
@@ -27,4 +27,4 @@ code: |
 
 ## API
 
-Props / Slots / Events 同 `TxEmptyState`。
+Props / Slots / Events follow `TxEmptyState`.
