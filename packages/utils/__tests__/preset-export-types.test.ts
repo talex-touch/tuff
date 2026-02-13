@@ -4,8 +4,12 @@ import {
   createPresetExport,
   validatePresetData,
 } from '../common/storage/entity/preset-export-types'
+import type {
+  CoreBoxThemeConfig,
+  LayoutAtomConfig,
+} from '../common/storage/entity/layout-atom-types'
 
-const layoutConfig = {
+const layoutConfig: LayoutAtomConfig = {
   preset: 'custom',
   header: { border: 'solid', opacity: 1, height: 26, blur: false },
   aside: { position: 'left', width: 68, border: 'solid', opacity: 0.6, collapsed: false },
@@ -13,7 +17,7 @@ const layoutConfig = {
   nav: { style: 'icon', activeIndicator: 'dot' },
 }
 
-const coreBoxConfig = {
+const coreBoxConfig: CoreBoxThemeConfig = {
   preset: 'custom',
   logo: { position: 'left', size: 24, style: 'default' },
   input: { border: 'bottom', radius: 8, background: 'transparent' },
