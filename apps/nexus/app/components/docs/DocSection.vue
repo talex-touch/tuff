@@ -27,7 +27,7 @@ function handleToggle() {
 </script>
 
 <template>
-  <div class="DocSection flex flex-col gap-2">
+  <div class="DocSection my-2 flex flex-col gap-2">
     <NuxtLink
       v-if="linkable"
       :to="link"
@@ -39,7 +39,7 @@ function handleToggle() {
         <slot name="header" />
       </span>
     </NuxtLink>
-    <TxButton v-else variant="bare" size="small" block native-type="button" class="DocSection-Header" :class="active ? 'is-active' : ''" :aria-expanded="active" @click="handleToggle">
+    <TxButton v-else variant="bare" block native-type="button" style="--fake-opacity: 0" class="DocSection-Header bg-transparent" :class="active ? 'is-active' : ''" :aria-expanded="active" @click="handleToggle">
       <span class="truncate">
         <slot name="header" />
       </span>
@@ -69,31 +69,6 @@ function handleToggle() {
 </template>
 
 <style scoped>
-.DocSection-Header {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(15, 23, 42, 0.68);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.2s ease;
-}
-
-.DocSection-Header:hover {
-  color: rgba(15, 23, 42, 0.85);
-}
-
-.DocSection-Header.is-active {
-  color: rgba(15, 23, 42, 0.92);
-}
-
 .DocSection-Indicator {
   margin-left: auto;
   font-size: 12px;
@@ -109,16 +84,6 @@ function handleToggle() {
 
 .DocSection-Indicator.is-open {
   transform: rotate(0deg);
-}
-
-:global(.dark .DocSection-Header),
-:global([data-theme='dark'] .DocSection-Header) {
-  color: rgba(226, 232, 240, 0.7);
-}
-
-:global(.dark .DocSection-Header:hover),
-:global([data-theme='dark'] .DocSection-Header:hover) {
-  color: rgba(248, 250, 252, 0.86);
 }
 
 :global(.dark .DocSection-Header.is-active),

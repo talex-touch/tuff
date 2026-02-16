@@ -79,6 +79,8 @@ code: |
 - [Foundations](./foundations.en.md) (includes light/dark token guidance)
 - [StatusBadge](./status-badge.en.md)
 - [EmptyState](./empty-state.en.md)
+- [ErrorState](./error-state.en.md)
+- [GuideState](./guide-state.en.md)
 
 ## Basics & Actions
 
@@ -93,6 +95,7 @@ code: |
 
 - [Input](./input.en.md)
 - [Select](./select.en.md)
+- [FlatRadio](./flat-radio.en.md)
 - [SearchInput](./search-input.en.md)
 - [SearchSelect](./search-select.en.md)
 - [Checkbox](./checkbox.en.md)
@@ -115,6 +118,7 @@ code: |
 - [Toast](./toast.en.md)
 - [Tooltip](./tooltip.en.md)
 - [Popover](./popover.en.md)
+- [BaseAnchor](./base-anchor.en.md)
 - [LoadingState](./loading-state.en.md)
 - [LoadingOverlay](./loading-overlay.en.md)
 - [Progress](./progress.en.md)

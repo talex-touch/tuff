@@ -30,12 +30,15 @@ const sectionPaths: Record<string, string> = {
   assets: '/dashboard/assets',
   plugins: '/dashboard/assets',
   intelligence: '/dashboard/admin/intelligence',
+  users: '/dashboard/admin/users',
+  subscriptions: '/dashboard/admin/subscriptions',
+  audits: '/dashboard/admin/audits',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   credits: '/dashboard/credits',
+  adminCredits: '/dashboard/admin/credits',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
-  codes: '/dashboard/admin/codes',
   reviews: '/dashboard/admin/reviews',
   'doc-comments': '/dashboard/admin/doc-comments',
   analytics: '/dashboard/admin/analytics',
@@ -120,14 +123,29 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-machine-learning-model',
     },
     {
+      id: 'adminCredits',
+      label: t('dashboard.sections.menu.adminCredits', 'AI 积分'),
+      icon: 'i-carbon-currency',
+    },
+    {
       id: 'images',
       label: t('dashboard.sections.menu.images', 'Resources'),
       icon: 'i-carbon-image',
     },
     {
-      id: 'codes',
-      label: t('dashboard.sections.menu.codes', 'Activation Codes'),
-      icon: 'i-carbon-code',
+      id: 'users',
+      label: t('dashboard.sections.menu.users', 'User Management'),
+      icon: 'i-carbon-user-avatar',
+    },
+    {
+      id: 'subscriptions',
+      label: t('dashboard.sections.menu.subscriptions', 'Subscription Management'),
+      icon: 'i-carbon-certificate',
+    },
+    {
+      id: 'audits',
+      label: t('dashboard.sections.menu.audits', 'Audit Logs'),
+      icon: 'i-carbon-list',
     },
     {
       id: 'reviews',
@@ -148,14 +166,22 @@ const adminMenuItems = computed(() => {
 })
 
 const activeSection = computed(() => {
+  if (route.path.startsWith('/dashboard/admin/users'))
+    return 'users'
+  if (route.path.startsWith('/dashboard/admin/subscriptions'))
+    return 'subscriptions'
+  if (route.path.startsWith('/dashboard/admin/audits'))
+    return 'audits'
   if (route.path.startsWith('/dashboard/admin/codes'))
-    return 'codes'
+    return 'subscriptions'
   if (route.path.startsWith('/dashboard/admin/reviews'))
     return 'reviews'
   if (route.path.startsWith('/dashboard/admin/doc-comments'))
     return 'doc-comments'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
+  if (route.path.startsWith('/dashboard/admin/credits'))
+    return 'adminCredits'
   if (route.path.startsWith('/dashboard/admin/intelligence'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/credits'))

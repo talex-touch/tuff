@@ -1,4 +1,4 @@
-import type { CardItemProps } from './src/types.ts'
+import type { CardItemProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxCardItem from './src/TxCardItem.vue'
 

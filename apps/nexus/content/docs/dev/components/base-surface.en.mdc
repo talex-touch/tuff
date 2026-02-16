@@ -1,0 +1,165 @@
+---
+title: "BaseSurface"
+description: "Unified background rendering component supporting pure, mask, blur, and glass modes with motion-degradation fallback for backdrop-filter + transform issues."
+category: Layout
+status: beta
+since: 2.5.0
+tags: [surface, background, blur, glass, backdrop-filter, fallback]
+syncStatus: migrated
+---
+# BaseSurface
+
+Unified background rendering component — supports `pure`, `mask`, `blur`, and `glass` modes, with a built-in motion degradation mechanism that automatically resolves the well-known Chromium `backdrop-filter` + `transform` invalidation bug.
+
+Supports `fake` pseudo-element rendering mode (consistent with the existing `.fake-background` utility). Dark mode switches automatically via the CSS variable system.
+
+## Background Modes
+
+Four modes compared: `pure` solid color, `mask` semi-transparent overlay, `blur` backdrop blur, `glass` full frosted glass.
+
+### Mode Comparison
+:::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <TxBaseSurface mode="pure" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        Pure
+      </TxBaseSurface>
+      <TxBaseSurface mode="mask" :opacity="0.6" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        Mask
+      </TxBaseSurface>
+      <TxBaseSurface mode="blur" :blur="8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        Blur
+      </TxBaseSurface>
+      <TxBaseSurface mode="glass" :blur="12" :saturation="1.8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        Glass
+      </TxBaseSurface>
+    </div>
+  </template>
+---
+:::
+
+## Fake Pseudo-Element Mode
+
+Enable pseudo-element background rendering via the `fake` prop. Slot content naturally sits above the background without extra z-index management. Useful when you need consistency with the existing `.fake-background` pattern.
+
+### Fake Mode
+:::TuffDemoWrapper{demo="BaseSurfaceFakeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <TxBaseSurface fake mode="mask" :opacity="0.5" :radius="12" style="width: 200px; height: 100px;">
+        <strong>Pseudo-element background</strong>
+        <span style="font-size: 12px; opacity: 0.7;">Slot content naturally above</span>
+      </TxBaseSurface>
+      <TxBaseSurface fake mode="pure" :radius="12" color="var(--tx-color-primary-light-9)" style="width: 200px; height: 100px;">
+        Custom color
+      </TxBaseSurface>
+    </div>
+  </template>
+---
+:::
+
+## Motion Fallback
+
+When `blur` or `glass` mode elements are in a CSS `transform` animation, `backdrop-filter` becomes invalidated (known Chromium bug).
+
+Use the `moving` prop for manual control, or `auto-detect` for automatic transform detection. The component degrades to `fallbackMode` (default `mask`) during motion and smoothly recovers afterward.
+
+Click the button to trigger real `transform` movement on both blur and glass cards. The cards contain scrollable content inside.
+
+### Multi-Mode Motion Fallback
+:::TuffDemoWrapper{demo="BaseSurfaceFallbackDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animating = ref(false)
+  </script>
+
+  <template>
+    <TxBaseSurface
+      mode="glass"
+      :blur="12"
+      :moving="animating"
+      fallback-mode="mask"
+      :radius="14"
+    >
+      <div style="max-height: 140px; overflow-y: auto;">
+        Scrollable content...
+      </div>
+    </TxBaseSurface>
+    <TxButton @click="animating = !animating">
+      {{ animating ? 'Stop' : 'Start Motion' }}
+    </TxButton>
+  </template>
+---
+:::
+
+## Raw vs BaseSurface Comparison
+
+Left side uses raw `backdrop-filter` — blur breaks completely during transform motion. Right side uses `BaseSurface` — gracefully degrades to mask during motion, then smoothly recovers to glass when stopped.
+
+### Motion Comparison
+:::TuffDemoWrapper{demo="BaseSurfaceMotionCompareDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animating = ref(false)
+  </script>
+
+  <template>
+    <!-- Left: raw, backdrop-filter breaks on move -->
+    <div :style="{ transform: animating ? 'translateX(20px)' : '' }"
+         style="backdrop-filter: blur(12px); transition: transform 1.2s;">
+      Raw glass (breaks on move)
+    </div>
+
+    <!-- Right: BaseSurface auto fallback -->
+    <TxBaseSurface mode="glass" :blur="12" :moving="animating"
+                   fallback-mode="mask" :radius="14">
+      BaseSurface (degrades to mask)
+    </TxBaseSurface>
+  </template>
+---
+:::
+
+## API
+
+### TxBaseSurface Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass'` | `'pure'` | Background mode. |
+| `radius` | `string \| number` | - | Custom border radius. Inherits from parent if not set. |
+| `color` | `string` | - | Background color. Defaults to `--tx-fill-color-lighter`. |
+| `opacity` | `number` | `0.75` | Opacity for mask mode (0-1). |
+| `blur` | `number` | `10` | Blur intensity for blur/glass modes (px). |
+| `saturation` | `number` | `1.8` | Saturation for glass mode. |
+| `brightness` | `number` | `1.1` | Brightness for glass mode. |
+| `moving` | `boolean` | `false` | Whether the element is in motion (manual fallback control). |
+| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | Target mode during motion degradation. |
+| `settleDelay` | `number` | `150` | Delay before restoring original mode after motion ends (ms). |
+| `autoDetect` | `boolean` | `false` | Enable automatic transform detection for degradation. |
+| `transitionDuration` | `number` | `260` | Transition duration (ms). |
+| `fake` | `boolean` | `false` | Use pseudo-element mode for background rendering. |
+| `fakeIndex` | `number` | `0` | z-index of the fake pseudo-element. |
+| `tag` | `string` | `'div'` | Root element tag name. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `default` | Surface content. |
+
+### CSS Variables
+
+| Variable | Description | Light Default | Dark Default |
+|----------|-------------|---------------|--------------|
+| `--tx-surface-color` | Solid/mask background color | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
+| `--tx-surface-blur-bg` | Semi-transparent base for blur/glass | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |

@@ -105,9 +105,9 @@
   &.variant-bare {
     min-width: 0;
     height: auto;
-    padding: var(--tx-button-bare-padding, 0.25rem);
+    padding: var(--tx-button-bare-padding, 0.5rem);
     border: none;
-    --tx-button-radius: var(--tx-button-bare-radius, 8px);
+    --tx-button-radius: var(--tx-button-bare-radius, 10px);
     background: var(--tx-button-bare-bg, transparent);
     --fake-inner-opacity: var(--tx-button-bare-fake-opacity, 0);
     --tx-button-bg-color-hover: var(--tx-button-bare-hover, var(--tx-fill-color));

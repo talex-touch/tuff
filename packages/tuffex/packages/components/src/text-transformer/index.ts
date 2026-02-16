@@ -1,4 +1,4 @@
-import type { TextTransformerProps } from './src/types.ts'
+import type { TextTransformerProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxTextTransformer from './src/TxTextTransformer.vue'
 

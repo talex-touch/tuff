@@ -6,13 +6,12 @@
 -->
 <script setup lang="ts" name="SettingDownload">
 import type { DownloadConfig } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -191,13 +190,13 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="1"> 1 </TSelectItem>
-      <TSelectItem :model-value="2"> 2 </TSelectItem>
-      <TSelectItem :model-value="3"> 3 </TSelectItem>
-      <TSelectItem :model-value="4"> 4 </TSelectItem>
-      <TSelectItem :model-value="5"> 5 </TSelectItem>
-      <TSelectItem :model-value="8"> 8 </TSelectItem>
-      <TSelectItem :model-value="10"> 10 </TSelectItem>
+      <TxSelectItem :value="1"> 1 </TxSelectItem>
+      <TxSelectItem :value="2"> 2 </TxSelectItem>
+      <TxSelectItem :value="3"> 3 </TxSelectItem>
+      <TxSelectItem :value="4"> 4 </TxSelectItem>
+      <TxSelectItem :value="5"> 5 </TxSelectItem>
+      <TxSelectItem :value="8"> 8 </TxSelectItem>
+      <TxSelectItem :value="10"> 10 </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -240,24 +239,24 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="256 * 1024">
+      <TxSelectItem :value="256 * 1024">
         {{ formatFileSize(256 * 1024) }}
-      </TSelectItem>
-      <TSelectItem :model-value="512 * 1024">
+      </TxSelectItem>
+      <TxSelectItem :value="512 * 1024">
         {{ formatFileSize(512 * 1024) }}
-      </TSelectItem>
-      <TSelectItem :model-value="1024 * 1024">
+      </TxSelectItem>
+      <TxSelectItem :value="1024 * 1024">
         {{ formatFileSize(1024 * 1024) }}
-      </TSelectItem>
-      <TSelectItem :model-value="2 * 1024 * 1024">
+      </TxSelectItem>
+      <TxSelectItem :value="2 * 1024 * 1024">
         {{ formatFileSize(2 * 1024 * 1024) }}
-      </TSelectItem>
-      <TSelectItem :model-value="4 * 1024 * 1024">
+      </TxSelectItem>
+      <TxSelectItem :value="4 * 1024 * 1024">
         {{ formatFileSize(4 * 1024 * 1024) }}
-      </TSelectItem>
-      <TSelectItem :model-value="8 * 1024 * 1024">
+      </TxSelectItem>
+      <TxSelectItem :value="8 * 1024 * 1024">
         {{ formatFileSize(8 * 1024 * 1024) }}
-      </TSelectItem>
+      </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -289,14 +288,14 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="0">
+      <TxSelectItem :value="0">
         {{ t('settings.settingDownload.noRetry') }}
-      </TSelectItem>
-      <TSelectItem :model-value="1"> 1 </TSelectItem>
-      <TSelectItem :model-value="2"> 2 </TSelectItem>
-      <TSelectItem :model-value="3"> 3 </TSelectItem>
-      <TSelectItem :model-value="5"> 5 </TSelectItem>
-      <TSelectItem :model-value="10"> 10 </TSelectItem>
+      </TxSelectItem>
+      <TxSelectItem :value="1"> 1 </TxSelectItem>
+      <TxSelectItem :value="2"> 2 </TxSelectItem>
+      <TxSelectItem :value="3"> 3 </TxSelectItem>
+      <TxSelectItem :value="5"> 5 </TxSelectItem>
+      <TxSelectItem :value="10"> 10 </TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Storage Settings -->
@@ -309,12 +308,12 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="7"> 7 {{ t('settings.settingDownload.days') }} </TSelectItem>
-      <TSelectItem :model-value="14"> 14 {{ t('settings.settingDownload.days') }} </TSelectItem>
-      <TSelectItem :model-value="30"> 30 {{ t('settings.settingDownload.days') }} </TSelectItem>
-      <TSelectItem :model-value="60"> 60 {{ t('settings.settingDownload.days') }} </TSelectItem>
-      <TSelectItem :model-value="90"> 90 {{ t('settings.settingDownload.days') }} </TSelectItem>
-      <TSelectItem :model-value="365"> 365 {{ t('settings.settingDownload.days') }} </TSelectItem>
+      <TxSelectItem :value="7"> 7 {{ t('settings.settingDownload.days') }} </TxSelectItem>
+      <TxSelectItem :value="14"> 14 {{ t('settings.settingDownload.days') }} </TxSelectItem>
+      <TxSelectItem :value="30"> 30 {{ t('settings.settingDownload.days') }} </TxSelectItem>
+      <TxSelectItem :value="60"> 60 {{ t('settings.settingDownload.days') }} </TxSelectItem>
+      <TxSelectItem :value="90"> 90 {{ t('settings.settingDownload.days') }} </TxSelectItem>
+      <TxSelectItem :value="365"> 365 {{ t('settings.settingDownload.days') }} </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -337,21 +336,21 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="10000">
+      <TxSelectItem :value="10000">
         {{ formatTimeout(10000) }}
-      </TSelectItem>
-      <TSelectItem :model-value="20000">
+      </TxSelectItem>
+      <TxSelectItem :value="20000">
         {{ formatTimeout(20000) }}
-      </TSelectItem>
-      <TSelectItem :model-value="30000">
+      </TxSelectItem>
+      <TxSelectItem :value="30000">
         {{ formatTimeout(30000) }}
-      </TSelectItem>
-      <TSelectItem :model-value="60000">
+      </TxSelectItem>
+      <TxSelectItem :value="60000">
         {{ formatTimeout(60000) }}
-      </TSelectItem>
-      <TSelectItem :model-value="120000">
+      </TxSelectItem>
+      <TxSelectItem :value="120000">
         {{ formatTimeout(120000) }}
-      </TSelectItem>
+      </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
@@ -363,11 +362,11 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="1000"> 1s </TSelectItem>
-      <TSelectItem :model-value="2000"> 2s </TSelectItem>
-      <TSelectItem :model-value="3000"> 3s </TSelectItem>
-      <TSelectItem :model-value="5000"> 5s </TSelectItem>
-      <TSelectItem :model-value="10000"> 10s </TSelectItem>
+      <TxSelectItem :value="1000"> 1s </TxSelectItem>
+      <TxSelectItem :value="2000"> 2s </TxSelectItem>
+      <TxSelectItem :value="3000"> 3s </TxSelectItem>
+      <TxSelectItem :value="5000"> 5s </TxSelectItem>
+      <TxSelectItem :value="10000"> 10s </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
@@ -379,14 +378,14 @@ function formatTimeout(ms: number): string {
       :disabled="loading"
       @update:model-value="onConfigChange"
     >
-      <TSelectItem :model-value="0">
+      <TxSelectItem :value="0">
         {{ t('settings.settingDownload.noRetry') }}
-      </TSelectItem>
-      <TSelectItem :model-value="1"> 1 </TSelectItem>
-      <TSelectItem :model-value="2"> 2 </TSelectItem>
-      <TSelectItem :model-value="3"> 3 </TSelectItem>
-      <TSelectItem :model-value="5"> 5 </TSelectItem>
-      <TSelectItem :model-value="10"> 10 </TSelectItem>
+      </TxSelectItem>
+      <TxSelectItem :value="1"> 1 </TxSelectItem>
+      <TxSelectItem :value="2"> 2 </TxSelectItem>
+      <TxSelectItem :value="3"> 3 </TxSelectItem>
+      <TxSelectItem :value="5"> 5 </TxSelectItem>
+      <TxSelectItem :value="10"> 10 </TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Storage path display -->

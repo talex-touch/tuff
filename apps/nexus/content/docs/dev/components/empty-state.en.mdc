@@ -80,6 +80,8 @@ code: |
 - `TxSearchEmpty`: empty search state (default `variant="search-empty"`)
 - `TxOfflineState`: offline hint (default `variant="offline"`)
 - `TxPermissionState`: permission denied (default `variant="permission"`)
+- `TxErrorState`: error state (default `variant="error"`), see [ErrorState](./error-state.en.md)
+- `TxGuideState`: guide state (default `variant="guide"`), see [GuideState](./guide-state.en.md)
 
 ## API
 

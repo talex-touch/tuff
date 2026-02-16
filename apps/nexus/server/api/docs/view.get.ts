@@ -1,4 +1,5 @@
 import { readCloudflareBindings } from '../../utils/cloudflare'
+import { ensureDocAnalyticsSchema, normalizeDocPath } from '../../utils/docAnalyticsStore'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const normalizedPath = docPath.replace(/^\/+|\/+$/g, '').toLowerCase()
+  const normalizedPath = normalizeDocPath(docPath)
   if (!normalizedPath.startsWith('docs/')) {
     throw createError({
       statusCode: 400,
@@ -23,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
   if (bindings?.DB) {
     try {
+      await ensureDocAnalyticsSchema(bindings.DB)
       const result = await bindings.DB.prepare(
         'SELECT views, updated_at FROM doc_views WHERE path = ?1',
       ).bind(normalizedPath).first<{ views: number, updated_at: number }>()

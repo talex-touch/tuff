@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceAdvancedConfig" setup>
+import { TxSelectItem } from '@talex-touch/tuffex'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
@@ -114,24 +114,24 @@ function handleTimeoutControlBlur(onBlur: () => void) {
       :disabled="disabled"
       @update:model-value="handlePriorityChange"
     >
-      <TSelectItem :model-value="1">
+      <TxSelectItem :value="1">
         <div class="flex items-center gap-2">
           <i class="i-carbon-arrow-up text-red-500" />
           <span>{{ t('intelligence.priority.high') }}</span>
         </div>
-      </TSelectItem>
-      <TSelectItem :model-value="2">
+      </TxSelectItem>
+      <TxSelectItem :value="2">
         <div class="flex items-center gap-2">
           <i class="i-carbon-subtract text-yellow-500" />
           <span>{{ t('intelligence.priority.medium') }}</span>
         </div>
-      </TSelectItem>
-      <TSelectItem :model-value="3">
+      </TxSelectItem>
+      <TxSelectItem :value="3">
         <div class="flex items-center gap-2">
           <i class="i-carbon-arrow-down text-green-500" />
           <span>{{ t('intelligence.priority.low') }}</span>
         </div>
-      </TSelectItem>
+      </TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Timeout Input -->

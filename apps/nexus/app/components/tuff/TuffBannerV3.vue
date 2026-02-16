@@ -29,118 +29,132 @@ precision mediump float;
 uniform vec2 u_resolution;
 uniform float u_time;
 uniform vec2 u_mouse;
-
 varying vec2 vTexCoord;
 
-float rand(vec2 co) {
-  return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+float hash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 
 float noise(vec2 p) {
   vec2 i = floor(p);
   vec2 f = fract(p);
-  float a = rand(i);
-  float b = rand(i + vec2(1.0, 0.0));
-  float c = rand(i + vec2(0.0, 1.0));
-  float d = rand(i + vec2(1.0, 1.0));
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
+  vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  float a = hash(i), b = hash(i + vec2(1, 0));
+  float c = hash(i + vec2(0, 1)), d = hash(i + vec2(1, 1));
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-float fbm(vec2 p) {
-  float value = 0.0;
-  float amplitude = 0.5;
-  for (int i = 0; i < 5; i++) {
-    value += amplitude * noise(p);
-    p *= 2.0;
-    amplitude *= 0.5;
+float fbm3(vec2 p) {
+  float v = 0.0, a = 0.5;
+  mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+  for (int i = 0; i < 3; i++) {
+    v += a * noise(p);
+    p = rot * p * 2.0 + 1.7;
+    a *= 0.5;
   }
-  return value;
-}
-
-vec2 rotate2D(vec2 p, float a) {
-  float c = cos(a);
-  float s = sin(a);
-  return mat2(c, -s, s, c) * p;
-}
-
-float sdEquilateralTriangle(vec2 p) {
-  const float k = 1.7320508;
-  p.x = abs(p.x) - 1.0;
-  p.y = p.y + 1.0 / k;
-  if (p.x + k * p.y > 0.0) {
-    p = vec2(p.x - k * p.y, -k * p.x - p.y) * 0.5;
-  }
-  p.x -= clamp(p.x, -2.0, 0.0);
-  return -length(p) * sign(p.y);
-}
-
-vec3 gradientColor(float t) {
-  vec3 c0 = vec3(0.08, 0.08, 0.2);
-  vec3 c1 = vec3(0.32, 0.2, 0.6);
-  vec3 c2 = vec3(1.0, 0.72, 1.0);
-  vec3 c3 = vec3(0.22, 0.98, 0.7);
-  float scaled = clamp(t, 0.0, 1.0) * 3.0;
-  if (scaled < 1.0) return mix(c0, c1, scaled);
-  if (scaled < 2.0) return mix(c1, c2, scaled - 1.0);
-  return mix(c2, c3, scaled - 2.0);
+  return v;
 }
 
 void main() {
   vec2 r = u_resolution;
   float t = u_time;
-  vec2 uv0 = gl_FragCoord.xy / r;
   float aspect = r.x / r.y;
-
-  vec2 p = uv0 * 2.0 - 1.0;
+  vec2 uv = gl_FragCoord.xy / r;
+  vec2 p = (uv - 0.5) * 2.0;
   p.x *= aspect;
 
-  vec2 smokeUv = p;
-  smokeUv += vec2(
-    sin(smokeUv.y * 1.6 + t * 0.18),
-    cos(smokeUv.x * 1.2 - t * 0.12)
-  ) * 0.35;
-  float smokeField = fbm(smokeUv * 1.6 + vec2(0.0, t * 0.04));
-  float smokeSoft = smoothstep(0.26, 0.95, smokeField);
-  vec3 smokeColor = mix(vec3(0.05, 0.05, 0.14), vec3(0.38, 0.18, 0.52), smokeSoft);
-  float smokeVignette = smoothstep(1.2, 0.32, length(p));
-  smokeColor *= 0.5 + 0.45 * smokeVignette;
+  vec2 m = u_mouse / r;
+  m = (m - 0.5) * 2.0;
+  m.x *= aspect;
+  m.y = -m.y;
 
-  vec2 swirlP = p * 0.85;
-  float radius = length(swirlP) + 0.001;
-  float angle = atan(swirlP.y, swirlP.x);
-  float twist = angle + t * 0.32 + sin(radius * 2.6 - t * 0.8) * 0.45;
-  vec2 swirlUv = vec2(cos(twist), sin(twist)) * radius;
-  float spiral = sin((radius * 8.6 - t * 1.7) + sin(angle * 2.4)) * 0.5 + 0.5;
-  float swirlCore = exp(-radius * 1.2) * (0.65 + 0.45 * spiral);
-  vec3 swirlColor = vec3(0.22, 0.45, 0.9) * swirlCore;
-  swirlColor += vec3(0.85, 0.45, 0.95) * pow(spiral, 1.4) * 0.35;
-  swirlColor += vec3(0.12, 0.7, 0.55) * fbm(swirlUv * 3.2 + t * 0.14) * 0.1;
-  float centerGlow = smoothstep(1.2, 0.0, radius);
-  swirlColor += vec3(0.3, 0.4, 0.8) * centerGlow * 0.15;
+  // Center follows mouse very slightly
+  vec2 center = m * 0.05;
+  vec2 d = p - center;
+  float rad = length(d);
+  float ang = atan(d.y, d.x);
 
-  float tGrad = clamp(0.5 + 0.55 * (p.x / (aspect * 1.2)), 0.0, 1.0);
-  vec3 base = gradientColor(tGrad);
+  // ── Pure black base ──
+  vec3 color = vec3(0.0);
 
-  float smokeMix = 0.5 + 0.2 * smokeSoft;
-  vec3 color = mix(base, smokeColor, smokeMix);
-  color += swirlColor * 0.7;
-  float triScale = 0.72 + 0.08 * sin(t * 0.4);
-  float tri = sdEquilateralTriangle(p * triScale);
-  float triPulse = 0.14 + 0.08 * sin(t * 0.6);
-  float triRing = smoothstep(0.025, 0.0, abs(tri) - triPulse);
-  float triFill = smoothstep(0.25, 0.0, -tri);
-  float triMask = triRing * 0.8 + triFill * 0.22;
-  vec3 triGlow = vec3(0.9, 0.92, 1.0) * triMask;
-  color += triGlow * 0.45;
-  color = clamp(color * 1.15, 0.0, 1.2);
-  color += vec3(0.04, 0.04, 0.05);
-  color += (rand(gl_FragCoord.xy + t) - 0.5) * 0.018;
+  // ── 1. Core glow — tight bright center ──
+  float core = exp(-rad * rad * 12.0);
+  float halo = exp(-rad * rad * 2.0);
+  color += vec3(0.95, 0.92, 0.88) * core * 0.7;
+  color += vec3(0.25, 0.28, 0.42) * halo * 0.12;
 
-  float vignette = smoothstep(1.35, 0.25, length(p));
-  color *= mix(0.85, 1.0, vignette);
+  // ── 2. Radial rays — noise-shaped, no loop ──
+  float rayN = fbm3(vec2(ang * 1.8 + t * 0.03, rad * 1.5 + t * 0.06));
+  float rays = pow(
+    max(0.5 + 0.5 * sin(ang * 8.0 + rayN * 4.0 + t * 0.04), 0.0),
+    16.0
+  );
+  rays *= exp(-rad * 0.5) * smoothstep(0.02, 0.12, rad);
+  color += vec3(0.6, 0.65, 0.82) * rays * 0.22;
 
-  gl_FragColor = vec4(clamp(color, 0.0, 1.2), 1.0);
+  // Secondary thinner rays at different frequency
+  float rays2 = pow(
+    max(0.5 + 0.5 * sin(ang * 14.0 - rayN * 3.0 - t * 0.03), 0.0),
+    24.0
+  );
+  rays2 *= exp(-rad * 0.7) * smoothstep(0.01, 0.08, rad);
+  color += vec3(0.5, 0.52, 0.7) * rays2 * 0.10;
+
+  // ── 3. Pulsing ring ──
+  float ringR = 0.5 + 0.06 * sin(t * 0.25);
+  float ring = abs(rad - ringR);
+  float ringGlow = exp(-ring * ring * 120.0);
+  float ringNoise = noise(vec2(ang * 4.0, t * 0.15));
+  ringGlow *= 0.7 + 0.3 * ringNoise;
+  color += vec3(0.35, 0.38, 0.55) * ringGlow * 0.12;
+
+  // ── 4. Flowing plasma haze — very subtle ──
+  vec2 hazeUv = d * 0.8;
+  hazeUv += vec2(sin(hazeUv.y * 0.8 + t * 0.08), cos(hazeUv.x * 0.6 + t * 0.06)) * 0.4;
+  float haze = fbm3(hazeUv * 1.2 + t * 0.04);
+  float hazeMask = smoothstep(1.2, 0.15, rad);
+  color += vec3(0.12, 0.14, 0.25) * haze * hazeMask * 0.15;
+
+  // ── 5. Star field ──
+  float starScale = 140.0;
+  vec2 starGrid = floor(uv * starScale);
+  vec2 starF = fract(uv * starScale);
+  float starH = hash(starGrid);
+  if (starH > 0.992) {
+    vec2 starPos = vec2(fract(starH * 91.7), fract(starH * 127.1)) * 0.6 + 0.2;
+    float starD = length(starF - starPos);
+    float star = smoothstep(0.04, 0.0, starD);
+    float twinkle = 0.6 + 0.4 * sin(t * (1.5 + starH * 3.0) + starH * 6.28);
+    color += vec3(0.7, 0.72, 0.8) * star * twinkle * 0.35;
+  }
+
+  // Second star layer (finer)
+  float starScale2 = 240.0;
+  vec2 starGrid2 = floor(uv * starScale2);
+  vec2 starF2 = fract(uv * starScale2);
+  float starH2 = hash(starGrid2 + 50.0);
+  if (starH2 > 0.995) {
+    vec2 starPos2 = vec2(fract(starH2 * 73.3), fract(starH2 * 143.7)) * 0.5 + 0.25;
+    float starD2 = length(starF2 - starPos2);
+    float star2 = smoothstep(0.03, 0.0, starD2);
+    color += vec3(0.5, 0.52, 0.6) * star2 * 0.2;
+  }
+
+  // ── 6. Very subtle warm accent on one side ──
+  float warmSide = smoothstep(-0.5, 1.2, p.x / aspect);
+  color += vec3(0.06, 0.02, 0.0) * warmSide * halo * 0.08;
+
+  // ── Post ──
+  // Grain
+  color += (hash(gl_FragCoord.xy + fract(t * 1.3)) - 0.5) * 0.008;
+
+  // Tone map
+  color = color * (2.51 * color + 0.03) / (color * (2.43 * color + 0.59) + 0.14);
+  color = clamp(color, 0.0, 1.0);
+
+  gl_FragColor = vec4(color, 1.0);
 }
 `
 
@@ -247,45 +261,29 @@ function render() {
   const projectionMatrixLocation = gl.getUniformLocation(program, 'uProjectionMatrix')
   const modelViewMatrixLocation = gl.getUniformLocation(program, 'uModelViewMatrix')
 
-  if (
-    !resolutionLocation
-    || !timeLocation
-    || !mouseLocation
-    || !projectionMatrixLocation
-    || !modelViewMatrixLocation
-  ) {
-    return
-  }
-
   const follow = 0.08
   mousePosition.x += (mousePosition.targetX - mousePosition.x) * follow
   mousePosition.y += (mousePosition.targetY - mousePosition.y) * follow
 
-  gl.uniform2f(resolutionLocation, canvas.width, canvas.height)
-  gl.uniform1f(timeLocation, time)
-  gl.uniform2f(mouseLocation, mousePosition.x, mousePosition.y)
+  if (resolutionLocation)
+    gl.uniform2f(resolutionLocation, canvas.width, canvas.height)
+  if (timeLocation)
+    gl.uniform1f(timeLocation, time)
+  if (mouseLocation)
+    gl.uniform2f(mouseLocation, mousePosition.x, mousePosition.y)
 
-  const identityMatrix = new Float32Array([
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
-    0,
-    0,
-    0,
-    1,
-  ])
-
-  gl.uniformMatrix4fv(projectionMatrixLocation, false, identityMatrix)
-  gl.uniformMatrix4fv(modelViewMatrixLocation, false, identityMatrix)
+  if (projectionMatrixLocation || modelViewMatrixLocation) {
+    const identityMatrix = new Float32Array([
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1,
+    ])
+    if (projectionMatrixLocation)
+      gl.uniformMatrix4fv(projectionMatrixLocation, false, identityMatrix)
+    if (modelViewMatrixLocation)
+      gl.uniformMatrix4fv(modelViewMatrixLocation, false, identityMatrix)
+  }
 
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 

@@ -79,6 +79,8 @@ code: |
 - [Foundations 设计基础](./foundations.zh.md)（含亮暗色 token 与主题约束）
 - [StatusBadge 状态徽标](./status-badge.zh.md)
 - [EmptyState 空态引导](./empty-state.zh.md)
+- [ErrorState 错误状态](./error-state.zh.md)
+- [GuideState 引导状态](./guide-state.zh.md)
 
 ## 基础与操作
 
@@ -93,6 +95,7 @@ code: |
 
 - [Input 输入](./input.zh.md)
 - [Select 选择器](./select.zh.md)
+- [FlatRadio 平铺单选](./flat-radio.zh.md)
 - [SearchInput 搜索输入框](./search-input.zh.md)
 - [SearchSelect 搜索选择器](./search-select.zh.md)
 - [Checkbox 复选框](./checkbox.zh.md)
@@ -115,6 +118,7 @@ code: |
 - [Toast 提示](./toast.zh.md)
 - [Tooltip 提示](./tooltip.zh.md)
 - [Popover 弹出层](./popover.zh.md)
+- [BaseAnchor 裂缝弹出层](./base-anchor.zh.md)
 - [LoadingState 加载态](./loading-state.zh.md)
 - [LoadingOverlay 加载遮罩](./loading-overlay.zh.md)
 - [Progress 进度](./progress.zh.md)

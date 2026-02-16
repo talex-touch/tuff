@@ -1,0 +1,202 @@
+---
+title: "BasePopover"
+description: "GSAP-powered popover with mask-reveal clip animation."
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [popover, overlay, floating, gsap, animation]
+syncStatus: migrated
+---
+# BasePopover
+
+GSAP-powered popover with a mask-reveal animation — content slides in from the placement direction through a soft gradient edge, with physics-based easing (overshoot + bounce). No opacity transition, pure spatial reveal.
+
+Panels use `TxCard`; control appearance via `panelBackground / panelShadow / panelRadius / panelPadding`.
+
+## Basic Usage
+
+### BasePopover
+:::TuffDemoWrapper{demo="BasePopoverBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover v-model="open" placement="bottom-start">
+      <template #reference>
+        <TxButton @click="open = !open">Click</TxButton>
+      </template>
+
+      <div style="width: 220px; padding: 4px;">
+        Popover content with mask-reveal animation.
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## Soft Edge
+
+Control the gradient softness at the mask boundary via `soft-edge` (px). A larger value creates a wider gradient fade.
+
+### Soft Edge
+:::TuffDemoWrapper{demo="BasePopoverSplitLineDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover
+      v-model="open"
+      placement="bottom-start"
+      :soft-edge="24"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">Soft Edge</TxButton>
+      </template>
+
+      <div style="width: 240px; padding: 4px;">
+        Content emerges with a soft gradient edge.
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## Placement
+
+Content enters and exits from the placement direction. For `top`, content slides down from above and returns upward on close.
+
+### Placement Directions
+:::TuffDemoWrapper{demo="BasePopoverPlacementDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open1 = ref(false)
+  const open2 = ref(false)
+  const open3 = ref(false)
+  const open4 = ref(false)
+  </script>
+
+  <template>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; padding: 48px 0; justify-content: center;">
+      <TxBasePopover v-model="open1" placement="bottom">
+        <template #reference>
+          <TxButton @click="open1 = !open1">Bottom</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">bottom</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open2" placement="top">
+        <template #reference>
+          <TxButton @click="open2 = !open2">Top</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">top</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open3" placement="left">
+        <template #reference>
+          <TxButton @click="open3 = !open3">Left</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">left</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open4" placement="right">
+        <template #reference>
+          <TxButton @click="open4 = !open4">Right</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">right</div>
+      </TxBasePopover>
+    </div>
+  </template>
+---
+:::
+
+## Custom Animation
+
+Control animation duration and GSAP easing via `duration` and `ease`.
+
+### Custom Ease
+:::TuffDemoWrapper{demo="BasePopoverCustomEaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover
+      v-model="open"
+      placement="bottom-start"
+      :duration="600"
+      ease="elastic.out(1, 0.4)"
+      :soft-edge="20"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">Elastic</TxButton>
+      </template>
+
+      <div style="width: 240px; padding: 4px;">
+        Elastic easing with 600ms duration.
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## API
+
+### TxBasePopover Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Whether popover is open (v-model). |
+| `disabled` | `boolean` | `false` | Disable the popover. |
+| `placement` | `BasePopoverPlacement` | `'bottom-start'` | Floating placement. |
+| `offset` | `number` | `8` | Distance from reference element (px). |
+| `width` | `number` | `0` | Panel width (0 = follow reference). |
+| `minWidth` | `number` | `0` | Minimum width. |
+| `maxWidth` | `number` | `360` | Maximum width. |
+| `duration` | `number` | `432` | Animation duration (ms). |
+| `ease` | `string` | `'back.out(1.7)'` | GSAP ease string for open animation. |
+| `softEdge` | `number` | `18` | Gradient fade width at mask boundary (px). |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Panel background (TxCard background). |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow (TxCard shadow). |
+| `panelRadius` | `number` | `18` | Panel border radius (TxCard radius). |
+| `panelPadding` | `number` | `10` | Panel padding (TxCard padding). |
+| `closeOnClickOutside` | `boolean` | `true` | Close on outside click. |
+| `closeOnEsc` | `boolean` | `true` | Close on Escape key. |
+
+### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `open` | - | Fired when popover opens. |
+| `close` | - | Fired when popover closes. |
+| `update:modelValue` | `boolean` | v-model update. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `reference` | Trigger element. |
+| `default` | Popover content. |
+
+### Exposed Methods
+
+| Method | Params | Description |
+|--------|--------|-------------|
+| `close` | - | Programmatically close. |
+| `toggle` | - | Programmatically toggle. |

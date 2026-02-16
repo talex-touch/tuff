@@ -1,0 +1,67 @@
+---
+title: "ErrorState"
+description: "Shortcut empty-state component for error scenarios, based on TxEmptyState with `variant=\"error\"`."
+category: Feedback
+status: beta
+since: 2.4.7
+tags: [empty, state, error, feedback]
+syncStatus: migrated
+---
+# ErrorState
+
+`TxErrorState` is a shortcut wrapper around `TxEmptyState` with `variant="error"` pre-set. Use it for request failures, system errors, and similar scenarios.
+
+## Basic Usage
+
+Uses default title and description with action buttons.
+
+### ErrorState (basic)
+:::TuffDemoWrapper{demo="ErrorStateBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+      :secondary-action="{ label: 'Go Back' }"
+    />
+  </template>
+---
+:::
+
+## Custom Content
+
+Override default title and description via props, with `surface="card"` for card style.
+
+### ErrorState (custom)
+:::TuffDemoWrapper{demo="ErrorStateCustomDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Failed to load data"
+      description="The server returned error 500. Please check your network and try again."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+    />
+  </template>
+---
+:::
+
+## API
+
+`TxErrorState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| title | `string` | `'Something went wrong'` | Title (overridable) |
+| description | `string` | `'Please try again later.'` | Description (overridable) |
+| layout | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
+| align | `'start' \| 'center' \| 'end'` | `'center'` | Alignment |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier |
+| surface | `'plain' \| 'card'` | `'plain'` | Surface style |
+| primaryAction | `EmptyStateAction` | - | Primary action config |
+| secondaryAction | `EmptyStateAction` | - | Secondary action config |
+
+> Full Props reference: [EmptyState API](./empty-state.en.md#api)

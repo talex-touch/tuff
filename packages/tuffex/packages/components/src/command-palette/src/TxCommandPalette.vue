@@ -2,8 +2,8 @@
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
 import { computed, nextTick, ref, watch } from 'vue'
-import { TxIcon } from '../../icon'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { TxIcon } from '../../icon'
 
 defineOptions({ name: 'TxCommandPalette' })
 
@@ -22,6 +22,7 @@ const inputRef = ref<HTMLInputElement | null>(null)
 const query = ref('')
 const activeIndex = ref(0)
 const zIndex = ref(getZIndex())
+const composing = ref(false)
 
 const visible = computed({
   get: () => props.modelValue,
@@ -95,7 +96,82 @@ function resolveIcon(icon?: CommandPaletteItem['icon']): TxIconSource | undefine
   return icon
 }
 
+function normalizeSegments(value: string) {
+  return value
+    .split(/\s+/)
+    .map(item => item.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function getHighlightedParts(text: string) {
+  if (!text)
+    return [{ text, highlighted: false }]
+  const tokens = normalizeSegments(query.value)
+  if (!tokens.length)
+    return [{ text, highlighted: false }]
+  const lowerText = text.toLowerCase()
+  const ranges: Array<{ start: number, end: number }> = []
+
+  for (const token of tokens) {
+    let from = 0
+    while (from < lowerText.length) {
+      const index = lowerText.indexOf(token, from)
+      if (index === -1)
+        break
+      ranges.push({ start: index, end: index + token.length })
+      from = index + token.length
+    }
+  }
+
+  if (!ranges.length)
+    return [{ text, highlighted: false }]
+
+  ranges.sort((a, b) => a.start - b.start)
+  const merged: Array<{ start: number, end: number }> = []
+  for (const range of ranges) {
+    const current = merged[merged.length - 1]
+    if (!current || range.start > current.end) {
+      merged.push({ ...range })
+      continue
+    }
+    current.end = Math.max(current.end, range.end)
+  }
+
+  const parts: Array<{ text: string, highlighted: boolean }> = []
+  let cursor = 0
+  for (const range of merged) {
+    if (range.start > cursor) {
+      parts.push({
+        text: text.slice(cursor, range.start),
+        highlighted: false,
+      })
+    }
+    parts.push({
+      text: text.slice(range.start, range.end),
+      highlighted: true,
+    })
+    cursor = range.end
+  }
+  if (cursor < text.length) {
+    parts.push({
+      text: text.slice(cursor),
+      highlighted: false,
+    })
+  }
+  return parts
+}
+
+function onCompositionStart() {
+  composing.value = true
+}
+
+function onCompositionEnd() {
+  composing.value = false
+}
+
 function onKeydown(e: KeyboardEvent) {
+  if (e.isComposing || e.keyCode === 229 || composing.value)
+    return
   if (!filteredCommands.value.length)
     return
   if (e.key === 'ArrowDown') {
@@ -134,6 +210,9 @@ function onKeydown(e: KeyboardEvent) {
       >
         <div class="tx-command-palette__panel" :style="{ '--tx-command-palette-max': `${maxHeight}px` }">
           <div class="tx-command-palette__search">
+            <span class="tx-command-palette__search-icon" aria-hidden="true">
+              <TxIcon :icon="{ type: 'builtin', value: 'search' }" :size="16" />
+            </span>
             <input
               ref="inputRef"
               class="tx-command-palette__input"
@@ -141,6 +220,8 @@ function onKeydown(e: KeyboardEvent) {
               :placeholder="placeholder"
               @input="(e) => onInput((e.target as HTMLInputElement).value)"
               @keydown="onKeydown"
+              @compositionstart="onCompositionStart"
+              @compositionend="onCompositionEnd"
             >
           </div>
 
@@ -160,8 +241,18 @@ function onKeydown(e: KeyboardEvent) {
                 <TxIcon :icon="resolveIcon(cmd.icon)" :size="16" />
               </span>
               <span class="tx-command-palette__content">
-                <span class="tx-command-palette__title">{{ cmd.title }}</span>
-                <span v-if="cmd.description" class="tx-command-palette__desc">{{ cmd.description }}</span>
+                <span class="tx-command-palette__title">
+                  <template v-for="(part, partIndex) in getHighlightedParts(cmd.title)" :key="`${cmd.id}-title-${partIndex}`">
+                    <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
+                    <span v-else>{{ part.text }}</span>
+                  </template>
+                </span>
+                <span v-if="cmd.description" class="tx-command-palette__desc">
+                  <template v-for="(part, partIndex) in getHighlightedParts(cmd.description)" :key="`${cmd.id}-desc-${partIndex}`">
+                    <mark v-if="part.highlighted" class="tx-command-palette__highlight">{{ part.text }}</mark>
+                    <span v-else>{{ part.text }}</span>
+                  </template>
+                </span>
               </span>
               <span v-if="cmd.shortcut" class="tx-command-palette__shortcut">{{ cmd.shortcut }}</span>
             </button>
@@ -197,8 +288,18 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 .tx-command-palette__search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 16px;
   border-bottom: 1px solid var(--tx-border-color-lighter, #ebeef5);
+}
+
+.tx-command-palette__search-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tx-text-color-secondary, #909399);
 }
 
 .tx-command-palette__input {
@@ -266,6 +367,13 @@ function onKeydown(e: KeyboardEvent) {
 .tx-command-palette__desc {
   font-size: 12px;
   color: var(--tx-text-color-secondary, #909399);
+}
+
+.tx-command-palette__highlight {
+  padding: 0;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 20%, transparent);
+  color: inherit;
+  border-radius: 3px;
 }
 
 .tx-command-palette__shortcut {

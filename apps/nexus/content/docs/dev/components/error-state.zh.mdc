@@ -1,0 +1,67 @@
+---
+title: "ErrorState 错误状态"
+description: "错误场景的快捷空态组件，基于 TxEmptyState 的 `variant=\"error\"` 预设。"
+category: Feedback
+status: beta
+since: 2.4.7
+tags: [empty, state, error, feedback]
+syncStatus: migrated
+---
+# ErrorState 错误状态
+
+`TxErrorState` 是 `TxEmptyState` 的快捷封装，自动设置 `variant="error"`，用于请求失败、系统异常等场景。
+
+## 基础用法
+
+使用默认标题和描述，搭配操作按钮。
+
+### ErrorState (basic)
+:::TuffDemoWrapper{demo="ErrorStateBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+      :secondary-action="{ label: 'Go Back' }"
+    />
+  </template>
+---
+:::
+
+## 自定义内容
+
+通过 props 覆盖默认标题、描述，配合 `surface="card"` 呈现卡片风格。
+
+### ErrorState (custom)
+:::TuffDemoWrapper{demo="ErrorStateCustomDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxErrorState
+      title="Failed to load data"
+      description="The server returned error 500. Please check your network and try again."
+      surface="card"
+      :primary-action="{ label: 'Retry', type: 'primary' }"
+    />
+  </template>
+---
+:::
+
+## API
+
+`TxErrorState` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| title | `string` | `'Something went wrong'` | 标题（可覆盖） |
+| description | `string` | `'Please try again later.'` | 描述（可覆盖） |
+| layout | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向 |
+| align | `'start' \| 'center' \| 'end'` | `'center'` | 对齐方式 |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级 |
+| surface | `'plain' \| 'card'` | `'plain'` | 表面风格 |
+| primaryAction | `EmptyStateAction` | - | 主操作配置 |
+| secondaryAction | `EmptyStateAction` | - | 次操作配置 |
+
+> 完整 Props 参考 [EmptyState API](./empty-state.zh.md#api)

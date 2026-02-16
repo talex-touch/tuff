@@ -1474,6 +1474,26 @@ export class UpdateSystem {
         '  fi',
         '  sleep 1',
         'done',
+        'if kill -0 "$PID" >/dev/null 2>&1; then',
+        '  echo "[self-update] pid still alive, sending TERM" >> "$LOG_FILE"',
+        '  kill -TERM "$PID" >/dev/null 2>&1 || true',
+        '  for i in {1..10}; do',
+        '    if ! kill -0 "$PID" >/dev/null 2>&1; then',
+        '      break',
+        '    fi',
+        '    sleep 1',
+        '  done',
+        'fi',
+        'if kill -0 "$PID" >/dev/null 2>&1; then',
+        '  echo "[self-update] pid still alive, sending KILL" >> "$LOG_FILE"',
+        '  kill -KILL "$PID" >/dev/null 2>&1 || true',
+        '  for i in {1..5}; do',
+        '    if ! kill -0 "$PID" >/dev/null 2>&1; then',
+        '      break',
+        '    fi',
+        '    sleep 1',
+        '  done',
+        'fi',
         '',
         'prepare_source() {',
         '  rm -rf "$WORK_APP" >> "$LOG_FILE" 2>&1 || true',
@@ -1512,9 +1532,7 @@ export class UpdateSystem {
       })
       installerProcess.unref()
 
-      setTimeout(() => {
-        app.quit()
-      }, 1200)
+      this.requestAppQuit('mac-app-update')
       console.log('[UpdateSystem] Scheduled macOS app replacement install', {
         from: packagePath,
         to: targetAppPath
@@ -1537,5 +1555,19 @@ export class UpdateSystem {
       return null
     }
     return appBundlePath
+  }
+
+  private requestAppQuit(reason: string): void {
+    const touchApp = (globalThis as { $app?: { quit?: () => void } }).$app
+    if (touchApp?.quit) {
+      touchApp.quit()
+    } else {
+      app.quit()
+    }
+
+    setTimeout(() => {
+      console.warn(`[UpdateSystem] Force exiting app after quit timeout: ${reason}`)
+      app.exit(0)
+    }, 8000)
   }
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
-import { computed, ref } from 'vue'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { computed, reactive, ref, watch } from 'vue'
 
 defineI18nRoute(false)
 
@@ -28,6 +28,7 @@ interface TeamPermissions {
   canManageMembers: boolean
   canDisband: boolean
   canCreateTeam: boolean
+  canViewUsage: boolean
 }
 
 interface TeamUpgradeHint {
@@ -47,6 +48,40 @@ interface DashboardTeam {
   upgrade: TeamUpgradeHint
   members: TeamMember[]
   invites: TeamInvite[]
+}
+
+interface CreditUsageItem {
+  userId: string
+  name: string | null
+  email: string | null
+  quota: number
+  used: number
+  month: string
+}
+
+interface CreditLedgerItem {
+  id: string
+  teamId: string
+  userId: string | null
+  userEmail: string | null
+  userName: string | null
+  delta: number
+  reason: string
+  createdAt: string
+  metadata: Record<string, any> | null
+}
+
+interface CreditTrendData {
+  days: string[]
+  values: number[]
+  totalUsed: number
+}
+
+interface Pagination {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
 }
 
 interface InvitePreview {
@@ -73,6 +108,7 @@ const canInvite = computed(() => Boolean(team.value?.permissions.canInvite))
 const canCreateTeam = computed(() => Boolean(team.value?.permissions.canCreateTeam))
 const canDisband = computed(() => Boolean(team.value?.permissions.canDisband))
 const isPersonalTeam = computed(() => team.value?.type === 'personal')
+const showTeamCredits = computed(() => team.value?.type === 'organization' && team.value?.permissions.canViewUsage)
 
 const actionError = ref('')
 const actionSuccess = ref('')
@@ -83,6 +119,34 @@ const disbandLoading = ref(false)
 const joinLoading = ref(false)
 const joinPreviewLoading = ref(false)
 const activationLoading = ref(false)
+
+const creditUsage = ref<CreditUsageItem[]>([])
+const creditUsageLoading = ref(false)
+const creditUsageError = ref('')
+const creditUsageSummary = reactive({ totalUsed: 0, totalQuota: 0, month: '' })
+const creditUsageQuery = ref('')
+const creditUsagePagination = reactive<Pagination>({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+})
+
+const creditLedger = ref<CreditLedgerItem[]>([])
+const creditLedgerLoading = ref(false)
+const creditLedgerError = ref('')
+const creditLedgerQuery = ref('')
+const creditLedgerPagination = reactive<Pagination>({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+})
+
+const creditTab = ref<'usage' | 'trend' | 'ledger'>('usage')
+const creditTrend = ref<CreditTrendData | null>(null)
+const creditTrendLoading = ref(false)
+const creditTrendError = ref('')
 
 const createOverlayVisible = ref(false)
 const inviteOverlayVisible = ref(false)
@@ -108,6 +172,58 @@ function formatDateTime(value: string | null) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
 }
+
+function normalizeSparkline(values: number[], width: number, height: number): { line: string, area: string } {
+  if (!values.length) {
+    return { line: '', area: '' }
+  }
+
+  const max = Math.max(1, ...values)
+  const stepX = values.length > 1 ? width / (values.length - 1) : width
+  const points = values.map((value, index) => {
+    const x = Number((index * stepX).toFixed(2))
+    const y = Number((height - (value / max) * height).toFixed(2))
+    return { x, y }
+  })
+  const line = points.map(point => `${point.x},${point.y}`).join(' ')
+  const area = `0,${height} ${line} ${width},${height}`
+  return { line, area }
+}
+
+function formatNumber(value: number | null | undefined) {
+  if (typeof value !== 'number')
+    return '0'
+  return new Intl.NumberFormat().format(value)
+}
+
+function resolveCreditUserLabel(item: { name?: string | null; email?: string | null; userId?: string | null }) {
+  return item.name || item.email || item.userId || '-'
+}
+
+function usagePercent(item: { used: number; quota: number }) {
+  if (!item.quota)
+    return 0
+  return Math.min(100, Math.round((item.used / item.quota) * 100))
+}
+
+const creditTrendSparkline = computed(() => {
+  const values = creditTrend.value?.values ?? []
+  if (!values.length) {
+    return { line: '', area: '', trend: '0%' }
+  }
+  const baseline = values[0] ?? 0
+  const latest = values[values.length - 1] ?? 0
+  const delta = latest - baseline
+  const trend = delta === 0
+    ? '0%'
+    : `${delta > 0 ? '+' : ''}${Math.round((delta / Math.max(1, baseline || 1)) * 100)}%`
+  const chart = normalizeSparkline(values, 280, 72)
+  return {
+    line: chart.line,
+    area: chart.area,
+    trend,
+  }
+})
 
 function normalizeErrorMessage(error: any, fallback: string) {
   return error?.data?.statusMessage || error?.message || fallback
@@ -337,9 +453,129 @@ async function handleActivateCode() {
   }
 }
 
+async function fetchTeamCreditUsage(options: { resetPage?: boolean } = {}) {
+  if (!showTeamCredits.value)
+    return
+  if (options.resetPage)
+    creditUsagePagination.page = 1
+
+  creditUsageLoading.value = true
+  creditUsageError.value = ''
+  try {
+    const result = await $fetch<{
+      month: string
+      totalUsed: number
+      totalQuota: number
+      users: CreditUsageItem[]
+      pagination: Pagination
+    }>('/api/dashboard/team/credits/usage', {
+      query: {
+        page: creditUsagePagination.page,
+        limit: creditUsagePagination.limit,
+        q: creditUsageQuery.value.trim() || undefined,
+      },
+    })
+    creditUsage.value = result.users || []
+    creditUsageSummary.totalUsed = result.totalUsed ?? 0
+    creditUsageSummary.totalQuota = result.totalQuota ?? 0
+    creditUsageSummary.month = result.month || ''
+    creditUsagePagination.page = result.pagination.page
+    creditUsagePagination.limit = result.pagination.limit
+    creditUsagePagination.total = result.pagination.total
+    creditUsagePagination.totalPages = result.pagination.totalPages
+  }
+  catch (error: any) {
+    creditUsageError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.usage', '加载积分消耗失败'))
+  }
+  finally {
+    creditUsageLoading.value = false
+  }
+}
+
+async function fetchTeamCreditLedger(options: { resetPage?: boolean } = {}) {
+  if (!showTeamCredits.value)
+    return
+  if (options.resetPage)
+    creditLedgerPagination.page = 1
+
+  creditLedgerLoading.value = true
+  creditLedgerError.value = ''
+  try {
+    const result = await $fetch<{
+      entries: CreditLedgerItem[]
+      pagination: Pagination
+    }>('/api/dashboard/team/credits/ledger', {
+      query: {
+        page: creditLedgerPagination.page,
+        limit: creditLedgerPagination.limit,
+        q: creditLedgerQuery.value.trim() || undefined,
+      },
+    })
+    creditLedger.value = result.entries || []
+    creditLedgerPagination.page = result.pagination.page
+    creditLedgerPagination.limit = result.pagination.limit
+    creditLedgerPagination.total = result.pagination.total
+    creditLedgerPagination.totalPages = result.pagination.totalPages
+  }
+  catch (error: any) {
+    creditLedgerError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.ledger', '加载积分流水失败'))
+  }
+  finally {
+    creditLedgerLoading.value = false
+  }
+}
+
+async function fetchTeamCreditTrend() {
+  if (!showTeamCredits.value)
+    return
+
+  creditTrendLoading.value = true
+  creditTrendError.value = ''
+  try {
+    const result = await $fetch<CreditTrendData>('/api/dashboard/team/credits/trend')
+    creditTrend.value = result
+  }
+  catch (error: any) {
+    creditTrendError.value = normalizeErrorMessage(error, t('dashboard.team.credits.errors.trend', '加载趋势失败'))
+  }
+  finally {
+    creditTrendLoading.value = false
+  }
+}
+
+function applyCreditUsageFilter() {
+  fetchTeamCreditUsage({ resetPage: true })
+}
+
+function applyCreditLedgerFilter() {
+  fetchTeamCreditLedger({ resetPage: true })
+}
+
 function openManagePlan() {
   return navigateTo('/pricing')
 }
+
+watch(
+  () => showTeamCredits.value,
+  (value) => {
+    if (value) {
+      fetchTeamCreditUsage()
+      fetchTeamCreditLedger()
+      if (creditTab.value === 'trend')
+        fetchTeamCreditTrend()
+    }
+  },
+  { immediate: true },
+)
+
+watch(() => creditUsagePagination.page, () => fetchTeamCreditUsage())
+watch(() => creditLedgerPagination.page, () => fetchTeamCreditLedger())
+
+watch(() => creditTab.value, (value) => {
+  if (value === 'trend' && !creditTrendLoading.value && !creditTrend.value) {
+    fetchTeamCreditTrend()
+  }
+})
 </script>
 
 <template>
@@ -495,6 +731,221 @@ function openManagePlan() {
             </span>
           </div>
         </div>
+      </section>
+
+      <section v-if="showTeamCredits" class="apple-card-lg p-6 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 class="apple-heading-sm">
+              {{ t('dashboard.team.credits.title', 'AI 积分消耗') }}
+            </h2>
+            <p class="mt-1 text-sm text-black/50 dark:text-white/50">
+              {{ t('dashboard.team.credits.subtitle', '团队成员本月积分消耗与额度') }}
+            </p>
+          </div>
+        </div>
+
+        <TxTabs v-model="creditTab" placement="top" :content-scrollable="false">
+          <TxTabItem name="usage" icon-class="i-carbon-calculator">
+            <template #name>
+              {{ t('dashboard.team.credits.tabs.usage', '成员消耗') }}
+            </template>
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <TxButton variant="secondary" size="small" @click="fetchTeamCreditUsage">
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                  <p class="text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.team.credits.totalUsed', '本月总消耗') }}
+                  </p>
+                  <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                    {{ formatNumber(creditUsageSummary.totalUsed) }}
+                  </p>
+                </div>
+                <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                  <p class="text-xs text-black/40 dark:text-white/40">
+                    {{ t('dashboard.team.credits.totalQuota', '本月总额度') }}
+                  </p>
+                  <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                    {{ formatNumber(creditUsageSummary.totalQuota) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <TuffInput
+                  v-model="creditUsageQuery"
+                  :placeholder="t('dashboard.team.credits.searchPlaceholder', '搜索用户 ID / 邮箱')"
+                  class="w-full max-w-xs"
+                />
+                <TxButton variant="secondary" size="mini" @click="applyCreditUsageFilter">
+                  {{ t('dashboard.team.credits.filter', '筛选') }}
+                </TxButton>
+              </div>
+
+              <div v-if="creditUsageError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+                {{ creditUsageError }}
+              </div>
+
+              <div v-if="creditUsageLoading" class="flex items-center justify-center py-4">
+                <TxSpinner :size="16" />
+              </div>
+
+              <div v-else-if="creditUsage.length" class="space-y-2">
+                <div
+                  v-for="item in creditUsage"
+                  :key="item.userId"
+                  class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/60 dark:bg-white/[0.03] dark:text-white/60"
+                >
+                  <div>
+                    <p class="text-sm font-medium text-black dark:text-white">
+                      {{ resolveCreditUserLabel({ name: item.name, email: item.email, userId: item.userId }) }}
+                    </p>
+                    <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                      {{ item.userId }}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold text-black dark:text-white">
+                      {{ formatNumber(item.used) }} / {{ formatNumber(item.quota) }}
+                    </p>
+                    <p class="text-[11px] text-black/40 dark:text-white/40">
+                      {{ usagePercent(item) }}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.team.credits.empty', '暂无记录') }}
+              </div>
+
+              <div v-if="creditUsagePagination.total > creditUsagePagination.limit" class="flex justify-end pt-2">
+                <TxPagination v-model:current-page="creditUsagePagination.page" :total="creditUsagePagination.total" :page-size="creditUsagePagination.limit" />
+              </div>
+            </div>
+          </TxTabItem>
+
+          <TxTabItem name="trend" icon-class="i-carbon-chart-line-smooth">
+            <template #name>
+              {{ t('dashboard.team.credits.tabs.trend', '趋势') }}
+            </template>
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <TxButton variant="secondary" size="small" @click="fetchTeamCreditTrend">
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+              </div>
+
+              <div v-if="creditTrendError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+                {{ creditTrendError }}
+              </div>
+
+              <div v-if="creditTrendLoading" class="flex items-center justify-center py-4">
+                <TxSpinner :size="16" />
+              </div>
+
+              <div v-else-if="creditTrend?.values?.length" class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                <div class="flex items-center justify-between text-xs text-black/40 dark:text-white/40">
+                  <span>{{ t('dashboard.team.credits.trendLabel', '最近趋势') }}</span>
+                  <span>{{ creditTrendSparkline.trend }}</span>
+                </div>
+                <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                  {{ formatNumber(creditTrend?.totalUsed ?? 0) }}
+                </p>
+                <svg viewBox="0 0 280 72" preserveAspectRatio="none" class="mt-3 h-24 w-full">
+                  <polygon
+                    :points="creditTrendSparkline.area"
+                    style="fill: color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);"
+                  />
+                  <polyline
+                    :points="creditTrendSparkline.line"
+                    style="fill: none; stroke: var(--tx-color-primary, #409eff); stroke-width: 2;"
+                  />
+                </svg>
+              </div>
+
+              <div v-else class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.team.credits.trendEmpty', '暂无趋势数据') }}
+              </div>
+            </div>
+          </TxTabItem>
+
+          <TxTabItem name="ledger" icon-class="i-carbon-list">
+            <template #name>
+              {{ t('dashboard.team.credits.tabs.ledger', '流水') }}
+            </template>
+
+            <div class="space-y-4">
+              <div class="flex items-center justify-between">
+                <TxButton variant="secondary" size="small" @click="fetchTeamCreditLedger">
+                  {{ t('common.refresh', '刷新') }}
+                </TxButton>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <TuffInput
+                  v-model="creditLedgerQuery"
+                  :placeholder="t('dashboard.team.credits.ledgerSearchPlaceholder', '筛选用户 ID / 邮箱')"
+                  class="w-full max-w-xs"
+                />
+                <TxButton variant="secondary" size="mini" @click="applyCreditLedgerFilter">
+                  {{ t('dashboard.team.credits.filter', '筛选') }}
+                </TxButton>
+              </div>
+
+              <div v-if="creditLedgerError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+                {{ creditLedgerError }}
+              </div>
+
+              <div v-if="creditLedgerLoading" class="flex items-center justify-center py-4">
+                <TxSpinner :size="16" />
+              </div>
+
+              <div v-else-if="creditLedger.length" class="space-y-2">
+                <div
+                  v-for="entry in creditLedger"
+                  :key="entry.id"
+                  class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/60 dark:bg-white/[0.03] dark:text-white/60"
+                >
+                  <div>
+                    <p class="text-sm font-medium text-black dark:text-white">
+                      {{ resolveCreditUserLabel({ name: entry.userName, email: entry.userEmail, userId: entry.userId }) }}
+                    </p>
+                    <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                      {{ entry.userId || '-' }} · {{ formatDateTime(entry.createdAt) }}
+                    </p>
+                    <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                      {{ entry.reason }}
+                    </p>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-semibold" :class="entry.delta < 0 ? 'text-red-500' : 'text-green-600'">
+                      {{ entry.delta }}
+                    </p>
+                    <p v-if="entry.metadata?.tokens" class="text-[11px] text-black/40 dark:text-white/40">
+                      tokens {{ entry.metadata.tokens }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.team.credits.ledgerEmpty', '暂无流水') }}
+              </div>
+
+              <div v-if="creditLedgerPagination.total > creditLedgerPagination.limit" class="flex justify-end pt-2">
+                <TxPagination v-model:current-page="creditLedgerPagination.page" :total="creditLedgerPagination.total" :page-size="creditLedgerPagination.limit" />
+              </div>
+            </div>
+          </TxTabItem>
+        </TxTabs>
       </section>
 
       <section v-if="team.type === 'organization' && team.invites.length" class="apple-card-lg p-6 space-y-4">

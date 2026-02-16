@@ -390,8 +390,8 @@ function isCurrentDevice(device: DeviceItem) {
         >
           <template #label>
             <div class="space-y-1">
-              <span>{{ t('dashboard.overview.kpis.searchCount') }}</span>
-              <span class="text-[11px] text-black/45 dark:text-white/45">
+              <span class="block">{{ t('dashboard.overview.kpis.searchCount') }}</span>
+              <span class="block text-[11px] text-black/45 dark:text-white/45">
                 {{ t('dashboard.overview.range.last7Days') }}
               </span>
             </div>
@@ -401,12 +401,12 @@ function isCurrentDevice(device: DeviceItem) {
         <TxStatCard
           :value="`${formatNumber(viewModel.kpis.avgLatency)} ms`"
           :label="t('dashboard.overview.kpis.searchEfficiency')"
-          icon-class="i-carbon-speedometer text-5xl text-[var(--tx-color-success)] sm:text-6xl"
+          icon-class="i-carbon-meter text-5xl text-[var(--tx-color-success)] sm:text-6xl"
         >
           <template #label>
             <div class="space-y-1">
-              <span>{{ t('dashboard.overview.kpis.searchEfficiency') }}</span>
-              <span class="text-[11px] text-black/45 dark:text-white/45">
+              <span class="block">{{ t('dashboard.overview.kpis.searchEfficiency') }}</span>
+              <span class="block text-[11px] text-black/45 dark:text-white/45">
                 {{ t('dashboard.overview.kpis.avgResultsHint', { n: formatNumber(viewModel.kpis.avgResults) }) }}
               </span>
             </div>
@@ -416,12 +416,12 @@ function isCurrentDevice(device: DeviceItem) {
         <TxStatCard
           :value="`${viewModel.kpis.login.successRate}%`"
           :label="t('dashboard.overview.kpis.loginHealth')"
-          icon-class="i-carbon-shield text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
+          icon-class="i-carbon-security text-5xl text-[var(--tx-color-warning)] sm:text-6xl"
         >
           <template #label>
             <div class="space-y-1">
-              <span>{{ t('dashboard.overview.kpis.loginHealth') }}</span>
-              <span class="text-[11px] text-black/45 dark:text-white/45">
+              <span class="block">{{ t('dashboard.overview.kpis.loginHealth') }}</span>
+              <span class="block text-[11px] text-black/45 dark:text-white/45">
                 {{ t('dashboard.overview.kpis.loginSplit', { success: viewModel.kpis.login.success, failed: viewModel.kpis.login.failed }) }}
               </span>
             </div>
@@ -435,8 +435,8 @@ function isCurrentDevice(device: DeviceItem) {
         >
           <template #label>
             <div class="space-y-1">
-              <span>{{ t('dashboard.overview.kpis.activeDevices') }}</span>
-              <span class="text-[11px] text-black/45 dark:text-white/45">
+              <span class="block">{{ t('dashboard.overview.kpis.activeDevices') }}</span>
+              <span class="block text-[11px] text-black/45 dark:text-white/45">
                 {{ t('dashboard.overview.kpis.activeNow', { active: viewModel.kpis.devices.active, total: viewModel.kpis.devices.total }) }}
               </span>
             </div>

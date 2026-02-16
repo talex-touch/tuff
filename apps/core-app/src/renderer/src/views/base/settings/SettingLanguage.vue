@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingLanguage">
+import { TxFlatRadioItem } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
-import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
+import TuffBlockFlatRadio from '~/components/tuff/TuffBlockFlatRadio.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useLanguageSettings } from '~/modules/hooks/useLanguageSettings'
@@ -25,7 +25,7 @@ const { followSystem, selectedLanguage, supportedLanguages } = useLanguageSettin
       default-icon="i-carbon-virtual-machine"
       active-icon="i-carbon-virtual-machine"
     />
-    <TuffBlockSelect
+    <TuffBlockFlatRadio
       v-model="selectedLanguage"
       :disabled="followSystem"
       :title="t('settingLanguage.chooseLanguage')"
@@ -33,14 +33,12 @@ const { followSystem, selectedLanguage, supportedLanguages } = useLanguageSettin
       default-icon="i-carbon-language"
       active-icon="i-carbon-language"
     >
-      <TSelectItem
+      <TxFlatRadioItem
         v-for="lang in supportedLanguages"
         :key="lang.key"
-        :model-value="selectedLanguage"
         :value="lang.key"
-      >
-        {{ lang.name }}
-      </TSelectItem>
-    </TuffBlockSelect>
+        :label="lang.name"
+      />
+    </TuffBlockFlatRadio>
   </TuffGroupBlock>
 </template>

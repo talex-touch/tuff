@@ -1,15 +1,16 @@
-import type { App } from 'vue'
-import TuffSelect from './src/TxSelect.vue'
-import TuffSelectItem from './src/TxSelectItem.vue'
+import type { TxSelectItemProps, TxSelectProps, TxSelectValue } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
+import TxSelect from './src/TxSelect.vue'
+import TxSelectItem from './src/TxSelectItem.vue'
 
-TuffSelect.install = (app: App) => {
-  app.component(TuffSelect.name || 'TuffSelect', TuffSelect)
-}
+const TuffSelect = withInstall(TxSelect)
+const TuffSelectItem = withInstall(TxSelectItem)
 
-TuffSelectItem.install = (app: App) => {
-  app.component(TuffSelectItem.name || 'TuffSelectItem', TuffSelectItem)
-}
+export { TuffSelect, TuffSelectItem, TxSelect, TxSelectItem }
+export type { TxSelectProps, TxSelectItemProps, TxSelectValue }
+export { SELECT_KEY } from './src/types'
+export type { TxSelectContext } from './src/types'
+export type TxSelectInstance = InstanceType<typeof TxSelect>
+export type TxSelectItemInstance = InstanceType<typeof TxSelectItem>
 
-export { TuffSelect, TuffSelectItem }
-export { TuffSelect as TxSelect, TuffSelectItem as TxSelectItem }
 export default TuffSelect

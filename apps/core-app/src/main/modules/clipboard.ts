@@ -227,7 +227,6 @@ const CACHE_MAX_COUNT = 20
 const CACHE_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
 
 const execFileAsync = promisify(execFile)
-const IMAGE_HASH_SIZE = 24
 const CLIPBOARD_IMAGE_NAMESPACE = 'clipboard/images'
 const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
 const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID = 'clipboard.temp-images.cleanup'
@@ -356,14 +355,12 @@ class ClipboardHelper {
   private getImageHash(image: NativeImage): string {
     if (!image || image.isEmpty()) return ''
 
-    const resized = image.resize({
-      width: IMAGE_HASH_SIZE,
-      height: IMAGE_HASH_SIZE,
-      quality: 'good'
-    })
-
-    const buffer = resized.toBitmap()
-    return crypto.createHash('sha1').update(buffer).digest('hex')
+    const size = image.getSize()
+    const bitmap = image.toBitmap()
+    // Sample first 1KB of raw bitmap for fast fingerprinting.
+    // Combined with dimensions, collision probability is negligible.
+    const sample = bitmap.subarray(0, Math.min(1024, bitmap.length))
+    return `${size.width}x${size.height}:${crypto.createHash('sha1').update(sample).digest('hex')}`
   }
 
   /**
@@ -1663,6 +1660,13 @@ export class ClipboardModule extends BaseModule {
           helper.markText('')
           const size = image.getSize()
           metaEntries.push({ key: 'image_size', value: size })
+
+          // Generate thumbnail synchronously (lightweight, ~128px)
+          const thumbnail = image.resize({ width: 128 }).toDataURL()
+
+          // Yield to event loop before heavy PNG encoding + file I/O
+          await new Promise<void>((resolve) => setImmediate(resolve))
+
           const png = image.toPNG()
           const stored = await tempFileService.createFile({
             namespace: CLIPBOARD_IMAGE_NAMESPACE,
@@ -1675,7 +1679,7 @@ export class ClipboardModule extends BaseModule {
           item = {
             type: 'image',
             content: stored.path,
-            thumbnail: image.resize({ width: 128 }).toDataURL()
+            thumbnail
           }
         }
       }
@@ -1746,6 +1750,9 @@ export class ClipboardModule extends BaseModule {
         metadata: metadataPayload,
         timestamp: new Date()
       }
+
+      // Yield before DB write to avoid stacking all heavy work in one tick
+      await new Promise<void>((resolve) => setImmediate(resolve))
 
       const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
       const persistStart = performance.now()

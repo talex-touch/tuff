@@ -1,0 +1,218 @@
+---
+title: "BaseAnchor"
+description: "Low-level floating anchor primitive powered by Floating UI."
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [anchor, overlay, floating]
+syncStatus: migrated
+---
+# BaseAnchor
+
+`TxBaseAnchor` is the low-level positioning primitive for floating content. It only handles geometry, open/close state, and lifecycle hooks. Panel visuals are intentionally left to consumer components such as `TxCard`, `TxPopover`, or custom content.
+
+Use `#reference` for the trigger area and `#content` for the floating layer. This split keeps behavior and rendering responsibilities clear.
+
+## Basic Usage
+
+### BaseAnchor
+:::TuffDemoWrapper{demo="BaseAnchorBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="open" placement="bottom-start" :offset="10">
+      <template #reference>
+        <TxButton @click="open = !open">Click</TxButton>
+      </template>
+
+      <template #content>
+        <TxCard shadow="soft" :radius="14" :padding="12" style="width: 240px;">
+          Basic floating panel powered by anchor positioning and v-model control.
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## Arrow Rendering
+
+When `show-arrow` is enabled, arrow geometry is provided through `#content` slot props (`arrowRef`, `arrowStyle`, `arrowSide`).
+
+### Arrow
+:::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="open" placement="bottom-start" :offset="12" :show-arrow="true" :arrow-size="10">
+      <template #reference>
+        <TxButton @click="open = !open">Arrow</TxButton>
+      </template>
+
+      <template #content="{ arrowRef, arrowStyle, arrowSide }">
+        <div :ref="arrowRef" :style="arrowStyle" :data-side="arrowSide" class="anchor-arrow" />
+        <TxCard shadow="soft" :radius="14" :padding="12" style="width: 260px;">
+          Render the directional arrow with slot props from the anchor core.
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## Placement
+
+Floating UI placement is passed through directly, including edge variants such as `bottom-start` and `right-end`.
+
+### Placement Directions
+:::TuffDemoWrapper{demo="BaseAnchorPlacementDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const openBottom = ref(false)
+  const openTop = ref(false)
+  const openLeft = ref(false)
+  const openRight = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="openBottom" placement="bottom">
+      <template #reference>
+        <TxButton @click="openBottom = !openBottom">Bottom</TxButton>
+      </template>
+      <template #content>
+        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">bottom</TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## Auto Resize
+
+Enable `auto-resize` to re-measure floating bounds whenever content layout changes.
+
+### Auto Resize
+:::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const expanded = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor
+      v-model="open"
+      placement="bottom-start"
+      :auto-resize="true"
+      :min-width="220"
+      :max-width="340"
+      :max-height="320"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">Auto Resize</TxButton>
+      </template>
+
+      <template #content>
+        <TxCard shadow="soft" :radius="14" :padding="12">
+          <TxButton size="sm" variant="ghost" @click="expanded = !expanded">Expand details</TxButton>
+          <div v-if="expanded">The floating panel recomputes its size when content changes.</div>
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## API
+
+### TxBaseAnchor Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Open state (v-model). |
+| `disabled` | `boolean` | `false` | Disable interaction. |
+| `placement` | `BaseAnchorPlacement` | `'bottom-start'` | Floating placement. |
+| `offset` | `number` | `8` | Gap from reference element (px). |
+| `width` | `number` | `0` | Fixed width when greater than 0. |
+| `minWidth` | `number` | `0` | Minimum floating width (px). |
+| `maxWidth` | `number` | `360` | Maximum floating width (px). |
+| `maxHeight` | `number` | `420` | Maximum floating height (px). |
+| `matchReferenceWidth` | `boolean` | `false` | Force floating width to reference width when `width` is 0. |
+| `referenceFullWidth` | `boolean` | `false` | Stretch reference container to full width. |
+| `motion` | `'fade' \| 'split'` | `'split'` | Motion style for enter/leave transition. |
+| `autoResize` | `boolean` | `false` | Enable automatic resize sync via `TxAutoSizer`. |
+| `autoResizeWidth` | `boolean` | `true` | Auto-resize width axis. |
+| `autoResizeHeight` | `boolean` | `true` | Auto-resize height axis. |
+| `closeOnClickOutside` | `boolean` | `true` | Close when clicking outside. |
+| `closeOnEsc` | `boolean` | `true` | Close on Escape key. |
+| `transition` | `string` | `'tx-base-anchor'` | Vue transition name applied to floating layer. Pass empty string to disable. |
+| `referenceAs` | `string` | `'span'` | Tag used by reference wrapper. |
+| `floatingAs` | `string` | `'div'` | Tag used by floating wrapper. |
+| `referenceProps` | `Record<string, any>` | `undefined` | Extra props bound to reference wrapper. |
+| `floatingProps` | `Record<string, any>` | `undefined` | Extra props bound to floating wrapper. |
+| `referenceClass` | `string \| string[] \| Record<string, boolean>` | `undefined` | Class override for reference wrapper. |
+| `floatingClass` | `string \| string[] \| Record<string, boolean>` | `undefined` | Class override for floating wrapper. |
+| `floatingStyle` | `StyleValue` | `undefined` | Inline style override for floating wrapper. |
+| `showArrow` | `boolean` | `false` | Enable arrow middleware output. |
+| `arrowSize` | `number` | `12` | Logical arrow size used for offset calculations. |
+| `virtualRef` | `BaseAnchorVirtualRef` | `undefined` | Virtual reference object for non-DOM triggers. |
+| `onBeforeEnter` | `(el: Element) => void` | `undefined` | Hook called before enter transition starts. |
+
+### Events
+
+| Event | Params | Description |
+|-------|--------|-------------|
+| `update:modelValue` | `boolean` | v-model state sync. |
+| `open` | - | Fired when state switches to open. |
+| `close` | - | Fired when state switches to closed. |
+| `before-enter` | `Element` | Fired before enter transition. |
+
+### Slots
+
+| Slot | Description |
+|------|-------------|
+| `reference` | Trigger content rendered inside the reference wrapper. |
+| `content` | Floating content area. |
+
+`content` slot props:
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `arrowStyle` | `Record<string, string>` | Computed arrow style from Floating UI middleware. |
+| `arrowSide` | `string` | Final side (`top`/`right`/`bottom`/`left`) after flip/shift. |
+| `arrowRef` | `Ref<HTMLElement \| null>` | Arrow element ref used by middleware. |
+| `arrowData` | `any` | Raw arrow middleware data. |
+
+### Exposed Methods
+
+| Method | Description |
+|--------|-------------|
+| `open()` | Open the floating panel. |
+| `close()` | Close the floating panel. |
+| `toggle()` | Toggle panel state. |
+| `update()` | Force a position recomputation. |
+
+### Exposed Refs
+
+| Ref | Description |
+|-----|-------------|
+| `referenceRef` | Reference wrapper element ref. |
+| `floatingRef` | Floating wrapper element ref. |

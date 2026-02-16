@@ -9,7 +9,7 @@ import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { TrayEvents } from '@talex-touch/utils/transport/events'
-import { app, Tray } from 'electron'
+import { app, Tray, screen } from 'electron'
 import {
   TalexEvents,
   touchEventBus,
@@ -54,6 +54,10 @@ export class TrayManager extends BaseModule {
       this.transport = getTuffTransportMain($app.channel, keyManager)
     }
 
+    if (process.platform === 'darwin') {
+      this.applyActivationPolicy()
+    }
+
     const shouldShowTray = this.shouldShowTray()
     if (process.env.TUFF_DEBUG_TRAY === '1') {
       console.log('[TrayManager] shouldShowTray', { shouldShowTray })
@@ -73,16 +77,34 @@ export class TrayManager extends BaseModule {
     }
   }
 
+  private applyActivationPolicy(): void {
+    const policy = process.env.TUFF_TRAY_ACTIVATION
+    if (!policy) return
+    const normalized = policy.toLowerCase()
+    if (!['regular', 'accessory', 'prohibited'].includes(normalized)) {
+      console.warn('[TrayManager] Invalid activation policy', { policy })
+      return
+    }
+    try {
+      app.setActivationPolicy(normalized as Electron.App['activationPolicy'])
+      console.log('[TrayManager] Activation policy updated', { policy: normalized })
+    } catch (error) {
+      console.warn('[TrayManager] Failed to set activation policy', { policy, error })
+    }
+  }
+
   private initializeTray(): void {
     try {
       const debugTray = process.env.TUFF_DEBUG_TRAY === '1'
       const icon = TrayIconProvider.getIcon()
+      const disableTemplate = process.env.TUFF_TRAY_NO_TEMPLATE === '1'
 
       if (debugTray) {
         console.log('[TrayManager] icon resolved', {
           empty: icon.isEmpty(),
           size: icon.getSize(),
-          path: TrayIconProvider.getIconPath()
+          path: TrayIconProvider.getIconPath(),
+          disableTemplate
         })
       }
 
@@ -93,13 +115,33 @@ export class TrayManager extends BaseModule {
       }
 
       if (process.platform === 'darwin') {
-        icon.setTemplateImage(true)
+        icon.setTemplateImage(!disableTemplate)
       }
 
       this.tray = new Tray(icon)
 
       if (debugTray) {
         try {
+          const formatDisplay = (display?: Electron.Display | null) => {
+            if (!display) return undefined
+            return {
+              id: display.id,
+              bounds: { ...display.bounds },
+              workArea: { ...display.workArea },
+              size: { ...display.size },
+              workAreaSize: { ...display.workAreaSize },
+              scaleFactor: display.scaleFactor
+            }
+          }
+
+          const stringify = (payload: unknown) => {
+            try {
+              return JSON.stringify(payload)
+            } catch (error) {
+              return `__stringify_failed__:${String(error)}`
+            }
+          }
+
           const logTrayBounds = (stage: string) => {
             const tray = this.tray
             if (!tray) {
@@ -107,11 +149,15 @@ export class TrayManager extends BaseModule {
               return
             }
             try {
-              console.log('[TrayManager] tray bounds', {
+              const bounds = tray.getBounds()
+              const display = screen.getDisplayMatching(bounds)
+              const payload = {
                 stage,
-                bounds: tray.getBounds(),
+                bounds,
+                display: formatDisplay(display),
                 destroyed: typeof tray.isDestroyed === 'function' ? tray.isDestroyed() : undefined
-              })
+              }
+              console.log('[TrayManager] tray bounds', stringify(payload))
             } catch (boundsError) {
               console.warn('[TrayManager] tray bounds failed', { stage, error: boundsError })
             }
@@ -120,6 +166,11 @@ export class TrayManager extends BaseModule {
           if (process.platform === 'darwin') {
             this.tray.setTitle('tuff')
           }
+          const displaysPayload = {
+            primary: formatDisplay(screen.getPrimaryDisplay()),
+            all: screen.getAllDisplays().map((display) => formatDisplay(display))
+          }
+          console.log('[TrayManager] tray displays', stringify(displaysPayload))
           logTrayBounds('created')
           setTimeout(() => logTrayBounds('after-1s'), 1000)
           setTimeout(() => logTrayBounds('after-3s'), 3000)
@@ -130,8 +181,15 @@ export class TrayManager extends BaseModule {
       }
 
       if (process.platform === 'darwin') {
-        icon.setTemplateImage(true)
+        icon.setTemplateImage(!disableTemplate)
         this.tray.setImage(icon)
+        if (process.env.TUFF_TRAY_FORCE_HIGHLIGHT === '1') {
+          try {
+            this.tray.setHighlightMode('always')
+          } catch (error) {
+            console.warn('[TrayManager] setHighlightMode not supported', { error })
+          }
+        }
       }
 
       this.tray.setToolTip('tuff')

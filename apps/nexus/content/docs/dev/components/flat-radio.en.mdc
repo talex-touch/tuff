@@ -1,0 +1,209 @@
+---
+title: "FlatRadio"
+description: "Inline flat selector for 2-5 options (`TxFlatRadio` + `TxFlatRadioItem`). Provides sliding indicator animation, keyboard navigation, and full TypeScript support."
+category: Form
+status: beta
+since: 2.4.7
+tags: [select, flat, form, selection, inline]
+syncStatus: migrated
+---
+# FlatRadio
+
+Inline flat selector for 2-5 options (`TxFlatRadio` + `TxFlatRadioItem`). More direct than dropdown selectors, more compact than Radio.
+
+## Basic Usage
+
+The simplest flat selector, ideal for a small number of options.
+
+### FlatRadio (basic)
+:::TuffDemoWrapper{demo="FlatRadioBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref<'light' | 'dark' | 'auto'>('light')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="light" label="Light" />
+      <TxFlatRadioItem value="dark" label="Dark" />
+      <TxFlatRadioItem value="auto" label="Auto" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## Sizes
+
+Supports `sm`, `md` (default), and `lg` sizes.
+
+### FlatRadio (sizes)
+:::TuffDemoWrapper{demo="FlatRadioSizesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sm = ref('a')
+  const md = ref('a')
+  const lg = ref('a')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="sm" size="sm">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="md" size="md">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="lg" size="lg">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## Icons
+
+Use the `icon` prop to add icons to options (CSS class, e.g. UnoCSS icons).
+
+### FlatRadio (icon)
+:::TuffDemoWrapper{demo="FlatRadioIconDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('grid')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
+      <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
+      <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## Disabled State
+
+Supports both group-level and item-level disabling.
+
+### FlatRadio (disabled)
+:::TuffDemoWrapper{demo="FlatRadioDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('a')
+  </script>
+
+  <template>
+    <!-- Item disabled -->
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" disabled />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <!-- Group disabled -->
+    <TxFlatRadio v-model="value" disabled>
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## Bordered
+
+Set the `bordered` prop to add an outer border.
+
+### FlatRadio (bordered)
+:::TuffDemoWrapper{demo="FlatRadioBorderedDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('a')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value" bordered>
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## Keyboard Navigation
+
+When the container is focused:
+
+| Key | Behavior |
+|-----|----------|
+| `→` / `↓` | Select next non-disabled item (wraps) |
+| `←` / `↑` | Select previous non-disabled item (wraps) |
+| `Home` | Select first non-disabled item |
+| `End` | Select last non-disabled item |
+
+## API
+
+### TxFlatRadio
+
+#### Props
+
+| Prop | Description | Type | Default |
+|------|-------------|------|---------|
+| modelValue / v-model | Bound value | `string \| number` | - |
+| disabled | Disable entire group | `boolean` | `false` |
+| size | Size variant | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| bordered | Show outer border | `boolean` | `false` |
+
+#### Events
+
+| Event | Description | Params |
+|-------|-------------|--------|
+| update:modelValue | Emitted when value updates | `(value: string \| number) => void` |
+| change | Emitted when value changes | `(value: string \| number) => void` |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| default | `TxFlatRadioItem` children |
+
+### TxFlatRadioItem
+
+#### Props
+
+| Prop | Description | Type | Default |
+|------|-------------|------|---------|
+| value | Item value | `string \| number` | - |
+| label | Display text | `string` | - |
+| icon | Icon CSS class | `string` | - |
+| disabled | Disable this item | `boolean` | `false` |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| default | Custom content (overrides label) |
+| icon | Custom icon |

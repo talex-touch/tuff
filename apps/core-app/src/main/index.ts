@@ -18,6 +18,7 @@ import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { buildVerificationModule } from './modules/build-verification'
 import { clipboardModule } from './modules/clipboard'
 import { databaseModule } from './modules/database'
+import { divisionBoxModule } from './modules/division-box'
 import { downloadCenterModule } from './modules/download/download-center'
 import { extensionLoaderModule } from './modules/extension-loader'
 import { fileProtocolModule } from './modules/file-protocol'
@@ -143,6 +144,7 @@ const modulesToLoad = [
   pluginModule,
   pluginLogModule,
   flowBusModule, // Flow Transfer system - after plugin module
+  divisionBoxModule,
   coreBoxModule,
   trayManagerModule,
   addonOpenerModule,

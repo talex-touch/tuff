@@ -8,24 +8,73 @@ syncStatus: migrated
 
 用于展示一个数字/指标与对应描述。
 
-<script setup lang="ts">
-import StatCardBasicDemo from '~/components/content/demos/StatCardBasicDemo.vue'
-import StatCardBasicDemoSource from '~/components/content/demos/StatCardBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
-### StatCard
-:::TuffDemoWrapper{demo="StatCardStatCardDemo" code-lang="vue"}
+### 默认样式
+
+基础卡片布局，不包含趋势和进度增强。
+
+::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStatCard
+      :value="2847"
+      label="插件总数"
+      icon-class="i-carbon-download text-6xl text-[var(--tx-color-primary)]"
+      clickable
+    />
+  </template>
+---
+::
+
+### 趋势样式
+
+通过 `insight` 展示变化趋势和对比信息。
+
+::TuffDemoWrapper{demo="StatCardInsightVariantDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import NumberFlow from '@number-flow/vue'
   import { ref } from 'vue'
 
-  const value = ref(12880)
+  const activeUsers = ref(18200)
+  const activeInsight = ref({
+    from: 16800,
+    to: activeUsers.value,
+    type: 'delta',
+    color: 'success',
+    iconClass: 'i-carbon-growth',
+  })
+
+  const resourceLoad = ref(42)
+  const resourceInsight = ref({
+    from: 35,
+    to: resourceLoad.value,
+    type: 'percent',
+    color: 'danger',
+    iconClass: 'i-carbon-arrow-up-right',
+    precision: 1,
+  })
 
   function bump() {
-    value.value = Math.floor(Math.random() * 100000)
+    const nextUsers = Math.floor(Math.random() * 8000) + 14000
+    const nextLoad = Math.floor(Math.random() * 50) + 30
+
+    activeInsight.value = {
+      ...activeInsight.value,
+      from: activeUsers.value,
+      to: nextUsers,
+    }
+    activeUsers.value = nextUsers
+
+    resourceInsight.value = {
+      ...resourceInsight.value,
+      from: resourceLoad.value,
+      to: nextLoad,
+    }
+    resourceLoad.value = nextLoad
   }
   </script>
 
@@ -33,23 +82,92 @@ code: |
     <div style="display: flex; flex-direction: column; gap: 12px;">
       <div style="display: flex; gap: 8px;">
         <TxButton @click="bump">
-          Shuffle
+          随机刷新
         </TxButton>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
         <TxStatCard
-          :value="value"
-          label="Downloads"
-          icon-class="i-carbon-download text-6xl text-[var(--tx-color-primary)]"
-          clickable
+          :value="activeUsers"
+          label="活跃用户"
+          icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]"
+          :insight="activeInsight"
         />
-        <TxStatCard :value="42" label="Tasks" icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]" />
+        <TxStatCard
+          :value="resourceLoad"
+          label="资源负载"
+          icon-class="i-carbon-chip text-6xl text-[var(--tx-color-warning)]"
+          :insight="resourceInsight"
+        >
+          <template #value>
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <NumberFlow :value="resourceLoad" />
+              <span style="font-size: 16px;">%</span>
+            </div>
+          </template>
+        </TxStatCard>
       </div>
     </div>
   </template>
 ---
-:::
+::
+
+### 进度样式
+
+使用 `progress` 切换为进度卡片，并支持 `Shuffle` 动态刷新。
+
+::TuffDemoWrapper{demo="StatCardProgressVariantDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import NumberFlow from '@number-flow/vue'
+  import { computed, ref } from 'vue'
+
+  const healthProgress = ref(78)
+  const healthDelay = ref(2)
+
+  const healthStatus = computed(() => {
+    if (healthProgress.value > 85) {
+      return '已同步'
+    }
+    return '同步中'
+  })
+
+  const healthMeta = computed(() => `${healthStatus.value} · 上次同步：${healthDelay.value}s 前 (v2.4.0)`)
+
+  function bump() {
+    healthProgress.value = Math.floor(Math.random() * 50) + 40
+    healthDelay.value = Math.floor(Math.random() * 16) + 2
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; gap: 8px;">
+        <TxButton @click="bump">
+          随机刷新
+        </TxButton>
+      </div>
+
+      <TxStatCard
+        variant="progress"
+        :value="healthProgress"
+        label="云同步"
+        :meta="healthMeta"
+        :progress="healthProgress"
+        icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
+      >
+        <template #value>
+          <div style="display: flex; align-items: baseline; gap: 6px;">
+            <NumberFlow :value="healthProgress" />
+            <span style="font-size: 16px;">%</span>
+          </div>
+        </template>
+      </TxStatCard>
+    </div>
+  </template>
+---
+::
 
 ## API
 
@@ -61,3 +179,27 @@ code: |
 | `label` | `string` | - | 描述文本 |
 | `iconClass` | `string` | `''` | 图标 class（UnoCSS icones） |
 | `clickable` | `boolean` | `false` | 鼠标悬浮/点击态 |
+| `insight` | `StatCardInsight` | - | 指标变化对象（启用后标题上移） |
+| `variant` | `StatCardVariant` | `'default'` | 变体（`default` \| `progress`） |
+| `progress` | `number` | - | 进度百分比（0-100），传入即启用进度变体 |
+| `meta` | `string` | - | 进度变体底部说明文本 |
+
+### StatCardInsight
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `from` | `number` | - | 基准值 |
+| `to` | `number` | - | 当前值 |
+| `type` | `'percent' \| 'delta'` | `'percent'` | 百分比变化或绝对增量 |
+| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | 自定义颜色 |
+| `iconClass` | `string` | - | 指标图标 |
+| `suffix` | `string` | - | 自定义后缀（默认 percent 为 `%`） |
+| `precision` | `number` | - | 小数精度 |
+
+### Slots
+
+| 插槽 | 说明 |
+|------|------|
+| `value` | 自定义数值区域 |
+| `label` | 自定义标题区域 |
+| `meta` | 进度变体底部说明 |

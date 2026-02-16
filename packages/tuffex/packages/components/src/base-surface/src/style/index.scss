@@ -1,0 +1,68 @@
+.tx-base-surface {
+  position: relative;
+  border-radius: var(--tx-surface-radius, inherit);
+
+  // ---- Mode: pure ----
+  &--pure {
+    background: var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa));
+  }
+
+  // ---- Mode: mask ----
+  &--mask {
+    background: color-mix(
+      in srgb,
+      var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa)) var(--tx-surface-opacity, 75%),
+      transparent
+    );
+  }
+
+  // ---- Mode: blur ----
+  &--blur {
+    background: var(--tx-surface-blur-bg, rgba(255, 255, 255, 0.6));
+    backdrop-filter: blur(var(--tx-surface-blur, 10px));
+    -webkit-backdrop-filter: blur(var(--tx-surface-blur, 10px));
+  }
+
+  // ---- Mode: glass / refraction (wraps GlassSurface) ----
+  &--glass-wrap {
+    overflow: hidden;
+
+    .tx-base-surface__glass {
+      width: 100%;
+      height: 100%;
+    }
+  }
+
+  // ---- Fake pseudo-element mode ----
+  &--fake {
+    > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: var(--tx-surface-radius, inherit);
+      background: var(--tx-surface-fake-bg);
+      opacity: var(--tx-surface-fake-opacity, 0.75);
+      z-index: var(--tx-surface-fake-index, 0);
+      pointer-events: none;
+      transition: background var(--tx-surface-transition, 260ms) ease-out,
+                  opacity var(--tx-surface-transition, 260ms) ease-out;
+    }
+  }
+
+  // ---- Settling transition (recovering from fallback) ----
+  &--settling {
+    transition: backdrop-filter var(--tx-surface-transition, 260ms) ease-out,
+                background var(--tx-surface-transition, 260ms) ease-out;
+  }
+}
+
+// ---- Dark mode overrides via CSS variable system ----
+[data-theme='dark'],
+.dark {
+  --tx-surface-blur-bg: rgba(0, 0, 0, 0.4);
+}

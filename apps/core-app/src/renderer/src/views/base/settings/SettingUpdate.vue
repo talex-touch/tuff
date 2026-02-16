@@ -5,13 +5,12 @@ import type {
   DownloadTask,
   UpdateSettings
 } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
 import { AppPreviewChannel, DownloadModule } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TModal from '~/components/base/tuff/TModal.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -375,9 +374,9 @@ function openAssetsDialog(): void {
       :disabled="channelSelectDisabled"
       @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
     >
-      <TSelectItem v-for="item in channelOptions" :key="item.value" :model-value="item.value">
+      <TxSelectItem v-for="item in channelOptions" :key="item.value" :value="item.value">
         {{ item.label }}
-      </TSelectItem>
+      </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
@@ -389,9 +388,9 @@ function openAssetsDialog(): void {
       :disabled="frequencySelectDisabled"
       @update:model-value="(value) => handleFrequencyChange(value as UpdateSettings['frequency'])"
     >
-      <TSelectItem v-for="freq in frequencyOptions" :key="freq.value" :model-value="freq.value">
+      <TxSelectItem v-for="freq in frequencyOptions" :key="freq.value" :value="freq.value">
         {{ freq.label }}
-      </TSelectItem>
+      </TxSelectItem>
     </TuffBlockSelect>
 
     <tuff-block-switch

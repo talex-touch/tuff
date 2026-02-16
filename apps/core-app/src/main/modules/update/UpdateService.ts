@@ -27,7 +27,7 @@ import { and, desc, eq } from 'drizzle-orm'
 import { app, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
-import { downloadTasks } from '../../db/schema'
+import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 /**
@@ -962,6 +962,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const metadata = this.parseDownloadTaskMetadata(task.metadata)
         const version = typeof metadata?.version === 'string' ? metadata.version : null
 
+        if (version && !this.isUpdateNeeded(this.parseVersion(version))) {
+          await this.cleanupOutdatedUpdateTask(task.id, filePath, version)
+          continue
+        }
+
         return {
           downloadReady: true,
           version,
@@ -976,6 +981,35 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       downloadReady: false,
       version: null,
       taskId: null
+    }
+  }
+
+  private async cleanupOutdatedUpdateTask(
+    taskId: string,
+    filePath: string,
+    version: string
+  ): Promise<void> {
+    try {
+      await fs.promises.unlink(filePath)
+    } catch (error) {
+      updateLog.warn('Failed to delete outdated update file', {
+        error,
+        meta: { taskId, filePath, version }
+      })
+    }
+
+    try {
+      const db = databaseModule.getDb()
+      await db.delete(downloadChunks).where(eq(downloadChunks.taskId, taskId))
+      await db.delete(downloadTasks).where(eq(downloadTasks.id, taskId))
+      updateLog.info('Outdated update package cleaned', {
+        meta: { taskId, version }
+      })
+    } catch (error) {
+      updateLog.warn('Failed to delete outdated update task record', {
+        error,
+        meta: { taskId, version }
+      })
     }
   }
 

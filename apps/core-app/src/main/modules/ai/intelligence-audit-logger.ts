@@ -86,7 +86,7 @@ export class IntelligenceAuditLogger {
   private readonly flushTaskId = 'intelligence-audit.flush'
   private pendingLogs: IntelligenceAuditLogEntry[] = []
   private readonly flushBatchSize = 50
-  private readonly flushIntervalMs = 5000
+  private readonly flushIntervalMs = 30_000
 
   constructor() {
     this.startFlushInterval()
