@@ -25,7 +25,6 @@ const labels = computed(() => {
     placement="bottom-start"
     :duration="600"
     ease="elastic.out(1, 0.4)"
-    :soft-edge="20"
   >
     <template #reference>
       <TxButton>{{ labels.trigger }}</TxButton>

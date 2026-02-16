@@ -3,6 +3,9 @@ import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
 const animating = ref(false)
+const movingForFallback = ref(false)
+const waitingForStopTransition = ref(false)
+const activeStopTransitionCount = ref(0)
 
 const labels = computed(() => {
   if (locale.value === 'zh') {
@@ -54,6 +57,55 @@ function cardLabel(card: CardDef) {
   const modeNames: Record<Mode, string> = { blur: 'Blur', glass: 'Glass', refraction: 'Refraction' }
   return `${modeNames[card.mode]} — ${tag}`
 }
+
+function finalizeFallbackStop() {
+  waitingForStopTransition.value = false
+  activeStopTransitionCount.value = 0
+  movingForFallback.value = false
+}
+
+function startMotion() {
+  waitingForStopTransition.value = false
+  activeStopTransitionCount.value = 0
+  movingForFallback.value = true
+  animating.value = true
+}
+
+function stopMotion() {
+  animating.value = false
+  waitingForStopTransition.value = true
+  activeStopTransitionCount.value = cards.value.length
+  if (activeStopTransitionCount.value === 0) {
+    finalizeFallbackStop()
+  }
+}
+
+function handleMotionToggle() {
+  if (animating.value) {
+    stopMotion()
+    return
+  }
+  startMotion()
+}
+
+function handleMoverTransitionEnd(event: TransitionEvent) {
+  if (!waitingForStopTransition.value) {
+    return
+  }
+  if (event.target !== event.currentTarget) {
+    return
+  }
+  if (event.propertyName !== 'transform') {
+    return
+  }
+  if (activeStopTransitionCount.value <= 0) {
+    return
+  }
+  activeStopTransitionCount.value -= 1
+  if (activeStopTransitionCount.value === 0) {
+    finalizeFallbackStop()
+  }
+}
 </script>
 
 <template>
@@ -70,7 +122,7 @@ function cardLabel(card: CardDef) {
 
     <!-- 控制栏 -->
     <div class="sf-fb__controls">
-      <TxButton @click="animating = !animating">
+      <TxButton @click="handleMotionToggle">
         {{ animating ? labels.stop : labels.start }}
       </TxButton>
       <span class="sf-fb__hint">
@@ -96,13 +148,15 @@ function cardLabel(card: CardDef) {
         <div
           class="sf-fb__mover"
           :class="{ 'sf-fb__mover--moving': animating }"
+          @transitionend="handleMoverTransitionEnd"
+          @transitioncancel="handleMoverTransitionEnd"
         >
           <TxBaseSurface
             :mode="card.mode"
             :blur="12"
             :saturation="1.8"
-            :moving="card.fallback ? animating : false"
-            :auto-detect="card.fallback"
+            :moving="card.fallback ? movingForFallback : false"
+            :auto-detect="false"
             fallback-mode="mask"
             :fallback-mask-opacity="0.32"
             :settle-delay="200"
@@ -114,8 +168,8 @@ function cardLabel(card: CardDef) {
             </div>
             <div class="sf-fb__card-scroll">
               <p class="sf-fb__scroll-hint">
-{{ labels.scrollHint }}
-</p>
+                {{ labels.scrollHint }}
+              </p>
               <p v-for="i in 10" :key="i" class="sf-fb__scroll-line">
                 {{ labels.line(i) }}
               </p>

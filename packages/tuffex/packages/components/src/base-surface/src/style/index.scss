@@ -47,12 +47,8 @@
 
   .tx-base-surface__layer--mask {
     z-index: 2;
-    background: color-mix(
-      in srgb,
-      var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa)) var(--tx-surface-mask-opacity-percent, 75%),
-      transparent
-    );
-    opacity: 1;
+    background: var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa));
+    opacity: var(--tx-surface-mask-opacity, 0.75);
   }
 
   .tx-base-surface__content {

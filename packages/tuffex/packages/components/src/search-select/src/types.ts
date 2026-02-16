@@ -20,7 +20,7 @@ export interface TxSearchSelectProps {
   dropdownOffset?: number
 
   panelVariant?: 'solid' | 'dashed' | 'plain'
-  panelBackground?: 'blur' | 'glass' | 'mask'
+  panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
   panelShadow?: 'none' | 'soft' | 'medium'
   panelRadius?: number
   panelPadding?: number

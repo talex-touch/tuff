@@ -19,6 +19,8 @@ const SESSION_TTL_MS = 10 * 60_000
 const CHALLENGE_TTL_MS = 10 * 60_000
 const CHALLENGE_COOKIE = 'nexus_doc_challenge'
 const EXPIRED_SESSION_VIOLATION_WEIGHT_CAP = 2
+const ENFORCE_DOC_SECURITY = process.env.NODE_ENV === 'production'
+  || process.env.DOC_ANALYTICS_ENFORCE_SECURITY === 'true'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ path: string, clientId?: string, title?: string, source?: string }>(event)
@@ -72,9 +74,11 @@ export default defineEventHandler(async (event) => {
 
   // TODO-SEC-1: 接入全局风险引擎后，替换当前 docs 独立风险状态读取逻辑。
   if (ip) {
-    const security = await getDocSecurityState(db, ip, clientId)
-    if (security?.blockedUntil && security.blockedUntil > Date.now()) {
-      throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
+    if (ENFORCE_DOC_SECURITY) {
+      const security = await getDocSecurityState(db, ip, clientId)
+      if (security?.blockedUntil && security.blockedUntil > Date.now()) {
+        throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
+      }
     }
 
     const expiredCount = await expirePendingSessions(db, {
@@ -82,7 +86,7 @@ export default defineEventHandler(async (event) => {
       clientId,
       now: Date.now(),
     })
-    if (expiredCount > 0) {
+    if (ENFORCE_DOC_SECURITY && expiredCount > 0) {
       const updated = await recordDocViolation(db, {
         ip,
         clientId,
@@ -99,7 +103,7 @@ export default defineEventHandler(async (event) => {
     title,
   })
 
-  const security = ip ? await getDocSecurityState(db, ip, clientId) : null
+  const security = ip && ENFORCE_DOC_SECURITY ? await getDocSecurityState(db, ip, clientId) : null
   const riskLevel = security?.riskLevel ?? 0
 
   const session = await createDocEngagementSession(db, {

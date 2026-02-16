@@ -1740,7 +1740,7 @@ watch(
             <Teleport to="#docs-outline-tools">
               <div v-if="isAdmin && viewState === 'content'" class="docs-analytics-toolbar docs-analytics-toolbar--outline">
                 <div class="docs-analytics-toolbar__main docs-analytics-toolbar__main--icons">
-                  <TxTooltip :content="docsAnalyticsQuickTips.toggle" placement="bottom" show-arrow>
+                  <TxTooltip :content="docsAnalyticsQuickTips.toggle" :anchor="{ placement: 'bottom', showArrow: true }">
                     <TxButton
                       size="small"
                       circle
@@ -1754,7 +1754,7 @@ watch(
                       <span :class="docsAnalyticsVisible ? 'i-carbon-view-off' : 'i-carbon-view'" />
                     </TxButton>
                   </TxTooltip>
-                  <TxTooltip :content="docsAnalyticsQuickTips.settings" placement="bottom" show-arrow>
+                  <TxTooltip :content="docsAnalyticsQuickTips.settings" :anchor="{ placement: 'bottom', showArrow: true }">
                     <TxButton
                       ref="docsAnalyticsConfigTriggerRef"
                       size="small"
@@ -1799,7 +1799,7 @@ watch(
                         </h3>
                       </div>
                       <div class="docs-analytics-config__header-actions">
-                        <TxTooltip :content="docsAnalyticsQuickTips.refresh" placement="bottom" show-arrow>
+                        <TxTooltip :content="docsAnalyticsQuickTips.refresh" :anchor="{ placement: 'bottom', showArrow: true }">
                           <TxButton
                             circle
                             size="small"
@@ -1812,7 +1812,7 @@ watch(
                             <span class="i-carbon-renew" />
                           </TxButton>
                         </TxTooltip>
-                        <TxTooltip :content="docsAnalyticsQuickTips.analytics" placement="bottom" show-arrow>
+                        <TxTooltip :content="docsAnalyticsQuickTips.analytics" :anchor="{ placement: 'bottom', showArrow: true }">
                           <NuxtLink
                             :to="adminAnalyticsHref"
                             class="docs-analytics-icon-link"
@@ -1820,7 +1820,7 @@ watch(
                             <span class="i-carbon-launch" />
                           </NuxtLink>
                         </TxTooltip>
-                        <TxTooltip :content="docsAnalyticsQuickTips.close" placement="left" show-arrow>
+                        <TxTooltip :content="docsAnalyticsQuickTips.close" :anchor="{ placement: 'left', showArrow: true }">
                           <TxButton
                             circle
                             size="small"

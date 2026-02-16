@@ -13,6 +13,10 @@ syncStatus: migrated
 > 小而轻的提示，不打断流程但能提供必要信息。  
 > **状态**：Beta
 
+Tooltip 是 `TxBaseAnchor` 的语义封装：
+- Tooltip 负责触发和提示内容；
+- Anchor 负责定位、动效和面板样式；
+- 通过 `anchor` 参数把配置透传给 Anchor。
 
 ## Demo
 ### Hover Hint
@@ -45,49 +49,60 @@ code: |
 ---
 :::
 
+## Anchor 透传
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="底部提示"
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">Bottom</TxButton>
+    </TxTooltip>
+  </template>
+---
+:::
+
 ## API（简版）
 ::TuffPropsTable
 ---
 rows:
   - name: content
     type: 'string'
-    default: '-'
+    default: "''"
     description: '提示内容'
   - name: trigger
     type: "'hover' | 'click' | 'focus'"
     default: "'hover'"
     description: '触发方式'
-  - name: placement
-    type: 'string'
-    default: 'top'
-    description: '显示位置'
-  - name: indicator
-    type: 'boolean'
-    default: 'false'
-    description: '是否显示指示点'
-  - name: indicator-placement
-    type: "'panel' | 'reference'"
-    default: "'panel'"
-    description: '指示点显示在气泡面板或触发器上'
-  - name: indicator-variant
-    type: "'dot' | 'pulse'"
-    default: "'dot'"
-    description: '指示点样式'
   - name: open-delay
     type: 'number'
-    default: '120'
+    default: '200'
     description: '延迟显示（ms）'
   - name: close-delay
     type: 'number'
-    default: '80'
+    default: '120'
     description: '延迟关闭（ms）'
+  - name: interactive
+    type: 'boolean'
+    default: 'false'
+    description: 'hover 模式下允许鼠标进入浮层'
+  - name: max-height
+    type: 'number'
+    default: '320'
+    description: '提示层最大高度'
+  - name: anchor
+    type: 'Partial<BaseAnchorProps>'
+    default: '{}'
+    description: '透传给 TxBaseAnchor 的配置（placement/showArrow/panelBackground 等）'
 ---
 :::
 
 ## Design Notes
 - 文案尽量短，避免多行提示。  
 - 与触发元素的间距保持轻盈。
-- Tooltip 默认是无背景的轻包装层，只负责提示文本与状态点展示。
+- 复杂外观和动效请通过 `anchor` 配置，不在 Tooltip 层重复抽象。
 
 ## 组合示例
 ### 提示按钮
@@ -105,20 +120,26 @@ code: |
 ---
 ::
 
-### Indicator 指示点
+### Anchor 配置预设
 
-用于显示提示气泡或触发器上的状态提醒点，适合“有新内容/需关注”这类场景。
+展示通过 `anchor` 透传不同面板样式和定位。
 
 ::TuffDemoWrapper{demo="TooltipIndicatorDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTooltip content="面板指示点" indicator indicator-variant="pulse" indicator-placement="panel">
-      <TxButton variant="ghost">查看提醒</TxButton>
+    <TxTooltip
+      content="遮罩背景 + 箭头"
+      :anchor="{ showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">状态详情</TxButton>
     </TxTooltip>
 
-    <TxTooltip content="触发器指示点" indicator indicator-placement="reference" indicator-color="#f56c6c">
-      <TxButton variant="ghost">系统状态</TxButton>
+    <TxTooltip
+      content="玻璃背景 + 右侧定位"
+      :anchor="{ placement: 'right', showArrow: true, panelBackground: 'glass', panelShadow: 'medium' }"
+    >
+      <TxButton variant="ghost">服务状态</TxButton>
     </TxTooltip>
   </template>
 ---

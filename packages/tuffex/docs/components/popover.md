@@ -71,6 +71,7 @@ const open = ref(false)
 | `openDelay` | `number` | `120` | hover 模式下打开延迟（ms） |
 | `closeDelay` | `number` | `100` | hover 模式下关闭延迟（ms） |
 | `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态 |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 是否点击 reference 切换开关（用于可编辑输入等场景） |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |

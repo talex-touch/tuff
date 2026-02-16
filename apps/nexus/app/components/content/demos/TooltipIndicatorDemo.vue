@@ -5,26 +5,24 @@ const { locale } = useI18n()
 
 const labels = computed(() => (locale.value === 'zh'
   ? {
-      panel: '面板指示点',
-      reference: '触发器指示点',
-      triggerA: '查看提醒',
-      triggerB: '系统状态',
+      primary: '遮罩背景 + 箭头',
+      secondary: '玻璃背景 + 右侧定位',
+      triggerA: '状态详情',
+      triggerB: '服务状态',
     }
   : {
-      panel: 'Panel indicator',
-      reference: 'Reference indicator',
-      triggerA: 'View notice',
-      triggerB: 'System status',
+      primary: 'Mask background + arrow',
+      secondary: 'Glass background + right placement',
+      triggerA: 'Status detail',
+      triggerB: 'Service status',
     }))
 </script>
 
 <template>
   <div class="tuff-demo-row">
     <TxTooltip
-      :content="labels.panel"
-      indicator
-      indicator-variant="pulse"
-      indicator-placement="panel"
+      :content="labels.primary"
+      :anchor="{ showArrow: true, panelBackground: 'mask' }"
     >
       <TxButton variant="ghost">
         {{ labels.triggerA }}
@@ -32,10 +30,8 @@ const labels = computed(() => (locale.value === 'zh'
     </TxTooltip>
 
     <TxTooltip
-      :content="labels.reference"
-      indicator
-      indicator-placement="reference"
-      indicator-color="#f56c6c"
+      :content="labels.secondary"
+      :anchor="{ placement: 'right', showArrow: true, panelBackground: 'glass', panelShadow: 'medium' }"
     >
       <TxButton variant="ghost">
         {{ labels.triggerB }}

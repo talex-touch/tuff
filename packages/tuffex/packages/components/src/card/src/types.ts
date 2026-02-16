@@ -18,7 +18,9 @@ export interface TxCardProps {
   glassBlurAmount?: number
   glassOverlay?: boolean
   glassOverlayOpacity?: number
+  maskOpacity?: number
   fallbackMaskOpacity?: number
+  surfaceMoving?: boolean
   refractionStrength?: number
   refractionProfile?: 'soft' | 'filmic' | 'cinematic'
   refractionTone?: TxCardRefractionTone

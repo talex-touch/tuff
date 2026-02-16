@@ -2,9 +2,7 @@
 import { ref } from 'vue'
 
 const open = ref(false)
-const background = ref<'blur' | 'glass' | 'mask'>('blur')
-const fusion = ref(false)
-const motion = ref<'fade' | 'split'>('split')
+const background = ref<'refraction' | 'pure' | 'mask' | 'blur' | 'glass'>('refraction')
 const placement = ref<'top' | 'bottom' | 'left' | 'right'>('top')
 const showArrow = ref(true)
 </script>
@@ -16,17 +14,11 @@ const showArrow = ref(true)
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">background</span>
           <TuffSelect v-model="background" style="min-width: 160px;">
+            <TuffSelectItem value="refraction" label="refraction" />
+            <TuffSelectItem value="pure" label="pure" />
+            <TuffSelectItem value="mask" label="mask" />
             <TuffSelectItem value="blur" label="blur" />
             <TuffSelectItem value="glass" label="glass" />
-            <TuffSelectItem value="mask" label="mask" />
-          </TuffSelect>
-        </label>
-
-        <label class="tx-demo__row" style="gap: 8px;">
-          <span class="tx-demo__label">motion</span>
-          <TuffSelect v-model="motion" style="min-width: 160px;">
-            <TuffSelectItem value="split" label="split" />
-            <TuffSelectItem value="fade" label="fade" />
           </TuffSelect>
         </label>
 
@@ -46,11 +38,6 @@ const showArrow = ref(true)
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
-          <span class="tx-demo__label">fusion</span>
-          <TxSwitch v-model="fusion" />
-        </label>
-
-        <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">trigger</span>
           <TxButton size="small" @click="open = !open">Toggle</TxButton>
         </label>
@@ -61,13 +48,13 @@ const showArrow = ref(true)
       <TxTooltip
         v-model="open"
         trigger="click"
-        :placement="placement"
-        content="Split out tooltip with blur/glass/mask & fusion"
-        :show-arrow="showArrow"
-        :motion="motion"
-        :fusion="fusion"
-        :panel-background="background"
-        panel-shadow="soft"
+        content="Tooltip wrapper over BaseAnchor"
+        :anchor="{
+          placement,
+          showArrow,
+          panelBackground: background,
+          panelShadow: 'soft',
+        }"
       >
         <TxButton>Click me</TxButton>
       </TxTooltip>

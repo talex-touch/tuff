@@ -10,7 +10,7 @@ withDefaults(defineProps<{
 })
 
 const route = useRoute()
-const { status, user } = useAuthUser()
+const { status } = useAuth()
 
 const scrolled = ref(false)
 const { t, locale } = useI18n()
@@ -47,13 +47,6 @@ const signInRoute = computed(() => ({
 }))
 
 const isAuthenticated = computed(() => status.value === 'authenticated')
-const isAdmin = computed(() => user.value?.role === 'admin')
-const adminAnalyticsRoute = computed(() => ({
-  path: '/dashboard/admin/analytics',
-  query: {
-    section: 'docs',
-  },
-}))
 
 const currentPath = computed(() => route.path || '/')
 const normalizedPath = computed(() => {
@@ -181,13 +174,6 @@ const headerRevealStyle = computed(() => {
             </NuxtLink>
           </template>
           <template v-else>
-            <NuxtLink
-              v-if="isAdmin"
-              :to="adminAnalyticsRoute"
-              class="hidden rounded-full border border-primary/30 px-3 py-1 text-xs text-primary font-semibold no-underline transition sm:inline-flex hover:border-primary/50 hover:bg-primary/10"
-            >
-              Analytics
-            </NuxtLink>
             <HeaderUserMenu />
           </template>
         </div>

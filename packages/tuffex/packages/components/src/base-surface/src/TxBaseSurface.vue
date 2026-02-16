@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { BaseSurfaceMode, BaseSurfaceProps } from './types'
 import type { GlassSurfaceProps } from '../../glass-surface'
+import type { BaseSurfaceMode, BaseSurfaceProps } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 import TxGlassSurface from '../../glass-surface/src/TxGlassSurface.vue'
@@ -49,6 +49,15 @@ const attrs = useAttrs()
 const autoMoving = ref(false)
 const settling = ref(false)
 let settleTimer: ReturnType<typeof setTimeout> | undefined
+const refractionRecovering = ref(false)
+const refractionRecoveryProgress = ref(1)
+const refractionRecoveryElapsed = ref(0)
+
+const REFRACTION_QUICK_PULL_MS = 50
+const REFRACTION_MASK_RELEASE_START = 0.3
+const REFRACTION_MASK_PEAK_OPACITY = 0.95
+
+let refractionRecoveryRaf: number | null = null
 
 const isMoving = computed(() => props.moving || autoMoving.value)
 const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, 260), toFinite(props.settleDelay, 150)))
@@ -117,9 +126,19 @@ function normalizeAngleDeg(value: number) {
   return ((value + 180) % 360 + 360) % 360 - 180
 }
 
-/** 需要降级的模式（blur / glass / refraction 在运动中降级） */
+function easeOutQuad(value: number) {
+  const t = clamp(value, 0, 1)
+  return 1 - (1 - t) * (1 - t)
+}
+
+function easeOutCubic(value: number) {
+  const t = clamp(value, 0, 1)
+  return 1 - (1 - t) ** 3
+}
+
+/** 需要降级的模式（blur / glass 在运动中降级） */
 const needsFallback = computed(() =>
-  props.mode === 'blur' || props.mode === 'glass' || props.mode === 'refraction',
+  props.mode === 'blur' || props.mode === 'glass',
 )
 
 const fallbackActive = computed(() =>
@@ -128,10 +147,33 @@ const fallbackActive = computed(() =>
 
 /** 实际渲染模式 */
 const activeMode = computed<BaseSurfaceMode>(() => {
+  if (props.mode === 'refraction') {
+    if (isMoving.value) {
+      return props.fallbackMode
+    }
+    return 'refraction'
+  }
   if (fallbackActive.value) {
     return props.fallbackMode
   }
   return props.mode
+})
+
+const refractionParamProgress = computed(() => {
+  if (props.mode !== 'refraction') {
+    return 1
+  }
+  if (isMoving.value) {
+    return 0
+  }
+  if (refractionRecovering.value) {
+    return refractionRecoveryProgress.value
+  }
+  return 1
+})
+
+const easedRefractionParamProgress = computed(() => {
+  return easeOutQuad(refractionParamProgress.value)
 })
 
 const showLayerGlass = computed(() =>
@@ -384,33 +426,52 @@ const refractionToneModel = computed(() => {
   }
 })
 
+const baseRefractionMaskOpacity = computed(() => {
+  const base = clamp(toFinite(props.overlayOpacity, 0, ['overlay-opacity', 'overlayOpacity']), 0, 1)
+  if (base <= 0) {
+    return 0
+  }
+  const tone = resolvedRefractionTone.value
+  const toneBoost = tone === 'mist' ? 0.11 : tone === 'vivid' ? 0.05 : 0.08
+  const profileBoost = resolvedRefractionProfile.value === 'soft'
+    ? -0.012
+    : resolvedRefractionProfile.value === 'cinematic'
+      ? 0.022
+      : 0
+  const boost = clamp(toneBoost + profileBoost, 0.03, 0.16)
+  const blendedStrength = lerp(0, filmicRefractionStrength.value, easedRefractionParamProgress.value)
+  return clamp(base + blendedStrength * boost, 0, 0.62)
+})
+
 const layerMaskOpacity = computed(() => {
   if (activeMode.value === 'mask') {
-    if (fallbackActive.value && props.fallbackMode === 'mask') {
-      const modeDefault = props.mode === 'blur'
-        ? 0.24
-        : props.mode === 'glass'
-          ? 0.28
-          : 0.34
-      const fallbackOpacity = toFinite(props.fallbackMaskOpacity, modeDefault, ['fallback-mask-opacity', 'fallbackMaskOpacity'])
-      return clamp(fallbackOpacity, 0.08, 0.72)
+    const triggeredByFallback = (fallbackActive.value || (props.mode === 'refraction' && isMoving.value))
+      && props.fallbackMode === 'mask'
+    if (triggeredByFallback) {
+      return REFRACTION_MASK_PEAK_OPACITY
     }
     return clamp(toFinite(props.opacity, 0.75, ['opacity']), 0, 1)
   }
   if (activeMode.value === 'refraction') {
-    const base = clamp(toFinite(props.overlayOpacity, 0, ['overlay-opacity', 'overlayOpacity']), 0, 1)
-    if (base <= 0) {
-      return 0
+    const baseOpacity = baseRefractionMaskOpacity.value
+    if (!refractionRecovering.value) {
+      return baseOpacity
     }
-    const tone = resolvedRefractionTone.value
-    const toneBoost = tone === 'mist' ? 0.11 : tone === 'vivid' ? 0.05 : 0.08
-    const profileBoost = resolvedRefractionProfile.value === 'soft'
-      ? -0.012
-      : resolvedRefractionProfile.value === 'cinematic'
-        ? 0.022
-        : 0
-    const boost = clamp(toneBoost + profileBoost, 0.03, 0.16)
-    return clamp(base + filmicRefractionStrength.value * boost, 0, 0.62)
+
+    const pullProgress = easeOutCubic(refractionRecoveryElapsed.value / REFRACTION_QUICK_PULL_MS)
+    const quickPeakOpacity = lerp(baseOpacity, REFRACTION_MASK_PEAK_OPACITY, pullProgress)
+    const parameterProgress = refractionParamProgress.value
+
+    const canStartRelease = refractionRecoveryElapsed.value >= REFRACTION_QUICK_PULL_MS
+      && parameterProgress > REFRACTION_MASK_RELEASE_START
+    if (!canStartRelease) {
+      return quickPeakOpacity
+    }
+
+    const releaseProgress = easeOutQuad(
+      (parameterProgress - REFRACTION_MASK_RELEASE_START) / (1 - REFRACTION_MASK_RELEASE_START),
+    )
+    return lerp(REFRACTION_MASK_PEAK_OPACITY, baseOpacity, releaseProgress)
   }
   return clamp(toFinite(props.overlayOpacity, 0, ['overlay-opacity', 'overlayOpacity']), 0, 1)
 })
@@ -442,16 +503,25 @@ const glassSurfaceProps = computed(() => {
   if (activeMode.value === 'refraction') {
     const model = refractionModel.value
     const toneModel = refractionToneModel.value
+    const parameterBlend = easedRefractionParamProgress.value
+    const targetSaturation = clamp(Math.max(0, toFinite(props.saturation, 1.8, ['saturation'])) * toneModel.glassSaturationBoost, 0.6, 3.2)
+    const targetBrightness = clamp(normalizedBrightness.value + toneModel.glassBrightnessBoost, 24, 100)
+    const targetDisplace = shouldUseRefractionModel.value ? model.displace : toFinite(props.displace, 0.5, ['displace'])
+    const targetDistortionScale = shouldUseRefractionModel.value ? model.distortionScale : toFinite(props.distortionScale, -180, ['distortion-scale', 'distortionScale'])
+    const targetRedOffset = shouldUseRefractionModel.value ? model.redOffset : toFinite(props.redOffset, 0, ['red-offset', 'redOffset'])
+    const targetGreenOffset = shouldUseRefractionModel.value ? model.greenOffset : toFinite(props.greenOffset, 10, ['green-offset', 'greenOffset'])
+    const targetBlueOffset = shouldUseRefractionModel.value ? model.blueOffset : toFinite(props.blueOffset, 20, ['blue-offset', 'blueOffset'])
+
     return {
       ...base,
-      saturation: clamp(Math.max(0, toFinite(props.saturation, 1.8, ['saturation'])) * toneModel.glassSaturationBoost, 0.6, 3.2),
-      brightness: clamp(normalizedBrightness.value + toneModel.glassBrightnessBoost, 24, 100),
-      opacity: toneModel.glassOpacity,
-      displace: shouldUseRefractionModel.value ? model.displace : toFinite(props.displace, 0.5, ['displace']),
-      distortionScale: shouldUseRefractionModel.value ? model.distortionScale : toFinite(props.distortionScale, -180, ['distortion-scale', 'distortionScale']),
-      redOffset: shouldUseRefractionModel.value ? model.redOffset : toFinite(props.redOffset, 0, ['red-offset', 'redOffset']),
-      greenOffset: shouldUseRefractionModel.value ? model.greenOffset : toFinite(props.greenOffset, 10, ['green-offset', 'greenOffset']),
-      blueOffset: shouldUseRefractionModel.value ? model.blueOffset : toFinite(props.blueOffset, 20, ['blue-offset', 'blueOffset']),
+      saturation: lerp(1.02, targetSaturation, parameterBlend),
+      brightness: lerp(Math.max(24, normalizedBrightness.value), targetBrightness, parameterBlend),
+      opacity: lerp(0.18, toneModel.glassOpacity, parameterBlend),
+      displace: lerp(0.06, targetDisplace, parameterBlend),
+      distortionScale: Math.round(lerp(-90, targetDistortionScale, parameterBlend)),
+      redOffset: Math.round(lerp(0, targetRedOffset, parameterBlend)),
+      greenOffset: Math.round(lerp(0, targetGreenOffset, parameterBlend)),
+      blueOffset: Math.round(lerp(0, targetBlueOffset, parameterBlend)),
       xChannel: props.xChannel,
       yChannel: props.yChannel,
       mixBlendMode: props.mixBlendMode ?? 'difference',
@@ -502,6 +572,8 @@ const cssVars = computed(() => {
     const angleDeg = normalizedRefractionAngleDeg.value
     const angleRad = normalizedRefractionAngleRad.value
     const toneModel = refractionToneModel.value
+    const parameterBlend = easedRefractionParamProgress.value
+    const blendedStrength = lerp(0, filmicRefractionStrength.value, parameterBlend)
     const fallbackLightX = clamp(50 + Math.cos(angleRad) * 24, 0, 100)
     const fallbackLightY = clamp(50 + Math.sin(angleRad) * 22, 0, 100)
     const lightX = props.refractionLightX == null
@@ -511,24 +583,24 @@ const cssVars = computed(() => {
       ? fallbackLightY
       : clamp(toFinite(props.refractionLightY, 0.5, ['refraction-light-y', 'refractionLightY']), 0, 1) * 100
 
-    vars['--tx-surface-refraction-strength'] = `${filmicRefractionStrength.value}`
+    vars['--tx-surface-refraction-strength'] = `${blendedStrength}`
     vars['--tx-surface-refraction-light-x'] = `${lightX}%`
     vars['--tx-surface-refraction-light-y'] = `${lightY}%`
     vars['--tx-surface-refraction-streak-angle'] = `${angleDeg + 92}deg`
-    vars['--tx-surface-refraction-filter-primary-weight'] = `${Math.round(clamp(toneModel.filterPrimaryTint, 8, 76))}%`
-    vars['--tx-surface-refraction-filter-secondary-weight'] = `${Math.round(clamp(toneModel.filterSecondaryTint, 6, 68))}%`
-    vars['--tx-surface-refraction-filter-veil-weight'] = `${Math.round(clamp(toneModel.filterVeilTint, 4, 52))}%`
-    vars['--tx-surface-refraction-filter-base-weight'] = `${Math.round(clamp(toneModel.filterBaseTint, 2, 32))}%`
-    vars['--tx-surface-refraction-filter-saturation-boost'] = `${toneModel.filterSaturationBoost}`
-    vars['--tx-surface-refraction-filter-contrast-base'] = `${toneModel.filterContrastBase}`
-    vars['--tx-surface-refraction-filter-contrast-gain'] = `${toneModel.filterContrastGain}`
-    vars['--tx-surface-refraction-filter-brightness-boost'] = `${toneModel.filterBrightnessBoost}`
-    vars['--tx-surface-refraction-mask-primary-weight'] = `${Math.round(clamp(toneModel.maskPrimaryTint, 8, 78))}%`
-    vars['--tx-surface-refraction-mask-secondary-weight'] = `${Math.round(clamp(toneModel.maskSecondaryTint, 6, 72))}%`
-    vars['--tx-surface-refraction-mask-veil-weight'] = `${Math.round(clamp(toneModel.maskVeilTint, 3, 36))}%`
-    vars['--tx-surface-refraction-mask-strength-gain'] = `${toneModel.maskStrengthGain}`
-    vars['--tx-surface-refraction-streak-weight'] = `${Math.round(clamp(toneModel.streakTint, 8, 52))}%`
-    vars['--tx-surface-refraction-halo-opacity-gain'] = `${toneModel.haloOpacityGain}`
+    vars['--tx-surface-refraction-filter-primary-weight'] = `${Math.round(lerp(10, clamp(toneModel.filterPrimaryTint, 8, 76), parameterBlend))}%`
+    vars['--tx-surface-refraction-filter-secondary-weight'] = `${Math.round(lerp(8, clamp(toneModel.filterSecondaryTint, 6, 68), parameterBlend))}%`
+    vars['--tx-surface-refraction-filter-veil-weight'] = `${Math.round(lerp(6, clamp(toneModel.filterVeilTint, 4, 52), parameterBlend))}%`
+    vars['--tx-surface-refraction-filter-base-weight'] = `${Math.round(lerp(2, clamp(toneModel.filterBaseTint, 2, 32), parameterBlend))}%`
+    vars['--tx-surface-refraction-filter-saturation-boost'] = `${lerp(1, toneModel.filterSaturationBoost, parameterBlend)}`
+    vars['--tx-surface-refraction-filter-contrast-base'] = `${lerp(1, toneModel.filterContrastBase, parameterBlend)}`
+    vars['--tx-surface-refraction-filter-contrast-gain'] = `${lerp(0, toneModel.filterContrastGain, parameterBlend)}`
+    vars['--tx-surface-refraction-filter-brightness-boost'] = `${lerp(1, toneModel.filterBrightnessBoost, parameterBlend)}`
+    vars['--tx-surface-refraction-mask-primary-weight'] = `${Math.round(lerp(12, clamp(toneModel.maskPrimaryTint, 8, 78), parameterBlend))}%`
+    vars['--tx-surface-refraction-mask-secondary-weight'] = `${Math.round(lerp(10, clamp(toneModel.maskSecondaryTint, 6, 72), parameterBlend))}%`
+    vars['--tx-surface-refraction-mask-veil-weight'] = `${Math.round(lerp(4, clamp(toneModel.maskVeilTint, 3, 36), parameterBlend))}%`
+    vars['--tx-surface-refraction-mask-strength-gain'] = `${lerp(0.01, toneModel.maskStrengthGain, parameterBlend)}`
+    vars['--tx-surface-refraction-streak-weight'] = `${Math.round(lerp(8, clamp(toneModel.streakTint, 8, 52), parameterBlend))}%`
+    vars['--tx-surface-refraction-halo-opacity-gain'] = `${lerp(0.72, toneModel.haloOpacityGain, parameterBlend)}`
 
     const modelHaloMin = resolvedRefractionProfile.value === 'soft'
       ? 0.16
@@ -540,7 +612,7 @@ const cssVars = computed(() => {
       : resolvedRefractionProfile.value === 'cinematic'
         ? 0.58
         : 0.48
-    const modelHaloOpacity = lerp(modelHaloMin, modelHaloMax, filmicRefractionStrength.value) * toneModel.haloOpacityGain
+    const modelHaloOpacity = lerp(modelHaloMin, modelHaloMax, blendedStrength) * lerp(0.72, toneModel.haloOpacityGain, parameterBlend)
     const haloOpacity = props.refractionHaloOpacity == null
       ? modelHaloOpacity
       : clamp(toFinite(props.refractionHaloOpacity, modelHaloOpacity, ['refraction-halo-opacity', 'refractionHaloOpacity']), 0, 1)
@@ -570,9 +642,15 @@ const rootClasses = computed(() => {
   classes.push(`tx-base-surface--preset-${props.preset}`)
   classes.push(`tx-base-surface--${activeMode.value}`)
 
-  if (showLayerGlass.value) classes.push('tx-base-surface--with-glass')
-  if (showLayerFilter.value) classes.push('tx-base-surface--with-filter')
-  if (showLayerMask.value) classes.push('tx-base-surface--with-mask')
+  if (showLayerGlass.value) {
+    classes.push('tx-base-surface--with-glass')
+  }
+  if (showLayerFilter.value) {
+    classes.push('tx-base-surface--with-filter')
+  }
+  if (showLayerMask.value) {
+    classes.push('tx-base-surface--with-mask')
+  }
   if (activeMode.value === 'refraction') {
     classes.push(`tx-base-surface--refraction-renderer-${props.refractionRenderer}`)
     classes.push(`tx-base-surface--refraction-profile-${resolvedRefractionProfile.value}`)
@@ -594,6 +672,74 @@ const rootClasses = computed(() => {
 let mutationObserver: MutationObserver | null = null
 let observedElements: HTMLElement[] = []
 
+function stopRefractionRecovery(resetProgress = true) {
+  if (refractionRecoveryRaf != null) {
+    cancelAnimationFrame(refractionRecoveryRaf)
+    refractionRecoveryRaf = null
+  }
+  refractionRecovering.value = false
+  refractionRecoveryElapsed.value = 0
+  if (resetProgress) {
+    refractionRecoveryProgress.value = 1
+  }
+}
+
+function startRefractionRecovery() {
+  if (props.mode !== 'refraction') {
+    return
+  }
+  if (isMoving.value) {
+    return
+  }
+  if (!hasWindow()) {
+    refractionRecovering.value = false
+    refractionRecoveryProgress.value = 1
+    refractionRecoveryElapsed.value = 0
+    return
+  }
+
+  stopRefractionRecovery(false)
+  refractionRecovering.value = true
+  refractionRecoveryProgress.value = 0
+  refractionRecoveryElapsed.value = 0
+
+  const total = Math.max(120, toFinite(props.transitionDuration, 260))
+  const quick = Math.min(REFRACTION_QUICK_PULL_MS, total)
+  const fastPullTarget = 0.72
+  let startedAt = 0
+
+  const tick = (timestamp: number) => {
+    if (!startedAt) {
+      startedAt = timestamp
+    }
+    const elapsed = timestamp - startedAt
+    refractionRecoveryElapsed.value = elapsed
+
+    let progress = 0
+    if (elapsed <= quick) {
+      const quickProgress = easeOutCubic(elapsed / Math.max(quick, 1))
+      progress = fastPullTarget * quickProgress
+    }
+    else {
+      const tailProgress = easeOutCubic((elapsed - quick) / Math.max(total - quick, 1))
+      progress = fastPullTarget + (1 - fastPullTarget) * tailProgress
+    }
+
+    refractionRecoveryProgress.value = clamp(progress, 0, 1)
+
+    if (elapsed >= total) {
+      refractionRecovering.value = false
+      refractionRecoveryProgress.value = 1
+      refractionRecoveryElapsed.value = total
+      refractionRecoveryRaf = null
+      return
+    }
+    refractionRecoveryRaf = requestAnimationFrame(tick)
+  }
+
+  refractionRecoveryRaf = requestAnimationFrame(tick)
+}
+
 function startSettleTimer() {
   clearTimeout(settleTimer)
   settling.value = true
@@ -606,10 +752,19 @@ function onTransformStart() {
   autoMoving.value = true
   clearTimeout(settleTimer)
   settling.value = false
+  if (props.mode === 'refraction') {
+    stopRefractionRecovery(false)
+    refractionRecoveryProgress.value = 0
+    refractionRecoveryElapsed.value = 0
+  }
 }
 
 function onTransformEnd() {
   autoMoving.value = false
+  if (props.mode === 'refraction') {
+    startRefractionRecovery()
+    return
+  }
   startSettleTimer()
 }
 
@@ -631,7 +786,9 @@ function hasTransformChanged(el: HTMLElement) {
 }
 
 function setupAutoDetect() {
-  if (!props.autoDetect || !hasWindow() || !rootRef.value) return
+  if (!props.autoDetect || !hasWindow() || !rootRef.value) {
+    return
+  }
 
   const el = rootRef.value
   const targets: HTMLElement[] = []
@@ -677,17 +834,46 @@ function teardownAutoDetect() {
   mutationObserver?.disconnect()
   mutationObserver = null
   clearTimeout(settleTimer)
+  stopRefractionRecovery()
 }
 
 watch(() => props.moving, (newVal, oldVal) => {
+  if (props.mode === 'refraction') {
+    if (newVal) {
+      stopRefractionRecovery(false)
+      refractionRecoveryProgress.value = 0
+      refractionRecoveryElapsed.value = 0
+      return
+    }
+    if (oldVal && !newVal) {
+      startRefractionRecovery()
+    }
+    return
+  }
   if (oldVal && !newVal && needsFallback.value) {
     startSettleTimer()
   }
 })
 
+watch(() => props.mode, (mode) => {
+  if (mode !== 'refraction') {
+    stopRefractionRecovery()
+    return
+  }
+  if (isMoving.value) {
+    stopRefractionRecovery(false)
+    refractionRecoveryProgress.value = 0
+    refractionRecoveryElapsed.value = 0
+    return
+  }
+  stopRefractionRecovery()
+})
+
 watch(() => props.autoDetect, (newVal) => {
   teardownAutoDetect()
-  if (newVal) setupAutoDetect()
+  if (newVal) {
+    setupAutoDetect()
+  }
 })
 
 onMounted(() => {

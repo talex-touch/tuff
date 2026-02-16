@@ -62,7 +62,7 @@ const open = ref(false)
 | `closeOnSelect` | `boolean` | `true` | 选择后自动关闭 |
 | `minWidth` | `number` | `220` | 最小宽度 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `8` | 面板 padding（TxCard padding） |

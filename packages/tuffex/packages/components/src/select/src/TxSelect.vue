@@ -1,10 +1,9 @@
 <script lang="ts" setup>
-import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import TxCard from '../../card/src/TxCard.vue'
+import type { TxSelectProps } from './types'
+import { computed, nextTick, provide, ref, watch } from 'vue'
 import TuffInput from '../../input/src/TxInput.vue'
+import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import { SELECT_KEY } from './types'
 
 defineOptions({
@@ -12,17 +11,7 @@ defineOptions({
 })
 
 const props = withDefaults(
-  defineProps<{
-    modelValue?: string | number
-    placeholder?: string
-    disabled?: boolean
-    searchable?: boolean
-    searchPlaceholder?: string
-    editable?: boolean
-    remote?: boolean
-    dropdownMaxHeight?: number
-    dropdownOffset?: number
-  }>(),
+  defineProps<TxSelectProps>(),
   {
     modelValue: '',
     placeholder: '请选择',
@@ -33,6 +22,11 @@ const props = withDefaults(
     remote: false,
     dropdownMaxHeight: 280,
     dropdownOffset: 6,
+    panelVariant: 'solid',
+    panelBackground: 'refraction',
+    panelShadow: 'soft',
+    panelRadius: 18,
+    panelPadding: 4,
   },
 )
 
@@ -43,14 +37,13 @@ const emit = defineEmits<{
 }>()
 
 const isOpen = ref(false)
-const selectRef = ref<HTMLElement | null>(null)
 const selectedLabel = ref('')
-const zIndex = ref(getZIndex())
 
 const searchInputRef = ref<any>(null)
 const searchQuery = ref('')
 
 const triggerInputRef = ref<any>(null)
+const panelRef = ref<HTMLElement | null>(null)
 
 const isEditable = computed(() => props.editable || props.remote)
 
@@ -60,38 +53,12 @@ const triggerText = computed({
     if (!isEditable.value)
       return
     searchQuery.value = v
-    if (props.remote)
-      emit('search', v)
+    if (!isOpen.value && !props.disabled)
+      isOpen.value = true
   },
 })
 
-const dropdownRef = ref<HTMLElement | null>(null)
-const cleanupAutoUpdate = ref<(() => void) | null>(null)
-
 const optionLabelMap = ref(new Map<string | number, string>())
-
-const { floatingStyles, update } = useFloating(selectRef, dropdownRef, {
-  placement: 'bottom-start',
-  strategy: 'fixed',
-  middleware: [
-    offset(() => props.dropdownOffset),
-    flip({ padding: 8 }),
-    shift({ padding: 8 }),
-    size({
-      padding: 8,
-      apply({ rects, availableHeight, elements }) {
-        const h = Math.min(availableHeight, props.dropdownMaxHeight)
-        Object.assign(elements.floating.style, {
-          minWidth: `${rects.reference.width}px`,
-          maxWidth: `${rects.reference.width}px`,
-          height: `${h}px`,
-          maxHeight: `${h}px`,
-          overflow: 'hidden',
-        })
-      },
-    }),
-  ],
-})
 
 const currentValue = computed({
   get: () => props.modelValue,
@@ -131,33 +98,16 @@ function registerOption(value: string | number, label: string) {
   }
 }
 
-function handleClickOutside(event: MouseEvent) {
-  if (!isOpen.value)
+function openFromFocus() {
+  if (props.disabled || !isEditable.value)
     return
-
-  const target = event.target as Node | null
-  const inReference = !!selectRef.value && !!target && selectRef.value.contains(target)
-  const inFloating = !!dropdownRef.value && !!target && dropdownRef.value.contains(target)
-  if (!inReference && !inFloating)
-    close()
-}
-
-function handleEsc(event: KeyboardEvent) {
-  if (event.key !== 'Escape')
-    return
-  if (!isOpen.value)
-    return
-  close()
-}
-
-async function updatePosition() {
-  await update()
+  isOpen.value = true
 }
 
 function scrollSelectedIntoView() {
-  if (!dropdownRef.value)
+  if (!panelRef.value)
     return
-  const el = dropdownRef.value.querySelector<HTMLElement>('.tuff-select-item.is-selected')
+  const el = panelRef.value.querySelector<HTMLElement>('.tuff-select-item.is-selected')
   if (!el)
     return
 
@@ -182,25 +132,21 @@ defineExpose({
   clear,
 })
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-  document.addEventListener('keydown', handleEsc)
-})
-
-onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside)
-  document.removeEventListener('keydown', handleEsc)
-  cleanupAutoUpdate.value?.()
-  cleanupAutoUpdate.value = null
-})
-
 watch(
   () => props.modelValue,
   (val) => {
-    currentValue.value = val as any
     const label = optionLabelMap.value.get(val as any)
-    if (label)
+    if (label) {
       selectedLabel.value = label
+      if (isEditable.value && !isOpen.value)
+        searchQuery.value = label
+      return
+    }
+    if (val === '' || val == null) {
+      selectedLabel.value = ''
+      if (isEditable.value && !isOpen.value)
+        searchQuery.value = ''
+    }
   },
   { immediate: true },
 )
@@ -209,22 +155,11 @@ watch(
   isOpen,
   async (open) => {
     if (!open) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = null
       if (isEditable.value)
         searchQuery.value = selectedLabel.value
       else
         searchQuery.value = ''
       return
-    }
-
-    zIndex.value = nextZIndex()
-    await nextTick()
-    await updatePosition()
-
-    if (selectRef.value && dropdownRef.value) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(selectRef.value, dropdownRef.value, () => updatePosition())
     }
 
     if (props.searchable)
@@ -239,6 +174,14 @@ watch(
 )
 
 watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled)
+      isOpen.value = false
+  },
+)
+
+watch(
   searchQuery,
   (v) => {
     if (props.remote && isOpen.value)
@@ -250,7 +193,6 @@ watch(
 
 <template>
   <div
-    ref="selectRef"
     class="tuff-select" :class="[
       {
         'is-open': isOpen,
@@ -258,47 +200,63 @@ watch(
       },
     ]"
   >
-    <div class="tuff-select__trigger" @click="!isEditable && toggle()">
-      <TuffInput
-        ref="triggerInputRef"
-        v-model="triggerText"
-        :placeholder="placeholder"
-        :readonly="!isEditable"
-        :disabled="disabled"
-        @focus="!disabled && isEditable && (isOpen = true)"
-      >
-        <template #suffix>
-          <span class="tuff-select__arrow">
-            <svg viewBox="0 0 24 24" width="16" height="16">
-              <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
-            </svg>
-          </span>
-        </template>
-      </TuffInput>
-    </div>
+    <TxPopover
+      v-model="isOpen"
+      :disabled="disabled"
+      placement="bottom-start"
+      :offset="dropdownOffset"
+      :width="0"
+      :max-width="9999"
+      :reference-full-width="true"
+      :show-arrow="false"
+      trigger="click"
+      :toggle-on-reference-click="!isEditable"
+      :panel-variant="panelVariant"
+      :panel-background="panelBackground"
+      :panel-shadow="panelShadow"
+      :panel-radius="panelRadius"
+      :panel-padding="panelPadding"
+      :panel-card="panelCard"
+    >
+      <template #reference>
+        <div class="tuff-select__trigger">
+          <TuffInput
+            ref="triggerInputRef"
+            v-model="triggerText"
+            :placeholder="placeholder"
+            :readonly="!isEditable"
+            :disabled="disabled"
+            @focus="openFromFocus"
+          >
+            <template #suffix>
+              <span class="tuff-select__arrow">
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                  <path fill="currentColor" d="M12 15.0006L7.75732 10.758L9.17154 9.34375L12 12.1722L14.8284 9.34375L16.2426 10.758L12 15.0006Z" />
+                </svg>
+              </span>
+            </template>
+          </TuffInput>
+        </div>
+      </template>
 
-    <Teleport to="body">
       <div
-        v-show="isOpen"
-        ref="dropdownRef"
-        class="tuff-select__dropdown"
-        :style="[floatingStyles, { zIndex }]"
+        ref="panelRef"
+        class="tuff-select__panel"
+        :style="{ maxHeight: `${dropdownMaxHeight}px` }"
       >
-        <TxCard class="tuff-select__panel" variant="solid" background="glass" shadow="soft" :radius="18" :padding="4">
-          <div v-if="searchable && !isEditable" class="tuff-select__search">
-            <TxSearchInput
-              ref="searchInputRef"
-              v-model="searchQuery"
-              :placeholder="searchPlaceholder"
-            />
-          </div>
+        <div v-if="searchable && !isEditable" class="tuff-select__search">
+          <TxSearchInput
+            ref="searchInputRef"
+            v-model="searchQuery"
+            :placeholder="searchPlaceholder"
+          />
+        </div>
 
-          <div class="tuff-select__list">
-            <slot />
-          </div>
-        </TxCard>
+        <div class="tuff-select__list">
+          <slot />
+        </div>
       </div>
-    </Teleport>
+    </TxPopover>
   </div>
 </template>
 
@@ -318,16 +276,6 @@ watch(
     align-items: center;
     color: var(--tx-text-color-secondary, #909399);
     transition: transform 0.3s;
-  }
-
-  &__dropdown {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding: 0;
-    background: transparent;
-    border: none;
   }
 
   &__panel {
