@@ -43,6 +43,9 @@
   --tx-bg-color: #ffffff;
   --tx-bg-color-page: #f2f3f5;
   --tx-bg-color-overlay: #ffffff;
+  --tx-surface-refraction-mask-color: #ffffff;
+  --tx-surface-refraction-mask-rgb: 255 255 255;
+  --tx-surface-refraction-mask-blend-mode: screen;
 
   // Box Shadow
   --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.04),
@@ -114,6 +117,9 @@
   --tx-bg-color: #141414;
   --tx-bg-color-page: #0a0a0a;
   --tx-bg-color-overlay: #1d1e1f;
+  --tx-surface-refraction-mask-color: #000000;
+  --tx-surface-refraction-mask-rgb: 0 0 0;
+  --tx-surface-refraction-mask-blend-mode: multiply;
 
   --tx-box-shadow: 0px 12px 32px 4px rgba(0, 0, 0, 0.36),
     0px 8px 20px rgba(0, 0, 0, 0.72);

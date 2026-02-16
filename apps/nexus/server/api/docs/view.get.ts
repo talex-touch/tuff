@@ -1,9 +1,10 @@
 import { readCloudflareBindings } from '../../utils/cloudflare'
-import { ensureDocAnalyticsSchema, normalizeDocPath } from '../../utils/docAnalyticsStore'
+import { ensureDocAnalyticsSchema, isAllowedDocPathForSource, normalizeDocPath, normalizeDocSourceType } from '../../utils/docAnalyticsStore'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const docPath = query.path as string | undefined
+  const sourceType = normalizeDocSourceType(query.source)
 
   if (!docPath || typeof docPath !== 'string') {
     throw createError({
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const normalizedPath = normalizeDocPath(docPath)
-  if (!normalizedPath.startsWith('docs/')) {
+  if (!isAllowedDocPathForSource(normalizedPath, sourceType)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Invalid doc path',

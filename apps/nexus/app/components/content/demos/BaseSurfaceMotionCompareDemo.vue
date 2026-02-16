@@ -98,8 +98,9 @@ glass (raw)
             :blur="12"
             :saturation="1.8"
             :moving="animating"
+            auto-detect
             fallback-mode="mask"
-            :opacity="0.6"
+            :fallback-mask-opacity="0.3"
             :settle-delay="200"
             :radius="14"
             class="sf-cmp__surface-card"

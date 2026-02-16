@@ -54,10 +54,26 @@ rows:
     type: 'string'
     default: '-'
     description: 'Tooltip text'
+  - name: trigger
+    type: "'hover' | 'click' | 'focus'"
+    default: "'hover'"
+    description: 'Trigger mode'
   - name: placement
     type: 'string'
     default: 'top'
     description: 'Placement'
+  - name: indicator
+    type: 'boolean'
+    default: 'false'
+    description: 'Enable indicator dot'
+  - name: indicator-placement
+    type: "'panel' | 'reference'"
+    default: "'panel'"
+    description: 'Render indicator on panel or trigger'
+  - name: indicator-variant
+    type: "'dot' | 'pulse'"
+    default: "'dot'"
+    description: 'Indicator visual style'
   - name: open-delay
     type: 'number'
     default: '120'
@@ -72,6 +88,7 @@ rows:
 ## Design Notes
 - Keep text short, avoid multiline.  
 - Maintain light spacing from the trigger element.
+- Tooltip now defaults to a background-free lightweight wrapper.
 
 ## Composite Patterns
 
@@ -85,6 +102,25 @@ code: |
   <template>
     <TxTooltip content="Share">
       <TxButton icon="i-ri-share-line" circle />
+    </TxTooltip>
+  </template>
+---
+::
+
+### Indicator
+
+Show a notification marker either on the tooltip panel or directly on the trigger.
+
+::TuffDemoWrapper{demo="TooltipIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip content="Panel indicator" indicator indicator-variant="pulse" indicator-placement="panel">
+      <TxButton variant="ghost">View notice</TxButton>
+    </TxTooltip>
+
+    <TxTooltip content="Reference indicator" indicator indicator-placement="reference" indicator-color="#f56c6c">
+      <TxButton variant="ghost">System status</TxButton>
     </TxTooltip>
   </template>
 ---

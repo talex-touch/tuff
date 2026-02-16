@@ -25,6 +25,17 @@ import scrollPullDownUpSource from '~/components/content/demos/ScrollPullDownUpD
 - **Native Mode**
   - Uses native browser scrolling
   - `direction` maps to `overflow-x/y` to keep structure consistent
+  - macOS Safari uses native scrolling directly
+  - Automatically falls back to native scrolling on macOS + Chromium `145+` (Chromium already supports it natively)
+  - Set `unified=true` to force BetterScroll takeover across environments
+
+## Runtime Strategy (Priority)
+
+1. `native=true`: always use native scrolling (highest priority).
+2. `unified=true`: always let BetterScroll take over (consistent cross-environment behavior).
+3. Running on macOS Safari: use native scrolling directly.
+4. `nativeAutoFallback=true` and `macOS + Chromium >= 145`: auto switch to native scrolling.
+5. Otherwise: use BetterScroll.
 
 ## Basic Usage
 
@@ -93,11 +104,13 @@ code: |
 ---
 :::
 
-## Scroll Chaining
+## Scroll Chaining (Advanced)
 
 By default inner scrolling does not propagate to the outer container (even at edges). Enable `scrollChaining` if you want scroll to bubble at the top/bottom.
 
-### Scroll (scroll chaining)
+> ⚠️ We do not recommend enabling `scrollChaining` by default. In nested scrolling layouts, it can make users unsure which layer is actually scrolling. Enable it only when parent-child scroll handoff is explicitly required.
+
+### Scroll (scroll chaining, advanced)
 :::TuffDemoWrapper{demo="ScrollScrollScrollChainingDemo" code-lang="vue"}
 ---
 code: |
@@ -175,6 +188,10 @@ code: |
 
 ## Pull-to-Refresh and Load More
 
+- Pull-to-refresh: enable `pullDownRefresh`, listen to `@pulling-down`, then call `finishPullDown()` when done.
+- Load more: enable `pullUpLoad`, listen to `@pulling-up`, then call `finishPullUp()` when done.
+- In `native=true` or auto-native fallback mode, events are degraded triggers; `pullDownStop` only works in BetterScroll mode.
+
 ### Scroll (pull down + pull up)
 :::TuffDemoWrapper{demo="ScrollScrollPullDownPullUpDemo" code-lang="vue"}
 ---
@@ -244,8 +261,10 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|------|
 | `native` | `boolean` | `false` | Description for native. |
+| `unified` | `boolean` | `false` | Force BetterScroll takeover for consistent cross-environment behavior (overrides Safari/Chromium auto-native; `native=true` still wins). |
+| `nativeAutoFallback` | `boolean` | `true` | Controls auto-native fallback on macOS + Chromium `145+`; does not affect the macOS Safari native-first rule. |
 | `noPadding` | `boolean` | `false` | Description for noPadding. |
-| `scrollChaining` | `boolean` | `false` | Description for scrollChaining. |
+| `scrollChaining` | `boolean` | `false` | Allow parent scroll handoff at boundaries; not recommended by default, enable only when nested handoff is explicitly needed. |
 | `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | TextDirection |
 | `scrollbar` | `boolean` | `true` | Description for scrollbar. |
 | `scrollbarFade` | `boolean` | `true` | Description for scrollbarFade. |

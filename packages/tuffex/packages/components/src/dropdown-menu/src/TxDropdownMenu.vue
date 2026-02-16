@@ -13,7 +13,7 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
 
   minWidth: 220,
   panelVariant: 'solid',
-  panelBackground: 'glass',
+  panelBackground: 'refraction',
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 8,

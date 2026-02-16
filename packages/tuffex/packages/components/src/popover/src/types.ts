@@ -25,11 +25,13 @@ export interface PopoverProps {
   showArrow?: boolean
   arrowSize?: number
 
-  motion?: 'fade' | 'split'
-  fusion?: boolean
+  trigger?: 'click' | 'hover'
+  openDelay?: number
+  closeDelay?: number
+  keepAliveContent?: boolean
 
   panelVariant?: 'solid' | 'dashed' | 'plain'
-  panelBackground?: 'blur' | 'glass' | 'mask'
+  panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
   panelShadow?: 'none' | 'soft' | 'medium'
   panelRadius?: number
   panelPadding?: number

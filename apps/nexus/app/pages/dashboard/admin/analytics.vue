@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import GeoLeafletMap from '~/components/dashboard/GeoLeafletMap.client.vue'
+import type { DocAnalyticsResponse } from '~/types/docs-engagement'
 
 definePageMeta({
   pageTransition: {
@@ -12,6 +13,7 @@ defineI18nRoute(false)
 
 const { t, locale } = useI18n()
 const { user } = useAuthUser()
+const route = useRoute()
 
 // Admin check - redirect if not admin
 const isAdmin = computed(() => {
@@ -145,7 +147,12 @@ const selectedGeoCountry = ref<string | null>(null)
 const messages = ref<TelemetryMessage[]>([])
 const messagesLoading = ref(false)
 const messagesError = ref<string | null>(null)
-const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'geo' | 'messages'>('overview')
+const docsAnalytics = ref<DocAnalyticsResponse | null>(null)
+const docsLoading = ref(false)
+const docsError = ref<string | null>(null)
+const docsPath = ref('')
+const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
+const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'docs' | 'geo' | 'messages'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
@@ -210,6 +217,28 @@ const geoMapPoints = computed<GeoMapPoint[]>(() => {
 const geoCountries = computed(() => geoAnalytics.value?.countries ?? [])
 const geoSubdivisions = computed(() => geoAnalytics.value?.subdivisions ?? [])
 const geoTopIps = computed(() => geoAnalytics.value?.topIps.slice(0, 12) ?? [])
+const docsSummaryRows = computed(() => docsAnalytics.value?.docs ?? [])
+const docsDetail = computed(() => docsAnalytics.value?.detail ?? null)
+const docsHeatmapBySection = computed(() => {
+  const bucket = new Map<string, Array<{ bucket: number, activeMs: number, sourceType: string }>>()
+  for (const item of docsDetail.value?.heatmap ?? []) {
+    const key = item.sectionId || 'root'
+    const list = bucket.get(key) ?? []
+    list.push({
+      bucket: item.bucket,
+      activeMs: item.activeMs,
+      sourceType: item.sourceType,
+    })
+    bucket.set(key, list)
+  }
+  for (const [key, list] of bucket.entries())
+    bucket.set(key, list.sort((a, b) => a.bucket - b.bucket))
+  return bucket
+})
+const maxHeatValue = computed(() => {
+  const values = docsDetail.value?.heatmap.map(item => item.activeMs) ?? []
+  return values.length ? Math.max(...values, 1) : 1
+})
 
 function resolveCountryLabel(countryCode: string | null): string {
   if (!countryCode || countryCode === 'Unknown') {
@@ -258,6 +287,28 @@ async function fetchGeoAnalytics() {
   }
 }
 
+async function fetchDocsAnalytics() {
+  docsLoading.value = true
+  docsError.value = null
+  try {
+    const data = await $fetch<DocAnalyticsResponse>('/api/admin/analytics/docs', {
+      query: {
+        days: selectedDays.value,
+        path: docsPath.value.trim() || undefined,
+        source: docsSource.value !== 'all' ? docsSource.value : undefined,
+      },
+    })
+    docsAnalytics.value = data
+  }
+  catch (e: any) {
+    docsError.value = e.data?.message || e.message || 'Failed to load docs analytics'
+    docsAnalytics.value = null
+  }
+  finally {
+    docsLoading.value = false
+  }
+}
+
 async function fetchMessages() {
   messagesLoading.value = true
   messagesError.value = null
@@ -275,18 +326,51 @@ async function fetchMessages() {
 }
 
 onMounted(() => {
+  const initialSection = typeof route.query.section === 'string' ? route.query.section : ''
+  if (initialSection === 'docs')
+    activeSection.value = 'docs'
+
+  const initialPath = typeof route.query.path === 'string' ? route.query.path.trim() : ''
+  if (initialPath)
+    docsPath.value = initialPath.toLowerCase()
+
+  const initialSource = typeof route.query.source === 'string' ? route.query.source : ''
+  if (initialSource === 'docs_page' || initialSource === 'doc_comments_admin')
+    docsSource.value = initialSource
+
   fetchAnalytics()
   fetchGeoAnalytics()
+  fetchDocsAnalytics()
   fetchMessages()
 })
 
 watch(selectedDays, () => {
   fetchAnalytics()
   fetchGeoAnalytics()
+  fetchDocsAnalytics()
 })
 
 watch(selectedGeoCountry, () => {
   fetchGeoAnalytics()
+})
+
+let docsQueryTimer: ReturnType<typeof setTimeout> | null = null
+watch([docsPath, docsSource], () => {
+  if (docsQueryTimer)
+    clearTimeout(docsQueryTimer)
+  docsQueryTimer = setTimeout(() => {
+    fetchDocsAnalytics()
+  }, 240)
+})
+
+watch(activeSection, (section) => {
+  if (section === 'docs' && !docsAnalytics.value && !docsLoading.value)
+    fetchDocsAnalytics()
+})
+
+onBeforeUnmount(() => {
+  if (docsQueryTimer)
+    clearTimeout(docsQueryTimer)
 })
 
 function formatNumber(num: number): string {
@@ -335,10 +419,26 @@ function resetGeoDrilldown() {
   selectedGeoCountry.value = null
 }
 
-function handleMapPointClick(point: GeoMapPoint) {
+function handleMapPointClick(point: { id: string }) {
   if (!selectedGeoCountry.value) {
     drilldownCountry(point.id)
   }
+}
+
+function formatDuration(ms: number) {
+  if (!ms)
+    return '0s'
+  const totalSeconds = Math.floor(ms / 1000)
+  if (totalSeconds < 60)
+    return `${totalSeconds}s`
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}m ${seconds}s`
+}
+
+function openDocAnalyticsPath(path: string) {
+  docsPath.value = path
+  activeSection.value = 'docs'
 }
 
 const deviceColors: Record<string, string> = {
@@ -444,6 +544,9 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'usage'">
           Usage
+        </TxButton>
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'docs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'docs'">
+          Docs
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'geo' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'geo'">
           Geo
@@ -816,6 +919,203 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-if="activeSection === 'docs'" class="space-y-4">
+        <div class="grid gap-4 lg:grid-cols-4">
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Docs
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(docsAnalytics?.overview.docCount || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Views
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber(docsAnalytics?.overview.totalViews || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Active Read Time
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatDuration(docsAnalytics?.overview.totalActiveMs || 0) }}
+            </p>
+          </div>
+          <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+            <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+              Copy / Select
+            </h3>
+            <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+              {{ formatNumber((docsAnalytics?.overview.totalCopyCount || 0) + (docsAnalytics?.overview.totalSelectCount || 0)) }}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+          <input
+            v-model="docsPath"
+            type="text"
+            placeholder="Filter path (e.g. docs/dev/components/button)"
+            class="h-8 w-72 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
+          >
+          <select
+            v-model="docsSource"
+            class="h-8 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
+          >
+            <option value="all">
+              All sources
+            </option>
+            <option value="docs_page">
+              Docs page
+            </option>
+            <option value="doc_comments_admin">
+              Doc comments admin
+            </option>
+          </select>
+          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70" @click="fetchDocsAnalytics">
+            Refresh
+          </TxButton>
+          <TxButton
+            v-if="docsPath"
+            variant="bare"
+            size="small"
+            native-type="button"
+            class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/70"
+            @click="docsPath = ''"
+          >
+            Clear
+          </TxButton>
+        </div>
+
+        <div v-if="docsLoading" class="flex items-center gap-2 rounded-2xl bg-black/[0.02] p-4 text-sm text-black/45 dark:bg-white/[0.03] dark:text-white/50">
+          <TxSpinner :size="16" />
+          Loading docs analytics...
+        </div>
+        <div v-else-if="docsError" class="rounded-2xl bg-red-500/10 p-4 text-sm text-red-600 dark:text-red-300">
+          {{ docsError }}
+        </div>
+        <template v-else-if="docsAnalytics">
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                Docs summary
+              </h3>
+              <div v-if="docsSummaryRows.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No docs data in current range.
+              </div>
+              <div v-else class="space-y-2">
+                <button
+                  v-for="item in docsSummaryRows"
+                  :key="item.path"
+                  type="button"
+                  class="w-full flex items-center justify-between rounded-xl bg-black/[0.04] px-3 py-2 text-left text-sm transition hover:bg-black/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.09]"
+                  @click="openDocAnalyticsPath(item.path)"
+                >
+                  <div class="min-w-0">
+                    <p class="truncate text-black/75 dark:text-white/75">
+                      {{ item.path }}
+                    </p>
+                    <p class="truncate text-xs text-black/45 dark:text-white/50">
+                      {{ item.title || 'Untitled' }}
+                    </p>
+                  </div>
+                  <div class="text-right text-xs text-black/45 dark:text-white/50">
+                    <p>{{ formatNumber(item.views) }} views</p>
+                    <p>{{ formatDuration(item.activeMs) }}</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                Action evidence
+              </h3>
+              <div v-if="!docsDetail || docsDetail.evidence.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No action evidence in current range.
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="item in docsDetail.evidence.slice(0, 12)"
+                  :key="`${item.sourceType}:${item.actionType}:${item.textHash}:${item.sectionId}:${item.anchorBucket}`"
+                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-xs dark:bg-white/[0.05]"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="text-black/75 dark:text-white/75">{{ item.actionType }} · {{ item.actionSource }}</span>
+                    <span class="text-black/45 dark:text-white/50">{{ formatNumber(item.count) }}</span>
+                  </div>
+                  <p class="mt-1 truncate text-black/45 dark:text-white/50">
+                    {{ item.sectionId }} · bucket {{ item.anchorBucket }} · {{ item.sourceType }}
+                  </p>
+                  <p v-if="item.textHash" class="mt-1 truncate text-black/40 dark:text-white/45">
+                    {{ item.textHash }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="docsDetail" class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                Sections · {{ docsDetail.path }}
+              </h3>
+              <div v-if="docsDetail.sections.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No section heat data.
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="section in docsDetail.sections.slice(0, 20)"
+                  :key="section.sectionId"
+                  class="rounded-xl bg-black/[0.04] px-3 py-2 text-sm dark:bg-white/[0.05]"
+                >
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="truncate text-black/75 dark:text-white/75">{{ section.sectionId }}</span>
+                    <span class="text-xs text-black/45 dark:text-white/50">{{ formatDuration(section.activeMs) }}</span>
+                  </div>
+                  <p class="truncate text-xs text-black/45 dark:text-white/50">
+                    {{ section.sectionTitle || '-' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <h3 class="mb-3 font-semibold text-black dark:text-white">
+                Heat buckets (0-19)
+              </h3>
+              <div v-if="!docsDetail || docsDetail.heatmap.length === 0" class="text-sm text-black/45 dark:text-white/50">
+                No heat buckets yet.
+              </div>
+              <div v-else class="space-y-3">
+                <div
+                  v-for="section in docsDetail.sections.slice(0, 8)"
+                  :key="`heat-${section.sectionId}`"
+                  class="rounded-xl bg-black/[0.04] px-3 py-3 text-xs dark:bg-white/[0.05]"
+                >
+                  <p class="mb-2 truncate text-black/70 dark:text-white/70">
+                    {{ section.sectionId }}
+                  </p>
+                  <div class="flex items-end gap-1">
+                    <div
+                      v-for="bucket in docsHeatmapBySection.get(section.sectionId) || []"
+                      :key="`${section.sectionId}:${bucket.bucket}:${bucket.sourceType}`"
+                      class="h-14 w-2 rounded bg-emerald-500/60"
+                      :style="{ height: `${Math.max(8, (bucket.activeMs / maxHeatValue) * 56)}px` }"
+                      :title="`bucket ${bucket.bucket} · ${bucket.sourceType} · ${bucket.activeMs}ms`"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- Geo Analytics -->

@@ -1,6 +1,6 @@
 ---
 title: "BaseSurface 基础表面层"
-description: "统一管理背景渲染策略的基础组件，支持纯色、遮罩、模糊、毛玻璃四种模式，并通过运动降级机制解决 backdrop-filter + transform 失效问题。"
+description: "统一管理背景渲染策略的基础组件，支持 pure/mask/blur/glass/refraction 五种模式，并通过运动降级机制解决 backdrop-filter + transform 失效问题。"
 category: Layout
 status: beta
 since: 2.5.0
@@ -9,13 +9,19 @@ syncStatus: migrated
 ---
 # BaseSurface 基础表面层
 
-统一管理背景渲染策略的基础组件 — 支持 `pure`（纯色）、`mask`（透明遮罩）、`blur`（背景模糊）、`glass`（毛玻璃）四种模式，并通过运动降级机制自动解决 Chromium 已知的 `backdrop-filter` + `transform` 失效 bug。
+统一管理背景渲染策略的基础组件 — 支持 `pure`（纯色）、`mask`（透明遮罩）、`blur`（filter）、`glass`（glass）、`refraction`（glass+filter）五种模式，并通过运动降级机制自动解决 Chromium 已知的 `backdrop-filter` + `transform` 失效 bug。
 
 支持 `fake` 伪元素模式渲染（与现有 `.fake-background` 一致），暗色模式通过 CSS 变量体系自动切换。
 
+## 与 TxCard 的关系
+
+- 需要业务层开箱即用（header/footer/loading/inertial/交互态）时，用 `TxCard`。
+- 需要底层材质调参（filter/refraction/glass 参数矩阵）时，用 `TxBaseSurface`。
+- 推荐做法：`TxCard` 负责容器语义与交互，`TxBaseSurface` 负责材质渲染。
+
 ## 背景模式
 
-四种模式对比：`pure` 纯色、`mask` 带透明度遮罩、`blur` 背景模糊、`glass` 完整毛玻璃。
+五种模式对比：`pure` 纯色、`mask` 带透明度遮罩、`blur` 背景模糊、`glass` 玻璃层、`refraction` 折射层。
 
 ### 模式对比
 :::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
@@ -36,6 +42,50 @@ code: |
         毛玻璃
       </TxBaseSurface>
     </div>
+  </template>
+---
+:::
+
+## 底层参数实验（Advanced）
+
+用于材质层调参的低层实验台，适合探索 `filter` / `refraction` 的参数组合；若是业务卡片场景，仍建议优先使用 `TxCard`。
+
+### Advanced Lab
+:::TuffDemoWrapper{demo="BaseSurfaceAdvancedDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+  
+  const mode = ref<'blur' | 'glass' | 'refraction'>('refraction')
+  const profile = ref<'soft' | 'filmic' | 'cinematic'>('filmic')
+  const blur = ref(24)
+  const filterSaturation = ref(1.6)
+  const filterContrast = ref(1.05)
+  const filterBrightness = ref(1.02)
+  
+  const refractionStrength = ref(68)
+  const refractionAngle = ref(-24)
+  const refractionHaloOpacity = ref(0.42)
+  </script>
+  
+  <template>
+    <TxBaseSurface
+      :mode="mode"
+      preset="card"
+      :radius="18"
+      :blur="blur"
+      :filter-saturation="filterSaturation"
+      :filter-contrast="filterContrast"
+      :filter-brightness="filterBrightness"
+      :refraction-profile="profile"
+      :refraction-strength="refractionStrength"
+      :refraction-angle="refractionAngle"
+      :refraction-halo-opacity="refractionHaloOpacity"
+      style="min-height: 180px; padding: 16px;"
+    >
+      BaseSurface Advanced
+    </TxBaseSurface>
   </template>
 ---
 :::
@@ -135,21 +185,41 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass'` | `'pure'` | 背景模式 |
-| `radius` | `string \| number` | - | 自定义圆角，不传则 inherit 父元素 |
-| `color` | `string` | - | 背景色，默认使用 `--tx-fill-color-lighter` |
-| `opacity` | `number` | `0.75` | mask 模式下的透明度 (0-1) |
-| `blur` | `number` | `10` | blur/glass 模式下的模糊强度 (px) |
-| `saturation` | `number` | `1.8` | glass 模式下的饱和度 |
-| `brightness` | `number` | `1.1` | glass 模式下的亮度 |
-| `moving` | `boolean` | `false` | 是否正在运动（手动控制降级） |
-| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | 运动降级的目标模式 |
-| `settleDelay` | `number` | `150` | 运动结束后恢复延迟 (ms) |
-| `autoDetect` | `boolean` | `false` | 是否启用自动 transform 检测降级 |
-| `transitionDuration` | `number` | `260` | 过渡时长 (ms) |
-| `fake` | `boolean` | `false` | 是否使用伪元素模式渲染背景 |
-| `fakeIndex` | `number` | `0` | fake 模式下伪元素的 z-index |
-| `tag` | `string` | `'div'` | 根元素标签名 |
+| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'pure'` | 背景模式（对应纯色 / 遮罩 / 滤镜 / 玻璃 / 折射）。 |
+| `radius` | `string \| number` | - | 自定义圆角，不传则继承父元素。 |
+| `color` | `string` | - | 纯色或遮罩底色。 |
+| `opacity` | `number` | `0.75` | `mask` 模式透明度（0-1）。 |
+| `fallbackMaskOpacity` | `number` | - | 降级到 `mask` 时覆盖透明度（0-1）。 |
+| `blur` | `number` | `10` | filter 层模糊强度（px）。 |
+| `filterSaturation` | `number` | `1.5` | filter 层饱和度（底层细调）。 |
+| `filterContrast` | `number` | `1` | filter 层对比度（底层细调）。 |
+| `filterBrightness` | `number` | `1` | filter 层亮度（底层细调）。 |
+| `saturation` | `number` | `1.8` | glass/refraction 的玻璃层饱和度。 |
+| `brightness` | `number` | `70` | glass/refraction 的玻璃层亮度。 |
+| `backgroundOpacity` | `number` | `0` | glass 层背景透明度。 |
+| `borderWidth` | `number` | `0.07` | glass 层边缘宽度系数。 |
+| `displace` | `number` | `0.5` | refraction 位移强度。 |
+| `distortionScale` | `number` | `-180` | refraction 扭曲缩放。 |
+| `redOffset` / `greenOffset` / `blueOffset` | `number` | `0 / 10 / 20` | RGB 通道偏移（底层色散控制）。 |
+| `xChannel` / `yChannel` | `'R' \| 'G' \| 'B'` | `'R' / 'G'` | refraction 位移取样通道。 |
+| `mixBlendMode` | `string` | `'difference'` | refraction 混合模式。 |
+| `refractionStrength` | `number` | - | 0-100，统一控制折射强度。 |
+| `refractionProfile` | `'soft' \| 'filmic' \| 'cinematic'` | - | 折射风格预设。 |
+| `refractionTone` | `'mist' \| 'balanced' \| 'vivid'` | `'balanced'` | 折射色调预设（`vivid` 更通透，`mist` 更柔和）。 |
+| `refractionAngle` | `number` | - | 色散主方向角度（度）。 |
+| `refractionLightX` / `refractionLightY` | `number` | - | 光源锚点（0-1）。 |
+| `refractionHaloOpacity` | `number` | - | halo 透明度（0-1），不传时用内置 filmic 模型。 |
+| `overlayOpacity` | `number` | `0` | 非 mask 模式下附加 mask 层透明度。 |
+| `preset` | `'default' \| 'card'` | `'default'` | 视觉预设（card 为卡片风格调校）。 |
+| `refractionRenderer` | `'svg' \| 'css'` | `'svg'` | refraction 渲染器类型。 |
+| `moving` | `boolean` | `false` | 手动标记是否处于运动中。 |
+| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | 运动降级模式。 |
+| `settleDelay` | `number` | `150` | 结束运动后恢复延迟（ms）。 |
+| `autoDetect` | `boolean` | `false` | 自动检测 transform 触发降级。 |
+| `transitionDuration` | `number` | `260` | 过渡时长（ms）。 |
+| `fake` | `boolean` | `false` | 是否使用 fake 伪元素渲染。 |
+| `fakeIndex` | `number` | `0` | fake 层 z-index。 |
+| `tag` | `string` | `'div'` | 根元素标签名。 |
 
 ### Slots
 

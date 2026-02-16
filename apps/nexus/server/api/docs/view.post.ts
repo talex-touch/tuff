@@ -1,4 +1,4 @@
-import { setCookie } from 'h3'
+import { getHeader, setCookie } from 'h3'
 import { resolveRequestIp } from '../../utils/ipSecurityStore'
 import {
   createDocChallenge,
@@ -8,7 +8,9 @@ import {
   expirePendingSessions,
   getDocSecurityState,
   incrementDocView,
+  isAllowedDocPathForSource,
   normalizeDocPath,
+  normalizeDocSourceType,
   recordDocViolation,
 } from '../../utils/docAnalyticsStore'
 import { readCloudflareBindings } from '../../utils/cloudflare'
@@ -16,11 +18,16 @@ import { readCloudflareBindings } from '../../utils/cloudflare'
 const SESSION_TTL_MS = 10 * 60_000
 const CHALLENGE_TTL_MS = 10 * 60_000
 const CHALLENGE_COOKIE = 'nexus_doc_challenge'
+const EXPIRED_SESSION_VIOLATION_WEIGHT_CAP = 2
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ path: string, clientId?: string, title?: string }>(event)
+  const body = await readBody<{ path: string, clientId?: string, title?: string, source?: string }>(event)
   const docPath = body?.path
-  const clientId = body?.clientId
+  const sourceType = normalizeDocSourceType(body?.source)
+  const headerDeviceId = getHeader(event, 'x-device-id')
+  const clientId = typeof body?.clientId === 'string' && body.clientId.trim()
+    ? body.clientId.trim()
+    : (typeof headerDeviceId === 'string' ? headerDeviceId.trim() : '')
   const title = typeof body?.title === 'string' ? body.title : ''
 
   if (!docPath || typeof docPath !== 'string') {
@@ -38,7 +45,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const normalizedPath = normalizeDocPath(docPath)
-  if (!normalizedPath.startsWith('docs/')) {
+  if (!isAllowedDocPathForSource(normalizedPath, sourceType)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Invalid doc path',
@@ -54,6 +61,7 @@ export default defineEventHandler(async (event) => {
       riskLevel: 0,
       sessionId: null,
       token: null,
+      challenge: null,
     }
   }
 
@@ -62,6 +70,7 @@ export default defineEventHandler(async (event) => {
 
   const ip = resolveRequestIp(event) || ''
 
+  // TODO-SEC-1: 接入全局风险引擎后，替换当前 docs 独立风险状态读取逻辑。
   if (ip) {
     const security = await getDocSecurityState(db, ip, clientId)
     if (security?.blockedUntil && security.blockedUntil > Date.now()) {
@@ -74,7 +83,11 @@ export default defineEventHandler(async (event) => {
       now: Date.now(),
     })
     if (expiredCount > 0) {
-      const updated = await recordDocViolation(db, { ip, clientId, weight: expiredCount })
+      const updated = await recordDocViolation(db, {
+        ip,
+        clientId,
+        weight: Math.min(expiredCount, EXPIRED_SESSION_VIOLATION_WEIGHT_CAP),
+      })
       if (updated.blockedUntil && updated.blockedUntil > Date.now()) {
         throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
       }
@@ -91,6 +104,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await createDocEngagementSession(db, {
     path: normalizedPath,
+    sourceType,
     clientId,
     ip: ip || null,
     riskLevel,
@@ -101,6 +115,7 @@ export default defineEventHandler(async (event) => {
     sid: session.sessionId,
     path: session.path,
     cid: session.clientId,
+    src: session.sourceType,
     rl: session.riskLevel,
   })
 

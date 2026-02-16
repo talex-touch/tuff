@@ -14,6 +14,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
+const { deviceId } = useDeviceIdentity()
 
 const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -54,6 +55,15 @@ const pathFilter = ref('')
 
 const hasMore = computed(() => comments.value.length < total.value)
 const actionsLocked = computed(() => loading.value || actionPendingId.value !== null)
+const commentsTracker = useDocEngagementTracker({
+  source: 'doc_comments_admin',
+  path: () => 'admin/doc-comments',
+  title: () => 'Doc Comments',
+  clientId: () => deviceId.value || '',
+  enabled: () => isAdmin.value,
+  trackSections: false,
+  captureSelection: false,
+})
 
 async function loadComments(options: { reset?: boolean } = {}) {
   if (loading.value)
@@ -94,12 +104,24 @@ async function loadComments(options: { reset?: boolean } = {}) {
 }
 
 async function refreshComments() {
+  void commentsTracker.recordAction({
+    type: 'refresh',
+    source: 'toolbar',
+    sectionId: 'root',
+    sectionTitle: 'Doc comments',
+  })
   await loadComments({ reset: true })
 }
 
 async function loadMore() {
   if (!hasMore.value || loading.value)
     return
+  void commentsTracker.recordAction({
+    type: 'load_more',
+    source: 'list',
+    sectionId: 'root',
+    sectionTitle: 'Doc comments',
+  })
   await loadComments()
 }
 
@@ -112,6 +134,14 @@ async function handleDelete(comment: DocComment) {
   try {
     await $fetch(`/api/admin/doc-comments/${comment.id}`, { method: 'DELETE' })
     toast.success(t('dashboard.sections.docComments.deleteSuccess', 'Comment deleted.'))
+    void commentsTracker.recordAction({
+      type: 'delete',
+      source: 'moderation',
+      sectionId: 'root',
+      sectionTitle: comment.path,
+      text: comment.content,
+      textLength: comment.content.length,
+    })
     await refreshComments()
   }
   catch (err: unknown) {
@@ -134,12 +164,34 @@ function docsLink(path: string) {
   return `/docs/${path}`
 }
 
+function normalizeDocPath(path: string) {
+  return path.replace(/^\/+|\/+$/g, '').toLowerCase()
+}
+
+function docsAnalyticsLink(path?: string) {
+  const params = new URLSearchParams()
+  params.set('section', 'docs')
+  if (path)
+    params.set('path', normalizeDocPath(path))
+  return `/dashboard/admin/analytics?${params.toString()}`
+}
+
 let pathFilterTimer: ReturnType<typeof setTimeout> | null = null
 
 watch(pathFilter, () => {
   if (pathFilterTimer)
     clearTimeout(pathFilterTimer)
   pathFilterTimer = setTimeout(() => {
+    const keyword = pathFilter.value.trim()
+    if (keyword) {
+      void commentsTracker.recordAction({
+        type: 'filter',
+        source: 'toolbar',
+        sectionId: 'root',
+        sectionTitle: 'Doc comments',
+        text: keyword,
+      })
+    }
     refreshComments()
   }, 250)
 })
@@ -156,13 +208,21 @@ onMounted(() => {
 
 <template>
   <div class="mx-auto max-w-5xl space-y-6">
-    <div>
-      <h1 class="apple-heading-md">
-        {{ t('dashboard.sections.docComments.title', 'Doc Comments') }}
-      </h1>
-      <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        {{ t('dashboard.sections.docComments.subtitle', 'Moderate and manage documentation comments.') }}
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 class="apple-heading-md">
+          {{ t('dashboard.sections.docComments.title', 'Doc Comments') }}
+        </h1>
+        <p class="mt-2 text-sm text-black/50 dark:text-white/50">
+          {{ t('dashboard.sections.docComments.subtitle', 'Moderate and manage documentation comments.') }}
+        </p>
+      </div>
+      <NuxtLink
+        :to="docsAnalyticsLink()"
+        class="rounded-lg border border-black/10 bg-black/[0.02] px-3 py-1.5 text-xs text-black/70 no-underline transition hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/70 dark:hover:bg-white/[0.08]"
+      >
+        {{ t('dashboard.sections.docComments.analytics', 'View docs analytics') }}
+      </NuxtLink>
     </div>
 
     <section class="apple-card-lg p-5">
@@ -171,7 +231,7 @@ onMounted(() => {
           {{ t('dashboard.sections.docComments.listTitle', 'All comments') }}
         </h2>
         <p class="text-xs text-black/50 dark:text-white/50">
-          {{ t('dashboard.sections.docComments.totalCount', '{count} total', { count: total }) }}
+          {{ t('dashboard.sections.docComments.totalCount', { count: total }) || `${total} total` }}
         </p>
       </div>
 
@@ -182,7 +242,7 @@ onMounted(() => {
           :placeholder="t('dashboard.sections.docComments.filterPlaceholder', 'Filter by doc path…')"
           class="h-8 w-48 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition dark:border-white/10 dark:text-white focus:border-primary/50"
         >
-        <TxButton size="small" type="secondary" :disabled="loading" @click="refreshComments">
+        <TxButton size="small" type="info" :disabled="loading" @click="refreshComments">
           <TxSpinner v-if="loading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.docComments.refresh', 'Refresh') }}
@@ -237,12 +297,20 @@ onMounted(() => {
                 </span>
               </div>
             </div>
-            <NuxtLink
-              :to="docsLink(comment.path)"
-              class="text-xs text-primary no-underline hover:underline"
-            >
-              {{ comment.path }}
-            </NuxtLink>
+            <div class="flex items-center gap-3">
+              <NuxtLink
+                :to="docsLink(comment.path)"
+                class="text-xs text-primary no-underline hover:underline"
+              >
+                {{ comment.path }}
+              </NuxtLink>
+              <NuxtLink
+                :to="docsAnalyticsLink(comment.path)"
+                class="text-[11px] text-black/50 no-underline hover:text-black/80 hover:underline dark:text-white/50 dark:hover:text-white/80"
+              >
+                {{ t('dashboard.sections.docComments.analyticsPath', 'Analytics') }}
+              </NuxtLink>
+            </div>
           </div>
 
           <div class="mt-3 text-sm text-black/70 dark:text-white/70">
@@ -260,7 +328,7 @@ onMounted(() => {
       </div>
 
       <div v-if="hasMore" class="mt-5 flex justify-center">
-        <TxButton size="small" type="secondary" :loading="loading" @click="loadMore">
+        <TxButton size="small" type="info" :loading="loading" @click="loadMore">
           {{ t('dashboard.sections.docComments.loadMore', 'Load more') }}
         </TxButton>
       </div>

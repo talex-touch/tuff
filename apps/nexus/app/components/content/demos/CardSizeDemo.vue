@@ -2,32 +2,52 @@
 </script>
 
 <template>
-  <div style="display: grid; gap: 10px; width: 520px; max-width: 100%;">
+  <div class="card-size-grid">
     <TxCard size="small" variant="solid" background="glass" shadow="none" :padding="undefined">
-      <div style="font-weight: 600;">
+      <div class="card-demo-title">
         size=small
       </div>
-      <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
+      <div class="card-demo-desc">
         Padding controlled by size
       </div>
     </TxCard>
 
     <TxCard size="medium" variant="solid" background="glass" shadow="none">
-      <div style="font-weight: 600;">
+      <div class="card-demo-title">
         size=medium
       </div>
-      <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
+      <div class="card-demo-desc">
         Default
       </div>
     </TxCard>
 
     <TxCard size="large" variant="solid" background="glass" shadow="none">
-      <div style="font-weight: 600;">
+      <div class="card-demo-title">
         size=large
       </div>
-      <div style="font-size: 12px; opacity: 0.75; margin-top: 6px;">
+      <div class="card-demo-desc">
         More padding
       </div>
     </TxCard>
   </div>
 </template>
+
+<style scoped>
+.card-size-grid {
+  display: grid;
+  gap: 10px;
+  width: 520px;
+  max-width: 100%;
+}
+
+.card-demo-title {
+  font-weight: 600;
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.card-demo-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary, #909399);
+}
+</style>
