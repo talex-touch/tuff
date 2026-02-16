@@ -43,6 +43,11 @@ export interface TooltipProps {
   panelShadow?: 'none' | 'soft' | 'medium'
   panelRadius?: number
   panelPadding?: number
+  indicator?: boolean
+  indicatorPlacement?: 'panel' | 'reference'
+  indicatorVariant?: 'dot' | 'pulse'
+  indicatorSize?: number
+  indicatorColor?: string
   transition?: string
   autoResize?: boolean
   autoResizeWidth?: boolean

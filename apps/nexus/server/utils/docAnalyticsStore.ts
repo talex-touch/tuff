@@ -8,6 +8,10 @@ const DOC_SECTION_TABLE = 'doc_section_stats'
 const DOC_SECTION_DAILY_TABLE = 'doc_section_stats_daily'
 const DOC_ACTION_TABLE = 'doc_action_stats'
 const DOC_ACTION_DAILY_TABLE = 'doc_action_stats_daily'
+const DOC_HEATMAP_TABLE = 'doc_section_heatmap'
+const DOC_HEATMAP_DAILY_TABLE = 'doc_section_heatmap_daily'
+const DOC_EVIDENCE_TABLE = 'doc_action_evidence'
+const DOC_EVIDENCE_DAILY_TABLE = 'doc_action_evidence_daily'
 const DOC_SESSION_TABLE = 'doc_engagement_sessions'
 const DOC_NONCE_TABLE = 'doc_engagement_nonces'
 const DOC_CHALLENGE_TABLE = 'doc_engagement_challenges'
@@ -17,14 +21,21 @@ const BASE_BLOCK_MS = 10 * 60_000
 const MAX_BLOCK_MS = 24 * 60 * 60_000
 
 const TOKEN_TTL_SECONDS = 15 * 60
+const EVIDENCE_RETENTION_DAYS = 90
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60_000
 
 let analyticsSchemaInitialized = false
+let analyticsCleanupAt = 0
+let tokenSecretCache: string | null = null
+
+export type DocEngagementSourceType = 'docs_page' | 'doc_comments_admin'
 
 export interface DocTokenPayload {
   typ: 'doc'
   sid: string
   path: string
   cid: string
+  src: DocEngagementSourceType
   rl: number
   iat: number
   exp: number
@@ -39,6 +50,7 @@ export interface DocSecurityState {
 export interface DocEngagementSession {
   sessionId: string
   path: string
+  sourceType: DocEngagementSourceType
   clientId: string
   ip: string | null
   riskLevel: number
@@ -63,6 +75,11 @@ export interface DocEngagementSectionInput {
   title: string
   activeMs: number
   totalMs: number
+  buckets?: Array<{
+    bucket: number
+    activeMs: number
+    totalMs: number
+  }>
 }
 
 export interface DocEngagementActionInput {
@@ -71,6 +88,70 @@ export interface DocEngagementActionInput {
   sectionId: string
   sectionTitle: string
   count: number
+  textHash?: string
+  textLength?: number
+  anchorStart?: number
+  anchorEnd?: number
+  anchorBucket?: number
+}
+
+export interface DocAnalyticsSummaryItem {
+  path: string
+  title: string
+  views: number
+  sessionCount: number
+  activeMs: number
+  totalMs: number
+  copyCount: number
+  selectCount: number
+  lastActivity: number | null
+}
+
+export interface DocAnalyticsDashboardResult {
+  overview: {
+    docCount: number
+    totalViews: number
+    totalSessionCount: number
+    totalActiveMs: number
+    totalTotalMs: number
+    totalCopyCount: number
+    totalSelectCount: number
+  }
+  docs: DocAnalyticsSummaryItem[]
+  detail: null | {
+    path: string
+    sections: Array<{
+      sectionId: string
+      sectionTitle: string
+      viewCount: number
+      activeMs: number
+      totalMs: number
+      lastReadAt: number | null
+    }>
+    heatmap: Array<{
+      sourceType: DocEngagementSourceType
+      sectionId: string
+      sectionTitle: string
+      bucket: number
+      activeMs: number
+      totalMs: number
+      lastReadAt: number | null
+    }>
+    evidence: Array<{
+      sourceType: DocEngagementSourceType
+      actionType: string
+      actionSource: string
+      sectionId: string
+      sectionTitle: string
+      textHash: string
+      textLength: number
+      anchorStart: number
+      anchorEnd: number
+      anchorBucket: number
+      count: number
+      lastActionAt: number | null
+    }>
+  }
 }
 
 function normalizeString(value: unknown, maxLength: number): string {
@@ -84,6 +165,16 @@ function normalizeString(value: unknown, maxLength: number): string {
 
 export function normalizeDocPath(path: string): string {
   return path.replace(/^\/+|\/+$/g, '').toLowerCase()
+}
+
+export function normalizeDocSourceType(value: unknown): DocEngagementSourceType {
+  return value === 'doc_comments_admin' ? 'doc_comments_admin' : 'docs_page'
+}
+
+export function isAllowedDocPathForSource(path: string, sourceType: DocEngagementSourceType): boolean {
+  if (sourceType === 'doc_comments_admin')
+    return path === 'admin/doc-comments'
+  return path.startsWith('docs/')
 }
 
 function stableSerialize(value: unknown): string {
@@ -120,18 +211,26 @@ function base64UrlDecode(value: string): string {
 }
 
 function getDocTokenSecret(): string {
+  if (tokenSecretCache)
+    return tokenSecretCache
+
   const config = useRuntimeConfig()
   const candidates = [
     config.appAuthJwtSecret,
     config.auth?.secret,
+    process.env.NUXT_DOC_TOKEN_SECRET,
+    process.env.AUTH_SECRET,
   ]
 
   for (const candidate of candidates) {
-    if (typeof candidate === 'string' && candidate.length >= 16)
-      return candidate
+    if (typeof candidate === 'string' && candidate.length >= 16) {
+      tokenSecretCache = candidate
+      return tokenSecretCache
+    }
   }
 
-  return base64UrlEncode(randomBytes(32).toString('hex'))
+  tokenSecretCache = 'nexus-doc-analytics-fallback-secret-v1'
+  return tokenSecretCache
 }
 
 export function createDocToken(payload: Omit<DocTokenPayload, 'iat' | 'exp' | 'typ'>, now = Date.now()): string {
@@ -142,6 +241,7 @@ export function createDocToken(payload: Omit<DocTokenPayload, 'iat' | 'exp' | 't
     sid: payload.sid,
     path: payload.path,
     cid: payload.cid,
+    src: payload.src,
     rl: payload.rl,
     iat: issuedAt,
     exp,
@@ -177,14 +277,23 @@ export function verifyDocToken(token: string): DocTokenPayload | null {
     if (signaturePart !== expectedSignature)
       return null
 
-    const payload = JSON.parse(base64UrlDecode(payloadPart)) as DocTokenPayload
+    const payload = JSON.parse(base64UrlDecode(payloadPart)) as Partial<DocTokenPayload>
     if (payload.typ !== 'doc')
       return null
     if (!payload.sid || !payload.path || !payload.cid)
       return null
-    if (payload.exp <= Math.floor(Date.now() / 1000))
+    if (!payload.exp || payload.exp <= Math.floor(Date.now() / 1000))
       return null
-    return payload
+    return {
+      typ: 'doc',
+      sid: payload.sid,
+      path: payload.path,
+      cid: payload.cid,
+      src: normalizeDocSourceType(payload.src),
+      rl: Number(payload.rl ?? 0),
+      iat: Number(payload.iat ?? 0),
+      exp: Number(payload.exp),
+    }
   }
   catch {
     return null
@@ -229,6 +338,20 @@ async function ensureSessionColumns(db: D1Database) {
       await db.prepare(`ALTER TABLE ${DOC_SESSION_TABLE} ADD COLUMN ${ddl};`).run()
   }
   await addColumn('challenge_id', 'challenge_id TEXT')
+  await addColumn('source_type', `source_type TEXT NOT NULL DEFAULT 'docs_page'`)
+}
+
+async function ensureColumns(
+  db: D1Database,
+  table: string,
+  definitions: Array<{ name: string, ddl: string }>,
+) {
+  const { results } = await db.prepare(`PRAGMA table_info(${table});`).all<{ name?: string }>()
+  const columns = new Set((results ?? []).map(item => item.name).filter(Boolean) as string[])
+  for (const definition of definitions) {
+    if (!columns.has(definition.name))
+      await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition.ddl};`).run()
+  }
 }
 
 export async function ensureDocAnalyticsSchema(db: D1Database) {
@@ -323,9 +446,87 @@ export async function ensureDocAnalyticsSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_TABLE} (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      section_id TEXT NOT NULL,
+      section_title TEXT,
+      bucket INTEGER NOT NULL,
+      active_ms INTEGER NOT NULL DEFAULT 0,
+      total_ms INTEGER NOT NULL DEFAULT 0,
+      last_read_at INTEGER
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DOC_HEATMAP_DAILY_TABLE} (
+      date TEXT NOT NULL,
+      path TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      section_id TEXT NOT NULL,
+      section_title TEXT,
+      bucket INTEGER NOT NULL,
+      active_ms INTEGER NOT NULL DEFAULT 0,
+      total_ms INTEGER NOT NULL DEFAULT 0,
+      last_read_at INTEGER,
+      PRIMARY KEY (date, path, source_type, section_id, bucket)
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_TABLE} (
+      id TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      action_type TEXT NOT NULL,
+      action_source TEXT NOT NULL,
+      section_id TEXT NOT NULL,
+      section_title TEXT,
+      text_hash TEXT,
+      text_length INTEGER,
+      anchor_start INTEGER,
+      anchor_end INTEGER,
+      anchor_bucket INTEGER,
+      count INTEGER NOT NULL DEFAULT 0,
+      last_action_at INTEGER
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DOC_EVIDENCE_DAILY_TABLE} (
+      date TEXT NOT NULL,
+      path TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      action_type TEXT NOT NULL,
+      action_source TEXT NOT NULL,
+      section_id TEXT NOT NULL,
+      section_title TEXT,
+      text_hash TEXT,
+      text_length INTEGER,
+      anchor_start INTEGER,
+      anchor_end INTEGER,
+      anchor_bucket INTEGER,
+      count INTEGER NOT NULL DEFAULT 0,
+      last_action_at INTEGER,
+      PRIMARY KEY (date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket)
+    );
+  `).run()
+
+  await ensureColumns(db, DOC_EVIDENCE_TABLE, [
+    { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
+    { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
+  ])
+  await ensureColumns(db, DOC_EVIDENCE_DAILY_TABLE, [
+    { name: 'anchor_start', ddl: 'anchor_start INTEGER' },
+    { name: 'anchor_end', ddl: 'anchor_end INTEGER' },
+  ])
+
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${DOC_SESSION_TABLE} (
       session_id TEXT PRIMARY KEY,
       path TEXT NOT NULL,
+      source_type TEXT NOT NULL DEFAULT 'docs_page',
       client_id TEXT NOT NULL,
       ip TEXT,
       risk_level INTEGER NOT NULL DEFAULT 0,
@@ -374,6 +575,16 @@ export async function ensureDocAnalyticsSchema(db: D1Database) {
       last_violation_at INTEGER,
       PRIMARY KEY (ip, client_id)
     );
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_doc_heatmap_path ON ${DOC_HEATMAP_TABLE}(path, source_type, active_ms DESC);
+  `).run()
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_doc_evidence_path ON ${DOC_EVIDENCE_TABLE}(path, source_type, action_type, count DESC);
+  `).run()
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_doc_session_source ON ${DOC_SESSION_TABLE}(source_type, path, issued_at DESC);
   `).run()
 
   analyticsSchemaInitialized = true
@@ -442,7 +653,7 @@ export async function expirePendingSessions(
 
 export async function createDocEngagementSession(
   db: D1Database,
-  params: { path: string, clientId: string, ip: string | null, riskLevel: number, ttlMs: number },
+  params: { path: string, sourceType: DocEngagementSourceType, clientId: string, ip: string | null, riskLevel: number, ttlMs: number },
 ): Promise<DocEngagementSession> {
   const sessionId = randomUUID()
   const issuedAt = Date.now()
@@ -450,13 +661,14 @@ export async function createDocEngagementSession(
 
   await db.prepare(`
     INSERT INTO ${DOC_SESSION_TABLE} (
-      session_id, path, client_id, ip, risk_level, issued_at, expect_report_at, status
-    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'pending');
-  `).bind(sessionId, params.path, params.clientId, params.ip, params.riskLevel, issuedAt, expectReportAt).run()
+      session_id, path, source_type, client_id, ip, risk_level, issued_at, expect_report_at, status
+    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'pending');
+  `).bind(sessionId, params.path, params.sourceType, params.clientId, params.ip, params.riskLevel, issuedAt, expectReportAt).run()
 
   return {
     sessionId,
     path: params.path,
+    sourceType: params.sourceType,
     clientId: params.clientId,
     ip: params.ip,
     riskLevel: params.riskLevel,
@@ -473,7 +685,7 @@ export async function getDocEngagementSession(
   sessionId: string,
 ): Promise<DocEngagementSession | null> {
   const row = await db.prepare(`
-    SELECT session_id, path, client_id, ip, risk_level, issued_at, expect_report_at, reported_at, status, challenge_id
+    SELECT session_id, path, source_type, client_id, ip, risk_level, issued_at, expect_report_at, reported_at, status, challenge_id
     FROM ${DOC_SESSION_TABLE}
     WHERE session_id = ?1
     LIMIT 1;
@@ -485,6 +697,7 @@ export async function getDocEngagementSession(
   return {
     sessionId: row.session_id,
     path: row.path,
+    sourceType: normalizeDocSourceType(row.source_type),
     clientId: row.client_id,
     ip: row.ip ?? null,
     riskLevel: Number(row.risk_level ?? 0),
@@ -611,6 +824,7 @@ export async function recordDocEngagement(
   params: {
     path: string
     title: string
+    sourceType: DocEngagementSourceType
     activeMs: number
     totalMs: number
     sections: DocEngagementSectionInput[]
@@ -619,6 +833,7 @@ export async function recordDocEngagement(
 ) {
   const now = Date.now()
   const date = new Date(now).toISOString().split('T')[0]
+  const sourceType = normalizeDocSourceType(params.sourceType)
   const copyCount = params.actions
     .filter(action => action.type === 'copy')
     .reduce((sum, action) => sum + action.count, 0)
@@ -681,16 +896,46 @@ export async function recordDocEngagement(
         total_ms = ${DOC_SECTION_DAILY_TABLE}.total_ms + excluded.total_ms,
         last_read_at = excluded.last_read_at;
     `).bind(date, params.path, sectionId, sectionTitle || null, viewCount, activeMs, totalMs, now).run()
+
+    const sectionBuckets = Array.isArray(section.buckets) ? section.buckets : []
+    for (const bucketEntry of sectionBuckets) {
+      const bucket = Math.max(0, Math.min(19, Math.round(Number(bucketEntry.bucket ?? 0) || 0)))
+      const bucketActiveMs = Math.max(0, Math.round(Number(bucketEntry.activeMs ?? 0) || 0))
+      const bucketTotalMs = Math.max(0, Math.round(Number(bucketEntry.totalMs ?? 0) || 0))
+      if (!bucketActiveMs && !bucketTotalMs)
+        continue
+      const heatmapId = `${params.path}#${sourceType}#${sectionId}#${bucket}`
+
+      await db.prepare(`
+        INSERT INTO ${DOC_HEATMAP_TABLE} (id, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(id) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_TABLE}.section_title),
+          active_ms = ${DOC_HEATMAP_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_HEATMAP_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(heatmapId, params.path, sourceType, sectionId, sectionTitle || null, bucket, bucketActiveMs, bucketTotalMs, now).run()
+
+      await db.prepare(`
+        INSERT INTO ${DOC_HEATMAP_DAILY_TABLE} (date, path, source_type, section_id, section_title, bucket, active_ms, total_ms, last_read_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        ON CONFLICT(date, path, source_type, section_id, bucket) DO UPDATE SET
+          section_title = COALESCE(excluded.section_title, ${DOC_HEATMAP_DAILY_TABLE}.section_title),
+          active_ms = ${DOC_HEATMAP_DAILY_TABLE}.active_ms + excluded.active_ms,
+          total_ms = ${DOC_HEATMAP_DAILY_TABLE}.total_ms + excluded.total_ms,
+          last_read_at = excluded.last_read_at;
+      `).bind(date, params.path, sourceType, sectionId, sectionTitle || null, bucket, bucketActiveMs, bucketTotalMs, now).run()
+    }
   }
 
   for (const action of params.actions) {
     const actionType = normalizeString(action.type, 16)
-    const sourceType = normalizeString(action.source, 16)
+    const actionSource = normalizeString(action.source, 16)
     const sectionId = normalizeString(action.sectionId || 'root', 120) || 'root'
-    if (!actionType || !sourceType)
+    if (!actionType || !actionSource)
       continue
     const sectionTitle = normalizeString(action.sectionTitle, 200)
-    const entryId = `${params.path}#${actionType}#${sourceType}#${sectionId}`
+    const entryId = `${params.path}#${actionType}#${actionSource}#${sectionId}`
     const count = Math.max(0, Math.round(action.count))
     if (!count)
       continue
@@ -702,7 +947,7 @@ export async function recordDocEngagement(
         section_title = COALESCE(excluded.section_title, ${DOC_ACTION_TABLE}.section_title),
         count = ${DOC_ACTION_TABLE}.count + excluded.count,
         last_action_at = excluded.last_action_at;
-    `).bind(entryId, params.path, actionType, sourceType, sectionId, sectionTitle || null, count, now).run()
+    `).bind(entryId, params.path, actionType, actionSource, sectionId, sectionTitle || null, count, now).run()
 
     await db.prepare(`
       INSERT INTO ${DOC_ACTION_DAILY_TABLE} (date, path, action_type, source_type, section_id, section_title, count, last_action_at)
@@ -711,7 +956,294 @@ export async function recordDocEngagement(
         section_title = COALESCE(excluded.section_title, ${DOC_ACTION_DAILY_TABLE}.section_title),
         count = ${DOC_ACTION_DAILY_TABLE}.count + excluded.count,
         last_action_at = excluded.last_action_at;
-    `).bind(date, params.path, actionType, sourceType, sectionId, sectionTitle || null, count, now).run()
+    `).bind(date, params.path, actionType, actionSource, sectionId, sectionTitle || null, count, now).run()
+
+    const textHash = normalizeString(action.textHash, 128)
+    const textLength = Math.max(0, Math.round(Number(action.textLength ?? 0) || 0))
+    const anchorStart = Math.max(0, Math.round(Number(action.anchorStart ?? 0) || 0))
+    const anchorEnd = Math.max(0, Math.round(Number(action.anchorEnd ?? 0) || 0))
+    const anchorBucket = Math.max(-1, Math.min(19, Math.round(Number(action.anchorBucket ?? -1) || -1)))
+    const evidenceId = `${params.path}#${sourceType}#${actionType}#${actionSource}#${sectionId}#${textHash || '_'}#${anchorBucket}`
+
+    await db.prepare(`
+      INSERT INTO ${DOC_EVIDENCE_TABLE} (
+        id, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
+      )
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+      ON CONFLICT(id) DO UPDATE SET
+        section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_TABLE}.section_title),
+        text_length = CASE
+          WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_TABLE}.text_length, 0) THEN excluded.text_length
+          ELSE ${DOC_EVIDENCE_TABLE}.text_length
+        END,
+        anchor_start = CASE
+          WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_start, 0) THEN excluded.anchor_start
+          ELSE ${DOC_EVIDENCE_TABLE}.anchor_start
+        END,
+        anchor_end = CASE
+          WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_TABLE}.anchor_end, 0) THEN excluded.anchor_end
+          ELSE ${DOC_EVIDENCE_TABLE}.anchor_end
+        END,
+        count = ${DOC_EVIDENCE_TABLE}.count + excluded.count,
+        last_action_at = excluded.last_action_at;
+    `).bind(
+      evidenceId,
+      params.path,
+      sourceType,
+      actionType,
+      actionSource,
+      sectionId,
+      sectionTitle || null,
+      textHash || '',
+      textLength || 0,
+      anchorStart || 0,
+      anchorEnd || 0,
+      anchorBucket,
+      count,
+      now,
+    ).run()
+
+    await db.prepare(`
+      INSERT INTO ${DOC_EVIDENCE_DAILY_TABLE} (
+        date, path, source_type, action_type, action_source, section_id, section_title, text_hash, text_length, anchor_start, anchor_end, anchor_bucket, count, last_action_at
+      )
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+      ON CONFLICT(date, path, source_type, action_type, action_source, section_id, text_hash, anchor_bucket) DO UPDATE SET
+        section_title = COALESCE(excluded.section_title, ${DOC_EVIDENCE_DAILY_TABLE}.section_title),
+        text_length = CASE
+          WHEN excluded.text_length > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.text_length, 0) THEN excluded.text_length
+          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.text_length
+        END,
+        anchor_start = CASE
+          WHEN excluded.anchor_start > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_start, 0) THEN excluded.anchor_start
+          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_start
+        END,
+        anchor_end = CASE
+          WHEN excluded.anchor_end > COALESCE(${DOC_EVIDENCE_DAILY_TABLE}.anchor_end, 0) THEN excluded.anchor_end
+          ELSE ${DOC_EVIDENCE_DAILY_TABLE}.anchor_end
+        END,
+        count = ${DOC_EVIDENCE_DAILY_TABLE}.count + excluded.count,
+        last_action_at = excluded.last_action_at;
+    `).bind(
+      date,
+      params.path,
+      sourceType,
+      actionType,
+      actionSource,
+      sectionId,
+      sectionTitle || null,
+      textHash || '',
+      textLength || 0,
+      anchorStart || 0,
+      anchorEnd || 0,
+      anchorBucket,
+      count,
+      now,
+    ).run()
+  }
+
+  await cleanupDocEvidenceDaily(db, now)
+}
+
+async function cleanupDocEvidenceDaily(db: D1Database, now: number) {
+  if (analyticsCleanupAt > 0 && now - analyticsCleanupAt < CLEANUP_INTERVAL_MS)
+    return
+  analyticsCleanupAt = now
+  const cutoffDate = new Date(now - EVIDENCE_RETENTION_DAYS * 24 * 60 * 60_000).toISOString().split('T')[0]
+  await db.prepare(`
+    DELETE FROM ${DOC_EVIDENCE_DAILY_TABLE}
+    WHERE date < ?1;
+  `).bind(cutoffDate).run()
+  await db.prepare(`
+    DELETE FROM ${DOC_HEATMAP_DAILY_TABLE}
+    WHERE date < ?1;
+  `).bind(cutoffDate).run()
+}
+
+export async function getDocAnalyticsDashboard(
+  db: D1Database,
+  params: {
+    days: number
+    path?: string
+    sourceType?: DocEngagementSourceType
+    limit?: number
+  },
+): Promise<DocAnalyticsDashboardResult> {
+  const limit = Math.min(Math.max(1, Math.round(params.limit ?? 20)), 100)
+  const days = Math.min(Math.max(1, Math.round(params.days || 30)), 365)
+  const now = Date.now()
+  const cutoffDate = new Date(now - (days - 1) * 24 * 60 * 60_000).toISOString().split('T')[0]
+  const normalizedPath = params.path ? normalizeDocPath(params.path) : ''
+  const sourceType = params.sourceType ? normalizeDocSourceType(params.sourceType) : null
+
+  const docsRows = await db.prepare(`
+    SELECT
+      path,
+      COALESCE(MAX(title), '') AS title,
+      SUM(views) AS views,
+      SUM(session_count) AS session_count,
+      SUM(active_ms) AS active_ms,
+      SUM(total_ms) AS total_ms,
+      SUM(copy_count) AS copy_count,
+      SUM(select_count) AS select_count,
+      MAX(date) AS last_date
+    FROM ${DOC_VIEWS_DAILY_TABLE}
+    WHERE date >= ?1
+      AND (?2 = '' OR path = ?2)
+    GROUP BY path
+    ORDER BY active_ms DESC, views DESC
+    LIMIT ?3;
+  `).bind(cutoffDate, normalizedPath, limit).all<Record<string, any>>()
+
+  const docs = (docsRows.results ?? []).map((row) => {
+    const lastDate = typeof row.last_date === 'string' && row.last_date.length > 0
+      ? new Date(`${row.last_date}T00:00:00Z`).getTime()
+      : null
+    return {
+      path: normalizeDocPath(String(row.path || '')),
+      title: String(row.title || ''),
+      views: Number(row.views || 0),
+      sessionCount: Number(row.session_count || 0),
+      activeMs: Number(row.active_ms || 0),
+      totalMs: Number(row.total_ms || 0),
+      copyCount: Number(row.copy_count || 0),
+      selectCount: Number(row.select_count || 0),
+      lastActivity: lastDate,
+    }
+  })
+
+  const resolvedPath = normalizedPath || docs[0]?.path || ''
+
+  let sections: NonNullable<DocAnalyticsDashboardResult['detail']>['sections'] = []
+  let heatmap: NonNullable<DocAnalyticsDashboardResult['detail']>['heatmap'] = []
+  let evidence: NonNullable<DocAnalyticsDashboardResult['detail']>['evidence'] = []
+
+  if (resolvedPath) {
+    const sectionRows = await db.prepare(`
+      SELECT
+        section_id,
+        COALESCE(MAX(section_title), '') AS section_title,
+        SUM(view_count) AS view_count,
+        SUM(active_ms) AS active_ms,
+        SUM(total_ms) AS total_ms,
+        MAX(last_read_at) AS last_read_at
+      FROM ${DOC_SECTION_DAILY_TABLE}
+      WHERE date >= ?1
+        AND path = ?2
+      GROUP BY section_id
+      ORDER BY active_ms DESC, total_ms DESC
+      LIMIT 120;
+    `).bind(cutoffDate, resolvedPath).all<Record<string, any>>()
+
+    sections = (sectionRows.results ?? []).map(row => ({
+      sectionId: String(row.section_id || 'root'),
+      sectionTitle: String(row.section_title || ''),
+      viewCount: Number(row.view_count || 0),
+      activeMs: Number(row.active_ms || 0),
+      totalMs: Number(row.total_ms || 0),
+      lastReadAt: row.last_read_at ? Number(row.last_read_at) : null,
+    }))
+
+    const heatmapRows = await db.prepare(`
+      SELECT
+        source_type,
+        section_id,
+        COALESCE(MAX(section_title), '') AS section_title,
+        bucket,
+        SUM(active_ms) AS active_ms,
+        SUM(total_ms) AS total_ms,
+        MAX(last_read_at) AS last_read_at
+      FROM ${DOC_HEATMAP_DAILY_TABLE}
+      WHERE date >= ?1
+        AND path = ?2
+        AND (?3 IS NULL OR source_type = ?3)
+      GROUP BY source_type, section_id, bucket
+      ORDER BY active_ms DESC, total_ms DESC
+      LIMIT 200;
+    `).bind(cutoffDate, resolvedPath, sourceType).all<Record<string, any>>()
+
+    heatmap = (heatmapRows.results ?? []).map(row => ({
+      sourceType: normalizeDocSourceType(row.source_type),
+      sectionId: String(row.section_id || 'root'),
+      sectionTitle: String(row.section_title || ''),
+      bucket: Number(row.bucket || 0),
+      activeMs: Number(row.active_ms || 0),
+      totalMs: Number(row.total_ms || 0),
+      lastReadAt: row.last_read_at ? Number(row.last_read_at) : null,
+    }))
+
+    const evidenceRows = await db.prepare(`
+      SELECT
+        source_type,
+        action_type,
+        action_source,
+        section_id,
+        COALESCE(MAX(section_title), '') AS section_title,
+        text_hash,
+        MAX(text_length) AS text_length,
+        MAX(anchor_start) AS anchor_start,
+        MAX(anchor_end) AS anchor_end,
+        anchor_bucket,
+        SUM(count) AS count,
+        MAX(last_action_at) AS last_action_at
+      FROM ${DOC_EVIDENCE_DAILY_TABLE}
+      WHERE date >= ?1
+        AND path = ?2
+        AND (?3 IS NULL OR source_type = ?3)
+      GROUP BY source_type, action_type, action_source, section_id, text_hash, anchor_bucket
+      ORDER BY count DESC, last_action_at DESC
+      LIMIT 120;
+    `).bind(cutoffDate, resolvedPath, sourceType).all<Record<string, any>>()
+
+    evidence = (evidenceRows.results ?? []).map(row => ({
+      sourceType: normalizeDocSourceType(row.source_type),
+      actionType: String(row.action_type || ''),
+      actionSource: String(row.action_source || ''),
+      sectionId: String(row.section_id || 'root'),
+      sectionTitle: String(row.section_title || ''),
+      textHash: String(row.text_hash || ''),
+      textLength: Number(row.text_length || 0),
+      anchorStart: Number(row.anchor_start || 0),
+      anchorEnd: Number(row.anchor_end || 0),
+      anchorBucket: Number(row.anchor_bucket ?? -1),
+      count: Number(row.count || 0),
+      lastActionAt: row.last_action_at ? Number(row.last_action_at) : null,
+    }))
+  }
+
+  const overview = docs.reduce(
+    (acc, item) => {
+      acc.docCount += 1
+      acc.totalViews += item.views
+      acc.totalSessionCount += item.sessionCount
+      acc.totalActiveMs += item.activeMs
+      acc.totalTotalMs += item.totalMs
+      acc.totalCopyCount += item.copyCount
+      acc.totalSelectCount += item.selectCount
+      return acc
+    },
+    {
+      docCount: 0,
+      totalViews: 0,
+      totalSessionCount: 0,
+      totalActiveMs: 0,
+      totalTotalMs: 0,
+      totalCopyCount: 0,
+      totalSelectCount: 0,
+    },
+  )
+
+  return {
+    overview,
+    docs,
+    detail: resolvedPath
+      ? {
+          path: resolvedPath,
+          sections,
+          heatmap,
+          evidence,
+        }
+      : null,
   }
 }
 

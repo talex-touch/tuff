@@ -27,7 +27,6 @@ const props = withDefaults(defineProps<GlassSurfaceProps>(), {
   mixBlendMode: 'difference',
 })
 
-const isDarkMode = ref(false)
 const containerRef = ref<HTMLDivElement | null>(null)
 const feImageRef = ref<SVGImageElement | null>(null)
 const redChannelRef = ref<SVGFEDisplacementMapElement | null>(null)
@@ -45,24 +44,6 @@ const redGradId = `tx-glass-red-grad-${uniqueId}`
 const blueGradId = `tx-glass-blue-grad-${uniqueId}`
 
 let resizeObserver: ResizeObserver | null = null
-let cleanupDarkMode: (() => void) | undefined
-
-function updateDarkMode() {
-  if (!hasWindow())
-    return
-
-  const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-  isDarkMode.value = mediaQuery.matches
-
-  const handler = (e: MediaQueryListEvent) => {
-    isDarkMode.value = e.matches
-  }
-
-  mediaQuery.addEventListener('change', handler)
-
-  return () => mediaQuery.removeEventListener('change', handler)
-}
-
 function supportsSVGFilters() {
   if (!hasWindow() || !hasNavigator() || !hasDocument())
     return false
@@ -140,6 +121,7 @@ function updateFilterElements() {
 }
 
 const containerStyles = computed(() => {
+  const monochromeMask = 'var(--tx-surface-refraction-mask-rgb, 255 255 255)'
   const baseStyles: Record<string, string | number> = {
     width: typeof props.width === 'number' ? `${props.width}px` : props.width,
     height: typeof props.height === 'number' ? `${props.height}px` : props.height,
@@ -153,51 +135,29 @@ const containerStyles = computed(() => {
   if (svgSupported) {
     return {
       ...baseStyles,
-      background: isDarkMode.value
-        ? `hsl(0 0% 0% / ${props.backgroundOpacity})`
-        : `hsl(0 0% 100% / ${props.backgroundOpacity})`,
+      background: `rgb(${monochromeMask} / ${props.backgroundOpacity})`,
       backdropFilter: `url(#${filterId}) saturate(${props.saturation})`,
-    }
-  }
-
-  if (isDarkMode.value) {
-    if (!backdropFilterSupported) {
-      return {
-        ...baseStyles,
-        background: 'rgba(0, 0, 0, 0.4)',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
-      }
-    }
-
-    return {
-      ...baseStyles,
-      background: 'rgba(255, 255, 255, 0.1)',
-      backdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.2)`,
-      WebkitBackdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.2)`,
-      border: '1px solid rgba(255, 255, 255, 0.2)',
     }
   }
 
   if (!backdropFilterSupported) {
     return {
       ...baseStyles,
-      background: 'rgba(255, 255, 255, 0.4)',
-      border: '1px solid rgba(255, 255, 255, 0.3)',
+      background: `rgb(${monochromeMask} / 0.4)`,
+      border: `1px solid rgb(${monochromeMask} / 0.24)`,
     }
   }
 
   return {
     ...baseStyles,
-    background: 'rgba(255, 255, 255, 0.25)',
-    backdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.1)`,
-    WebkitBackdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.1)`,
-    border: '1px solid rgba(255, 255, 255, 0.3)',
+    background: `rgb(${monochromeMask} / 0.22)`,
+    backdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.06)`,
+    WebkitBackdropFilter: `blur(${fallbackBlur}px) saturate(1.8) brightness(1.06)`,
+    border: `1px solid rgb(${monochromeMask} / 0.24)`,
   }
 })
 
 onMounted(() => {
-  cleanupDarkMode = updateDarkMode()
-
   nextTick(() => {
     updateDisplacementMap()
     updateFilterElements()
@@ -212,8 +172,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  cleanupDarkMode?.()
-  cleanupDarkMode = undefined
   resizeObserver?.disconnect()
   resizeObserver = null
 })

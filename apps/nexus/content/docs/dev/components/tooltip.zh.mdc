@@ -53,10 +53,26 @@ rows:
     type: 'string'
     default: '-'
     description: '提示内容'
+  - name: trigger
+    type: "'hover' | 'click' | 'focus'"
+    default: "'hover'"
+    description: '触发方式'
   - name: placement
     type: 'string'
     default: 'top'
     description: '显示位置'
+  - name: indicator
+    type: 'boolean'
+    default: 'false'
+    description: '是否显示指示点'
+  - name: indicator-placement
+    type: "'panel' | 'reference'"
+    default: "'panel'"
+    description: '指示点显示在气泡面板或触发器上'
+  - name: indicator-variant
+    type: "'dot' | 'pulse'"
+    default: "'dot'"
+    description: '指示点样式'
   - name: open-delay
     type: 'number'
     default: '120'
@@ -71,6 +87,7 @@ rows:
 ## Design Notes
 - 文案尽量短，避免多行提示。  
 - 与触发元素的间距保持轻盈。
+- Tooltip 默认是无背景的轻包装层，只负责提示文本与状态点展示。
 
 ## 组合示例
 ### 提示按钮
@@ -83,6 +100,25 @@ code: |
   <template>
     <TxTooltip content="分享">
       <TxButton icon="i-ri-share-line" circle />
+    </TxTooltip>
+  </template>
+---
+::
+
+### Indicator 指示点
+
+用于显示提示气泡或触发器上的状态提醒点，适合“有新内容/需关注”这类场景。
+
+::TuffDemoWrapper{demo="TooltipIndicatorDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip content="面板指示点" indicator indicator-variant="pulse" indicator-placement="panel">
+      <TxButton variant="ghost">查看提醒</TxButton>
+    </TxTooltip>
+
+    <TxTooltip content="触发器指示点" indicator indicator-placement="reference" indicator-color="#f56c6c">
+      <TxButton variant="ghost">系统状态</TxButton>
     </TxTooltip>
   </template>
 ---

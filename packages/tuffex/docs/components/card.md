@@ -90,9 +90,9 @@ import CardInertialDemoSource from '../.vitepress/theme/components/demos/CardIne
   </template>
 </DemoBlock>
 
-## 不同背景下的效果（blur / glass）
+## 不同背景下的效果（refraction / glass / blur）
 
-单卡片对比：背后提供文本与图形内容，通过开关切换 background（blur / glass / mask）。
+单卡片对比：背后提供文本与图形内容，通过开关切换 background（refraction / glass / blur / mask）。推荐优先使用 `refraction`。
 
 <DemoBlock title="Card backgrounds (scroll)" :code="CardBackgroundScrollDemoSource">
   <template #preview>
@@ -150,6 +150,11 @@ import CardInertialDemoSource from '../.vitepress/theme/components/demos/CardIne
   </template>
 </DemoBlock>
 
+## 选型建议（TxBaseSurface vs TxCard）
+
+- 需要更高封装与业务直出：优先用 `TxCard`。它已包含 `variant/shadow/slots/loading/inertial` 以及 pointer-light + spring 等交互能力。
+- 需要底层材质细调：改用 `TxBaseSurface`。尤其是折射与滤镜的底层参数（如 `displace`、`distortionScale`、`redOffset/greenOffset/blueOffset`、`filterSaturation/filterContrast/filterBrightness`、`refractionHaloOpacity`）。
+- 约定：`TxCard` 保持“开箱即用”的稳定 API；需要做材质实验或品牌化渲染时，直接在 `TxBaseSurface` 层完成。
 
 ## API 参考
 
@@ -158,15 +163,25 @@ import CardInertialDemoSource from '../.vitepress/theme/components/demos/CardIne
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | variant | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 边框与交互形态 |
-| background | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 背景风格（玻璃效果在 `glass` 中最明显） |
+| background | `'blur' \| 'glass' \| 'refraction' \| 'mask'` | `'refraction'` | 背景风格：`blur`=filter 层，`glass`=glass 层，`refraction`=glass+filter（默认推荐），`mask`=mask 层 |
 | shadow | `'none' \| 'soft' \| 'medium'` | `'none'` | 阴影强度 |
 | size | `'small' \| 'medium' \| 'large'` | `'medium'` | 卡片尺寸 |
 | radius | `number` | `18` | 圆角 |
 | padding | `number` | - | 内边距（不传时由 `size` 决定） |
-| glassBlur | `boolean` | `true` | 仅 `background='glass'`：是否启用 backdrop blur |
-| glassBlurAmount | `number` | `22` | 仅 `background='glass'`：blur 强度（px） |
-| glassOverlay | `boolean` | `true` | 仅 `background='glass'`：是否启用高光遮罩层 |
-| glassOverlayOpacity | `number` | `0.22` | 仅 `background='glass'`：遮罩层透明度 |
+| glassBlur | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：是否启用 blur |
+| glassBlurAmount | `number` | `22` | 仅 `background='glass' \| 'refraction'`：blur 强度（px） |
+| glassOverlay | `boolean` | `true` | 仅 `background='glass' \| 'refraction'`：是否叠加高光遮罩层 |
+| glassOverlayOpacity | `number` | `0.18` | 仅 `background='glass' \| 'refraction'`：高光遮罩层透明度 |
+| fallbackMaskOpacity | `number` | `0.26` | 运动降级到 mask 时的遮罩透明度（0-1） |
+| refractionStrength | `number` | `62` | 仅 `background='refraction'`：折射强度（0-100），主控色散与扭曲强度 |
+| refractionProfile | `'soft' \| 'filmic' \| 'cinematic'` | `'filmic'` | 仅 `background='refraction'`：折射风格预设（推荐 `filmic`） |
+| refractionTone | `'mist' \| 'balanced' \| 'vivid'` | `'vivid'` | 仅 `background='refraction'`：折射色调预设（默认 `vivid`，减少发灰） |
+| refractionAngle | `number` | `-24` | 仅 `background='refraction'`：色散主方向角度（度） |
+| refractionLightFollowMouse | `boolean` | `false` | 仅 `background='refraction'`：是否将高光锚点与鼠标位置绑定 |
+| refractionLightFollowIntensity | `number` | `0.45` | 仅 `background='refraction'`：鼠标绑定强度（0-1），控制 angle/strength 的跟随权重 |
+| refractionLightSpring | `boolean` | `true` | 仅 `background='refraction'`：鼠标光源是否使用弹簧过渡 |
+| refractionLightSpringStiffness | `number` | `0.18` | 仅 `background='refraction'`：鼠标光源弹簧刚度（建议 0.01-0.55） |
+| refractionLightSpringDamping | `number` | `0.84` | 仅 `background='refraction'`：鼠标光源弹簧阻尼（建议 0.55-0.99） |
 | clickable | `boolean` | `false` | 是否可点击（hover feedback） |
 | loading | `boolean` | `false` | 是否显示加载状态 |
 | loadingSpinnerSize | `number` | - | loading spinner 大小（px） |

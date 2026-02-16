@@ -1,19 +1,30 @@
 <script setup lang="ts">
 import type { TxCardProps } from './types'
-import { computed, onBeforeUnmount, ref, toRefs } from 'vue'
+import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
+import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 
 defineOptions({ name: 'TxCard' })
 
 const props = withDefaults(defineProps<TxCardProps>(), {
   variant: 'solid',
-  background: 'blur',
+  background: 'pure',
   shadow: 'none',
   size: 'medium',
   glassBlur: true,
   glassBlurAmount: 22,
   glassOverlay: true,
-  glassOverlayOpacity: 0.22,
+  glassOverlayOpacity: 0.18,
+  fallbackMaskOpacity: 0.26,
+  refractionStrength: 62,
+  refractionProfile: 'filmic',
+  refractionTone: 'vivid',
+  refractionAngle: -24,
+  refractionLightFollowMouse: false,
+  refractionLightFollowIntensity: 0.45,
+  refractionLightSpring: true,
+  refractionLightSpringStiffness: 0.18,
+  refractionLightSpringDamping: 0.84,
   clickable: false,
   loading: false,
   disabled: false,
@@ -29,20 +40,28 @@ const emit = defineEmits<{
   (e: 'click', ev: MouseEvent): void
 }>()
 
-const {
-  variant,
-  background,
-  shadow,
-  size,
-  clickable,
-  loading,
-  disabled,
-  inertial,
-  glassBlur,
-  glassBlurAmount,
-  glassOverlay,
-  glassOverlayOpacity,
-} = toRefs(props)
+const variant = toRef(props, 'variant')
+const background = toRef(props, 'background')
+const shadow = toRef(props, 'shadow')
+const size = toRef(props, 'size')
+const clickable = toRef(props, 'clickable')
+const loading = toRef(props, 'loading')
+const disabled = toRef(props, 'disabled')
+const inertial = toRef(props, 'inertial')
+const glassBlur = toRef(props, 'glassBlur')
+const glassBlurAmount = toRef(props, 'glassBlurAmount')
+const glassOverlay = toRef(props, 'glassOverlay')
+const glassOverlayOpacity = toRef(props, 'glassOverlayOpacity')
+const fallbackMaskOpacity = toRef(props, 'fallbackMaskOpacity')
+const refractionStrength = toRef(props, 'refractionStrength')
+const refractionProfile = toRef(props, 'refractionProfile')
+const refractionTone = toRef(props, 'refractionTone')
+const refractionAngle = toRef(props, 'refractionAngle')
+const refractionLightFollowMouse = toRef(props, 'refractionLightFollowMouse')
+const refractionLightFollowIntensity = toRef(props, 'refractionLightFollowIntensity')
+const refractionLightSpring = toRef(props, 'refractionLightSpring')
+const refractionLightSpringStiffness = toRef(props, 'refractionLightSpringStiffness')
+const refractionLightSpringDamping = toRef(props, 'refractionLightSpringDamping')
 
 const resolvedRadius = computed(() => {
   if (typeof props.radius === 'number')
@@ -66,13 +85,105 @@ const resolvedSpinnerSize = computed(() => {
   return 12
 })
 
+const surfaceMode = computed<'pure' | 'mask' | 'blur' | 'glass' | 'refraction'>(() => {
+  return background.value
+})
+
+const surfaceRefractionProfile = computed<'soft' | 'filmic' | 'cinematic' | undefined>(() => {
+  if (background.value !== 'refraction')
+    return undefined
+  return refractionProfile.value
+})
+
+const surfaceRefractionTone = computed<'mist' | 'balanced' | 'vivid' | undefined>(() => {
+  if (background.value !== 'refraction')
+    return undefined
+  return refractionTone.value
+})
+
+const surfaceBlur = computed(() => {
+  if (background.value === 'blur')
+    return 30
+  if (background.value === 'glass' || background.value === 'refraction')
+    return glassBlur.value ? glassBlurAmount.value : 0
+  return 0
+})
+
+const surfaceOverlayOpacity = computed(() => {
+  if (background.value !== 'glass' && background.value !== 'refraction')
+    return 0
+  return glassOverlay.value ? glassOverlayOpacity.value : 0
+})
+
+const surfaceRefractionStrength = computed<number | undefined>(() => {
+  if (background.value !== 'refraction')
+    return undefined
+  const baseStrength = clamp(refractionStrength.value, 0, 100)
+  if (!refractionLightFollowMouse.value) {
+    return baseStrength
+  }
+  const intensity = clamp(refractionLightFollowIntensity.value, 0, 1)
+  const distance = clamp(Math.hypot(lightRatioX.value, lightRatioY.value), 0, 1)
+  return clamp(baseStrength + distance * 16 * intensity, 0, 100)
+})
+
+const surfaceRefractionAngle = computed<number | undefined>(() => {
+  if (background.value !== 'refraction')
+    return undefined
+  const baseAngle = normalizeAngleDeg(refractionAngle.value)
+  if (!refractionLightFollowMouse.value) {
+    return baseAngle
+  }
+  if (Math.abs(lightRatioX.value) < 0.01 && Math.abs(lightRatioY.value) < 0.01) {
+    return baseAngle
+  }
+  const intensity = clamp(refractionLightFollowIntensity.value, 0, 1)
+  const pointerAngle = Math.atan2(lightRatioY.value, lightRatioX.value) * (180 / Math.PI)
+  return lerpAngleDeg(baseAngle, pointerAngle, intensity)
+})
+
+const surfaceRefractionLightX = computed<number | undefined>(() => {
+  if (background.value !== 'refraction' || !refractionLightFollowMouse.value) {
+    return undefined
+  }
+  return lightPointX.value
+})
+
+const surfaceRefractionLightY = computed<number | undefined>(() => {
+  if (background.value !== 'refraction' || !refractionLightFollowMouse.value) {
+    return undefined
+  }
+  return lightPointY.value
+})
+
+const surfaceColor = computed(() => {
+  if (background.value !== 'mask')
+    return undefined
+  return 'var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff))'
+})
+
+const surfaceOpacity = computed<number | undefined>(() => {
+  if (background.value === 'mask')
+    return 1
+  return undefined
+})
+
 const motionX = ref(0)
 const motionY = ref(0)
+const surfaceMoving = ref(false)
+const lightPointX = ref(0.5)
+const lightPointY = ref(0.5)
+const lightRatioX = ref(0)
+const lightRatioY = ref(0)
 
 let targetX = 0
 let targetY = 0
+let lightTargetX = 0.5
+let lightTargetY = 0.5
 let velocityX = 0
 let velocityY = 0
+let lightVelocityX = 0
+let lightVelocityY = 0
 let lastTs = 0
 let rafId: number | null = null
 let isReturning = false
@@ -83,6 +194,15 @@ function clamp(n: number, min: number, max: number) {
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
+}
+
+function normalizeAngleDeg(angle: number) {
+  return ((angle + 180) % 360 + 360) % 360 - 180
+}
+
+function lerpAngleDeg(from: number, to: number, t: number) {
+  const delta = normalizeAngleDeg(to - from)
+  return normalizeAngleDeg(from + delta * t)
 }
 
 function stopRaf() {
@@ -97,35 +217,73 @@ function tickFrame(ts: number) {
   lastTs = ts
   const dt = clamp(dtRaw, 0.5, 2)
 
-  const rebound = clamp(props.inertialRebound, 0, 1)
+  let motionSettled = true
+  let lightSettled = true
 
-  const followStiffness = 0.085
-  const followDamping = 0.90
+  if (props.inertial) {
+    const rebound = clamp(props.inertialRebound, 0, 1)
+    const followStiffness = 0.085
+    const followDamping = 0.9
+    const returnStiffness = lerp(0.06, 0.12, rebound)
+    const returnDamping = lerp(0.96, 0.84, rebound)
+    const stiffness = isReturning ? returnStiffness : followStiffness
+    const damping = isReturning ? returnDamping : followDamping
 
-  const returnStiffness = lerp(0.06, 0.12, rebound)
-  const returnDamping = lerp(0.96, 0.84, rebound)
+    velocityX += (targetX - motionX.value) * stiffness * dt
+    velocityY += (targetY - motionY.value) * stiffness * dt
 
-  const stiffness = isReturning ? returnStiffness : followStiffness
-  const damping = isReturning ? returnDamping : followDamping
+    const damp = damping ** dt
+    velocityX *= damp
+    velocityY *= damp
 
-  velocityX += (targetX - motionX.value) * stiffness * dt
-  velocityY += (targetY - motionY.value) * stiffness * dt
+    motionX.value += velocityX
+    motionY.value += velocityY
 
-  const damp = damping ** dt
-  velocityX *= damp
-  velocityY *= damp
+    const closeX = Math.abs(targetX - motionX.value) < 0.08 && Math.abs(velocityX) < 0.08
+    const closeY = Math.abs(targetY - motionY.value) < 0.08 && Math.abs(velocityY) < 0.08
+    motionSettled = closeX && closeY
+    if (motionSettled) {
+      motionX.value = targetX
+      motionY.value = targetY
+      velocityX = 0
+      velocityY = 0
+    }
+  }
 
-  motionX.value += velocityX
-  motionY.value += velocityY
+  if (refractionLightFollowMouse.value && background.value === 'refraction') {
+    if (refractionLightSpring.value) {
+      const springStiffness = clamp(refractionLightSpringStiffness.value, 0.01, 0.55)
+      const springDamping = clamp(refractionLightSpringDamping.value, 0.55, 0.99)
 
-  const closeX = Math.abs(targetX - motionX.value) < 0.08 && Math.abs(velocityX) < 0.08
-  const closeY = Math.abs(targetY - motionY.value) < 0.08 && Math.abs(velocityY) < 0.08
+      lightVelocityX += (lightTargetX - lightPointX.value) * springStiffness * dt
+      lightVelocityY += (lightTargetY - lightPointY.value) * springStiffness * dt
 
-  if (closeX && closeY) {
-    motionX.value = targetX
-    motionY.value = targetY
-    velocityX = 0
-    velocityY = 0
+      const lightDamp = springDamping ** dt
+      lightVelocityX *= lightDamp
+      lightVelocityY *= lightDamp
+
+      lightPointX.value = clamp(lightPointX.value + lightVelocityX, 0, 1)
+      lightPointY.value = clamp(lightPointY.value + lightVelocityY, 0, 1)
+    }
+    else {
+      lightPointX.value = lightTargetX
+      lightPointY.value = lightTargetY
+      lightVelocityX = 0
+      lightVelocityY = 0
+    }
+
+    lightRatioX.value = clamp(lightPointX.value * 2 - 1, -1, 1)
+    lightRatioY.value = clamp(lightPointY.value * 2 - 1, -1, 1)
+
+    const closeLightX = Math.abs(lightTargetX - lightPointX.value) < 0.002 && Math.abs(lightVelocityX) < 0.002
+    const closeLightY = Math.abs(lightTargetY - lightPointY.value) < 0.002 && Math.abs(lightVelocityY) < 0.002
+    lightSettled = closeLightX && closeLightY
+  }
+
+  if (motionSettled && lightSettled) {
+    if (props.inertial) {
+      surfaceMoving.value = false
+    }
     lastTs = 0
     rafId = null
     return
@@ -140,10 +298,41 @@ function ensureRaf() {
   rafId = requestAnimationFrame(tickFrame)
 }
 
-function onMouseMove(ev: MouseEvent) {
-  if (!props.inertial)
+function updateRefractionLight(ev: MouseEvent) {
+  if (!refractionLightFollowMouse.value)
     return
+  if (background.value !== 'refraction')
+    return
+
+  const el = ev.currentTarget as HTMLElement | null
+  if (!el)
+    return
+
+  const rect = el.getBoundingClientRect()
+  if (!rect.width || !rect.height)
+    return
+
+  const localX = clamp(ev.clientX - rect.left, 0, rect.width)
+  const localY = clamp(ev.clientY - rect.top, 0, rect.height)
+  lightTargetX = localX / rect.width
+  lightTargetY = localY / rect.height
+  if (!refractionLightSpring.value) {
+    lightPointX.value = lightTargetX
+    lightPointY.value = lightTargetY
+    lightRatioX.value = clamp(lightPointX.value * 2 - 1, -1, 1)
+    lightRatioY.value = clamp(lightPointY.value * 2 - 1, -1, 1)
+    lightVelocityX = 0
+    lightVelocityY = 0
+  }
+  ensureRaf()
+}
+
+function onMouseMove(ev: MouseEvent) {
   if (props.disabled)
+    return
+  updateRefractionLight(ev)
+
+  if (!props.inertial)
     return
   const el = ev.currentTarget as HTMLElement | null
   if (!el)
@@ -166,15 +355,31 @@ function onMouseMove(ev: MouseEvent) {
   const easedY = Math.sign(ratioY) * Math.abs(ratioY) ** 0.85
   const max = props.inertialMaxOffset
 
+  surfaceMoving.value = true
   targetX = easedX * max
   targetY = easedY * max
   ensureRaf()
 }
 
 function onMouseLeave() {
+  if (refractionLightFollowMouse.value && background.value === 'refraction') {
+    lightTargetX = 0.5
+    lightTargetY = 0.5
+    if (!refractionLightSpring.value) {
+      lightPointX.value = 0.5
+      lightPointY.value = 0.5
+      lightRatioX.value = 0
+      lightRatioY.value = 0
+      lightVelocityX = 0
+      lightVelocityY = 0
+    }
+    ensureRaf()
+  }
+
   if (!props.inertial)
     return
   const rebound = clamp(props.inertialRebound, 0, 1)
+  surfaceMoving.value = true
   isReturning = true
   velocityX *= rebound
   velocityY *= rebound
@@ -182,6 +387,35 @@ function onMouseLeave() {
   targetY = 0
   ensureRaf()
 }
+
+function resetRefractionLightState() {
+  lightTargetX = 0.5
+  lightTargetY = 0.5
+  lightPointX.value = 0.5
+  lightPointY.value = 0.5
+  lightRatioX.value = 0
+  lightRatioY.value = 0
+  lightVelocityX = 0
+  lightVelocityY = 0
+}
+
+watch([background, refractionLightFollowMouse], ([bg, follow]) => {
+  if (bg !== 'refraction' || !follow) {
+    resetRefractionLightState()
+  }
+})
+
+watch(inertial, (enabled) => {
+  if (!enabled) {
+    surfaceMoving.value = false
+    motionX.value = 0
+    motionY.value = 0
+    targetX = 0
+    targetY = 0
+    velocityX = 0
+    velocityY = 0
+  }
+})
 
 onBeforeUnmount(() => {
   stopRaf()
@@ -216,13 +450,32 @@ function onClick(ev: MouseEvent) {
       '--tx-card-padding': `${resolvedPadding}px`,
       '--tx-card-dx': `${motionX}px`,
       '--tx-card-dy': `${motionY}px`,
-      '--tx-card-glass-blur': `${glassBlur ? glassBlurAmount : 0}px`,
-      '--tx-card-glass-overlay-opacity': `${glassOverlay ? glassOverlayOpacity : 0}`,
+      '--tx-surface-refraction-mask-color': 'var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff))',
     }"
     @click="onClick"
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
   >
+    <TxBaseSurface
+      class="tx-card__surface"
+      :mode="surfaceMode"
+      preset="card"
+      :moving="surfaceMoving"
+      :fallback-mask-opacity="fallbackMaskOpacity"
+      :radius="resolvedRadius"
+      :color="surfaceColor"
+      :opacity="surfaceOpacity"
+      :blur="surfaceBlur"
+      :overlay-opacity="surfaceOverlayOpacity"
+      :refraction-strength="surfaceRefractionStrength"
+      :refraction-profile="surfaceRefractionProfile"
+      :refraction-tone="surfaceRefractionTone"
+      :refraction-angle="surfaceRefractionAngle"
+      :refraction-light-x="surfaceRefractionLightX"
+      :refraction-light-y="surfaceRefractionLightY"
+      aria-hidden="true"
+    />
+
     <div v-if="$slots.cover" class="tx-card__cover">
       <slot name="cover" />
     </div>
@@ -259,16 +512,6 @@ function onClick(ev: MouseEvent) {
   will-change: transform;
   touch-action: pan-y;
 
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    opacity: 0;
-    z-index: 0;
-  }
-
   &.is-solid,
   &.is-dashed {
     border: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
@@ -282,31 +525,9 @@ function onClick(ev: MouseEvent) {
     border: none;
   }
 
-  &.is-bg-mask {
-    background: var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff));
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-
-  &.is-bg-blur {
-    background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-  }
-
-  &.is-bg-glass {
-    background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
-    backdrop-filter: blur(var(--tx-card-glass-blur, 22px)) saturate(185%) contrast(1.08);
-    -webkit-backdrop-filter: blur(var(--tx-card-glass-blur, 22px)) saturate(185%) contrast(1.08);
+  &.is-bg-glass,
+  &.is-bg-refraction {
     border-color: color-mix(in srgb, rgba(255, 255, 255, 0.26) 55%, var(--tx-border-color-light, #e4e7ed));
-
-    &::before {
-      opacity: var(--tx-card-glass-overlay-opacity, 0.22);
-      background:
-        radial-gradient(700px 220px at 0% 0%, rgba(255, 255, 255, 0.55), transparent 55%),
-        radial-gradient(600px 260px at 100% 0%, rgba(255, 255, 255, 0.22), transparent 58%),
-        linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0) 68%);
-    }
   }
 
   &.is-shadow-none {
@@ -337,6 +558,17 @@ function onClick(ev: MouseEvent) {
     opacity: 0.65;
     cursor: not-allowed;
   }
+}
+
+.tx-card__surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: var(--tx-card-radius, 14px);
+  pointer-events: none;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .tx-card__cover {

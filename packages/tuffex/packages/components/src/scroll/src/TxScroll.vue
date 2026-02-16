@@ -4,6 +4,7 @@ import PullDown from '@better-scroll/pull-down'
 import PullUp from '@better-scroll/pull-up'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { hasNavigator } from '@talex-touch/utils/env'
+import { isMacOSSafari, supportsNativeNonRootOverscrollBounce } from './runtime-capabilities'
 
 type BetterScroll = any
 
@@ -14,6 +15,8 @@ const props = withDefaults(
   defineProps<{
     noPadding?: boolean
     native?: boolean
+    unified?: boolean
+    nativeAutoFallback?: boolean
     scrollChaining?: boolean
     direction?: 'vertical' | 'horizontal' | 'both'
     scrollbar?: boolean
@@ -36,6 +39,8 @@ const props = withDefaults(
   {
     noPadding: false,
     native: false,
+    unified: false,
+    nativeAutoFallback: true,
     scrollChaining: false,
     direction: 'vertical',
     scrollbar: true,
@@ -71,6 +76,14 @@ const nativeScrollRef = ref<HTMLElement | null>(null)
 
 const canScrollY = ref(false)
 const canScrollX = ref(false)
+const shouldAutoFallbackToNative = computed(() => {
+  if (props.unified)
+    return false
+  if (isMacOSSafari())
+    return true
+  return props.nativeAutoFallback && supportsNativeNonRootOverscrollBounce()
+})
+const isNativeMode = computed(() => props.native || shouldAutoFallbackToNative.value)
 
 const isScrollXEnabled = computed(() => props.direction === 'horizontal' || props.direction === 'both')
 const isScrollYEnabled = computed(() => props.direction === 'vertical' || props.direction === 'both')
@@ -301,7 +314,7 @@ async function initBetterScroll() {
   const onWheel = (e: WheelEvent) => {
     if (!bs)
       return
-    if (props.native)
+    if (isNativeMode.value)
       return
     if (!props.wheel)
       return
@@ -643,7 +656,7 @@ function handleNativeTouchEnd(e: TouchEvent) {
 defineExpose({
   nativeScrollRef,
   scrollTo(x: number, y: number, time = 0) {
-    if (props.native) {
+    if (isNativeMode.value) {
       nativeScrollRef.value?.scrollTo(x, y)
       return
     }
@@ -653,7 +666,7 @@ defineExpose({
     }
   },
   getScrollInfo(): TxScrollInfo {
-    if (props.native && nativeScrollRef.value) {
+    if (isNativeMode.value && nativeScrollRef.value) {
       const el = nativeScrollRef.value
       return {
         scrollTop: el.scrollTop,
@@ -693,7 +706,7 @@ defineExpose({
     }
   },
   finishPullDown() {
-    if (props.native) {
+    if (isNativeMode.value) {
       nativePullingDown = false
       return
     }
@@ -704,7 +717,7 @@ defineExpose({
     }
   },
   finishPullUp() {
-    if (props.native) {
+    if (isNativeMode.value) {
       nativePullingUp = false
       return
     }
@@ -719,7 +732,7 @@ defineExpose({
 onMounted(async () => {
   await nextTick()
 
-  if (!props.native) {
+  if (!isNativeMode.value) {
     await initBetterScroll()
     setupResizeObserver()
     setupMutationObserver()
@@ -732,14 +745,14 @@ onUnmounted(() => {
 })
 
 watch(
-  () => props.native,
-  async (nextNative) => {
+  () => isNativeMode.value,
+  async (nextIsNative) => {
     await nextTick()
 
     destroyResizeObserver()
     destroyBetterScroll()
 
-    if (!nextNative) {
+    if (!nextIsNative) {
       await initBetterScroll()
       setupResizeObserver()
       setupMutationObserver()
@@ -766,7 +779,7 @@ watch(
     props.options,
   ],
   async () => {
-    if (props.native)
+    if (isNativeMode.value)
       return
 
     await nextTick()
@@ -781,8 +794,8 @@ watch(
 </script>
 
 <template>
-  <div class="tx-scroll" :class="{ 'is-native': native }">
-    <template v-if="native">
+  <div class="tx-scroll" :class="{ 'is-native': isNativeMode }">
+    <template v-if="isNativeMode">
       <div
         ref="nativeScrollRef"
         class="tx-scroll__native"

@@ -1,10 +1,11 @@
 export type TxCardVariant = 'solid' | 'dashed' | 'plain'
 
-export type TxCardBackground = 'blur' | 'glass' | 'mask'
+export type TxCardBackground = 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
 
 export type TxCardShadow = 'none' | 'soft' | 'medium'
 
 export type TxCardSize = 'small' | 'medium' | 'large'
+export type TxCardRefractionTone = 'mist' | 'balanced' | 'vivid'
 
 export interface TxCardProps {
   variant?: TxCardVariant
@@ -17,6 +18,16 @@ export interface TxCardProps {
   glassBlurAmount?: number
   glassOverlay?: boolean
   glassOverlayOpacity?: number
+  fallbackMaskOpacity?: number
+  refractionStrength?: number
+  refractionProfile?: 'soft' | 'filmic' | 'cinematic'
+  refractionTone?: TxCardRefractionTone
+  refractionAngle?: number
+  refractionLightFollowMouse?: boolean
+  refractionLightFollowIntensity?: number
+  refractionLightSpring?: boolean
+  refractionLightSpringStiffness?: number
+  refractionLightSpringDamping?: number
   clickable?: boolean
   loading?: boolean
   loadingSpinnerSize?: number

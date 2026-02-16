@@ -1,41 +1,176 @@
 .tx-base-surface {
   position: relative;
   border-radius: var(--tx-surface-radius, inherit);
+  overflow: hidden;
 
   // ---- Mode: pure ----
   &--pure {
     background: var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa));
   }
 
-  // ---- Mode: mask ----
-  &--mask {
-    background: color-mix(
-      in srgb,
-      var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa)) var(--tx-surface-opacity, 75%),
-      transparent
-    );
+  .tx-base-surface__layer {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    transition:
+      opacity var(--tx-surface-transition, 260ms) ease,
+      background var(--tx-surface-transition, 260ms) ease,
+      backdrop-filter var(--tx-surface-transition, 260ms) ease;
   }
 
-  // ---- Mode: blur ----
-  &--blur {
-    background: var(--tx-surface-blur-bg, rgba(255, 255, 255, 0.6));
-    backdrop-filter: blur(var(--tx-surface-blur, 10px));
-    -webkit-backdrop-filter: blur(var(--tx-surface-blur, 10px));
-  }
+  .tx-base-surface__layer--glass {
+    z-index: 0;
 
-  // ---- Mode: glass / refraction (wraps GlassSurface) ----
-  &--glass-wrap {
-    overflow: hidden;
-
-    .tx-base-surface__glass {
+    .tx-glass-surface {
       width: 100%;
       height: 100%;
+      border-radius: inherit;
+    }
+  }
+
+  .tx-base-surface__layer--filter {
+    z-index: 1;
+    background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 10%, transparent);
+    backdrop-filter:
+      blur(var(--tx-surface-filter-blur, 10px))
+      saturate(var(--tx-surface-filter-saturation, 1.5))
+      contrast(var(--tx-surface-filter-contrast, 1))
+      brightness(var(--tx-surface-filter-brightness, 1));
+    -webkit-backdrop-filter:
+      blur(var(--tx-surface-filter-blur, 10px))
+      saturate(var(--tx-surface-filter-saturation, 1.5))
+      contrast(var(--tx-surface-filter-contrast, 1))
+      brightness(var(--tx-surface-filter-brightness, 1));
+    will-change: backdrop-filter;
+  }
+
+  .tx-base-surface__layer--mask {
+    z-index: 2;
+    background: color-mix(
+      in srgb,
+      var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa)) var(--tx-surface-mask-opacity-percent, 75%),
+      transparent
+    );
+    opacity: 1;
+  }
+
+  .tx-base-surface__content {
+    position: relative;
+    z-index: 3;
+    border-radius: inherit;
+    min-height: inherit;
+  }
+
+  // ---- Card preset visual tuning ----
+  &--preset-card {
+    &.tx-base-surface--blur .tx-base-surface__layer--filter {
+      background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 22%, transparent);
+      backdrop-filter:
+        blur(var(--tx-surface-filter-blur, 30px))
+        saturate(calc(var(--tx-surface-filter-saturation, 1.5) * 1.2))
+        contrast(calc(var(--tx-surface-filter-contrast, 1) * 1.06))
+        brightness(var(--tx-surface-filter-brightness, 1));
+      -webkit-backdrop-filter:
+        blur(var(--tx-surface-filter-blur, 30px))
+        saturate(calc(var(--tx-surface-filter-saturation, 1.5) * 1.2))
+        contrast(calc(var(--tx-surface-filter-contrast, 1) * 1.06))
+        brightness(var(--tx-surface-filter-brightness, 1));
+    }
+
+    &.tx-base-surface--refraction .tx-base-surface__layer--filter {
+      background:
+        radial-gradient(
+          120% 88% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-filter-primary-weight, 32%), transparent),
+          transparent 58%
+        ),
+        radial-gradient(
+          105% 82% at calc(100% - var(--tx-surface-refraction-light-x, 24%)) calc(100% - var(--tx-surface-refraction-light-y, 20%)),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-filter-secondary-weight, 20%), transparent),
+          transparent 64%
+        ),
+        radial-gradient(
+          140% 100% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-filter-veil-weight, 16%), transparent),
+          transparent 62%
+        ),
+        color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-filter-base-weight, 6%), transparent);
+      backdrop-filter:
+        blur(var(--tx-surface-filter-blur, 24px))
+        saturate(calc(var(--tx-surface-filter-saturation, 1.5) * var(--tx-surface-refraction-filter-saturation-boost, 1.36)))
+        contrast(
+          calc(
+            var(--tx-surface-filter-contrast, 1)
+            * (var(--tx-surface-refraction-filter-contrast-base, 1.06) + var(--tx-surface-refraction-strength, 0.6) * var(--tx-surface-refraction-filter-contrast-gain, 0.1))
+          )
+        )
+        brightness(calc(var(--tx-surface-filter-brightness, 1) * var(--tx-surface-refraction-filter-brightness-boost, 1.04)));
+      -webkit-backdrop-filter:
+        blur(var(--tx-surface-filter-blur, 24px))
+        saturate(calc(var(--tx-surface-filter-saturation, 1.5) * var(--tx-surface-refraction-filter-saturation-boost, 1.36)))
+        contrast(
+          calc(
+            var(--tx-surface-filter-contrast, 1)
+            * (var(--tx-surface-refraction-filter-contrast-base, 1.06) + var(--tx-surface-refraction-strength, 0.6) * var(--tx-surface-refraction-filter-contrast-gain, 0.1))
+          )
+        )
+        brightness(calc(var(--tx-surface-filter-brightness, 1) * var(--tx-surface-refraction-filter-brightness-boost, 1.04)));
+    }
+
+    &.tx-base-surface--glass .tx-base-surface__layer--mask {
+      background:
+        radial-gradient(700px 220px at 0% 0%, rgba(255, 255, 255, 0.55), transparent 55%),
+        radial-gradient(600px 260px at 100% 0%, rgba(255, 255, 255, 0.22), transparent 58%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.02) 45%, rgba(255, 255, 255, 0) 68%);
+      opacity: var(--tx-surface-mask-opacity, 0.22);
+    }
+
+    &.tx-base-surface--refraction .tx-base-surface__layer--mask {
+      background:
+        radial-gradient(
+          620px 260px at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%),
+          color-mix(
+            in srgb,
+            var(--tx-surface-refraction-mask-color, #fff)
+            calc((var(--tx-surface-refraction-halo-opacity, 0.32) * var(--tx-surface-refraction-halo-opacity-gain, 1)) * 100%),
+            transparent
+          ),
+          transparent 60%
+        ),
+        radial-gradient(
+          760px 360px at calc(100% - var(--tx-surface-refraction-light-x, 24%)) calc(100% - var(--tx-surface-refraction-light-y, 20%)),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-mask-primary-weight, 30%), transparent),
+          transparent 64%
+        ),
+        radial-gradient(
+          740px 340px at var(--tx-surface-refraction-light-x, 24%) calc(100% - var(--tx-surface-refraction-light-y, 20%)),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-mask-secondary-weight, 24%), transparent),
+          transparent 64%
+        ),
+        linear-gradient(
+          var(--tx-surface-refraction-streak-angle, 128deg),
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-streak-weight, 22%), transparent) 0%,
+          color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-mask-veil-weight, 10%), transparent) 36%,
+          transparent 70%
+        );
+      opacity: clamp(
+        0.08,
+        calc(var(--tx-surface-mask-opacity, 0.16) + var(--tx-surface-refraction-strength, 0.56) * var(--tx-surface-refraction-mask-strength-gain, 0.05)),
+        0.5
+      );
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) 10%, transparent);
+      mask-image:
+        radial-gradient(120% 90% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%), #000 46%, transparent 95%);
+      -webkit-mask-image:
+        radial-gradient(120% 90% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%), #000 46%, transparent 95%);
+      mix-blend-mode: var(--tx-surface-refraction-mask-blend-mode, screen);
     }
   }
 
   // ---- Fake pseudo-element mode ----
   &--fake {
-    > * {
+    .tx-base-surface__content {
       position: relative;
       z-index: 1;
     }
@@ -61,8 +196,31 @@
   }
 }
 
+.tx-surface-layer-fade-enter-active,
+.tx-surface-layer-fade-leave-active {
+  transition: opacity var(--tx-surface-transition, 260ms) ease;
+}
+
+.tx-surface-layer-fade-enter-from,
+.tx-surface-layer-fade-leave-to {
+  opacity: 0;
+}
+
 // ---- Dark mode overrides via CSS variable system ----
 [data-theme='dark'],
 .dark {
-  --tx-surface-blur-bg: rgba(0, 0, 0, 0.4);
+  .tx-base-surface--preset-card.tx-base-surface--blur .tx-base-surface__layer--filter {
+    background: color-mix(in srgb, #fff 14%, transparent);
+    backdrop-filter:
+      blur(var(--tx-surface-filter-blur, 30px))
+      saturate(calc(var(--tx-surface-filter-saturation, 1.5) * 1.1))
+      contrast(var(--tx-surface-filter-contrast, 1))
+      brightness(calc(var(--tx-surface-filter-brightness, 1) * 1.1));
+    -webkit-backdrop-filter:
+      blur(var(--tx-surface-filter-blur, 30px))
+      saturate(calc(var(--tx-surface-filter-saturation, 1.5) * 1.1))
+      contrast(var(--tx-surface-filter-contrast, 1))
+      brightness(calc(var(--tx-surface-filter-brightness, 1) * 1.1));
+  }
+
 }

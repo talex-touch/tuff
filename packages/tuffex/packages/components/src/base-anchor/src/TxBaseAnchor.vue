@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
+import gsap from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import TxAutoSizer from '../../auto-sizer/src/TxAutoSizer.vue'
+import TxCard from '../../card/src/TxCard.vue'
+import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxBaseAnchor' })
@@ -15,34 +17,28 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   width: 0,
   minWidth: 0,
   maxWidth: 360,
-  maxHeight: 420,
   matchReferenceWidth: false,
-  referenceFullWidth: false,
-  motion: 'split',
-  autoResize: false,
-  autoResizeWidth: true,
-  autoResizeHeight: true,
+  duration: 432,
+  ease: 'back.out(2)',
+  softEdge: 18,
+  useCard: true,
+  panelVariant: 'plain',
+  panelBackground: 'blur',
+  panelShadow: 'soft',
+  panelRadius: 18,
+  panelPadding: 10,
+  showArrow: false,
+  arrowSize: 10,
+  keepAliveContent: false,
   closeOnClickOutside: true,
   closeOnEsc: true,
-  transition: 'tx-base-anchor',
-  referenceAs: 'span',
-  floatingAs: 'div',
-  referenceProps: undefined,
-  floatingProps: undefined,
-  referenceClass: undefined,
-  floatingClass: undefined,
-  floatingStyle: undefined,
-  showArrow: false,
-  arrowSize: 12,
-  virtualRef: undefined,
-  onBeforeEnter: undefined,
+  toggleOnReferenceClick: true,
 })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'open'): void
   (e: 'close'): void
-  (e: 'before-enter', el: Element): void
 }>()
 
 const open = computed({
@@ -56,24 +52,26 @@ const open = computed({
   },
 })
 
+/* ─── refs ─── */
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
+const clipRef = ref<HTMLElement | null>(null)
+const contentRef = ref<HTMLElement | null>(null)
 const arrowRef = ref<HTMLElement | null>(null)
+const outlineW = ref(0)
+const outlineH = ref(0)
+
 const zIndex = ref(getZIndex())
+const mounted = ref(false)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
+const cleanupResizeObserver = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
-const stablePlacement = ref<string | null>(null)
-const splitX = ref(0)
-const splitY = ref(0)
 
-const motion = computed(() => (props.motion === 'fade' ? 'fade' : 'split'))
-const referenceEl = computed(() => (props.virtualRef ?? referenceRef.value) as any)
+let tl: gsap.core.Timeline | null = null
+let runId = 0
 
-function getPlacementSide(v: string): string {
-  return v.split('-')[0] ?? 'bottom'
-}
-
-const { floatingStyles, middlewareData, placement, update } = useFloating(referenceEl, floatingRef, {
+/* ─── floating-ui ─── */
+const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
   placement: computed(() => props.placement),
   strategy: 'fixed',
   transform: false,
@@ -86,31 +84,24 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
       apply({ rects, availableHeight, elements }) {
         const baseW = rects.reference.width
         const minW = Math.max(0, props.minWidth ?? 0)
-        const maxW = Math.max(0, props.maxWidth ?? 0)
-        const maxH = Math.min(availableHeight, props.maxHeight ?? 420)
+        const maxH = Math.min(availableHeight, 420)
 
         const style = elements.floating.style
         style.width = ''
         style.minWidth = ''
-        style.maxWidth = ''
-        style.maxHeight = ''
 
         if (props.width > 0) {
           style.width = `${props.width}px`
         }
         else if (props.matchReferenceWidth) {
-          const w = Math.max(baseW, minW)
-          style.width = `${w}px`
+          style.width = `${Math.max(baseW, minW)}px`
         }
         else if (minW > 0) {
           style.minWidth = `${minW}px`
         }
 
-        if (maxW > 0)
-          style.maxWidth = `${maxW}px`
-
-        style.maxHeight = `${maxH}px`
-        style.setProperty('--tx-base-anchor-max-height', `${maxH}px`)
+        style.maxWidth = `${props.maxWidth}px`
+        elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
       },
     }),
     arrow({
@@ -120,8 +111,8 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
   ],
 })
 
-const arrowSide = computed(() => getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom')))
-const arrowData = computed(() => ((middlewareData.value as any)?.arrow ?? null))
+const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
+const enableEdgeCut = false
 
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
@@ -134,6 +125,7 @@ const arrowStyle = computed<Record<string, string>>(() => {
   const base: Record<string, string> = {
     display: 'block',
     position: 'absolute',
+    '--tx-ba-arrow-size': `${props.arrowSize ?? 10}px`,
   }
 
   if (data.x != null)
@@ -148,100 +140,379 @@ const arrowStyle = computed<Record<string, string>>(() => {
     left: 'right',
   } as const
 
-  const staticSide = staticSideMap[arrowSide.value as keyof typeof staticSideMap] ?? 'top'
-  const half = Math.round((props.arrowSize || 12) / 2)
-  base[staticSide] = `calc(-${half}px + 1px)`
-
+  const staticSide = staticSideMap[side.value] ?? 'top'
+  const half = Math.round((props.arrowSize ?? 10) / 2)
+  base[staticSide] = `-${half}px`
   return base
 })
 
-const isVisible = computed(() => open.value && !props.disabled)
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
 
-const mergedReferenceProps = computed(() => props.referenceProps ?? {})
-const mergedFloatingProps = computed(() => props.floatingProps ?? {})
-const mergedFloatingClass = computed(() => [props.floatingClass, { 'is-motion-split': motion.value === 'split' }])
-const floatingStyle = computed(() => {
-  const side = getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom'))
-  const currentArrowData = (middlewareData.value as any)?.arrow
-  const arrowSize = props.arrowSize || 12
-  let crackX = '50%'
-  let crackY = '50%'
+function fmt(value: number): string {
+  return Number(value.toFixed(2)).toString()
+}
 
-  if (props.showArrow && currentArrowData) {
-    if ((side === 'top' || side === 'bottom') && currentArrowData.x != null)
-      crackX = `${currentArrowData.x + arrowSize * 0.5}px`
-    if ((side === 'left' || side === 'right') && currentArrowData.y != null)
-      crackY = `${currentArrowData.y + arrowSize * 0.5}px`
+function syncOutlineSize() {
+  const el = contentRef.value
+  if (!el) {
+    outlineW.value = 0
+    outlineH.value = 0
+    return
+  }
+  outlineW.value = Math.max(0, el.offsetWidth)
+  outlineH.value = Math.max(0, el.offsetHeight)
+}
+
+function setupResizeObserver() {
+  cleanupResizeObserver.value?.()
+  cleanupResizeObserver.value = null
+  if (!hasWindow() || !contentRef.value || typeof ResizeObserver === 'undefined')
+    return
+
+  const observer = new ResizeObserver(() => {
+    syncOutlineSize()
+  })
+  observer.observe(contentRef.value)
+  cleanupResizeObserver.value = () => observer.disconnect()
+}
+
+const outlinePath = computed(() => {
+  if (!props.useCard)
+    return ''
+
+  const w = outlineW.value
+  const h = outlineH.value
+  if (!w || !h)
+    return ''
+
+  const r = Math.min(Math.max(0, props.panelRadius ?? 18), w / 2, h / 2)
+  const borderInset = 0.5
+  const left = borderInset
+  const top = borderInset
+  const right = w - borderInset
+  const bottom = h - borderInset
+  const radius = Math.max(0, r - borderInset)
+
+  const topStart = left + radius
+  const topEnd = right - radius
+  const rightStart = top + radius
+  const rightEnd = bottom - radius
+  const bottomStart = left + radius
+  const bottomEnd = right - radius
+  const leftStart = top + radius
+  const leftEnd = bottom - radius
+
+  const data = props.showArrow ? (middlewareData.value as any)?.arrow : null
+  const size = props.arrowSize ?? 10
+  const gapHalf = Math.max((size / Math.SQRT2) - 0.2, 5.5)
+  const gapCenterNudge = 0
+  const minSeg = 4
+
+  const fullPath = [
+    `M ${fmt(topStart)} ${fmt(top)}`,
+    `L ${fmt(topEnd)} ${fmt(top)}`,
+    `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
+    `L ${fmt(right)} ${fmt(rightEnd)}`,
+    `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
+    `L ${fmt(bottomStart)} ${fmt(bottom)}`,
+    `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
+    `L ${fmt(left)} ${fmt(leftStart)}`,
+    `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
+  ].join(' ')
+
+  if (!data || !enableEdgeCut)
+    return fullPath
+
+  if ((side.value === 'top' || side.value === 'bottom') && data.x != null) {
+    const center = data.x + (size / 2) + gapCenterNudge
+    const minStart = topStart + minSeg
+    const maxEnd = topEnd - minSeg
+    const gapStart = clamp(center - gapHalf, minStart, maxEnd - minSeg)
+    let gapEnd = clamp(center + gapHalf, gapStart + minSeg, maxEnd)
+    if (gapEnd - gapStart < minSeg)
+      gapEnd = gapStart + minSeg
+
+    if (side.value === 'bottom') {
+      return [
+        `M ${fmt(topStart)} ${fmt(top)}`,
+        `L ${fmt(gapStart)} ${fmt(top)}`,
+        `M ${fmt(gapEnd)} ${fmt(top)}`,
+        `L ${fmt(topEnd)} ${fmt(top)}`,
+        `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
+        `L ${fmt(right)} ${fmt(rightEnd)}`,
+        `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
+        `L ${fmt(bottomStart)} ${fmt(bottom)}`,
+        `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
+        `L ${fmt(left)} ${fmt(leftStart)}`,
+        `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
+      ].join(' ')
+    }
+
+    return [
+      `M ${fmt(topStart)} ${fmt(top)}`,
+      `L ${fmt(topEnd)} ${fmt(top)}`,
+      `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
+      `L ${fmt(right)} ${fmt(rightEnd)}`,
+      `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
+      `L ${fmt(gapEnd)} ${fmt(bottom)}`,
+      `M ${fmt(gapStart)} ${fmt(bottom)}`,
+      `L ${fmt(bottomStart)} ${fmt(bottom)}`,
+      `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
+      `L ${fmt(left)} ${fmt(leftStart)}`,
+      `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
+    ].join(' ')
   }
 
-  const splitVars = {
-    '--tx-base-anchor-split-x': `${splitX.value}px`,
-    '--tx-base-anchor-split-y': `${splitY.value}px`,
-    '--tx-base-anchor-crack-size': `${props.arrowSize || 12}px`,
-    '--tx-base-anchor-crack-x': crackX,
-    '--tx-base-anchor-crack-y': crackY,
-  } as const
-  return [splitVars, props.floatingStyle]
+  if ((side.value === 'left' || side.value === 'right') && data.y != null) {
+    const center = data.y + (size / 2) + gapCenterNudge
+    const minStart = leftStart + minSeg
+    const maxEnd = leftEnd - minSeg
+    const gapStart = clamp(center - gapHalf, minStart, maxEnd - minSeg)
+    let gapEnd = clamp(center + gapHalf, gapStart + minSeg, maxEnd)
+    if (gapEnd - gapStart < minSeg)
+      gapEnd = gapStart + minSeg
+
+    if (side.value === 'left') {
+      return [
+        `M ${fmt(topStart)} ${fmt(top)}`,
+        `L ${fmt(topEnd)} ${fmt(top)}`,
+        `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
+        `L ${fmt(right)} ${fmt(gapStart)}`,
+        `M ${fmt(right)} ${fmt(gapEnd)}`,
+        `L ${fmt(right)} ${fmt(rightEnd)}`,
+        `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
+        `L ${fmt(bottomStart)} ${fmt(bottom)}`,
+        `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
+        `L ${fmt(left)} ${fmt(leftStart)}`,
+        `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
+      ].join(' ')
+    }
+
+    return [
+      `M ${fmt(topStart)} ${fmt(top)}`,
+      `L ${fmt(topEnd)} ${fmt(top)}`,
+      `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
+      `L ${fmt(right)} ${fmt(rightEnd)}`,
+      `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
+      `L ${fmt(bottomStart)} ${fmt(bottom)}`,
+      `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
+      `L ${fmt(left)} ${fmt(gapEnd)}`,
+      `M ${fmt(left)} ${fmt(gapStart)}`,
+      `L ${fmt(left)} ${fmt(leftStart)}`,
+      `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
+    ].join(' ')
+  }
+
+  return fullPath
 })
 
-function syncSplitOffset(el: Element) {
-  if (motion.value !== 'split') {
-    splitX.value = 0
-    splitY.value = 0
+/* ─── bounce padding on the far side ─── */
+const bouncePad = computed(() => {
+  const pad = '10px'
+  switch (side.value) {
+    case 'bottom': return { paddingBottom: pad }
+    case 'top': return { paddingTop: pad }
+    case 'left': return { paddingLeft: pad }
+    case 'right': return { paddingRight: pad }
+    default: return { paddingBottom: pad }
+  }
+})
+
+/* ─── helpers ─── */
+function getTranslate(): { x: number, y: number } {
+  const d = 30
+  switch (side.value) {
+    case 'bottom': return { x: 0, y: -d }
+    case 'top': return { x: 0, y: d }
+    case 'left': return { x: d, y: 0 }
+    case 'right': return { x: -d, y: 0 }
+    default: return { x: 0, y: -d }
+  }
+}
+
+function getClipPath(progress: number): string {
+  const p = `${Math.max(0, (1 - progress) * 100)}%`
+  switch (side.value) {
+    case 'bottom': return `inset(0 0 ${p} 0)`
+    case 'top': return `inset(${p} 0 0 0)`
+    case 'left': return `inset(0 0 0 ${p})`
+    case 'right': return `inset(0 ${p} 0 0)`
+    default: return `inset(0 0 ${p} 0)`
+  }
+}
+
+function getArrowInsetTranslate(): { x: number, y: number } {
+  const d = Math.max(4, Math.round((props.arrowSize ?? 10) * 0.45))
+  switch (side.value) {
+    case 'bottom': return { x: 0, y: d }
+    case 'top': return { x: 0, y: -d }
+    case 'left': return { x: -d, y: 0 }
+    case 'right': return { x: d, y: 0 }
+    default: return { x: 0, y: d }
+  }
+}
+
+function clearTimeline() {
+  if (tl) {
+    tl.kill()
+    tl = null
+  }
+}
+
+/* ─── animate open ─── */
+function animateOpen(currentRunId: number) {
+  const clip = clipRef.value
+  const content = contentRef.value
+  const arrowEl = arrowRef.value
+  if (!clip || !content || !hasWindow()) {
+    mounted.value = true
     return
   }
 
-  const referenceNode = (props.virtualRef ?? referenceRef.value) as BaseAnchorProps['virtualRef'] | HTMLElement | null
-  if (!referenceNode || typeof referenceNode.getBoundingClientRect !== 'function') {
-    splitX.value = 0
-    splitY.value = 0
+  clearTimeline()
+
+  const hiddenT = getTranslate()
+  const dur = props.duration / 1000
+
+  // prepare
+  clip.style.overflow = 'hidden'
+  clip.style.visibility = 'visible'
+  clip.style.clipPath = getClipPath(0)
+  clip.style.willChange = 'clip-path'
+  content.style.willChange = 'transform'
+  gsap.set(content, { x: hiddenT.x, y: hiddenT.y })
+  if (props.showArrow && arrowEl) {
+    const insetT = getArrowInsetTranslate()
+    gsap.set(arrowEl, {
+      x: insetT.x,
+      y: insetT.y,
+      scale: 0.72,
+      opacity: 0,
+      willChange: 'transform,opacity',
+    })
+  }
+
+  const clipState = { progress: 0 }
+  const arrowEnterDur = Math.min(0.16, Math.max(0.09, dur * 0.28))
+
+  tl = gsap.timeline({
+    onComplete: () => {
+      if (currentRunId !== runId)
+        return
+      clip.style.clipPath = 'none'
+      clip.style.overflow = 'visible'
+      // clear GPU layers for smooth scroll repositioning
+      clip.style.willChange = 'auto'
+      gsap.set(content, { clearProps: 'transform' })
+      content.style.willChange = 'auto'
+      if (arrowEl)
+        gsap.set(arrowEl, { clearProps: 'willChange' })
+      tl = null
+    },
+  })
+
+  tl.to(clipState, {
+    progress: 1,
+    duration: dur * 0.85,
+    ease: 'power2.inOut',
+    onUpdate() {
+      clip.style.clipPath = getClipPath(clipState.progress)
+    },
+  }, 0)
+
+  tl.to(content, {
+    x: 0,
+    y: 0,
+    duration: dur,
+    ease: props.ease,
+  }, 0)
+
+  if (props.showArrow && arrowEl) {
+    tl.to(arrowEl, {
+      x: 0,
+      y: 0,
+      scale: 1,
+      opacity: 1,
+      duration: arrowEnterDur,
+      ease: 'power2.out',
+    }, Math.max(0, dur - arrowEnterDur * 0.85))
+  }
+}
+
+/* ─── animate close ─── */
+function animateClose(currentRunId: number) {
+  const clip = clipRef.value
+  const content = contentRef.value
+  const arrowEl = arrowRef.value
+  if (!clip || !content || !hasWindow()) {
+    mounted.value = false
     return
   }
 
-  const node = el as HTMLElement
-  const refRect = referenceNode.getBoundingClientRect()
-  const floatRect = node.getBoundingClientRect()
-  const side = getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom'))
+  clearTimeline()
 
-  const refCx = refRect.left + refRect.width * 0.5
-  const refCy = refRect.top + refRect.height * 0.5
-  let tipX = floatRect.left + floatRect.width * 0.5
-  let tipY = floatRect.top + floatRect.height * 0.5
+  // restore GPU layers for animation
+  clip.style.willChange = 'clip-path'
+  content.style.willChange = 'transform'
+  clip.style.overflow = 'hidden'
+  clip.style.clipPath = getClipPath(1)
 
-  const arrowEl = props.showArrow ? arrowRef.value : null
-  if (arrowEl) {
-    const arrowRect = arrowEl.getBoundingClientRect()
-    tipX = arrowRect.left + arrowRect.width * 0.5
-    tipY = arrowRect.top + arrowRect.height * 0.5
-    if (side === 'top')
-      tipY = arrowRect.bottom
-    if (side === 'bottom')
-      tipY = arrowRect.top
-    if (side === 'left')
-      tipX = arrowRect.right
-    if (side === 'right')
-      tipX = arrowRect.left
+  const hiddenT = getTranslate()
+  const dur = (props.duration * 0.45) / 1000
+  const clipState = { progress: 1 }
+  const hasArrow = !!(props.showArrow && arrowEl)
+  const arrowInsetT = hasArrow ? getArrowInsetTranslate() : { x: 0, y: 0 }
+  const arrowHideDur = hasArrow ? Math.min(0.11, Math.max(0.07, dur * 0.4)) : 0
+  const motionStart = arrowHideDur
+
+  tl = gsap.timeline({
+    onComplete: () => {
+      if (currentRunId !== runId)
+        return
+      clip.style.visibility = 'hidden'
+      clip.style.clipPath = 'none'
+      clip.style.willChange = 'auto'
+      content.style.willChange = 'auto'
+      if (arrowEl)
+        gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+      if (!props.keepAliveContent)
+        mounted.value = false
+      tl = null
+    },
+  })
+
+  if (hasArrow && arrowEl) {
+    gsap.set(arrowEl, { willChange: 'transform,opacity' })
+    tl.to(arrowEl, {
+      x: arrowInsetT.x,
+      y: arrowInsetT.y,
+      scale: 0.72,
+      opacity: 0,
+      duration: arrowHideDur,
+      ease: 'power2.in',
+    }, 0)
   }
 
-  const dx = refCx - tipX
-  const dy = refCy - tipY
-  const limit = 18
-  const clamp = (v: number) => Math.min(limit, Math.max(-limit, v))
+  tl.to(content, {
+    x: hiddenT.x,
+    y: hiddenT.y,
+    duration: dur,
+    ease: 'power3.in',
+  }, motionStart)
 
-  splitX.value = side === 'left' || side === 'right' ? clamp(dx) : 0
-  splitY.value = side === 'top' || side === 'bottom' ? clamp(dy) : 0
+  tl.to(clipState, {
+    progress: 0,
+    duration: dur,
+    ease: 'power3.in',
+    onUpdate() {
+      clip.style.clipPath = getClipPath(clipState.progress)
+    },
+  }, motionStart)
 }
 
-function handleBeforeEnter(el: Element) {
-  syncSplitOffset(el)
-  emit('before-enter', el)
-  props.onBeforeEnter?.(el)
-}
-
-function close() {
-  open.value = false
-}
-
+/* ─── toggle / close ─── */
 function toggle() {
   if (props.disabled)
     return
@@ -250,6 +521,17 @@ function toggle() {
   open.value = !open.value
 }
 
+function handleReferenceClick() {
+  if (!props.toggleOnReferenceClick)
+    return
+  toggle()
+}
+
+function close() {
+  open.value = false
+}
+
+/* ─── outside click / esc ─── */
 function isEventInside(e: Event, el: HTMLElement | null): boolean {
   if (!el)
     return false
@@ -285,39 +567,57 @@ function handleEsc(e: KeyboardEvent) {
   close()
 }
 
+/* ─── watch open state ─── */
 watch(
   open,
   async (v) => {
+    runId++
+    const currentRunId = runId
+
     if (!v) {
-      stablePlacement.value = null
-      splitX.value = 0
-      splitY.value = 0
       cleanupAutoUpdate.value?.()
       cleanupAutoUpdate.value = null
+      cleanupResizeObserver.value?.()
+      cleanupResizeObserver.value = null
+      animateClose(currentRunId)
       return
     }
 
+    mounted.value = true
     zIndex.value = nextZIndex()
     lastOpenedAt.value = performance.now()
+
     await nextTick()
     await update()
-    stablePlacement.value = placement.value
+    syncOutlineSize()
+    setupResizeObserver()
 
     if (referenceRef.value && floatingRef.value) {
       cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => update())
+      cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => {
+        update()
+        syncOutlineSize()
+      })
     }
+
+    await nextTick()
+    syncOutlineSize()
+    animateOpen(currentRunId)
   },
   { flush: 'post' },
 )
 
+/* ─── lifecycle ─── */
 onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', handleEsc)
 
   await nextTick()
-  if (referenceRef.value)
+  if (referenceRef.value) {
     await update()
+    syncOutlineSize()
+    setupResizeObserver()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -325,118 +625,78 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleEsc)
   cleanupAutoUpdate.value?.()
   cleanupAutoUpdate.value = null
-})
-
-defineExpose({
-  open: () => (open.value = true),
-  close,
-  toggle,
-  update,
-  referenceRef,
-  floatingRef,
+  cleanupResizeObserver.value?.()
+  cleanupResizeObserver.value = null
+  clearTimeline()
 })
 </script>
 
 <template>
-  <component
-    :is="props.referenceAs"
+  <div
     ref="referenceRef"
     class="tx-base-anchor__reference"
-    :class="[props.referenceClass, { 'is-full-width': props.referenceFullWidth }]"
-    v-bind="mergedReferenceProps"
+    @click.capture="handleReferenceClick"
   >
     <slot name="reference" />
-  </component>
+  </div>
 
   <Teleport to="body">
-    <Transition v-if="props.transition" :name="props.transition" @before-enter="handleBeforeEnter">
-      <component
-        v-if="isVisible"
-        :is="props.floatingAs"
-        ref="floatingRef"
-        class="tx-base-anchor"
-        :class="mergedFloatingClass"
-        :data-side="arrowSide"
-        :style="[floatingStyles, floatingStyle, { zIndex }]"
-        v-bind="mergedFloatingProps"
-      >
-        <TxAutoSizer
-          v-if="props.autoResize"
-          outer-class="tx-base-anchor__sizer"
-          :width="props.autoResizeWidth"
-          :height="props.autoResizeHeight"
-        >
-          <slot
-            name="content"
-            :arrow-style="arrowStyle"
-            :arrow-side="arrowSide"
-            :arrow-ref="arrowRef"
-            :arrow-data="arrowData"
-          >
-            <slot />
-          </slot>
-        </TxAutoSizer>
-        <slot
-          v-else
-          name="content"
-          :arrow-style="arrowStyle"
-          :arrow-side="arrowSide"
-          :arrow-ref="arrowRef"
-          :arrow-data="arrowData"
-        >
-          <slot />
-        </slot>
-      </component>
-    </Transition>
-    <component
-      v-else-if="isVisible"
-      :is="props.floatingAs"
+    <div
+      v-if="mounted || open"
       ref="floatingRef"
       class="tx-base-anchor"
-      :class="mergedFloatingClass"
-      :data-side="arrowSide"
-      :style="[floatingStyles, floatingStyle, { zIndex }]"
-      v-bind="mergedFloatingProps"
+      :class="{ 'is-open': open }"
+      :style="[floatingStyles, { zIndex }]"
     >
-      <TxAutoSizer
-        v-if="props.autoResize"
-        outer-class="tx-base-anchor__sizer"
-        :width="props.autoResizeWidth"
-        :height="props.autoResizeHeight"
+      <span
+        v-if="props.showArrow"
+        ref="arrowRef"
+        class="tx-base-anchor__arrow"
+        :data-side="side"
+        :data-bg="panelBackground"
+        :style="arrowStyle"
+        aria-hidden="true"
+      />
+
+      <div
+        ref="clipRef"
+        class="tx-base-anchor__clip"
+        :data-side="side"
+        :style="bouncePad"
       >
-        <slot
-          name="content"
-          :arrow-style="arrowStyle"
-          :arrow-side="arrowSide"
-          :arrow-ref="arrowRef"
-          :arrow-data="arrowData"
-        >
-          <slot />
-        </slot>
-      </TxAutoSizer>
-      <slot
-        v-else
-        name="content"
-        :arrow-style="arrowStyle"
-        :arrow-side="arrowSide"
-        :arrow-ref="arrowRef"
-        :arrow-data="arrowData"
-      >
-        <slot />
-      </slot>
-    </component>
+        <div ref="contentRef" class="tx-base-anchor__content">
+          <TxCard
+            v-if="props.useCard"
+            class="tx-base-anchor__card"
+            :variant="props.panelVariant"
+            :background="panelBackground"
+            :shadow="panelShadow"
+            :radius="panelRadius"
+            :padding="panelPadding"
+          >
+            <slot :side="side" />
+          </TxCard>
+          <slot v-else :side="side" />
+          <svg
+            v-if="props.useCard && outlinePath"
+            class="tx-base-anchor__outline"
+            :viewBox="`0 0 ${outlineW} ${outlineH}`"
+            aria-hidden="true"
+          >
+            <path class="tx-base-anchor__outline-path" :d="outlinePath" />
+          </svg>
+        </div>
+      </div>
+    </div>
   </Teleport>
 </template>
 
-<style lang="scss" scoped>
+<style scoped>
 .tx-base-anchor__reference {
+  position: relative;
   display: inline-flex;
   align-items: center;
   width: fit-content;
-
-  &.is-full-width {
-    width: 100%;
-  }
 }
 
 .tx-base-anchor {
@@ -444,114 +704,125 @@ defineExpose({
   background: transparent;
   border: none;
   overflow: visible;
+  pointer-events: none;
 }
 
-.tx-base-anchor.is-motion-split {
-  --tx-base-anchor-crack-size: 12px;
-  filter: saturate(1.04);
+.tx-base-anchor__clip {
+  position: relative;
+  pointer-events: auto;
+  overflow: hidden;
+  will-change: clip-path;
+  visibility: hidden;
+  z-index: 2;
 }
 
-.tx-base-anchor.is-motion-split::before {
+.tx-base-anchor__arrow {
+  position: absolute;
+  width: var(--tx-ba-arrow-size, 10px);
+  height: var(--tx-ba-arrow-size, 10px);
+  pointer-events: none;
+  background: transparent;
+  overflow: hidden;
+  z-index: 4;
+}
+
+.tx-base-anchor:not(.is-open) .tx-base-anchor__arrow {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.tx-base-anchor__arrow[data-side='bottom'] {
+  clip-path: inset(0 0 50% 0);
+}
+
+.tx-base-anchor__arrow[data-side='top'] {
+  clip-path: inset(50% 0 0 0);
+}
+
+.tx-base-anchor__arrow[data-side='left'] {
+  clip-path: inset(0 0 0 50%);
+}
+
+.tx-base-anchor__arrow[data-side='right'] {
+  clip-path: inset(0 50% 0 0);
+}
+
+.tx-base-anchor__arrow::before,
+.tx-base-anchor__arrow::after {
   content: '';
   position: absolute;
-  z-index: 0;
+  inset: 0;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  box-sizing: border-box;
+}
+
+.tx-base-anchor__arrow::before {
+  background: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
+}
+
+.tx-base-anchor__arrow::after {
+  inset: 1px;
+  background: var(--tx-bg-color-overlay, #fff);
+}
+
+.tx-base-anchor__arrow[data-bg='mask']::after {
+  background: var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-base-anchor__arrow[data-bg='blur']::after {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+.tx-base-anchor__arrow[data-bg='glass']::after {
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
+  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
+}
+
+.tx-base-anchor__arrow[data-bg='refraction']::after {
+  background: color-mix(in srgb, var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff)) 34%, transparent);
+  backdrop-filter: blur(18px) saturate(150%) contrast(1.06) brightness(0.98);
+  -webkit-backdrop-filter: blur(18px) saturate(150%) contrast(1.06) brightness(0.98);
+}
+
+.tx-base-anchor__arrow[data-bg='pure']::after {
+  background: var(--tx-fill-color-lighter, var(--tx-bg-color-overlay, #fff));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.tx-base-anchor__outline-path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 88%, transparent);
+  stroke-width: 1;
+  stroke-linecap: butt;
+  stroke-linejoin: round;
+  shape-rendering: geometricPrecision;
+  vector-effect: non-scaling-stroke;
+}
+
+.tx-base-anchor__content {
+  position: relative;
+  will-change: transform;
+  max-height: var(--tx-ba-max-height, 420px);
+}
+
+.tx-base-anchor__card {
+  width: 100%;
+  max-height: var(--tx-ba-max-height, 420px);
+  overflow: auto;
+}
+
+.tx-base-anchor__outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.18s ease, transform 0.18s ease, filter 0.18s ease;
-  background:
-    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.48), transparent 58%),
-    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 28%, rgba(255, 255, 255, 0.34)), transparent 58%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14), transparent 74%);
-  mix-blend-mode: soft-light;
-  filter: blur(3px) saturate(1.16);
-  border-radius: 999px;
-  width: calc(var(--tx-base-anchor-crack-size, 12px) * 3.6);
-  height: calc(var(--tx-base-anchor-crack-size, 12px) * 2.4);
-}
-
-.tx-base-anchor.is-motion-split[data-side='top']::before {
-  left: var(--tx-base-anchor-crack-x, 50%);
-  bottom: 0;
-  transform: translate3d(-50%, 70%, 0) scale(0.7);
-}
-
-.tx-base-anchor.is-motion-split[data-side='bottom']::before {
-  left: var(--tx-base-anchor-crack-x, 50%);
-  top: 0;
-  transform: translate3d(-50%, -70%, 0) scale(0.7);
-}
-
-.tx-base-anchor.is-motion-split[data-side='left']::before {
-  top: var(--tx-base-anchor-crack-y, 50%);
-  right: 0;
-  transform: translate3d(70%, -50%, 0) scale(0.7);
-}
-
-.tx-base-anchor.is-motion-split[data-side='right']::before {
-  top: var(--tx-base-anchor-crack-y, 50%);
-  left: 0;
-  transform: translate3d(-70%, -50%, 0) scale(0.7);
-}
-
-.tx-base-anchor-enter-active,
-.tx-base-anchor-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
-  will-change: opacity, transform;
-}
-
-.tx-base-anchor-enter-from,
-.tx-base-anchor-leave-to {
-  opacity: 0;
-  transform: translate3d(0, 6px, 0) scale(0.96);
-}
-
-.tx-base-anchor-enter-from[data-side='top'],
-.tx-base-anchor-leave-to[data-side='top'] {
-  transform: translate3d(0, -6px, 0) scale(0.96);
-}
-
-.tx-base-anchor-enter-from[data-side='left'],
-.tx-base-anchor-leave-to[data-side='left'] {
-  transform: translate3d(-6px, 0, 0) scale(0.96);
-}
-
-.tx-base-anchor-enter-from[data-side='right'],
-.tx-base-anchor-leave-to[data-side='right'] {
-  transform: translate3d(6px, 0, 0) scale(0.96);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to {
-  transform: translate3d(var(--tx-base-anchor-split-x, 0px), var(--tx-base-anchor-split-y, 0px), 0) scale(0.9);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from::before,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to::before {
-  opacity: 0.9;
-  filter: blur(5px) saturate(1.24);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from[data-side='top']::before,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to[data-side='top']::before {
-  border-radius: 52% 48% 62% 38% / 54% 46% 58% 42%;
-  transform: translate3d(-50%, 104%, 0) rotate(6deg) scaleX(1.52) scaleY(1.16);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from[data-side='bottom']::before,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to[data-side='bottom']::before {
-  border-radius: 46% 54% 40% 60% / 42% 58% 46% 54%;
-  transform: translate3d(-50%, -104%, 0) rotate(-6deg) scaleX(1.52) scaleY(1.16);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from[data-side='left']::before,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to[data-side='left']::before {
-  border-radius: 58% 42% 52% 48% / 44% 56% 40% 60%;
-  transform: translate3d(104%, -50%, 0) rotate(-6deg) scaleX(1.16) scaleY(1.52);
-}
-
-.tx-base-anchor.is-motion-split.tx-base-anchor-enter-from[data-side='right']::before,
-.tx-base-anchor.is-motion-split.tx-base-anchor-leave-to[data-side='right']::before {
-  border-radius: 44% 56% 38% 62% / 60% 40% 56% 44%;
-  transform: translate3d(-104%, -50%, 0) rotate(6deg) scaleX(1.16) scaleY(1.52);
+  z-index: 3;
 }
 </style>

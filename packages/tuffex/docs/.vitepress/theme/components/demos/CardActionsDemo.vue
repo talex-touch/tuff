@@ -2,11 +2,11 @@
 </script>
 
 <template>
-  <div style="width: 520px; max-width: 100%;">
+  <div class="card-actions-shell">
     <TxCard variant="solid" background="glass" shadow="soft" :radius="18" :padding="14">
       <template #header>
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
-          <div style="font-weight: 600;">
+        <div class="card-actions-header">
+          <div class="card-actions-title">
             User info
           </div>
           <TxButton size="small" variant="text">
@@ -15,20 +15,20 @@
         </div>
       </template>
 
-      <div style="display: flex; gap: 12px; align-items: center;">
-        <div style="width: 34px; height: 34px; border-radius: 12px; background: rgba(64,158,255,0.22);" />
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <div style="font-weight: 600;">
+      <div class="card-actions-body">
+        <div class="card-actions-avatar" />
+        <div class="card-actions-meta">
+          <div class="card-actions-name">
             Zhang San
           </div>
-          <div style="font-size: 12px; opacity: 0.75;">
+          <div class="card-actions-role">
             Frontend Engineer
           </div>
         </div>
       </div>
 
       <template #footer>
-        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <div class="card-actions-footer">
           <TxButton size="small" variant="outline">
             Cancel
           </TxButton>
@@ -40,3 +40,53 @@
     </TxCard>
   </div>
 </template>
+
+<style scoped>
+.card-actions-shell {
+  width: 520px;
+  max-width: 100%;
+}
+
+.card-actions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-actions-title,
+.card-actions-name {
+  font-weight: 600;
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.card-actions-body {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.card-actions-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 24%, transparent);
+}
+
+.card-actions-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.card-actions-role {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary, #909399);
+}
+
+.card-actions-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>

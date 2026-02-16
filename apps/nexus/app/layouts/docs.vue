@@ -42,6 +42,7 @@ const outlineVisible = ref(false)
           </main>
           <aside class="hidden w-[240px] shrink-0 lg:block">
             <div class="sticky top-24 flex flex-col gap-6">
+              <div id="docs-outline-tools" class="docs-outline-tools-anchor relative z-30" />
               <div class="docs-outline-panel max-h-[calc(100vh-12rem)] overflow-y-auto pr-2 relative z-30">
                 <DocsOutline />
               </div>

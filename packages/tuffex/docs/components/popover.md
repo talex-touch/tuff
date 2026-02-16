@@ -1,8 +1,8 @@
 # Popover 弹出层
 
-基于 Floating UI 的点击弹出层。
+基于 `TxBaseAnchor` 的轻封装弹出层，支持 click / hover 两种触发模式。
 
-Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板的边框、背景与阴影。
+Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板样式；并支持 `keepAliveContent` 保留内部状态。
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -43,7 +43,7 @@ const open = ref(false)
 </template>
 </DemoBlock>
 
-## 视觉效果（split / fusion / mask）
+## 组合模式（trigger / keepAlive / background）
 
 <DemoBlock title="Popover (visual effects)" :code="PopoverVisualEffectsDemoSource">
 <template #preview>
@@ -57,24 +57,26 @@ const open = ref(false)
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | 是否打开（v-model） |
+| `modelValue` | `boolean` | - | 是否打开（v-model） |
 | `disabled` | `boolean` | `false` | 禁用 |
 | `placement` | `PopoverPlacement` | `'bottom-start'` | 位置 |
-| `offset` | `number` | `8` | 间距 |
+| `offset` | `number` | 自动计算 | 间距（传值优先；未传时：有箭头按 `arrowSize` 自动留距，无箭头为 `2`） |
 | `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
 | `minWidth` | `number` | `0` | 最小宽度（width=0 时也会生效） |
 | `maxWidth` | `number` | `360` | 最大宽度 |
 | `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度（用于 flex 场景） |
-| `showArrow` | `boolean` | `false` | 显示箭头 |
+| `showArrow` | `boolean` | `true` | 显示箭头 |
 | `arrowSize` | `number` | `12` | 箭头尺寸 |
-| `motion` | `'fade' \| 'split'` | `'split'` | 动效 |
-| `fusion` | `boolean` | `false` | 融合滤镜 |
+| `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
+| `openDelay` | `number` | `120` | hover 模式下打开延迟（ms） |
+| `closeDelay` | `number` | `100` | hover 模式下关闭延迟（ms） |
+| `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
-| `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
+| `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭（仅 click trigger 生效） |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 
 ### Events

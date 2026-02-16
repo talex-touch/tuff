@@ -1,4 +1,10 @@
+import type { GlassSurfaceProps } from '../../glass-surface'
+
 export type BaseSurfaceMode = 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
+export type BaseSurfacePreset = 'default' | 'card'
+export type BaseSurfaceRefractionRenderer = 'svg' | 'css'
+export type BaseSurfaceRefractionProfile = 'soft' | 'filmic' | 'cinematic'
+export type BaseSurfaceRefractionTone = 'mist' | 'balanced' | 'vivid'
 
 export interface BaseSurfaceProps {
   /** 背景模式 */
@@ -9,11 +15,19 @@ export interface BaseSurfaceProps {
   color?: string
   /** mask 模式下的透明度 (0-1) */
   opacity?: number
-  /** blur 模式下的模糊强度 (px) */
+  /** 运动降级到 mask 时的透明度覆盖（0-1） */
+  fallbackMaskOpacity?: number
+  /** blur（即 filter 层）模式下的模糊强度 (px) */
   blur?: number
+  /** filter 层饱和度（用于 blur/refraction 模式） */
+  filterSaturation?: number
+  /** filter 层对比度（用于 blur/refraction 模式） */
+  filterContrast?: number
+  /** filter 层亮度（用于 blur/refraction 模式） */
+  filterBrightness?: number
   /** glass/refraction 模式下的饱和度 */
   saturation?: number
-  /** glass/refraction 模式下的亮度 */
+  /** glass/refraction 模式下的亮度（推荐 0-100；<=3 会按倍率自动转为百分比） */
   brightness?: number
   /** glass 模式下的背景透明度 */
   backgroundOpacity?: number
@@ -23,6 +37,20 @@ export interface BaseSurfaceProps {
   displace?: number
   /** refraction 模式下的扭曲缩放 */
   distortionScale?: number
+  /** refraction 强度（0-100），用于统一控制色散/扭曲/高光层力度 */
+  refractionStrength?: number
+  /** refraction 质感预设（soft/filmic/cinematic） */
+  refractionProfile?: BaseSurfaceRefractionProfile
+  /** refraction 色调预设（mist/balanced/vivid） */
+  refractionTone?: BaseSurfaceRefractionTone
+  /** refraction 偏移角度（度），用于控制色散主方向 */
+  refractionAngle?: number
+  /** refraction 高光锚点 X（0-1），用于光源跟随 */
+  refractionLightX?: number
+  /** refraction 高光锚点 Y（0-1），用于光源跟随 */
+  refractionLightY?: number
+  /** refraction 高光 halo 透明度（0-1），不传时使用内置 filmic 模型计算 */
+  refractionHaloOpacity?: number
   /** refraction 模式下的 R 通道偏移 */
   redOffset?: number
   /** refraction 模式下的 G 通道偏移 */
@@ -34,7 +62,7 @@ export interface BaseSurfaceProps {
   /** refraction 模式下的 Y 通道选择 */
   yChannel?: 'R' | 'G' | 'B'
   /** refraction 模式下的混合模式 */
-  mixBlendMode?: string
+  mixBlendMode?: GlassSurfaceProps['mixBlendMode']
   /** 是否正在运动（手动控制降级） */
   moving?: boolean
   /** 运动降级的目标模式，默认 'mask' */
@@ -49,6 +77,12 @@ export interface BaseSurfaceProps {
   fake?: boolean
   /** fake 模式下的 z-index，默认 0 */
   fakeIndex?: number
+  /** 视觉预设，default 保持通用，card 用于卡片风格 */
+  preset?: BaseSurfacePreset
+  /** refraction 模式渲染器：svg 或 css */
+  refractionRenderer?: BaseSurfaceRefractionRenderer
+  /** 非 mask 模式下的可选 mask 层透明度（用于 1+3、2+3、1+2+3） */
+  overlayOpacity?: number
   /** 标签名，默认 'div' */
   tag?: string
 }

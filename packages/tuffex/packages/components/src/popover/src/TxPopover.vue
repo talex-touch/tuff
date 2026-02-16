@@ -1,32 +1,39 @@
 <script setup lang="ts">
 import type { PopoverProps } from './types'
-import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
-import TxCard from '../../card/src/TxCard.vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxPopover' })
 
 const props = withDefaults(defineProps<PopoverProps>(), {
-  modelValue: false,
+  modelValue: undefined,
   disabled: false,
   placement: 'bottom-start',
-  offset: 8,
   width: 0,
   minWidth: 0,
   maxWidth: 360,
   referenceFullWidth: false,
-  showArrow: false,
+  showArrow: true,
   arrowSize: 12,
-  motion: 'split',
-  fusion: false,
+  trigger: 'click',
+  openDelay: 120,
+  closeDelay: 100,
+  keepAliveContent: true,
   panelVariant: 'solid',
-  panelBackground: 'blur',
+  panelBackground: 'refraction',
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 10,
   closeOnClickOutside: true,
   closeOnEsc: true,
+})
+
+const resolvedOffset = computed(() => {
+  if (typeof props.offset === 'number')
+    return props.offset
+  if (props.showArrow)
+    return Math.max(8, Math.round((props.arrowSize ?? 12) * 0.5) + 2)
+  return 2
 })
 
 const emit = defineEmits<{
@@ -35,9 +42,19 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const internalOpen = ref(false)
+
 const open = computed({
-  get: () => !!props.modelValue,
-  set: (v) => {
+  get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
+  set: (v: boolean) => {
+    if (props.disabled && v)
+      return
+
+    const current = typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value
+    if (current === v)
+      return
+
+    internalOpen.value = v
     emit('update:modelValue', v)
     if (v)
       emit('open')
@@ -46,669 +63,140 @@ const open = computed({
   },
 })
 
-const referenceRef = ref<HTMLElement | null>(null)
-const floatingRef = ref<HTMLElement | null>(null)
-const arrowRef = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
-const cleanupAutoUpdate = ref<(() => void) | null>(null)
-const lastOpenedAt = ref(0)
+let openTimer: number | null = null
+let closeTimer: number | null = null
 
-const stablePlacement = ref<string | null>(null)
-
-const splitX = ref(0)
-const splitY = ref(0)
-
-const motion = computed(() => (props.motion === 'fade' ? 'fade' : 'split'))
-
-function getPlacementSide(v: string): string {
-  return v.split('-')[0] ?? 'bottom'
+function clearTimers() {
+  if (openTimer != null)
+    window.clearTimeout(openTimer)
+  if (closeTimer != null)
+    window.clearTimeout(closeTimer)
+  openTimer = null
+  closeTimer = null
 }
 
-const popoverVars = computed<Record<string, string>>(() => {
-  const side = getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom'))
-  const arrowData = (middlewareData.value as any)?.arrow
-  const arrowSize = props.arrowSize || 12
-
-  let fusionX = '50%'
-  let fusionY = '50%'
-
-  if (props.showArrow && arrowData) {
-    if (side === 'top' || side === 'bottom') {
-      if (arrowData.x != null)
-        fusionX = `${arrowData.x + arrowSize * 0.5}px`
-    }
-    else {
-      if (arrowData.y != null)
-        fusionY = `${arrowData.y + arrowSize * 0.5}px`
-    }
-  }
-
-  return {
-    '--tx-popover-arrow-size': `${props.arrowSize}px`,
-    '--tx-popover-radius': `${props.panelRadius}px`,
-    '--tx-popover-split-x': `${splitX.value}px`,
-    '--tx-popover-split-y': `${splitY.value}px`,
-    '--tx-popover-fusion-x': fusionX,
-    '--tx-popover-fusion-y': fusionY,
-  }
-})
-
-const uid = useId()
-const gooFilterId = `tx-popover-goo-${uid}`
-
-const gooMatrixValues = computed(() => {
-  const alpha = 26
-  const alphaOffset = -12
-  return `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ${alpha} ${alphaOffset}`
-})
-
-const fusionVars = computed<Record<string, string>>(() => {
-  const out = Math.max(12, (props.offset ?? 8) + (props.arrowSize ?? 12) * 0.8)
-  const size = Math.max(26, (props.arrowSize ?? 12) * 3.2)
-  return {
-    '--tx-popover-goo-out': `${out}px`,
-    '--tx-popover-goo-size': `${size}px`,
-  }
-})
-
-const { floatingStyles, middlewareData, placement, update } = useFloating(referenceRef, floatingRef, {
-  placement: computed(() => props.placement),
-  strategy: 'fixed',
-  transform: false,
-  middleware: [
-    offsetMw(() => props.offset),
-    flip({ padding: 8 }),
-    shift({ padding: 8 }),
-    size({
-      padding: 8,
-      apply({ rects, availableHeight, elements }) {
-        const baseW = rects.reference.width
-        const minW = Math.max(0, props.minWidth ?? 0)
-        const w = props.width > 0 ? props.width : Math.max(baseW, minW)
-        const maxH = Math.min(availableHeight, 420)
-        Object.assign(elements.floating.style, {
-          width: `${w}px`,
-          maxWidth: `${props.maxWidth}px`,
-        })
-
-        elements.floating.style.setProperty('--tx-popover-max-height', `${maxH}px`)
-      },
-    }),
-    arrow({
-      element: computed(() => arrowRef.value),
-      padding: 6,
-    }),
-  ],
-})
-
-const arrowSide = computed(() => getPlacementSide(String(stablePlacement.value || placement.value || props.placement || 'bottom')))
-
-const arrowStyle = computed<Record<string, string>>(() => {
-  if (!props.showArrow || !arrowRef.value)
-    return { display: 'none' }
-
-  const data = (middlewareData.value as any)?.arrow
-
-  // Ensure arrow data is stable and valid
-  if (!data || (data.x == null && data.y == null)) {
-    return { display: 'none' }
-  }
-
-  const x = data.x
-  const y = data.y
-  const side = arrowSide.value
-
-  const base: Record<string, string> = {
-    display: 'block',
-    position: 'absolute',
-  }
-
-  // Only set position if we have valid coordinates
-  if (x != null)
-    base.left = `${x}px`
-  if (y != null)
-    base.top = `${y}px`
-
-  const staticSideMap = {
-    top: 'bottom',
-    right: 'left',
-    bottom: 'top',
-    left: 'right',
-  } as const
-  const staticSide = side in staticSideMap
-    ? staticSideMap[side as keyof typeof staticSideMap]
-    : 'top'
-
-  const half = Math.round((props.arrowSize || 12) / 2)
-  base[staticSide] = `calc(-${half}px + 1px)`
-  return base
-})
-
-function onBeforeEnter(el: Element) {
-  if (motion.value !== 'split') {
-    splitX.value = 0
-    splitY.value = 0
-    return
-  }
-
-  const node = el as HTMLElement
-  const refEl = referenceRef.value
-  if (!refEl)
-    return
-
-  const refRect = refEl.getBoundingClientRect()
-  const side = arrowSide.value
-
-  const refCx = refRect.left + refRect.width * 0.5
-  const refCy = refRect.top + refRect.height * 0.5
-
-  let tipX = refCx
-  let tipY = refCy
-
-  const arrowEl = props.showArrow ? arrowRef.value : null
-  if (arrowEl) {
-    const arrowRect = arrowEl.getBoundingClientRect()
-    tipX = arrowRect.left + arrowRect.width * 0.5
-    tipY = arrowRect.top + arrowRect.height * 0.5
-    if (side === 'top')
-      tipY = arrowRect.bottom
-    if (side === 'bottom')
-      tipY = arrowRect.top
-    if (side === 'left')
-      tipX = arrowRect.right
-    if (side === 'right')
-      tipX = arrowRect.left
-  }
-  else {
-    const floatRect = node.getBoundingClientRect()
-    tipX = floatRect.left + floatRect.width * 0.5
-    tipY = floatRect.top + floatRect.height * 0.5
-  }
-
-  const dx = refCx - tipX
-  const dy = refCy - tipY
-
-  const limit = 18
-  const clamp = (v: number) => Math.min(limit, Math.max(-limit, v))
-
-  splitX.value = side === 'left' || side === 'right' ? clamp(dx) : 0
-  splitY.value = side === 'top' || side === 'bottom' ? clamp(dy) : 0
-}
-
-function toggle() {
+function scheduleOpen() {
   if (props.disabled)
     return
-  if (!open.value)
-    lastOpenedAt.value = performance.now()
-  open.value = !open.value
+  clearTimers()
+  openTimer = window.setTimeout(() => {
+    open.value = true
+  }, Math.max(0, props.openDelay))
 }
 
-function close() {
-  open.value = false
+function scheduleClose() {
+  clearTimers()
+  closeTimer = window.setTimeout(() => {
+    open.value = false
+  }, Math.max(0, props.closeDelay))
 }
 
-function isEventInside(e: Event, el: HTMLElement | null): boolean {
-  if (!el)
+function onReferenceEnter() {
+  if (props.trigger !== 'hover')
+    return
+  scheduleOpen()
+}
+
+function onReferenceLeave() {
+  if (props.trigger !== 'hover')
+    return
+  scheduleClose()
+}
+
+function onFloatingEnter() {
+  if (props.trigger !== 'hover')
+    return
+  clearTimers()
+}
+
+function onFloatingLeave() {
+  if (props.trigger !== 'hover')
+    return
+  scheduleClose()
+}
+
+const anchorCloseOnClickOutside = computed(() => {
+  if (props.trigger !== 'click')
     return false
-  const anyE = e as any
-  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
-  if (path && path.length)
-    return path.includes(el)
-  const t = (e.target ?? null) as Node | null
-  return !!t && el.contains(t)
-}
-
-function handleOutside(e: Event) {
-  if (!props.closeOnClickOutside)
-    return
-  if (!open.value)
-    return
-
-  if (performance.now() - lastOpenedAt.value < 60)
-    return
-
-  const inRef = isEventInside(e, referenceRef.value)
-  const inFloat = isEventInside(e, floatingRef.value)
-  if (!inRef && !inFloat)
-    close()
-}
-
-function handleEsc(e: KeyboardEvent) {
-  if (!props.closeOnEsc)
-    return
-  if (e.key !== 'Escape')
-    return
-  if (!open.value)
-    return
-  close()
-}
-
-watch(
-  open,
-  async (v) => {
-    if (!v) {
-      stablePlacement.value = null
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = null
-      return
-    }
-
-    zIndex.value = nextZIndex()
-    lastOpenedAt.value = performance.now()
-    await nextTick()
-    await update()
-    stablePlacement.value = placement.value
-    if (referenceRef.value && floatingRef.value) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => update())
-    }
-  },
-  { flush: 'post' },
-)
-
-onMounted(async () => {
-  document.addEventListener('pointerdown', handleOutside, true)
-  document.addEventListener('keydown', handleEsc)
-
-  // Pre-calculate position even when closed to avoid jump on first open
-  await nextTick()
-  if (referenceRef.value) {
-    await update()
-  }
+  return props.closeOnClickOutside
 })
 
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (!disabled)
+      return
+    clearTimers()
+    open.value = false
+  },
+)
+
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleOutside, true)
-  document.removeEventListener('keydown', handleEsc)
-  cleanupAutoUpdate.value?.()
-  cleanupAutoUpdate.value = null
+  clearTimers()
 })
 </script>
 
 <template>
-  <div
-    ref="referenceRef"
-    class="tx-popover__reference"
-    :class="{ 'is-full-width': referenceFullWidth }"
-    @click.capture="toggle"
+  <TxBaseAnchor
+    v-model="open"
+    :disabled="props.disabled"
+    :placement="props.placement"
+    :offset="resolvedOffset"
+    :width="props.width"
+    :min-width="props.minWidth"
+    :max-width="props.maxWidth"
+    :match-reference-width="props.width <= 0"
+    :panel-variant="props.panelVariant"
+    :panel-background="props.panelBackground"
+    :panel-shadow="props.panelShadow"
+    :panel-radius="props.panelRadius"
+    :panel-padding="props.panelPadding"
+    :show-arrow="props.showArrow"
+    :arrow-size="props.arrowSize"
+    :keep-alive-content="props.keepAliveContent"
+    :close-on-click-outside="anchorCloseOnClickOutside"
+    :close-on-esc="props.closeOnEsc"
+    :toggle-on-reference-click="props.trigger === 'click'"
   >
-    <slot name="reference" />
-  </div>
-
-  <Teleport to="body">
-    <Transition name="tx-popover" @before-enter="onBeforeEnter">
+    <template #reference>
       <div
-        v-if="open && !disabled"
-        ref="floatingRef"
-        class="tx-popover"
-        :class="[
-          `is-bg-${panelBackground}`,
-          { 'is-fusion': !!props.fusion, 'is-motion-split': motion === 'split' },
-        ]"
-        :data-side="arrowSide"
-        :style="[floatingStyles, popoverVars, { zIndex }]"
+        class="tx-popover__reference"
+        :class="{ 'is-full-width': props.referenceFullWidth }"
+        @mouseenter="onReferenceEnter"
+        @mouseleave="onReferenceLeave"
+        @focusin="onReferenceEnter"
+        @focusout="onReferenceLeave"
       >
-        <svg class="tx-popover__fusion-filters" width="0" height="0" aria-hidden="true">
-          <defs>
-            <filter :id="gooFilterId">
-              <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="blur" />
-              <feColorMatrix in="blur" mode="matrix" :values="gooMatrixValues" result="goo" />
-              <feComposite in="SourceGraphic" in2="goo" operator="atop" />
-            </filter>
-          </defs>
-        </svg>
-
-        <div
-          v-if="props.showArrow"
-          ref="arrowRef"
-          class="tx-popover__arrow"
-          :data-side="arrowSide"
-          :style="arrowStyle"
-          aria-hidden="true"
-        />
-
-        <div
-          v-if="props.fusion && motion === 'split'"
-          class="tx-popover__fusion"
-          :style="fusionVars"
-          aria-hidden="true"
-        >
-          <div class="tx-popover__fusion-goo" :style="{ filter: `url(#${gooFilterId})` }">
-            <div class="tx-popover__fusion-blob tx-popover__fusion-blob--tip" />
-            <div class="tx-popover__fusion-blob tx-popover__fusion-blob--ref" />
-          </div>
-        </div>
-
-        <TxCard
-          class="tx-popover__card"
-          :variant="panelVariant"
-          :background="panelBackground"
-          :shadow="panelShadow"
-          :radius="panelRadius"
-          :padding="panelPadding"
-        >
-          <slot />
-        </TxCard>
+        <slot name="reference" />
       </div>
-    </Transition>
-  </Teleport>
+    </template>
+
+    <template #default="{ side }">
+      <div
+        class="tx-popover__content"
+        :data-side="side"
+        @mouseenter="onFloatingEnter"
+        @mouseleave="onFloatingLeave"
+      >
+        <slot :side="side" />
+      </div>
+    </template>
+  </TxBaseAnchor>
 </template>
 
-<style lang="scss" scoped>
+<style scoped>
 .tx-popover__reference {
   display: inline-flex;
   align-items: center;
   width: fit-content;
-
-  &.is-full-width {
-    width: 100%;
-  }
 }
 
-.tx-popover {
-  padding: 0;
-  background: transparent;
-  border: none;
-  overflow: visible;
-}
-
-.tx-popover::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: var(--tx-popover-radius, 18px);
-  pointer-events: none;
-  opacity: 0;
-  z-index: 0;
-}
-
-.tx-popover > :not(.tx-popover__arrow):not(.tx-popover__fusion):not(.tx-popover__fusion-filters) {
-  position: relative;
-  z-index: 1;
-}
-
-.tx-popover > .tx-popover__arrow {
-  z-index: 0;
-}
-
-.tx-popover.is-fusion {
-  filter: saturate(1.28) contrast(1.06);
-}
-
-.tx-popover.is-fusion::before {
-  opacity: 0.08;
-  background:
-    radial-gradient(520px 220px at 50% 0%, rgba(255, 255, 255, 0.22), transparent 66%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 60%);
-  filter: blur(16px);
-}
-
-.tx-popover.is-fusion.is-motion-split::after {
-  content: none;
-  position: absolute;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  width: calc(var(--tx-popover-arrow-size, 12px) * 3.6);
-  height: calc(var(--tx-popover-arrow-size, 12px) * 2.6);
-  border-radius: 999px;
-  mix-blend-mode: soft-light;
-  filter: blur(3px) saturate(1.22);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.46),
-    inset 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
-    0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 62%, transparent),
-    0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 14%, transparent),
-    0 14px 34px rgba(0, 0, 0, 0.10);
-  transition: opacity 0.16s ease, transform 0.16s ease, filter 0.16s ease, border-radius 0.16s ease;
-}
-
-.tx-popover.is-fusion.is-motion-split[data-side='top']::after {
-  left: var(--tx-popover-fusion-x, 50%);
-  bottom: 0;
-  transform: translate3d(-50%, 70%, 0) scale(0.65);
-}
-
-.tx-popover.is-fusion.is-motion-split[data-side='bottom']::after {
-  left: var(--tx-popover-fusion-x, 50%);
-  top: 0;
-  transform: translate3d(-50%, -70%, 0) scale(0.65);
-}
-
-.tx-popover.is-fusion.is-motion-split[data-side='left']::after {
-  top: var(--tx-popover-fusion-y, 50%);
-  right: 0;
-  transform: translate3d(70%, -50%, 0) scale(0.65);
-}
-
-.tx-popover.is-fusion.is-motion-split[data-side='right']::after {
-  top: var(--tx-popover-fusion-y, 50%);
-  left: 0;
-  transform: translate3d(-70%, -50%, 0) scale(0.65);
-}
-
-.tx-popover.is-bg-mask.is-fusion.is-motion-split::after {
-  background:
-    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
-    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.42)), transparent 58%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%),
-    var(--tx-bg-color-overlay, #fff);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.tx-popover.is-bg-blur.is-fusion.is-motion-split::after {
-  background:
-    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.44), transparent 58%),
-    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.34)), transparent 58%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14), transparent 74%),
-    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-.tx-popover.is-bg-glass.is-fusion.is-motion-split::after {
-  background:
-    radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
-    radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 38%, rgba(255, 255, 255, 0.44)), transparent 58%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%),
-    color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
-  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
- }
-
- .tx-popover__fusion {
-   position: absolute;
-   inset: 0;
-   pointer-events: none;
-   z-index: 0;
-   opacity: 0.18;
-   transition: opacity 0.16s ease, filter 0.16s ease;
- }
-
- .tx-popover__fusion-goo {
-   position: absolute;
-   inset: 0;
- }
-
- .tx-popover__fusion-blob {
-   position: absolute;
-   width: var(--tx-popover-goo-size, 38px);
-   height: var(--tx-popover-goo-size, 38px);
-   border-radius: 999px;
-   background:
-     radial-gradient(circle at 38% 52%, rgba(255, 255, 255, 0.52), transparent 58%),
-     radial-gradient(circle at 62% 48%, color-mix(in srgb, var(--tx-color-primary, #409eff) 36%, rgba(255, 255, 255, 0.42)), transparent 58%),
-     radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.16), transparent 74%);
-   filter: saturate(1.22);
-   mix-blend-mode: screen;
-   box-shadow:
-     0 0 0 1px color-mix(in srgb, rgba(255, 255, 255, 0.52) 60%, transparent),
-     0 16px 42px rgba(0, 0, 0, 0.10);
- }
-
- .tx-popover[data-side='top'] .tx-popover__fusion-blob--tip {
-   left: var(--tx-popover-fusion-x, 50%);
-   top: 100%;
-   transform: translate3d(-50%, -50%, 0) scale(0.78);
- }
-
- .tx-popover[data-side='top'] .tx-popover__fusion-blob--ref {
-   left: var(--tx-popover-fusion-x, 50%);
-   top: calc(100% + var(--tx-popover-goo-out, 18px));
-   transform: translate3d(-50%, -50%, 0) scale(0.88);
- }
-
- .tx-popover[data-side='bottom'] .tx-popover__fusion-blob--tip {
-   left: var(--tx-popover-fusion-x, 50%);
-   top: 0;
-   transform: translate3d(-50%, -50%, 0) scale(0.78);
- }
-
- .tx-popover[data-side='bottom'] .tx-popover__fusion-blob--ref {
-   left: var(--tx-popover-fusion-x, 50%);
-   top: calc(0px - var(--tx-popover-goo-out, 18px));
-   transform: translate3d(-50%, -50%, 0) scale(0.88);
- }
-
- .tx-popover[data-side='left'] .tx-popover__fusion-blob--tip {
-   left: 100%;
-   top: var(--tx-popover-fusion-y, 50%);
-   transform: translate3d(-50%, -50%, 0) scale(0.78);
- }
-
- .tx-popover[data-side='left'] .tx-popover__fusion-blob--ref {
-   left: calc(100% + var(--tx-popover-goo-out, 18px));
-   top: var(--tx-popover-fusion-y, 50%);
-   transform: translate3d(-50%, -50%, 0) scale(0.88);
- }
-
- .tx-popover[data-side='right'] .tx-popover__fusion-blob--tip {
-   left: 0;
-   top: var(--tx-popover-fusion-y, 50%);
-   transform: translate3d(-50%, -50%, 0) scale(0.78);
- }
-
- .tx-popover[data-side='right'] .tx-popover__fusion-blob--ref {
-   left: calc(0px - var(--tx-popover-goo-out, 18px));
-   top: var(--tx-popover-fusion-y, 50%);
-   transform: translate3d(-50%, -50%, 0) scale(0.88);
- }
-
-.tx-popover__card {
+.tx-popover__reference.is-full-width {
   width: 100%;
-  max-height: var(--tx-popover-max-height, 420px);
-  overflow: auto;
 }
 
-.tx-popover__arrow {
-  position: absolute;
-  width: var(--tx-popover-arrow-size, 12px);
-  height: var(--tx-popover-arrow-size, 12px);
-  pointer-events: none;
-  background: transparent;
-}
-
-.tx-popover__arrow::before,
-.tx-popover__arrow::after {
-  content: '';
-  position: absolute;
-  clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-}
-
-.tx-popover__arrow::before {
-  inset: -1px;
-  background: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 72%, transparent);
-  z-index: 0;
-}
-
-.tx-popover__arrow::after {
-  inset: 0;
-  background: var(--tx-bg-color-overlay, #fff);
-  z-index: 1;
-}
-
-.tx-popover.is-bg-mask {
-  background: transparent;
-}
-
-.tx-popover.is-bg-mask .tx-popover__arrow::after {
-  background: var(--tx-bg-color-overlay, #fff);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.tx-popover.is-bg-blur .tx-popover__arrow::after {
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 12%, transparent);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-.tx-popover.is-bg-glass .tx-popover__arrow::after {
-  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 50%, transparent);
-  backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-  -webkit-backdrop-filter: blur(22px) saturate(185%) contrast(1.08);
-}
-
-.tx-popover__arrow[data-side='top'] {
-  transform: rotate(180deg);
-}
-
-.tx-popover__arrow[data-side='bottom'] {
-  transform: rotate(0deg);
-}
-
-.tx-popover__arrow[data-side='left'] {
-  transform: rotate(90deg);
-}
-
-.tx-popover__arrow[data-side='right'] {
-  transform: rotate(-90deg);
-}
-
-.tx-popover-enter-active,
-.tx-popover-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.tx-popover-enter-from,
-.tx-popover-leave-to {
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
-}
-
-.tx-popover.is-motion-split.tx-popover-enter-from,
-.tx-popover.is-motion-split.tx-popover-leave-to {
-  transform: translate3d(var(--tx-popover-split-x, 0px), var(--tx-popover-split-y, 0px), 0) scale(0.92);
-}
-
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from .tx-popover__fusion,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to .tx-popover__fusion {
-  opacity: 1;
-  filter: saturate(1.35) contrast(1.12);
-}
-
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='top']::after,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='top']::after {
-  border-radius: 52% 48% 62% 38% / 54% 46% 58% 42%;
-  transform: translate3d(-50%, 104%, 0) rotate(6deg) scaleX(1.58) scaleY(1.18);
-}
-
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='bottom']::after,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='bottom']::after {
-  border-radius: 46% 54% 40% 60% / 42% 58% 46% 54%;
-  transform: translate3d(-50%, -104%, 0) rotate(-6deg) scaleX(1.58) scaleY(1.18);
-}
-
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='left']::after,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='left']::after {
-  border-radius: 58% 42% 52% 48% / 44% 56% 40% 60%;
-  transform: translate3d(104%, -50%, 0) rotate(-6deg) scaleX(1.18) scaleY(1.58);
-}
-
-.tx-popover.is-fusion.is-motion-split.tx-popover-enter-from[data-side='right']::after,
-.tx-popover.is-fusion.is-motion-split.tx-popover-leave-to[data-side='right']::after {
-  border-radius: 44% 56% 38% 62% / 60% 40% 56% 44%;
-  transform: translate3d(-104%, -50%, 0) rotate(6deg) scaleX(1.18) scaleY(1.58);
+.tx-popover__content {
+  position: relative;
+  width: 100%;
 }
 </style>

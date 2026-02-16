@@ -29,56 +29,40 @@ const labels = computed(() => {
 
 <template>
   <div style="display: flex; gap: 12px; flex-wrap: wrap; padding: 48px 0; justify-content: center;">
-    <TxBaseAnchor v-model="open1" placement="bottom">
+    <TxBaseAnchor v-model="open1" placement="bottom" :show-arrow="true">
       <template #reference>
-        <TxButton @click="open1 = !open1">
-          {{ labels.bottom }}
-        </TxButton>
+        <TxButton>{{ labels.bottom }}</TxButton>
       </template>
-      <template #content>
-        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">
-          bottom
-        </TxCard>
-      </template>
+      <div style="width: 180px; padding: 4px;">
+        bottom
+      </div>
     </TxBaseAnchor>
 
-    <TxBaseAnchor v-model="open2" placement="top">
+    <TxBaseAnchor v-model="open2" placement="top" :show-arrow="true">
       <template #reference>
-        <TxButton @click="open2 = !open2">
-          {{ labels.top }}
-        </TxButton>
+        <TxButton>{{ labels.top }}</TxButton>
       </template>
-      <template #content>
-        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">
-          top
-        </TxCard>
-      </template>
+      <div style="width: 180px; padding: 4px;">
+        top
+      </div>
     </TxBaseAnchor>
 
-    <TxBaseAnchor v-model="open3" placement="left">
+    <TxBaseAnchor v-model="open3" placement="left" :show-arrow="true">
       <template #reference>
-        <TxButton @click="open3 = !open3">
-          {{ labels.left }}
-        </TxButton>
+        <TxButton>{{ labels.left }}</TxButton>
       </template>
-      <template #content>
-        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">
-          left
-        </TxCard>
-      </template>
+      <div style="width: 180px; padding: 4px;">
+        left
+      </div>
     </TxBaseAnchor>
 
-    <TxBaseAnchor v-model="open4" placement="right">
+    <TxBaseAnchor v-model="open4" placement="right" :show-arrow="true">
       <template #reference>
-        <TxButton @click="open4 = !open4">
-          {{ labels.right }}
-        </TxButton>
+        <TxButton>{{ labels.right }}</TxButton>
       </template>
-      <template #content>
-        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">
-          right
-        </TxCard>
-      </template>
+      <div style="width: 180px; padding: 4px;">
+        right
+      </div>
     </TxBaseAnchor>
   </div>
 </template>
