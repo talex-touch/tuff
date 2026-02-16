@@ -8,6 +8,7 @@ const TEAM_MEMBERS_TABLE = 'team_members'
 const CREDIT_PLANS_TABLE = 'credit_plans'
 const CREDIT_BALANCES_TABLE = 'credit_balances'
 const CREDIT_LEDGER_TABLE = 'credit_ledger'
+const USERS_TABLE = 'auth_users'
 
 let creditsSchemaInitialized = false
 
@@ -422,12 +423,13 @@ export async function consumeCredits(event: H3Event, userId: string, amount: num
     WHERE scope = 'user' AND scope_id = ? AND month = ?
   `).bind(amount, userId, month).run()
 
+  const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   await db.prepare(`
     INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
     VALUES (?, 'team', ?, ?, ?, ?, ?)
-  `).bind(id, teamId, -amount, reason, now, metadata ? JSON.stringify(metadata) : null).run()
+  `).bind(id, teamId, -amount, reason, now, JSON.stringify(ledgerMetadata)).run()
 }
 
 export async function listCreditLedger(event: H3Event, userId: string) {
@@ -441,4 +443,405 @@ export async function listCreditLedger(event: H3Event, userId: string) {
     LIMIT 100
   `).bind(teamId).all()
   return result.results
+}
+
+function parseLedgerMetadata(value: string | null): Record<string, any> | null {
+  if (!value)
+    return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+export async function listCreditUsageByUsers(
+  event: H3Event,
+  userIds: string[],
+  options?: { page?: number; limit?: number; search?: string; month?: string },
+) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)))
+  const month = options?.month || getMonthKey()
+  const page = Math.max(1, options?.page ?? 1)
+  const limit = Math.min(200, Math.max(1, options?.limit ?? 20))
+  const offset = (page - 1) * limit
+  const search = options?.search?.trim().toLowerCase() || ''
+
+  if (!uniqueUserIds.length) {
+    return {
+      month,
+      total: 0,
+      totalUsed: 0,
+      totalQuota: 0,
+      users: [],
+      page,
+      pageSize: limit,
+    }
+  }
+
+  for (const userId of uniqueUserIds) {
+    await ensurePersonalTeam(event, userId)
+    await ensureBalance(event, 'user', userId)
+  }
+
+  const idPlaceholders = uniqueUserIds.map(() => '?').join(', ')
+  const conditions = [
+    `cb.scope = 'user'`,
+    `cb.month = ?`,
+    `cb.scope_id IN (${idPlaceholders})`,
+  ]
+  const params: Array<string | number> = [month, ...uniqueUserIds]
+
+  if (search) {
+    const term = `%${search}%`
+    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(cb.scope_id) LIKE ?)')
+    params.push(term, term, term)
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`
+
+  const summaryRow = await db.prepare(`
+    SELECT COUNT(1) as total, SUM(cb.used) as total_used, SUM(cb.quota) as total_quota
+    FROM ${CREDIT_BALANCES_TABLE} cb
+    LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
+    ${whereClause}
+  `).bind(...params).first<{ total?: number; total_used?: number; total_quota?: number }>()
+
+  const listParams = [...params, limit, offset]
+  const { results } = await db.prepare(`
+    SELECT
+      cb.scope_id as user_id,
+      cb.quota,
+      cb.used,
+      cb.month,
+      u.email,
+      u.name,
+      u.role,
+      u.status
+    FROM ${CREDIT_BALANCES_TABLE} cb
+    LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
+    ${whereClause}
+    ORDER BY cb.used DESC, cb.scope_id ASC
+    LIMIT ? OFFSET ?
+  `).bind(...listParams).all<Record<string, any>>()
+
+  return {
+    month,
+    total: Number(summaryRow?.total ?? 0),
+    totalUsed: Number(summaryRow?.total_used ?? 0),
+    totalQuota: Number(summaryRow?.total_quota ?? 0),
+    users: (results ?? []).map(row => ({
+      userId: row.user_id,
+      email: row.email ?? null,
+      name: row.name ?? null,
+      role: row.role ?? null,
+      status: row.status ?? null,
+      quota: Number(row.quota ?? 0),
+      used: Number(row.used ?? 0),
+      month: row.month ?? month,
+    })),
+    page,
+    pageSize: limit,
+  }
+}
+
+export async function listCreditLedgerByUsers(
+  event: H3Event,
+  userIds: string[],
+  options?: { page?: number; limit?: number; search?: string },
+) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)))
+  const page = Math.max(1, options?.page ?? 1)
+  const limit = Math.min(200, Math.max(1, options?.limit ?? 20))
+  const offset = (page - 1) * limit
+  const search = options?.search?.trim().toLowerCase() || ''
+
+  if (!uniqueUserIds.length) {
+    return {
+      entries: [],
+      total: 0,
+      page,
+      pageSize: limit,
+    }
+  }
+
+  const teamIds = uniqueUserIds.map(userId => `team_${userId}`)
+  const idPlaceholders = teamIds.map(() => '?').join(', ')
+  const conditions = [
+    `l.scope = 'team'`,
+    `l.scope_id IN (${idPlaceholders})`,
+  ]
+  const params: Array<string | number> = [...teamIds]
+
+  if (search) {
+    const term = `%${search}%`
+    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(u.id) LIKE ?)')
+    params.push(term, term, term)
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`
+
+  const totalRow = await db.prepare(`
+    SELECT COUNT(1) as total
+    FROM ${CREDIT_LEDGER_TABLE} l
+    LEFT JOIN ${USERS_TABLE} u ON u.id = SUBSTR(l.scope_id, 6)
+    ${whereClause}
+  `).bind(...params).first<{ total?: number }>()
+
+  const listParams = [...params, limit, offset]
+  const { results } = await db.prepare(`
+    SELECT
+      l.id,
+      l.scope_id,
+      l.delta,
+      l.reason,
+      l.created_at,
+      l.metadata,
+      u.id as user_id,
+      u.email,
+      u.name
+    FROM ${CREDIT_LEDGER_TABLE} l
+    LEFT JOIN ${USERS_TABLE} u ON u.id = SUBSTR(l.scope_id, 6)
+    ${whereClause}
+    ORDER BY l.created_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...listParams).all<Record<string, any>>()
+
+  return {
+    entries: (results ?? []).map(row => ({
+      id: row.id,
+      teamId: row.scope_id,
+      userId: row.user_id ?? null,
+      userEmail: row.email ?? null,
+      userName: row.name ?? null,
+      delta: Number(row.delta ?? 0),
+      reason: row.reason ?? '',
+      createdAt: row.created_at,
+      metadata: parseLedgerMetadata(row.metadata ?? null),
+    })),
+    total: Number(totalRow?.total ?? 0),
+    page,
+    pageSize: limit,
+  }
+}
+
+export async function listCreditTrendByUsers(
+  event: H3Event,
+  userIds: string[],
+  options?: { days?: number },
+) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)))
+  const days = Math.min(30, Math.max(7, options?.days ?? 14))
+
+  const endDate = new Date()
+  endDate.setUTCHours(0, 0, 0, 0)
+  const dayKeys: string[] = []
+  const dailyMap = new Map<string, number>()
+  for (let index = days - 1; index >= 0; index -= 1) {
+    const date = new Date(endDate)
+    date.setUTCDate(endDate.getUTCDate() - index)
+    const key = date.toISOString().slice(0, 10)
+    dayKeys.push(key)
+    dailyMap.set(key, 0)
+  }
+
+  if (!uniqueUserIds.length) {
+    return {
+      days: dayKeys,
+      values: dayKeys.map(key => dailyMap.get(key) ?? 0),
+      totalUsed: 0,
+    }
+  }
+
+  const teamIds = uniqueUserIds.map(userId => `team_${userId}`)
+  const placeholders = teamIds.map(() => '?').join(', ')
+  const startDate = new Date(endDate)
+  startDate.setUTCDate(endDate.getUTCDate() - (days - 1))
+  const startIso = startDate.toISOString()
+
+  const { results } = await db.prepare(`
+    SELECT created_at, delta
+    FROM ${CREDIT_LEDGER_TABLE}
+    WHERE scope = 'team'
+      AND scope_id IN (${placeholders})
+      AND created_at >= ?
+  `).bind(...teamIds, startIso).all<{ created_at: string; delta: number }>()
+
+  let totalUsed = 0
+  for (const row of results || []) {
+    const createdAt = row.created_at || ''
+    if (!createdAt)
+      continue
+    const dayKey = createdAt.slice(0, 10)
+    if (!dailyMap.has(dayKey))
+      continue
+    const delta = Number(row.delta ?? 0)
+    const used = delta < 0 ? -delta : 0
+    totalUsed += used
+    dailyMap.set(dayKey, (dailyMap.get(dayKey) ?? 0) + used)
+  }
+
+  return {
+    days: dayKeys,
+    values: dayKeys.map(key => dailyMap.get(key) ?? 0),
+    totalUsed,
+  }
+}
+
+export async function listCreditUsageAdmin(
+  event: H3Event,
+  options?: { page?: number; limit?: number; search?: string; month?: string },
+) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const month = options?.month || getMonthKey()
+  const page = Math.max(1, options?.page ?? 1)
+  const limit = Math.min(200, Math.max(1, options?.limit ?? 20))
+  const offset = (page - 1) * limit
+  const search = options?.search?.trim().toLowerCase() || ''
+
+  const conditions = [`cb.scope = 'user'`, `cb.month = ?`]
+  const params: Array<string | number> = [month]
+
+  if (search) {
+    const term = `%${search}%`
+    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(cb.scope_id) LIKE ?)')
+    params.push(term, term, term)
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`
+
+  const summaryRow = await db.prepare(`
+    SELECT COUNT(1) as total, SUM(cb.used) as total_used, SUM(cb.quota) as total_quota
+    FROM ${CREDIT_BALANCES_TABLE} cb
+    LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
+    ${whereClause}
+  `).bind(...params).first<{ total?: number; total_used?: number; total_quota?: number }>()
+
+  const listParams = [...params, limit, offset]
+  const { results } = await db.prepare(`
+    SELECT
+      cb.scope_id as user_id,
+      cb.quota,
+      cb.used,
+      cb.month,
+      u.email,
+      u.name,
+      u.role,
+      u.status
+    FROM ${CREDIT_BALANCES_TABLE} cb
+    LEFT JOIN ${USERS_TABLE} u ON u.id = cb.scope_id
+    ${whereClause}
+    ORDER BY cb.used DESC, cb.scope_id ASC
+    LIMIT ? OFFSET ?
+  `).bind(...listParams).all<Record<string, any>>()
+
+  return {
+    month,
+    total: Number(summaryRow?.total ?? 0),
+    totalUsed: Number(summaryRow?.total_used ?? 0),
+    totalQuota: Number(summaryRow?.total_quota ?? 0),
+    users: (results ?? []).map(row => ({
+      userId: row.user_id,
+      email: row.email ?? null,
+      name: row.name ?? null,
+      role: row.role ?? null,
+      status: row.status ?? null,
+      quota: Number(row.quota ?? 0),
+      used: Number(row.used ?? 0),
+      month: row.month ?? month,
+    })),
+    page,
+    pageSize: limit,
+  }
+}
+
+export async function listCreditLedgerAdmin(
+  event: H3Event,
+  options?: { page?: number; limit?: number; search?: string },
+) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const page = Math.max(1, options?.page ?? 1)
+  const limit = Math.min(200, Math.max(1, options?.limit ?? 20))
+  const offset = (page - 1) * limit
+  const search = options?.search?.trim().toLowerCase() || ''
+
+  const conditions = [`l.scope = 'team'`]
+  const params: Array<string | number> = []
+
+  if (search) {
+    const term = `%${search}%`
+    conditions.push('(LOWER(u.email) LIKE ? OR LOWER(u.name) LIKE ? OR LOWER(t.owner_user_id) LIKE ? OR LOWER(l.scope_id) LIKE ?)')
+    params.push(term, term, term, term)
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  const totalRow = await db.prepare(`
+    SELECT COUNT(1) as total
+    FROM ${CREDIT_LEDGER_TABLE} l
+    LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id
+    LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
+    ${whereClause}
+  `).bind(...params).first<{ total?: number }>()
+
+  const listParams = [...params, limit, offset]
+  const { results } = await db.prepare(`
+    SELECT
+      l.id,
+      l.scope_id,
+      l.delta,
+      l.reason,
+      l.created_at,
+      l.metadata,
+      t.id as team_id,
+      t.owner_user_id,
+      t.type as team_type,
+      u.email,
+      u.name
+    FROM ${CREDIT_LEDGER_TABLE} l
+    LEFT JOIN ${TEAMS_TABLE} t ON t.id = l.scope_id
+    LEFT JOIN ${USERS_TABLE} u ON u.id = t.owner_user_id
+    ${whereClause}
+    ORDER BY l.created_at DESC
+    LIMIT ? OFFSET ?
+  `).bind(...listParams).all<Record<string, any>>()
+
+  const entries = (results ?? []).map(row => {
+    const metadata = parseLedgerMetadata(row.metadata ?? null)
+    const resolvedUserId = typeof metadata?.userId === 'string'
+      ? metadata.userId
+      : (row.owner_user_id ?? null)
+    return {
+      id: row.id,
+      teamId: row.team_id ?? row.scope_id,
+      teamType: row.team_type ?? null,
+      userId: resolvedUserId,
+      userEmail: row.email ?? null,
+      userName: row.name ?? null,
+      delta: Number(row.delta ?? 0),
+      reason: row.reason ?? '',
+      createdAt: row.created_at,
+      metadata,
+    }
+  })
+
+  return {
+    entries,
+    total: Number(totalRow?.total ?? 0),
+    page,
+    pageSize: limit,
+  }
 }

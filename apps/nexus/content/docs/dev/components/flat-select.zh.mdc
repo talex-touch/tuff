@@ -1,0 +1,119 @@
+---
+title: "FlatSelect 平铺下拉选择器"
+description: "ComboBox 风格的下拉选择器（`TxFlatSelect` + `TxFlatSelectItem`）。选项覆盖触发器展开，选中项锚定在触发器位置，clip-path 动画丝滑展开/收起。"
+category: Form
+status: beta
+since: 2.4.7
+tags: [select, flat, form, combobox]
+syncStatus: migrated
+---
+# FlatSelect 平铺下拉选择器
+
+ComboBox 风格的下拉选择器（`TxFlatSelect` + `TxFlatSelectItem`）。点击触发器后，选项列表覆盖触发器展开，选中项锚定在触发器位置，通过 `clip-path` 实现丝滑的展开/收起动画。
+
+## 基础用法
+
+点击触发器，下拉列表从选中项位置向上下展开，选中项带勾选图标。
+
+### FlatSelect (basic)
+:::TuffDemoWrapper{demo="FlatSelectBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('json')
+  </script>
+
+  <template>
+    <TxFlatSelect v-model="value" placeholder="选择格式">
+      <TxFlatSelectItem value="json" label="JSON" />
+      <TxFlatSelectItem value="csv" label="CSV" />
+      <TxFlatSelectItem value="xml" label="XML" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
+## 禁用状态
+
+支持整组禁用和单项禁用。
+
+### FlatSelect (disabled)
+:::TuffDemoWrapper{demo="FlatSelectDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('')
+  </script>
+
+  <template>
+    <!-- 整组禁用 -->
+    <TxFlatSelect v-model="value" placeholder="请选择" disabled>
+      <TxFlatSelectItem value="a" label="Option A" />
+      <TxFlatSelectItem value="b" label="Option B" />
+    </TxFlatSelect>
+
+    <!-- 单项禁用 -->
+    <TxFlatSelect v-model="value" placeholder="请选择">
+      <TxFlatSelectItem value="a" label="Option A" />
+      <TxFlatSelectItem value="b" label="Option B" disabled />
+      <TxFlatSelectItem value="c" label="Option C" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
+## 与 TxSelect 的对比
+
+| 特性 | TxSelect | TxFlatSelect |
+|------|----------|-------------|
+| 定位方式 | floating-ui（Teleport 到 body） | CSS absolute + clip-path |
+| 展开效果 | 下拉面板出现在触发器下方 | ComboBox：选项覆盖触发器，从选中项位置展开 |
+| 动画 | 无（避免滚动延迟） | clip-path 丝滑展开/收起 |
+| 搜索 | 支持 | 不支持 |
+| 适用场景 | 通用表单、复杂场景 | 设置页、简单下拉 |
+| 触发器 | 输入框风格 | 按钮风格 + 箭头 |
+
+## API
+
+### TxFlatSelect
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| modelValue / v-model | 绑定值 | `string \| number` | `''` |
+| placeholder | 占位文本 | `string` | `''` |
+| disabled | 是否禁用 | `boolean` | `false` |
+
+#### Events
+
+| 事件名 | 说明 | 回调参数 |
+|--------|------|----------|
+| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
+| change | 值变化时触发 | `(value: string \| number) => void` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | `TxFlatSelectItem` 子组件 |
+
+### TxFlatSelectItem
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| value | 当前项的值 | `string \| number` | - |
+| label | 显示文本 | `string` | - |
+| disabled | 是否禁用（单项） | `boolean` | `false` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | 自定义内容（覆盖 label） |

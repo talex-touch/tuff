@@ -1,4 +1,4 @@
-import type { SliderEmits, SliderProps } from './src/types.ts'
+import type { SliderEmits, SliderProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxSlider from './src/TxSlider.vue'
 

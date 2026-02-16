@@ -80,6 +80,8 @@ code: |
 - `TxSearchEmpty`：搜索空态（默认 `variant="search-empty"`）
 - `TxOfflineState`：离线提示（默认 `variant="offline"`）
 - `TxPermissionState`：权限不足（默认 `variant="permission"`）
+- `TxErrorState`：错误状态（默认 `variant="error"`），详见 [ErrorState](./error-state.zh.md)
+- `TxGuideState`：引导状态（默认 `variant="guide"`），详见 [GuideState](./guide-state.zh.md)
 
 ## API
 

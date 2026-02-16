@@ -1,5 +1,5 @@
-import { matchFeature } from '@talex-touch/utils/search'
 import { hasWindow } from '@talex-touch/utils/env'
+import { matchFeature } from '@talex-touch/utils/search'
 import { featureSearchItems } from '~/data/search/featureIndex'
 import { pageSearchItems } from '~/data/search/pageIndex'
 
@@ -162,6 +162,7 @@ export function useGlobalSearch() {
   }
 
   function openSearch(anchor?: HTMLElement | null) {
+    resetSearch()
     setSearchAnchor(anchor)
     open.value = true
   }
@@ -169,6 +170,7 @@ export function useGlobalSearch() {
   async function summonSearch(anchor?: HTMLElement | null) {
     if (open.value)
       return
+    resetSearch()
     setSearchAnchor(anchor)
     if (!anchor || !hasWindow() || prefersReducedMotion()) {
       open.value = true
@@ -212,6 +214,7 @@ export function useGlobalSearch() {
   }
 
   function resetSearch() {
+    searchRunId += 1
     query.value = ''
     results.value = []
     loading.value = false

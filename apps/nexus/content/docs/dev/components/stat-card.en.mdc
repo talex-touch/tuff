@@ -8,24 +8,73 @@ syncStatus: migrated
 
 Component documentation for StatCard.
 
-<script setup lang="ts">
-import StatCardBasicDemo from '~/components/content/demos/StatCardBasicDemo.vue'
-import StatCardBasicDemoSource from '~/components/content/demos/StatCardBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
-### StatCard
-:::TuffDemoWrapper{demo="StatCardStatCardDemo" code-lang="vue"}
+### Default Variant
+
+Base card layout without trend/progress enhancement.
+
+::TuffDemoWrapper{demo="StatCardDefaultVariantDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxStatCard
+      :value="2847"
+      label="Total Plugins"
+      icon-class="i-carbon-download text-6xl text-[var(--tx-color-primary)]"
+      clickable
+    />
+  </template>
+---
+::
+
+### Insight Variant
+
+Shows trend/compare information by passing the `insight` object.
+
+::TuffDemoWrapper{demo="StatCardInsightVariantDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
+  import NumberFlow from '@number-flow/vue'
   import { ref } from 'vue'
 
-  const value = ref(12880)
+  const activeUsers = ref(18200)
+  const activeInsight = ref({
+    from: 16800,
+    to: activeUsers.value,
+    type: 'delta',
+    color: 'success',
+    iconClass: 'i-carbon-growth',
+  })
+
+  const resourceLoad = ref(42)
+  const resourceInsight = ref({
+    from: 35,
+    to: resourceLoad.value,
+    type: 'percent',
+    color: 'danger',
+    iconClass: 'i-carbon-arrow-up-right',
+    precision: 1,
+  })
 
   function bump() {
-    value.value = Math.floor(Math.random() * 100000)
+    const nextUsers = Math.floor(Math.random() * 8000) + 14000
+    const nextLoad = Math.floor(Math.random() * 50) + 30
+
+    activeInsight.value = {
+      ...activeInsight.value,
+      from: activeUsers.value,
+      to: nextUsers,
+    }
+    activeUsers.value = nextUsers
+
+    resourceInsight.value = {
+      ...resourceInsight.value,
+      from: resourceLoad.value,
+      to: nextLoad,
+    }
+    resourceLoad.value = nextLoad
   }
   </script>
 
@@ -37,19 +86,88 @@ code: |
         </TxButton>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
         <TxStatCard
-          :value="value"
-          label="Downloads"
-          icon-class="i-carbon-download text-6xl text-[var(--tx-color-primary)]"
-          clickable
+          :value="activeUsers"
+          label="Active Users"
+          icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]"
+          :insight="activeInsight"
         />
-        <TxStatCard :value="42" label="Tasks" icon-class="i-carbon-task text-6xl text-[var(--tx-color-success)]" />
+        <TxStatCard
+          :value="resourceLoad"
+          label="Resource Load"
+          icon-class="i-carbon-chip text-6xl text-[var(--tx-color-warning)]"
+          :insight="resourceInsight"
+        >
+          <template #value>
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <NumberFlow :value="resourceLoad" />
+              <span style="font-size: 16px;">%</span>
+            </div>
+          </template>
+        </TxStatCard>
       </div>
     </div>
   </template>
 ---
-:::
+::
+
+### Progress Variant
+
+Switches to progress layout and supports shuffle updates.
+
+::TuffDemoWrapper{demo="StatCardProgressVariantDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import NumberFlow from '@number-flow/vue'
+  import { computed, ref } from 'vue'
+
+  const healthProgress = ref(78)
+  const healthDelay = ref(2)
+
+  const healthStatus = computed(() => {
+    if (healthProgress.value > 85) {
+      return 'Synced'
+    }
+    return 'Syncing'
+  })
+
+  const healthMeta = computed(() => `${healthStatus.value} · Last sync: ${healthDelay.value}s ago (v2.4.0)`)
+
+  function bump() {
+    healthProgress.value = Math.floor(Math.random() * 50) + 40
+    healthDelay.value = Math.floor(Math.random() * 16) + 2
+  }
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: flex; gap: 8px;">
+        <TxButton @click="bump">
+          Shuffle
+        </TxButton>
+      </div>
+
+      <TxStatCard
+        variant="progress"
+        :value="healthProgress"
+        label="Cloud Sync"
+        :meta="healthMeta"
+        :progress="healthProgress"
+        icon-class="i-carbon-cloud text-[var(--tx-color-primary)]"
+      >
+        <template #value>
+          <div style="display: flex; align-items: baseline; gap: 6px;">
+            <NumberFlow :value="healthProgress" />
+            <span style="font-size: 16px;">%</span>
+          </div>
+        </template>
+      </TxStatCard>
+    </div>
+  </template>
+---
+::
 
 ## API
 
@@ -59,5 +177,29 @@ code: |
 |------|------|---------|------|
 | `value` | `number \| string` | - | DisplayValue |
 | `label` | `string` | - | Description for label. |
-| `iconClass` | `string` | `''` | Description for iconClass. |
-| `clickable` | `boolean` | `false` | Description for clickable. |
+| `iconClass` | `string` | `''` | Icon class (UnoCSS Icones). |
+| `clickable` | `boolean` | `false` | Enables hover/press states. |
+| `insight` | `StatCardInsight` | - | Change indicator object (moves label to top). |
+| `variant` | `StatCardVariant` | `'default'` | Layout variant (`default` \| `progress`). |
+| `progress` | `number` | - | Progress percent (0-100). Passing this enables the progress variant. |
+| `meta` | `string` | - | Bottom meta line for progress variant. |
+
+### StatCardInsight
+
+| Field | Type | Default | Description |
+|------|------|---------|------|
+| `from` | `number` | - | Baseline value. |
+| `to` | `number` | - | Current value. |
+| `type` | `'percent' \| 'delta'` | `'percent'` | Percent change or absolute delta. |
+| `color` | `'success' \| 'danger' \| 'warning' \| 'info' \| string` | - | Overrides indicator color. |
+| `iconClass` | `string` | - | Custom indicator icon. |
+| `suffix` | `string` | - | Overrides suffix (default `%` for percent). |
+| `precision` | `number` | - | Decimal precision. |
+
+### Slots
+
+| Slot | Description |
+|------|------|
+| `value` | Custom value area. |
+| `label` | Custom label area. |
+| `meta` | Meta line for progress variant. |

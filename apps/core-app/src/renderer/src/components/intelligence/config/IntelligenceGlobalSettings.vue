@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceGlobalSettings" setup>
 import type { AISDKGlobalConfig } from '@talex-touch/utils/types/intelligence'
+import { TxSelectItem } from '@talex-touch/tuffex'
 import { getCurrentInstance, ref, watch } from 'vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 
@@ -113,36 +113,36 @@ function handleCacheExpirationChange() {
         active-icon="i-carbon-time"
         @update:model-value="handleCacheExpirationChange"
       >
-        <TSelectItem :model-value="300">
+        <TxSelectItem :value="300">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
             <span>{{ t('intelligence.global.cacheExpiration5min') }}</span>
           </div>
-        </TSelectItem>
-        <TSelectItem :model-value="900">
+        </TxSelectItem>
+        <TxSelectItem :value="900">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
             <span>{{ t('intelligence.global.cacheExpiration15min') }}</span>
           </div>
-        </TSelectItem>
-        <TSelectItem :model-value="3600">
+        </TxSelectItem>
+        <TxSelectItem :value="3600">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
             <span>{{ t('intelligence.global.cacheExpiration1hour') }}</span>
           </div>
-        </TSelectItem>
-        <TSelectItem :model-value="21600">
+        </TxSelectItem>
+        <TxSelectItem :value="21600">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
             <span>{{ t('intelligence.global.cacheExpiration6hours') }}</span>
           </div>
-        </TSelectItem>
-        <TSelectItem :model-value="86400">
+        </TxSelectItem>
+        <TxSelectItem :value="86400">
           <div class="flex items-center gap-2">
             <i class="i-carbon-time" />
             <span>{{ t('intelligence.global.cacheExpiration24hours') }}</span>
           </div>
-        </TSelectItem>
+        </TxSelectItem>
       </TuffBlockSelect>
     </Transition>
   </div>

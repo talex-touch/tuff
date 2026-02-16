@@ -297,11 +297,11 @@ watch(
 
     <nav v-if="hasOutline" ref="navRef" class="outline-nav relative">
       <!-- Main track line -->
-      <div class="absolute top-0 bottom-0 left-0 w-px bg-black/10 dark:bg-white/10" />
+      <div class="outline-rail" />
 
       <!-- Sliding Marker -->
       <div
-        class="absolute left-0 w-0.5 rounded-full bg-primary transition-all duration-300 ease-out"
+        class="outline-marker"
         :style="{
           top: `${markerTop}px`,
           height: `${markerHeight}px`,
@@ -320,11 +320,7 @@ watch(
           replace
           class="outline-link group relative flex items-center py-2 text-[14px] leading-snug no-underline transition-all duration-150"
           :style="{ paddingLeft: `${8 + entry.indent * 12}px` }"
-          :class="[
-            activeHash === entry.id
-              ? 'text-primary font-semibold'
-              : 'text-black/45 hover:text-black/75 dark:text-white/45 dark:hover:text-white/75',
-          ]"
+          :class="{ 'is-active': activeHash === entry.id }"
           :data-id="entry.id"
           @click.prevent="scrollToHeading(entry.id)"
         >
@@ -340,7 +336,7 @@ watch(
         :style="{ width }"
       />
     </div>
-    <div v-else class="text-[12px] text-black/30 dark:text-white/30">
+    <div v-else class="outline-empty">
       {{ t('docs.noOutline') }}
     </div>
   </div>
@@ -356,7 +352,7 @@ watch(
   font-weight: 600;
   letter-spacing: 0.26em;
   text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.35);
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 70%, transparent);
 }
 
 .outline-nav {
@@ -365,6 +361,27 @@ watch(
   max-height: min(420px, calc(100vh - 16rem));
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.outline-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 70%, transparent);
+}
+
+.outline-marker {
+  position: absolute;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--tx-color-primary, #409eff);
+  transition:
+    top var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out),
+    height var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out),
+    opacity var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out);
 }
 
 .outline-skeleton {
@@ -376,9 +393,28 @@ watch(
 .outline-skeleton__item {
   height: 14px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.16) 50%, rgba(15, 23, 42, 0.08) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 0%,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 92%, transparent) 50%,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 100%
+  );
   background-size: 200% 100%;
   animation: outline-shimmer 1.6s ease-in-out infinite;
+}
+
+.outline-link {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 85%, transparent);
+  transition: color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+}
+
+.outline-link:hover {
+  color: var(--tx-text-color-primary, #303133);
+}
+
+.outline-link.is-active {
+  color: var(--tx-color-primary, #409eff);
+  font-weight: 600;
 }
 
 .outline-item + .outline-item {
@@ -389,15 +425,9 @@ watch(
   font-size: 13px;
 }
 
-:global(.dark .docs-outline__label),
-:global([data-theme='dark'] .docs-outline__label) {
-  color: rgba(226, 232, 240, 0.35);
-}
-
-:global(.dark .outline-skeleton__item),
-:global([data-theme='dark'] .outline-skeleton__item) {
-  background: linear-gradient(90deg, rgba(148, 163, 184, 0.18) 0%, rgba(148, 163, 184, 0.32) 50%, rgba(148, 163, 184, 0.18) 100%);
-  background-size: 200% 100%;
+.outline-empty {
+  font-size: 12px;
+  color: var(--tx-text-color-placeholder, #a8abb2);
 }
 
 @keyframes outline-shimmer {

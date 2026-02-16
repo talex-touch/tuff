@@ -1,11 +1,10 @@
 <script name="ThemeStyle" lang="ts" setup>
-import { TxButton, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxSelectItem, TxSpinner, TxStatusBadge } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
@@ -233,15 +232,18 @@ watchEffect(() => {
 /**
  * Handle theme change event
  * Triggers a theme transition with animation
- * @param v - The new theme value
+ * @param v - The new theme value (0=light, 1=dark, 2=auto)
  * @param e - The mouse event triggering the change
  * @returns void
  */
+const THEME_MODE_MAP: ThemeMode[] = ['light', 'dark', 'auto'] as ThemeMode[]
+
 function handleThemeChange(value: string | number, event?: Event): void {
+  const mode = typeof value === 'number' ? (THEME_MODE_MAP[value] ?? value) : value
   if (event instanceof MouseEvent) {
-    triggerThemeTransition([event.x, event.y], value as ThemeMode)
+    triggerThemeTransition([event.x, event.y], mode as ThemeMode)
   } else {
-    triggerThemeTransition([0, 0], value as ThemeMode)
+    triggerThemeTransition([0, 0], mode as ThemeMode)
   }
 }
 
@@ -381,15 +383,15 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         <template #icon="{ active }">
           <ThemePreviewIcon variant="palette" :active="active" />
         </template>
-        <TSelectItem :model-value="0" name="light">
+        <TxSelectItem :value="0">
           {{ t('themeStyle.lightStyle') }}
-        </TSelectItem>
-        <TSelectItem :model-value="1" name="dark">
+        </TxSelectItem>
+        <TxSelectItem :value="1">
           {{ t('themeStyle.darkStyle') }}
-        </TSelectItem>
-        <TSelectItem :model-value="2" name="auto">
+        </TxSelectItem>
+        <TxSelectItem :value="2">
           {{ t('themeStyle.followSystem') }}
-        </TSelectItem>
+        </TxSelectItem>
       </TuffBlockSelect>
 
       <TuffBlockSelect
@@ -401,21 +403,21 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
           <TxSpinner v-if="bgSaving" :size="14" />
           <ThemePreviewIcon v-else variant="wallpaper" :active="active" />
         </template>
-        <TSelectItem :model-value="0" name="none">
+        <TxSelectItem :value="0">
           {{ t('themeStyle.noBackground') }}
-        </TSelectItem>
-        <TSelectItem :model-value="1" name="bing">
+        </TxSelectItem>
+        <TxSelectItem :value="1">
           {{ t('themeStyle.bing') }}
-        </TSelectItem>
-        <TSelectItem :model-value="2" name="custom">
+        </TxSelectItem>
+        <TxSelectItem :value="2">
           {{ t('themeStyle.customImage') }}
-        </TSelectItem>
-        <TSelectItem :model-value="3" name="folder">
+        </TxSelectItem>
+        <TxSelectItem :value="3">
           {{ t('themeStyle.folder') }}
-        </TSelectItem>
-        <TSelectItem :model-value="4" name="desktop">
+        </TxSelectItem>
+        <TxSelectItem :value="4">
           {{ t('themeStyle.desktopWallpaper') }}
-        </TSelectItem>
+        </TxSelectItem>
       </TuffBlockSelect>
 
       <!-- Custom background image upload -->
@@ -714,15 +716,15 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         <template #icon="{ active }">
           <ThemePreviewIcon variant="transition" :active="active" />
         </template>
-        <TSelectItem model-value="slide" name="slide">
+        <TxSelectItem value="slide">
           {{ t('themeStyle.routeTransitionSlide', '滑动') }}
-        </TSelectItem>
-        <TSelectItem model-value="fade" name="fade">
+        </TxSelectItem>
+        <TxSelectItem value="fade">
           {{ t('themeStyle.routeTransitionFade', '淡入淡出') }}
-        </TSelectItem>
-        <TSelectItem model-value="zoom" name="zoom">
+        </TxSelectItem>
+        <TxSelectItem value="zoom">
           {{ t('themeStyle.routeTransitionZoom', '缩放') }}
-        </TSelectItem>
+        </TxSelectItem>
       </TuffBlockSelect>
 
       <!-- CoreBox window resize animation switch (Beta) -->

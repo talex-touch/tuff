@@ -1,0 +1,165 @@
+---
+title: "BaseSurface 基础表面层"
+description: "统一管理背景渲染策略的基础组件，支持纯色、遮罩、模糊、毛玻璃四种模式，并通过运动降级机制解决 backdrop-filter + transform 失效问题。"
+category: Layout
+status: beta
+since: 2.5.0
+tags: [surface, background, blur, glass, backdrop-filter, fallback]
+syncStatus: migrated
+---
+# BaseSurface 基础表面层
+
+统一管理背景渲染策略的基础组件 — 支持 `pure`（纯色）、`mask`（透明遮罩）、`blur`（背景模糊）、`glass`（毛玻璃）四种模式，并通过运动降级机制自动解决 Chromium 已知的 `backdrop-filter` + `transform` 失效 bug。
+
+支持 `fake` 伪元素模式渲染（与现有 `.fake-background` 一致），暗色模式通过 CSS 变量体系自动切换。
+
+## 背景模式
+
+四种模式对比：`pure` 纯色、`mask` 带透明度遮罩、`blur` 背景模糊、`glass` 完整毛玻璃。
+
+### 模式对比
+:::TuffDemoWrapper{demo="BaseSurfaceModesDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <TxBaseSurface mode="pure" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        纯色
+      </TxBaseSurface>
+      <TxBaseSurface mode="mask" :opacity="0.6" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        遮罩
+      </TxBaseSurface>
+      <TxBaseSurface mode="blur" :blur="8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        模糊
+      </TxBaseSurface>
+      <TxBaseSurface mode="glass" :blur="12" :saturation="1.8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        毛玻璃
+      </TxBaseSurface>
+    </div>
+  </template>
+---
+:::
+
+## Fake 伪元素模式
+
+通过 `fake` prop 启用伪元素渲染背景，slot 内容自然在背景上层，无需额外 z-index 管理。适合需要与现有 `.fake-background` 模式保持一致的场景。
+
+### Fake 模式
+:::TuffDemoWrapper{demo="BaseSurfaceFakeDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+      <TxBaseSurface fake mode="mask" :opacity="0.5" :radius="12" style="width: 200px; height: 100px;">
+        <strong>伪元素背景</strong>
+        <span style="font-size: 12px; opacity: 0.7;">slot 内容自然在背景上层</span>
+      </TxBaseSurface>
+      <TxBaseSurface fake mode="pure" :radius="12" color="var(--tx-color-primary-light-9)" style="width: 200px; height: 100px;">
+        自定义颜色
+      </TxBaseSurface>
+    </div>
+  </template>
+---
+:::
+
+## 运动降级
+
+当 `blur` 或 `glass` 模式的元素处于 CSS `transform` 运动中时，`backdrop-filter` 会失效（Chromium 已知 bug）。
+
+通过 `moving` prop 手动控制降级，或 `auto-detect` 自动检测 transform 变化，自动降级到 `fallbackMode`（默认 `mask`），运动结束后平滑恢复。
+
+点击按钮后，blur 和 glass 卡片会真正进行 `transform` 位移，同时自动降级到 mask 模式。卡片内部内容可滚动。
+
+### 多模式运动降级
+:::TuffDemoWrapper{demo="BaseSurfaceFallbackDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animating = ref(false)
+  </script>
+
+  <template>
+    <TxBaseSurface
+      mode="glass"
+      :blur="12"
+      :moving="animating"
+      fallback-mode="mask"
+      :radius="14"
+    >
+      <div style="max-height: 140px; overflow-y: auto;">
+        可滚动内容...
+      </div>
+    </TxBaseSurface>
+    <TxButton @click="animating = !animating">
+      {{ animating ? '停止' : '开始运动' }}
+    </TxButton>
+  </template>
+---
+:::
+
+## 原生 vs BaseSurface 对比
+
+左侧使用原生 `backdrop-filter`，运动时模糊效果直接失效变透明；右侧使用 `BaseSurface`，运动时平滑降级为 mask 遮罩，停止后恢复毛玻璃。
+
+### 运动对比
+:::TuffDemoWrapper{demo="BaseSurfaceMotionCompareDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const animating = ref(false)
+  </script>
+
+  <template>
+    <!-- 左：原生，运动时 backdrop-filter 失效 -->
+    <div :style="{ transform: animating ? 'translateX(20px)' : '' }"
+         style="backdrop-filter: blur(12px); transition: transform 1.2s;">
+      原生 glass（运动时失效）
+    </div>
+
+    <!-- 右：BaseSurface 自动降级 -->
+    <TxBaseSurface mode="glass" :blur="12" :moving="animating"
+                   fallback-mode="mask" :radius="14">
+      BaseSurface（运动时降级为 mask）
+    </TxBaseSurface>
+  </template>
+---
+:::
+
+## API
+
+### TxBaseSurface Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `mode` | `'pure' \| 'mask' \| 'blur' \| 'glass'` | `'pure'` | 背景模式 |
+| `radius` | `string \| number` | - | 自定义圆角，不传则 inherit 父元素 |
+| `color` | `string` | - | 背景色，默认使用 `--tx-fill-color-lighter` |
+| `opacity` | `number` | `0.75` | mask 模式下的透明度 (0-1) |
+| `blur` | `number` | `10` | blur/glass 模式下的模糊强度 (px) |
+| `saturation` | `number` | `1.8` | glass 模式下的饱和度 |
+| `brightness` | `number` | `1.1` | glass 模式下的亮度 |
+| `moving` | `boolean` | `false` | 是否正在运动（手动控制降级） |
+| `fallbackMode` | `'pure' \| 'mask'` | `'mask'` | 运动降级的目标模式 |
+| `settleDelay` | `number` | `150` | 运动结束后恢复延迟 (ms) |
+| `autoDetect` | `boolean` | `false` | 是否启用自动 transform 检测降级 |
+| `transitionDuration` | `number` | `260` | 过渡时长 (ms) |
+| `fake` | `boolean` | `false` | 是否使用伪元素模式渲染背景 |
+| `fakeIndex` | `number` | `0` | fake 模式下伪元素的 z-index |
+| `tag` | `string` | `'div'` | 根元素标签名 |
+
+### Slots
+
+| 插槽名 | 说明 |
+|------|------|
+| `default` | 表面层内容 |
+
+### CSS 变量
+
+| 变量名 | 说明 | 亮色默认值 | 暗色默认值 |
+|------|------|---------|---------|
+| `--tx-surface-color` | 纯色/遮罩背景色 | `var(--tx-fill-color-lighter)` (#fafafa) | #1d1d1d |
+| `--tx-surface-blur-bg` | blur/glass 半透明底色 | `rgba(255,255,255,0.6)` | `rgba(0,0,0,0.4)` |

@@ -5,6 +5,7 @@ import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
 import TxSearchInput from '../../search-input/src/TxSearchInput.vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import { SELECT_KEY } from './types'
 
 defineOptions({
   name: 'TuffSelect',
@@ -165,7 +166,7 @@ function scrollSelectedIntoView() {
   })
 }
 
-provide('tuffSelect', {
+provide(SELECT_KEY, {
   currentValue,
   handleSelect,
   registerOption,
@@ -189,6 +190,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleEsc)
+  cleanupAutoUpdate.value?.()
+  cleanupAutoUpdate.value = null
 })
 
 watch(
@@ -243,11 +246,6 @@ watch(
   },
   { flush: 'post' },
 )
-
-onBeforeUnmount(() => {
-  cleanupAutoUpdate.value?.()
-  cleanupAutoUpdate.value = null
-})
 </script>
 
 <template>
@@ -267,7 +265,7 @@ onBeforeUnmount(() => {
         :placeholder="placeholder"
         :readonly="!isEditable"
         :disabled="disabled"
-        @focus="!disabled && (isOpen = true)"
+        @focus="!disabled && isEditable && (isOpen = true)"
       >
         <template #suffix>
           <span class="tuff-select__arrow">
@@ -280,28 +278,26 @@ onBeforeUnmount(() => {
     </div>
 
     <Teleport to="body">
-      <Transition name="tuff-select-dropdown">
-        <div
-          v-show="isOpen"
-          ref="dropdownRef"
-          class="tuff-select__dropdown"
-          :style="[floatingStyles, { zIndex }]"
-        >
-          <TxCard class="tuff-select__panel" variant="solid" background="glass" shadow="soft" :radius="18" :padding="4">
-            <div v-if="searchable && !isEditable" class="tuff-select__search">
-              <TxSearchInput
-                ref="searchInputRef"
-                v-model="searchQuery"
-                :placeholder="searchPlaceholder"
-              />
-            </div>
+      <div
+        v-show="isOpen"
+        ref="dropdownRef"
+        class="tuff-select__dropdown"
+        :style="[floatingStyles, { zIndex }]"
+      >
+        <TxCard class="tuff-select__panel" variant="solid" background="glass" shadow="soft" :radius="18" :padding="4">
+          <div v-if="searchable && !isEditable" class="tuff-select__search">
+            <TxSearchInput
+              ref="searchInputRef"
+              v-model="searchQuery"
+              :placeholder="searchPlaceholder"
+            />
+          </div>
 
-            <div class="tuff-select__list">
-              <slot />
-            </div>
-          </TxCard>
-        </div>
-      </Transition>
+          <div class="tuff-select__list">
+            <slot />
+          </div>
+        </TxCard>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -377,16 +373,5 @@ onBeforeUnmount(() => {
       color: var(--tx-disabled-text-color, #c0c4cc);
     }
   }
-}
-
-.tuff-select-dropdown-enter-active,
-.tuff-select-dropdown-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.tuff-select-dropdown-enter-from,
-.tuff-select-dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
 }
 </style>

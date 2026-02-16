@@ -1,0 +1,218 @@
+---
+title: "BaseAnchor 锚点浮层基座"
+description: "基于 Floating UI 的底层锚点浮层组件，只负责定位与状态管理。"
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [anchor, overlay, floating]
+syncStatus: migrated
+---
+# BaseAnchor 锚点浮层基座
+
+`TxBaseAnchor` 是浮层体系的底层定位基座，只处理几何定位、开关状态和生命周期钩子，不内置视觉样式。你可以在 `#content` 中自由组合 `TxCard`、自定义容器或业务组件。
+
+推荐把触发器放到 `#reference`，把浮层本体放到 `#content`，让行为层和表现层职责清晰分离。
+
+## 基础用法
+
+### BaseAnchor
+:::TuffDemoWrapper{demo="BaseAnchorBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="open" placement="bottom-start" :offset="10">
+      <template #reference>
+        <TxButton @click="open = !open">点击</TxButton>
+      </template>
+
+      <template #content>
+        <TxCard shadow="soft" :radius="14" :padding="12" style="width: 240px;">
+          基于锚点定位的基础浮层，可由外部 v-model 完整控制。
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## 箭头渲染
+
+开启 `show-arrow` 后，箭头定位信息通过 `#content` 插槽参数提供（`arrowRef`、`arrowStyle`、`arrowSide`），由业务层自行渲染箭头节点。
+
+### Arrow
+:::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="open" placement="bottom-start" :offset="12" :show-arrow="true" :arrow-size="10">
+      <template #reference>
+        <TxButton @click="open = !open">箭头定位</TxButton>
+      </template>
+
+      <template #content="{ arrowRef, arrowStyle, arrowSide }">
+        <div :ref="arrowRef" :style="arrowStyle" :data-side="arrowSide" class="anchor-arrow" />
+        <TxCard shadow="soft" :radius="14" :padding="12" style="width: 260px;">
+          通过 content 插槽的 arrowRef / arrowStyle 渲染指示箭头。
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## 定位方向
+
+`placement` 直接透传给 Floating UI，支持 `top / bottom / left / right` 及 `*-start`、`*-end` 变体。
+
+### Placement
+:::TuffDemoWrapper{demo="BaseAnchorPlacementDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const openBottom = ref(false)
+  const openTop = ref(false)
+  const openLeft = ref(false)
+  const openRight = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor v-model="openBottom" placement="bottom">
+      <template #reference>
+        <TxButton @click="openBottom = !openBottom">下方</TxButton>
+      </template>
+      <template #content>
+        <TxCard shadow="soft" :radius="12" :padding="10" style="width: 180px;">bottom</TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## 自动尺寸重算
+
+当浮层内部内容会动态增减时，可开启 `auto-resize`，在内容变更后自动重新测量尺寸，减少截断与跳动。
+
+### Auto Resize
+:::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const expanded = ref(false)
+  </script>
+
+  <template>
+    <TxBaseAnchor
+      v-model="open"
+      placement="bottom-start"
+      :auto-resize="true"
+      :min-width="220"
+      :max-width="340"
+      :max-height="320"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">自适应尺寸</TxButton>
+      </template>
+
+      <template #content>
+        <TxCard shadow="soft" :radius="14" :padding="12">
+          <TxButton size="sm" variant="ghost" @click="expanded = !expanded">展开更多说明</TxButton>
+          <div v-if="expanded">内容变化后浮层会自动重新计算尺寸，避免突然截断。</div>
+        </TxCard>
+      </template>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+## API
+
+### TxBaseAnchor Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean` | `false` | 打开状态（v-model） |
+| `disabled` | `boolean` | `false` | 是否禁用交互 |
+| `placement` | `BaseAnchorPlacement` | `'bottom-start'` | 浮层定位方向 |
+| `offset` | `number` | `8` | 与 reference 的间距（px） |
+| `width` | `number` | `0` | 固定宽度（大于 0 时生效） |
+| `minWidth` | `number` | `0` | 最小宽度（px） |
+| `maxWidth` | `number` | `360` | 最大宽度（px） |
+| `maxHeight` | `number` | `420` | 最大高度（px） |
+| `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否与 reference 同宽 |
+| `referenceFullWidth` | `boolean` | `false` | reference 包装节点是否占满宽度 |
+| `motion` | `'fade' \| 'split'` | `'split'` | 进入/离开动效类型 |
+| `autoResize` | `boolean` | `false` | 是否启用自动尺寸重算 |
+| `autoResizeWidth` | `boolean` | `true` | 自动重算宽度轴 |
+| `autoResizeHeight` | `boolean` | `true` | 自动重算高度轴 |
+| `closeOnClickOutside` | `boolean` | `true` | 点击外部是否关闭 |
+| `closeOnEsc` | `boolean` | `true` | 按下 ESC 是否关闭 |
+| `transition` | `string` | `'tx-base-anchor'` | 浮层进入/离开动画名称。传空字符串可关闭动画 |
+| `referenceAs` | `string` | `'span'` | reference 包装标签 |
+| `floatingAs` | `string` | `'div'` | floating 包装标签 |
+| `referenceProps` | `Record<string, any>` | `undefined` | 透传给 reference 包装节点的属性 |
+| `floatingProps` | `Record<string, any>` | `undefined` | 透传给 floating 包装节点的属性 |
+| `referenceClass` | `string \| string[] \| Record<string, boolean>` | `undefined` | reference 包装节点 class 覆盖 |
+| `floatingClass` | `string \| string[] \| Record<string, boolean>` | `undefined` | floating 包装节点 class 覆盖 |
+| `floatingStyle` | `StyleValue` | `undefined` | floating 包装节点 style 覆盖 |
+| `showArrow` | `boolean` | `false` | 是否启用箭头定位中间件 |
+| `arrowSize` | `number` | `12` | 箭头逻辑尺寸（用于偏移计算） |
+| `virtualRef` | `BaseAnchorVirtualRef` | `undefined` | 虚拟 reference（非 DOM 触发场景） |
+| `onBeforeEnter` | `(el: Element) => void` | `undefined` | 进入动画前钩子 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:modelValue` | `boolean` | v-model 同步 |
+| `open` | - | 打开时触发 |
+| `close` | - | 关闭时触发 |
+| `before-enter` | `Element` | 进入动画前触发 |
+
+### Slots
+
+| 插槽名 | 说明 |
+|------|------|
+| `reference` | 触发区域内容 |
+| `content` | 浮层内容区域 |
+
+`content` 插槽参数：
+
+| 参数名 | 类型 | 说明 |
+|------|------|------|
+| `arrowStyle` | `Record<string, string>` | 箭头定位样式（Floating UI 计算结果） |
+| `arrowSide` | `string` | 最终方向（`top/right/bottom/left`） |
+| `arrowRef` | `Ref<HTMLElement \| null>` | 箭头节点引用，供中间件测量 |
+| `arrowData` | `any` | 箭头中间件原始数据 |
+
+### 暴露方法
+
+| 方法名 | 说明 |
+|------|------|
+| `open()` | 打开浮层 |
+| `close()` | 关闭浮层 |
+| `toggle()` | 切换开关状态 |
+| `update()` | 强制重算定位 |
+
+### 暴露引用
+
+| 引用名 | 说明 |
+|------|------|
+| `referenceRef` | reference 包装节点 ref |
+| `floatingRef` | floating 包装节点 ref |

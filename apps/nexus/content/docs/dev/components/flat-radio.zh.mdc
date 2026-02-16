@@ -1,0 +1,209 @@
+---
+title: "FlatRadio 平铺选择器"
+description: "用于 2-5 个选项的平铺选择（`TxFlatRadio` + `TxFlatRadioItem`）。提供指示器滑动动画、键盘导航和完整的 TypeScript 类型支持。"
+category: Form
+status: beta
+since: 2.4.7
+tags: [select, flat, form, selection, inline]
+syncStatus: migrated
+---
+# FlatRadio 平铺选择器
+
+用于 2-5 个选项的平铺选择（`TxFlatRadio` + `TxFlatRadioItem`）。相比下拉选择器操作更直接，相比 Radio 更紧凑。
+
+## 基础用法
+
+最简单的平铺选择器，适合少量选项的场景。
+
+### FlatRadio (basic)
+:::TuffDemoWrapper{demo="FlatRadioBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref<'light' | 'dark' | 'auto'>('light')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="light" label="Light" />
+      <TxFlatRadioItem value="dark" label="Dark" />
+      <TxFlatRadioItem value="auto" label="Auto" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## 尺寸
+
+支持 `sm`、`md`（默认）、`lg` 三种尺寸。
+
+### FlatRadio (sizes)
+:::TuffDemoWrapper{demo="FlatRadioSizesDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const sm = ref('a')
+  const md = ref('a')
+  const lg = ref('a')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="sm" size="sm">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="md" size="md">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <TxFlatRadio v-model="lg" size="lg">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## 图标
+
+通过 `icon` 属性可以为选项添加图标（CSS class 方式，如 UnoCSS 图标）。
+
+### FlatRadio (icon)
+:::TuffDemoWrapper{demo="FlatRadioIconDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('grid')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="grid" icon="i-carbon-grid" label="Grid" />
+      <TxFlatRadioItem value="list" icon="i-carbon-list" label="List" />
+      <TxFlatRadioItem value="kanban" icon="i-carbon-column" label="Kanban" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## 禁用状态
+
+支持整组禁用和单项禁用。
+
+### FlatRadio (disabled)
+:::TuffDemoWrapper{demo="FlatRadioDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('a')
+  </script>
+
+  <template>
+    <!-- 单项禁用 -->
+    <TxFlatRadio v-model="value">
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" disabled />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+
+    <!-- 整组禁用 -->
+    <TxFlatRadio v-model="value" disabled>
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## 带边框
+
+设置 `bordered` 属性可以为选择器添加外边框。
+
+### FlatRadio (bordered)
+:::TuffDemoWrapper{demo="FlatRadioBorderedDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('a')
+  </script>
+
+  <template>
+    <TxFlatRadio v-model="value" bordered>
+      <TxFlatRadioItem value="a" label="Option A" />
+      <TxFlatRadioItem value="b" label="Option B" />
+      <TxFlatRadioItem value="c" label="Option C" />
+    </TxFlatRadio>
+  </template>
+---
+:::
+
+## 键盘导航
+
+容器聚焦后可通过键盘控制：
+
+| 按键 | 行为 |
+|------|------|
+| `→` / `↓` | 选中下一个非禁用项（循环） |
+| `←` / `↑` | 选中上一个非禁用项（循环） |
+| `Home` | 选中第一个非禁用项 |
+| `End` | 选中最后一个非禁用项 |
+
+## API
+
+### TxFlatRadio
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| modelValue / v-model | 绑定值 | `string \| number` | - |
+| disabled | 是否禁用（整组） | `boolean` | `false` |
+| size | 尺寸 | `'sm' \| 'md' \| 'lg'` | `'md'` |
+| bordered | 是否显示外边框 | `boolean` | `false` |
+
+#### Events
+
+| 事件名 | 说明 | 回调参数 |
+|--------|------|----------|
+| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
+| change | 值变化时触发 | `(value: string \| number) => void` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | `TxFlatRadioItem` 子组件 |
+
+### TxFlatRadioItem
+
+#### Props
+
+| 属性名 | 说明 | 类型 | 默认值 |
+|--------|------|------|--------|
+| value | 当前项的值 | `string \| number` | - |
+| label | 显示文本 | `string` | - |
+| icon | 图标 CSS class | `string` | - |
+| disabled | 是否禁用（单项） | `boolean` | `false` |
+
+#### Slots
+
+| 插槽名 | 说明 |
+|--------|------|
+| default | 自定义内容（覆盖 label） |
+| icon | 自定义图标 |

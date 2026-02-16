@@ -88,7 +88,7 @@ mac:
     #
     # On macOS Sequoia, setting LSUIElement: true may be required for tray icons to appear
     # If tray icon is not visible, try uncommenting the line below:
-    # LSUIElement: true
+    LSUIElement: true
   notarize: false
   sign: false
   gatekeeperAssess: false

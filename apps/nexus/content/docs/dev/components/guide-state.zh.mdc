@@ -1,0 +1,68 @@
+---
+title: "GuideState 引导状态"
+description: "引导场景的快捷空态组件，基于 TxEmptyState 的 `variant=\"guide\"` 预设。"
+category: Feedback
+status: beta
+since: 2.4.7
+tags: [empty, state, guide, onboarding]
+syncStatus: migrated
+---
+# GuideState 引导状态
+
+`TxGuideState` 是 `TxEmptyState` 的快捷封装，自动设置 `variant="guide"`，用于新用户引导、功能入门等场景。
+
+## 基础用法
+
+使用默认标题和描述，搭配操作按钮。
+
+### GuideState (basic)
+:::TuffDemoWrapper{demo="GuideStateBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGuideState
+      :primary-action="{ label: 'Get Started', type: 'primary' }"
+      :secondary-action="{ label: 'Learn More' }"
+    />
+  </template>
+---
+:::
+
+## 自定义内容
+
+自定义标题描述，配合 `surface="card"` 和 `size="large"` 呈现更醒目的引导。
+
+### GuideState (custom)
+:::TuffDemoWrapper{demo="GuideStateCustomDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGuideState
+      title="Create your first workspace"
+      description="Workspaces help you organize projects. Follow the steps below to begin."
+      surface="card"
+      size="large"
+      :primary-action="{ label: 'Create Workspace', type: 'primary' }"
+    />
+  </template>
+---
+:::
+
+## API
+
+`TxGuideState` 继承 `TxEmptyState` 的全部 Props（除 `variant`）、Slots 和 Events，详见 [EmptyState](./empty-state.zh.md)。
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| title | `string` | `'Start here'` | 标题（可覆盖） |
+| description | `string` | `'Follow the steps to get started.'` | 描述（可覆盖） |
+| layout | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向 |
+| align | `'start' \| 'center' \| 'end'` | `'center'` | 对齐方式 |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级 |
+| surface | `'plain' \| 'card'` | `'plain'` | 表面风格 |
+| primaryAction | `EmptyStateAction` | - | 主操作配置 |
+| secondaryAction | `EmptyStateAction` | - | 次操作配置 |
+
+> 完整 Props 参考 [EmptyState API](./empty-state.zh.md#api)

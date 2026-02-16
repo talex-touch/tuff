@@ -1,0 +1,68 @@
+---
+title: "GuideState"
+description: "Shortcut empty-state component for onboarding scenarios, based on TxEmptyState with `variant=\"guide\"`."
+category: Feedback
+status: beta
+since: 2.4.7
+tags: [empty, state, guide, onboarding]
+syncStatus: migrated
+---
+# GuideState
+
+`TxGuideState` is a shortcut wrapper around `TxEmptyState` with `variant="guide"` pre-set. Use it for onboarding flows, feature introductions, and first-use experiences.
+
+## Basic Usage
+
+Uses default title and description with action buttons.
+
+### GuideState (basic)
+:::TuffDemoWrapper{demo="GuideStateBasicDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGuideState
+      :primary-action="{ label: 'Get Started', type: 'primary' }"
+      :secondary-action="{ label: 'Learn More' }"
+    />
+  </template>
+---
+:::
+
+## Custom Content
+
+Custom title and description, with `surface="card"` and `size="large"` for a more prominent guide.
+
+### GuideState (custom)
+:::TuffDemoWrapper{demo="GuideStateCustomDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxGuideState
+      title="Create your first workspace"
+      description="Workspaces help you organize projects. Follow the steps below to begin."
+      surface="card"
+      size="large"
+      :primary-action="{ label: 'Create Workspace', type: 'primary' }"
+    />
+  </template>
+---
+:::
+
+## API
+
+`TxGuideState` inherits all Props (except `variant`), Slots, and Events from `TxEmptyState`. See [EmptyState](./empty-state.en.md).
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| title | `string` | `'Start here'` | Title (overridable) |
+| description | `string` | `'Follow the steps to get started.'` | Description (overridable) |
+| layout | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction |
+| align | `'start' \| 'center' \| 'end'` | `'center'` | Alignment |
+| size | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier |
+| surface | `'plain' \| 'card'` | `'plain'` | Surface style |
+| primaryAction | `EmptyStateAction` | - | Primary action config |
+| secondaryAction | `EmptyStateAction` | - | Secondary action config |
+
+> Full Props reference: [EmptyState API](./empty-state.en.md#api)

@@ -23,10 +23,12 @@ export class TrayIconProvider {
 
     // macOS requires Template.png suffix for template images
     // Electron automatically handles @2x version if filename matches pattern
-    const preferredNames =
+    const overrideName = process.env.TUFF_TRAY_ICON_NAME?.trim()
+    const defaultNames =
       process.platform === 'darwin'
         ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
         : ['tray_icon.png']
+    const preferredNames = overrideName ? [overrideName, ...defaultNames] : defaultNames
 
     if (app.isPackaged) {
       const appPath = app.getAppPath()
@@ -166,10 +168,12 @@ export class TrayIconProvider {
 
     // macOS requires Template.png suffix for template images
     // Electron automatically handles @2x version if filename matches pattern
-    const preferredNames =
+    const overrideName = process.env.TUFF_TRAY_ICON_NAME?.trim()
+    const defaultNames =
       process.platform === 'darwin'
         ? ['TrayIconTemplate.png', 'tray_icon_22x22.png', 'tray_icon_16x16.png', 'tray_icon.png']
         : ['tray_icon.png']
+    const preferredNames = overrideName ? [overrideName, ...defaultNames] : defaultNames
 
     if (app.isPackaged) {
       const appPath = app.getAppPath()

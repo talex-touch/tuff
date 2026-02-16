@@ -1,0 +1,202 @@
+---
+title: "BasePopover 裂缝弹出层"
+description: "基于 GSAP 驱动渐变遮罩动画的弹出层，内容从 placement 方向滑入，带有物理回弹效果。"
+category: Feedback
+status: beta
+since: 2.5.0
+tags: [popover, overlay, floating, gsap, animation]
+syncStatus: migrated
+---
+# BasePopover 裂缝弹出层
+
+基于 GSAP 驱动渐变遮罩动画的弹出层 — 内容从 placement 方向通过柔和的渐变边缘滑入，带有加速→减速→回弹的物理效果。无透明度变化，纯空间遮罩揭示。
+
+面板容器使用 `TxCard` 渲染，可通过 `panelBackground / panelShadow / panelRadius / panelPadding` 控制外观。
+
+## 基础用法
+
+### BasePopover
+:::TuffDemoWrapper{demo="BasePopoverBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover v-model="open" placement="bottom-start">
+      <template #reference>
+        <TxButton @click="open = !open">点击</TxButton>
+      </template>
+
+      <div style="width: 220px; padding: 4px;">
+        渐变遮罩动画弹出内容
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## 渐变边缘
+
+通过 `soft-edge` (px) 控制遮罩边界的渐变柔和程度。值越大，边缘渐变越宽。
+
+### 柔和边缘
+:::TuffDemoWrapper{demo="BasePopoverSplitLineDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover
+      v-model="open"
+      placement="bottom-start"
+      :soft-edge="24"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">柔和边缘</TxButton>
+      </template>
+
+      <div style="width: 240px; padding: 4px;">
+        内容从柔和渐变边缘中浮现
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## 方向
+
+内容从 placement 方向进入和退出。例如 `top` 时，内容从上方下来，关闭时原路返回上方。
+
+### 不同方向
+:::TuffDemoWrapper{demo="BasePopoverPlacementDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open1 = ref(false)
+  const open2 = ref(false)
+  const open3 = ref(false)
+  const open4 = ref(false)
+  </script>
+
+  <template>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; padding: 48px 0; justify-content: center;">
+      <TxBasePopover v-model="open1" placement="bottom">
+        <template #reference>
+          <TxButton @click="open1 = !open1">下方</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">bottom</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open2" placement="top">
+        <template #reference>
+          <TxButton @click="open2 = !open2">上方</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">top</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open3" placement="left">
+        <template #reference>
+          <TxButton @click="open3 = !open3">左侧</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">left</div>
+      </TxBasePopover>
+
+      <TxBasePopover v-model="open4" placement="right">
+        <template #reference>
+          <TxButton @click="open4 = !open4">右侧</TxButton>
+        </template>
+        <div style="width: 180px; padding: 4px;">right</div>
+      </TxBasePopover>
+    </div>
+  </template>
+---
+:::
+
+## 自定义动画
+
+通过 `duration` 和 `ease` 控制动画时长和 GSAP 缓动函数。
+
+### 弹性缓动
+:::TuffDemoWrapper{demo="BasePopoverCustomEaseDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  </script>
+
+  <template>
+    <TxBasePopover
+      v-model="open"
+      placement="bottom-start"
+      :duration="600"
+      ease="elastic.out(1, 0.4)"
+      :soft-edge="20"
+    >
+      <template #reference>
+        <TxButton @click="open = !open">弹性</TxButton>
+      </template>
+
+      <div style="width: 240px; padding: 4px;">
+        弹性缓动，时长 600ms
+      </div>
+    </TxBasePopover>
+  </template>
+---
+:::
+
+## API
+
+### TxBasePopover Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean` | `false` | 是否打开（v-model） |
+| `disabled` | `boolean` | `false` | 禁用 |
+| `placement` | `BasePopoverPlacement` | `'bottom-start'` | 浮动定位方向 |
+| `offset` | `number` | `8` | 与触发元素的间距 (px) |
+| `width` | `number` | `0` | 面板宽度（0 = 跟随 reference） |
+| `minWidth` | `number` | `0` | 最小宽度 |
+| `maxWidth` | `number` | `360` | 最大宽度 |
+| `duration` | `number` | `432` | 动画时长 (ms) |
+| `ease` | `string` | `'back.out(1.7)'` | GSAP 缓动函数（打开动画） |
+| `softEdge` | `number` | `18` | 遮罩边界渐变宽度 (px) |
+| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景（TxCard background） |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
+| `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
+| `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
+| `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |
+| `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | - | 打开时触发 |
+| `close` | - | 关闭时触发 |
+| `update:modelValue` | `boolean` | v-model 更新 |
+
+### Slots
+
+| 插槽名 | 说明 |
+|------|------|
+| `reference` | 触发元素 |
+| `default` | 弹出内容 |
+
+### 暴露方法
+
+| 方法名 | 参数 | 说明 |
+|------|------|------|
+| `close` | - | 编程式关闭 |
+| `toggle` | - | 编程式切换 |

@@ -105,6 +105,7 @@ const illustrationVariants = new Set<EmptyStateVariant>([
   'no-data',
   'no-selection',
   'guide',
+  'error',
 ])
 const hasIconSlot = computed(() => !!slots.icon)
 const hasIconProp = computed(() => {
@@ -173,24 +174,26 @@ function getActionSize(action?: EmptyStateAction) {
           <!-- No Selection (Cursor Click Guide) -->
           <svg v-else-if="illustrationVariant === 'no-selection'" viewBox="0 0 64 64" aria-hidden="true">
             <!-- Background List Items -->
-            <rect class="tx-empty-state__selection-bg-item" x="12" y="8" width="32" height="4" rx="2" />
+            <rect class="tx-empty-state__selection-bg-item" x="10" y="8" width="28" height="3" rx="1.5" />
 
             <!-- Target Item (Active) -->
             <g class="tx-empty-state__selection-target">
-              <rect class="tx-empty-state__selection-item-bg" x="12" y="18" width="40" height="12" rx="4" />
-              <circle class="tx-empty-state__selection-item-icon" cx="20" cy="24" r="3" />
-              <rect class="tx-empty-state__selection-item-text" x="26" y="22" width="20" height="4" rx="2" />
+              <rect class="tx-empty-state__selection-item-bg" x="10" y="16" width="36" height="12" rx="3" />
+              <circle class="tx-empty-state__selection-item-icon" cx="18" cy="22" r="3" />
+              <rect class="tx-empty-state__selection-item-text" x="24" y="20" width="16" height="4" rx="2" />
             </g>
 
             <!-- Third Item -->
-            <g opacity="0.6">
-              <rect class="tx-empty-state__selection-item-bg-muted" x="12" y="36" width="40" height="12" rx="4" />
-              <circle class="tx-empty-state__selection-item-icon" cx="20" cy="42" r="3" />
-              <rect class="tx-empty-state__selection-item-text" x="26" y="40" width="16" height="4" rx="2" />
+            <g opacity="0.5">
+              <rect class="tx-empty-state__selection-item-bg-muted" x="10" y="34" width="36" height="12" rx="3" />
+              <circle class="tx-empty-state__selection-item-icon" cx="18" cy="40" r="3" />
+              <rect class="tx-empty-state__selection-item-text" x="24" y="38" width="12" height="4" rx="2" />
             </g>
 
-            <!-- Cursor -->
-            <path class="tx-empty-state__selection-cursor" d="M38 42l-2.9-12.7 10.3 5.4-6.3 1.9 4.3 6.4-3.2 2.1-4.2-6.4Z" />
+            <!-- Cursor (classic pointer arrow) -->
+            <g class="tx-empty-state__selection-cursor">
+              <path d="M40 38l-8-8v12.5l3-2.5 2.2 4.2 2.4-1.2-2.2-4.2L40 38z" />
+            </g>
           </svg>
 
           <!-- Search Empty (Magnifying Glass) -->
@@ -206,18 +209,24 @@ function getActionSize(action?: EmptyStateAction) {
             </g>
           </svg>
 
-          <!-- No Data (Flatline) -->
+          <!-- No Data (Flatline with pulse attempt) -->
           <svg v-else-if="illustrationVariant === 'no-data'" viewBox="0 0 64 64" aria-hidden="true">
+            <!-- Axes -->
             <line class="tx-empty-state__chart-axis" x1="8" y1="56" x2="56" y2="56" />
-            <line class="tx-empty-state__chart-axis" x1="8" y1="16" x2="8" y2="56" />
-            <!-- Flatline Animation -->
-            <path class="tx-empty-state__chart-line" d="M8 48 Q 20 48 32 48 T 56 48" />
-            <!-- Cross marks -->
-            <g transform="translate(38, 38)" class="tx-empty-state__chart-marks">
+            <line class="tx-empty-state__chart-axis" x1="8" y1="12" x2="8" y2="56" />
+            <!-- Grid lines (subtle) -->
+            <line class="tx-empty-state__chart-grid" x1="8" y1="34" x2="56" y2="34" />
+            <line class="tx-empty-state__chart-grid" x1="8" y1="23" x2="56" y2="23" />
+            <!-- Flatline that briefly pulses then goes flat -->
+            <path class="tx-empty-state__chart-line" d="M8 46 L18 46 L22 38 L26 50 L30 42 L34 46 L56 46" />
+            <!-- Sad dot at the end -->
+            <circle class="tx-empty-state__chart-dot" cx="56" cy="46" r="2.5" />
+            <!-- Cross marks indicating no data points -->
+            <g class="tx-empty-state__chart-marks" transform="translate(42, 28)">
               <path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke-width="2" stroke-linecap="round" />
             </g>
-            <g transform="translate(26, 26)" class="tx-empty-state__chart-marks">
-              <path d="M-2 -2 L2 2 M2 -2 L-2 2" stroke-width="2" stroke-linecap="round" />
+            <g class="tx-empty-state__chart-marks" transform="translate(22, 22)">
+              <path d="M-2 -2 L2 2 M2 -2 L-2 2" stroke-width="1.5" stroke-linecap="round" />
             </g>
           </svg>
 
@@ -255,16 +264,16 @@ function getActionSize(action?: EmptyStateAction) {
           <!-- Empty Box (Open/Close) -->
           <svg v-else-if="illustrationVariant === 'empty'" viewBox="0 0 64 64" aria-hidden="true">
             <g transform="translate(0, 4)">
+              <!-- Box Body -->
               <rect class="tx-empty-state__box-body" x="18" y="30" width="28" height="16" rx="2" />
-              <!-- Lid Back -->
-              <path class="tx-empty-state__box-lid-back" d="M18 30h28v-8h-28z" />
-              <!-- Lid Front (Animated) -->
-              <g class="tx-empty-state__box-lid-wrapper">
-                <rect class="tx-empty-state__box-lid" x="18" y="22" width="28" height="8" rx="1" />
-              </g>
-              <!-- Dust -->
-              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--1" cx="14" cy="46" r="2" />
-              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--2" cx="10" cy="42" r="1.5" />
+              <!-- Box opening line -->
+              <line class="tx-empty-state__box-opening" x1="22" y1="34" x2="42" y2="34" />
+              <!-- Lid (Animated - opens upward using scaleY) -->
+              <rect class="tx-empty-state__box-lid" x="16" y="22" width="32" height="8" rx="2" />
+              <!-- Floating particles when box opens -->
+              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--1" cx="28" cy="26" r="1.5" />
+              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--2" cx="36" cy="24" r="1" />
+              <circle class="tx-empty-state__box-dust tx-empty-state__box-dust--3" cx="32" cy="22" r="1.2" />
             </g>
           </svg>
 
@@ -276,6 +285,20 @@ function getActionSize(action?: EmptyStateAction) {
             </g>
             <rect class="tx-empty-state__guide-bar" x="20" y="40" width="24" height="4" rx="2" />
             <rect class="tx-empty-state__guide-progress" x="20" y="40" width="12" height="4" rx="2" />
+          </svg>
+
+          <!-- Error State (Warning Triangle) -->
+          <svg v-else-if="illustrationVariant === 'error'" viewBox="0 0 64 64" aria-hidden="true">
+            <g class="tx-empty-state__error-group">
+              <!-- Triangle -->
+              <path class="tx-empty-state__error-triangle" d="M32 12L8 52h48L32 12z" />
+              <!-- Exclamation mark -->
+              <line class="tx-empty-state__error-exclaim-line" x1="32" y1="26" x2="32" y2="38" />
+              <circle class="tx-empty-state__error-exclaim-dot" cx="32" cy="44" r="2.5" />
+            </g>
+            <!-- Pulse rings -->
+            <circle class="tx-empty-state__error-pulse tx-empty-state__error-pulse--1" cx="32" cy="36" r="18" />
+            <circle class="tx-empty-state__error-pulse tx-empty-state__error-pulse--2" cx="32" cy="36" r="24" />
           </svg>
         </span>
         <TxIcon v-else-if="iconSource" :icon="iconSource" :size="resolvedIconSize" />
@@ -507,35 +530,64 @@ function getActionSize(action?: EmptyStateAction) {
 
 .tx-empty-state__selection-target {
   animation: tx-empty-state-item-highlight 3s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
+}
+
+.tx-empty-state__selection-target .tx-empty-state__selection-item-bg {
+  transition: fill 0.3s;
 }
 
 .tx-empty-state__selection-cursor {
   fill: var(--tx-text-color-primary, #1e293b);
   stroke: var(--tx-bg-color, #fff);
-  stroke-width: 1.5;
+  stroke-width: 1;
   animation: tx-empty-state-cursor-move 3s ease-in-out infinite;
-  transform-origin: center;
-  transform-box: fill-box;
 }
 
 @keyframes tx-empty-state-cursor-move {
-  0% { transform: translate(15px, 15px); opacity: 0; }
-  10% { opacity: 1; }
-  30% { transform: translate(0, 0); }
-  40% { transform: scale(0.9); }
-  50% { transform: scale(1); }
-  80% { opacity: 1; }
-  100% { transform: translate(15px, 15px); opacity: 0; }
+  0% {
+    transform: translate(12px, 12px);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  35% {
+    transform: translate(0, 0);
+  }
+  42% {
+    transform: translate(0, 0) scale(0.92);
+  }
+  50% {
+    transform: translate(0, 0) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(12px, 12px);
+    opacity: 0;
+  }
 }
 
 @keyframes tx-empty-state-item-highlight {
-  0%, 30% { transform: scale(1); opacity: 0.8; }
-  40% { transform: scale(0.98); opacity: 1; }
-  50% { transform: scale(1); opacity: 1; }
-  90% { opacity: 1; }
-  100% { opacity: 0.8; }
+  0%, 25% {
+    opacity: 0.7;
+  }
+  42% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+  }
+  52% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
+  }
 }
 
 /* --- Search Empty --- */
@@ -593,12 +645,30 @@ function getActionSize(action?: EmptyStateAction) {
   stroke: color-mix(in srgb, currentColor 30%, transparent);
 }
 
+.tx-empty-state__chart-grid {
+  stroke: color-mix(in srgb, currentColor 8%, transparent);
+  stroke-dasharray: 3 3;
+}
+
 .tx-empty-state__chart-line {
   stroke: currentColor;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
+  stroke-width: 2;
   fill: none;
-  animation: tx-empty-state-flatline 3s ease-out infinite;
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: tx-empty-state-flatline 3.5s ease-out infinite;
+}
+
+.tx-empty-state__chart-dot {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0;
+  animation: tx-empty-state-dot-appear 3.5s ease-out infinite;
+}
+
+.tx-empty-state__chart-marks {
+  opacity: 0;
+  animation: tx-empty-state-marks-fade 3.5s ease-out infinite;
 }
 
 .tx-empty-state__chart-marks path {
@@ -606,9 +676,22 @@ function getActionSize(action?: EmptyStateAction) {
 }
 
 @keyframes tx-empty-state-flatline {
-  0% { stroke-dashoffset: 100; }
-  50% { stroke-dashoffset: 0; }
+  0% { stroke-dashoffset: 120; }
+  60% { stroke-dashoffset: 0; }
   100% { stroke-dashoffset: 0; }
+}
+
+@keyframes tx-empty-state-dot-appear {
+  0%, 55% { opacity: 0; transform: scale(0); }
+  65% { opacity: 1; transform: scale(1.3); }
+  75% { transform: scale(1); }
+  100% { opacity: 1; }
+}
+
+@keyframes tx-empty-state-marks-fade {
+  0%, 40% { opacity: 0; }
+  55% { opacity: 0.6; }
+  100% { opacity: 0.6; }
 }
 
 /* --- Offline --- */
@@ -727,40 +810,65 @@ function getActionSize(action?: EmptyStateAction) {
   stroke: color-mix(in srgb, currentColor 40%, transparent);
 }
 
-.tx-empty-state__box-lid-back {
-  fill: color-mix(in srgb, currentColor 25%, transparent);
-  stroke: color-mix(in srgb, currentColor 40%, transparent);
-  transform-origin: bottom center;
-  animation: tx-empty-state-box-lid 3s ease-in-out infinite;
-  transform-box: fill-box;
+.tx-empty-state__box-opening {
+  stroke: color-mix(in srgb, currentColor 20%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
 }
 
 .tx-empty-state__box-lid {
-  fill: transparent;
+  fill: color-mix(in srgb, currentColor 25%, transparent);
   stroke: color-mix(in srgb, currentColor 40%, transparent);
-  opacity: 0.3;
+  transform-origin: 32px 30px; /* bottom center of lid */
+  animation: tx-empty-state-box-lid 3s ease-in-out infinite;
 }
 
 .tx-empty-state__box-dust {
-  fill: color-mix(in srgb, currentColor 40%, transparent);
-  opacity: 0;
+  fill: color-mix(in srgb, currentColor 50%, transparent);
   stroke: none;
-  animation: tx-empty-state-dust-float 2s linear infinite;
+  opacity: 0;
+}
+
+.tx-empty-state__box-dust--1 {
+  animation: tx-empty-state-dust-1 3s ease-out infinite;
 }
 
 .tx-empty-state__box-dust--2 {
-  animation-delay: 0.5s;
+  animation: tx-empty-state-dust-2 3s ease-out infinite;
+  animation-delay: 0.15s;
+}
+
+.tx-empty-state__box-dust--3 {
+  animation: tx-empty-state-dust-3 3s ease-out infinite;
+  animation-delay: 0.3s;
 }
 
 @keyframes tx-empty-state-box-lid {
-  0%, 100% { transform: rotateX(0deg); }
-  50% { transform: rotateX(-40deg); }
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+  60% { transform: translateY(-6px); }
+  80% { transform: translateY(0); }
 }
 
-@keyframes tx-empty-state-dust-float {
-  0% { transform: translate(0, 0) scale(0); opacity: 0; }
-  50% { opacity: 1; }
-  100% { transform: translate(10px, -10px) scale(1.5); opacity: 0; }
+@keyframes tx-empty-state-dust-1 {
+  0%, 25% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  35% { opacity: 0.8; }
+  60% { opacity: 0; transform: translate(-8px, -12px) scale(1.2); }
+  100% { opacity: 0; }
+}
+
+@keyframes tx-empty-state-dust-2 {
+  0%, 28% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  38% { opacity: 0.7; }
+  62% { opacity: 0; transform: translate(6px, -14px) scale(1); }
+  100% { opacity: 0; }
+}
+
+@keyframes tx-empty-state-dust-3 {
+  0%, 30% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  40% { opacity: 0.6; }
+  65% { opacity: 0; transform: translate(0, -16px) scale(0.8); }
+  100% { opacity: 0; }
 }
 
 /* --- Guide --- */

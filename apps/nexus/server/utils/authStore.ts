@@ -534,6 +534,25 @@ export async function updateUserProfile(event: H3Event, userId: string, payload:
   return getUserById(event, userId)
 }
 
+export async function setUserRole(event: H3Event, userId: string, role: string): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`UPDATE ${USERS_TABLE} SET role = ? WHERE id = ?`).bind(role, userId).run()
+  return getUserById(event, userId)
+}
+
+export async function setUserStatus(event: H3Event, userId: string, status: UserStatus): Promise<AuthUser | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const disabledAt = status === 'disabled' ? new Date().toISOString() : null
+  await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET status = ?, disabled_at = ?
+    WHERE id = ?
+  `).bind(status, disabledAt, userId).run()
+  return getUserById(event, userId)
+}
+
 export async function setUserPassword(event: H3Event, userId: string, password: string): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)

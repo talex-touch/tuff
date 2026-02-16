@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
@@ -52,6 +52,9 @@ const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { 
 const syncBaseUrl = ref('')
 const syncSaving = ref(false)
 const syncError = ref<string | null>(null)
+const syncGuideVisible = ref(false)
+const syncGuideSource = ref<HTMLElement | null>(null)
+const syncGuideTriggerRef = ref<HTMLElement | null>(null)
 
 watch(
   () => settingsData.value?.settings,
@@ -73,6 +76,11 @@ const releaseSyncExample = computed(() => {
     '  -d \'{"tag":"v1.2.3","name":"Tuff v1.2.3","version":"1.2.3","channel":"RELEASE","notes":{"zh":"...","en":"..."},"status":"published"}\'',
   ].join('\n')
 })
+
+function openSyncGuide() {
+  syncGuideSource.value = syncGuideTriggerRef.value
+  syncGuideVisible.value = true
+}
 
 function formatDate(value?: string) {
   if (!value)
@@ -196,12 +204,27 @@ function closeDeleteConfirm() {
             {{ t('dashboard.sections.updates.sync.subtitle') }}
           </p>
         </div>
-        <NuxtLink
-          to="/dashboard/api-keys"
-          class="text-xs text-primary no-underline hover:text-primary/80"
-        >
-          {{ t('dashboard.sections.updates.sync.apiKeyHint') }}
-        </NuxtLink>
+        <div class="flex items-center gap-2">
+          <span ref="syncGuideTriggerRef" class="inline-flex">
+            <TxButton
+              circle
+              size="mini"
+              variant="ghost"
+              icon="i-carbon-help"
+              native-type="button"
+              :aria-label="t('dashboard.sections.updates.sync.guideTrigger', '配置说明')"
+              :title="t('dashboard.sections.updates.sync.guideTrigger', '配置说明')"
+              class="text-black/50 hover:text-primary dark:text-white/50"
+              @click="openSyncGuide"
+            />
+          </span>
+          <NuxtLink
+            to="/dashboard/api-keys"
+            class="text-xs text-primary no-underline hover:text-primary/80"
+          >
+            {{ t('dashboard.sections.updates.sync.apiKeyHint') }}
+          </NuxtLink>
+        </div>
       </div>
 
       <div class="mt-4 space-y-3">
@@ -228,14 +251,7 @@ function closeDeleteConfirm() {
             {{ syncError }}
           </span>
         </div>
-
-        <div class="rounded-xl bg-black/[0.03] p-3 text-xs text-black/60 dark:bg-white/[0.04] dark:text-white/60">
-          <p class="mb-2 text-[11px] font-semibold uppercase text-black/40 dark:text-white/40">
-            {{ t('dashboard.sections.updates.sync.exampleTitle') }}
-          </p>
-          <pre class="whitespace-pre-wrap font-mono text-[11px] leading-relaxed">{{ releaseSyncExample }}</pre>
-        </div>
-      </div>
+</div>
     </section>
 
     <section class="apple-card-lg p-5">
@@ -339,6 +355,85 @@ function closeDeleteConfirm() {
       @saved="onSaved"
     />
 
+    <Teleport to="body">
+      <TxFlipOverlay
+        v-model="syncGuideVisible"
+        :source="syncGuideSource"
+        :duration="420"
+        :rotate-x="6"
+        :rotate-y="8"
+        transition-name="UpdatesGuideOverlay-Mask"
+        mask-class="UpdatesGuideOverlay-Mask"
+        card-class="UpdatesGuideOverlay-Card"
+      >
+        <template #default="{ close }">
+          <div class="UpdatesGuideOverlay-Inner">
+            <div class="UpdatesGuideOverlay-Header">
+              <div class="space-y-1">
+                <h2 class="UpdatesGuideOverlay-Title">
+                  {{ t('dashboard.sections.updates.sync.guideTitle', '更新/要闻同步说明') }}
+                </h2>
+                <p class="UpdatesGuideOverlay-Desc">
+                  {{ t('dashboard.sections.updates.sync.guideSubtitle', '如何配置同步入口、示例与工作机制。') }}
+                </p>
+              </div>
+              <TxButton variant="secondary" size="small" native-type="button" @click="close?.()">
+                {{ t('dashboard.sections.updates.sync.guideClose', '关闭') }}
+              </TxButton>
+            </div>
+
+            <div class="UpdatesGuideOverlay-Body">
+              <section class="UpdatesGuideOverlay-Section">
+                <h3 class="UpdatesGuideOverlay-SectionTitle">
+                  {{ t('dashboard.sections.updates.sync.guidePurposeTitle', '有什么用') }}
+                </h3>
+                <ul class="UpdatesGuideOverlay-List">
+                  <li class="UpdatesGuideOverlay-ListItem">
+                    <span class="i-carbon-checkmark text-primary text-sm" />
+                    <span>{{ t('dashboard.sections.updates.sync.guidePurposeItem1', '在发布流水线里自动写入更新与要闻。') }}</span>
+                  </li>
+                  <li class="UpdatesGuideOverlay-ListItem">
+                    <span class="i-carbon-checkmark text-primary text-sm" />
+                    <span>{{ t('dashboard.sections.updates.sync.guidePurposeItem2', '保持更新与下载页面内容一致。') }}</span>
+                  </li>
+                </ul>
+              </section>
+
+              <section class="UpdatesGuideOverlay-Section">
+                <h3 class="UpdatesGuideOverlay-SectionTitle">
+                  {{ t('dashboard.sections.updates.sync.guideConfigTitle', '如何配置') }}
+                </h3>
+                <ol class="UpdatesGuideOverlay-List UpdatesGuideOverlay-List--ordered">
+                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep1', '在“同步设置”填写服务器地址（留空默认当前域名）。') }}</li>
+                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep2', '到 API Keys 创建密钥，保存为 CI 的 `NEXUS_API_KEY`。') }}</li>
+                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep3', '在流水线中调用发布接口提交数据（release/news）。') }}</li>
+                </ol>
+              </section>
+
+              <section class="UpdatesGuideOverlay-Section">
+                <h3 class="UpdatesGuideOverlay-SectionTitle">
+                  {{ t('dashboard.sections.updates.sync.guideExampleTitle', '示例') }}
+                </h3>
+                <p class="UpdatesGuideOverlay-Hint">
+                  {{ t('dashboard.sections.updates.sync.guideExampleHint', '示例使用发布接口（/api/releases）。') }}
+                </p>
+                <pre class="UpdatesGuideOverlay-Code">{{ releaseSyncExample }}</pre>
+              </section>
+
+              <section class="UpdatesGuideOverlay-Section">
+                <h3 class="UpdatesGuideOverlay-SectionTitle">
+                  {{ t('dashboard.sections.updates.sync.guidePrincipleTitle', '作用原理') }}
+                </h3>
+                <p class="UpdatesGuideOverlay-Text">
+                  {{ t('dashboard.sections.updates.sync.guidePrincipleDesc', 'CI 请求携带 API Key → 服务端校验 → 写入 D1/存储 → 前端拉取并展示。') }}
+                </p>
+              </section>
+            </div>
+          </div>
+        </template>
+      </TxFlipOverlay>
+    </Teleport>
+
     <TxBottomDialog
       v-if="deleteConfirmVisible"
       :title="t('dashboard.sections.updates.deleteTitle', 'Delete Update')"
@@ -351,3 +446,134 @@ function closeDeleteConfirm() {
     />
   </div>
 </template>
+
+<style scoped>
+.UpdatesGuideOverlay-Inner {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  padding: 20px;
+}
+
+.UpdatesGuideOverlay-Header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.UpdatesGuideOverlay-Title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx-text-color-primary);
+}
+
+.UpdatesGuideOverlay-Desc {
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.UpdatesGuideOverlay-Body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--tx-text-color-secondary);
+}
+
+.UpdatesGuideOverlay-Section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.UpdatesGuideOverlay-SectionTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-text-color-secondary);
+}
+
+.UpdatesGuideOverlay-List {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.UpdatesGuideOverlay-List--ordered {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+  list-style: decimal;
+}
+
+.UpdatesGuideOverlay-ListItem {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.UpdatesGuideOverlay-Hint {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.UpdatesGuideOverlay-Code {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--tx-border-color-lighter);
+  background: color-mix(in srgb, var(--tx-bg-color-secondary, #f5f5f5) 80%, transparent);
+  color: var(--tx-text-color-secondary);
+}
+
+.UpdatesGuideOverlay-Text {
+  line-height: 1.6;
+}
+</style>
+
+<style>
+.UpdatesGuideOverlay-Mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  background: rgba(12, 12, 16, 0.4);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1200px;
+}
+
+.UpdatesGuideOverlay-Mask-enter-active,
+.UpdatesGuideOverlay-Mask-leave-active {
+  transition: opacity 200ms ease;
+}
+
+.UpdatesGuideOverlay-Mask-enter-from,
+.UpdatesGuideOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.UpdatesGuideOverlay-Card {
+  width: min(640px, 92vw);
+  min-height: 360px;
+  max-height: 82vh;
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
+  border-radius: 1rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  overflow: auto;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+}
+</style>

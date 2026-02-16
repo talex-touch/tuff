@@ -1,4 +1,4 @@
-import type { SpinnerProps } from './src/types.ts'
+import type { SpinnerProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxSpinner from './src/TxSpinner.vue'
 

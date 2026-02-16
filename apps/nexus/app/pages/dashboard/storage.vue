@@ -393,6 +393,32 @@ function resolveItemStatus(item: StorageDetailsResponse['items'][number]): strin
     : t('dashboard.storage.itemActive', '生效中')
 }
 
+function resolveCategoryLabel(categoryKey: string, fallback?: string): string {
+  const normalized = categoryKey.trim().toLowerCase()
+  if (normalized === 'settings') {
+    return t('dashboard.storage.categorySettings', '应用设置')
+  }
+  if (normalized === 'plugin') {
+    return t('dashboard.storage.categoryPlugin', '插件数据')
+  }
+  if (normalized === 'launcher') {
+    return t('dashboard.storage.categoryLauncher', '启动器与索引')
+  }
+  if (normalized === 'intelligence') {
+    return t('dashboard.storage.categoryIntelligence', '智能配置')
+  }
+  if (normalized === 'blob') {
+    return t('dashboard.storage.categoryBlob', '大对象附件')
+  }
+  if (normalized === 'storage') {
+    return t('dashboard.storage.categoryStorage', '其他存储快照')
+  }
+  if (fallback) {
+    return fallback
+  }
+  return t('dashboard.storage.categoryOther', '未分类数据')
+}
+
 function resolveCategoryTone(categoryKey: string): string {
   if (categoryKey === 'settings') {
     return 'StorageDetailOverlay-Tone--blue'
@@ -744,7 +770,7 @@ watch(showDetailsOverlay, (open) => {
                         class="StorageDetailOverlay-Tone"
                         :class="resolveCategoryTone(category.key)"
                       />
-                      <strong>{{ category.label }}</strong>
+                      <strong>{{ resolveCategoryLabel(category.key, category.label) }}</strong>
                     </div>
                     <div class="text-xs text-black/55 dark:text-white/55">
                       {{ category.count }} 条 · {{ formatBytes(category.total_payload_bytes) }}
@@ -785,7 +811,7 @@ watch(showDetailsOverlay, (open) => {
                       </div>
                       <div class="StorageDetailOverlay-ItemMeta">
                         <span class="StorageDetailOverlay-ItemBadge">
-                          {{ item.category_label }}
+                          {{ resolveCategoryLabel(item.category, item.category_label) }}
                         </span>
                         <span>{{ formatBytes(item.payload_size) }}</span>
                         <span>{{ formatTime(item.updated_at) }}</span>

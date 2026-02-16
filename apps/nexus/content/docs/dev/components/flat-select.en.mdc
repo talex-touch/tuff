@@ -1,0 +1,119 @@
+---
+title: "FlatSelect"
+description: "ComboBox-style dropdown selector (`TxFlatSelect` + `TxFlatSelectItem`). Options overlay the trigger, selected item anchors at trigger position, smooth clip-path expand/collapse animation."
+category: Form
+status: beta
+since: 2.4.7
+tags: [select, flat, form, combobox]
+syncStatus: migrated
+---
+# FlatSelect
+
+ComboBox-style dropdown selector (`TxFlatSelect` + `TxFlatSelectItem`). When clicked, the options list overlays the trigger with the selected item anchored at the trigger position. Uses `clip-path` for smooth expand/collapse animation.
+
+## Basic Usage
+
+Click the trigger — the dropdown expands outward from the selected item position. The selected item displays a checkmark.
+
+### FlatSelect (basic)
+:::TuffDemoWrapper{demo="FlatSelectBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('json')
+  </script>
+
+  <template>
+    <TxFlatSelect v-model="value" placeholder="Select format">
+      <TxFlatSelectItem value="json" label="JSON" />
+      <TxFlatSelectItem value="csv" label="CSV" />
+      <TxFlatSelectItem value="xml" label="XML" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
+## Disabled State
+
+Supports both group-level and item-level disabling.
+
+### FlatSelect (disabled)
+:::TuffDemoWrapper{demo="FlatSelectDisabledDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('')
+  </script>
+
+  <template>
+    <!-- Group disabled -->
+    <TxFlatSelect v-model="value" placeholder="Select" disabled>
+      <TxFlatSelectItem value="a" label="Option A" />
+      <TxFlatSelectItem value="b" label="Option B" />
+    </TxFlatSelect>
+
+    <!-- Item disabled -->
+    <TxFlatSelect v-model="value" placeholder="Select">
+      <TxFlatSelectItem value="a" label="Option A" />
+      <TxFlatSelectItem value="b" label="Option B" disabled />
+      <TxFlatSelectItem value="c" label="Option C" />
+    </TxFlatSelect>
+  </template>
+---
+:::
+
+## Comparison with TxSelect
+
+| Feature | TxSelect | TxFlatSelect |
+|---------|----------|-------------|
+| Positioning | floating-ui (Teleport to body) | CSS absolute + clip-path |
+| Expand effect | Dropdown appears below trigger | ComboBox: options overlay trigger, expand from selected item |
+| Animation | None (avoids scroll lag) | Smooth clip-path expand/collapse |
+| Search | Supported | Not supported |
+| Use case | General purpose, complex forms | Settings pages, simple dropdowns |
+| Trigger | Input-style with icon | Button-style with arrow |
+
+## API
+
+### TxFlatSelect
+
+#### Props
+
+| Prop | Description | Type | Default |
+|------|-------------|------|---------|
+| modelValue / v-model | Bound value | `string \| number` | `''` |
+| placeholder | Placeholder text | `string` | `''` |
+| disabled | Disable the selector | `boolean` | `false` |
+
+#### Events
+
+| Event | Description | Params |
+|-------|-------------|--------|
+| update:modelValue | Emitted when value updates | `(value: string \| number) => void` |
+| change | Emitted when value changes | `(value: string \| number) => void` |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| default | `TxFlatSelectItem` children |
+
+### TxFlatSelectItem
+
+#### Props
+
+| Prop | Description | Type | Default |
+|------|-------------|------|---------|
+| value | Item value | `string \| number` | - |
+| label | Display text | `string` | - |
+| disabled | Disable this item | `boolean` | `false` |
+
+#### Slots
+
+| Slot | Description |
+|------|-------------|
+| default | Custom content (overrides label) |

@@ -1,4 +1,4 @@
-import type { SkeletonProps } from './src/types.ts'
+import type { SkeletonProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxCardSkeleton from './src/TxCardSkeleton.vue'
 import TxListItemSkeleton from './src/TxListItemSkeleton.vue'

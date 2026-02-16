@@ -220,6 +220,7 @@ if (props.autofocus) {
       <template v-if="!showLoadingBar">
         <template v-if="isIconOnly">
           <Spinner
+            v-if="loading"
             class="tx-button__spinner is-overlay"
 
             :visible="loading"
@@ -227,7 +228,7 @@ if (props.autofocus) {
           />
         </template>
         <template v-else>
-          <span class="tx-button__spinner-slot" :class="{ 'is-visible': loading }">
+          <span v-if="loading" class="tx-button__spinner-slot is-visible">
             <Spinner
               class="tx-button__spinner"
               :visible="loading"

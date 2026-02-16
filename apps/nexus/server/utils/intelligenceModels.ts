@@ -8,9 +8,66 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
 }
 
 const OPENAI_COMPATIBLE_TYPES = new Set(['openai', 'deepseek', 'siliconflow', 'custom'])
+const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
+const OPENAI_ROOT_SUFFIXES = ['/api', '/openai', '/api/openai']
 
 function trimBaseUrl(value: string): string {
   return value.replace(/\/+$/, '')
+}
+
+export function buildOpenAiCompatBaseUrls(baseUrl: string): string[] {
+  const trimmed = trimBaseUrl(baseUrl)
+  const candidates: string[] = []
+
+  const push = (value: string) => {
+    const normalized = trimBaseUrl(value)
+    if (!normalized || candidates.includes(normalized))
+      return
+    candidates.push(normalized)
+  }
+
+  push(trimmed)
+
+  const trimmedLower = trimmed.toLowerCase()
+  for (const suffix of [...OPENAI_VERSION_SUFFIXES, ...OPENAI_ROOT_SUFFIXES]) {
+    if (trimmedLower.endsWith(suffix)) {
+      push(trimmed.slice(0, -suffix.length))
+    }
+  }
+
+  for (const base of [...candidates]) {
+    const baseLower = base.toLowerCase()
+    if (OPENAI_VERSION_SUFFIXES.some(suffix => baseLower.endsWith(suffix)))
+      continue
+
+    if (baseLower.endsWith('/api/openai')) {
+      push(`${base}/v1`)
+      continue
+    }
+
+    if (baseLower.endsWith('/openai')) {
+      push(`${base}/v1`)
+      continue
+    }
+
+    if (baseLower.endsWith('/api')) {
+      push(`${base}/v1`)
+      continue
+    }
+
+    push(`${base}/v1`)
+    push(`${base}/api/v1`)
+    push(`${base}/openai/v1`)
+    push(`${base}/api/openai/v1`)
+  }
+
+  const isVersioned = (value: string) =>
+    OPENAI_VERSION_SUFFIXES.some(suffix => value.toLowerCase().endsWith(suffix))
+
+  const versioned = candidates.filter(isVersioned)
+  const plain = candidates.filter(value => !isVersioned(value))
+
+  return [...versioned, ...plain]
 }
 
 export function resolveProviderBaseUrl(type: string, baseUrl?: string | null): string {
@@ -22,12 +79,9 @@ export function resolveProviderBaseUrl(type: string, baseUrl?: string | null): s
 
 function buildOpenAiModelEndpoints(baseUrl: string): string[] {
   const trimmed = trimBaseUrl(baseUrl)
-  const candidates = [trimmed]
-
-  if (!trimmed.endsWith('/v1'))
-    candidates.push(`${trimmed}/v1`)
-
-  return candidates.map(candidate => `${candidate}/models`)
+  if (/\/models$/i.test(trimmed))
+    return [trimmed]
+  return buildOpenAiCompatBaseUrls(trimmed).map(candidate => `${candidate}/models`)
 }
 
 export async function fetchProviderModels(options: {

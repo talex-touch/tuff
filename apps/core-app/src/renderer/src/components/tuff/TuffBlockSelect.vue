@@ -3,7 +3,7 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import type { WritableComputedRef } from 'vue'
 import { computed } from 'vue'
-import TSelect from '~/components/base/select/TSelect.vue'
+import { TxSelect } from '@talex-touch/tuffex'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 
 const props = withDefaults(
@@ -47,13 +47,13 @@ function handleChange(val: string | number, evt?: Event) {
     </template>
     <template #default>
       <div class="flex items-center justify-end w-full">
-        <TSelect
+        <TxSelect
           v-model="value"
           :class="disabled ? 'pointer-events-none opacity-70' : ''"
           @change="handleChange"
         >
           <slot />
-        </TSelect>
+        </TxSelect>
       </div>
     </template>
   </TuffBlockSlot>

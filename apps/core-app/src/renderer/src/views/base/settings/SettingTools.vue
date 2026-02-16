@@ -8,12 +8,11 @@
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton, TxFlipOverlay, TxSelectItem } from '@talex-touch/tuffex'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
-import TSelectItem from '~/components/base/select/TSelectItem.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
@@ -394,19 +393,19 @@ watch(shortcutsDialogVisible, (visible) => {
       default-icon="i-carbon-copy"
       active-icon="i-carbon-copy"
     >
-      <TSelectItem :model-value="-1">
+      <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
-      </TSelectItem>
-      <TSelectItem :model-value="0">
+      </TxSelectItem>
+      <TxSelectItem :value="0">
         {{ t('settingTools.noLimit') }}
-      </TSelectItem>
-      <TSelectItem :model-value="15"> 15 {{ t('settingTools.sec') }} </TSelectItem>
-      <TSelectItem :model-value="30"> 30 {{ t('settingTools.sec') }} </TSelectItem>
-      <TSelectItem :model-value="60"> 1 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="180"> 3 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="300"> 5 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="600"> 10 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="750"> 15 {{ t('settingTools.min') }} </TSelectItem>
+      </TxSelectItem>
+      <TxSelectItem :value="15"> 15 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="30"> 30 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="60"> 1 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="180"> 3 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="600"> 10 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="750"> 15 {{ t('settingTools.min') }} </TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto clear time selection -->
@@ -417,19 +416,19 @@ watch(shortcutsDialogVisible, (visible) => {
       default-icon="i-carbon-erase"
       active-icon="i-carbon-erase"
     >
-      <TSelectItem :model-value="-1">
+      <TxSelectItem :value="-1">
         {{ t('settingTools.disabled') }}
-      </TSelectItem>
-      <TSelectItem :model-value="0">
+      </TxSelectItem>
+      <TxSelectItem :value="0">
         {{ t('settingTools.noLimit') }}
-      </TSelectItem>
-      <TSelectItem :model-value="15"> 15 {{ t('settingTools.sec') }} </TSelectItem>
-      <TSelectItem :model-value="30"> 30 {{ t('settingTools.sec') }} </TSelectItem>
-      <TSelectItem :model-value="60"> 1 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="180"> 3 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="300"> 5 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="600"> 10 {{ t('settingTools.min') }} </TSelectItem>
-      <TSelectItem :model-value="750"> 15 {{ t('settingTools.min') }} </TSelectItem>
+      </TxSelectItem>
+      <TxSelectItem :value="15"> 15 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="30"> 30 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="60"> 1 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="180"> 3 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="600"> 10 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="750"> 15 {{ t('settingTools.min') }} </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
@@ -439,12 +438,12 @@ watch(shortcutsDialogVisible, (visible) => {
       default-icon="i-carbon-timer"
       active-icon="i-carbon-timer"
     >
-      <TSelectItem :model-value="1">1 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="3">3 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="5">5 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="10">10 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="15">15 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="-1">{{ t('settingTools.never') }}</TSelectItem>
+      <TxSelectItem :value="1">1 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="3">3 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="5">5 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSwitch
@@ -463,8 +462,8 @@ watch(shortcutsDialogVisible, (visible) => {
       active-icon="i-carbon-battery-empty"
       :disabled="clipboardPollingLowBatteryDisabled"
     >
-      <TSelectItem :model-value="10">10 {{ t('settingTools.sec') }}</TSelectItem>
-      <TSelectItem :model-value="15">15 {{ t('settingTools.sec') }}</TSelectItem>
+      <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
+      <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto hide switch -->
@@ -520,10 +519,10 @@ watch(shortcutsDialogVisible, (visible) => {
       default-icon="i-carbon-list"
       active-icon="i-carbon-list"
     >
-      <TSelectItem :model-value="5"> 5 </TSelectItem>
-      <TSelectItem :model-value="10"> 10 </TSelectItem>
-      <TSelectItem :model-value="15"> 15 </TSelectItem>
-      <TSelectItem :model-value="20"> 20 </TSelectItem>
+      <TxSelectItem :value="5"> 5 </TxSelectItem>
+      <TxSelectItem :value="10"> 10 </TxSelectItem>
+      <TxSelectItem :value="15"> 15 </TxSelectItem>
+      <TxSelectItem :value="20"> 20 </TxSelectItem>
     </TuffBlockSelect>
   </TuffGroupBlock>
 

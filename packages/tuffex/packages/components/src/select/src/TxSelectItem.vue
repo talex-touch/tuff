@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, inject, onMounted } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
+import { SELECT_KEY } from './types'
 
 defineOptions({
   name: 'TuffSelectItem',
@@ -17,16 +18,11 @@ const props = withDefaults(
   },
 )
 
-const txSelect = inject<{
-  currentValue: { value: string | number }
-  handleSelect: (value: string | number, label: string) => void
-  registerOption?: (value: string | number, label: string) => void
-  searchQuery?: { value: string }
-}>('tuffSelect')
+const txSelect = inject(SELECT_KEY)
 
 onMounted(() => {
   const label = props.label || String(props.value)
-  txSelect?.registerOption?.(props.value, label)
+  txSelect?.registerOption(props.value, label)
 })
 
 const isSelected = computed(() => {

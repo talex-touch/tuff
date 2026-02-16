@@ -27,7 +27,7 @@ export interface ActiveAppInfo {
 
 class ActiveAppService {
   private cache: { info: ActiveAppInfo; expiresAt: number } | null = null
-  private readonly cacheTTL = 750
+  private readonly cacheTTL = 3000
   private currentPlatform: Platform
 
   constructor() {
@@ -48,69 +48,42 @@ class ActiveAppService {
   }
 
   /**
-   * macOS-specific: Use AppleScript to get active application info
+   * macOS-specific: Use a single AppleScript call to get all active application info.
+   * Previously used 3+ separate osascript/shell invocations which could take 1-3s total.
    */
   private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
     try {
-      // Get active application name
-      const { stdout: appName } = await execFileAsync('osascript', [
-        '-e',
-        'tell application "System Events" to get name of first application process whose frontmost is true'
-      ])
+      const script = `
+tell application "System Events"
+  set frontApp to first application process whose frontmost is true
+  set appName to name of frontApp
+  set appPID to unix id of frontApp
+  try
+    set appID to bundle identifier of frontApp
+  on error
+    set appID to ""
+  end try
+  try
+    set winTitle to name of front window of frontApp
+  on error
+    set winTitle to ""
+  end try
+  return appName & "||" & appID & "||" & (appPID as text) & "||" & winTitle
+end tell`
 
-      // Get active window title
-      let windowTitle = ''
-      try {
-        const { stdout: title } = await execFileAsync('osascript', [
-          '-e',
-          `tell application "System Events" to get name of front window of application process "${appName.trim()}"`
-        ])
-        windowTitle = title.trim()
-      } catch {
-        // Some apps don't have window titles
-      }
-
-      // Get bundle ID and process ID using lsappinfo
-      let bundleId: string | null = null
-      let processId: number | null = null
-      const executablePath: string | null = null
-
-      try {
-        const { stdout: processInfo } = await execFileAsync('sh', [
-          '-c',
-          `ps aux | grep -i "${appName.trim()}" | grep -v grep | head -n 1 | awk '{print $2}'`
-        ])
-
-        const pid = Number.parseInt(processInfo.trim(), 10)
-        if (!isNaN(pid)) {
-          processId = pid
-
-          // Try to get bundle ID using lsappinfo
-          try {
-            const { stdout: bundleInfo } = await execFileAsync('lsappinfo', [
-              'info',
-              '-only',
-              'bundleid',
-              `${pid}`
-            ])
-            const match = bundleInfo.match(/"CFBundleIdentifier"="([^"]+)"/)
-            if (match) {
-              bundleId = match[1]
-            }
-          } catch {
-            // lsappinfo might not work for all processes
-          }
-        }
-      } catch {
-        // Process info retrieval failed
-      }
+      const { stdout } = await execFileAsync('osascript', ['-e', script])
+      const parts = stdout.trim().split('||')
+      const appName = parts[0] ?? ''
+      const bundleId = parts[1] || null
+      const pid = Number.parseInt(parts[2] ?? '', 10)
+      const windowTitle = parts[3] || null
 
       return {
-        displayName: appName.trim(),
-        windowTitle: windowTitle || null,
+        displayName: appName || null,
+        windowTitle,
         bundleId,
-        processId,
-        executablePath,
+        processId: Number.isFinite(pid) ? pid : null,
+        executablePath: null,
         platform: 'macos'
       }
     } catch (error) {

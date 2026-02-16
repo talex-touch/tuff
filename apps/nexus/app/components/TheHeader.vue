@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 import HeaderUserMenu from './HeaderUserMenu.vue'
-import Logo from './icon/Logo.vue'
 
 withDefaults(defineProps<{
   title?: string
@@ -140,9 +139,7 @@ const headerRevealStyle = computed(() => {
         to="/"
         class="flex items-center gap-1 text-black font-semibold tracking-tight no-underline dark:text-light"
       >
-        <Logo />
-        <span class="text-lg sm:text-xl">{{ title }}</span>
-        <BetaIcon />
+        <IconComposer />
       </NuxtLink>
 
       <nav class="flex flex-1 items-center justify-between gap-2 overflow-hidden text-sm">
@@ -187,6 +184,7 @@ const headerRevealStyle = computed(() => {
 
 <style scoped>
 .TuffHeader {
+  z-index: 1000;
   position: fixed;
 
   top: 0;

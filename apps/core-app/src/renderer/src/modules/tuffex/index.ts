@@ -26,7 +26,10 @@ const ENABLED_COMPONENTS = [
   'TxCard',
   'TxSwitch',
   'TxInput',
-  'TxSelect'
+  'TxSelect',
+  'TxSelectItem',
+  'TxFlatSelect',
+  'TxFlatSelectItem'
 ] as const
 
 export type EnabledComponent = (typeof ENABLED_COMPONENTS)[number]

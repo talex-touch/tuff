@@ -109,9 +109,6 @@ const outlineVisible = ref(false)
   border-radius: 2px;
 }
 .docs-outline-panel:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-}
-:root.dark .docs-outline-panel:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 18%, transparent);
 }
 </style>

@@ -34,32 +34,91 @@ const sdk = new CloudSyncSDK({
 await sdk.push(items)
 ```
 
-## 端到端示例
+## Token 缓存（避免频繁握手）
+```ts
+const syncTokenCache = {
+  token: localStorage.getItem('sync_token') || undefined,
+  expiresAt: localStorage.getItem('sync_token_expires_at') || undefined,
+}
+
+const sdk = new CloudSyncSDK({
+  baseUrl: 'https://api.example.com',
+  getAuthToken: async () => authToken,
+  getDeviceId: async () => deviceId,
+  fetch,
+  formDataFactory: () => new FormData(),
+  syncTokenCache,
+  onSyncTokenUpdate: (token, expiresAt) => {
+    localStorage.setItem('sync_token', token)
+    localStorage.setItem('sync_token_expires_at', expiresAt)
+  },
+})
+```
+
+## 端到端示例（含删除/冲突/大对象）
 ```ts
 const sdk = useCloudSyncSDK()
 
 const handshake = await sdk.handshake()
 
-await sdk.push([
+const now = new Date().toISOString()
+
+const items = [
   {
     item_id: 'note-1',
     type: 'note',
     schema_version: 1,
-    payload_enc: 'ciphertext',
+    payload_enc: 'ciphertext', // 业务明文必须先在客户端加密
     payload_ref: null,
-    meta_plain: { title: 'Hello' },
+    meta_plain: { title: 'Hello' }, // 只放非敏感元信息
     payload_size: 128,
-    updated_at: new Date().toISOString(),
+    updated_at: now,
     op_seq: 1,
     op_hash: 'hash-1',
     op_type: 'upsert',
   },
-])
+]
+
+const pushResult = await sdk.push(items)
+if (pushResult.conflicts.length > 0) {
+  const pulled = await sdk.pull({ cursor: handshake.server_cursor, limit: 100 })
+  // 用服务端版本覆盖或进行冲突合并
+}
 
 const pulled = await sdk.pull({ cursor: handshake.server_cursor, limit: 100 })
 
 const blob = new Blob(['hello'], { type: 'text/plain' })
 const upload = await sdk.uploadBlob(blob, { filename: 'note.txt' })
+
+await sdk.push([
+  {
+    item_id: 'note-blob',
+    type: 'note',
+    schema_version: 1,
+    payload_enc: 'ciphertext',
+    payload_ref: upload.blob_id,
+    meta_plain: { filename: 'note.txt' },
+    payload_size: upload.size_bytes,
+    updated_at: new Date().toISOString(),
+    op_seq: 2,
+    op_hash: 'hash-2',
+    op_type: 'upsert',
+  },
+  {
+    item_id: 'note-legacy',
+    type: 'note',
+    schema_version: 1,
+    payload_enc: null,
+    payload_ref: null,
+    meta_plain: null,
+    payload_size: null,
+    updated_at: new Date().toISOString(),
+    deleted_at: new Date().toISOString(),
+    op_seq: 3,
+    op_hash: 'hash-3',
+    op_type: 'delete',
+  },
+])
 
 const quotas = await sdk.getQuotas()
 ```
@@ -80,6 +139,8 @@ try {
 ## 注意事项
 - 需要 Bearer 认证与 `x-device-id`。
 - `sync_token` 自动管理，并通过 `x-sync-token` 传递。
+- `payload_enc` 必须为密文，`meta_plain` 仅能放非敏感元信息。
+- `op_seq` 必须单调递增，用于去重与幂等。
 - Node/Electron 主进程需要自行注入 `fetch` 与 `formDataFactory`。
 - 插件 SDK 默认通过 AccountSDK 获取 auth token 与 device id（`account:get-auth-token` / `account:get-device-id`）。
 - Prelude 中需要先调用 `accountSDK.setChannelSend(send)` 或在 CloudSyncSDK options 传入 `channelSend`。
