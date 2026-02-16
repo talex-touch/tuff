@@ -41,7 +41,7 @@ code: |
 
 ## 渐变边缘
 
-通过 `soft-edge` (px) 控制遮罩边界的渐变柔和程度。值越大，边缘渐变越宽。可配合 `show-arrow` 让三角箭头跟随最终浮层方向与位置。
+BaseAnchor 内置柔和遮罩边缘，并支持 `show-arrow` 让三角箭头跟随最终浮层方向与位置。
 
 ### 柔和边缘
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -57,7 +57,6 @@ code: |
     <TxBaseAnchor
       v-model="open"
       placement="bottom-start"
-      :soft-edge="24"
       :show-arrow="true"
     >
       <template #reference>
@@ -143,7 +142,6 @@ code: |
       placement="bottom-start"
       :duration="600"
       ease="elastic.out(1, 0.4)"
-      :soft-edge="20"
     >
       <template #reference>
         <TxButton>弹性</TxButton>
@@ -153,6 +151,20 @@ code: |
         弹性缓动，时长 600ms
       </div>
     </TxBaseAnchor>
+  </template>
+---
+:::
+
+## 交互式 Playground
+
+在一个面板里自由调整关键属性，重点观察 `pure / mask / blur / glass / refraction` 不同 surface 的材质表现。
+
+### Surface Playground
+:::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <BaseAnchorSurfacePlaygroundDemo />
   </template>
 ---
 :::
@@ -172,13 +184,13 @@ code: |
 | `maxWidth` | `number` | `360` | 最大宽度 |
 | `matchReferenceWidth` | `boolean` | `false` | `width=0` 时是否跟随 reference 宽度 |
 | `duration` | `number` | `432` | 动画时长 (ms) |
-| `ease` | `string` | `'back.out(1.7)'` | GSAP 缓动函数（打开动画） |
-| `softEdge` | `number` | `18` | 遮罩边界渐变宽度 (px) |
+| `ease` | `string` | `'back.out(2)'` | GSAP 缓动函数（打开动画） |
 | `useCard` | `boolean` | `true` | 是否使用内置 `TxCard` 包裹浮层内容 |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | 面板背景（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
+| `panelCard` | `Partial<TxCardProps>` | `undefined` | 透传 `TxCard` 高级参数（如 `maskOpacity`、`fallbackMaskOpacity`、`refraction*`） |
 | `showArrow` | `boolean` | `false` | 是否启用跟随浮层定位的三角箭头 |
 | `arrowSize` | `number` | `10` | 箭头尺寸（px） |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |

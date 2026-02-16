@@ -121,6 +121,15 @@ const anchorCloseOnClickOutside = computed(() => {
   return props.closeOnClickOutside
 })
 
+const anchorDuration = computed(() => 180)
+const anchorEase = computed(() => 'power2.out')
+
+const anchorToggleOnReferenceClick = computed(() => {
+  if (typeof props.toggleOnReferenceClick === 'boolean')
+    return props.toggleOnReferenceClick
+  return props.trigger === 'click'
+})
+
 watch(
   () => props.disabled,
   (disabled) => {
@@ -146,17 +155,20 @@ onBeforeUnmount(() => {
     :min-width="props.minWidth"
     :max-width="props.maxWidth"
     :match-reference-width="props.width <= 0"
+    :duration="anchorDuration"
+    :ease="anchorEase"
     :panel-variant="props.panelVariant"
     :panel-background="props.panelBackground"
     :panel-shadow="props.panelShadow"
     :panel-radius="props.panelRadius"
     :panel-padding="props.panelPadding"
+    :panel-card="props.panelCard"
     :show-arrow="props.showArrow"
     :arrow-size="props.arrowSize"
     :keep-alive-content="props.keepAliveContent"
     :close-on-click-outside="anchorCloseOnClickOutside"
     :close-on-esc="props.closeOnEsc"
-    :toggle-on-reference-click="props.trigger === 'click'"
+    :toggle-on-reference-click="anchorToggleOnReferenceClick"
   >
     <template #reference>
       <div

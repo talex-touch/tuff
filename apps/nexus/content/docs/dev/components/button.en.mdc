@@ -154,67 +154,77 @@ code: |
 
 ### Button Attributes
 
-::TuffPropsTable
+::DocApiTable
 ---
 rows:
-  - name: variant
-    type: "'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'"
+  - parameter: variant
+    type:
+      kind: enum
+      enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
     default: '-'
     description: 'Visual variant'
-  - name: type
-    type: "'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'"
+  - parameter: type
+    type:
+      kind: enum
+      enums: [primary, success, warning, danger, info, text]
     default: '-'
     description: 'Shortcut semantic type (legacy)'
-  - name: size
-    type: "'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'"
+  - parameter: size
+    type:
+      kind: enum
+      enums: [sm, md, lg, large, small, mini]
     default: "'md'"
     description: 'Button size'
-  - name: block
-    type: 'boolean'
+  - parameter: block
+    type: boolean
     default: 'false'
     description: 'Block-level (full width)'
-  - name: plain
-    type: 'boolean'
+  - parameter: plain
+    type: boolean
     default: 'false'
     description: 'Plain style'
-  - name: dashed
-    type: 'boolean'
+  - parameter: dashed
+    type: boolean
     default: 'false'
     description: 'Dashed style'
-  - name: round
-    type: 'boolean'
+  - parameter: round
+    type: boolean
     default: 'false'
     description: 'Rounded style'
-  - name: circle
-    type: 'boolean'
+  - parameter: circle
+    type: boolean
     default: 'false'
     description: 'Circular button'
-  - name: loading
-    type: 'boolean'
+  - parameter: loading
+    type: boolean
     default: 'false'
     description: 'Loading state'
-  - name: disabled
-    type: 'boolean'
+  - parameter: disabled
+    type: boolean
     default: 'false'
     description: 'Disabled state'
-  - name: icon
-    type: 'string'
+  - parameter: icon
+    type: string
     default: '-'
     description: 'Icon class name'
-  - name: autofocus
-    type: 'boolean'
+  - parameter: autofocus
+    type: boolean
     default: 'false'
     description: 'Autofocus'
-  - name: native-type
-    type: "'button' | 'submit' | 'reset'"
+  - parameter: native-type
+    type:
+      kind: enum
+      enums: [button, submit, reset]
     default: "'button'"
     description: 'Native type attribute'
-  - name: vibrate
-    type: 'boolean'
+  - parameter: vibrate
+    type: boolean
     default: 'true'
     description: 'Enable haptics'
-  - name: vibrate-type
-    type: "'light' | 'medium' | 'heavy' | 'bit' | 'success' | 'warning' | 'error'"
+  - parameter: vibrate-type
+    type:
+      kind: enum
+      enums: [light, medium, heavy, bit, success, warning, error]
     default: "'light'"
     description: 'Haptic type'
 ---
@@ -222,11 +232,15 @@ rows:
 
 ### Button Events
 
-::TuffPropsTable
+::DocApiTable
 ---
 rows:
-  - name: click
-    type: '(event: MouseEvent) => void'
+  - parameter: click
+    type:
+      label: '(event: MouseEvent) => void'
+      snippet: |
+        type ButtonClickHandler = (event: MouseEvent) => void
+      language: typescript
     default: '-'
     description: 'Triggered on click'
 ---

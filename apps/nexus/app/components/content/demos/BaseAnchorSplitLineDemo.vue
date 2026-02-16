@@ -23,7 +23,6 @@ const labels = computed(() => {
   <TxBaseAnchor
     v-model="open"
     placement="bottom-start"
-    :soft-edge="24"
     :show-arrow="true"
   >
     <template #reference>

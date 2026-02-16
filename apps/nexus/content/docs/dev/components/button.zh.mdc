@@ -154,83 +154,97 @@ code: |
 
 ### Button Attributes
 
-:::TuffPropsTable
+::DocApiTable
 ---
 rows:
-  - name: variant
-    type: "'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warning' | 'info' | 'flat' | 'bare'"
+  - parameter: variant
+    type:
+      kind: enum
+      enums: [primary, secondary, ghost, danger, success, warning, info, flat, bare]
     default: '-'
     description: '视觉风格变体'
-  - name: type
-    type: "'primary' | 'success' | 'warning' | 'danger' | 'info' | 'text'"
+  - parameter: type
+    type:
+      kind: enum
+      enums: [primary, success, warning, danger, info, text]
     default: '-'
     description: '快捷语义类型（兼容旧用法）'
-  - name: size
-    type: "'sm' | 'md' | 'lg' | 'large' | 'small' | 'mini'"
+  - parameter: size
+    type:
+      kind: enum
+      enums: [sm, md, lg, large, small, mini]
     default: "'md'"
     description: '按钮尺寸'
-  - name: block
-    type: 'boolean'
+  - parameter: block
+    type: boolean
     default: 'false'
     description: '是否块级（撑满容器）'
-  - name: plain
-    type: 'boolean'
+  - parameter: plain
+    type: boolean
     default: 'false'
     description: '是否朴素按钮'
-  - name: dashed
-    type: 'boolean'
+  - parameter: dashed
+    type: boolean
     default: 'false'
     description: '是否虚线按钮'
-  - name: round
-    type: 'boolean'
+  - parameter: round
+    type: boolean
     default: 'false'
     description: '是否圆角按钮'
-  - name: circle
-    type: 'boolean'
+  - parameter: circle
+    type: boolean
     default: 'false'
     description: '是否圆形按钮'
-  - name: loading
-    type: 'boolean'
+  - parameter: loading
+    type: boolean
     default: 'false'
     description: '是否加载中状态'
-  - name: disabled
-    type: 'boolean'
+  - parameter: disabled
+    type: boolean
     default: 'false'
     description: '是否禁用状态'
-  - name: icon
-    type: 'string'
+  - parameter: icon
+    type: string
     default: '-'
     description: '图标类名'
-  - name: autofocus
-    type: 'boolean'
+  - parameter: autofocus
+    type: boolean
     default: 'false'
     description: '是否默认聚焦'
-  - name: native-type
-    type: "'button' | 'submit' | 'reset'"
+  - parameter: native-type
+    type:
+      kind: enum
+      enums: [button, submit, reset]
     default: "'button'"
     description: '原生 type 属性'
-  - name: vibrate
-    type: 'boolean'
+  - parameter: vibrate
+    type: boolean
     default: 'true'
     description: '是否启用震动反馈'
-  - name: vibrate-type
-    type: "'light' | 'medium' | 'heavy' | 'bit' | 'success' | 'warning' | 'error'"
+  - parameter: vibrate-type
+    type:
+      kind: enum
+      enums: [light, medium, heavy, bit, success, warning, error]
     default: "'light'"
     description: '震动类型'
 ---
-:::
+::
 
 ### Button Events
 
-:::TuffPropsTable
+::DocApiTable
 ---
 rows:
-  - name: click
-    type: '(event: MouseEvent) => void'
+  - parameter: click
+    type:
+      label: '(event: MouseEvent) => void'
+      snippet: |
+        type ButtonClickHandler = (event: MouseEvent) => void
+      language: typescript
     default: '-'
     description: '点击时触发'
 ---
-:::
+::
 
 ### 类型
 ::TuffCodeBlock{lang="ts"}

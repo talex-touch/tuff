@@ -17,6 +17,7 @@ const pageContent = computed(() => {
       rows: [
         {
           parameter: 'type',
+          default: 'ChannelType.MAIN',
           type: {
             kind: 'ref',
             label: 'ChannelType',
@@ -27,11 +28,13 @@ const pageContent = computed(() => {
         },
         {
           parameter: 'eventName',
+          default: 'plugin:example:start',
           type: 'string',
           description: '事件标识符，建议使用稳定前缀避免冲突，例如 plugin:event:start。',
         },
         {
           parameter: 'mode',
+          default: 'sync',
           type: {
             kind: 'enum',
             enums: [
@@ -44,6 +47,7 @@ const pageContent = computed(() => {
         },
         {
           parameter: 'payload',
+          default: '-',
           type: {
             kind: 'ref',
             label: 'TuffEventPayload',
@@ -60,6 +64,7 @@ const pageContent = computed(() => {
         },
         {
           parameter: 'description',
+          default: '""',
           type: 'string',
           description: '用于展示调用上下文的说明文本。该字段可能包含较长内容，组件默认会截断并在必要时展示“展开/收起”按钮。移动端下采用卡片布局，每条记录会拆分为 Parameter、Type、Description 三段，保证信息密度和触达效率。',
         },
@@ -73,6 +78,7 @@ const pageContent = computed(() => {
     rows: [
       {
         parameter: 'type',
+        default: 'ChannelType.MAIN',
         type: {
           kind: 'ref',
           label: 'ChannelType',
@@ -83,11 +89,13 @@ const pageContent = computed(() => {
       },
       {
         parameter: 'eventName',
+        default: 'plugin:example:start',
         type: 'string',
         description: 'Stable event identifier, for example plugin:event:start.',
       },
       {
         parameter: 'mode',
+        default: 'sync',
         type: {
           kind: 'enum',
           enums: [
@@ -100,6 +108,7 @@ const pageContent = computed(() => {
       },
       {
         parameter: 'payload',
+        default: '-',
         type: {
           kind: 'ref',
           label: 'TuffEventPayload',
@@ -116,6 +125,7 @@ const pageContent = computed(() => {
       },
       {
         parameter: 'description',
+        default: '""',
         type: 'string',
         description: 'This field can be long in real docs. The table clamps text by default, shows an expand action when needed, and switches to a card-style layout on mobile for better readability and touch accessibility.',
       },

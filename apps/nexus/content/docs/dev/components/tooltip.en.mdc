@@ -13,6 +13,10 @@ syncStatus: migrated
 > Small and lightweight hints that do not interrupt the flow.  
 > **Status**: Beta
 
+Tooltip is a semantic wrapper over `TxBaseAnchor`:
+- Tooltip handles trigger timing and hint content;
+- Anchor handles positioning, animation, and panel visuals;
+- use `anchor` to pass anchor-level configuration.
 
 ## Demo
 
@@ -46,49 +50,60 @@ code: |
 ---
 ::
 
+## Anchor Passthrough
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      content="Bottom tooltip"
+      :anchor="{ placement: 'bottom', showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">Bottom</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
 ## API (Lite)
 ::TuffPropsTable
 ---
 rows:
   - name: content
     type: 'string'
-    default: '-'
+    default: "''"
     description: 'Tooltip text'
   - name: trigger
     type: "'hover' | 'click' | 'focus'"
     default: "'hover'"
     description: 'Trigger mode'
-  - name: placement
-    type: 'string'
-    default: 'top'
-    description: 'Placement'
-  - name: indicator
-    type: 'boolean'
-    default: 'false'
-    description: 'Enable indicator dot'
-  - name: indicator-placement
-    type: "'panel' | 'reference'"
-    default: "'panel'"
-    description: 'Render indicator on panel or trigger'
-  - name: indicator-variant
-    type: "'dot' | 'pulse'"
-    default: "'dot'"
-    description: 'Indicator visual style'
   - name: open-delay
     type: 'number'
-    default: '120'
+    default: '200'
     description: 'Open delay (ms)'
   - name: close-delay
     type: 'number'
-    default: '80'
+    default: '120'
     description: 'Close delay (ms)'
+  - name: interactive
+    type: 'boolean'
+    default: 'false'
+    description: 'Allow pointer to enter floating panel in hover mode'
+  - name: max-height
+    type: 'number'
+    default: '320'
+    description: 'Tooltip max height'
+  - name: anchor
+    type: 'Partial<BaseAnchorProps>'
+    default: '{}'
+    description: 'Pass-through config for TxBaseAnchor (placement/showArrow/panelBackground, etc.)'
 ---
 ::
 
 ## Design Notes
-- Keep text short, avoid multiline.  
-- Maintain light spacing from the trigger element.
-- Tooltip now defaults to a background-free lightweight wrapper.
+- Keep text short and avoid multiline hints.  
+- Keep spacing light around the trigger element.
+- Put visual complexity in `anchor`, not in tooltip-specific props.
 
 ## Composite Patterns
 
@@ -107,20 +122,26 @@ code: |
 ---
 ::
 
-### Indicator
+### Anchor Presets
 
-Show a notification marker either on the tooltip panel or directly on the trigger.
+Show different looks and placement through `anchor` pass-through.
 
 ::TuffDemoWrapper{demo="TooltipIndicatorDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <TxTooltip content="Panel indicator" indicator indicator-variant="pulse" indicator-placement="panel">
-      <TxButton variant="ghost">View notice</TxButton>
+    <TxTooltip
+      content="Mask background + arrow"
+      :anchor="{ showArrow: true, panelBackground: 'mask' }"
+    >
+      <TxButton variant="ghost">Status detail</TxButton>
     </TxTooltip>
 
-    <TxTooltip content="Reference indicator" indicator indicator-placement="reference" indicator-color="#f56c6c">
-      <TxButton variant="ghost">System status</TxButton>
+    <TxTooltip
+      content="Glass background + right placement"
+      :anchor="{ placement: 'right', showArrow: true, panelBackground: 'glass', panelShadow: 'medium' }"
+    >
+      <TxButton variant="ghost">Service status</TxButton>
     </TxTooltip>
   </template>
 ---

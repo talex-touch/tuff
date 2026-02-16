@@ -1,4 +1,5 @@
 import type { ComputedRef, InjectionKey } from 'vue'
+import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
 
 export type TxSelectValue = string | number
 
@@ -12,6 +13,12 @@ export interface TxSelectProps {
   remote?: boolean
   dropdownMaxHeight?: number
   dropdownOffset?: number
+  panelVariant?: 'solid' | 'dashed' | 'plain'
+  panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
+  panelShadow?: 'none' | 'soft' | 'medium'
+  panelRadius?: number
+  panelPadding?: number
+  panelCard?: BaseAnchorPanelCardProps
 }
 
 export interface TxSelectItemProps {

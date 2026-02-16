@@ -24,6 +24,8 @@ const NONCE_TTL_MS = 15 * 60_000
 const CHALLENGE_COOKIE = 'nexus_doc_challenge'
 const MAX_ACTIONS = 80
 const MAX_HEAT_BUCKETS = 200
+const ENFORCE_DOC_SECURITY = process.env.NODE_ENV === 'production'
+  || process.env.DOC_ANALYTICS_ENFORCE_SECURITY === 'true'
 
 function sanitizeSections(input: unknown): { sections: any[], truncated: boolean } {
   const list = Array.isArray(input) ? input : []
@@ -145,7 +147,7 @@ export default defineEventHandler(async (event) => {
   const ip = resolveRequestIp(event) || session.ip || ''
 
   // TODO-SEC-2: 回源 IP 信任边界与全局链路合并后，统一使用全局可信 IP 解析结果。
-  if (ip) {
+  if (ip && ENFORCE_DOC_SECURITY) {
     const security = await getDocSecurityState(db, ip, clientId)
     if (security?.blockedUntil && security.blockedUntil > Date.now()) {
       throw createError({ statusCode: 403, statusMessage: 'IP blocked' })
@@ -159,7 +161,7 @@ export default defineEventHandler(async (event) => {
     ttlMs: NONCE_TTL_MS,
   })
   if (!nonceInserted) {
-    if (ip)
+    if (ip && ENFORCE_DOC_SECURITY)
       await recordDocViolation(db, { ip, clientId, weight: 2 })
     throw createError({ statusCode: 409, statusMessage: 'Nonce already used' })
   }
@@ -179,7 +181,7 @@ export default defineEventHandler(async (event) => {
 
   const expectedHash = buildPayloadHash(engagementPayload)
   if (payloadHash !== expectedHash) {
-    if (ip)
+    if (ip && ENFORCE_DOC_SECURITY)
       await recordDocViolation(db, { ip, clientId, weight: 2 })
     throw createError({ statusCode: 403, statusMessage: 'Payload hash mismatch' })
   }
@@ -188,27 +190,27 @@ export default defineEventHandler(async (event) => {
     const cookieChallenge = getCookie(event, CHALLENGE_COOKIE) || ''
     const challengeId = session.challengeId || ''
     if (!cookieChallenge || cookieChallenge !== challengeId) {
-      if (ip)
+      if (ip && ENFORCE_DOC_SECURITY)
         await recordDocViolation(db, { ip, clientId, weight: 2 })
       throw createError({ statusCode: 403, statusMessage: 'Challenge cookie mismatch' })
     }
 
     const challenge = await getDocChallenge(db, challengeId)
     if (!challenge || challenge.expiresAt < Date.now()) {
-      if (ip)
+      if (ip && ENFORCE_DOC_SECURITY)
         await recordDocViolation(db, { ip, clientId, weight: 2 })
       throw createError({ statusCode: 403, statusMessage: 'Challenge expired' })
     }
 
     const expectedProof = sha256Hex(`${challenge.seed}${nonce}${payloadHash}`)
     if (proof !== expectedProof) {
-      if (ip)
+      if (ip && ENFORCE_DOC_SECURITY)
         await recordDocViolation(db, { ip, clientId, weight: 2 })
       throw createError({ statusCode: 403, statusMessage: 'Proof mismatch' })
     }
 
     if (session.riskLevel >= 2 && !validatePow(proof, powNonce, challenge.difficulty)) {
-      if (ip)
+      if (ip && ENFORCE_DOC_SECURITY)
         await recordDocViolation(db, { ip, clientId, weight: 2 })
       throw createError({ statusCode: 403, statusMessage: 'PoW invalid' })
     }

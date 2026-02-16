@@ -1,8 +1,29 @@
-export type BaseAnchorPlacement =
-  | 'top' | 'top-start' | 'top-end'
-  | 'bottom' | 'bottom-start' | 'bottom-end'
-  | 'left' | 'left-start' | 'left-end'
-  | 'right' | 'right-start' | 'right-end'
+import type { TxCardProps } from '../../card/src/types'
+
+export type BaseAnchorPlacement
+  = | 'top' | 'top-start' | 'top-end'
+    | 'bottom' | 'bottom-start' | 'bottom-end'
+    | 'left' | 'left-start' | 'left-end'
+    | 'right' | 'right-start' | 'right-end'
+
+export type BaseAnchorPanelCardProps = Partial<Pick<
+  TxCardProps,
+  | 'glassBlur'
+  | 'glassBlurAmount'
+  | 'glassOverlay'
+  | 'glassOverlayOpacity'
+  | 'maskOpacity'
+  | 'fallbackMaskOpacity'
+  | 'refractionStrength'
+  | 'refractionProfile'
+  | 'refractionTone'
+  | 'refractionAngle'
+  | 'refractionLightFollowMouse'
+  | 'refractionLightFollowIntensity'
+  | 'refractionLightSpring'
+  | 'refractionLightSpringStiffness'
+  | 'refractionLightSpringDamping'
+>>
 
 export interface BaseAnchorProps {
   modelValue?: boolean
@@ -19,7 +40,6 @@ export interface BaseAnchorProps {
   // animation
   duration?: number
   ease?: string
-  softEdge?: number
 
   // panel styling
   useCard?: boolean
@@ -28,6 +48,7 @@ export interface BaseAnchorProps {
   panelShadow?: 'none' | 'soft' | 'medium'
   panelRadius?: number
   panelPadding?: number
+  panelCard?: BaseAnchorPanelCardProps
   showArrow?: boolean
   arrowSize?: number
   keepAliveContent?: boolean

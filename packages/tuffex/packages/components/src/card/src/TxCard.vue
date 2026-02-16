@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { TxCardProps } from './types'
 import { computed, onBeforeUnmount, ref, toRef, watch } from 'vue'
-import TxSpinner from '../../spinner/src/TxSpinner.vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
+import TxSpinner from '../../spinner/src/TxSpinner.vue'
 
 defineOptions({ name: 'TxCard' })
 
@@ -15,7 +15,9 @@ const props = withDefaults(defineProps<TxCardProps>(), {
   glassBlurAmount: 22,
   glassOverlay: true,
   glassOverlayOpacity: 0.18,
+  maskOpacity: 0.75,
   fallbackMaskOpacity: 0.26,
+  surfaceMoving: false,
   refractionStrength: 62,
   refractionProfile: 'filmic',
   refractionTone: 'vivid',
@@ -52,7 +54,9 @@ const glassBlur = toRef(props, 'glassBlur')
 const glassBlurAmount = toRef(props, 'glassBlurAmount')
 const glassOverlay = toRef(props, 'glassOverlay')
 const glassOverlayOpacity = toRef(props, 'glassOverlayOpacity')
+const maskOpacity = toRef(props, 'maskOpacity')
 const fallbackMaskOpacity = toRef(props, 'fallbackMaskOpacity')
+const externalSurfaceMoving = toRef(props, 'surfaceMoving')
 const refractionStrength = toRef(props, 'refractionStrength')
 const refractionProfile = toRef(props, 'refractionProfile')
 const refractionTone = toRef(props, 'refractionTone')
@@ -62,6 +66,13 @@ const refractionLightFollowIntensity = toRef(props, 'refractionLightFollowIntens
 const refractionLightSpring = toRef(props, 'refractionLightSpring')
 const refractionLightSpringStiffness = toRef(props, 'refractionLightSpringStiffness')
 const refractionLightSpringDamping = toRef(props, 'refractionLightSpringDamping')
+const motionX = ref(0)
+const motionY = ref(0)
+const surfaceMoving = ref(false)
+const lightPointX = ref(0.5)
+const lightPointY = ref(0.5)
+const lightRatioX = ref(0)
+const lightRatioY = ref(0)
 
 const resolvedRadius = computed(() => {
   if (typeof props.radius === 'number')
@@ -164,17 +175,13 @@ const surfaceColor = computed(() => {
 
 const surfaceOpacity = computed<number | undefined>(() => {
   if (background.value === 'mask')
-    return 1
+    return clamp(maskOpacity.value, 0, 1)
   return undefined
 })
 
-const motionX = ref(0)
-const motionY = ref(0)
-const surfaceMoving = ref(false)
-const lightPointX = ref(0.5)
-const lightPointY = ref(0.5)
-const lightRatioX = ref(0)
-const lightRatioY = ref(0)
+const mergedSurfaceMoving = computed(() => {
+  return surfaceMoving.value || !!externalSurfaceMoving.value
+})
 
 let targetX = 0
 let targetY = 0
@@ -460,7 +467,7 @@ function onClick(ev: MouseEvent) {
       class="tx-card__surface"
       :mode="surfaceMode"
       preset="card"
-      :moving="surfaceMoving"
+      :moving="mergedSurfaceMoving"
       :fallback-mask-opacity="fallbackMaskOpacity"
       :radius="resolvedRadius"
       :color="surfaceColor"

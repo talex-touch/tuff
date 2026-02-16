@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<TxSearchSelectProps>(), {
   dropdownOffset: 6,
 
   panelVariant: 'solid',
-  panelBackground: 'glass',
+  panelBackground: 'refraction',
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 6,

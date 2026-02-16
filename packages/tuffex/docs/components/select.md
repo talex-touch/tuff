@@ -1,6 +1,6 @@
 # Select 选择器
 
-下拉选择器组件，基于 Floating UI 实现浮层定位（点击展开、自动翻转、面板内滚动）。
+下拉选择器组件，基于 `TxPopover` + `TxCard` 实现浮层（点击展开、自动翻转、面板内滚动），默认使用 `refraction` 背景。
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -197,6 +197,11 @@ async function onSearch(q: string) {
 | remote | 是否远程搜索（输入时触发 `search`） | `boolean` | `false` |
 | dropdownMaxHeight | 下拉面板最大高度 | `number` | `280` |
 | dropdownOffset | 触发器与面板间距 | `number` | `6` |
+| panelVariant | 面板边框形态（TxCard variant） | `'solid' \| 'dashed' \| 'plain'` | `'solid'` |
+| panelBackground | 面板背景（TxCard background） | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` |
+| panelShadow | 面板阴影（TxCard shadow） | `'none' \| 'soft' \| 'medium'` | `'soft'` |
+| panelRadius | 面板圆角（TxCard radius） | `number` | `18` |
+| panelPadding | 面板内边距（TxCard padding） | `number` | `4` |
 
 ### TuffSelect Events
 

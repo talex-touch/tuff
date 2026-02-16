@@ -1,3 +1,5 @@
+import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+
 export type PopoverPlacement
   = | 'top'
     | 'top-start'
@@ -29,12 +31,14 @@ export interface PopoverProps {
   openDelay?: number
   closeDelay?: number
   keepAliveContent?: boolean
+  toggleOnReferenceClick?: boolean
 
   panelVariant?: 'solid' | 'dashed' | 'plain'
   panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
   panelShadow?: 'none' | 'soft' | 'medium'
   panelRadius?: number
   panelPadding?: number
+  panelCard?: BaseAnchorPanelCardProps
   closeOnClickOutside?: boolean
   closeOnEsc?: boolean
 }

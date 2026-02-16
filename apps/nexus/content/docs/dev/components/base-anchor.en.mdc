@@ -41,7 +41,7 @@ code: |
 
 ## Soft Edge
 
-Control the gradient softness at the mask boundary via `soft-edge` (px). Pair with `show-arrow` to render a triangle that follows final floating placement and offset.
+BaseAnchor ships with a built-in soft mask edge. Pair with `show-arrow` to render a triangle that follows final floating placement and offset.
 
 ### Soft Edge
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
@@ -57,7 +57,6 @@ code: |
     <TxBaseAnchor
       v-model="open"
       placement="bottom-start"
-      :soft-edge="24"
       :show-arrow="true"
     >
       <template #reference>
@@ -143,7 +142,6 @@ code: |
       placement="bottom-start"
       :duration="600"
       ease="elastic.out(1, 0.4)"
-      :soft-edge="20"
     >
       <template #reference>
         <TxButton>Elastic</TxButton>
@@ -153,6 +151,20 @@ code: |
         Elastic easing with 600ms duration.
       </div>
     </TxBaseAnchor>
+  </template>
+---
+:::
+
+## Interactive Playground
+
+Tune key props in one panel and focus on surface differences (`pure / mask / blur / glass / refraction`).
+
+### Surface Playground
+:::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <BaseAnchorSurfacePlaygroundDemo />
   </template>
 ---
 :::
@@ -172,13 +184,13 @@ code: |
 | `maxWidth` | `number` | `360` | Maximum width. |
 | `matchReferenceWidth` | `boolean` | `false` | Follow reference width when `width` is 0. |
 | `duration` | `number` | `432` | Animation duration (ms). |
-| `ease` | `string` | `'back.out(1.7)'` | GSAP ease string for open animation. |
-| `softEdge` | `number` | `18` | Gradient fade width at mask boundary (px). |
+| `ease` | `string` | `'back.out(2)'` | GSAP ease string for open animation. |
 | `useCard` | `boolean` | `true` | Wrap floating content with built-in `TxCard`. |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Panel background (TxCard background). |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Panel background (TxCard background). |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow (TxCard shadow). |
 | `panelRadius` | `number` | `18` | Panel border radius (TxCard radius). |
 | `panelPadding` | `number` | `10` | Panel padding (TxCard padding). |
+| `panelCard` | `Partial<TxCardProps>` | `undefined` | Pass-through advanced TxCard props (`maskOpacity`, `fallbackMaskOpacity`, `refraction*`). |
 | `showArrow` | `boolean` | `false` | Enable the triangle arrow that follows floating placement. |
 | `arrowSize` | `number` | `10` | Arrow size in px. |
 | `closeOnClickOutside` | `boolean` | `true` | Close on outside click. |

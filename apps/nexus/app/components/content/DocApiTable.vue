@@ -25,9 +25,11 @@ interface ApiTableTypeSpec {
 }
 
 interface ApiTableRow {
-  parameter: string
-  type?: string | ApiTableTypeSpec
-  description?: string
+  parameter?: string
+  type?: unknown
+  default?: unknown
+  defaultValue?: unknown
+  description?: unknown
 }
 
 interface NormalizedEnumValue {
@@ -63,6 +65,7 @@ type NormalizedType = TextType | RefType | EnumType
 interface NormalizedRow {
   key: string
   parameter: string
+  defaultValue: string
   description: string
   typeInfo: NormalizedType
 }
@@ -93,10 +96,12 @@ const labels = computed(() => {
   return {
     parameter: zh ? 'Parameter' : 'Parameter',
     type: zh ? 'Type' : 'Type',
+    default: zh ? 'Default' : 'Default',
     description: zh ? 'Description' : 'Description',
     empty: zh ? '暂无参数定义' : 'No parameter definitions yet.',
     copyParameter: zh ? '点击复制参数名' : 'Click to copy parameter',
     copyType: zh ? '点击复制类型' : 'Click to copy type',
+    copyDefault: zh ? '点击复制默认值' : 'Click to copy default value',
     copyEnum: zh ? '点击复制枚举值' : 'Click to copy enum value',
     copied: zh ? '已复制' : 'Copied',
     openReference: zh ? '点击查看类型定义' : 'Open type definition',
@@ -108,9 +113,10 @@ const labels = computed(() => {
 })
 
 const tableColumns = computed(() => ([
-  { key: 'parameter', title: labels.value.parameter, width: '25%' },
-  { key: 'typeInfo', title: labels.value.type, width: '27%' },
-  { key: 'description', title: labels.value.description, width: '48%' },
+  { key: 'parameter', title: labels.value.parameter, width: '22%' },
+  { key: 'typeInfo', title: labels.value.type, width: '24%' },
+  { key: 'defaultValue', title: labels.value.default, width: '16%' },
+  { key: 'description', title: labels.value.description, width: '38%' },
 ]))
 
 function extractEnumValuesFromType(typeLabel: string): string[] {
@@ -149,6 +155,39 @@ function normalizeEnumValues(enums: ApiTableEnumInput[] = []): NormalizedEnumVal
     .filter((item): item is NormalizedEnumValue => item !== null)
 }
 
+function normalizeText(value: unknown): string {
+  if (typeof value === 'string')
+    return value.trim()
+
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value).trim()
+
+  if (Array.isArray(value)) {
+    return value
+      .map(item => normalizeText(item))
+      .filter(Boolean)
+      .join(' | ')
+      .trim()
+  }
+
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+    if (entries.length === 1) {
+      const [key, rawVal] = entries[0]
+      const val = normalizeText(rawVal)
+      return val ? `${key}: ${val}` : key
+    }
+    try {
+      return JSON.stringify(value).trim()
+    }
+    catch {
+      return String(value).trim()
+    }
+  }
+
+  return ''
+}
+
 function inferTypeLanguage(source: string): string {
   if (/[<>{}()[\]|:&]/.test(source))
     return 'typescript'
@@ -162,7 +201,7 @@ function normalizeLanguage(language?: string, source = ''): string {
   return inferTypeLanguage(source)
 }
 
-function normalizeType(type?: string | ApiTableTypeSpec): NormalizedType {
+function normalizeType(type?: unknown): NormalizedType {
   if (!type) {
     return {
       kind: 'text',
@@ -210,49 +249,66 @@ function normalizeType(type?: string | ApiTableTypeSpec): NormalizedType {
     }
   }
 
-  const kind = type.kind ?? (type.enums?.length ? 'enum' : type.to ? 'ref' : 'text')
+  if (typeof type !== 'object') {
+    const label = normalizeText(type) || '-'
+    return {
+      kind: 'text',
+      label,
+      copyValue: label === '-' ? '' : label,
+      snippet: label === '-' ? '' : label,
+      language: normalizeLanguage(undefined, label),
+      forcePreview: false,
+    }
+  }
+
+  const normalizedType = type as ApiTableTypeSpec
+
+  const kind = normalizedType.kind ?? (normalizedType.enums?.length ? 'enum' : normalizedType.to ? 'ref' : 'text')
 
   if (kind === 'enum') {
-    const values = normalizeEnumValues(type.enums)
+    const values = normalizeEnumValues(normalizedType.enums)
     if (values.length) {
       return {
         kind: 'enum',
-        label: type.label?.trim() || 'enum',
+        label: normalizeText(normalizedType.label) || 'enum',
         values,
       }
     }
   }
 
-  if (kind === 'ref' && type.to?.trim()) {
-    const label = type.label?.trim() || type.to.trim()
+  if (kind === 'ref' && normalizeText(normalizedType.to)) {
+    const to = normalizeText(normalizedType.to)
+    const label = normalizeText(normalizedType.label) || to
     return {
       kind: 'ref',
       label,
-      to: type.to.trim(),
-      preview: type.preview?.trim() || '',
+      to,
+      preview: normalizeText(normalizedType.preview),
     }
   }
 
-  const label = type.label?.trim() || '-'
-  const copyValue = (type.copyValue ?? label).trim()
-  const snippet = (type.snippet ?? type.preview ?? copyValue).trim()
+  const label = normalizeText(normalizedType.label) || '-'
+  const copyValue = normalizeText(normalizedType.copyValue) || label
+  const snippet = normalizeText(normalizedType.snippet) || normalizeText(normalizedType.preview) || copyValue
   return {
     kind: 'text',
     label,
     copyValue: label === '-' ? '' : copyValue,
     snippet,
-    language: normalizeLanguage(type.language, snippet || label),
-    forcePreview: Boolean(type.snippet?.trim()) || kind === 'ref',
+    language: normalizeLanguage(normalizeText(normalizedType.language), snippet || label),
+    forcePreview: Boolean(normalizeText(normalizedType.snippet)) || kind === 'ref',
   }
 }
 
 const normalizedRows = computed<NormalizedRow[]>(() => {
   return props.rows.map((row, index) => {
-    const parameter = row.parameter.trim() || `arg${index + 1}`
+    const parameter = normalizeText(row.parameter) || normalizeText((row as Record<string, unknown>).name) || `arg${index + 1}`
+    const defaultValue = normalizeText(row.defaultValue) || normalizeText(row.default) || '-'
     return {
       key: `${parameter}-${index}`,
       parameter,
-      description: row.description?.trim() || '',
+      defaultValue,
+      description: normalizeText(row.description),
       typeInfo: normalizeType(row.type),
     }
   })
@@ -480,14 +536,16 @@ async function openTypeReference(typeInfo: RefType) {
               <TxTooltip
                 v-if="isTypePreviewable(row.typeInfo)"
                 interactive
-                placement="right-start"
                 :open-delay="120"
                 :close-delay="140"
-                :max-width="460"
-                :panel-padding="10"
-                panel-variant="plain"
-                panel-background="glass"
-                panel-shadow="soft"
+                :anchor="{
+                  placement: 'right-start',
+                  maxWidth: 460,
+                  panelPadding: 10,
+                  panelVariant: 'plain',
+                  panelBackground: 'glass',
+                  panelShadow: 'soft',
+                }"
               >
                 <span
                   class="doc-api-table__type-action is-popover"
@@ -525,6 +583,23 @@ async function openTypeReference(typeInfo: RefType) {
           </div>
         </template>
 
+        <template #cell-defaultValue="{ row }">
+          <div class="doc-api-table__default-cell">
+            <TxTooltip :content="isCopyable(row.defaultValue) ? labels.copyDefault : ''" :disabled="!isCopyable(row.defaultValue)">
+              <span
+                class="doc-api-table__default-text"
+                :class="{ 'is-copyable': isCopyable(row.defaultValue), 'is-empty': !isCopyable(row.defaultValue) }"
+                :role="isCopyable(row.defaultValue) ? 'button' : undefined"
+                :tabindex="isCopyable(row.defaultValue) ? 0 : undefined"
+                @click="copyText(row.defaultValue, getDefaultKey(row.key))"
+                @keydown="handleKeyCopy($event, row.defaultValue, getDefaultKey(row.key))"
+              >
+                {{ row.defaultValue }}
+              </span>
+            </TxTooltip>
+          </div>
+        </template>
+
         <template #cell-description="{ row }">
           <div class="doc-api-table__desc-cell">
             <TxAutoSizer
@@ -538,12 +613,14 @@ async function openTypeReference(typeInfo: RefType) {
               <TxTooltip
                 :content="row.description || ''"
                 :disabled="!row.description"
-                placement="top-start"
-                :max-width="560"
-                :panel-padding="10"
-                panel-variant="plain"
-                panel-background="glass"
-                panel-shadow="soft"
+                :anchor="{
+                  placement: 'top-start',
+                  maxWidth: 560,
+                  panelPadding: 10,
+                  panelVariant: 'plain',
+                  panelBackground: 'glass',
+                  panelShadow: 'soft',
+                }"
                 :reference-full-width="true"
               >
                 <p
@@ -607,167 +684,191 @@ async function openTypeReference(typeInfo: RefType) {
           :radius="14"
           class="doc-api-table__mobile-card"
         >
-        <div class="doc-api-table__mobile-item">
-          <div class="doc-api-table__mobile-label">
-            {{ labels.parameter }}
+          <div class="doc-api-table__mobile-item">
+            <div class="doc-api-table__mobile-label">
+              {{ labels.parameter }}
+            </div>
+            <div class="doc-api-table__mobile-value">
+              <TxTooltip :content="isCopied(getParameterKey(row.key)) ? labels.copied : labels.copyParameter">
+                <span
+                  class="doc-api-table__param-text"
+                  role="button"
+                  tabindex="0"
+                  @click="copyText(row.parameter, getParameterKey(row.key))"
+                  @keydown="handleKeyCopy($event, row.parameter, getParameterKey(row.key))"
+                >
+                  {{ row.parameter }}
+                </span>
+              </TxTooltip>
+            </div>
           </div>
-          <div class="doc-api-table__mobile-value">
-            <TxTooltip :content="isCopied(getParameterKey(row.key)) ? labels.copied : labels.copyParameter">
-              <span
-                class="doc-api-table__param-text"
-                role="button"
-                tabindex="0"
-                @click="copyText(row.parameter, getParameterKey(row.key))"
-                @keydown="handleKeyCopy($event, row.parameter, getParameterKey(row.key))"
-              >
-                {{ row.parameter }}
-              </span>
-            </TxTooltip>
-          </div>
-        </div>
 
-        <div class="doc-api-table__mobile-item">
-          <div class="doc-api-table__mobile-label">
-            {{ labels.type }}
+          <div class="doc-api-table__mobile-item">
+            <div class="doc-api-table__mobile-label">
+              {{ labels.type }}
+            </div>
+            <div class="doc-api-table__mobile-value">
+              <div class="doc-api-table__type-cell">
+                <template v-if="row.typeInfo.kind === 'enum'">
+                  <TxTooltip
+                    v-for="enumValue in row.typeInfo.values"
+                    :key="`${row.key}-mobile-${enumValue.copyValue}`"
+                    :content="isCopied(getEnumKey(row.key, enumValue.copyValue)) ? labels.copied : labels.copyEnum"
+                  >
+                    <TxTag
+                      :label="enumValue.label"
+                      size="sm"
+                      class="doc-api-table__enum-tag"
+                      @click="copyText(enumValue.copyValue, getEnumKey(row.key, enumValue.copyValue))"
+                    />
+                  </TxTooltip>
+                </template>
+                <template v-else-if="row.typeInfo.kind === 'ref'">
+                  <TxTooltip :content="row.typeInfo.preview || labels.openReference">
+                    <span
+                      class="doc-api-table__type-action is-link"
+                      role="button"
+                      tabindex="0"
+                      @click="openTypeReference(row.typeInfo)"
+                      @keydown="handleKeyOpenReference($event, row.typeInfo)"
+                    >
+                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                      <span class="doc-api-table__type-action-icon i-carbon-launch" aria-hidden="true" />
+                    </span>
+                  </TxTooltip>
+                </template>
+                <template v-else>
+                  <TxTooltip
+                    v-if="isTypePreviewable(row.typeInfo)"
+                    interactive
+                    :open-delay="120"
+                    :close-delay="140"
+                    :anchor="{
+                      placement: 'top-start',
+                      maxWidth: 420,
+                      panelPadding: 10,
+                      panelVariant: 'plain',
+                      panelBackground: 'glass',
+                      panelShadow: 'soft',
+                    }"
+                  >
+                    <span
+                      class="doc-api-table__type-action is-popover"
+                      :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
+                      :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
+                      :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
+                      @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
+                      @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                    >
+                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                      <span class="doc-api-table__type-action-icon i-carbon-code" aria-hidden="true" />
+                    </span>
+                    <template #content>
+                      <div class="doc-api-table__type-popover">
+                        <p class="doc-api-table__type-popover-title">
+                          {{ labels.typePreview }}
+                        </p>
+                        <CodeRenderer :code="getTypePreviewCode(row.typeInfo)" :lang="row.typeInfo.language" :max-height="200" />
+                      </div>
+                    </template>
+                  </TxTooltip>
+                  <TxTooltip v-else :content="isCopyable(row.typeInfo.copyValue) ? labels.copyType : ''" :disabled="!isCopyable(row.typeInfo.copyValue)">
+                    <span
+                      class="doc-api-table__type-action"
+                      :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
+                      :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
+                      :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
+                      @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
+                      @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                    >
+                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                    </span>
+                  </TxTooltip>
+                </template>
+              </div>
+            </div>
           </div>
-          <div class="doc-api-table__mobile-value">
-            <div class="doc-api-table__type-cell">
-              <template v-if="row.typeInfo.kind === 'enum'">
-                <TxTooltip
-                  v-for="enumValue in row.typeInfo.values"
-                  :key="`${row.key}-mobile-${enumValue.copyValue}`"
-                  :content="isCopied(getEnumKey(row.key, enumValue.copyValue)) ? labels.copied : labels.copyEnum"
+
+          <div class="doc-api-table__mobile-item">
+            <div class="doc-api-table__mobile-label">
+              {{ labels.default }}
+            </div>
+            <div class="doc-api-table__mobile-value">
+              <TxTooltip :content="isCopyable(row.defaultValue) ? labels.copyDefault : ''" :disabled="!isCopyable(row.defaultValue)">
+                <span
+                  class="doc-api-table__default-text"
+                  :class="{ 'is-copyable': isCopyable(row.defaultValue), 'is-empty': !isCopyable(row.defaultValue) }"
+                  :role="isCopyable(row.defaultValue) ? 'button' : undefined"
+                  :tabindex="isCopyable(row.defaultValue) ? 0 : undefined"
+                  @click="copyText(row.defaultValue, getDefaultKey(row.key))"
+                  @keydown="handleKeyCopy($event, row.defaultValue, getDefaultKey(row.key))"
                 >
-                  <TxTag
-                    :label="enumValue.label"
-                    size="sm"
-                    class="doc-api-table__enum-tag"
-                    @click="copyText(enumValue.copyValue, getEnumKey(row.key, enumValue.copyValue))"
-                  />
-                </TxTooltip>
-              </template>
-              <template v-else-if="row.typeInfo.kind === 'ref'">
-                <TxTooltip :content="row.typeInfo.preview || labels.openReference">
-                  <span
-                    class="doc-api-table__type-action is-link"
-                    role="button"
-                    tabindex="0"
-                    @click="openTypeReference(row.typeInfo)"
-                    @keydown="handleKeyOpenReference($event, row.typeInfo)"
-                  >
-                    <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
-                    <span class="doc-api-table__type-action-icon i-carbon-launch" aria-hidden="true" />
-                  </span>
-                </TxTooltip>
-              </template>
-              <template v-else>
+                  {{ row.defaultValue }}
+                </span>
+              </TxTooltip>
+            </div>
+          </div>
+
+          <div class="doc-api-table__mobile-item">
+            <div class="doc-api-table__mobile-label">
+              {{ labels.description }}
+            </div>
+            <div class="doc-api-table__mobile-value doc-api-table__desc-cell">
+              <TxAutoSizer
+                :ref="el => setDescSizerRef('mobile', row.key, el as AutoSizerActionApi | null)"
+                :width="false"
+                :height="true"
+                :duration-ms="180"
+                outer-class="doc-api-table__desc-sizer overflow-hidden"
+                inner-class="doc-api-table__desc-sizer-inner min-h-0"
+              >
                 <TxTooltip
-                  v-if="isTypePreviewable(row.typeInfo)"
-                  interactive
-                  placement="top-start"
-                  :open-delay="120"
-                  :close-delay="140"
-                  :max-width="420"
-                  :panel-padding="10"
-                  panel-variant="plain"
-                  panel-background="glass"
-                  panel-shadow="soft"
+                  :content="row.description || ''"
+                  :disabled="!row.description"
+                  :anchor="{
+                    placement: 'top-start',
+                    maxWidth: 460,
+                    panelPadding: 10,
+                    panelVariant: 'plain',
+                    panelBackground: 'glass',
+                    panelShadow: 'soft',
+                  }"
+                  :reference-full-width="true"
                 >
-                  <span
-                    class="doc-api-table__type-action is-popover"
-                    :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                    :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                    :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                    @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                    @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                  <p
+                    class="doc-api-table__desc-text"
+                    :class="{ 'is-collapsed-mobile': isDescriptionCollapsible(row) && !isDescriptionExpanded(row.key) }"
                   >
-                    <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
-                    <span class="doc-api-table__type-action-icon i-carbon-code" aria-hidden="true" />
-                  </span>
+                    {{ row.description || labels.emptyDescription }}
+                  </p>
                   <template #content>
-                    <div class="doc-api-table__type-popover">
-                      <p class="doc-api-table__type-popover-title">
-                        {{ labels.typePreview }}
-                      </p>
-                      <CodeRenderer :code="getTypePreviewCode(row.typeInfo)" :lang="row.typeInfo.language" :max-height="200" />
+                    <div class="doc-api-table__desc-tooltip">
+                      {{ row.description }}
                     </div>
                   </template>
                 </TxTooltip>
-                <TxTooltip v-else :content="isCopyable(row.typeInfo.copyValue) ? labels.copyType : ''" :disabled="!isCopyable(row.typeInfo.copyValue)">
-                  <span
-                    class="doc-api-table__type-action"
-                    :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                    :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                    :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                    @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                    @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
-                  >
-                    <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
-                  </span>
-                </TxTooltip>
-              </template>
+              </TxAutoSizer>
+              <TxAutoSizer
+                v-if="isDescriptionCollapsible(row)"
+                :width="true"
+                :height="false"
+                :inline="true"
+                :duration-ms="160"
+                outer-class="doc-api-table__desc-toggle-sizer overflow-hidden"
+              >
+                <TxButton
+                  variant="bare"
+                  size="small"
+                  native-type="button"
+                  :icon="isDescriptionExpanded(row.key) ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'"
+                  class="doc-api-table__desc-toggle"
+                  @click="toggleDescription(row.key)"
+                >
+                  {{ isDescriptionExpanded(row.key) ? labels.collapse : labels.expand }}
+                </TxButton>
+              </TxAutoSizer>
             </div>
           </div>
-        </div>
-
-        <div class="doc-api-table__mobile-item">
-          <div class="doc-api-table__mobile-label">
-            {{ labels.description }}
-          </div>
-          <div class="doc-api-table__mobile-value doc-api-table__desc-cell">
-            <TxAutoSizer
-              :ref="el => setDescSizerRef('mobile', row.key, el as AutoSizerActionApi | null)"
-              :width="false"
-              :height="true"
-              :duration-ms="180"
-              outer-class="doc-api-table__desc-sizer overflow-hidden"
-              inner-class="doc-api-table__desc-sizer-inner min-h-0"
-            >
-              <TxTooltip
-                :content="row.description || ''"
-                :disabled="!row.description"
-                placement="top-start"
-                :max-width="460"
-                :panel-padding="10"
-                panel-variant="plain"
-                panel-background="glass"
-                panel-shadow="soft"
-                :reference-full-width="true"
-              >
-                <p
-                  class="doc-api-table__desc-text"
-                  :class="{ 'is-collapsed-mobile': isDescriptionCollapsible(row) && !isDescriptionExpanded(row.key) }"
-                >
-                  {{ row.description || labels.emptyDescription }}
-                </p>
-                <template #content>
-                  <div class="doc-api-table__desc-tooltip">
-                    {{ row.description }}
-                  </div>
-                </template>
-              </TxTooltip>
-            </TxAutoSizer>
-            <TxAutoSizer
-              v-if="isDescriptionCollapsible(row)"
-              :width="true"
-              :height="false"
-              :inline="true"
-              :duration-ms="160"
-              outer-class="doc-api-table__desc-toggle-sizer overflow-hidden"
-            >
-              <TxButton
-                variant="bare"
-                size="small"
-                native-type="button"
-                :icon="isDescriptionExpanded(row.key) ? 'i-carbon-chevron-up' : 'i-carbon-chevron-down'"
-                class="doc-api-table__desc-toggle"
-                @click="toggleDescription(row.key)"
-              >
-                {{ isDescriptionExpanded(row.key) ? labels.collapse : labels.expand }}
-              </TxButton>
-            </TxAutoSizer>
-          </div>
-        </div>
         </TxCard>
       </template>
     </div>
@@ -874,6 +975,30 @@ async function openTypeReference(typeInfo: RefType) {
 
 .doc-api-table__enum-tag {
   cursor: pointer;
+}
+
+.doc-api-table__default-cell {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+}
+
+.doc-api-table__default-text {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--tx-text-color-primary, #111827) 74%, transparent);
+  outline: none;
+}
+
+.doc-api-table__default-text.is-copyable {
+  cursor: pointer;
+}
+
+.doc-api-table__default-text.is-empty {
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #6b7280) 85%, transparent);
 }
 
 .doc-api-table__type-popover {

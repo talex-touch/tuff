@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import type { TxCardProps } from '../../card/src/types'
 import type { BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import TxCard from '../../card/src/TxCard.vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
+import TxCard from '../../card/src/TxCard.vue'
 
 defineOptions({ name: 'TxBaseAnchor' })
 
 const props = withDefaults(defineProps<BaseAnchorProps>(), {
-  modelValue: false,
+  modelValue: undefined,
   disabled: false,
   placement: 'bottom-start',
   offset: 8,
@@ -20,10 +21,9 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   matchReferenceWidth: false,
   duration: 432,
   ease: 'back.out(2)',
-  softEdge: 18,
   useCard: true,
   panelVariant: 'plain',
-  panelBackground: 'blur',
+  panelBackground: 'refraction',
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 10,
@@ -41,9 +41,19 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const internalOpen = ref(false)
+
 const open = computed({
-  get: () => !!props.modelValue,
-  set: (v) => {
+  get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
+  set: (v: boolean) => {
+    if (props.disabled && v)
+      return
+
+    const current = typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value
+    if (current === v)
+      return
+
+    internalOpen.value = v
     emit('update:modelValue', v)
     if (v)
       emit('open')
@@ -66,6 +76,10 @@ const mounted = ref(false)
 const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const cleanupResizeObserver = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
+const panelSurfaceMoving = ref(false)
+interface RectSnapshot { x: number, y: number, width: number, height: number }
+let lastReferenceRect: RectSnapshot | null = null
+let panelSurfaceMoveTimer: ReturnType<typeof setTimeout> | null = null
 
 let tl: gsap.core.Timeline | null = null
 let runId = 0
@@ -104,15 +118,24 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
         elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
       },
     }),
-    arrow({
-      element: computed(() => (props.showArrow ? arrowRef.value : null)),
-      padding: 6,
-    }),
+    arrow({ element: arrowRef, padding: 6 }),
   ],
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
-const enableEdgeCut = false
+
+const panelCardProps = computed<Partial<TxCardProps>>(() => {
+  const shouldFallbackSurface = props.panelBackground !== 'refraction' && panelSurfaceMoving.value
+  return {
+    ...(props.panelCard ?? {}),
+    variant: props.panelVariant,
+    background: props.panelBackground,
+    shadow: props.panelShadow,
+    radius: props.panelRadius,
+    padding: props.panelPadding,
+    surfaceMoving: shouldFallbackSurface,
+  }
+})
 
 const arrowStyle = computed<Record<string, string>>(() => {
   if (!props.showArrow || !arrowRef.value)
@@ -123,8 +146,8 @@ const arrowStyle = computed<Record<string, string>>(() => {
     return { display: 'none' }
 
   const base: Record<string, string> = {
-    display: 'block',
-    position: 'absolute',
+    'display': 'block',
+    'position': 'absolute',
     '--tx-ba-arrow-size': `${props.arrowSize ?? 10}px`,
   }
 
@@ -145,10 +168,6 @@ const arrowStyle = computed<Record<string, string>>(() => {
   base[staticSide] = `-${half}px`
   return base
 })
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
 
 function fmt(value: number): string {
   return Number(value.toFixed(2)).toString()
@@ -200,17 +219,10 @@ const outlinePath = computed(() => {
   const rightStart = top + radius
   const rightEnd = bottom - radius
   const bottomStart = left + radius
-  const bottomEnd = right - radius
   const leftStart = top + radius
   const leftEnd = bottom - radius
 
-  const data = props.showArrow ? (middlewareData.value as any)?.arrow : null
-  const size = props.arrowSize ?? 10
-  const gapHalf = Math.max((size / Math.SQRT2) - 0.2, 5.5)
-  const gapCenterNudge = 0
-  const minSeg = 4
-
-  const fullPath = [
+  return [
     `M ${fmt(topStart)} ${fmt(top)}`,
     `L ${fmt(topEnd)} ${fmt(top)}`,
     `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
@@ -221,91 +233,6 @@ const outlinePath = computed(() => {
     `L ${fmt(left)} ${fmt(leftStart)}`,
     `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
   ].join(' ')
-
-  if (!data || !enableEdgeCut)
-    return fullPath
-
-  if ((side.value === 'top' || side.value === 'bottom') && data.x != null) {
-    const center = data.x + (size / 2) + gapCenterNudge
-    const minStart = topStart + minSeg
-    const maxEnd = topEnd - minSeg
-    const gapStart = clamp(center - gapHalf, minStart, maxEnd - minSeg)
-    let gapEnd = clamp(center + gapHalf, gapStart + minSeg, maxEnd)
-    if (gapEnd - gapStart < minSeg)
-      gapEnd = gapStart + minSeg
-
-    if (side.value === 'bottom') {
-      return [
-        `M ${fmt(topStart)} ${fmt(top)}`,
-        `L ${fmt(gapStart)} ${fmt(top)}`,
-        `M ${fmt(gapEnd)} ${fmt(top)}`,
-        `L ${fmt(topEnd)} ${fmt(top)}`,
-        `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
-        `L ${fmt(right)} ${fmt(rightEnd)}`,
-        `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
-        `L ${fmt(bottomStart)} ${fmt(bottom)}`,
-        `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
-        `L ${fmt(left)} ${fmt(leftStart)}`,
-        `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
-      ].join(' ')
-    }
-
-    return [
-      `M ${fmt(topStart)} ${fmt(top)}`,
-      `L ${fmt(topEnd)} ${fmt(top)}`,
-      `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
-      `L ${fmt(right)} ${fmt(rightEnd)}`,
-      `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
-      `L ${fmt(gapEnd)} ${fmt(bottom)}`,
-      `M ${fmt(gapStart)} ${fmt(bottom)}`,
-      `L ${fmt(bottomStart)} ${fmt(bottom)}`,
-      `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
-      `L ${fmt(left)} ${fmt(leftStart)}`,
-      `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
-    ].join(' ')
-  }
-
-  if ((side.value === 'left' || side.value === 'right') && data.y != null) {
-    const center = data.y + (size / 2) + gapCenterNudge
-    const minStart = leftStart + minSeg
-    const maxEnd = leftEnd - minSeg
-    const gapStart = clamp(center - gapHalf, minStart, maxEnd - minSeg)
-    let gapEnd = clamp(center + gapHalf, gapStart + minSeg, maxEnd)
-    if (gapEnd - gapStart < minSeg)
-      gapEnd = gapStart + minSeg
-
-    if (side.value === 'left') {
-      return [
-        `M ${fmt(topStart)} ${fmt(top)}`,
-        `L ${fmt(topEnd)} ${fmt(top)}`,
-        `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
-        `L ${fmt(right)} ${fmt(gapStart)}`,
-        `M ${fmt(right)} ${fmt(gapEnd)}`,
-        `L ${fmt(right)} ${fmt(rightEnd)}`,
-        `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
-        `L ${fmt(bottomStart)} ${fmt(bottom)}`,
-        `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
-        `L ${fmt(left)} ${fmt(leftStart)}`,
-        `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
-      ].join(' ')
-    }
-
-    return [
-      `M ${fmt(topStart)} ${fmt(top)}`,
-      `L ${fmt(topEnd)} ${fmt(top)}`,
-      `Q ${fmt(right)} ${fmt(top)} ${fmt(right)} ${fmt(rightStart)}`,
-      `L ${fmt(right)} ${fmt(rightEnd)}`,
-      `Q ${fmt(right)} ${fmt(bottom)} ${fmt(topEnd)} ${fmt(bottom)}`,
-      `L ${fmt(bottomStart)} ${fmt(bottom)}`,
-      `Q ${fmt(left)} ${fmt(bottom)} ${fmt(left)} ${fmt(leftEnd)}`,
-      `L ${fmt(left)} ${fmt(gapEnd)}`,
-      `M ${fmt(left)} ${fmt(gapStart)}`,
-      `L ${fmt(left)} ${fmt(leftStart)}`,
-      `Q ${fmt(left)} ${fmt(top)} ${fmt(topStart)} ${fmt(top)}`,
-    ].join(' ')
-  }
-
-  return fullPath
 })
 
 /* ─── bounce padding on the far side ─── */
@@ -361,6 +288,88 @@ function clearTimeline() {
   }
 }
 
+function clearPanelSurfaceMoveTimer() {
+  if (panelSurfaceMoveTimer == null)
+    return
+  clearTimeout(panelSurfaceMoveTimer)
+  panelSurfaceMoveTimer = null
+}
+
+function setPanelSurfaceMoving(value: boolean) {
+  if (!props.useCard) {
+    panelSurfaceMoving.value = false
+    clearPanelSurfaceMoveTimer()
+    return
+  }
+  panelSurfaceMoving.value = value
+  if (!value)
+    clearPanelSurfaceMoveTimer()
+}
+
+function pulsePanelSurfaceMoving(duration = 96) {
+  if (!props.useCard)
+    return
+  panelSurfaceMoving.value = true
+  clearPanelSurfaceMoveTimer()
+  panelSurfaceMoveTimer = setTimeout(() => {
+    panelSurfaceMoving.value = false
+    panelSurfaceMoveTimer = null
+  }, Math.max(40, duration))
+}
+
+function settleOpenVisualStateForFollow() {
+  const clip = clipRef.value
+  const content = contentRef.value
+  const arrowEl = arrowRef.value
+  if (!clip || !content || !hasWindow())
+    return
+
+  clearTimeline()
+  pulsePanelSurfaceMoving(120)
+
+  clip.style.visibility = 'visible'
+  clip.style.clipPath = 'none'
+  clip.style.overflow = 'visible'
+  clip.style.willChange = 'auto'
+
+  gsap.set(content, { clearProps: 'transform' })
+  content.style.willChange = 'auto'
+
+  if (arrowEl)
+    gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+}
+
+function readReferenceRect(): RectSnapshot | null {
+  const el = referenceRef.value
+  if (!el)
+    return null
+  const rect = el.getBoundingClientRect()
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+function hasReferenceMoved(): boolean {
+  const current = readReferenceRect()
+  if (!current)
+    return false
+  if (!lastReferenceRect) {
+    lastReferenceRect = current
+    return false
+  }
+
+  const moved = Math.abs(current.x - lastReferenceRect.x) > 0.5
+    || Math.abs(current.y - lastReferenceRect.y) > 0.5
+    || Math.abs(current.width - lastReferenceRect.width) > 0.5
+    || Math.abs(current.height - lastReferenceRect.height) > 0.5
+
+  lastReferenceRect = current
+  return moved
+}
+
 /* ─── animate open ─── */
 function animateOpen(currentRunId: number) {
   const clip = clipRef.value
@@ -368,13 +377,37 @@ function animateOpen(currentRunId: number) {
   const arrowEl = arrowRef.value
   if (!clip || !content || !hasWindow()) {
     mounted.value = true
+    setPanelSurfaceMoving(false)
     return
   }
 
   clearTimeline()
+  setPanelSurfaceMoving(true)
+
+  const durMs = Math.max(0, props.duration)
+  if (durMs <= 0) {
+    clip.style.visibility = 'visible'
+    clip.style.clipPath = 'none'
+    clip.style.overflow = 'visible'
+    clip.style.willChange = 'auto'
+    gsap.set(content, { clearProps: 'transform' })
+    content.style.willChange = 'auto'
+    if (props.showArrow && arrowEl) {
+      gsap.set(arrowEl, {
+        x: 0,
+        y: 0,
+        scale: 1,
+        opacity: 1,
+        clearProps: 'willChange',
+      })
+    }
+    setPanelSurfaceMoving(false)
+    tl = null
+    return
+  }
 
   const hiddenT = getTranslate()
-  const dur = props.duration / 1000
+  const dur = durMs / 1000
 
   // prepare
   clip.style.overflow = 'hidden'
@@ -409,6 +442,7 @@ function animateOpen(currentRunId: number) {
       content.style.willChange = 'auto'
       if (arrowEl)
         gsap.set(arrowEl, { clearProps: 'willChange' })
+      setPanelSurfaceMoving(false)
       tl = null
     },
   })
@@ -448,10 +482,29 @@ function animateClose(currentRunId: number) {
   const arrowEl = arrowRef.value
   if (!clip || !content || !hasWindow()) {
     mounted.value = false
+    setPanelSurfaceMoving(false)
     return
   }
 
   clearTimeline()
+  setPanelSurfaceMoving(true)
+
+  const durMs = Math.max(0, props.duration * 0.45)
+  if (durMs <= 0) {
+    clip.style.visibility = 'hidden'
+    clip.style.clipPath = 'none'
+    clip.style.overflow = 'hidden'
+    clip.style.willChange = 'auto'
+    gsap.set(content, { clearProps: 'transform' })
+    content.style.willChange = 'auto'
+    if (arrowEl)
+      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+    if (!props.keepAliveContent)
+      mounted.value = false
+    setPanelSurfaceMoving(false)
+    tl = null
+    return
+  }
 
   // restore GPU layers for animation
   clip.style.willChange = 'clip-path'
@@ -460,7 +513,7 @@ function animateClose(currentRunId: number) {
   clip.style.clipPath = getClipPath(1)
 
   const hiddenT = getTranslate()
-  const dur = (props.duration * 0.45) / 1000
+  const dur = durMs / 1000
   const clipState = { progress: 1 }
   const hasArrow = !!(props.showArrow && arrowEl)
   const arrowInsetT = hasArrow ? getArrowInsetTranslate() : { x: 0, y: 0 }
@@ -479,6 +532,7 @@ function animateClose(currentRunId: number) {
         gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
       if (!props.keepAliveContent)
         mounted.value = false
+      setPanelSurfaceMoving(false)
       tl = null
     },
   })
@@ -531,6 +585,11 @@ function close() {
   open.value = false
 }
 
+defineExpose({
+  close,
+  toggle,
+})
+
 /* ─── outside click / esc ─── */
 function isEventInside(e: Event, el: HTMLElement | null): boolean {
   if (!el)
@@ -579,6 +638,7 @@ watch(
       cleanupAutoUpdate.value = null
       cleanupResizeObserver.value?.()
       cleanupResizeObserver.value = null
+      lastReferenceRect = null
       animateClose(currentRunId)
       return
     }
@@ -594,17 +654,37 @@ watch(
 
     if (referenceRef.value && floatingRef.value) {
       cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => {
-        update()
-        syncOutlineSize()
-      })
+      cleanupAutoUpdate.value = autoUpdate(
+        referenceRef.value,
+        floatingRef.value,
+        () => {
+          const referenceMoved = hasReferenceMoved()
+          update()
+          if (referenceMoved && open.value) {
+            pulsePanelSurfaceMoving(120)
+          }
+          if (referenceMoved && tl && open.value)
+            settleOpenVisualStateForFollow()
+        },
+        { animationFrame: true },
+      )
     }
 
     await nextTick()
+    lastReferenceRect = readReferenceRect()
     syncOutlineSize()
     animateOpen(currentRunId)
   },
   { flush: 'post' },
+)
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (!disabled)
+      return
+    open.value = false
+  },
 )
 
 /* ─── lifecycle ─── */
@@ -627,6 +707,7 @@ onBeforeUnmount(() => {
   cleanupAutoUpdate.value = null
   cleanupResizeObserver.value?.()
   cleanupResizeObserver.value = null
+  setPanelSurfaceMoving(false)
   clearTimeline()
 })
 </script>
@@ -653,7 +734,7 @@ onBeforeUnmount(() => {
         ref="arrowRef"
         class="tx-base-anchor__arrow"
         :data-side="side"
-        :data-bg="panelBackground"
+        :data-bg="props.panelBackground"
         :style="arrowStyle"
         aria-hidden="true"
       />
@@ -668,11 +749,7 @@ onBeforeUnmount(() => {
           <TxCard
             v-if="props.useCard"
             class="tx-base-anchor__card"
-            :variant="props.panelVariant"
-            :background="panelBackground"
-            :shadow="panelShadow"
-            :radius="panelRadius"
-            :padding="panelPadding"
+            v-bind="panelCardProps"
           >
             <slot :side="side" />
           </TxCard>
@@ -784,9 +861,9 @@ onBeforeUnmount(() => {
 }
 
 .tx-base-anchor__arrow[data-bg='refraction']::after {
-  background: color-mix(in srgb, var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff)) 34%, transparent);
-  backdrop-filter: blur(18px) saturate(150%) contrast(1.06) brightness(0.98);
-  -webkit-backdrop-filter: blur(18px) saturate(150%) contrast(1.06) brightness(0.98);
+  background: color-mix(in srgb, var(--tx-surface-refraction-mask-color, var(--tx-bg-color-overlay, #fff)) 22%, transparent);
+  backdrop-filter: blur(18px) saturate(162%) contrast(1.06) brightness(1.02);
+  -webkit-backdrop-filter: blur(18px) saturate(162%) contrast(1.06) brightness(1.02);
 }
 
 .tx-base-anchor__arrow[data-bg='pure']::after {
