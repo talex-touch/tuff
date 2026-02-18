@@ -10,8 +10,11 @@ const props = withDefaults(defineProps<DropdownMenuProps>(), {
   placement: 'bottom-start',
   offset: 6,
   closeOnSelect: true,
+  duration: 180,
 
   minWidth: 220,
+  maxHeight: 420,
+  unlimitedHeight: false,
   panelVariant: 'solid',
   panelBackground: 'refraction',
   panelShadow: 'soft',
@@ -52,14 +55,18 @@ provide('txDropdownMenu', {
     class="tx-dropdown"
     :placement="placement"
     :offset="offset"
+    :duration="duration"
     :width="0"
     :min-width="minWidth"
     :max-width="360"
+    :max-height="maxHeight"
+    :unlimited-height="unlimitedHeight"
     :panel-variant="panelVariant"
     :panel-background="panelBackground"
     :panel-shadow="panelShadow"
     :panel-radius="panelRadius"
     :panel-padding="panelPadding"
+    :panel-card="panelCard"
   >
     <template #reference>
       <slot name="trigger" />
