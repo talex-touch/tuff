@@ -1,6 +1,6 @@
 ---
 title: "Popover"
-description: "Floating UI"
+description: "Semantic popover built on Tooltip and Anchor"
 category: Feedback
 status: beta
 since: 1.0.0
@@ -9,9 +9,9 @@ syncStatus: migrated
 ---
 # Popover
 
-Floating UI
+`TxPopover` wraps `TxTooltip` for trigger semantics while `TxBaseAnchor` handles positioning, collision, and motion.
 
-Popover panels use `TxCard`; use `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` to control border, background, and shadow.
+Popover panels use `TxCard`; use `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` to control border, background, and shadow. `keepAliveContent` controls whether inner state is preserved after close.
 
 
 ## Basic Usage
@@ -136,25 +136,28 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | Description for modelValue. |
-| `disabled` | `boolean` | `false` | Description for disabled. |
-| `placement` | `PopoverPlacement` | `'bottom-start'` | Description for placement. |
-| `offset` | `number` | `8` | Description for offset. |
-| `width` | `number` | `0` | Description for width. |
-| `minWidth` | `number` | `0` | Description for minWidth. |
-| `maxWidth` | `number` | `360` | Description for maxWidth. |
-| `referenceFullWidth` | `boolean` | `false` | Description for referenceFullWidth. |
-| `showArrow` | `boolean` | `false` | Description for showArrow. |
-| `arrowSize` | `number` | `12` | Description for arrowSize. |
-| `motion` | `'fade' \| 'split'` | `'split'` | Description for motion. |
-| `fusion` | `boolean` | `false` | Description for fusion. |
-| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Text（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'blur'` | Text（TxCard background） |
-| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Text（TxCard shadow） |
-| `panelRadius` | `number` | `18` | Description for panelRadius. |
-| `panelPadding` | `number` | `10` | Description for panelPadding. |
-| `closeOnClickOutside` | `boolean` | `true` | Description for closeOnClickOutside. |
-| `closeOnEsc` | `boolean` | `true` | Description for closeOnEsc. |
+| `modelValue` | `boolean` | - | Open state (`v-model`) |
+| `disabled` | `boolean` | `false` | Disable interaction |
+| `placement` | `PopoverPlacement` | `'bottom-start'` | Floating placement |
+| `offset` | `number` | auto | Gap (computed from `arrowSize` when arrow is enabled; otherwise `2`) |
+| `width` | `number` | `0` | Panel width (`0` follows reference width) |
+| `minWidth` | `number` | `0` | Minimum panel width |
+| `maxWidth` | `number` | `360` | Maximum panel width |
+| `referenceFullWidth` | `boolean` | `false` | Stretch reference container to full width |
+| `showArrow` | `boolean` | `true` | Show arrow |
+| `arrowSize` | `number` | `12` | Arrow size |
+| `trigger` | `'click' \| 'hover'` | `'click'` | Trigger mode |
+| `openDelay` | `number` | `120` | Hover open delay (ms) |
+| `closeDelay` | `number` | `100` | Hover close delay (ms) |
+| `keepAliveContent` | `boolean` | `true` | Keep floating content mounted between open/close |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Toggle by clicking reference |
+| `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Card border variant |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Card background style |
+| `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Card shadow style |
+| `panelRadius` | `number` | `18` | Card radius |
+| `panelPadding` | `number` | `10` | Card padding |
+| `closeOnClickOutside` | `boolean` | `true` | Close on outside click (click trigger only) |
+| `closeOnEsc` | `boolean` | `true` | Close on ESC |
 
 ### Events
 

@@ -236,6 +236,7 @@ const COMPONENT_PRIORITY_SECTIONS = computed(() => ([
       '/docs/dev/components/outline-border',
       '/docs/dev/components/corner-overlay',
       '/docs/dev/components/gradual-blur',
+      '/docs/dev/components/edge-fade-mask',
       '/docs/dev/components/glow-text',
       '/docs/dev/components/keyframe-stroke-text',
       '/docs/dev/components/tuff-logo-stroke',

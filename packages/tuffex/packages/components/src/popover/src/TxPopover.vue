@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import type { TooltipAnchorProps } from '../../tooltip/src/types'
 import type { PopoverProps } from './types'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { TxBaseAnchor } from '../../base-anchor'
+import { computed, ref, watch } from 'vue'
+import TxTooltip from '../../tooltip/src/TxTooltip.vue'
 
 defineOptions({ name: 'TxPopover' })
 
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   openDelay: 120,
   closeDelay: 100,
   keepAliveContent: true,
+  toggleOnReferenceClick: undefined,
   panelVariant: 'solid',
   panelBackground: 'refraction',
   panelShadow: 'soft',
@@ -26,14 +28,6 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   panelPadding: 10,
   closeOnClickOutside: true,
   closeOnEsc: true,
-})
-
-const resolvedOffset = computed(() => {
-  if (typeof props.offset === 'number')
-    return props.offset
-  if (props.showArrow)
-    return Math.max(8, Math.round((props.arrowSize ?? 12) * 0.5) + 2)
-  return 2
 })
 
 const emit = defineEmits<{
@@ -63,57 +57,13 @@ const open = computed({
   },
 })
 
-let openTimer: number | null = null
-let closeTimer: number | null = null
-
-function clearTimers() {
-  if (openTimer != null)
-    window.clearTimeout(openTimer)
-  if (closeTimer != null)
-    window.clearTimeout(closeTimer)
-  openTimer = null
-  closeTimer = null
-}
-
-function scheduleOpen() {
-  if (props.disabled)
-    return
-  clearTimers()
-  openTimer = window.setTimeout(() => {
-    open.value = true
-  }, Math.max(0, props.openDelay))
-}
-
-function scheduleClose() {
-  clearTimers()
-  closeTimer = window.setTimeout(() => {
-    open.value = false
-  }, Math.max(0, props.closeDelay))
-}
-
-function onReferenceEnter() {
-  if (props.trigger !== 'hover')
-    return
-  scheduleOpen()
-}
-
-function onReferenceLeave() {
-  if (props.trigger !== 'hover')
-    return
-  scheduleClose()
-}
-
-function onFloatingEnter() {
-  if (props.trigger !== 'hover')
-    return
-  clearTimers()
-}
-
-function onFloatingLeave() {
-  if (props.trigger !== 'hover')
-    return
-  scheduleClose()
-}
+const resolvedOffset = computed(() => {
+  if (typeof props.offset === 'number')
+    return props.offset
+  if (props.showArrow)
+    return Math.max(8, Math.round((props.arrowSize ?? 12) * 0.5) + 2)
+  return 2
+})
 
 const anchorCloseOnClickOutside = computed(() => {
   if (props.trigger !== 'click')
@@ -130,70 +80,70 @@ const anchorToggleOnReferenceClick = computed(() => {
   return props.trigger === 'click'
 })
 
+const resolvedAnchorProps = computed<Partial<TooltipAnchorProps>>(() => {
+  return {
+    placement: props.placement,
+    offset: resolvedOffset.value,
+    width: props.width,
+    minWidth: props.minWidth,
+    maxWidth: props.maxWidth,
+    matchReferenceWidth: props.width <= 0,
+    duration: anchorDuration.value,
+    ease: anchorEase.value,
+    panelVariant: props.panelVariant,
+    panelBackground: props.panelBackground,
+    panelShadow: props.panelShadow,
+    panelRadius: props.panelRadius,
+    panelPadding: props.panelPadding,
+    panelCard: props.panelCard,
+    showArrow: props.showArrow,
+    arrowSize: props.arrowSize,
+    closeOnClickOutside: anchorCloseOnClickOutside.value,
+    closeOnEsc: props.closeOnEsc,
+    toggleOnReferenceClick: anchorToggleOnReferenceClick.value,
+  }
+})
+
 watch(
   () => props.disabled,
   (disabled) => {
     if (!disabled)
       return
-    clearTimers()
     open.value = false
   },
 )
-
-onBeforeUnmount(() => {
-  clearTimers()
-})
 </script>
 
 <template>
-  <TxBaseAnchor
+  <TxTooltip
     v-model="open"
     :disabled="props.disabled"
-    :placement="props.placement"
-    :offset="resolvedOffset"
-    :width="props.width"
-    :min-width="props.minWidth"
-    :max-width="props.maxWidth"
-    :match-reference-width="props.width <= 0"
-    :duration="anchorDuration"
-    :ease="anchorEase"
-    :panel-variant="props.panelVariant"
-    :panel-background="props.panelBackground"
-    :panel-shadow="props.panelShadow"
-    :panel-radius="props.panelRadius"
-    :panel-padding="props.panelPadding"
-    :panel-card="props.panelCard"
-    :show-arrow="props.showArrow"
-    :arrow-size="props.arrowSize"
+    :trigger="props.trigger"
+    :open-delay="props.openDelay"
+    :close-delay="props.closeDelay"
+    :interactive="props.trigger === 'hover'"
+    :reference-full-width="props.referenceFullWidth"
     :keep-alive-content="props.keepAliveContent"
-    :close-on-click-outside="anchorCloseOnClickOutside"
-    :close-on-esc="props.closeOnEsc"
-    :toggle-on-reference-click="anchorToggleOnReferenceClick"
+    :anchor="resolvedAnchorProps"
   >
-    <template #reference>
+    <template #default>
       <div
         class="tx-popover__reference"
         :class="{ 'is-full-width': props.referenceFullWidth }"
-        @mouseenter="onReferenceEnter"
-        @mouseleave="onReferenceLeave"
-        @focusin="onReferenceEnter"
-        @focusout="onReferenceLeave"
       >
         <slot name="reference" />
       </div>
     </template>
 
-    <template #default="{ side }">
+    <template #content="{ side }">
       <div
         class="tx-popover__content"
         :data-side="side"
-        @mouseenter="onFloatingEnter"
-        @mouseleave="onFloatingLeave"
       >
         <slot :side="side" />
       </div>
     </template>
-  </TxBaseAnchor>
+  </TxTooltip>
 </template>
 
 <style scoped>

@@ -6,6 +6,8 @@ export type BaseAnchorPlacement
     | 'left' | 'left-start' | 'left-end'
     | 'right' | 'right-start' | 'right-end'
 
+export type BaseAnchorSurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
+
 export type BaseAnchorPanelCardProps = Partial<Pick<
   TxCardProps,
   | 'glassBlur'
@@ -14,6 +16,7 @@ export type BaseAnchorPanelCardProps = Partial<Pick<
   | 'glassOverlayOpacity'
   | 'maskOpacity'
   | 'fallbackMaskOpacity'
+  | 'surfaceMoving'
   | 'refractionStrength'
   | 'refractionProfile'
   | 'refractionTone'
@@ -49,6 +52,7 @@ export interface BaseAnchorProps {
   panelRadius?: number
   panelPadding?: number
   panelCard?: BaseAnchorPanelCardProps
+  surfaceMotionAdaptation?: BaseAnchorSurfaceMotionAdaptation
   showArrow?: boolean
   arrowSize?: number
   keepAliveContent?: boolean

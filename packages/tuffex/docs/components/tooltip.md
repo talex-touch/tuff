@@ -4,6 +4,8 @@
 
 定位、动效和面板样式通过 `anchor` 参数透传到 `TxBaseAnchor`，Tooltip 只保留提示场景需要的最小 API。
 
+在新链路中，`TxPopover` 也复用 `TxTooltip`：Tooltip 负责触发语义，Anchor 负责定位与动效。
+
 <script setup lang="ts">
 import { ref } from 'vue'
 
@@ -11,6 +13,7 @@ import TooltipVisualEffectsDemo from '../.vitepress/theme/components/demos/Toolt
 import TooltipVisualEffectsDemoSource from '../.vitepress/theme/components/demos/TooltipVisualEffectsDemo.vue?raw'
 
 const open = ref(false)
+const openKeep = ref(false)
 </script>
 
 ## 基础用法
@@ -59,14 +62,14 @@ const open = ref(false)
 </template>
 </DemoBlock>
 
-## Click 触发
+## Click 切换（点击外部关闭）
 
-<DemoBlock title="Tooltip (click)">
+<DemoBlock title="Tooltip (click / close outside)">
 <template #preview>
 <TxTooltip
   v-model="open"
   trigger="click"
-  content="Click to toggle"
+  content="Click to toggle, click outside to close"
   :anchor="{ showArrow: true }"
 >
   <TxButton>Click me</TxButton>
@@ -79,10 +82,42 @@ const open = ref(false)
   <TxTooltip
     v-model="open"
     trigger="click"
-    content="Click to toggle"
+    content="Click to toggle, click outside to close"
     :anchor="{ showArrow: true }"
   >
     <TxButton>Click me</TxButton>
+  </TxTooltip>
+</template>
+```
+</template>
+</DemoBlock>
+
+## Click 切换（点击外部不关闭）
+
+<DemoBlock title="Tooltip (click / keep on outside click)">
+<template #preview>
+<TxTooltip
+  v-model="openKeep"
+  trigger="click"
+  content="Click outside will not close"
+  :close-on-click-outside="false"
+  :anchor="{ showArrow: true }"
+>
+  <TxButton>Pinned tooltip</TxButton>
+</TxTooltip>
+</template>
+
+<template #code>
+```vue
+<template>
+  <TxTooltip
+    v-model="openKeep"
+    trigger="click"
+    content="Click outside will not close"
+    :close-on-click-outside="false"
+    :anchor="{ showArrow: true }"
+  >
+    <TxButton>Pinned tooltip</TxButton>
   </TxTooltip>
 </template>
 ```
@@ -144,6 +179,9 @@ const open = ref(false)
 | `openDelay` | `number` | `200` | 打开延迟(ms) |
 | `closeDelay` | `number` | `120` | 关闭延迟(ms) |
 | `interactive` | `boolean` | `false` | hover 模式下允许鼠标进入浮层 |
+| `keepAliveContent` | `boolean` | `false` | 是否保留浮层内容状态（默认关闭即重建） |
+| `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 点击外部是否关闭（click 模式） |
+| `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 是否切换开关 |
 | `referenceFullWidth` | `boolean` | `false` | reference 容器是否占满宽度 |
 | `maxHeight` | `number` | `320` | Tooltip 内容最大高度 |
 | `anchor` | `Partial<BaseAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置 |
@@ -165,6 +203,7 @@ const open = ref(false)
 | `panelPadding` | `number` | `8` | 面板内边距 |
 | `duration` | `number` | `432` | 打开动画时长(ms) |
 | `ease` | `string` | `'back.out(2)'` | 打开动画缓动 |
+| `keepAliveContent` | `boolean` | `Tooltip.keepAliveContent` | 浮层内容是否保持挂载 |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 点击外部关闭 |
 | `closeOnEsc` | `boolean` | `true` | ESC 关闭 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 点击 reference 是否切换开关 |

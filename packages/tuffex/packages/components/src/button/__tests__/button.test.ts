@@ -146,7 +146,8 @@ describe('txButton', () => {
 
     expect(wrapper.classes()).toContain('block')
     expect(wrapper.classes()).toContain('circle')
-    expect(wrapper.find('.tx-button__spinner-slot').exists()).toBe(true)
+    expect(wrapper.find('.tx-button__spinner-slot').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Block Circle')
   })
 
   it('renders plain button correctly', () => {

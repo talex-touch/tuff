@@ -55,6 +55,7 @@ code: |
 - [OutlineBorder 描边容器](./outline-border.zh.md)
 - [CornerOverlay 角标容器](./corner-overlay.zh.md)
 - [GradualBlur 渐变模糊](./gradual-blur.zh.md)
+- [EdgeFadeMask 边缘渐隐遮罩](./edge-fade-mask.zh.md)
 - [GlowText 扫光](./glow-text.zh.md)
 - [KeyframeStrokeText 关键帧描边](./keyframe-stroke-text.zh.md)
 - [TuffLogoStroke Logo 描边](./tuff-logo-stroke.zh.md)

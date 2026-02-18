@@ -151,16 +151,15 @@
           transparent 70%
         );
       opacity: clamp(
-        0.08,
-        calc(var(--tx-surface-mask-opacity, 0.16) + var(--tx-surface-refraction-strength, 0.56) * var(--tx-surface-refraction-mask-strength-gain, 0.05)),
-        0.5
+        0.1,
+        calc(var(--tx-surface-mask-opacity, 0.22) + var(--tx-surface-refraction-strength, 0.56) * var(--tx-surface-refraction-mask-strength-gain, 0.065)),
+        0.6
       );
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) 10%, transparent);
       mask-image:
         radial-gradient(120% 90% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%), #000 46%, transparent 95%);
       -webkit-mask-image:
         radial-gradient(120% 90% at var(--tx-surface-refraction-light-x, 24%) var(--tx-surface-refraction-light-y, 20%), #000 46%, transparent 95%);
-      mix-blend-mode: var(--tx-surface-refraction-mask-blend-mode, screen);
     }
   }
 

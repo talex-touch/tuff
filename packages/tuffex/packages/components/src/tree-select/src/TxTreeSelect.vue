@@ -98,8 +98,6 @@ watch(
     if (v && props.searchable) {
       await nextTick()
     }
-    if (!v)
-      query.value = ''
   },
   { flush: 'post' },
 )

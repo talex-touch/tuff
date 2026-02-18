@@ -194,6 +194,7 @@ export default defineConfig({
           items: [
             { text: '玻璃拟态 GlassSurface', link: '/components/glass-surface' },
             { text: '渐变模糊 GradualBlur', link: '/components/gradual-blur' },
+            { text: '边缘渐隐 EdgeFadeMask', link: '/components/edge-fade-mask' },
             { text: '渐变边框 GradientBorder', link: '/components/gradient-border' },
             { text: '扫光 GlowText', link: '/components/glow-text' },
             { text: '关键帧描边 KeyframeStrokeText', link: '/components/keyframe-stroke-text' },

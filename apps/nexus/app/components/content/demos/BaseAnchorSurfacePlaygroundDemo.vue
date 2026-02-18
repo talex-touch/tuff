@@ -6,6 +6,7 @@ type Surface = 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
 type PanelVariant = 'solid' | 'plain' | 'dashed'
 type Shadow = 'none' | 'soft' | 'medium'
 type WidthMode = 'auto' | 'compact' | 'wide'
+type SurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
 
 const { locale } = useI18n()
 
@@ -15,10 +16,12 @@ const surface = ref<Surface>('refraction')
 const panelVariant = ref<PanelVariant>('plain')
 const panelShadow = ref<Shadow>('soft')
 const widthMode = ref<WidthMode>('auto')
+const surfaceMotionAdaptation = ref<SurfaceMotionAdaptation>('auto')
 const showArrow = ref(true)
 const useCard = ref(true)
 const matchReferenceWidth = ref(false)
 const toggleOnReferenceClick = ref(true)
+const manualSurfaceMoving = ref(false)
 const offset = ref(10)
 const radius = ref(18)
 const padding = ref(12)
@@ -37,6 +40,7 @@ const labels = computed(() => {
         surface: 'Surface',
         placement: 'Placement',
         width: 'Width',
+        motionAdaptation: 'Surface adaptation',
         variant: 'Variant',
         shadow: 'Shadow',
         ease: 'Ease',
@@ -46,6 +50,7 @@ const labels = computed(() => {
         useCard: 'Use card',
         matchReferenceWidth: 'Match reference width',
         toggleOnReferenceClick: 'Toggle on click',
+        manualSurfaceMoving: 'Manual surface moving',
       },
       slider: {
         offset: 'Offset',
@@ -60,9 +65,14 @@ const labels = computed(() => {
         compact: 'compact',
         wide: 'wide',
       },
+      adaptationMode: {
+        auto: 'auto',
+        manual: 'manual',
+        off: 'off',
+      },
       panel: {
         title: 'BaseAnchor Surface Preview',
-        desc: '切换 surface 可明显看到材质变化；关闭 Use card 后会回退成纯包装层。',
+        desc: '切换 surface 可明显看到材质变化；支持 auto/manual/off 三种降级策略。',
         action: 'Apply Settings',
       },
       surfacePreset: 'Surface Presets',
@@ -77,6 +87,7 @@ const labels = computed(() => {
       surface: 'Surface',
       placement: 'Placement',
       width: 'Width',
+      motionAdaptation: 'Surface adaptation',
       variant: 'Variant',
       shadow: 'Shadow',
       ease: 'Ease',
@@ -86,6 +97,7 @@ const labels = computed(() => {
       useCard: 'Use card',
       matchReferenceWidth: 'Match reference width',
       toggleOnReferenceClick: 'Toggle on click',
+      manualSurfaceMoving: 'Manual surface moving',
     },
     slider: {
       offset: 'Offset',
@@ -100,9 +112,14 @@ const labels = computed(() => {
       compact: 'compact',
       wide: 'wide',
     },
+    adaptationMode: {
+      auto: 'auto',
+      manual: 'manual',
+      off: 'off',
+    },
     panel: {
       title: 'BaseAnchor Surface Preview',
-      desc: 'Switch surface to inspect material differences. Disable Use card to fallback to raw wrapper.',
+      desc: 'Switch surface to inspect material differences with auto/manual/off downgrade modes.',
       action: 'Apply Settings',
     },
     surfacePreset: 'Surface Presets',
@@ -114,6 +131,7 @@ const placementOptions: Placement[] = ['bottom-start', 'bottom', 'top-start', 't
 const variantOptions: PanelVariant[] = ['plain', 'solid', 'dashed']
 const shadowOptions: Shadow[] = ['none', 'soft', 'medium']
 const widthOptions: WidthMode[] = ['auto', 'compact', 'wide']
+const adaptationOptions: SurfaceMotionAdaptation[] = ['auto', 'manual', 'off']
 const easeOptions = ['back.out(2)', 'power2.out', 'elastic.out(1, 0.45)']
 
 const resolvedWidth = computed(() => {
@@ -135,6 +153,7 @@ const resolvedMaxWidth = computed(() => {
 const panelCard = computed(() => ({
   maskOpacity: maskOpacity.value,
   fallbackMaskOpacity: fallbackMaskOpacity.value,
+  surfaceMoving: surfaceMotionAdaptation.value === 'manual' ? manualSurfaceMoving.value : undefined,
 }))
 </script>
 
@@ -169,6 +188,18 @@ const panelCard = computed(() => ({
           <span>{{ labels.section.width }}</span>
           <TxFlatSelect v-model="widthMode">
             <TxFlatSelectItem v-for="item in widthOptions" :key="item" :value="item" :label="labels.widthMode[item]" />
+          </TxFlatSelect>
+        </label>
+
+        <label class="anchor-playground__field">
+          <span>{{ labels.section.motionAdaptation }}</span>
+          <TxFlatSelect v-model="surfaceMotionAdaptation">
+            <TxFlatSelectItem
+              v-for="item in adaptationOptions"
+              :key="item"
+              :value="item"
+              :label="labels.adaptationMode[item]"
+            />
           </TxFlatSelect>
         </label>
 
@@ -210,6 +241,10 @@ const panelCard = computed(() => ({
         <label class="anchor-playground__switch-field">
           <span>{{ labels.switch.toggleOnReferenceClick }}</span>
           <TxSwitch v-model="toggleOnReferenceClick" />
+        </label>
+        <label class="anchor-playground__switch-field">
+          <span>{{ labels.switch.manualSurfaceMoving }}</span>
+          <TxSwitch v-model="manualSurfaceMoving" :disabled="surfaceMotionAdaptation !== 'manual'" />
         </label>
       </div>
 
@@ -271,6 +306,7 @@ const panelCard = computed(() => ({
         :panel-card="panelCard"
         :match-reference-width="matchReferenceWidth"
         :toggle-on-reference-click="toggleOnReferenceClick"
+        :surface-motion-adaptation="surfaceMotionAdaptation"
         :width="resolvedWidth"
         :max-width="resolvedMaxWidth"
       >
@@ -292,6 +328,7 @@ const panelCard = computed(() => ({
             <TxTag :label="`variant: ${panelVariant}`" size="sm" />
             <TxTag :label="`shadow: ${panelShadow}`" size="sm" />
             <TxTag :label="`mask: ${maskOpacity.toFixed(2)}`" size="sm" />
+            <TxTag :label="`adapt: ${surfaceMotionAdaptation}`" size="sm" />
           </div>
           <TxButton size="small" variant="secondary">
             {{ labels.panel.action }}

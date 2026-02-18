@@ -1,0 +1,63 @@
+---
+title: "EdgeFadeMask"
+description: "Add edge fade with `mask-image` to avoid hard clipping in scroll containers."
+category: Layout
+syncStatus: migrated
+---
+# EdgeFadeMask
+
+Add edge fade with `mask-image` to avoid hard clipping in scroll containers.
+
+## Basic Usage (Vertical)
+
+### Vertical fade
+:::TuffDemoWrapper{demo="EdgeFadeMaskVerticalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 420px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxEdgeFadeMask :size="32" style="height: 220px;">
+        <div style="padding: 14px 16px; line-height: 1.7;">
+          <!-- long content -->
+        </div>
+      </TxEdgeFadeMask>
+    </div>
+  </template>
+---
+:::
+
+## Horizontal Scrolling
+
+### Horizontal fade
+:::TuffDemoWrapper{demo="EdgeFadeMaskHorizontalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 520px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxEdgeFadeMask axis="horizontal" :size="40" style="height: 116px;">
+        <div style="display: flex; gap: 12px; width: max-content; padding: 12px;">
+          <!-- horizontal cards -->
+        </div>
+      </TxEdgeFadeMask>
+    </div>
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|------|
+| `as` | `string` | `'div'` | Root tag |
+| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | Fade direction |
+| `size` | `string \| number` | `24` | One-side fade distance |
+| `threshold` | `number` | `1` | Scroll-edge threshold in px |
+| `disabled` | `boolean` | `false` | Disable fade effect |
+| `observeResize` | `boolean` | `true` | Recompute when container size changes |
+
+## Tips
+
+- Keep border/radius styles on the wrapper; `TxEdgeFadeMask` handles scroll and mask.
+- For horizontal mode, prefer inner content with `display: flex` and `width: max-content`.

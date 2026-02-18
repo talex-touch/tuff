@@ -12,5 +12,8 @@ export interface TooltipProps {
   maxHeight?: number
   referenceFullWidth?: boolean
   interactive?: boolean
+  keepAliveContent?: boolean
+  closeOnClickOutside?: boolean
+  toggleOnReferenceClick?: boolean
   anchor?: Partial<TooltipAnchorProps>
 }

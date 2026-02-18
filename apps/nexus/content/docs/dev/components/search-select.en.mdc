@@ -8,6 +8,8 @@ syncStatus: migrated
 
 Select
 
+The dropdown layer is now unified on the `TxPopover → TxTooltip → TxBaseAnchor` chain for consistent overlay behavior.
+
 <script setup lang="ts">
 import SearchSelectBasicDemo from '~/components/content/demos/SearchSelectBasicDemo.vue'
 import SearchSelectBasicDemoSource from '~/components/content/demos/SearchSelectBasicDemo.vue?raw'
@@ -101,6 +103,7 @@ code: |
 
 - Local mode filters by `options.label` and shows all when input is empty.
 - Remote mode requires updating `options` in the `search` event; results are not cached.
+- Closing the dropdown keeps input and panel state; reopening does not auto-reset.
 
 ## API
 
@@ -119,7 +122,7 @@ code: |
 | `dropdownMaxHeight` | `number` | `280` | Description for dropdownMaxHeight. |
 | `dropdownOffset` | `number` | `6` | Description for dropdownOffset. |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | Text（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | Text（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Card background style |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Text（TxCard shadow） |
 | `panelRadius` | `number` | `18` | Description for panelRadius. |
 | `panelPadding` | `number` | `6` | Description for panelPadding. |

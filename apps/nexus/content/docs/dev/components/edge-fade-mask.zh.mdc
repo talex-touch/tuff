@@ -1,0 +1,63 @@
+---
+title: "EdgeFadeMask 边缘渐隐遮罩"
+description: "用于给滚动容器加 `mask-image` 渐隐效果，避免内容在边缘被硬裁切。"
+category: Layout
+syncStatus: migrated
+---
+# EdgeFadeMask 边缘渐隐遮罩
+
+用于给滚动容器加 `mask-image` 渐隐效果，避免内容在边缘被硬裁切。
+
+## 基础用法（纵向）
+
+### Vertical fade
+:::TuffDemoWrapper{demo="EdgeFadeMaskVerticalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 420px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxEdgeFadeMask :size="32" style="height: 220px;">
+        <div style="padding: 14px 16px; line-height: 1.7;">
+          <!-- long content -->
+        </div>
+      </TxEdgeFadeMask>
+    </div>
+  </template>
+---
+:::
+
+## 横向滚动
+
+### Horizontal fade
+:::TuffDemoWrapper{demo="EdgeFadeMaskHorizontalDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <div style="width: 520px; border: 1px solid var(--tx-border-color); border-radius: 12px;">
+      <TxEdgeFadeMask axis="horizontal" :size="40" style="height: 116px;">
+        <div style="display: flex; gap: 12px; width: max-content; padding: 12px;">
+          <!-- horizontal cards -->
+        </div>
+      </TxEdgeFadeMask>
+    </div>
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `as` | `string` | `'div'` | 根元素标签 |
+| `axis` | `'vertical' \| 'horizontal'` | `'vertical'` | 渐隐方向 |
+| `size` | `string \| number` | `24` | 单侧渐隐长度 |
+| `threshold` | `number` | `1` | 滚动边界判定阈值（px） |
+| `disabled` | `boolean` | `false` | 禁用渐隐 |
+| `observeResize` | `boolean` | `true` | 容器尺寸变化时自动刷新状态 |
+
+## 使用建议
+
+- 外层容器负责边框和圆角，`TxEdgeFadeMask` 负责滚动和渐隐。
+- 横向场景建议内部内容使用 `display: flex` + `width: max-content`。
