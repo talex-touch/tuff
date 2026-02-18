@@ -2,6 +2,8 @@
 
 搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。
 
+组件下拉层已统一迁移到 `TxPopover → TxTooltip → TxBaseAnchor` 链路，浮层行为与其他选择器保持一致。
+
 <script setup lang="ts">
 import SearchSelectBasicDemo from '../.vitepress/theme/components/demos/SearchSelectBasicDemo.vue'
 import SearchSelectBasicDemoSource from '../.vitepress/theme/components/demos/SearchSelectBasicDemo.vue?raw'
@@ -32,6 +34,7 @@ import SearchSelectRemoteDemoSource from '../.vitepress/theme/components/demos/S
 
 - 本地模式会基于 `options` 的 `label` 进行过滤，输入为空时显示全部。
 - 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
+- 下拉关闭后会保留输入与面板内部状态，重新打开不会自动重置。
 
 ## API
 

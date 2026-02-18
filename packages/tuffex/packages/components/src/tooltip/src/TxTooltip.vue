@@ -16,6 +16,9 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   maxHeight: 320,
   referenceFullWidth: false,
   interactive: false,
+  keepAliveContent: false,
+  closeOnClickOutside: undefined,
+  toggleOnReferenceClick: undefined,
   anchor: () => ({}),
 })
 
@@ -117,11 +120,15 @@ function onFloatingLeave() {
 const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
   const anchor = props.anchor ?? {}
 
-  const closeOnClickOutside = typeof anchor.closeOnClickOutside === 'boolean'
+  const closeOnClickOutside = typeof props.closeOnClickOutside === 'boolean'
+    ? props.closeOnClickOutside
+    : typeof anchor.closeOnClickOutside === 'boolean'
     ? anchor.closeOnClickOutside
     : props.trigger === 'click'
 
-  const toggleOnReferenceClick = typeof anchor.toggleOnReferenceClick === 'boolean'
+  const toggleOnReferenceClick = typeof props.toggleOnReferenceClick === 'boolean'
+    ? props.toggleOnReferenceClick
+    : typeof anchor.toggleOnReferenceClick === 'boolean'
     ? anchor.toggleOnReferenceClick
     : props.trigger === 'click'
 
@@ -142,7 +149,7 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
     panelPadding: 8,
     showArrow: true,
     arrowSize: 10,
-    keepAliveContent: false,
+    keepAliveContent: props.keepAliveContent,
     closeOnEsc: true,
     ...anchor,
     closeOnClickOutside,
@@ -200,7 +207,7 @@ onBeforeUnmount(() => {
         @mouseleave="onFloatingLeave"
       >
         <div class="tx-tooltip__content">
-          <slot name="content">
+          <slot name="content" :side="side">
             {{ props.content }}
           </slot>
         </div>

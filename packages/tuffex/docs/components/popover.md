@@ -1,6 +1,6 @@
 # Popover 弹出层
 
-基于 `TxBaseAnchor` 的轻封装弹出层，支持 click / hover 两种触发模式。
+`TxPopover` 基于 `TxTooltip` 进一步封装，最终由 `TxBaseAnchor` 提供定位和动效能力，支持 click / hover 两种触发模式。
 
 Popover 的面板容器使用 `TxCard` 渲染，可通过 `panelVariant/panelBackground/panelShadow/panelRadius/panelPadding` 控制面板样式；并支持 `keepAliveContent` 保留内部状态。
 
@@ -70,7 +70,7 @@ const open = ref(false)
 | `trigger` | `'click' \| 'hover'` | `'click'` | 触发方式 |
 | `openDelay` | `number` | `120` | hover 模式下打开延迟（ms） |
 | `closeDelay` | `number` | `100` | hover 模式下关闭延迟（ms） |
-| `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态 |
+| `keepAliveContent` | `boolean` | `true` | 是否保留弹层内部状态（默认保留） |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 是否点击 reference 切换开关（用于可编辑输入等场景） |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
 | `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |

@@ -157,7 +157,7 @@ code: |
 
 ## Interactive Playground
 
-Tune key props in one panel and focus on surface differences (`pure / mask / blur / glass / refraction`).
+Tune key props in one panel and focus on surface differences (`pure / mask / blur / glass / refraction`) plus motion adaptation modes (`auto / manual / off`).
 
 ### Surface Playground
 :::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
@@ -190,7 +190,8 @@ code: |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | Panel shadow (TxCard shadow). |
 | `panelRadius` | `number` | `18` | Panel border radius (TxCard radius). |
 | `panelPadding` | `number` | `10` | Panel padding (TxCard padding). |
-| `panelCard` | `Partial<TxCardProps>` | `undefined` | Pass-through advanced TxCard props (`maskOpacity`, `fallbackMaskOpacity`, `refraction*`). |
+| `panelCard` | `Partial<TxCardProps>` | `undefined` | Pass-through advanced TxCard props (`maskOpacity`, `fallbackMaskOpacity`, `surfaceMoving`, `refraction*`). |
+| `surfaceMotionAdaptation` | `'auto' \| 'manual' \| 'off'` | `'auto'` | Surface downgrade strategy: `auto` follows Anchor motion, `manual` reads `panelCard.surfaceMoving`, `off` disables downgrade adaptation. |
 | `showArrow` | `boolean` | `false` | Enable the triangle arrow that follows floating placement. |
 | `arrowSize` | `number` | `10` | Arrow size in px. |
 | `closeOnClickOutside` | `boolean` | `true` | Close on outside click. |

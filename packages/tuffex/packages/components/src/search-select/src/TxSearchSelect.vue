@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import type { TxSearchSelectEmits, TxSearchSelectOption, TxSearchSelectProps } from './types'
-import { autoUpdate, flip, offset, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
-import TxCard from '../../card/src/TxCard.vue'
 import TuffInput from '../../input/src/TxInput.vue'
+import TxPopover from '../../popover/src/TxPopover.vue'
 import TxSpinner from '../../spinner/src/TxSpinner.vue'
-import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxSearchSelect' })
 
@@ -35,19 +33,14 @@ const props = withDefaults(defineProps<TxSearchSelectProps>(), {
 const emit = defineEmits<TxSearchSelectEmits>()
 
 const open = ref(false)
-const referenceRef = ref<HTMLElement | null>(null)
-const floatingRef = ref<HTMLElement | null>(null)
-const zIndex = ref(getZIndex())
-const cleanupAutoUpdate = ref<(() => void) | null>(null)
-const lastOpenedAt = ref(0)
-
 const inputRef = ref<any>(null)
 const inputText = ref('')
 const searchTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 
 const optionsMap = computed(() => {
   const m = new Map<string | number, TxSearchSelectOption>()
-  for (const o of props.options ?? []) m.set(o.value, o)
+  for (const o of props.options ?? [])
+    m.set(o.value, o)
   return m
 })
 
@@ -74,10 +67,10 @@ const filteredOptions = computed(() => {
 })
 
 function clearSearchTimer() {
-  if (searchTimer.value) {
-    clearTimeout(searchTimer.value)
-    searchTimer.value = null
-  }
+  if (!searchTimer.value)
+    return
+  clearTimeout(searchTimer.value)
+  searchTimer.value = null
 }
 
 function emitSearch(q: string) {
@@ -91,10 +84,9 @@ function emitSearch(q: string) {
 function onInput(v: string | number) {
   const nextValue = typeof v === 'string' ? v : String(v)
   inputText.value = nextValue
-  if (!open.value) {
+
+  if (!open.value && !props.disabled)
     open.value = true
-    emit('open')
-  }
 
   if (!props.remote)
     return
@@ -114,17 +106,13 @@ function onEnter() {
 function onFocus() {
   if (props.disabled)
     return
-  if (!open.value) {
-    open.value = true
-    emit('open')
-  }
+  open.value = true
 }
 
 function close() {
   if (!open.value)
     return
   open.value = false
-  emit('close')
 }
 
 function onClear() {
@@ -143,92 +131,22 @@ function onPick(opt: TxSearchSelectOption) {
   close()
 }
 
-function isEventInside(e: Event, el: HTMLElement | null): boolean {
-  if (!el)
-    return false
-  const anyE = e as any
-  const path: EventTarget[] | undefined = typeof anyE.composedPath === 'function' ? anyE.composedPath() : undefined
-  if (path && path.length)
-    return path.includes(el)
-  const t = (e.target ?? null) as Node | null
-  return !!t && el.contains(t)
-}
-
-function handleOutside(e: Event) {
-  if (!open.value)
-    return
-  if (performance.now() - lastOpenedAt.value < 60)
-    return
-  const inRef = isEventInside(e, referenceRef.value)
-  const inFloat = isEventInside(e, floatingRef.value)
-  if (!inRef && !inFloat)
-    close()
-}
-
-function handleEsc(e: KeyboardEvent) {
-  if (e.key !== 'Escape')
-    return
-  if (!open.value)
-    return
-  close()
-}
-
-const { floatingStyles, update } = useFloating(referenceRef, floatingRef, {
-  placement: 'bottom-start',
-  strategy: 'fixed',
-  middleware: [
-    offset(() => props.dropdownOffset),
-    flip({ padding: 8 }),
-    shift({ padding: 8 }),
-    size({
-      padding: 8,
-      apply({ rects, availableHeight, elements }) {
-        const h = Math.min(availableHeight, props.dropdownMaxHeight)
-        Object.assign(elements.floating.style, {
-          minWidth: `${rects.reference.width}px`,
-          maxWidth: `${rects.reference.width}px`,
-          height: `${h}px`,
-          maxHeight: `${h}px`,
-          overflow: 'hidden',
-        })
-      },
-    }),
-  ],
-})
-
 watch(
   open,
-  async (v) => {
-    if (!v) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = null
-      clearSearchTimer()
+  (v, prev) => {
+    if (v === prev)
+      return
+    if (v) {
+      emit('open')
       return
     }
-
-    zIndex.value = nextZIndex()
-    lastOpenedAt.value = performance.now()
-    await nextTick()
-    await update()
-
-    if (referenceRef.value && floatingRef.value) {
-      cleanupAutoUpdate.value?.()
-      cleanupAutoUpdate.value = autoUpdate(referenceRef.value, floatingRef.value, () => update())
-    }
+    emit('close')
+    clearSearchTimer()
   },
   { flush: 'post' },
 )
 
-onMounted(() => {
-  document.addEventListener('pointerdown', handleOutside, true)
-  document.addEventListener('keydown', handleEsc)
-})
-
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleOutside, true)
-  document.removeEventListener('keydown', handleEsc)
-  cleanupAutoUpdate.value?.()
-  cleanupAutoUpdate.value = null
   clearSearchTimer()
 })
 
@@ -236,10 +154,7 @@ defineExpose({
   open: () => {
     if (props.disabled)
       return
-    if (!open.value) {
-      open.value = true
-      emit('open')
-    }
+    open.value = true
   },
   close,
   focus: () => inputRef.value?.focus?.(),
@@ -250,82 +165,97 @@ defineExpose({
 
 <template>
   <div
-    ref="referenceRef"
     class="tx-search-select"
     :class="{ 'is-open': open, 'is-disabled': props.disabled }"
   >
-    <TuffInput
-      ref="inputRef"
-      :model-value="inputText"
+    <TxPopover
+      v-model="open"
       :disabled="props.disabled"
-      :placeholder="props.placeholder"
-      :clearable="props.clearable"
-      @update:model-value="onInput"
-      @focus="onFocus"
-      @keydown.enter="onEnter"
-      @clear="onClear"
+      placement="bottom-start"
+      :offset="props.dropdownOffset"
+      :width="0"
+      :max-width="9999"
+      :show-arrow="false"
+      :reference-full-width="true"
+      :toggle-on-reference-click="false"
+      :panel-variant="props.panelVariant"
+      :panel-background="props.panelBackground"
+      :panel-shadow="props.panelShadow"
+      :panel-radius="props.panelRadius"
+      :panel-padding="props.panelPadding"
     >
-      <template #prefix>
-        <span class="tx-search-select__icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="16" height="16">
-            <path
-              fill="currentColor"
-              d="M10 2a8 8 0 105.293 14.293l4.207 4.207 1.414-1.414-4.207-4.207A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z"
-            />
-          </svg>
-        </span>
-      </template>
-      <template #suffix>
-        <span v-if="props.loading" class="tx-search-select__loading">
-          <TxSpinner :size="12" />
-        </span>
-      </template>
-    </TuffInput>
-
-    <Teleport to="body">
-      <Transition name="tx-search-select-dropdown">
-        <div
-          v-show="open && !props.disabled"
-          ref="floatingRef"
-          class="tx-search-select__dropdown"
-          :style="[floatingStyles, { zIndex }]"
-        >
-          <TxCard
-            class="tx-search-select__panel"
-            :variant="props.panelVariant"
-            :background="props.panelBackground"
-            :shadow="props.panelShadow"
-            :radius="props.panelRadius"
-            :padding="props.panelPadding"
+      <template #reference>
+        <div class="tx-search-select__reference">
+          <TuffInput
+            ref="inputRef"
+            :model-value="inputText"
+            :disabled="props.disabled"
+            :placeholder="props.placeholder"
+            :clearable="props.clearable"
+            @update:model-value="onInput"
+            @focus="onFocus"
+            @keydown.enter="onEnter"
+            @clear="onClear"
           >
-            <div class="tx-search-select__list">
-              <TxCardItem
-                v-for="opt in filteredOptions"
-                :key="String(opt.value)"
-                class="tx-search-select__item"
-                :class="{ 'is-selected': opt.value === props.modelValue, 'is-disabled': opt.disabled }"
-                :clickable="!opt.disabled"
-                :disabled="!!opt.disabled"
-                :active="opt.value === props.modelValue"
-                @click="onPick(opt)"
-              >
-                <template #title>
-                  <span class="tx-search-select__item-label">{{ opt.label }}</span>
-                </template>
-              </TxCardItem>
+            <template #prefix>
+              <span class="tx-search-select__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                  <path
+                    fill="currentColor"
+                    d="M10 2a8 8 0 105.293 14.293l4.207 4.207 1.414-1.414-4.207-4.207A8 8 0 0010 2zm0 2a6 6 0 110 12 6 6 0 010-12z"
+                  />
+                </svg>
+              </span>
+            </template>
 
-              <div v-if="!props.loading && !filteredOptions.length" class="tx-search-select__empty">
-                No results
-              </div>
-            </div>
-          </TxCard>
+            <template #suffix>
+              <span v-if="props.loading" class="tx-search-select__loading">
+                <TxSpinner :size="12" />
+              </span>
+            </template>
+          </TuffInput>
         </div>
-      </Transition>
-    </Teleport>
+      </template>
+
+      <div
+        class="tx-search-select__panel"
+        :style="{ maxHeight: `${props.dropdownMaxHeight}px` }"
+      >
+        <div class="tx-search-select__list">
+          <TxCardItem
+            v-for="opt in filteredOptions"
+            :key="String(opt.value)"
+            class="tx-search-select__item"
+            :class="{ 'is-selected': opt.value === props.modelValue, 'is-disabled': opt.disabled }"
+            :clickable="!opt.disabled"
+            :disabled="!!opt.disabled"
+            :active="opt.value === props.modelValue"
+            @click="onPick(opt)"
+          >
+            <template #title>
+              <span class="tx-search-select__item-label">{{ opt.label }}</span>
+            </template>
+          </TxCardItem>
+
+          <div v-if="!props.loading && !filteredOptions.length" class="tx-search-select__empty">
+            No results
+          </div>
+        </div>
+      </div>
+    </TxPopover>
   </div>
 </template>
 
 <style lang="scss" scoped>
+.tx-search-select {
+  width: 100%;
+}
+
+.tx-search-select__reference {
+  display: block;
+  width: 100%;
+}
+
 .tx-search-select__icon {
   display: inline-flex;
   align-items: center;
@@ -341,16 +271,8 @@ defineExpose({
   color: var(--tx-text-color-secondary, #909399);
 }
 
-.tx-search-select__dropdown {
-  padding: 0;
-  background: transparent;
-  border: none;
-  overflow: hidden;
-}
-
 .tx-search-select__panel {
   width: 100%;
-  height: 100%;
   overflow: auto;
 }
 
@@ -379,16 +301,5 @@ defineExpose({
   padding: 8px 6px;
   font-size: 12px;
   color: var(--tx-text-color-secondary, #909399);
-}
-
-.tx-search-select-dropdown-enter-active,
-.tx-search-select-dropdown-leave-active {
-  transition: opacity 0.16s ease, transform 0.16s ease;
-}
-
-.tx-search-select-dropdown-enter-from,
-.tx-search-select-dropdown-leave-to {
-  opacity: 0;
-  transform: translateY(6px) scale(0.985);
 }
 </style>

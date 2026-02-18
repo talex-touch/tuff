@@ -46,6 +46,7 @@ import {
   TxDataTable,
   TxDatePicker,
   TxDrawer,
+  TxEdgeFadeMask,
   TxDropdownItem,
   TxDropdownMenu,
   TxEmpty,
@@ -308,6 +309,7 @@ export default {
 
     // 视觉
     app.component('TxGlassSurface', TxGlassSurface)
+    app.component('TxEdgeFadeMask', TxEdgeFadeMask)
     app.component('TxGradualBlur', TxGradualBlur)
     app.component('TxGradientBorder', TxGradientBorder)
     app.component('TxGlowText', TxGlowText)

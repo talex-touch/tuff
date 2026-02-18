@@ -17,6 +17,7 @@ Tooltip is a semantic wrapper over `TxBaseAnchor`:
 - Tooltip handles trigger timing and hint content;
 - Anchor handles positioning, animation, and panel visuals;
 - use `anchor` to pass anchor-level configuration.
+- `TxPopover` reuses the same chain to keep overlay behavior consistent.
 
 ## Demo
 
@@ -65,6 +66,41 @@ code: |
 ---
 ::
 
+## Click Toggle (close on outside click)
+::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      content="Click to toggle, click outside to close"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">Click me</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## Click Toggle (keep on outside click)
+::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      :close-on-click-outside="false"
+      content="Click to toggle, outside click will not close"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">Pinned tooltip</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
 ## API (Lite)
 ::TuffPropsTable
 ---
@@ -89,6 +125,18 @@ rows:
     type: 'boolean'
     default: 'false'
     description: 'Allow pointer to enter floating panel in hover mode'
+  - name: keep-alive-content
+    type: 'boolean'
+    default: 'false'
+    description: 'Keep floating content state mounted after close'
+  - name: close-on-click-outside
+    type: 'boolean'
+    default: "trigger === 'click'"
+    description: 'Whether outside click closes the tooltip in click mode'
+  - name: toggle-on-reference-click
+    type: 'boolean'
+    default: "trigger === 'click'"
+    description: 'Whether clicking reference toggles open/close'
   - name: max-height
     type: 'number'
     default: '320'

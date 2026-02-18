@@ -1,47 +1,45 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-type PanelBackground = 'blur' | 'glass' | 'mask'
-type PopoverMotion = 'fade' | 'split'
+type PanelBackground = 'refraction' | 'pure' | 'mask' | 'blur' | 'glass'
 type PopoverPlacement = 'bottom-start' | 'bottom' | 'top' | 'right'
+type PopoverTrigger = 'click' | 'hover'
 
 const { locale } = useI18n()
 
 const open = ref(false)
-const background = ref<PanelBackground>('blur')
-const fusion = ref(false)
-const motion = ref<PopoverMotion>('split')
+const background = ref<PanelBackground>('refraction')
 const placement = ref<PopoverPlacement>('bottom-start')
+const trigger = ref<PopoverTrigger>('click')
 const showArrow = ref(true)
+const keepAliveContent = ref(true)
 
 const labels = computed(() => {
   if (locale.value === 'zh') {
     return {
       background: '背景',
-      motion: '动效',
       placement: '位置',
-      arrow: '箭头',
-      fusion: '融合',
       trigger: '触发',
-      toggle: '切换',
-      reference: '点我',
+      arrow: '箭头',
+      keepAlive: '状态保留',
+      referenceClick: '点我',
+      referenceHover: '悬停我',
       panelTitle: 'Popover 面板',
-      panelDescription: 'Blur/Glass/Mask + Fusion + Arrow',
+      panelDescription: '触发、背景、箭头和内容保留行为可联动调整',
       action: '操作',
     }
   }
 
   return {
     background: 'background',
-    motion: 'motion',
     placement: 'placement',
-    arrow: 'arrow',
-    fusion: 'fusion',
     trigger: 'trigger',
-    toggle: 'Toggle',
-    reference: 'Click me',
-    panelTitle: 'Split out popover',
-    panelDescription: 'Blur/Glass/Mask + Fusion + Arrow',
+    arrow: 'arrow',
+    keepAlive: 'keepAlive',
+    referenceClick: 'Click me',
+    referenceHover: 'Hover me',
+    panelTitle: 'Popover panel',
+    panelDescription: 'Tune trigger, surface, arrow, and keepAlive behavior.',
     action: 'Action',
   }
 })
@@ -54,17 +52,11 @@ const labels = computed(() => {
         <label class="tx-demo__row" style="gap: 8px;">
           <span class="tx-demo__label">{{ labels.background }}</span>
           <TuffSelect v-model="background" style="min-width: 160px;">
+            <TuffSelectItem value="refraction" label="refraction" />
+            <TuffSelectItem value="pure" label="pure" />
+            <TuffSelectItem value="mask" label="mask" />
             <TuffSelectItem value="blur" label="blur" />
             <TuffSelectItem value="glass" label="glass" />
-            <TuffSelectItem value="mask" label="mask" />
-          </TuffSelect>
-        </label>
-
-        <label class="tx-demo__row" style="gap: 8px;">
-          <span class="tx-demo__label">{{ labels.motion }}</span>
-          <TuffSelect v-model="motion" style="min-width: 160px;">
-            <TuffSelectItem value="split" label="split" />
-            <TuffSelectItem value="fade" label="fade" />
           </TuffSelect>
         </label>
 
@@ -84,15 +76,16 @@ const labels = computed(() => {
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
-          <span class="tx-demo__label">{{ labels.fusion }}</span>
-          <TxSwitch v-model="fusion" />
+          <span class="tx-demo__label">{{ labels.trigger }}</span>
+          <TuffSelect v-model="trigger" style="min-width: 140px;">
+            <TuffSelectItem value="click" label="click" />
+            <TuffSelectItem value="hover" label="hover" />
+          </TuffSelect>
         </label>
 
         <label class="tx-demo__row" style="gap: 8px;">
-          <span class="tx-demo__label">{{ labels.trigger }}</span>
-          <TxButton size="small" @click="open = !open">
-            {{ labels.toggle }}
-          </TxButton>
+          <span class="tx-demo__label">{{ labels.keepAlive }}</span>
+          <TxSwitch v-model="keepAliveContent" />
         </label>
       </div>
     </TxCard>
@@ -101,15 +94,15 @@ const labels = computed(() => {
       <TxPopover
         v-model="open"
         :placement="placement"
+        :trigger="trigger"
         :show-arrow="showArrow"
-        :motion="motion"
-        :fusion="fusion"
+        :keep-alive-content="keepAliveContent"
         :panel-background="background"
         panel-shadow="soft"
         :panel-padding="12"
       >
         <template #reference>
-          <TxButton>{{ labels.reference }}</TxButton>
+          <TxButton>{{ trigger === 'hover' ? labels.referenceHover : labels.referenceClick }}</TxButton>
         </template>
 
         <div style="width: 260px; display: grid; gap: 8px;">

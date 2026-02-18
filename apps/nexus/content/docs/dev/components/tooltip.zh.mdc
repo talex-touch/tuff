@@ -17,6 +17,7 @@ Tooltip 是 `TxBaseAnchor` 的语义封装：
 - Tooltip 负责触发和提示内容；
 - Anchor 负责定位、动效和面板样式；
 - 通过 `anchor` 参数把配置透传给 Anchor。
+- `TxPopover` 也复用这条链路，统一触发与浮层行为。
 
 ## Demo
 ### Hover Hint
@@ -64,6 +65,41 @@ code: |
 ---
 :::
 
+## Click 切换（点击外部关闭）
+::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      content="点击切换，点击外部关闭"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">点击我</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
+## Click 切换（点击外部不关闭）
+::TuffDemoWrapper{demo="TooltipClickOutsideKeepDemo" code-lang="vue"}
+---
+code: |
+  <template>
+    <TxTooltip
+      v-model="open"
+      trigger="click"
+      :close-on-click-outside="false"
+      content="点击切换，点击外部不关闭"
+      :anchor="{ showArrow: true }"
+    >
+      <TxButton variant="ghost">固定提示</TxButton>
+    </TxTooltip>
+  </template>
+---
+::
+
 ## API（简版）
 ::TuffPropsTable
 ---
@@ -88,6 +124,18 @@ rows:
     type: 'boolean'
     default: 'false'
     description: 'hover 模式下允许鼠标进入浮层'
+  - name: keep-alive-content
+    type: 'boolean'
+    default: 'false'
+    description: '是否保留浮层内容状态（默认关闭后重建）'
+  - name: close-on-click-outside
+    type: 'boolean'
+    default: "trigger === 'click'"
+    description: '点击外部是否关闭（click 模式）'
+  - name: toggle-on-reference-click
+    type: 'boolean'
+    default: "trigger === 'click'"
+    description: '点击 reference 是否切换开关'
   - name: max-height
     type: 'number'
     default: '320'

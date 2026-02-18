@@ -27,6 +27,7 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 10,
+  surfaceMotionAdaptation: 'auto',
   showArrow: false,
   arrowSize: 10,
   keepAliveContent: false,
@@ -77,6 +78,8 @@ const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const cleanupResizeObserver = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
 const panelSurfaceMoving = ref(false)
+const SURFACE_MOTION_COMPENSATION_FRAMES = 4
+const SURFACE_MOTION_FRAME_MS = 16
 interface RectSnapshot { x: number, y: number, width: number, height: number }
 let lastReferenceRect: RectSnapshot | null = null
 let panelSurfaceMoveTimer: ReturnType<typeof setTimeout> | null = null
@@ -125,7 +128,12 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
 
 const panelCardProps = computed<Partial<TxCardProps>>(() => {
-  const shouldFallbackSurface = props.panelBackground !== 'refraction' && panelSurfaceMoving.value
+  const manualSurfaceMoving = !!props.panelCard?.surfaceMoving
+  const shouldFallbackSurface = props.surfaceMotionAdaptation === 'off'
+    ? false
+    : props.surfaceMotionAdaptation === 'manual'
+      ? manualSurfaceMoving
+      : panelSurfaceMoving.value
   return {
     ...(props.panelCard ?? {}),
     variant: props.panelVariant,
@@ -295,26 +303,50 @@ function clearPanelSurfaceMoveTimer() {
   panelSurfaceMoveTimer = null
 }
 
-function setPanelSurfaceMoving(value: boolean) {
-  if (!props.useCard) {
+function getSurfaceCompensationMs() {
+  return Math.max(0, SURFACE_MOTION_COMPENSATION_FRAMES * SURFACE_MOTION_FRAME_MS)
+}
+
+function schedulePanelSurfaceMovingOff(delayMs = 0, immediate = false) {
+  clearPanelSurfaceMoveTimer()
+  if (immediate) {
+    panelSurfaceMoving.value = false
+    return
+  }
+
+  const timeout = Math.max(0, delayMs) + getSurfaceCompensationMs()
+  if (timeout <= 0) {
+    panelSurfaceMoving.value = false
+    return
+  }
+
+  panelSurfaceMoveTimer = setTimeout(() => {
+    panelSurfaceMoving.value = false
+    panelSurfaceMoveTimer = null
+  }, timeout)
+}
+
+function setPanelSurfaceMoving(value: boolean, immediate = false) {
+  if (!props.useCard || props.surfaceMotionAdaptation !== 'auto') {
     panelSurfaceMoving.value = false
     clearPanelSurfaceMoveTimer()
     return
   }
-  panelSurfaceMoving.value = value
-  if (!value)
+
+  if (value) {
+    panelSurfaceMoving.value = true
     clearPanelSurfaceMoveTimer()
+    return
+  }
+
+  schedulePanelSurfaceMovingOff(0, immediate)
 }
 
 function pulsePanelSurfaceMoving(duration = 96) {
-  if (!props.useCard)
+  if (!props.useCard || props.surfaceMotionAdaptation !== 'auto')
     return
   panelSurfaceMoving.value = true
-  clearPanelSurfaceMoveTimer()
-  panelSurfaceMoveTimer = setTimeout(() => {
-    panelSurfaceMoving.value = false
-    panelSurfaceMoveTimer = null
-  }, Math.max(40, duration))
+  schedulePanelSurfaceMovingOff(Math.max(40, duration))
 }
 
 function settleOpenVisualStateForFollow() {
@@ -679,6 +711,15 @@ watch(
 )
 
 watch(
+  () => props.surfaceMotionAdaptation,
+  (mode) => {
+    if (mode === 'auto')
+      return
+    setPanelSurfaceMoving(false, true)
+  },
+)
+
+watch(
   () => props.disabled,
   (disabled) => {
     if (!disabled)
@@ -707,7 +748,7 @@ onBeforeUnmount(() => {
   cleanupAutoUpdate.value = null
   cleanupResizeObserver.value?.()
   cleanupResizeObserver.value = null
-  setPanelSurfaceMoving(false)
+  setPanelSurfaceMoving(false, true)
   clearTimeline()
 })
 </script>

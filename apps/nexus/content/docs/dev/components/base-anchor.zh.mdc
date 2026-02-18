@@ -157,7 +157,7 @@ code: |
 
 ## 交互式 Playground
 
-在一个面板里自由调整关键属性，重点观察 `pure / mask / blur / glass / refraction` 不同 surface 的材质表现。
+在一个面板里自由调整关键属性，重点观察 `pure / mask / blur / glass / refraction` 不同 surface 的材质表现，以及 `auto / manual / off` 三种运动适配策略。
 
 ### Surface Playground
 :::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
@@ -190,7 +190,8 @@ code: |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `10` | 面板 padding（TxCard padding） |
-| `panelCard` | `Partial<TxCardProps>` | `undefined` | 透传 `TxCard` 高级参数（如 `maskOpacity`、`fallbackMaskOpacity`、`refraction*`） |
+| `panelCard` | `Partial<TxCardProps>` | `undefined` | 透传 `TxCard` 高级参数（如 `maskOpacity`、`fallbackMaskOpacity`、`surfaceMoving`、`refraction*`） |
+| `surfaceMotionAdaptation` | `'auto' \| 'manual' \| 'off'` | `'auto'` | 浮层运动降级策略：`auto` 自动跟随 Anchor 动画，`manual` 使用 `panelCard.surfaceMoving`，`off` 关闭降级适配 |
 | `showArrow` | `boolean` | `false` | 是否启用跟随浮层定位的三角箭头 |
 | `arrowSize` | `number` | `10` | 箭头尺寸（px） |
 | `closeOnClickOutside` | `boolean` | `true` | 点击外部关闭 |

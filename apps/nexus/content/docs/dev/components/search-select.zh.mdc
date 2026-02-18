@@ -8,6 +8,8 @@ syncStatus: migrated
 
 搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。
 
+下拉层已统一迁移到 `TxPopover → TxTooltip → TxBaseAnchor` 链路，浮层行为与其他选择类组件保持一致。
+
 <script setup lang="ts">
 import SearchSelectBasicDemo from '~/components/content/demos/SearchSelectBasicDemo.vue'
 import SearchSelectBasicDemoSource from '~/components/content/demos/SearchSelectBasicDemo.vue?raw'
@@ -101,6 +103,7 @@ code: |
 
 - 本地模式会基于 `options` 的 `label` 进行过滤，输入为空时显示全部。
 - 远程模式需要在 `search` 事件中自行更新 `options`，组件不会缓存结果。
+- 下拉关闭后会保留输入与面板内部状态，重新打开不会自动重置。
 
 ## API
 
@@ -119,7 +122,7 @@ code: |
 | `dropdownMaxHeight` | `number` | `280` | 下拉最大高度 |
 | `dropdownOffset` | `number` | `6` | 下拉偏移 |
 | `panelVariant` | `'solid' \| 'dashed' \| 'plain'` | `'solid'` | 面板边框形态（TxCard variant） |
-| `panelBackground` | `'blur' \| 'glass' \| 'mask'` | `'glass'` | 面板背景（TxCard background） |
+| `panelBackground` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 面板背景（TxCard background） |
 | `panelShadow` | `'none' \| 'soft' \| 'medium'` | `'soft'` | 面板阴影（TxCard shadow） |
 | `panelRadius` | `number` | `18` | 面板圆角（TxCard radius） |
 | `panelPadding` | `number` | `6` | 面板 padding（TxCard padding） |

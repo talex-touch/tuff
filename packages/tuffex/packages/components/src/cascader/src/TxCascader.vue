@@ -296,10 +296,8 @@ watch(
       emit('open')
     else
       emit('close')
-    if (!v) {
-      query.value = ''
+    if (!v)
       return
-    }
 
     await nextTick()
     if (props.load && activePath.value.length) {

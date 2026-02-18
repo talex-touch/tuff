@@ -154,13 +154,8 @@ watch(
 watch(
   isOpen,
   async (open) => {
-    if (!open) {
-      if (isEditable.value)
-        searchQuery.value = selectedLabel.value
-      else
-        searchQuery.value = ''
+    if (!open)
       return
-    }
 
     if (props.searchable)
       searchInputRef.value?.focus?.()
