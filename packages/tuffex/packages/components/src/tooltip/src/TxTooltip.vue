@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxTooltip' })
@@ -27,6 +27,7 @@ const emit = defineEmits<{
   (e: 'open'): void
   (e: 'close'): void
 }>()
+const slots = useSlots()
 
 const internalOpen = ref(false)
 
@@ -158,8 +159,11 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
 })
 
 const tooltipVars = computed<Record<string, string>>(() => {
+  const maxHeight = props.maxHeight <= 0
+    ? 'none'
+    : (slots.content && props.maxHeight === 320 ? 'none' : `${props.maxHeight}px`)
   return {
-    '--tx-tooltip-max-height': `${props.maxHeight}px`,
+    '--tx-tooltip-max-height': maxHeight,
   }
 })
 

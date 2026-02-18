@@ -1,3 +1,5 @@
+import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+
 export type DropdownPlacement
   = | 'top-start'
     | 'top-end'
@@ -13,8 +15,12 @@ export interface DropdownMenuProps {
   placement?: DropdownPlacement
   offset?: number
   closeOnSelect?: boolean
+  duration?: number
 
   minWidth?: number
+  maxHeight?: number
+  unlimitedHeight?: boolean
+  panelCard?: BaseAnchorPanelCardProps
 
   panelVariant?: 'solid' | 'dashed' | 'plain'
   panelBackground?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
