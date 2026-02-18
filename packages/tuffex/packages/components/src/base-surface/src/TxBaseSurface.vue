@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<BaseSurfaceProps>(), {
   fallbackMode: 'mask',
   settleDelay: 150,
   autoDetect: false,
-  transitionDuration: 260,
+  transitionDuration: 299,
   fake: false,
   fakeIndex: 0,
   preset: 'default',
@@ -53,14 +53,22 @@ const refractionRecovering = ref(false)
 const refractionRecoveryProgress = ref(1)
 const refractionRecoveryElapsed = ref(0)
 
-const REFRACTION_QUICK_PULL_MS = 50
-const REFRACTION_MASK_RELEASE_START = 0.3
+const SURFACE_MOTION_DURATION_MS = 299
+const REFRACTION_PARAM_BLEND_DURATION_MS = 182
+const REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS = 100
+const REFRACTION_RECOVERY_DURATION_FACTOR = 0.7
+const REFRACTION_MASK_RELEASE_DURATION_MS = Math.round(650 * REFRACTION_RECOVERY_DURATION_FACTOR)
 const REFRACTION_MASK_PEAK_OPACITY = 0.95
+const REFRACTION_MASK_PEAK_RAMP_DURATION_MS = 140
+const REFRACTION_MASK_RELEASE_SLOWDOWN = 1.2
+const REFRACTION_MOVING_PARAM_FLOOR = 0.28
 
 let refractionRecoveryRaf: number | null = null
+let refractionMaskPeakRampRaf: number | null = null
+const refractionMaskPeakRampProgress = ref(1)
 
 const isMoving = computed(() => props.moving || autoMoving.value)
-const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, 260), toFinite(props.settleDelay, 150)))
+const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS), toFinite(props.settleDelay, 150)))
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
@@ -131,11 +139,6 @@ function easeOutQuad(value: number) {
   return 1 - (1 - t) * (1 - t)
 }
 
-function easeOutCubic(value: number) {
-  const t = clamp(value, 0, 1)
-  return 1 - (1 - t) ** 3
-}
-
 /** 需要降级的模式（blur / glass 在运动中降级） */
 const needsFallback = computed(() =>
   props.mode === 'blur' || props.mode === 'glass',
@@ -148,9 +151,6 @@ const fallbackActive = computed(() =>
 /** 实际渲染模式 */
 const activeMode = computed<BaseSurfaceMode>(() => {
   if (props.mode === 'refraction') {
-    if (isMoving.value) {
-      return props.fallbackMode
-    }
     return 'refraction'
   }
   if (fallbackActive.value) {
@@ -164,10 +164,10 @@ const refractionParamProgress = computed(() => {
     return 1
   }
   if (isMoving.value) {
-    return 0
+    return REFRACTION_MOVING_PARAM_FLOOR
   }
   if (refractionRecovering.value) {
-    return refractionRecoveryProgress.value
+    return lerp(REFRACTION_MOVING_PARAM_FLOOR, 1, refractionRecoveryProgress.value)
   }
   return 1
 })
@@ -443,6 +443,61 @@ const baseRefractionMaskOpacity = computed(() => {
   return clamp(base + blendedStrength * boost, 0, 0.62)
 })
 
+const refractionRecoveryBlendDurationMs = computed(() => {
+  const base = toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS)
+  return Math.max(REFRACTION_PARAM_BLEND_DURATION_MS, base * REFRACTION_RECOVERY_DURATION_FACTOR)
+})
+
+const refractionMaskReleaseDelayMs = computed(() => {
+  return REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS
+})
+
+const refractionRecoveryTotalDurationMs = computed(() => {
+  return Math.max(
+    refractionRecoveryBlendDurationMs.value,
+    refractionMaskReleaseDelayMs.value + REFRACTION_MASK_RELEASE_DURATION_MS,
+  )
+})
+
+const refractionMaskReleaseProgress = computed(() => {
+  if (props.mode !== 'refraction' || !refractionRecovering.value) {
+    return 1
+  }
+  const afterDelayElapsed = refractionRecoveryElapsed.value - refractionMaskReleaseDelayMs.value
+  if (afterDelayElapsed <= 0) {
+    return 0
+  }
+
+  const timeProgress = smoothstep01(afterDelayElapsed / REFRACTION_MASK_RELEASE_DURATION_MS)
+  const effectProgress = smoothstep01(refractionParamProgress.value)
+  return clamp(Math.min(timeProgress, effectProgress), 0, 1)
+})
+
+const refractionRestMaskOpacity = computed(() => {
+  const baseOpacity = baseRefractionMaskOpacity.value
+  if (!refractionRecovering.value) {
+    return baseOpacity
+  }
+  const releaseProgress = refractionMaskReleaseProgress.value
+  return lerp(
+    REFRACTION_MASK_PEAK_OPACITY,
+    baseOpacity,
+    releaseProgress ** REFRACTION_MASK_RELEASE_SLOWDOWN,
+  )
+})
+
+const refractionRestMotionCoverOpacity = computed(() => {
+  if (!refractionRecovering.value) {
+    return 0
+  }
+  const releaseProgress = refractionMaskReleaseProgress.value
+  return lerp(
+    REFRACTION_MASK_PEAK_OPACITY,
+    0,
+    releaseProgress ** REFRACTION_MASK_RELEASE_SLOWDOWN,
+  )
+})
+
 const layerMaskOpacity = computed(() => {
   if (activeMode.value === 'mask') {
     const triggeredByFallback = (fallbackActive.value || (props.mode === 'refraction' && isMoving.value))
@@ -453,27 +508,26 @@ const layerMaskOpacity = computed(() => {
     return clamp(toFinite(props.opacity, 0.75, ['opacity']), 0, 1)
   }
   if (activeMode.value === 'refraction') {
-    const baseOpacity = baseRefractionMaskOpacity.value
-    if (!refractionRecovering.value) {
-      return baseOpacity
+    if (isMoving.value) {
+      return lerp(refractionRestMaskOpacity.value, REFRACTION_MASK_PEAK_OPACITY, refractionMaskPeakRampProgress.value)
     }
-
-    const pullProgress = easeOutCubic(refractionRecoveryElapsed.value / REFRACTION_QUICK_PULL_MS)
-    const quickPeakOpacity = lerp(baseOpacity, REFRACTION_MASK_PEAK_OPACITY, pullProgress)
-    const parameterProgress = refractionParamProgress.value
-
-    const canStartRelease = refractionRecoveryElapsed.value >= REFRACTION_QUICK_PULL_MS
-      && parameterProgress > REFRACTION_MASK_RELEASE_START
-    if (!canStartRelease) {
-      return quickPeakOpacity
-    }
-
-    const releaseProgress = easeOutQuad(
-      (parameterProgress - REFRACTION_MASK_RELEASE_START) / (1 - REFRACTION_MASK_RELEASE_START),
-    )
-    return lerp(REFRACTION_MASK_PEAK_OPACITY, baseOpacity, releaseProgress)
+    return refractionRestMaskOpacity.value
   }
   return clamp(toFinite(props.overlayOpacity, 0, ['overlay-opacity', 'overlayOpacity']), 0, 1)
+})
+
+const refractionMotionCoverOpacity = computed(() => {
+  if (activeMode.value !== 'refraction') {
+    return 0
+  }
+  if (isMoving.value) {
+    return lerp(refractionRestMotionCoverOpacity.value, REFRACTION_MASK_PEAK_OPACITY, refractionMaskPeakRampProgress.value)
+  }
+  return refractionRestMotionCoverOpacity.value
+})
+
+const showLayerMotionCover = computed(() => {
+  return refractionMotionCoverOpacity.value > 0
 })
 
 const showLayerMask = computed(() => {
@@ -545,7 +599,7 @@ const glassSurfaceProps = computed(() => {
 // --- CSS 变量 ---
 const cssVars = computed(() => {
   const vars: Record<string, string> = {
-    '--tx-surface-transition': `${Math.max(0, toFinite(props.transitionDuration, 260))}ms`,
+    '--tx-surface-transition': `${Math.max(0, toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS))}ms`,
   }
 
   if (props.radius != null) {
@@ -566,6 +620,9 @@ const cssVars = computed(() => {
   if (showLayerMask.value) {
     vars['--tx-surface-mask-opacity'] = `${layerMaskOpacity.value}`
     vars['--tx-surface-mask-opacity-percent'] = `${Math.round(layerMaskOpacity.value * 100)}%`
+  }
+  if (showLayerMotionCover.value) {
+    vars['--tx-surface-motion-cover-opacity'] = `${refractionMotionCoverOpacity.value}`
   }
 
   if (activeMode.value === 'refraction') {
@@ -599,6 +656,7 @@ const cssVars = computed(() => {
     vars['--tx-surface-refraction-mask-secondary-weight'] = `${Math.round(lerp(10, clamp(toneModel.maskSecondaryTint, 6, 72), parameterBlend))}%`
     vars['--tx-surface-refraction-mask-veil-weight'] = `${Math.round(lerp(4, clamp(toneModel.maskVeilTint, 3, 36), parameterBlend))}%`
     vars['--tx-surface-refraction-mask-strength-gain'] = `${lerp(0.01, toneModel.maskStrengthGain, parameterBlend)}`
+    vars['--tx-surface-refraction-mask-effective-opacity'] = `${layerMaskOpacity.value}`
     vars['--tx-surface-refraction-streak-weight'] = `${Math.round(lerp(8, clamp(toneModel.streakTint, 8, 52), parameterBlend))}%`
     vars['--tx-surface-refraction-halo-opacity-gain'] = `${lerp(0.72, toneModel.haloOpacityGain, parameterBlend)}`
 
@@ -651,6 +709,9 @@ const rootClasses = computed(() => {
   if (showLayerMask.value) {
     classes.push('tx-base-surface--with-mask')
   }
+  if (showLayerMotionCover.value) {
+    classes.push('tx-base-surface--with-motion-cover')
+  }
   if (activeMode.value === 'refraction') {
     classes.push(`tx-base-surface--refraction-renderer-${props.refractionRenderer}`)
     classes.push(`tx-base-surface--refraction-profile-${resolvedRefractionProfile.value}`)
@@ -672,6 +733,50 @@ const rootClasses = computed(() => {
 let mutationObserver: MutationObserver | null = null
 let observedElements: HTMLElement[] = []
 
+function stopRefractionMaskPeakRamp(resetProgress = true) {
+  if (refractionMaskPeakRampRaf != null) {
+    cancelAnimationFrame(refractionMaskPeakRampRaf)
+    refractionMaskPeakRampRaf = null
+  }
+  if (resetProgress) {
+    refractionMaskPeakRampProgress.value = 1
+  }
+}
+
+function startRefractionMaskPeakRamp() {
+  if (props.mode !== 'refraction') {
+    refractionMaskPeakRampProgress.value = 1
+    return
+  }
+  if (!hasWindow()) {
+    refractionMaskPeakRampProgress.value = 1
+    return
+  }
+
+  stopRefractionMaskPeakRamp(false)
+  refractionMaskPeakRampProgress.value = 0
+
+  const total = Math.max(40, REFRACTION_MASK_PEAK_RAMP_DURATION_MS)
+  let startedAt = 0
+
+  const tick = (timestamp: number) => {
+    if (!startedAt) {
+      startedAt = timestamp
+    }
+    const elapsed = timestamp - startedAt
+    const progress = clamp(elapsed / total, 0, 1)
+    refractionMaskPeakRampProgress.value = smoothstep01(progress)
+    if (progress >= 1 || !isMoving.value) {
+      refractionMaskPeakRampProgress.value = 1
+      refractionMaskPeakRampRaf = null
+      return
+    }
+    refractionMaskPeakRampRaf = requestAnimationFrame(tick)
+  }
+
+  refractionMaskPeakRampRaf = requestAnimationFrame(tick)
+}
+
 function stopRefractionRecovery(resetProgress = true) {
   if (refractionRecoveryRaf != null) {
     cancelAnimationFrame(refractionRecoveryRaf)
@@ -691,6 +796,9 @@ function startRefractionRecovery() {
   if (isMoving.value) {
     return
   }
+  if (refractionRecovering.value) {
+    return
+  }
   if (!hasWindow()) {
     refractionRecovering.value = false
     refractionRecoveryProgress.value = 1
@@ -703,27 +811,21 @@ function startRefractionRecovery() {
   refractionRecoveryProgress.value = 0
   refractionRecoveryElapsed.value = 0
 
-  const total = Math.max(120, toFinite(props.transitionDuration, 260))
-  const quick = Math.min(REFRACTION_QUICK_PULL_MS, total)
-  const fastPullTarget = 0.72
+  const blendTotal = refractionRecoveryBlendDurationMs.value
+  const total = refractionRecoveryTotalDurationMs.value
   let startedAt = 0
 
   const tick = (timestamp: number) => {
     if (!startedAt) {
       startedAt = timestamp
     }
+
     const elapsed = timestamp - startedAt
     refractionRecoveryElapsed.value = elapsed
 
-    let progress = 0
-    if (elapsed <= quick) {
-      const quickProgress = easeOutCubic(elapsed / Math.max(quick, 1))
-      progress = fastPullTarget * quickProgress
-    }
-    else {
-      const tailProgress = easeOutCubic((elapsed - quick) / Math.max(total - quick, 1))
-      progress = fastPullTarget + (1 - fastPullTarget) * tailProgress
-    }
+    const progress = blendTotal <= 0
+      ? 1
+      : smoothstep01(elapsed / blendTotal)
 
     refractionRecoveryProgress.value = clamp(progress, 0, 1)
 
@@ -834,6 +936,7 @@ function teardownAutoDetect() {
   mutationObserver?.disconnect()
   mutationObserver = null
   clearTimeout(settleTimer)
+  stopRefractionMaskPeakRamp()
   stopRefractionRecovery()
 }
 
@@ -855,17 +958,34 @@ watch(() => props.moving, (newVal, oldVal) => {
   }
 })
 
+watch(isMoving, (moving, prevMoving) => {
+  if (props.mode !== 'refraction') {
+    stopRefractionMaskPeakRamp()
+    return
+  }
+  if (moving && !prevMoving) {
+    startRefractionMaskPeakRamp()
+    return
+  }
+  if (!moving) {
+    stopRefractionMaskPeakRamp()
+  }
+}, { flush: 'sync' })
+
 watch(() => props.mode, (mode) => {
   if (mode !== 'refraction') {
+    stopRefractionMaskPeakRamp()
     stopRefractionRecovery()
     return
   }
   if (isMoving.value) {
+    startRefractionMaskPeakRamp()
     stopRefractionRecovery(false)
     refractionRecoveryProgress.value = 0
     refractionRecoveryElapsed.value = 0
     return
   }
+  stopRefractionMaskPeakRamp()
   stopRefractionRecovery()
 })
 
@@ -896,6 +1016,9 @@ onBeforeUnmount(() => {
     </Transition>
     <Transition name="tx-surface-layer-fade">
       <div v-if="showLayerFilter" class="tx-base-surface__layer tx-base-surface__layer--filter" />
+    </Transition>
+    <Transition name="tx-surface-layer-fade">
+      <div v-if="showLayerMotionCover" class="tx-base-surface__layer tx-base-surface__layer--motion-cover" />
     </Transition>
     <Transition name="tx-surface-layer-fade">
       <div v-if="showLayerMask" class="tx-base-surface__layer tx-base-surface__layer--mask" />

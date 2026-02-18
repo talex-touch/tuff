@@ -3,12 +3,12 @@ import type { TxCardProps } from '../../card/src/types'
 import type { BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
 
-defineOptions({ name: 'TxBaseAnchor' })
+defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
 
 const props = withDefaults(defineProps<BaseAnchorProps>(), {
   modelValue: undefined,
@@ -29,7 +29,6 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   panelShadow: 'soft',
   panelRadius: 18,
   panelPadding: 10,
-  surfaceMotionAdaptation: 'auto',
   showArrow: false,
   arrowSize: 10,
   keepAliveContent: false,
@@ -43,6 +42,7 @@ const emit = defineEmits<{
   (e: 'open'): void
   (e: 'close'): void
 }>()
+const attrs = useAttrs()
 
 const internalOpen = ref(false)
 const isUnlimitedHeight = computed(() => props.unlimitedHeight || props.maxHeight <= 0)
@@ -81,11 +81,11 @@ const cleanupAutoUpdate = ref<(() => void) | null>(null)
 const cleanupResizeObserver = ref<(() => void) | null>(null)
 const lastOpenedAt = ref(0)
 const panelSurfaceMoving = ref(false)
-const SURFACE_MOTION_COMPENSATION_FRAMES = 4
-const SURFACE_MOTION_FRAME_MS = 16
+const REFRACTION_CLOSE_PREPARE_MS = 180
 interface RectSnapshot { x: number, y: number, width: number, height: number }
 let lastReferenceRect: RectSnapshot | null = null
 let panelSurfaceMoveTimer: ReturnType<typeof setTimeout> | null = null
+let closePrepareTimer: ReturnType<typeof setTimeout> | null = null
 
 let tl: gsap.core.Timeline | null = null
 let runId = 0
@@ -133,15 +133,21 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
+const floatingClass = computed(() => (attrs as Record<string, unknown>).class)
+const floatingStyle = computed(() => (attrs as Record<string, unknown>).style)
+const floatingAttrs = computed(() => {
+  const source = attrs as Record<string, unknown>
+  const next: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'class' || key === 'style')
+      continue
+    next[key] = value
+  }
+  return next
+})
 
 const panelCardProps = computed<Partial<TxCardProps>>(() => {
-  const manualSurfaceMoving = !!props.panelCard?.surfaceMoving
-  const baseSurfaceMoving = props.surfaceMotionAdaptation === 'off'
-    ? false
-    : props.surfaceMotionAdaptation === 'manual'
-      ? manualSurfaceMoving
-      : panelSurfaceMoving.value
-  const shouldFallbackSurface = props.panelBackground !== 'refraction' && baseSurfaceMoving
+  const shouldFallbackSurface = panelSurfaceMoving.value
   const refractionSurfaceDefaults = props.panelBackground === 'refraction'
     ? {
         glassOverlayOpacity: 0.15,
@@ -305,6 +311,10 @@ function getArrowInsetTranslate(): { x: number, y: number } {
 }
 
 function clearTimeline() {
+  if (closePrepareTimer != null) {
+    clearTimeout(closePrepareTimer)
+    closePrepareTimer = null
+  }
   if (tl) {
     tl.kill()
     tl = null
@@ -318,50 +328,26 @@ function clearPanelSurfaceMoveTimer() {
   panelSurfaceMoveTimer = null
 }
 
-function getSurfaceCompensationMs() {
-  return Math.max(0, SURFACE_MOTION_COMPENSATION_FRAMES * SURFACE_MOTION_FRAME_MS)
-}
-
-function schedulePanelSurfaceMovingOff(delayMs = 0, immediate = false) {
-  clearPanelSurfaceMoveTimer()
-  if (immediate) {
-    panelSurfaceMoving.value = false
-    return
-  }
-
-  const timeout = Math.max(0, delayMs) + getSurfaceCompensationMs()
-  if (timeout <= 0) {
-    panelSurfaceMoving.value = false
-    return
-  }
-
-  panelSurfaceMoveTimer = setTimeout(() => {
-    panelSurfaceMoving.value = false
-    panelSurfaceMoveTimer = null
-  }, timeout)
-}
-
-function setPanelSurfaceMoving(value: boolean, immediate = false) {
-  if (!props.useCard || props.surfaceMotionAdaptation !== 'auto') {
+function setPanelSurfaceMoving(value: boolean) {
+  if (!props.useCard) {
     panelSurfaceMoving.value = false
     clearPanelSurfaceMoveTimer()
     return
   }
-
-  if (value) {
-    panelSurfaceMoving.value = true
+  panelSurfaceMoving.value = value
+  if (!value)
     clearPanelSurfaceMoveTimer()
-    return
-  }
-
-  schedulePanelSurfaceMovingOff(0, immediate)
 }
 
 function pulsePanelSurfaceMoving(duration = 96) {
-  if (!props.useCard || props.surfaceMotionAdaptation !== 'auto')
+  if (!props.useCard)
     return
   panelSurfaceMoving.value = true
-  schedulePanelSurfaceMovingOff(Math.max(40, duration))
+  clearPanelSurfaceMoveTimer()
+  panelSurfaceMoveTimer = setTimeout(() => {
+    panelSurfaceMoving.value = false
+    panelSurfaceMoveTimer = null
+  }, Math.max(40, duration))
 }
 
 function settleOpenVisualStateForFollow() {
@@ -372,7 +358,9 @@ function settleOpenVisualStateForFollow() {
     return
 
   clearTimeline()
-  pulsePanelSurfaceMoving(120)
+  if (props.panelBackground !== 'refraction') {
+    pulsePanelSurfaceMoving(120)
+  }
 
   clip.style.visibility = 'visible'
   clip.style.clipPath = 'none'
@@ -408,10 +396,11 @@ function hasReferenceMoved(): boolean {
     return false
   }
 
-  const moved = Math.abs(current.x - lastReferenceRect.x) > 0.5
-    || Math.abs(current.y - lastReferenceRect.y) > 0.5
-    || Math.abs(current.width - lastReferenceRect.width) > 0.5
-    || Math.abs(current.height - lastReferenceRect.height) > 0.5
+  const moveThreshold = 1.5
+  const moved = Math.abs(current.x - lastReferenceRect.x) > moveThreshold
+    || Math.abs(current.y - lastReferenceRect.y) > moveThreshold
+    || Math.abs(current.width - lastReferenceRect.width) > moveThreshold
+    || Math.abs(current.height - lastReferenceRect.height) > moveThreshold
 
   lastReferenceRect = current
   return moved
@@ -593,64 +582,80 @@ function animateClose(currentRunId: number) {
     return
   }
 
-  // restore GPU layers for animation
-  clip.style.willChange = 'clip-path'
-  content.style.willChange = 'transform'
-  clip.style.overflow = 'hidden'
-  clip.style.clipPath = getClipPath(1)
+  const startCloseMotion = () => {
+    if (currentRunId !== runId || open.value) {
+      return
+    }
 
-  const hiddenT = getTranslate()
-  const dur = durMs / 1000
-  const clipState = { progress: 1 }
-  const hasArrow = !!(props.showArrow && arrowEl)
-  const arrowInsetT = hasArrow ? getArrowInsetTranslate() : { x: 0, y: 0 }
-  const arrowHideDur = hasArrow ? Math.min(0.11, Math.max(0.07, dur * 0.4)) : 0
-  const motionStart = arrowHideDur
+    // restore GPU layers for animation
+    clip.style.willChange = 'clip-path'
+    content.style.willChange = 'transform'
+    clip.style.overflow = 'hidden'
+    clip.style.clipPath = getClipPath(1)
 
-  tl = gsap.timeline({
-    onComplete: () => {
-      if (currentRunId !== runId)
-        return
-      clip.style.visibility = 'hidden'
-      clip.style.clipPath = 'none'
-      clip.style.willChange = 'auto'
-      content.style.willChange = 'auto'
-      if (arrowEl)
-        gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
-      if (!props.keepAliveContent)
-        mounted.value = false
-      setPanelSurfaceMoving(false)
-      tl = null
-    },
-  })
+    const hiddenT = getTranslate()
+    const dur = durMs / 1000
+    const clipState = { progress: 1 }
+    const hasArrow = !!(props.showArrow && arrowEl)
+    const arrowInsetT = hasArrow ? getArrowInsetTranslate() : { x: 0, y: 0 }
+    const arrowHideDur = hasArrow ? Math.min(0.11, Math.max(0.07, dur * 0.4)) : 0
+    const motionStart = arrowHideDur
 
-  if (hasArrow && arrowEl) {
-    gsap.set(arrowEl, { willChange: 'transform,opacity' })
-    tl.to(arrowEl, {
-      x: arrowInsetT.x,
-      y: arrowInsetT.y,
-      scale: 0.72,
-      opacity: 0,
-      duration: arrowHideDur,
-      ease: 'power2.in',
-    }, 0)
+    tl = gsap.timeline({
+      onComplete: () => {
+        if (currentRunId !== runId)
+          return
+        clip.style.visibility = 'hidden'
+        clip.style.clipPath = 'none'
+        clip.style.willChange = 'auto'
+        content.style.willChange = 'auto'
+        if (arrowEl)
+          gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+        if (!props.keepAliveContent)
+          mounted.value = false
+        setPanelSurfaceMoving(false)
+        tl = null
+      },
+    })
+
+    if (hasArrow && arrowEl) {
+      gsap.set(arrowEl, { willChange: 'transform,opacity' })
+      tl.to(arrowEl, {
+        x: arrowInsetT.x,
+        y: arrowInsetT.y,
+        scale: 0.72,
+        opacity: 0,
+        duration: arrowHideDur,
+        ease: 'power2.in',
+      }, 0)
+    }
+
+    tl.to(content, {
+      x: hiddenT.x,
+      y: hiddenT.y,
+      duration: dur,
+      ease: 'power3.in',
+    }, motionStart)
+
+    tl.to(clipState, {
+      progress: 0,
+      duration: dur,
+      ease: 'power3.in',
+      onUpdate() {
+        clip.style.clipPath = getClipPath(clipState.progress)
+      },
+    }, motionStart)
   }
 
-  tl.to(content, {
-    x: hiddenT.x,
-    y: hiddenT.y,
-    duration: dur,
-    ease: 'power3.in',
-  }, motionStart)
+  if (props.panelBackground === 'refraction') {
+    closePrepareTimer = setTimeout(() => {
+      closePrepareTimer = null
+      startCloseMotion()
+    }, REFRACTION_CLOSE_PREPARE_MS)
+    return
+  }
 
-  tl.to(clipState, {
-    progress: 0,
-    duration: dur,
-    ease: 'power3.in',
-    onUpdate() {
-      clip.style.clipPath = getClipPath(clipState.progress)
-    },
-  }, motionStart)
+  startCloseMotion()
 }
 
 /* ─── toggle / close ─── */
@@ -747,7 +752,7 @@ watch(
         () => {
           const referenceMoved = hasReferenceMoved()
           update()
-          if (referenceMoved && open.value) {
+          if (referenceMoved && open.value && props.panelBackground !== 'refraction') {
             pulsePanelSurfaceMoving(120)
           }
           if (referenceMoved && tl && open.value)
@@ -763,15 +768,6 @@ watch(
     animateOpen(currentRunId)
   },
   { flush: 'post' },
-)
-
-watch(
-  () => props.surfaceMotionAdaptation,
-  (mode) => {
-    if (mode === 'auto')
-      return
-    setPanelSurfaceMoving(false, true)
-  },
 )
 
 watch(
@@ -803,7 +799,7 @@ onBeforeUnmount(() => {
   cleanupAutoUpdate.value = null
   cleanupResizeObserver.value?.()
   cleanupResizeObserver.value = null
-  setPanelSurfaceMoving(false, true)
+  setPanelSurfaceMoving(false)
   clearTimeline()
 })
 </script>
@@ -821,9 +817,10 @@ onBeforeUnmount(() => {
     <div
       v-if="mounted || open"
       ref="floatingRef"
+      v-bind="floatingAttrs"
       class="tx-base-anchor"
-      :class="{ 'is-open': open, 'is-unlimited-height': isUnlimitedHeight }"
-      :style="[floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
+      :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight }]"
+      :style="[floatingStyle, floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
     >
       <span
         v-if="props.showArrow"

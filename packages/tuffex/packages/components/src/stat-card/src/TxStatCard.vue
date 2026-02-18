@@ -466,8 +466,14 @@ watch(
   width: 72px;
   height: 72px;
   transform: translateY(-50%);
-  --tx-stat-card-progress-color: var(--tx-stat-card-icon-color, var(--tx-color-primary, #409eff));
-  --tx-stat-card-progress-track: color-mix(in srgb, var(--tx-stat-card-progress-color) 22%, transparent);
+  --tx-stat-card-progress-color: var(--tx-color-primary, #409eff);
+  --tx-stat-card-progress-track: rgba(64, 158, 255, 0.24);
+}
+
+@supports (color: color-mix(in srgb, #000 50%, transparent)) {
+  .tx-stat-card__progress {
+    --tx-stat-card-progress-track: color-mix(in srgb, var(--tx-stat-card-progress-color) 22%, transparent);
+  }
 }
 
 .tx-stat-card__progress-ring {
@@ -488,10 +494,16 @@ watch(
   position: absolute;
   inset: 10px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-stat-card-progress-color) 12%, rgba(0, 0, 0, 0.45));
+  background: rgba(64, 158, 255, 0.16);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+@supports (color: color-mix(in srgb, #000 50%, transparent)) {
+  .tx-stat-card__progress-inner {
+    background: color-mix(in srgb, var(--tx-stat-card-progress-color) 12%, rgba(0, 0, 0, 0.45));
+  }
 }
 
 .tx-stat-card__progress-icon {

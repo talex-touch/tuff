@@ -14,9 +14,9 @@
     border-radius: inherit;
     pointer-events: none;
     transition:
-      opacity var(--tx-surface-transition, 260ms) ease,
-      background var(--tx-surface-transition, 260ms) ease,
-      backdrop-filter var(--tx-surface-transition, 260ms) ease;
+      opacity var(--tx-surface-transition, 299ms) ease,
+      background var(--tx-surface-transition, 299ms) ease,
+      backdrop-filter var(--tx-surface-transition, 299ms) ease;
   }
 
   .tx-base-surface__layer--glass {
@@ -46,14 +46,24 @@
   }
 
   .tx-base-surface__layer--mask {
-    z-index: 2;
+    z-index: 3;
     background: var(--tx-surface-color, var(--tx-fill-color-lighter, #fafafa));
     opacity: var(--tx-surface-mask-opacity, 0.75);
   }
 
+  .tx-base-surface__layer--motion-cover {
+    z-index: 2;
+    background: color-mix(
+      in srgb,
+      var(--tx-surface-refraction-mask-color, var(--tx-bg-color-overlay, #fff)) 100%,
+      transparent
+    );
+    opacity: var(--tx-surface-motion-cover-opacity, 0);
+  }
+
   .tx-base-surface__content {
     position: relative;
-    z-index: 3;
+    z-index: 4;
     border-radius: inherit;
     min-height: inherit;
   }
@@ -150,10 +160,13 @@
           color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) var(--tx-surface-refraction-mask-veil-weight, 10%), transparent) 36%,
           transparent 70%
         );
-      opacity: clamp(
-        0.1,
-        calc(var(--tx-surface-mask-opacity, 0.22) + var(--tx-surface-refraction-strength, 0.56) * var(--tx-surface-refraction-mask-strength-gain, 0.065)),
-        0.6
+      opacity: var(
+        --tx-surface-refraction-mask-effective-opacity,
+        clamp(
+          0.08,
+          calc(var(--tx-surface-mask-opacity, 0.16) + var(--tx-surface-refraction-strength, 0.56) * var(--tx-surface-refraction-mask-strength-gain, 0.05)),
+          0.5
+        )
       );
       box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-surface-refraction-mask-color, #fff) 10%, transparent);
       mask-image:
@@ -179,21 +192,21 @@
       opacity: var(--tx-surface-fake-opacity, 0.75);
       z-index: var(--tx-surface-fake-index, 0);
       pointer-events: none;
-      transition: background var(--tx-surface-transition, 260ms) ease-out,
-                  opacity var(--tx-surface-transition, 260ms) ease-out;
+      transition: background var(--tx-surface-transition, 299ms) ease-out,
+                  opacity var(--tx-surface-transition, 299ms) ease-out;
     }
   }
 
   // ---- Settling transition (recovering from fallback) ----
   &--settling {
-    transition: backdrop-filter var(--tx-surface-transition, 260ms) ease-out,
-                background var(--tx-surface-transition, 260ms) ease-out;
+    transition: backdrop-filter var(--tx-surface-transition, 299ms) ease-out,
+                background var(--tx-surface-transition, 299ms) ease-out;
   }
 }
 
 .tx-surface-layer-fade-enter-active,
 .tx-surface-layer-fade-leave-active {
-  transition: opacity var(--tx-surface-transition, 260ms) ease;
+  transition: opacity var(--tx-surface-transition, 299ms) ease;
 }
 
 .tx-surface-layer-fade-enter-from,
