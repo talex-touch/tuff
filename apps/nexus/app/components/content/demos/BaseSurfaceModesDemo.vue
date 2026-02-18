@@ -41,10 +41,10 @@ const labels = computed(() => {
       <TxBaseSurface mode="blur" :blur="8" :radius="10" class="base-surface-modes-demo__item">
         {{ labels.blur }}
       </TxBaseSurface>
-      <TxBaseSurface mode="glass" :blur="11" :radius="10" class="base-surface-modes-demo__item base-surface-modes-demo__item--tall">
+      <TxBaseSurface mode="glass" :blur="11" :radius="10" class="base-surface-modes-demo__item">
         {{ labels.glass }}
       </TxBaseSurface>
-      <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" :radius="10" class="base-surface-modes-demo__item base-surface-modes-demo__item--tall">
+      <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" :radius="10" class="base-surface-modes-demo__item">
         {{ labels.refraction }}
       </TxBaseSurface>
     </div>
@@ -120,9 +120,5 @@ const labels = computed(() => {
   font-weight: 500;
   color: var(--tx-text-color-primary, #303133);
   font-size: 13px;
-}
-
-.base-surface-modes-demo__item--tall {
-  height: 100px;
 }
 </style>

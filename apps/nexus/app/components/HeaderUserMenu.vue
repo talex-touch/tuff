@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { hasWindow } from '@talex-touch/utils/env'
-import { useLocalePreference } from '~/composables/useLocalePreference'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useSubscriptionData } from '~/composables/useDashboardData'
+import { useLocalePreference } from '~/composables/useLocalePreference'
 import { useTheme } from '~/composables/useTheme'
 
 const { data: session, signOut } = useAuth()
-const { t, locale, setLocale } = useI18n()
+const { t, te, locale, setLocale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const { persistPreferredLocale } = useLocalePreference()
@@ -15,15 +14,17 @@ const { color, toggleDark } = useTheme()
 const { plan } = useSubscriptionData()
 const { data: creditsSummary } = useFetch<any>('/api/credits/summary')
 const userMenuPanelCard = {
-  glassOverlayOpacity: 0.12,
-  maskOpacity: 0.82,
+  glassOverlayOpacity: 0.22,
+  refractionStrength: 74,
+  refractionProfile: 'cinematic',
+  refractionTone: 'balanced',
 } as const
 
 const userMenuOpen = ref(false)
 const languageMenuOpen = ref(false)
 const themeToggleEvent = ref<MouseEvent | null>(null)
 const themeToggleAt = ref(0)
-const userPanelRef = ref<HTMLElement | null>(null)
+const menuMotionDuration = 207
 let userMenuTimer: ReturnType<typeof setTimeout> | null = null
 let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -79,6 +80,10 @@ const afterSignOutUrl = computed(() => {
   return `/sign-in?${params.toString()}`
 })
 
+function tSafe(key: string, fallback: string) {
+  return te(key) ? t(key) : fallback
+}
+
 async function handleLocaleSelect(nextLocale: 'en' | 'zh') {
   const rawPath = route.path || '/'
   const normalizedPath = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
@@ -127,55 +132,6 @@ function setUserMenuHover(active: boolean) {
   }, 160)
 }
 
-function syncUserMenuPopupLayout() {
-  if (!hasWindow())
-    return
-
-  const panel = userPanelRef.value
-  if (!panel)
-    return
-
-  const tooltip = panel.closest('.tx-tooltip') as HTMLElement | null
-  if (tooltip) {
-    tooltip.style.setProperty('--tx-tooltip-max-height', 'none', 'important')
-    tooltip.style.setProperty('max-height', 'none', 'important')
-    tooltip.style.setProperty('overflow', 'visible', 'important')
-
-    const tooltipContent = tooltip.querySelector<HTMLElement>('.tx-tooltip__content')
-    if (tooltipContent) {
-      tooltipContent.style.setProperty('max-height', 'none', 'important')
-      tooltipContent.style.setProperty('overflow', 'visible', 'important')
-    }
-  }
-
-  const anchor = panel.closest('.tx-base-anchor') as HTMLElement | null
-  if (!anchor)
-    return
-
-  anchor.style.setProperty('--tx-ba-max-height', 'none', 'important')
-  const clip = anchor.querySelector<HTMLElement>('.tx-base-anchor__clip')
-  const card = anchor.querySelector<HTMLElement>('.tx-base-anchor__card')
-  if (clip)
-    clip.style.setProperty('overflow', 'visible', 'important')
-  if (card) {
-    card.style.setProperty('max-height', 'none', 'important')
-    card.style.setProperty('overflow', 'visible', 'important')
-  }
-}
-
-function queueUserMenuPopupLayoutSync(frames = 8) {
-  if (!hasWindow())
-    return
-  let remain = Math.max(1, frames)
-  const run = () => {
-    syncUserMenuPopupLayout()
-    remain -= 1
-    if (remain > 0)
-      window.requestAnimationFrame(run)
-  }
-  window.requestAnimationFrame(run)
-}
-
 function setLanguageHover(active: boolean) {
   if (languageMenuTimer) {
     clearTimeout(languageMenuTimer)
@@ -193,12 +149,6 @@ function setLanguageHover(active: boolean) {
 function handleLanguagePanelHover(active: boolean) {
   setUserMenuHover(active)
   setLanguageHover(active)
-}
-
-async function handleAvatarClick() {
-  userMenuOpen.value = false
-  languageMenuOpen.value = false
-  await navigateTo('/dashboard')
 }
 
 async function handleMenuNavigate(path: string) {
@@ -228,26 +178,16 @@ onBeforeUnmount(() => {
     languageMenuTimer = null
   }
 })
-
-watch(userMenuOpen, (open) => {
-  if (!open)
-    return
-  nextTick(() => {
-    queueUserMenuPopupLayoutSync()
-  })
-})
 </script>
 
 <template>
   <div class="header-user-wrapper header-user-vars" @mouseenter="setUserMenuHover(true)" @mouseleave="setUserMenuHover(false)">
     <TxDropdownMenu
-      :model-value="userMenuOpen"
+      v-model="userMenuOpen"
       placement="bottom-end"
       :offset="10"
-      :duration="0"
+      :duration="menuMotionDuration"
       :min-width="280"
-      :max-height="0"
-      :unlimited-height="true"
       :panel-padding="0"
       :close-on-select="false"
       :panel-card="userMenuPanelCard"
@@ -256,7 +196,7 @@ watch(userMenuOpen, (open) => {
       panel-shadow="medium"
     >
       <template #trigger>
-        <TxButton variant="bare" native-type="button" class="header-user-trigger" aria-label="Account" @click="handleAvatarClick">
+        <TxButton variant="bare" native-type="button" class="header-user-trigger" aria-label="Account">
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
@@ -266,12 +206,7 @@ watch(userMenuOpen, (open) => {
         </TxButton>
       </template>
 
-      <div
-        ref="userPanelRef"
-        class="header-user-panel header-user-vars fake-background isolate"
-        @mouseenter="setUserMenuHover(true)"
-        @mouseleave="setUserMenuHover(false)"
-      >
+      <div class="header-user-panel header-user-vars isolate" @mouseenter="setUserMenuHover(true)" @mouseleave="setUserMenuHover(false)">
         <div class="header-user-profile">
           <TxAvatar
             :src="userAvatar || undefined"
@@ -281,7 +216,7 @@ watch(userMenuOpen, (open) => {
           />
           <div class="header-user-profile-meta">
             <div class="header-user-name">
-              {{ userLabel || t('nav.account', 'Account') }}
+              {{ userLabel || tSafe('nav.account', 'Account') }}
             </div>
             <div v-if="userEmail" class="header-user-email">
               {{ userEmail }}
@@ -292,7 +227,7 @@ watch(userMenuOpen, (open) => {
         <div class="header-user-stats">
           <div class="header-user-stat">
             <div class="header-user-stat-label">
-              {{ t('dashboard.credits.title', 'Credits') }}
+              {{ tSafe('dashboard.credits.title', 'Credits') }}
             </div>
             <div class="header-user-stat-value">
               {{ creditsLabel }}
@@ -300,7 +235,7 @@ watch(userMenuOpen, (open) => {
           </div>
           <div class="header-user-stat header-user-stat--right">
             <div class="header-user-stat-label">
-              {{ t('dashboard.plan', 'Plan') }}
+              {{ tSafe('dashboard.plan', 'Plan') }}
             </div>
             <div class="header-user-stat-value">
               {{ planLabel }}
@@ -313,6 +248,7 @@ watch(userMenuOpen, (open) => {
             v-model="languageMenuOpen"
             placement="right"
             :offset="6"
+            :duration="menuMotionDuration"
             :min-width="160"
             :reference-full-width="true"
             :panel-padding="0"
@@ -326,7 +262,7 @@ watch(userMenuOpen, (open) => {
               <TxDropdownItem class="header-user-submenu-trigger">
                 <span class="header-user-item">
                   <span class="i-carbon-language header-user-item-icon" />
-                  <span>{{ t('auth.menu.language', 'Language') }}</span>
+                  <span>{{ tSafe('auth.menu.language', 'Language') }}</span>
                 </span>
                 <template #right>
                   <span class="header-user-right">
@@ -337,7 +273,7 @@ watch(userMenuOpen, (open) => {
               </TxDropdownItem>
             </template>
             <div
-              class="header-user-submenu-panel header-user-vars fake-background isolate"
+              class="header-user-submenu-panel header-user-vars isolate"
               @mouseenter="handleLanguagePanelHover(true)"
               @mouseleave="handleLanguagePanelHover(false)"
             >
@@ -354,7 +290,7 @@ watch(userMenuOpen, (open) => {
         <TxDropdownItem class="header-user-theme-item">
           <span class="header-user-item">
             <span class="i-carbon-moon header-user-item-icon" />
-            <span>{{ t('auth.menu.theme', 'Theme') }}</span>
+            <span>{{ tSafe('auth.menu.theme', 'Theme') }}</span>
           </span>
           <template #right>
             <span class="header-user-right" @pointerdown.capture="captureThemeEvent">
@@ -375,13 +311,13 @@ watch(userMenuOpen, (open) => {
         <TxDropdownItem @select="handleMenuNavigate('/docs')">
           <span class="header-user-item">
             <span class="i-carbon-help header-user-item-icon" />
-            <span>{{ t('nav.support', 'Support') }}</span>
+            <span>{{ tSafe('nav.support', 'Support') }}</span>
           </span>
         </TxDropdownItem>
         <TxDropdownItem danger @select="handleSignOut">
           <span class="header-user-item">
             <span class="i-carbon-logout header-user-item-icon" />
-            <span>{{ t('nav.logout', 'Log out') }}</span>
+            <span>{{ tSafe('nav.logout', 'Log out') }}</span>
           </span>
         </TxDropdownItem>
       </div>
@@ -391,7 +327,12 @@ watch(userMenuOpen, (open) => {
 
 <style scoped>
 .header-user-vars {
-  --header-user-bg: color-mix(in srgb, var(--tx-bg-color-overlay, #0b0b10) 84%, transparent);
+  --header-user-bg: color-mix(in srgb, var(--tx-bg-color-overlay, #0b0b10) 90%, transparent);
+  --tx-card-fake-background: color-mix(
+    in srgb,
+    var(--tx-bg-color-overlay, #0b0b10) 78%,
+    color-mix(in srgb, var(--tx-text-color-primary, #ffffff) 22%, transparent)
+  );
   --header-user-border: color-mix(in srgb, var(--tx-border-color-light, rgba(255, 255, 255, 0.2)) 65%, transparent);
   --header-user-border-strong: color-mix(in srgb, var(--tx-border-color-light, rgba(255, 255, 255, 0.32)) 80%, transparent);
   --header-user-text: color-mix(in srgb, var(--tx-text-color-primary, #ffffff) 92%, transparent);
@@ -414,18 +355,13 @@ watch(userMenuOpen, (open) => {
   --tx-index-popper: 2300;
 }
 
-:global(.tx-base-anchor:has(.header-user-panel)) {
-  --tx-ba-max-height: none !important;
+:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__outline),
+:global(.tx-base-anchor:has(.header-user-submenu-panel) .tx-base-anchor__outline) {
+  display: none !important;
 }
 
-:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__content),
 :global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card) {
-  max-height: none !important;
-}
-
-:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card),
-:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__clip) {
-  overflow: visible !important;
+  overflow-x: hidden !important;
 }
 
 :global(.tx-tooltip:has(.header-user-panel)) {
@@ -484,6 +420,7 @@ watch(userMenuOpen, (open) => {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
+  box-sizing: border-box;
   min-width: 280px;
   margin: 0;
   background: transparent;
@@ -491,10 +428,7 @@ watch(userMenuOpen, (open) => {
   border-radius: 18px;
   box-shadow: none;
   color: var(--header-user-text);
-  overflow: visible;
-  --fake-color: var(--header-user-bg);
-  --fake-opacity: 0.6;
-  --fake-radius: 18px;
+  overflow: hidden;
 }
 
 .header-user-profile {
@@ -610,14 +544,12 @@ watch(userMenuOpen, (open) => {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
+  box-sizing: border-box;
   min-width: 150px;
   border-radius: 14px;
   background: transparent;
   border: 1px solid var(--header-user-border);
   box-shadow: none;
-  --fake-color: var(--header-user-bg);
-  --fake-opacity: 0.6;
-  --fake-radius: 14px;
 }
 
 .header-user-submenu-item {
