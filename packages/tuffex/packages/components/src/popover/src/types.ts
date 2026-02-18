@@ -22,6 +22,8 @@ export interface PopoverProps {
   width?: number
   minWidth?: number
   maxWidth?: number
+  maxHeight?: number
+  unlimitedHeight?: boolean
   referenceFullWidth?: boolean
 
   showArrow?: boolean
@@ -30,6 +32,7 @@ export interface PopoverProps {
   trigger?: 'click' | 'hover'
   openDelay?: number
   closeDelay?: number
+  duration?: number
   keepAliveContent?: boolean
   toggleOnReferenceClick?: boolean
 

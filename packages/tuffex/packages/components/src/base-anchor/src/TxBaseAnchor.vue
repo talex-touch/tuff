@@ -18,6 +18,8 @@ const props = withDefaults(defineProps<BaseAnchorProps>(), {
   width: 0,
   minWidth: 0,
   maxWidth: 360,
+  maxHeight: 420,
+  unlimitedHeight: false,
   matchReferenceWidth: false,
   duration: 432,
   ease: 'back.out(2)',
@@ -43,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const internalOpen = ref(false)
+const isUnlimitedHeight = computed(() => props.unlimitedHeight || props.maxHeight <= 0)
 
 const open = computed({
   get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
@@ -101,7 +104,6 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
       apply({ rects, availableHeight, elements }) {
         const baseW = rects.reference.width
         const minW = Math.max(0, props.minWidth ?? 0)
-        const maxH = Math.min(availableHeight, 420)
 
         const style = elements.floating.style
         style.width = ''
@@ -118,6 +120,11 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
         }
 
         style.maxWidth = `${props.maxWidth}px`
+        if (isUnlimitedHeight.value) {
+          elements.floating.style.setProperty('--tx-ba-max-height', 'none')
+          return
+        }
+        const maxH = Math.max(0, Math.min(availableHeight, props.maxHeight))
         elements.floating.style.setProperty('--tx-ba-max-height', `${maxH}px`)
       },
     }),
@@ -129,12 +136,20 @@ const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top
 
 const panelCardProps = computed<Partial<TxCardProps>>(() => {
   const manualSurfaceMoving = !!props.panelCard?.surfaceMoving
-  const shouldFallbackSurface = props.surfaceMotionAdaptation === 'off'
+  const baseSurfaceMoving = props.surfaceMotionAdaptation === 'off'
     ? false
     : props.surfaceMotionAdaptation === 'manual'
       ? manualSurfaceMoving
       : panelSurfaceMoving.value
+  const shouldFallbackSurface = props.panelBackground !== 'refraction' && baseSurfaceMoving
+  const refractionSurfaceDefaults = props.panelBackground === 'refraction'
+    ? {
+        glassOverlayOpacity: 0.15,
+        maskOpacity: 0.78,
+      }
+    : undefined
   return {
+    ...(refractionSurfaceDefaults ?? {}),
     ...(props.panelCard ?? {}),
     variant: props.panelVariant,
     background: props.panelBackground,
@@ -407,6 +422,25 @@ function animateOpen(currentRunId: number) {
   const clip = clipRef.value
   const content = contentRef.value
   const arrowEl = arrowRef.value
+  if (isUnlimitedHeight.value) {
+    clearTimeline()
+    if (!clip || !content) {
+      mounted.value = true
+      setPanelSurfaceMoving(false)
+      return
+    }
+    clip.style.visibility = 'visible'
+    clip.style.clipPath = 'none'
+    clip.style.overflow = 'visible'
+    clip.style.willChange = 'auto'
+    gsap.set(content, { clearProps: 'transform' })
+    content.style.willChange = 'auto'
+    if (arrowEl)
+      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+    setPanelSurfaceMoving(false)
+    tl = null
+    return
+  }
   if (!clip || !content || !hasWindow()) {
     mounted.value = true
     setPanelSurfaceMoving(false)
@@ -512,6 +546,27 @@ function animateClose(currentRunId: number) {
   const clip = clipRef.value
   const content = contentRef.value
   const arrowEl = arrowRef.value
+  if (isUnlimitedHeight.value) {
+    clearTimeline()
+    if (!clip || !content) {
+      mounted.value = false
+      setPanelSurfaceMoving(false)
+      return
+    }
+    clip.style.visibility = 'hidden'
+    clip.style.clipPath = 'none'
+    clip.style.overflow = 'hidden'
+    clip.style.willChange = 'auto'
+    gsap.set(content, { clearProps: 'transform' })
+    content.style.willChange = 'auto'
+    if (arrowEl)
+      gsap.set(arrowEl, { clearProps: 'transform,opacity,willChange' })
+    if (!props.keepAliveContent)
+      mounted.value = false
+    setPanelSurfaceMoving(false)
+    tl = null
+    return
+  }
   if (!clip || !content || !hasWindow()) {
     mounted.value = false
     setPanelSurfaceMoving(false)
@@ -767,8 +822,8 @@ onBeforeUnmount(() => {
       v-if="mounted || open"
       ref="floatingRef"
       class="tx-base-anchor"
-      :class="{ 'is-open': open }"
-      :style="[floatingStyles, { zIndex }]"
+      :class="{ 'is-open': open, 'is-unlimited-height': isUnlimitedHeight }"
+      :style="[floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
     >
       <span
         v-if="props.showArrow"
@@ -942,5 +997,10 @@ onBeforeUnmount(() => {
   height: 100%;
   pointer-events: none;
   z-index: 3;
+}
+
+.tx-base-anchor.is-unlimited-height .tx-base-anchor__content,
+.tx-base-anchor.is-unlimited-height .tx-base-anchor__card {
+  max-height: none;
 }
 </style>

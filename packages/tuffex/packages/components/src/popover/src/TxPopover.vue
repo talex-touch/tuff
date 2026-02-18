@@ -13,12 +13,15 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   width: 0,
   minWidth: 0,
   maxWidth: 360,
+  maxHeight: 420,
+  unlimitedHeight: false,
   referenceFullWidth: false,
   showArrow: true,
   arrowSize: 12,
   trigger: 'click',
   openDelay: 120,
   closeDelay: 100,
+  duration: 180,
   keepAliveContent: true,
   toggleOnReferenceClick: undefined,
   panelVariant: 'solid',
@@ -71,7 +74,7 @@ const anchorCloseOnClickOutside = computed(() => {
   return props.closeOnClickOutside
 })
 
-const anchorDuration = computed(() => 180)
+const anchorDuration = computed(() => Math.max(0, props.duration))
 const anchorEase = computed(() => 'power2.out')
 
 const anchorToggleOnReferenceClick = computed(() => {
@@ -87,6 +90,8 @@ const resolvedAnchorProps = computed<Partial<TooltipAnchorProps>>(() => {
     width: props.width,
     minWidth: props.minWidth,
     maxWidth: props.maxWidth,
+    maxHeight: props.maxHeight,
+    unlimitedHeight: props.unlimitedHeight,
     matchReferenceWidth: props.width <= 0,
     duration: anchorDuration.value,
     ease: anchorEase.value,

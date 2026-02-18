@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import { useLocalePreference } from '~/composables/useLocalePreference'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { useTheme } from '~/composables/useTheme'
@@ -13,11 +14,16 @@ const { color, toggleDark } = useTheme()
 
 const { plan } = useSubscriptionData()
 const { data: creditsSummary } = useFetch<any>('/api/credits/summary')
+const userMenuPanelCard = {
+  glassOverlayOpacity: 0.12,
+  maskOpacity: 0.82,
+} as const
 
 const userMenuOpen = ref(false)
 const languageMenuOpen = ref(false)
 const themeToggleEvent = ref<MouseEvent | null>(null)
 const themeToggleAt = ref(0)
+const userPanelRef = ref<HTMLElement | null>(null)
 let userMenuTimer: ReturnType<typeof setTimeout> | null = null
 let languageMenuTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -121,6 +127,55 @@ function setUserMenuHover(active: boolean) {
   }, 160)
 }
 
+function syncUserMenuPopupLayout() {
+  if (!hasWindow())
+    return
+
+  const panel = userPanelRef.value
+  if (!panel)
+    return
+
+  const tooltip = panel.closest('.tx-tooltip') as HTMLElement | null
+  if (tooltip) {
+    tooltip.style.setProperty('--tx-tooltip-max-height', 'none', 'important')
+    tooltip.style.setProperty('max-height', 'none', 'important')
+    tooltip.style.setProperty('overflow', 'visible', 'important')
+
+    const tooltipContent = tooltip.querySelector<HTMLElement>('.tx-tooltip__content')
+    if (tooltipContent) {
+      tooltipContent.style.setProperty('max-height', 'none', 'important')
+      tooltipContent.style.setProperty('overflow', 'visible', 'important')
+    }
+  }
+
+  const anchor = panel.closest('.tx-base-anchor') as HTMLElement | null
+  if (!anchor)
+    return
+
+  anchor.style.setProperty('--tx-ba-max-height', 'none', 'important')
+  const clip = anchor.querySelector<HTMLElement>('.tx-base-anchor__clip')
+  const card = anchor.querySelector<HTMLElement>('.tx-base-anchor__card')
+  if (clip)
+    clip.style.setProperty('overflow', 'visible', 'important')
+  if (card) {
+    card.style.setProperty('max-height', 'none', 'important')
+    card.style.setProperty('overflow', 'visible', 'important')
+  }
+}
+
+function queueUserMenuPopupLayoutSync(frames = 8) {
+  if (!hasWindow())
+    return
+  let remain = Math.max(1, frames)
+  const run = () => {
+    syncUserMenuPopupLayout()
+    remain -= 1
+    if (remain > 0)
+      window.requestAnimationFrame(run)
+  }
+  window.requestAnimationFrame(run)
+}
+
 function setLanguageHover(active: boolean) {
   if (languageMenuTimer) {
     clearTimeout(languageMenuTimer)
@@ -173,6 +228,14 @@ onBeforeUnmount(() => {
     languageMenuTimer = null
   }
 })
+
+watch(userMenuOpen, (open) => {
+  if (!open)
+    return
+  nextTick(() => {
+    queueUserMenuPopupLayoutSync()
+  })
+})
 </script>
 
 <template>
@@ -181,11 +244,15 @@ onBeforeUnmount(() => {
       :model-value="userMenuOpen"
       placement="bottom-end"
       :offset="10"
+      :duration="0"
       :min-width="280"
+      :max-height="0"
+      :unlimited-height="true"
       :panel-padding="0"
       :close-on-select="false"
+      :panel-card="userMenuPanelCard"
       panel-variant="plain"
-      panel-background="glass"
+      panel-background="refraction"
       panel-shadow="medium"
     >
       <template #trigger>
@@ -200,6 +267,7 @@ onBeforeUnmount(() => {
       </template>
 
       <div
+        ref="userPanelRef"
         class="header-user-panel header-user-vars fake-background isolate"
         @mouseenter="setUserMenuHover(true)"
         @mouseleave="setUserMenuHover(false)"
@@ -250,7 +318,7 @@ onBeforeUnmount(() => {
             :panel-padding="0"
             :panel-radius="14"
             panel-variant="plain"
-            panel-background="glass"
+            panel-background="refraction"
             panel-shadow="soft"
             :close-on-click-outside="false"
           >
@@ -344,6 +412,31 @@ onBeforeUnmount(() => {
 
 :global(.tx-popover:has(.header-user-submenu-panel)) {
   --tx-index-popper: 2300;
+}
+
+:global(.tx-base-anchor:has(.header-user-panel)) {
+  --tx-ba-max-height: none !important;
+}
+
+:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__content),
+:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card) {
+  max-height: none !important;
+}
+
+:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__card),
+:global(.tx-base-anchor:has(.header-user-panel) .tx-base-anchor__clip) {
+  overflow: visible !important;
+}
+
+:global(.tx-tooltip:has(.header-user-panel)) {
+  --tx-tooltip-max-height: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+:global(.tx-tooltip:has(.header-user-panel) .tx-tooltip__content) {
+  max-height: none !important;
+  overflow: visible !important;
 }
 
 .header-user-wrapper {
