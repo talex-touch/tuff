@@ -12,12 +12,15 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   width: 0,
   minWidth: 0,
   maxWidth: 360,
+  maxHeight: 420,
+  unlimitedHeight: false,
   referenceFullWidth: false,
   showArrow: true,
   arrowSize: 12,
   trigger: 'click',
   openDelay: 120,
   closeDelay: 100,
+  duration: 180,
   keepAliveContent: true,
   panelVariant: 'solid',
   panelBackground: 'refraction',
@@ -121,7 +124,7 @@ const anchorCloseOnClickOutside = computed(() => {
   return props.closeOnClickOutside
 })
 
-const anchorDuration = computed(() => 180)
+const anchorDuration = computed(() => Math.max(0, props.duration))
 const anchorEase = computed(() => 'power2.out')
 
 const anchorToggleOnReferenceClick = computed(() => {
@@ -154,6 +157,8 @@ onBeforeUnmount(() => {
     :width="props.width"
     :min-width="props.minWidth"
     :max-width="props.maxWidth"
+    :max-height="props.maxHeight"
+    :unlimited-height="props.unlimitedHeight"
     :match-reference-width="props.width <= 0"
     :duration="anchorDuration"
     :ease="anchorEase"

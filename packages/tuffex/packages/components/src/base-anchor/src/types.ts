@@ -35,6 +35,8 @@ export interface BaseAnchorProps {
   width?: number
   minWidth?: number
   maxWidth?: number
+  maxHeight?: number
+  unlimitedHeight?: boolean
   matchReferenceWidth?: boolean
 
   // animation
