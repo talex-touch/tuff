@@ -4,6 +4,19 @@
 
 ## 2026-02-20
 
+### CI Windows 构建命令执行修复
+
+**变更类型**: 工具链修复 / CI 稳定性
+
+**描述**: 修复 Windows Runner 上 `tuffex` build 触发的 `spawn EINVAL`，改为通过 `cmd.exe` 执行构建命令，确保 Build and Release / Release Core Assets 的 Windows 阶段可稳定完成。
+
+**主要变更**:
+1. **命令执行修复**：Windows 下使用 `cmd.exe /d /s /c` 调用构建命令。
+2. **参数安全处理**：统一命令行转义与拼接，保持非 Windows 行为不变。
+
+**修改文件**:
+- `packages/tuffex/packages/script/build/run.ts`
+
 ### Nexus 头像入口补充控制台跳转
 
 **变更类型**: 体验修复 / 导航

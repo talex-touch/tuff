@@ -7,7 +7,8 @@ import {
 } from '../../../../plugin/providers/scientific-constants'
 import { BasePreviewAbility } from '../preview-ability'
 
-const CONSTANT_KEYWORDS = /(constant|常量|gravity|光速|普朗克|玻尔兹曼|阿伏伽德罗|π)/i
+const CONSTANT_KEYWORDS =
+  /(constant|常量|gravity|光速|普朗克|玻尔兹曼|阿伏伽德罗|π|\bpi\b|planck|boltzmann|avogadro|faraday|圆周率|自然常数|元电荷|气体常数|重力)/i
 
 function formatValue(value: string): { formatted: string; scientific?: string } {
   const scientificMatch = /^-?\d+(\.\d+)?e[+-]?\d+$/i.test(value)

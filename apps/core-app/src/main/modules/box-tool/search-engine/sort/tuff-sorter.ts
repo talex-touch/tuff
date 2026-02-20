@@ -15,7 +15,12 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
 
 function getWeight(item: TuffItem): number {
   const kind = item.kind || 'unknown'
-  return DEFAULT_WEIGHTS[kind] || 0
+  const baseWeight = DEFAULT_WEIGHTS[kind] || 0
+
+  // Feature manifest priority can boost ranking above the default kind weight.
+  // This allows high-priority features (e.g., intelligence) to rank above apps.
+  const metaPriority = Number(item.meta?.priority) || 0
+  return baseWeight + metaPriority
 }
 
 /**

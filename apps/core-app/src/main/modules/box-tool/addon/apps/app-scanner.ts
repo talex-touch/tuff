@@ -183,15 +183,22 @@ export class AppScanner {
 
   /**
    * Runs an `mdls` update scan on macOS to refresh application metadata.
-   * @param {ScannedAppInfo[]} apps - The list of applications to scan.
-   * @returns {Promise<{updatedApps: ScannedAppInfo[], updatedCount: number, deletedApps: ScannedAppInfo[]}>} A promise that resolves to the updated apps, count, and deleted apps.
+   * @param {ScannedAppInfo[]} apps - Apps that need mdls scanning (missing displayName).
+   * @param {ScannedAppInfo[]} skipMdlsApps - Apps that already have displayName (only need existence check).
+   * @returns {Promise<{updatedApps: ScannedAppInfo[], updatedCount: number, deletedApps: ScannedAppInfo[]}>}
    */
-  async runMdlsUpdateScan(apps: ScannedAppInfo[]): Promise<{
+  async runMdlsUpdateScan(
+    apps: ScannedAppInfo[],
+    skipMdlsApps: ScannedAppInfo[] = []
+  ): Promise<{
     updatedApps: ScannedAppInfo[]
     updatedCount: number
     deletedApps: ScannedAppInfo[]
   }> {
-    const disposeScan = enterPerfContext('AppScanner.mdlsUpdate', { appCount: apps.length })
+    const disposeScan = enterPerfContext('AppScanner.mdlsUpdate', {
+      appCount: apps.length,
+      skipCount: skipMdlsApps.length
+    })
     try {
       if (process.platform !== 'darwin') {
         appScannerLog.info(
@@ -202,7 +209,8 @@ export class AppScanner {
 
       appScannerLog.info(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
 
-      if (apps.length === 0) {
+      const totalApps = apps.length + skipMdlsApps.length
+      if (totalApps === 0) {
         appScannerLog.info(
           formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info)
         )
@@ -212,7 +220,7 @@ export class AppScanner {
       appScannerLog.info(
         formatLog(
           'AppScanner',
-          `Running mdls scan for ${chalk.cyan(apps.length)} apps`,
+          `Running mdls scan for ${chalk.cyan(apps.length)} apps (${chalk.green(skipMdlsApps.length)} skipped with existing displayName)`,
           LogStyle.process
         )
       )
@@ -222,6 +230,42 @@ export class AppScanner {
       const updatedApps: ScannedAppInfo[] = []
       const deletedApps: ScannedAppInfo[] = []
       const startTime = Date.now()
+
+      // Check existence for skip-mdls apps (they already have displayName, just verify they still exist)
+      if (skipMdlsApps.length > 0) {
+        for (let i = 0; i < skipMdlsApps.length; i++) {
+          const app = skipMdlsApps[i]
+          try {
+            await fs.access(app.path)
+          } catch {
+            appScannerLog.warn(
+              formatLog(
+                'AppScanner',
+                `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
+                LogStyle.warning
+              )
+            )
+            deletedApps.push(app)
+          }
+          if ((i + 1) % 20 === 0) {
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
+        }
+      }
+
+      // If no apps need mdls scanning, we're done early
+      if (apps.length === 0) {
+        appScannerLog.info(
+          formatLog(
+            'AppScanner',
+            `mdls update scan finished (no mdls needed). Found ${chalk.yellow(
+              deletedApps.length
+            )} missing apps in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
+            LogStyle.success
+          )
+        )
+        return { updatedApps, updatedCount: 0, deletedApps }
+      }
 
       // 先过滤掉不存在的应用（异步 + 定期 yield 避免阻塞事件循环）
       const existingApps: typeof apps = []
@@ -353,7 +397,7 @@ export class AppScanner {
             updatedCount
           )} app display names, found ${chalk.yellow(
             deletedApps.length
-          )} missing apps in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
+          )} missing apps, scanned ${chalk.cyan(existingApps.length)} (skipped ${chalk.green(skipMdlsApps.length)}) in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
           LogStyle.success
         )
       )

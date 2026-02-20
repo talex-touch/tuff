@@ -21,6 +21,7 @@ import { desc, eq } from 'drizzle-orm'
 import { shell } from 'electron'
 import { downloadChunks, downloadHistory, downloadTasks } from '../../db/schema'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
+import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
 import { ChunkManager } from './chunk-manager'
@@ -159,8 +160,11 @@ export class DownloadCenterModule extends BaseModule {
 
     const t3 = performance.now()
 
-    // 清理孤立的临时文件
-    await this.cleanupTempFiles()
+    // Don't await cleanupTempFiles during init — defer to avoid blocking
+    // module loading pipeline. Temp cleanup is non-critical and can run later.
+    setTimeout(() => {
+      void this.cleanupTempFiles()
+    }, 30_000)
 
     const t4 = performance.now()
 
@@ -581,6 +585,7 @@ export class DownloadCenterModule extends BaseModule {
 
   // 清理临时文件
   async cleanupTempFiles(): Promise<void> {
+    const dispose = enterPerfContext('DownloadCenter.cleanupTempFiles')
     const tempDir = this.config.storage.tempDir
 
     try {
@@ -602,7 +607,8 @@ export class DownloadCenterModule extends BaseModule {
       let cleanedCount = 0
       let cleanedSize = 0
 
-      for (const entry of entries) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]
         if (entry.isDirectory()) {
           if (!activeTaskIds.has(entry.name)) {
             const dirPath = path.join(tempDir, entry.name)
@@ -630,6 +636,11 @@ export class DownloadCenterModule extends BaseModule {
             console.error(`Failed to cleanup temp file ${filePath}:`, error)
           }
         }
+
+        // 每 10 个文件让出事件循环
+        if ((i + 1) % 10 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
       }
 
       if (cleanedCount > 0) {
@@ -639,6 +650,8 @@ export class DownloadCenterModule extends BaseModule {
       }
     } catch (error) {
       console.error('Failed to cleanup temp files:', error)
+    } finally {
+      dispose()
     }
   }
 

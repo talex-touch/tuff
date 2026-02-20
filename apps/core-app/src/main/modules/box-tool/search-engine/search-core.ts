@@ -1704,14 +1704,23 @@ export class SearchEngineCore
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, async () => {
-      // Load providers sequentially to avoid database lock contention
-      // 串行加载 providers 以避免数据库锁竞争
-      searchEngineLog.debug(`Loading ${instance.providersToLoad.length} providers sequentially...`)
-      for (const provider of instance.providersToLoad) {
-        await instance.loadProvider(provider)
+      const dispose = enterPerfContext('SearchEngine.loadProviders')
+      try {
+        // Load providers sequentially to avoid database lock contention
+        // 串行加载 providers 以避免数据库锁竞争
+        searchEngineLog.debug(
+          `Loading ${instance.providersToLoad.length} providers sequentially...`
+        )
+        for (const provider of instance.providersToLoad) {
+          await instance.loadProvider(provider)
+          // 每加载一个 provider 后让出事件循环
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+        instance.providersToLoad = []
+        searchEngineLog.info('All providers loaded successfully')
+      } finally {
+        dispose()
       }
-      instance.providersToLoad = []
-      searchEngineLog.info('All providers loaded successfully')
 
       // 启动汇总服务
       instance.usageSummaryService?.start()

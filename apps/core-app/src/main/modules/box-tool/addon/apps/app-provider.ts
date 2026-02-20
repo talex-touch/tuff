@@ -33,7 +33,7 @@ import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
-import { shell } from 'electron'
+import { app, shell } from 'electron'
 import {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
@@ -1688,12 +1688,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (is.dev) {
-      logApp('Deferring dev mode mdls scan by 3s to avoid startup contention', LogStyle.info)
+      logApp('Deferring dev mode mdls scan by 15s to avoid startup contention', LogStyle.info)
       setTimeout(() => {
         this._runMdlsUpdateScan().then(() => {
           logApp('Dev mode mdls scan complete', LogStyle.success)
         })
-      }, 3000)
+      }, 15_000)
     }
 
     logApp('Registering mdls update polling service (10 min interval)', LogStyle.info)
@@ -1788,6 +1788,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await this._setConfigTimestamp('app_provider_last_mdls_scan', timestamp)
   }
 
+  private async _getLastMdlsLocale(): Promise<string | null> {
+    if (!this.dbUtils) return null
+    const db = this.dbUtils.getDb()
+    const result = await db
+      .select({ value: configSchema.value })
+      .from(configSchema)
+      .where(eq(configSchema.key, 'app_provider_last_mdls_locale'))
+      .limit(1)
+    return result[0]?.value ?? null
+  }
+
+  private async _setLastMdlsLocale(locale: string): Promise<void> {
+    if (!this.dbUtils) return
+    const db = this.dbUtils.getDb()
+    await db
+      .insert(configSchema)
+      .values({ key: 'app_provider_last_mdls_locale', value: locale })
+      .onConflictDoUpdate({
+        target: configSchema.key,
+        set: { value: locale }
+      })
+  }
+
   private async _getKnownMissingIconApps(): Promise<Set<string>> {
     if (!this.dbUtils) return new Set()
 
@@ -1871,8 +1894,40 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
       )
 
-      const { updatedApps, updatedCount, deletedApps } =
-        await appScanner.runMdlsUpdateScan(scannedApps)
+      // Detect system locale change — if the user switched language, mdls will
+      // return new displayNames so we must force a full re-scan.
+      const currentLocale = app.getLocale()
+      const lastLocale = await this._getLastMdlsLocale()
+      const localeChanged = lastLocale !== null && lastLocale !== currentLocale
+
+      let appsNeedingMdls: typeof scannedApps
+      let appsWithDisplayName: typeof scannedApps
+
+      if (localeChanged) {
+        // Locale changed: force full mdls scan for all apps
+        logApp(
+          `System locale changed (${chalk.yellow(lastLocale)} → ${chalk.green(currentLocale)}), forcing full mdls rescan`,
+          LogStyle.info
+        )
+        appsNeedingMdls = scannedApps
+        appsWithDisplayName = []
+      } else {
+        // Normal: only scan apps that are missing a displayName — apps with an
+        // existing displayName are unlikely to change and can be skipped to
+        // avoid spawning expensive mdls processes (5.7s → ~0.1s).
+        appsNeedingMdls = scannedApps.filter((app) => !app.displayName)
+        appsWithDisplayName = scannedApps.filter((app) => app.displayName)
+      }
+
+      logApp(
+        `mdls scan: ${chalk.cyan(appsNeedingMdls.length)} apps need mdls, ${chalk.green(appsWithDisplayName.length)} skipped${localeChanged ? ' (locale changed, full rescan)' : ''}`,
+        LogStyle.info
+      )
+
+      const { updatedApps, updatedCount, deletedApps } = await appScanner.runMdlsUpdateScan(
+        appsNeedingMdls,
+        appsWithDisplayName
+      )
       const t3 = performance.now()
 
       // 处理更新的 app
@@ -1942,9 +1997,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const t5 = performance.now()
 
       await this._setLastScanTime(Date.now())
+      await this._setLastMdlsLocale(currentLocale)
 
       logApp(
-        `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
+        `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms(${appsNeedingMdls.length}mdls+${appsWithDisplayName.length}skip) dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
         LogStyle.info
       )
     }, 'AppProvider.mdlsUpdateScan')

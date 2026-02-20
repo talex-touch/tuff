@@ -30,7 +30,7 @@
       },
       "keywords": ["ai", "@ai", "/ai", "智能", "问答", "chat", "助手"],
       "push": true,
-      "priority": 8,
+      "priority": 200,
       "acceptedInputTypes": ["text"],
       "platform": {
         "win32": true,
