@@ -838,6 +838,16 @@ export class TouchPlugin implements ITouchPlugin {
 
     this._runtimeStats.startedAt = 0
 
+    // Clean up any registered recommendation providers
+    try {
+      const { SearchEngineCore } =
+        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
+      const engine = SearchEngineCore.getInstance().getRecommendationEngine()
+      engine?.unregisterPluginProviders(this.name)
+    } catch {
+      // SearchEngineCore may not be initialized; safe to ignore
+    }
+
     this.status = PluginStatus.DISABLED
     this.logger.debug('Plugin disable lifecycle completed.')
     this.logger.info('[Lifecycle] disabled')
@@ -1011,6 +1021,34 @@ export class TouchPlugin implements ITouchPlugin {
   private async resolvePluginManager() {
     const { pluginModule } = await import('./plugin-module')
     return pluginModule.pluginManager
+  }
+
+  private createRecommendSDK(pluginName: string) {
+    const getEngine = () => {
+      const { SearchEngineCore } =
+        require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
+      return SearchEngineCore.getInstance().getRecommendationEngine()
+    }
+
+    return {
+      registerProvider: (
+        provider: import('@talex-touch/utils/core-box').RecommendProvider
+      ): (() => void) => {
+        const engine = getEngine()
+        if (!engine) {
+          pluginSystemLog.warn(
+            `[Plugin ${pluginName}] RecommendationEngine not available, cannot register provider`
+          )
+          return () => {}
+        }
+        return engine.registerPluginProvider(pluginName, provider)
+      },
+      unregisterProvider: (providerId: string): boolean => {
+        const engine = getEngine()
+        if (!engine) return false
+        return engine.unregisterPluginProvider(providerId)
+      }
+    }
   }
 
   private createPluginsAPI(pluginName: string) {
@@ -1383,6 +1421,8 @@ export class TouchPlugin implements ITouchPlugin {
 
     const powerSDK = this.createPowerSDK(pluginName, touchChannel)
 
+    const recommendSDK = this.createRecommendSDK(pluginName)
+
     const featuresManager = {
       /**
        * Dynamically adds a feature to the plugin
@@ -1557,7 +1597,8 @@ export class TouchPlugin implements ITouchPlugin {
       box: createBoxSDK(boxChannel),
       divisionBox: createDivisionBoxSDK(channelBridge),
       meta: createMetaSDK(channelBridge, this.name),
-      power: powerSDK
+      power: powerSDK,
+      recommend: recommendSDK
     }
 
     return {
@@ -1575,6 +1616,7 @@ export class TouchPlugin implements ITouchPlugin {
       feature: createFeatureSDK(boxItems, channelBridge),
       meta: createMetaSDK(channelBridge, this.name),
       power: powerSDK,
+      recommend: recommendSDK,
       // 新的 BoxItemSDK API
       boxItems,
       // 废弃的 API - 直接抛出错误

@@ -51,8 +51,45 @@ export interface ScoredItem {
   sourceId: string
   itemId: string
   score: number
-  source: 'frequent' | 'time-based' | 'recent' | 'trending' | 'context'
+  source: 'frequent' | 'time-based' | 'recent' | 'trending' | 'context' | 'plugin'
   reason?: string
+}
+
+/**
+ * Candidate item returned by a plugin recommend provider.
+ * Unlike internal candidates, these do not require usageStats.
+ */
+export interface PluginRecommendCandidate {
+  /** Provider ID (auto-filled from provider.id) */
+  providerId?: string
+  /** Unique item ID */
+  id: string
+  /** Display title */
+  title: string
+  /** Subtitle / description */
+  subtitle?: string
+  /** Icon configuration */
+  icon?: { type: string; value: string }
+  /** Priority 0-100, higher = more prominent */
+  priority?: number
+  /** Action key passed back to the plugin */
+  action: string
+  /** Additional data */
+  data?: Record<string, unknown>
+}
+
+/**
+ * Provider interface for plugins to supply custom recommendations.
+ */
+export interface RecommendProvider {
+  /** Unique provider ID */
+  id: string
+  /** Display name */
+  name: string
+  /** Whether this provider can supply recommendations for the given context */
+  canProvide(context: ContextSignal): boolean
+  /** Return recommendation candidates */
+  getCandidates(context: ContextSignal): PluginRecommendCandidate[] | Promise<PluginRecommendCandidate[]>
 }
 
 /**

@@ -27,6 +27,10 @@ export class ItemRebuilder {
       this.rebuildClipboardItems(grouped.get('clipboard-history') || [])
     ])
 
+    // Handle plugin-recommend and builtin candidates (synchronous, no DB needed)
+    const pluginRecommendItems = this.rebuildPluginRecommendItems(scoredItems)
+    results.push(pluginRecommendItems)
+
     const allItems = results.flat()
     return this.mergeAndEnrichItems(allItems, scoredItems)
   }
@@ -312,6 +316,79 @@ export class ItemRebuilder {
     }
   }
 
+  /**
+   * 重建插件推荐候选项和内置候选项（如剪贴板 URL）
+   */
+  private rebuildPluginRecommendItems(scoredItems: ScoredItem[]): TuffItem[] {
+    const items: TuffItem[] = []
+
+    for (const scored of scoredItems) {
+      if (!scored.pluginCandidate) continue
+
+      const candidate = scored.pluginCandidate
+      const isBuiltinUrl = scored.sourceId === '__builtin_clipboard_url__'
+
+      const tuffItem: TuffItem = {
+        id: candidate.id,
+        source: {
+          id: scored.sourceId,
+          type: isBuiltinUrl ? 'system' : 'plugin',
+          name: isBuiltinUrl ? 'Clipboard URL' : `Plugin: ${candidate.providerId || 'unknown'}`
+        },
+        kind: 'action',
+        render: {
+          mode: 'default',
+          basic: {
+            title: candidate.title,
+            subtitle: candidate.subtitle,
+            icon: candidate.icon
+              ? {
+                  type: candidate.icon.type as 'emoji' | 'url' | 'file' | 'class' | 'builtin',
+                  value: candidate.icon.value
+                }
+              : { type: 'emoji', value: '💡' }
+          }
+        },
+        actions: isBuiltinUrl
+          ? [
+              {
+                id: 'open-url',
+                type: 'execute',
+                label: '打开',
+                shortcut: 'Enter'
+              },
+              {
+                id: 'copy-url',
+                type: 'copy',
+                label: '复制',
+                shortcut: 'CmdOrCtrl+C'
+              }
+            ]
+          : [
+              {
+                id: candidate.action,
+                type: 'execute',
+                label: 'Execute',
+                shortcut: 'Enter'
+              }
+            ],
+        meta: {
+          pluginRecommend: {
+            providerId: candidate.providerId,
+            action: candidate.action,
+            data: candidate.data
+          },
+          _originalItemId: scored.itemId,
+          _originalSourceId: scored.sourceId
+        } as TuffItem['meta']
+      }
+
+      items.push(tuffItem)
+    }
+
+    return items
+  }
+
   private findScoredByPartialMatch(
     item: TuffItem,
     scoredItems: ScoredItem[]
@@ -385,7 +462,8 @@ export class ItemRebuilder {
       'time-based': '🕐 Popular Now',
       recent: '⏰ Recent',
       trending: '📈 Trending',
-      context: '✨ Smart Match'
+      context: '✨ Smart Match',
+      plugin: '🧩 Plugin'
     }
     return labels[scored.source] || '💡 Recommended'
   }
@@ -396,7 +474,8 @@ export class ItemRebuilder {
       'time-based': { text: '推荐', icon: '🕐', variant: 'intelligent' },
       recent: { text: '最近', icon: '⏰', variant: 'recent' },
       trending: { text: '趋势', icon: '📈', variant: 'trending' },
-      context: { text: '智能推荐', icon: '✨', variant: 'intelligent' }
+      context: { text: '智能推荐', icon: '✨', variant: 'intelligent' },
+      plugin: { text: '插件', icon: '🧩', variant: 'plugin' }
     }
     return badges[scored.source] || { text: '推荐', icon: '💡', variant: 'intelligent' }
   }

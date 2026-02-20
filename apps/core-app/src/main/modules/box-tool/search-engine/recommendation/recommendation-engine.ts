@@ -1,4 +1,5 @@
 import type { TuffContainerLayout, TuffItem } from '@talex-touch/utils'
+import type { PluginRecommendCandidate, RecommendProvider } from '@talex-touch/utils/core-box'
 import type { DbUtils } from '../../../../db/utils'
 import type { ParsedItemTimeStats } from '../time-stats-aggregator'
 import type { ContextSignal, TimePattern } from './context-provider'
@@ -22,6 +23,7 @@ const RECOMMENDATION_PERF_SAMPLE_LIMIT = 2000
 const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
+const PLUGIN_PROVIDER_TIMEOUT_MS = 200
 
 function toDayBucket(timestampMs: number): number {
   return Math.floor(timestampMs / DAY_MS)
@@ -47,6 +49,10 @@ export class RecommendationEngine {
   private readonly telemetryTaskId = 'recommendation.telemetry-report'
   private trendBackfillQueue: number[] | null = null
   private trendBackfillCompleted = false
+
+  /** Plugin-registered recommendation providers */
+  private pluginProviders: Map<string, { pluginName: string; provider: RecommendProvider }> =
+    new Map()
 
   constructor(private dbUtils: DbUtils) {
     this.contextProvider = new ContextProvider()
@@ -428,6 +434,57 @@ export class RecommendationEngine {
     this.pollingService.unregister(this.refreshTaskId)
     this.pollingService.unregister(this.trendBackfillTaskId)
     this.pollingService.unregister(this.telemetryTaskId)
+  }
+
+  /**
+   * Register a plugin recommendation provider.
+   * @returns A dispose function to unregister the provider.
+   */
+  public registerPluginProvider(pluginName: string, provider: RecommendProvider): () => void {
+    this.pluginProviders.set(provider.id, { pluginName, provider })
+    this.invalidateCache()
+    console.debug(
+      `[RecommendationEngine] Registered plugin provider: ${provider.id} from ${pluginName}`
+    )
+    return () => this.unregisterPluginProvider(provider.id)
+  }
+
+  /**
+   * Unregister a plugin recommendation provider by its ID.
+   */
+  public unregisterPluginProvider(providerId: string): boolean {
+    const removed = this.pluginProviders.delete(providerId)
+    if (removed) {
+      this.invalidateCache()
+      console.debug(`[RecommendationEngine] Unregistered plugin provider: ${providerId}`)
+    }
+    return removed
+  }
+
+  /**
+   * Unregister all providers from a specific plugin (for plugin unload cleanup).
+   */
+  public unregisterPluginProviders(pluginName: string): void {
+    const toRemove: string[] = []
+    for (const [id, entry] of this.pluginProviders) {
+      if (entry.pluginName === pluginName) {
+        toRemove.push(id)
+      }
+    }
+    for (const id of toRemove) {
+      this.pluginProviders.delete(id)
+    }
+    if (toRemove.length > 0) {
+      this.invalidateCache()
+      console.debug(
+        `[RecommendationEngine] Unregistered ${toRemove.length} providers from plugin: ${pluginName}`
+      )
+    }
+  }
+
+  /** Invalidate in-memory recommendation cache */
+  private invalidateCache(): void {
+    this.recommendationCache = null
   }
 
   /** Generate recommendation list */
@@ -821,6 +878,15 @@ export class RecommendationEngine {
       }))
     )
 
+    // 维度 5: 插件提供者
+    const pluginCandidates = await this.getPluginCandidates(context)
+    console.debug(`[RecommendationEngine] Plugin candidates: ${pluginCandidates.length}`)
+    candidates.push(...pluginCandidates)
+
+    // 维度 6: 内置剪贴板 URL 推荐
+    const clipboardUrlCandidates = this.getClipboardUrlCandidates(context)
+    candidates.push(...clipboardUrlCandidates)
+
     console.debug(`[RecommendationEngine] Total candidates before dedup: ${candidates.length}`)
 
     const totalCandidates = candidates.length
@@ -963,6 +1029,77 @@ export class RecommendationEngine {
       .sort((a, b) => b.score - a.score)
       .slice(0, limit)
       .map(({ item }) => item)
+  }
+
+  /**
+   * 收集插件注册的推荐候选项
+   */
+  private async getPluginCandidates(context: ContextSignal): Promise<CandidateItem[]> {
+    if (this.pluginProviders.size === 0) return []
+
+    const candidates: CandidateItem[] = []
+
+    for (const [_id, { provider }] of this.pluginProviders) {
+      try {
+        if (!provider.canProvide(context)) continue
+
+        const result = await Promise.race([
+          Promise.resolve(provider.getCandidates(context)),
+          new Promise<PluginRecommendCandidate[]>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Provider ${provider.id} timed out`)),
+              PLUGIN_PROVIDER_TIMEOUT_MS
+            )
+          )
+        ])
+
+        for (const candidate of result) {
+          candidates.push({
+            sourceId: `plugin-recommend:${provider.id}`,
+            itemId: candidate.id,
+            sourceType: 'plugin-recommend',
+            usageStats: EMPTY_USAGE_STATS,
+            source: 'plugin',
+            pluginCandidate: {
+              ...candidate,
+              providerId: provider.id
+            }
+          })
+        }
+      } catch (error) {
+        console.warn(`[RecommendationEngine] Plugin provider ${provider.id} error:`, error)
+      }
+    }
+
+    return candidates
+  }
+
+  /**
+   * 内置剪贴板 URL 推荐候选
+   */
+  private getClipboardUrlCandidates(context: ContextSignal): CandidateItem[] {
+    if (!context.clipboard?.meta?.isUrl || !context.clipboard.content) return []
+
+    const url = context.clipboard.content
+
+    return [
+      {
+        sourceId: '__builtin_clipboard_url__',
+        itemId: `clipboard-url-open:${url}`,
+        sourceType: 'action',
+        usageStats: EMPTY_USAGE_STATS,
+        source: 'context',
+        pluginCandidate: {
+          id: `clipboard-url-open:${url}`,
+          title: '打开 URL',
+          subtitle: url.length > 60 ? `${url.substring(0, 57)}...` : url,
+          icon: { type: 'emoji', value: '🔗' },
+          priority: 95,
+          action: 'open-url',
+          data: { url }
+        }
+      }
+    ]
   }
 
   /**
@@ -1117,6 +1254,16 @@ export class RecommendationEngine {
     candidate: CandidateItem,
     context: ContextSignal
   ): Promise<number> {
+    // Plugin candidates: use priority directly, skip usageStats-based calculation
+    if (candidate.source === 'plugin' && candidate.pluginCandidate) {
+      return (candidate.pluginCandidate.priority ?? 50) * 1e5
+    }
+
+    // Built-in clipboard URL candidate: high priority contextual match
+    if (candidate.sourceId === '__builtin_clipboard_url__' && candidate.pluginCandidate) {
+      return (candidate.pluginCandidate.priority ?? 95) * 1e5
+    }
+
     let score = 0
 
     // 1. 上下文匹配度 (最高权重)
@@ -1644,11 +1791,13 @@ interface ItemCandidate {
   sourceType: string
   usageStats: typeof schema.itemUsageStats.$inferSelect
   timeStats?: ParsedItemTimeStats
+  /** Plugin-provided candidate data (for source='plugin' or builtin clipboard URL) */
+  pluginCandidate?: PluginRecommendCandidate
 }
 
 /** 候选项(带来源标记) */
 interface CandidateItem extends ItemCandidate {
-  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context' | 'pinned'
+  source: 'frequent' | 'recent' | 'time-based' | 'trending' | 'context' | 'pinned' | 'plugin'
 }
 
 /**
@@ -1657,3 +1806,18 @@ interface CandidateItem extends ItemCandidate {
 export interface ScoredItem extends CandidateItem {
   score: number
 }
+
+/** Empty usage stats placeholder for plugin/builtin candidates that have no usage history */
+const EMPTY_USAGE_STATS = {
+  sourceId: '',
+  itemId: '',
+  sourceType: '',
+  searchCount: 0,
+  executeCount: 0,
+  cancelCount: 0,
+  lastSearched: null,
+  lastExecuted: null,
+  lastCancelled: null,
+  createdAt: new Date(),
+  updatedAt: new Date()
+} as typeof schema.itemUsageStats.$inferSelect
