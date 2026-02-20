@@ -33,7 +33,7 @@
       "clipboard": "Clipboard",
       "network": "Network",
       "system": "System",
-      "ai": "AI",
+      "intelligence": "Intelligence",
       "storage": "Storage",
       "window": "Window"
     },
@@ -61,10 +61,10 @@
       "notification": { "name": "Notifications", "desc": "Send system notifications" },
       "tray": { "name": "System Tray", "desc": "Access system tray features" }
     },
-    "ai": {
-      "basic": { "name": "Basic AI", "desc": "Use basic AI capabilities" },
-      "advanced": { "name": "Advanced AI", "desc": "Use advanced AI models" },
-      "agents": { "name": "AI Agents", "desc": "Invoke the agents system" }
+    "intelligence": {
+      "basic": { "name": "Basic Intelligence", "desc": "Use basic Intelligence capabilities" },
+      "admin": { "name": "Intelligence Admin", "desc": "Use high-risk Intelligence capabilities" },
+      "agents": { "name": "Intelligence Agents", "desc": "Invoke the agents system" }
     },
     "storage": {
       "plugin": { "name": "Plugin Storage", "desc": "Use plugin private storage" },

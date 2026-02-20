@@ -1,5 +1,5 @@
 import type {
-  AiInvokeResult,
+  IntelligenceInvokeResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
@@ -28,11 +28,11 @@ import {
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import {
   INTERNAL_SYSTEM_OCR_PROVIDER_ID,
-  ensureAiConfigLoaded,
+  ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   getCapabilityPrompt
 } from '../ai/intelligence-config'
-import { ai } from '../ai/intelligence-sdk'
+import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { windowManager } from '../box-tool/core-box/window'
 import { databaseModule } from '../database'
 
@@ -162,12 +162,12 @@ class OcrService {
     this.db = databaseModule.getDb()
 
     this.registerChannels()
-    ensureAiConfigLoaded()
+    ensureIntelligenceConfigLoaded()
 
     pollingService.register(this.pollTaskId, () => this.processQueue().catch(() => {}), {
       interval: PROCESS_INTERVAL_SECONDS,
       unit: 'seconds',
-      runImmediately: true
+      initialDelayMs: 10_000
     })
 
     this.initialized = true
@@ -784,7 +784,7 @@ class OcrService {
       })
     }
 
-    ensureAiConfigLoaded()
+    ensureIntelligenceConfigLoaded()
 
     const capabilityOptions = getCapabilityOptions('vision.ocr')
     const normalizedSource = await this.normalizeSourceForAgent(
@@ -814,10 +814,14 @@ class OcrService {
     )
 
     try {
-      const invocation = await ai.invoke<IntelligenceVisionOcrResult>('vision.ocr', payload, {
-        modelPreference,
-        allowedProviderIds
-      })
+      const invocation = await tuffIntelligence.invoke<IntelligenceVisionOcrResult>(
+        'vision.ocr',
+        payload,
+        {
+          modelPreference,
+          allowedProviderIds
+        }
+      )
       await this.persistAgentSuccess(job, invocation)
     } catch (error) {
       const retryReason = this.classifyRetryableAgentError(error)
@@ -891,7 +895,7 @@ class OcrService {
 
   private async persistAgentSuccess(
     job: typeof ocrJobs.$inferSelect,
-    invocation: AiInvokeResult<IntelligenceVisionOcrResult>
+    invocation: IntelligenceInvokeResult<IntelligenceVisionOcrResult>
   ): Promise<void> {
     if (!this.db) return
 
@@ -1042,7 +1046,7 @@ class OcrService {
     }
 
     try {
-      const response = await ai.embedding.generate(
+      const response = await tuffIntelligence.embedding.generate(
         { text: trimmedText },
         {
           modelPreference: capabilityOptions.modelPreference,

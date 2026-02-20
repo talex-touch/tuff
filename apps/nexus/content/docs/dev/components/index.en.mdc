@@ -95,6 +95,7 @@ code: |
 ## Forms & Input
 
 - [Input](./input.en.md)
+- [CodeEditor](./code-editor.en.md)
 - [Select](./select.en.md)
 - [FlatRadio](./flat-radio.en.md)
 - [SearchInput](./search-input.en.md)
@@ -116,6 +117,7 @@ code: |
 
 - [Dialog](./dialog.en.md)
 - [Drawer](./drawer.en.md)
+- [FlipOverlay](./flip-overlay.en.md)
 - [Toast](./toast.en.md)
 - [Tooltip](./tooltip.en.md)
 - [Popover](./popover.en.md)

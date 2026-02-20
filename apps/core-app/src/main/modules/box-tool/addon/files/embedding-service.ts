@@ -7,7 +7,8 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { embeddings as embeddingsSchema } from '../../../../db/schema'
 import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
-import { ai } from '../../../ai/intelligence-sdk'
+import { tuffIntelligence } from '../../../ai/intelligence-sdk'
+import { enterPerfContext } from '../../../../utils/perf-context'
 
 const logger = getLogger('EmbeddingService')
 
@@ -40,8 +41,13 @@ export class EmbeddingService {
     if (this.available !== null) return this.available
 
     try {
-      const result = await ai.embedding.generate({ text: 'test' })
-      this.available = Array.isArray(result?.result) && result.result.length > 0
+      const disposeCheck = enterPerfContext('Embedding.isAvailable', { textLength: 4 })
+      try {
+        const result = await tuffIntelligence.embedding.generate({ text: 'test' })
+        this.available = Array.isArray(result?.result) && result.result.length > 0
+      } finally {
+        disposeCheck()
+      }
     } catch {
       this.available = false
     }
@@ -80,7 +86,7 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await ai.embedding.generate({ text: truncated })
+      const result = await tuffIntelligence.embedding.generate({ text: truncated })
       const vector = result.result
 
       await dbWriteScheduler.schedule('embedding.index', () =>
@@ -177,44 +183,57 @@ export class EmbeddingService {
    * using cosine similarity computed in application code.
    */
   async semanticSearch(query: string, limit = 20): Promise<EmbeddingSearchResult[]> {
-    if (!(await this.isAvailable())) return []
-    if (!query?.trim()) return []
+    const disposeSearch = enterPerfContext('Embedding.semanticSearch', {
+      queryLength: query?.length ?? 0,
+      limit
+    })
+    try {
+      if (!(await this.isAvailable())) return []
+      if (!query?.trim()) return []
 
-    const start = performance.now()
+      const start = performance.now()
 
-    // Generate query embedding (with cache)
-    const queryVector = await this.getQueryEmbedding(query)
-    if (!queryVector) return []
+      // Generate query embedding (with cache)
+      const queryVector = await this.getQueryEmbedding(query)
+      if (!queryVector) return []
 
-    // Load all file embeddings from DB
-    const rows = await this.db
-      .select({
-        sourceId: embeddingsSchema.sourceId,
-        embedding: embeddingsSchema.embedding
-      })
-      .from(embeddingsSchema)
-      .where(eq(embeddingsSchema.sourceType, SOURCE_TYPE))
+      // Load all file embeddings from DB
+      const rows = await this.db
+        .select({
+          sourceId: embeddingsSchema.sourceId,
+          embedding: embeddingsSchema.embedding
+        })
+        .from(embeddingsSchema)
+        .where(eq(embeddingsSchema.sourceType, SOURCE_TYPE))
 
-    if (rows.length === 0) return []
+      if (rows.length === 0) return []
 
-    // Compute cosine similarity for each
-    const scored: EmbeddingSearchResult[] = []
-    for (const row of rows) {
-      const score = cosineSimilarity(queryVector, row.embedding)
-      if (score > 0.3) {
-        scored.push({ sourceId: row.sourceId, score })
+      // Compute cosine similarity for each
+      const disposeScore = enterPerfContext('Embedding.semanticScore', { rows: rows.length })
+      const scored: EmbeddingSearchResult[] = []
+      try {
+        for (const row of rows) {
+          const score = cosineSimilarity(queryVector, row.embedding)
+          if (score > 0.3) {
+            scored.push({ sourceId: row.sourceId, score })
+          }
+        }
+      } finally {
+        disposeScore()
       }
+
+      // Sort by score descending, take top-K
+      scored.sort((a, b) => b.score - a.score)
+      const results = scored.slice(0, limit)
+
+      logger.debug(
+        `Semantic search: "${query}" → ${results.length}/${rows.length} matches ` +
+          `in ${(performance.now() - start).toFixed(0)}ms`
+      )
+      return results
+    } finally {
+      disposeSearch()
     }
-
-    // Sort by score descending, take top-K
-    scored.sort((a, b) => b.score - a.score)
-    const results = scored.slice(0, limit)
-
-    logger.debug(
-      `Semantic search: "${query}" → ${results.length}/${rows.length} matches ` +
-        `in ${(performance.now() - start).toFixed(0)}ms`
-    )
-    return results
   }
 
   /**
@@ -237,7 +256,7 @@ export class EmbeddingService {
     }
 
     try {
-      const result = await ai.embedding.generate({ text: query })
+      const result = await tuffIntelligence.embedding.generate({ text: query })
       const vector = result.result
 
       this.queryCache.set(cacheKey, { vector, timestamp: Date.now() })

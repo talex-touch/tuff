@@ -1,25 +1,30 @@
-import { exec } from 'node:child_process'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
 import { createRetrier } from '@talex-touch/utils'
+import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { reportAppScanError } from './app-error-reporter'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
-const execAsync = promisify(exec)
-
 async function convertIcnsToPng(icnsPath: string, pngPath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const command = `sips -s format png "${icnsPath}" --out "${pngPath}" --resampleHeightWidth 64 64`
-    exec(command, (error) => {
-      if (error) {
-        return reject(new Error(`sips command failed for ${icnsPath}: ${error.message}`))
-      }
-      resolve(pngPath)
-    })
-  })
+  try {
+    await execFileSafe('sips', [
+      '-s',
+      'format',
+      'png',
+      icnsPath,
+      '--out',
+      pngPath,
+      '--resampleHeightWidth',
+      '64',
+      '64'
+    ])
+    return pngPath
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`sips command failed for ${icnsPath}: ${message}`)
+  }
 }
 
 async function getAppIcon(app: { path: string; name: string }): Promise<string | null> {
@@ -300,10 +305,10 @@ export async function getAppsViaMdfind(): Promise<
     }
   }
 
-  const onlyInArgs = existingRoots.map((root) => `-onlyin "${root}"`).join(' ')
-  const command = existingRoots.length > 0 ? `mdfind ${onlyInArgs} '${query}'` : `mdfind '${query}'`
+  const args = existingRoots.flatMap((root) => ['-onlyin', root])
+  args.push(query)
 
-  const { stdout } = await execAsync(command, { maxBuffer: 1024 * 1024 * 10 })
+  const { stdout } = await execFileSafe('mdfind', args, { maxBuffer: 1024 * 1024 * 10 })
   const appPaths = Array.from(
     new Set(
       stdout

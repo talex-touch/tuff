@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceCapabilityInfo" setup>
 import type {
-  AiCapabilityProviderBinding,
-  AISDKCapabilityConfig,
+  IntelligenceCapabilityProviderBinding,
+  IntelligenceCapabilityConfig,
   IntelligenceProviderConfig
 } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
@@ -19,7 +19,7 @@ import ProviderList from './ProviderList.vue'
 import TestSection from './TestSection.vue'
 
 const props = defineProps<{
-  capability: AISDKCapabilityConfig
+  capability: IntelligenceCapabilityConfig
   providers: IntelligenceProviderConfig[]
   bindings: CapabilityBinding[]
   isTesting: boolean
@@ -39,7 +39,7 @@ const emits = defineEmits<{
       userInput?: string
     }
   ]
-  reorderProviders: [bindings: AiCapabilityProviderBinding[]]
+  reorderProviders: [bindings: IntelligenceCapabilityProviderBinding[]]
 }>()
 
 const { t } = useI18n()

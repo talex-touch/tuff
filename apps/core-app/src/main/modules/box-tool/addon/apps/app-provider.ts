@@ -449,10 +449,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.startupBackfillStarted) return
     this.startupBackfillStarted = true
 
-    logApp('Scheduling startup backfill', LogStyle.info)
-    queueMicrotask(() => {
+    logApp('Scheduling startup backfill (deferred 500ms)', LogStyle.info)
+    setTimeout(() => {
       void this._runStartupBackfillWithRetry()
-    })
+    }, 500)
   }
 
   private async _runStartupBackfillWithRetry(): Promise<void> {
@@ -562,6 +562,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const uniqueId = app.uniqueId || app.path
         return !!uniqueId && !existingIds.has(uniqueId)
       })
+
+      // 释放不再需要的大数组引用，降低 GC 峰值压力
+      ;(dbApps as unknown[]).length = 0
+      ;(dbAppsWithExtensions as unknown[]).length = 0
 
       logApp(`Startup backfill found ${chalk.green(toAdd.length)} missing apps`, LogStyle.info)
 
@@ -1684,10 +1688,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (is.dev) {
-      logApp('Running initial mdls scan in dev mode', LogStyle.info)
-      this._runMdlsUpdateScan().then(() => {
-        logApp('Dev mode mdls scan complete', LogStyle.success)
-      })
+      logApp('Deferring dev mode mdls scan by 3s to avoid startup contention', LogStyle.info)
+      setTimeout(() => {
+        this._runMdlsUpdateScan().then(() => {
+          logApp('Dev mode mdls scan complete', LogStyle.success)
+        })
+      }, 3000)
     }
 
     logApp('Registering mdls update polling service (10 min interval)', LogStyle.info)
@@ -1850,13 +1856,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     await appTaskGate.runAppTask(async () => {
       logApp('Starting mdls update scan...', LogStyle.process)
 
+      const t0 = performance.now()
       const allDbApps = await dbUtils.getFilesByType('app')
+      const t1 = performance.now()
       if (allDbApps.length === 0) {
         logApp('No apps in DB, skipping mdls scan', LogStyle.info)
         return
       }
 
       const dbAppsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
+      const t2 = performance.now()
       const scannedApps = dbAppsWithExtensions.map((app) => this._mapDbAppToScannedInfo(app))
       const dbAppsByUniqueId = new Map(
         dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
@@ -1864,6 +1873,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       const { updatedApps, updatedCount, deletedApps } =
         await appScanner.runMdlsUpdateScan(scannedApps)
+      const t3 = performance.now()
 
       // 处理更新的 app
       if (updatedCount > 0 && updatedApps.length > 0) {
@@ -1891,6 +1901,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await this._syncKeywordsForApp(appInfo)
         }
       }
+      const t4 = performance.now()
 
       // 处理删除的 app（文件不存在，从数据库中删除）
       if (deletedApps.length > 0) {
@@ -1928,8 +1939,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           }
         }
       }
+      const t5 = performance.now()
 
       await this._setLastScanTime(Date.now())
+
+      logApp(
+        `mdlsUpdateScan timing: dbQuery=${Math.round(t1 - t0)}ms fetchExt=${Math.round(t2 - t1)}ms scan=${Math.round(t3 - t2)}ms dbUpdate=${Math.round(t4 - t3)}ms(${updatedCount}upd) dbDelete=${Math.round(t5 - t4)}ms(${deletedApps.length}del) total=${Math.round(t5 - t0)}ms`,
+        LogStyle.info
+      )
     }, 'AppProvider.mdlsUpdateScan')
   }
 

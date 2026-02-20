@@ -59,6 +59,22 @@ components:
         - plan_tier
         - limits
         - usage
+    EvictedDeviceInfo:
+      type: object
+      properties:
+        device_id:
+          type: string
+        device_name:
+          type: string
+          nullable: true
+        platform:
+          type: string
+          nullable: true
+        last_seen_at:
+          type: string
+          nullable: true
+      required:
+        - device_id
     KeyringMeta:
       type: object
       properties:
@@ -244,6 +260,10 @@ paths:
                     type: string
                   quotas:
                     $ref: '#/components/schemas/QuotaInfo'
+                  evicted_devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvictedDeviceInfo'
                 required:
                   - sync_token
                   - sync_token_expires_at

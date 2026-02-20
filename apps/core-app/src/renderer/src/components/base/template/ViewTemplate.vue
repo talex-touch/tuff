@@ -1,7 +1,9 @@
 <script lang="ts" name="View" setup>
 import { TxGradualBlur } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import TouchScroll from '../TouchScroll.vue'
+import { resolveI18nLabel } from '~/utils/i18n-helpers'
 
 const props = withDefaults(
   defineProps<{
@@ -16,7 +18,16 @@ const props = withDefaults(
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const subRouterMode = computed(() => route.matched?.length > props.len)
+const resolvedTitle = computed(() => resolveI18nLabel(props.title, t))
+const routeTitleSource = computed(() => {
+  if (typeof route?.name === 'string' && route.name) {
+    return route.name
+  }
+
+  return props.title ?? ''
+})
 </script>
 
 <template>
@@ -54,13 +65,13 @@ const subRouterMode = computed(() => route.matched?.length > props.len)
       :class="{ visible: subRouterMode }"
       class="ViewTemplate-Router fake-background transition-cubic absolute w-full h-full"
     >
-      <view-template v-if="subRouterMode" :len="len + 1" :title="String(route.name) ?? title">
+      <view-template v-if="subRouterMode" :len="len + 1" :title="routeTitleSource">
         <div
           class="ViewTemplate-RouterTitle cursor-pointer flex items-center text-xl"
           @click="router.back"
         >
           <div i-ri-arrow-left-s-line />
-          {{ title }}
+          {{ resolvedTitle }}
         </div>
         <router-view />
       </view-template>

@@ -235,6 +235,23 @@ export class NotificationModule extends BaseModule {
     this.systemRequests.clear()
   }
 
+  pushInboxEntry(
+    entry: Partial<NotificationInboxEntry> & Pick<NotificationInboxEntry, 'title' | 'message'>
+  ): NotificationInboxEntry {
+    const stored: NotificationInboxEntry = {
+      id: entry.id ?? randomUUID(),
+      source: entry.source ?? 'system',
+      title: entry.title,
+      message: entry.message,
+      level: entry.level,
+      actions: entry.actions,
+      createdAt: entry.createdAt ?? Date.now(),
+      dedupeKey: entry.dedupeKey,
+      payload: entry.payload
+    }
+    return this.persistInboxEntry(stored)
+  }
+
   private registerTransportHandlers(): void {
     if (!this.transport) return
 
@@ -347,12 +364,7 @@ export class NotificationModule extends BaseModule {
       dedupeKey: request.dedupeKey,
       payload: request.meta
     }
-    const stored = this.inbox.add(entry)
-    const stats = this.inbox.getStats()
-    this.transport?.broadcast(NotificationEvents.push.inboxUpdated, {
-      entry: stored,
-      ...stats
-    })
+    this.persistInboxEntry(entry)
   }
 
   private handleInboxMarkRead(
@@ -381,6 +393,16 @@ export class NotificationModule extends BaseModule {
       })
     }
     return entry
+  }
+
+  private persistInboxEntry(entry: NotificationInboxEntry): NotificationInboxEntry {
+    const stored = this.inbox.add(entry)
+    const stats = this.inbox.getStats()
+    this.transport?.broadcast(NotificationEvents.push.inboxUpdated, {
+      entry: stored,
+      ...stats
+    })
+    return stored
   }
 
   private resolveChannel(

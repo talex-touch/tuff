@@ -14,7 +14,7 @@ export function getAuthBaseUrl(): string {
   return isLocalAuthMode() ? LOCAL_AUTH_BASE_URL : getTuffBaseUrl()
 }
 
-function decodeJwtPayload(token: string): { exp?: number } | null {
+function decodeJwtPayload(token: string): { exp?: number; deviceId?: string } | null {
   const parts = token.split('.')
   if (parts.length < 2) {
     return null
@@ -29,6 +29,12 @@ function decodeJwtPayload(token: string): { exp?: number } | null {
   } catch {
     return null
   }
+}
+
+export function resolveAuthTokenDeviceId(token: string): string | null {
+  const payload = decodeJwtPayload(token)
+  const deviceId = typeof payload?.deviceId === 'string' ? payload.deviceId.trim() : ''
+  return deviceId || null
 }
 
 export function getAppAuthToken(): string | null {

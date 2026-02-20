@@ -592,71 +592,82 @@ export class StorageModule extends BaseModule {
   ): { success: boolean; version: number; conflict?: boolean } {
     if (!this.filePath) throw new Error(`Config ${name} not found`)
 
-    this.frequencyMonitor.trackSave(name)
-
-    if (clear) {
-      this.cache.evict(name)
-      return { success: true, version: 0 }
-    }
-
-    const currentVersion = this.cache.getVersion(name)
-    let parsed: unknown
-    let serialized: string | undefined
-
-    if (typeof payload === 'string') {
-      if (payload.length > 0) {
-        try {
-          parsed = JSON.parse(payload)
-        } catch (error) {
-          storageLog.error(`Failed to parse config payload for ${name}`, { error })
-          return { success: false, version: currentVersion }
-        }
-        serialized = payload
-      } else {
-        parsed = {}
-        serialized = '{}'
-      }
-    } else if (payload !== undefined) {
-      parsed = payload
-    } else {
-      const cached = this.cache.getRaw(name)
-      parsed = cached === undefined ? {} : cached
-    }
-
-    // Conflict detection: if client has older version, reject the save
-    if (clientVersion !== undefined && clientVersion < currentVersion) {
-      storageLog.warn(
-        `Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`
-      )
-      return { success: false, version: currentVersion, conflict: true }
-    }
-
-    // Smart deduplication: check if content actually changed (unless force=true)
-    if (!force) {
-      const cachedData = this.cache.getRaw(name)
-      const cachedSerialized = serialized ? this.cache.getSerialized(name) : undefined
-      if (serialized && cachedSerialized && cachedSerialized === serialized) {
-        return { success: true, version: currentVersion }
-      }
-      if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
-        // Content hasn't changed, skip save but return current version
-        return { success: true, version: currentVersion }
-      }
-    }
-
-    // Set new data and get new version
-    const newVersion = this.cache.set(name, parsed as object, true, serialized)
-    void this.upsertSqliteConfig(name, parsed, serialized)
-
-    // Broadcast update to other windows (exclude source)
-    setImmediate(() => {
-      broadcastUpdate(name, newVersion, sourceWebContentsId)
+    const disposeSave = enterPerfContext(`Storage.save:${name}`, {
+      payloadType: typeof payload,
+      payloadBytes: typeof payload === 'string' ? payload.length : undefined,
+      clear: Boolean(clear),
+      force: Boolean(force)
     })
 
-    // Notify local subscribers
-    this.notifySubscribers(name)
+    try {
+      this.frequencyMonitor.trackSave(name)
 
-    return { success: true, version: newVersion }
+      if (clear) {
+        this.cache.evict(name)
+        return { success: true, version: 0 }
+      }
+
+      const currentVersion = this.cache.getVersion(name)
+      let parsed: unknown
+      let serialized: string | undefined
+
+      if (typeof payload === 'string') {
+        if (payload.length > 0) {
+          try {
+            parsed = JSON.parse(payload)
+          } catch (error) {
+            storageLog.error(`Failed to parse config payload for ${name}`, { error })
+            return { success: false, version: currentVersion }
+          }
+          serialized = payload
+        } else {
+          parsed = {}
+          serialized = '{}'
+        }
+      } else if (payload !== undefined) {
+        parsed = payload
+      } else {
+        const cached = this.cache.getRaw(name)
+        parsed = cached === undefined ? {} : cached
+      }
+
+      // Conflict detection: if client has older version, reject the save
+      if (clientVersion !== undefined && clientVersion < currentVersion) {
+        storageLog.warn(
+          `Conflict detected for ${name}: client v${clientVersion} < server v${currentVersion}`
+        )
+        return { success: false, version: currentVersion, conflict: true }
+      }
+
+      // Smart deduplication: check if content actually changed (unless force=true)
+      if (!force) {
+        const cachedData = this.cache.getRaw(name)
+        const cachedSerialized = serialized ? this.cache.getSerialized(name) : undefined
+        if (serialized && cachedSerialized && cachedSerialized === serialized) {
+          return { success: true, version: currentVersion }
+        }
+        if (cachedData && JSON.stringify(cachedData) === JSON.stringify(parsed)) {
+          // Content hasn't changed, skip save but return current version
+          return { success: true, version: currentVersion }
+        }
+      }
+
+      // Set new data and get new version
+      const newVersion = this.cache.set(name, parsed as object, true, serialized)
+      void this.upsertSqliteConfig(name, parsed, serialized)
+
+      // Broadcast update to other windows (exclude source)
+      setImmediate(() => {
+        broadcastUpdate(name, newVersion, sourceWebContentsId)
+      })
+
+      // Notify local subscribers
+      this.notifySubscribers(name)
+
+      return { success: true, version: newVersion }
+    } finally {
+      disposeSave()
+    }
   }
 
   /**
@@ -667,7 +678,14 @@ export class StorageModule extends BaseModule {
       throw new Error(`Config path not found!`)
     }
 
+    const gateStart = performance.now()
     await appTaskGate.waitForIdle()
+    const gateWaitMs = performance.now() - gateStart
+    if (gateWaitMs > 200) {
+      storageLog.warn(`persistConfig gate wait for ${name}`, {
+        meta: { gateWaitMs: Math.round(gateWaitMs) }
+      })
+    }
 
     const data = this.cache.getRaw(name)
     if (data === undefined) {

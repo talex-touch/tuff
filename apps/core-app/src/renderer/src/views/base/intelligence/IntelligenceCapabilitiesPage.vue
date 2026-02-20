@@ -1,8 +1,8 @@
 <script lang="ts" name="IntelligenceCapabilitiesPage" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
 import type {
-  AiCapabilityProviderBinding,
-  AISDKCapabilityConfig
+  IntelligenceCapabilityProviderBinding,
+  IntelligenceCapabilityConfig
 } from '@talex-touch/utils/types/intelligence'
 import type {
   CapabilityBinding,
@@ -29,7 +29,7 @@ const {
 } = useIntelligenceManager()
 
 const searchQuery = ref('')
-const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
+const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
   Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
 const providerMap = computed(
@@ -48,7 +48,7 @@ const filteredCapabilities = computed(() => {
 })
 
 const selectedCapabilityId = ref<string | null>(null)
-const selectedCapability = computed<AISDKCapabilityConfig | null>(() => {
+const selectedCapability = computed<IntelligenceCapabilityConfig | null>(() => {
   if (!selectedCapabilityId.value) return null
   const values = Object.values(capabilityList.value)
   return values.find((entry) => entry.id === selectedCapabilityId.value) ?? null
@@ -78,7 +78,7 @@ function handleSelectCapability(id: string): void {
   selectedCapabilityId.value = id
 }
 
-function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
+function getCapabilityIcon(capability: IntelligenceCapabilityConfig): ITuffIcon {
   const iconMap: Record<string, { icon: string; color: string }> = {
     'text.chat': { icon: 'i-carbon-chat', color: '#1e88e5' },
     'embedding.generate': { icon: 'i-carbon-data-base', color: '#7b1fa2' },
@@ -96,7 +96,7 @@ function getCapabilityIcon(capability: AISDKCapabilityConfig): ITuffIcon {
   }
 }
 
-function getCapabilityIconColor(capability: AISDKCapabilityConfig): string {
+function getCapabilityIconColor(capability: IntelligenceCapabilityConfig): string {
   const iconMap: Record<string, string> = {
     'text.chat': '#1e88e5',
     'embedding.generate': '#7b1fa2',
@@ -110,7 +110,9 @@ function getCapabilityIconColor(capability: AISDKCapabilityConfig): string {
   return iconMap[capability.id] || '#757575'
 }
 
-function getCapabilityStatus(capability: AISDKCapabilityConfig): 'configured' | 'unconfigured' {
+function getCapabilityStatus(
+  capability: IntelligenceCapabilityConfig
+): 'configured' | 'unconfigured' {
   // const hasProviders = capability.providers && capability.providers.length > 0
   const hasActiveProvider = capability.providers?.some((p) => p.enabled !== false)
   return hasActiveProvider ? 'configured' : 'unconfigured'
@@ -122,7 +124,7 @@ const capabilityTesting = reactive<Record<string, boolean>>({})
 function updateCapabilityBinding(
   capabilityId: string,
   providerId: string,
-  patch: Partial<AiCapabilityProviderBinding>
+  patch: Partial<IntelligenceCapabilityProviderBinding>
 ): void {
   const capability = capabilities.value[capabilityId]
   const current = capability?.providers ? [...capability.providers] : []
@@ -194,7 +196,7 @@ function onUpdatePrompt(prompt: string): void {
   handleCapabilityPrompt(selectedCapability.value.id, prompt)
 }
 
-function onReorderProviders(bindings: AiCapabilityProviderBinding[]): void {
+function onReorderProviders(bindings: IntelligenceCapabilityProviderBinding[]): void {
   if (!selectedCapability.value) return
   setCapabilityProviders(selectedCapability.value.id, bindings)
 }

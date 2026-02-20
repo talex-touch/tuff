@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
- 
- > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
- > 更新时间: 2026-02-10
+
+> 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
+> 更新时间: 2026-02-19
 
  ## PRD Index（以代码实现为准）
  
@@ -14,9 +14,25 @@
 
  ## 快速入口
 
+ - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
+ - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
+
+## 项目最终目标（North Star）
+
+- **产品目标**：构建本地优先 + AI 原生 + 插件可扩展的桌面指令中心，形成稳定主产品与可演进生态。
+- **架构目标**：完成 SDK Hard-Cut，跨层调用统一到 typed SDK/transport，停止 legacy channel 扩散。
+- **质量目标**：建立可复现、可追踪的质量门禁（typecheck/lint/test/build）并保持稳定通过。
+- **发布目标**：打通 OIDC + RSA 官方构建信任链与 Nexus release 同步闭环。
+
+## 质量约束（所有活跃 PRD 必须遵守）
+
+- 每个活跃 PRD 必须写明：**最终目标**、**范围/非目标**、**质量约束**、**验收标准**、**回滚策略**。
+- 不允许通过降级规则/跳过校验绕过质量问题；既有失败项需在 PRD 中显式标注。
+- 关键行为变更必须同步 `README.md`、`TODO.md`、`CHANGES.md` 与 Nexus 文档至少一处。
+- Storage / Sync 相关能力必须遵守：SQLite 本地 SoT，JSON 仅同步载荷。
 
 ## 近期（近 3 个月）关键里程碑
 
@@ -48,6 +64,13 @@
     - `apps/nexus/server/` - sign-in callback 稳定化
     - `apps/nexus/middleware/` - session/app auth guard 拆分
   - **状态**：OAuth flow + Turnstile + Passkey step-up 已闭环
+
+- **Nexus 汇率服务（ExchangeRate-API）**（2026-02，已落地）
+  - **代码**
+    - `apps/nexus/server/utils/exchangeRateService.ts`
+    - `apps/nexus/server/api/exchange/convert.get.ts`
+  - **状态**：USD 基准换算 + 8h TTL 缓存，D1 历史快照与错误归档
+  - **补充**：非 FREE 用户可访问历史查询 `/api/exchange/history`
 
 - **更新系统增强**（2026-02，已落地）
   - **代码**

@@ -15,6 +15,8 @@ let creditsSchemaInitialized = false
 const DEFAULT_TEAM_QUOTA = 10000
 const DEFAULT_PERSONAL_QUOTA = 5000
 const DEFAULT_PLAN_ID = 'default'
+const CREDIT_DECIMALS = 2
+const CREDIT_SCALE = 10 ** CREDIT_DECIMALS
 
 export type TeamType = 'personal' | 'organization'
 export type TeamMemberRole = 'owner' | 'admin' | 'member'
@@ -73,6 +75,33 @@ function mapTeamMemberRow(row: D1TeamMemberRow): TeamMemberRecord {
   }
 }
 
+function normalizeCreditAmount(value: number): number {
+  if (!Number.isFinite(value))
+    return 0
+  return Math.round(value * CREDIT_SCALE) / CREDIT_SCALE
+}
+
+function resolveCreditAmount(value: unknown): number {
+  return normalizeCreditAmount(Number(value ?? 0))
+}
+
+function sumCredits(...values: number[]): number {
+  const total = values.reduce((acc, current) => acc + current, 0)
+  return normalizeCreditAmount(total)
+}
+
+function normalizeCreditBalanceRow<T extends { quota?: unknown; used?: unknown }>(
+  row: T | null | undefined
+): T | null {
+  if (!row)
+    return null
+  return {
+    ...row,
+    quota: resolveCreditAmount(row.quota),
+    used: resolveCreditAmount(row.used)
+  }
+}
+
 function getD1Database(event: H3Event): D1Database | null {
   const bindings = readCloudflareBindings(event)
   return bindings?.DB ?? null
@@ -112,8 +141,8 @@ async function ensureCreditsSchema(db: D1Database) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${CREDIT_PLANS_TABLE} (
       plan_id TEXT PRIMARY KEY,
-      monthly_quota INTEGER NOT NULL,
-      personal_quota INTEGER NOT NULL
+      monthly_quota REAL NOT NULL,
+      personal_quota REAL NOT NULL
     );
   `).run()
 
@@ -122,8 +151,8 @@ async function ensureCreditsSchema(db: D1Database) {
       scope TEXT NOT NULL,
       scope_id TEXT NOT NULL,
       month TEXT NOT NULL,
-      quota INTEGER NOT NULL,
-      used INTEGER NOT NULL DEFAULT 0,
+      quota REAL NOT NULL,
+      used REAL NOT NULL DEFAULT 0,
       PRIMARY KEY (scope, scope_id, month)
     );
   `).run()
@@ -133,7 +162,7 @@ async function ensureCreditsSchema(db: D1Database) {
       id TEXT PRIMARY KEY,
       scope TEXT NOT NULL,
       scope_id TEXT NOT NULL,
-      delta INTEGER NOT NULL,
+      delta REAL NOT NULL,
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL,
       metadata TEXT
@@ -359,8 +388,8 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
   await ensureCreditsSchema(db)
   const month = getMonthKey()
   const plan = await db.prepare(`SELECT * FROM ${CREDIT_PLANS_TABLE} WHERE plan_id = ?`).bind(DEFAULT_PLAN_ID).first()
-  const teamQuota = Number((plan as any)?.monthly_quota ?? DEFAULT_TEAM_QUOTA)
-  const personalQuota = Number((plan as any)?.personal_quota ?? DEFAULT_PERSONAL_QUOTA)
+  const teamQuota = resolveCreditAmount((plan as any)?.monthly_quota ?? DEFAULT_TEAM_QUOTA)
+  const personalQuota = resolveCreditAmount((plan as any)?.personal_quota ?? DEFAULT_PERSONAL_QUOTA)
   const quota = scope === 'team' ? teamQuota : personalQuota
   await db.prepare(`
     INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
@@ -383,8 +412,8 @@ export async function getCreditSummary(event: H3Event, userId: string) {
   `).bind(userId, month).first()
   return {
     month,
-    team: teamBalance,
-    user: userBalance
+    team: normalizeCreditBalanceRow(teamBalance),
+    user: normalizeCreditBalanceRow(userBalance)
   }
 }
 
@@ -394,6 +423,10 @@ export async function consumeCredits(event: H3Event, userId: string, amount: num
   const teamId = await ensurePersonalTeam(event, userId)
   await ensureBalance(event, 'team', teamId)
   await ensureBalance(event, 'user', userId)
+  const normalizedAmount = normalizeCreditAmount(amount)
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    throw new Error('Invalid credit amount.')
+  }
   const month = getMonthKey()
   const teamBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
@@ -401,27 +434,29 @@ export async function consumeCredits(event: H3Event, userId: string, amount: num
   const userBalance = await db.prepare(`
     SELECT quota, used FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
   `).bind(userId, month).first()
-  const teamQuota = Number((teamBalance as any)?.quota ?? 0)
-  const teamUsed = Number((teamBalance as any)?.used ?? 0)
-  const userQuota = Number((userBalance as any)?.quota ?? 0)
-  const userUsed = Number((userBalance as any)?.used ?? 0)
+  const teamQuota = resolveCreditAmount((teamBalance as any)?.quota ?? 0)
+  const teamUsed = resolveCreditAmount((teamBalance as any)?.used ?? 0)
+  const userQuota = resolveCreditAmount((userBalance as any)?.quota ?? 0)
+  const userUsed = resolveCreditAmount((userBalance as any)?.used ?? 0)
+  const nextTeamUsed = sumCredits(teamUsed, normalizedAmount)
+  const nextUserUsed = sumCredits(userUsed, normalizedAmount)
 
-  if (teamUsed + amount > teamQuota)
+  if (nextTeamUsed > teamQuota)
     throw new Error('Team credits exceeded.')
-  if (userUsed + amount > userQuota)
+  if (nextUserUsed > userQuota)
     throw new Error('User credits exceeded.')
 
   await db.prepare(`
     UPDATE ${CREDIT_BALANCES_TABLE}
     SET used = used + ?
     WHERE scope = 'team' AND scope_id = ? AND month = ?
-  `).bind(amount, teamId, month).run()
+  `).bind(normalizedAmount, teamId, month).run()
 
   await db.prepare(`
     UPDATE ${CREDIT_BALANCES_TABLE}
     SET used = used + ?
     WHERE scope = 'user' AND scope_id = ? AND month = ?
-  `).bind(amount, userId, month).run()
+  `).bind(normalizedAmount, userId, month).run()
 
   const ledgerMetadata = metadata ? { ...metadata, userId } : { userId }
   const id = crypto.randomUUID()
@@ -429,7 +464,7 @@ export async function consumeCredits(event: H3Event, userId: string, amount: num
   await db.prepare(`
     INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
     VALUES (?, 'team', ?, ?, ?, ?, ?)
-  `).bind(id, teamId, -amount, reason, now, JSON.stringify(ledgerMetadata)).run()
+  `).bind(id, teamId, -normalizedAmount, reason, now, JSON.stringify(ledgerMetadata)).run()
 }
 
 export async function listCreditLedger(event: H3Event, userId: string) {
@@ -442,7 +477,10 @@ export async function listCreditLedger(event: H3Event, userId: string) {
     ORDER BY created_at DESC
     LIMIT 100
   `).bind(teamId).all()
-  return result.results
+  return (result.results ?? []).map((row: any) => ({
+    ...row,
+    delta: resolveCreditAmount(row?.delta ?? 0)
+  }))
 }
 
 function parseLedgerMetadata(value: string | null): Record<string, any> | null {
@@ -531,16 +569,16 @@ export async function listCreditUsageByUsers(
   return {
     month,
     total: Number(summaryRow?.total ?? 0),
-    totalUsed: Number(summaryRow?.total_used ?? 0),
-    totalQuota: Number(summaryRow?.total_quota ?? 0),
+    totalUsed: resolveCreditAmount(summaryRow?.total_used ?? 0),
+    totalQuota: resolveCreditAmount(summaryRow?.total_quota ?? 0),
     users: (results ?? []).map(row => ({
       userId: row.user_id,
       email: row.email ?? null,
       name: row.name ?? null,
       role: row.role ?? null,
       status: row.status ?? null,
-      quota: Number(row.quota ?? 0),
-      used: Number(row.used ?? 0),
+      quota: resolveCreditAmount(row.quota ?? 0),
+      used: resolveCreditAmount(row.used ?? 0),
       month: row.month ?? month,
     })),
     page,
@@ -620,7 +658,7 @@ export async function listCreditLedgerByUsers(
       userId: row.user_id ?? null,
       userEmail: row.email ?? null,
       userName: row.name ?? null,
-      delta: Number(row.delta ?? 0),
+      delta: resolveCreditAmount(row.delta ?? 0),
       reason: row.reason ?? '',
       createdAt: row.created_at,
       metadata: parseLedgerMetadata(row.metadata ?? null),
@@ -684,10 +722,10 @@ export async function listCreditTrendByUsers(
     const dayKey = createdAt.slice(0, 10)
     if (!dailyMap.has(dayKey))
       continue
-    const delta = Number(row.delta ?? 0)
+    const delta = resolveCreditAmount(row.delta ?? 0)
     const used = delta < 0 ? -delta : 0
-    totalUsed += used
-    dailyMap.set(dayKey, (dailyMap.get(dayKey) ?? 0) + used)
+    totalUsed = sumCredits(totalUsed, used)
+    dailyMap.set(dayKey, sumCredits(dailyMap.get(dayKey) ?? 0, used))
   }
 
   return {
@@ -749,16 +787,16 @@ export async function listCreditUsageAdmin(
   return {
     month,
     total: Number(summaryRow?.total ?? 0),
-    totalUsed: Number(summaryRow?.total_used ?? 0),
-    totalQuota: Number(summaryRow?.total_quota ?? 0),
+    totalUsed: resolveCreditAmount(summaryRow?.total_used ?? 0),
+    totalQuota: resolveCreditAmount(summaryRow?.total_quota ?? 0),
     users: (results ?? []).map(row => ({
       userId: row.user_id,
       email: row.email ?? null,
       name: row.name ?? null,
       role: row.role ?? null,
       status: row.status ?? null,
-      quota: Number(row.quota ?? 0),
-      used: Number(row.used ?? 0),
+      quota: resolveCreditAmount(row.quota ?? 0),
+      used: resolveCreditAmount(row.used ?? 0),
       month: row.month ?? month,
     })),
     page,
@@ -831,7 +869,7 @@ export async function listCreditLedgerAdmin(
       userId: resolvedUserId,
       userEmail: row.email ?? null,
       userName: row.name ?? null,
-      delta: Number(row.delta ?? 0),
+      delta: resolveCreditAmount(row.delta ?? 0),
       reason: row.reason ?? '',
       createdAt: row.created_at,
       metadata,

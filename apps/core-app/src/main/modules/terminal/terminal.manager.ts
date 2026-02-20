@@ -2,22 +2,11 @@ import type { ModuleKey } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { WebContents } from 'electron'
 import type { ChildProcess } from 'node:child_process'
-import { spawn } from 'node:child_process'
-import os from 'node:os'
-import process from 'node:process'
+import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { BaseModule } from '../abstract-base-module'
-
-// Determine the default shell based on the operating system
-function getDefaultShell(): string {
-  if (os.platform() === 'win32') {
-    return 'cmd.exe'
-  } else {
-    // For macOS and Linux, use the SHELL environment variable or default to 'bash'
-    return process.env.SHELL || '/bin/bash'
-  }
-}
+import { withPermission } from '../permission/channel-guard'
 
 const terminalCreateEvent = defineRawEvent<{ command: string; args?: string[] }, { id: string }>(
   'terminal:create'
@@ -51,7 +40,13 @@ class TerminalModule extends BaseModule {
     this.transport = getTuffTransportMain(channel, keyManager)
 
     // For child_process, 'create' will be used to start a new command process.
-    this.transport.on(terminalCreateEvent, (payload, context) => this.create(payload, context))
+    this.transport.on(
+      terminalCreateEvent,
+      withPermission(
+        { permissionId: 'system.shell', errorMessage: 'Permission system.shell required' },
+        (payload, context) => this.create(payload, context)
+      )
+    )
     // 'write' is not applicable for non-interactive child_process, but we can keep it for API consistency
     // or repurpose it if needed in the future. For now, it will be a no-op or log a warning.
     this.transport.on(terminalWriteEvent, (payload) => this.write(payload))
@@ -81,14 +76,9 @@ class TerminalModule extends BaseModule {
     // Use spawn to create a new process. The shell is determined by the OS.
     // The '-c' flag is used for bash/sh to execute a command string.
     // On Windows, cmd.exe will execute the command directly.
-    let proc: ChildProcess
-    if (os.platform() === 'win32') {
-      proc = spawn(command, args, { shell: true })
-    } else {
-      proc = spawn(getDefaultShell(), ['-c', `${command} ${args.join(' ')}`], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
-    }
+    const proc: ChildProcess = spawnSafe(command, args, {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
 
     this.processes.set(id, proc)
 

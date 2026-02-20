@@ -24,6 +24,13 @@ export interface QuotaInfo {
   }
 }
 
+export interface EvictedDeviceInfo {
+  device_id: string
+  device_name?: string | null
+  platform?: string | null
+  last_seen_at?: string | null
+}
+
 export interface SyncItemInput {
   item_id: string
   type: string
@@ -74,6 +81,7 @@ export interface HandshakeResponse {
   server_cursor: number
   device_id: string
   quotas: QuotaInfo
+  evicted_devices?: EvictedDeviceInfo[]
 }
 
 export interface PushResponse {

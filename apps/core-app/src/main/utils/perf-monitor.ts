@@ -8,6 +8,7 @@ import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
 import { appendWorkflowDebugLog } from './workflow-debug'
+import { getHeapStatistics } from 'node:v8'
 
 export interface RendererPerfReport {
   kind:
@@ -226,6 +227,8 @@ export class PerfMonitor {
   } | null = null
 
   private logThrottle = new Map<string, number>()
+  private lastHeapSnapshotAt = 0
+  private readonly heapSnapshotIntervalMs = 10_000
 
   private shouldLog(key: string, throttleMs: number, now: number): boolean {
     const lastAt = this.logThrottle.get(key) ?? 0
@@ -462,6 +465,14 @@ export class PerfMonitor {
       lagMs >= 500 && this.shouldLog('event_loop.lag:diagnostic', 10000, now)
     if (shouldLog || shouldLogDiagnostic) {
       const contexts = getPerfContextSnapshot(3)
+      const heapNow = Date.now()
+      const heapStats =
+        lagMs >= 500 && heapNow - this.lastHeapSnapshotAt >= this.heapSnapshotIntervalMs
+          ? getHeapStatistics()
+          : null
+      if (heapStats) {
+        this.lastHeapSnapshotAt = heapNow
+      }
       const pollingDiagnostics = pollingService.getDiagnostics()
       const pollingActive = pollingDiagnostics.activeTasks.slice(0, 4).map((task) => ({
         id: task.id,
@@ -538,7 +549,14 @@ export class PerfMonitor {
         primaryPollingActive,
         primaryPollingRecent,
         lastSlowIpc,
-        slowPollingRecent
+        slowPollingRecent,
+        heap: heapStats
+          ? {
+              totalHeapSize: heapStats.total_heap_size,
+              usedHeapSize: heapStats.used_heap_size,
+              heapSizeLimit: heapStats.heap_size_limit
+            }
+          : undefined
       })
       if (shouldLog) {
         if (severity === 'error') {

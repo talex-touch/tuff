@@ -12,7 +12,7 @@ export enum PermissionCategory {
   CLIPBOARD = 'clipboard',
   NETWORK = 'network',
   SYSTEM = 'system',
-  AI = 'ai',
+  INTELLIGENCE = 'intelligence',
   STORAGE = 'storage',
   WINDOW = 'window',
 }

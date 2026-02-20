@@ -1,10 +1,10 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
-  AiUsageInfo,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceChatPayload,
   IntelligenceEmbeddingPayload,
   IntelligenceTranslatePayload,
@@ -31,8 +31,8 @@ export class LocalProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
@@ -52,12 +52,12 @@ export class LocalProvider extends IntelligenceProvider {
 
     const data = await this.parseJsonResponse<{
       result?: string
-      usage?: AiUsageInfo
+      usage?: IntelligenceUsageInfo
       model?: string
     }>(response, { endpoint: '/chat' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = data.usage || {
+    const usage: IntelligenceUsageInfo = data.usage || {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0
@@ -75,8 +75,8 @@ export class LocalProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     const result = await this.chat(payload, options)
     yield {
       delta: result.result ?? '',
@@ -87,8 +87,8 @@ export class LocalProvider extends IntelligenceProvider {
 
   async embedding(
     payload: IntelligenceEmbeddingPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<number[]>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<number[]>> {
     const startTime = Date.now()
     const traceId = this.generateTraceId()
 
@@ -108,7 +108,7 @@ export class LocalProvider extends IntelligenceProvider {
 
     const data = await this.parseJsonResponse<{
       embedding?: number[]
-      usage?: AiUsageInfo
+      usage?: IntelligenceUsageInfo
       model?: string
     }>(response, { endpoint: '/embedding' })
     const latency = Date.now() - startTime
@@ -125,8 +125,8 @@ export class LocalProvider extends IntelligenceProvider {
 
   async translate(
     payload: IntelligenceTranslatePayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     return this.chat(
       {
         messages: [
@@ -140,8 +140,8 @@ export class LocalProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    _options: AiInvokeOptions
-  ): Promise<AiInvokeResult<IntelligenceVisionOcrResult>> {
+    _options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     const traceId = this.generateTraceId()
     const startedAt = Date.now()
 

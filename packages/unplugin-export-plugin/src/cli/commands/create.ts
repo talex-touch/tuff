@@ -1,9 +1,8 @@
 import type { SelectOption } from '../prompts'
-import { exec } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import { t } from '../i18n'
+import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import {
   askConfirm,
   askSelect,
@@ -18,8 +17,6 @@ import {
   styled,
   withSpinner,
 } from '../prompts'
-
-const execAsync = promisify(exec)
 
 const TEMPLATE_REPO = 'https://github.com/talex-touch/tuff-plugin-template.git'
 const SQLITE_PERMISSION_ID = 'storage.sqlite'
@@ -57,7 +54,7 @@ function validatePluginName(name: string): boolean | string {
  */
 async function checkGitInstalled(): Promise<boolean> {
   try {
-    await execAsync('git --version')
+    await execFileSafe('git', ['--version'])
     return true
   }
   catch {
@@ -69,8 +66,12 @@ async function checkGitInstalled(): Promise<boolean> {
  * Clone template from GitHub
  */
 async function cloneTemplate(targetDir: string, branch?: string): Promise<void> {
-  const branchArg = branch ? `-b ${branch}` : ''
-  await execAsync(`git clone --depth 1 ${branchArg} ${TEMPLATE_REPO} "${targetDir}"`)
+  const args = ['clone', '--depth', '1']
+  if (branch) {
+    args.push('-b', branch)
+  }
+  args.push(TEMPLATE_REPO, targetDir)
+  await execFileSafe('git', args)
 
   // Remove .git folder to start fresh
   const gitDir = path.join(targetDir, '.git')

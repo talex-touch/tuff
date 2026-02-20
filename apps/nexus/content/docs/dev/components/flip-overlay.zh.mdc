@@ -1,0 +1,86 @@
+---
+title: FlipOverlay 翻转遮罩
+description: 从触发源翻转展开的 3D Overlay
+category: Feedback
+status: beta
+since: 1.0.0
+tags: [overlay, motion, transition]
+syncStatus: migrated
+---
+
+# FlipOverlay 翻转遮罩
+
+从触发源翻转展开的 3D Overlay，适合卡片详情、图片预览与过渡式页面。
+
+## 基础用法
+
+:::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const triggerRef = ref()
+  </script>
+
+  <template>
+    <TxButton ref="triggerRef" @click="open = true">打开 Overlay</TxButton>
+    <TxFlipOverlay v-model="open" :source="triggerRef?.$el">
+      <template #default="{ close }">
+        <div style="padding: 32px;">
+          <h3 style="margin: 0 0 8px;">详情视图</h3>
+          <p style="margin: 0 0 16px;">内容从触发源翻转展开。</p>
+          <TxButton size="sm" @click="close">关闭</TxButton>
+        </div>
+      </template>
+    </TxFlipOverlay>
+  </template>
+---
+:::
+
+## 设计要点
+
+- `source` 决定动画起点，可传 `HTMLElement` 或 `DOMRect`。
+- `rotateX` / `rotateY` 与 `perspective` 控制 3D 质感。
+- `randomTilt` 可为每次打开添加轻微随机偏移。
+- `maskClosable=false` 时只能通过 slot 的 `close()` 关闭。
+- 通过 `open/opened/close/closed` 事件联动外围 UI。
+
+## API
+
+### Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `modelValue` | `boolean` | `false` | 显示状态（v-model） |
+| `source` | `HTMLElement \| DOMRect \| null` | `null` | 动画起点 |
+| `sourceRadius` | `string \| null` | `null` | 起点圆角 |
+| `duration` | `number` | `480` | 动画时长（ms） |
+| `perspective` | `number` | `1200` | 3D 透视距离 |
+| `rotateX` | `number` | `6` | X 轴旋转角度 |
+| `rotateY` | `number` | `8` | Y 轴旋转角度 |
+| `randomTilt` | `boolean` | `true` | 随机轻微倾斜 |
+| `tiltRange` | `number` | `2` | 随机倾斜范围 |
+| `easeOut` | `string` | `'back.out(1.25)'` | 打开动画缓动 |
+| `easeIn` | `string` | `'back.in(1)'` | 关闭动画缓动 |
+| `maskClosable` | `boolean` | `true` | 点击遮罩关闭 |
+| `maskClass` | `string` | `''` | 遮罩 class |
+| `cardClass` | `string` | `''` | 卡片 class |
+
+### Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `open` | - | 打开动画开始 |
+| `opened` | - | 打开动画完成 |
+| `close` | - | 关闭动画开始 |
+| `closed` | - | 关闭动画完成 |
+| `update:expanded` | `(value: boolean)` | 同步 expanded |
+| `update:animating` | `(value: boolean)` | 同步 animating |
+
+### Slots
+
+| 插槽 | 参数 | 说明 |
+|------|------|------|
+| `default` | `{ close, expanded, animating }` | Overlay 内容 |

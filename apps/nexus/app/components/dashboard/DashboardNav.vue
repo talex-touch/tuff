@@ -30,13 +30,13 @@ const sectionPaths: Record<string, string> = {
   assets: '/dashboard/assets',
   plugins: '/dashboard/assets',
   intelligence: '/dashboard/admin/intelligence',
+  'intelligence-lab': '/dashboard/admin/intelligence-lab',
   users: '/dashboard/admin/users',
   subscriptions: '/dashboard/admin/subscriptions',
   audits: '/dashboard/admin/audits',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   credits: '/dashboard/credits',
-  adminCredits: '/dashboard/admin/credits',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
   reviews: '/dashboard/admin/reviews',
@@ -73,7 +73,7 @@ const workspaceMenuItems = computed(() => mapItems([
   },
   {
     id: 'credits',
-    label: t('dashboard.sections.menu.credits', 'AI 积分'),
+    label: t('dashboard.sections.menu.credits', 'Intelligence 积分'),
     icon: 'i-carbon-currency',
   },
 ]))
@@ -118,14 +118,14 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-notification',
     },
     {
-      id: 'intelligence',
-      label: t('dashboard.sections.menu.intelligence', 'AI 渠道'),
-      icon: 'i-carbon-machine-learning-model',
+      id: 'intelligence-lab',
+      label: t('dashboard.sections.menu.intelligenceLab', 'Intelligence Lab'),
+      icon: 'i-carbon-beaker',
     },
     {
-      id: 'adminCredits',
-      label: t('dashboard.sections.menu.adminCredits', 'AI 积分'),
-      icon: 'i-carbon-currency',
+      id: 'intelligence',
+      label: t('dashboard.sections.menu.intelligence', 'Intelligence 模块'),
+      icon: 'i-carbon-machine-learning-model',
     },
     {
       id: 'images',
@@ -181,7 +181,9 @@ const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
   if (route.path.startsWith('/dashboard/admin/credits'))
-    return 'adminCredits'
+    return 'intelligence'
+  if (route.path.startsWith('/dashboard/admin/intelligence-lab'))
+    return 'intelligence-lab'
   if (route.path.startsWith('/dashboard/admin/intelligence'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/credits'))

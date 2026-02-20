@@ -1,4 +1,4 @@
-import type { AiInvokeResult, IntelligenceChatPayload } from '@talex-touch/utils'
+import type { IntelligenceInvokeResult, IntelligenceChatPayload } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
@@ -18,7 +18,7 @@ export class ChatCapabilityTester extends BaseCapabilityTester<IntelligenceChatP
     }
   }
 
-  formatTestResult(result: AiInvokeResult<string>) {
+  formatTestResult(result: IntelligenceInvokeResult<string>) {
     const preview = result.result.length > 200 ? `${result.result.slice(0, 200)}...` : result.result
 
     return {

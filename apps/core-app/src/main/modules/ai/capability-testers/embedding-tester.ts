@@ -1,4 +1,4 @@
-import type { AiInvokeResult, IntelligenceEmbeddingPayload } from '@talex-touch/utils'
+import type { IntelligenceInvokeResult, IntelligenceEmbeddingPayload } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 
@@ -16,7 +16,7 @@ export class EmbeddingCapabilityTester extends BaseCapabilityTester<
     }
   }
 
-  formatTestResult(result: AiInvokeResult<number[]>) {
+  formatTestResult(result: IntelligenceInvokeResult<number[]>) {
     const vectorLength = result.result.length
     const preview = `向量维度: ${vectorLength}, 前5个值: [${result.result
       .slice(0, 5)

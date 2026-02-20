@@ -24,6 +24,7 @@ import path from 'node:path'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginStatus } from '@talex-touch/utils/plugin'
+import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import {
   createBoxSDK,
   createClipboardManager,
@@ -1677,7 +1678,15 @@ export class TouchPlugin implements ITouchPlugin {
    */
   getPluginFile(fileName: string): object {
     const configPath = this.getConfigPath()
-    const p = path.resolve(configPath, fileName)
+    const safePath = resolveSafePath(configPath, fileName)
+    if (!safePath.resolvedPath) {
+      pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
+        fileName,
+        error: safePath.error
+      })
+      return {}
+    }
+    const p = safePath.resolvedPath
 
     // 确保目录存在
     fse.ensureDirSync(configPath)
@@ -1698,6 +1707,10 @@ export class TouchPlugin implements ITouchPlugin {
     options?: { broadcast?: boolean }
   ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
+    const safePath = resolveSafePath(configPath, fileName)
+    if (!safePath.resolvedPath) {
+      return { success: false, error: safePath.error ?? 'Invalid file path' }
+    }
     const configData = JSON.stringify(content)
     if (typeof configData !== 'string') {
       return { success: false, error: 'Invalid content' }
@@ -1711,7 +1724,7 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    const p = path.join(configPath, fileName)
+    const p = safePath.resolvedPath
     fse.ensureDirSync(configPath)
     fse.writeFileSync(p, configData)
 
@@ -1732,7 +1745,11 @@ export class TouchPlugin implements ITouchPlugin {
     options?: { broadcast?: boolean }
   ): { success: boolean; error?: string } {
     const configPath = this.getConfigPath()
-    const p = path.join(configPath, fileName)
+    const safePath = resolveSafePath(configPath, fileName)
+    if (!safePath.resolvedPath) {
+      return { success: false, error: safePath.error ?? 'Invalid file path' }
+    }
+    const p = safePath.resolvedPath
 
     if (fse.existsSync(p)) {
       fse.removeSync(p)
@@ -1884,7 +1901,15 @@ export class TouchPlugin implements ITouchPlugin {
     truncated?: boolean
   } | null {
     const configPath = this.getConfigPath()
-    const filePath = path.join(configPath, fileName)
+    const safePath = resolveSafePath(configPath, fileName)
+    if (!safePath.resolvedPath) {
+      pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
+        fileName,
+        error: safePath.error
+      })
+      return null
+    }
+    const filePath = safePath.resolvedPath
 
     if (!fse.existsSync(filePath)) {
       return null

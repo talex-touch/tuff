@@ -18,7 +18,7 @@ const SettingUpdate = defineAsyncComponent(() => import('./SettingUpdate.vue'))
 const isWindows = computed(() => window.electron?.process?.platform === 'win32')
 </script>
 <template>
-  <ViewTemplate title="Settings">
+  <ViewTemplate title="$I18n:router.appSettings">
     <div class="AppSettings-Container">
       <SettingHeader />
 

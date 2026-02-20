@@ -100,6 +100,8 @@ export class DownloadCenterModule extends BaseModule {
       throw new Error('DownloadCenterModule requires a module directory but none was provided')
     }
 
+    const t0 = performance.now()
+
     // 初始化配置
     this.config = {
       ...defaultDownloadConfig,
@@ -125,8 +127,12 @@ export class DownloadCenterModule extends BaseModule {
       this.errorLogger
     )
 
+    const t1 = performance.now()
+
     // 初始化错误日志记录器
     await this.errorLogger.initialize()
+
+    const t2 = performance.now()
 
     // Set up notification click handler
     this.notificationService.setNotificationClickCallback((taskId, action) => {
@@ -151,9 +157,19 @@ export class DownloadCenterModule extends BaseModule {
     // 启动任务调度器
     this.startTaskScheduler()
 
+    const t3 = performance.now()
+
     // 清理孤立的临时文件
     await this.cleanupTempFiles()
 
+    const t4 = performance.now()
+
+    const totalMs = Math.round(t4 - t0)
+    if (totalMs > 500) {
+      console.warn(
+        `[DownloadCenter] Slow init ${totalMs}ms: components=${Math.round(t1 - t0)}ms errorLogger=${Math.round(t2 - t1)}ms setup=${Math.round(t3 - t2)}ms cleanup=${Math.round(t4 - t3)}ms`
+      )
+    }
     console.log('DownloadCenterModule initialized')
   }
 

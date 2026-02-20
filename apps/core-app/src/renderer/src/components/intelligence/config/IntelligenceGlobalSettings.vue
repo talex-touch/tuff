@@ -1,16 +1,16 @@
 <script lang="ts" name="IntelligenceGlobalSettings" setup>
-import type { AISDKGlobalConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceGlobalConfig } from '@talex-touch/utils/types/intelligence'
 import { TxSelectItem } from '@talex-touch/tuffex'
 import { getCurrentInstance, ref, watch } from 'vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 
 const props = defineProps<{
-  modelValue: AISDKGlobalConfig
+  modelValue: IntelligenceGlobalConfig
 }>()
 
 const emits = defineEmits<{
-  'update:modelValue': [value: AISDKGlobalConfig]
+  'update:modelValue': [value: IntelligenceGlobalConfig]
   change: []
 }>()
 
@@ -44,7 +44,7 @@ watch(
 )
 
 function handleAuditChange() {
-  const updated: AISDKGlobalConfig = {
+  const updated: IntelligenceGlobalConfig = {
     ...props.modelValue,
     enableAudit: localEnableAudit.value
   }
@@ -53,7 +53,7 @@ function handleAuditChange() {
 }
 
 function handleCacheChange() {
-  const updated: AISDKGlobalConfig = {
+  const updated: IntelligenceGlobalConfig = {
     ...props.modelValue,
     enableCache: localEnableCache.value
   }
@@ -71,7 +71,7 @@ function handleCacheChange() {
 }
 
 function handleCacheExpirationChange() {
-  const updated: AISDKGlobalConfig = {
+  const updated: IntelligenceGlobalConfig = {
     ...props.modelValue,
     cacheExpiration: localCacheExpiration.value
   }

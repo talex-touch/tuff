@@ -14,13 +14,16 @@ interface LocalizedText {
 
 interface DashboardUpdate {
   id: string
-  type: 'news' | 'release'
+  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
+  scope: 'web' | 'system' | 'both'
+  channels: string[]
   releaseTag: string | null
   title: LocalizedText
   timestamp: string
   summary: LocalizedText
   tags: string[]
   link: string
+  payloadUrl?: string | null
 }
 
 interface DashboardTeam {

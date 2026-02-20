@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
@@ -48,7 +48,7 @@ const testCapabilityId = ref<string>('text.chat')
 const promptTestResult = ref<UiCapabilityTestResult | null>(null)
 const promptTesting = ref(false)
 
-const capabilityList = computed<AISDKCapabilityConfig[]>(() =>
+const capabilityList = computed<IntelligenceCapabilityConfig[]>(() =>
   Object.values(capabilities.value || {}).sort((a, b) => a.id.localeCompare(b.id))
 )
 

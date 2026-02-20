@@ -33,6 +33,8 @@
     "@auth/core": "^0.34.1",
     "@floating-ui/vue": "catalog:",
     "@iconify-json/cib": "catalog:",
+    "@langchain/core": "^0.3.80",
+    "@langchain/openai": "^0.3.17",
     "@sentry/nuxt": "catalog:",
     "@sidebase/nuxt-auth": "^0.9.4",
     "@talex-touch/tuffex": "workspace:*",

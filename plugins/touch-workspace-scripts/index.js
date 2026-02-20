@@ -3,12 +3,20 @@ const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const path = require('node:path')
 const { spawn } = require('node:child_process')
+let spawnShellCommand
+try {
+  ({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
+}
+catch {
+  spawnShellCommand = null
+}
 
 const PLUGIN_NAME = 'touch-workspace-scripts'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
 const ACTION_ID = 'workspace-scripts'
 const CONFIG_FILE = 'workspace-scripts.json'
+const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 
 const DEFAULT_CONFIG = {
   workspacePath: '',
@@ -192,9 +200,13 @@ async function confirmRun(command) {
 }
 
 function runCommand(command, cwd) {
-  const child = spawn(command, {
+  if (SHELL_UNSAFE_PATTERN.test(command)) {
+    logger?.warn?.('[workspace-scripts] blocked unsafe command payload')
+    return
+  }
+  const spawnRunner = spawnShellCommand || ((cmd, options) => spawn(cmd, { ...options, shell: true }))
+  const child = spawnRunner(command, {
     cwd,
-    shell: true,
     detached: true,
     stdio: 'ignore',
     windowsHide: true,

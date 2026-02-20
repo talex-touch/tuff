@@ -1,7 +1,7 @@
 # Nexus Tuffex 组件展示整合 PRD（草案）
 
 Status: Draft
-Last Updated: 2026-02-12
+Last Updated: 2026-02-19
 
 ## 当前迁移进度（截至 2026-02-12）
 
@@ -14,16 +14,17 @@ Last Updated: 2026-02-12
 
 | 项目 | 结果 | 进度结论 |
 |------|------|----------|
-| 源组件总数 | 92 | 基线 |
-| Nexus 双语覆盖（zh+en 同时存在） | 90/92 | 97.8%，进行中 |
-| Nexus zh 文档数 | 93 | 已含扩展组件 |
-| Nexus en 文档数 | 93 | 已含扩展组件 |
-| `syncStatus: migrated`（zh） | 93/93 | 已完成 |
-| `syncStatus: migrated`（en） | 93/93 | 已完成 |
+| 源组件总数 | 95 | 基线 |
+| Nexus 双语覆盖（zh+en 同时存在） | 95/95 | 100%，已完成 |
+| Nexus zh 文档数 | 104 | 已含扩展组件 |
+| Nexus en 文档数 | 104 | 已含扩展组件 |
+| `syncStatus: migrated`（zh） | 104/104 | 已完成 |
+| `syncStatus: migrated`（en） | 104/104 | 已完成 |
+| `verified: true` | 1/104 | 持续补齐 |
 
 ### 差异清单
-- 未迁移（2）：`code-editor`、`flip-overlay`。
-- Nexus 扩展（3）：`foundations`、`flat-button`、`flat-input`（不在原 `packages/tuffex/docs/components` 基线中）。
+- 未迁移：无。
+- Nexus 扩展（9）：`foundations`、`flat-button`、`flat-input`、`flat-radio`、`flat-select`、`base-anchor`、`base-surface`、`error-state`、`guide-state`。
 
 ## 联调测试清单（你可一项一项执行）
 
@@ -35,8 +36,8 @@ Last Updated: 2026-02-12
 | 2 | 迁移看板可加载 | `DocsComponentSyncTable` 能展示组件与状态，无加载错误 | 待测 |  |
 | 3 | 双语页面一致性 | 抽样 10 个组件，zh/en 页面结构一致、示例可运行 | 待测 |  |
 | 4 | 已迁移组件基础回归 | `button`、`input`、`select`、`dialog`、`table`、`tree`、`chat` 页面示例可交互 | 进行中 | `button` 已验证（2026-02-12） |
-| 5 | 未迁移项补齐：code-editor | 新增 `code-editor.zh.mdc` 与 `code-editor.en.mdc`，看板状态可见 | 待测 |  |
-| 6 | 未迁移项补齐：flip-overlay | 新增 `flip-overlay.zh.mdc` 与 `flip-overlay.en.mdc`，看板状态可见 | 待测 |  |
+| 5 | 未迁移项补齐：code-editor | 新增 `code-editor.zh.mdc` 与 `code-editor.en.mdc`，看板状态可见 | 待测 | 文档已新增，待验证 |
+| 6 | 未迁移项补齐：flip-overlay | 新增 `flip-overlay.zh.mdc` 与 `flip-overlay.en.mdc`，看板状态可见 | 待测 | 文档已新增，待验证 |
 | 7 | 扩展项核对 | `foundations`、`flat-button`、`flat-input` 与组件实现一致、无失链 | 待测 |  |
 | 8 | 导航与检索回归 | 侧边栏、上一页/下一页、站内搜索能命中新增/迁移页 | 待测 |  |
 | 9 | 文档构建回归 | `pnpm -C "apps/nexus" run lint` 通过（允许记录与本次改动无关的既有失败） | 待测 |  |

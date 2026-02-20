@@ -359,46 +359,6 @@ export interface IntelligenceSummarizePayload {
   style?: 'concise' | 'detailed' | 'bullet-points'
 }
 
-// Legacy aliases for backward compatibility
-/** @deprecated Use IntelligenceProviderType instead. */
-export type AiProviderType = IntelligenceProviderType
-/** @deprecated Use IntelligenceCapabilityType instead. */
-export type AiCapabilityType = IntelligenceCapabilityType
-/** @deprecated Use IntelligenceProviderRateLimit instead. */
-export type AiProviderRateLimit = IntelligenceProviderRateLimit
-/** @deprecated Use IntelligenceVisionImageSource instead. */
-export type AiVisionImageSource = IntelligenceVisionImageSource
-/** @deprecated Use IntelligenceVisionOcrBlock instead. */
-export type AiVisionOcrBlock = IntelligenceVisionOcrBlock
-/** @deprecated Use IntelligenceVisionOcrResult instead. */
-export type AiVisionOcrResult = IntelligenceVisionOcrResult
-/** @deprecated Use IntelligenceVisionOcrPayload instead. */
-export type AiVisionOcrPayload = IntelligenceVisionOcrPayload
-/** @deprecated Use IntelligenceProviderConfig instead. */
-export type AiProviderConfig = IntelligenceProviderConfig
-/** @deprecated Use IntelligenceMessage instead. */
-export type AiMessage = IntelligenceMessage
-/** @deprecated Use IntelligenceInvokeOptions instead. */
-export type AiInvokeOptions = IntelligenceInvokeOptions
-/** @deprecated Use IntelligenceInvokeContext instead. */
-export type AiInvokeContext = IntelligenceInvokeContext
-/** @deprecated Use IntelligenceUsageInfo instead. */
-export type AiUsageInfo = IntelligenceUsageInfo
-/** @deprecated Use IntelligenceInvokeResult instead. */
-export type AiInvokeResult<T = any> = IntelligenceInvokeResult<T>
-/** @deprecated Use IntelligenceStreamChunk instead. */
-export type AiStreamChunk = IntelligenceStreamChunk
-/** @deprecated Use IntelligenceCapabilityDescriptor instead. */
-export type AiCapabilityDescriptor = IntelligenceCapabilityDescriptor
-/** @deprecated Use IntelligenceChatPayload instead. */
-export type AiChatPayload = IntelligenceChatPayload
-/** @deprecated Use IntelligenceEmbeddingPayload instead. */
-export type AiEmbeddingPayload = IntelligenceEmbeddingPayload
-/** @deprecated Use IntelligenceTranslatePayload instead. */
-export type AiTranslatePayload = IntelligenceTranslatePayload
-/** @deprecated Use IntelligenceSummarizePayload instead. */
-export type AiSummarizePayload = IntelligenceSummarizePayload
-
 // ============================================================================
 // Extended Payload Types
 // ============================================================================
@@ -763,54 +723,6 @@ export interface IntelligenceClassificationResult {
   explanation?: string
 }
 
-// Legacy aliases for extended payload types
-/** @deprecated Use IntelligenceRewritePayload instead. */
-export type AiRewritePayload = IntelligenceRewritePayload
-/** @deprecated Use IntelligenceGrammarCheckPayload instead. */
-export type AiGrammarCheckPayload = IntelligenceGrammarCheckPayload
-/** @deprecated Use IntelligenceGrammarCheckResult instead. */
-export type AiGrammarCheckResult = IntelligenceGrammarCheckResult
-/** @deprecated Use IntelligenceCodeGeneratePayload instead. */
-export type AiCodeGeneratePayload = IntelligenceCodeGeneratePayload
-/** @deprecated Use IntelligenceCodeGenerateResult instead. */
-export type AiCodeGenerateResult = IntelligenceCodeGenerateResult
-/** @deprecated Use IntelligenceCodeExplainPayload instead. */
-export type AiCodeExplainPayload = IntelligenceCodeExplainPayload
-/** @deprecated Use IntelligenceCodeExplainResult instead. */
-export type AiCodeExplainResult = IntelligenceCodeExplainResult
-/** @deprecated Use IntelligenceCodeReviewPayload instead. */
-export type AiCodeReviewPayload = IntelligenceCodeReviewPayload
-/** @deprecated Use IntelligenceCodeReviewResult instead. */
-export type AiCodeReviewResult = IntelligenceCodeReviewResult
-/** @deprecated Use IntelligenceCodeRefactorPayload instead. */
-export type AiCodeRefactorPayload = IntelligenceCodeRefactorPayload
-/** @deprecated Use IntelligenceCodeRefactorResult instead. */
-export type AiCodeRefactorResult = IntelligenceCodeRefactorResult
-/** @deprecated Use IntelligenceCodeDebugPayload instead. */
-export type AiCodeDebugPayload = IntelligenceCodeDebugPayload
-/** @deprecated Use IntelligenceCodeDebugResult instead. */
-export type AiCodeDebugResult = IntelligenceCodeDebugResult
-/** @deprecated Use IntelligenceIntentDetectPayload instead. */
-export type AiIntentDetectPayload = IntelligenceIntentDetectPayload
-/** @deprecated Use IntelligenceIntentDetectResult instead. */
-export type AiIntentDetectResult = IntelligenceIntentDetectResult
-/** @deprecated Use IntelligenceSentimentAnalyzePayload instead. */
-export type AiSentimentAnalyzePayload = IntelligenceSentimentAnalyzePayload
-/** @deprecated Use IntelligenceSentimentAnalyzeResult instead. */
-export type AiSentimentAnalyzeResult = IntelligenceSentimentAnalyzeResult
-/** @deprecated Use IntelligenceContentExtractPayload instead. */
-export type AiContentExtractPayload = IntelligenceContentExtractPayload
-/** @deprecated Use IntelligenceContentExtractResult instead. */
-export type AiContentExtractResult = IntelligenceContentExtractResult
-/** @deprecated Use IntelligenceKeywordsExtractPayload instead. */
-export type AiKeywordsExtractPayload = IntelligenceKeywordsExtractPayload
-/** @deprecated Use IntelligenceKeywordsExtractResult instead. */
-export type AiKeywordsExtractResult = IntelligenceKeywordsExtractResult
-/** @deprecated Use IntelligenceClassificationPayload instead. */
-export type AiClassificationPayload = IntelligenceClassificationPayload
-/** @deprecated Use IntelligenceClassificationResult instead. */
-export type AiClassificationResult = IntelligenceClassificationResult
-
 // ============================================================================
 // Audio Payload Types
 // ============================================================================
@@ -922,20 +834,6 @@ export interface IntelligenceAudioTranscribeResult {
     confidence?: number
   }>
 }
-
-// Legacy aliases for audio types
-/** @deprecated Use IntelligenceTTSPayload instead. */
-export type AiTTSPayload = IntelligenceTTSPayload
-/** @deprecated Use IntelligenceTTSResult instead. */
-export type AiTTSResult = IntelligenceTTSResult
-/** @deprecated Use IntelligenceSTTPayload instead. */
-export type AiSTTPayload = IntelligenceSTTPayload
-/** @deprecated Use IntelligenceSTTResult instead. */
-export type AiSTTResult = IntelligenceSTTResult
-/** @deprecated Use IntelligenceAudioTranscribePayload instead. */
-export type AiAudioTranscribePayload = IntelligenceAudioTranscribePayload
-/** @deprecated Use IntelligenceAudioTranscribeResult instead. */
-export type AiAudioTranscribeResult = IntelligenceAudioTranscribeResult
 
 // ============================================================================
 // Vision Extended Payload Types
@@ -1083,24 +981,6 @@ export interface IntelligenceImageEditResult {
   revisedPrompt?: string
 }
 
-// Legacy aliases for vision types
-/** @deprecated Use IntelligenceImageCaptionPayload instead. */
-export type AiImageCaptionPayload = IntelligenceImageCaptionPayload
-/** @deprecated Use IntelligenceImageCaptionResult instead. */
-export type AiImageCaptionResult = IntelligenceImageCaptionResult
-/** @deprecated Use IntelligenceImageAnalyzePayload instead. */
-export type AiImageAnalyzePayload = IntelligenceImageAnalyzePayload
-/** @deprecated Use IntelligenceImageAnalyzeResult instead. */
-export type AiImageAnalyzeResult = IntelligenceImageAnalyzeResult
-/** @deprecated Use IntelligenceImageGeneratePayload instead. */
-export type AiImageGeneratePayload = IntelligenceImageGeneratePayload
-/** @deprecated Use IntelligenceImageGenerateResult instead. */
-export type AiImageGenerateResult = IntelligenceImageGenerateResult
-/** @deprecated Use IntelligenceImageEditPayload instead. */
-export type AiImageEditPayload = IntelligenceImageEditPayload
-/** @deprecated Use IntelligenceImageEditResult instead. */
-export type AiImageEditResult = IntelligenceImageEditResult
-
 // ============================================================================
 // RAG & Search Payload Types
 // ============================================================================
@@ -1205,20 +1085,6 @@ export interface IntelligenceRerankResult {
     metadata?: Record<string, any>
   }>
 }
-
-// Legacy aliases for RAG types
-/** @deprecated Use IntelligenceRAGQueryPayload instead. */
-export type AiRAGQueryPayload = IntelligenceRAGQueryPayload
-/** @deprecated Use IntelligenceRAGQueryResult instead. */
-export type AiRAGQueryResult = IntelligenceRAGQueryResult
-/** @deprecated Use IntelligenceSemanticSearchPayload instead. */
-export type AiSemanticSearchPayload = IntelligenceSemanticSearchPayload
-/** @deprecated Use IntelligenceSemanticSearchResult instead. */
-export type AiSemanticSearchResult = IntelligenceSemanticSearchResult
-/** @deprecated Use IntelligenceRerankPayload instead. */
-export type AiRerankPayload = IntelligenceRerankPayload
-/** @deprecated Use IntelligenceRerankResult instead. */
-export type AiRerankResult = IntelligenceRerankResult
 
 // ============================================================================
 // Prompt Workflow System
@@ -1340,6 +1206,132 @@ export interface PromptWorkflowContext {
 }
 
 // ============================================================================
+// TuffIntelligence Orchestration
+// ============================================================================
+
+export type TuffIntelligenceSessionStatus
+  = | 'idle'
+    | 'planning'
+    | 'planned'
+    | 'executing'
+    | 'reflecting'
+    | 'waiting_approval'
+    | 'paused_disconnect'
+    | 'resuming'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+
+export type TuffIntelligenceActionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
+export interface TuffIntelligenceActionNode {
+  id: string
+  type: 'intent' | 'plan' | 'tool' | 'agent' | 'capability' | 'reflect' | 'result'
+  title: string
+  status: TuffIntelligenceActionStatus
+  capabilityId?: string
+  toolId?: string
+  input?: unknown
+  output?: unknown
+  error?: string
+  parentId?: string
+  metadata?: Record<string, any>
+  createdAt: number
+  updatedAt?: number
+}
+
+export interface TuffIntelligenceActionGraph {
+  sessionId: string
+  nodes: TuffIntelligenceActionNode[]
+  edges: Array<{ from: string, to: string, kind?: 'sequence' | 'dependency' | 'reflection' }>
+  version: number
+  updatedAt: number
+}
+
+export interface TuffIntelligenceTurn {
+  id: string
+  sessionId: string
+  status: TuffIntelligenceSessionStatus
+  objective?: string
+  userInput?: string
+  plannerModel?: string
+  executionModel?: string
+  actionIds: string[]
+  reflection?: string
+  error?: string
+  metadata?: Record<string, any>
+  startedAt: number
+  completedAt?: number
+}
+
+export interface TuffIntelligenceSession {
+  id: string
+  status: TuffIntelligenceSessionStatus
+  pauseReason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
+  lastEventSeq?: number
+  lastCheckpointAt?: number
+  resumeHint?: string
+  objective?: string
+  context?: Record<string, any>
+  metadata?: Record<string, any>
+  currentTurnId?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface TuffIntelligenceTraceEvent {
+  id: string
+  sessionId: string
+  turnId?: string
+  type:
+    | 'session.started'
+    | 'session.resumed'
+    | 'session.paused'
+    | 'session.cancelled'
+    | 'plan.created'
+    | 'plan.updated'
+    | 'execution.started'
+    | 'execution.completed'
+    | 'execution.failed'
+    | 'tool.called'
+    | 'tool.completed'
+    | 'tool.approval_required'
+    | 'tool.approved'
+    | 'tool.rejected'
+    | 'reflection.completed'
+    | 'state.snapshot'
+  level: 'debug' | 'info' | 'warn' | 'error'
+  message: string
+  payload?: Record<string, any>
+  timestamp: number
+}
+
+export interface TuffIntelligenceApprovalTicket {
+  id: string
+  sessionId: string
+  turnId?: string
+  actionId?: string
+  toolId: string
+  riskLevel: 'low' | 'medium' | 'high' | 'critical'
+  reason: string
+  status: 'pending' | 'approved' | 'rejected'
+  requestedAt: number
+  resolvedAt?: number
+  resolvedBy?: string
+  metadata?: Record<string, any>
+}
+
+export interface TuffIntelligenceStateSnapshot {
+  sessionId: string
+  status: TuffIntelligenceSessionStatus
+  currentTurn?: TuffIntelligenceTurn
+  actionGraph: TuffIntelligenceActionGraph
+  pendingApprovals: TuffIntelligenceApprovalTicket[]
+  lastTraceEvent?: TuffIntelligenceTraceEvent
+  updatedAt: number
+}
+
+// ============================================================================
 // Agent System
 // ============================================================================
 
@@ -1406,14 +1398,6 @@ export interface IntelligenceAgentResult {
   /** Number of iterations. */
   iterations: number
 }
-
-// Legacy aliases for agent types
-/** @deprecated Use IntelligenceAgentTool instead. */
-export type AiAgentTool = IntelligenceAgentTool
-/** @deprecated Use IntelligenceAgentPayload instead. */
-export type AiAgentPayload = IntelligenceAgentPayload
-/** @deprecated Use IntelligenceAgentResult instead. */
-export type AiAgentResult = IntelligenceAgentResult
 
 /**
  * SDK configuration.
@@ -1532,20 +1516,6 @@ export interface IntelligenceSDKPersistedConfig {
   version: number
 }
 
-// Legacy aliases for SDK types
-/** @deprecated Use IntelligenceSDKConfig instead. */
-export type AiSDKConfig = IntelligenceSDKConfig
-/** @deprecated Use IntelligenceStrategyConfig instead. */
-export type AiStrategyConfig = IntelligenceStrategyConfig
-/** @deprecated Use IntelligenceAuditLog instead. */
-export type AiAuditLog = IntelligenceAuditLog
-/** @deprecated Use IntelligenceCapabilityProviderBinding instead. */
-export type AiCapabilityProviderBinding = IntelligenceCapabilityProviderBinding
-/** @deprecated Use IntelligenceCapabilityRoutingConfig instead. */
-export type AiCapabilityRoutingConfig = IntelligenceCapabilityRoutingConfig
-/** @deprecated Use IntelligenceSDKPersistedConfig instead. */
-export type AiSDKPersistedConfig = IntelligenceSDKPersistedConfig
-
 /**
  * Provider adapter interface.
  */
@@ -1603,9 +1573,6 @@ export interface IntelligenceProviderAdapter {
   agent?: (payload: IntelligenceAgentPayload, options: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
 }
 
-/** @deprecated Use IntelligenceProviderAdapter instead. */
-export type AiProviderAdapter = IntelligenceProviderAdapter
-
 /**
  * Provider manager adapter interface.
  */
@@ -1622,7 +1589,6 @@ export interface IntelligenceProviderManagerAdapter {
   createProviderInstance: (config: IntelligenceProviderConfig) => IntelligenceProviderAdapter
 }
 
-/** @deprecated Use IntelligenceProviderManagerAdapter instead. */
 export type ProviderManagerAdapter = IntelligenceProviderManagerAdapter
 
 /**
@@ -1655,9 +1621,6 @@ export interface IntelligenceGlobalConfig {
   parallelRequests?: boolean
 }
 
-/** @deprecated Use IntelligenceGlobalConfig instead. */
-export type AISDKGlobalConfig = IntelligenceGlobalConfig
-
 /**
  * Test result structure.
  */
@@ -1672,7 +1635,6 @@ export interface IntelligenceTestResult {
   timestamp: number
 }
 
-/** @deprecated Use IntelligenceTestResult instead. */
 export type TestResult = IntelligenceTestResult
 
 /**
@@ -1695,9 +1657,6 @@ export interface IntelligenceCapabilityConfig {
   metadata?: Record<string, any>
 }
 
-/** @deprecated Use IntelligenceCapabilityConfig instead. */
-export type AISDKCapabilityConfig = IntelligenceCapabilityConfig
-
 /**
  * Storage data structure for SDK.
  */
@@ -1711,9 +1670,6 @@ export interface IntelligenceStorageData {
   /** Data version. */
   version: number
 }
-
-/** @deprecated Use IntelligenceStorageData instead. */
-export type AISDKStorageData = IntelligenceStorageData
 
 /**
  * Default provider configurations.
@@ -1802,14 +1758,14 @@ export const DEFAULT_PROVIDERS: IntelligenceProviderConfig[] = [
   },
 ]
 
-export const DEFAULT_GLOBAL_CONFIG: AISDKGlobalConfig = {
+export const DEFAULT_GLOBAL_CONFIG: IntelligenceGlobalConfig = {
   defaultStrategy: 'adaptive-default',
   enableAudit: false,
   enableCache: true,
   cacheExpiration: 3600,
 }
 
-export const DEFAULT_CAPABILITIES: Record<string, AISDKCapabilityConfig> = {
+export const DEFAULT_CAPABILITIES: Record<string, IntelligenceCapabilityConfig> = {
   'text.chat': {
     id: 'text.chat',
     label: '对话 / Chat',
@@ -2057,6 +2013,6 @@ export interface CapabilityTestResult {
   timestamp: number
 }
 
-export interface CapabilityBinding extends AiCapabilityProviderBinding {
+export interface CapabilityBinding extends IntelligenceCapabilityProviderBinding {
   provider?: IntelligenceProviderConfig
 }

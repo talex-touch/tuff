@@ -115,29 +115,29 @@ export const PERMISSIONS: PermissionDefinition[] = [
     icon: 'PanelTop',
   },
 
-  // AI permissions
+  // Intelligence permissions
   {
-    id: 'ai.basic',
-    category: PermissionCategory.AI,
+    id: 'intelligence.basic',
+    category: PermissionCategory.INTELLIGENCE,
     risk: PermissionRiskLevel.LOW,
-    nameKey: 'permission.ai.basic.name',
-    descKey: 'permission.ai.basic.desc',
+    nameKey: 'permission.intelligence.basic.name',
+    descKey: 'permission.intelligence.basic.desc',
     icon: 'Bot',
   },
   {
-    id: 'ai.advanced',
-    category: PermissionCategory.AI,
-    risk: PermissionRiskLevel.MEDIUM,
-    nameKey: 'permission.ai.advanced.name',
-    descKey: 'permission.ai.advanced.desc',
-    icon: 'Sparkles',
+    id: 'intelligence.admin',
+    category: PermissionCategory.INTELLIGENCE,
+    risk: PermissionRiskLevel.HIGH,
+    nameKey: 'permission.intelligence.admin.name',
+    descKey: 'permission.intelligence.admin.desc',
+    icon: 'Shield',
   },
   {
-    id: 'ai.agents',
-    category: PermissionCategory.AI,
+    id: 'intelligence.agents',
+    category: PermissionCategory.INTELLIGENCE,
     risk: PermissionRiskLevel.HIGH,
-    nameKey: 'permission.ai.agents.name',
-    descKey: 'permission.ai.agents.desc',
+    nameKey: 'permission.intelligence.agents.name',
+    descKey: 'permission.intelligence.agents.desc',
     icon: 'Users',
   },
 
@@ -186,6 +186,14 @@ export const PERMISSIONS: PermissionDefinition[] = [
   },
 ]
 
+export function normalizePermissionId(id: string): string {
+  return id
+}
+
+export function getPermissionIdCandidates(id: string): string[] {
+  return [normalizePermissionId(id)]
+}
+
 /**
  * Permission registry class
  */
@@ -194,14 +202,14 @@ export class PermissionRegistry {
 
   constructor() {
     // Register all built-in permissions
-    PERMISSIONS.forEach(p => this.permissions.set(p.id, p))
+    PERMISSIONS.forEach((p) => this.permissions.set(normalizePermissionId(p.id), p))
   }
 
   /**
    * Get permission definition by ID
    */
   get(id: string): PermissionDefinition | undefined {
-    return this.permissions.get(id)
+    return this.permissions.get(normalizePermissionId(id))
   }
 
   /**
@@ -229,14 +237,14 @@ export class PermissionRegistry {
    * Check if permission exists
    */
   has(id: string): boolean {
-    return this.permissions.has(id)
+    return this.permissions.has(normalizePermissionId(id))
   }
 
   /**
    * Register custom permission
    */
   register(permission: PermissionDefinition): void {
-    this.permissions.set(permission.id, permission)
+    this.permissions.set(normalizePermissionId(permission.id), permission)
   }
 }
 
@@ -269,10 +277,10 @@ export const PermissionIds = {
   SYSTEM_NOTIFICATION: 'system.notification',
   SYSTEM_TRAY: 'system.tray',
 
-  // AI
-  AI_BASIC: 'ai.basic',
-  AI_ADVANCED: 'ai.advanced',
-  AI_AGENTS: 'ai.agents',
+  // Intelligence
+  INTELLIGENCE_BASIC: 'intelligence.basic',
+  INTELLIGENCE_ADMIN: 'intelligence.admin',
+  INTELLIGENCE_AGENTS: 'intelligence.agents',
 
   // Storage
   STORAGE_PLUGIN: 'storage.plugin',

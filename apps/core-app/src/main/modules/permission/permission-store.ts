@@ -10,7 +10,12 @@ import type {
   PluginPermissionStatus
 } from '@talex-touch/utils/permission'
 import path from 'node:path'
-import { DEFAULT_PERMISSIONS, getPluginPermissionStatus } from '@talex-touch/utils/permission'
+import {
+  DEFAULT_PERMISSIONS,
+  getPermissionIdCandidates,
+  getPluginPermissionStatus,
+  normalizePermissionId
+} from '@talex-touch/utils/permission'
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
 
@@ -101,13 +106,14 @@ export class PermissionStore {
     permissionId: string,
     grantedBy: 'user' | 'auto' | 'trust' = 'user'
   ): Promise<void> {
+    const normalizedPermissionId = normalizePermissionId(permissionId)
     if (!this.data.grants[pluginId]) {
       this.data.grants[pluginId] = {}
     }
 
-    this.data.grants[pluginId][permissionId] = {
+    this.data.grants[pluginId][normalizedPermissionId] = {
       pluginId,
-      permissionId,
+      permissionId: normalizedPermissionId,
       grantedAt: Date.now(),
       grantedBy
     }
@@ -116,7 +122,7 @@ export class PermissionStore {
     this.addAuditLog(
       'granted',
       pluginId,
-      permissionId,
+      normalizedPermissionId,
       grantedBy === 'trust' ? 'system' : grantedBy === 'auto' ? 'auto' : 'user'
     )
 
@@ -128,11 +134,14 @@ export class PermissionStore {
    * Revoke permission from plugin
    */
   async revoke(pluginId: string, permissionId: string): Promise<void> {
+    const normalizedPermissionId = normalizePermissionId(permissionId)
     if (this.data.grants[pluginId]) {
-      delete this.data.grants[pluginId][permissionId]
+      for (const candidate of getPermissionIdCandidates(normalizedPermissionId)) {
+        delete this.data.grants[pluginId][candidate]
+      }
 
       // Add audit log
-      this.addAuditLog('revoked', pluginId, permissionId, 'user')
+      this.addAuditLog('revoked', pluginId, normalizedPermissionId, 'user')
 
       this.dirty = true
       this.save()
@@ -159,11 +168,12 @@ export class PermissionStore {
    * Grant session-level permission (memory only, not persisted)
    */
   grantSession(pluginId: string, permissionId: string): void {
+    const normalizedPermissionId = normalizePermissionId(permissionId)
     if (!this.sessionGrants[pluginId]) {
       this.sessionGrants[pluginId] = new Set()
     }
-    this.sessionGrants[pluginId].add(permissionId)
-    this.addAuditLog('granted', pluginId, permissionId, 'user', 'Session-only grant')
+    this.sessionGrants[pluginId].add(normalizedPermissionId)
+    this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
   }
 
   /**
@@ -174,8 +184,9 @@ export class PermissionStore {
       this.sessionGrants[pluginId] = new Set()
     }
     for (const permissionId of permissionIds) {
-      this.sessionGrants[pluginId].add(permissionId)
-      this.addAuditLog('granted', pluginId, permissionId, 'user', 'Session-only grant')
+      const normalizedPermissionId = normalizePermissionId(permissionId)
+      this.sessionGrants[pluginId].add(normalizedPermissionId)
+      this.addAuditLog('granted', pluginId, normalizedPermissionId, 'user', 'Session-only grant')
     }
   }
 
@@ -183,13 +194,17 @@ export class PermissionStore {
    * Check if plugin has session-level permission
    */
   hasSessionPermission(pluginId: string, permissionId: string): boolean {
-    return this.sessionGrants[pluginId]?.has(permissionId) ?? false
+    const candidates = getPermissionIdCandidates(permissionId)
+    return candidates.some((candidate) => this.sessionGrants[pluginId]?.has(candidate) ?? false)
   }
 
   /**
    * Check if plugin has permission
    */
   hasPermission(pluginId: string, permissionId: string, sdkapi?: number): boolean {
+    const normalizedPermissionId = normalizePermissionId(permissionId)
+    const candidates = getPermissionIdCandidates(normalizedPermissionId)
+
     // Check SDK compatibility
     const compat = checkSdkCompatibility(sdkapi, pluginId)
     if (!compat.enforcePermissions) {
@@ -198,17 +213,17 @@ export class PermissionStore {
     }
 
     // Check default permissions
-    if (DEFAULT_PERMISSIONS.includes(permissionId)) {
+    if (candidates.some((candidate) => DEFAULT_PERMISSIONS.includes(candidate))) {
       return true
     }
 
     // Check session grants first
-    if (this.hasSessionPermission(pluginId, permissionId)) {
+    if (this.hasSessionPermission(pluginId, normalizedPermissionId)) {
       return true
     }
 
     // Check granted permissions
-    return !!this.data.grants[pluginId]?.[permissionId]
+    return candidates.some((candidate) => Boolean(this.data.grants[pluginId]?.[candidate]))
   }
 
   /**
@@ -217,7 +232,18 @@ export class PermissionStore {
   getPluginPermissions(pluginId: string): PermissionGrant[] {
     const pluginGrants = this.data.grants[pluginId]
     if (!pluginGrants) return []
-    return Object.values(pluginGrants)
+    const normalizedMap = new Map<string, PermissionGrant>()
+    for (const grant of Object.values(pluginGrants)) {
+      const normalizedPermissionId = normalizePermissionId(grant.permissionId)
+      const existing = normalizedMap.get(normalizedPermissionId)
+      if (!existing || existing.grantedAt < grant.grantedAt) {
+        normalizedMap.set(normalizedPermissionId, {
+          ...grant,
+          permissionId: normalizedPermissionId
+        })
+      }
+    }
+    return Array.from(normalizedMap.values())
   }
 
   /**

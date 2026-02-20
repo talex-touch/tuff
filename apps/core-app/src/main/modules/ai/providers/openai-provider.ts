@@ -1,8 +1,8 @@
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
-  AiUsageInfo,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceChatPayload,
   IntelligenceEmbeddingPayload,
   IntelligenceTranslatePayload
@@ -47,8 +47,8 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -86,7 +86,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       totalTokens: data.usage?.total_tokens || 0
@@ -104,8 +104,8 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     this.validateApiKey()
 
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'gpt-4o-mini'
@@ -171,8 +171,8 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async embedding(
     payload: IntelligenceEmbeddingPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<number[]>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<number[]>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -204,7 +204,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/embeddings' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: 0,
       totalTokens: data.usage?.total_tokens || 0
@@ -222,8 +222,8 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async translate(
     payload: IntelligenceTranslatePayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
@@ -242,8 +242,8 @@ export class OpenAIProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<import('@talex-touch/utils').IntelligenceVisionOcrResult>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<import('@talex-touch/utils').IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -297,7 +297,7 @@ export class OpenAIProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/chat/completions (vision)' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       totalTokens: data.usage?.total_tokens || 0
@@ -341,7 +341,7 @@ export class OpenAIProvider extends IntelligenceProvider {
   }
 
   private async getImageData(
-    source: import('@talex-touch/utils').AiVisionImageSource
+    source: import('@talex-touch/utils').IntelligenceVisionImageSource
   ): Promise<string> {
     if (source.type === 'data-url' && source.dataUrl) {
       return source.dataUrl

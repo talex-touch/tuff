@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-02-10
+> 更新时间: 2026-02-19
 
 ---
 
@@ -13,6 +13,18 @@
 | 🟡 进行中 | 6 | 部分实现 |
 | 📝 待实现 | 2 | 规划中 |
 | 📁 参考文档 | 6 | 指南/参考 |
+
+---
+
+## 🧭 文档治理与路线图落地（新增）
+
+> 目标：让“目标—执行—验收—文档”四层保持一致，避免路线偏移。
+
+- [x] 新增产品总览与 8 周路线图（`01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`）
+- [x] 新增 PRD 质量基线（`docs/PRD-QUALITY-BASELINE.md`）
+- [x] 新增 Week 1 执行清单（`01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`）
+- [ ] 活跃 PRD 补齐“最终目标 / 质量约束 / 回滚策略”章节（首批已覆盖 Flow/DivisionBox/ViewMode/AttachViewCache/Agents/PlatformCapabilities）
+- [ ] 在每周例行更新中同步 `README.md` + `TODO.md` + `CHANGES.md`（形成固定节奏）
 
 ---
 
@@ -51,6 +63,10 @@
   - `touch-browser-open`、`touch-browser-bookmarks`、`touch-quick-actions`、`touch-window-presets`、`touch-workspace-scripts`、`touch-system-actions`、`touch-intelligence-actions`
   - 移除内置 URL 系统和内部 AI providers
   - 含测试 + Nexus 文档
+- [x] **Nexus 汇率服务（ExchangeRate-API）**
+  - USD 基准换算 + 8h TTL 缓存
+  - D1 历史快照 + telemetry 错误归档
+  - 非免费用户历史查询 + 归一化历史表
 - [x] **SDK 统一 Hard-Cut 批次 A~D**
   - Settings/Permission/Download/Cloud Sync/Channel → SDK Hooks 迁移
   - Typed Transport Domain SDKs + event payloads
@@ -355,7 +371,7 @@
 
 ---
 
-### 2. ✅ Flow Transfer (v2.4.8) - 核心调度完成，权限/闭环完成
+### 2. ✅ Flow Transfer (v2.4.7) - 核心调度完成，权限/闭环完成
 
 **新增功能** (2025-12-11):
 - [x] ShareNotificationService - 系统分享操作反馈通知
@@ -613,13 +629,18 @@
 
 ## 📊 任务统计
 
-| 优先级 | 任务数 | 已完成 | 剩余 | 状态 |
-|--------|--------|--------|------|------|
-| P0 紧急 | 2 | 2 | 0 | 模块日志系统 Phase 1-4 + TuffEx 迁移收尾 |
-| P1 重要 | 6 | 5 | 1 | 托盘+计算+NPM+权限中心+OAuth 完成, View Mode 剩余 |
-| P2 增强 | 7 | 6 | 1 | 插件抽离+SDK Hard-Cut A~D+原生集成 完成 |
-| P3 长期 | 5 | 4 | 1 | Intelligence Agents Phase 3 剩余 |
-| **总计** | **20** | **17** | **3** | **85% 完成** |
+| 分组 | 任务数 | 已完成 | 剩余 | 状态 |
+|------|--------|--------|------|------|
+| 文档治理与路线图 | 5 | 3 | 2 | 基线文档与节奏同步 |
+| Plan 目录对照（2026-01） | 16 | 5 | 11 | 计划落地差距与收尾 |
+| 2026-02 新增进展 | 17 | 8 | 9 | 新增能力与收尾项 |
+| P0 紧急 | 12 | 4 | 8 | TuffEx 收尾与高优先级 |
+| P1 重要 | 31 | 22 | 9 | 关键能力与验收补齐 |
+| P2 增强 | 23 | 12 | 11 | 体验与性能增强 |
+| P3 长期 | 39 | 26 | 13 | 路线图与长周期专题 |
+| **总计** | **143** | **80** | **63** | **56% 完成** |
+
+> 统计口径：仅统计本文件内勾选项；不含 pre-release 清单 6 项（见 `docs/plan-prd/03-features/download-update/pre-release-validation.md`）。
 
 ---
 

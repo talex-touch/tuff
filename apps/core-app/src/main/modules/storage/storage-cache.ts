@@ -1,6 +1,8 @@
 /**
  * Cached data with version tracking
  */
+import { enterPerfContext } from '../../utils/perf-context'
+
 export interface VersionedData {
   data: object
   version: number
@@ -30,7 +32,12 @@ export class StorageCache {
     if (entry) {
       this.lastAccessTime.set(name, Date.now())
       // Return deep copy to prevent external code from mutating cache
-      return structuredClone(entry.data)
+      const disposeClone = enterPerfContext(`Storage.clone:${name}`, { mode: 'get' })
+      try {
+        return structuredClone(entry.data)
+      } finally {
+        disposeClone()
+      }
     }
     return undefined
   }
@@ -56,9 +63,14 @@ export class StorageCache {
     const entry = this.cache.get(name)
     if (entry) {
       this.lastAccessTime.set(name, Date.now())
-      return {
-        data: structuredClone(entry.data),
-        version: entry.version
+      const disposeClone = enterPerfContext(`Storage.clone:${name}`, { mode: 'getWithVersion' })
+      try {
+        return {
+          data: structuredClone(entry.data),
+          version: entry.version
+        }
+      } finally {
+        disposeClone()
       }
     }
     return undefined

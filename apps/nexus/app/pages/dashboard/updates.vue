@@ -13,7 +13,9 @@ interface LocalizedText {
 
 interface DashboardUpdate {
   id: string
-  type: 'news' | 'release'
+  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
+  scope: 'web' | 'system' | 'both'
+  channels: string[]
   releaseTag: string | null
   title: LocalizedText
   timestamp: string
@@ -104,9 +106,15 @@ function resolveLocalizedText(text: LocalizedText) {
 }
 
 function updateTypeLabel(update: DashboardUpdate) {
-  return update.type === 'release'
-    ? t('dashboard.sections.updates.typeRelease', '更新')
-    : t('dashboard.sections.updates.typeNews', '要闻')
+  if (update.type === 'release')
+    return t('dashboard.sections.updates.typeRelease', '更新')
+  if (update.type === 'announcement')
+    return t('dashboard.sections.updates.typeAnnouncement', '公告')
+  if (update.type === 'config')
+    return t('dashboard.sections.updates.typeConfig', '配置')
+  if (update.type === 'data')
+    return t('dashboard.sections.updates.typeData', '数据')
+  return t('dashboard.sections.updates.typeNews', '要闻')
 }
 
 async function saveSyncSettings() {
@@ -316,6 +324,14 @@ function closeDeleteConfirm() {
                   {{ updateTypeLabel(update) }}
                 </span>
                 <span
+                  v-if="update.scope && update.scope !== 'web'"
+                  class="rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/[0.08] dark:text-white/60"
+                >
+                  {{ update.scope === 'system'
+                    ? t('dashboard.sections.updates.scopeSystem', '系统')
+                    : t('dashboard.sections.updates.scopeBoth', '官网+系统') }}
+                </span>
+                <span
                   v-for="tag in update.tags.slice(0, 2)"
                   :key="tag"
                   class="rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/[0.08] dark:text-white/60"
@@ -336,7 +352,7 @@ function closeDeleteConfirm() {
               </p>
             </div>
             <div
-              v-if="isAdmin && update.type === 'news'"
+              v-if="isAdmin && update.type !== 'release'"
               class="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100"
             >
               <FlatButton icon="i-carbon-edit" @click="openEdit(update)" />

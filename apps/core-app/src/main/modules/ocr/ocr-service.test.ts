@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const { ensureAiConfigLoadedMock, getCapabilityOptionsMock, aiInvokeMock } = vi.hoisted(() => ({
-  ensureAiConfigLoadedMock: vi.fn(),
-  getCapabilityOptionsMock: vi.fn(),
-  aiInvokeMock: vi.fn()
-}))
+const { ensureIntelligenceConfigLoadedMock, getCapabilityOptionsMock, aiInvokeMock } = vi.hoisted(
+  () => ({
+    ensureIntelligenceConfigLoadedMock: vi.fn(),
+    getCapabilityOptionsMock: vi.fn(),
+    aiInvokeMock: vi.fn()
+  })
+)
 
 vi.mock('electron', () => {
   const electronMock = {
@@ -98,13 +100,13 @@ vi.mock('../database', () => ({
 
 vi.mock('../ai/intelligence-config', () => ({
   INTERNAL_SYSTEM_OCR_PROVIDER_ID: 'local-system-ocr',
-  ensureAiConfigLoaded: ensureAiConfigLoadedMock,
+  ensureIntelligenceConfigLoaded: ensureIntelligenceConfigLoadedMock,
   getCapabilityOptions: getCapabilityOptionsMock,
   getCapabilityPrompt: vi.fn()
 }))
 
 vi.mock('../ai/intelligence-sdk', () => ({
-  ai: {
+  tuffIntelligence: {
     invoke: aiInvokeMock
   }
 }))
@@ -113,7 +115,7 @@ import { ocrService } from './ocr-service'
 
 afterEach(() => {
   vi.restoreAllMocks()
-  ensureAiConfigLoadedMock.mockReset()
+  ensureIntelligenceConfigLoadedMock.mockReset()
   getCapabilityOptionsMock.mockReset()
   aiInvokeMock.mockReset()
 })

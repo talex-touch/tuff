@@ -1,8 +1,10 @@
-import type { SyncItemInput, SyncItemOutput } from '@talex-touch/utils'
+import type { EvictedDeviceInfo, SyncItemInput, SyncItemOutput } from '@talex-touch/utils'
 import { CloudSyncError, CloudSyncSDK } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { hasWindow } from '@talex-touch/utils/env'
 import { storages } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { createNotificationSdk } from '@talex-touch/utils/transport/sdk/domains/notification'
 import {
   appSettings,
   intelligenceStorage,
@@ -10,7 +12,13 @@ import {
 } from '@talex-touch/utils/renderer/storage'
 import { toast } from 'vue-sonner'
 import { getSyncPreferenceState } from '~/modules/auth/sync-preferences'
-import { getAppAuthToken, getAppDeviceId, getAuthBaseUrl } from '~/modules/auth/auth-env'
+import {
+  getAppAuthToken,
+  getAppDeviceId,
+  getAuthBaseUrl,
+  resolveAuthTokenDeviceId
+} from '~/modules/auth/auth-env'
+import { useI18nText } from '~/modules/lang'
 import { divisionBoxStorage } from '~/modules/storage/division-box-storage'
 import { marketSourcesStorage } from '~/modules/storage/market-sources'
 import { promptLibraryStorage } from '~/modules/storage/prompt-library'
@@ -59,6 +67,7 @@ const NORMAL_PULL_TIMEOUT_MS = 20_000
 const BEFORE_UNLOAD_FLUSH_TIMEOUT_MS = 3_000
 const RETRY_BACKOFF_MS = [5_000, 30_000, 120_000, 300_000, 600_000] as const
 const FAILURE_TOAST_THRESHOLD = 3
+const SYNC_FAILURE_NOTIFICATION_THRESHOLD = FAILURE_TOAST_THRESHOLD
 
 const pollingService = PollingService.getInstance()
 const dirtyStorages = new Set<string>()
@@ -73,11 +82,22 @@ let pushPromise: Promise<boolean> | null = null
 let pushTimer: ReturnType<typeof setTimeout> | null = null
 let blobBatchTimer: ReturnType<typeof setTimeout> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
+let notificationSdk: ReturnType<typeof createNotificationSdk> | null = null
+const notifiedBlockedReasons = new Set<SyncBlockedReason>()
 let onlineListenerBound = false
 let beforeUnloadListenerBound = false
 let onlineHandler: (() => void) | null = null
 let pluginStorageListener: ((payload: { name?: unknown; fileName?: unknown }) => void) | null = null
 let pluginStorageListenerBound = false
+
+function maskDeviceId(value: string | null): string {
+  if (!value) return '-'
+  const normalized = value.trim()
+  if (normalized.length <= 10) {
+    return normalized
+  }
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`
+}
 
 function warmupKnownStoragesForSync(): void {
   const candidates = [
@@ -118,6 +138,14 @@ function resolveSdk(): CloudSyncSDK {
         throw new Error('DEVICE_ID_MISSING')
       }
       return deviceId
+    },
+    onHandshake: (response) => {
+      const evicted = Array.isArray(response.evicted_devices)
+        ? response.evicted_devices.filter(Boolean)
+        : []
+      if (evicted.length > 0) {
+        notifyDeviceEvicted(evicted)
+      }
     }
   })
 
@@ -252,6 +280,128 @@ function clearRetryTimer(): void {
   retryTimer = null
 }
 
+function formatTemplate(template: string, params?: Record<string, unknown>): string {
+  if (!params) {
+    return template
+  }
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    const value = params[key]
+    return value === undefined ? match : String(value)
+  })
+}
+
+function resolveI18nText(key: string, fallback: string, params?: Record<string, unknown>): string {
+  const { t } = useI18nText()
+  const value = t(key, params)
+  if (value === key) {
+    return formatTemplate(fallback, params)
+  }
+  return value
+}
+
+function resolveNotificationSdk(): ReturnType<typeof createNotificationSdk> {
+  if (!notificationSdk) {
+    notificationSdk = createNotificationSdk(useTuffTransport())
+  }
+  return notificationSdk
+}
+
+function formatEvictedDeviceLabel(device: EvictedDeviceInfo): string {
+  const name = typeof device.device_name === 'string' ? device.device_name.trim() : ''
+  if (name) {
+    return name
+  }
+  const platform = typeof device.platform === 'string' ? device.platform.trim() : ''
+  if (platform) {
+    return platform
+  }
+  return resolveI18nText('notifications.syncDeviceUnknown', 'Unknown device')
+}
+
+function formatEvictedDeviceList(devices: EvictedDeviceInfo[]): string {
+  const labels = devices.map(formatEvictedDeviceLabel).filter((label) => label)
+  if (!labels.length) {
+    return ''
+  }
+  const separator = resolveI18nText('notifications.syncDeviceListSeparator', ', ')
+  const moreSuffix = resolveI18nText('notifications.syncDeviceListMore', ' and others')
+  const display = labels.slice(0, 2).join(separator)
+  if (labels.length > 2) {
+    return `${display}${moreSuffix}`
+  }
+  return display
+}
+
+function notifyDeviceEvicted(devices: EvictedDeviceInfo[]): void {
+  const count = devices.length
+  if (!Number.isFinite(count) || count <= 0) {
+    return
+  }
+  const title = resolveI18nText('notifications.syncDeviceEvictedTitle', 'Device limit reached')
+  const deviceList = formatEvictedDeviceList(devices)
+  const message = deviceList
+    ? resolveI18nText(
+        'notifications.syncDeviceEvictedBodyWithNames',
+        'Removed {count} inactive device(s): {devices}.',
+        { count, devices: deviceList }
+      )
+    : resolveI18nText(
+        'notifications.syncDeviceEvictedBody',
+        'Removed {count} inactive device(s) to keep sync available.',
+        { count }
+      )
+  const sdk = resolveNotificationSdk()
+  void sdk
+    .notify({
+      channel: 'system',
+      level: 'warning',
+      title,
+      message
+    })
+    .catch(() => {})
+}
+
+function resolveBlockedReasonText(blockedReason: SyncBlockedReason): string {
+  switch (blockedReason) {
+    case 'quota':
+      return resolveI18nText('notifications.syncBlockedReasonQuota', 'quota limit')
+    case 'device':
+      return resolveI18nText('notifications.syncBlockedReasonDevice', 'device not authorized')
+    case 'auth':
+      return resolveI18nText('notifications.syncBlockedReasonAuth', 'authentication issue')
+    default:
+      return ''
+  }
+}
+
+function notifySyncBlockedOnce(blockedReason: SyncBlockedReason, errorCode: string): void {
+  if (!blockedReason || notifiedBlockedReasons.has(blockedReason)) {
+    return
+  }
+  const reasonText = resolveBlockedReasonText(blockedReason)
+  const title = resolveI18nText('notifications.syncBlockedTitle', 'Sync Paused')
+  const message = resolveI18nText(
+    'notifications.syncBlockedBody',
+    'Sync is paused due to {reason}. Please resolve and try again.',
+    { reason: reasonText || errorCode }
+  )
+  const sdk = resolveNotificationSdk()
+  void sdk
+    .notify({
+      channel: 'system',
+      level: 'warning',
+      title,
+      message,
+      dedupeKey: `sync-blocked-${blockedReason}`
+    })
+    .catch(() => {})
+  notifiedBlockedReasons.add(blockedReason)
+}
+
+function resetSyncBlockedNotifications(): void {
+  notifiedBlockedReasons.clear()
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, timeoutCode: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -371,8 +521,24 @@ function reportSyncError(stage: 'pull' | 'push', error: unknown): void {
     status
   })
 
+  if (info.code === 'SYNC_INVALID_TOKEN' || info.code === 'SYNC_TOKEN_EXPIRED') {
+    const authToken = getAppAuthToken()
+    const tokenDeviceId = authToken ? resolveAuthTokenDeviceId(authToken) : null
+    const localDeviceId = getAppDeviceId()
+    console.debug('[AutoSync] sync token rejected', {
+      stage,
+      localDeviceId: maskDeviceId(localDeviceId),
+      tokenDeviceId: maskDeviceId(tokenDeviceId),
+      matches: Boolean(localDeviceId && tokenDeviceId && localDeviceId === tokenDeviceId)
+    })
+  }
+
   if (failures >= FAILURE_TOAST_THRESHOLD) {
     toast.error(`${stage === 'pull' ? '拉取' : '推送'}同步失败：${info.message}`)
+  }
+
+  if (failures >= SYNC_FAILURE_NOTIFICATION_THRESHOLD && blockedReason) {
+    notifySyncBlockedOnce(blockedReason, info.code)
   }
 
   if (blockedReason === 'quota') {
@@ -574,6 +740,7 @@ async function performPull(reason: AutoPullReason): Promise<boolean> {
       setSyncCursor(cursor)
       markSyncPullSuccess()
       clearSyncError()
+      resetSyncBlockedNotifications()
       setSyncStatus('idle')
       setNextPullAt(new Date(Date.now() + AUTO_PULL_INTERVAL_MINUTES * 60 * 1000).toISOString())
       return true
@@ -695,6 +862,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       const result = await client.push(items)
       markSyncPushSuccess()
       clearSyncError()
+      resetSyncBlockedNotifications()
       setSyncCursor(Math.max(getSyncPreferenceState().cursor, result.ack_cursor))
       setSyncStatus('idle')
 

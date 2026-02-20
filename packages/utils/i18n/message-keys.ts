@@ -63,7 +63,7 @@ export const PermissionKeys = {
   CATEGORY_CLIPBOARD: 'permission.category.clipboard',
   CATEGORY_NETWORK: 'permission.category.network',
   CATEGORY_SYSTEM: 'permission.category.system',
-  CATEGORY_AI: 'permission.category.ai',
+  CATEGORY_INTELLIGENCE: 'permission.category.intelligence',
   CATEGORY_STORAGE: 'permission.category.storage',
   CATEGORY_WINDOW: 'permission.category.window',
 
@@ -104,13 +104,13 @@ export const PermissionKeys = {
   SYSTEM_TRAY_NAME: 'permission.system.tray.name',
   SYSTEM_TRAY_DESC: 'permission.system.tray.desc',
 
-  // AI permissions
-  AI_BASIC_NAME: 'permission.ai.basic.name',
-  AI_BASIC_DESC: 'permission.ai.basic.desc',
-  AI_ADVANCED_NAME: 'permission.ai.advanced.name',
-  AI_ADVANCED_DESC: 'permission.ai.advanced.desc',
-  AI_AGENTS_NAME: 'permission.ai.agents.name',
-  AI_AGENTS_DESC: 'permission.ai.agents.desc',
+  // Intelligence permissions
+  INTELLIGENCE_BASIC_NAME: 'permission.intelligence.basic.name',
+  INTELLIGENCE_BASIC_DESC: 'permission.intelligence.basic.desc',
+  INTELLIGENCE_ADMIN_NAME: 'permission.intelligence.admin.name',
+  INTELLIGENCE_ADMIN_DESC: 'permission.intelligence.admin.desc',
+  INTELLIGENCE_AGENTS_NAME: 'permission.intelligence.agents.name',
+  INTELLIGENCE_AGENTS_DESC: 'permission.intelligence.agents.desc',
 
   // Storage permissions
   STORAGE_PLUGIN_NAME: 'permission.storage.plugin.name',

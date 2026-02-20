@@ -2,8 +2,16 @@ const { plugin, logger, TuffItemBuilder, permission } = globalThis
 const { exec } = require('node:child_process')
 const process = require('node:process')
 const { promisify } = require('node:util')
+let spawnShellCommand
+try {
+  ;({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
+}
+catch {
+  spawnShellCommand = null
+}
 
 const execAsync = promisify(exec)
+const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 
 const PLUGIN_NAME = 'touch-quick-actions'
 const SOURCE_ID = 'plugin-features'
@@ -162,6 +170,27 @@ function resolveActions(platform = process.platform) {
   return []
 }
 
+async function runShellCommand(command) {
+  if (SHELL_UNSAFE_PATTERN.test(command)) {
+    throw new Error('unsafe command payload')
+  }
+  if (!spawnShellCommand) {
+    await execAsync(command)
+    return
+  }
+
+  await new Promise((resolve, reject) => {
+    const child = spawnShellCommand(command, { windowsHide: true })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code && code !== 0)
+        reject(new Error(`command failed with code ${code}`))
+      else
+        resolve()
+    })
+  })
+}
+
 function matchActions(actions, keyword) {
   const list = Array.isArray(actions) ? actions : []
   const target = normalizeText(keyword).toLowerCase()
@@ -230,7 +259,7 @@ function buildSectionHeader(featureId, groupId) {
 }
 
 async function executeAction(action) {
-  await execAsync(action.command)
+  await runShellCommand(action.command)
 }
 
 const pluginLifecycle = {

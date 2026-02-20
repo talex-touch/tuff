@@ -541,6 +541,34 @@ export async function listAudits(
   }
 }
 
+export async function listRuntimeAudits(
+  event: H3Event,
+  options?: {
+    days?: number
+    limit?: number
+  },
+): Promise<IntelligenceAuditRecord[]> {
+  const db = requireDatabase(event)
+  await ensureSchema(db)
+
+  const days = Math.min(Math.max(options?.days ?? 30, 1), 365)
+  const limit = Math.min(Math.max(options?.limit ?? 1200, 1), 5000)
+  const createdAfter = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+  const sourceLike = '%"source":"intelligence-lab-runtime"%'
+
+  const { results } = await db.prepare(`
+    SELECT a.*, p.name AS provider_name
+    FROM ${AUDITS_TABLE} a
+    LEFT JOIN ${PROVIDERS_TABLE} p ON a.provider_id = p.id
+    WHERE a.created_at >= ?
+      AND a.metadata LIKE ?
+    ORDER BY a.created_at DESC
+    LIMIT ?
+  `).bind(createdAfter, sourceLike, limit).all<IntelligenceAuditRow>()
+
+  return (results || []).map(mapAuditRow)
+}
+
 export interface IntelligenceIpBanRecord {
   id: string
   ip: string

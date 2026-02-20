@@ -743,3 +743,39 @@ export const appUpdateRecords = sqliteTable(
     channelIdx: index('idx_app_update_records_channel').on(table.channel, table.fetchedAt)
   })
 )
+
+// =============================================================================
+// 13. System Updates & Hot Data
+// =============================================================================
+
+export const systemUpdateState = sqliteTable('system_update_state', {
+  id: text('id').primaryKey(),
+  etag: text('etag'),
+  lastFetchedAt: integer('last_fetched_at').notNull().default(0),
+  lastProcessedId: text('last_processed_id'),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
+
+export const systemConfig = sqliteTable('system_config', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
+
+export const fxRates = sqliteTable(
+  'fx_rates',
+  {
+    base: text('base').notNull(),
+    quote: text('quote').notNull(),
+    rate: real('rate').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    source: text('source').notNull(),
+    providerUpdatedAt: integer('provider_updated_at'),
+    fetchedAt: integer('fetched_at').notNull()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.base, table.quote] }),
+    baseIdx: index('idx_fx_rates_base').on(table.base),
+    updatedIdx: index('idx_fx_rates_updated').on(table.updatedAt)
+  })
+)

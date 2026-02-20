@@ -25,6 +25,7 @@ import {
   getAppDeviceId,
   getAppDeviceName,
   getAppDevicePlatform,
+  resolveAuthTokenDeviceId,
   setAppAuthToken
 } from './auth-env'
 import { attestCurrentDevice } from './device-attest'
@@ -123,6 +124,15 @@ const authLoadingState = reactive({
 const STEP_UP_TOKEN_TTL_MS = 1000 * 60 * 10
 const stepUpToken = ref<string | null>(null)
 const stepUpTokenExpiresAt = ref<number>(0)
+
+function maskDeviceId(value: string | null): string {
+  if (!value) return '-'
+  const normalized = value.trim()
+  if (normalized.length <= 10) {
+    return normalized
+  }
+  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`
+}
 
 function setStepUpToken(token: string): void {
   const trimmed = token.trim()
@@ -528,6 +538,15 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     }
 
     setAppAuthToken(resolvedToken)
+    const localDeviceId = getAppDeviceId()
+    const tokenDeviceId = resolveAuthTokenDeviceId(resolvedToken)
+    if (localDeviceId || tokenDeviceId) {
+      console.debug('[Auth] app token device check', {
+        localDeviceId: maskDeviceId(localDeviceId),
+        tokenDeviceId: maskDeviceId(tokenDeviceId),
+        matches: Boolean(localDeviceId && tokenDeviceId && localDeviceId === tokenDeviceId)
+      })
+    }
     const remoteUser = await fetchRemoteUser(resolvedToken)
     if (!remoteUser) {
       throw new Error('Failed to fetch user profile')

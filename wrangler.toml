@@ -13,6 +13,11 @@ binding = "R2"
 bucket_name = "tuff-nexus-imgable-prod"
 preview_bucket_name = "tuff-nexus-imgable-dev"
 
+[[kv_namespaces]]
+binding = "TUFF_INTELLIGENCE_RUNTIME"
+id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_ID"
+preview_id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_PREVIEW_ID"
+
 [env.preview]
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat", "no_nodejs_compat_v2"]
@@ -32,10 +37,20 @@ LINUXDO_CLIENT_SECRET = ""
 LINUXDO_ISSUER = "https://connect.linux.do"
 RESEND_API_KEY = ""
 AUTH_EMAIL_FROM = "hello@tuff.app"
+EXCHANGE_RATE_API_KEY = ""
+EXCHANGE_RATE_BASE_URL = "https://v6.exchangerate-api.com/v6"
+EXCHANGE_RATE_TTL_MS = "28800000"
+EXCHANGE_RATE_TIMEOUT_MS = "10000"
+EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
+EXCHANGE_RATE_STORE_RATE_ROWS = "true"
 
 [[env.preview.r2_buckets]]
 binding = "R2"
 bucket_name = "tuff-nexus-imgable-dev"
+
+[[env.preview.kv_namespaces]]
+binding = "TUFF_INTELLIGENCE_RUNTIME"
+id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_PREVIEW_ID"
 
 [vars]
 NODE_OPTIONS = "--max-old-space-size=6144"
@@ -48,3 +63,9 @@ LINUXDO_CLIENT_SECRET = ""
 LINUXDO_ISSUER = "https://connect.linux.do"
 RESEND_API_KEY = ""
 AUTH_EMAIL_FROM = "hello@tuff.app"
+EXCHANGE_RATE_API_KEY = ""
+EXCHANGE_RATE_BASE_URL = "https://v6.exchangerate-api.com/v6"
+EXCHANGE_RATE_TTL_MS = "28800000"
+EXCHANGE_RATE_TIMEOUT_MS = "10000"
+EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
+EXCHANGE_RATE_STORE_RATE_ROWS = "true"

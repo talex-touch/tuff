@@ -2,6 +2,319 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-19
+
+### Intelligence OpenAI 兼容 Base URL 归一化
+
+**变更类型**: 兼容性修复 / 管理台提示
+
+**描述**: OpenAI 兼容提供商默认自动补全 `/v1`，避免误落到 UI 路径；如需 `/api/v1` 或 `/openai/v1`，需在 Base URL 中显式填写。
+
+**主要变更**:
+1. **Base URL 归一化**：OpenAI 兼容路径仅自动补全 `/v1`，不再尝试多种变体。
+2. **提示更新**：管理台 Base URL 提示明确写法。
+
+**修改文件**:
+- `apps/nexus/server/utils/intelligenceModels.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Intelligence OpenAI 兼容输出提取增强
+
+**变更类型**: 兼容性修复 / 运行稳定性
+
+**描述**: 支持 OpenAI-compatible 响应仅返回 `reasoning_content` 的场景，避免被误判为“空响应”。
+
+**主要变更**:
+1. **输出提取**：当 `content` 为空时，依次回落到 `reasoning_content` / `reasoning` / `analysis` 字段。
+2. **响应解析**：从 `message` 根对象提取内容，兼容非标准字段。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+### Intelligence System Prompt 上下文补充
+
+**变更类型**: 能力增强 / 可追溯性
+
+**描述**: TuffIntelligence Lab 所有模型调用增加统一系统上下文（角色、当前时间、当前用户、会话 ID）。
+
+**主要变更**:
+1. **系统上下文**：在 intent / planner / executor / reviewer / follow-up / final responder 等阶段注入统一提示。
+2. **时间信息**：包含本地时间与 ISO 时间，便于审计与复盘。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+### Nexus Intelligence 模块整合积分
+
+**变更类型**: 体验优化 / 管理台信息整合
+
+**描述**: 管理后台将 AI 积分从独立导航合并到 Intelligence 模块，并统一命名为 Intelligence 模块，方便管理员在单页内查看渠道配置、审计与积分消耗。
+
+**主要变更**:
+1. **导航合并**：管理员侧移除单独的 AI Credits 菜单，合并到 Intelligence 模块页签。
+2. **模块命名**：菜单与页面标题统一为 “Intelligence 模块”，同步中英文文案。
+3. **积分视图**：原有积分消耗/流水视图作为新页签嵌入。
+
+**修改文件**:
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Nexus 汇率服务（USD 基准 + 历史归档）
+
+**变更类型**: 能力接入 / 服务端数据
+
+**描述**: 新增 ExchangeRate-API 汇率服务，统一 USD 作为 base，按请求触发 + 8h TTL 缓存；成功响应写入 D1 历史表并将错误归档到 telemetry。
+
+**主要变更**:
+1. **运行时配置扩展**：新增 `exchangeRate` 配置项，包含 API Key、Base URL、TTL 与超时。
+2. **双层缓存与历史记录**：新增 `exchange_rate_snapshots` 表并保留完整 payload，useStorage 作为 fallback。
+3. **对外换算 API**：新增 `/api/exchange/convert`（仅支持 USD base）。
+4. **错误归档**：上游错误写入 `telemetry_messages`，便于检索与审计。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `wrangler.toml`
+- `apps/nexus/server/utils/exchangeRateStore.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/server/utils/__tests__/exchangeRateService.test.ts`
+- `.spec/features/exchange-rate-service.md`
+- `.spec/modules/exchange-rate-cache.md`
+- `.spec/index.md`
+
+### Nexus 汇率历史查询（非免费用户）
+
+**变更类型**: 能力增强 / 高级权限
+
+**描述**: 在 USD 基准汇率服务上新增历史查询能力，非 FREE 用户可访问历史曲线；新增归一化历史表并支持可选 payload 返回。
+
+**主要变更**:
+1. **历史查询 API**：新增 `/api/exchange/history`，支持按币种 + 时间范围查询。
+2. **权限门槛**：非 FREE 用户可访问；`includePayload` 仅管理员允许。
+3. **归一化历史表**：新增 `exchange_rate_rates`，便于时间序列查询。
+4. **保留策略**：支持 `historyRetentionDays` 控制清理（默认不清理）。
+5. **管理后台视图**：Admin Analytics 新增 Exchange 区块用于查看历史数据。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `wrangler.toml`
+- `apps/nexus/server/utils/exchangeRateStore.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/history.get.ts`
+- `apps/nexus/server/utils/__tests__/exchangeRateHistory.test.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+- `.spec/features/exchange-rate-service.md`
+- `.spec/modules/exchange-rate-cache.md`
+- `.spec/index.md`
+
+### Nexus 汇率 API 计费与 Latest 接口
+
+**变更类型**: 计费策略 / 接口扩展
+
+**描述**: 汇率服务新增 `/api/exchange/latest`（USD 基准倍率表）并建立积分扣费规则；`convert` 每次扣 0.1，`latest` 每次扣 1，`history` 每次扣 2。
+
+**主要变更**:
+1. **Latest 接口**：新增 `/api/exchange/latest` 返回 USD 基准倍率与更新时间字段。
+2. **扣费策略**：`convert`/`latest`/`history` 分别扣 0.1/1/2 credits。
+3. **表结构优化**：credits 表字段使用 REAL 并统一保留 2 位小数。
+
+**修改文件**:
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/server/api/exchange/latest.get.ts`
+- `apps/nexus/server/api/exchange/history.get.ts`
+- `apps/nexus/server/utils/creditsStore.ts`
+
+### 统一更新与汇率热数据链路（Nexus + CoreApp）
+
+**变更类型**: 统一更新 / 热数据分发
+
+**描述**: 扩展 Nexus Updates/Release 体系支持系统更新（公告/配置/热数据），新增 payload 存储与读取；CoreApp 增加 SystemUpdate 拉取与 fx-rate 热数据回填，更新服务支持 Official 源，并在汇率换算 API 中暴露更新时间字段。
+
+**主要变更**:
+1. **Updates 扩展**：`dashboard_updates` 增加 scope/type/channels 与 payload 元数据，新增 `/api/updates/:id/payload`。
+2. **汇率更新时间暴露**：`/api/exchange/convert` 返回 `providerUpdatedAt/fetchedAt/providerNextUpdateAt`。
+3. **汇率热数据刷新**：新增 fx-rate 刷新入口与 provider 客户端占位。
+4. **CoreApp 系统更新拉取**：新增 SystemUpdateModule、fx_rates/system_config/system_update_state 表。
+5. **官方更新源支持**：UpdateService 增加 OFFICIAL provider 并对接 Nexus `/api/releases/latest`。
+
+**修改文件**:
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/server/utils/updateAssetStorage.ts`
+- `apps/nexus/server/api/updates.get.ts`
+- `apps/nexus/server/api/updates/[id]/payload.get.ts`
+- `apps/nexus/server/api/dashboard/updates/fx-rate/refresh.post.ts`
+- `apps/nexus/server/utils/fxRateProviderClient.ts`
+- `apps/nexus/server/utils/exchangeRateService.ts`
+- `apps/nexus/server/api/exchange/convert.get.ts`
+- `apps/nexus/app/components/dashboard/UpdateFormDrawer.vue`
+- `apps/nexus/app/pages/dashboard/updates.vue`
+- `apps/nexus/app/pages/updates.vue`
+- `apps/nexus/app/composables/useDashboardData.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/db/schema.ts`
+- `apps/core-app/resources/db/migrations/0020_system_update_tables.sql`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/abilities/currency-ability.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+
+### CoreApp 页面标题 i18n 规范化
+
+**变更类型**: 体验一致性 / 国际化
+
+**描述**: CoreApp 页面标题支持 `$I18n:` 前缀解析，路由与布局标题统一走 i18n 解析逻辑。
+
+**主要变更**:
+1. **新增标题前缀约定**：`$I18n:<key>` 用于标记需要国际化的页面标题与路由名。
+2. **布局标题解析**：ViewTemplate 与布局控制器统一解析前缀并回退到原文。
+3. **路由标题本地化**：核心路由名替换为 i18n key 并补充双语文案。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/components/base/template/ViewTemplate.vue`
+- `apps/core-app/src/renderer/src/composables/layout/useLayoutController.ts`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/I18N_IMPLEMENTATION.md`
+
+### Setting About 更新通道显示调整
+
+**变更类型**: 体验一致性 / 信息展示
+
+**描述**: 设置页关于模块的通道信息改为展示用户订阅的更新通道，避免与构建类型重复。
+
+**主要变更**:
+1. **更新通道替换**：将 Channel 字段改为 Update Channel，并读取更新订阅通道。
+2. **订阅标识**：通道值附加 `sub` 标记便于区分构建类型。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+
+### Nexus App 登录回调失焦自动关闭
+
+**变更类型**: 行为优化 / 体验改进
+
+**描述**: 登录回调页在拉起客户端后检测到页面失焦即视为成功并关闭标签页，避免 dev token 提示干扰。
+
+**主要变更**:
+1. **失焦即关闭**：协议拉起后页面失焦触发自动关闭标签页。
+2. **取消 dev token 提示**：成功且失焦时不再展示 dev-mode token 复制提示。
+
+**修改文件**:
+- `apps/nexus/app/pages/auth/app-callback.vue`
+
+### 同步阻塞系统通知
+
+**变更类型**: 行为优化 / 可观测性
+
+**描述**: 同步连续失败后触发一次系统通知，提示配额/设备/鉴权问题，避免多次 toast 被忽略。
+
+**主要变更**:
+1. **失败阈值通知**：连续失败达到 3 次后发送系统通知（按原因去重）。
+2. **发送端本地化**：同步通知文案在 renderer 侧完成 i18n 解析后发送。
+3. **成功后重置**：同步成功后清理通知去重状态，下一轮可重新提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### 同步设备自动回收
+
+**变更类型**: 行为优化 / 账号安全
+
+**描述**: 新设备开始同步时，超过设备上限会自动回收最久未活跃设备，并在当前设备提示回收结果。
+
+**主要变更**:
+1. **自动回收旧设备**：同步握手时先回收 30 天未活跃设备，仍超限则按 `last_seen_at` 从旧到新回收。
+2. **同步握手提示**：握手返回回收列表（含设备名/平台/最近活跃），客户端弹出系统通知提醒。
+3. **API 类型同步**：更新 Sync handshake 响应与类型定义。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/v1/sync/handshake.post.ts`
+- `apps/nexus/openapi/nexus-sync.yaml`
+- `apps/nexus/types/sync-api.d.ts`
+- `packages/utils/types/cloud-sync.ts`
+- `packages/utils/cloud-sync/cloud-sync-sdk.ts`
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### 文档治理基线与路线图收敛
+
+**变更类型**: 文档治理 / 规划收敛
+
+**描述**: 补齐“项目定义 → PRD 目标 → 质量约束 → 执行路线图”的文档闭环，统一后续迭代的执行标准。
+
+**主要变更**:
+1. **AGENTS 项目定义增强**：新增项目定位、交付边界、阶段性最终目标与文档同步责任。
+2. **PRD 索引增强**：`docs/plan-prd/README.md` 增加 North Star 与活跃 PRD 质量约束。
+3. **新增产品总览与 8 周路线图**：`docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`。
+4. **新增 PRD 质量基线文档**：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`，要求活跃 PRD 必含目标、约束、验收、回滚。
+5. **新增 Week 1 执行清单**：`docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`。
+6. **TODO 与索引对齐**：`docs/plan-prd/TODO.md`、`docs/INDEX.md` 新增治理入口与执行项。
+
+### TuffIntelligence Lab 流式对话语义修正
+
+**变更类型**: 行为调整 / 体验优化
+
+**描述**: 调整 TuffIntelligence Lab 的对话恢复语义为“历史即上下文”，断链后无需显式恢复；状态日志改为模型原文直出，最终回答使用流式输出。
+
+**主要变更**:
+1. **取消显式恢复流程**：前端移除 recoverable/resume 交互，只保留历史加载与继续对话。
+2. **状态日志直出**：意图、动作选择、动作结果统一采用模型原文作为状态消息。
+3. **最终回答流式**：最终回答优先走流式推送，失败时回退为普通流。
+4. **断链语义简化**：保留 `session.paused` 事件作为日志提示，不提供 recoverable/resume API。
+5. **移除外部桥接依赖**：仅使用已启用 provider 执行链路。
+6. **原始输出可追溯**：plan/reflect/followup 的原始输出与错误详情写入 stream detail，便于溯源与排障。
+7. **快捷测试入口**：管理端对话页提供默认提示词按钮，便于快速验证工具能力。
+8. **错误追踪增强**：错误事件补充 providerId/model/endpoint/status/responseSnippet 等详细字段。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+
+### LangChain + Nuxt 流式对话接入（管理员测试页）
+
+**变更类型**: 能力接入 / 测试通道
+
+**描述**: 在 Nexus 内接入 LangChain，并新增管理员专用的流式对话测试页，支持历史回放。
+
+**主要变更**:
+1. **LangChain 接入**：新增 LangChain 流式调用与消息历史管理。
+2. **Admin API**：新增 `/api/admin/intelligence/chat` GET/POST 路由，支持流式对话与历史回放。
+3. **测试页面**：新增 `/dashboard/admin/intelligence-chat` 页面用于对话验证。
+4. **Provider 对齐**：LangChain 调用复用 intelligence provider 配置，不再读取环境变量。
+
+**修改文件**:
+- `apps/nexus/server/api/admin/intelligence/chat.ts`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-chat.vue`
+- `apps/nexus/package.json`
+- `apps/nexus/nuxt.config.ts`
+
+### 安全加固：路径与命令执行防护
+
+**变更类型**: 安全加固 / 风险收敛
+
+**描述**: 统一路径校验与命令执行封装，限制可疑路径访问并修复通道 key 回收问题。
+
+**主要变更**:
+1. **新增安全封装**：`safe-path` 与 `safe-shell` 统一路径校验与非 shell 执行。
+2. **插件存储路径校验**：插件存储读写删/详情均限制在插件配置目录内。
+3. **文件访问限制**：`fs:read-file`/`fs:write-file` 仅允许对话框批准路径；`tfile://` 访问限制在白名单根目录。
+4. **命令执行去 shell**：App Scanner、Darwin app icon、Native Share、Terminal、Open-in-editor 等改为安全执行，并为终端执行增加权限校验。
+5. **通道 key 回收修复**：修复 revokeKey 删除顺序导致的 key 残留。
+
+---
+
 ## 2026-02-10
 
 ### CoreBox 内置能力抽离为独立插件

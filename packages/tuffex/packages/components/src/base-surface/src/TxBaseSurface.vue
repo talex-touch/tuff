@@ -59,13 +59,18 @@ const REFRACTION_MASK_RELEASE_DELAY_AFTER_FALLBACK_MS = 100
 const REFRACTION_RECOVERY_DURATION_FACTOR = 0.7
 const REFRACTION_MASK_RELEASE_DURATION_MS = Math.round(650 * REFRACTION_RECOVERY_DURATION_FACTOR)
 const REFRACTION_MASK_PEAK_OPACITY = 0.95
-const REFRACTION_MASK_PEAK_RAMP_DURATION_MS = 140
+const REFRACTION_MASK_PEAK_RAMP_DURATION_MS = 180
+const REFRACTION_EDGE_REVEAL_DELAY_MS = 60
+const REFRACTION_EDGE_REVEAL_DURATION_MS = 220
 const REFRACTION_MASK_RELEASE_SLOWDOWN = 1.2
 const REFRACTION_MOVING_PARAM_FLOOR = 0.28
 
 let refractionRecoveryRaf: number | null = null
 let refractionMaskPeakRampRaf: number | null = null
+let refractionEdgeRevealRaf: number | null = null
+let refractionEdgeRevealTimer: ReturnType<typeof setTimeout> | null = null
 const refractionMaskPeakRampProgress = ref(1)
+const refractionEdgeRevealProgress = ref(1)
 
 const isMoving = computed(() => props.moving || autoMoving.value)
 const settleDelayMs = computed(() => Math.max(toFinite(props.transitionDuration, SURFACE_MOTION_DURATION_MS), toFinite(props.settleDelay, 150)))
@@ -530,6 +535,24 @@ const showLayerMotionCover = computed(() => {
   return refractionMotionCoverOpacity.value > 0
 })
 
+const refractionEdgeTargetOpacity = computed(() => {
+  if (activeMode.value !== 'refraction') {
+    return 0
+  }
+  return clamp(baseRefractionMaskOpacity.value * 0.36 + 0.008, 0.018, 0.065)
+})
+
+const refractionEdgeOpacity = computed(() => {
+  if (activeMode.value !== 'refraction') {
+    return 0
+  }
+  return refractionEdgeTargetOpacity.value * refractionEdgeRevealProgress.value
+})
+
+const showLayerRefractionEdge = computed(() => {
+  return activeMode.value === 'refraction'
+})
+
 const showLayerMask = computed(() => {
   if (activeMode.value === 'pure') {
     return false
@@ -624,6 +647,9 @@ const cssVars = computed(() => {
   if (showLayerMotionCover.value) {
     vars['--tx-surface-motion-cover-opacity'] = `${refractionMotionCoverOpacity.value}`
   }
+  if (showLayerRefractionEdge.value) {
+    vars['--tx-surface-refraction-edge-opacity'] = `${refractionEdgeOpacity.value}`
+  }
 
   if (activeMode.value === 'refraction') {
     const angleDeg = normalizedRefractionAngleDeg.value
@@ -712,6 +738,9 @@ const rootClasses = computed(() => {
   if (showLayerMotionCover.value) {
     classes.push('tx-base-surface--with-motion-cover')
   }
+  if (showLayerRefractionEdge.value) {
+    classes.push('tx-base-surface--with-refraction-edge')
+  }
   if (activeMode.value === 'refraction') {
     classes.push(`tx-base-surface--refraction-renderer-${props.refractionRenderer}`)
     classes.push(`tx-base-surface--refraction-profile-${resolvedRefractionProfile.value}`)
@@ -732,6 +761,64 @@ const rootClasses = computed(() => {
 // --- 自动检测 transform 运动 ---
 let mutationObserver: MutationObserver | null = null
 let observedElements: HTMLElement[] = []
+
+function stopRefractionEdgeReveal(resetProgress = true) {
+  if (refractionEdgeRevealTimer != null) {
+    clearTimeout(refractionEdgeRevealTimer)
+    refractionEdgeRevealTimer = null
+  }
+  if (refractionEdgeRevealRaf != null) {
+    cancelAnimationFrame(refractionEdgeRevealRaf)
+    refractionEdgeRevealRaf = null
+  }
+  if (resetProgress) {
+    refractionEdgeRevealProgress.value = 1
+  }
+}
+
+function hideRefractionEdge() {
+  stopRefractionEdgeReveal(false)
+  refractionEdgeRevealProgress.value = 0
+}
+
+function startRefractionEdgeReveal() {
+  if (props.mode !== 'refraction') {
+    refractionEdgeRevealProgress.value = 1
+    return
+  }
+  if (!hasWindow()) {
+    refractionEdgeRevealProgress.value = 1
+    return
+  }
+
+  stopRefractionEdgeReveal(false)
+  refractionEdgeRevealProgress.value = 0
+  refractionEdgeRevealTimer = setTimeout(() => {
+    refractionEdgeRevealTimer = null
+    const total = Math.max(80, REFRACTION_EDGE_REVEAL_DURATION_MS)
+    let startedAt = 0
+    const tick = (timestamp: number) => {
+      if (!startedAt) {
+        startedAt = timestamp
+      }
+      const elapsed = timestamp - startedAt
+      const progress = clamp(elapsed / total, 0, 1)
+      refractionEdgeRevealProgress.value = smoothstep01(progress)
+      if (progress >= 1 || isMoving.value || refractionRecovering.value) {
+        if (isMoving.value || refractionRecovering.value) {
+          refractionEdgeRevealProgress.value = 0
+        }
+        else {
+          refractionEdgeRevealProgress.value = 1
+        }
+        refractionEdgeRevealRaf = null
+        return
+      }
+      refractionEdgeRevealRaf = requestAnimationFrame(tick)
+    }
+    refractionEdgeRevealRaf = requestAnimationFrame(tick)
+  }, Math.max(0, REFRACTION_EDGE_REVEAL_DELAY_MS))
+}
 
 function stopRefractionMaskPeakRamp(resetProgress = true) {
   if (refractionMaskPeakRampRaf != null) {
@@ -936,6 +1023,7 @@ function teardownAutoDetect() {
   mutationObserver?.disconnect()
   mutationObserver = null
   clearTimeout(settleTimer)
+  stopRefractionEdgeReveal()
   stopRefractionMaskPeakRamp()
   stopRefractionRecovery()
 }
@@ -961,9 +1049,11 @@ watch(() => props.moving, (newVal, oldVal) => {
 watch(isMoving, (moving, prevMoving) => {
   if (props.mode !== 'refraction') {
     stopRefractionMaskPeakRamp()
+    stopRefractionEdgeReveal()
     return
   }
   if (moving && !prevMoving) {
+    hideRefractionEdge()
     startRefractionMaskPeakRamp()
     return
   }
@@ -972,19 +1062,40 @@ watch(isMoving, (moving, prevMoving) => {
   }
 }, { flush: 'sync' })
 
+watch(
+  [isMoving, refractionRecovering, () => props.mode],
+  ([moving, recovering, mode], [prevMoving, prevRecovering, prevMode]) => {
+    if (mode !== 'refraction') {
+      stopRefractionEdgeReveal()
+      return
+    }
+    if (moving || recovering) {
+      hideRefractionEdge()
+      return
+    }
+    if (prevMode !== 'refraction' || prevMoving || prevRecovering) {
+      startRefractionEdgeReveal()
+    }
+  },
+  { flush: 'sync' },
+)
+
 watch(() => props.mode, (mode) => {
   if (mode !== 'refraction') {
     stopRefractionMaskPeakRamp()
+    stopRefractionEdgeReveal()
     stopRefractionRecovery()
     return
   }
   if (isMoving.value) {
+    hideRefractionEdge()
     startRefractionMaskPeakRamp()
     stopRefractionRecovery(false)
     refractionRecoveryProgress.value = 0
     refractionRecoveryElapsed.value = 0
     return
   }
+  startRefractionEdgeReveal()
   stopRefractionMaskPeakRamp()
   stopRefractionRecovery()
 })
@@ -1022,6 +1133,9 @@ onBeforeUnmount(() => {
     </Transition>
     <Transition name="tx-surface-layer-fade">
       <div v-if="showLayerMask" class="tx-base-surface__layer tx-base-surface__layer--mask" />
+    </Transition>
+    <Transition name="tx-surface-layer-fade">
+      <div v-if="showLayerRefractionEdge" class="tx-base-surface__layer tx-base-surface__layer--refraction-edge" />
     </Transition>
     <div class="tx-base-surface__content">
       <slot />

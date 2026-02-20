@@ -28,13 +28,16 @@ export class SystemSampler {
     private now: () => number = () => Date.now()
   ) {}
 
-  start(): void {
+  start(options?: { initialDelayMs?: number }): void {
     if (this.isRunning) return
     this.isRunning = true
-    this.collect()
+    // 不再立即调用 this.collect()，避免在启动期触发 DB 写入
+    // 首次采样由 pollingService 的 initialDelayMs 控制
+    const initialDelayMs = options?.initialDelayMs ?? this.intervalMs
     this.pollingService.register(this.taskId, () => this.collect(), {
       interval: this.intervalMs,
-      unit: 'milliseconds'
+      unit: 'milliseconds',
+      initialDelayMs
     })
     this.pollingService.start()
   }

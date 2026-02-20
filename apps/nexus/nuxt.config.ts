@@ -120,6 +120,14 @@ export default defineNuxtConfig({
     turnstile: {
       secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
     },
+    exchangeRate: {
+      apiKey: process.env.EXCHANGE_RATE_API_KEY,
+      baseUrl: process.env.EXCHANGE_RATE_BASE_URL || 'https://v6.exchangerate-api.com/v6',
+      ttlMs: Number(process.env.EXCHANGE_RATE_TTL_MS || 8 * 60 * 60 * 1000),
+      timeoutMs: Number(process.env.EXCHANGE_RATE_TIMEOUT_MS || 10000),
+      historyRetentionDays: Number(process.env.EXCHANGE_RATE_HISTORY_RETENTION_DAYS || 0),
+      storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
+    },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     public: {
       turnstile: {

@@ -24,23 +24,41 @@ export class DbStore {
     if (!persistable.length) return
 
     const createdAt = Math.floor(Date.now() / 1000)
-    const dispose = enterPerfContext('AnalyticsSnapshots.persist', {
+    let totalBytes = 0
+    const disposeSerialize = enterPerfContext('AnalyticsSnapshots.serialize', {
       count: persistable.length
+    })
+    let rows: Array<typeof schema.analyticsSnapshots.$inferInsert> = []
+    try {
+      rows = persistable.map((snapshot) => {
+        const metrics = JSON.stringify(snapshot.metrics)
+        totalBytes += metrics.length
+        return {
+          windowType: snapshot.windowType,
+          timestamp: snapshot.timestamp,
+          metrics,
+          createdAt
+        }
+      })
+    } catch (error) {
+      log.error('Failed to serialize analytics snapshots', {
+        error,
+        meta: { count: persistable.length }
+      })
+      return
+    } finally {
+      disposeSerialize()
+    }
+
+    const disposePersist = enterPerfContext('AnalyticsSnapshots.persist', {
+      count: persistable.length,
+      bytes: totalBytes
     })
     try {
       await dbWriteScheduler.schedule('analytics.snapshots', () =>
-        withSqliteRetry(
-          () =>
-            this.db.insert(schema.analyticsSnapshots).values(
-              persistable.map((snapshot) => ({
-                windowType: snapshot.windowType,
-                timestamp: snapshot.timestamp,
-                metrics: JSON.stringify(snapshot.metrics),
-                createdAt
-              }))
-            ),
-          { label: 'analytics.snapshots' }
-        )
+        withSqliteRetry(() => this.db.insert(schema.analyticsSnapshots).values(rows), {
+          label: 'analytics.snapshots'
+        })
       )
     } catch (error) {
       log.error('Failed to save analytics snapshots', {
@@ -48,7 +66,7 @@ export class DbStore {
         meta: { count: persistable.length }
       })
     } finally {
-      dispose()
+      disposePersist()
     }
   }
 

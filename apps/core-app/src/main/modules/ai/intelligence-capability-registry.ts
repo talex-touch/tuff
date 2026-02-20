@@ -1,12 +1,15 @@
-import type { AiCapabilityDescriptor, IntelligenceCapabilityType } from '@talex-touch/utils'
+import type {
+  IntelligenceCapabilityDescriptor,
+  IntelligenceCapabilityType
+} from '@talex-touch/utils'
 import { createLogger } from '../../utils/logger'
 
 const capabilityRegistryLog = createLogger('Intelligence').child('CapabilityRegistry')
 
-export class AiCapabilityRegistry {
-  private capabilities = new Map<string, AiCapabilityDescriptor>()
+export class TuffIntelligenceCapabilityRegistry {
+  private capabilities = new Map<string, IntelligenceCapabilityDescriptor>()
 
-  register(capability: AiCapabilityDescriptor): void {
+  register(capability: IntelligenceCapabilityDescriptor): void {
     if (this.capabilities.has(capability.id)) {
       capabilityRegistryLog.warn(`Capability ${capability.id} already registered, overwriting`)
     }
@@ -22,15 +25,15 @@ export class AiCapabilityRegistry {
     }
   }
 
-  get(capabilityId: string): AiCapabilityDescriptor | undefined {
+  get(capabilityId: string): IntelligenceCapabilityDescriptor | undefined {
     return this.capabilities.get(capabilityId)
   }
 
-  getByType(type: IntelligenceCapabilityType): AiCapabilityDescriptor[] {
+  getByType(type: IntelligenceCapabilityType): IntelligenceCapabilityDescriptor[] {
     return Array.from(this.capabilities.values()).filter((cap) => cap.type === type)
   }
 
-  getAll(): AiCapabilityDescriptor[] {
+  getAll(): IntelligenceCapabilityDescriptor[] {
     return Array.from(this.capabilities.values())
   }
 
@@ -48,4 +51,4 @@ export class AiCapabilityRegistry {
   }
 }
 
-export const aiCapabilityRegistry = new AiCapabilityRegistry()
+export const intelligenceCapabilityRegistry = new TuffIntelligenceCapabilityRegistry()

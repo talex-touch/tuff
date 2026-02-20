@@ -141,6 +141,13 @@
       "when": 1768794340549,
       "tag": "0019_usage_trend_daily",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1771521053929,
+      "tag": "0020_system_update_tables",
+      "breakpoints": true
     }
   ]
 }

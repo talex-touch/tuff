@@ -76,9 +76,11 @@ export class CurrencyPreviewAbility extends BasePreviewAbility {
 
     // Format update time
     const updateTime = new Date(status.lastRefresh).toLocaleString('zh-CN')
+    const sourceLabel =
+      status.source === 'nexus' ? 'Nexus' : status.source === 'ecb' ? 'ECB' : '内置'
     const subtitle = status.isStale
       ? `汇率换算 ⚠️ 数据较旧 (${updateTime})`
-      : `汇率换算 · ${status.source === 'ecb' ? 'ECB' : '内置'} · ${updateTime}`
+      : `汇率换算 · ${sourceLabel} · ${updateTime}`
 
     const payload: PreviewCardPayload = {
       abilityId: this.id,

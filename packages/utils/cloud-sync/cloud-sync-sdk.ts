@@ -35,6 +35,7 @@ export interface CloudSyncSDKOptions {
   now?: () => number
   syncTokenCache?: { token?: string, expiresAt?: string }
   onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  onHandshake?: (response: HandshakeResponse) => void
   onStepUpRequired?: () => string | null | Promise<string | null>
   formDataFactory?: () => FormData
 }
@@ -61,6 +62,7 @@ export class CloudSyncSDK {
   private now: () => number
   private syncTokenCache: { token?: string, expiresAt?: string }
   private onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  private onHandshake?: (response: HandshakeResponse) => void
   private onStepUpRequired?: () => string | null | Promise<string | null>
   private formDataFactory?: () => FormData
   private handshakePromise: Promise<HandshakeResponse> | null = null
@@ -74,6 +76,7 @@ export class CloudSyncSDK {
     this.now = options.now ?? (() => Date.now())
     this.syncTokenCache = options.syncTokenCache ?? {}
     this.onSyncTokenUpdate = options.onSyncTokenUpdate
+    this.onHandshake = options.onHandshake
     this.onStepUpRequired = options.onStepUpRequired
     this.formDataFactory = options.formDataFactory
   }
@@ -89,6 +92,10 @@ export class CloudSyncSDK {
         headers,
       })
       this.updateSyncToken(response.sync_token, response.sync_token_expires_at)
+      try {
+        this.onHandshake?.(response)
+      } catch {
+      }
       return response
     })()
 

@@ -14,7 +14,7 @@ const { color, toggleDark } = useTheme()
 const { plan } = useSubscriptionData()
 const { data: creditsSummary } = useFetch<any>('/api/credits/summary')
 const userMenuPanelCard = {
-  glassOverlayOpacity: 0.22,
+  glassOverlayOpacity: 0.16,
   refractionStrength: 74,
   refractionProfile: 'cinematic',
   refractionTone: 'balanced',

@@ -1,8 +1,8 @@
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
-  AiUsageInfo,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceChatPayload,
   IntelligenceEmbeddingPayload,
   IntelligenceTranslatePayload,
@@ -53,8 +53,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -86,7 +86,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }>('/chat/completions', body, options.timeout)
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: data.usage?.completion_tokens ?? 0,
       totalTokens: data.usage?.total_tokens ?? 0
@@ -104,8 +104,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     this.validateApiKey()
 
     const model =
@@ -173,8 +173,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async embedding(
     payload: IntelligenceEmbeddingPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<number[]>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<number[]>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
@@ -198,7 +198,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }>('/embeddings', body, options.timeout)
 
     const latency = Date.now() - startTime
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: 0,
       totalTokens: data.usage?.total_tokens ?? data.usage?.prompt_tokens ?? 0
@@ -216,8 +216,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async translate(
     payload: IntelligenceTranslatePayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {
@@ -236,8 +236,8 @@ export class SiliconflowProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<IntelligenceVisionOcrResult>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const traceId = this.generateTraceId()
     const startTime = Date.now()
@@ -283,7 +283,7 @@ export class SiliconflowProvider extends IntelligenceProvider {
     }>('/chat/completions', body, options.timeout)
 
     const latency = Date.now() - startTime
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens ?? 0,
       completionTokens: data.usage?.completion_tokens ?? 0,
       totalTokens: data.usage?.total_tokens ?? 0

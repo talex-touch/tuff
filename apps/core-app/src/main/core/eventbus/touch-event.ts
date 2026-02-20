@@ -59,6 +59,9 @@ export enum TalexEvents {
   // Update Events
   UPDATE_AVAILABLE = 'update/available',
 
+  // System Config Events
+  SYSTEM_CONFIG_UPDATED = 'system/config-updated',
+
   // Search Engine Events
   PROVIDER_DEACTIVATED = 'search-engine/provider-deactivated',
 
@@ -414,6 +417,19 @@ export class UpdateAvailableEvent implements ITouchEvent<TalexEvents> {
   constructor(version: string, channel: AppPreviewChannel) {
     this.version = version
     this.channel = channel
+  }
+}
+
+export class SystemConfigUpdatedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.SYSTEM_CONFIG_UPDATED
+  key: string
+  payload: unknown
+  updatedAt: number
+
+  constructor(key: string, payload: unknown, updatedAt: number) {
+    this.key = key
+    this.payload = payload
+    this.updatedAt = updatedAt
   }
 }
 

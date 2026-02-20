@@ -1,11 +1,12 @@
-import { exec } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
+import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import chalk from 'chalk'
 import { createLogger } from '../../../../utils/logger'
+import { enterPerfContext } from '../../../../utils/perf-context'
 import { formatLog, LogStyle } from './app-utils'
 import type { ScannedAppInfo } from './app-types'
 
@@ -77,59 +78,64 @@ export class AppScanner {
   }
 
   private async scanApps(): Promise<ScannedAppInfo[]> {
-    appScannerLog.info(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
-
+    const disposeScan = enterPerfContext('AppScanner.scan', { platform: process.platform })
     try {
-      const apps =
-        (await withOSAdapter<void, Promise<ScannedAppInfo[]>>({
-          darwin: async () => {
-            appScannerLog.info(
-              formatLog(
-                'AppScanner',
-                'macOS detected, scanning applications using mdfind',
-                LogStyle.info
-              )
-            )
-            const { getApps } = await import('./darwin')
-            return await getApps()
-          },
-          win32: async () => {
-            appScannerLog.info(
-              formatLog(
-                'AppScanner',
-                'Windows detected, scanning Start Menu and Program Directories',
-                LogStyle.info
-              )
-            )
-            const { getApps } = await import('./win')
-            return await getApps()
-          },
-          linux: async () => {
-            appScannerLog.info(
-              formatLog('AppScanner', 'Linux detected, scanning .desktop files', LogStyle.info)
-            )
-            const { getApps } = await import('./linux')
-            return await getApps()
-          }
-        })) || []
+      appScannerLog.info(formatLog('AppScanner', 'Starting application scan...', LogStyle.process))
 
-      appScannerLog.info(
-        formatLog(
-          'AppScanner',
-          `Scan complete, found ${chalk.green(apps.length)} applications`,
-          LogStyle.success
+      try {
+        const apps =
+          (await withOSAdapter<void, Promise<ScannedAppInfo[]>>({
+            darwin: async () => {
+              appScannerLog.info(
+                formatLog(
+                  'AppScanner',
+                  'macOS detected, scanning applications using mdfind',
+                  LogStyle.info
+                )
+              )
+              const { getApps } = await import('./darwin')
+              return await getApps()
+            },
+            win32: async () => {
+              appScannerLog.info(
+                formatLog(
+                  'AppScanner',
+                  'Windows detected, scanning Start Menu and Program Directories',
+                  LogStyle.info
+                )
+              )
+              const { getApps } = await import('./win')
+              return await getApps()
+            },
+            linux: async () => {
+              appScannerLog.info(
+                formatLog('AppScanner', 'Linux detected, scanning .desktop files', LogStyle.info)
+              )
+              const { getApps } = await import('./linux')
+              return await getApps()
+            }
+          })) || []
+
+        appScannerLog.info(
+          formatLog(
+            'AppScanner',
+            `Scan complete, found ${chalk.green(apps.length)} applications`,
+            LogStyle.success
+          )
         )
-      )
-      return apps
-    } catch (error) {
-      appScannerLog.error(
-        formatLog(
-          'AppScanner',
-          `Error scanning applications: ${error instanceof Error ? error.message : String(error)}`,
-          LogStyle.error
+        return apps
+      } catch (error) {
+        appScannerLog.error(
+          formatLog(
+            'AppScanner',
+            `Error scanning applications: ${error instanceof Error ? error.message : String(error)}`,
+            LogStyle.error
+          )
         )
-      )
-      return []
+        return []
+      }
+    } finally {
+      disposeScan()
     }
   }
 
@@ -185,169 +191,191 @@ export class AppScanner {
     updatedCount: number
     deletedApps: ScannedAppInfo[]
   }> {
-    if (process.platform !== 'darwin') {
-      appScannerLog.info(formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info))
-      return { updatedApps: [], updatedCount: 0, deletedApps: [] }
-    }
-
-    appScannerLog.info(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
-
-    if (apps.length === 0) {
-      appScannerLog.info(
-        formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info)
-      )
-      return { updatedApps: [], updatedCount: 0, deletedApps: [] }
-    }
-
-    appScannerLog.info(
-      formatLog(
-        'AppScanner',
-        `Running mdls scan for ${chalk.cyan(apps.length)} apps`,
-        LogStyle.process
-      )
-    )
-
-    let updatedCount = 0
-    let processedCount = 0
-    const updatedApps: ScannedAppInfo[] = []
-    const deletedApps: ScannedAppInfo[] = []
-    const startTime = Date.now()
-
-    // 先过滤掉不存在的应用
-    const existingApps: typeof apps = []
-    for (const app of apps) {
-      if (!existsSync(app.path)) {
-        appScannerLog.warn(
-          formatLog(
-            'AppScanner',
-            `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
-            LogStyle.warning
-          )
+    const disposeScan = enterPerfContext('AppScanner.mdlsUpdate', { appCount: apps.length })
+    try {
+      if (process.platform !== 'darwin') {
+        appScannerLog.info(
+          formatLog('AppScanner', 'Not on macOS, skipping mdls scan', LogStyle.info)
         )
-        deletedApps.push(app)
-      } else {
-        existingApps.push(app)
+        return { updatedApps: [], updatedCount: 0, deletedApps: [] }
       }
-    }
 
-    // 批量处理：每批 50 个应用，使用一次 mdls 调用
-    const BATCH_SIZE = 50
-    const batches: ScannedAppInfo[][] = []
-    for (let i = 0; i < existingApps.length; i += BATCH_SIZE) {
-      batches.push(existingApps.slice(i, i + BATCH_SIZE))
-    }
+      appScannerLog.info(formatLog('AppScanner', 'Starting mdls update scan', LogStyle.process))
 
-    for (const batch of batches) {
-      try {
-        // 使用 mdls 一次查询多个文件（每个文件输出用 null 字符分隔）
-        const paths = batch.map((app) => `"${app.path}"`).join(' ')
-        const command = `mdls -name kMDItemDisplayName -raw ${paths}`
-        const { stdout } = await this._execCommand(command)
-
-        // mdls -raw 对多个文件输出时，用 null 字符 (\0) 分隔
-        const results = stdout.split('\0')
-
-        for (let i = 0; i < batch.length; i++) {
-          const app = batch[i]
-          let spotlightName = (results[i] || '').trim()
-
-          if (spotlightName.endsWith('.app')) {
-            spotlightName = spotlightName.slice(0, -4)
-          }
-
-          const currentDisplayName = app.displayName
-
-          if (spotlightName && spotlightName !== '(null)' && spotlightName !== currentDisplayName) {
-            appScannerLog.debug(
-              formatLog(
-                'AppScanner',
-                `Updating app display name: ${chalk.cyan(app.name)}: "${
-                  currentDisplayName || 'null'
-                }" -> "${spotlightName}"`,
-                LogStyle.info
-              )
-            )
-
-            updatedCount++
-            updatedApps.push({
-              ...app,
-              displayName: spotlightName
-            })
-          }
-        }
-      } catch (error) {
-        // 批量失败时回退到逐个处理
-        appScannerLog.warn(
-          formatLog(
-            'AppScanner',
-            `Batch mdls failed, falling back to individual processing: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            LogStyle.warning
-          )
+      if (apps.length === 0) {
+        appScannerLog.info(
+          formatLog('AppScanner', 'App list is empty, skipping mdls scan', LogStyle.info)
         )
+        return { updatedApps: [], updatedCount: 0, deletedApps: [] }
+      }
 
-        for (const app of batch) {
-          try {
-            const command = `mdls -name kMDItemDisplayName -raw "${app.path}"`
-            const { stdout } = await this._execCommand(command)
-            let spotlightName = stdout.trim()
+      appScannerLog.info(
+        formatLog(
+          'AppScanner',
+          `Running mdls scan for ${chalk.cyan(apps.length)} apps`,
+          LogStyle.process
+        )
+      )
+
+      let updatedCount = 0
+      let processedCount = 0
+      const updatedApps: ScannedAppInfo[] = []
+      const deletedApps: ScannedAppInfo[] = []
+      const startTime = Date.now()
+
+      // 先过滤掉不存在的应用（异步 + 定期 yield 避免阻塞事件循环）
+      const existingApps: typeof apps = []
+      for (let i = 0; i < apps.length; i++) {
+        const app = apps[i]
+        try {
+          await fs.access(app.path)
+          existingApps.push(app)
+        } catch {
+          appScannerLog.warn(
+            formatLog(
+              'AppScanner',
+              `App not found, will be deleted from database: ${chalk.yellow(app.path)}`,
+              LogStyle.warning
+            )
+          )
+          deletedApps.push(app)
+        }
+        // 每 20 个让出事件循环，避免长时间阻塞
+        if ((i + 1) % 20 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
+
+      // 批量处理：每批 50 个应用，使用一次 mdls 调用
+      const BATCH_SIZE = 50
+      const batches: ScannedAppInfo[][] = []
+      for (let i = 0; i < existingApps.length; i += BATCH_SIZE) {
+        batches.push(existingApps.slice(i, i + BATCH_SIZE))
+      }
+
+      for (const batch of batches) {
+        try {
+          // 使用 mdls 一次查询多个文件（每个文件输出用 null 字符分隔）
+          const args = ['-name', 'kMDItemDisplayName', '-raw', ...batch.map((app) => app.path)]
+          const { stdout } = await this._execCommand('mdls', args)
+
+          // mdls -raw 对多个文件输出时，用 null 字符 (\0) 分隔
+          const results = stdout.split('\0')
+
+          for (let i = 0; i < batch.length; i++) {
+            const app = batch[i]
+            let spotlightName = (results[i] || '').trim()
+
             if (spotlightName.endsWith('.app')) {
               spotlightName = spotlightName.slice(0, -4)
             }
-            if (spotlightName && spotlightName !== '(null)' && spotlightName !== app.displayName) {
+
+            const currentDisplayName = app.displayName
+
+            if (
+              spotlightName &&
+              spotlightName !== '(null)' &&
+              spotlightName !== currentDisplayName
+            ) {
+              appScannerLog.debug(
+                formatLog(
+                  'AppScanner',
+                  `Updating app display name: ${chalk.cyan(app.name)}: "${
+                    currentDisplayName || 'null'
+                  }" -> "${spotlightName}"`,
+                  LogStyle.info
+                )
+              )
+
               updatedCount++
-              updatedApps.push({ ...app, displayName: spotlightName })
+              updatedApps.push({
+                ...app,
+                displayName: spotlightName
+              })
             }
-          } catch {
-            // 忽略单个应用的错误
           }
-        }
-      } finally {
-        processedCount += batch.length
-        if (processedCount % 100 === 0 || processedCount === existingApps.length) {
-          appScannerLog.debug(
+        } catch (error) {
+          // 批量失败时回退到逐个处理
+          appScannerLog.warn(
             formatLog(
               'AppScanner',
-              `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(existingApps.length)} apps`,
-              LogStyle.info
+              `Batch mdls failed, falling back to individual processing: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              LogStyle.warning
             )
           )
+
+          for (const app of batch) {
+            try {
+              const { stdout } = await this._execCommand('mdls', [
+                '-name',
+                'kMDItemDisplayName',
+                '-raw',
+                app.path
+              ])
+              let spotlightName = stdout.trim()
+              if (spotlightName.endsWith('.app')) {
+                spotlightName = spotlightName.slice(0, -4)
+              }
+              if (
+                spotlightName &&
+                spotlightName !== '(null)' &&
+                spotlightName !== app.displayName
+              ) {
+                updatedCount++
+                updatedApps.push({ ...app, displayName: spotlightName })
+              }
+            } catch {
+              // 忽略单个应用的错误
+            }
+          }
+        } finally {
+          processedCount += batch.length
+          if (processedCount % 100 === 0 || processedCount === existingApps.length) {
+            appScannerLog.debug(
+              formatLog(
+                'AppScanner',
+                `mdls progress: processed ${chalk.cyan(processedCount)}/${chalk.cyan(existingApps.length)} apps`,
+                LogStyle.info
+              )
+            )
+          }
         }
+        // 批次间让出事件循环，避免连续处理导致 lag
+        await new Promise<void>((resolve) => setImmediate(resolve))
       }
-    }
 
-    appScannerLog.info(
-      formatLog(
-        'AppScanner',
-        `mdls update scan finished. Updated ${chalk.green(
-          updatedCount
-        )} app display names, found ${chalk.yellow(
-          deletedApps.length
-        )} missing apps in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
-        LogStyle.success
+      appScannerLog.info(
+        formatLog(
+          'AppScanner',
+          `mdls update scan finished. Updated ${chalk.green(
+            updatedCount
+          )} app display names, found ${chalk.yellow(
+            deletedApps.length
+          )} missing apps in ${chalk.cyan(((Date.now() - startTime) / 1000).toFixed(1))}s.`,
+          LogStyle.success
+        )
       )
-    )
 
-    return { updatedApps, updatedCount, deletedApps }
+      return { updatedApps, updatedCount, deletedApps }
+    } finally {
+      disposeScan()
+    }
   }
 
   /**
    * Executes a shell command.
    * @param {string} command - The command to execute.
+   * @param {string[]} args - The arguments to execute.
    * @returns {Promise<{ stdout: string; stderr: string }>} A promise that resolves with stdout and stderr.
    * @private
    */
-  private _execCommand(command: string): Promise<{ stdout: string; stderr: string }> {
-    return new Promise((resolve, reject) => {
-      exec(command, (error, stdout, stderr) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve({ stdout, stderr })
-      })
-    })
+  private async _execCommand(
+    command: string,
+    args: string[]
+  ): Promise<{ stdout: string; stderr: string }> {
+    return await execFileSafe(command, args)
   }
 }
 

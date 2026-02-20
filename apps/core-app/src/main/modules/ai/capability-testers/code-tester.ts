@@ -1,5 +1,5 @@
 import type {
-  AiInvokeResult,
+  IntelligenceInvokeResult,
   IntelligenceCodeGenerateResult,
   IntelligenceCodeReviewResult
 } from '@talex-touch/utils'
@@ -18,7 +18,7 @@ export class CodeGenerateTester extends BaseCapabilityTester {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<IntelligenceCodeGenerateResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceCodeGenerateResult>) {
     const code = result.result?.code || ''
     const preview = code.length > 300 ? `${code.slice(0, 300)}...` : code
 
@@ -62,7 +62,7 @@ function multiply(x, y) {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<IntelligenceCodeReviewResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceCodeReviewResult>) {
     const summary = result.result?.summary || ''
     const issueCount = result.result?.issues?.length || 0
 

@@ -234,50 +234,49 @@ function useLoading(options: LoadingOptions) {
 }
 .${className}__progress {
   width: min(320px, 80vw);
-  height: 8px;
+  height: 4px;
   border-radius: 999px;
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.18);
 }
 .${className}__progress::before {
   content: '';
   position: absolute;
   inset: 0;
   transform-origin: left center;
-  background: linear-gradient(90deg, #8c66ff 0%, #5b8dff 50%, #75f5ff 100%);
-  filter: drop-shadow(0 0 18px rgba(117, 245, 255, 0.35));
+  background: rgba(255, 255, 255, 0.72);
   transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   transform: scaleX(var(--app-loading-progress, 0.08));
 }
 .${className}[data-theme='light'] .${className}__progress {
-  background: rgba(19, 21, 26, 0.12);
+  background: rgba(19, 21, 26, 0.2);
 }
 .${className}[data-theme='light'] .${className}__progress::before {
-  filter: drop-shadow(0 0 18px rgba(92, 141, 255, 0.24));
+  background: rgba(19, 21, 26, 0.48);
 }
 .${className}__bar {
   width: min(320px, 80vw);
-  height: 8px;
+  height: 4px;
   border-radius: 999px;
   overflow: hidden;
   position: relative;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.18);
 }
 .${className}[data-theme='light'] .${className}__bar {
-  background: rgba(19, 21, 26, 0.12);
+  background: rgba(19, 21, 26, 0.2);
 }
 .${className}__bar::before {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0) 100%);
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.5) 50%, rgba(255,255,255,0) 100%);
   transform: translateX(-100%);
   animation: ${className}__bar__animation 1.2s infinite;
 }
 .${className}[data-theme='light'] .${className}__bar::before {
-  background: linear-gradient(90deg, rgba(19,21,26,0) 0%, rgba(19,21,26,0.28) 50%, rgba(19,21,26,0) 100%);
+  background: linear-gradient(90deg, rgba(19,21,26,0) 0%, rgba(19,21,26,0.22) 50%, rgba(19,21,26,0) 100%);
 }
 .${className}__debug {
   width: min(360px, 86vw);

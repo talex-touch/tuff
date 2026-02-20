@@ -1,8 +1,8 @@
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
-  AiUsageInfo,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceChatPayload
 } from '@talex-touch/utils'
 import { IntelligenceProviderType } from '@talex-touch/utils'
@@ -39,8 +39,8 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -76,7 +76,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/messages' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.input_tokens ?? 0,
       completionTokens: data.usage?.output_tokens ?? 0,
       totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
@@ -94,8 +94,8 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     this.validateApiKey()
 
     const model =
@@ -158,14 +158,14 @@ export class AnthropicProvider extends IntelligenceProvider {
     }
   }
 
-  async embedding(): Promise<AiInvokeResult<number[]>> {
+  async embedding(): Promise<IntelligenceInvokeResult<number[]>> {
     throw new Error('[AnthropicProvider] Embedding not supported')
   }
 
   async translate(
     payload: import('@talex-touch/utils').IntelligenceTranslatePayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: import('@talex-touch/utils').IntelligenceChatPayload = {
       messages: [
         {
@@ -184,8 +184,8 @@ export class AnthropicProvider extends IntelligenceProvider {
 
   async visionOcr(
     payload: import('@talex-touch/utils').IntelligenceVisionOcrPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<import('@talex-touch/utils').AiVisionOcrResult>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<import('@talex-touch/utils').IntelligenceVisionOcrResult>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -243,7 +243,7 @@ export class AnthropicProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/messages (vision)' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.input_tokens ?? 0,
       completionTokens: data.usage?.output_tokens ?? 0,
       totalTokens: (data.usage?.input_tokens ?? 0) + (data.usage?.output_tokens ?? 0)
@@ -261,7 +261,7 @@ export class AnthropicProvider extends IntelligenceProvider {
       : []
     const blocks = Array.isArray(parsedRecord?.blocks) ? parsedRecord.blocks : undefined
 
-    const ocrResult: import('@talex-touch/utils').AiVisionOcrResult = parsedRecord
+    const ocrResult: import('@talex-touch/utils').IntelligenceVisionOcrResult = parsedRecord
       ? {
           text,
           confidence,
@@ -287,7 +287,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   }
 
   private async getImageData(
-    source: import('@talex-touch/utils').AiVisionImageSource
+    source: import('@talex-touch/utils').IntelligenceVisionImageSource
   ): Promise<string> {
     if (source.type === 'data-url' && source.dataUrl) {
       return source.dataUrl

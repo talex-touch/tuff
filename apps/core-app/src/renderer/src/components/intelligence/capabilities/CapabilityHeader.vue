@@ -1,9 +1,9 @@
 <script lang="ts" setup>
-import type { AISDKCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceCapabilityConfig } from '@talex-touch/utils/types/intelligence'
 import { computed } from 'vue'
 
 const props = defineProps<{
-  capability: AISDKCapabilityConfig
+  capability: IntelligenceCapabilityConfig
 }>()
 
 const capabilityType = computed(() => {

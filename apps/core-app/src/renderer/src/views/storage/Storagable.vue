@@ -627,7 +627,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <ViewTemplate title="Storagable">
+  <ViewTemplate title="$I18n:router.storagable">
     <div class="Storagable-Container">
       <div class="header">
         <div class="title">存储占用</div>

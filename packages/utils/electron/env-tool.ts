@@ -1,6 +1,8 @@
 import type { ExecException } from 'node:child_process'
-import { exec } from 'node:child_process'
 import { platform } from 'node:process'
+import { execFileSafe } from '../common/utils/safe-shell'
+
+type ExecError = { error?: unknown }
 
 export interface IGlobalPkgResult {
   exist: boolean
@@ -9,49 +11,53 @@ export interface IGlobalPkgResult {
   version?: string
 }
 
-export function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkgResult> {
-  return new Promise((resolve, reject) => {
-    exec(`npm list -g ${packageName}`, (error, stdout, stderr) => {
-      if (error) {
-        const execError = Object.assign(new Error('Failed to check global package'), { error })
-        reject(execError)
-        return
-      }
-      if (stderr) {
-        const stderrError = Object.assign(new Error('Failed to check global package'), { error: stderr })
-        reject(stderrError)
-        return
-      }
+export async function checkGlobalPackageExist(packageName: string): Promise<IGlobalPkgResult> {
+  const name = packageName.trim()
+  if (!name) {
+    throw new Error('Package name is required')
+  }
 
-      const lines = stdout.split('\n')
-      const lastLine = lines[lines.length - 3]
-      const match = lastLine.match(/([^@\s]+)@(\S+)/)
-      if (match) {
-        resolve({
-          exist: true,
-          name: match[1],
-          version: match[2],
-        } as IGlobalPkgResult)
-        return
-      }
+  try {
+    const { stdout, stderr } = await execFileSafe('npm', ['list', '-g', name])
+    if (stderr) {
+      const stderrError = Object.assign(new Error('Failed to check global package'), {
+        error: stderr
+      })
+      throw stderrError
+    }
 
-      resolve({
-        exist: false,
-      } as IGlobalPkgResult)
+    const lines = stdout.split('\n')
+    const lastLine = lines[lines.length - 3]
+    const match = lastLine.match(/([^@\s]+)@(\S+)/)
+    if (match) {
+      return {
+        exist: true,
+        name: match[1],
+        version: match[2]
+      } as IGlobalPkgResult
+    }
+
+    return {
+      exist: false
+    } as IGlobalPkgResult
+  } catch (error) {
+    const execError = Object.assign(new Error('Failed to check global package'), {
+      error: error as ExecError
     })
-  })
+    return Promise.reject(execError)
+  }
 }
 
 // Check npm version
 export function getNpmVersion(): Promise<string | null> {
-  return new Promise((resolve) => {
-    exec(`npm --version`, (error, stdout, stderr) => {
-      if (error || stderr)
-        resolve(null)
-
-      resolve(stdout.trim())
+  return execFileSafe('npm', ['--version'])
+    .then(({ stdout, stderr }) => {
+      if (stderr) {
+        return null
+      }
+      return stdout.trim()
     })
-  })
+    .catch(() => null)
 }
 
 export interface OSAdapter<R, T> {

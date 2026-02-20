@@ -130,11 +130,21 @@ export class AnalyticsModule extends BaseModule {
 
     this.registerHandlers()
 
-    const startup = getStartupAnalytics().getCurrentMetrics()
-    this.core.hydrateStartupMetrics(startup)
+    // 将非关键操作延迟到启动窗口之后，避免在启动高峰期触发 DB 写入和采样
+    // hydrateStartupMetrics → recordAndPersist → DB INSERT
+    // sampler.start → collect → recordSystemSample → DB INSERT
+    // startCleanup → DB DELETE
+    // 这三个操作在启动期同时触发会导致 dbWriteScheduler 队列积压 + SQLite WAL checkpoint
+    setTimeout(() => {
+      const startup = getStartupAnalytics().getCurrentMetrics()
+      this.core.hydrateStartupMetrics(startup)
 
-    this.sampler.start()
-    this.startCleanup()
+      // SystemSampler 首次采样延迟 15 秒，给启动任务留出空间
+      this.sampler.start({ initialDelayMs: 15_000 })
+      this.startCleanup()
+      analyticsLog.info('Analytics deferred startup tasks executed')
+    }, 3_000)
+
     analyticsLog.success('Analytics module initialized with TuffTransport handlers')
   }
 
@@ -693,19 +703,23 @@ export class AnalyticsModule extends BaseModule {
 
   private startCleanup(): void {
     if (!this.dbStore) return
-    const run = () =>
-      this.dbStore
-        ?.cleanup(DEFAULT_RETENTION_MS, () => Date.now())
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          analyticsLog.warn('Analytics DB cleanup failed', { error: message })
-        })
-
-    run()
-    pollingService.register(ANALYTICS_CLEANUP_TASK_ID, () => run(), {
-      interval: 60 * 60 * 1000,
-      unit: 'milliseconds'
-    })
+    // 清理操作不需要立即执行，注册定时任务即可
+    // 首次清理延迟 5 分钟，避免在启动期增加 DB 负载
+    pollingService.register(
+      ANALYTICS_CLEANUP_TASK_ID,
+      () =>
+        this.dbStore
+          ?.cleanup(DEFAULT_RETENTION_MS, () => Date.now())
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error)
+            analyticsLog.warn('Analytics DB cleanup failed', { error: message })
+          }),
+      {
+        interval: 60 * 60 * 1000,
+        unit: 'milliseconds',
+        initialDelayMs: 5 * 60 * 1000
+      }
+    )
     pollingService.start()
   }
 
