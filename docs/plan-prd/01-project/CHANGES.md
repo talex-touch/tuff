@@ -2,6 +2,42 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-20
+
+### DivisionBox / Flow 权限入口对齐
+
+**变更类型**: 权限闭环 / 行为一致性
+
+**描述**: 统一 Flow 触发与 DivisionBox 打开场景的权限判定与入口归因，补齐 CoreBox 触发链路的权限校验与用户反馈。
+
+**主要变更**:
+1. **权限归因**：Flow Dispatch 增加 `actorPluginId`，仅在插件来源时写入；DivisionBox 打开入口仅对插件来源透传 pluginId。
+2. **权限判定**：FlowBus 与 DivisionBox IPC 统一按 payload/context 解析 actor 与 sdkapi，避免误用默认版本。
+3. **权限映射**：`division-box:flow:trigger` 绑定 `window.create` + `storage.shared` 双权限。
+4. **用户反馈**：UI 模式触发 Flow 前置权限校验，拒绝时弹出 toast 提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `packages/utils/transport/events/types/flow.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+
+### 旧同步链路禁用（/api/sync/*）
+
+**变更类型**: 行为收口 / 兼容性
+
+**描述**: 旧 `/api/sync/push` 与 `/api/sync/pull` 全部禁用并提示迁移至 `/api/v1/sync/*`，旧链路不再兼容。
+
+**主要变更**:
+1. **禁写提示**：旧 push 返回 410 并提示迁移路径。
+2. **禁读提示**：旧 pull 返回 410 并提示迁移路径。
+
+**修改文件**:
+- `apps/nexus/server/api/sync/push.post.ts`
+- `apps/nexus/server/api/sync/pull.get.ts`
+
 ## 2026-02-19
 
 ### Intelligence OpenAI 兼容 Base URL 归一化

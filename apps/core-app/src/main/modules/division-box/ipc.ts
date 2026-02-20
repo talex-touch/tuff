@@ -20,6 +20,7 @@ import {
 } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
+import { pluginModule } from '../plugin/plugin-module'
 import { flowTriggerManager } from './flow-trigger'
 import { DivisionBoxManager } from './manager'
 
@@ -167,8 +168,36 @@ export class DivisionBoxIPC {
 
     const transport = this.transport
 
-    const enforce = (context: HandlerContext, apiName: string, sdkapi?: number) => {
-      const pluginId = context?.plugin?.name
+    const resolvePluginSdkapi = (pluginId?: string): number | undefined => {
+      if (!pluginId) return undefined
+      return pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
+    }
+
+    const resolveActor = (context: HandlerContext, payload: any) => {
+      const contextPluginId = context?.plugin?.name
+      if (contextPluginId) {
+        const sdkapi =
+          typeof payload?._sdkapi === 'number'
+            ? payload._sdkapi
+            : resolvePluginSdkapi(contextPluginId)
+        return { pluginId: contextPluginId, sdkapi }
+      }
+
+      const actorPluginId =
+        payload?.actorPluginId ?? payload?.pluginId ?? payload?.payload?.context?.sourcePluginId
+
+      if (!actorPluginId) {
+        return {}
+      }
+
+      const sdkapi =
+        typeof payload?._sdkapi === 'number' ? payload._sdkapi : resolvePluginSdkapi(actorPluginId)
+
+      return { pluginId: actorPluginId, sdkapi }
+    }
+
+    const enforce = (context: HandlerContext, apiName: string, payload?: any) => {
+      const { pluginId, sdkapi } = resolveActor(context, payload)
       if (!pluginId) {
         return
       }
@@ -181,7 +210,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.open, async (payload, context) => {
-        enforce(context, 'division-box:session:open', payload?._sdkapi)
+        enforce(context, 'division-box:session:open', payload)
         const validation = validateConfig(payload)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
@@ -206,7 +235,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.close, async (payload, context) => {
-        enforce(context, 'division-box:session:close', payload?._sdkapi)
+        enforce(context, 'division-box:session:close', payload)
         const { sessionId, options } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -224,7 +253,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getState, async (payload, context) => {
-        enforce(context, 'division-box:session:get-state', payload?._sdkapi)
+        enforce(context, 'division-box:session:get-state', payload)
         const { sessionId, key } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -252,7 +281,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.updateState, async (payload, context) => {
-        enforce(context, 'division-box:session:update-state', payload?._sdkapi)
+        enforce(context, 'division-box:session:update-state', payload)
         const { sessionId, key, value } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -281,7 +310,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getActiveSessions, async (payload, context) => {
-        enforce(context, 'division-box:session:get-active-sessions', payload?._sdkapi)
+        enforce(context, 'division-box:session:get-active-sessions', payload)
         const sessions = this.manager.getActiveSessionsInfo()
         return createSuccessResponse(sessions)
       })
@@ -289,7 +318,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.flowTrigger, async (payload, context) => {
-        enforce(context, 'division-box:flow:trigger', payload?._sdkapi)
+        enforce(context, 'division-box:flow:trigger', payload)
         const { targetId, payload: flowPayload } = payload
 
         if (!targetId || typeof targetId !== 'string') {
@@ -312,7 +341,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.togglePin, async (payload, context) => {
-        enforce(context, 'division-box:window:toggle-pin', payload?._sdkapi)
+        enforce(context, 'division-box:window:toggle-pin', payload)
         const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -331,7 +360,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.setOpacity, async (payload, context) => {
-        enforce(context, 'division-box:window:set-opacity', payload?._sdkapi)
+        enforce(context, 'division-box:window:set-opacity', payload)
         const { sessionId, opacity } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -350,7 +379,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.toggleDevTools, async (payload, context) => {
-        enforce(context, 'division-box:window:toggle-devtools', payload?._sdkapi)
+        enforce(context, 'division-box:window:toggle-devtools', payload)
         const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -374,7 +403,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.getWindowState, async (payload, context) => {
-        enforce(context, 'division-box:window:get-window-state', payload?._sdkapi)
+        enforce(context, 'division-box:window:get-window-state', payload)
         const { sessionId } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {
@@ -396,7 +425,7 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.inputChange, async (payload, context) => {
-        enforce(context, 'division-box:ui:input-change', payload?._sdkapi)
+        enforce(context, 'division-box:ui:input-change', payload)
         const { sessionId, input, query } = payload
         const validation = validateSessionId(sessionId)
         if (!validation.valid) {

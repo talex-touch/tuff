@@ -10,6 +10,7 @@ import type {
 
 export interface FlowDispatchRequest {
   senderId?: string
+  actorPluginId?: string
   payload: FlowPayload
   options?: FlowDispatchOptions
   _sdkapi?: number

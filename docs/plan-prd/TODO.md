@@ -139,6 +139,8 @@
 
 ## 🔴 P0 紧急任务
 
+- [ ] P0 风险点登记与收口（`01-project/RISK-REGISTER-2026-02.md`）
+
 ### 🧩 TuffEx 迁移收尾（tuffex-ui -> tuffex）
 
 - [ ] `packages/tuffex`：确保 `pnpm -C packages/tuffex build` 可跑通（Gulp + ts-node/esm）
@@ -404,7 +406,7 @@
 
 **待补**:
 - [x] 生命周期事件（prepare/attach/active/inactive/detach/destroy）对插件侧开放并统一进 SDK
-- [ ] 与 FlowTransfer 的权限/触发入口对齐
+- [x] 与 FlowTransfer 的权限/触发入口对齐 (2026-02-20)
 
 ---
 
