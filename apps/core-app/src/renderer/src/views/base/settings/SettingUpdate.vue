@@ -38,6 +38,7 @@ const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(false)
+const rendererOverrideEnabled = ref(false)
 const lastCheck = ref<number | null>(null)
 const downloadReady = ref(false)
 const downloadReadyVersion = ref<string | null>(null)
@@ -49,6 +50,7 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
+const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 
 const channelOptions = computed(() => {
@@ -155,6 +157,7 @@ async function loadSettings(): Promise<void> {
     selectedChannel.value = fetched.updateChannel
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? false
+    rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
     lastCheck.value = fetched.lastCheckedAt ?? null
     await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
@@ -272,6 +275,25 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
     autoDownloadSaving.value = false
+  }
+}
+
+async function handleRendererOverrideChange(value: boolean): Promise<void> {
+  if (!settings.value || rendererOverrideSaving.value) return
+
+  const previous = rendererOverrideEnabled.value
+  rendererOverrideEnabled.value = value
+  rendererOverrideSaving.value = true
+  try {
+    await updateSettings({ rendererOverrideEnabled: value })
+    settings.value.rendererOverrideEnabled = value
+    toast.success(t('settings.settingUpdate.messages.rendererOverrideSaved'))
+  } catch (error) {
+    console.error('[SettingUpdate] Failed to update renderer override:', error)
+    rendererOverrideEnabled.value = previous
+    toast.error(t('settings.settingUpdate.messages.saveFailed'))
+  } finally {
+    rendererOverrideSaving.value = false
   }
 }
 
@@ -401,6 +423,16 @@ function openAssetsDialog(): void {
       active-icon="i-carbon-download"
       :disabled="fetching || autoDownloadSaving"
       @update:model-value="handleAutoDownloadChange"
+    />
+
+    <tuff-block-switch
+      v-model="rendererOverrideEnabled"
+      :title="t('settings.settingUpdate.rendererOverrideTitle')"
+      :description="t('settings.settingUpdate.rendererOverrideDesc')"
+      default-icon="i-carbon-layers"
+      active-icon="i-carbon-layers"
+      :disabled="fetching || rendererOverrideSaving"
+      @update:model-value="handleRendererOverrideChange"
     />
 
     <TuffBlockSlot

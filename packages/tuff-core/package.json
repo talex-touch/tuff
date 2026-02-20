@@ -26,10 +26,10 @@
     "clean": "rimraf dist"
   },
   "devDependencies": {
-    "eslint": "^9.31.0",
+    "eslint": "^9.39.2",
     "rimraf": "^5.0.10",
     "tsup": "^8.1.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.3"
   },
   "publishConfig": {
     "access": "public"

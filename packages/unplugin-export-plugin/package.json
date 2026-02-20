@@ -87,14 +87,14 @@
     "@talex-touch/utils": "workspace:*"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^0.39.8",
+    "@antfu/eslint-config": "^5.4.1",
     "@types/cli-progress": "^3.11.6",
     "@types/debug": "^4.1.12",
     "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
     "@types/node": "^18.19.130",
     "bumpp": "^9.11.1",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.2",
     "esno": "^0.16.3",
     "find-up": "^7.0.0",
     "glob": "^10.5.0",
@@ -102,7 +102,7 @@
     "rimraf": "^5.0.10",
     "tsup": "^6.7.0",
     "typescript": "^5.9.3",
-    "vite": "^4.5.14",
-    "vitest": "^0.31.4"
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4"
   }
 }

@@ -31,6 +31,8 @@ import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eve
 import { downloadChunks, downloadTasks } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
+import { getAnalyticsMessageStore } from '../analytics/message-store'
+import { getSentryService } from '../sentry'
 /**
  * Update service for checking application updates in main process
  */
@@ -137,6 +139,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private macUpdateDownloadedVersion: string | null = null
   private macUpdateReadyNotifiedVersion: string | null = null
   private macAutoUpdaterConfigMissingLogged = false
+  private readonly messageStore = getAnalyticsMessageStore()
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
     [AppPreviewChannel.BETA]: 1,
@@ -183,6 +186,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
       updateChannel: this.settings.updateChannel,
+      rendererOverrideEnabled: this.settings.rendererOverrideEnabled,
       storageRoot: ctx.app.rootPath
     })
     updateLog.success('UpdateSystem initialized with DownloadCenter integration')
@@ -368,6 +372,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
                 this.syncMacAutoUpdaterChannel()
               }
+              if (typeof sanitizedSettings.rendererOverrideEnabled === 'boolean') {
+                const enabled = sanitizedSettings.rendererOverrideEnabled
+                this.updateSystem.updateConfig({ rendererOverrideEnabled: enabled })
+                if (!enabled) {
+                  await this.updateSystem.disableRendererOverride(
+                    'renderer override disabled via settings'
+                  )
+                }
+                this.reportUpdateMessage(
+                  'info',
+                  'Renderer override setting',
+                  enabled ? 'Renderer override enabled' : 'Renderer override disabled',
+                  { enabled }
+                )
+              }
             }
 
             if (this.pollingService.isRegistered(UPDATE_POLL_TASK_ID)) {
@@ -494,15 +513,48 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               await this.updateSystem.scheduleRendererOverride(release)
             }
             await this.downloadMacUpdate(release)
+            this.reportUpdateMessage('info', 'Update download started', release.tag_name, {
+              channel: this.getEffectiveChannel(),
+              source: 'mac-auto-updater'
+            })
+            this.reportUpdateTelemetry('download_started', {
+              channel: this.getEffectiveChannel(),
+              source: 'mac-auto-updater',
+              tag: release.tag_name,
+              itemKind: 'manual'
+            })
             return { success: true }
           }
           if (!this.updateSystem) {
             throw new Error('UpdateSystem not initialized')
           }
           const taskId = await this.updateSystem.downloadUpdate(release)
+          this.reportUpdateMessage('info', 'Update download started', release.tag_name, {
+            channel: this.getEffectiveChannel(),
+            taskId
+          })
+          this.reportUpdateTelemetry('download_started', {
+            channel: this.getEffectiveChannel(),
+            source: this.settings.source?.name ?? 'Unknown',
+            tag: release.tag_name,
+            taskId,
+            itemKind: 'manual'
+          })
           return { success: true, data: { taskId } }
         } catch (error) {
           updateLog.error('Failed to download update', { error })
+          this.reportUpdateError('download', error, {
+            tag: release?.tag_name,
+            channel: this.getEffectiveChannel()
+          })
+          this.reportUpdateTelemetry('download_error', {
+            channel: this.getEffectiveChannel(),
+            source: this.isMacAutoUpdaterEnabled()
+              ? 'mac-auto-updater'
+              : (this.settings.source?.name ?? 'Unknown'),
+            tag: release?.tag_name,
+            itemKind: 'manual'
+          })
           return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
@@ -514,6 +566,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         try {
           if (this.isMacAutoUpdaterEnabled()) {
             await this.installMacUpdate()
+            this.reportUpdateMessage('info', 'Update install triggered', 'mac-auto-updater', {
+              channel: this.getEffectiveChannel()
+            })
+            this.reportUpdateTelemetry('install_started', {
+              channel: this.getEffectiveChannel(),
+              source: 'mac-auto-updater',
+              itemKind: 'manual'
+            })
             return { success: true }
           }
           if (!this.updateSystem) {
@@ -523,9 +583,30 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             throw new Error('Missing update task id')
           }
           await this.updateSystem.installUpdate(payload.taskId)
+          this.reportUpdateMessage('info', 'Update install triggered', payload.taskId, {
+            channel: this.getEffectiveChannel()
+          })
+          this.reportUpdateTelemetry('install_started', {
+            channel: this.getEffectiveChannel(),
+            source: this.settings.source?.name ?? 'Unknown',
+            taskId: payload.taskId,
+            itemKind: 'manual'
+          })
           return { success: true }
         } catch (error) {
           updateLog.error('Failed to install update', { error })
+          this.reportUpdateError('install', error, {
+            channel: this.getEffectiveChannel(),
+            taskId: payload?.taskId
+          })
+          this.reportUpdateTelemetry('install_error', {
+            channel: this.getEffectiveChannel(),
+            source: this.isMacAutoUpdaterEnabled()
+              ? 'mac-auto-updater'
+              : (this.settings.source?.name ?? 'Unknown'),
+            taskId: payload?.taskId,
+            itemKind: 'manual'
+          })
           return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
@@ -744,6 +825,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    */
   private async checkForUpdates(force = false): Promise<UpdateCheckResult> {
     const targetChannel = this.getEffectiveChannel()
+    const checkKind = force ? 'manual' : 'auto'
     const ttlMs = this.settings.cacheTTL * 60 * 1000
     const now = Date.now()
 
@@ -803,6 +885,23 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           tag: result.release?.tag_name ?? null
         }
       })
+      this.reportUpdateTelemetry(result.hasUpdate ? 'check_found' : 'check_none', {
+        channel: targetChannel,
+        source: result.source,
+        tag: result.release?.tag_name ?? null,
+        itemKind: checkKind
+      })
+      if (result.hasUpdate && result.release) {
+        this.reportUpdateMessage(
+          'info',
+          'Update available',
+          `Found update ${result.release.tag_name}`,
+          {
+            channel: targetChannel,
+            source: result.source
+          }
+        )
+      }
 
       if (result.hasUpdate && result.release) {
         await this.persistRelease(targetChannel, result.release, result.source)
@@ -860,6 +959,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     } catch (error) {
       this.recordCheckTimestamp()
       updateLog.error('Update check failed', { error })
+      this.reportUpdateError('check', error, { channel: targetChannel })
+      this.reportUpdateTelemetry('check_error', {
+        channel: targetChannel,
+        source: this.settings.source?.name ?? 'Unknown',
+        itemKind: checkKind
+      })
 
       const errorResult = {
         hasUpdate: false,
@@ -892,8 +997,20 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         await this.downloadMacUpdate(release)
         this.autoDownloadTasks.set(tag, 'macos-auto-updater')
         updateLog.info(`Auto download started for ${tag} (macOS autoUpdater)`)
+        this.reportUpdateTelemetry('download_started', {
+          channel: this.getEffectiveChannel(),
+          source: 'mac-auto-updater',
+          tag,
+          itemKind: 'auto'
+        })
       } catch (error) {
         updateLog.warn('Auto download failed (macOS autoUpdater)', { error, meta: { tag } })
+        this.reportUpdateTelemetry('download_error', {
+          channel: this.getEffectiveChannel(),
+          source: 'mac-auto-updater',
+          tag,
+          itemKind: 'auto'
+        })
       }
       return
     }
@@ -915,8 +1032,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       const taskId = await this.updateSystem.downloadUpdate(release)
       this.autoDownloadTasks.set(tag, taskId)
       updateLog.info(`Auto download started for ${tag}`, { meta: { taskId } })
+      this.reportUpdateTelemetry('download_started', {
+        channel: this.getEffectiveChannel(),
+        source: this.settings.source?.name ?? 'Unknown',
+        tag,
+        taskId,
+        itemKind: 'auto'
+      })
     } catch (error) {
       updateLog.warn('Auto download failed', { error, meta: { tag } })
+      this.reportUpdateTelemetry('download_error', {
+        channel: this.getEffectiveChannel(),
+        source: this.settings.source?.name ?? 'Unknown',
+        tag,
+        itemKind: 'auto'
+      })
     }
   }
 
@@ -1131,6 +1261,64 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private recordCheckTimestamp(): void {
     this.settings.lastCheckedAt = Date.now()
     this.saveSettings()
+  }
+
+  private reportUpdateTelemetry(
+    action: string,
+    options: {
+      channel?: AppPreviewChannel
+      source?: string
+      tag?: string | null
+      taskId?: string | null
+      itemKind?: 'manual' | 'auto'
+    }
+  ): void {
+    try {
+      const sentryService = getSentryService()
+      if (!sentryService.isTelemetryEnabled()) {
+        return
+      }
+
+      const [stage, ...rest] = action.split('_')
+      const result = rest.length ? rest.join('_') : undefined
+
+      sentryService.queueNexusTelemetry({
+        eventType: 'feature_use',
+        metadata: {
+          action,
+          stage: stage || undefined,
+          result,
+          sourceType: 'update',
+          sourceId: options.channel,
+          sourceName: options.source,
+          sourceVersion: options.tag ?? undefined,
+          itemKind: options.itemKind,
+          featureId: options.taskId ?? undefined
+        }
+      })
+    } catch {
+      // ignore telemetry errors
+    }
+  }
+
+  private reportUpdateMessage(
+    severity: 'info' | 'warn' | 'error',
+    title: string,
+    message: string,
+    meta?: Record<string, unknown>
+  ): void {
+    this.messageStore.add({
+      source: 'update',
+      severity,
+      title,
+      message,
+      meta
+    })
+  }
+
+  private reportUpdateError(action: string, error: unknown, meta?: Record<string, unknown>): void {
+    const message = error instanceof Error ? error.message : String(error)
+    this.reportUpdateMessage('error', `Update ${action} failed`, message, meta)
   }
 
   /**
@@ -1912,6 +2100,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ignoredVersions: [],
       customSources: [],
       autoDownload: false,
+      rendererOverrideEnabled: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
@@ -2230,6 +2419,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
         if (typeof this.settings.autoDownload !== 'boolean') {
           this.settings.autoDownload = defaults.autoDownload
+        }
+        if (typeof this.settings.rendererOverrideEnabled !== 'boolean') {
+          this.settings.rendererOverrideEnabled = defaults.rendererOverrideEnabled
         }
         if (typeof this.settings.pendingInstallVersion !== 'string') {
           this.settings.pendingInstallVersion = defaults.pendingInstallVersion

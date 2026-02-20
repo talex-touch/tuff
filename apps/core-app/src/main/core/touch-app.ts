@@ -5,6 +5,7 @@ import { StorageList } from '@talex-touch/utils'
 import { app, BrowserWindow, dialog, screen } from 'electron'
 import fse from 'fs-extra'
 import { MainWindowOption } from '../config/default'
+import { getAnalyticsMessageStore } from '../modules/analytics/message-store'
 import { getMainConfig, saveMainConfig } from '../modules/storage'
 import { TalexTouch } from '../types'
 import { checkDirWithCreate } from '../utils/common-util'
@@ -37,6 +38,7 @@ interface RendererOverrideState {
 
 export class TouchApp implements TalexTouch.TouchApp {
   readonly rootPath: string = innerRootPath
+  private readonly messageStore = getAnalyticsMessageStore()
 
   app: Electron.App
 
@@ -109,6 +111,17 @@ export class TouchApp implements TalexTouch.TouchApp {
       fse.writeFileSync(this.resolveRendererOverrideStatePath(), JSON.stringify(updated, null, 2))
       mainLog.warn('Renderer override disabled', {
         meta: { reason, path: state.path }
+      })
+      this.messageStore.add({
+        source: 'update',
+        severity: 'warn',
+        title: 'Renderer override disabled',
+        message: reason,
+        meta: {
+          version: state.version,
+          tag: state.sourceTag,
+          path: state.path
+        }
       })
     } catch (error) {
       mainLog.warn('Failed to persist renderer override state', { error })

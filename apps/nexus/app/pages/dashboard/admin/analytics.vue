@@ -70,6 +70,14 @@ interface AnalyticsData {
     featureUseItemKindDistribution: Record<string, number>
     featureUsePluginDistribution: Record<string, number>
     featureUseCategoryDistribution: Record<string, number>
+    updateActionDistribution: Record<string, number>
+    updateStageDistribution: Record<string, number>
+    updateResultDistribution: Record<string, number>
+    updateChannelDistribution: Record<string, number>
+    updateSourceDistribution: Record<string, number>
+    updateTagDistribution: Record<string, number>
+    updateItemKindDistribution: Record<string, number>
+    versionDistribution: Record<string, number>
     moduleLoadMetrics: Array<{
       module: string
       avgDuration: number
@@ -218,6 +226,7 @@ const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
 const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
+const versionPalette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
 const regionTotal = computed(() =>
   Object.values(analytics.value?.summary.regionDistribution ?? {}).reduce((sum, count) => sum + count, 0),
@@ -255,6 +264,42 @@ const hourlySeries = computed(() => {
   return { series, max }
 })
 const hasHourlyData = computed(() => hourlySeries.value.series.some(item => item.count > 0))
+const versionSegments = computed(() => {
+  const distribution = analytics.value?.summary.versionDistribution ?? {}
+  const entries = Object.entries(distribution).filter(([, count]) => count > 0)
+  const total = entries.reduce((sum, [, count]) => sum + count, 0)
+  if (!total) {
+    return { total: 0, segments: [], gradient: '' }
+  }
+
+  const maxSegments = 6
+  const sorted = entries.sort((a, b) => b[1] - a[1])
+  const main = sorted.slice(0, maxSegments)
+  const remainder = sorted.slice(maxSegments).reduce((sum, [, count]) => sum + count, 0)
+  const segments = remainder > 0 ? [...main, ['others', remainder] as [string, number]] : main
+
+  let cursor = 0
+  const mapped = segments.map(([key, count], index) => {
+    const ratio = count / total
+    const start = cursor
+    const end = cursor + ratio * 360
+    cursor = end
+    return {
+      key,
+      count,
+      ratio,
+      start,
+      end,
+      color: versionPalette[index % versionPalette.length]
+    }
+  })
+
+  const gradient = mapped
+    .map((segment) => `${segment.color} ${segment.start}deg ${segment.end}deg`)
+    .join(', ')
+
+  return { total, segments: mapped, gradient: gradient ? `conic-gradient(${gradient})` : '' }
+})
 const geoMapPoints = computed<GeoMapPoint[]>(() => {
   if (!geoAnalytics.value) {
     return []
@@ -983,6 +1028,37 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         </div>
       </div>
 
+      <!-- Version Distribution -->
+      <div v-if="activeSection === 'overview'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <h3 class="mb-4 font-semibold text-black dark:text-white">
+          Version Distribution
+        </h3>
+        <div v-if="!versionSegments.total" class="py-4 text-center text-sm text-black/40 dark:text-white/40">
+          No version data yet
+        </div>
+        <div v-else class="flex flex-col gap-6 sm:flex-row sm:items-center">
+          <div
+            class="h-32 w-32 rounded-full border border-black/5 dark:border-white/10"
+            :style="{ background: versionSegments.gradient }"
+          />
+          <div class="flex-1 space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div
+              v-for="segment in versionSegments.segments"
+              :key="segment.key"
+              class="flex items-center justify-between gap-4"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="h-2 w-2 rounded-full" :style="{ background: segment.color }" />
+                <span class="truncate">{{ segment.key }}</span>
+              </div>
+              <span class="text-xs text-black/40 dark:text-white/40">
+                {{ segment.count }} · {{ (segment.ratio * 100).toFixed(1) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Hourly Distribution -->
       <div v-if="activeSection === 'overview'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
         <h3 class="mb-4 font-semibold text-black dark:text-white">
@@ -1075,6 +1151,86 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               <span class="truncate">
                 {{ formatCategoryKey(item[0]).level1 }} · {{ formatCategoryKey(item[0]).level2 }}
               </span>
+              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-white">
+              Update Actions
+            </h3>
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+              View details
+            </TxButton>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div v-for="item in toSortedList(analytics.summary.updateActionDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
+              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-white">
+              Update Results
+            </h3>
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+              View details
+            </TxButton>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div v-for="item in toSortedList(analytics.summary.updateResultDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
+              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-white">
+              Update Channels
+            </h3>
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+              View details
+            </TxButton>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div v-for="item in toSortedList(analytics.summary.updateChannelDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ item[0] }}</span>
+              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-white">
+              Update Sources
+            </h3>
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+              View details
+            </TxButton>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div v-for="item in toSortedList(analytics.summary.updateSourceDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="capitalize">{{ item[0] }}</span>
+              <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="activeSection === 'usage'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+          <div class="mb-3 flex items-center justify-between">
+            <h3 class="font-semibold text-black dark:text-white">
+              Update Tags
+            </h3>
+            <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/50 transition hover:text-black dark:text-white/50 dark:hover:text-light" @click="showBreakdown = true; activeBreakdownTab = 'usage'">
+              View details
+            </TxButton>
+          </div>
+          <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+            <div v-for="item in toSortedList(analytics.summary.updateTagDistribution, 5)" :key="item[0]" class="flex items-center justify-between">
+              <span class="truncate">{{ item[0] }}</span>
               <span class="text-xs text-black/40 dark:text-white/40">{{ item[1] }}</span>
             </div>
           </div>
@@ -1816,6 +1972,83 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               <div class="space-y-2">
                 <div v-for="item in toSortedList(analytics.summary.featureUseCategoryDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
                   <span class="truncate">{{ formatCategoryKey(item[0]).level1 }} · {{ formatCategoryKey(item[0]).level2 }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Actions
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateActionDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Stages
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateStageDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Results
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateResultDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ formatCategoryLabel(item[0]) }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Channels
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateChannelDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Sources
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateSourceDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Tags
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateTagDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="truncate">{{ item[0] }}</span>
+                  <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 class="mb-2 font-semibold text-black dark:text-white">
+                Update Item Kinds
+              </h4>
+              <div class="space-y-2">
+                <div v-for="item in toSortedList(analytics.summary.updateItemKindDistribution, 10)" :key="item[0]" class="flex items-center justify-between">
+                  <span class="capitalize">{{ item[0] }}</span>
                   <span class="text-black/40 dark:text-white/40">{{ item[1] }}</span>
                 </div>
               </div>

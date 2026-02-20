@@ -15,8 +15,8 @@
   "dependencies": {
     "@talex-touch/unplugin-export-plugin": "1.2.7",
     "@talex-touch/utils": "workspace:^",
-    "@vueuse/core": "^13.9.0",
-    "vue": "^3.5.25",
+    "@vueuse/core": "^14.1.0",
+    "vue": "^3.5.27",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
@@ -37,14 +37,14 @@
     "simple-git-hooks": "^2.13.1",
     "taze": "^19.9.2",
     "typescript": "^5.9.3",
-    "unocss": "^66.5.10",
+    "unocss": "^66.6.0",
     "unplugin-auto-import": "^20.3.0",
     "unplugin-vue-components": "^30.0.0",
     "unplugin-vue-macros": "^2.14.5",
     "unplugin-vue-router": "^0.16.2",
-    "vite": "^7.2.7",
-    "vitest": "^4.0.15",
-    "vue-tsc": "^3.1.8"
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.2.2"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm lint-staged"

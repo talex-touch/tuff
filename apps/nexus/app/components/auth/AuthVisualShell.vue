@@ -101,10 +101,12 @@ const blockMessage = computed(() => props.blockText?.trim() || '')
   position: relative;
   z-index: 10;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 80px 24px;
+  box-sizing: border-box;
 }
 
 @keyframes auth-float {

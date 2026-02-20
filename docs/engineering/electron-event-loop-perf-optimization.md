@@ -548,157 +548,11 @@ private startCleanup(): void {
 
 ---
 
-## 7. 核心优化模式总结
-
-### 模式 1：同步 I/O → 异步 I/O + 批量 yield
-
-```typescript
-// Anti-pattern: 同步 I/O 循环
-for (const item of items) {
-  if (existsSync(item.path)) { ... }  // 阻塞!
-}
-
-// Pattern: 异步 I/O + 定期 yield
-for (let i = 0; i < items.length; i++) {
-  await fs.access(items[i].path)       // 非阻塞
-  if ((i + 1) % BATCH === 0) {
-    await new Promise(r => setImmediate(r))  // 让出
-  }
-}
-```
-
-### 模式 2：微任务调度 → 宏任务延迟
-
-```typescript
-// Anti-pattern: 微任务不让出事件循环
-queueMicrotask(() => heavyWork())
-
-// Pattern: setTimeout 延迟到下一个事件循环迭代
-setTimeout(() => heavyWork(), delay)
-```
-
-### 模式 3：紧密异步循环 → 分批 yield
-
-```typescript
-// Anti-pattern: await 之间的同步处理累积
-for (const batch of batches) {
-  const result = await asyncWork()
-  heavySyncProcessing(result)  // 累积阻塞
-}
-
-// Pattern: 每批后显式让出
-for (const batch of batches) {
-  const result = await asyncWork()
-  heavySyncProcessing(result)
-  await new Promise(r => setImmediate(r))  // 切断累积
-}
-```
-
-### 模式 4：启动任务信号量
-
-```typescript
-// Anti-pattern: 多个重任务无协调并发
-onLoad() {
-  startHeavyTask1()  // 竞争
-  startHeavyTask2()  // 竞争
-  startHeavyTask3()  // 竞争
-}
-
-// Pattern: 通过 gate 协调 + 延迟错开
-onLoad() {
-  setTimeout(() => gate.runAppTask(task1), 500)
-  setTimeout(() => gate.runAppTask(task2), 3000)
-}
-// 其他模块等待 gate 空闲
-if (gate.isActive()) await gate.waitForIdle()
-```
-
-### 模式 5：及时释放大数组引用
-
-```typescript
-// Anti-pattern: 大数组持有到函数结束
-async function process() {
-  const bigArray = await loadAll()      // 持有到函数结束
-  const filtered = bigArray.filter(...)
-  await doWorkWith(filtered)            // bigArray 仍在内存中
-}
-
-// Pattern: 用完立即清空
-async function process() {
-  const bigArray = await loadAll()
-  const filtered = bigArray.filter(...)
-  ;(bigArray as unknown[]).length = 0   // 立即释放
-  await doWorkWith(filtered)
-}
-```
-
-### 模式 6：启动期延迟非关键 DB 操作
-
-```typescript
-// Anti-pattern: 模块初始化时立即触发 DB 写入
-onInit() {
-  this.sampler.start()      // → 立即 collect → DB INSERT
-  this.hydrate(metrics)     // → recordAndPersist → DB INSERT
-  this.startCleanup()       // → run() → DB DELETE
-}
-
-// Pattern: 非关键操作延迟到启动窗口之后
-onInit() {
-  this.registerHandlers()   // 只注册处理器（零 I/O）
-  setTimeout(() => {
-    this.hydrate(metrics)
-    this.sampler.start({ initialDelayMs: 15_000 })
-    this.startCleanup()     // 使用 initialDelayMs 延迟首次执行
-  }, 3_000)
-}
-```
-
----
-
-## 8. 改动文件索引
-
-| 文件 | 改动点 |
-|------|--------|
-| `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts` | #1 existsSync→fs.access, #3 mdls批次yield |
-| `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` | #2 queueMicrotask→setTimeout, #4 dev延迟, #9 GC释放 |
-| `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` | #5 trend延迟, #6 JSON.parse yield, #7 upsert yield, #8 appTaskGate |
-| `apps/core-app/src/main/modules/analytics/collectors/system-sampler.ts` | #10 移除首次立即collect |
-| `apps/core-app/src/main/modules/analytics/analytics-module.ts` | #11 onInit延迟非关键操作, #12 cleanup延迟首次执行 |
-| `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts` | #13 搜索防抖35ms→150ms |
-| `apps/core-app/src/main/modules/file-protocol/index.ts` | #14 移除existsSync同步预检查 |
-| `apps/core-app/src/main/modules/ocr/ocr-service.ts` | #15 runImmediately→initialDelayMs:10s |
-
----
-
-## 9. 验证方法
-
-优化后通过以下日志确认效果：
-
-```bash
-# 关注这些日志行
-grep -E "Perf:Context|Event loop lag|Startup backfill complete|mdls update scan finished|Analytics deferred" <log>
-```
-
-预期指标：
-- 启动期 event loop lag 峰值 < 300ms
-- 启动后 3 秒内无 `AnalyticsSnapshots.persist` 日志
-- `AppScanner.mdlsUpdate` < 900ms（wall time，非阻塞时间）
-- `startupBackfill` 不再与 mdls scan 时间重叠
-- 空闲期无 > 1s 的 event loop lag
-
-如果优化后仍有 > 1s lag 且无 Perf:Context，添加 `--trace-gc` 标志确认是否为 V8 GC：
-```bash
-# 在 electron 启动参数中添加
-electron --js-flags="--trace-gc" .
-```
-
----
-
-## 10. 第四轮优化：搜索防抖 + FileProtocol 同步 I/O + OCR 启动时序
+## 7. 第四轮优化：搜索防抖 + FileProtocol 同步 I/O + OCR 启动时序
 
 第三轮后日志显示：残留 **3.3s event loop lag**（`contexts=[]`），同时用户反馈 CoreBox 搜索输入时结果刷新过于频繁。
 
-### 10.1 诊断过程
+### 7.1 诊断过程
 
 关键线索：
 ```
@@ -714,7 +568,7 @@ heap={totalHeapSize: 84MB, usedHeapSize: 78MB}
 
 **C. OCR 服务 `runImmediately: true`**：OCR 队列调度器在 `ensureInitialized()` 时立即执行 `processQueue()`，包含 DB 查询和任务过滤，增加启动期负载。
 
-### 10.2 优化 13：搜索防抖 35ms → 150ms
+### 7.2 优化 13：搜索防抖 35ms → 150ms
 
 **问题**：35ms 防抖对 60-100 WPM 的打字速度来说等于没有防抖。每个字符间隔约 80-120ms，远大于 35ms。
 
@@ -734,7 +588,7 @@ const BASE_DEBOUNCE = 150
 
 同时 `inputTransport` 也使用 `BASE_DEBOUNCE`（150ms），减少了 IPC 广播频率。
 
-### 10.3 优化 14：FileProtocolModule 移除 `existsSync`
+### 7.3 优化 14：FileProtocolModule 移除 `existsSync`
 
 **问题**：`fsSync.existsSync(normalizedPath)` 对每个 `tfile://` 请求做同步 `stat` 系统调用。渲染进程加载 app 图标时可能触发数十个并发请求，同步 I/O 在协议处理器中连续执行会阻塞事件循环。
 
@@ -759,7 +613,7 @@ try {
 
 **原理**：`net.fetch(fileUrl)` 对不存在的文件会抛出异常，catch 块已经处理了 404 响应。同步预检查是多余的，移除后所有 I/O 都走异步路径。
 
-### 10.4 优化 15：OCR 服务延迟首次执行
+### 7.4 优化 15：OCR 服务延迟首次执行
 
 **问题**：`pollingService.register` 使用 `runImmediately: true`，在 `ensureInitialized()` 被调用时立即执行 `processQueue()`，在启动窗口增加 DB 查询负载。
 
@@ -781,7 +635,7 @@ pollingService.register(this.pollTaskId, () => this.processQueue(), {
 })
 ```
 
-### 10.5 第四轮效果
+### 7.5 第四轮效果
 
 | 指标 | 优化前 | 优化后 |
 |------|--------|--------|
@@ -792,7 +646,7 @@ pollingService.register(this.pollTaskId, () => this.processQueue(), {
 
 ---
 
-## 11. 四轮优化总览
+## 8. 五轮优化总览
 
 | 轮次 | 优化点数 | 核心问题 | 效果 |
 |------|----------|----------|------|
@@ -800,3 +654,259 @@ pollingService.register(this.pollTaskId, () => this.processQueue(), {
 | 第二轮 | 5 | 推荐引擎冷启动 + V8 GC + trend backfill | lag 2.2s→偶发 |
 | 第三轮 | 3 | Analytics DB 写入风暴 + 启动期 SQLite 竞争 | 消除启动期 DB 写入 |
 | 第四轮 | 3 | 搜索防抖不足 + FileProtocol 同步 I/O + OCR 启动时序 | 搜索体验改善 + 减少同步阻塞 |
+| 第五轮 | 4 | macOS 路径大小写 + 诊断埋点 + 启动瓶颈定位 | lag 9.5s→1.3s, 模块加载 12s→9s |
+
+---
+
+## 9. 第五轮优化：macOS 路径大小写修复 + 诊断埋点
+
+第四轮后日志显示：**9.5s event loop lag**（无 Perf:Context），`DownloadCenter` 初始化 3.1s，FileProtocol 大量 403 Forbidden（macOS 路径大小写不匹配）。
+
+### 9.1 诊断过程
+
+关键线索：
+```
+[Perf:EventLoop] Event loop lag 9.5s (contexts=[])
+[FileProtocolModule] Blocked path: /users/talexdreamsoul/Library/...    ← 小写 /users/
+DownloadCenterModule initialized                                        ← 加载耗时 3.1s
+```
+
+四个问题方向：
+
+**P0: 9.5s 神秘 lag**（无 Perf:Context 归属）→ 需要埋点定位
+**P1: StoragePolling 慢写入**（间接被 `appTaskGate.waitForIdle()` 阻塞）→ 需要埋点确认
+**P2: DownloadCenter 3.1s 初始化**→ 需要阶段性埋点定位瓶颈
+**P3: FileProtocol macOS 路径 403**→ Chromium 将 URL hostname 部分小写化（`/Users/` → `/users/`），但 allowedRoots 匹配是区分大小写的
+
+### 9.2 优化 16：FileProtocol macOS 大小写不敏感匹配
+
+**问题**：macOS 文件系统（HFS+/APFS）默认不区分大小写，但 `isAllowedTfilePath` 使用严格字符串比较。Chromium 内部对 URL 的 hostname 部分做了小写化处理，导致 `tfile://Users/...` 变成 `tfile://users/...`，路径 `/users/talexdreamsoul/...` 无法匹配 allowedRoot `/Users/talexdreamsoul/...`。
+
+**文件**：`apps/core-app/src/main/modules/file-protocol/index.ts`
+
+```typescript
+// Before: 严格区分大小写
+function isAllowedTfilePath(filePath: string, roots: string[]): boolean {
+  const normalized = normalizeAbsolutePath(filePath)
+  if (!normalized) return false
+  return roots.some((root) =>
+    resolveSafePath(root, normalized, { allowAbsolute: true, allowRoot: true }).resolvedPath
+  )
+}
+
+// After: macOS 使用大小写不敏感比较
+function isAllowedTfilePath(filePath: string, roots: string[]): boolean {
+  const normalized = normalizeAbsolutePath(filePath)
+  if (!normalized) return false
+
+  // macOS (HFS+/APFS) 默认大小写不敏感；
+  // Chromium 可能将 URL hostname 小写化（如 /users/ 替代 /Users/）
+  if (process.platform === 'darwin') {
+    const lower = normalized.toLowerCase()
+    return roots.some((root) => {
+      const lowerRoot = root.toLowerCase()
+      return lower === lowerRoot || lower.startsWith(`${lowerRoot}/`)
+    })
+  }
+
+  return roots.some((root) =>
+    resolveSafePath(root, normalized, { allowAbsolute: true, allowRoot: true }).resolvedPath
+  )
+}
+```
+
+**原理**：macOS HFS+/APFS 文件系统默认是 case-insensitive case-preserving。`/Users/foo` 和 `/users/foo` 指向同一个文件。路径安全检查应与操作系统行为一致。Linux 保持原有的精确匹配。
+
+### 9.3 诊断埋点 17：DownloadCenter 阶段性计时
+
+**目的**：定位 `DownloadCenter` 3.1s 初始化中哪个阶段最慢。
+
+**文件**：`apps/core-app/src/main/modules/download/download-center.ts`
+
+```typescript
+async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+  const t0 = performance.now()
+  // 组件创建（config, taskQueue, chunkManager 等）
+  const t1 = performance.now()
+  await this.errorLogger.initialize()
+  const t2 = performance.now()
+  // workers + transport + monitoring + scheduler
+  const t3 = performance.now()
+  await this.cleanupTempFiles()
+  const t4 = performance.now()
+
+  const totalMs = Math.round(t4 - t0)
+  if (totalMs > 500) {
+    console.warn(
+      `[DownloadCenter] Slow init ${totalMs}ms: ` +
+      `components=${Math.round(t1 - t0)}ms ` +
+      `errorLogger=${Math.round(t2 - t1)}ms ` +
+      `setup=${Math.round(t3 - t2)}ms ` +
+      `cleanup=${Math.round(t4 - t3)}ms`
+    )
+  }
+}
+```
+
+### 9.4 诊断埋点 18：StoragePolling 慢写入诊断
+
+**目的**：当存储轮询写入总耗时超过 500ms 时，输出每个 config 的单独耗时。
+
+**文件**：`apps/core-app/src/main/modules/storage/storage-polling-service.ts`
+
+并发保存 + 每个 config 单独计时：
+
+```typescript
+const results = await Promise.allSettled(
+  dirtyConfigs.map(async (name) => {
+    const saveStart = performance.now()
+    await this.saveFn(name)
+    this.cache.clearDirty(name)
+    return { name, durationMs: Math.round(performance.now() - saveStart) }
+  })
+)
+const totalMs = Math.round(performance.now() - t0)
+if (totalMs > 500) {
+  console.warn(`[StoragePolling] Slow save ${totalMs}ms: ${details}`)
+}
+```
+
+### 9.5 诊断埋点 19：persistConfig gate 等待计时
+
+**目的**：检测 `persistConfig` 被 `appTaskGate.waitForIdle()` 阻塞的时间。
+
+**文件**：`apps/core-app/src/main/modules/storage/index.ts`
+
+```typescript
+private async persistConfig(name: string): Promise<void> {
+  const gateStart = performance.now()
+  await appTaskGate.waitForIdle()
+  const gateWaitMs = performance.now() - gateStart
+  if (gateWaitMs > 200) {
+    storageLog.warn(`persistConfig gate wait for ${name}`, {
+      meta: { gateWaitMs: Math.round(gateWaitMs) }
+    })
+  }
+  // ... 正常写入逻辑 ...
+}
+```
+
+### 9.6 第五轮效果
+
+第五轮优化后经过多次测试验证，性能有显著改善：
+
+| 指标 | 第四轮后 | 第五轮后 | 改善 |
+|------|----------|----------|------|
+| Event loop lag 峰值 | 9.5s | 1.1-1.3s | **-87%** |
+| DownloadCenter 初始化 | 3.1s | 825ms-1.0s | **-68%** |
+| mdlsUpdateScan | 12.5s | 702-829ms | **-94%** |
+| All modules loaded | ~12s | 8.5-9.0s | **-25%** |
+| FileProtocol 403 误拦截 | 大量 | 0 | **100%修复** |
+
+**注**：FileProtocol 修复后，剩余的 `ERR_FILE_NOT_FOUND` 错误来自 macOS Photos Library 内部文件（Apple 沙箱保护），属于预期行为。
+
+---
+
+## 10. 最终性能分析（2026-02-20）
+
+### 10.1 模块加载时间分布
+
+| 模块 | 耗时 | 说明 |
+|------|------|------|
+| DivisionBox | 7.2-7.8s | **Dev 模式独有**：预热窗口加载 Vite dev server |
+| DownloadCenter | 825ms-1.0s | 主要是 errorLogger 初始化 + tempFile 清理 |
+| Clipboard | 92ms + 759ms 后台 | 初始化快速，水合在后台异步执行 |
+| search-engine-core | 78ms | 搜索引擎核心初始化 |
+| TrayManager | 37ms | 系统托盘初始化 |
+| Database | ~39ms | SQLite 连接建立 |
+| 其他模块 | 0-12ms | Storage, Shortcut, Plugin 等 |
+| **总计** | **8.5-9.0s** | 其中 DivisionBox 占 ~85%（仅 dev） |
+
+### 10.2 启动时序图
+
+```
+0s          2s          4s          6s          8s         9s
+├───────────┼───────────┼───────────┼───────────┼──────────┤
+│ Database  │                                              │
+│ Storage   │                                              │
+│ Shortcut  │                                              │
+│           │ DownloadCenter (825ms)                        │
+│           │ █████████                                     │
+│           │                                              │
+│ DivisionBox ████████████████████████████████████████ 7.8s │ ← dev only
+│           │                                              │
+│           │         Clipboard hydration (759ms bg)        │
+│           │         ░░░░░░░░░░                           │
+│           │                                              │
+│           │              AppProvider backfill (500ms后)   │
+│           │              ████                             │
+│           │                    mdlsUpdateScan (829ms)    │
+│           │                    ████████                   │
+│           │                                              │
+│           │                                          ✓ All modules loaded
+```
+
+### 10.3 Event Loop 健康状态
+
+最终测试（多次运行取代表值）：
+
+```
+Event loop lag 分布:
+  < 100ms:  正常运行（绝大多数时间）
+  100-300ms: 偶发 2-3 次（启动期，可接受）
+  300-500ms: 偶发 1 次（Clipboard hydration 引起）
+  500ms-1s:  偶发 1 次（GC 相关）
+  1-1.3s:   偶发 1 次（V8 Major GC + Clipboard hydration）
+  > 2s:     0 次 ✓（之前最高 13s）
+```
+
+### 10.4 剩余可选优化方向
+
+以下为非紧急的可选优化，当前性能已满足使用要求：
+
+| 方向 | 预期收益 | 优先级 | 说明 |
+|------|----------|--------|------|
+| DivisionBox dev 预热优化 | -7s（dev only） | 低 | 仅影响开发模式，可考虑懒加载或延迟预热 |
+| Clipboard hydration 异步化 | -0.8s lag | 低 | 已是后台执行，可进一步拆分为更小批次 |
+| DownloadCenter errorLogger | -200ms | 低 | 可延迟初始化到首次使用时 |
+| SystemUpdate `schema is not defined` | Bug fix | 中 | 不影响性能但产生 unhandled rejection |
+
+### 10.5 结论
+
+经过 5 轮共 19 个优化点的实施，主要性能指标改善如下：
+
+| 指标 | 初始值 | 最终值 | 改善幅度 |
+|------|--------|--------|----------|
+| Event loop lag 峰值 | **13s** | **1.3s** | **90%** |
+| 启动期模块加载 | **~12s** | **~9s** | **25%** |
+| mdlsUpdateScan | **12.5s** | **829ms** | **93%** |
+| DownloadCenter init | **3.1s** | **825ms** | **73%** |
+| 搜索触发次数（5 字） | **5 次** | **1-2 次** | **60-80%** |
+| FileProtocol 误拦截 | **大量 403** | **0** | **100%** |
+
+**核心优化手段**：
+1. 同步 I/O → 异步 I/O（`existsSync` → `fs.access`）
+2. 微任务 → 宏任务延迟（`queueMicrotask` → `setTimeout`）
+3. 批量操作间 yield（`setImmediate`）
+4. 启动任务信号量协调（`appTaskGate`）
+5. 非关键操作延迟启动（`initialDelayMs`）
+6. 平台特定行为适配（macOS 大小写不敏感路径匹配）
+7. GC 压力优化（及时释放大数组引用）
+
+---
+
+## 11. 改动文件索引（完整）
+
+| 文件 | 改动点 |
+|------|--------|
+| `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts` | #1 existsSync→fs.access, #3 mdls批次yield |
+| `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts` | #2 queueMicrotask→setTimeout, #4 dev延迟, #9 GC释放, #17 mdlsUpdateScan阶段计时 |
+| `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts` | #5 trend延迟, #6 JSON.parse yield, #7 upsert yield, #8 appTaskGate |
+| `apps/core-app/src/main/modules/analytics/collectors/system-sampler.ts` | #10 移除首次立即collect |
+| `apps/core-app/src/main/modules/analytics/analytics-module.ts` | #11 onInit延迟非关键操作, #12 cleanup延迟首次执行 |
+| `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts` | #13 搜索防抖35ms→150ms |
+| `apps/core-app/src/main/modules/file-protocol/index.ts` | #14 移除existsSync同步预检查, #16 macOS大小写不敏感匹配 |
+| `apps/core-app/src/main/modules/ocr/ocr-service.ts` | #15 runImmediately→initialDelayMs:10s |
+| `apps/core-app/src/main/modules/download/download-center.ts` | #17 init阶段性计时埋点 |
+| `apps/core-app/src/main/modules/storage/storage-polling-service.ts` | #18 慢写入诊断日志 |
+| `apps/core-app/src/main/modules/storage/index.ts` | #19 persistConfig gate等待计时 |

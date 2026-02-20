@@ -682,9 +682,22 @@ watch(
   { immediate: true },
 )
 
-watch(activeHash, () => {
+watch(activeHash, (hash) => {
   nextTick(() => {
     updateEntryPositions()
+    // Auto-scroll outline to keep active item visible
+    if (hash && navRef.value && contentRef.value) {
+      const activeEl = contentRef.value.querySelector(`[data-id="${hash}"]`)?.closest('.outline-item') as HTMLElement | null
+      if (activeEl) {
+        const nav = navRef.value
+        const navRect = nav.getBoundingClientRect()
+        const elRect = activeEl.getBoundingClientRect()
+        const margin = 40
+        if (elRect.top < navRect.top + margin || elRect.bottom > navRect.bottom - margin) {
+          activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+        }
+      }
+    }
   })
 })
 
@@ -853,6 +866,12 @@ watch(
   max-height: min(420px, calc(100vh - 16rem));
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.outline-nav::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
 }
 
 .outline-tree-svg {

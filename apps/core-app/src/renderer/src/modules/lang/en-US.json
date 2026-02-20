@@ -1880,6 +1880,8 @@
       },
       "autoDownloadTitle": "Auto Download Updates",
       "autoDownloadDesc": "Automatically download updates when available",
+      "rendererOverrideTitle": "Renderer Override (Experimental)",
+      "rendererOverrideDesc": "Manually enable the experimental renderer override (requires TUFF_ENABLE_RENDERER_OVERRIDE=1).",
       "statusTitle": "Status",
       "status": {
         "loading": "Loading update status…",
@@ -1919,6 +1921,7 @@
         "channelSaved": "Update channel saved",
         "frequencySaved": "Frequency saved",
         "autoDownloadSaved": "Auto download setting saved",
+        "rendererOverrideSaved": "Renderer override setting saved",
         "saveFailed": "Failed to save settings",
         "manualCheckStarted": "Update check started",
         "manualCheckFound": "Found release {version}",
