@@ -15,7 +15,9 @@ function buildAllowedRoots(): string[] {
   const platform = process.platform
   const winRoots =
     platform === 'win32'
-      ? [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.SystemRoot]
+      ? [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.SystemRoot].filter(
+          (value): value is string => Boolean(value)
+        )
       : []
   const linuxRoots = platform === 'linux' ? ['/usr/share', '/usr/local/share', '/opt'] : []
   const candidates = [

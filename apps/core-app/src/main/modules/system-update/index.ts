@@ -1,7 +1,7 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import type * as schema from '../../db/schema'
+import * as schema from '../../db/schema'
 import { AppPreviewChannel, resolveUpdateChannelLabel, splitUpdateTag } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'

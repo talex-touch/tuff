@@ -240,7 +240,7 @@ export class NotificationModule extends BaseModule {
   ): NotificationInboxEntry {
     const stored: NotificationInboxEntry = {
       id: entry.id ?? randomUUID(),
-      source: entry.source ?? 'system',
+      source: entry.source ?? 'app',
       title: entry.title,
       message: entry.message,
       level: entry.level,
