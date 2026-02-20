@@ -11,7 +11,21 @@ export interface DbWriteTask<T> {
   resolve: (value: T) => void
   reject: (error: unknown) => void
   enqueuedAt: number
+  /** If true, this task can be dropped when queue wait time exceeds the threshold. */
+  droppable?: boolean
 }
+
+export interface ScheduleOptions {
+  /**
+   * Mark this task as droppable under queue pressure.
+   * When a droppable task has waited longer than DROPPABLE_TIMEOUT_MS,
+   * it will be rejected with a timeout error instead of executed.
+   */
+  droppable?: boolean
+}
+
+/** Tasks marked as droppable are rejected after waiting this long in the queue. */
+const DROPPABLE_TIMEOUT_MS = 10_000
 
 export class DbWriteScheduler {
   private queue: DbWriteTask<unknown>[] = []
@@ -24,7 +38,11 @@ export class DbWriteScheduler {
     this.queue.push(task as DbWriteTask<unknown>)
   }
 
-  async schedule<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  async schedule<T>(
+    label: string,
+    operation: () => Promise<T>,
+    options?: ScheduleOptions
+  ): Promise<T> {
     if (taskContext.getStore()) {
       return operation()
     }
@@ -35,7 +53,8 @@ export class DbWriteScheduler {
         operation,
         resolve,
         reject,
-        enqueuedAt: Date.now()
+        enqueuedAt: Date.now(),
+        droppable: options?.droppable
       })
       this.kick()
     })
@@ -105,6 +124,17 @@ export class DbWriteScheduler {
 
       if (waitedMs > 2000) {
         log.warn(`DB write task waited ${waitedMs}ms: ${task.label}`)
+      }
+
+      // Drop droppable tasks that have waited too long (queue pressure relief)
+      if (task.droppable && waitedMs > DROPPABLE_TIMEOUT_MS) {
+        log.warn(`Dropping stale droppable task after ${waitedMs}ms: ${task.label}`)
+        task.reject(
+          new Error(`DB write task dropped after ${waitedMs}ms queue wait: ${task.label}`)
+        )
+        this.currentTaskLabel = null
+        this.notifyCapacityWaiters()
+        continue
       }
 
       try {

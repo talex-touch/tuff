@@ -223,6 +223,7 @@ function ensureBuildNodeOptions(buildEnv) {
 
 function build() {
   const cleanupTempLock = ensureLocalPnpmLockfile();
+  console.time('build-target:total');
   try {
     const { target, type, publish, dir, arch } = parseArgs(process.argv.slice(2));
     const skipInstallAppDeps = process.env.SKIP_INSTALL_APP_DEPS === 'true';
@@ -275,22 +276,27 @@ function build() {
   console.log(`Preparing ${buildType} build for ${normalizedTarget}...`);
 
   const distDir = path.join(projectRoot, 'dist');
-  if (fs.existsSync(distDir)) {
-    console.log('Cleaning previous dist directory...');
-    fs.rmSync(distDir, { recursive: true, force: true });
-  }
+  console.time('build-target:prepare-dist');
+  try {
+    if (fs.existsSync(distDir)) {
+      console.log('Cleaning previous dist directory...');
+      fs.rmSync(distDir, { recursive: true, force: true });
+    }
 
-  fs.mkdirSync(distDir, { recursive: true });
+    fs.mkdirSync(distDir, { recursive: true });
 
-  if (normalizedTarget === 'linux') {
-    fs.mkdirSync(path.join(distDir, '@talex-touch'), { recursive: true });
-    fs.mkdirSync(path.join(distDir, '__appImage-x64'), { recursive: true });
-    fs.mkdirSync(path.join(distDir, '__deb-x64'), { recursive: true });
-  } else if (normalizedTarget === 'win') {
-    const winDirs = ['@talex-touch'];
-    winDirs.forEach(dirName => {
-      fs.mkdirSync(path.join(distDir, dirName), { recursive: true });
-    });
+    if (normalizedTarget === 'linux') {
+      fs.mkdirSync(path.join(distDir, '@talex-touch'), { recursive: true });
+      fs.mkdirSync(path.join(distDir, '__appImage-x64'), { recursive: true });
+      fs.mkdirSync(path.join(distDir, '__deb-x64'), { recursive: true });
+    } else if (normalizedTarget === 'win') {
+      const winDirs = ['@talex-touch'];
+      winDirs.forEach(dirName => {
+        fs.mkdirSync(path.join(distDir, dirName), { recursive: true });
+      });
+    }
+  } finally {
+    console.timeEnd('build-target:prepare-dist');
   }
 
   process.env.BUILD_TYPE = buildType;
@@ -328,6 +334,7 @@ function build() {
     : 'npm run build';
 
   try {
+    console.time('build-target:app-build');
     const buildEnv = {
       ...process.env,
       BUILD_TYPE: buildType,
@@ -345,7 +352,9 @@ function build() {
       stdio: 'inherit',
       env: buildEnv
     });
+    console.timeEnd('build-target:app-build');
   } catch (error) {
+    console.timeEnd('build-target:app-build');
     console.error('\n❌ Application build failed!');
     console.error(`Exit code: ${error.status || error.code}`);
     throw error;
@@ -355,49 +364,57 @@ function build() {
   const outDir = path.join(projectRoot, 'out');
   console.log('\n=== Verifying out directory after build ===');
 
-  if (!fs.existsSync(outDir)) {
-    console.error('❌ ERROR: out directory does not exist after build!');
-    throw new Error('out directory was not created by electron-vite build');
-  }
-
-  // 检查 out 目录的内容
-  const outItems = fs.readdirSync(outDir, { withFileTypes: true });
-  console.log(`Out directory exists with ${outItems.length} top-level items`);
-
-  if (outItems.length === 0) {
-    console.error('❌ ERROR: out directory is empty after build!');
-    throw new Error('out directory is empty - electron-vite build may have failed');
-  }
-
-  // 检查关键目录是否存在
-  const requiredDirs = ['main', 'preload', 'renderer'];
-  const missingDirs = [];
-
-  requiredDirs.forEach(dir => {
-    const dirPath = path.join(outDir, dir);
-    if (!fs.existsSync(dirPath)) {
-      missingDirs.push(dir);
-    } else {
-      const dirItems = fs.readdirSync(dirPath, { withFileTypes: true });
-      console.log(`  ✓ ${dir}/: ${dirItems.length} items`);
+  console.time('build-target:out-verify');
+  try {
+    if (!fs.existsSync(outDir)) {
+      console.error('❌ ERROR: out directory does not exist after build!');
+      throw new Error('out directory was not created by electron-vite build');
     }
-  });
 
-  if (missingDirs.length > 0) {
-    console.error(`❌ ERROR: Missing required directories: ${missingDirs.join(', ')}`);
-    throw new Error(`out directory missing required subdirectories: ${missingDirs.join(', ')}`);
+    // 检查 out 目录的内容
+    const outItems = fs.readdirSync(outDir, { withFileTypes: true });
+    console.log(`Out directory exists with ${outItems.length} top-level items`);
+
+    if (outItems.length === 0) {
+      console.error('❌ ERROR: out directory is empty after build!');
+      throw new Error('out directory is empty - electron-vite build may have failed');
+    }
+
+    // 检查关键目录是否存在
+    const requiredDirs = ['main', 'preload', 'renderer'];
+    const missingDirs = [];
+
+    requiredDirs.forEach(dir => {
+      const dirPath = path.join(outDir, dir);
+      if (!fs.existsSync(dirPath)) {
+        missingDirs.push(dir);
+      } else {
+        const dirItems = fs.readdirSync(dirPath, { withFileTypes: true });
+        console.log(`  ✓ ${dir}/: ${dirItems.length} items`);
+      }
+    });
+
+    if (missingDirs.length > 0) {
+      console.error(`❌ ERROR: Missing required directories: ${missingDirs.join(', ')}`);
+      throw new Error(`out directory missing required subdirectories: ${missingDirs.join(', ')}`);
+    }
+
+    console.log('✓ Out directory verification passed\n');
+  } finally {
+    console.timeEnd('build-target:out-verify');
   }
-
-  console.log('✓ Out directory verification passed\n');
 
   const builderBin = resolveBuilderBin();
 
   // 确保关键平台依赖存在于应用 node_modules 中
   try {
+    console.time('build-target:ensure-platform-modules');
     const ensureModules = require(path.join(__dirname, 'ensure-platform-modules.js'));
     ensureModules(normalizedTarget, effectiveArch);
     console.log('✓ Platform-specific modules synced to app node_modules\n');
+    console.timeEnd('build-target:ensure-platform-modules');
   } catch (err) {
+    console.timeEnd('build-target:ensure-platform-modules');
     console.warn(`Warning: Failed to ensure platform modules: ${err.message}`);
   }
 
@@ -406,6 +423,7 @@ function build() {
     verifyNativeOcrModule(process.env.CI === 'true');
   } else {
     console.log('=== Rebuilding Electron native modules for packaged app ===');
+    console.time('build-target:install-app-deps');
     const installPlatformMap = {
       win: 'win32',
       mac: 'darwin',
@@ -433,8 +451,10 @@ function build() {
         }
       });
       console.log('✓ electron-builder install-app-deps completed\n');
+      console.timeEnd('build-target:install-app-deps');
       verifyNativeOcrModule(process.env.CI === 'true');
     } catch (error) {
+      console.timeEnd('build-target:install-app-deps');
       console.error('\n❌ electron-builder install-app-deps failed!');
       throw error;
     }
@@ -496,6 +516,7 @@ function build() {
 
   let builderExitCode = 0;
   try {
+    console.time('build-target:electron-builder');
     execSync(builderCommand, {
       stdio: 'inherit',
       env: {
@@ -505,6 +526,7 @@ function build() {
     });
     builderExitCode = 0;
     console.log('\n✓ electron-builder completed with exit code 0');
+    console.timeEnd('build-target:electron-builder');
 
     // 即使退出码为 0，也要检查是否真的生成了文件（防止静默失败）
     console.log('\nVerifying electron-builder actually produced files...');
@@ -533,6 +555,7 @@ function build() {
       }
     }
   } catch (error) {
+    console.timeEnd('build-target:electron-builder');
     builderExitCode = error.status || error.code || 1;
     console.error('\n=== electron-builder failed ===');
     console.error(`Exit code: ${builderExitCode}`);
@@ -558,7 +581,9 @@ function build() {
 
   // 检查构建后的 dist 目录状态
   console.log('\n=== Post-build dist directory check ===');
-  if (fs.existsSync(distDir)) {
+  console.time('build-target:post-check');
+  try {
+    if (fs.existsSync(distDir)) {
     // 列出所有文件
     const allFiles = [];
     const allDirs = [];
@@ -728,9 +753,12 @@ function build() {
     } catch (err) {
       console.error(`Error listing dist files: ${err.message}`);
     }
-  } else {
-    console.error('ERROR: Dist directory does not exist after build!');
-    throw new Error('Dist directory not created by electron-builder');
+    } else {
+      console.error('ERROR: Dist directory does not exist after build!');
+      throw new Error('Dist directory not created by electron-builder');
+    }
+  } finally {
+    console.timeEnd('build-target:post-check');
   }
 
   // Fix executable permissions for macOS .app bundles
@@ -983,6 +1011,7 @@ function build() {
 
   console.log('\n✓ Build completed successfully.');
   } finally {
+    console.timeEnd('build-target:total');
     cleanupTempLock();
   }
 }
