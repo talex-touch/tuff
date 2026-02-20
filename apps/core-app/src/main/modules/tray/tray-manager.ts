@@ -86,7 +86,7 @@ export class TrayManager extends BaseModule {
       return
     }
     try {
-      app.setActivationPolicy(normalized as Electron.App['activationPolicy'])
+      app.setActivationPolicy(normalized as 'regular' | 'accessory' | 'prohibited')
       console.log('[TrayManager] Activation policy updated', { policy: normalized })
     } catch (error) {
       console.warn('[TrayManager] Failed to set activation policy', { policy, error })
@@ -184,10 +184,17 @@ export class TrayManager extends BaseModule {
         icon.setTemplateImage(!disableTemplate)
         this.tray.setImage(icon)
         if (process.env.TUFF_TRAY_FORCE_HIGHLIGHT === '1') {
-          try {
-            this.tray.setHighlightMode('always')
-          } catch (error) {
-            console.warn('[TrayManager] setHighlightMode not supported', { error })
+          const tray = this.tray as Tray & {
+            setHighlightMode?: (mode: 'always' | 'never') => void
+          }
+          if (typeof tray.setHighlightMode !== 'function') {
+            console.warn('[TrayManager] setHighlightMode not supported')
+          } else {
+            try {
+              tray.setHighlightMode('always')
+            } catch (error) {
+              console.warn('[TrayManager] setHighlightMode failed', { error })
+            }
           }
         }
       }

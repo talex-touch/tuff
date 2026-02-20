@@ -1681,7 +1681,7 @@ export class TouchPlugin implements ITouchPlugin {
     const safePath = resolveSafePath(configPath, fileName)
     if (!safePath.resolvedPath) {
       pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
-        fileName,
+        meta: { fileName },
         error: safePath.error
       })
       return {}
@@ -1904,7 +1904,7 @@ export class TouchPlugin implements ITouchPlugin {
     const safePath = resolveSafePath(configPath, fileName)
     if (!safePath.resolvedPath) {
       pluginSystemLog.warn(`[Plugin ${this.name}] Invalid file path`, {
-        fileName,
+        meta: { fileName },
         error: safePath.error
       })
       return null

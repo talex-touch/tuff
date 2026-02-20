@@ -3,6 +3,7 @@ import type { TxCardProps } from '../../card/src/types'
 import type { BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
+import type { StyleValue } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
@@ -133,8 +134,10 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
-const floatingClass = computed(() => (attrs as Record<string, unknown>).class)
-const floatingStyle = computed(() => (attrs as Record<string, unknown>).style)
+type ClassValue = string | Record<string, boolean> | Array<string | Record<string, boolean>>
+
+const floatingClass = computed<ClassValue | undefined>(() => (attrs as Record<string, unknown>).class as ClassValue | undefined)
+const floatingStyle = computed<StyleValue | undefined>(() => (attrs as Record<string, unknown>).style as StyleValue | undefined)
 const floatingAttrs = computed(() => {
   const source = attrs as Record<string, unknown>
   const next: Record<string, unknown> = {}

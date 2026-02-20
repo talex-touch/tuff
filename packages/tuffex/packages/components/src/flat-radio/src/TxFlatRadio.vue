@@ -17,7 +17,7 @@ const emit = defineEmits<{
   (e: 'change', value: TxFlatRadioValue | TxFlatRadioValue[]): void
 }>()
 
-const { disabled, size, multiple } = toRefs(props)
+const { disabled, multiple } = toRefs(props)
 
 // --- Item registration ---
 const itemMap = new Map<TxFlatRadioValue, HTMLElement>()
