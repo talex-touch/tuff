@@ -44,6 +44,18 @@ function resolveIcon(item: TuffItem): string | undefined {
   return undefined
 }
 
+function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
+  if (!payload || payload.type !== 'json') {
+    return undefined
+  }
+  const data = payload.data as { item?: TuffItem } | undefined
+  const item = data?.item
+  if (item?.source?.type !== 'plugin') {
+    return undefined
+  }
+  return item.source.id
+}
+
 export function useDetach(options: UseDetachOptions) {
   const { searchVal, res, boxOptions, isUIMode, activeActivations, deactivateProvider } = options
   const { t } = useI18n()
@@ -64,7 +76,7 @@ export function useDetach(options: UseDetachOptions) {
         icon: resolveIcon(item),
         size: 'medium' as const,
         keepAlive: true,
-        pluginId: item.source?.id,
+        pluginId: item.source?.type === 'plugin' ? item.source.id : undefined,
         ui: { showInput, initialInput: showInput ? searchVal.value : '' }
       }
       const response = await transport.send(DivisionBoxEvents.open, config)
@@ -125,8 +137,10 @@ export function useDetach(options: UseDetachOptions) {
     if (!flowPayload.value) return
     try {
       const { targetId, consentToken } = payload
+      const actorPluginId = resolveActorPluginId(flowPayload.value)
       const response = await transport.send(FlowEvents.dispatch, {
         senderId: 'corebox',
+        actorPluginId,
         payload: flowPayload.value,
         options: { preferredTarget: targetId, skipSelector: true, consentToken }
       })

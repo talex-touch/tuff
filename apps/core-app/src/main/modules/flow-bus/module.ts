@@ -12,6 +12,7 @@ import type { FlowBusIPC } from './ipc'
 import {
   FlowEvents,
   getTuffTransportMain,
+  NotificationEvents,
   type HandlerContext
 } from '@talex-touch/utils/transport/main'
 import { genTouchApp } from '../../core'
@@ -251,6 +252,11 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       const { view, plugin } = extracted
       console.log(LOG_PREFIX, `Detaching plugin → ${plugin.name}`)
 
+      const perm = getPermissionModule()
+      if (perm && plugin?.name) {
+        perm.enforcePermission(plugin.name, 'division-box:session:open', plugin.sdkapi)
+      }
+
       // Create DivisionBox session config (without URL - we'll attach existing view)
       const config = {
         url: `plugin://${plugin.name}/index.html`, // Required by config validation
@@ -282,6 +288,29 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       console.log(LOG_PREFIX, '✓ Detach completed')
     } catch (error) {
       console.error(LOG_PREFIX, '✗ Failed to detach:', error)
+
+      const err = error as { code?: string }
+      if (err?.code === 'PERMISSION_DENIED') {
+        try {
+          const channel = genTouchApp().channel
+          const keyManager =
+            (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+          const tx = getTuffTransportMain(channel, keyManager)
+          const id = `corebox.permission.denied.${Date.now()}`
+          tx.broadcast(NotificationEvents.push.notify, {
+            id,
+            request: {
+              id,
+              channel: 'app',
+              level: 'warning',
+              message: '权限不足，无法分离到独立窗口',
+              app: { presentation: 'toast' }
+            }
+          })
+        } catch (notifyError) {
+          console.warn(LOG_PREFIX, 'Failed to notify permission denied:', notifyError)
+        }
+      }
 
       // Rollback: put the extracted view back to CoreBox to avoid "view lost"
       if (extracted?.view && extracted?.plugin) {

@@ -11,6 +11,7 @@ import {
   type HandlerContext
 } from '@talex-touch/utils/transport/main'
 import { getPermissionModule } from '../permission'
+import { pluginModule } from '../plugin/plugin-module'
 import { flowBus } from './flow-bus'
 import { flowConsentStore, requiresFlowConsent } from './flow-consent'
 import { flowSessionManager } from './session-manager'
@@ -52,8 +53,38 @@ export class FlowBusIPC {
 
     this.transport = transport
 
-    const enforce = (context: HandlerContext, eventName: string, sdkapi?: number) => {
-      const pluginId = context?.plugin?.name
+    const resolvePluginSdkapi = (pluginId?: string): number | undefined => {
+      if (!pluginId) return undefined
+      return pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
+    }
+
+    const resolveActor = (context: HandlerContext, payload: any) => {
+      const contextPluginId = context?.plugin?.name
+      if (contextPluginId) {
+        const sdkapi =
+          typeof payload?._sdkapi === 'number'
+            ? payload._sdkapi
+            : resolvePluginSdkapi(contextPluginId)
+        return { pluginId: contextPluginId, sdkapi }
+      }
+
+      const actorPluginId =
+        payload?.actorPluginId ??
+        payload?.payload?.context?.sourcePluginId ??
+        (payload?.senderId && payload.senderId !== 'corebox' ? payload.senderId : undefined)
+
+      if (!actorPluginId || actorPluginId === 'corebox') {
+        return {}
+      }
+
+      const sdkapi =
+        typeof payload?._sdkapi === 'number' ? payload._sdkapi : resolvePluginSdkapi(actorPluginId)
+
+      return { pluginId: actorPluginId, sdkapi }
+    }
+
+    const enforce = (context: HandlerContext, eventName: string, payload?: any) => {
+      const { pluginId, sdkapi } = resolveActor(context, payload)
       if (!pluginId) {
         return
       }
@@ -69,7 +100,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.dispatch, async (payload, context) => {
-        enforce(context, 'flow:bus:dispatch', payload?._sdkapi)
+        enforce(context, 'flow:bus:dispatch', payload)
         const senderId = payload.senderId ?? context?.plugin?.name
         if (!senderId) {
           return { success: false, error: { message: 'senderId is required' } }
@@ -86,7 +117,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.getTargets, async (payload, context) => {
-        enforce(context, 'flow:bus:get-targets', payload?._sdkapi)
+        enforce(context, 'flow:bus:get-targets', payload)
         const targets = flowBus.getAvailableTargets(payload?.payloadType)
         return { success: true, data: targets }
       })
@@ -94,7 +125,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.cancel, async (payload, context) => {
-        enforce(context, 'flow:bus:cancel', payload?._sdkapi)
+        enforce(context, 'flow:bus:cancel', payload)
         const success = flowBus.cancel(payload.sessionId)
         return { success, data: { cancelled: success } }
       })
@@ -102,7 +133,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.acknowledge, async (payload, context) => {
-        enforce(context, 'flow:bus:acknowledge', payload?._sdkapi)
+        enforce(context, 'flow:bus:acknowledge', payload)
         const success = flowBus.acknowledge(payload.sessionId, payload.ackPayload)
         return { success, data: { acknowledged: success } }
       })
@@ -110,7 +141,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.reportError, async (payload, context) => {
-        enforce(context, 'flow:bus:report-error', payload?._sdkapi)
+        enforce(context, 'flow:bus:report-error', payload)
         const success = flowBus.reportError(payload.sessionId, payload.message || 'Unknown error')
         return { success, data: { reported: success } }
       })
@@ -118,7 +149,7 @@ export class FlowBusIPC {
 
     this.transportDisposers.push(
       transport.on(FlowEvents.selectTarget, async (payload, context) => {
-        enforce(context, 'flow:bus:select-target', payload?._sdkapi)
+        enforce(context, 'flow:bus:select-target', payload)
         const { sessionId, targetId } = payload
 
         if (!sessionId) {
