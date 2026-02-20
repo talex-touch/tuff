@@ -26,14 +26,14 @@
     "publish": "npm publish --access public"
   },
   "peerDependencies": {
-    "electron": "^37.2.4",
-    "vue": "^3.5.15"
+    "electron": "^40.0.0",
+    "vue": "^3.5.27"
   },
   "dependencies": {
-    "@vueuse/core": "^13.6.0",
+    "@vueuse/core": "^14.1.0",
     "marked": "^17.0.1",
     "path-browserify": "^1.0.1",
-    "vue": "^3.5.18"
+    "vue": "^3.5.27"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",

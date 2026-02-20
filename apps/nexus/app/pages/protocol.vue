@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import protocolContent from '~~/content/app/protocol.md?raw'
+import { usePolicyMarkdown } from '~/composables/usePolicyMarkdown'
 
 definePageMeta({
   layout: 'license',
 })
 
 const { t } = useI18n()
+const { doc: protocolDoc } = usePolicyMarkdown('protocol')
 
 useHead({
   title: t('protocol.title'),
@@ -17,9 +18,10 @@ useHead({
 
 <template>
   <div class="protocol-surface px-8 py-10 space-y-10">
-    <div class="prose prose-neutral dark:prose-invert max-w-none">
-      <ContentRendererMarkdown :value="protocolContent" />
-    </div>
+    <ContentRenderer
+      :value="protocolDoc ?? {}"
+      class="prose prose-neutral dark:prose-invert max-w-none"
+    />
   </div>
 </template>
 

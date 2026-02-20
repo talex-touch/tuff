@@ -467,6 +467,8 @@ function sanitizeFeatureUseMetadata(value: Record<string, unknown> | undefined):
   const stringFields: Array<[key: string, maxLength?: number]> = [
     ['sessionId', 64],
     ['action', 32],
+    ['stage', 32],
+    ['result', 32],
     ['sourceType', 64],
     ['sourceId', 128],
     ['sourceName', 128],
@@ -761,6 +763,45 @@ export async function recordTelemetryEvent(
       if (typeof meta.pluginName === 'string') {
         await incrementDailyStat(db, today, 'feature_use_plugin', meta.pluginName, 1)
       }
+      if (meta.sourceType === 'update') {
+        const updateAction = normalizeString(meta.action, 64)
+        let updateStage = normalizeString(meta.stage, 32)
+        let updateResult = normalizeString(meta.result, 32)
+        if ((!updateStage || !updateResult) && updateAction) {
+          const [stage, ...rest] = updateAction.split('_')
+          if (!updateStage && stage) {
+            updateStage = stage
+          }
+          if (!updateResult && rest.length) {
+            updateResult = rest.join('_')
+          }
+        }
+        if (updateAction) {
+          await incrementDailyStat(db, today, 'update_action', updateAction, 1)
+        }
+        if (updateStage) {
+          await incrementDailyStat(db, today, 'update_stage', updateStage, 1)
+        }
+        if (updateResult) {
+          await incrementDailyStat(db, today, 'update_result', updateResult, 1)
+        }
+        const updateChannel = normalizeString(meta.sourceId, 64)
+        if (updateChannel) {
+          await incrementDailyStat(db, today, 'update_channel', updateChannel, 1)
+        }
+        const updateSource = normalizeString(meta.sourceName, 64)
+        if (updateSource) {
+          await incrementDailyStat(db, today, 'update_source', updateSource, 1)
+        }
+        const updateTag = normalizeString(meta.sourceVersion, 64)
+        if (updateTag) {
+          await incrementDailyStat(db, today, 'update_tag', updateTag, 1)
+        }
+        const updateItemKind = normalizeString(meta.itemKind, 32)
+        if (updateItemKind) {
+          await incrementDailyStat(db, today, 'update_item_kind', updateItemKind, 1)
+        }
+      }
       const categoryL1 = normalizeUsageCategoryPart(meta.usageCategoryL1) || 'others'
       const categoryL2 = normalizeUsageCategoryPart(meta.usageCategoryL2) || 'others'
       await incrementDailyStat(db, today, 'feature_use_category', `${categoryL1}:${categoryL2}`, 1)
@@ -917,6 +958,14 @@ export async function getAnalyticsSummary(
   featureUseItemKindDistribution: Record<string, number>
   featureUsePluginDistribution: Record<string, number>
   featureUseCategoryDistribution: Record<string, number>
+  updateActionDistribution: Record<string, number>
+  updateStageDistribution: Record<string, number>
+  updateResultDistribution: Record<string, number>
+  updateChannelDistribution: Record<string, number>
+  updateSourceDistribution: Record<string, number>
+  updateTagDistribution: Record<string, number>
+  updateItemKindDistribution: Record<string, number>
+  versionDistribution: Record<string, number>
   moduleLoadMetrics: Array<{
     module: string
     avgDuration: number
@@ -959,10 +1008,18 @@ export async function getAnalyticsSummary(
   const featureUseItemKindDist: Record<string, number> = {}
   const featureUsePluginDist: Record<string, number> = {}
   const featureUseCategoryDist: Record<string, number> = {}
+  const updateActionDist: Record<string, number> = {}
+  const updateStageDist: Record<string, number> = {}
+  const updateResultDist: Record<string, number> = {}
+  const updateChannelDist: Record<string, number> = {}
+  const updateSourceDist: Record<string, number> = {}
+  const updateTagDist: Record<string, number> = {}
+  const updateItemKindDist: Record<string, number> = {}
   const moduleLoadTotals: Record<string, number> = {}
   const moduleLoadCounts: Record<string, number> = {}
   const moduleLoadMax: Record<string, number> = {}
   const moduleLoadMin: Record<string, number> = {}
+  const versionDistribution: Record<string, number> = {}
   let totalEvents = 0
   let totalUsers = 0
   let totalSearches = 0
@@ -1062,6 +1119,27 @@ export async function getAnalyticsSummary(
       case 'feature_use_category':
         featureUseCategoryDist[row.stat_key] = (featureUseCategoryDist[row.stat_key] || 0) + row.value
         break
+      case 'update_action':
+        updateActionDist[row.stat_key] = (updateActionDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_stage':
+        updateStageDist[row.stat_key] = (updateStageDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_result':
+        updateResultDist[row.stat_key] = (updateResultDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_channel':
+        updateChannelDist[row.stat_key] = (updateChannelDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_source':
+        updateSourceDist[row.stat_key] = (updateSourceDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_tag':
+        updateTagDist[row.stat_key] = (updateTagDist[row.stat_key] || 0) + row.value
+        break
+      case 'update_item_kind':
+        updateItemKindDist[row.stat_key] = (updateItemKindDist[row.stat_key] || 0) + row.value
+        break
       case 'feature_use_entity': {
         const [legacyType, legacyId = ''] = row.stat_key.split(':')
         const level1 = normalizeUsageCategoryPart(legacyType) || 'others'
@@ -1160,6 +1238,25 @@ export async function getAnalyticsSummary(
     }
   }).sort((a, b) => b.avgDuration - a.avgDuration)
 
+  const startTime = startDate.toISOString()
+  const { results: versionRows } = await db.prepare(`
+    SELECT version, COUNT(DISTINCT COALESCE(user_id, client_id, device_fingerprint)) as users
+    FROM ${TELEMETRY_TABLE}
+    WHERE event_type = 'visit'
+      AND version IS NOT NULL
+      AND version != ''
+      AND created_at >= ?1
+    GROUP BY version
+    ORDER BY users DESC
+    LIMIT 50;
+  `).bind(startTime).all<{ version: string, users: number }>()
+
+  for (const row of versionRows ?? []) {
+    if (!row?.version)
+      continue
+    versionDistribution[row.version] = Number(row.users) || 0
+  }
+
   return {
     totalEvents,
     totalUsers,
@@ -1198,6 +1295,14 @@ export async function getAnalyticsSummary(
     featureUseItemKindDistribution: featureUseItemKindDist,
     featureUsePluginDistribution: featureUsePluginDist,
     featureUseCategoryDistribution: featureUseCategoryDist,
+    updateActionDistribution: updateActionDist,
+    updateStageDistribution: updateStageDist,
+    updateResultDistribution: updateResultDist,
+    updateChannelDistribution: updateChannelDist,
+    updateSourceDistribution: updateSourceDist,
+    updateTagDistribution: updateTagDist,
+    updateItemKindDistribution: updateItemKindDist,
+    versionDistribution,
     moduleLoadMetrics,
   }
 }

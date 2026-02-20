@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { useLocalePreference } from '~/composables/useLocalePreference'
 import { useTheme } from '~/composables/useTheme'
@@ -151,6 +152,18 @@ function handleLanguagePanelHover(active: boolean) {
   setLanguageHover(active)
 }
 
+function shouldNavigateFromAvatar() {
+  if (!hasWindow() || !('matchMedia' in window))
+    return false
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches
+}
+
+function handleAvatarClick() {
+  if (!shouldNavigateFromAvatar())
+    return
+  handleMenuNavigate('/dashboard')
+}
+
 async function handleMenuNavigate(path: string) {
   userMenuOpen.value = false
   languageMenuOpen.value = false
@@ -196,7 +209,13 @@ onBeforeUnmount(() => {
       panel-shadow="medium"
     >
       <template #trigger>
-        <TxButton variant="bare" native-type="button" class="header-user-trigger" aria-label="Account">
+        <TxButton
+          variant="bare"
+          native-type="button"
+          class="header-user-trigger"
+          aria-label="Account"
+          @click="handleAvatarClick"
+        >
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
@@ -242,6 +261,13 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+
+        <TxDropdownItem @select="handleMenuNavigate('/dashboard')">
+          <span class="header-user-item">
+            <span class="i-carbon-dashboard header-user-item-icon" />
+            <span>{{ tSafe('nav.dashboard', 'Dashboard') }}</span>
+          </span>
+        </TxDropdownItem>
 
         <div class="header-user-submenu" @mouseenter="setLanguageHover(true)" @mouseleave="setLanguageHover(false)">
           <TxPopover

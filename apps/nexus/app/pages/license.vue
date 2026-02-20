@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import licenseContent from '~~/content/app/license.md?raw'
+import { usePolicyMarkdown } from '~/composables/usePolicyMarkdown'
 
 definePageMeta({
   layout: 'license',
 })
 
 const { t } = useI18n()
+const { doc: licenseDoc } = usePolicyMarkdown('license')
 
 useHead({
   title: t('license.title'),
@@ -17,9 +18,10 @@ useHead({
 
 <template>
   <div class="license-surface px-8 py-10 space-y-10">
-    <div class="prose prose-neutral dark:prose-invert max-w-none">
-      <ContentRendererMarkdown :value="licenseContent" />
-    </div>
+    <ContentRenderer
+      :value="licenseDoc ?? {}"
+      class="prose prose-neutral dark:prose-invert max-w-none"
+    />
   </div>
 </template>
 

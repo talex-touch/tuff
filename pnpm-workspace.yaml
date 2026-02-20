@@ -39,34 +39,34 @@ catalogs:
     '@nuxtjs/color-mode': ^3.5.2
     '@nuxtjs/i18n': ^10.0.6
     '@pinia/nuxt': ^0.11.1
-    '@unocss/eslint-config': ^66.3.3
-    '@unocss/nuxt': ^66.3.3
-    '@unocss/preset-typography': ^66.5.0
+    '@unocss/eslint-config': ^66.5.10
+    '@unocss/nuxt': ^66.6.0
+    '@unocss/preset-typography': ^66.6.0
     '@vite-pwa/nuxt': ^1.0.4
     '@vueuse/nuxt': ^13.5.0
     nuxt: ^4.0.0
-    unocss: ^66.3.3
+    unocss: ^66.6.0
     unplugin: ^2.3.5
-    vite: ^7.0.4
+    vite: ^7.3.1
   conflicts_build_h7_0_6:
-    vite: ^7.0.6
+    vite: ^7.3.1
   conflicts_frontend_h3_5_18:
     vue: ^3.5.18
   dev:
-    '@antfu/eslint-config': ^4.17.0
+    '@antfu/eslint-config': ^5.4.1
     '@cloudflare/workers-types': ^4.20241218.0
     baseline-browser-mapping: ^2.9.15
-    eslint: ^9.31.0
+    eslint: ^9.39.2
     eslint-plugin-format: ^1.0.1
     nitro-cloudflare-dev: ^0.2.2
-    typescript: ^5.8.3
-    vue-tsc: ^3.0.1
+    typescript: ^5.9.3
+    vue-tsc: ^3.2.2
     webpack: ^5.101.3
     wrangler: ^4.0.0
   frontend:
-    '@vueuse/core': ^13.5.0
-    pinia: ^3.0.3
-    vue: ^3.5.17
+    '@vueuse/core': ^14.1.0
+    pinia: ^3.0.4
+    vue: ^3.5.27
   icons:
     '@iconify-json/carbon': ^1.2.10
     '@iconify-json/twemoji': ^1.2.2

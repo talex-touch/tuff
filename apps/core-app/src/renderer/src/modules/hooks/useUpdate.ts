@@ -373,6 +373,7 @@ export class AppUpdate {
       ignoredVersions: [],
       customSources: [],
       autoDownload: false,
+      rendererOverrideEnabled: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
@@ -394,6 +395,9 @@ export class AppUpdate {
       if (response.success && response.data) {
         const serverSettings = response.data
         serverSettings.frequency = this.normalizeFrequencyLabel(serverSettings.frequency)
+        if (typeof serverSettings.rendererOverrideEnabled !== 'boolean') {
+          serverSettings.rendererOverrideEnabled = false
+        }
         this.settings = serverSettings
       }
       return this.settings

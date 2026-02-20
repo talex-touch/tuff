@@ -102,6 +102,10 @@ export interface UpdateSettings {
    */
   autoDownload?: boolean
   /**
+   * Enable experimental renderer override updates.
+   */
+  rendererOverrideEnabled?: boolean
+  /**
    * Timestamp (ms) of the last successful update check.
    */
   lastCheckedAt?: number | null
@@ -149,6 +153,7 @@ export const defaultUpdateSettings: UpdateSettings = {
   ignoredVersions: [],
   customSources: [],
   autoDownload: false,
+  rendererOverrideEnabled: false,
   lastCheckedAt: null,
   cacheEnabled: true,
   cacheTTL: 30,

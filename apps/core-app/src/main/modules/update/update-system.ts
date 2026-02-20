@@ -34,6 +34,7 @@ import { downloadTasks } from '../../db/schema'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
+import { getAnalyticsMessageStore } from '../analytics/message-store'
 
 /**
  * Version information interface
@@ -55,6 +56,7 @@ interface UpdateSystemConfig {
   checkFrequency: 'startup' | 'daily' | 'weekly' | 'never'
   ignoredVersions: string[]
   updateChannel: AppPreviewChannel
+  rendererOverrideEnabled?: boolean
   storageRoot?: string
 }
 
@@ -124,6 +126,7 @@ export class UpdateSystem {
   private readonly pollingService = PollingService.getInstance()
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly storageRoot: string
+  private readonly messageStore = getAnalyticsMessageStore()
 
   /** Channel priority for version comparison (lower = more stable) */
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
@@ -148,6 +151,7 @@ export class UpdateSystem {
       checkFrequency: 'startup',
       ignoredVersions: [],
       updateChannel: this.currentVersion.channel,
+      rendererOverrideEnabled: false,
       ...config
     }
   }
@@ -321,7 +325,7 @@ export class UpdateSystem {
   }
 
   async scheduleRendererOverride(release: GitHubRelease): Promise<void> {
-    if (!ENABLE_RENDERER_OVERRIDE) {
+    if (!this.isRendererOverrideEnabled()) {
       return
     }
 
@@ -330,6 +334,10 @@ export class UpdateSystem {
       await this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest)
     } catch (error) {
       console.warn('[UpdateSystem] Failed to schedule renderer override:', error)
+      const message = error instanceof Error ? error.message : String(error)
+      this.reportRendererOverrideIssue('error', 'Renderer override schedule failed', message, {
+        tag: release.tag_name
+      })
     }
   }
 
@@ -374,7 +382,7 @@ export class UpdateSystem {
     release: GitHubRelease,
     manifest: UpdateReleaseManifest | null
   ): Promise<void> {
-    if (!ENABLE_RENDERER_OVERRIDE) {
+    if (!this.isRendererOverrideEnabled()) {
       return
     }
 
@@ -385,10 +393,22 @@ export class UpdateSystem {
 
     if (!artifact.coreRange) {
       console.warn('[UpdateSystem] Renderer artifact missing coreRange, skipping.')
+      this.reportRendererOverrideIssue(
+        'warn',
+        'Renderer override skipped',
+        'Renderer artifact missing coreRange',
+        { tag: release.tag_name }
+      )
       return
     }
     if (!artifact.sha256) {
       console.warn('[UpdateSystem] Renderer artifact missing sha256, skipping.')
+      this.reportRendererOverrideIssue(
+        'warn',
+        'Renderer override skipped',
+        'Renderer artifact missing sha256',
+        { tag: release.tag_name }
+      )
       return
     }
 
@@ -396,18 +416,36 @@ export class UpdateSystem {
       console.info(
         `[UpdateSystem] Renderer coreRange "${artifact.coreRange}" not satisfied by current core, skipping.`
       )
+      this.reportRendererOverrideIssue(
+        'warn',
+        'Renderer override skipped',
+        `coreRange mismatch: ${artifact.coreRange}`,
+        { tag: release.tag_name }
+      )
       return
     }
 
     const asset = this.resolveAssetByName(release.assets as ReleaseAsset[], artifact.name)
     if (!asset) {
       console.warn('[UpdateSystem] Renderer asset not found in release:', artifact.name)
+      this.reportRendererOverrideIssue(
+        'warn',
+        'Renderer override skipped',
+        'Renderer asset not found in release',
+        { tag: release.tag_name, asset: artifact.name }
+      )
       return
     }
 
     const url = this.resolveAssetUrl(asset)
     if (!url) {
       console.warn('[UpdateSystem] Renderer asset missing download url:', artifact.name)
+      this.reportRendererOverrideIssue(
+        'warn',
+        'Renderer override skipped',
+        'Renderer asset missing download url',
+        { tag: release.tag_name, asset: artifact.name }
+      )
       return
     }
 
@@ -500,6 +538,8 @@ export class UpdateSystem {
           this.pollingService.unregister(pollTaskId)
           void onCompleted(task).catch((error) => {
             console.warn('[UpdateSystem] Auxiliary install failed:', error)
+            const message = error instanceof Error ? error.message : String(error)
+            this.reportRendererOverrideIssue('error', 'Renderer override install failed', message)
           })
         } else if (task.status === 'failed' || task.status === 'cancelled') {
           this.pollingService.unregister(pollTaskId)
@@ -516,11 +556,21 @@ export class UpdateSystem {
     release: GitHubRelease,
     manifest: UpdateReleaseManifest | null
   ): Promise<void> {
+    if (!this.isRendererOverrideEnabled()) {
+      console.warn('[UpdateSystem] Renderer override disabled, skipping install.')
+      return
+    }
     const filePath = path.join(task.destination, task.filename)
 
     if (artifact.sha256) {
       const valid = await this.verifyChecksum(filePath, artifact.sha256)
       if (!valid) {
+        this.reportRendererOverrideIssue(
+          'error',
+          'Renderer override checksum failed',
+          'Checksum verification failed',
+          { tag: release.tag_name }
+        )
         throw new Error('Renderer override checksum verification failed')
       }
     }
@@ -538,6 +588,12 @@ export class UpdateSystem {
         console.warn('[UpdateSystem] Renderer override signature verification failed:', {
           reason: verifyResult.reason
         })
+        this.reportRendererOverrideIssue(
+          'warn',
+          'Renderer override signature invalid',
+          verifyResult.reason || 'Signature verification failed',
+          { tag: release.tag_name }
+        )
       }
     }
 
@@ -616,6 +672,38 @@ export class UpdateSystem {
     const statePath = this.resolveRendererOverrideStatePath()
     await fs.mkdir(path.dirname(statePath), { recursive: true })
     await fs.writeFile(statePath, JSON.stringify(state, null, 2))
+  }
+
+  async disableRendererOverride(reason: string): Promise<void> {
+    const current = await this.readRendererOverrideState()
+    if (!current?.enabled) {
+      return
+    }
+    await this.writeRendererOverrideState({
+      ...current,
+      enabled: false,
+      lastError: reason,
+      updatedAt: Date.now()
+    })
+    this.reportRendererOverrideIssue('warn', 'Renderer override disabled', reason, {
+      version: current.version,
+      tag: current.sourceTag
+    })
+  }
+
+  private reportRendererOverrideIssue(
+    severity: 'info' | 'warn' | 'error',
+    title: string,
+    message: string,
+    meta?: Record<string, unknown>
+  ): void {
+    this.messageStore.add({
+      source: 'update',
+      severity,
+      title,
+      message,
+      meta
+    })
   }
 
   private async resolveRendererBundleRoot(tempDir: string): Promise<string | null> {
@@ -847,6 +935,10 @@ export class UpdateSystem {
    */
   updateConfig(config: Partial<UpdateSystemConfig>): void {
     this.config = { ...this.config, ...config }
+  }
+
+  private isRendererOverrideEnabled(): boolean {
+    return ENABLE_RENDERER_OVERRIDE && this.config.rendererOverrideEnabled === true
   }
 
   // Private helper methods

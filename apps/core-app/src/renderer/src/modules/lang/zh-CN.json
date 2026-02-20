@@ -1872,6 +1872,8 @@
       },
       "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
+      "rendererOverrideTitle": "Renderer Override（实验性）",
+      "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
       "statusTitle": "状态",
       "status": {
         "loading": "正在加载更新状态…",
@@ -1911,6 +1913,7 @@
         "channelSaved": "更新渠道已保存",
         "frequencySaved": "检查频率已保存",
         "autoDownloadSaved": "自动下载设置已保存",
+        "rendererOverrideSaved": "Renderer Override 设置已保存",
         "saveFailed": "保存更新设置失败",
         "manualCheckStarted": "已开始手动检测更新",
         "manualCheckFound": "发现新版本 {version}",

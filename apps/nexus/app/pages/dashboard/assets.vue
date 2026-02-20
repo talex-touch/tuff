@@ -11,6 +11,7 @@ import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vu
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
 import PluginListItem from '~/components/dashboard/PluginListItem.vue'
 import ReviewModal from '~/components/dashboard/ReviewModal.vue'
+import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
 import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
@@ -1057,7 +1058,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                   {{ t('dashboard.sections.plugins.readmePreview') }}
                 </p>
                 <div v-if="pluginReadmePreview" class="prose prose-sm mt-2 max-w-none dark:prose-invert">
-                  <ContentRendererMarkdown :value="pluginReadmePreview" />
+                  <MDC :value="pluginReadmePreview" />
                 </div>
                 <p v-else-if="pluginPackageFileName" class="mt-2 text-[11px]">
                   {{ t('dashboard.sections.plugins.noReadme') }}

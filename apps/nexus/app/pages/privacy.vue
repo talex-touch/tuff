@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import protocolContent from '~~/content/app/protocol.md?raw'
+import { usePolicyMarkdown } from '~/composables/usePolicyMarkdown'
 
 definePageMeta({
   layout: 'license',
 })
 
 const { t } = useI18n()
+const { doc: privacyDoc } = usePolicyMarkdown('privacy')
+const { doc: protocolDoc } = usePolicyMarkdown('protocol')
 
-const privacyContent = computed(() => {
-  const marker = '# Privacy Policy'
-  const index = protocolContent.indexOf(marker)
-  if (index === -1) return protocolContent
-  return protocolContent.slice(index)
-})
+const resolvedDoc = computed(() => privacyDoc.value ?? protocolDoc.value ?? {})
 
 useHead({
   title: t('privacy.title'),
@@ -25,9 +22,10 @@ useHead({
 
 <template>
   <div class="privacy-surface px-8 py-10 space-y-10">
-    <div class="prose prose-neutral dark:prose-invert max-w-none">
-      <ContentRendererMarkdown :value="privacyContent" />
-    </div>
+    <ContentRenderer
+      :value="resolvedDoc"
+      class="prose prose-neutral dark:prose-invert max-w-none"
+    />
   </div>
 </template>
 

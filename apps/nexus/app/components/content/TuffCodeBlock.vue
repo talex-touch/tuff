@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { resolveHighlightApi } from '~/utils/highlight'
 
 const props = withDefaults(defineProps<{
   code: string
@@ -14,6 +15,8 @@ const props = withDefaults(defineProps<{
 
 const { locale } = useI18n()
 const copied = ref(false)
+const codeRef = ref<HTMLElement | null>(null)
+const highlightKey = ref('')
 
 const canCopy = computed(() => Boolean(props.code?.trim()))
 const resolvedTitle = computed(() => {
@@ -31,6 +34,48 @@ const copyLabel = computed(() => {
 
 const showHeader = computed(() => !props.embedded)
 const isMermaid = computed(() => (props.lang || '').toLowerCase() === 'mermaid')
+
+async function highlightCode() {
+  if (!import.meta.client || isMermaid.value)
+    return
+
+  const source = props.code?.trim() ?? ''
+  if (!source)
+    return
+
+  const key = `${props.lang ?? ''}:${source}`
+  if (highlightKey.value === key)
+    return
+
+  await nextTick()
+  const node = codeRef.value
+  if (!node)
+    return
+
+  const api = await resolveHighlightApi()
+  if (!api)
+    return
+
+  try {
+    api.highlightElement(node)
+    node.dataset.highlighted = 'true'
+    highlightKey.value = key
+  }
+  catch {
+    // ignore highlight errors
+  }
+}
+
+onMounted(() => {
+  void highlightCode()
+})
+
+watch(
+  () => [props.code, props.lang, isMermaid.value],
+  () => {
+    void highlightCode()
+  },
+)
 
 async function handleCopy() {
   if (!import.meta.client || !canCopy.value)
@@ -79,6 +124,7 @@ async function handleCopy() {
       />
       <code
         v-else
+        ref="codeRef"
         :class="['tuff-code-block__code', 'hljs', `language-${props.lang}`]"
         v-text="props.code"
       />

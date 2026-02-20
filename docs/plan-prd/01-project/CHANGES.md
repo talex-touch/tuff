@@ -4,6 +4,59 @@
 
 ## 2026-02-20
 
+### Nexus 头像入口补充控制台跳转
+
+**变更类型**: 体验修复 / 导航
+
+**描述**: Header 用户菜单补充控制台入口；支持 hover 的设备点击头像可直接进入控制台，触屏设备保持菜单可用。
+
+**主要变更**:
+1. **头像快捷跳转**：hover 设备点击头像跳转 `/dashboard`。
+2. **菜单入口**：用户菜单新增“控制台”项，触屏点击头像后也可进入。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+
+### Nexus 文档代码块高亮补全
+
+**变更类型**: 体验修复 / 文档渲染
+
+**描述**: 修复 ClientOnly/示例代码块挂载后未触发高亮的问题，确保代码在展开或渲染后立即着色。
+
+**主要变更**:
+1. **高亮解析复用**：抽离 highlight.js 解析逻辑供插件与代码块组件共享。
+2. **挂载后高亮**：TuffCodeBlock 在挂载与内容变更时触发高亮，避免漏染。
+
+**修改文件**:
+- `apps/nexus/app/utils/highlight.ts`
+- `apps/nexus/app/plugins/highlight.client.ts`
+- `apps/nexus/app/components/content/TuffCodeBlock.vue`
+
+### 更新系统实验性 Renderer Override 与 Nexus 版本分布统计
+
+**变更类型**: 行为增强 / 可观测性
+
+**描述**: Renderer Override 需要手动开启并受环境变量约束；更新检查/下载/安装失败与 Renderer Override 关键异常写入 Nexus 遥测消息；更新检查/下载/安装追加结构化 telemetry 事件并扩展 Update 行为分布统计（action/stage/result/channel/source/tag/itemKind）；Nexus 管理台新增版本分布统计（按近 N 天 visit 事件统计）。
+
+**主要变更**:
+1. **手动开关**：更新设置新增 Renderer Override 实验性开关（默认关闭，需 `TUFF_ENABLE_RENDERER_OVERRIDE=1` 生效）。
+2. **异常上报**：更新检查/下载/安装失败与 Renderer Override 关键异常上报至 Nexus telemetry messages。
+3. **更新埋点**：更新检查/下载/安装补充结构化 telemetry 事件（feature_use）。
+4. **更新分布**：Nexus Analytics 增加 Update 行为/阶段/结果/渠道/来源/版本/触发方式分布统计卡片。
+5. **版本分布**：Nexus Analytics 增加版本分布统计与饼图展示（基于 visit 事件）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/update/update-system.ts`
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUpdate.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/types/update.ts`
+- `apps/nexus/server/utils/telemetryStore.ts`
+- `apps/nexus/app/pages/dashboard/admin/analytics.vue`
+
 ### DivisionBox / Flow 权限入口对齐
 
 **变更类型**: 权限闭环 / 行为一致性

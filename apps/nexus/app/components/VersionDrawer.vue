@@ -4,6 +4,7 @@ import type { TpexExtractedManifest, TpexPackagePreviewResult } from '@talex-tou
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
@@ -433,7 +434,7 @@ onBeforeUnmount(() => {
                     </h3>
                     <div class="VersionOverlay-LicenseText">
                       <div class="prose prose-sm dark:prose-invert">
-                        <ContentRendererMarkdown :value="t('dashboard.sections.plugins.license.agreement')" />
+                        <MDC :value="t('dashboard.sections.plugins.license.agreement')" />
                       </div>
                     </div>
                     <div class="mt-6 flex flex-col gap-4">
