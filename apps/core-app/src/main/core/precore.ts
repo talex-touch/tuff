@@ -92,6 +92,9 @@ log4js.configure({
 
 mainLog.success('Talex Touch bootstrap started')
 
+// Increase renderer process V8 heap limit (main process uses NODE_OPTIONS)
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512')
+
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 

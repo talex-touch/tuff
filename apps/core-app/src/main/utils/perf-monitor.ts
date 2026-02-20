@@ -3,7 +3,7 @@ import type { Primitive } from './logger'
 import { performance } from 'node:perf_hooks'
 import { formatPayloadPreview } from '@talex-touch/utils/common/utils/payload-preview'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { ipcMain } from 'electron'
+import { ipcMain, powerMonitor } from 'electron'
 import { getSentryService } from '../modules/sentry/sentry-service'
 import { createLogger, formatDuration } from './logger'
 import { getPerfContextSnapshot } from './perf-context'
@@ -66,6 +66,7 @@ interface PerfAggregate {
 const perfLog = createLogger('Perf')
 const ipcPerfLog = perfLog.child('IPC')
 const loopPerfLog = perfLog.child('EventLoop')
+const powerMonitorAvailable = typeof powerMonitor?.on === 'function'
 
 const PERF_REPORT_CHANNEL = 'touch:perf-report'
 
@@ -98,11 +99,14 @@ function resolveUiThreshold(kind: RendererPerfReport['kind']): { warn: number; e
 
 const LOOP_LAG_WARN_MS = 200
 const LOOP_LAG_ERROR_MS = 2_000
+/** Lags above this threshold are almost certainly caused by system sleep/suspend, not real event loop blocking. */
+const SYSTEM_SLEEP_THRESHOLD_MS = 30_000
 
 const SUMMARY_INTERVAL_MS = 60_000
 const MAX_INCIDENTS = 80
 const PERF_LOOP_TASK_ID = 'perf-monitor.event-loop'
 const PERF_SUMMARY_TASK_ID = 'perf-monitor.summary'
+const PERF_HEAP_TASK_ID = 'perf-monitor.heap'
 
 const IPC_LOG_THROTTLE_MS = 5_000
 const RENDERER_LOG_THROTTLE_MS = 5_000
@@ -230,6 +234,12 @@ export class PerfMonitor {
   private lastHeapSnapshotAt = 0
   private readonly heapSnapshotIntervalMs = 10_000
 
+  /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
+  private systemResumedAt = 0
+  /** Grace window after resume during which lags are attributed to sleep. */
+  private static readonly RESUME_GRACE_MS = 5_000
+  private powerListeners: Array<() => void> = []
+
   private shouldLog(key: string, throttleMs: number, now: number): boolean {
     const lastAt = this.logThrottle.get(key) ?? 0
     if (now - lastAt < throttleMs) {
@@ -240,6 +250,8 @@ export class PerfMonitor {
   }
 
   start(): void {
+    this.registerPowerMonitorListeners()
+
     if (!pollingService.isRegistered(PERF_LOOP_TASK_ID)) {
       this.lastLoopTick = performance.now()
       pollingService.register(
@@ -249,6 +261,14 @@ export class PerfMonitor {
           const expected = this.lastLoopTick + 100
           const lag = Math.max(0, now - expected)
           this.lastLoopTick = now
+
+          if (this.isLagFromSystemSleep(lag)) {
+            const durationSec = Math.round(lag / 1000)
+            loopPerfLog.info(
+              `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
+            )
+            return
+          }
 
           if (lag >= LOOP_LAG_WARN_MS) {
             const severity = lag >= LOOP_LAG_ERROR_MS ? 'error' : 'warn'
@@ -266,12 +286,86 @@ export class PerfMonitor {
       })
     }
 
+    if (!pollingService.isRegistered(PERF_HEAP_TASK_ID)) {
+      pollingService.register(
+        PERF_HEAP_TASK_ID,
+        () => {
+          const heap = getHeapStatistics()
+          const usedRatio = heap.used_heap_size / heap.heap_size_limit
+          if (usedRatio > 0.85) {
+            const usedMB = Math.round(heap.used_heap_size / 1024 / 1024)
+            const totalMB = Math.round(heap.total_heap_size / 1024 / 1024)
+            const limitMB = Math.round(heap.heap_size_limit / 1024 / 1024)
+            perfLog.warn(
+              `Heap pressure: ${usedMB}MB used / ${totalMB}MB allocated / ${limitMB}MB limit (${Math.round(usedRatio * 100)}%)`
+            )
+          }
+        },
+        { interval: 30_000, unit: 'milliseconds', initialDelayMs: 15_000 }
+      )
+    }
+
     pollingService.start()
   }
 
   stop(): void {
     pollingService.unregister(PERF_LOOP_TASK_ID)
     pollingService.unregister(PERF_SUMMARY_TASK_ID)
+    pollingService.unregister(PERF_HEAP_TASK_ID)
+    for (const dispose of this.powerListeners) dispose()
+    this.powerListeners = []
+  }
+
+  /**
+   * Listen to Electron powerMonitor suspend/resume events so we can
+   * distinguish real event-loop blocking from system sleep.
+   */
+  private registerPowerMonitorListeners(): void {
+    if (this.powerListeners.length > 0) return
+    if (!powerMonitorAvailable) {
+      loopPerfLog.warn('powerMonitor unavailable; skipping suspend/resume listeners')
+      return
+    }
+
+    const onSuspend = () => {
+      loopPerfLog.info('System suspending (powerMonitor)')
+    }
+    const onResume = () => {
+      this.systemResumedAt = Date.now()
+      // Reset the tick baseline so the first check after wake doesn't
+      // produce a false positive lag equal to the sleep duration.
+      this.lastLoopTick = performance.now()
+      loopPerfLog.info('System resumed (powerMonitor)')
+    }
+
+    powerMonitor.on('suspend', onSuspend)
+    powerMonitor.on('resume', onResume)
+
+    this.powerListeners.push(
+      () => powerMonitor.off('suspend', onSuspend),
+      () => powerMonitor.off('resume', onResume)
+    )
+  }
+
+  /**
+   * Determine whether a detected lag is caused by system sleep rather than
+   * real event-loop blocking.
+   *
+   * Two signals are used (either is sufficient):
+   * 1. powerMonitor reported a recent resume (within RESUME_GRACE_MS)
+   * 2. Fallback: lag exceeds SYSTEM_SLEEP_THRESHOLD_MS (for cases where
+   *    powerMonitor events don't fire, e.g. forced hibernation)
+   */
+  private isLagFromSystemSleep(lagMs: number): boolean {
+    // Signal 1: powerMonitor resume within grace window
+    if (this.systemResumedAt > 0) {
+      const sincResume = Date.now() - this.systemResumedAt
+      if (sincResume < PerfMonitor.RESUME_GRACE_MS) {
+        return true
+      }
+    }
+    // Signal 2: threshold fallback
+    return lagMs >= SYSTEM_SLEEP_THRESHOLD_MS
   }
 
   recordIpcHandler(eventName: string, durationMs: number, meta: Record<string, unknown>): void {

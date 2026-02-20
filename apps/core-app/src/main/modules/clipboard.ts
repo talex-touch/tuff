@@ -80,7 +80,7 @@ const clipboardLegacyQueryEvent = defineRawEvent<ClipboardMetaQueryRequest, ICli
 )
 const clipboardLegacyNewItemEvent = defineRawEvent<IClipboardItem, void>('clipboard:new-item')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
-const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
+const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 1000
 const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 5000
 const pollingService = PollingService.getInstance()
 
@@ -356,11 +356,12 @@ class ClipboardHelper {
     if (!image || image.isEmpty()) return ''
 
     const size = image.getSize()
-    const bitmap = image.toBitmap()
-    // Sample first 1KB of raw bitmap for fast fingerprinting.
-    // Combined with dimensions, collision probability is negligible.
-    const sample = bitmap.subarray(0, Math.min(1024, bitmap.length))
-    return `${size.width}x${size.height}:${crypto.createHash('sha1').update(sample).digest('hex')}`
+    // Use a tiny resize + dataURL for fast fingerprinting.
+    // Avoids image.toBitmap() which allocates a full RGBA buffer
+    // (e.g. 33MB for 4K images) just to sample 1KB.
+    const tiny = image.resize({ width: 16, height: 16 })
+    const fingerprint = tiny.toDataURL().substring(0, 200)
+    return `${size.width}x${size.height}:${crypto.createHash('sha1').update(fingerprint).digest('hex')}`
   }
 
   /**
@@ -1613,6 +1614,17 @@ export class ClipboardModule extends BaseModule {
       const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
       let item: Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata' | 'meta'> | null = null
 
+      // Read image once and cache to avoid duplicate clipboard.readImage() calls.
+      // Each readImage() call is synchronous and can cost 20-100ms for large images.
+      const hasImageFormats = includesAny(formats, IMAGE_FORMATS)
+      let cachedImage: NativeImage | null = null
+      if (hasImageFormats) {
+        cachedImage = clipboard.readImage()
+        if (cachedImage.isEmpty()) {
+          cachedImage = null
+        }
+      }
+
       // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
       // Check for files first to handle video files with thumbnails correctly
       if (includesAny(formats, FILE_URL_FORMATS)) {
@@ -1623,18 +1635,13 @@ export class ClipboardModule extends BaseModule {
           let imageSize: { width: number; height: number } | undefined
 
           // Check if there's an associated image (e.g., video thumbnail)
-          if (includesAny(formats, IMAGE_FORMATS)) {
-            const image = clipboard.readImage()
-            if (!image.isEmpty()) {
-              helper.primeImage(image)
-              imageSize = image.getSize()
-              thumbnail = image.resize({ width: 128 }).toDataURL()
-              clipboardLog.info('File with thumbnail detected', {
-                meta: { width: imageSize.width, height: imageSize.height }
-              })
-            } else {
-              helper.primeImage(null)
-            }
+          if (cachedImage) {
+            helper.primeImage(cachedImage)
+            imageSize = cachedImage.getSize()
+            thumbnail = cachedImage.resize({ width: 128 }).toDataURL()
+            clipboardLog.info('File with thumbnail detected', {
+              meta: { width: imageSize.width, height: imageSize.height }
+            })
           } else {
             helper.primeImage(null)
           }
@@ -1654,20 +1661,24 @@ export class ClipboardModule extends BaseModule {
       }
 
       // Check for standalone image (only if no files detected)
-      if (!item && includesAny(formats, IMAGE_FORMATS)) {
-        const image = clipboard.readImage()
-        if (helper.didImageChange(image)) {
+      if (!item && cachedImage) {
+        if (helper.didImageChange(cachedImage)) {
           helper.markText('')
-          const size = image.getSize()
+          const size = cachedImage.getSize()
           metaEntries.push({ key: 'image_size', value: size })
 
           // Generate thumbnail synchronously (lightweight, ~128px)
-          const thumbnail = image.resize({ width: 128 }).toDataURL()
+          const thumbnail = cachedImage.resize({ width: 128 }).toDataURL()
 
           // Yield to event loop before heavy PNG encoding + file I/O
           await new Promise<void>((resolve) => setImmediate(resolve))
 
-          const png = image.toPNG()
+          const png = cachedImage.toPNG()
+
+          // Release the cached image reference before async file I/O
+          // to allow GC to reclaim the NativeImage and PNG buffer sooner
+          cachedImage = null
+
           const stored = await tempFileService.createFile({
             namespace: CLIPBOARD_IMAGE_NAMESPACE,
             ext: 'png',

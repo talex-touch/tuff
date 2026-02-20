@@ -55,14 +55,21 @@ export class DbStore {
       bytes: totalBytes
     })
     try {
-      await dbWriteScheduler.schedule('analytics.snapshots', () =>
-        withSqliteRetry(() => this.db.insert(schema.analyticsSnapshots).values(rows), {
-          label: 'analytics.snapshots'
-        })
+      await dbWriteScheduler.schedule(
+        'analytics.snapshots',
+        () =>
+          withSqliteRetry(() => this.db.insert(schema.analyticsSnapshots).values(rows), {
+            label: 'analytics.snapshots'
+          }),
+        { droppable: true }
       )
     } catch (error) {
-      log.error('Failed to save analytics snapshots', {
-        error,
+      const isDropped = error instanceof Error && error.message.includes('dropped')
+      const message = isDropped
+        ? 'Analytics snapshots dropped (queue pressure)'
+        : 'Failed to save analytics snapshots'
+      log.warn(message, {
+        error: isDropped ? undefined : error,
         meta: { count: persistable.length }
       })
     } finally {
@@ -122,20 +129,34 @@ export class DbStore {
     metadata?: Record<string, unknown>
     timestamp: number
   }): Promise<void> {
-    await dbWriteScheduler.schedule('analytics.plugin', () =>
-      withSqliteRetry(
+    try {
+      await dbWriteScheduler.schedule(
+        'analytics.plugin',
         () =>
-          this.db.insert(schema.pluginAnalytics).values({
-            pluginName: payload.pluginName,
-            pluginVersion: payload.pluginVersion ?? null,
-            featureId: payload.featureId,
-            eventType: payload.eventType,
-            count: payload.count ?? 1,
-            metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
-            timestamp: payload.timestamp
-          }),
-        { label: 'analytics.plugin' }
+          withSqliteRetry(
+            () =>
+              this.db.insert(schema.pluginAnalytics).values({
+                pluginName: payload.pluginName,
+                pluginVersion: payload.pluginVersion ?? null,
+                featureId: payload.featureId,
+                eventType: payload.eventType,
+                count: payload.count ?? 1,
+                metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
+                timestamp: payload.timestamp
+              }),
+            { label: 'analytics.plugin' }
+          ),
+        { droppable: true }
       )
-    )
+    } catch (error) {
+      const isDropped = error instanceof Error && error.message.includes('dropped')
+      log.warn(
+        isDropped ? 'Plugin analytics dropped (queue pressure)' : 'Failed to save plugin analytics',
+        {
+          error: isDropped ? undefined : error,
+          meta: { plugin: payload.pluginName, event: payload.eventType }
+        }
+      )
+    }
   }
 }

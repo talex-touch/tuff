@@ -65,7 +65,11 @@ describe('z-index-manager', () => {
     expect(getZIndex()).toBe(3000)
 
     seed = 4000
-    subscribed?.()
+    const trigger: (() => void) | null = subscribed
+    if (!trigger) {
+      throw new Error('Expected seedSource subscription to be registered')
+    }
+    trigger()
     expect(getZIndex()).toBe(4000)
 
     configureZIndex({ seedSource: null })
@@ -86,4 +90,3 @@ describe('z-index-manager', () => {
 })
 
 type TxEventType = 'next' | 'refresh' | 'reset' | 'configure'
-

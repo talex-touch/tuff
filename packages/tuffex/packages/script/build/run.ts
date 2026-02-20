@@ -1,9 +1,15 @@
 /// <reference types="node" />
 import { spawn } from "node:child_process"
-import type { SpawnOptionsWithoutStdio } from "node:child_process"
+import type { SpawnOptions } from "node:child_process"
 
 const NULL_BYTE_PATTERN = /\0/
 const NEWLINE_PATTERN = /[\r\n]/
+
+const resolveCommand = (command: string): string => {
+  if (process.platform !== "win32") return command
+  if (command.toLowerCase() === "pnpm") return "pnpm.cmd"
+  return command
+}
 
 const assertShellValue = (value: string, label: string): string => {
   const trimmed = value.trim()
@@ -21,20 +27,34 @@ const assertShellArg = (value: string): string => {
 const spawnSafe = (
   command: string,
   args: string[] = [],
-  options: SpawnOptionsWithoutStdio = {}
+  options: SpawnOptions = {}
 ) => {
-  const safeCommand = assertShellValue(command, "COMMAND")
+  const safeCommand = assertShellValue(resolveCommand(command), "COMMAND")
   const safeArgs = args.map(assertShellArg)
   return spawn(safeCommand, safeArgs, { ...options, shell: false })
 }
 
 export default async (command: any, path: string) => {
   const [cmd, ...args] = String(command ?? "").trim().split(" ")
+  const displayCommand = [cmd, ...args].join(" ")
+  console.log(`[build-run] ${displayCommand} (cwd: ${path})`)
   return new Promise((resolve, _reject) => {
     const app = spawnSafe(cmd, args, {
       cwd: path,
+      stdio: "inherit"
     })
 
-    app.on("close", resolve)
+    app.on("error", _reject)
+    app.on("close", (code, signal) => {
+      if (signal) {
+        _reject(new Error(`[build-run] Command terminated by signal: ${signal}`))
+        return
+      }
+      if (code && code !== 0) {
+        _reject(new Error(`[build-run] Command failed with exit code ${code}`))
+        return
+      }
+      resolve(code ?? 0)
+    })
   })
 }

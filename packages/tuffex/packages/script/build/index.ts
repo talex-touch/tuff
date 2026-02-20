@@ -31,7 +31,7 @@ return src(`${componentPath}/src/**/src/style/**/*.scss`)
 }
 
 export const buildComponent = async () => {
-  run("pnpm run build", componentPath);
+  return run("pnpm run build", componentPath);
 }
 
 export const buildStyleEntry = async () => {
