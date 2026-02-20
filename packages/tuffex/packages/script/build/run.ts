@@ -31,6 +31,18 @@ const spawnSafe = (
 ) => {
   const safeCommand = assertShellValue(resolveCommand(command), "COMMAND")
   const safeArgs = args.map(assertShellArg)
+  if (process.platform === "win32") {
+    const commandLine = [safeCommand, ...safeArgs]
+      .map((value) => {
+        if (!/[\s"]/g.test(value)) return value
+        return `"${value.replace(/"/g, '\\"')}"`
+      })
+      .join(" ")
+    return spawn("cmd.exe", ["/d", "/s", "/c", commandLine], {
+      ...options,
+      shell: false
+    })
+  }
   return spawn(safeCommand, safeArgs, { ...options, shell: false })
 }
 

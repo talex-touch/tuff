@@ -2,6 +2,10 @@ import type { DbUtils } from '../../../db/utils'
 import { sleep } from '@talex-touch/utils'
 import { desc, eq } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
+import { createLogger } from '../../../utils/logger'
+import { enterPerfContext } from '../../../utils/perf-context'
+
+const log = createLogger('TimeStatsAggregator')
 
 const MAX_RETRIES = 5
 const RETRY_DELAY_MS = 200
@@ -48,90 +52,109 @@ export class TimeStatsAggregator {
    * 从 usage_logs 汇总时间统计到 item_time_stats
    */
   async aggregateTimeStats(): Promise<void> {
-    const startTime = performance.now()
-    console.log('[TimeStatsAggregator] Starting aggregation...')
+    const dispose = enterPerfContext('TimeStatsAggregator.aggregate')
 
-    const db = this.dbUtils.getDb()
+    try {
+      const startTime = performance.now()
+      log.debug('Starting aggregation...')
 
-    // 1. 查询所有执行日志
-    const logs = await db
-      .select({
-        sourceId: schema.usageLogs.source,
-        itemId: schema.usageLogs.itemId,
-        timestamp: schema.usageLogs.timestamp
-      })
-      .from(schema.usageLogs)
-      .where(eq(schema.usageLogs.action, 'execute'))
-      .orderBy(desc(schema.usageLogs.timestamp))
-      .all()
+      const db = this.dbUtils.getDb()
 
-    console.log(`[TimeStatsAggregator] Found ${logs.length} execution logs`)
-
-    // 2. 构建统计数据
-    const statsMap = new Map<string, ItemTimeStatsData>()
-
-    for (const log of logs) {
-      const key = `${log.sourceId}:${log.itemId}`
-      const date = new Date(log.timestamp)
-      const hour = date.getHours()
-      const dayOfWeek = date.getDay()
-      const timeSlot = this.getTimeSlot(hour)
-
-      if (!statsMap.has(key)) {
-        statsMap.set(key, {
-          sourceId: log.sourceId,
-          itemId: log.itemId,
-          hourDistribution: Array.from({ length: 24 }, () => 0),
-          dayOfWeekDistribution: Array.from({ length: 7 }, () => 0),
-          timeSlotDistribution: {
-            morning: 0,
-            afternoon: 0,
-            evening: 0,
-            night: 0
-          }
+      // 1. 查询所有执行日志
+      const logs = await db
+        .select({
+          sourceId: schema.usageLogs.source,
+          itemId: schema.usageLogs.itemId,
+          timestamp: schema.usageLogs.timestamp
         })
+        .from(schema.usageLogs)
+        .where(eq(schema.usageLogs.action, 'execute'))
+        .orderBy(desc(schema.usageLogs.timestamp))
+        .all()
+
+      log.debug(`Found ${logs.length} execution logs`)
+
+      if (logs.length === 0) return
+
+      // 2. 构建统计数据 — 每 50 行让出事件循环
+      const statsMap = new Map<string, ItemTimeStatsData>()
+
+      for (let i = 0; i < logs.length; i++) {
+        const entry = logs[i]
+        const key = `${entry.sourceId}:${entry.itemId}`
+        const date = new Date(entry.timestamp)
+        const hour = date.getHours()
+        const dayOfWeek = date.getDay()
+        const timeSlot = this.getTimeSlot(hour)
+
+        if (!statsMap.has(key)) {
+          statsMap.set(key, {
+            sourceId: entry.sourceId,
+            itemId: entry.itemId,
+            hourDistribution: Array.from({ length: 24 }, () => 0),
+            dayOfWeekDistribution: Array.from({ length: 7 }, () => 0),
+            timeSlotDistribution: {
+              morning: 0,
+              afternoon: 0,
+              evening: 0,
+              night: 0
+            }
+          })
+        }
+
+        const stats = statsMap.get(key)!
+        stats.hourDistribution[hour]++
+        stats.dayOfWeekDistribution[dayOfWeek]++
+        stats.timeSlotDistribution[timeSlot]++
+
+        // 每 50 行让出事件循环，避免连续同步操作累积阻塞
+        if ((i + 1) % 50 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
       }
 
-      const stats = statsMap.get(key)!
-      stats.hourDistribution[hour]++
-      stats.dayOfWeekDistribution[dayOfWeek]++
-      stats.timeSlotDistribution[timeSlot]++
-    }
+      // 3. 批量写入数据库（使用事务和重试）— 每 20 条 upsert 让出
+      let updatedCount = 0
+      const allStats = Array.from(statsMap.values())
 
-    // 3. 批量写入数据库（使用事务和重试）
-    let updatedCount = 0
-
-    await withRetry(async () => {
-      await db.transaction(async (tx) => {
-        for (const stats of statsMap.values()) {
-          await tx
-            .insert(schema.itemTimeStats)
-            .values({
-              sourceId: stats.sourceId,
-              itemId: stats.itemId,
-              hourDistribution: JSON.stringify(stats.hourDistribution),
-              dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
-              timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
-              lastUpdated: new Date()
-            })
-            .onConflictDoUpdate({
-              target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
-              set: {
+      await withRetry(async () => {
+        await db.transaction(async (tx) => {
+          for (let i = 0; i < allStats.length; i++) {
+            const stats = allStats[i]
+            await tx
+              .insert(schema.itemTimeStats)
+              .values({
+                sourceId: stats.sourceId,
+                itemId: stats.itemId,
                 hourDistribution: JSON.stringify(stats.hourDistribution),
                 dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
                 timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
                 lastUpdated: new Date()
-              }
-            })
-          updatedCount++
-        }
-      })
-    })
+              })
+              .onConflictDoUpdate({
+                target: [schema.itemTimeStats.sourceId, schema.itemTimeStats.itemId],
+                set: {
+                  hourDistribution: JSON.stringify(stats.hourDistribution),
+                  dayOfWeekDistribution: JSON.stringify(stats.dayOfWeekDistribution),
+                  timeSlotDistribution: JSON.stringify(stats.timeSlotDistribution),
+                  lastUpdated: new Date()
+                }
+              })
+            updatedCount++
 
-    const duration = performance.now() - startTime
-    console.log(
-      `[TimeStatsAggregator] Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`
-    )
+            // 每 20 条 upsert 让出事件循环
+            if ((i + 1) % 20 === 0) {
+              await new Promise<void>((resolve) => setImmediate(resolve))
+            }
+          }
+        })
+      })
+
+      const duration = performance.now() - startTime
+      log.debug(`Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`)
+    } finally {
+      dispose()
+    }
   }
 
   /**

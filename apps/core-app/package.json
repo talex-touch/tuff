@@ -15,7 +15,7 @@
     "typecheck:web": "pnpm -F @talex-touch/tuffex run build && vue-tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "start": "electron-vite preview",
-    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=512' pnpm exec electron-vite dev",
+    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=8192' pnpm exec electron-vite dev",
     "build": "pnpm run typecheck && electron-vite build",
     "postinstall": "echo 'Skipping electron-builder install-app-deps - will run during build'",
     "db:generate": "drizzle-kit generate",

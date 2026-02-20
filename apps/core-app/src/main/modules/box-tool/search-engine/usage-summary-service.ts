@@ -5,6 +5,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { lt, sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
+import { enterPerfContext } from '../../../utils/perf-context'
 import { TimeStatsAggregator } from './time-stats-aggregator'
 
 const log = createLogger('UsageSummaryService')
@@ -92,10 +93,8 @@ export class UsageSummaryService {
       meta: { interval: `${this.config.summaryInterval / 1000 / 60 / 60}h` }
     })
 
-    this.runSummary().catch((error) => {
-      log.error('Initial summary failed', { error })
-    })
-
+    // Don't run summary immediately during startup — delay to avoid competing
+    // with AppScanner, recommendation engine, and other startup tasks.
     if (this.pollingService.isRegistered(this.summaryTaskId)) {
       this.pollingService.unregister(this.summaryTaskId)
     }
@@ -108,7 +107,7 @@ export class UsageSummaryService {
           log.error('Scheduled summary failed', { error })
         }
       },
-      { interval: this.config.summaryInterval, unit: 'milliseconds' }
+      { interval: this.config.summaryInterval, unit: 'milliseconds', initialDelayMs: 30_000 }
     )
     this.pollingService.start()
   }
@@ -121,6 +120,7 @@ export class UsageSummaryService {
 
   async runSummary(): Promise<SummaryStats> {
     const start = performance.now()
+    const dispose = enterPerfContext('UsageSummary.run')
 
     try {
       const summarizedCount = await this.summarizeUsageLogs()
@@ -149,6 +149,8 @@ export class UsageSummaryService {
     } catch (error) {
       log.error('Summary process failed', { error })
       throw error
+    } finally {
+      dispose()
     }
   }
 
@@ -186,16 +188,17 @@ export class UsageSummaryService {
         }
       >()
 
-      for (const log of logs) {
-        const sourceType = log.source
-        const sourceId = log.source
-        const key = `${sourceId}:${log.itemId}`
+      for (let i = 0; i < logs.length; i++) {
+        const entry = logs[i]
+        const sourceType = entry.source
+        const sourceId = entry.source
+        const key = `${sourceId}:${entry.itemId}`
 
         if (!aggregated.has(key)) {
           aggregated.set(key, {
             sourceType,
             sourceId,
-            itemId: log.itemId,
+            itemId: entry.itemId,
             searchCount: 0,
             executeCount: 0,
             lastSearched: null,
@@ -204,16 +207,21 @@ export class UsageSummaryService {
         }
 
         const stat = aggregated.get(key)!
-        if (log.action === 'search') {
+        if (entry.action === 'search') {
           stat.searchCount++
-          if (!stat.lastSearched || log.timestamp > stat.lastSearched) {
-            stat.lastSearched = log.timestamp
+          if (!stat.lastSearched || entry.timestamp > stat.lastSearched) {
+            stat.lastSearched = entry.timestamp
           }
-        } else if (log.action === 'execute') {
+        } else if (entry.action === 'execute') {
           stat.executeCount++
-          if (!stat.lastExecuted || log.timestamp > stat.lastExecuted) {
-            stat.lastExecuted = log.timestamp
+          if (!stat.lastExecuted || entry.timestamp > stat.lastExecuted) {
+            stat.lastExecuted = entry.timestamp
           }
+        }
+
+        // 每 50 行让出事件循环
+        if ((i + 1) % 50 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
         }
       }
 
@@ -222,7 +230,8 @@ export class UsageSummaryService {
       // Use transaction with retry for batch upsert
       await withRetry(async () => {
         await db.transaction(async (tx) => {
-          for (const stat of updates) {
+          for (let i = 0; i < updates.length; i++) {
+            const stat = updates[i]
             const now = new Date()
             const updateFields: Record<string, unknown> = { updatedAt: now }
 
@@ -254,6 +263,11 @@ export class UsageSummaryService {
                 target: [schema.itemUsageStats.sourceId, schema.itemUsageStats.itemId],
                 set: updateFields
               })
+
+            // 每 20 条 upsert 让出事件循环
+            if ((i + 1) % 20 === 0) {
+              await new Promise<void>((resolve) => setImmediate(resolve))
+            }
           }
         })
       })
