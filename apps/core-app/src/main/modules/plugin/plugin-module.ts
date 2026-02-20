@@ -17,12 +17,12 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
 import type { PluginWithSource } from '../../service/market-api.service'
-import { exec } from 'node:child_process'
 import path from 'node:path'
 import * as util from 'node:util'
 import { createClient } from '@libsql/client'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -2160,10 +2160,9 @@ export class PluginModule extends BaseModule {
           }
 
           const configPath = plugin.getConfigPath()
-          const execAsync = util.promisify(exec)
 
           try {
-            await execAsync(`code "${configPath}"`)
+            await execFileSafe('code', [configPath])
           } catch {
             await shell.openPath(configPath)
           }

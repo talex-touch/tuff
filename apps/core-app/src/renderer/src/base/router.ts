@@ -69,7 +69,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/market',
-    name: 'Plugin Market',
+    name: '$I18n:router.pluginMarket',
     component: withRouteComponentPerf('/market', () => import('../views/base/Market.vue')),
     meta: {
       index: 2,
@@ -78,7 +78,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/market/installed',
-    name: 'Installed Plugins',
+    name: '$I18n:router.installedPlugins',
     component: withRouteComponentPerf(
       '/market/installed',
       () => import('../views/base/Market.vue')
@@ -90,7 +90,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/market/docs',
-    name: 'Market Docs',
+    name: '$I18n:router.marketDocs',
     component: withRouteComponentPerf('/market/docs', () => import('../views/base/Market.vue')),
     meta: {
       index: 2,
@@ -99,7 +99,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/market/:id',
-    name: 'Market Detail',
+    name: '$I18n:router.marketDetail',
     component: withRouteComponentPerf(
       '/market/:id',
       () => import('../views/base/MarketDetail.vue')
@@ -111,7 +111,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/plugin/:name?',
-    name: 'Plugin',
+    name: '$I18n:router.plugin',
     component: withRouteComponentPerf(
       '/plugin/:name?',
       () => import('../views/base/PluginDetail.vue')
@@ -122,7 +122,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/downloads',
-    name: 'Downloads',
+    name: '$I18n:router.downloads',
     component: withRouteComponentPerf(
       '/downloads',
       () => import('../components/download/DownloadCenterView.vue')
@@ -134,7 +134,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/details',
-    name: '详细信息',
+    name: '$I18n:router.details',
     component: withRouteComponentPerf('/details', () => import('../views/base/LingPan.vue')),
     meta: {
       index: 4,
@@ -143,7 +143,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/styles',
-    name: 'Styles',
+    name: '$I18n:router.styles',
     component: withRouteComponentPerf(
       '/styles',
       () => import('../views/base/styles/ThemeStyle.vue')
@@ -155,7 +155,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/styles/theme',
-    name: 'Theme',
+    name: '$I18n:router.theme',
     component: withRouteComponentPerf(
       '/styles/theme',
       () => import('../views/base/styles/sub/ThemePreference.vue')
@@ -167,7 +167,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/application',
-    name: 'Application',
+    name: '$I18n:router.application',
     component: withRouteComponentPerf(
       '/application',
       () => import('../views/base/application/ApplicationIndex.vue')
@@ -179,7 +179,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/setting',
-    name: 'AppSettings',
+    name: '$I18n:router.appSettings',
     component: withRouteComponentPerf(
       '/setting',
       () => import('../views/base/settings/AppSettings.vue')
@@ -191,7 +191,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/setting/storage',
-    name: 'Storagable',
+    name: '$I18n:router.storagable',
     component: withRouteComponentPerf(
       '/setting/storage',
       () => import('../views/storage/Storagable.vue')
@@ -203,7 +203,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence',
-    name: 'Intelligence',
+    name: '$I18n:router.intelligence',
     component: withRouteComponentPerf(
       '/intelligence',
       () => import('../views/base/intelligence/IntelligencePage.vue')
@@ -215,7 +215,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence/channels',
-    name: 'IntelligenceChannels',
+    name: '$I18n:router.intelligenceChannels',
     component: withRouteComponentPerf(
       '/intelligence/channels',
       () => import('../views/base/intelligence/IntelligenceChannelsPage.vue')
@@ -227,7 +227,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence/capabilities',
-    name: 'IntelligenceCapabilities',
+    name: '$I18n:router.intelligenceCapabilities',
     component: withRouteComponentPerf(
       '/intelligence/capabilities',
       () => import('../views/base/intelligence/IntelligenceCapabilitiesPage.vue')
@@ -239,7 +239,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence/prompts',
-    name: 'IntelligencePrompts',
+    name: '$I18n:router.intelligencePrompts',
     component: withRouteComponentPerf(
       '/intelligence/prompts',
       () => import('../views/base/intelligence/IntelligencePromptsPage.vue')
@@ -251,7 +251,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence/audit',
-    name: 'IntelligenceAudit',
+    name: '$I18n:router.intelligenceAudit',
     component: withRouteComponentPerf(
       '/intelligence/audit',
       () => import('../views/base/intelligence/IntelligenceAuditPage.vue')
@@ -263,7 +263,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/intelligence/agents',
-    name: 'IntelligenceAgents',
+    name: '$I18n:router.intelligenceAgents',
     component: withRouteComponentPerf(
       '/intelligence/agents',
       () => import('../views/base/intelligence/IntelligenceAgentsPage.vue')
@@ -275,7 +275,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/meta-overlay',
-    name: 'MetaOverlay',
+    name: '$I18n:router.metaOverlay',
     component: withRouteComponentPerf(
       '/meta-overlay',
       () => import('../views/meta/MetaOverlay.vue')

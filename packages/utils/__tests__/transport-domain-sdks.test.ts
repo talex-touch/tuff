@@ -73,13 +73,13 @@ describe('transport domain sdk mappings', () => {
 
     const sdk = createPermissionSdk(transport as any)
 
-    await sdk.grant({ pluginId: 'demo', permissionId: 'ai.basic', grantedBy: 'user' })
+    await sdk.grant({ pluginId: 'demo', permissionId: 'intelligence.basic', grantedBy: 'user' })
     const unsubscribe = sdk.onUpdated(() => {})
     unsubscribe()
 
     expect(transport.send).toHaveBeenCalledWith(PermissionEvents.api.grant, {
       pluginId: 'demo',
-      permissionId: 'ai.basic',
+      permissionId: 'intelligence.basic',
       grantedBy: 'user',
     })
     expect(transport.on).toHaveBeenCalledWith(

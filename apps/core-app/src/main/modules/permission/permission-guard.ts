@@ -6,7 +6,12 @@
  */
 
 import type { PermissionStore } from './permission-store'
-import { DEFAULT_PERMISSIONS, permissionRegistry } from '@talex-touch/utils/permission'
+import {
+  DEFAULT_PERMISSIONS,
+  getPermissionIdCandidates,
+  normalizePermissionId,
+  permissionRegistry
+} from '@talex-touch/utils/permission'
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 
 /**
@@ -76,12 +81,15 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'tray:*', permissions: ['system.tray'] },
   { pattern: 'shortcon:reg', permissions: ['system.shortcut'] },
 
-  // AI APIs
-  { pattern: 'ai:chat', permissions: ['ai.basic'] },
-  { pattern: 'ai:complete', permissions: ['ai.basic'] },
-  { pattern: 'ai:embed', permissions: ['ai.basic'] },
-  { pattern: 'ai:agent*', permissions: ['ai.agents'] },
-  { pattern: 'intelligence:*', permissions: ['ai.basic'] },
+  // Intelligence APIs
+  { pattern: 'intelligence:tool:approve', permissions: ['intelligence.admin'] },
+  { pattern: 'intelligence:trace:export', permissions: ['intelligence.admin'] },
+  { pattern: 'intelligence:tool:*', permissions: ['intelligence.agents'] },
+  { pattern: 'intelligence:orchestrator:execute', permissions: ['intelligence.agents'] },
+  { pattern: 'intelligence:orchestrator:*', permissions: ['intelligence.basic'] },
+  { pattern: 'intelligence:session:*', permissions: ['intelligence.basic'] },
+  { pattern: 'intelligence:trace:*', permissions: ['intelligence.basic'] },
+  { pattern: 'intelligence:*', permissions: ['intelligence.basic'] },
 
   // Storage APIs
   { pattern: 'storage:plugin:*', permissions: ['storage.plugin'] },
@@ -162,20 +170,26 @@ export class PermissionGuard {
 
     // Check each required permission
     for (const permissionId of requiredPermissions) {
+      const normalizedPermissionId = normalizePermissionId(permissionId)
+      const candidatePermissionIds = getPermissionIdCandidates(permissionId)
+
       // Check default permissions
-      if (DEFAULT_PERMISSIONS.includes(permissionId)) {
+      if (candidatePermissionIds.some((candidate) => DEFAULT_PERMISSIONS.includes(candidate))) {
         continue
       }
 
       // Check granted permissions
-      if (!this.store.hasPermission(pluginId, permissionId, sdkapi)) {
+      const hasPermission = candidatePermissionIds.some((candidate) =>
+        this.store.hasPermission(pluginId, candidate, sdkapi)
+      )
+      if (!hasPermission) {
         const duration = performance.now() - startTime
         this.recordPerformance(duration)
         return {
           allowed: false,
-          permissionId,
+          permissionId: normalizedPermissionId,
           pluginId,
-          reason: `Permission '${permissionId}' not granted`,
+          reason: `Permission '${normalizedPermissionId}' not granted`,
           showRequest: true,
           durationMs: duration
         }
@@ -186,7 +200,7 @@ export class PermissionGuard {
     this.recordPerformance(duration)
     return {
       allowed: true,
-      permissionId: requiredPermissions[0],
+      permissionId: normalizePermissionId(requiredPermissions[0]),
       pluginId,
       durationMs: duration
     }
@@ -262,13 +276,13 @@ export class PermissionGuard {
     // Exact match
     const exact = this.mappings.get(apiName)
     if (exact) {
-      return exact.permissions
+      return exact.permissions.map((permissionId) => normalizePermissionId(permissionId))
     }
 
     // Wildcard match
     for (const [pattern, mapping] of this.mappings) {
       if (this.matchPattern(pattern, apiName)) {
-        return mapping.permissions
+        return mapping.permissions.map((permissionId) => normalizePermissionId(permissionId))
       }
     }
 
@@ -298,7 +312,10 @@ export class PermissionGuard {
    * Register custom API permission mapping
    */
   registerMapping(mapping: ApiPermissionMapping): void {
-    this.mappings.set(mapping.pattern, mapping)
+    this.mappings.set(mapping.pattern, {
+      ...mapping,
+      permissions: mapping.permissions.map((permissionId) => normalizePermissionId(permissionId))
+    })
   }
 
   /**

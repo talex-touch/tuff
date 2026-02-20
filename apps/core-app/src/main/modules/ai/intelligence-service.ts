@@ -9,13 +9,13 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
 import { capabilityTesterRegistry } from './capability-testers'
-import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
-  ensureAiConfigLoaded,
+  ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   setupConfigUpdateListener
 } from './intelligence-config'
-import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
+import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
 import { fetchProviderModels } from './provider-models'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
@@ -74,13 +74,13 @@ const intelligenceReloadConfigEvent = defineRawEvent<void, { ok: boolean; error?
 
 let initialized = false
 
-export function initAiSdkService(): void {
+export function initIntelligenceSdkService(): void {
   if (initialized) {
     return
   }
   const channel = genTouchApp().channel
   if (!channel) {
-    throw new Error('[AISDK] Touch channel not ready')
+    throw new Error('[Intelligence] Touch channel not ready')
   }
   const keyManager = (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
   const transport = getTuffTransportMain(channel, keyManager)
@@ -108,7 +108,7 @@ export function initAiSdkService(): void {
   setupConfigUpdateListener()
 
   // Load initial config
-  ensureAiConfigLoaded()
+  ensureIntelligenceConfigLoaded()
 
   transport.on(intelligenceInvokeEvent, async (data, _context) => {
     try {
@@ -118,9 +118,9 @@ export function initAiSdkService(): void {
 
       const { capabilityId, payload, options } = data
 
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       logInfo(`Invoking capability ${capabilityId}`)
-      const result = await ai.invoke(capabilityId, payload, options)
+      const result = await tuffIntelligence.invoke(capabilityId, payload, options)
       logInfo(
         `Capability ${capabilityId} completed via provider ${result.provider} (${result.model})`
       )
@@ -138,9 +138,9 @@ export function initAiSdkService(): void {
       }
 
       const { provider } = data
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       // logInfo(`Testing provider ${provider.id}`) // Remove to reduce noise
-      const result = await ai.testProvider(provider)
+      const result = await tuffIntelligence.testProvider(provider)
       logInfo(`Provider ${provider.id} test success`)
 
       return ok(result)
@@ -158,7 +158,7 @@ export function initAiSdkService(): void {
 
       const { capabilityId, providerId, userInput, ...rest } = data
 
-      const capability = aiCapabilityRegistry.get(capabilityId)
+      const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
         throw new Error(`Capability ${capabilityId} not registered`)
       }
@@ -168,7 +168,7 @@ export function initAiSdkService(): void {
         throw new Error(`No tester registered for capability ${capabilityId}`)
       }
 
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       const options = getCapabilityOptions(capabilityId)
       const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
@@ -178,7 +178,7 @@ export function initAiSdkService(): void {
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
 
       // 执行测试
-      const result = await ai.invoke(capabilityId, payload, {
+      const result = await tuffIntelligence.invoke(capabilityId, payload, {
         modelPreference: options.modelPreference,
         allowedProviderIds
       })
@@ -204,7 +204,7 @@ export function initAiSdkService(): void {
       }
 
       const { provider } = data
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       logInfo(`Fetching models for provider ${provider.id}`)
       const models = await fetchProviderModels(provider)
       return ok({
@@ -220,7 +220,7 @@ export function initAiSdkService(): void {
   transport.on(intelligenceReloadConfigEvent, async () => {
     try {
       logInfo('Reloading config on demand')
-      ensureAiConfigLoaded(true)
+      ensureIntelligenceConfigLoaded(true)
       return { ok: true }
     } catch (error) {
       logError('Reload config failed:', error)

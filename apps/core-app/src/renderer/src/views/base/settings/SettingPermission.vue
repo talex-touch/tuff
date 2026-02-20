@@ -78,9 +78,9 @@ const permissionTranslations: Record<string, { name: string; desc: string }> = {
   'system.shell': { name: '执行命令', desc: '运行系统命令或脚本' },
   'system.notification': { name: '系统通知', desc: '发送系统通知' },
   'system.tray': { name: '托盘交互', desc: '访问系统托盘功能' },
-  'ai.basic': { name: '基础 AI', desc: '使用基础 AI 能力' },
-  'ai.advanced': { name: '高级 AI', desc: '使用高级 AI 模型' },
-  'ai.agents': { name: '智能体', desc: '调用智能体系统' },
+  'intelligence.basic': { name: '基础 Intelligence', desc: '使用基础 Intelligence 能力' },
+  'intelligence.admin': { name: 'Intelligence 管理', desc: '管理高风险 Intelligence 能力' },
+  'intelligence.agents': { name: '智能体', desc: '调用智能体系统' },
   'storage.plugin': { name: '插件存储', desc: '使用插件私有存储空间' },
   'storage.shared': { name: '共享存储', desc: '访问跨插件共享存储' },
   'window.create': { name: '创建窗口', desc: '创建新窗口或视图' },
@@ -181,14 +181,21 @@ function getPermissionList(plugin: PluginPermissionInfo) {
 }
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
-  const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
+  const highRisk = [
+    'fs.write',
+    'fs.execute',
+    'system.shell',
+    'intelligence.agents',
+    'intelligence.admin',
+    'window.capture'
+  ]
   const mediumRisk = [
     'fs.read',
     'clipboard.read',
     'network.internet',
     'network.download',
     'system.tray',
-    'ai.advanced',
+    'intelligence.basic',
     'storage.shared'
   ]
   if (highRisk.includes(permissionId)) return 'high'

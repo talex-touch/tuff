@@ -347,6 +347,8 @@ This page maps `packages/utils/transport/sdk/domains/*` to main-process handlers
 | `terminal:data` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal output subscribers) |
 | `terminal:exit` | `TerminalModule.create -> transport.sendTo` (`apps/core-app/src/main/modules/terminal/terminal.manager.ts`) | Renderer (terminal exit subscribers) |
 
+> Note: Plugin callers must declare `system.shell` permission to use `terminal:create`.  
+
 #### C12.3 Plugin Logs
 
 | Event Name | Sender | Handler |

@@ -32,6 +32,7 @@ import { sentryModule } from './modules/sentry'
 import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
 import { permissionCheckerModule } from './modules/system/permission-checker'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
+import { systemUpdateModule } from './modules/system-update'
 import { terminalModule } from './modules/terminal/terminal.manager'
 import { trayManagerModule } from './modules/tray/tray-manager'
 import { updateServiceModule } from './modules/update/UpdateService'
@@ -140,6 +141,7 @@ const modulesToLoad = [
   sentryModule,
   buildVerificationModule,
   updateServiceModule,
+  systemUpdateModule,
   intelligenceModule,
   pluginModule,
   pluginLogModule,

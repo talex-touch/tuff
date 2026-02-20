@@ -375,7 +375,7 @@ export class TouchStorage<T extends object> {
             : null
           const patchHasChanges = Boolean(patch && (patch.set.length > 0 || patch.unset.length > 0))
           const remoteData = (versionedResult.data ?? {}) as Partial<T>
-          console.log(`[TouchStorage] HYDRATE("${this.#qualifiedName}") remote version=${versionedResult.version}, background.source=`, (remoteData as any)?.background?.source)
+          console.debug(`[TouchStorage] HYDRATE("${this.#qualifiedName}") remote version=${versionedResult.version}, background.source=`, (remoteData as any)?.background?.source)
 
           this.#currentVersion = versionedResult.version
           this.#isRemoteUpdate = true
@@ -492,7 +492,7 @@ export class TouchStorage<T extends object> {
     }
 
     const rawData = toRaw(this.data)
-    console.log(`[TouchStorage] #executeSave("${this.#qualifiedName}") SAVING, background.source=`, (rawData as any)?.background?.source)
+    console.debug(`[TouchStorage] #executeSave("${this.#qualifiedName}") SAVING, background.source=`, (rawData as any)?.background?.source)
 
     this.savingState.value = true
     try {
@@ -504,7 +504,7 @@ export class TouchStorage<T extends object> {
       })
 
       if (result.success) {
-        console.log(`[TouchStorage] #executeSave("${this.#qualifiedName}") SUCCESS, version=${result.version}`)
+        console.debug(`[TouchStorage] #executeSave("${this.#qualifiedName}") SUCCESS, version=${result.version}`)
         this.#currentVersion = result.version
         this.#lastSyncedSnapshot = cloneValue(toRaw(this.data) as T) as T
         this.#localDirty = false
@@ -796,7 +796,7 @@ export class TouchStorage<T extends object> {
     if (this.#isRemoteUpdate)
       return
 
-    console.log(`[TouchStorage] saveSync("${this.#qualifiedName}") called, background.source=`, (toRaw(this.data) as any)?.background?.source)
+    console.debug(`[TouchStorage] saveSync("${this.#qualifiedName}") called, background.source=`, (toRaw(this.data) as any)?.background?.source)
     void this.#executeSave({ force: true })
   }
 

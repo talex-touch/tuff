@@ -9,6 +9,7 @@ import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import { databaseModule } from '../database'
+import { enterPerfContext } from '../../utils/perf-context'
 
 /**
  * Extended audit log with additional tracking fields
@@ -139,7 +140,7 @@ export class IntelligenceAuditLogger {
       this.memoryLogs.shift()
     }
 
-    // Add to pending batch for persistence
+    // Add to buffered batch for persistence
     this.pendingLogs.push(entry)
 
     // Flush if batch is full
@@ -149,7 +150,7 @@ export class IntelligenceAuditLogger {
   }
 
   /**
-   * Flush pending logs to database
+   * Flush buffered logs to database
    */
   async flushToDB(): Promise<void> {
     if (this.pendingLogs.length === 0) return
@@ -157,39 +158,64 @@ export class IntelligenceAuditLogger {
     const logsToFlush = [...this.pendingLogs]
     this.pendingLogs = []
 
+    let metadataBytes = 0
+    const disposeSerialize = enterPerfContext('IntelligenceAudit.serialize', {
+      count: logsToFlush.length
+    })
+    let rows: Array<typeof intelligenceAuditLogs.$inferInsert> = []
+    try {
+      rows = logsToFlush.map((log) => {
+        const metadata = log.metadata ? JSON.stringify(log.metadata) : null
+        if (metadata) {
+          metadataBytes += metadata.length
+        }
+        return {
+          traceId: log.traceId,
+          timestamp: log.timestamp,
+          capabilityId: log.capabilityId,
+          provider: log.provider,
+          model: log.model,
+          promptHash: log.promptHash,
+          caller: log.caller,
+          userId: log.userId,
+          promptTokens: log.usage.promptTokens,
+          completionTokens: log.usage.completionTokens,
+          totalTokens: log.usage.totalTokens,
+          estimatedCost: log.estimatedCost,
+          latency: log.latency,
+          success: log.success,
+          error: log.error,
+          metadata
+        }
+      })
+    } catch (error) {
+      console.error('[AuditLogger] Failed to serialize logs:', error)
+      this.pendingLogs.push(...logsToFlush)
+      return
+    } finally {
+      disposeSerialize()
+    }
+
+    const disposeFlush = enterPerfContext('IntelligenceAudit.flush', {
+      count: logsToFlush.length,
+      metadataBytes
+    })
     try {
       const db = this.getDb()
 
       await this.withDbWrite('intelligence.audit.flush', async () => {
         await db.transaction(async (tx) => {
-          await tx.insert(intelligenceAuditLogs).values(
-            logsToFlush.map((log) => ({
-              traceId: log.traceId,
-              timestamp: log.timestamp,
-              capabilityId: log.capabilityId,
-              provider: log.provider,
-              model: log.model,
-              promptHash: log.promptHash,
-              caller: log.caller,
-              userId: log.userId,
-              promptTokens: log.usage.promptTokens,
-              completionTokens: log.usage.completionTokens,
-              totalTokens: log.usage.totalTokens,
-              estimatedCost: log.estimatedCost,
-              latency: log.latency,
-              success: log.success,
-              error: log.error,
-              metadata: log.metadata ? JSON.stringify(log.metadata) : null
-            }))
-          )
+          await tx.insert(intelligenceAuditLogs).values(rows)
 
           await this.updateUsageStats(tx, logsToFlush)
         })
       })
     } catch (error) {
       console.error('[AuditLogger] Failed to flush logs:', error)
-      // Re-add failed logs to pending
+      // Re-add failed logs to buffer
       this.pendingLogs.push(...logsToFlush)
+    } finally {
+      disposeFlush()
     }
   }
 

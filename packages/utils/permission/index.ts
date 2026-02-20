@@ -14,7 +14,12 @@ import {
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
 } from '../plugin/sdk-version'
-import { DEFAULT_PERMISSIONS, permissionRegistry } from './registry'
+import {
+  DEFAULT_PERMISSIONS,
+  getPermissionIdCandidates,
+  normalizePermissionId,
+  permissionRegistry
+} from './registry'
 
 export * from './legacy'
 export * from './registry'
@@ -41,8 +46,12 @@ export function parseManifestPermissions(manifest: {
   }
 
   // Validate permission IDs
-  required = required.filter(id => permissionRegistry.has(id))
-  optional = optional.filter(id => permissionRegistry.has(id))
+  required = required
+    .map(id => normalizePermissionId(id))
+    .filter(id => permissionRegistry.has(id))
+  optional = optional
+    .map(id => normalizePermissionId(id))
+    .filter(id => permissionRegistry.has(id))
 
   return {
     required,
@@ -61,25 +70,29 @@ export function getPluginPermissionStatus(
   grantedPermissions: string[],
 ): PluginPermissionStatus {
   const sdkCompat = checkSdkCompatibility(sdkapi, pluginId)
+  const required = [...new Set(declaredPermissions.required.map(id => normalizePermissionId(id)))]
+  const optional = [...new Set(declaredPermissions.optional.map(id => normalizePermissionId(id)))]
+  const granted = [...new Set(grantedPermissions.map(id => normalizePermissionId(id)))]
+  const defaultPermissions = [...new Set(DEFAULT_PERMISSIONS.map(id => normalizePermissionId(id)))]
 
   // Calculate missing required permissions
-  const missingRequired = declaredPermissions.required.filter(
-    p => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p),
+  const missingRequired = required.filter(
+    p => !granted.includes(p) && !defaultPermissions.includes(p),
   )
 
   // Calculate denied (not in granted and not default)
-  const allDeclared = [...declaredPermissions.required, ...declaredPermissions.optional]
+  const allDeclared = [...required, ...optional]
   const denied = allDeclared.filter(
-    p => !grantedPermissions.includes(p) && !DEFAULT_PERMISSIONS.includes(p),
+    p => !granted.includes(p) && !defaultPermissions.includes(p),
   )
 
   return {
     pluginId,
     sdkapi,
     enforcePermissions: sdkCompat.enforcePermissions,
-    required: declaredPermissions.required,
-    optional: declaredPermissions.optional,
-    granted: [...new Set([...grantedPermissions, ...DEFAULT_PERMISSIONS])],
+    required,
+    optional,
+    granted: [...new Set([...granted, ...defaultPermissions])],
     denied,
     missingRequired,
     warning: sdkCompat.warning,
@@ -99,7 +112,8 @@ export function hasPermission(
   }
 
   // Check if granted
-  return status.granted.includes(permissionId)
+  const candidates = getPermissionIdCandidates(permissionId)
+  return candidates.some(id => status.granted.includes(id))
 }
 
 /**

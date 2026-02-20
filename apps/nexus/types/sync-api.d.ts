@@ -22,6 +22,12 @@ export interface paths {
               server_cursor: number;
               device_id: string;
               quotas: components["schemas"]["QuotaInfo"];
+              evicted_devices?: {
+                device_id: string;
+                device_name?: string | null;
+                platform?: string | null;
+                last_seen_at?: string | null;
+              }[];
             };
           };
         };

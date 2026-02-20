@@ -347,6 +347,8 @@
 | `terminal:data` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端输出订阅者） |
 | `terminal:exit` | `TerminalModule.create -> transport.sendTo`（`apps/core-app/src/main/modules/terminal/terminal.manager.ts`） | 渲染器（终端退出订阅者） |
 
+> 说明：插件侧调用 `terminal:create` 需声明 `system.shell` 权限。  
+
 #### C12.3 Plugin Logs
 
 | 事件名 | 发送端 | 处理端 |

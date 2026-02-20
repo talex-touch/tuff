@@ -16,6 +16,7 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
 import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
+import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
@@ -88,12 +89,13 @@ class TouchChannel implements ITouchChannel {
   }
 
   revokeKey(key: string): boolean {
-    if (!this.keyToNameMap.has(key)) {
+    const name = this.keyToNameMap.get(key)
+    if (!name) {
       return false
     }
 
     this.keyToNameMap.delete(key)
-    this.nameToKeyMap.delete(this.keyToNameMap.get(key)!)
+    this.nameToKeyMap.delete(name)
 
     return true
   }
@@ -264,7 +266,16 @@ class TouchChannel implements ITouchChannel {
               }
             })
           } else {
-            finalData = JSON.parse(structuredStrictStringify(rData))
+            const disposeSerialize = enterPerfContext(`Channel.reply.serialize:${rawData.name}`, {
+              code,
+              sync: Boolean(rawData.sync),
+              channelType: rawData.header.type
+            })
+            try {
+              finalData = JSON.parse(structuredStrictStringify(rData))
+            } finally {
+              disposeSerialize()
+            }
           }
 
           if (rawData.sync) {
@@ -464,6 +475,9 @@ class TouchChannel implements ITouchChannel {
     let _channelCategory = '@main-process-message'
 
     let finalData: RawStandardChannelData
+    const disposeSerialize = enterPerfContext(`Channel.send.serialize:${eventName}`, {
+      channelType: type
+    })
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
     } catch (error) {
@@ -485,6 +499,8 @@ class TouchChannel implements ITouchChannel {
           eventName
         }
       })
+    } finally {
+      disposeSerialize()
     }
 
     if (type === ChannelType.PLUGIN) {
@@ -642,6 +658,9 @@ class TouchChannel implements ITouchChannel {
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
+    const disposeSerialize = enterPerfContext(`Channel.broadcast.serialize:${eventName}`, {
+      channelType: type
+    })
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
     } catch (error) {
@@ -650,6 +669,8 @@ class TouchChannel implements ITouchChannel {
         `[Channel] Failed to serialize broadcast for "${eventName}": ${errorMessage}`
       )
       return
+    } finally {
+      disposeSerialize()
     }
 
     const channel =
@@ -693,10 +714,15 @@ class TouchChannel implements ITouchChannel {
     } as RawStandardChannelData
 
     let finalData: RawStandardChannelData
+    const disposeSerialize = enterPerfContext(`Channel.broadcast.serialize:${eventName}`, {
+      channelType: ChannelType.PLUGIN
+    })
     try {
       finalData = JSON.parse(structuredStrictStringify(data))
     } catch {
       return
+    } finally {
+      disposeSerialize()
     }
 
     try {

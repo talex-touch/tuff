@@ -1,10 +1,10 @@
 import type {
-  AISDKGlobalConfig,
+  IntelligenceGlobalConfig,
   IntelligenceProviderConfig
 } from '@talex-touch/utils/renderer/storage'
 import type {
-  AiCapabilityProviderBinding,
-  AISDKCapabilityConfig,
+  IntelligenceCapabilityProviderBinding,
+  IntelligenceCapabilityConfig,
   TestResult
 } from '@talex-touch/utils/types/intelligence'
 import type { ComputedRef, Ref } from 'vue'
@@ -21,10 +21,10 @@ interface UseIntelligenceManagerReturn {
   selectedProviderId: Ref<string | null>
   /** Currently selected provider object (computed for reactive updates) */
   selectedProvider: ComputedRef<IntelligenceProviderConfig | null>
-  /** Global AISDK configuration */
-  globalConfig: Ref<AISDKGlobalConfig>
+  /** Global intelligence configuration */
+  globalConfig: Ref<IntelligenceGlobalConfig>
   /** Capability routing configuration */
-  capabilities: Ref<Record<string, AISDKCapabilityConfig>>
+  capabilities: Ref<Record<string, IntelligenceCapabilityConfig>>
   /** Map of test results by provider ID */
   testResults: Ref<Map<string, TestResult>>
   /** Loading state for async operations */
@@ -44,11 +44,11 @@ interface UseIntelligenceManagerReturn {
   /** Function to toggle provider enabled state */
   toggleProvider: (id: string) => void
   /** Function to update global configuration */
-  updateGlobalConfig: (updates: Partial<AISDKGlobalConfig>) => void
+  updateGlobalConfig: (updates: Partial<IntelligenceGlobalConfig>) => void
   /** Function to update capability metadata */
-  updateCapability: (id: string, updates: Partial<AISDKCapabilityConfig>) => void
+  updateCapability: (id: string, updates: Partial<IntelligenceCapabilityConfig>) => void
   /** Function to assign provider bindings for a capability */
-  setCapabilityProviders: (id: string, providers: AiCapabilityProviderBinding[]) => void
+  setCapabilityProviders: (id: string, providers: IntelligenceCapabilityProviderBinding[]) => void
   /** Function to set test result for a provider */
   setTestResult: (id: string, result: TestResult) => void
   /** Function to clear test result for a provider */
@@ -64,11 +64,11 @@ interface UseIntelligenceManagerReturn {
  * - Provider selection state management with type-safe provider objects
  * - Automatic grouping of enabled and disabled providers
  * - Provider configuration updates with reactivity
- * - Global AISDK settings management
+ * - Global intelligence settings management
  * - Test result tracking per provider
  * - Automatic cleanup when selected provider is disabled
  *
- * @returns AISDK management state and control methods
+ * @returns Intelligence management state and control methods
  *
  * @example
  * ```ts
@@ -106,7 +106,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
 
   const selectedProviderId = ref<string | null>(null)
 
-  const globalConfig = computed<AISDKGlobalConfig>({
+  const globalConfig = computed<IntelligenceGlobalConfig>({
     get: () => intelligenceSettings.get().globalConfig,
     set: (value) => {
       const currentData = intelligenceSettings.get()
@@ -117,7 +117,7 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
     }
   })
 
-  const capabilities = computed<Record<string, AISDKCapabilityConfig>>({
+  const capabilities = computed<Record<string, IntelligenceCapabilityConfig>>({
     get: () => intelligenceData.capabilities,
     set: (value) => {
       intelligenceData.capabilities = value
@@ -237,14 +237,14 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
    *
    * @param updates - Partial global configuration to merge
    */
-  function updateGlobalConfig(updates: Partial<AISDKGlobalConfig>): void {
+  function updateGlobalConfig(updates: Partial<IntelligenceGlobalConfig>): void {
     intelligenceSettings.updateGlobalConfig(updates)
   }
 
   /**
    * Updates capability metadata
    */
-  function updateCapability(id: string, updates: Partial<AISDKCapabilityConfig>): void {
+  function updateCapability(id: string, updates: Partial<IntelligenceCapabilityConfig>): void {
     const updated = { ...capabilities.value }
     if (!updated[id]) {
       updated[id] = {
@@ -265,7 +265,10 @@ export function useIntelligenceManager(): UseIntelligenceManagerReturn {
   /**
    * Replaces bindings for a capability
    */
-  function setCapabilityProviders(id: string, providers: AiCapabilityProviderBinding[]): void {
+  function setCapabilityProviders(
+    id: string,
+    providers: IntelligenceCapabilityProviderBinding[]
+  ): void {
     const updated = { ...capabilities.value }
     if (!updated[id]) {
       updated[id] = {

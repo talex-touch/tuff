@@ -1,4 +1,4 @@
-import type { AiInvokeResult } from '@talex-touch/utils'
+import type { IntelligenceInvokeResult } from '@talex-touch/utils'
 
 export interface CapabilityTestPayload {
   providerId?: string
@@ -24,7 +24,7 @@ export abstract class BaseCapabilityTester<TPayload = unknown, TResult = unknown
   /**
    * 格式化测试结果用于展示
    */
-  abstract formatTestResult(result: AiInvokeResult<TResult>): {
+  abstract formatTestResult(result: IntelligenceInvokeResult<TResult>): {
     success: boolean
     message: string
     textPreview?: string

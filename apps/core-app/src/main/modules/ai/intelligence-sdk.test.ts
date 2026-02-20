@@ -10,8 +10,8 @@ import {
   type IntelligenceVisionOcrPayload,
   type IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
-import { aiCapabilityRegistry } from './intelligence-capability-registry'
-import { AiSDK, setIntelligenceProviderManager } from './intelligence-sdk'
+import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
+import { TuffIntelligenceSDK, setIntelligenceProviderManager } from './intelligence-sdk'
 
 interface TestProvider extends IntelligenceProviderAdapter {
   visionOcr: (
@@ -93,12 +93,12 @@ function createProvider(
 }
 
 afterEach(() => {
-  aiCapabilityRegistry.clear()
+  intelligenceCapabilityRegistry.clear()
 })
 
-describe('AiSDK invoke', () => {
+describe('TuffIntelligenceSDK invoke', () => {
   it('falls back to secondary provider when primary provider fails', async () => {
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'vision.ocr',
       type: IntelligenceCapabilityType.VISION_OCR,
       name: 'Vision OCR',
@@ -146,7 +146,7 @@ describe('AiSDK invoke', () => {
 
     setIntelligenceProviderManager(new FakeProviderManager([firstProvider, secondProvider]))
 
-    const sdk = new AiSDK({
+    const sdk = new TuffIntelligenceSDK({
       enableAudit: false,
       enableQuota: false,
       enableCache: false
@@ -165,7 +165,7 @@ describe('AiSDK invoke', () => {
   })
 
   it('renders routing prompt template before chat invoke', async () => {
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.chat',
       type: IntelligenceCapabilityType.CHAT,
       name: 'Chat',
@@ -198,7 +198,7 @@ describe('AiSDK invoke', () => {
 
     setIntelligenceProviderManager(new FakeProviderManager([provider]))
 
-    const sdk = new AiSDK({
+    const sdk = new TuffIntelligenceSDK({
       enableAudit: false,
       enableQuota: false,
       enableCache: false,

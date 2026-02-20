@@ -92,7 +92,7 @@ export function useSearch(
   const pendingSearchEndById = new Map<string, SearchEndData>()
   const pendingSearchUpdatesById = new Map<string, TuffItem[]>()
 
-  const BASE_DEBOUNCE = 35
+  const BASE_DEBOUNCE = 150
   const inputTransport = createCoreBoxInputTransport(transport, BASE_DEBOUNCE)
 
   let searchSequence = 0

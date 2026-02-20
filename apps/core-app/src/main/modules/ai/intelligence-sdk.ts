@@ -1,4 +1,5 @@
 import type {
+  AgentTask,
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
   IntelligenceChatPayload,
@@ -35,6 +36,8 @@ import type {
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
+  PromptWorkflow,
+  PromptWorkflowExecution,
   IntelligenceRAGQueryPayload,
   IntelligenceRAGQueryResult,
   IntelligenceRerankPayload,
@@ -57,10 +60,12 @@ import { format } from 'node:util'
 import { PromptTemplate } from '@langchain/core/prompts'
 import chalk from 'chalk'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
-import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
+import { agentManager } from './agents'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
 import { IntelligenceProvider } from './runtime/base-provider'
+import { enterPerfContext } from '../../utils/perf-context'
 
 const INTELLIGENCE_TAG = chalk.hex('#1e88e5').bold('[Intelligence]')
 const logInfo = (...args: unknown[]) => stdout.write(`${format(INTELLIGENCE_TAG, ...args)}\n`)
@@ -157,7 +162,25 @@ const CAPABILITY_METHOD_MAP: Record<
   'rag-query': { method: 'ragQuery', requiresOverride: true },
   'semantic-search': { method: 'semanticSearch', requiresOverride: true },
   rerank: { method: 'rerank', requiresOverride: true },
-  agent: { method: 'agent', requiresOverride: true }
+  workflow: { method: 'chat' },
+  agent: { method: 'chat' }
+}
+
+interface WorkflowExecutionStepInput {
+  id?: string
+  name?: string
+  description?: string
+  capabilityId?: string
+  input?: unknown
+  agentId?: string
+  type?: 'execute' | 'plan' | 'chat'
+}
+
+interface WorkflowCapabilityPayload {
+  workflow?: PromptWorkflow
+  steps?: WorkflowExecutionStepInput[]
+  inputs?: Record<string, unknown>
+  continueOnError?: boolean
 }
 
 function resolveCapabilityMethod(
@@ -245,7 +268,7 @@ function ensureProviderManager(): IntelligenceProviderManagerAdapter {
   return providerManager
 }
 
-export class AiSDK {
+export class TuffIntelligenceSDK {
   private config: IntelligenceSDKConfig = {
     providers: [],
     defaultStrategy: 'adaptive-default',
@@ -310,116 +333,137 @@ export class AiSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
-    const capability = aiCapabilityRegistry.get(capabilityId)
-    if (!capability) {
-      throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
-    }
-    logInfo(`invoke -> ${capabilityId}`)
-
-    const caller = options.metadata?.caller
-    if (this.config.enableQuota && caller) {
-      const quotaCheck = await this.checkQuota(caller)
-      if (!quotaCheck.allowed) {
-        throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
-      }
-    }
-
-    const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
+    const payloadRecord =
+      payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
+    const disposeInvoke = enterPerfContext('Intelligence.invoke', {
       capabilityId,
-      options
-    )
-
-    const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
-    if (this.config.enableCache && !runtimeOptions.stream) {
-      const cached = this.getFromCache<T>(cacheKey)
-      if (cached) {
-        logInfo(`Returning cached result for ${capabilityId}`)
-        return cached
-      }
-    }
-
-    const manager = ensureProviderManager()
-    const availableProviders = this.resolveAvailableProviders(
-      manager,
-      capabilityId,
-      capability.type,
-      capability.supportedProviders,
-      runtimeOptions,
-      false
-    )
-
-    const strategyResult = await strategyManager.select({
-      capabilityId,
-      options: runtimeOptions,
-      availableProviders
+      payloadType: typeof payload,
+      payloadTextLength:
+        typeof payload === 'string'
+          ? payload.length
+          : typeof payloadRecord?.text === 'string'
+            ? payloadRecord.text.length
+            : undefined,
+      messageCount: Array.isArray(payloadRecord?.messages)
+        ? payloadRecord?.messages.length
+        : undefined,
+      stream: Boolean(options?.stream),
+      caller: options.metadata?.caller
     })
-
-    const provider = manager.get(strategyResult.selectedProvider.id)
-    if (!provider) {
-      throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
-    }
-    logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
-
-    this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
-
-    const startTime = Date.now()
-
     try {
-      const result = await this.invokeByCapabilityType<T>(
-        provider,
-        capability.type,
-        payload,
-        runtimeOptions,
-        promptTemplate,
-        promptVariables
-      )
+      const capability = intelligenceCapabilityRegistry.get(capabilityId)
+      if (!capability) {
+        throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
+      }
+      logInfo(`invoke -> ${capabilityId}`)
 
-      if (this.config.enableCache) {
-        this.setToCache(cacheKey, result)
+      const caller = options.metadata?.caller
+      if (this.config.enableQuota && caller) {
+        const quotaCheck = await this.checkQuota(caller)
+        if (!quotaCheck.allowed) {
+          throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
+        }
       }
 
-      await this.writeSuccessAudit({
-        result,
-        startTime,
+      const { runtimeOptions, promptTemplate, promptVariables } = this.prepareRuntimeOptions(
         capabilityId,
-        caller: runtimeOptions.metadata?.caller,
-        userId: runtimeOptions.metadata?.userId,
-        promptTemplate,
-        promptVariables
-      })
-
-      logInfo(
-        `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
+        options
       )
-      return result
-    } catch (error) {
-      logError(`Invoke error for ${capabilityId}`, error)
 
-      await this.writeFailureAudit({
-        error,
-        startTime,
-        capabilityId,
-        providerId: strategyResult.selectedProvider.id,
-        caller: runtimeOptions.metadata?.caller,
-        userId: runtimeOptions.metadata?.userId,
-        promptTemplate,
-        promptVariables
-      })
+      const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
+      if (this.config.enableCache && !runtimeOptions.stream) {
+        const cached = this.getFromCache<T>(cacheKey)
+        if (cached) {
+          logInfo(`Returning cached result for ${capabilityId}`)
+          return cached
+        }
+      }
 
-      const fallbackResult = await this.tryFallbackProviders<T>({
-        capabilityId,
-        capabilityType: capability.type,
-        payload,
-        runtimeOptions,
+      const manager = ensureProviderManager()
+      const availableProviders = this.resolveAvailableProviders(
         manager,
-        fallbackProviders: strategyResult.fallbackProviders
+        capabilityId,
+        capability.type,
+        capability.supportedProviders,
+        runtimeOptions,
+        false
+      )
+
+      const strategyResult = await strategyManager.select({
+        capabilityId,
+        options: runtimeOptions,
+        availableProviders
       })
 
-      if (fallbackResult) {
-        return fallbackResult
+      const provider = manager.get(strategyResult.selectedProvider.id)
+      if (!provider) {
+        throw new Error(`[Intelligence] Provider ${strategyResult.selectedProvider.id} not found`)
       }
+      logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
 
-      throw error
+      this.applyModelPreference(runtimeOptions, strategyResult.selectedProvider, capabilityId)
+
+      const startTime = Date.now()
+
+      try {
+        const result = await this.invokeByCapabilityType<T>(
+          provider,
+          capability.type,
+          payload,
+          runtimeOptions,
+          promptTemplate,
+          promptVariables
+        )
+
+        if (this.config.enableCache) {
+          this.setToCache(cacheKey, result)
+        }
+
+        await this.writeSuccessAudit({
+          result,
+          startTime,
+          capabilityId,
+          caller: runtimeOptions.metadata?.caller,
+          userId: runtimeOptions.metadata?.userId,
+          promptTemplate,
+          promptVariables
+        })
+
+        logInfo(
+          `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
+        )
+        return result
+      } catch (error) {
+        logError(`Invoke error for ${capabilityId}`, error)
+
+        await this.writeFailureAudit({
+          error,
+          startTime,
+          capabilityId,
+          providerId: strategyResult.selectedProvider.id,
+          caller: runtimeOptions.metadata?.caller,
+          userId: runtimeOptions.metadata?.userId,
+          promptTemplate,
+          promptVariables
+        })
+
+        const fallbackResult = await this.tryFallbackProviders<T>({
+          capabilityId,
+          capabilityType: capability.type,
+          payload,
+          runtimeOptions,
+          manager,
+          fallbackProviders: strategyResult.fallbackProviders
+        })
+
+        if (fallbackResult) {
+          return fallbackResult
+        }
+
+        throw error
+      }
+    } finally {
+      disposeInvoke()
     }
   }
 
@@ -639,6 +683,389 @@ export class AiSDK {
     }
   }
 
+  private normalizeWorkflowPayload(payload: unknown): {
+    steps: WorkflowExecutionStepInput[]
+    continueOnError: boolean
+  } {
+    const data = (payload ?? {}) as WorkflowCapabilityPayload
+    const continueOnError = Boolean(data.continueOnError)
+
+    const simpleSteps = Array.isArray(data.steps)
+      ? data.steps
+          .map((step, index) => ({
+            id: step.id || `step-${index + 1}`,
+            name: step.name,
+            description: step.description,
+            capabilityId: step.capabilityId,
+            input: step.input,
+            agentId: step.agentId,
+            type: step.type
+          }))
+          .filter((step) => Boolean(step.id))
+      : []
+
+    if (simpleSteps.length > 0) {
+      return { steps: simpleSteps, continueOnError }
+    }
+
+    const workflow = data.workflow
+    if (!workflow || !Array.isArray(workflow.steps) || workflow.steps.length === 0) {
+      throw new Error('[Intelligence] workflow.execute requires non-empty steps')
+    }
+
+    const steps = workflow.steps.map((step, index) => {
+      const promptInput =
+        step.config.template ||
+        step.config.variables ||
+        step.config.body ||
+        step.config.condition ||
+        step.config.transform
+      return {
+        id: step.id || `step-${index + 1}`,
+        name: step.name,
+        description: step.name || step.type,
+        capabilityId: step.config.capabilityId,
+        input: promptInput
+      }
+    })
+
+    return { steps, continueOnError }
+  }
+
+  private toTextPayload(value: unknown): string {
+    if (typeof value === 'string') return value
+    if (value === undefined || value === null) return ''
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  private toAgentResult(raw: unknown, fallbackText: string): IntelligenceAgentResult {
+    const source = typeof raw === 'string' ? raw : this.toTextPayload(raw)
+    let parsed: Partial<IntelligenceAgentResult> | null = null
+
+    try {
+      const data = JSON.parse(source) as Partial<IntelligenceAgentResult>
+      if (data && typeof data === 'object') {
+        parsed = data
+      }
+    } catch {
+      parsed = null
+    }
+
+    const normalizedSteps = Array.isArray(parsed?.steps)
+      ? parsed.steps.map((step) => ({
+          thought: typeof step?.thought === 'string' ? step.thought : 'generated',
+          action: typeof step?.action === 'string' ? step.action : undefined,
+          actionInput: step?.actionInput,
+          observation: typeof step?.observation === 'string' ? step.observation : undefined
+        }))
+      : []
+
+    const normalizedToolCalls = Array.isArray(parsed?.toolCalls)
+      ? parsed.toolCalls.map((call) => ({
+          tool: typeof call?.tool === 'string' ? call.tool : 'unknown',
+          input: call?.input,
+          output: call?.output
+        }))
+      : []
+
+    const resultText =
+      typeof parsed?.result === 'string' && parsed.result.trim().length > 0
+        ? parsed.result
+        : fallbackText
+
+    return {
+      result: resultText,
+      steps:
+        normalizedSteps.length > 0
+          ? normalizedSteps
+          : [{ thought: 'processed', observation: resultText.slice(0, 500) }],
+      toolCalls: normalizedToolCalls,
+      iterations:
+        typeof parsed?.iterations === 'number' && Number.isFinite(parsed.iterations)
+          ? parsed.iterations
+          : Math.max(1, normalizedSteps.length || 1)
+    }
+  }
+
+  private async invokeAgentWithRuntime(
+    provider: IntelligenceProviderAdapter,
+    payload: IntelligenceAgentPayload,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<IntelligenceAgentResult>> {
+    if (!payload.task || typeof payload.task !== 'string') {
+      throw new Error('[Intelligence] agent.run requires a task string')
+    }
+
+    const start = Date.now()
+    const agentId =
+      typeof runtimeOptions.metadata?.agentId === 'string'
+        ? runtimeOptions.metadata.agentId
+        : undefined
+
+    if (agentId && agentManager.isInitialized()) {
+      const taskInput = runtimeOptions.metadata?.agentInput ?? {
+        goal: payload.task,
+        task: payload.task
+      }
+
+      const task: AgentTask = {
+        agentId,
+        type: 'execute',
+        input: taskInput,
+        context: {
+          sessionId:
+            typeof runtimeOptions.metadata?.sessionId === 'string'
+              ? runtimeOptions.metadata.sessionId
+              : undefined,
+          workingDirectory:
+            typeof runtimeOptions.metadata?.workingDirectory === 'string'
+              ? runtimeOptions.metadata.workingDirectory
+              : undefined,
+          metadata: runtimeOptions.metadata
+        }
+      }
+
+      const result = await agentManager.executeTaskImmediate(task)
+      if (result.success) {
+        const text = this.toTextPayload(result.output)
+        return {
+          result: {
+            result: text,
+            steps: [{ thought: `Delegated to ${agentId}`, observation: text.slice(0, 500) }],
+            toolCalls: [],
+            iterations: 1
+          },
+          usage: {
+            promptTokens: result.usage?.promptTokens ?? 0,
+            completionTokens: result.usage?.completionTokens ?? 0,
+            totalTokens: result.usage?.totalTokens ?? 0
+          },
+          model: 'tuffintelligence-agent-runtime',
+          latency: Date.now() - start,
+          traceId: result.taskId,
+          provider: 'intelligence-runtime'
+        }
+      }
+      throw new Error(result.error || `Agent ${agentId} execution failed`)
+    }
+
+    const response = await provider.chat(
+      {
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are TuffIntelligence Orchestrator. Return strict JSON: {"result":"...","steps":[{"thought":"...","action":"...","actionInput":{},"observation":"..."}],"toolCalls":[{"tool":"...","input":{},"output":{}}],"iterations":1}'
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              task: payload.task,
+              context: payload.context,
+              constraints: payload.constraints ?? [],
+              tools: payload.tools ?? [],
+              memory: payload.memory ?? []
+            })
+          }
+        ]
+      },
+      runtimeOptions
+    )
+
+    const normalizedResult = this.toAgentResult(
+      response.result,
+      this.toTextPayload(response.result)
+    )
+    return {
+      ...response,
+      result: normalizedResult
+    }
+  }
+
+  private async invokeWorkflowWithRuntime(
+    provider: IntelligenceProviderAdapter,
+    payload: unknown,
+    runtimeOptions: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<PromptWorkflowExecution>> {
+    const start = Date.now()
+    const traceId = intelligenceAuditLogger.generateTraceId()
+    const { steps, continueOnError } = this.normalizeWorkflowPayload(payload)
+
+    if (
+      steps.length > 0 &&
+      steps.every((step) => typeof step.agentId === 'string' && step.agentId)
+    ) {
+      if (!agentManager.isInitialized()) {
+        throw new Error('[Intelligence] Agent runtime not initialized')
+      }
+      const workflowTask: AgentTask = {
+        agentId: 'builtin.workflow-agent',
+        type: 'execute',
+        input: {
+          capability: 'workflow.run',
+          steps: steps.map((step) => ({
+            id: step.id,
+            agentId: step.agentId!,
+            type: step.type ?? 'execute',
+            input: step.input ?? {}
+          })),
+          continueOnError
+        },
+        context: {
+          sessionId:
+            typeof runtimeOptions.metadata?.sessionId === 'string'
+              ? runtimeOptions.metadata.sessionId
+              : undefined,
+          workingDirectory:
+            typeof runtimeOptions.metadata?.workingDirectory === 'string'
+              ? runtimeOptions.metadata.workingDirectory
+              : undefined,
+          metadata: runtimeOptions.metadata
+        }
+      }
+
+      const workflowResult = await agentManager.executeTaskImmediate(workflowTask)
+      if (!workflowResult.success) {
+        throw new Error(workflowResult.error || 'Workflow execution failed')
+      }
+
+      const output = (workflowResult.output ?? {}) as {
+        success?: boolean
+        results?: Array<{ stepId?: string; success?: boolean; result?: unknown }>
+      }
+
+      const execution: PromptWorkflowExecution = {
+        id: traceId,
+        workflowId: 'builtin.workflow-agent',
+        status: output.success === false ? 'failed' : 'completed',
+        startedAt: start,
+        completedAt: Date.now(),
+        inputs: { steps },
+        outputs: { result: output },
+        steps: (output.results ?? []).map((item, index) => ({
+          stepId: item.stepId || `step-${index + 1}`,
+          status: item.success === false ? 'failed' : 'completed',
+          startedAt: start,
+          completedAt: Date.now(),
+          output: item.result
+        })),
+        error: output.success === false ? 'workflow execution failed' : undefined
+      }
+
+      return {
+        result: execution,
+        usage: {
+          promptTokens: workflowResult.usage?.promptTokens ?? 0,
+          completionTokens: workflowResult.usage?.completionTokens ?? 0,
+          totalTokens: workflowResult.usage?.totalTokens ?? 0
+        },
+        model: 'tuffintelligence-workflow-runtime',
+        latency: Date.now() - start,
+        traceId,
+        provider: 'intelligence-runtime'
+      }
+    }
+
+    const execution: PromptWorkflowExecution = {
+      id: traceId,
+      workflowId: 'inline.workflow',
+      status: 'running',
+      startedAt: start,
+      inputs: {
+        steps
+      },
+      steps: []
+    }
+
+    const outputs: Record<string, unknown> = {}
+    let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+    let model = provider.getConfig().defaultModel || 'tuffintelligence-workflow-runtime'
+
+    for (const step of steps) {
+      const startedAt = Date.now()
+      const stepState: PromptWorkflowExecution['steps'][number] = {
+        stepId: step.id || `step-${execution.steps.length + 1}`,
+        status: 'running',
+        startedAt,
+        input: step.input
+      }
+      execution.steps.push(stepState)
+
+      try {
+        let output: unknown
+        if (step.capabilityId && step.capabilityId !== 'workflow.execute') {
+          const invokeResult = await this.invoke(
+            step.capabilityId,
+            step.input ?? {},
+            runtimeOptions
+          )
+          output = invokeResult.result
+          usage = {
+            promptTokens: usage.promptTokens + (invokeResult.usage?.promptTokens ?? 0),
+            completionTokens: usage.completionTokens + (invokeResult.usage?.completionTokens ?? 0),
+            totalTokens: usage.totalTokens + (invokeResult.usage?.totalTokens ?? 0)
+          }
+          model = invokeResult.model || model
+        } else {
+          const chatResult = await provider.chat(
+            {
+              messages: [
+                {
+                  role: 'user',
+                  content:
+                    step.description ||
+                    this.toTextPayload(step.input) ||
+                    `Execute workflow step ${step.id}`
+                }
+              ]
+            },
+            runtimeOptions
+          )
+          output = chatResult.result
+          usage = {
+            promptTokens: usage.promptTokens + (chatResult.usage?.promptTokens ?? 0),
+            completionTokens: usage.completionTokens + (chatResult.usage?.completionTokens ?? 0),
+            totalTokens: usage.totalTokens + (chatResult.usage?.totalTokens ?? 0)
+          }
+          model = chatResult.model || model
+        }
+
+        outputs[stepState.stepId] = output
+        stepState.output = output
+        stepState.status = 'completed'
+        stepState.completedAt = Date.now()
+      } catch (error) {
+        stepState.status = 'failed'
+        stepState.error = error instanceof Error ? error.message : String(error)
+        stepState.completedAt = Date.now()
+        if (!continueOnError) {
+          execution.status = 'failed'
+          execution.error = stepState.error
+          break
+        }
+      }
+    }
+
+    if (execution.status !== 'failed') {
+      execution.status = 'completed'
+    }
+    execution.completedAt = Date.now()
+    execution.outputs = outputs
+
+    return {
+      result: execution,
+      usage,
+      model,
+      latency: Date.now() - start,
+      traceId,
+      provider: provider.getConfig().id
+    }
+  }
+
   private async invokeByCapabilityType<T>(
     provider: IntelligenceProviderAdapter,
     capabilityType: string,
@@ -791,14 +1218,22 @@ export class AiSDK {
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
 
+      case 'workflow':
+        return (await this.invokeWorkflowWithRuntime(
+          provider,
+          payload,
+          runtimeOptions
+        )) as IntelligenceInvokeResult<T>
+
       case 'agent':
-        return (await provider.agent!(
+        return (await this.invokeAgentWithRuntime(
+          provider,
           payload as IntelligenceAgentPayload,
           runtimeOptions
         )) as IntelligenceInvokeResult<T>
 
       default:
-        throw new Error(`[Intelligence] Capability type ${capabilityType} not implemented`)
+        throw new Error(`[Intelligence] Capability type ${capabilityType} is unsupported`)
     }
   }
 
@@ -808,37 +1243,7 @@ export class AiSDK {
     payload: unknown,
     runtimeOptions: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<T> | null> {
-    switch (capabilityType) {
-      case 'chat':
-        return (await provider.chat(
-          payload as IntelligenceChatPayload,
-          runtimeOptions
-        )) as IntelligenceInvokeResult<T>
-      case 'embedding':
-        return (await this.invokeEmbeddingWithGovernance(
-          provider as {
-            embedding: (
-              p: IntelligenceEmbeddingPayload,
-              o: IntelligenceInvokeOptions
-            ) => Promise<IntelligenceInvokeResult<number[]>>
-          },
-          payload as IntelligenceEmbeddingPayload,
-          runtimeOptions
-        )) as IntelligenceInvokeResult<T>
-      case 'translate':
-        return (await provider.translate(
-          payload as IntelligenceTranslatePayload,
-          runtimeOptions
-        )) as IntelligenceInvokeResult<T>
-      case 'vision':
-      case 'vision-ocr':
-        return (await provider.visionOcr(
-          payload as IntelligenceVisionOcrPayload,
-          runtimeOptions
-        )) as IntelligenceInvokeResult<T>
-      default:
-        return null
-    }
+    return this.invokeByCapabilityType(provider, capabilityType, payload, runtimeOptions)
   }
 
   private async tryFallbackProviders<T>(params: {
@@ -974,7 +1379,7 @@ export class AiSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): AsyncGenerator<IntelligenceStreamChunk> {
-    const capability = aiCapabilityRegistry.get(capabilityId)
+    const capability = intelligenceCapabilityRegistry.get(capabilityId)
     if (!capability) {
       throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
     }
@@ -1442,7 +1847,8 @@ export class AiSDK {
   }
 }
 
-export const ai = new AiSDK()
+export const tuffIntelligence = new TuffIntelligenceSDK()
+export const intelligence = tuffIntelligence
 
 function normalizeStrategyId(id?: string): string | undefined {
   if (!id) return id

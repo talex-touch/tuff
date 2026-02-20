@@ -1,0 +1,159 @@
+---
+title: CodeEditor
+description: CodeMirror-based editor for JSON and YAML
+category: Form
+status: beta
+since: 1.0.0
+tags: [code, editor, json, yaml]
+syncStatus: migrated
+---
+
+# CodeEditor
+
+A CodeMirror 6 based editor with formatting, linting, completion, folding, and search for JSON/YAML.
+
+## Basic Usage
+
+:::TuffDemoWrapper{demo="CodeEditorCodeEditorDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const jsonValue = ref('{"name":"Tuffex","version":1,"features":["lint","format","search"]}')
+  const yamlValue = ref('name: Tuffex\nversion: 1\nfeatures:\n  - lint\n  - format\n  - search\n')
+  </script>
+
+  <template>
+    <div class="grid gap-4">
+      <TxCodeEditor v-model="jsonValue" language="json" />
+      <TxCodeEditor v-model="yamlValue" language="yaml" />
+    </div>
+  </template>
+---
+:::
+
+## Formatting
+
+Enable `formatOnBlur` or call the instance method `format()` to format content.
+
+## Themes
+
+Use `theme` to switch the built-in themes; `auto` follows the external theme data attributes.
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <template>
+    <TxCodeEditor v-model="jsonValue" language="json" theme="github" />
+    <TxCodeEditor v-model="jsonValue" language="json" theme="dracula" />
+  </template>
+---
+::
+
+## Toolbar
+
+Use the `toolbar` slot, commonly paired with `TxCodeEditorToolbar`.
+
+::TuffCodeBlock{lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const value = ref('{"name":"Tuffex"}')
+  const toolbarActions = [
+    { key: 'format', label: 'Format' },
+    { key: 'search', label: 'Search', shortcut: 'Cmd/Ctrl+F' },
+    { key: 'foldAll', label: 'Fold' },
+    { key: 'unfoldAll', label: 'Unfold' },
+    { key: 'copy', label: 'Copy' },
+  ]
+
+  function handleToolbarAction(key, handlers) {
+    if (key === 'format') handlers.format()
+    if (key === 'search') handlers.openSearch()
+    if (key === 'foldAll') handlers.foldAll()
+    if (key === 'unfoldAll') handlers.unfoldAll()
+    if (key === 'copy') handlers.copy()
+  }
+  </script>
+
+  <template>
+    <TxCodeEditor v-model="value" language="json">
+      <template #toolbar="{ format, openSearch, foldAll, unfoldAll, copy }">
+        <TxCodeEditorToolbar
+          :actions="toolbarActions"
+          @action="(key) => handleToolbarAction(key, { format, openSearch, foldAll, unfoldAll, copy })"
+        />
+      </template>
+    </TxCodeEditor>
+  </template>
+---
+::
+
+## API
+
+### TxCodeEditor Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `string` | `''` | Content (v-model) |
+| `language` | `'json' \| 'yaml' \| 'toml' \| 'ini' \| 'javascript' \| 'js'` | `'json'` | Language mode |
+| `theme` | `'auto' \| 'light' \| 'dark' \| 'github' \| 'dracula' \| 'monokai'` | `'auto'` | Theme |
+| `readOnly` | `boolean` | `false` | Read-only mode |
+| `lineNumbers` | `boolean` | `true` | Line numbers |
+| `lineWrapping` | `boolean` | `false` | Line wrapping |
+| `placeholder` | `string` | `''` | Placeholder text |
+| `tabSize` | `number` | `2` | Tab size |
+| `formatOnBlur` | `boolean` | `false` | Format on blur |
+| `formatOnInit` | `boolean` | `false` | Format on init |
+| `lint` | `boolean` | `true` | Linting |
+| `search` | `boolean` | `true` | Search panel (Cmd/Ctrl+F) |
+| `completion` | `boolean` | `true` | Completion |
+| `extensions` | `Extension[]` | `[]` | Custom CodeMirror extensions |
+
+> Note: formatting and linting are available for `json` / `yaml`. Other languages provide highlighting and basic editing only.
+
+### Slots
+
+| Slot | Params | Description |
+|------|--------|-------------|
+| `toolbar` | `{ format, openSearch, foldAll, unfoldAll, copy, getValue }` | Custom toolbar |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `update:modelValue` | `(value: string)` | v-model update |
+| `change` | `(value: string)` | Content change |
+| `focus` | `()` | Focus |
+| `blur` | `()` | Blur |
+| `format` | `({ value, language })` | Format success |
+
+### Expose
+
+| Method | Type | Description |
+|------|------|-------------|
+| `focus()` | `() => void` | Focus editor |
+| `blur()` | `() => void` | Blur editor |
+| `format()` | `() => boolean` | Run formatter |
+| `openSearch()` | `() => boolean` | Open search panel |
+| `foldAll()` | `() => boolean` | Fold all |
+| `unfoldAll()` | `() => boolean` | Unfold all |
+| `copy()` | `() => Promise<boolean>` | Copy content |
+| `getValue()` | `() => string` | Get value |
+| `getView()` | `() => EditorView \| null` | Get editor instance |
+
+### TxCodeEditorToolbar
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `actions` | `CodeEditorToolbarAction[]` | built-in | Toolbar actions |
+| `compact` | `boolean` | `false` | Compact mode |
+
+### TxCodeEditorToolbar Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `action` | `(key)` | Action clicked |

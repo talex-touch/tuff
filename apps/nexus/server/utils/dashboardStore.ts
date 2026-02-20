@@ -1,16 +1,19 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { AppRelease, ReleaseNotes } from './releasesStore'
-import { randomUUID } from 'node:crypto'
+import { Buffer } from 'node:buffer'
+import { createHash, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { saveUpdateAsset } from './updateAssetStorage'
 
 const UPDATES_KEY = 'dashboard:updates'
 const UPDATES_TABLE = 'dashboard_updates'
 const UPDATES_SETTINGS_KEY = 'dashboard:updates_settings'
 const UPDATES_SETTINGS_TABLE = 'dashboard_update_settings'
 const UPDATES_SETTINGS_ID = 'global'
+const DEFAULT_PAYLOAD_CONTENT_TYPE = 'application/json'
 
 let schemaInitialized = false
 let hasLoggedDashboardDb = false
@@ -27,12 +30,19 @@ async function ensureUpdateColumn(db: D1Database, name: string, ddl: string) {
 interface D1UpdateRow {
   id: string
   type: string | null
+  scope: string | null
+  channels: string | null
   release_tag: string | null
   title: string
   timestamp: string
   summary: string
   tags: string | null
   link: string
+  payload_key: string | null
+  payload_sha256: string | null
+  payload_content_type: string | null
+  payload_version: string | null
+  payload_size: number | null
   created_at: string
   updated_at: string
 }
@@ -66,19 +76,33 @@ async function ensureDashboardSchema(db: D1Database) {
     CREATE TABLE IF NOT EXISTS ${UPDATES_TABLE} (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL DEFAULT 'news',
+      scope TEXT NOT NULL DEFAULT 'web',
+      channels TEXT NOT NULL DEFAULT '[]',
       release_tag TEXT,
       title TEXT NOT NULL,
       timestamp TEXT NOT NULL,
       summary TEXT NOT NULL,
       tags TEXT NOT NULL,
       link TEXT NOT NULL,
+      payload_key TEXT,
+      payload_sha256 TEXT,
+      payload_content_type TEXT,
+      payload_version TEXT,
+      payload_size INTEGER,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
   `).run()
 
   await ensureUpdateColumn(db, 'type', "type TEXT NOT NULL DEFAULT 'news'")
+  await ensureUpdateColumn(db, 'scope', "scope TEXT NOT NULL DEFAULT 'web'")
+  await ensureUpdateColumn(db, 'channels', "channels TEXT NOT NULL DEFAULT '[]'")
   await ensureUpdateColumn(db, 'release_tag', 'release_tag TEXT')
+  await ensureUpdateColumn(db, 'payload_key', 'payload_key TEXT')
+  await ensureUpdateColumn(db, 'payload_sha256', 'payload_sha256 TEXT')
+  await ensureUpdateColumn(db, 'payload_content_type', 'payload_content_type TEXT')
+  await ensureUpdateColumn(db, 'payload_version', 'payload_version TEXT')
+  await ensureUpdateColumn(db, 'payload_size', 'payload_size INTEGER')
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_dashboard_updates_release_tag ON ${UPDATES_TABLE}(release_tag);`).run()
 
@@ -94,7 +118,8 @@ async function ensureDashboardSchema(db: D1Database) {
   schemaInitialized = true
 }
 
-export type UpdateType = 'news' | 'release'
+export type UpdateScope = 'web' | 'system' | 'both'
+export type UpdateType = 'news' | 'release' | 'announcement' | 'config' | 'data'
 
 export interface LocalizedText {
   zh: string
@@ -111,6 +136,99 @@ function parseJsonArray(value: string | null): string[] {
   }
   catch {
     return []
+  }
+}
+
+function normalizeScope(value: unknown, fallback: UpdateScope): UpdateScope {
+  if (value === 'system' || value === 'both' || value === 'web')
+    return value
+  return fallback
+}
+
+function normalizeUpdateType(value: unknown, fallback: UpdateType): UpdateType {
+  if (typeof value !== 'string')
+    return fallback
+  const normalized = value.trim().toLowerCase()
+  if (
+    normalized === 'news'
+    || normalized === 'release'
+    || normalized === 'announcement'
+    || normalized === 'config'
+    || normalized === 'data'
+  ) {
+    return normalized as UpdateType
+  }
+  return fallback
+}
+
+function normalizeChannels(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+  const normalized = raw
+    .map(entry => String(entry).trim().toUpperCase())
+    .filter(Boolean)
+    .filter(entry => entry === 'RELEASE' || entry === 'BETA' || entry === 'SNAPSHOT')
+  return Array.from(new Set(normalized))
+}
+
+function normalizePayloadVersion(value: unknown): string | null {
+  if (typeof value !== 'string')
+    return null
+  const trimmed = value.trim()
+  if (!trimmed)
+    return null
+  return trimmed.replace(/[^a-zA-Z0-9._-]/g, '-')
+}
+
+function resolvePayloadString(payload: unknown): string {
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim()
+    if (!trimmed)
+      throw createError({ statusCode: 400, statusMessage: 'Update payload is empty.' })
+    try {
+      JSON.parse(trimmed)
+    }
+    catch {
+      throw createError({ statusCode: 400, statusMessage: 'Update payload must be valid JSON.' })
+    }
+    return trimmed
+  }
+
+  try {
+    const serialized = JSON.stringify(payload)
+    if (!serialized)
+      throw new Error('empty')
+    return serialized
+  }
+  catch {
+    throw createError({ statusCode: 400, statusMessage: 'Update payload must be valid JSON.' })
+  }
+}
+
+async function buildPayloadMeta(
+  event: H3Event,
+  updateId: string,
+  payload: unknown,
+  payloadVersion?: string | null,
+) {
+  const resolvedVersion = normalizePayloadVersion(payloadVersion) ?? String(Date.now())
+  const payloadText = resolvePayloadString(payload)
+  const data = Buffer.from(payloadText)
+  const payloadKey = `updates/${updateId}/${resolvedVersion}.json`
+  const payloadSha256 = createHash('sha256').update(data).digest('hex')
+
+  await saveUpdateAsset(event, payloadKey, data, DEFAULT_PAYLOAD_CONTENT_TYPE)
+
+  return {
+    payloadKey,
+    payloadSha256,
+    payloadContentType: DEFAULT_PAYLOAD_CONTENT_TYPE,
+    payloadVersion: resolvedVersion,
+    payloadSize: data.byteLength,
+    payloadUrl: `/api/updates/${updateId}/payload`,
   }
 }
 
@@ -165,13 +283,21 @@ function serializeLocalizedText(input: LocalizedText | string): string {
 function mapUpdateRow(row: D1UpdateRow): DashboardUpdate {
   return {
     id: row.id,
-    type: row.type === 'release' ? 'release' : 'news',
+    type: normalizeUpdateType(row.type, 'news'),
+    scope: normalizeScope(row.scope, 'web'),
+    channels: parseJsonArray(row.channels),
     releaseTag: row.release_tag ?? null,
     title: parseLocalizedText(row.title),
     timestamp: row.timestamp,
     summary: parseLocalizedText(row.summary),
     tags: parseJsonArray(row.tags),
     link: row.link,
+    payloadKey: row.payload_key ?? null,
+    payloadSha256: row.payload_sha256 ?? null,
+    payloadContentType: row.payload_content_type ?? null,
+    payloadVersion: row.payload_version ?? null,
+    payloadSize: row.payload_size ?? null,
+    payloadUrl: row.payload_key ? `/api/updates/${row.id}/payload` : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -180,24 +306,42 @@ function mapUpdateRow(row: D1UpdateRow): DashboardUpdate {
 export interface DashboardUpdate {
   id: string
   type: UpdateType
+  scope: UpdateScope
+  channels: string[]
   releaseTag: string | null
   title: LocalizedText
   timestamp: string
   summary: LocalizedText
   tags: string[]
   link: string
+  payloadKey?: string | null
+  payloadSha256?: string | null
+  payloadContentType?: string | null
+  payloadVersion?: string | null
+  payloadSize?: number | null
+  payloadUrl?: string | null
   createdAt: string
   updatedAt: string
 }
 
+export interface ListUpdatesOptions {
+  scope?: UpdateScope
+  type?: UpdateType
+  channel?: string
+}
+
 export interface UpdateInput {
   type: UpdateType
+  scope?: UpdateScope
+  channels?: string[]
   releaseTag: string | null
   title: LocalizedText | string
   timestamp: string
   summary: LocalizedText | string
   tags: string[]
   link: string
+  payload?: unknown
+  payloadVersion?: string
 }
 
 function validIsoDate(value: string) {
@@ -234,11 +378,16 @@ function normalizeUpdateInput(
   options: { forUpdate?: boolean, allowRelease?: boolean } = {},
 ): UpdateInput {
   const { forUpdate = false, allowRelease = false } = options
-  const { title, timestamp, summary, tags, link, type, releaseTag } = input
+  const { title, timestamp, summary, tags, link, type, releaseTag, scope, channels } = input
 
-  const resolvedType = typeof type === 'string' ? type : (forUpdate ? undefined : 'news')
-  if (resolvedType && resolvedType !== 'news' && resolvedType !== 'release')
+  const resolvedType = normalizeUpdateType(
+    typeof type === 'string' ? type : (forUpdate ? undefined : 'news'),
+    forUpdate ? 'news' : 'news',
+  )
+
+  if (resolvedType && !['news', 'release', 'announcement', 'config', 'data'].includes(resolvedType)) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid update type.' })
+  }
 
   if (resolvedType === 'release' && !allowRelease)
     throw createError({ statusCode: 403, statusMessage: 'Release updates are managed automatically.' })
@@ -272,9 +421,13 @@ function normalizeUpdateInput(
   const normalizedReleaseTag = resolvedType === 'release' && typeof releaseTag === 'string'
     ? releaseTag
     : null
+  const normalizedScope = normalizeScope(scope, 'web')
+  const normalizedChannels = normalizeChannels(channels)
 
   return {
     type: (resolvedType ?? 'news') as UpdateType,
+    scope: normalizedScope,
+    channels: normalizedChannels,
     releaseTag: normalizedReleaseTag,
     title: normalizedTitle,
     timestamp: timestamp ? normalizeDate(timestamp) : new Date().toISOString(),
@@ -287,19 +440,66 @@ function normalizeUpdateInput(
 function normalizeStoredUpdate(update: Partial<DashboardUpdate>): DashboardUpdate {
   return {
     id: String(update.id ?? ''),
-    type: update.type === 'release' ? 'release' : 'news',
+    type: normalizeUpdateType(update.type, 'news'),
+    scope: normalizeScope(update.scope, 'web'),
+    channels: Array.isArray(update.channels) ? update.channels.map(channel => String(channel)) : [],
     releaseTag: typeof update.releaseTag === 'string' ? update.releaseTag : null,
     title: normalizeLocalizedText((update as any).title ?? ''),
     timestamp: typeof update.timestamp === 'string' ? update.timestamp : new Date().toISOString(),
     summary: normalizeLocalizedText((update as any).summary ?? ''),
     tags: Array.isArray(update.tags) ? update.tags.map(tag => String(tag)) : [],
     link: typeof update.link === 'string' ? update.link : '',
+    payloadKey: typeof update.payloadKey === 'string' ? update.payloadKey : null,
+    payloadSha256: typeof update.payloadSha256 === 'string' ? update.payloadSha256 : null,
+    payloadContentType: typeof update.payloadContentType === 'string' ? update.payloadContentType : null,
+    payloadVersion: typeof update.payloadVersion === 'string' ? update.payloadVersion : null,
+    payloadSize: typeof update.payloadSize === 'number' ? update.payloadSize : null,
+    payloadUrl: typeof update.payloadUrl === 'string'
+      ? update.payloadUrl
+      : typeof update.payloadKey === 'string'
+        ? `/api/updates/${String(update.id ?? '')}/payload`
+        : null,
     createdAt: typeof update.createdAt === 'string' ? update.createdAt : new Date().toISOString(),
     updatedAt: typeof update.updatedAt === 'string' ? update.updatedAt : new Date().toISOString(),
   }
 }
 
-export async function listUpdates(event?: H3Event): Promise<DashboardUpdate[]> {
+function matchScope(update: DashboardUpdate, scope?: UpdateScope): boolean {
+  if (!scope)
+    return true
+  if (scope === 'web')
+    return update.scope === 'web' || update.scope === 'both'
+  if (scope === 'system')
+    return update.scope === 'system' || update.scope === 'both'
+  return update.scope === 'both'
+}
+
+function matchType(update: DashboardUpdate, type?: UpdateType): boolean {
+  if (!type)
+    return true
+  return update.type === type
+}
+
+function matchChannel(update: DashboardUpdate, channel?: string): boolean {
+  if (!channel)
+    return true
+  if (!update.channels || update.channels.length === 0)
+    return true
+  return update.channels.includes(channel.toUpperCase())
+}
+
+function applyUpdateFilters(updates: DashboardUpdate[], options: ListUpdatesOptions): DashboardUpdate[] {
+  return updates.filter(update =>
+    matchScope(update, options.scope)
+    && matchType(update, options.type)
+    && matchChannel(update, options.channel)
+  )
+}
+
+export async function listUpdates(
+  event?: H3Event,
+  options: ListUpdatesOptions = {},
+): Promise<DashboardUpdate[]> {
   const db = getD1Database(event)
 
   if (db) {
@@ -309,25 +509,34 @@ export async function listUpdates(event?: H3Event): Promise<DashboardUpdate[]> {
       SELECT
         id,
         type,
+        scope,
+        channels,
         release_tag,
         title,
         timestamp,
         summary,
         tags,
         link,
+        payload_key,
+        payload_sha256,
+        payload_content_type,
+        payload_version,
+        payload_size,
         created_at,
         updated_at
       FROM ${UPDATES_TABLE}
       ORDER BY datetime(timestamp) DESC;
     `).all<D1UpdateRow>()
 
-    return (results ?? []).map(mapUpdateRow)
+    const mapped = (results ?? []).map(mapUpdateRow)
+    return applyUpdateFilters(mapped, options)
   }
 
   const updates = await readCollection<DashboardUpdate>(UPDATES_KEY)
   const normalized = updates.map(update => normalizeStoredUpdate(update))
+  const filtered = applyUpdateFilters(normalized, options)
 
-  return normalized.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 }
 
 export async function getUpdateById(event: H3Event | undefined, id: string) {
@@ -340,12 +549,19 @@ export async function getUpdateById(event: H3Event | undefined, id: string) {
       SELECT
         id,
         type,
+        scope,
+        channels,
         release_tag,
         title,
         timestamp,
         summary,
         tags,
         link,
+        payload_key,
+        payload_sha256,
+        payload_content_type,
+        payload_version,
+        payload_size,
         created_at,
         updated_at
       FROM ${UPDATES_TABLE}
@@ -375,6 +591,11 @@ export async function createUpdate(
     updatedAt: now,
   }
 
+  if (rawInput.payload !== undefined && rawInput.payload !== null) {
+    const payloadMeta = await buildPayloadMeta(event, update.id, rawInput.payload, rawInput.payloadVersion)
+    Object.assign(update, payloadMeta)
+  }
+
   const db = getD1Database(event)
 
   if (db) {
@@ -384,24 +605,38 @@ export async function createUpdate(
       INSERT INTO ${UPDATES_TABLE} (
         id,
         type,
+        scope,
+        channels,
         release_tag,
         title,
         timestamp,
         summary,
         tags,
         link,
+        payload_key,
+        payload_sha256,
+        payload_content_type,
+        payload_version,
+        payload_size,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17);
     `).bind(
       update.id,
       update.type,
+      update.scope,
+      JSON.stringify(update.channels),
       update.releaseTag,
       serializeLocalizedText(update.title),
       update.timestamp,
       serializeLocalizedText(update.summary),
       JSON.stringify(update.tags),
       update.link,
+      update.payloadKey ?? null,
+      update.payloadSha256 ?? null,
+      update.payloadContentType ?? null,
+      update.payloadVersion ?? null,
+      update.payloadSize ?? null,
       update.createdAt,
       update.updatedAt,
     ).run()
@@ -442,9 +677,28 @@ export async function updateUpdate(
       { forUpdate: true, allowRelease: options.allowRelease },
     )
 
+    let payloadMeta: Partial<DashboardUpdate> = {}
+    const payloadProvided = Object.prototype.hasOwnProperty.call(rawInput, 'payload')
+    if (payloadProvided) {
+      if (rawInput.payload === null) {
+        payloadMeta = {
+          payloadKey: null,
+          payloadSha256: null,
+          payloadContentType: null,
+          payloadVersion: null,
+          payloadSize: null,
+          payloadUrl: null,
+        }
+      }
+      else if (rawInput.payload !== undefined) {
+        payloadMeta = await buildPayloadMeta(event, existing.id, rawInput.payload, rawInput.payloadVersion)
+      }
+    }
+
     const updated: DashboardUpdate = {
       ...existing,
       ...mergedInput,
+      ...payloadMeta,
       updatedAt: new Date().toISOString(),
     }
 
@@ -452,22 +706,36 @@ export async function updateUpdate(
       UPDATE ${UPDATES_TABLE}
       SET
         type = ?1,
-        release_tag = ?2,
-        title = ?3,
-        timestamp = ?4,
-        summary = ?5,
-        tags = ?6,
-        link = ?7,
-        updated_at = ?8
-      WHERE id = ?9;
+        scope = ?2,
+        channels = ?3,
+        release_tag = ?4,
+        title = ?5,
+        timestamp = ?6,
+        summary = ?7,
+        tags = ?8,
+        link = ?9,
+        payload_key = ?10,
+        payload_sha256 = ?11,
+        payload_content_type = ?12,
+        payload_version = ?13,
+        payload_size = ?14,
+        updated_at = ?15
+      WHERE id = ?16;
     `).bind(
       updated.type,
+      updated.scope,
+      JSON.stringify(updated.channels),
       updated.releaseTag,
       serializeLocalizedText(updated.title),
       updated.timestamp,
       serializeLocalizedText(updated.summary),
       JSON.stringify(updated.tags),
       updated.link,
+      updated.payloadKey ?? null,
+      updated.payloadSha256 ?? null,
+      updated.payloadContentType ?? null,
+      updated.payloadVersion ?? null,
+      updated.payloadSize ?? null,
       updated.updatedAt,
       updated.id,
     ).run()
@@ -496,9 +764,28 @@ export async function updateUpdate(
     { forUpdate: true, allowRelease: options.allowRelease },
   )
 
+  let payloadMeta: Partial<DashboardUpdate> = {}
+  const payloadProvided = Object.prototype.hasOwnProperty.call(rawInput, 'payload')
+  if (payloadProvided) {
+    if (rawInput.payload === null) {
+      payloadMeta = {
+        payloadKey: null,
+        payloadSha256: null,
+        payloadContentType: null,
+        payloadVersion: null,
+        payloadSize: null,
+        payloadUrl: null,
+      }
+    }
+    else if (rawInput.payload !== undefined) {
+      payloadMeta = await buildPayloadMeta(event, existing.id, rawInput.payload, rawInput.payloadVersion)
+    }
+  }
+
   const updated: DashboardUpdate = {
     ...existing,
     ...mergedInput,
+    ...payloadMeta,
     updatedAt: new Date().toISOString(),
   }
 
@@ -638,6 +925,8 @@ export async function upsertReleaseUpdate(event: H3Event, release: AppRelease): 
   const summary = buildReleaseSummary(release.notes, release.notesHtml ?? null)
   const input: UpdateInput = {
     type: 'release',
+    scope: 'both',
+    channels: [release.channel],
     releaseTag: release.tag,
     title: release.name || release.tag,
     timestamp: release.publishedAt ?? release.createdAt,
@@ -669,16 +958,20 @@ export async function upsertReleaseUpdate(event: H3Event, release: AppRelease): 
         UPDATE ${UPDATES_TABLE}
         SET
           type = ?1,
-          release_tag = ?2,
-          title = ?3,
-          timestamp = ?4,
-          summary = ?5,
-          tags = ?6,
-          link = ?7,
-          updated_at = ?8
-        WHERE id = ?9;
+          scope = ?2,
+          channels = ?3,
+          release_tag = ?4,
+          title = ?5,
+          timestamp = ?6,
+          summary = ?7,
+          tags = ?8,
+          link = ?9,
+          updated_at = ?10
+        WHERE id = ?11;
       `).bind(
         updated.type,
+        updated.scope,
+        JSON.stringify(updated.channels),
         updated.releaseTag,
         serializeLocalizedText(updated.title),
         updated.timestamp,
@@ -703,6 +996,8 @@ export async function upsertReleaseUpdate(event: H3Event, release: AppRelease): 
       INSERT INTO ${UPDATES_TABLE} (
         id,
         type,
+        scope,
+        channels,
         release_tag,
         title,
         timestamp,
@@ -711,10 +1006,12 @@ export async function upsertReleaseUpdate(event: H3Event, release: AppRelease): 
         link,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);
     `).bind(
       created.id,
       created.type,
+      created.scope,
+      JSON.stringify(created.channels),
       created.releaseTag,
       serializeLocalizedText(created.title),
       created.timestamp,

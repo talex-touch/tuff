@@ -625,7 +625,7 @@
         "clipboard": "剪贴板",
         "network": "网络",
         "system": "系统",
-        "ai": "AI 能力",
+        "intelligence": "Intelligence 能力",
         "storage": "存储",
         "window": "窗口"
       },
@@ -703,14 +703,14 @@
             "desc": "注册系统级全局快捷键"
           }
         },
-        "ai": {
+        "intelligence": {
           "basic": {
-            "name": "基础 AI",
-            "desc": "使用基础 AI 能力"
+            "name": "基础 Intelligence",
+            "desc": "使用基础 Intelligence 能力"
           },
-          "advanced": {
-            "name": "高级 AI",
-            "desc": "使用高级 AI 模型"
+          "admin": {
+            "name": "Intelligence 管理",
+            "desc": "管理高风险 Intelligence 能力"
           },
           "agents": {
             "name": "智能体",
@@ -1048,12 +1048,24 @@
     "login": "请先登录!",
     "permission": "您没有权限!",
     "pluginMarket": "插件市场",
+    "installedPlugins": "已安装插件",
+    "marketDocs": "市场文档",
+    "marketDetail": "插件详情",
     "plugin": "插件",
+    "downloads": "下载中心",
+    "details": "详细信息",
     "styles": "样式",
     "theme": "主题",
     "application": "应用",
     "appSettings": "应用设置",
-    "storagable": "存储"
+    "storagable": "存储",
+    "intelligence": "智能",
+    "intelligenceChannels": "智能通道",
+    "intelligenceCapabilities": "智能能力",
+    "intelligencePrompts": "智能提示词",
+    "intelligenceAudit": "智能审计",
+    "intelligenceAgents": "智能代理",
+    "metaOverlay": "元信息"
   },
   "textPreview": {
     "loading": "加载中...",
@@ -2135,7 +2147,18 @@
     "updateAvailable": "新版本可用",
     "updateAvailableBody": "Tuff {version} 已发布\n点击查看详情",
     "updateReady": "更新已准备就绪",
-    "updateReadyBody": "Tuff {version} 已下载完成\n点击立即安装"
+    "updateReadyBody": "Tuff {version} 已下载完成\n点击立即安装",
+    "syncBlockedTitle": "同步已暂停",
+    "syncBlockedBody": "由于{reason}，同步已暂停，请处理后重试。",
+    "syncBlockedReasonQuota": "配额受限",
+    "syncBlockedReasonDevice": "设备未授权",
+    "syncBlockedReasonAuth": "鉴权异常",
+    "syncDeviceEvictedTitle": "设备已回收",
+    "syncDeviceEvictedBody": "已移除{count}台长期未活跃设备，以保持同步可用。",
+    "syncDeviceEvictedBodyWithNames": "已移除{count}台设备：{devices}。",
+    "syncDeviceListSeparator": "、",
+    "syncDeviceListMore": "等",
+    "syncDeviceUnknown": "未知设备"
   },
   "timeUnits": {
     "seconds": "秒",

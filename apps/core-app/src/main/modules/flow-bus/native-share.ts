@@ -11,12 +11,13 @@ import type {
   NativeShareOptions,
   NativeShareResult
 } from '@talex-touch/utils'
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
 import { shell } from 'electron'
+import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { shareNotificationService } from './share-notification'
 
-const execAsync = promisify(exec)
+async function runAppleScript(script: string): Promise<void> {
+  await execFileSafe('osascript', ['-e', script])
+}
 
 /**
  * Native share target IDs
@@ -200,13 +201,13 @@ export class NativeShareService {
         shareService's performWithItems:theFiles
       `
 
-      await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`)
+      await runAppleScript(script)
       return { success: true, target: 'airdrop' }
     } catch (_error) {
       // Fallback: open AirDrop window
-      await execAsync(
-        'open /System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app'
-      )
+      await execFileSafe('open', [
+        '/System/Library/CoreServices/Finder.app/Contents/Applications/AirDrop.app'
+      ])
       return { success: true, target: 'airdrop-window' }
     }
   }
@@ -228,7 +229,7 @@ export class NativeShareService {
             tell newMessage to set visible to true
           end tell
         `
-        await execAsync(`osascript -e '${script.replace(/'/g, "'\\''")}'`)
+        await runAppleScript(script)
       } else {
         const subject = encodeURIComponent(title || '')
         const body = encodeURIComponent(text || '')
@@ -257,7 +258,7 @@ export class NativeShareService {
         activate
       end tell
     `
-    await execAsync(`osascript -e '${script}'`)
+    await runAppleScript(script)
 
     // Copy text to clipboard for user to paste
     const { clipboard } = await import('electron')

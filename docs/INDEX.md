@@ -5,10 +5,14 @@
 ## 主要入口
 
 - `docs/plan-prd/README.md` - PRD / 规划索引（产品 + 架构 + 实现）
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` - 产品总览 + 8 周路线图（目标与节奏）
+- `docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md` - Week 1 执行清单（质量基线）
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 最终目标与质量约束基线
 - `docs/` - 仓库文档（分析、事故报告、集成指南）
 
 ## 状态快照（压缩版，代码核对）
 
+- 2026-02 新增：Nexus 汇率服务（USD 基准换算 + D1 历史快照 + telemetry 错误归档），入口 `/api/exchange/convert`；高级历史查询 `/api/exchange/history`
 - 已完成（指南/报告）：`docs/updates-module.md`; `docs/search-logger-lifecycle-analysis.md`; `docs/clipboard-mechanism-analysis.md`; `docs/script-native-build-distribution.md`; `docs/script-native-constraints.md`; `docs/analytics-data-prd.md`; `docs/everything-integration.md`; `docs/engineering/everything-sdk-rollout-status.md`; `docs/engineering/audits/*`; `docs/engineering/optimization/*`; `docs/engineering/ci-cd/*`; `docs/engineering/typecheck/*`; `docs/engineering/reports/*`; `docs/engineering/notes/*`; `docs/engineering/monorepo-standards.md`; `docs/plan-prd/docs/build-strategy.md`; `docs/plan-prd/docs/github-automation.zh-CN.md`; `docs/plan-prd/04-implementation/QualityAnalysis260111.md`; `docs/plan-prd/04-implementation/Quality260111.md`; `docs/plan-prd/04-implementation/performance/PERFORMANCE_REFERENCE.md`; `docs/plan-prd/05-archive/*`
 - 已完成（功能 PRD，代码一致）：`docs/plan-prd/03-features/search/*`; `docs/plan-prd/03-features/SEARCH-REFACTOR-PRD.md`; `docs/plan-prd/03-features/corebox-clipboard-transport-migration.md`; `docs/plan-prd/03-features/meta-overlay/META-OVERLAY-PRD.md`; `docs/plan-prd/03-features/flow-transfer-*.md`; `docs/plan-prd/03-features/division-box-prd.md`; `docs/plan-prd/docs/DIVISION_BOX_*`; `docs/plan-prd/03-features/tuff-transport/*`; `docs/plan-prd/03-features/download-update/*`; `docs/plan-prd/03-features/build/*`; `docs/plan-prd/03-features/plugin/*`; `docs/plan-prd/02-architecture/{intelligence-agents-system-prd.md,intelligence-power-generic-api-prd.md,telemetry-error-reporting-system-prd.md,module-logging-system-prd.md,platform-capabilities-prd.md}`; `docs/plan-prd/docs/AISDK_GUIDE.md`; `docs/plan-prd/04-implementation/TuffTransportMigration260111.md`; `docs/plan-prd/04-implementation/performance/direct-preview-calculation-prd.md`
 - 部分完成：`docs/plan-prd/04-implementation/{StorageUnified260111.md,config-storage-unification.md,CoreAppRefactor260111.md,TuffTransportPortPlan260111.md,TaskScheduler260111.md,FileWorkerIdlePlan260111.md,PerformanceLag260111.md}`; `docs/plan-prd/03-features/view/attach-view-cache-prd.md`; `docs/plan-prd/03-features/tuff-ui/TUFF-UI-MIGRATION-PRD.md`; `docs/plan-prd/03-features/nexus/*`; `docs/nexus-everything-integration.md`; `docs/incident-2026-01-16-longterm-fixes.md`（VC-4/DB-6/PERF-1 待完成）

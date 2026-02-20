@@ -95,6 +95,7 @@ code: |
 ## 表单与输入
 
 - [Input 输入](./input.zh.md)
+- [CodeEditor 代码编辑器](./code-editor.zh.md)
 - [Select 选择器](./select.zh.md)
 - [FlatRadio 平铺单选](./flat-radio.zh.md)
 - [SearchInput 搜索输入框](./search-input.zh.md)
@@ -116,6 +117,7 @@ code: |
 
 - [Dialog 弹窗](./dialog.zh.md)
 - [Drawer 抽屉](./drawer.zh.md)
+- [FlipOverlay 翻转遮罩](./flip-overlay.zh.md)
 - [Toast 提示](./toast.zh.md)
 - [Tooltip 提示](./tooltip.zh.md)
 - [Popover 弹出层](./popover.zh.md)

@@ -2,6 +2,34 @@
 
 本文件用于指导 AI 编码代理（如 Codex CLI / Qoder 等）在本仓库内工作。目标是：少歧义、可执行、可维护。
 
+## 项目定义（必须先理解）
+
+### 这是什么项目
+- **Tuff（原 TalexTouch）** 是一个本地优先（Local-first）、AI 原生（AI-native）、插件可扩展（Plugin-extensible）的桌面指令中心。
+- 项目核心价值：统一“搜索 + 执行 + 插件协同 + 智能能力”，减少跨应用操作成本。
+
+### 交付边界（Monorepo 视角）
+- `apps/core-app`：桌面主产品（Electron + Vue），是主要运行时与能力承载体。
+- `apps/nexus`：文档与生态站点（开发者文档、API 文档、发布信息）。
+- `packages/*`：共享 SDK、类型、组件与工具（如 `utils`、`tuffex`、`transport`）。
+- `plugins/*`：官方/示例插件能力集合（CoreBox 能力扩展与验证载体）。
+
+### 当前阶段最终目标（2026 上半年）
+- **架构目标**：完成 SDK Hard-Cut，清理 renderer/main/plugin 侧 legacy channel 直连。
+- **质量目标**：建立稳定质量门禁（typecheck/lint/test/build 可复现、可追踪）。
+- **发布目标**：打通 OIDC + RSA 官方构建信任链与 Nexus 自动同步闭环。
+- **产品目标**：补齐 Flow / DivisionBox / Intelligence 等核心能力闭环，形成可稳定迭代基线。
+
+### 文档同步责任（强约束）
+- 任何影响行为/接口/架构的改动，必须同步以下文档至少一处：
+  - `docs/plan-prd/README.md`（里程碑与未闭环能力）
+  - `docs/plan-prd/TODO.md`（执行清单）
+  - `docs/plan-prd/01-project/CHANGES.md`（已落地变更）
+  - `docs/INDEX.md`（入口导航）
+- 若改动涉及“目标变化/质量门禁变化”，必须同时更新产品总览与路线图文档。
+  - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+  - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+
 ## 0. 最高优先级（必须遵守）
 
 ### 0.1 语言与输出
@@ -102,7 +130,7 @@
 - `apps/core-app/` - 主应用程序（Electron + Vue 3）
 - `packages/` - 共享工具包（@talex-touch/utils）
 - `plugins/` - 插件示例
-- `apps/docs/` - 文档站点
+- `apps/nexus/` - 文档与生态站点
 
 ### 技术栈
 - **运行时**: Electron 37.2.4+, Node.js 22.16.0+ (Volta 强制)

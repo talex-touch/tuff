@@ -22,6 +22,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { isLocalhostUrl } from '@talex-touch/utils'
+import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -99,7 +100,11 @@ const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const PLUGIN_TEMP_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 const SECURE_STORE_FILE = 'secure-store.json'
 const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
+const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
+const DIALOG_APPROVED_MAX = 200
 const log = createLogger('CommonChannel')
+
+const dialogApprovedPaths = new Map<string, number>()
 
 const legacyCloseEvent = defineRawEvent<void, void>('close')
 const legacyHideEvent = defineRawEvent<void, void>('hide')
@@ -582,21 +587,53 @@ function resolveLocalFilePath(source: string): string | null {
 
   if (source.startsWith('file:')) {
     try {
-      return fileURLToPath(source)
+      return normalizeAbsolutePath(fileURLToPath(source))
     } catch {
       return null
     }
   }
 
   if (source.startsWith(`${FILE_SCHEMA}:`)) {
-    return resolveTfilePath(source)
+    return normalizeAbsolutePath(resolveTfilePath(source))
   }
 
-  if (path.isAbsolute(source) || path.win32.isAbsolute(source)) {
-    return source
+  return normalizeAbsolutePath(source)
+}
+
+function recordDialogPath(pathValue: string): void {
+  const normalized = normalizeAbsolutePath(pathValue)
+  if (!normalized) {
+    return
   }
 
-  return null
+  dialogApprovedPaths.set(normalized, Date.now())
+  if (dialogApprovedPaths.size <= DIALOG_APPROVED_MAX) {
+    return
+  }
+
+  const entries = Array.from(dialogApprovedPaths.entries()).sort((a, b) => a[1] - b[1])
+  for (const [key] of entries.slice(0, entries.length - DIALOG_APPROVED_MAX)) {
+    dialogApprovedPaths.delete(key)
+  }
+}
+
+function ensureApprovedDialogPath(pathValue: string): string {
+  const normalized = normalizeAbsolutePath(pathValue)
+  if (!normalized) {
+    throw new Error('Invalid file path')
+  }
+
+  const timestamp = dialogApprovedPaths.get(normalized)
+  if (!timestamp) {
+    throw new Error('Path is not approved')
+  }
+
+  if (Date.now() - timestamp > DIALOG_APPROVED_TTL_MS) {
+    dialogApprovedPaths.delete(normalized)
+    throw new Error('Path approval expired')
+  }
+
+  return normalized
 }
 
 function getCachedReadFile(path: string): ReadFileCacheEntry | null {
@@ -1493,7 +1530,9 @@ export class CommonChannelModule extends BaseModule {
           properties
         })
 
-        return { filePaths: result.canceled ? [] : result.filePaths }
+        const filePaths = result.canceled ? [] : result.filePaths
+        filePaths.forEach(recordDialogPath)
+        return { filePaths }
       }),
       transport.on(dialogSaveFileEvent, async (payload) => {
         const win = BrowserWindow.getFocusedWindow()
@@ -1505,14 +1544,18 @@ export class CommonChannelModule extends BaseModule {
           filters: payload?.filters
         })
 
-        return { filePath: result.canceled ? undefined : result.filePath }
+        const filePath = result.canceled ? undefined : result.filePath
+        if (filePath) {
+          recordDialogPath(filePath)
+        }
+        return { filePath }
       }),
       registerSafeHandler(fsWriteFileEvent, async (payload: { path?: string; data?: string }) => {
         if (!payload?.path || typeof payload.data !== 'string') {
           throw new Error('Path and data are required')
         }
-
-        await fs.writeFile(payload.path, payload.data, 'utf-8')
+        const targetPath = ensureApprovedDialogPath(payload.path)
+        await fs.writeFile(targetPath, payload.data, 'utf-8')
       }),
       transport.on(fsReadFileEvent, async (payload) => {
         if (!payload?.path) {
@@ -1520,7 +1563,8 @@ export class CommonChannelModule extends BaseModule {
         }
 
         try {
-          const data = await fs.readFile(payload.path, 'utf-8')
+          const targetPath = ensureApprovedDialogPath(payload.path)
+          const data = await fs.readFile(targetPath, 'utf-8')
           return { data }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

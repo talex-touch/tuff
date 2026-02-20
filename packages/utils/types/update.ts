@@ -198,6 +198,22 @@ export function parseUpdateTag(tag: string): { version: string; channel: AppPrev
 
 export type UpdateArtifactComponent = 'core' | 'renderer' | 'extensions'
 
+export type SystemUpdateType = 'announcement' | 'config' | 'data'
+
+export interface FxRatePayload {
+  kind: 'fx-rate'
+  base: string
+  asOf?: string
+  providerUpdatedAt?: string | null
+  fetchedAt: string
+  providerNextUpdateAt?: string | null
+  ttlMs?: number
+  source?: string
+  rates: Record<string, number>
+}
+
+export type SystemUpdatePayload = FxRatePayload | { kind: string; [key: string]: unknown }
+
 export interface UpdateReleaseArtifact {
   name: string
   component: UpdateArtifactComponent

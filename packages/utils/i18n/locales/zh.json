@@ -33,7 +33,7 @@
       "clipboard": "剪贴板",
       "network": "网络",
       "system": "系统",
-      "ai": "AI 能力",
+      "intelligence": "Intelligence 能力",
       "storage": "存储",
       "window": "窗口"
     },
@@ -61,9 +61,9 @@
       "notification": { "name": "系统通知", "desc": "发送系统通知" },
       "tray": { "name": "托盘交互", "desc": "访问系统托盘功能" }
     },
-    "ai": {
-      "basic": { "name": "基础 AI", "desc": "使用基础 AI 能力" },
-      "advanced": { "name": "高级 AI", "desc": "使用高级 AI 模型" },
+    "intelligence": {
+      "basic": { "name": "基础 Intelligence", "desc": "使用基础 Intelligence 能力" },
+      "admin": { "name": "Intelligence 管理", "desc": "使用高风险 Intelligence 能力" },
       "agents": { "name": "智能体", "desc": "调用智能体系统" }
     },
     "storage": {

@@ -2,8 +2,16 @@ const { plugin, logger, TuffItemBuilder, permission, dialog, openUrl } = globalT
 const { exec } = require('node:child_process')
 const process = require('node:process')
 const { promisify } = require('node:util')
+let spawnShellCommand
+try {
+  ;({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
+}
+catch {
+  spawnShellCommand = null
+}
 
 const execAsync = promisify(exec)
+const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 const PLUGIN_NAME = 'touch-system-actions'
 const SOURCE_ID = 'plugin-features'
 const ICON = { type: 'file', value: 'assets/logo.svg' }
@@ -62,7 +70,7 @@ async function openSystemSettings() {
       openUrl('x-apple.systempreferences:com.apple.preference.security')
       return
     }
-    await execAsync('open "x-apple.systempreferences:com.apple.preference.security"')
+    await runShellCommand('open "x-apple.systempreferences:com.apple.preference.security"')
     return
   }
 
@@ -71,8 +79,29 @@ async function openSystemSettings() {
       openUrl('ms-settings:')
       return
     }
-    await execAsync('powershell -Command "Start-Process ms-settings:"')
+    await runShellCommand('powershell -Command "Start-Process ms-settings:"')
   }
+}
+
+async function runShellCommand(command) {
+  if (SHELL_UNSAFE_PATTERN.test(command)) {
+    throw new Error('unsafe command payload')
+  }
+  if (!spawnShellCommand) {
+    await execAsync(command)
+    return
+  }
+
+  await new Promise((resolve, reject) => {
+    const child = spawnShellCommand(command, { windowsHide: true })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code && code !== 0)
+        reject(new Error(`command failed with code ${code}`))
+      else
+        resolve()
+    })
+  })
 }
 
 async function showPermissionError(actionName) {
@@ -159,10 +188,10 @@ function createActions(platform = process.platform) {
         return
 
       if (isMac) {
-        await execAsync('osascript -e \'tell app "System Events" to shut down\'')
+        await runShellCommand('osascript -e \'tell app "System Events" to shut down\'')
       }
       else if (isWindows) {
-        await execAsync('shutdown /s /t 0')
+        await runShellCommand('shutdown /s /t 0')
       }
     },
   })
@@ -180,10 +209,10 @@ function createActions(platform = process.platform) {
         return
 
       if (isMac) {
-        await execAsync('osascript -e \'tell app "System Events" to restart\'')
+        await runShellCommand('osascript -e \'tell app "System Events" to restart\'')
       }
       else if (isWindows) {
-        await execAsync('shutdown /r /t 0')
+        await runShellCommand('shutdown /r /t 0')
       }
     },
   })
@@ -196,10 +225,10 @@ function createActions(platform = process.platform) {
     group: 'power',
     execute: async () => {
       if (isMac) {
-        await execAsync('pmset displaysleepnow')
+        await runShellCommand('pmset displaysleepnow')
       }
       else if (isWindows) {
-        await execAsync('rundll32.exe user32.dll,LockWorkStation')
+        await runShellCommand('rundll32.exe user32.dll,LockWorkStation')
       }
     },
   })
@@ -212,10 +241,10 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await execAsync("osascript -e 'set volume output volume (output volume of (get volume settings) + 10)'")
+        await runShellCommand("osascript -e 'set volume output volume (output volume of (get volume settings) + 10)'")
       }
       else if (isWindows) {
-        await execAsync("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
+        await runShellCommand("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
       }
     },
   })
@@ -228,10 +257,10 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await execAsync("osascript -e 'set volume output volume (output volume of (get volume settings) - 10)'")
+        await runShellCommand("osascript -e 'set volume output volume (output volume of (get volume settings) - 10)'")
       }
       else if (isWindows) {
-        await execAsync("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
+        await runShellCommand("powershell -Command \"(New-Object -ComObject Shell.Application).NameSpace(17).ParseName('Volume Control').InvokeVerb('properties')\"")
       }
     },
   })
@@ -244,10 +273,10 @@ function createActions(platform = process.platform) {
     group: 'audio',
     execute: async () => {
       if (isMac) {
-        await execAsync("osascript -e 'set volume output muted not (output muted of (get volume settings))'")
+        await runShellCommand("osascript -e 'set volume output muted not (output muted of (get volume settings))'")
       }
       else if (isWindows) {
-        await execAsync('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"')
+        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"')
       }
     },
   })
@@ -260,7 +289,7 @@ function createActions(platform = process.platform) {
       keywords: ['亮度', '增加亮度', 'brightness up', '亮度+'],
       group: 'display',
       execute: async () => {
-        await execAsync('osascript -e \'tell application "System Events" to key code 144\'')
+        await runShellCommand('osascript -e \'tell application "System Events" to key code 144\'')
       },
     })
 
@@ -271,7 +300,7 @@ function createActions(platform = process.platform) {
       keywords: ['亮度', '降低亮度', 'brightness down', '亮度-'],
       group: 'display',
       execute: async () => {
-        await execAsync('osascript -e \'tell application "System Events" to key code 145\'')
+        await runShellCommand('osascript -e \'tell application "System Events" to key code 145\'')
       },
     })
   }

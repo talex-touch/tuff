@@ -1,6 +1,6 @@
 import type {
-  AiCapabilityRoutingConfig,
-  AiSDKPersistedConfig,
+  IntelligenceCapabilityRoutingConfig,
+  IntelligenceSDKPersistedConfig,
   IntelligenceProviderConfig
 } from '@talex-touch/utils'
 import { IntelligenceProviderType, StorageList } from '@talex-touch/utils'
@@ -8,7 +8,7 @@ import { IntelligenceProviderType, StorageList } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { getMainConfig, saveMainConfig } from '../storage'
-import { ai } from './intelligence-sdk'
+import { tuffIntelligence } from './intelligence-sdk'
 
 const storageUpdateEvent = StorageEvents.legacy.update
 
@@ -48,12 +48,14 @@ function normalizeStrategyId(value?: string) {
 /**
  * 实时从 storage 获取最新配置，不使用内部缓存
  */
-function getLatestConfig(): AiSDKPersistedConfig | undefined {
-  const stored = getMainConfig(StorageList.IntelligenceConfig) as AiSDKPersistedConfig | undefined
+function getLatestConfig(): IntelligenceSDKPersistedConfig | undefined {
+  const stored = getMainConfig(StorageList.IntelligenceConfig) as
+    | IntelligenceSDKPersistedConfig
+    | undefined
   return stored
 }
 
-export function ensureAiConfigLoaded(_force?: boolean): void {
+export function ensureIntelligenceConfigLoaded(_force?: boolean): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
 
@@ -79,7 +81,7 @@ export function ensureAiConfigLoaded(_force?: boolean): void {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
   }
 
-  ai.updateConfig({
+  tuffIntelligence.updateConfig({
     providers,
     defaultStrategy: normalizedStrategy,
     enableAudit: stored.globalConfig?.enableAudit ?? true,
@@ -122,14 +124,14 @@ export function getCapabilityPrompt(capabilityId: string): string | undefined {
   return capabilityMap[capabilityId]?.promptTemplate
 }
 
-export function listCapabilities(): AiCapabilityRoutingConfig[] {
+export function listCapabilities(): IntelligenceCapabilityRoutingConfig[] {
   // 实时从 storage 读取
   const stored = getLatestConfig()
   const capabilityMap = stored?.capabilities ?? {}
   return Object.values(capabilityMap)
 }
 
-export function getCapabilitiesMap(): Record<string, AiCapabilityRoutingConfig> {
+export function getCapabilitiesMap(): Record<string, IntelligenceCapabilityRoutingConfig> {
   // 实时从 storage 读取
   const stored = getLatestConfig()
   return stored?.capabilities ?? {}
@@ -154,15 +156,15 @@ export function setupConfigUpdateListener(): void {
       'name' in data &&
       data.name === StorageList.IntelligenceConfig
     ) {
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
     }
   })
 }
 
 /**
- * Save AI SDK config to storage
+ * Save Intelligence SDK config to storage
  */
-export function saveAiConfig(config: AiSDKPersistedConfig): void {
+export function saveIntelligenceConfig(config: IntelligenceSDKPersistedConfig): void {
   saveMainConfig(StorageList.IntelligenceConfig, config)
 }
 

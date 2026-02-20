@@ -179,6 +179,8 @@ export function structuredStrictStringify(value: unknown): string {
 }
 
 export * from './file'
+export * from './safe-path'
+export * from './safe-shell'
 
 export { type AdaptiveTaskQueueOptions, runAdaptiveTaskQueue } from './task-queue'
 

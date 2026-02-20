@@ -286,6 +286,13 @@ export interface AuthDevice {
   lastLoginAt?: string | null
 }
 
+export interface EvictedDeviceSummary {
+  id: string
+  deviceName: string | null
+  platform: string | null
+  lastSeenAt: string | null
+}
+
 export interface AuthGeoLocation {
   countryCode: string | null
   regionCode: string | null
@@ -421,6 +428,17 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
     lastLocation,
     lastLoginIpMasked,
     lastLoginAt: row.last_login_at ?? null,
+  }
+}
+
+function mapEvictedDeviceSummary(row: Record<string, any> | null): EvictedDeviceSummary | null {
+  if (!row)
+    return null
+  return {
+    id: row.id,
+    deviceName: row.device_name ?? null,
+    platform: row.platform ?? null,
+    lastSeenAt: row.last_seen_at ?? null
   }
 }
 
@@ -1120,6 +1138,111 @@ export async function countActiveDevices(event: H3Event, userId: string): Promis
     WHERE user_id = ? AND revoked_at IS NULL
   `).bind(userId).first<{ total: number }>()
   return Number(row?.total ?? 0)
+}
+
+export async function revokeOldestDevices(
+  event: H3Event,
+  userId: string,
+  options: { limit: number; keepDeviceId?: string | null }
+): Promise<EvictedDeviceSummary[]> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const limit = Math.max(0, Math.floor(options.limit))
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return []
+  }
+
+  const totalRow = await db.prepare(`
+    SELECT COUNT(*) as total
+    FROM ${DEVICES_TABLE}
+    WHERE user_id = ? AND revoked_at IS NULL
+  `).bind(userId).first<{ total: number }>()
+  const total = Number(totalRow?.total ?? 0)
+  if (total <= limit) {
+    return []
+  }
+
+  const toRevoke = total - limit
+  const params: Array<string | number> = [userId]
+  const keepDeviceId = options.keepDeviceId ?? null
+  const keepCondition = keepDeviceId ? ' AND id != ?' : ''
+  if (keepDeviceId) {
+    params.push(keepDeviceId)
+  }
+
+  const candidates = await db.prepare(`
+    SELECT id, device_name, platform, last_seen_at
+    FROM ${DEVICES_TABLE}
+    WHERE user_id = ? AND revoked_at IS NULL${keepCondition}
+    ORDER BY COALESCE(last_seen_at, created_at) ASC, created_at ASC
+    LIMIT ?
+  `).bind(...params, toRevoke).all<Record<string, any>>()
+
+  const summaries = (candidates.results ?? [])
+    .map(row => mapEvictedDeviceSummary(row))
+    .filter((item): item is EvictedDeviceSummary => Boolean(item))
+
+  const ids = summaries.map(item => item.id)
+  if (!ids.length) {
+    return []
+  }
+
+  const now = new Date().toISOString()
+  const placeholders = ids.map(() => '?').join(', ')
+  await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET revoked_at = ?, token_version = token_version + 1
+    WHERE user_id = ? AND id IN (${placeholders})
+  `).bind(now, userId, ...ids).run()
+
+  return summaries
+}
+
+export async function revokeInactiveDevices(
+  event: H3Event,
+  userId: string,
+  options: { inactiveBefore: string; keepDeviceId?: string | null }
+): Promise<EvictedDeviceSummary[]> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const inactiveBefore = options.inactiveBefore
+  if (!inactiveBefore) {
+    return []
+  }
+
+  const params: Array<string | number> = [userId, inactiveBefore]
+  const keepDeviceId = options.keepDeviceId ?? null
+  const keepCondition = keepDeviceId ? ' AND id != ?' : ''
+  if (keepDeviceId) {
+    params.push(keepDeviceId)
+  }
+
+  const candidates = await db.prepare(`
+    SELECT id, device_name, platform, last_seen_at
+    FROM ${DEVICES_TABLE}
+    WHERE user_id = ? AND revoked_at IS NULL
+      AND COALESCE(last_seen_at, created_at) < ?${keepCondition}
+    ORDER BY COALESCE(last_seen_at, created_at) ASC, created_at ASC
+  `).bind(...params).all<Record<string, any>>()
+
+  const summaries = (candidates.results ?? [])
+    .map(row => mapEvictedDeviceSummary(row))
+    .filter((item): item is EvictedDeviceSummary => Boolean(item))
+
+  const ids = summaries.map(item => item.id)
+  if (!ids.length) {
+    return []
+  }
+
+  const now = new Date().toISOString()
+  const placeholders = ids.map(() => '?').join(', ')
+  await db.prepare(`
+    UPDATE ${DEVICES_TABLE}
+    SET revoked_at = ?, token_version = token_version + 1
+    WHERE user_id = ? AND id IN (${placeholders})
+  `).bind(now, userId, ...ids).run()
+
+  return summaries
 }
 
 export async function revokeDevice(event: H3Event, userId: string, deviceId: string): Promise<void> {

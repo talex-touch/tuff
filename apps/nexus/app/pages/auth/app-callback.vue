@@ -17,7 +17,10 @@ const callbackInFlight = ref(false)
 const sessionToken = ref('')
 const showDevMode = ref(false)
 const copied = ref(false)
+const protocolAttempted = ref(false)
+const autoCloseRequested = ref(false)
 let callbackGuardTimer: ReturnType<typeof setTimeout> | null = null
+let devModeTimer: ReturnType<typeof setTimeout> | null = null
 
 const APP_SCHEMA = 'tuff'
 const isDev = import.meta.dev
@@ -123,12 +126,14 @@ async function handleCallback() {
     const params = new URLSearchParams()
     params.set('app_token', appToken)
     const callbackUrl = `${APP_SCHEMA}://auth/callback?${params.toString()}`
+    protocolAttempted.value = true
     window.location.href = callbackUrl
 
     // In dev mode, show fallback after a delay (protocol might not work)
     if (isDev) {
-      setTimeout(() => {
-        showDevMode.value = true
+      devModeTimer = setTimeout(() => {
+        if (!autoCloseRequested.value)
+          showDevMode.value = true
       }, 2000)
     }
   }
@@ -157,6 +162,32 @@ async function handleCallback() {
   }
 }
 
+function cancelDevModePrompt() {
+  showDevMode.value = false
+  if (devModeTimer) {
+    clearTimeout(devModeTimer)
+    devModeTimer = null
+  }
+}
+
+function requestCloseTab() {
+  if (autoCloseRequested.value)
+    return
+  autoCloseRequested.value = true
+  cancelDevModePrompt()
+  window.close()
+}
+
+function handleWindowBlur() {
+  if (import.meta.server)
+    return
+  if (status.value !== 'success')
+    return
+  if (!protocolAttempted.value)
+    return
+  requestCloseTab()
+}
+
 async function copyToken() {
   if (sessionToken.value) {
     await navigator.clipboard.writeText(sessionToken.value)
@@ -169,6 +200,7 @@ async function copyToken() {
 
 onMounted(() => {
   void handleCallback()
+  window.addEventListener('blur', handleWindowBlur)
   callbackGuardTimer = setTimeout(() => {
     if (status.value !== 'loading')
       return
@@ -187,10 +219,15 @@ watch(
 )
 
 onUnmounted(() => {
+  window.removeEventListener('blur', handleWindowBlur)
   if (!callbackGuardTimer)
     return
   clearTimeout(callbackGuardTimer)
   callbackGuardTimer = null
+  if (devModeTimer) {
+    clearTimeout(devModeTimer)
+    devModeTimer = null
+  }
 })
 </script>
 

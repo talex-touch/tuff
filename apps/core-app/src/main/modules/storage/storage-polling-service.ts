@@ -68,15 +68,19 @@ export class StoragePollingService {
       return
     }
 
+    const t0 = performance.now()
+
     // Use Promise.all for concurrent saves instead of sequential
     const results = await Promise.allSettled(
       dirtyConfigs.map(async (name) => {
+        const saveStart = performance.now()
         await this.saveFn(name)
         this.cache.clearDirty(name)
-        return name
+        return { name, durationMs: Math.round(performance.now() - saveStart) }
       })
     )
 
+    const totalMs = Math.round(performance.now() - t0)
     const failCount = results.filter((r) => r.status === 'rejected').length
 
     if (failCount > 0) {
@@ -89,6 +93,22 @@ export class StoragePollingService {
           console.error(chalk.red(`  - ${dirtyConfigs[index]}:`), result.reason)
         }
       })
+    }
+
+    // 诊断日志：当总耗时 > 500ms 时输出各 config 的保存耗时
+    if (totalMs > 500) {
+      const details = results
+        .filter(
+          (r): r is PromiseFulfilledResult<{ name: string; durationMs: number }> =>
+            r.status === 'fulfilled'
+        )
+        .map((r) => `${r.value.name}=${r.value.durationMs}ms`)
+        .join(' ')
+      console.warn(
+        chalk.yellow(
+          `[StoragePolling] Slow save ${totalMs}ms (${dirtyConfigs.length} configs): ${details}`
+        )
+      )
     }
   }
 

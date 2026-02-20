@@ -1,9 +1,7 @@
 <script lang="ts" name="FlatController" setup>
-import { computed } from 'vue'
 import { useLayoutController } from '~/composables/layout/useLayoutController'
 
-const { route, t, handleUpgradeClick } = useLayoutController()
-const routeLabel = computed(() => route?.name ?? route?.path ?? '')
+const { routeLabel, t, handleUpgradeClick } = useLayoutController()
 </script>
 
 <template>

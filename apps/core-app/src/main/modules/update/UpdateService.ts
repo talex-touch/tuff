@@ -19,6 +19,7 @@ import {
   resolveUpdateChannelLabel,
   splitUpdateTag
 } from '@talex-touch/utils'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
@@ -78,12 +79,37 @@ interface ReleaseCacheEntry {
 
 interface ReleaseCacheStore {
   version: 1
+  providerType?: UpdateProviderType
+  providerKey?: string
   entries: Partial<Record<AppPreviewChannel, ReleaseCacheEntry>>
 }
 
 interface UpdateFetchResult {
   result: UpdateCheckResult
   usedNetwork: boolean
+}
+
+interface OfficialReleaseAsset {
+  filename: string
+  downloadUrl: string
+  size: number
+  platform: 'darwin' | 'win32' | 'linux'
+  arch: 'x64' | 'arm64' | 'universal'
+  sha256?: string | null
+  signatureUrl?: string | null
+}
+
+interface OfficialRelease {
+  tag: string
+  name: string
+  channel: AppPreviewChannel
+  version: string
+  notes: { zh: string; en: string }
+  notesHtml?: { zh: string; en: string } | null
+  status: string
+  publishedAt?: string | null
+  createdAt: string
+  assets?: OfficialReleaseAsset[]
 }
 
 /**
@@ -134,6 +160,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.currentVersion = this.getCurrentVersion()
     this.currentChannel = this.getCurrentChannel()
     this.settings = this.getDefaultSettings()
+    this.releaseCacheStore = this.buildReleaseCacheStore()
   }
 
   private tryInitUpdateSystem(ctx: ModuleInitContext<TalexEvents>): boolean {
@@ -304,6 +331,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         async (payload: { settings?: Partial<UpdateSettings> }) => {
           const newSettings = payload?.settings ?? {}
           try {
+            const previousProvider = this.resolveReleaseCacheProvider(this.settings.source)
             const sanitizedSettings: Partial<UpdateSettings> = { ...newSettings }
 
             if ('updateChannel' in sanitizedSettings) {
@@ -347,6 +375,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             }
             if (this.settings.enabled) {
               this.startPolling()
+            }
+
+            const nextProvider = this.resolveReleaseCacheProvider(this.settings.source)
+            if (
+              previousProvider.type !== nextProvider.type ||
+              previousProvider.key !== nextProvider.key
+            ) {
+              this.cache.clear()
+              this.clearReleaseCache()
             }
 
             return { success: true }
@@ -1136,7 +1173,45 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
    * Get cache key for current configuration
    */
   private getCacheKey(channel: AppPreviewChannel): string {
-    return `releases:${UPDATE_GITHUB_REPO}:${channel}`
+    const providerType = this.settings.source?.type ?? UpdateProviderType.GITHUB
+    const providerKey =
+      providerType === UpdateProviderType.OFFICIAL
+        ? this.resolveOfficialBaseUrl()
+        : (this.settings.source?.url ?? UPDATE_GITHUB_REPO)
+    return `releases:${providerType}:${providerKey}:${channel}`
+  }
+
+  private resolveReleaseCacheProvider(source: UpdateSettings['source'] | undefined): {
+    type: UpdateProviderType
+    key: string
+  } {
+    const providerType = source?.type ?? UpdateProviderType.GITHUB
+    const providerKey =
+      providerType === UpdateProviderType.OFFICIAL
+        ? this.resolveOfficialBaseUrl()
+        : (source?.url ?? UPDATE_GITHUB_REPO)
+    return { type: providerType, key: providerKey }
+  }
+
+  private buildReleaseCacheStore(entries: ReleaseCacheStore['entries'] = {}): ReleaseCacheStore {
+    const provider = this.resolveReleaseCacheProvider(this.settings.source)
+    return {
+      version: 1,
+      entries,
+      providerType: provider.type,
+      providerKey: provider.key
+    }
+  }
+
+  private isReleaseCacheCompatible(store: ReleaseCacheStore): boolean {
+    const provider = this.resolveReleaseCacheProvider(this.settings.source)
+    if (!store.providerType && !store.providerKey) {
+      return (
+        provider.type === UpdateProviderType.GITHUB &&
+        provider.key === (this.settings.source?.url ?? UPDATE_GITHUB_REPO)
+      )
+    }
+    return store.providerType === provider.type && store.providerKey === provider.key
   }
 
   private async handleUserAction(tag: string, action: UpdateUserAction): Promise<void> {
@@ -1173,7 +1248,29 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     channel: AppPreviewChannel,
     options?: { force?: boolean }
   ): Promise<UpdateFetchResult> {
-    const source = this.settings.source?.name ?? 'GitHub'
+    if (this.settings.source?.type === UpdateProviderType.OFFICIAL) {
+      try {
+        const officialResult = await this.fetchLatestReleaseFromOfficial(channel, options)
+        if (officialResult.result.hasUpdate || !officialResult.result.error) {
+          return officialResult
+        }
+      } catch (error) {
+        updateLog.warn('Official update source failed, falling back to GitHub', { error })
+      }
+      return this.fetchLatestReleaseFromGitHub(channel, options)
+    }
+
+    return this.fetchLatestReleaseFromGitHub(channel, options)
+  }
+
+  private async fetchLatestReleaseFromGitHub(
+    channel: AppPreviewChannel,
+    options?: { force?: boolean }
+  ): Promise<UpdateFetchResult> {
+    const source =
+      this.settings.source?.type === UpdateProviderType.GITHUB
+        ? (this.settings.source?.name ?? 'GitHub')
+        : 'GitHub'
     const force = options?.force ?? false
     const cacheEntry = this.getReleaseCacheEntry(channel)
     const now = Date.now()
@@ -1359,6 +1456,132 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
 
     throw new Error('Failed to fetch latest release')
+  }
+
+  private async fetchLatestReleaseFromOfficial(
+    channel: AppPreviewChannel,
+    options?: { force?: boolean }
+  ): Promise<UpdateFetchResult> {
+    const source = this.settings.source?.name ?? 'Official Releases'
+    const force = options?.force ?? false
+    const cacheEntry = this.getReleaseCacheEntry(channel)
+    const now = Date.now()
+
+    if (!force && this.settings.cacheEnabled && cacheEntry?.releases?.length) {
+      const ttlMs = this.settings.cacheTTL * 60 * 1000
+      if (now - cacheEntry.fetchedAt <= ttlMs) {
+        return {
+          usedNetwork: false,
+          result: {
+            hasUpdate: true,
+            release: cacheEntry.releases[0],
+            source
+          }
+        }
+      }
+    }
+
+    try {
+      const url = new URL('/api/releases/latest', this.resolveOfficialBaseUrl())
+      url.searchParams.set('channel', channel)
+      const response = await axios.get(url.toString(), { timeout: 8000 })
+      const release = response.data?.release as OfficialRelease | null
+
+      if (!release) {
+        return {
+          usedNetwork: true,
+          result: {
+            hasUpdate: false,
+            error: response.data?.message ?? 'No official release available',
+            source
+          }
+        }
+      }
+
+      const mapped = this.mapOfficialRelease(release)
+      const updatedEntry: ReleaseCacheEntry = {
+        releases: [mapped],
+        fetchedAt: now,
+        ttlMinutes: this.settings.cacheTTL,
+        failureCount: 0
+      }
+
+      this.setReleaseCacheEntry(channel, updatedEntry)
+
+      return {
+        usedNetwork: true,
+        result: {
+          hasUpdate: true,
+          release: mapped,
+          source
+        }
+      }
+    } catch (error) {
+      this.recordFetchFailure(channel, error)
+
+      if (cacheEntry?.releases?.length) {
+        return {
+          usedNetwork: false,
+          result: {
+            hasUpdate: true,
+            release: cacheEntry.releases[0],
+            source
+          }
+        }
+      }
+
+      if (error instanceof Error) {
+        throw error
+      }
+
+      throw new Error('Failed to fetch official release')
+    }
+  }
+
+  private mapOfficialRelease(release: OfficialRelease): GitHubRelease {
+    const notesHtml = release.notesHtml
+    const body = notesHtml?.en || release.notes?.en || notesHtml?.zh || release.notes?.zh || ''
+
+    const assets = (release.assets ?? [])
+      .map((asset) => {
+        const downloadUrl = this.resolveOfficialAssetUrl(asset.downloadUrl)
+        if (!downloadUrl) return null
+        const signatureUrl = this.resolveOfficialAssetUrl(asset.signatureUrl ?? undefined)
+        const arch = asset.arch === 'arm64' ? 'arm64' : 'x64'
+        return {
+          name: asset.filename,
+          url: downloadUrl,
+          size: asset.size,
+          platform: asset.platform,
+          arch,
+          checksum: asset.sha256 ?? undefined,
+          signatureUrl
+        } as GitHubRelease['assets'][number]
+      })
+      .filter(Boolean) as GitHubRelease['assets']
+
+    return {
+      tag_name: release.tag,
+      name: release.name || release.tag,
+      published_at: release.publishedAt ?? release.createdAt,
+      body,
+      assets
+    }
+  }
+
+  private resolveOfficialAssetUrl(path?: string | null): string | null {
+    if (!path) return null
+    if (/^https?:\/\//i.test(path)) return path
+    const normalized = path.startsWith('/') ? path : `/${path}`
+    return `${this.resolveOfficialBaseUrl()}${normalized}`
+  }
+
+  private resolveOfficialBaseUrl(): string {
+    const configured = this.settings.source?.url
+    if (configured) {
+      return configured.replace(/\/$/, '')
+    }
+    return getTuffBaseUrl()
   }
 
   private async persistRelease(
@@ -1755,9 +1978,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         parsed.entries &&
         typeof parsed.entries === 'object'
       ) {
-        this.releaseCacheStore = {
+        const parsedStore: ReleaseCacheStore = {
           version: 1,
-          entries: parsed.entries as ReleaseCacheStore['entries']
+          entries: parsed.entries as ReleaseCacheStore['entries'],
+          providerType: (parsed as ReleaseCacheStore).providerType,
+          providerKey: (parsed as ReleaseCacheStore).providerKey
+        }
+
+        if (this.isReleaseCacheCompatible(parsedStore)) {
+          this.releaseCacheStore = this.buildReleaseCacheStore(parsedStore.entries)
+        } else {
+          this.releaseCacheStore = this.buildReleaseCacheStore()
         }
       }
     } catch (error) {
@@ -1789,7 +2020,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private clearReleaseCache(): void {
-    this.releaseCacheStore = { version: 1, entries: {} }
+    this.releaseCacheStore = this.buildReleaseCacheStore()
     this.scheduleReleaseCacheSave()
   }
 
@@ -1798,6 +2029,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   }
 
   private setReleaseCacheEntry(channel: AppPreviewChannel, entry: ReleaseCacheEntry): void {
+    if (!this.isReleaseCacheCompatible(this.releaseCacheStore)) {
+      this.releaseCacheStore = this.buildReleaseCacheStore()
+    }
     this.releaseCacheStore.entries[channel] = entry
     this.scheduleReleaseCacheSave()
   }

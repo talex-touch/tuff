@@ -5,6 +5,9 @@ import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 
 interface UpdateFormState {
+  type: 'news' | 'announcement' | 'config' | 'data'
+  scope: 'web' | 'system' | 'both'
+  channels: string
   titleZh: string
   titleEn: string
   summaryZh: string
@@ -12,6 +15,8 @@ interface UpdateFormState {
   tags: string
   link: string
   timestamp: string
+  payload: string
+  payloadVersion: string
 }
 
 interface LocalizedText {
@@ -21,13 +26,16 @@ interface LocalizedText {
 
 interface DashboardUpdate {
   id: string
-  type: 'news' | 'release'
+  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
+  scope: 'web' | 'system' | 'both'
+  channels: string[]
   releaseTag: string | null
   title: LocalizedText
   timestamp: string
   summary: LocalizedText
   tags: string[]
   link: string
+  payloadUrl?: string | null
 }
 
 const props = defineProps<{
@@ -49,6 +57,9 @@ const error = ref<string | null>(null)
 const todayInput = () => new Date().toISOString().slice(0, 10)
 
 const form = reactive<UpdateFormState>({
+  type: 'news',
+  scope: 'web',
+  channels: '',
   titleZh: '',
   titleEn: '',
   summaryZh: '',
@@ -56,12 +67,17 @@ const form = reactive<UpdateFormState>({
   tags: '',
   link: '',
   timestamp: todayInput(),
+  payload: '',
+  payloadVersion: '',
 })
 
 watch(() => props.open, (isOpen) => {
   if (isOpen) {
     error.value = null
     if (props.mode === 'edit' && props.update) {
+      form.type = props.update.type === 'release' ? 'news' : props.update.type
+      form.scope = props.update.scope ?? 'web'
+      form.channels = (props.update.channels || []).join(', ')
       form.titleZh = (props.update.title as unknown as LocalizedText)?.zh || (props.update.title as unknown as LocalizedText)?.en || ''
       form.titleEn = (props.update.title as unknown as LocalizedText)?.en || (props.update.title as unknown as LocalizedText)?.zh || ''
       form.summaryZh = (props.update.summary as unknown as LocalizedText)?.zh || (props.update.summary as unknown as LocalizedText)?.en || ''
@@ -69,8 +85,13 @@ watch(() => props.open, (isOpen) => {
       form.tags = props.update.tags.join(', ')
       form.link = props.update.link
       form.timestamp = props.update.timestamp?.slice(0, 10) || todayInput()
+      form.payload = ''
+      form.payloadVersion = ''
     }
     else {
+      form.type = 'news'
+      form.scope = 'web'
+      form.channels = ''
       form.titleZh = ''
       form.titleEn = ''
       form.summaryZh = ''
@@ -78,6 +99,8 @@ watch(() => props.open, (isOpen) => {
       form.tags = ''
       form.link = ''
       form.timestamp = todayInput()
+      form.payload = ''
+      form.payloadVersion = ''
     }
   }
 })
@@ -94,6 +117,11 @@ async function submit() {
     const tags = form.tags
       .split(',')
       .map(tag => tag.trim())
+      .filter(Boolean)
+
+    const channels = form.channels
+      .split(',')
+      .map(channel => channel.trim().toUpperCase())
       .filter(Boolean)
 
     const titleZh = form.titleZh.trim()
@@ -116,13 +144,21 @@ async function submit() {
     if (!resolvedSummary.zh && !resolvedSummary.en)
       throw new Error(t('dashboard.sections.updates.form.summaryRequired', 'Summary is required.'))
 
-    const payload = {
+    const payload: Record<string, unknown> = {
+      type: form.type,
+      scope: form.scope,
+      channels,
       title: resolvedTitle,
       summary: resolvedSummary,
       link: form.link.trim(),
       tags,
       timestamp: timestampIso,
     }
+
+    if (form.payload.trim())
+      payload.payload = form.payload.trim()
+    if (form.payloadVersion.trim())
+      payload.payloadVersion = form.payloadVersion.trim()
 
     const endpoint = props.mode === 'edit' && props.update
       ? `/api/dashboard/updates/${props.update.id}`
@@ -160,6 +196,61 @@ async function submit() {
       </div>
 
       <form class="flex-1 space-y-4 overflow-y-auto pt-4" @submit.prevent="submit">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.type') }}
+            </label>
+            <select
+              v-model="form.type"
+              class="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-black/80 outline-none transition focus:border-primary/60 dark:border-white/10 dark:bg-white/5 dark:text-white"
+            >
+              <option value="news">
+                {{ t('dashboard.sections.updates.form.typeNews') }}
+              </option>
+              <option value="announcement">
+                {{ t('dashboard.sections.updates.form.typeAnnouncement') }}
+              </option>
+              <option value="config">
+                {{ t('dashboard.sections.updates.form.typeConfig') }}
+              </option>
+              <option value="data">
+                {{ t('dashboard.sections.updates.form.typeData') }}
+              </option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-xs font-medium text-black/50 dark:text-white/50">
+              {{ t('dashboard.sections.updates.form.scope') }}
+            </label>
+            <select
+              v-model="form.scope"
+              class="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-black/80 outline-none transition focus:border-primary/60 dark:border-white/10 dark:bg-white/5 dark:text-white"
+            >
+              <option value="web">
+                {{ t('dashboard.sections.updates.form.scopeWeb') }}
+              </option>
+              <option value="system">
+                {{ t('dashboard.sections.updates.form.scopeSystem') }}
+              </option>
+              <option value="both">
+                {{ t('dashboard.sections.updates.form.scopeBoth') }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-black/50 dark:text-white/50">
+            {{ t('dashboard.sections.updates.form.channels') }}
+          </label>
+          <Input
+            v-model="form.channels"
+            type="text"
+            :placeholder="t('dashboard.sections.updates.form.channelsPlaceholder')"
+          />
+        </div>
+
         <div class="grid gap-3 sm:grid-cols-2">
           <div class="flex flex-col gap-1.5">
             <label class="text-xs font-medium text-black/50 dark:text-white/50">
@@ -209,6 +300,25 @@ async function submit() {
             {{ t('dashboard.sections.updates.form.link') }}
           </label>
           <Input v-model="form.link" type="text" placeholder="https://" required />
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-black/50 dark:text-white/50">
+            {{ t('dashboard.sections.updates.form.payload') }}
+          </label>
+          <Input
+            v-model="form.payload"
+            type="textarea"
+            :rows="6"
+            :placeholder="t('dashboard.sections.updates.form.payloadPlaceholder')"
+          />
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-xs font-medium text-black/50 dark:text-white/50">
+            {{ t('dashboard.sections.updates.form.payloadVersion') }}
+          </label>
+          <Input v-model="form.payloadVersion" type="text" :placeholder="t('dashboard.sections.updates.form.payloadVersionPlaceholder')" />
         </div>
 
         <p v-if="error" class="rounded-md bg-red-50 p-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">

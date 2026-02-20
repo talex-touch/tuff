@@ -28,6 +28,15 @@ export interface FxRateCache {
   source: string
 }
 
+export interface FxRateExternalSnapshot {
+  base: string
+  rates: Record<string, number>
+  fetchedAt: number
+  providerUpdatedAt?: number | null
+  ttlMs?: number
+  source: string
+}
+
 // 货币别名
 const CURRENCY_ALIASES: Record<string, string> = {
   美元: 'USD',
@@ -114,6 +123,7 @@ export class FxRateProvider {
     source: 'default'
   }
 
+  private externalState: { fetchedAt: number; ttlMs: number } | null = null
   private readonly pollingService = PollingService.getInstance()
   private readonly refreshTaskId = 'fx-rate.refresh'
   private isRefreshing = false
@@ -217,13 +227,30 @@ export class FxRateProvider {
     isStale: boolean
     currencyCount: number
   } {
-    const isStale = Date.now() - this.cache.lastRefresh > CACHE_MAX_AGE_MS
+    const now = Date.now()
+    const reference = this.externalState?.fetchedAt ?? this.cache.lastRefresh
+    const maxAge = this.externalState?.ttlMs ?? CACHE_MAX_AGE_MS
+    const isStale = now - reference > maxAge
 
     return {
       lastRefresh: this.cache.lastRefresh,
       source: this.cache.source,
       isStale,
       currencyCount: this.cache.rates.size
+    }
+  }
+
+  applyExternalRates(snapshot: FxRateExternalSnapshot): void {
+    const base = snapshot.base.toUpperCase()
+    const rates = { ...snapshot.rates }
+    if (!rates[base]) {
+      rates[base] = 1
+    }
+    const updatedAt = snapshot.providerUpdatedAt ?? snapshot.fetchedAt ?? Date.now()
+    this.updateCache(rates, snapshot.source, updatedAt)
+    this.externalState = {
+      fetchedAt: snapshot.fetchedAt ?? updatedAt,
+      ttlMs: snapshot.ttlMs ?? CACHE_MAX_AGE_MS
     }
   }
 
@@ -264,6 +291,15 @@ export class FxRateProvider {
     if (this.isRefreshing) {
       log.debug('Refresh already in progress')
       return false
+    }
+
+    if (this.externalState) {
+      const now = Date.now()
+      if (now - this.externalState.fetchedAt <= this.externalState.ttlMs) {
+        log.debug('External rates still fresh, skip refresh')
+        return false
+      }
+      this.externalState = null
     }
 
     this.isRefreshing = true
@@ -373,8 +409,8 @@ export class FxRateProvider {
   /**
    * Update cache with new rates
    */
-  private updateCache(rates: Record<string, number>, source: string): void {
-    const now = Date.now()
+  private updateCache(rates: Record<string, number>, source: string, updatedAt?: number): void {
+    const now = updatedAt ?? Date.now()
 
     for (const [currency, rate] of Object.entries(rates)) {
       this.cache.rates.set(currency, {

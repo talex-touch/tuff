@@ -8,8 +8,9 @@
  * - 上下文相关搜索
  */
 
-import type { AgentDescriptor, AgentPlanStep } from '@talex-touch/utils'
+import type { AgentDescriptor, AgentPlanStep, TuffItem, TuffQuery } from '@talex-touch/utils'
 import type { AgentExecutionContext, AgentImpl } from '../agent-registry'
+import searchEngineCore from '../../../box-tool/search-engine/search-core'
 import { agentRegistry } from '../agent-registry'
 
 const SEARCH_AGENT_ID = 'builtin.search-agent'
@@ -199,19 +200,33 @@ async function executeQuery(
     limit?: number
     filters?: Record<string, unknown>
   }
+  if (!query || !query.trim()) {
+    throw new Error('search.query requires a non-empty query')
+  }
 
-  // TODO: Integrate with actual search engine (TuffSearchEngine)
-  // For now, return a placeholder response
+  const normalizedScope = normalizeScope(scope)
+  const scopedQuery = buildScopedQuery(query.trim(), normalizedScope)
+  const result = await searchEngineCore.search({ text: scopedQuery } as TuffQuery)
+  const mappedResults = normalizeSearchItems(result.items ?? [])
+  const filteredResults = applyResultFilters(mappedResults, filters)
+  const finalResults = filteredResults.slice(0, Math.max(1, limit))
+  const suggestionSet = new Set<string>(generateSuggestions(query))
+  for (const item of finalResults.slice(0, 5)) {
+    if (typeof item.title === 'string' && item.title.length > 0) {
+      suggestionSet.add(item.title)
+    }
+  }
 
   return {
-    query,
-    scope,
-    total: 0,
-    results: [],
-    suggestions: generateSuggestions(query),
+    query: query.trim(),
+    scope: normalizedScope,
+    total: filteredResults.length,
+    results: finalResults,
+    suggestions: Array.from(suggestionSet).slice(0, 10),
     filters,
-    limit,
-    message: 'Search integration pending - connect to TuffSearchEngine'
+    limit: Math.max(1, limit),
+    duration: result.duration,
+    sessionId: result.sessionId
   }
 }
 
@@ -222,21 +237,43 @@ async function executeSemantic(
   const {
     query,
     context,
-    threshold = 0.7
+    threshold = 0.4,
+    limit = 20
   } = params as {
     query: string
     context?: string
     threshold?: number
+    limit?: number
+  }
+  if (!query || !query.trim()) {
+    throw new Error('search.semantic requires a non-empty query')
   }
 
-  // TODO: Integrate with IntelligenceSDK for semantic search
+  const scopedQuery = query.trim()
+  const result = await searchEngineCore.search({ text: scopedQuery } as TuffQuery)
+  const mapped = normalizeSearchItems(result.items ?? [])
+  const tokens = tokenize(`${scopedQuery} ${context ?? ''}`)
+  const normalizedThreshold = Math.min(1, Math.max(0, threshold))
+  const ranked = mapped
+    .map((item) => {
+      const semanticScore = computeSemanticScore(tokens, item)
+      return {
+        ...item,
+        semanticScore
+      }
+    })
+    .filter((item) => item.semanticScore >= normalizedThreshold)
+    .sort((a, b) => b.semanticScore - a.semanticScore)
+    .slice(0, Math.max(1, limit))
+
   return {
-    query,
+    query: scopedQuery,
     context,
-    threshold,
-    results: [],
-    interpretation: `理解查询: "${query}"`,
-    message: 'Semantic search integration pending'
+    threshold: normalizedThreshold,
+    results: ranked,
+    interpretation: buildSemanticInterpretation(scopedQuery, context, ranked.length),
+    duration: result.duration,
+    sessionId: result.sessionId
   }
 }
 
@@ -277,13 +314,38 @@ async function executeRank(
     criteria?: string
     userContext?: Record<string, unknown>
   }
+  if (!Array.isArray(results)) {
+    throw new Error('search.rank requires an array of results')
+  }
 
-  // Simple pass-through for now
+  const normalizedCriteria = normalizeRankCriteria(criteria)
+  const preferredSources = extractPreferredSources(userContext)
+  const ranked = [...results].sort((left, right) => {
+    const leftSourceBoost = preferredSources.has(getResultSource(left)) ? 0.15 : 0
+    const rightSourceBoost = preferredSources.has(getResultSource(right)) ? 0.15 : 0
+
+    if (normalizedCriteria === 'date') {
+      return (
+        getResultTimestamp(right) + rightSourceBoost - (getResultTimestamp(left) + leftSourceBoost)
+      )
+    }
+    if (normalizedCriteria === 'popularity') {
+      return (
+        getResultPopularity(right) +
+        rightSourceBoost -
+        (getResultPopularity(left) + leftSourceBoost)
+      )
+    }
+    return (
+      getResultRelevance(right) + rightSourceBoost - (getResultRelevance(left) + leftSourceBoost)
+    )
+  })
+
   return {
-    ranked: results,
-    criteria,
+    ranked,
+    criteria: normalizedCriteria,
     userContext,
-    explanation: `Results ranked by ${criteria}`
+    explanation: `Results ranked by ${normalizedCriteria}`
   }
 }
 
@@ -292,11 +354,179 @@ async function executeRank(
 // ============================================================================
 
 function generateSuggestions(query: string): string[] {
-  // Simple suggestion generation
   const base = query.toLowerCase().trim()
   if (!base) return []
 
   return [`${base} 文件`, `${base} 应用`, `${base} 设置`, `打开 ${base}`, `搜索 ${base}`]
+}
+
+function normalizeScope(scope?: string): 'files' | 'apps' | 'plugins' | 'all' {
+  if (!scope) return 'all'
+  const normalized = scope.trim().toLowerCase()
+  if (normalized === 'files' || normalized === 'file' || normalized === 'fs') return 'files'
+  if (normalized === 'apps' || normalized === 'app' || normalized === 'application') return 'apps'
+  if (normalized === 'plugins' || normalized === 'plugin' || normalized === 'extension')
+    return 'plugins'
+  return 'all'
+}
+
+function buildScopedQuery(query: string, scope: 'files' | 'apps' | 'plugins' | 'all'): string {
+  if (scope === 'files') return `@file ${query}`
+  if (scope === 'apps') return `@app ${query}`
+  if (scope === 'plugins') return `@plugin ${query}`
+  return query
+}
+
+function normalizeSearchItems(items: TuffItem[]): Array<Record<string, unknown>> {
+  return items.map((item) => {
+    const renderBasic = item.render?.mode === 'default' ? item.render.basic : undefined
+    const title = renderBasic?.title || item.id
+    const subtitle = renderBasic?.subtitle
+    const description = renderBasic?.description
+
+    return {
+      id: item.id,
+      title,
+      subtitle,
+      description,
+      kind: item.kind,
+      sourceId: item.source?.id,
+      sourceType: item.source?.type,
+      score: item.scoring?.final ?? item.scoring?.match ?? item.scoring?.base ?? 0,
+      meta: item.meta
+    }
+  })
+}
+
+function applyResultFilters(
+  results: Array<Record<string, unknown>>,
+  filters?: Record<string, unknown>
+): Array<Record<string, unknown>> {
+  if (!filters) return results
+
+  const typeFilter = typeof filters.type === 'string' ? filters.type.toLowerCase() : undefined
+  if (!typeFilter) return results
+
+  return results.filter((item) => {
+    const kind = typeof item.kind === 'string' ? item.kind.toLowerCase() : ''
+    const sourceType = typeof item.sourceType === 'string' ? item.sourceType.toLowerCase() : ''
+    const sourceId = typeof item.sourceId === 'string' ? item.sourceId.toLowerCase() : ''
+    return (
+      kind.includes(typeFilter) || sourceType.includes(typeFilter) || sourceId.includes(typeFilter)
+    )
+  })
+}
+
+function tokenize(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[\s,.!?;:/\\()[\]{}"'`|+-]+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1)
+}
+
+function computeSemanticScore(tokens: string[], item: Record<string, unknown>): number {
+  if (tokens.length === 0) return 0
+  const corpus = [
+    typeof item.title === 'string' ? item.title : '',
+    typeof item.subtitle === 'string' ? item.subtitle : '',
+    typeof item.description === 'string' ? item.description : ''
+  ]
+    .join(' ')
+    .toLowerCase()
+
+  if (!corpus) return 0
+
+  let score = 0
+  for (const token of tokens) {
+    if (corpus.includes(token)) {
+      score += 1
+    }
+  }
+
+  const lexicalScore = score / tokens.length
+  const relevance = getResultRelevance(item)
+  return Math.min(1, lexicalScore * 0.8 + relevance * 0.2)
+}
+
+function buildSemanticInterpretation(
+  query: string,
+  context: string | undefined,
+  matched: number
+): string {
+  const contextHint = context ? `，结合上下文“${context}”` : ''
+  return `已解析查询“${query}”${contextHint}，匹配到 ${matched} 条语义相关结果`
+}
+
+function normalizeRankCriteria(criteria?: string): 'relevance' | 'date' | 'popularity' {
+  const normalized = criteria?.toLowerCase().trim()
+  if (normalized === 'date' || normalized === 'popularity' || normalized === 'relevance') {
+    return normalized
+  }
+  return 'relevance'
+}
+
+function extractPreferredSources(userContext?: Record<string, unknown>): Set<string> {
+  const preferred =
+    Array.isArray(userContext?.preferredSources) &&
+    userContext?.preferredSources.every((item) => typeof item === 'string')
+      ? (userContext.preferredSources as string[])
+      : []
+  return new Set(preferred)
+}
+
+function getResultSource(result: unknown): string {
+  if (!result || typeof result !== 'object') return ''
+  const sourceId = (result as Record<string, unknown>).sourceId
+  if (typeof sourceId === 'string') return sourceId
+  return ''
+}
+
+function getResultTimestamp(result: unknown): number {
+  if (!result || typeof result !== 'object') return 0
+  const record = result as Record<string, unknown>
+  const candidates = [record.updatedAt, record.modifiedAt, record.timestamp]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate
+    }
+    if (typeof candidate === 'string') {
+      const parsed = Date.parse(candidate)
+      if (!Number.isNaN(parsed)) return parsed
+    }
+  }
+  return 0
+}
+
+function getResultPopularity(result: unknown): number {
+  if (!result || typeof result !== 'object') return 0
+  const record = result as Record<string, unknown>
+  const candidates = [record.popularity, record.usageCount, record.launchCount]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate
+    }
+  }
+  const meta = record.meta
+  if (meta && typeof meta === 'object') {
+    const metaPopularity = (meta as Record<string, unknown>).popularity
+    if (typeof metaPopularity === 'number' && Number.isFinite(metaPopularity)) {
+      return metaPopularity
+    }
+  }
+  return 0
+}
+
+function getResultRelevance(result: unknown): number {
+  if (!result || typeof result !== 'object') return 0
+  const record = result as Record<string, unknown>
+  const candidates = [record.score, record.relevance]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+      return candidate
+    }
+  }
+  return 0
 }
 
 // ============================================================================

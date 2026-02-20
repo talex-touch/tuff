@@ -1,0 +1,86 @@
+---
+title: FlipOverlay
+description: 3D flip overlay that expands from a trigger
+category: Feedback
+status: beta
+since: 1.0.0
+tags: [overlay, motion, transition]
+syncStatus: migrated
+---
+
+# FlipOverlay
+
+A 3D flip overlay that expands from a trigger element, ideal for detail views, previews, and transitions.
+
+## Basic Usage
+
+:::TuffDemoWrapper{demo="FlipOverlayFlipOverlayDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const triggerRef = ref()
+  </script>
+
+  <template>
+    <TxButton ref="triggerRef" @click="open = true">Open Overlay</TxButton>
+    <TxFlipOverlay v-model="open" :source="triggerRef?.$el">
+      <template #default="{ close }">
+        <div style="padding: 32px;">
+          <h3 style="margin: 0 0 8px;">Detail View</h3>
+          <p style="margin: 0 0 16px;">Content flips in from the trigger.</p>
+          <TxButton size="sm" @click="close">Close</TxButton>
+        </div>
+      </template>
+    </TxFlipOverlay>
+  </template>
+---
+:::
+
+## Design Notes
+
+- `source` defines the animation origin; pass an `HTMLElement` or `DOMRect`.
+- Use `rotateX` / `rotateY` with `perspective` to control the 3D feel.
+- `randomTilt` adds subtle variation to each open.
+- Set `maskClosable=false` to close only via the slot `close()`.
+- Coordinate UI changes with `open/opened/close/closed` events.
+
+## API
+
+### Props
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `modelValue` | `boolean` | `false` | Visible state (v-model) |
+| `source` | `HTMLElement \| DOMRect \| null` | `null` | Animation origin |
+| `sourceRadius` | `string \| null` | `null` | Origin border radius |
+| `duration` | `number` | `480` | Animation duration (ms) |
+| `perspective` | `number` | `1200` | 3D perspective |
+| `rotateX` | `number` | `6` | X-axis rotation |
+| `rotateY` | `number` | `8` | Y-axis rotation |
+| `randomTilt` | `boolean` | `true` | Random tilt per open |
+| `tiltRange` | `number` | `2` | Random tilt range |
+| `easeOut` | `string` | `'back.out(1.25)'` | Open easing |
+| `easeIn` | `string` | `'back.in(1)'` | Close easing |
+| `maskClosable` | `boolean` | `true` | Click mask to close |
+| `maskClass` | `string` | `''` | Mask class |
+| `cardClass` | `string` | `''` | Card class |
+
+### Events
+
+| Event | Params | Description |
+|------|--------|-------------|
+| `open` | - | Open animation starts |
+| `opened` | - | Open animation ends |
+| `close` | - | Close animation starts |
+| `closed` | - | Close animation ends |
+| `update:expanded` | `(value: boolean)` | Sync expanded |
+| `update:animating` | `(value: boolean)` | Sync animating |
+
+### Slots
+
+| Slot | Params | Description |
+|------|--------|-------------|
+| `default` | `{ close, expanded, animating }` | Overlay content |

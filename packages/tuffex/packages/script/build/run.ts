@@ -1,12 +1,11 @@
-import { spawn } from "child_process"
+import { spawnSafe } from "../../../../utils/common/utils/safe-shell"
 
 export default async (command: any, path: string) => {
-  const [cmd, ...args] = command.split(" ")
+  const [cmd, ...args] = String(command ?? '').trim().split(" ")
   return new Promise((resolve, _reject) => {
-    const app = spawn(cmd, args, {
+    const app = spawnSafe(cmd, args, {
       cwd: path,
       stdio: "inherit",
-      shell: true,
     });
 
     app.on("close", resolve);

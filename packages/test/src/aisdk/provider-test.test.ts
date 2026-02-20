@@ -1,7 +1,7 @@
-import type { AiProviderConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
 import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
 import { describe, expect, it } from 'vitest'
-import { ai, setIntelligenceProviderManager } from '../../../../apps/core-app/src/main/modules/ai/intelligence-sdk'
+import { setIntelligenceProviderManager, tuffIntelligence } from '../../../../apps/core-app/src/main/modules/ai/intelligence-sdk'
 
 function setMockProviderManager(chatImpl: () => Promise<unknown>) {
   const provider = { chat: chatImpl } as any
@@ -14,9 +14,9 @@ function setMockProviderManager(chatImpl: () => Promise<unknown>) {
   } as any)
 }
 
-describe('aISDK Provider Testing Service', () => {
+describe('tuffIntelligence Provider Testing Service', () => {
   it('should return error when provider is disabled', async () => {
-    const disabledProvider: AiProviderConfig = {
+    const disabledProvider: IntelligenceProviderConfig = {
       id: 'test-disabled',
       type: IntelligenceProviderType.OPENAI,
       name: 'Test Disabled',
@@ -24,7 +24,7 @@ describe('aISDK Provider Testing Service', () => {
       apiKey: 'test-key',
     }
 
-    const result = await ai.testProvider(disabledProvider)
+    const result = await tuffIntelligence.testProvider(disabledProvider)
 
     expect(result.success).toBe(false)
     expect(result.message).toBe('Provider is disabled')
@@ -32,14 +32,14 @@ describe('aISDK Provider Testing Service', () => {
   })
 
   it('should return error when API key is missing for non-local provider', async () => {
-    const providerWithoutKey: AiProviderConfig = {
+    const providerWithoutKey: IntelligenceProviderConfig = {
       id: 'test-no-key',
       type: IntelligenceProviderType.OPENAI,
       name: 'Test No Key',
       enabled: true,
     }
 
-    const result = await ai.testProvider(providerWithoutKey)
+    const result = await tuffIntelligence.testProvider(providerWithoutKey)
 
     expect(result.success).toBe(false)
     expect(result.message).toBe('API key is required')
@@ -51,7 +51,7 @@ describe('aISDK Provider Testing Service', () => {
       throw new Error('network error')
     })
 
-    const invalidProvider: AiProviderConfig = {
+    const invalidProvider: IntelligenceProviderConfig = {
       id: 'test-invalid',
       type: IntelligenceProviderType.OPENAI,
       name: 'Test Invalid',
@@ -61,7 +61,7 @@ describe('aISDK Provider Testing Service', () => {
       timeout: 5000,
     }
 
-    const result = await ai.testProvider(invalidProvider)
+    const result = await tuffIntelligence.testProvider(invalidProvider)
 
     expect(result.success).toBe(false)
     expect(result.message).toBeDefined()
@@ -72,7 +72,7 @@ describe('aISDK Provider Testing Service', () => {
   it('should handle timeout errors', async () => {
     setMockProviderManager(async () => new Promise(() => {}))
 
-    const timeoutProvider: AiProviderConfig = {
+    const timeoutProvider: IntelligenceProviderConfig = {
       id: 'test-timeout',
       type: IntelligenceProviderType.OPENAI,
       name: 'Test Timeout',
@@ -81,7 +81,7 @@ describe('aISDK Provider Testing Service', () => {
       timeout: 10, // Very short timeout to trigger timeout error
     }
 
-    const result = await ai.testProvider(timeoutProvider)
+    const result = await tuffIntelligence.testProvider(timeoutProvider)
 
     expect(result.success).toBe(false)
     expect(result.message.toLowerCase()).toContain('timeout')
@@ -94,7 +94,7 @@ describe('aISDK Provider Testing Service', () => {
       throw new Error('network error')
     })
 
-    const provider: AiProviderConfig = {
+    const provider: IntelligenceProviderConfig = {
       id: 'test-latency',
       type: IntelligenceProviderType.OPENAI,
       name: 'Test Latency',
@@ -103,7 +103,7 @@ describe('aISDK Provider Testing Service', () => {
       timeout: 5000,
     }
 
-    const result = await ai.testProvider(provider)
+    const result = await tuffIntelligence.testProvider(provider)
 
     expect(result.latency).toBeDefined()
     expect(typeof result.latency).toBe('number')

@@ -5,6 +5,7 @@
   Shows version, build information, system specs, and resource usage.
 -->
 <script setup lang="ts" name="SettingAbout">
+import { AppPreviewChannel } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -20,12 +21,14 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
+import { useApplicationUpgrade } from '~/modules/hooks/useUpdate'
 import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
 const { packageJson, os, processInfo } = useEnv()
 const { startupInfo } = useStartupInfo()
+const { getUpdateSettings } = useApplicationUpgrade()
 
 const appUpdate = computed(() => Boolean(startupInfo.value?.appUpdate))
 
@@ -39,6 +42,7 @@ interface PerformanceSummary {
 
 const performanceSummary = ref<PerformanceSummary | null>(null)
 const showPerformanceDetails = ref(false)
+const updateChannel = ref<AppPreviewChannel | null>(null)
 const runtimeVersions = computed(() => {
   const info = processInfo.value as
     | { versions?: { electron?: string; v8?: string; chrome?: string; node?: string } }
@@ -68,6 +72,8 @@ onMounted(async () => {
   } catch (error) {
     console.warn('Failed to load performance summary', error)
   }
+
+  await loadUpdateSettings()
 })
 
 // Computed property for version string
@@ -123,6 +129,23 @@ const currentExperiencePack = computed(() => {
 
 // Get build info from signature
 const buildInfo = computed(() => getBuildInfo())
+const updateChannelLabel = computed(() => {
+  const channel = updateChannel.value || buildInfo.value?.channel
+  if (!channel) {
+    return ''
+  }
+
+  return `${channel} sub`
+})
+
+async function loadUpdateSettings(): Promise<void> {
+  try {
+    const settings = await getUpdateSettings()
+    updateChannel.value = settings.updateChannel
+  } catch (error) {
+    console.warn('Failed to load update settings', error)
+  }
+}
 
 // Open application folder
 async function openAppFolder() {
@@ -186,7 +209,11 @@ async function openAppFolder() {
       title="Git Hash"
       :description="buildInfo.gitCommitHash.substring(0, 7)"
     />
-    <TuffBlockLine v-if="buildInfo.channel" title="Channel" :description="buildInfo.channel" />
+    <TuffBlockLine
+      v-if="updateChannelLabel"
+      title="Update Channel"
+      :description="updateChannelLabel"
+    />
     <TuffBlockLine
       v-if="buildInfo.buildType"
       title="Build Type"

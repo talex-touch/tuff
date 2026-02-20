@@ -82,7 +82,7 @@ const iconComponent = computed(() => {
       return Connection
     case 'system':
       return Cpu
-    case 'ai':
+    case 'intelligence':
       return Coin
     case 'storage':
       return Platform

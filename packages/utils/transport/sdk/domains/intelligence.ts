@@ -3,6 +3,11 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
+  TuffIntelligenceApprovalTicket,
+  TuffIntelligenceSession,
+  TuffIntelligenceStateSnapshot,
+  TuffIntelligenceTraceEvent,
+  TuffIntelligenceTurn,
 } from '../../../types/intelligence'
 import type { ITuffTransport } from '../../types'
 import { defineRawEvent } from '../../event/builder'
@@ -93,6 +98,100 @@ export interface IntelligenceChatRequest {
   metadata?: Record<string, unknown>
 }
 
+export interface IntelligenceSessionStartPayload {
+  sessionId?: string
+  objective?: string
+  context?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceSessionResumePayload {
+  sessionId: string
+}
+
+export interface IntelligenceSessionCancelPayload {
+  sessionId: string
+  reason?: string
+}
+
+export interface IntelligenceSessionStatePayload {
+  sessionId: string
+}
+
+export interface IntelligenceSessionHeartbeatPayload {
+  sessionId: string
+}
+
+export interface IntelligenceSessionPausePayload {
+  sessionId: string
+  reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
+  note?: string
+}
+
+export interface IntelligenceOrchestratorPlanPayload {
+  sessionId: string
+  objective: string
+  context?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceOrchestratorExecutePayload {
+  sessionId: string
+  turnId?: string
+  maxSteps?: number
+  toolBudget?: number
+  continueOnError?: boolean
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceOrchestratorReflectPayload {
+  sessionId: string
+  turnId: string
+  notes?: string
+}
+
+export interface IntelligenceToolCallPayload {
+  sessionId: string
+  turnId?: string
+  actionId?: string
+  toolId: string
+  input?: unknown
+  riskLevel?: TuffIntelligenceApprovalTicket['riskLevel']
+  callId?: string
+  timeoutMs?: number
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceToolResultPayload {
+  sessionId: string
+  turnId?: string
+  toolId: string
+  success: boolean
+  output?: unknown
+  error?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface IntelligenceToolApprovePayload {
+  ticketId: string
+  approved: boolean
+  approvedBy?: string
+  reason?: string
+}
+
+export interface IntelligenceTraceQueryPayload {
+  sessionId: string
+  fromSeq?: number
+  limit?: number
+  level?: TuffIntelligenceTraceEvent['level']
+  type?: TuffIntelligenceTraceEvent['type']
+}
+
+export interface IntelligenceTraceExportPayload {
+  sessionId: string
+  format?: 'json' | 'jsonl'
+}
+
 export type IntelligenceApiResponse<T = undefined>
   = { ok: true, result?: T }
     | { ok: false, error: string }
@@ -132,6 +231,32 @@ export interface IntelligenceSdk {
     callerId: string
     callerType?: IntelligenceQuotaConfig['callerType']
   }) => Promise<IntelligenceCurrentUsage>
+
+  sessionStart: (payload?: IntelligenceSessionStartPayload) => Promise<TuffIntelligenceSession>
+  sessionHeartbeat: (payload: IntelligenceSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
+  sessionPause: (payload: IntelligenceSessionPausePayload) => Promise<unknown>
+  sessionRecoverable: () => Promise<unknown>
+  sessionResume: (payload: IntelligenceSessionResumePayload) => Promise<TuffIntelligenceSession | null>
+  sessionCancel: (payload: IntelligenceSessionCancelPayload) => Promise<TuffIntelligenceStateSnapshot | null>
+  sessionGetState: (payload: IntelligenceSessionStatePayload) => Promise<TuffIntelligenceStateSnapshot | null>
+
+  orchestratorPlan: (payload: IntelligenceOrchestratorPlanPayload) => Promise<TuffIntelligenceTurn>
+  orchestratorExecute: (payload: IntelligenceOrchestratorExecutePayload) => Promise<TuffIntelligenceTurn>
+  orchestratorReflect: (payload: IntelligenceOrchestratorReflectPayload) => Promise<TuffIntelligenceTurn>
+
+  toolCall: (payload: IntelligenceToolCallPayload) => Promise<{
+    success: boolean
+    output?: unknown
+    error?: string
+    approvalTicket?: TuffIntelligenceApprovalTicket
+    traceEvent: TuffIntelligenceTraceEvent
+  }>
+  toolResult: (payload: IntelligenceToolResultPayload) => Promise<{ accepted: boolean }>
+  toolApprove: (payload: IntelligenceToolApprovePayload) => Promise<TuffIntelligenceApprovalTicket | null>
+
+  traceStream: (payload: IntelligenceTraceQueryPayload) => Promise<TuffIntelligenceTraceEvent[]>
+  traceQuery: (payload: IntelligenceTraceQueryPayload) => Promise<TuffIntelligenceTraceEvent[]>
+  traceExport: (payload: IntelligenceTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
 }
 
 export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'>
@@ -229,6 +354,92 @@ const intelligenceGetCurrentUsageEvent = defineRawEvent<
   IntelligenceApiResponse<IntelligenceCurrentUsage>
 >('intelligence:get-current-usage')
 
+const intelligenceSessionStartEvent = defineRawEvent<
+  IntelligenceSessionStartPayload,
+  IntelligenceApiResponse<TuffIntelligenceSession>
+>('intelligence:session:start')
+
+const intelligenceSessionHeartbeatEvent = defineRawEvent<
+  IntelligenceSessionHeartbeatPayload,
+  IntelligenceApiResponse<{ sessionId: string, heartbeatAt: string }>
+>('intelligence:session:heartbeat')
+
+const intelligenceSessionPauseEvent = defineRawEvent<
+  IntelligenceSessionPausePayload,
+  IntelligenceApiResponse<unknown>
+>('intelligence:session:pause')
+
+const intelligenceSessionRecoverableEvent = defineRawEvent<
+  void,
+  IntelligenceApiResponse<unknown>
+>('intelligence:session:recoverable')
+
+const intelligenceSessionResumeEvent = defineRawEvent<
+  IntelligenceSessionResumePayload,
+  IntelligenceApiResponse<TuffIntelligenceSession | null>
+>('intelligence:session:resume')
+
+const intelligenceSessionCancelEvent = defineRawEvent<
+  IntelligenceSessionCancelPayload,
+  IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+>('intelligence:session:cancel')
+
+const intelligenceSessionGetStateEvent = defineRawEvent<
+  IntelligenceSessionStatePayload,
+  IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+>('intelligence:session:get-state')
+
+const intelligenceOrchestratorPlanEvent = defineRawEvent<
+  IntelligenceOrchestratorPlanPayload,
+  IntelligenceApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:plan')
+
+const intelligenceOrchestratorExecuteEvent = defineRawEvent<
+  IntelligenceOrchestratorExecutePayload,
+  IntelligenceApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:execute')
+
+const intelligenceOrchestratorReflectEvent = defineRawEvent<
+  IntelligenceOrchestratorReflectPayload,
+  IntelligenceApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:reflect')
+
+const intelligenceToolCallEvent = defineRawEvent<
+  IntelligenceToolCallPayload,
+  IntelligenceApiResponse<{
+    success: boolean
+    output?: unknown
+    error?: string
+    approvalTicket?: TuffIntelligenceApprovalTicket
+    traceEvent: TuffIntelligenceTraceEvent
+  }>
+>('intelligence:tool:call')
+
+const intelligenceToolResultEvent = defineRawEvent<
+  IntelligenceToolResultPayload,
+  IntelligenceApiResponse<{ accepted: boolean }>
+>('intelligence:tool:result')
+
+const intelligenceToolApproveEvent = defineRawEvent<
+  IntelligenceToolApprovePayload,
+  IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
+>('intelligence:tool:approve')
+
+const intelligenceTraceStreamEvent = defineRawEvent<
+  IntelligenceTraceQueryPayload,
+  IntelligenceApiResponse<TuffIntelligenceTraceEvent[]>
+>('intelligence:trace:stream')
+
+const intelligenceTraceQueryEvent = defineRawEvent<
+  IntelligenceTraceQueryPayload,
+  IntelligenceApiResponse<TuffIntelligenceTraceEvent[]>
+>('intelligence:trace:query')
+
+const intelligenceTraceExportEvent = defineRawEvent<
+  IntelligenceTraceExportPayload,
+  IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
+>('intelligence:trace:export')
+
 function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
   if (!response?.ok) {
     throw new Error(response?.error || fallbackMessage)
@@ -238,7 +449,11 @@ function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMess
 
 export function createIntelligenceSdk(transport: IntelligenceSdkTransport): IntelligenceSdk {
   return {
-    async invoke<T = unknown>(capabilityId, payload, options) {
+    async invoke<T = unknown>(
+      capabilityId: string,
+      payload: unknown,
+      options?: IntelligenceInvokeOptions,
+    ) {
       const response = await transport.send(intelligenceInvokeEvent, { capabilityId, payload, options })
       return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
     },
@@ -316,6 +531,86 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async getCurrentUsage(payload) {
       const response = await transport.send(intelligenceGetCurrentUsageEvent, payload)
       return assertApiResponse(response, 'Failed to get current usage')
+    },
+
+    async sessionStart(payload = {}) {
+      const response = await transport.send(intelligenceSessionStartEvent, payload)
+      return assertApiResponse(response, 'Failed to start intelligence session')
+    },
+
+    async sessionHeartbeat(payload) {
+      const response = await transport.send(intelligenceSessionHeartbeatEvent, payload)
+      return assertApiResponse(response, 'Failed to send intelligence heartbeat')
+    },
+
+    async sessionPause(payload) {
+      const response = await transport.send(intelligenceSessionPauseEvent, payload)
+      return assertApiResponse(response, 'Failed to pause intelligence session')
+    },
+
+    async sessionRecoverable() {
+      const response = await transport.send(intelligenceSessionRecoverableEvent)
+      return assertApiResponse(response, 'Failed to fetch recoverable intelligence session')
+    },
+
+    async sessionResume(payload) {
+      const response = await transport.send(intelligenceSessionResumeEvent, payload)
+      return assertApiResponse(response, 'Failed to resume intelligence session')
+    },
+
+    async sessionCancel(payload) {
+      const response = await transport.send(intelligenceSessionCancelEvent, payload)
+      return assertApiResponse(response, 'Failed to cancel intelligence session')
+    },
+
+    async sessionGetState(payload) {
+      const response = await transport.send(intelligenceSessionGetStateEvent, payload)
+      return assertApiResponse(response, 'Failed to get intelligence session state')
+    },
+
+    async orchestratorPlan(payload) {
+      const response = await transport.send(intelligenceOrchestratorPlanEvent, payload)
+      return assertApiResponse(response, 'Failed to create intelligence plan')
+    },
+
+    async orchestratorExecute(payload) {
+      const response = await transport.send(intelligenceOrchestratorExecuteEvent, payload)
+      return assertApiResponse(response, 'Failed to execute intelligence plan')
+    },
+
+    async orchestratorReflect(payload) {
+      const response = await transport.send(intelligenceOrchestratorReflectEvent, payload)
+      return assertApiResponse(response, 'Failed to reflect intelligence result')
+    },
+
+    async toolCall(payload) {
+      const response = await transport.send(intelligenceToolCallEvent, payload)
+      return assertApiResponse(response, 'Failed to call intelligence tool')
+    },
+
+    async toolResult(payload) {
+      const response = await transport.send(intelligenceToolResultEvent, payload)
+      return assertApiResponse(response, 'Failed to report intelligence tool result')
+    },
+
+    async toolApprove(payload) {
+      const response = await transport.send(intelligenceToolApproveEvent, payload)
+      return assertApiResponse(response, 'Failed to approve intelligence tool')
+    },
+
+    async traceStream(payload) {
+      const response = await transport.send(intelligenceTraceStreamEvent, payload)
+      return assertApiResponse(response, 'Failed to stream intelligence trace')
+    },
+
+    async traceQuery(payload) {
+      const response = await transport.send(intelligenceTraceQueryEvent, payload)
+      return assertApiResponse(response, 'Failed to query intelligence trace')
+    },
+
+    async traceExport(payload) {
+      const response = await transport.send(intelligenceTraceExportEvent, payload)
+      return assertApiResponse(response, 'Failed to export intelligence trace')
     },
   }
 }

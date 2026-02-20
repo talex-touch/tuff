@@ -71,6 +71,9 @@ A: Yes. When `retentionMs` is provided, the main process periodically removes ex
 **Q: Why does `tfile://` not load?**  
 A: `tfile://` is Electron-only; browsers will block it.
 
+**Q: Why does `tfile://` still return 403 in Electron?**  
+A: Access is restricted to approved roots (home/userData/temp and system app directories). Use the temp-file API or move assets into allowed roots.
+
 ## Best Practices
 
 - Use clear `namespace` values to simplify cleanup and debugging.

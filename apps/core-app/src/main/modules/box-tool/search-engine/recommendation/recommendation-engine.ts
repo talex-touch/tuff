@@ -11,6 +11,7 @@ import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { getSentryService } from '../../../sentry'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
+import { enterPerfContext } from '../../../../utils/perf-context'
 
 const DAY_MS = 86_400_000
 const TREND_HISTORY_DAYS = 30
@@ -308,7 +309,7 @@ export class RecommendationEngine {
       async () => {
         await this.processTrendBackfillTick()
       },
-      { interval: TREND_BACKFILL_INTERVAL_SECONDS, unit: 'seconds', runImmediately: true }
+      { interval: TREND_BACKFILL_INTERVAL_SECONDS, unit: 'seconds', initialDelayMs: 15_000 }
     )
     this.pollingService.start()
   }
@@ -324,6 +325,10 @@ export class RecommendationEngine {
     const day = this.trendBackfillQueue.shift()
     if (day == null) return
 
+    const disposeTick = enterPerfContext('Recommendation.trendBackfill.tick', {
+      day,
+      queueLength: this.trendBackfillQueue.length
+    })
     try {
       const hasData = await this.hasTrendDataForDay(day)
       if (!hasData) {
@@ -331,6 +336,8 @@ export class RecommendationEngine {
       }
     } catch (error) {
       console.error('[RecommendationEngine] Trend backfill failed', error)
+    } finally {
+      disposeTick()
     }
   }
 
@@ -351,21 +358,27 @@ export class RecommendationEngine {
     const dayEnd = new Date((day + 1) * DAY_MS)
     const dayBucket = day
 
-    const rows = await db
-      .select({
-        sourceId: schema.usageLogs.source,
-        itemId: schema.usageLogs.itemId,
-        executeCount: sql<number>`COUNT(*)`
-      })
-      .from(schema.usageLogs)
-      .where(
-        and(
-          eq(schema.usageLogs.action, 'execute'),
-          gte(schema.usageLogs.timestamp, dayStart),
-          lt(schema.usageLogs.timestamp, dayEnd)
+    let rows: Array<{ sourceId: string; itemId: string; executeCount: number }> = []
+    const disposeQuery = enterPerfContext('Recommendation.trendBackfill.query', { day })
+    try {
+      rows = await db
+        .select({
+          sourceId: schema.usageLogs.source,
+          itemId: schema.usageLogs.itemId,
+          executeCount: sql<number>`COUNT(*)`
+        })
+        .from(schema.usageLogs)
+        .where(
+          and(
+            eq(schema.usageLogs.action, 'execute'),
+            gte(schema.usageLogs.timestamp, dayStart),
+            lt(schema.usageLogs.timestamp, dayEnd)
+          )
         )
-      )
-      .groupBy(schema.usageLogs.source, schema.usageLogs.itemId)
+        .groupBy(schema.usageLogs.source, schema.usageLogs.itemId)
+    } finally {
+      disposeQuery()
+    }
 
     if (rows.length === 0) return
 
@@ -379,22 +392,34 @@ export class RecommendationEngine {
     }))
 
     const chunkSize = 500
-    for (let i = 0; i < values.length; i += chunkSize) {
-      const chunk = values.slice(i, i + chunkSize)
-      await db
-        .insert(schema.usageTrendDaily)
-        .values(chunk)
-        .onConflictDoUpdate({
-          target: [
-            schema.usageTrendDaily.sourceId,
-            schema.usageTrendDaily.itemId,
-            schema.usageTrendDaily.day
-          ],
-          set: {
-            executeCount: sql`excluded.execute_count`,
-            updatedAt: sql`excluded.updated_at`
-          }
-        })
+    const disposeUpsert = enterPerfContext('Recommendation.trendBackfill.upsert', {
+      day,
+      rows: values.length
+    })
+    try {
+      for (let i = 0; i < values.length; i += chunkSize) {
+        const chunk = values.slice(i, i + chunkSize)
+        await db
+          .insert(schema.usageTrendDaily)
+          .values(chunk)
+          .onConflictDoUpdate({
+            target: [
+              schema.usageTrendDaily.sourceId,
+              schema.usageTrendDaily.itemId,
+              schema.usageTrendDaily.day
+            ],
+            set: {
+              executeCount: sql`excluded.execute_count`,
+              updatedAt: sql`excluded.updated_at`
+            }
+          })
+        // 分块写入间让出事件循环
+        if (i + chunkSize < values.length) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
+    } finally {
+      disposeUpsert()
     }
   }
 
@@ -407,6 +432,11 @@ export class RecommendationEngine {
 
   /** Generate recommendation list */
   async recommend(options: RecommendationOptions = {}): Promise<RecommendationResult> {
+    // 启动期 appTaskGate 活跃时，先等待空闲再执行推荐计算，避免与启动任务竞争主线程
+    if (appTaskGate.isActive()) {
+      await appTaskGate.waitForIdle()
+    }
+
     const startTime = performance.now()
     this.scheduleTrendBackfill()
 
@@ -893,7 +923,8 @@ export class RecommendationEngine {
       ])
     )
 
-    for (const raw of allTimeStats) {
+    for (let idx = 0; idx < allTimeStats.length; idx++) {
+      const raw = allTimeStats[idx]
       const parsed: ParsedItemTimeStats = {
         sourceId: raw.sourceId,
         itemId: raw.itemId,
@@ -920,6 +951,11 @@ export class RecommendationEngine {
             score: timeScore
           })
         }
+      }
+
+      // 每 50 行让出事件循环，避免 JSON.parse 密集计算阻塞
+      if ((idx + 1) % 50 === 0) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
       }
     }
 

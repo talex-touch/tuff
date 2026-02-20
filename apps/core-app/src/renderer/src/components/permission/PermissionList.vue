@@ -65,7 +65,7 @@ const categoryNames: Record<string, string> = {
   clipboard: '剪贴板',
   network: '网络',
   system: '系统',
-  ai: 'AI 能力',
+  intelligence: 'Intelligence 能力',
   storage: '存储',
   window: '窗口'
 }
@@ -75,7 +75,7 @@ const categoryIcons: Record<string, Component> = {
   clipboard: DocumentCopy,
   network: Connection,
   system: Cpu,
-  ai: Coin,
+  intelligence: Coin,
   storage: Platform,
   window: Monitor
 }

@@ -41,6 +41,20 @@ preview_bucket_name = "tuff-nexus-assets-preview"
 - 如暂时没有预览 bucket，可删除 `preview_bucket_name`。
 - 若需要额外的 R2 绑定（例如 `ASSETS`），可按相同格式追加。
 
+### 2.1 启用 TuffIntelligence KV（TUFF_INTELLIGENCE_RUNTIME）
+当需要启用会话协调、租约锁、恢复游标和热点缓存时，执行以下步骤：
+
+1. 创建 KV namespace（生产 + 预览）：
+   ```bash
+   npx wrangler kv namespace create TUFF_INTELLIGENCE_RUNTIME
+   npx wrangler kv namespace create TUFF_INTELLIGENCE_RUNTIME --preview
+   ```
+2. 将返回的 `id`/`preview_id` 填入根目录 `wrangler.toml` 的 `[[kv_namespaces]]` 与 `[[env.preview.kv_namespaces]]`。
+3. 在 Cloudflare Pages 控制台完成同名绑定校验：
+   - KV 控制台入口：[Cloudflare KV Namespaces](https://dash.cloudflare.com/?to=/:account/workers/kv/namespaces)
+   - Pages Functions 绑定入口：[Cloudflare Pages](https://dash.cloudflare.com/?to=/:account/pages)
+4. 同步检查 `apps/nexus/types/cloudflare-env.d.ts` 中 `TUFF_INTELLIGENCE_RUNTIME` 类型声明是否与绑定一致。
+
 ## 3. 准备 D1 表结构
 1. 将下面的示例 SQL 保存为 `database/schema.sql`（可根据需求调整字段）：
    ```sql

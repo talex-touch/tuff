@@ -109,6 +109,37 @@ interface IpBan {
   createdAt: string
 }
 
+interface Pagination {
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+interface CreditUsageItem {
+  userId: string
+  email: string | null
+  name: string | null
+  role: string | null
+  status: string | null
+  quota: number
+  used: number
+  month: string
+}
+
+interface CreditLedgerItem {
+  id: string
+  teamId: string
+  teamType: string | null
+  userId: string | null
+  userEmail: string | null
+  userName: string | null
+  delta: number
+  reason: string
+  createdAt: string
+  metadata: Record<string, any> | null
+}
+
 // ── State ──
 const activeTab = ref('overview')
 const providers = ref<Provider[]>([])
@@ -131,10 +162,10 @@ const auditUserId = ref('')
 const overviewLoading = ref(false)
 const overviewError = ref<string | null>(null)
 const overviewData = ref<OverviewData | null>(null)
-const usageQuery = ref('')
-const usageLoading = ref(false)
-const usageError = ref<string | null>(null)
-const usageResult = ref<UsageResult | null>(null)
+const userUsageQuery = ref('')
+const userUsageLoading = ref(false)
+const userUsageError = ref<string | null>(null)
+const userUsageResult = ref<UsageResult | null>(null)
 const ipBans = ref<IpBan[]>([])
 const ipBanLoading = ref(false)
 const ipBanError = ref<string | null>(null)
@@ -142,6 +173,29 @@ const ipBanForm = reactive({
   ip: '',
   reason: '',
 })
+const creditsLoaded = ref(false)
+const usageItems = ref<CreditUsageItem[]>([])
+const usageLoading = ref(false)
+const usageError = ref<string | null>(null)
+const usageSummary = ref({ totalUsed: 0, totalQuota: 0, month: '' })
+const usagePagination = ref<Pagination>({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+})
+const usageQuery = ref('')
+
+const ledgerItems = ref<CreditLedgerItem[]>([])
+const ledgerLoading = ref(false)
+const ledgerError = ref<string | null>(null)
+const ledgerPagination = ref<Pagination>({
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 1,
+})
+const ledgerQuery = ref('')
 
 // ── Fetch data ──
 async function fetchProviders() {
@@ -210,25 +264,25 @@ async function fetchOverview() {
   }
 }
 
-async function fetchUsage() {
-  const userId = usageQuery.value.trim()
+async function fetchUserUsage() {
+  const userId = userUsageQuery.value.trim()
   if (!userId)
     return
-  usageLoading.value = true
-  usageError.value = null
+  userUsageLoading.value = true
+  userUsageError.value = null
   try {
     const data = await $fetch<{ ok: boolean; result?: UsageResult; error?: string }>('/api/dashboard/intelligence/usage', {
       query: { userId },
     })
     if (!data.ok)
       throw new Error(data.error || 'Failed to load usage')
-    usageResult.value = data.result || null
+    userUsageResult.value = data.result || null
   }
   catch (e: any) {
-    usageError.value = e.data?.message || e.message || 'Failed to load usage'
+    userUsageError.value = e.data?.message || e.message || 'Failed to load usage'
   }
   finally {
-    usageLoading.value = false
+    userUsageLoading.value = false
   }
 }
 
@@ -306,6 +360,86 @@ async function removeIpBan(ban: IpBan) {
   }
 }
 
+async function fetchUsage(options: { resetPage?: boolean } = {}) {
+  if (options.resetPage)
+    usagePagination.value.page = 1
+
+  usageLoading.value = true
+  usageError.value = null
+  try {
+    const result = await $fetch<{
+      month: string
+      totalUsed: number
+      totalQuota: number
+      users: CreditUsageItem[]
+      pagination: Pagination
+    }>('/api/admin/credits/usage', {
+      query: {
+        page: usagePagination.value.page,
+        limit: usagePagination.value.limit,
+        q: usageQuery.value.trim() || undefined,
+      },
+    })
+    usageItems.value = result.users || []
+    usageSummary.value = {
+      totalUsed: result.totalUsed ?? 0,
+      totalQuota: result.totalQuota ?? 0,
+      month: result.month || '',
+    }
+    usagePagination.value = result.pagination
+  }
+  catch (err: any) {
+    usageError.value = err?.data?.message || err?.message || t('dashboard.adminCredits.errors.loadUsage', 'Failed to load credit usage.')
+  }
+  finally {
+    usageLoading.value = false
+  }
+}
+
+async function fetchLedger(options: { resetPage?: boolean } = {}) {
+  if (options.resetPage)
+    ledgerPagination.value.page = 1
+
+  ledgerLoading.value = true
+  ledgerError.value = null
+  try {
+    const result = await $fetch<{
+      entries: CreditLedgerItem[]
+      pagination: Pagination
+    }>('/api/admin/credits/ledger', {
+      query: {
+        page: ledgerPagination.value.page,
+        limit: ledgerPagination.value.limit,
+        q: ledgerQuery.value.trim() || undefined,
+      },
+    })
+    ledgerItems.value = result.entries || []
+    ledgerPagination.value = result.pagination
+  }
+  catch (err: any) {
+    ledgerError.value = err?.data?.message || err?.message || t('dashboard.adminCredits.errors.loadLedger', 'Failed to load credit ledger.')
+  }
+  finally {
+    ledgerLoading.value = false
+  }
+}
+
+function applyUsageFilter() {
+  fetchUsage({ resetPage: true })
+}
+
+function applyLedgerFilter() {
+  fetchLedger({ resetPage: true })
+}
+
+function ensureCreditsLoaded() {
+  if (creditsLoaded.value)
+    return
+  creditsLoaded.value = true
+  fetchUsage()
+  fetchLedger()
+}
+
 onMounted(() => {
   fetchProviders()
   fetchSettings()
@@ -319,11 +453,23 @@ watch([auditPage, auditPageSize], () => {
     fetchAudits()
 })
 
+watch(() => usagePagination.value.page, () => {
+  if (activeTab.value === 'credits')
+    fetchUsage()
+})
+
+watch(() => ledgerPagination.value.page, () => {
+  if (activeTab.value === 'credits')
+    fetchLedger()
+})
+
 watch(activeTab, (value) => {
   if (value === 'overview' && !overviewLoading.value && !overviewData.value)
     fetchOverview()
   if (value === 'audits' && !auditLoading.value)
     fetchAudits()
+  if (value === 'credits')
+    ensureCreditsLoaded()
 })
 
 // ── Create / Edit overlay ──
@@ -597,6 +743,27 @@ function providerTypeLabel(type: string) {
   return t(`dashboard.sections.intelligence.types.${type}`, type)
 }
 
+function formatNumber(value: number | null | undefined) {
+  if (typeof value !== 'number')
+    return '0'
+  return new Intl.NumberFormat().format(value)
+}
+
+function formatTime(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+function resolveUserLabel(item: { name?: string | null; email?: string | null; userId?: string | null }) {
+  return item.name || item.email || item.userId || '-'
+}
+
+function usagePercent(item: CreditUsageItem) {
+  if (!item.quota)
+    return 0
+  return Math.min(100, Math.round((item.used / item.quota) * 100))
+}
+
 function formatAuditTime(value: string) {
   if (!value)
     return ''
@@ -768,30 +935,30 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.userUsage.subtitle') }}
                 </p>
               </div>
-              <TxButton variant="primary" size="small" :disabled="usageLoading || !usageQuery.trim()" @click="fetchUsage">
-                {{ usageLoading ? t('dashboard.sections.intelligence.overview.userUsage.loading') : t('dashboard.sections.intelligence.overview.userUsage.action') }}
+              <TxButton variant="primary" size="small" :disabled="userUsageLoading || !userUsageQuery.trim()" @click="fetchUserUsage">
+                {{ userUsageLoading ? t('dashboard.sections.intelligence.overview.userUsage.loading') : t('dashboard.sections.intelligence.overview.userUsage.action') }}
               </TxButton>
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
               <TuffInput
-                v-model="usageQuery"
+                v-model="userUsageQuery"
                 :placeholder="t('dashboard.sections.intelligence.overview.userUsage.placeholder')"
                 class="w-full max-w-xs"
               />
             </div>
 
-            <div v-if="usageError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
-              {{ usageError }}
+            <div v-if="userUsageError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+              {{ userUsageError }}
             </div>
 
-            <div v-if="usageResult" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-if="userUsageResult" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
                 <p class="text-xs text-black/40 dark:text-white/40">
                   {{ t('dashboard.sections.intelligence.overview.userUsage.requests') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ usageResult.totalRequests }}
+                  {{ userUsageResult.totalRequests }}
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -799,7 +966,7 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.userUsage.tokens') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ usageResult.totalTokens }}
+                  {{ userUsageResult.totalTokens }}
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -807,7 +974,7 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.userUsage.successRate') }}
                 </p>
                 <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
-                  {{ usageResult.successRate }}%
+                  {{ userUsageResult.successRate }}%
                 </p>
               </div>
               <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
@@ -815,16 +982,16 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.overview.userUsage.lastSeen') }}
                 </p>
                 <p class="mt-2 text-sm font-semibold text-black dark:text-white">
-                  {{ usageResult.lastSeenAt ? formatAuditTime(usageResult.lastSeenAt) : '-' }}
+                  {{ userUsageResult.lastSeenAt ? formatAuditTime(userUsageResult.lastSeenAt) : '-' }}
                 </p>
               </div>
             </div>
 
-            <div v-if="usageResult?.models?.length" class="space-y-2 text-xs text-black/60 dark:text-white/60">
+            <div v-if="userUsageResult?.models?.length" class="space-y-2 text-xs text-black/60 dark:text-white/60">
               <p class="text-[11px] text-black/40 dark:text-white/40">
                 {{ t('dashboard.sections.intelligence.overview.userUsage.modelBreakdown') }}
               </p>
-              <div v-for="item in usageResult.models" :key="item.label" class="flex items-center justify-between">
+              <div v-for="item in userUsageResult.models" :key="item.label" class="flex items-center justify-between">
                 <span class="truncate">{{ item.label }}</span>
                 <span>{{ item.count }}</span>
               </div>
@@ -1109,6 +1276,182 @@ function formatEndpointCandidates(list?: string[]) {
         </div>
       </TxTabItem>
 
+      <TxTabItem name="credits" icon-class="i-carbon-currency">
+        <template #name>
+          {{ t('dashboard.sections.intelligence.tabs.credits', 'AI 积分') }}
+        </template>
+
+        <div class="space-y-6">
+          <section class="apple-card-lg space-y-4 p-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 class="apple-heading-sm">
+                  {{ t('dashboard.adminCredits.usage.title', '用户消耗') }}
+                </h2>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.adminCredits.usage.subtitle', '按当前月份统计，支持搜索用户 ID / 邮箱') }}
+                </p>
+              </div>
+              <TxButton variant="secondary" size="small" @click="fetchUsage">
+                {{ t('common.refresh', '刷新') }}
+              </TxButton>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]">
+                <p class="text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.adminCredits.usage.totalUsed', '本月总消耗') }}
+                </p>
+                <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                  {{ formatNumber(usageSummary.totalUsed) }}
+                </p>
+              </div>
+              <div class="rounded-2xl bg-black/[0.02] p-4 text-sm dark:bg-white/[0.03]">
+                <p class="text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.adminCredits.usage.totalQuota', '本月总额度') }}
+                </p>
+                <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                  {{ formatNumber(usageSummary.totalQuota) }}
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <TuffInput
+                v-model="usageQuery"
+                :placeholder="t('dashboard.adminCredits.usage.searchPlaceholder', '搜索用户 ID / 邮箱')"
+                class="w-full max-w-xs"
+              />
+              <TxButton variant="secondary" size="mini" @click="applyUsageFilter">
+                {{ t('dashboard.adminCredits.actions.filter', '筛选') }}
+              </TxButton>
+            </div>
+
+            <div v-if="usageError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+              {{ usageError }}
+            </div>
+
+            <div v-if="usageLoading" class="space-y-3 py-4">
+              <div class="flex items-center justify-center">
+                <TxSpinner :size="18" />
+              </div>
+              <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+            </div>
+
+            <div v-else-if="usageItems.length" class="space-y-2">
+              <div
+                v-for="item in usageItems"
+                :key="item.userId"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-black/[0.02] px-4 py-3 text-xs text-black/60 dark:bg-white/[0.03] dark:text-white/60"
+              >
+                <div>
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ resolveUserLabel({ name: item.name, email: item.email, userId: item.userId }) }}
+                  </p>
+                  <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                    {{ item.userId }}
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-semibold text-black dark:text-white">
+                    {{ formatNumber(item.used) }} / {{ formatNumber(item.quota) }}
+                  </p>
+                  <p class="text-[11px] text-black/40 dark:text-white/40">
+                    {{ usagePercent(item) }}%
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="text-xs text-black/40 dark:text-white/40">
+              {{ t('dashboard.adminCredits.usage.empty', '暂无记录') }}
+            </div>
+
+            <div v-if="usagePagination.total > usagePagination.limit" class="flex justify-end pt-2">
+              <TxPagination v-model:current-page="usagePagination.page" :total="usagePagination.total" :page-size="usagePagination.limit" />
+            </div>
+          </section>
+
+          <section class="apple-card-lg space-y-4 p-6">
+            <div class="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 class="apple-heading-sm">
+                  {{ t('dashboard.adminCredits.ledger.title', '积分流水') }}
+                </h2>
+                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
+                  {{ t('dashboard.adminCredits.ledger.subtitle', '记录每一次积分消耗') }}
+                </p>
+              </div>
+              <TxButton variant="secondary" size="small" @click="fetchLedger">
+                {{ t('common.refresh', '刷新') }}
+              </TxButton>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <TuffInput
+                v-model="ledgerQuery"
+                :placeholder="t('dashboard.adminCredits.ledger.searchPlaceholder', '筛选用户 ID / 邮箱')"
+                class="w-full max-w-xs"
+              />
+              <TxButton variant="secondary" size="mini" @click="applyLedgerFilter">
+                {{ t('dashboard.adminCredits.actions.filter', '筛选') }}
+              </TxButton>
+            </div>
+
+            <div v-if="ledgerError" class="rounded-xl bg-red-500/10 px-4 py-3 text-xs text-red-500">
+              {{ ledgerError }}
+            </div>
+
+            <div v-if="ledgerLoading" class="space-y-3 py-4">
+              <div class="flex items-center justify-center">
+                <TxSpinner :size="18" />
+              </div>
+              <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+                <TxSkeleton :loading="true" :lines="2" />
+              </div>
+            </div>
+
+            <div v-else-if="ledgerItems.length" class="space-y-2">
+              <div
+                v-for="entry in ledgerItems"
+                :key="entry.id"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-black/[0.02] px-4 py-3 text-xs text-black/60 dark:bg-white/[0.03] dark:text-white/60"
+              >
+                <div>
+                  <p class="text-sm font-medium text-black dark:text-white">
+                    {{ resolveUserLabel({ name: entry.userName, email: entry.userEmail, userId: entry.userId }) }}
+                  </p>
+                  <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                    {{ entry.userId || '-' }} · {{ formatTime(entry.createdAt) }}
+                  </p>
+                  <p class="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                    {{ entry.reason }}
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-semibold" :class="entry.delta < 0 ? 'text-red-500' : 'text-green-600'">
+                    {{ entry.delta }}
+                  </p>
+                  <p v-if="entry.metadata?.tokens" class="text-[11px] text-black/40 dark:text-white/40">
+                    tokens {{ entry.metadata.tokens }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="text-xs text-black/40 dark:text-white/40">
+              {{ t('dashboard.adminCredits.ledger.empty', '暂无流水') }}
+            </div>
+
+            <div v-if="ledgerPagination.total > ledgerPagination.limit" class="flex justify-end pt-2">
+              <TxPagination v-model:current-page="ledgerPagination.page" :total="ledgerPagination.total" :page-size="ledgerPagination.limit" />
+            </div>
+          </section>
+        </div>
+      </TxTabItem>
+
       <TxTabItem name="audits" icon-class="i-carbon-document">
         <template #name>
           {{ t('dashboard.sections.intelligence.tabs.audits') }}
@@ -1310,6 +1653,9 @@ function formatEndpointCandidates(list?: string[]) {
                   {{ t('dashboard.sections.intelligence.form.baseUrl') }}
                 </label>
                 <TuffInput v-model="form.baseUrl" :placeholder="t('dashboard.sections.intelligence.form.baseUrlPlaceholder')" class="w-full" />
+                <p class="text-[11px] text-black/30 dark:text-white/30">
+                  {{ t('dashboard.sections.intelligence.form.baseUrlHint') }}
+                </p>
               </div>
 
               <!-- Models -->

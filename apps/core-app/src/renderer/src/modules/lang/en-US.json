@@ -625,7 +625,7 @@
         "clipboard": "Clipboard",
         "network": "Network",
         "system": "System",
-        "ai": "AI",
+        "intelligence": "Intelligence",
         "storage": "Storage",
         "window": "Window"
       },
@@ -703,14 +703,14 @@
             "desc": "Register system-wide global shortcuts"
           }
         },
-        "ai": {
+        "intelligence": {
           "basic": {
-            "name": "Basic AI",
-            "desc": "Use basic AI capabilities"
+            "name": "Basic Intelligence",
+            "desc": "Use basic Intelligence capabilities"
           },
-          "advanced": {
-            "name": "Advanced AI",
-            "desc": "Use advanced AI models"
+          "admin": {
+            "name": "Intelligence Admin",
+            "desc": "Manage high-risk Intelligence capabilities"
           },
           "agents": {
             "name": "Agents",
@@ -1048,12 +1048,24 @@
     "login": "Please login first!",
     "permission": "You don't have permission!",
     "pluginMarket": "Plugin Market",
+    "installedPlugins": "Installed Plugins",
+    "marketDocs": "Market Docs",
+    "marketDetail": "Market Detail",
     "plugin": "Plugin",
+    "downloads": "Downloads",
+    "details": "Details",
     "styles": "Styles",
     "theme": "Theme",
     "application": "Application",
     "appSettings": "App Settings",
-    "storagable": "Storagable"
+    "storagable": "Storagable",
+    "intelligence": "Intelligence",
+    "intelligenceChannels": "Intelligence Channels",
+    "intelligenceCapabilities": "Intelligence Capabilities",
+    "intelligencePrompts": "Intelligence Prompts",
+    "intelligenceAudit": "Intelligence Audit",
+    "intelligenceAgents": "Intelligence Agents",
+    "metaOverlay": "Meta Overlay"
   },
   "textPreview": {
     "loading": "Loading...",
@@ -2143,7 +2155,18 @@
     "updateAvailable": "New Version Available",
     "updateAvailableBody": "Tuff {version} has been released\nClick to view details",
     "updateReady": "Update Ready",
-    "updateReadyBody": "Tuff {version} download complete\nClick to install now"
+    "updateReadyBody": "Tuff {version} download complete\nClick to install now",
+    "syncBlockedTitle": "Sync Paused",
+    "syncBlockedBody": "Sync is paused due to {reason}. Please resolve and try again.",
+    "syncBlockedReasonQuota": "quota limit",
+    "syncBlockedReasonDevice": "device not authorized",
+    "syncBlockedReasonAuth": "authentication issue",
+    "syncDeviceEvictedTitle": "Old Devices Removed",
+    "syncDeviceEvictedBody": "Removed {count} inactive device(s) to keep sync available.",
+    "syncDeviceEvictedBodyWithNames": "Removed {count} device(s): {devices}.",
+    "syncDeviceListSeparator": ", ",
+    "syncDeviceListMore": " and others",
+    "syncDeviceUnknown": "Unknown device"
   },
   "timeUnits": {
     "seconds": "s",

@@ -44,22 +44,21 @@ const skeletonEntries = [
   { width: '76%', indent: 0 },
 ]
 
-// Tree line constants
-const TREE_X_BASE = 6
-const TREE_INDENT = 12
-const CURVE_RADIUS = 5
+// Tree line geometry
+// SVG is inside contentRef wrapper (after nav's 6px padding)
+// Link paddingLeft: 14 + indent*12 (from wrapper left)
+// Trunk at 4 + indent*12 (before text start at 14)
+const TREE_LINE_X = 4
+const INDENT_SIZE = 12
+const BRANCH_CURVE_H = 12
 const SKELETON_ROW_HEIGHT = 24
-const SKELETON_PADDING_TOP = 0
 
-// Marker state
-const markerTop = ref(0)
-const markerHeight = ref(0)
-const hasActive = ref(false)
 const navRef = ref<HTMLElement | null>(null)
+const contentRef = ref<HTMLElement | null>(null)
 
 // Entry positions for SVG tree lines
 const entryPositions = ref<Map<string, { top: number, centerY: number, height: number }>>(new Map())
-const navScrollHeight = ref(0)
+const navContentHeight = ref(0)
 
 function normalizeHash(hash: string) {
   const raw = hash.replace(/^#/, '')
@@ -90,43 +89,23 @@ function syncUrlHash(id: string) {
     history.replaceState(null, '', next)
 }
 
-function updateMarker() {
-  if (!navRef.value || !activeHash.value) {
-    hasActive.value = false
-    return
-  }
-
-  const links = navRef.value.querySelectorAll<HTMLElement>('a[data-id]')
-  const activeLink = Array.from(links).find(link => link.getAttribute('data-id') === activeHash.value)
-  if (!activeLink) {
-    hasActive.value = false
-    return
-  }
-
-  hasActive.value = true
-  markerHeight.value = 18
-  const navRect = navRef.value.getBoundingClientRect()
-  const linkRect = activeLink.getBoundingClientRect()
-  markerTop.value = linkRect.top - navRect.top + navRef.value.scrollTop + (activeLink.offsetHeight - markerHeight.value) / 2
-}
-
 const updateEntryPositions = useThrottleFn(() => {
-  if (!navRef.value)
+  if (!contentRef.value)
     return
   const map = new Map<string, { top: number, centerY: number, height: number }>()
-  const links = navRef.value.querySelectorAll<HTMLElement>('a[data-id]')
-  const navRect = navRef.value.getBoundingClientRect()
+  const links = contentRef.value.querySelectorAll<HTMLElement>('a[data-id]')
+  const wrapperRect = contentRef.value.getBoundingClientRect()
   for (const link of links) {
     const id = link.getAttribute('data-id')
     if (!id)
       continue
     const linkRect = link.getBoundingClientRect()
-    const top = linkRect.top - navRect.top + navRef.value.scrollTop
+    const top = linkRect.top - wrapperRect.top
     const height = linkRect.height
     map.set(id, { top, centerY: top + height / 2, height })
   }
   entryPositions.value = map
-  navScrollHeight.value = navRef.value.scrollHeight
+  navContentHeight.value = contentRef.value.scrollHeight
 }, 50)
 
 function scrollToHeading(id: string, behavior: ScrollBehavior = 'smooth') {
@@ -197,7 +176,6 @@ if (import.meta.client) {
         scrollToHeading(initialHash, 'auto')
       else
         updateActiveFromScroll()
-      updateMarker()
       updateEntryPositions()
     })
   })
@@ -218,14 +196,9 @@ if (import.meta.client) {
   useEventListener(window, 'resize', () => {
     refreshHeadingElements()
     updateActiveFromScroll()
-    updateMarker()
     updateEntryPositions()
   })
-  useEventListener(navRef, 'scroll', () => {
-    updateMarker()
-  }, { passive: true })
   useResizeObserver(navRef, () => {
-    updateMarker()
     updateEntryPositions()
   })
 }
@@ -277,14 +250,13 @@ const outlineEntries = computed<OutlineEntry[]>(() => {
   const base = baseDepth.value
   const level2Depth = base + 1
   const level3Depth = base + 2
-  const activeLevel1 = activeLevel1Id.value
   const activeLevel2 = activeLevel2Id.value
   return flatLinks.value
     .filter((link) => {
       if (link.depth === base)
         return true
       if (link.depth === level2Depth)
-        return !!activeLevel1 && link.parentId === activeLevel1
+        return true
       if (link.depth === level3Depth)
         return !!activeLevel2 && link.parentId === activeLevel2
       return false
@@ -341,102 +313,350 @@ const svgPaths = computed(() => {
 
   const paths: { d: string, class: string }[] = []
 
+  // Step 1: Group siblings by (indent, parentId)
+  const siblingGroups = new Map<string, TreeNode[]>()
+  for (const node of nodes) {
+    const key = `${node.indent}:${node.parentId || '__root__'}`
+    let group = siblingGroups.get(key)
+    if (!group) {
+      group = []
+      siblingGroups.set(key, group)
+    }
+    group.push(node)
+  }
+
+  // Step 2: Draw segmented trunk lines (skip gaps where children detour)
+  for (const [, group] of siblingGroups) {
+    const first = group[0]
+    const last = group[group.length - 1]
+    const firstPos = positions.get(first.id)
+    const lastPos = positions.get(last.id)
+    if (!firstPos || !lastPos)
+      continue
+
+    let endY = lastPos.centerY
+
+    // Compute gaps where children detour via diagonals
+    const gaps: { start: number, end: number }[] = []
+    for (const entry of group) {
+      if (!entry.hasChildren)
+        continue
+      const entryIdx = nodes.indexOf(entry)
+      let firstChildCy = Infinity
+      let lastChildCy = -Infinity
+      for (let j = entryIdx + 1; j < nodes.length; j++) {
+        if (nodes[j].indent <= entry.indent)
+          break
+        if (nodes[j].indent === entry.indent + 1) {
+          const cp = positions.get(nodes[j].id)
+          if (cp) {
+            if (cp.centerY < firstChildCy)
+              firstChildCy = cp.centerY
+            if (cp.centerY > lastChildCy)
+              lastChildCy = cp.centerY
+          }
+        }
+      }
+      if (firstChildCy !== Infinity && lastChildCy !== -Infinity) {
+        const gapStart = firstChildCy - BRANCH_CURVE_H
+        const gapEnd = lastChildCy + BRANCH_CURVE_H
+        gaps.push({ start: gapStart, end: gapEnd })
+        if (gapEnd > endY)
+          endY = gapEnd
+      }
+    }
+
+    const startY = firstPos.centerY
+    if (endY <= startY)
+      continue
+
+    const x = TREE_LINE_X + first.indent * INDENT_SIZE
+
+    if (gaps.length === 0) {
+      paths.push({ d: `M ${x} ${startY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
+    }
+    else {
+      // Sort and merge overlapping gaps
+      gaps.sort((a, b) => a.start - b.start)
+      const merged: { start: number, end: number }[] = []
+      for (const gap of gaps) {
+        if (merged.length && gap.start <= merged[merged.length - 1].end)
+          merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, gap.end)
+        else
+          merged.push({ start: gap.start, end: gap.end })
+      }
+
+      // Draw trunk segments between gaps
+      let currentY = startY
+      for (const gap of merged) {
+        if (gap.start > currentY)
+          paths.push({ d: `M ${x} ${currentY} L ${x} ${gap.start}`, class: 'tree-line tree-trunk' })
+        currentY = Math.max(currentY, gap.end)
+      }
+      if (endY > currentY)
+        paths.push({ d: `M ${x} ${currentY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
+    }
+  }
+
+  // Step 3: Forward branch diagonal (only for FIRST child of each parent)
+  const firstChildDrawn = new Set<string>()
+  for (const node of nodes) {
+    if (node.indent <= 0)
+      continue
+    const parentId = node.parentId || '__root__'
+    if (firstChildDrawn.has(parentId))
+      continue
+    firstChildDrawn.add(parentId)
+
+    const pos = positions.get(node.id)
+    if (!pos)
+      continue
+
+    const parentTrunkX = TREE_LINE_X + (node.indent - 1) * INDENT_SIZE
+    const endX = TREE_LINE_X + node.indent * INDENT_SIZE
+    const cy = pos.centerY
+
+    paths.push({
+      d: `M ${parentTrunkX} ${cy - BRANCH_CURVE_H} L ${endX} ${cy}`,
+      class: 'tree-line tree-branch',
+    })
+  }
+
+  // Step 4: Reverse branch diagonal (from last child back to trunk)
+  for (const node of nodes) {
+    if (!node.hasChildren)
+      continue
+    const nodeIdx = nodes.indexOf(node)
+    let lastChild: TreeNode | null = null
+    for (let j = nodeIdx + 1; j < nodes.length; j++) {
+      if (nodes[j].indent <= node.indent)
+        break
+      if (nodes[j].indent === node.indent + 1)
+        lastChild = nodes[j]
+    }
+    if (!lastChild)
+      continue
+    const lcp = positions.get(lastChild.id)
+    if (!lcp)
+      continue
+    const trunkX = TREE_LINE_X + node.indent * INDENT_SIZE
+    const childX = TREE_LINE_X + lastChild.indent * INDENT_SIZE
+    paths.push({
+      d: `M ${childX} ${lcp.centerY} L ${trunkX} ${lcp.centerY + BRANCH_CURVE_H}`,
+      class: 'tree-line tree-branch',
+    })
+  }
+
+  return paths
+})
+
+// Active chain: active entry + all its ancestors
+const activeChainIds = computed(() => {
+  const ids = new Set<string>()
+  if (!activeHash.value)
+    return ids
+  ids.add(activeHash.value)
+  let current = linkMap.value.get(activeHash.value)
+  while (current?.parentId) {
+    ids.add(current.parentId)
+    current = linkMap.value.get(current.parentId)
+  }
+  return ids
+})
+
+// SVG dots for each outline entry node (base layer, highlight when in active chain)
+const svgDots = computed(() => {
+  const positions = entryPositions.value
+  if (!positions.size)
+    return []
+  const chain = activeChainIds.value
+
+  return outlineEntries.value
+    .map((entry) => {
+      const pos = positions.get(entry.id)
+      if (!pos)
+        return null
+      return {
+        cx: TREE_LINE_X + entry.indent * INDENT_SIZE,
+        cy: pos.centerY,
+        active: chain.has(entry.id),
+      }
+    })
+    .filter(Boolean) as { cx: number, cy: number, active: boolean }[]
+})
+
+// Indicator track range: computes the start/end distances along treeTrack for highlighting
+const indicatorTrackRange = computed<{ start: number, length: number } | null>(() => {
+  if (!activeHash.value)
+    return null
+  const distances = treeTrack.value.distances
+  if (!distances.size)
+    return null
+  const chain = activeChainIds.value
+
+  // Start: smallest distance in the active chain (topmost ancestor)
+  let startDist = Infinity
+  for (const id of chain) {
+    const d = distances.get(id)
+    if (d != null && d < startDist)
+      startDist = d
+  }
+
+  // End: active node's distance, extended to last child if has children
+  let endDist = distances.get(activeHash.value) ?? 0
+  const nodes = treeStructure.value
+  const activeIdx = nodes.findIndex(n => n.id === activeHash.value)
+  if (activeIdx >= 0) {
+    const activeNode = nodes[activeIdx]
+    if (activeNode.hasChildren) {
+      for (let j = activeIdx + 1; j < nodes.length; j++) {
+        if (nodes[j].indent <= activeNode.indent)
+          break
+        if (nodes[j].indent === activeNode.indent + 1) {
+          const d = distances.get(nodes[j].id)
+          if (d != null && d > endDist)
+            endDist = d
+        }
+      }
+    }
+  }
+
+  if (startDist === Infinity)
+    return null
+
+  return { start: startDist, length: endDist - startDist }
+})
+
+// Continuous tree track path for offset-path animation
+// Traces the full tree structure: trunk → forward diagonal → child trunk → reverse diagonal → trunk...
+const treeTrack = computed(() => {
+  const nodes = treeStructure.value
+  const positions = entryPositions.value
+  if (!nodes.length || !positions.size)
+    return { d: '', distances: new Map<string, number>() }
+
+  const distances = new Map<string, number>()
+  const parts: string[] = []
+  let totalLength = 0
+  let curX = 0
+  let curY = 0
+
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
     const pos = positions.get(node.id)
     if (!pos)
       continue
 
-    const nodeX = TREE_X_BASE + node.indent * TREE_INDENT
+    const x = TREE_LINE_X + node.indent * INDENT_SIZE
+    const cy = pos.centerY
 
-    // A. Vertical trunk line: parent with children draws line down to last direct child
-    if (node.hasChildren) {
-      // Find last direct child position
-      let lastChildCenterY = pos.centerY
-      for (let j = i + 1; j < nodes.length; j++) {
-        if (nodes[j].indent <= node.indent)
-          break
-        if (nodes[j].indent === node.indent + 1) {
-          const childPos = positions.get(nodes[j].id)
-          if (childPos)
-            lastChildCenterY = childPos.centerY
-        }
+    if (i === 0) {
+      parts.push(`M ${x} ${cy}`)
+      curX = x
+      curY = cy
+      distances.set(node.id, 0)
+      continue
+    }
+
+    const prevNode = nodes[i - 1]
+
+    if (node.indent > prevNode.indent) {
+      // Going deeper: trunk down to branch start, then forward 45° diagonal
+      const branchY = cy - BRANCH_CURVE_H
+      if (branchY > curY) {
+        parts.push(`L ${curX} ${branchY}`)
+        totalLength += branchY - curY
+        curY = branchY
       }
-
-      if (lastChildCenterY > pos.centerY) {
-        const x = nodeX + TREE_INDENT
-        paths.push({
-          d: `M ${x} ${pos.centerY} L ${x} ${lastChildCenterY - CURVE_RADIUS}`,
-          class: 'tree-line tree-trunk',
-        })
+      const dx = x - curX
+      const dy = cy - curY
+      parts.push(`L ${x} ${cy}`)
+      totalLength += Math.sqrt(dx * dx + dy * dy)
+    }
+    else if (node.indent < prevNode.indent) {
+      // Going shallower: reverse 45° diagonal, then trunk down
+      const rdx = x - curX
+      parts.push(`L ${x} ${curY + BRANCH_CURVE_H}`)
+      totalLength += Math.sqrt(rdx * rdx + BRANCH_CURVE_H * BRANCH_CURVE_H)
+      const returnY = curY + BRANCH_CURVE_H
+      if (cy > returnY) {
+        parts.push(`L ${x} ${cy}`)
+        totalLength += cy - returnY
+      }
+    }
+    else {
+      // Same indent: straight down
+      if (cy > curY) {
+        parts.push(`L ${x} ${cy}`)
+        totalLength += cy - curY
       }
     }
 
-    // B. Branch connector: indent > 0 entries get a curved connector from parent trunk
-    if (node.indent > 0) {
-      const parentX = nodeX - TREE_INDENT + TREE_INDENT // parent's trunk x = parent indent * TREE_INDENT + TREE_X_BASE + TREE_INDENT
-      const trunkX = TREE_X_BASE + (node.indent - 1) * TREE_INDENT + TREE_INDENT
-      const endX = nodeX + 2 // slightly past the node X for visual connection
-      const cy = pos.centerY
-      const R = Math.min(CURVE_RADIUS, (endX - trunkX) / 2)
-
-      paths.push({
-        d: `M ${trunkX} ${cy - R} Q ${trunkX} ${cy}, ${trunkX + R} ${cy} L ${endX} ${cy}`,
-        class: 'tree-line tree-branch',
-      })
-    }
+    curX = x
+    curY = cy
+    distances.set(node.id, totalLength)
   }
 
-  return paths
+  return { d: parts.join(' '), distances, totalLength }
+})
+
+const activeTrackOffset = computed(() => {
+  if (!activeHash.value || !treeTrack.value.d)
+    return 0
+  return treeTrack.value.distances.get(activeHash.value) ?? 0
 })
 
 // Static SVG paths for skeleton tree lines
 const skeletonSvgPaths = computed(() => {
   const paths: { d: string }[] = []
 
+  // Branch connectors for indented items
   for (let i = 0; i < skeletonEntries.length; i++) {
     const entry = skeletonEntries[i]
-    const centerY = SKELETON_PADDING_TOP + i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-    const nodeX = TREE_X_BASE + entry.indent * TREE_INDENT
+    const centerY = i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
 
     if (entry.indent > 0) {
-      const trunkX = TREE_X_BASE + (entry.indent - 1) * TREE_INDENT + TREE_INDENT
-      const endX = nodeX + 2
-      const R = Math.min(CURVE_RADIUS, (endX - trunkX) / 2)
+      const parentTrunkX = TREE_LINE_X + (entry.indent - 1) * INDENT_SIZE
+      const endX = TREE_LINE_X + entry.indent * INDENT_SIZE
 
       paths.push({
-        d: `M ${trunkX} ${centerY - R} Q ${trunkX} ${centerY}, ${trunkX + R} ${centerY} L ${endX} ${centerY}`,
+        d: `M ${parentTrunkX} ${centerY - BRANCH_CURVE_H} L ${endX} ${centerY}`,
       })
     }
   }
 
-  // Vertical trunk lines for skeleton parents
-  const parentRanges: { x: number, startY: number, endY: number }[] = []
+  // Sibling group vertical lines (same logic as real tree)
+  // Group by indent level
+  const groups = new Map<number, number[]>()
   for (let i = 0; i < skeletonEntries.length; i++) {
-    const entry = skeletonEntries[i]
-    if (entry.indent > 0)
-      continue
-    // Find children range
-    const startY = SKELETON_PADDING_TOP + i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-    let lastChildY = startY
-    let hasChild = false
-    for (let j = i + 1; j < skeletonEntries.length; j++) {
-      if (skeletonEntries[j].indent === 0)
-        break
-      if (skeletonEntries[j].indent === 1) {
-        hasChild = true
-        lastChildY = SKELETON_PADDING_TOP + j * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-      }
+    const indent = skeletonEntries[i].indent
+    let group = groups.get(indent)
+    if (!group) {
+      group = []
+      groups.set(indent, group)
     }
-    if (hasChild) {
-      const x = TREE_X_BASE + TREE_INDENT
-      parentRanges.push({ x, startY, endY: lastChildY - CURVE_RADIUS })
-    }
+    group.push(i)
   }
 
-  for (const range of parentRanges) {
+  // For indent-0 group: continuous vertical line from first to last
+  const rootIndices = groups.get(0)
+  if (rootIndices && rootIndices.length >= 2) {
+    const firstY = rootIndices[0] * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
+    let lastY = rootIndices[rootIndices.length - 1] * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
+
+    // Extend to cover children below last root
+    for (const ri of rootIndices) {
+      for (let j = ri + 1; j < skeletonEntries.length; j++) {
+        if (skeletonEntries[j].indent === 0)
+          break
+        const childY = j * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
+        if (childY > lastY)
+          lastY = childY
+      }
+    }
+
     paths.push({
-      d: `M ${range.x} ${range.startY} L ${range.x} ${range.endY}`,
+      d: `M ${TREE_LINE_X} ${firstY} L ${TREE_LINE_X} ${lastY}`,
     })
   }
 
@@ -456,7 +676,6 @@ watch(
     nextTick(() => {
       refreshHeadingElements()
       updateActiveFromScroll()
-      updateMarker()
       updateEntryPositions()
     })
   },
@@ -465,7 +684,6 @@ watch(
 
 watch(activeHash, () => {
   nextTick(() => {
-    updateMarker()
     updateEntryPositions()
   })
 })
@@ -479,7 +697,6 @@ watch(
     // Reset state on route change
     headingElements.value = {}
     activeHash.value = ''
-    hasActive.value = false
 
     // Wait for DOM to be ready with new content
     nextTick(() => {
@@ -491,7 +708,6 @@ watch(
         else
           updateActiveFromScroll()
         setActiveHash(window.location.hash)
-        updateMarker()
         updateEntryPositions()
       }, 100)
     })
@@ -505,49 +721,74 @@ watch(
       {{ t('docs.outlineLabel') }}
     </div>
 
-    <nav v-if="hasOutline" ref="navRef" class="outline-nav relative">
-      <!-- SVG tree guide lines -->
-      <svg
-        class="outline-tree-svg"
-        :style="{ height: `${navScrollHeight}px` }"
-        aria-hidden="true"
-      >
-        <path
-          v-for="(p, i) in svgPaths"
-          :key="i"
-          :d="p.d"
-          :class="p.class"
-          fill="none"
-        />
-      </svg>
-
-      <!-- Sliding Marker -->
-      <div
-        class="outline-marker"
-        :style="{
-          top: `${markerTop}px`,
-          height: `${markerHeight}px`,
-          opacity: hasActive ? 1 : 0,
-        }"
-      />
-
-      <div
-        v-for="entry in outlineEntries"
-        :key="entry.id"
-        class="outline-item relative"
-        :class="{ 'outline-item-nested': entry.indent > 0 }"
-      >
-        <NuxtLink
-          :to="`#${entry.id}`"
-          replace
-          class="outline-link group relative flex items-center py-2 text-[14px] leading-snug no-underline transition-all duration-150"
-          :style="{ paddingLeft: `${8 + entry.indent * 12}px` }"
-          :class="{ 'is-active': activeHash === entry.id }"
-          :data-id="entry.id"
-          @click.prevent="scrollToHeading(entry.id)"
+    <nav v-if="hasOutline" ref="navRef" class="outline-nav">
+      <div ref="contentRef" class="relative">
+        <!-- SVG tree guide lines: base layer (grey) + indicator layer (primary) -->
+        <svg
+          class="outline-tree-svg"
+          :style="{ height: `${navContentHeight}px` }"
+          aria-hidden="true"
         >
-          <span class="line-clamp-2">{{ entry.text }}</span>
-        </NuxtLink>
+          <!-- Base layer: all tree lines + dots in grey -->
+          <g class="tree-base-layer">
+            <path
+              v-for="(p, i) in svgPaths"
+              :key="i"
+              :d="p.d"
+              :class="p.class"
+              fill="none"
+            />
+            <circle
+              v-for="(dot, i) in svgDots"
+              :key="`dot-${i}`"
+              :cx="dot.cx"
+              :cy="dot.cy"
+              :r="dot.active ? 3 : 2.5"
+              :class="dot.active ? 'tree-dot-active' : 'tree-dot'"
+            />
+          </g>
+
+          <!-- Indicator layer: highlighted segment of tree track -->
+          <g class="tree-indicator-layer">
+            <!-- Indicator line: same treeTrack path, dash-clipped to active chain range -->
+            <path
+              :d="treeTrack.d"
+              class="tree-indicator-line"
+              fill="none"
+              :stroke-dasharray="`${indicatorTrackRange?.length ?? 0} ${(treeTrack.totalLength || 9999) * 2}`"
+              :stroke-dashoffset="`${-(indicatorTrackRange?.start ?? 0)}`"
+              :style="{ opacity: indicatorTrackRange ? 1 : 0 }"
+            />
+            <!-- Main active dot: stroke-dash animation along tree track -->
+            <path
+              :d="treeTrack.d"
+              class="tree-indicator-dot-track"
+              fill="none"
+              :stroke-dasharray="`0.1 ${(treeTrack.totalLength || 9999) * 2}`"
+              :stroke-dashoffset="`${-activeTrackOffset}`"
+              :style="{ opacity: activeHash && treeTrack.d ? 1 : 0 }"
+            />
+          </g>
+        </svg>
+
+        <div
+          v-for="entry in outlineEntries"
+          :key="entry.id"
+          class="outline-item relative"
+          :class="{ 'outline-item-nested': entry.indent > 0 }"
+        >
+          <NuxtLink
+            :to="`#${entry.id}`"
+            replace
+            class="outline-link group relative flex items-center py-2 text-[14px] leading-snug no-underline transition-all duration-150"
+            :style="{ paddingLeft: `${14 + entry.indent * 12}px` }"
+            :class="{ 'is-active': activeHash === entry.id }"
+            :data-id="entry.id"
+            @click.prevent="scrollToHeading(entry.id)"
+          >
+            <span class="line-clamp-2">{{ entry.text }}</span>
+          </NuxtLink>
+        </div>
       </div>
     </nav>
 
@@ -564,6 +805,14 @@ watch(
           :d="p.d"
           class="tree-line tree-skeleton-line"
           fill="none"
+        />
+        <circle
+          v-for="(entry, i) in skeletonEntries"
+          :key="`sk-dot-${i}`"
+          :cx="TREE_LINE_X + entry.indent * INDENT_SIZE"
+          :cy="i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2"
+          r="2.5"
+          class="tree-dot tree-skeleton-dot"
         />
       </svg>
 
@@ -627,17 +876,33 @@ watch(
   stroke: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 80%, transparent);
 }
 
-.outline-marker {
-  position: absolute;
-  left: 0;
-  width: 2px;
-  border-radius: 999px;
-  background: var(--tx-color-primary, #409eff);
-  z-index: 1;
-  transition:
-    top var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out),
-    height var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out),
-    opacity var(--tx-transition-duration, 0.3s) var(--tx-transition-function, ease-in-out);
+.tree-dot {
+  fill: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
+  transition: fill 0.3s ease, r 0.3s ease;
+}
+
+.tree-skeleton-dot {
+  fill: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 80%, transparent);
+}
+
+.tree-dot-active {
+  fill: var(--tx-color-primary, #409eff);
+  transition: fill 0.3s ease, r 0.3s ease;
+}
+
+.tree-indicator-line {
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: stroke-dashoffset 0.4s ease, stroke-dasharray 0.4s ease, opacity 0.2s ease;
+}
+
+.tree-indicator-dot-track {
+  stroke: var(--tx-color-primary, #409eff);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease, opacity 0.2s ease;
 }
 
 .outline-skeleton {

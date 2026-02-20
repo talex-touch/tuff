@@ -1,5 +1,5 @@
 import type {
-  AiInvokeResult,
+  IntelligenceInvokeResult,
   IntelligenceIntentDetectResult,
   IntelligenceKeywordsExtractResult,
   IntelligenceSentimentAnalyzeResult
@@ -18,7 +18,7 @@ export class IntentDetectTester extends BaseCapabilityTester {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<IntelligenceIntentDetectResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceIntentDetectResult>) {
     const intent = result.result?.intent || 'unknown'
     const confidence = result.result?.confidence || 0
 
@@ -52,7 +52,7 @@ export class SentimentAnalyzeTester extends BaseCapabilityTester {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<IntelligenceSentimentAnalyzeResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>) {
     const sentiment = result.result?.sentiment || 'neutral'
     const score = result.result?.score || 0
 
@@ -88,7 +88,7 @@ export class KeywordsExtractTester extends BaseCapabilityTester {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<IntelligenceKeywordsExtractResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>) {
     const keywords = result.result?.keywords || []
     const keywordList = keywords.map((k) => k.term).join(', ')
 

@@ -12,7 +12,9 @@ interface LocalizedText {
 
 interface DashboardUpdate {
   id: string
-  type: 'news' | 'release'
+  type: 'news' | 'release' | 'announcement' | 'config' | 'data'
+  scope: 'web' | 'system' | 'both'
+  channels: string[]
   releaseTag: string | null
   title: LocalizedText
   timestamp: string
@@ -167,9 +169,15 @@ function resolveUpdateText(text: LocalizedText) {
 }
 
 function updateTypeLabel(update: DashboardUpdate) {
-  return update.type === 'release'
-    ? t('updates.news.typeRelease', '更新')
-    : t('updates.news.typeNews', '要闻')
+  if (update.type === 'release')
+    return t('updates.news.typeRelease', '更新')
+  if (update.type === 'announcement')
+    return t('updates.news.typeAnnouncement', '公告')
+  if (update.type === 'config')
+    return t('updates.news.typeConfig', '配置')
+  if (update.type === 'data')
+    return t('updates.news.typeData', '数据')
+  return t('updates.news.typeNews', '要闻')
 }
 
 watch(historyExpanded, (expanded) => {

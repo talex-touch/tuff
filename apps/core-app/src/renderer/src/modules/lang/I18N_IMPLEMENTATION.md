@@ -22,6 +22,19 @@ const { t } = useI18n()
 const message = t('download.title') // "下载中心" or "Download Center"
 ```
 
+### UI Label Shorthand ($I18n:)
+
+For string-only props (route names, layout titles, etc.), use the `$I18n:` prefix to mark
+values that should be translated by the layout layer. This avoids wiring `useI18n()` in
+every view component while keeping titles localized.
+
+```vue
+<ViewTemplate title="$I18n:router.appSettings" />
+```
+
+In the renderer, `resolveI18nLabel()` (see `apps/core-app/src/renderer/src/utils/i18n-helpers.ts`)
+handles the prefix and falls back to the raw string when no prefix is present.
+
 ### Main Process (Backend)
 
 The main process uses a custom i18n helper:

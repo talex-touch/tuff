@@ -1,4 +1,4 @@
-import type { AiSDKPersistedConfig } from '@talex-touch/utils'
+import type { IntelligenceSDKPersistedConfig } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { OpenersConfig } from '@talex-touch/utils/common/storage/entity/openers'
 import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
@@ -148,9 +148,9 @@ export const mainStorageRegistry = {
     defaultValue: {},
     normalize: normalizeObject
   }),
-  [StorageList.IntelligenceConfig]: defineEntry<AiSDKPersistedConfig>({
+  [StorageList.IntelligenceConfig]: defineEntry<IntelligenceSDKPersistedConfig>({
     key: StorageList.IntelligenceConfig,
-    defaultValue: {} as AiSDKPersistedConfig,
+    defaultValue: {} as IntelligenceSDKPersistedConfig,
     normalize: normalizeObject
   }),
   [StorageList.MARKET_SOURCES]: defineEntry<MarketSourcesPayload>({

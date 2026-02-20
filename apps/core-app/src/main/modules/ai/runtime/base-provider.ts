@@ -408,103 +408,103 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
   }
 
   // ============================================================================
-  // Vision Capabilities (Optional - default not implemented)
+  // Vision Capabilities (Optional - default unsupported)
   // ============================================================================
 
   visionOcr(
     _payload: IntelligenceVisionOcrPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>> {
-    return Promise.reject(new Error(`[${this.type}] Vision OCR not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Vision OCR capability is unsupported`))
   }
 
   imageCaption(
     _payload: IntelligenceImageCaptionPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>> {
-    return Promise.reject(new Error(`[${this.type}] Image caption not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Image caption capability is unsupported`))
   }
 
   imageAnalyze(
     _payload: IntelligenceImageAnalyzePayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>> {
-    return Promise.reject(new Error(`[${this.type}] Image analyze not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Image analyze capability is unsupported`))
   }
 
   imageGenerate(
     _payload: IntelligenceImageGeneratePayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>> {
-    return Promise.reject(new Error(`[${this.type}] Image generate not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Image generate capability is unsupported`))
   }
 
   imageEdit(
     _payload: IntelligenceImageEditPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>> {
-    return Promise.reject(new Error(`[${this.type}] Image edit not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Image edit capability is unsupported`))
   }
 
   // ============================================================================
-  // Audio Capabilities (Optional - default not implemented)
+  // Audio Capabilities (Optional - default unsupported)
   // ============================================================================
 
   tts(
     _payload: IntelligenceTTSPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceTTSResult>> {
-    return Promise.reject(new Error(`[${this.type}] TTS not implemented`))
+    return Promise.reject(new Error(`[${this.type}] TTS capability is unsupported`))
   }
 
   stt(
     _payload: IntelligenceSTTPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceSTTResult>> {
-    return Promise.reject(new Error(`[${this.type}] STT not implemented`))
+    return Promise.reject(new Error(`[${this.type}] STT capability is unsupported`))
   }
 
   audioTranscribe(
     _payload: IntelligenceAudioTranscribePayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>> {
-    return Promise.reject(new Error(`[${this.type}] Audio transcribe not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Audio transcribe capability is unsupported`))
   }
 
   // ============================================================================
-  // RAG & Search Capabilities (Optional - default not implemented)
+  // RAG & Search Capabilities (Optional - default unsupported)
   // ============================================================================
 
   ragQuery(
     _payload: IntelligenceRAGQueryPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>> {
-    return Promise.reject(new Error(`[${this.type}] RAG query not implemented`))
+    return Promise.reject(new Error(`[${this.type}] RAG query capability is unsupported`))
   }
 
   semanticSearch(
     _payload: IntelligenceSemanticSearchPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>> {
-    return Promise.reject(new Error(`[${this.type}] Semantic search not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Semantic search capability is unsupported`))
   }
 
   rerank(
     _payload: IntelligenceRerankPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceRerankResult>> {
-    return Promise.reject(new Error(`[${this.type}] Rerank not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Rerank capability is unsupported`))
   }
 
   // ============================================================================
-  // Agent Capabilities (Optional - default not implemented)
+  // Agent Capabilities (Optional - default unsupported)
   // ============================================================================
 
   agent(
     _payload: IntelligenceAgentPayload,
     _options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<IntelligenceAgentResult>> {
-    return Promise.reject(new Error(`[${this.type}] Agent not implemented`))
+    return Promise.reject(new Error(`[${this.type}] Agent capability is unsupported`))
   }
 
   // ============================================================================

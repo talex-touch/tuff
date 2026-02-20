@@ -1,8 +1,8 @@
 import type {
-  AiInvokeOptions,
-  AiInvokeResult,
-  AiStreamChunk,
-  AiUsageInfo,
+  IntelligenceInvokeOptions,
+  IntelligenceInvokeResult,
+  IntelligenceStreamChunk,
+  IntelligenceUsageInfo,
   IntelligenceChatPayload,
   IntelligenceTranslatePayload
 } from '@talex-touch/utils'
@@ -39,8 +39,8 @@ export class DeepSeekProvider extends IntelligenceProvider {
 
   async chat(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     this.validateApiKey()
     const startTime = Date.now()
     const traceId = this.generateTraceId()
@@ -81,7 +81,7 @@ export class DeepSeekProvider extends IntelligenceProvider {
     }>(response, { endpoint: '/chat/completions' })
     const latency = Date.now() - startTime
 
-    const usage: AiUsageInfo = {
+    const usage: IntelligenceUsageInfo = {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       totalTokens: data.usage?.total_tokens || 0
@@ -99,8 +99,8 @@ export class DeepSeekProvider extends IntelligenceProvider {
 
   async *chatStream(
     payload: IntelligenceChatPayload,
-    options: AiInvokeOptions
-  ): AsyncGenerator<AiStreamChunk> {
+    options: IntelligenceInvokeOptions
+  ): AsyncGenerator<IntelligenceStreamChunk> {
     this.validateApiKey()
 
     const model = options.modelPreference?.[0] || this.config.defaultModel || 'deepseek-chat'
@@ -161,14 +161,14 @@ export class DeepSeekProvider extends IntelligenceProvider {
     }
   }
 
-  async embedding(): Promise<AiInvokeResult<number[]>> {
+  async embedding(): Promise<IntelligenceInvokeResult<number[]>> {
     throw new Error('[DeepSeekProvider] Embedding is not supported by DeepSeek')
   }
 
   async translate(
     payload: IntelligenceTranslatePayload,
-    options: AiInvokeOptions
-  ): Promise<AiInvokeResult<string>> {
+    options: IntelligenceInvokeOptions
+  ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {
       messages: [
         {

@@ -118,6 +118,23 @@ interface GeoAnalyticsData {
   generatedAt: string
 }
 
+interface ExchangeRateHistoryItem {
+  baseCurrency: string
+  targetCurrency: string
+  rate: number
+  fetchedAt: number
+  providerUpdatedAt?: number | null
+}
+
+interface ExchangeRateSnapshotSummary {
+  id: string
+  baseCurrency: string
+  fetchedAt: number
+  providerUpdatedAt?: number | null
+  providerNextUpdateAt?: number | null
+  payload?: Record<string, unknown>
+}
+
 interface GeoMapPoint {
   id: string
   label: string
@@ -136,6 +153,41 @@ interface TelemetryMessage {
   createdAt: string
 }
 
+interface IntelligenceAnalyticsData {
+  summary: {
+    days: number
+    totalRuns: number
+    successRuns: number
+    failureRuns: number
+    successRate: number
+    fallbackRate: number
+    approvalHitRate: number
+    recoveryRate: number
+    streamCoverageRate: number
+    retryRunRate: number
+    disconnectPauseRate: number
+    checkpointLossRate: number
+    totalActions: number
+    completedActions: number
+    failedActions: number
+    waitingApprovals: number
+    avgDurationMs: number
+    p95DurationMs: number
+  }
+  statusDistribution: Record<string, number>
+  toolFailureDistribution: Array<{ toolId: string, count: number }>
+  recentRuns: Array<{
+    sessionId: string
+    status: string
+    providerName: string | null
+    model: string
+    fallbackCount: number
+    approvalHitCount: number
+    durationMs: number
+    createdAt: string
+  }>
+}
+
 const analytics = ref<AnalyticsData | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -150,9 +202,20 @@ const messagesError = ref<string | null>(null)
 const docsAnalytics = ref<DocAnalyticsResponse | null>(null)
 const docsLoading = ref(false)
 const docsError = ref<string | null>(null)
+const intelligenceAnalytics = ref<IntelligenceAnalyticsData | null>(null)
+const intelligenceLoading = ref(false)
+const intelligenceError = ref<string | null>(null)
+const exchangeHistory = ref<ExchangeRateHistoryItem[]>([])
+const exchangeSnapshots = ref<ExchangeRateSnapshotSummary[]>([])
+const exchangeLoading = ref(false)
+const exchangeError = ref<string | null>(null)
+const exchangeTarget = ref('CNY')
+const exchangeLimit = ref(20)
+const exchangeView = ref<'history' | 'snapshots'>('history')
+const exchangeIncludePayload = ref(false)
 const docsPath = ref('')
 const docsSource = ref<'all' | 'docs_page' | 'doc_comments_admin'>('all')
-const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'docs' | 'geo' | 'messages'>('overview')
+const activeSection = ref<'overview' | 'performance' | 'search' | 'usage' | 'intelligence' | 'docs' | 'geo' | 'messages' | 'exchange'>('overview')
 const showBreakdown = ref(false)
 const activeBreakdownTab = ref<'search' | 'usage'>('search')
 const topModuleLoads = computed(() => analytics.value?.summary.moduleLoadMetrics.slice(0, 10) ?? [])
@@ -309,6 +372,26 @@ async function fetchDocsAnalytics() {
   }
 }
 
+async function fetchIntelligenceAnalytics() {
+  intelligenceLoading.value = true
+  intelligenceError.value = null
+  try {
+    const data = await $fetch<IntelligenceAnalyticsData>('/api/admin/analytics/intelligence', {
+      query: {
+        days: selectedDays.value,
+      },
+    })
+    intelligenceAnalytics.value = data
+  }
+  catch (e: any) {
+    intelligenceError.value = e.data?.message || e.message || 'Failed to load intelligence analytics'
+    intelligenceAnalytics.value = null
+  }
+  finally {
+    intelligenceLoading.value = false
+  }
+}
+
 async function fetchMessages() {
   messagesLoading.value = true
   messagesError.value = null
@@ -322,6 +405,45 @@ async function fetchMessages() {
   }
   finally {
     messagesLoading.value = false
+  }
+}
+
+async function fetchExchangeHistory() {
+  exchangeLoading.value = true
+  exchangeError.value = null
+  try {
+    if (exchangeView.value === 'history') {
+      const normalizedTarget = exchangeTarget.value.trim().toUpperCase()
+      if (!/^[A-Z]{3}$/.test(normalizedTarget)) {
+        throw new Error('Invalid target currency code.')
+      }
+      const data = await $fetch<{ items?: ExchangeRateHistoryItem[] }>('/api/exchange/history', {
+        query: {
+          target: normalizedTarget,
+          limit: exchangeLimit.value,
+        },
+      })
+      exchangeHistory.value = data.items ?? []
+      exchangeSnapshots.value = []
+    }
+    else {
+      const data = await $fetch<{ items?: ExchangeRateSnapshotSummary[] }>('/api/exchange/history', {
+        query: {
+          limit: exchangeLimit.value,
+          includePayload: exchangeIncludePayload.value ? 'true' : undefined,
+        },
+      })
+      exchangeSnapshots.value = data.items ?? []
+      exchangeHistory.value = []
+    }
+  }
+  catch (e: any) {
+    exchangeError.value = e.data?.message || e.message || 'Failed to load exchange history'
+    exchangeHistory.value = []
+    exchangeSnapshots.value = []
+  }
+  finally {
+    exchangeLoading.value = false
   }
 }
 
@@ -341,6 +463,7 @@ onMounted(() => {
   fetchAnalytics()
   fetchGeoAnalytics()
   fetchDocsAnalytics()
+  fetchIntelligenceAnalytics()
   fetchMessages()
 })
 
@@ -348,6 +471,7 @@ watch(selectedDays, () => {
   fetchAnalytics()
   fetchGeoAnalytics()
   fetchDocsAnalytics()
+  fetchIntelligenceAnalytics()
 })
 
 watch(selectedGeoCountry, () => {
@@ -366,6 +490,16 @@ watch([docsPath, docsSource], () => {
 watch(activeSection, (section) => {
   if (section === 'docs' && !docsAnalytics.value && !docsLoading.value)
     fetchDocsAnalytics()
+  if (section === 'intelligence' && !intelligenceAnalytics.value && !intelligenceLoading.value)
+    fetchIntelligenceAnalytics()
+  if (section === 'exchange' && !exchangeLoading.value)
+    fetchExchangeHistory()
+})
+
+watch([exchangeView, exchangeTarget, exchangeLimit, exchangeIncludePayload], () => {
+  if (activeSection.value === 'exchange') {
+    fetchExchangeHistory()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -406,6 +540,26 @@ function formatCategoryKey(key: string) {
 function formatMessageTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+function formatExchangeTime(value: number | null | undefined) {
+  if (!value)
+    return '-'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+}
+
+function formatRate(value: number) {
+  if (!Number.isFinite(value))
+    return '-'
+  return value >= 1 ? value.toFixed(4) : value.toFixed(6)
+}
+
+function formatPayloadPreview(payload?: Record<string, unknown>) {
+  if (!payload)
+    return ''
+  const raw = JSON.stringify(payload)
+  return raw.length > 180 ? `${raw.slice(0, 180)}...` : raw
 }
 
 function drilldownCountry(countryCode: string) {
@@ -545,11 +699,17 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'usage' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'usage'">
           Usage
         </TxButton>
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'intelligence' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'intelligence'">
+          Intelligence
+        </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'docs' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'docs'">
           Docs
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'geo' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'geo'">
           Geo
+        </TxButton>
+        <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'exchange' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'exchange'">
+          Exchange
         </TxButton>
         <TxButton variant="bare" native-type="button" class="text-xs transition" :class="activeSection === 'messages' ? 'bg-black text-white dark:bg-white dark:text-black' : 'bg-black/[0.04] text-black/60 hover:bg-black/10 dark:bg-white/[0.08] dark:text-white/60 dark:hover:bg-white/[0.1]'" @click="activeSection = 'messages'">
           Alerts
@@ -919,6 +1079,141 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
             </div>
           </div>
         </div>
+      </div>
+
+      <div v-if="activeSection === 'intelligence'" class="space-y-4">
+        <div v-if="intelligenceLoading" class="flex items-center justify-center rounded-2xl bg-black/[0.02] py-10 dark:bg-white/[0.03]">
+          <TxSpinner :size="18" />
+        </div>
+        <div v-else-if="intelligenceError" class="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+          {{ intelligenceError }}
+        </div>
+        <template v-else-if="intelligenceAnalytics">
+          <div class="grid gap-4 lg:grid-cols-4">
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+                Runs
+              </h3>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ formatNumber(intelligenceAnalytics.summary.totalRuns) }}
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                success {{ intelligenceAnalytics.summary.successRate }}%
+              </p>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                disconnect pause {{ intelligenceAnalytics.summary.disconnectPauseRate }}%
+              </p>
+            </div>
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+                Fallback
+              </h3>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ intelligenceAnalytics.summary.fallbackRate }}%
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                recovery {{ intelligenceAnalytics.summary.recoveryRate }}%
+              </p>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                retry run {{ intelligenceAnalytics.summary.retryRunRate }}%
+              </p>
+            </div>
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+                Approval Hit
+              </h3>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ intelligenceAnalytics.summary.approvalHitRate }}%
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                waiting {{ intelligenceAnalytics.summary.waitingApprovals }}
+              </p>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                checkpoint loss {{ intelligenceAnalytics.summary.checkpointLossRate }}%
+              </p>
+            </div>
+            <div class="rounded-2xl bg-black/[0.02] p-4 dark:bg-white/[0.03]">
+              <h3 class="text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+                Stream Coverage
+              </h3>
+              <p class="mt-2 text-2xl font-semibold text-black dark:text-white">
+                {{ intelligenceAnalytics.summary.streamCoverageRate }}%
+              </p>
+              <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+                p95 {{ intelligenceAnalytics.summary.p95DurationMs }}ms
+              </p>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                avg {{ intelligenceAnalytics.summary.avgDurationMs }}ms
+              </p>
+            </div>
+          </div>
+
+          <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="font-semibold text-black dark:text-white">
+                  Runtime Status Distribution
+                </h3>
+                <span class="text-xs text-black/45 dark:text-white/45">
+                  avg {{ intelligenceAnalytics.summary.avgDurationMs }}ms
+                </span>
+              </div>
+              <div class="space-y-2 text-sm text-black/70 dark:text-white/70">
+                <div v-for="item in Object.entries(intelligenceAnalytics.statusDistribution)" :key="item[0]" class="flex items-center justify-between rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
+                  <span class="capitalize">{{ item[0].replace('_', ' ') }}</span>
+                  <span class="text-xs text-black/45 dark:text-white/45">{{ item[1] }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="font-semibold text-black dark:text-white">
+                  Tool Failures
+                </h3>
+                <TxButton variant="bare" size="small" native-type="button" class="text-xs text-black/45 dark:text-white/45" @click="fetchIntelligenceAnalytics">
+                  Refresh
+                </TxButton>
+              </div>
+              <div v-if="intelligenceAnalytics.toolFailureDistribution.length === 0" class="text-sm text-black/45 dark:text-white/45">
+                No tool failures in selected period.
+              </div>
+              <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
+                <div v-for="tool in intelligenceAnalytics.toolFailureDistribution.slice(0, 8)" :key="tool.toolId" class="flex items-center justify-between rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
+                  <span class="truncate">{{ tool.toolId }}</span>
+                  <span class="text-xs text-black/45 dark:text-white/45">{{ tool.count }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+            <h3 class="mb-3 font-semibold text-black dark:text-white">
+              Recent Intelligence Runs
+            </h3>
+            <div v-if="intelligenceAnalytics.recentRuns.length === 0" class="text-sm text-black/45 dark:text-white/45">
+              No runtime records.
+            </div>
+            <div v-else class="space-y-2 text-sm text-black/70 dark:text-white/70">
+              <div v-for="run in intelligenceAnalytics.recentRuns" :key="run.sessionId + run.createdAt" class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-black/[0.03] px-3 py-2 dark:bg-white/[0.04]">
+                <div class="min-w-0">
+                  <p class="truncate font-medium text-black dark:text-white">
+                    {{ run.sessionId }}
+                  </p>
+                  <p class="text-xs text-black/45 dark:text-white/45">
+                    {{ run.providerName || 'runtime' }} · {{ run.model }}
+                  </p>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-black/45 dark:text-white/45">
+                  <span class="capitalize">{{ run.status }}</span>
+                  <span>{{ run.durationMs }}ms</span>
+                  <span>fallback {{ run.fallbackCount }}</span>
+                  <span>approval {{ run.approvalHitCount }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <div v-if="activeSection === 'docs'" class="space-y-4">
@@ -1315,6 +1610,106 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart
               <span class="text-xs text-black/40 dark:text-white/40">{{ formatMessageTime(item.createdAt) }}</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Exchange Rate History -->
+      <div v-if="activeSection === 'exchange'" class="rounded-2xl bg-black/[0.02] p-5 dark:bg-white/[0.03]">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 class="font-semibold text-black dark:text-white">
+              Exchange Rate History
+            </h3>
+            <p class="text-xs text-black/45 dark:text-white/45">
+              Non-free users only. USD base.
+            </p>
+          </div>
+          <TxButton variant="bare" size="small" native-type="button" class="rounded-lg bg-black/[0.04] text-xs text-black/70 transition hover:bg-black/10 dark:bg-white/[0.04] dark:text-white/70" @click="fetchExchangeHistory">
+            Refresh
+          </TxButton>
+        </div>
+        <div class="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-black/[0.02] p-4 text-xs dark:bg-white/[0.03]">
+          <select v-model="exchangeView" class="h-8 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white">
+            <option value="history">
+              Target history
+            </option>
+            <option value="snapshots">
+              Snapshots
+            </option>
+          </select>
+          <input
+            v-model="exchangeTarget"
+            type="text"
+            placeholder="Target (e.g. CNY)"
+            class="h-8 w-28 rounded-lg border border-black/10 bg-transparent px-3 text-xs uppercase text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
+          >
+          <input
+            v-model.number="exchangeLimit"
+            type="number"
+            min="1"
+            max="200"
+            class="h-8 w-20 rounded-lg border border-black/10 bg-transparent px-3 text-xs text-black outline-none transition focus:border-primary/50 dark:border-white/10 dark:text-white"
+          >
+          <label class="flex items-center gap-2 text-xs text-black/60 dark:text-white/60">
+            <input v-model="exchangeIncludePayload" type="checkbox" class="h-3 w-3 rounded border-black/20">
+            Include payload (admin)
+          </label>
+        </div>
+        <div v-if="exchangeLoading" class="flex items-center gap-2 text-sm text-black/40 dark:text-white/40">
+          <TxSpinner :size="16" />
+          Loading exchange history...
+        </div>
+        <div v-else-if="exchangeError" class="rounded-lg bg-red-500/10 p-3 text-sm text-red-500">
+          {{ exchangeError }}
+        </div>
+        <div v-else-if="exchangeView === 'history' && exchangeHistory.length === 0" class="text-sm text-black/40 dark:text-white/40">
+          No history data
+        </div>
+        <div v-else-if="exchangeView === 'snapshots' && exchangeSnapshots.length === 0" class="text-sm text-black/40 dark:text-white/40">
+          No snapshot data
+        </div>
+        <div v-else class="space-y-3">
+          <template v-if="exchangeView === 'history'">
+            <div
+              v-for="item in exchangeHistory"
+              :key="`${item.targetCurrency}:${item.fetchedAt}`"
+              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.04]"
+            >
+              <div class="flex items-center justify-between gap-4">
+                <div class="font-semibold text-black dark:text-white">
+                  USD → {{ item.targetCurrency }}
+                </div>
+                <div class="text-xs text-black/40 dark:text-white/40">
+                  {{ formatExchangeTime(item.fetchedAt) }}
+                </div>
+              </div>
+              <div class="mt-2 text-xs text-black/60 dark:text-white/60">
+                Rate: {{ formatRate(item.rate) }}
+              </div>
+            </div>
+          </template>
+          <template v-if="exchangeView === 'snapshots'">
+            <div
+              v-for="item in exchangeSnapshots"
+              :key="item.id"
+              class="rounded-xl border border-black/[0.04] bg-black/[0.02] p-4 text-sm dark:border-white/[0.06] dark:bg-white/[0.04]"
+            >
+              <div class="flex items-center justify-between gap-4">
+                <div class="font-semibold text-black dark:text-white">
+                  Snapshot · {{ item.baseCurrency }}
+                </div>
+                <div class="text-xs text-black/40 dark:text-white/40">
+                  {{ formatExchangeTime(item.fetchedAt) }}
+                </div>
+              </div>
+              <div class="mt-2 text-xs text-black/60 dark:text-white/60">
+                Provider updated: {{ formatExchangeTime(item.providerUpdatedAt) }}
+              </div>
+              <div v-if="item.payload" class="mt-2 rounded-lg bg-black/[0.03] p-3 text-[11px] text-black/60 dark:bg-white/[0.05] dark:text-white/60">
+                {{ formatPayloadPreview(item.payload) }}
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import compressing from 'compressing'
 import fse from 'fs-extra'
+import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
 
@@ -68,6 +69,9 @@ export class PluginResolver {
     options?: ResolverInstallOptions
   ): Promise<void> {
     console.log(`[PluginResolver] Installing plugin: ${manifest.name}`)
+    if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
+      return cb('invalid plugin name', 'error')
+    }
     const _target = path.join(pluginModule.filePath!, manifest.name)
     const existingPlugin = fse.existsSync(_target)
     let wasEnabled = false

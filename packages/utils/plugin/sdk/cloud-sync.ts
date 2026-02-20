@@ -1,6 +1,6 @@
 import type { CloudSyncSDKOptions as ClientOptions } from '../../cloud-sync/cloud-sync-sdk'
 import { CloudSyncSDK as CloudSyncClientSDK, CloudSyncError } from '../../cloud-sync/cloud-sync-sdk'
-import type { PullResponse, PushResponse, SyncItemInput } from '../../types/cloud-sync'
+import type { HandshakeResponse, PullResponse, PushResponse, SyncItemInput } from '../../types/cloud-sync'
 import { accountSDK } from '../../account'
 import { ensureRendererChannel } from './channel'
 
@@ -11,6 +11,7 @@ export interface CloudSyncSDKOptions {
   now?: () => number
   syncTokenCache?: { token?: string, expiresAt?: string }
   onSyncTokenUpdate?: (token: string, expiresAt: string) => void
+  onHandshake?: (response: HandshakeResponse) => void
   onStepUpRequired?: () => string | null | Promise<string | null>
   formDataFactory?: () => FormData
   channelSend?: (event: string, data?: any) => Promise<any>
@@ -71,6 +72,7 @@ export class CloudSyncSDK extends CloudSyncClientSDK {
       now: options.now,
       syncTokenCache: options.syncTokenCache,
       onSyncTokenUpdate: options.onSyncTokenUpdate,
+      onHandshake: options.onHandshake,
       onStepUpRequired: options.onStepUpRequired,
       formDataFactory: options.formDataFactory,
       getAuthToken: () => resolveAuthToken(options),

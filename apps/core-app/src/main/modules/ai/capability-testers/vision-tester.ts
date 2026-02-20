@@ -1,6 +1,6 @@
 import type {
-  AiInvokeResult,
-  AiVisionOcrResult,
+  IntelligenceInvokeResult,
+  IntelligenceVisionOcrResult,
   IntelligenceVisionOcrPayload
 } from '@talex-touch/utils'
 import type { CapabilityTestPayload } from './base-tester'
@@ -36,7 +36,7 @@ export class VisionCapabilityTester extends BaseCapabilityTester {
     }
   }
 
-  formatTestResult(result: AiInvokeResult<AiVisionOcrResult>) {
+  formatTestResult(result: IntelligenceInvokeResult<IntelligenceVisionOcrResult>) {
     const ocrResult = result.result
     const preview =
       ocrResult.text.length > 200 ? `${ocrResult.text.slice(0, 200)}...` : ocrResult.text

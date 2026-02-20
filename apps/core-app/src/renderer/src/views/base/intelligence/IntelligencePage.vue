@@ -23,7 +23,7 @@ const boundCapabilities = computed(
 </script>
 
 <template>
-  <ViewTemplate title="Intelligence">
+  <ViewTemplate title="$I18n:router.intelligence">
     <IntelligenceHeader />
 
     <!-- Stats strip -->

@@ -3,6 +3,11 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceMessage,
   IntelligenceProviderConfig,
+  TuffIntelligenceApprovalTicket,
+  TuffIntelligenceSession,
+  TuffIntelligenceStateSnapshot,
+  TuffIntelligenceTraceEvent,
+  TuffIntelligenceTurn,
   ModuleInitContext,
   ModuleKey
 } from '@talex-touch/utils'
@@ -15,14 +20,20 @@ import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
 import { capabilityTesterRegistry } from './capability-testers'
-import { aiCapabilityRegistry } from './intelligence-capability-registry'
+import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
   debugPrintConfig,
-  ensureAiConfigLoaded,
+  ensureIntelligenceConfigLoaded,
   getCapabilityOptions,
   setupConfigUpdateListener
 } from './intelligence-config'
-import { ai, setIntelligenceProviderManager } from './intelligence-sdk'
+import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
+import {
+  agentManager,
+  registerAgentChannels,
+  registerBuiltinAgents,
+  registerBuiltinTools
+} from './agents'
 import { fetchProviderModels } from './provider-models'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
@@ -31,6 +42,7 @@ import { OpenAIProvider } from './providers/openai-provider'
 import { SiliconflowProvider } from './providers/siliconflow-provider'
 import type { QuotaConfig } from './intelligence-quota-manager'
 import { IntelligenceProviderManager } from './runtime/provider-manager'
+import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 
 const intelligenceLog = createLogger('Intelligence')
 
@@ -84,6 +96,82 @@ type IntelligenceUsageStatsPayload = {
 type QuotaLookupPayload = { callerId?: string; callerType?: QuotaConfig['callerType'] }
 
 type QuotaCheckPayload = QuotaLookupPayload & { estimatedTokens?: number }
+
+type IntelligenceSessionStartPayload = {
+  sessionId?: string
+  objective?: string
+  context?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+type IntelligenceSessionResumePayload = { sessionId: string }
+
+type IntelligenceSessionCancelPayload = { sessionId: string; reason?: string }
+
+type IntelligenceSessionStatePayload = { sessionId: string }
+
+type IntelligenceOrchestratorPlanPayload = {
+  sessionId: string
+  objective: string
+  context?: Record<string, unknown>
+  metadata?: Record<string, unknown>
+}
+
+type IntelligenceOrchestratorExecutePayload = {
+  sessionId: string
+  turnId?: string
+  maxSteps?: number
+  toolBudget?: number
+  continueOnError?: boolean
+  metadata?: Record<string, unknown>
+}
+
+type IntelligenceOrchestratorReflectPayload = {
+  sessionId: string
+  turnId: string
+  notes?: string
+}
+
+type IntelligenceToolCallPayload = {
+  sessionId: string
+  turnId?: string
+  actionId?: string
+  toolId: string
+  input?: unknown
+  riskLevel?: TuffIntelligenceApprovalTicket['riskLevel']
+  callId?: string
+  timeoutMs?: number
+  metadata?: Record<string, unknown>
+}
+
+type IntelligenceToolResultPayload = {
+  sessionId: string
+  turnId?: string
+  toolId: string
+  success: boolean
+  output?: unknown
+  error?: string
+  metadata?: Record<string, unknown>
+}
+
+type IntelligenceToolApprovePayload = {
+  ticketId: string
+  approved: boolean
+  approvedBy?: string
+  reason?: string
+}
+
+type IntelligenceTraceQueryPayload = {
+  sessionId: string
+  limit?: number
+  level?: TuffIntelligenceTraceEvent['level']
+  type?: TuffIntelligenceTraceEvent['type']
+}
+
+type IntelligenceTraceExportPayload = {
+  sessionId: string
+  format?: 'json' | 'jsonl'
+}
 
 const intelligenceInvokeEvent = defineRawEvent<
   IntelligenceInvokePayload,
@@ -143,6 +231,64 @@ const intelligenceCheckQuotaEvent = defineRawEvent<QuotaCheckPayload, ApiRespons
 const intelligenceGetCurrentUsageEvent = defineRawEvent<QuotaLookupPayload, ApiResponse<unknown>>(
   'intelligence:get-current-usage'
 )
+const intelligenceSessionStartEvent = defineRawEvent<
+  IntelligenceSessionStartPayload,
+  ApiResponse<TuffIntelligenceSession>
+>('intelligence:session:start')
+const intelligenceSessionResumeEvent = defineRawEvent<
+  IntelligenceSessionResumePayload,
+  ApiResponse<TuffIntelligenceSession | null>
+>('intelligence:session:resume')
+const intelligenceSessionCancelEvent = defineRawEvent<
+  IntelligenceSessionCancelPayload,
+  ApiResponse<TuffIntelligenceStateSnapshot | null>
+>('intelligence:session:cancel')
+const intelligenceSessionGetStateEvent = defineRawEvent<
+  IntelligenceSessionStatePayload,
+  ApiResponse<TuffIntelligenceStateSnapshot | null>
+>('intelligence:session:get-state')
+const intelligenceOrchestratorPlanEvent = defineRawEvent<
+  IntelligenceOrchestratorPlanPayload,
+  ApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:plan')
+const intelligenceOrchestratorExecuteEvent = defineRawEvent<
+  IntelligenceOrchestratorExecutePayload,
+  ApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:execute')
+const intelligenceOrchestratorReflectEvent = defineRawEvent<
+  IntelligenceOrchestratorReflectPayload,
+  ApiResponse<TuffIntelligenceTurn>
+>('intelligence:orchestrator:reflect')
+const intelligenceToolCallEvent = defineRawEvent<
+  IntelligenceToolCallPayload,
+  ApiResponse<{
+    success: boolean
+    output?: unknown
+    error?: string
+    approvalTicket?: TuffIntelligenceApprovalTicket
+    traceEvent: TuffIntelligenceTraceEvent
+  }>
+>('intelligence:tool:call')
+const intelligenceToolResultEvent = defineRawEvent<
+  IntelligenceToolResultPayload,
+  ApiResponse<{ accepted: boolean }>
+>('intelligence:tool:result')
+const intelligenceToolApproveEvent = defineRawEvent<
+  IntelligenceToolApprovePayload,
+  ApiResponse<TuffIntelligenceApprovalTicket | null>
+>('intelligence:tool:approve')
+const intelligenceTraceStreamEvent = defineRawEvent<
+  IntelligenceTraceQueryPayload,
+  ApiResponse<TuffIntelligenceTraceEvent[]>
+>('intelligence:trace:stream')
+const intelligenceTraceQueryEvent = defineRawEvent<
+  IntelligenceTraceQueryPayload,
+  ApiResponse<TuffIntelligenceTraceEvent[]>
+>('intelligence:trace:query')
+const intelligenceTraceExportEvent = defineRawEvent<
+  IntelligenceTraceExportPayload,
+  ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
+>('intelligence:trace:export')
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -157,6 +303,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
   private manager: IntelligenceProviderManager | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private agentChannelsCleanup: (() => void) | null = null
 
   constructor() {
     super(IntelligenceModule.key)
@@ -200,15 +347,64 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     debugPrintConfig()
 
     // 强制加载初始配置（force=true 确保即使 signature 相同也会重新加载）
-    ensureAiConfigLoaded(true)
+    ensureIntelligenceConfigLoaded(true)
+
+    await this.setupAgentRuntime()
 
     intelligenceLog.success('Intelligence module initialized')
   }
 
   async onDestroy(): Promise<void> {
     intelligenceLog.info('Destroying Intelligence module')
+    if (this.agentChannelsCleanup) {
+      this.agentChannelsCleanup()
+      this.agentChannelsCleanup = null
+    }
+    await agentManager.shutdown()
     this.manager?.clear()
     this.manager = null
+  }
+
+  private async setupAgentRuntime(): Promise<void> {
+    intelligenceLog.info('Initializing intelligence agent runtime')
+
+    registerBuiltinTools()
+    registerBuiltinAgents()
+
+    await agentManager.init({
+      invoke: async (capability, params, options) => {
+        try {
+          const result = await tuffIntelligence.invoke(
+            capability,
+            params,
+            options as IntelligenceInvokeOptions
+          )
+          return {
+            success: true,
+            data: result.result
+          }
+        } catch (error) {
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }
+      }
+    })
+
+    this.agentChannelsCleanup = registerAgentChannels()
+    this.verifyAgentRuntimeReady()
+    intelligenceLog.success('Intelligence agent runtime initialized')
+  }
+
+  private verifyAgentRuntimeReady(): void {
+    const stats = agentManager.getStats()
+    if (stats.agents.enabled <= 0) {
+      throw new Error('[Intelligence] No enabled agents found after runtime initialization')
+    }
+    if (stats.tools.total <= 0) {
+      throw new Error('[Intelligence] No tools found after runtime initialization')
+    }
   }
 
   /**
@@ -287,7 +483,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Core Text Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.chat',
       type: IntelligenceCapabilityType.CHAT,
       name: 'Text Chat',
@@ -295,7 +491,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.translate',
       type: IntelligenceCapabilityType.TRANSLATE,
       name: 'Translation',
@@ -303,7 +499,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.summarize',
       type: IntelligenceCapabilityType.SUMMARIZE,
       name: 'Summarization',
@@ -311,7 +507,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.rewrite',
       type: IntelligenceCapabilityType.REWRITE,
       name: 'Text Rewrite',
@@ -319,7 +515,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.grammar',
       type: IntelligenceCapabilityType.GRAMMAR_CHECK,
       name: 'Grammar Check',
@@ -331,7 +527,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Embedding Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'embedding.generate',
       type: IntelligenceCapabilityType.EMBEDDING,
       name: 'Generate Embeddings',
@@ -349,7 +545,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Code Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'code.generate',
       type: IntelligenceCapabilityType.CODE_GENERATE,
       name: 'Code Generation',
@@ -357,7 +553,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'code.explain',
       type: IntelligenceCapabilityType.CODE_EXPLAIN,
       name: 'Code Explanation',
@@ -365,7 +561,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'code.review',
       type: IntelligenceCapabilityType.CODE_REVIEW,
       name: 'Code Review',
@@ -373,7 +569,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'code.refactor',
       type: IntelligenceCapabilityType.CODE_REFACTOR,
       name: 'Code Refactoring',
@@ -381,7 +577,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'code.debug',
       type: IntelligenceCapabilityType.CODE_DEBUG,
       name: 'Code Debugging',
@@ -393,7 +589,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Analysis Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'intent.detect',
       type: IntelligenceCapabilityType.INTENT_DETECT,
       name: 'Intent Detection',
@@ -401,7 +597,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'sentiment.analyze',
       type: IntelligenceCapabilityType.SENTIMENT_ANALYZE,
       name: 'Sentiment Analysis',
@@ -409,7 +605,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'content.extract',
       type: IntelligenceCapabilityType.CONTENT_EXTRACT,
       name: 'Content Extraction',
@@ -417,7 +613,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'keywords.extract',
       type: IntelligenceCapabilityType.KEYWORDS_EXTRACT,
       name: 'Keyword Extraction',
@@ -425,7 +621,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'text.classify',
       type: IntelligenceCapabilityType.CLASSIFICATION,
       name: 'Text Classification',
@@ -437,7 +633,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Vision Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'vision.ocr',
       type: IntelligenceCapabilityType.VISION_OCR,
       name: 'Vision OCR',
@@ -445,7 +641,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: VISION_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'image.caption',
       type: IntelligenceCapabilityType.IMAGE_CAPTION,
       name: 'Image Captioning',
@@ -453,7 +649,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: VISION_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'image.analyze',
       type: IntelligenceCapabilityType.IMAGE_ANALYZE,
       name: 'Image Analysis',
@@ -461,7 +657,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: VISION_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'image.generate',
       type: IntelligenceCapabilityType.IMAGE_GENERATE,
       name: 'Image Generation',
@@ -473,7 +669,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ]
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'image.edit',
       type: IntelligenceCapabilityType.IMAGE_EDIT,
       name: 'Image Editing',
@@ -485,7 +681,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Audio Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'audio.tts',
       type: IntelligenceCapabilityType.TTS,
       name: 'Text-to-Speech',
@@ -497,7 +693,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ]
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'audio.stt',
       type: IntelligenceCapabilityType.STT,
       name: 'Speech-to-Text',
@@ -509,7 +705,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ]
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'audio.transcribe',
       type: IntelligenceCapabilityType.AUDIO_TRANSCRIBE,
       name: 'Audio Transcription',
@@ -525,7 +721,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // RAG & Search Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'rag.query',
       type: IntelligenceCapabilityType.RAG_QUERY,
       name: 'RAG Query',
@@ -533,7 +729,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'search.semantic',
       type: IntelligenceCapabilityType.SEMANTIC_SEARCH,
       name: 'Semantic Search',
@@ -545,7 +741,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       ]
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'search.rerank',
       type: IntelligenceCapabilityType.RERANK,
       name: 'Document Reranking',
@@ -557,7 +753,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     // Workflow & Agent Capabilities
     // ========================================================================
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'workflow.execute',
       type: IntelligenceCapabilityType.WORKFLOW,
       name: 'Workflow Execution',
@@ -565,7 +761,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    aiCapabilityRegistry.register({
+    intelligenceCapabilityRegistry.register({
       id: 'agent.run',
       type: IntelligenceCapabilityType.AGENT,
       name: 'Agent Execution',
@@ -573,7 +769,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       supportedProviders: ALL_PROVIDERS
     })
 
-    intelligenceLog.success(`Registered ${aiCapabilityRegistry.size()} capabilities`)
+    intelligenceLog.success(`Registered ${intelligenceCapabilityRegistry.size()} capabilities`)
   }
 
   /**
@@ -590,6 +786,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerCapabilityChannels(registerSafe)
     this.registerStatsChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
+    this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
 
     intelligenceLog.success('IPC channels registered')
   }
@@ -645,16 +842,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerProtectedSafe(
       intelligenceInvokeEvent,
       'Invoke capability',
-      'ai.basic',
+      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object' || typeof data.capabilityId !== 'string') {
           throw new Error('Invalid invoke payload')
         }
 
         const { capabilityId, payload, options } = data
-        ensureAiConfigLoaded()
+        ensureIntelligenceConfigLoaded()
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
-        const result = await ai.invoke(capabilityId, payload, options)
+        const result = await tuffIntelligence.invoke(capabilityId, payload, options)
         intelligenceLog.success(
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
@@ -665,7 +862,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerProtectedSafe(
       intelligenceChatLangchainEvent,
       'LangChain chat',
-      'ai.basic',
+      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object' || !Array.isArray(data.messages)) {
           throw new Error('Invalid chat payload')
@@ -673,9 +870,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
         const { messages, providerId, model, promptTemplate, promptVariables, metadata } = data
 
-        ensureAiConfigLoaded()
+        ensureIntelligenceConfigLoaded()
 
-        const result = await ai.invoke<string>(
+        const result = await tuffIntelligence.invoke<string>(
           'text.chat',
           { messages },
           {
@@ -707,9 +904,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
 
       const { provider } = data
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       intelligenceLog.info(`Testing provider: ${provider.id}`)
-      const result = await ai.testProvider(provider)
+      const result = await tuffIntelligence.testProvider(provider)
       intelligenceLog.success(`Provider ${provider.id} test success`)
       return result
     })
@@ -754,7 +951,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         ...rest
       } = data
 
-      const capability = aiCapabilityRegistry.get(capabilityId)
+      const capability = intelligenceCapabilityRegistry.get(capabilityId)
       if (!capability) {
         throw new Error(`Capability ${capabilityId} not registered`)
       }
@@ -764,14 +961,14 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         throw new Error(`No tester registered for capability ${capabilityId}`)
       }
 
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       const options = getCapabilityOptions(capabilityId)
       const allowedProviderIds = providerId ? [providerId] : options.allowedProviderIds
 
       intelligenceLog.info(`Testing capability: ${capabilityId}`)
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
 
-      const result = await ai.invoke(capabilityId, payload, {
+      const result = await tuffIntelligence.invoke(capabilityId, payload, {
         modelPreference: model ? [model] : options.modelPreference,
         allowedProviderIds,
         metadata: {
@@ -796,7 +993,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
 
       const { provider } = data
-      ensureAiConfigLoaded()
+      ensureIntelligenceConfigLoaded()
       intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
 
       const models = await fetchProviderModels(provider)
@@ -818,17 +1015,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   ): void {
     registerSafe(intelligenceGetAuditLogsEvent, 'Get audit logs', async (data) => {
       const options = data ?? {}
-      return await ai.queryAuditLogs(options)
+      return await tuffIntelligence.queryAuditLogs(options)
     })
 
     registerSafe(intelligenceGetTodayStatsEvent, 'Get today stats', async (data) => {
       const { callerId } = data ?? {}
-      return await ai.getTodayStats(callerId)
+      return await tuffIntelligence.getTodayStats(callerId)
     })
 
     registerSafe(intelligenceGetMonthStatsEvent, 'Get month stats', async (data) => {
       const { callerId } = data ?? {}
-      return await ai.getMonthStats(callerId)
+      return await tuffIntelligence.getMonthStats(callerId)
     })
 
     registerSafe(intelligenceGetUsageStatsEvent, 'Get usage stats', async (data) => {
@@ -836,8 +1033,168 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         throw new Error('Invalid payload')
       }
       const { callerId, periodType, startPeriod, endPeriod } = data
-      return await ai.getUsageStats(callerId, periodType, startPeriod, endPeriod)
+      return await tuffIntelligence.getUsageStats(callerId, periodType, startPeriod, endPeriod)
     })
+  }
+
+  private registerOrchestrationChannels(
+    registerProtectedSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      permissionId: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void,
+    registerSafe: <TRes>(
+      event: { toEventName: () => string },
+      action: string,
+      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    registerProtectedSafe(
+      intelligenceSessionStartEvent,
+      'Start intelligence session',
+      'intelligence.basic',
+      async (data) => {
+        if (data && typeof data !== 'object') {
+          throw new Error('Invalid session start payload')
+        }
+        return tuffIntelligenceRuntime.startSession(data ?? {})
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionResumeEvent,
+      'Resume intelligence session',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.resumeSession(data.sessionId)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionCancelEvent,
+      'Cancel intelligence session',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.cancelSession(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionGetStateEvent,
+      'Get intelligence session state',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.getSessionState(data.sessionId)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceOrchestratorPlanEvent,
+      'Plan intelligence turn',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId || !data?.objective) {
+          throw new Error('sessionId and objective are required')
+        }
+        return tuffIntelligenceRuntime.plan(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceOrchestratorExecuteEvent,
+      'Execute intelligence turn',
+      'intelligence.agents',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.execute(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceOrchestratorReflectEvent,
+      'Reflect intelligence turn',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId || !data?.turnId) {
+          throw new Error('sessionId and turnId are required')
+        }
+        return tuffIntelligenceRuntime.reflect(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceToolCallEvent,
+      'Call intelligence tool',
+      'intelligence.agents',
+      async (data) => {
+        if (!data?.sessionId || !data?.toolId) {
+          throw new Error('sessionId and toolId are required')
+        }
+        return tuffIntelligenceRuntime.callTool(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceToolResultEvent,
+      'Report intelligence tool result',
+      'intelligence.agents',
+      async (data) => {
+        if (!data?.sessionId || !data?.toolId || typeof data.success !== 'boolean') {
+          throw new Error('sessionId, toolId and success are required')
+        }
+        return tuffIntelligenceRuntime.reportToolResult(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceToolApproveEvent,
+      'Approve intelligence tool call',
+      'intelligence.admin',
+      async (data) => {
+        if (!data?.ticketId || typeof data.approved !== 'boolean') {
+          throw new Error('ticketId and approved are required')
+        }
+        return tuffIntelligenceRuntime.approveTool(data)
+      }
+    )
+
+    registerSafe(intelligenceTraceStreamEvent, 'Stream intelligence trace', async (data) => {
+      if (!data?.sessionId) {
+        throw new Error('sessionId is required')
+      }
+      return tuffIntelligenceRuntime.queryTrace(data)
+    })
+
+    registerSafe(intelligenceTraceQueryEvent, 'Query intelligence trace', async (data) => {
+      if (!data?.sessionId) {
+        throw new Error('sessionId is required')
+      }
+      return tuffIntelligenceRuntime.queryTrace(data)
+    })
+
+    registerProtectedSafe(
+      intelligenceTraceExportEvent,
+      'Export intelligence trace',
+      'intelligence.admin',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.exportTrace(data)
+      }
+    )
   }
 
   private registerQuotaChannels(

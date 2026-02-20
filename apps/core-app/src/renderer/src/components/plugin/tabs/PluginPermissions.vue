@@ -92,7 +92,7 @@ const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
   clipboard: { nameKey: 'plugin.permissions.categories.clipboard', icon: 'i-carbon-copy' },
   network: { nameKey: 'plugin.permissions.categories.network', icon: 'i-carbon-network-3' },
   system: { nameKey: 'plugin.permissions.categories.system', icon: 'i-carbon-terminal' },
-  ai: { nameKey: 'plugin.permissions.categories.ai', icon: 'i-carbon-bot' },
+  intelligence: { nameKey: 'plugin.permissions.categories.intelligence', icon: 'i-carbon-bot' },
   storage: { nameKey: 'plugin.permissions.categories.storage', icon: 'i-carbon-data-base' },
   window: { nameKey: 'plugin.permissions.categories.window', icon: 'i-carbon-application' }
 }
@@ -127,7 +127,14 @@ const pluginShortcuts = computed(() =>
 )
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
-  const highRisk = ['fs.write', 'fs.execute', 'system.shell', 'ai.agents', 'window.capture']
+  const highRisk = [
+    'fs.write',
+    'fs.execute',
+    'system.shell',
+    'intelligence.agents',
+    'intelligence.admin',
+    'window.capture'
+  ]
   const mediumRisk = [
     'fs.read',
     'clipboard.read',
@@ -135,7 +142,7 @@ function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
     'network.download',
     'system.tray',
     'system.shortcut',
-    'ai.advanced',
+    'intelligence.basic',
     'storage.shared'
   ]
   if (highRisk.includes(permissionId)) return 'high'
@@ -157,9 +164,9 @@ function getPermissionIcon(permissionId: string): string {
     'system.notification': 'i-carbon-notification',
     'system.tray': 'i-carbon-overflow-menu-vertical',
     'system.shortcut': 'i-carbon-keyboard',
-    'ai.basic': 'i-carbon-bot',
-    'ai.advanced': 'i-carbon-machine-learning',
-    'ai.agents': 'i-carbon-user-multiple',
+    'intelligence.basic': 'i-carbon-bot',
+    'intelligence.admin': 'i-carbon-shield',
+    'intelligence.agents': 'i-carbon-user-multiple',
     'storage.plugin': 'i-carbon-data-base',
     'storage.shared': 'i-carbon-share',
     'window.create': 'i-carbon-application',
