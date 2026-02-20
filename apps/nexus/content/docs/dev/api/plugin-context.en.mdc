@@ -20,7 +20,8 @@ code: |
     clipboard,        // Clipboard operations
     storage,          // Plugin-specific storage
     power,            // PowerSDK (low-power state)
-    
+    recommend,        // RecommendSDK (recommendation provider registration)
+
     // Feature APIs
     feature,          // Feature SDK (push search results)
     search,           // Search manager (deprecated, use feature)
@@ -167,6 +168,43 @@ code: |
 :::
 
 > Note: In `index.js` context, `power.onLowPowerChanged` currently uses polling (about 60s), and strict real-time push is pending.
+
+---
+
+## recommend
+
+RecommendSDK for registering custom recommendation providers with CoreBox.
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // Register recommendation provider
+  const dispose = recommend.registerProvider({
+    id: 'my-recommendation',
+    name: 'My Recommendations',
+    canProvide(context) {
+      return context.timeOfDay === 'morning'
+    },
+    getCandidates(context) {
+      return [{
+        id: 'morning-tip',
+        title: 'Morning Reminder',
+        subtitle: 'Start a new day',
+        icon: { type: 'emoji', value: '☀️' },
+        priority: 75,
+        action: 'show-morning-tip'
+      }]
+    }
+  })
+
+  // Unregister provider
+  dispose()
+  // or
+  recommend.unregisterProvider('my-recommendation')
+---
+:::
+
+> See [RecommendSDK API](./recommend.en.md) for full documentation.
 
 ---
 
@@ -557,4 +595,5 @@ code: |
 - [Feature SDK](./feature-sdk.en.md) - Feature detailed API
 - [DivisionBox API](./division-box.en.md) - Independent window system
 - [PowerSDK](./power.en.md) - Low-power adaptation
+- [RecommendSDK](./recommend.en.md) - Custom recommendation providers
 - [Flow Transfer API](./flow-transfer.en.md) - Plugin data transfer

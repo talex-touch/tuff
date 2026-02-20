@@ -1,0 +1,155 @@
+# RecommendSDK
+
+## Overview
+
+RecommendSDK allows plugins to register custom recommendation providers with the CoreBox recommendation engine. When a user opens CoreBox with an empty query, the engine calls all registered providers to collect candidates, which are then scored and ranked alongside built-in dimensions (frequency, time-of-day, trending, etc.).
+
+## Quick Start
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js (Prelude script)
+  const dispose = recommend.registerProvider({
+    id: 'my-plugin-weather',
+    name: 'Weather Recommendations',
+
+    canProvide(context) {
+      // Only provide weather recommendations in the morning
+      const hour = new Date().getHours()
+      return hour >= 6 && hour <= 10
+    },
+
+    getCandidates(context) {
+      return [
+        {
+          id: 'weather-today',
+          title: "Today's Weather",
+          subtitle: 'Check the forecast for today',
+          icon: { type: 'emoji', value: '🌤️' },
+          priority: 80,
+          action: 'show-weather'
+        }
+      ]
+    }
+  })
+---
+:::
+
+## API Reference
+
+### `recommend.registerProvider(provider)`
+
+Register a recommendation provider.
+
+**Parameters**:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `provider.id` | `string` | Yes | Unique provider ID |
+| `provider.name` | `string` | Yes | Display name |
+| `provider.canProvide` | `(context: ContextSignal) => boolean` | Yes | Whether this provider can supply recommendations for the current context |
+| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | Yes | Return recommendation candidates |
+
+**Returns**: `() => void` — Dispose function to unregister the provider.
+
+### `recommend.unregisterProvider(providerId)`
+
+Unregister a recommendation provider by ID.
+
+**Parameters**:
+- `providerId: string` — The provider ID
+
+**Returns**: `boolean` — Whether the provider was found and removed.
+
+## PluginRecommendCandidate
+
+Each candidate item structure:
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `id` | `string` | Yes | Unique item ID |
+| `title` | `string` | Yes | Display title |
+| `subtitle` | `string` | No | Subtitle / description |
+| `icon` | `{ type: string; value: string }` | No | Icon configuration (defaults to `💡`) |
+| `priority` | `number` | No | Priority 0-100, higher = more prominent (default `50`) |
+| `action` | `string` | Yes | Action key passed back to the plugin |
+| `data` | `Record<string, unknown>` | No | Additional data, available in `TuffItem.meta.pluginRecommend.data` |
+
+## ContextSignal
+
+The context object received by `canProvide` and `getCandidates`:
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `timeOfDay` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | Current time period |
+| `dayOfWeek` | `number` | Day of week (0-6) |
+| `isWorkday` | `boolean` | Whether it is a workday |
+| `clipboard` | `{ content: string; meta: { isUrl: boolean; isPath: boolean; isCode: boolean } }` | Clipboard content and metadata |
+
+## Full Example
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js
+  let weatherData = null
+
+  // Register recommendation provider
+  const disposeProvider = recommend.registerProvider({
+    id: 'smart-weather',
+    name: 'Smart Weather',
+
+    canProvide(context) {
+      return context.timeOfDay === 'morning' && weatherData !== null
+    },
+
+    async getCandidates(context) {
+      const items = [{
+        id: 'weather-forecast',
+        title: `Today ${weatherData.temp}°C ${weatherData.condition}`,
+        subtitle: 'Click for details',
+        icon: { type: 'emoji', value: '🌡️' },
+        priority: 85,
+        action: 'open-weather-detail',
+        data: { city: weatherData.city }
+      }]
+
+      if (weatherData.rain) {
+        items.push({
+          id: 'weather-rain-alert',
+          title: 'Rain expected today, bring an umbrella',
+          subtitle: `Rain chance ${weatherData.rainChance}%`,
+          icon: { type: 'emoji', value: '🌧️' },
+          priority: 90,
+          action: 'rain-detail',
+          data: { rainChance: weatherData.rainChance }
+        })
+      }
+
+      return items
+    }
+  })
+
+  // Handle recommendation item click callbacks
+  module.exports = {
+    onFeatureTriggered(featureId, query, feature) {
+      // Normal feature trigger logic
+    }
+  }
+---
+:::
+
+## Technical Notes
+
+- **Main-process local calls**: Provider's `canProvide()` and `getCandidates()` execute directly in the main process, without IPC serialization.
+- **Timeout protection**: Each provider's `getCandidates()` has a 200ms timeout; timed-out providers are silently skipped.
+- **Automatic cleanup**: When a plugin is disabled or unloaded, all its registered providers are automatically removed.
+- **Scoring**: A candidate's `priority` (0-100) maps directly to recommendation score, ranked alongside built-in dimensions.
+
+## Best Practices
+
+1. **Keep `canProvide` lightweight** — Called every time CoreBox opens; avoid async or heavy computation.
+2. **Set priority thoughtfully** — 60-80 for normal recommendations, 80+ for high-confidence items (e.g., clipboard-related).
+3. **Use the dispose function** — Dynamically register/unregister as plugin state changes.
+4. **Limit candidate count** — Return 1-5 candidates per provider; excess items are trimmed by ranking.

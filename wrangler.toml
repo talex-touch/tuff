@@ -15,8 +15,8 @@ preview_bucket_name = "tuff-nexus-imgable-dev"
 
 [[kv_namespaces]]
 binding = "TUFF_INTELLIGENCE_RUNTIME"
-id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_ID"
-preview_id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_PREVIEW_ID"
+id = "8c235ea8b96d4209bed631ee6c698803"
+preview_id = "77c5f7ddc0014c49b0b5977b23e599e3"
 
 [env.preview]
 compatibility_date = "2024-09-23"
@@ -50,7 +50,7 @@ bucket_name = "tuff-nexus-imgable-dev"
 
 [[env.preview.kv_namespaces]]
 binding = "TUFF_INTELLIGENCE_RUNTIME"
-id = "REPLACE_WITH_TUFF_INTELLIGENCE_RUNTIME_KV_PREVIEW_ID"
+id = "77c5f7ddc0014c49b0b5977b23e599e3"
 
 [vars]
 NODE_OPTIONS = "--max-old-space-size=6144"

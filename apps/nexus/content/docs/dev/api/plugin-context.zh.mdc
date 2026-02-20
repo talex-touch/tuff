@@ -20,7 +20,8 @@ code: |
     clipboard,        // 剪贴板操作
     storage,          // 插件专属存储
     power,            // PowerSDK（低电量状态）
-    
+    recommend,        // RecommendSDK（推荐提供者注册）
+
     // 功能 API
     feature,          // Feature SDK (推送搜索结果)
     search,           // 搜索管理器 (已废弃，用 feature 替代)
@@ -167,6 +168,43 @@ code: |
 :::
 
 > 说明：在 `index.js` 上下文里，`power.onLowPowerChanged` 当前是轮询（约 60 秒），严格实时推送还在待定。
+
+---
+
+## recommend
+
+RecommendSDK：向 CoreBox 推荐引擎注册自定义推荐提供者。
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // 注册推荐提供者
+  const dispose = recommend.registerProvider({
+    id: 'my-recommendation',
+    name: '我的推荐',
+    canProvide(context) {
+      return context.timeOfDay === 'morning'
+    },
+    getCandidates(context) {
+      return [{
+        id: 'morning-tip',
+        title: '早间提醒',
+        subtitle: '开始新的一天',
+        icon: { type: 'emoji', value: '☀️' },
+        priority: 75,
+        action: 'show-morning-tip'
+      }]
+    }
+  })
+
+  // 注销提供者
+  dispose()
+  // 或
+  recommend.unregisterProvider('my-recommendation')
+---
+:::
+
+> 详见 [RecommendSDK API](./recommend.zh.md)
 
 ---
 
@@ -557,4 +595,5 @@ code: |
 - [Feature SDK](./feature-sdk.zh.md) - Feature 详细 API
 - [DivisionBox API](./division-box.zh.md) - 独立窗口系统
 - [PowerSDK](./power.zh.md) - 低电量适配能力
+- [RecommendSDK](./recommend.zh.md) - 自定义推荐提供者
 - [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转

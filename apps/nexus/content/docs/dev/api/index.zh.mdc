@@ -27,6 +27,7 @@ code: |
 | [Download SDK](./download.zh.md) | `useDownloadSdk()` | 下载任务管理 |
 | [Platform Capabilities SDK](./platform-capabilities.zh.md) | `usePlatformSdk()` | 平台能力目录 |
 | [PowerSDK](./power.zh.md) | `usePowerSDK()` | 插件低电量状态能力 |
+| [RecommendSDK](./recommend.zh.md) | `recommend` | 自定义推荐提供者注册 |
 | [**Account SDK**](./account.zh.md) | `accountSDK` | **用户信息、订阅、配额** |
 | [**TuffTransport**](./transport.zh.md) | `useTuffTransport()` | **新一代 IPC（推荐）** |
 | [Channel SDK](./channel.zh.md) | `useChannel()` | IPC 通信（传统） |

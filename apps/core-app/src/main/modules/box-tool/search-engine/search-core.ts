@@ -293,6 +293,11 @@ export class SearchEngineCore
     return this._instance
   }
 
+  /** Expose RecommendationEngine for plugin SDK integration */
+  public getRecommendationEngine(): RecommendationEngine | null {
+    return this.recommendationEngine
+  }
+
   registerProvider(provider: ISearchProvider<ProviderContext>): void {
     if (this.providers.has(provider.id)) {
       searchEngineLog.warn(`Search provider '${provider.id}' is already registered`)

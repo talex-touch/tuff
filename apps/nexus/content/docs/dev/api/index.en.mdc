@@ -27,6 +27,7 @@ code: |
 | [Download SDK](./download.en.md) | `useDownloadSdk()` | Download task management |
 | [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()` | Platform capability catalog |
 | [PowerSDK](./power.en.md) | `usePowerSDK()` | Low-power status for plugin adaptation |
+| [RecommendSDK](./recommend.en.md) | `recommend` | Custom recommendation provider registration |
 | [**Account SDK**](./account.en.md) | `accountSDK` | **User info, subscription, quota** |
 | [**TuffTransport**](./transport.en.md) | `useTuffTransport()` | **Next-gen IPC (recommended)** |
 | [Channel SDK](./channel.en.md) | `useChannel()` | IPC communication (legacy) |

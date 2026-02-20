@@ -252,6 +252,12 @@ export interface IPluginUtils {
   power: import('./power').PowerSDK
 
   /**
+   * Recommend SDK for registering custom recommendation providers
+   * @see {@link RecommendSDK}
+   */
+  recommend: import('./recommend').RecommendSDK
+
+  /**
    * Opens a URL in the default browser
    * @param url - The URL to open
    */

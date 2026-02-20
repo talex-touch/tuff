@@ -1,0 +1,155 @@
+# RecommendSDK
+
+## 概述
+
+RecommendSDK 让插件可以向 CoreBox 推荐引擎注册自定义推荐提供者。当用户在空 query 下打开 CoreBox 时，推荐引擎会调用所有已注册的 provider 来收集候选项，与内置的频率、时段、趋势等维度一起参与统一评分排序。
+
+## 快速开始
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js (Prelude 脚本)
+  const dispose = recommend.registerProvider({
+    id: 'my-plugin-weather',
+    name: '天气推荐',
+
+    canProvide(context) {
+      // 只在早晨时段提供天气推荐
+      const hour = new Date().getHours()
+      return hour >= 6 && hour <= 10
+    },
+
+    getCandidates(context) {
+      return [
+        {
+          id: 'weather-today',
+          title: '今日天气',
+          subtitle: '查看今天的天气预报',
+          icon: { type: 'emoji', value: '🌤️' },
+          priority: 80,
+          action: 'show-weather'
+        }
+      ]
+    }
+  })
+---
+:::
+
+## API 参考
+
+### `recommend.registerProvider(provider)`
+
+注册一个推荐提供者。
+
+**参数**：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `provider.id` | `string` | 是 | 提供者唯一 ID |
+| `provider.name` | `string` | 是 | 提供者显示名称 |
+| `provider.canProvide` | `(context: ContextSignal) => boolean` | 是 | 判断当前上下文是否应提供推荐 |
+| `provider.getCandidates` | `(context: ContextSignal) => PluginRecommendCandidate[] \| Promise<...>` | 是 | 返回推荐候选项列表 |
+
+**返回值**：`() => void` — 取消注册函数。
+
+### `recommend.unregisterProvider(providerId)`
+
+按 ID 注销一个推荐提供者。
+
+**参数**：
+- `providerId: string` — 提供者 ID
+
+**返回值**：`boolean` — 是否成功移除。
+
+## PluginRecommendCandidate
+
+每个候选项的结构：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `id` | `string` | 是 | 推荐项唯一 ID |
+| `title` | `string` | 是 | 显示标题 |
+| `subtitle` | `string` | 否 | 副标题 / 描述 |
+| `icon` | `{ type: string; value: string }` | 否 | 图标配置（默认 `💡`） |
+| `priority` | `number` | 否 | 优先级 0-100，越高越靠前（默认 `50`） |
+| `action` | `string` | 是 | 执行回调标识，传回插件用于区分动作 |
+| `data` | `Record<string, unknown>` | 否 | 附加数据，会在 TuffItem.meta.pluginRecommend.data 中透传 |
+
+## ContextSignal
+
+`canProvide` 和 `getCandidates` 收到的上下文对象：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `timeOfDay` | `'morning' \| 'afternoon' \| 'evening' \| 'night'` | 当前时段 |
+| `dayOfWeek` | `number` | 星期几（0-6） |
+| `isWorkday` | `boolean` | 是否工作日 |
+| `clipboard` | `{ content: string; meta: { isUrl: boolean; isPath: boolean; isCode: boolean } }` | 剪贴板内容及元信息 |
+
+## 完整示例
+
+:::TuffCodeBlock{lang="javascript"}
+---
+code: |
+  // index.js
+  let weatherData = null
+
+  // 注册推荐提供者
+  const disposeProvider = recommend.registerProvider({
+    id: 'smart-weather',
+    name: '智能天气',
+
+    canProvide(context) {
+      return context.timeOfDay === 'morning' && weatherData !== null
+    },
+
+    async getCandidates(context) {
+      const items = [{
+        id: 'weather-forecast',
+        title: `今日 ${weatherData.temp}°C ${weatherData.condition}`,
+        subtitle: '点击查看详情',
+        icon: { type: 'emoji', value: '🌡️' },
+        priority: 85,
+        action: 'open-weather-detail',
+        data: { city: weatherData.city }
+      }]
+
+      if (weatherData.rain) {
+        items.push({
+          id: 'weather-rain-alert',
+          title: '今日有雨，记得带伞',
+          subtitle: `降雨概率 ${weatherData.rainChance}%`,
+          icon: { type: 'emoji', value: '🌧️' },
+          priority: 90,
+          action: 'rain-detail',
+          data: { rainChance: weatherData.rainChance }
+        })
+      }
+
+      return items
+    }
+  })
+
+  // 处理推荐项的点击回调
+  module.exports = {
+    onFeatureTriggered(featureId, query, feature) {
+      // 正常的 feature 触发逻辑
+    }
+  }
+---
+:::
+
+## 技术说明
+
+- **主进程本地调用**：Provider 的 `canProvide()` 和 `getCandidates()` 在主进程中直接执行，不经过 IPC 序列化。
+- **超时保护**：单个 provider 的 `getCandidates()` 最多执行 200ms，超时自动跳过。
+- **自动清理**：插件禁用/卸载时，其注册的所有 provider 会被自动清理。
+- **评分机制**：候选项的 `priority`（0-100）直接映射为推荐分数，与频率、趋势等内置维度统一排序。
+
+## 最佳实践
+
+1. **`canProvide` 要轻量** — 每次打开 CoreBox 都会调用，避免异步或重计算。
+2. **合理设置 priority** — 60-80 适合常规推荐，80+ 适合高置信度（如剪贴板内容关联）。
+3. **返回 dispose 函数** — 在插件内部状态变化时可以动态注册/注销。
+4. **候选项数量控制** — 单个 provider 推荐返回 1-5 个候选项，过多会被排序裁剪。
