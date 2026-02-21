@@ -40,9 +40,9 @@ function getAgentIcon(agent: AgentDescriptor): string {
       </div>
     </div>
     <div v-if="agent.capabilities?.length" class="agent-badge">
-      <el-tag size="small" type="info">
+      <TxTag size="small" type="info">
         {{ agent.capabilities.length }}
-      </el-tag>
+      </TxTag>
     </div>
   </div>
 </template>

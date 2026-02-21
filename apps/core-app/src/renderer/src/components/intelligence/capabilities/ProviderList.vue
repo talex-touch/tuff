@@ -106,7 +106,7 @@ function handleRemoveProvider(providerId: string): void {
 
 <template>
   <TuffBlockSlot :title="providerSummary" default-icon="i-carbon-api-1">
-    <el-select
+    <TuffSelect
       v-model="selectedProviderIds"
       multiple
       collapse-tags
@@ -116,7 +116,7 @@ function handleRemoveProvider(providerId: string): void {
       class="provider-list__select"
       @change="handleSelectionChange"
     >
-      <el-option
+      <TuffSelectItem
         v-for="provider in allProviders"
         :key="provider.providerId"
         :label="provider.provider?.name || provider.providerId"
@@ -130,8 +130,8 @@ function handleRemoveProvider(providerId: string): void {
             provider.provider?.type || provider.providerId
           }}</span>
         </div>
-      </el-option>
-    </el-select>
+      </TuffSelectItem>
+    </TuffSelect>
   </TuffBlockSlot>
 
   <div v-if="enabledBindings.length > 0" class="provider-list__selected">
@@ -139,7 +139,7 @@ function handleRemoveProvider(providerId: string): void {
       {{ t('settings.intelligence.selectedProviders') }}
     </p>
     <div class="provider-list__tags">
-      <el-tag
+      <TxTag
         v-for="binding in enabledBindings"
         :key="binding.providerId"
         closable
@@ -153,7 +153,7 @@ function handleRemoveProvider(providerId: string): void {
             {{ binding.models.length }}
           </span>
         </span>
-      </el-tag>
+      </TxTag>
     </div>
   </div>
 </template>
@@ -199,7 +199,7 @@ function handleRemoveProvider(providerId: string): void {
   gap: 0.5rem;
 }
 
-.provider-list__tags :deep(.el-tag) {
+.provider-list__tags :deep(.tx-tag) {
   cursor: pointer;
   transition: all 0.2s ease;
 

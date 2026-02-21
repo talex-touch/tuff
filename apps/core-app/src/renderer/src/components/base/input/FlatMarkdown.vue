@@ -107,9 +107,9 @@ onBeforeUnmount(async () => {
 
 <template>
   <div class="FlatMarkdown-Container fake-background">
-    <el-scrollbar>
+    <TxScroll>
       <div ref="editorDom" class="FlatMarkdown-Editor" />
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 
@@ -211,8 +211,8 @@ onBeforeUnmount(async () => {
     box-sizing: border-box;
   }
 
-  :deep(.el-scrollbar) {
-    .el-scrollbar__view {
+  :deep(.tx-scroll) {
+    .tx-scroll__content {
       min-height: 100%;
     }
     height: 100%;

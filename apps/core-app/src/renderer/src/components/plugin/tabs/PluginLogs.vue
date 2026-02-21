@@ -1,10 +1,9 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxTooltip } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElTooltip } from 'element-plus'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
@@ -34,6 +33,12 @@ const props = defineProps<{
 
 const transport = useTuffTransport()
 const { t } = useI18n()
+const toolbarTooltipAnchor = {
+  placement: 'bottom',
+  panelBackground: 'blur',
+  panelShadow: 'soft',
+  showArrow: true
+} as const
 
 const pluginLogEvents = {
   subscribe: defineRawEvent<{ pluginName: string }, void>('plugin-log:subscribe'),
@@ -594,12 +599,7 @@ defineExpose({
           </div>
         </div>
         <div class="terminal-toolbar">
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="isLivePaused ? 'RESUME' : 'PAUSE'"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="isLivePaused ? 'RESUME' : 'PAUSE'" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="terminal-icon terminal-icon-live"
@@ -610,14 +610,12 @@ defineExpose({
             >
               <i :class="isLivePaused ? 'i-ri-play-circle-line' : 'i-ri-pause-circle-line'" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
+          <TxTooltip
             v-if="pendingLiveUpdates"
-            popper-class="tuff-tooltip-blur"
             :content="pendingUpdatesLabel"
-            placement="bottom"
-            effect="dark"
+            :anchor="toolbarTooltipAnchor"
           >
             <TxButton
               variant="bare"
@@ -627,14 +625,9 @@ defineExpose({
             >
               <i class="i-ri-sparkling-fill" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="clearLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="clearLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="terminal-icon"
@@ -643,14 +636,9 @@ defineExpose({
             >
               <i class="i-ri-delete-bin-6-line" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="exportLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="exportLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="terminal-icon"
@@ -660,15 +648,10 @@ defineExpose({
             >
               <i class="i-ri-download-2-line" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
         </div>
         <div class="toolbar-actions">
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="historyActionLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="historyActionLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="toolbar-icon"
@@ -677,14 +660,9 @@ defineExpose({
             >
               <i class="i-ri-history-line" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="refreshLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="refreshLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="toolbar-icon"
@@ -693,14 +671,9 @@ defineExpose({
             >
               <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="openFileLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="openFileLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="toolbar-icon"
@@ -710,14 +683,9 @@ defineExpose({
             >
               <i class="i-ri-file-text-line" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
 
-          <ElTooltip
-            popper-class="tuff-tooltip-blur"
-            :content="openDirectoryLabel"
-            placement="bottom"
-            effect="dark"
-          >
+          <TxTooltip :content="openDirectoryLabel" :anchor="toolbarTooltipAnchor">
             <TxButton
               variant="bare"
               class="toolbar-icon"
@@ -727,7 +695,7 @@ defineExpose({
             >
               <i class="i-ri-folder-open-line" />
             </TxButton>
-          </ElTooltip>
+          </TxTooltip>
         </div>
       </footer>
     </section>
@@ -864,17 +832,6 @@ defineExpose({
 
 .toolbar-icon i.spin {
   animation: rotate 1s linear infinite;
-}
-
-:global(.tuff-tooltip-blur) {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-:global(.tuff-tooltip-blur.is-dark) {
-  background: rgba(17, 19, 23, 0.92) !important;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  color: rgba(226, 232, 240, 0.92);
 }
 
 .toolbar-status {

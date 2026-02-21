@@ -283,6 +283,13 @@ export class TuffIntelligenceSDK {
     { result: IntelligenceInvokeResult<unknown>; timestamp: number }
   >()
 
+  /**
+   * Track repeated invoke failures per capability to suppress log noise.
+   * Only the first failure and every Nth failure are logged at error level;
+   * intermediate failures are logged as warn (single line) to reduce spam.
+   */
+  private invokeFailureCounts = new Map<string, number>()
+
   constructor(config?: Partial<IntelligenceSDKConfig>) {
     if (config) {
       this.updateConfig(config)
@@ -432,9 +439,20 @@ export class TuffIntelligenceSDK {
         logInfo(
           `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
         )
+        // Reset failure counter on success so the next failure gets full logging
+        this.invokeFailureCounts.delete(capabilityId)
         return result
       } catch (error) {
-        logError(`Invoke error for ${capabilityId}`, error)
+        // Suppress repetitive error logging: only log full error on first
+        // failure and every 10th failure; intermediate failures get a concise warn.
+        const failCount = (this.invokeFailureCounts.get(capabilityId) ?? 0) + 1
+        this.invokeFailureCounts.set(capabilityId, failCount)
+        if (failCount === 1 || failCount % 10 === 0) {
+          logWarn(
+            `Invoke failed for ${capabilityId}` + (failCount > 1 ? ` (${failCount} failures)` : ''),
+            error instanceof Error ? error.message : error
+          )
+        }
 
         await this.writeFailureAudit({
           error,
@@ -1279,7 +1297,10 @@ export class TuffIntelligenceSDK {
         logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
         return result
       } catch (fallbackError) {
-        logError(`Fallback provider ${fallbackConfig.id} failed`, fallbackError)
+        // Downgrade to warn with concise message to reduce log noise.
+        // Full error details are captured in the audit log.
+        const msg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        logWarn(`Fallback provider ${fallbackConfig.id} failed: ${msg}`)
       }
     }
 

@@ -59,7 +59,7 @@ export class SearchLogger {
 
           if (newEnabled !== this.enabled) {
             this.enabled = newEnabled
-            console.log(
+            console.debug(
               `[SearchLogger] Settings changed: logging ${this.enabled ? 'enabled' : 'disabled'}`
             )
           }

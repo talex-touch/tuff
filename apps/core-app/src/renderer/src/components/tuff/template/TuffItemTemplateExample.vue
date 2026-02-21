@@ -139,13 +139,13 @@ function handleClick(type: string) {
       <TuffItemTemplate :icon="{ type: 'class', value: 'i-carbon-user' }">
         <template #title>
           <span style="color: var(--el-color-primary)">Custom Title</span>
-          <el-tag size="small" type="success"> Pro </el-tag>
+          <TxTag size="small" type="success"> Pro </TxTag>
         </template>
         <template #subtitle>
           <span>Custom subtitle with <strong>formatting</strong></span>
         </template>
         <template #trailing>
-          <el-button size="small" type="primary" text> Action </el-button>
+          <TxButton size="small" type="primary" text> Action </TxButton>
         </template>
       </TuffItemTemplate>
     </section>

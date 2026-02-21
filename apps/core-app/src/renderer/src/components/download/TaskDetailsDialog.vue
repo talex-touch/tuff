@@ -154,9 +154,9 @@ function formatDate(date: Date | number | undefined): string {
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.status') }}:</span>
-          <el-tag :type="getStatusType(task.status)">
+          <TxTag :type="getStatusType(task.status)">
             {{ getStatusText(task.status) }}
-          </el-tag>
+          </TxTag>
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.module') }}:</span>
@@ -164,9 +164,9 @@ function formatDate(date: Date | number | undefined): string {
         </div>
         <div class="detail-item">
           <span class="detail-label">{{ $t('download.priority') }}:</span>
-          <el-tag :type="getPriorityType(task.priority)">
+          <TxTag :type="getPriorityType(task.priority)">
             {{ getPriorityText(task.priority) }}
-          </el-tag>
+          </TxTag>
         </div>
       </div>
 
@@ -254,17 +254,17 @@ function formatDate(date: Date | number | undefined): string {
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose">
+        <TxButton @click="handleClose">
           {{ $t('common.close') }}
-        </el-button>
-        <el-button v-if="task?.status === 'completed'" type="primary" @click="handleOpenFile">
+        </TxButton>
+        <TxButton v-if="task?.status === 'completed'" type="primary" @click="handleOpenFile">
           <el-icon><FolderOpened /></el-icon>
           {{ $t('download.open_file') }}
-        </el-button>
-        <el-button v-if="task?.status === 'completed'" @click="handleShowInFolder">
+        </TxButton>
+        <TxButton v-if="task?.status === 'completed'" @click="handleShowInFolder">
           <el-icon><Folder /></el-icon>
           {{ $t('download.show_in_folder') }}
-        </el-button>
+        </TxButton>
       </div>
     </template>
   </el-dialog>

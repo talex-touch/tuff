@@ -264,12 +264,12 @@ function getCapabilityIcon(type: string): string {
         </h2>
         <p class="agent-version">v{{ agent.version }}</p>
       </div>
-      <el-tag v-if="agent.enabled !== false" type="success">
+      <TxTag v-if="agent.enabled !== false" type="success">
         {{ t('intelligence.agents.active') }}
-      </el-tag>
-      <el-tag v-else type="info">
+      </TxTag>
+      <TxTag v-else type="info">
         {{ t('intelligence.agents.inactive') }}
-      </el-tag>
+      </TxTag>
     </div>
 
     <!-- Description -->
@@ -292,9 +292,9 @@ function getCapabilityIcon(type: string): string {
           <div class="cap-header">
             <span :class="getCapabilityIcon(cap.type)" />
             <span class="cap-name">{{ cap.id }}</span>
-            <el-tag size="small">
+            <TxTag size="small">
               {{ cap.type }}
-            </el-tag>
+            </TxTag>
           </div>
         </div>
       </div>
@@ -306,10 +306,10 @@ function getCapabilityIcon(type: string): string {
         {{ t('intelligence.agents.tools') }}
       </h3>
       <div class="tools-list">
-        <el-tag v-for="tool in agent.tools" :key="tool.toolId" size="small" class="tool-tag">
+        <TxTag v-for="tool in agent.tools" :key="tool.toolId" size="small" class="tool-tag">
           <span class="i-carbon-tool mr-1" />
           {{ tool.toolId }}
-        </el-tag>
+        </TxTag>
       </div>
     </div>
 
@@ -319,7 +319,7 @@ function getCapabilityIcon(type: string): string {
         {{ t('intelligence.agents.quick_execute') }}
       </h3>
       <div class="execute-form">
-        <el-input
+        <TuffInput
           v-model="taskInput"
           :placeholder="t('intelligence.agents.input_placeholder')"
           type="textarea"
@@ -327,7 +327,7 @@ function getCapabilityIcon(type: string): string {
           :disabled="executing"
         />
         <div class="execute-actions">
-          <el-button
+          <TxButton
             type="primary"
             :loading="executing"
             :disabled="!taskInput.trim() || executing"
@@ -335,8 +335,8 @@ function getCapabilityIcon(type: string): string {
           >
             <span class="i-carbon-play mr-1" />
             {{ t('intelligence.agents.execute') }}
-          </el-button>
-          <el-button
+          </TxButton>
+          <TxButton
             v-if="executing && currentTaskId"
             text
             type="warning"
@@ -345,7 +345,7 @@ function getCapabilityIcon(type: string): string {
             @click="cancelTask"
           >
             {{ t('intelligence.agents.cancel') }}
-          </el-button>
+          </TxButton>
         </div>
       </div>
 

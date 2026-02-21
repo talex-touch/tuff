@@ -17,7 +17,8 @@ import {
   Platform,
   Warning
 } from '@element-plus/icons-vue'
-import { ElAlert, ElButton, ElDialog, ElIcon } from 'element-plus'
+import { TxButton } from '@talex-touch/tuffex'
+import { ElAlert, ElDialog, ElIcon } from 'element-plus'
 import { computed } from 'vue'
 
 interface Props {
@@ -169,9 +170,9 @@ function handleDeny() {
 
     <template #footer>
       <div class="dialog-footer">
-        <ElButton @click="handleDeny"> 拒绝 </ElButton>
-        <ElButton type="primary" plain @click="handleAllowOnce"> 仅本次 </ElButton>
-        <ElButton type="primary" @click="handleAllowAlways"> 始终允许 </ElButton>
+        <TxButton @click="handleDeny"> 拒绝 </TxButton>
+        <TxButton type="primary" plain @click="handleAllowOnce"> 仅本次 </TxButton>
+        <TxButton type="primary" @click="handleAllowAlways"> 始终允许 </TxButton>
       </div>
     </template>
   </ElDialog>

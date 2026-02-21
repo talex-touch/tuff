@@ -245,6 +245,7 @@ import type {
 
 import type {
   FileIndexBatteryStatus,
+  FileIndexFailedFile,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
@@ -768,6 +769,14 @@ export const AppEvents = {
       .define<void, AsyncIterable<FileIndexProgress>>({
         stream: { enabled: true },
       }),
+
+    /**
+     * Get list of failed files with error details.
+     */
+    failedFiles: defineEvent('app')
+      .module('file-index')
+      .event('failed-files')
+      .define<void, FileIndexFailedFile[]>(),
   },
 
   /**

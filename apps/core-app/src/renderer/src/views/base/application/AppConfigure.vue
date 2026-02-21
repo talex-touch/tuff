@@ -130,7 +130,7 @@ function handleHelp(): void {
       </div>
     </div>
     <div class="AppConfigure-Content">
-      <el-scrollbar>
+      <TxScroll>
         <div class="AppConfigure-Content-Inner">
           <t-group-block :name="t('appConfigure.action')" description="" icon="auction">
             <t-block-slot :title="t('appConfigure.launch')" description="" icon="external-link">
@@ -206,7 +206,7 @@ function handleHelp(): void {
             />
           </t-group-block>
         </div>
-      </el-scrollbar>
+      </TxScroll>
     </div>
     <div class="AppConfigure-Ends">
       {{ t('appConfigure.confirm') }}

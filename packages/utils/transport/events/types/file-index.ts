@@ -60,6 +60,13 @@ export interface FileIndexRebuildResult {
   threshold?: number
 }
 
+export interface FileIndexFailedFile {
+  fileId: number
+  path: string
+  lastError: string | null
+  updatedAt: string | null
+}
+
 export interface FileIndexBatteryStatus {
   level: number
   charging: boolean

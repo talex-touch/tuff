@@ -1,4 +1,5 @@
 import type {
+  FileIndexFailedFile,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult
@@ -38,6 +39,18 @@ export function useFileIndexMonitor() {
     } catch (error) {
       console.error('[FileIndexMonitor] Failed to get battery level:', error)
       return null
+    }
+  }
+
+  /**
+   * 查询失败文件列表
+   */
+  const getFailedFiles = async (): Promise<FileIndexFailedFile[]> => {
+    try {
+      return await settingsSdk.fileIndex.getFailedFiles()
+    } catch (error) {
+      console.error('[FileIndexMonitor] Failed to get failed files:', error)
+      return []
     }
   }
 
@@ -125,6 +138,7 @@ export function useFileIndexMonitor() {
     getIndexStatus,
     getBatteryLevel,
     getIndexStats,
+    getFailedFiles,
     handleRebuild,
     onProgressUpdate,
     indexProgress

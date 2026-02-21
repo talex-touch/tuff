@@ -13,6 +13,7 @@ import type { AnalyticsToggleRequest, CurrentMetrics, PerformanceHistoryEntry, P
 import type { DeviceIdleSettings } from '../../events/types/device-idle'
 import type {
   FileIndexBatteryStatus,
+  FileIndexFailedFile,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
@@ -31,6 +32,7 @@ export interface SettingsSdk {
     streamProgress: (
       options: StreamOptions<FileIndexProgress>,
     ) => Promise<StreamController>
+    getFailedFiles: () => Promise<FileIndexFailedFile[]>
   }
   deviceIdle: {
     getSettings: () => Promise<DeviceIdleSettings>
@@ -63,6 +65,7 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       getBatteryLevel: () => transport.send(AppEvents.fileIndex.batteryLevel),
       rebuild: request => transport.send(AppEvents.fileIndex.rebuild, request),
       streamProgress: options => transport.stream(AppEvents.fileIndex.progress, undefined, options),
+      getFailedFiles: () => transport.send(AppEvents.fileIndex.failedFiles),
     },
     deviceIdle: {
       getSettings: () => transport.send(AppEvents.deviceIdle.getSettings),

@@ -3,8 +3,16 @@ import type { ComponentPublicInstance } from 'vue'
 import { computed } from 'vue'
 import type { TuffItem } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature } from '@talex-touch/utils/plugin'
-import { TxButton, TxSplitButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
-import { ElInput, ElOption, ElSelect, ElSwitch } from 'element-plus'
+import {
+  TuffInput,
+  TuffSelect,
+  TuffSelectItem,
+  TxButton,
+  TxSplitButton,
+  TxTabItem,
+  TxTabs
+} from '@talex-touch/tuffex'
+import { ElSwitch } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -541,20 +549,19 @@ function handleClose(): void {
                         <span class="text-xs text-[var(--el-text-color-secondary)]">
                           选择预览
                         </span>
-                        <ElSelect
+                        <TuffSelect
                           v-model="currentPreviewWidgetId"
-                          size="small"
                           class="PluginFeature-PreviewSelect"
                           placeholder="选择 widget"
                           :disabled="isOperationDisabled"
                         >
-                          <ElOption
+                          <TuffSelectItem
                             v-for="option in widgetPreviewOptions"
                             :key="option.value"
                             :label="option.label"
                             :value="option.value"
                           />
-                        </ElSelect>
+                        </TuffSelect>
                       </div>
                       <div class="PluginFeature-PreviewMeta">
                         <span
@@ -591,20 +598,19 @@ function handleClose(): void {
                       </div>
                       <div class="PluginFeature-PreviewSize">
                         <span class="text-xs text-[var(--el-text-color-secondary)]">预览尺寸</span>
-                        <ElSelect
+                        <TuffSelect
                           v-model="currentPreviewSizePresetValue"
-                          size="small"
                           class="PluginFeature-PreviewSizeSelect"
                           placeholder="选择尺寸"
                           :disabled="isOperationDisabled || !previewWidgetId"
                         >
-                          <ElOption
+                          <TuffSelectItem
                             v-for="option in previewSizeOptions"
                             :key="option.value"
                             :label="option.label"
                             :value="option.value"
                           />
-                        </ElSelect>
+                        </TuffSelect>
                         <span class="PluginFeature-PreviewSizeMeta">
                           {{ previewFrameSizeLabel }}
                         </span>
@@ -632,10 +638,10 @@ function handleClose(): void {
                             :disabled="isOperationDisabled"
                           />
                         </div>
-                        <ElInput
+                        <TuffInput
                           v-model="currentMockPayloadRaw"
                           type="textarea"
-                          :autosize="{ minRows: 4, maxRows: 8 }"
+                          :rows="4"
                           placeholder="输入 JSON payload"
                           :disabled="isOperationDisabled || !currentMockPayloadEnabled"
                         />
@@ -929,6 +935,12 @@ pre {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.PluginFeature-PreviewMock :deep(.tx-input__textarea) {
+  resize: vertical;
+  min-height: 120px;
+  max-height: 220px;
 }
 
 .PluginFeature-PreviewMockHeader {

@@ -6,7 +6,8 @@
  */
 
 import { Check, Close, InfoFilled, Warning } from '@element-plus/icons-vue'
-import { ElAlert, ElButton, ElCard, ElIcon, ElProgress, ElTag } from 'element-plus'
+import { TxButton, TxTag } from '@talex-touch/tuffex'
+import { ElAlert, ElCard, ElIcon, ElProgress } from 'element-plus'
 import { computed } from 'vue'
 
 interface Props {
@@ -80,7 +81,7 @@ const progressColor = computed(() => {
           </ElIcon>
           <span class="header-title">权限状态</span>
         </div>
-        <ElButton size="small" @click="emit('manage')"> 管理权限 </ElButton>
+        <TxButton size="small" @click="emit('manage')"> 管理权限 </TxButton>
       </div>
     </template>
 
@@ -110,9 +111,9 @@ const progressColor = computed(() => {
         </div>
 
         <div class="permission-stats">
-          <ElTag type="danger" effect="light" size="small"> 必需: {{ requiredCount }} </ElTag>
-          <ElTag type="info" effect="light" size="small"> 可选: {{ optionalCount }} </ElTag>
-          <ElTag type="success" effect="light" size="small"> 已授予: {{ grantedCount }} </ElTag>
+          <TxTag color="var(--tx-color-danger)" size="sm"> 必需: {{ requiredCount }} </TxTag>
+          <TxTag color="var(--tx-color-info)" size="sm"> 可选: {{ optionalCount }} </TxTag>
+          <TxTag color="var(--tx-color-success)" size="sm"> 已授予: {{ grantedCount }} </TxTag>
         </div>
       </div>
 
@@ -136,19 +137,18 @@ const progressColor = computed(() => {
           <span>缺少必需权限：</span>
         </div>
         <div class="missing-list">
-          <ElTag
+          <TxTag
             v-for="perm in missingRequired"
             :key="perm"
-            type="danger"
-            effect="plain"
-            size="small"
+            color="var(--tx-color-danger)"
+            size="sm"
           >
             {{ perm }}
-          </ElTag>
+          </TxTag>
         </div>
-        <ElButton type="primary" size="small" class="grant-all-btn" @click="emit('grant-all')">
+        <TxButton type="primary" size="small" class="grant-all-btn" @click="emit('grant-all')">
           授予全部必需权限
-        </ElButton>
+        </TxButton>
       </div>
     </div>
   </ElCard>

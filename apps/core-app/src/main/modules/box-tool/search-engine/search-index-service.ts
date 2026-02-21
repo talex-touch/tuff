@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
+import { AdaptiveBatchScheduler } from './adaptive-batch-scheduler'
 import { searchLogger } from './search-logger'
 
 const CHINESE_CHAR_REGEX = /[\u4E00-\u9FA5]/
@@ -60,47 +61,104 @@ interface PreparedIndexDocument {
   keywordEntries: SearchIndexKeyword[]
 }
 
+export interface SearchIndexServiceOptions {
+  /**
+   * When true, bypass DbWriteScheduler and pacing delays.
+   * Use this in worker threads where the service owns its own DB connection
+   * and there is no event loop contention.
+   */
+  directMode?: boolean
+}
+
 export class SearchIndexService {
   private initialized = false
   private pinyinModule: typeof import('pinyin-pro') | null = null
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
+  private readonly directMode: boolean
+
+  /** AIMD adaptive batch scheduler for indexItems — persists across calls. */
+  private readonly indexBatchScheduler = new AdaptiveBatchScheduler({
+    initialSize: 3,
+    maxSize: 20,
+    targetMs: 300,
+    minSize: 2,
+    ssthresh: 12
+  })
 
   /** True if the FTS5 table was dropped and recreated during initialization (schema migration). */
   public didMigrate = false
 
-  constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
+  constructor(
+    private readonly db: LibSQLDatabase<typeof schema>,
+    options?: SearchIndexServiceOptions
+  ) {
+    this.directMode = options?.directMode ?? false
+  }
+
+  /**
+   * Schedule a write operation: in directMode, execute immediately;
+   * otherwise go through DbWriteScheduler + SQLite retry.
+   */
+  private async scheduleWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    if (this.directMode) {
+      return withSqliteRetry(operation, { label })
+    }
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  }
 
   async indexItems(items: SearchIndexItem[]): Promise<void> {
     if (items.length === 0) return
     const start = performance.now()
 
-    await dbWriteScheduler.schedule('search-index.ensure', () =>
-      withSqliteRetry(() => this.ensureInitialized(), { label: 'search-index.ensure' })
-    )
+    await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
 
-    // Prepare documents one at a time, yielding between each to avoid
+    // Prepare documents in small groups, yielding between each to avoid
     // long main-thread stalls from pinyin / n-gram computation.
     const preparedDocs: PreparedIndexDocument[] = []
-    for (const item of items) {
-      preparedDocs.push(await this.prepareDocument(item))
-      // Yield to event loop between documents so UI stays responsive
-      await new Promise<void>((resolve) => setImmediate(resolve))
+    for (let i = 0; i < items.length; i++) {
+      preparedDocs.push(await this.prepareDocument(items[i]))
+      // Yield every 3 documents: prepareDocument is CPU-intensive (pinyin,
+      // n-grams) — in directMode (worker), skip yielding for throughput.
+      if (!this.directMode && (i + 1) % 3 === 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
     }
 
-    // Write each document in its own transaction so the dbWriteScheduler
-    // can yield to the event loop between documents. A single transaction
-    // for all docs blocks the event loop for the entire duration (FTS5
-    // INSERT + keyword_mappings are synchronous SQLite operations).
-    for (const doc of preparedDocs) {
-      await dbWriteScheduler.schedule('search-index.indexItem', () =>
-        withSqliteRetry(
-          () =>
-            this.db.transaction(async (tx) => {
-              await this.applyDocument(tx, doc)
-            }),
-          { label: 'search-index.indexItem' }
-        )
+    // Adaptive batching: use AIMD scheduler to find the optimal batch size
+    // that keeps each transaction close to the target duration (~500ms).
+    let i = 0
+    while (i < preparedDocs.length) {
+      const batchSize = this.indexBatchScheduler.currentSize
+      const batch = preparedDocs.slice(i, i + batchSize)
+      i += batch.length
+
+      if (!this.directMode) {
+        await dbWriteScheduler.waitForCapacity(6)
+      }
+      const batchStart = performance.now()
+      await this.scheduleWrite('search-index.indexBatch', () =>
+        this.db.transaction(async (tx) => {
+          for (const doc of batch) {
+            await this.applyDocument(tx, doc)
+          }
+        })
       )
+      const elapsed = performance.now() - batchStart
+      this.indexBatchScheduler.recordDuration(elapsed)
+
+      // Pacing delay: sleep proportional to batch duration to prevent
+      // cascading event loop stalls from rapid FTS5 transactions.
+      if (!this.directMode) {
+        const pacingMs = Math.max(80, Math.round(elapsed * 0.75))
+        await new Promise<void>((resolve) => setTimeout(resolve, pacingMs))
+      } else {
+        // In directMode (worker thread): yield briefly between batches to
+        // release the SQLite write lock.  This allows main-thread services
+        // (UsageSummaryService, etc.) to acquire the lock between worker
+        // transactions, preventing SQLITE_BUSY (code 5) errors.
+        const yieldMs = Math.max(20, Math.round(elapsed * 0.1))
+        await new Promise<void>((resolve) => setTimeout(resolve, yieldMs))
+      }
     }
 
     console.debug(
@@ -114,23 +172,20 @@ export class SearchIndexService {
     if (itemIds.length === 0) return
     const start = performance.now()
 
-    // Remove each item in its own scheduled task so the dbWriteScheduler
-    // can yield between items, avoiding long event-loop blocks.
-    for (const itemId of itemIds) {
-      await dbWriteScheduler.schedule('search-index.removeItem', () =>
-        withSqliteRetry(
-          async () => {
-            await this.ensureInitialized()
-            await this.db.transaction(async (tx) => {
-              await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
-              await tx
-                .delete(schema.keywordMappings)
-                .where(eq(schema.keywordMappings.itemId, itemId))
-            })
-          },
-          { label: 'search-index.removeItem' }
-        )
-      )
+    // Batch removals — same smaller batch size as indexItems to keep
+    // FTS5 DELETE transactions short and event-loop-friendly.
+    const BATCH_SIZE = 10
+    for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
+      const batch = itemIds.slice(i, i + BATCH_SIZE)
+      await this.scheduleWrite('search-index.removeBatch', async () => {
+        await this.ensureInitialized()
+        await this.db.transaction(async (tx) => {
+          for (const itemId of batch) {
+            await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
+            await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
+          }
+        })
+      })
     }
     console.debug(
       `[SearchIndexService] Removed ${itemIds.length} items in ${(
@@ -600,15 +655,22 @@ export class SearchIndexService {
       .map(([value, priority]) => ({ value, priority }))
       .filter(({ value }) => this.isKeywordValid(value))
 
-    // Generate n-gram entries for fuzzy recall (only for non-trivial keywords)
-    const ngramEntries: SearchIndexKeyword[] = []
+    // Generate n-gram entries for fuzzy recall (only for non-trivial keywords).
+    // No static cap — the AIMD adaptive batch scheduler will automatically
+    // shrink the batch size when documents produce many n-grams, keeping
+    // transaction durations under the target without sacrificing search quality.
+    const ngramSet = new Set<string>()
     for (const { value } of keywordEntries) {
       if (value.length >= NGRAM_MIN_WORD_LENGTH && !value.startsWith(NGRAM_PREFIX)) {
         for (const ngram of generateNgrams(value, 2)) {
-          ngramEntries.push({ value: ngram, priority: 0.5 })
+          ngramSet.add(ngram)
         }
       }
     }
+    const ngramEntries: SearchIndexKeyword[] = Array.from(ngramSet).map((ng) => ({
+      value: ng,
+      priority: 0.5
+    }))
 
     // Combine regular keywords with n-gram entries for storage in keywordMappings
     const allKeywordEntries = [...keywordEntries, ...ngramEntries]

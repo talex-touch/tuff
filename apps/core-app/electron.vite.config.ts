@@ -116,7 +116,9 @@ export default defineConfig({
           'file-reconcile-worker':
             'src/main/modules/box-tool/addon/files/workers/file-reconcile-worker.ts',
           'file-index-worker': 'src/main/modules/box-tool/addon/files/workers/file-index-worker.ts',
-          'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts'
+          'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts',
+          'search-index-worker':
+            'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts'
         },
         output: {
           entryFileNames: (chunkInfo) => {
@@ -130,6 +132,8 @@ export default defineConfig({
               return 'file-index-worker.js'
             } else if (chunkInfo.name === 'icon-worker') {
               return 'icon-worker.js'
+            } else if (chunkInfo.name === 'search-index-worker') {
+              return 'search-index-worker.js'
             } else if (chunkInfo.name === 'index') {
               return 'index.js'
             }

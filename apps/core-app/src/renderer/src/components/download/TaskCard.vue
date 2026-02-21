@@ -134,15 +134,15 @@ function formatSize(bytes: number): string {
         </div>
       </div>
       <div class="task-actions">
-        <el-button
+        <TxButton
           v-if="task.status === 'downloading'"
           size="small"
           circle
           @click="$emit('pause', task.id)"
         >
           <el-icon><VideoPause /></el-icon>
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-else-if="task.status === 'paused'"
           size="small"
           type="primary"
@@ -150,8 +150,8 @@ function formatSize(bytes: number): string {
           @click="$emit('resume', task.id)"
         >
           <el-icon><VideoPlay /></el-icon>
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-if="task.status === 'failed'"
           size="small"
           type="warning"
@@ -159,8 +159,8 @@ function formatSize(bytes: number): string {
           @click="$emit('retry', task.id)"
         >
           <el-icon><Refresh /></el-icon>
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-if="task.status === 'completed'"
           size="small"
           type="success"
@@ -168,11 +168,11 @@ function formatSize(bytes: number): string {
           @click="$emit('open-file', task.id)"
         >
           <el-icon><FolderOpened /></el-icon>
-        </el-button>
+        </TxButton>
         <el-dropdown v-if="showMoreActions" trigger="click">
-          <el-button size="small" circle>
+          <TxButton size="small" circle>
             <el-icon><MoreFilled /></el-icon>
-          </el-button>
+          </TxButton>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="$emit('show-details', task.id)">
@@ -368,13 +368,13 @@ function formatSize(bytes: number): string {
   flex-shrink: 0;
 }
 
-.task-actions :deep(.el-button) {
+.task-actions :deep(.tx-button) {
   background: transparent;
   border-color: var(--el-border-color-light);
   color: var(--task-strong);
 }
 
-.task-actions :deep(.el-button:hover) {
+.task-actions :deep(.tx-button:hover) {
   border-color: var(--task-strong);
 }
 

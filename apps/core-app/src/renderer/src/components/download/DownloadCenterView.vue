@@ -305,30 +305,27 @@ async function updateConfig(config: DownloadConfig) {
         </h2>
       </div>
       <div class="header-right">
-        <el-button-group>
-          <el-button
-            :type="viewMode === 'detailed' ? 'primary' : ''"
-            @click="viewMode = 'detailed'"
-          >
+        <div class="view-mode-group">
+          <TxButton :type="viewMode === 'detailed' ? 'primary' : ''" @click="viewMode = 'detailed'">
             <el-icon><List /></el-icon>
-          </el-button>
-          <el-button :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
+          </TxButton>
+          <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
             <el-icon><Grid /></el-icon>
-          </el-button>
-        </el-button-group>
-        <el-button @click="openLogs">
+          </TxButton>
+        </div>
+        <TxButton @click="openLogs">
           <el-icon><Document /></el-icon>
           {{ $t('download.view_logs') }}
-        </el-button>
-        <el-button @click="openSettings">
+        </TxButton>
+        <TxButton @click="openSettings">
           <el-icon><Setting /></el-icon>
-        </el-button>
+        </TxButton>
       </div>
     </div>
 
     <!-- 搜索和筛选 -->
     <div class="search-filter-bar">
-      <el-input
+      <TuffInput
         v-model="searchQuery"
         :placeholder="$t('download.search_placeholder')"
         clearable
@@ -337,20 +334,20 @@ async function updateConfig(config: DownloadConfig) {
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
-      </el-input>
+      </TuffInput>
       <div class="filter-actions">
-        <el-button v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
+        <TxButton v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
           <el-icon><VideoPause /></el-icon>
           {{ $t('download.pause_all') }}
-        </el-button>
-        <el-button v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
+        </TxButton>
+        <TxButton v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
           <el-icon><VideoPlay /></el-icon>
           {{ $t('download.resume_all') }}
-        </el-button>
-        <el-button v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
+        </TxButton>
+        <TxButton v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_history') }}
-        </el-button>
+        </TxButton>
       </div>
     </div>
 
@@ -517,13 +514,18 @@ async function updateConfig(config: DownloadConfig) {
   gap: 12px;
 }
 
+.view-mode-group {
+  display: inline-flex;
+  gap: 4px;
+}
+
 .search-filter-bar {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
 }
 
-.search-filter-bar .el-input {
+.search-filter-bar .tx-input {
   flex: 1;
   max-width: 400px;
 }
@@ -560,7 +562,7 @@ async function updateConfig(config: DownloadConfig) {
     flex-direction: column;
   }
 
-  .search-filter-bar .el-input {
+  .search-filter-bar .tx-input {
     max-width: 100%;
   }
 

@@ -166,14 +166,14 @@ watch(
         </template>
 
         <el-form-item :label="$t('settings.download.chunk_size')">
-          <el-select v-model="form.chunk.size" style="width: 200px">
-            <el-option
+          <TuffSelect v-model="form.chunk.size" style="width: 200px">
+            <TuffSelectItem
               v-for="size in chunkSizeOptions"
               :key="size.value"
               :label="size.label"
               :value="size.value"
             />
-          </el-select>
+          </TuffSelect>
           <div class="form-help">
             {{ $t('settings.download.chunk_size_help') }}
           </div>
@@ -192,7 +192,7 @@ watch(
         </el-form-item>
 
         <el-form-item v-if="form.chunk.autoRetry" :label="$t('settings.download.max_retries')">
-          <el-input-number
+          <TuffInput-number
             v-model="form.chunk.maxRetries"
             :min="1"
             :max="10"
@@ -208,27 +208,27 @@ watch(
         </template>
 
         <el-form-item :label="$t('settings.download.temp_dir')">
-          <el-input v-model="form.storage.tempDir" readonly style="width: 300px">
+          <TuffInput v-model="form.storage.tempDir" readonly style="width: 300px">
             <template #append>
-              <el-button @click="selectTempDir">
+              <TxButton @click="selectTempDir">
                 {{ $t('settings.download.browse') }}
-              </el-button>
+              </TxButton>
             </template>
-          </el-input>
+          </TuffInput>
           <div class="form-help">
             {{ $t('settings.download.temp_dir_help') }}
           </div>
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.history_retention')">
-          <el-select v-model="form.storage.historyRetention" style="width: 200px">
-            <el-option
+          <TuffSelect v-model="form.storage.historyRetention" style="width: 200px">
+            <TuffSelectItem
               v-for="option in historyRetentionOptions"
               :key="option.value"
               :label="option.label"
               :value="option.value"
             />
-          </el-select>
+          </TuffSelect>
           <div class="form-help">
             {{ $t('settings.download.history_retention_help') }}
           </div>
@@ -248,7 +248,7 @@ watch(
         </template>
 
         <el-form-item :label="$t('settings.download.timeout')">
-          <el-input-number
+          <TuffInput-number
             v-model="form.network.timeout"
             :min="5000"
             :max="60000"
@@ -262,7 +262,7 @@ watch(
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.retry_delay')">
-          <el-input-number
+          <TuffInput-number
             v-model="form.network.retryDelay"
             :min="1000"
             :max="30000"
@@ -276,7 +276,7 @@ watch(
         </el-form-item>
 
         <el-form-item :label="$t('settings.download.max_retries')">
-          <el-input-number
+          <TuffInput-number
             v-model="form.network.maxRetries"
             :min="1"
             :max="10"
@@ -291,12 +291,12 @@ watch(
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleClose">
+        <TxButton @click="handleClose">
           {{ $t('common.cancel') }}
-        </el-button>
-        <el-button type="primary" @click="handleSave">
+        </TxButton>
+        <TxButton type="primary" @click="handleSave">
           {{ $t('common.save') }}
-        </el-button>
+        </TxButton>
       </div>
     </template>
   </el-dialog>

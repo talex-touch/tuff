@@ -2,6 +2,44 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-21
+
+### 文件索引错误提示 Popover 与重建确认修复
+
+**变更类型**: 体验修复 / 行为一致性
+
+**描述**: 文件索引错误详情改为按钮触发 Popover 查看，避免错误文本直接铺满面板；重建索引在电量低场景避免重复确认，保留关键电量阈值变更时的二次确认。
+
+**主要变更**:
+1. **错误 Popover 接入**：错误详情区域显示按钮并通过 Popover 展示错误细节。
+2. **确认逻辑修复**：电量低确认不再重复弹窗，仅在阈值变更或电量未知时二次确认。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### tfile 路径规范化与缩略图后台生成优化
+
+**变更类型**: 性能优化 / 体验修复
+
+**描述**: tfile URL 解析补充 `tfile://` 路径拼接容错与 macOS `/users` 规范化；文件索引缩略图改由后台 worker 队列生成，缺失缩略图时先展示占位图，避免主线程阻塞与频繁 IO。
+
+**主要变更**:
+1. **tfile 解析容错**：构建/解析 `tfile://` URL 时避免 hostname 小写化导致的 `/users` 路径异常。
+2. **缩略图 worker**：新增 ThumbnailWorker 队列异步生成缩略图，索引后批量补齐与按需触发。
+3. **占位预览**：图片无缩略图时先渲染占位图，避免直接加载原图引发卡顿。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/thumbnail-config.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/thumbnail-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
+- `apps/core-app/src/main/modules/file-protocol/index.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/renderer/src/utils/tfile-url.ts`
+
 ## 2026-02-20
 
 ### CI Windows 构建命令执行修复

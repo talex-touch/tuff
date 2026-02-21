@@ -10,10 +10,11 @@ import { createPresetExport, validatePresetData } from '@talex-touch/utils'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getLayoutAtomPreset, isLayoutPresetKey } from '~/modules/layout/atoms'
+import { showSonnerDialog, showSonnerPrompt } from '~/modules/notification/sonner-dialog'
 import { themeStyle } from '~/modules/storage/theme-style'
 import { getCoreBoxThemePreset } from '~/views/box/theme'
 
@@ -290,20 +291,18 @@ export function usePresetExport() {
    */
   async function promptPresetName(): Promise<string | null> {
     try {
-      const result = await ElMessageBox.prompt(
-        t('preset.namePrompt', 'Enter a name for your preset'),
-        t('preset.exportPreset', 'Export Preset'),
-        {
-          confirmButtonText: t('common.confirm', 'Confirm'),
-          cancelButtonText: t('common.cancel', 'Cancel'),
-          inputPlaceholder: t('preset.namePlaceholder', 'My Custom Preset'),
-          inputValidator: (val) => {
-            if (!val || !val.trim()) return t('preset.nameRequired', 'Name is required')
-            return true
-          }
+      const { result } = showSonnerPrompt({
+        title: t('preset.exportPreset', 'Export Preset'),
+        message: t('preset.namePrompt', 'Enter a name for your preset'),
+        confirmText: t('common.confirm', 'Confirm'),
+        cancelText: t('common.cancel', 'Cancel'),
+        placeholder: t('preset.namePlaceholder', 'My Custom Preset'),
+        validator: (val) => {
+          if (!val || !val.trim()) return t('preset.nameRequired', 'Name is required')
+          return true
         }
-      )
-      return result.value?.trim() || null
+      })
+      return await result
     } catch {
       return null
     }
@@ -325,11 +324,27 @@ export function usePresetExport() {
         name: preset.meta.name,
         parts: parts.join(', ')
       })
-      await ElMessageBox.confirm(confirmMsg, t('preset.importPreset', 'Import Preset'), {
-        confirmButtonText: t('common.import', 'Import'),
-        cancelButtonText: t('common.cancel', 'Cancel'),
-        type: 'warning'
+      const { result } = showSonnerDialog<'confirm' | 'cancel'>({
+        title: t('preset.importPreset', 'Import Preset'),
+        message: confirmMsg,
+        actions: [
+          {
+            value: 'cancel',
+            label: t('common.cancel', 'Cancel'),
+            variant: 'ghost'
+          },
+          {
+            value: 'confirm',
+            label: t('common.import', 'Import'),
+            type: 'warning'
+          }
+        ],
+        onDismiss: () => 'cancel'
       })
+      const choice = await result
+      if (choice !== 'confirm') {
+        return
+      }
 
       applyPreset(preset)
       ElMessage.success(t('preset.importSuccess', 'Preset imported successfully'))

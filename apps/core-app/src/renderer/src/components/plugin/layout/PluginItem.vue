@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginItem" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { ElPopover } from 'element-plus'
+import { TxPopover } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -21,47 +21,43 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     class="plugin-item my-4 group relative flex items-center h-20 p-2 cursor-pointer rounded-xl border-2 border-transparent overflow-hidden transition-all duration-250 ease-in-out fake-background"
     :class="{ shrink, target: isTarget, dev: plugin.dev?.enable }"
   >
-    <ElPopover
-      v-if="hasIssues"
-      placement="top-start"
-      title="Plugin Issues"
-      :width="300"
-      trigger="hover"
-      popper-class="plugin-issues-popper"
-    >
+    <TxPopover v-if="hasIssues" placement="top-start" :width="300" trigger="hover">
       <template #reference>
         <i
           class="i-ri-error-warning-line issue-badge absolute top-1.5 right-1.5 text-red-500/80 text-xl z-10 cursor-help"
         />
       </template>
-      <TouchScroll native no-padding class="issues-list h-60">
-        <div
-          v-for="(issue, index) in plugin.issues"
-          :key="index"
-          class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
-          :class="{
-            'bg-red-500/10': issue.type === 'error',
-            'bg-yellow-500/10': issue.type === 'warning'
-          }"
-        >
-          <i
-            class="flex-shrink-0 mt-0.5"
+      <div class="plugin-issues-panel">
+        <div class="plugin-issues-title">Plugin Issues</div>
+        <TouchScroll native no-padding class="issues-list h-60">
+          <div
+            v-for="(issue, index) in plugin.issues"
+            :key="index"
+            class="issue-item flex items-start p-1.5 mb-1.5 last:mb-0 rounded"
             :class="{
-              'i-ri-close-circle-fill text-red-500': issue.type === 'error',
-              'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
+              'bg-red-500/10': issue.type === 'error',
+              'bg-yellow-500/10': issue.type === 'warning'
             }"
-          />
-          <div class="ml-2 text-xs">
-            <p class="font-bold">
-              {{ issue.source }}
-            </p>
-            <p class="mt-0.5 text-gray-600 dark:text-gray-300">
-              {{ issue.message }}
-            </p>
+          >
+            <i
+              class="flex-shrink-0 mt-0.5"
+              :class="{
+                'i-ri-close-circle-fill text-red-500': issue.type === 'error',
+                'i-ri-alert-fill text-yellow-500': issue.type === 'warning'
+              }"
+            />
+            <div class="ml-2 text-xs">
+              <p class="font-bold">
+                {{ issue.source }}
+              </p>
+              <p class="mt-0.5 text-gray-600 dark:text-gray-300">
+                {{ issue.message }}
+              </p>
+            </div>
           </div>
-        </div>
-      </TouchScroll>
-    </ElPopover>
+        </TouchScroll>
+      </div>
+    </TxPopover>
 
     <TuffIcon
       class="flex-shrink-0 dark:text-white"
@@ -149,6 +145,18 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
 
 .main-content {
   z-index: 1;
+}
+
+.plugin-issues-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plugin-issues-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
 @keyframes rotate {

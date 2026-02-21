@@ -207,16 +207,16 @@ onMounted(() => {
         <span class="history-count">{{ filteredHistory.length }} {{ $t('download.items') }}</span>
       </div>
       <div class="header-right">
-        <el-button v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">
+        <TxButton v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_all_history') }}
-        </el-button>
+        </TxButton>
       </div>
     </div>
 
     <!-- 搜索和筛选栏 -->
     <div class="search-filter-bar">
-      <el-input
+      <TuffInput
         v-model="searchQuery"
         :placeholder="$t('download.search_history_placeholder')"
         clearable
@@ -225,33 +225,39 @@ onMounted(() => {
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
-      </el-input>
-      <el-select
+      </TuffInput>
+      <TuffSelect
         v-model="filterModule"
         :placeholder="$t('download.filter_by_module')"
         clearable
         style="width: 200px"
       >
-        <el-option :label="$t('download.all_modules')" value="" />
-        <el-option :label="$t('download.module_app_update')" :value="DownloadModule.APP_UPDATE" />
-        <el-option
+        <TuffSelectItem :label="$t('download.all_modules')" value="" />
+        <TuffSelectItem
+          :label="$t('download.module_app_update')"
+          :value="DownloadModule.APP_UPDATE"
+        />
+        <TuffSelectItem
           :label="$t('download.module_plugin_install')"
           :value="DownloadModule.PLUGIN_INSTALL"
         />
-        <el-option
+        <TuffSelectItem
           :label="$t('download.module_resource_download')"
           :value="DownloadModule.RESOURCE_DOWNLOAD"
         />
-        <el-option :label="$t('download.module_user_manual')" :value="DownloadModule.USER_MANUAL" />
-      </el-select>
-      <el-select v-model="sortBy" :placeholder="$t('download.sort_by')" style="width: 180px">
-        <el-option :label="$t('download.sort_by_time_desc')" value="time_desc" />
-        <el-option :label="$t('download.sort_by_time_asc')" value="time_asc" />
-        <el-option :label="$t('download.sort_by_size_desc')" value="size_desc" />
-        <el-option :label="$t('download.sort_by_size_asc')" value="size_asc" />
-        <el-option :label="$t('download.sort_by_name_asc')" value="name_asc" />
-        <el-option :label="$t('download.sort_by_name_desc')" value="name_desc" />
-      </el-select>
+        <TuffSelectItem
+          :label="$t('download.module_user_manual')"
+          :value="DownloadModule.USER_MANUAL"
+        />
+      </TuffSelect>
+      <TuffSelect v-model="sortBy" :placeholder="$t('download.sort_by')" style="width: 180px">
+        <TuffSelectItem :label="$t('download.sort_by_time_desc')" value="time_desc" />
+        <TuffSelectItem :label="$t('download.sort_by_time_asc')" value="time_asc" />
+        <TuffSelectItem :label="$t('download.sort_by_size_desc')" value="size_desc" />
+        <TuffSelectItem :label="$t('download.sort_by_size_asc')" value="size_asc" />
+        <TuffSelectItem :label="$t('download.sort_by_name_asc')" value="name_asc" />
+        <TuffSelectItem :label="$t('download.sort_by_name_desc')" value="name_desc" />
+      </TuffSelect>
     </div>
 
     <!-- 历史记录列表 -->
@@ -344,7 +350,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.search-filter-bar .el-input {
+.search-filter-bar .tx-input {
   flex: 1;
   max-width: 400px;
 }
@@ -401,8 +407,8 @@ onMounted(() => {
     flex-direction: column;
   }
 
-  .search-filter-bar .el-input,
-  .search-filter-bar .el-select {
+  .search-filter-bar .tx-input,
+  .search-filter-bar .tuff-select {
     max-width: 100%;
     width: 100%;
   }

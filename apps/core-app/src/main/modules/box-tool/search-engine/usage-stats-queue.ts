@@ -1,7 +1,9 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../db/schema'
 import { sql } from 'drizzle-orm'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { itemUsageStats } from '../../../db/schema'
+import { withSqliteRetry } from '../../../db/sqlite-retry'
 
 /**
  * Increment operation to be queued
@@ -16,7 +18,10 @@ interface IncrementOperation {
 
 /**
  * Batch write queue for usage stats to reduce database write operations
- * Aggregates increments within a time window (default 100ms) and writes them in batches
+ * Aggregates increments within a time window (default 100ms) and writes them in batches.
+ *
+ * Uses DbWriteScheduler + withSqliteRetry to avoid SQLITE_BUSY contention
+ * with the search-index worker thread.
  */
 export class UsageStatsQueue {
   private queue = new Map<string, IncrementOperation>()
@@ -74,13 +79,26 @@ export class UsageStatsQueue {
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null
       this.flush().catch((error) => {
-        console.error('[UsageStatsQueue] Flush failed:', error)
+        const isDropped = error instanceof Error && error.message.includes('dropped')
+        if (!isDropped) {
+          console.error('[UsageStatsQueue] Flush failed:', error)
+        }
       })
     }, this.flushInterval)
   }
 
   /**
-   * Flush all queued operations to database
+   * Convert a Date to a Unix timestamp (seconds) for SQLite integer columns,
+   * or return null if the date is null.
+   */
+  private static toUnixTs(date: Date | null): number | null {
+    return date ? Math.floor(date.getTime() / 1000) : null
+  }
+
+  /**
+   * Flush all queued operations to database.
+   * Routes through DbWriteScheduler with droppable flag to avoid
+   * SQLITE_BUSY contention with the search-index worker thread.
    */
   async flush(): Promise<void> {
     if (this.isFlushing || this.queue.size === 0) {
@@ -167,72 +185,67 @@ export class UsageStatsQueue {
         })
       }
 
-      // Batch upsert to database
-      await this.db.transaction(async (tx) => {
-        for (const upsert of upserts) {
-          // Check if record exists
-          const existing = await tx
-            .select()
-            .from(itemUsageStats)
-            .where(
-              sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`
-            )
-            .get()
+      // Upsert using INSERT ON CONFLICT DO UPDATE — avoids the SELECT+INSERT/UPDATE
+      // pattern which holds the transaction open longer and is more prone to contention.
+      // Routed through DbWriteScheduler (serialized with other main-thread writes) and
+      // withSqliteRetry (retries on SQLITE_BUSY from the worker thread).
+      // Marked as droppable: usage stats are non-critical and can be dropped under pressure.
+      await dbWriteScheduler.schedule(
+        'usage-stats.flush',
+        () =>
+          withSqliteRetry(
+            () =>
+              this.db.transaction(async (tx) => {
+                const now = new Date()
+                for (const upsert of upserts) {
+                  const lastSearchedTs = UsageStatsQueue.toUnixTs(upsert.lastSearched)
+                  const lastExecutedTs = UsageStatsQueue.toUnixTs(upsert.lastExecuted)
+                  const lastCancelledTs = UsageStatsQueue.toUnixTs(upsert.lastCancelled)
 
-          if (existing) {
-            // Update existing record
-            await tx
-              .update(itemUsageStats)
-              .set({
-                searchCount: sql`${itemUsageStats.searchCount} + ${upsert.searchCount}`,
-                executeCount: sql`${itemUsageStats.executeCount} + ${upsert.executeCount}`,
-                cancelCount: sql`${itemUsageStats.cancelCount} + ${upsert.cancelCount}`,
-                lastSearched:
-                  upsert.lastSearched &&
-                  (!existing.lastSearched || upsert.lastSearched > existing.lastSearched)
-                    ? upsert.lastSearched
-                    : existing.lastSearched,
-                lastExecuted:
-                  upsert.lastExecuted &&
-                  (!existing.lastExecuted || upsert.lastExecuted > existing.lastExecuted)
-                    ? upsert.lastExecuted
-                    : existing.lastExecuted,
-                lastCancelled:
-                  upsert.lastCancelled &&
-                  (!existing.lastCancelled || upsert.lastCancelled > existing.lastCancelled)
-                    ? upsert.lastCancelled
-                    : existing.lastCancelled,
-                updatedAt: new Date()
-              })
-              .where(
-                sql`${itemUsageStats.sourceId} = ${upsert.sourceId} AND ${itemUsageStats.itemId} = ${upsert.itemId}`
-              )
-          } else {
-            // Insert new record
-            await tx.insert(itemUsageStats).values({
-              sourceId: upsert.sourceId,
-              itemId: upsert.itemId,
-              sourceType: upsert.sourceType,
-              searchCount: upsert.searchCount,
-              executeCount: upsert.executeCount,
-              cancelCount: upsert.cancelCount,
-              lastSearched: upsert.lastSearched,
-              lastExecuted: upsert.lastExecuted,
-              lastCancelled: upsert.lastCancelled,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            })
-          }
-        }
-      })
+                  await tx
+                    .insert(itemUsageStats)
+                    .values({
+                      sourceId: upsert.sourceId,
+                      itemId: upsert.itemId,
+                      sourceType: upsert.sourceType,
+                      searchCount: upsert.searchCount,
+                      executeCount: upsert.executeCount,
+                      cancelCount: upsert.cancelCount,
+                      lastSearched: upsert.lastSearched,
+                      lastExecuted: upsert.lastExecuted,
+                      lastCancelled: upsert.lastCancelled,
+                      createdAt: now,
+                      updatedAt: now
+                    })
+                    .onConflictDoUpdate({
+                      target: [itemUsageStats.sourceId, itemUsageStats.itemId],
+                      set: {
+                        searchCount: sql`${itemUsageStats.searchCount} + ${upsert.searchCount}`,
+                        executeCount: sql`${itemUsageStats.executeCount} + ${upsert.executeCount}`,
+                        cancelCount: sql`${itemUsageStats.cancelCount} + ${upsert.cancelCount}`,
+                        lastSearched: sql`MAX(${itemUsageStats.lastSearched}, ${lastSearchedTs})`,
+                        lastExecuted: sql`MAX(${itemUsageStats.lastExecuted}, ${lastExecutedTs})`,
+                        lastCancelled: sql`MAX(${itemUsageStats.lastCancelled}, ${lastCancelledTs})`,
+                        updatedAt: now
+                      }
+                    })
+                }
+              }),
+            { label: 'usage-stats.flush' }
+          ),
+        { droppable: true }
+      )
 
       console.debug(
         `[UsageStatsQueue] Flushed ${operations.length} operations (${upserts.length} unique items)`
       )
     } catch (error) {
-      console.error('[UsageStatsQueue] Failed to flush queue:', error)
-      // Re-queue operations on failure (optional: could implement retry logic)
-      throw error
+      const isDropped = error instanceof Error && error.message.includes('dropped')
+      if (isDropped) {
+        console.debug('[UsageStatsQueue] Flush dropped (queue pressure)')
+      } else {
+        console.error('[UsageStatsQueue] Failed to flush queue:', error)
+      }
     } finally {
       this.isFlushing = false
 

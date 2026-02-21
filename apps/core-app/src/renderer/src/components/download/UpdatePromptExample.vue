@@ -114,7 +114,7 @@ function handleCancelDownload(taskId: string) {
 
 <template>
   <div class="update-prompt-example">
-    <el-button type="primary" @click="showUpdateDialog"> Show Update Dialog </el-button>
+    <TxButton type="primary" @click="showUpdateDialog"> Show Update Dialog </TxButton>
 
     <UpdatePromptDialog
       v-model="dialogVisible"

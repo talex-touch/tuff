@@ -105,7 +105,12 @@ function handleCancel(): void {
         active-icon="i-carbon-edit"
         memory-name="capability-test-input"
       >
-        <el-input v-model="userInput" type="textarea" :placeholder="testMeta.inputHint" :rows="4" />
+        <TuffInput
+          v-model="userInput"
+          type="textarea"
+          :placeholder="testMeta.inputHint"
+          :rows="4"
+        />
       </TuffGroupBlock>
 
       <div class="capability-test-dialog__actions">

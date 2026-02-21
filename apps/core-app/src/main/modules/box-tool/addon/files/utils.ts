@@ -8,6 +8,7 @@ import {
   scanDirectory as globalScanDirectory
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
+import { THUMBNAIL_EXTENSIONS, normalizeExtension } from './thumbnail-config'
 
 const DIRECT_IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'gif', 'bmp', 'webp', 'ico'])
 
@@ -54,11 +55,10 @@ export function mapFileToTuffItem(
   _extensions: Record<string, string>,
   providerId: string,
   providerName: string,
-  onMissingIcon?: (file: typeof filesSchema.$inferSelect) => void
+  onMissingIcon?: (file: typeof filesSchema.$inferSelect) => void,
+  onMissingThumbnail?: (file: typeof filesSchema.$inferSelect) => void
 ): TuffItem {
-  const extension = (file.extension || path.extname(file.name) || '')
-    .replace(/^\./, '')
-    .toLowerCase()
+  const extension = normalizeExtension(file.extension || path.extname(file.name) || '')
 
   let icon: { type: 'file' | 'url' | 'class' | 'emoji'; value: string }
 
@@ -67,6 +67,17 @@ export function mapFileToTuffItem(
     icon = {
       type: 'url',
       value: _extensions.thumbnail
+    }
+  } else if (
+    DIRECT_IMAGE_EXTENSIONS.has(extension) &&
+    THUMBNAIL_EXTENSIONS.has(extension) &&
+    onMissingThumbnail
+  ) {
+    // Prefer placeholder until thumbnail is ready to avoid blocking IO
+    onMissingThumbnail?.(file)
+    icon = {
+      type: 'class',
+      value: 'i-ri-image-line'
     }
   } else if (DIRECT_IMAGE_EXTENSIONS.has(extension)) {
     icon = {

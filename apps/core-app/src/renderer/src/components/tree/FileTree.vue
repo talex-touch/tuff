@@ -154,7 +154,7 @@ function item2Obj(array, paths = []) {
         <IconButton small icon="refresh" @click="refresh" />
       </span>
     </div>
-    <el-scrollbar>
+    <TxScroll>
       <!--      <div class="FileTree-Container"> -->
 
       <el-tree
@@ -179,7 +179,7 @@ function item2Obj(array, paths = []) {
       </el-tree>
 
       <!--      </div> -->
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 

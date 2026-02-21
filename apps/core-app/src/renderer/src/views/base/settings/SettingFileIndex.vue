@@ -6,7 +6,7 @@ import type {
   FileIndexBatteryStatus,
   FileIndexStats
 } from '@talex-touch/utils/transport/events/types'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { ElMessage } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
@@ -19,10 +19,17 @@ import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
+import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
 import RebuildConfirmDialog from './components/RebuildConfirmDialog.vue'
 
-const { getIndexStatus, getIndexStats, getBatteryLevel, handleRebuild, onProgressUpdate } =
-  useFileIndexMonitor()
+const {
+  getIndexStatus,
+  getIndexStats,
+  getFailedFiles,
+  getBatteryLevel,
+  handleRebuild,
+  onProgressUpdate
+} = useFileIndexMonitor()
 const { t, te } = useI18n()
 const settingsSdk = useSettingsSdk()
 
@@ -34,6 +41,7 @@ const estimatedTimeLabel = useEstimatedCompletionText(estimatedTimeRemaining)
 const indexStats = ref<FileIndexStats | null>(null)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
+const errorPopoverVisible = ref(false)
 
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
@@ -353,6 +361,28 @@ async function openRebuildConfirm(payload?: {
   })
 }
 
+function openFailedFilesDialog() {
+  popperMention(t('settings.settingFileIndex.failedFilesDialogTitle'), () =>
+    h(FailedFilesListDialog, {
+      loadFiles: getFailedFiles
+    })
+  )
+}
+
+const failedFilesCount = computed(() => indexStats.value?.failedFiles ?? 0)
+
+const errorButtonLabel = computed(() => {
+  const count = failedFilesCount.value
+  if (count > 0) {
+    return t('settings.settingFileIndex.errorButtonWithCount', { count })
+  }
+  return t('settings.settingFileIndex.errorButton')
+})
+
+function toggleErrorPopover(): void {
+  errorPopoverVisible.value = !errorPopoverVisible.value
+}
+
 async function triggerRebuild() {
   if (isRebuilding.value) {
     ElMessage.warning(t('settings.settingFileIndex.alertRebuilding'))
@@ -393,16 +423,23 @@ async function triggerRebuild() {
         )
       }
 
-      try {
-        await openRebuildConfirm({
-          battery: result.battery ?? battery ?? null,
-          minBattery: defaultMinBattery,
-          criticalBattery: result.threshold ?? defaultCriticalBattery,
-          showCriticalWarning: true
-        })
-      } catch {
-        isRebuilding.value = false
-        return
+      const shouldConfirmAgain =
+        !battery ||
+        typeof battery.level !== 'number' ||
+        (result.threshold ?? defaultCriticalBattery) !== defaultCriticalBattery
+
+      if (shouldConfirmAgain) {
+        try {
+          await openRebuildConfirm({
+            battery: result.battery ?? battery ?? null,
+            minBattery: defaultMinBattery,
+            criticalBattery: result.threshold ?? defaultCriticalBattery,
+            showCriticalWarning: true
+          })
+        } catch {
+          isRebuilding.value = false
+          return
+        }
       }
 
       const forced = await handleRebuild({ force: true })
@@ -470,9 +507,28 @@ async function triggerRebuild() {
       default-icon="i-carbon-warning-alt"
       active-icon="i-carbon-warning-alt"
     >
-      <div class="error-text">
-        {{ indexStatus?.error }}
-      </div>
+      <TxPopover
+        v-model="errorPopoverVisible"
+        placement="bottom-start"
+        :width="360"
+        trigger="click"
+        :toggle-on-reference-click="false"
+      >
+        <template #reference>
+          <TxButton variant="flat" class="error-trigger" @click.stop="toggleErrorPopover">
+            {{ errorButtonLabel }}
+          </TxButton>
+        </template>
+        <div class="error-popover">
+          <div class="error-popover-title">
+            {{ t('settings.settingFileIndex.errorTitle') }}
+          </div>
+          <div class="error-popover-desc">
+            {{ t('settings.settingFileIndex.errorDesc') }}
+          </div>
+          <pre class="error-popover-content">{{ indexStatus?.error }}</pre>
+        </div>
+      </TxPopover>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -507,7 +563,16 @@ async function triggerRebuild() {
         <span class="stat-divider">·</span>
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.failedFiles') }}</span>
-          <span class="stat-value failed">&nbsp;{{ indexStats.failedFiles }}</span>
+          <button
+            v-if="indexStats.failedFiles > 0"
+            class="stat-value-btn failed"
+            :title="t('settings.settingFileIndex.viewFailedFiles')"
+            @click="openFailedFilesDialog"
+          >
+            &nbsp;{{ indexStats.failedFiles }}
+            <div class="i-carbon-chevron-right text-10px ml-2px" />
+          </button>
+          <span v-else class="stat-value">&nbsp;{{ indexStats.failedFiles }}</span>
         </div>
         <span class="stat-divider">·</span>
         <div class="stat-item">
@@ -883,20 +948,66 @@ async function triggerRebuild() {
   color: #ff3b30;
 }
 
+.stat-value-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 1px 6px 1px 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stat-value-btn.failed {
+  color: #ff3b30;
+}
+
+.stat-value-btn:hover {
+  background: rgba(255, 59, 48, 0.1);
+}
+
 .stat-value.skipped {
   color: #ff9500;
 }
 
-.error-text {
+.error-trigger {
+  width: fit-content;
+}
+
+.error-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.error-popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.error-popover-desc {
   font-size: 12px;
-  color: #ff3b30;
-  padding: 8px 12px;
-  background: rgba(255, 59, 48, 0.1);
+  color: var(--el-text-color-secondary);
+}
+
+.error-popover-content {
+  margin: 0;
+  padding: 8px 10px;
+  background: rgba(255, 59, 48, 0.08);
   border-radius: 6px;
-  border-left: 3px solid #ff3b30;
-  font-family: monospace;
+  border: 1px solid rgba(255, 59, 48, 0.15);
+  font-size: 11px;
+  color: #ff3b30;
+  white-space: pre-wrap;
   word-break: break-all;
-  max-width: 400px;
+  max-height: 200px;
+  overflow: auto;
 }
 
 .time-text {

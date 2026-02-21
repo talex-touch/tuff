@@ -1,8 +1,8 @@
 <script lang="ts" name="LayoutAtomEditor" setup>
 import type { LayoutAtomConfig } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
-import { ElCollapse, ElCollapseItem, ElInput, ElOption, ElSelect, ElSlider } from 'element-plus'
+import { ElCollapse, ElCollapseItem, ElSlider } from 'element-plus'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -95,20 +95,20 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label">{{
             t('layoutSection.atomHeaderBorder', 'Border')
           }}</span>
-          <ElSelect
+          <TuffSelect
             :model-value="atomConfig.header.border"
             class="w-full"
             @update:model-value="
               (v) => applyCustom({ ...atomConfig, header: { ...atomConfig.header, border: v } })
             "
           >
-            <ElOption
+            <TuffSelectItem
               v-for="opt in headerBorderOptions"
               :key="opt.value"
               :value="opt.value"
               :label="opt.label"
             />
-          </ElSelect>
+          </TuffSelect>
         </div>
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label"
@@ -134,20 +134,20 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label">{{
             t('layoutSection.atomAsidePosition', 'Position')
           }}</span>
-          <ElSelect
+          <TuffSelect
             :model-value="atomConfig.aside.position"
             class="w-full"
             @update:model-value="
               (v) => applyCustom({ ...atomConfig, aside: { ...atomConfig.aside, position: v } })
             "
           >
-            <ElOption
+            <TuffSelectItem
               v-for="opt in asidePositionOptions"
               :key="opt.value"
               :value="opt.value"
               :label="opt.label"
             />
-          </ElSelect>
+          </TuffSelect>
         </div>
         <div v-if="atomConfig.aside.position !== 'hidden'" class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label"
@@ -190,39 +190,39 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label">{{
             t('layoutSection.atomViewShadow', 'Shadow')
           }}</span>
-          <ElSelect
+          <TuffSelect
             :model-value="atomConfig.view.shadow"
             class="w-full"
             @update:model-value="
               (v) => applyCustom({ ...atomConfig, view: { ...atomConfig.view, shadow: v } })
             "
           >
-            <ElOption
+            <TuffSelectItem
               v-for="opt in viewShadowOptions"
               :key="opt.value"
               :value="opt.value"
               :label="opt.label"
             />
-          </ElSelect>
+          </TuffSelect>
         </div>
       </ElCollapseItem>
       <ElCollapseItem :title="t('layoutSection.atomNav', 'Navigation')" name="nav">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label">{{ t('layoutSection.atomNavStyle', 'Style') }}</span>
-          <ElSelect
+          <TuffSelect
             :model-value="atomConfig.nav.style"
             class="w-full"
             @update:model-value="
               (v) => applyCustom({ ...atomConfig, nav: { ...atomConfig.nav, style: v } })
             "
           >
-            <ElOption
+            <TuffSelectItem
               v-for="opt in navStyleOptions"
               :key="opt.value"
               :value="opt.value"
               :label="opt.label"
             />
-          </ElSelect>
+          </TuffSelect>
         </div>
       </ElCollapseItem>
       <ElCollapseItem :title="t('layoutSection.atomCustomCss', 'Custom CSS')" name="css">
@@ -233,11 +233,10 @@ const viewShadowOptions = [
               'Applied to app layout. Unsafe directives are blocked.'
             )
           }}</span>
-          <ElInput
+          <TuffInput
             :model-value="atomConfig.customCSS || ''"
             type="textarea"
             :rows="6"
-            resize="vertical"
             placeholder=".AppLayout-Container { /* your css */ }"
             @update:model-value="(v) => applyCustom({ ...atomConfig, customCSS: v })"
           />
@@ -286,6 +285,10 @@ const viewShadowOptions = [
 
 .LayoutAtomEditor-Field {
   margin-bottom: 12px;
+}
+
+.LayoutAtomEditor :deep(.tx-input__textarea) {
+  resize: vertical;
 }
 
 .LayoutAtomEditor-Label {

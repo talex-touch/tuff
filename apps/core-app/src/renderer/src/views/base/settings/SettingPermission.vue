@@ -11,17 +11,8 @@ import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@ele
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import {
-  ElButton,
-  ElCollapse,
-  ElCollapseItem,
-  ElEmpty,
-  ElIcon,
-  ElInput,
-  ElOption,
-  ElSelect,
-  ElTag
-} from 'element-plus'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxTag } from '@talex-touch/tuffex'
+import { ElCollapse, ElCollapseItem, ElEmpty, ElIcon } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { PermissionList } from '~/components/permission'
@@ -304,20 +295,20 @@ function getActionLabel(action: string) {
 }
 
 // Get action type for tag
-function getActionType(action: string) {
+function getActionColor(action: string) {
   switch (action) {
     case 'granted':
-      return 'success'
+      return 'var(--tx-color-success)'
     case 'revoked':
-      return 'warning'
+      return 'var(--tx-color-warning)'
     case 'denied':
-      return 'danger'
+      return 'var(--tx-color-danger)'
     case 'blocked':
-      return 'danger'
+      return 'var(--tx-color-danger)'
     case 'used':
-      return 'info'
+      return 'var(--tx-color-info)'
     default:
-      return 'info'
+      return 'var(--tx-color-info)'
   }
 }
 
@@ -367,19 +358,20 @@ onMounted(() => {
 
       <!-- Filters -->
       <div class="permission-filters">
-        <ElInput
-          v-model="searchQuery"
-          placeholder="搜索插件..."
-          :prefix-icon="Search"
-          clearable
-          class="search-input"
-        />
-        <ElSelect v-model="filterStatus" class="status-select">
-          <ElOption value="all" label="全部插件" />
-          <ElOption value="granted" label="权限完整" />
-          <ElOption value="missing" label="缺少权限" />
-        </ElSelect>
-        <ElButton :icon="Refresh" :loading="loading" @click="loadData"> 刷新 </ElButton>
+        <TuffInput v-model="searchQuery" placeholder="搜索插件..." clearable class="search-input">
+          <template #prefix>
+            <ElIcon><Search /></ElIcon>
+          </template>
+        </TuffInput>
+        <TuffSelect v-model="filterStatus" class="status-select">
+          <TuffSelectItem value="all" label="全部插件" />
+          <TuffSelectItem value="granted" label="权限完整" />
+          <TuffSelectItem value="missing" label="缺少权限" />
+        </TuffSelect>
+        <TxButton :loading="loading" @click="loadData">
+          <ElIcon class="mr-1"><Refresh /></ElIcon>
+          刷新
+        </TxButton>
       </div>
 
       <!-- Plugin List -->
@@ -405,17 +397,20 @@ onMounted(() => {
                   <InfoFilled />
                 </ElIcon>
                 <span class="plugin-name">{{ plugin.name }}</span>
-                <ElTag
+                <TxTag
                   v-if="!plugin.enforcePermissions && !plugin.warning"
-                  type="warning"
-                  size="small"
-                  effect="plain"
+                  color="var(--tx-color-warning)"
+                  size="sm"
                 >
                   旧版 SDK
-                </ElTag>
-                <ElTag v-if="plugin.missingRequired.length > 0" type="danger" size="small">
+                </TxTag>
+                <TxTag
+                  v-if="plugin.missingRequired.length > 0"
+                  color="var(--tx-color-danger)"
+                  size="sm"
+                >
                   缺少 {{ plugin.missingRequired.length }} 项
-                </ElTag>
+                </TxTag>
               </div>
               <div class="plugin-stats">
                 <span class="stat">必需: {{ plugin.required.length }}</span>
@@ -434,17 +429,17 @@ onMounted(() => {
 
             <!-- Actions -->
             <div class="plugin-actions">
-              <ElButton
+              <TxButton
                 v-if="plugin.missingRequired.length > 0"
                 type="primary"
                 size="small"
                 @click.stop="handleGrantAll(plugin)"
               >
                 授予全部必需权限
-              </ElButton>
-              <ElButton type="danger" size="small" plain @click.stop="handleRevokeAll(plugin.id)">
+              </TxButton>
+              <TxButton type="danger" size="small" plain @click.stop="handleRevokeAll(plugin.id)">
                 撤销全部权限
-              </ElButton>
+              </TxButton>
             </div>
 
             <!-- Permission List -->
@@ -463,25 +458,30 @@ onMounted(() => {
   <TuffGroupBlock name="审计日志" description="查看权限操作历史记录">
     <TuffBlockSlot>
       <div class="audit-header">
-        <ElButton :icon="Clock" @click="toggleAuditLogs">
+        <TxButton @click="toggleAuditLogs">
+          <ElIcon class="mr-1"><Clock /></ElIcon>
           {{ showAuditLogs ? '收起日志' : '查看日志' }}
-        </ElButton>
+        </TxButton>
 
         <template v-if="showAuditLogs">
-          <ElSelect v-model="auditLogFilter" class="audit-filter">
-            <ElOption value="all" label="全部操作" />
-            <ElOption value="granted" label="授予" />
-            <ElOption value="revoked" label="撤销" />
-            <ElOption value="denied" label="拒绝" />
-            <ElOption value="used" label="使用" />
-            <ElOption value="blocked" label="拦截" />
-          </ElSelect>
+          <TuffSelect v-model="auditLogFilter" class="audit-filter">
+            <TuffSelectItem value="all" label="全部操作" />
+            <TuffSelectItem value="granted" label="授予" />
+            <TuffSelectItem value="revoked" label="撤销" />
+            <TuffSelectItem value="denied" label="拒绝" />
+            <TuffSelectItem value="used" label="使用" />
+            <TuffSelectItem value="blocked" label="拦截" />
+          </TuffSelect>
 
-          <ElButton :icon="Refresh" :loading="auditLogsLoading" @click="loadAuditLogs">
+          <TxButton :loading="auditLogsLoading" @click="loadAuditLogs">
+            <ElIcon class="mr-1"><Refresh /></ElIcon>
             刷新
-          </ElButton>
+          </TxButton>
 
-          <ElButton :icon="Delete" type="danger" plain @click="clearAuditLogs"> 清空 </ElButton>
+          <TxButton type="danger" plain @click="clearAuditLogs">
+            <ElIcon class="mr-1"><Delete /></ElIcon>
+            清空
+          </TxButton>
         </template>
       </div>
 
@@ -497,9 +497,9 @@ onMounted(() => {
             <div class="audit-time">
               {{ formatTime(log.timestamp) }}
             </div>
-            <ElTag :type="getActionType(log.action)" size="small" class="audit-action">
+            <TxTag :color="getActionColor(log.action)" size="sm" class="audit-action">
               {{ getActionLabel(log.action) }}
-            </ElTag>
+            </TxTag>
             <span class="audit-plugin">{{ log.pluginId }}</span>
             <span class="audit-arrow">→</span>
             <span class="audit-permission">{{

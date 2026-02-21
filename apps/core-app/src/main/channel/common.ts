@@ -1490,6 +1490,7 @@ export class CommonChannelModule extends BaseModule {
     this.transportDisposers.push(
       transport.on(AppEvents.fileIndex.status, () => fileProvider.getIndexingStatus()),
       transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
+      transport.on(AppEvents.fileIndex.failedFiles, () => fileProvider.getFailedFiles()),
       transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
       transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
         try {
