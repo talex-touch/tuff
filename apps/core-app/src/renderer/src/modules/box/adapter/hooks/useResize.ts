@@ -72,6 +72,14 @@ function calculateDesiredHeight(resultCount: number): number {
   return clampHeight(scrollHeight + headerHeight + extraBuffer + HEIGHT_SAFETY_PADDING)
 }
 
+function hasWidgetActivation(activations: IProviderActivate[] | null | undefined): boolean {
+  if (!activations || activations.length === 0) return false
+  return activations.some((activation) => {
+    const meta = activation?.meta as { feature?: { meta?: { interaction?: { type?: string } } } }
+    return meta?.feature?.meta?.interaction?.type === 'widget'
+  })
+}
+
 export function useResize(options: UseResizeOptions): void {
   const { results, activeActivations, loading, recommendationPending } = options
   const transport = useTuffTransport()
@@ -90,6 +98,7 @@ export function useResize(options: UseResizeOptions): void {
       : false
 
     const height = calculateDesiredHeight(resultCount)
+    const forceMax = hasWidgetActivation(activeActivations.value)
 
     const payload: CoreBoxLayoutUpdateRequest = {
       height,
@@ -97,6 +106,7 @@ export function useResize(options: UseResizeOptions): void {
       loading: isLoading,
       recommendationPending: isRecommendationPending,
       activationCount,
+      forceMax,
       source
     }
 

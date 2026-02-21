@@ -19,6 +19,8 @@ import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
 import CoreBoxRender from '~/components/render/CoreBoxRender.vue'
 import PreviewHistoryPanel from '~/components/render/custom/PreviewHistoryPanel.vue'
 import { appSetting } from '~/modules/channel/storage'
+import { getCustomRenderer } from '~/modules/box/custom-render'
+import { isDefaultWidgetRenderer } from '@talex-touch/utils/plugin/widget'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { useBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { sanitizeUserCss } from '~/modules/style/sanitizeUserCss'
@@ -85,6 +87,49 @@ const resultTransitionName = computed(() => {
   const enabled = appSetting.animation?.resultTransition === true
   return enabled && !lowBatteryMode.value ? 'result-switch' : ''
 })
+
+const isWidgetActivationActive = computed(() => {
+  if (!activeActivations.value || activeActivations.value.length === 0) return false
+  return activeActivations.value.some((activation) => {
+    const meta = activation?.meta as {
+      feature?: { meta?: { interaction?: { type?: string } } }
+    }
+    return meta?.feature?.meta?.interaction?.type === 'widget'
+  })
+})
+
+const widgetRenderItem = computed(() => {
+  if (res.value.length !== 1) return null
+  const item = res.value[0]
+  const render = item?.render
+  if (render?.mode !== 'custom') return null
+  const custom = render.custom
+  if (!custom || custom.type !== 'vue' || !custom.content) return null
+  if (isDefaultWidgetRenderer(custom.content)) return null
+  if (!getCustomRenderer(custom.content)) return null
+  return item
+})
+
+const lastWidgetItem = ref<TuffItem | null>(null)
+watch(widgetRenderItem, (item) => {
+  if (item) {
+    lastWidgetItem.value = item
+  }
+})
+watch(isWidgetActivationActive, (active) => {
+  if (!active) {
+    lastWidgetItem.value = null
+  }
+})
+
+const widgetItemToRender = computed(() => {
+  if (widgetRenderItem.value) return widgetRenderItem.value
+  if (isWidgetActivationActive.value) return lastWidgetItem.value
+  return null
+})
+const isWidgetMode = computed(
+  () => isWidgetActivationActive.value || Boolean(widgetRenderItem.value)
+)
 
 function handleClipboardChange() {
   // Force immediate search when clipboard changes (paste or clear)
@@ -598,7 +643,7 @@ const customCss = computed(() => {
 
     <div
       class="CoreBoxRes flex"
-      :class="{ 'CoreBoxRes--canvas': isCanvasLayout }"
+      :class="{ 'CoreBoxRes--canvas': isCanvasLayout, 'CoreBoxRes--widget': isWidgetMode }"
       @contextmenu="previewHistory.handleContextMenu"
     >
       <!-- Hide result area when plugin UI view is attached -->
@@ -606,9 +651,24 @@ const customCss = computed(() => {
         <div
           class="CoreBoxRes-Main"
           :style="getCanvasAreaStyle('results')"
-          :class="{ compressed: !!addon, 'CoreBoxRes-Main--canvas': isCanvasLayout }"
+          :class="{
+            compressed: !!addon && !isWidgetMode,
+            'CoreBoxRes-Main--canvas': isCanvasLayout,
+            'CoreBoxRes-Main--widget': isWidgetMode
+          }"
         >
-          <TouchScroll ref="scrollbar" no-padding class="scroll-area">
+          <div v-if="isWidgetMode" class="CoreBoxRes-Widget">
+            <CoreBoxRender
+              v-if="widgetItemToRender"
+              :key="`widget-${widgetItemToRender.id}`"
+              :active="boxOptions.focus === 0"
+              :item="widgetItemToRender"
+              :index="0"
+              class="CoreBoxRender-Widget"
+              @trigger="handleItemTrigger(0, widgetItemToRender)"
+            />
+          </div>
+          <TouchScroll v-else ref="scrollbar" no-padding class="scroll-area">
             <div class="CoreBoxRes-ScrollContent" :class="{ 'has-footer': !!res.length }">
               <Transition :name="resultTransitionName" mode="out-in">
                 <BoxGrid
@@ -643,12 +703,15 @@ const customCss = computed(() => {
             </div>
           </TouchScroll>
           <CoreBoxFooter
-            :display="!!res.length"
-            :item="activeItem ?? null"
+            :display="isWidgetMode || !!res.length"
+            :item="widgetItemToRender ?? activeItem ?? null"
             :active-activations="activeActivations"
             :result-count="res.length"
             :is-recommendation="!searchVal && !activeActivations?.length"
-            :class="['CoreBoxFooter-Sticky', { 'CoreBoxFooter-Canvas': isCanvasLayout }]"
+            :class="[
+              'CoreBoxFooter-Sticky',
+              { 'CoreBoxFooter-Canvas': isCanvasLayout, 'CoreBoxFooter-Widget': isWidgetMode }
+            ]"
           />
         </div>
         <TuffItemAddon
@@ -864,6 +927,35 @@ div.CoreBoxRes {
     display: flex;
     flex-direction: column;
     min-height: 0;
+  }
+}
+
+div.CoreBoxRes.CoreBoxRes--widget {
+  overflow: hidden;
+
+  .CoreBoxRes-Main {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .CoreBoxRes-Widget {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    display: flex;
+  }
+
+  .CoreBoxRender-Widget {
+    width: 100%;
+    height: 100%;
+  }
+
+  .CoreBoxRender-Custom {
+    margin: 0;
+    height: 100%;
+    border-radius: 0;
+    border-color: transparent;
   }
 }
 

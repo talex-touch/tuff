@@ -91,6 +91,17 @@ export class BoxItemManager {
   update(id: string, updates: Partial<TuffItem>): void {
     const existing = this.items.get(id)
     if (!existing) {
+      const candidate = updates as TuffItem
+      if (
+        candidate &&
+        typeof candidate === 'object' &&
+        'source' in candidate &&
+        'render' in candidate
+      ) {
+        this.logWarn(`Item ${id} not found. Upserting with provided payload.`)
+        this.upsert({ ...candidate, id })
+        return
+      }
       this.logWarn(`Item ${id} not found. Cannot update.`)
       return
     }

@@ -63,6 +63,20 @@ import type { ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
 const appProviderLog = getLogger('app-provider')
+const BASE64_MARKER = 'base64,'
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
+function isValidBase64DataUrl(value: string): boolean {
+  const markerIndex = value.indexOf(BASE64_MARKER)
+  if (markerIndex === -1) {
+    return true
+  }
+  const payload = value.slice(markerIndex + BASE64_MARKER.length)
+  if (!payload) {
+    return false
+  }
+  return BASE64_PAYLOAD_PATTERN.test(payload)
+}
 
 type AppTimingMeta = TimingMeta & {
   label?: string
@@ -909,6 +923,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       unit: 's',
       precision: 2
     })
+    const invalidIconApps = new Set<string>()
+    for (const app of dbAppsWithExtensions) {
+      const icon = app.extensions.icon
+      if (icon && !isValidBase64DataUrl(icon)) {
+        const uniqueId = app.extensions.bundleId || app.path
+        if (uniqueId) invalidIconApps.add(uniqueId)
+      }
+    }
+    if (invalidIconApps.size > 0) {
+      logApp(
+        `Detected ${chalk.yellow(invalidIconApps.size)} invalid app icons, will refresh`,
+        LogStyle.warning
+      )
+    }
     const dbAppsMap = new Map(
       dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
     )
@@ -927,7 +955,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       if (!dbApp) {
         toAdd.push(scannedApp)
       } else {
-        if (scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()) {
+        const shouldRefreshIcon = invalidIconApps.has(uniqueId)
+        if (
+          shouldRefreshIcon ||
+          scannedApp.lastModified.getTime() > new Date(dbApp.mtime).getTime()
+        ) {
           toUpdate.push({ fileId: dbApp.id, app: scannedApp })
         }
         dbAppsMap.delete(uniqueId)

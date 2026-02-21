@@ -373,7 +373,18 @@
 
 ---
 
-### 2. ✅ Flow Transfer (v2.4.7) - 核心调度完成，权限/闭环完成
+### 2. 🟡 Widget 沙箱隔离与存储收口 (v2.6.x) - 进行中
+**来源**: `plan-prd/04-implementation/WidgetSandboxIsolation260221.md`
+**工期**: 3-5 天
+
+- [ ] 扩展拦截：navigator.clipboard/storage、history、location、postMessage
+- [ ] Worker 隔离：serviceWorker/sharedWorker 注册入口拦截
+- [ ] 调用限额与审计记录（频控/计数）
+- [ ] 沙箱开关与白名单（快速回滚）
+
+---
+
+### 3. ✅ Flow Transfer (v2.4.7) - 核心调度完成，权限/闭环完成
 
 **新增功能** (2025-12-11):
 - [x] ShareNotificationService - 系统分享操作反馈通知
@@ -398,7 +409,7 @@
 
 ---
 
-### 3. 🟡 DivisionBox 深化 (v2.4.7) - 核心完成，生命周期开放待补
+### 4. 🟡 DivisionBox 深化 (v2.4.7) - 核心完成，生命周期开放待补
 
 **补充（IPC 迁移）**:
 - ✅ DivisionBox IPC 全量迁移到 TuffTransport（renderer/main），移除 legacy `division-box:*`
@@ -410,7 +421,7 @@
 
 ---
 
-### 4. 多视图并行共存
+### 5. 多视图并行共存
 **来源**: `plan-prd/03-features/view/multi-attach-view-prd.md`
 **工期**: 10-15 天
 

@@ -51,11 +51,33 @@ const classList = computed(() => {
 
 const interactiveDisabled = computed(() => props.disabled || props.loading)
 const menuDisabled = computed(() => interactiveDisabled.value || props.menuDisabled)
+const ignoreNextMenuClick = ref(false)
 
 function handlePrimaryClick(event: MouseEvent) {
   if (interactiveDisabled.value)
     return
   emit('click', event)
+}
+
+function toggleMenu() {
+  if (menuDisabled.value)
+    return
+  open.value = !open.value
+}
+
+function handleMenuPointerDown() {
+  if (menuDisabled.value)
+    return
+  ignoreNextMenuClick.value = true
+  toggleMenu()
+}
+
+function handleMenuClick() {
+  if (ignoreNextMenuClick.value) {
+    ignoreNextMenuClick.value = false
+    return
+  }
+  toggleMenu()
 }
 
 function closeMenu() {
@@ -94,6 +116,7 @@ function closeMenu() {
         :placement="menuPlacement"
         :offset="menuOffset"
         :width="menuWidth"
+        :toggle-on-reference-click="false"
       >
         <template #reference>
           <button
@@ -102,6 +125,10 @@ function closeMenu() {
             type="button"
             aria-haspopup="menu"
             :aria-expanded="open || undefined"
+            @pointerdown="handleMenuPointerDown"
+            @click="handleMenuClick"
+            @keydown.enter.prevent="handleMenuClick"
+            @keydown.space.prevent="handleMenuClick"
           >
             <slot name="menu-icon">
               <i class="tx-split-button__menu-icon" :class="menuIcon" />

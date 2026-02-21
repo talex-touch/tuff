@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -32,8 +33,11 @@ async function getAppIcon(targetPath: string, appName: string): Promise<string> 
       const fileIcon = (await import('extract-file-icon')).default
       if (typeof fileIcon === 'function') {
         const buffer = fileIcon(targetPath, 32)
-        await fs.writeFile(iconPath, buffer)
-        return `data:image/png;base64,${buffer.toString('base64')}`
+        if (buffer && buffer.length > 0) {
+          const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
+          await fs.writeFile(iconPath, normalized)
+          return `data:image/png;base64,${normalized.toString('base64')}`
+        }
       }
     } catch (e) {
       console.warn(`[Win] Failed to extract icon for ${targetPath}:`, e)
