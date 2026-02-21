@@ -207,6 +207,20 @@
 - `plugins/touch-translation/index.js`
 - `plugins/touch-translation/index/main.ts`
 
+### Webcontent 插件 Transport 注入修复
+
+**变更类型**: 稳定性 / 行为修复
+
+**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；改为从应用根路径创建 require，以保证依赖解析稳定。
+
+**主要变更**:
+1. **依赖解析根**：preload 内通过 `createRequire(root/package.json)` 解析 transport，避免临时目录找不到依赖。
+2. **通道初始化**：CoreBox 与 DivisionBox 的 webcontent 注入一致化处理，避免特定容器失效。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+
 ## 2026-02-19
 
 ### Intelligence OpenAI 兼容 Base URL 归一化

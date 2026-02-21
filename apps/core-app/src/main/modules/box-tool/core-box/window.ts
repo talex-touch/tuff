@@ -1374,7 +1374,13 @@ export class WindowManager {
 
   window['$channel'] = new TouchChannel();
   try {
-    const { createPluginTuffTransport } = require('@talex-touch/utils/transport');
+    const { createRequire } = require('node:module');
+    const path = require('node:path');
+    const rootPath = window?.$plugin?.path?.root;
+    const requireFromRoot = rootPath
+      ? createRequire(path.join(rootPath, 'package.json'))
+      : require;
+    const { createPluginTuffTransport } = requireFromRoot('@talex-touch/utils/transport');
     window['$transport'] = createPluginTuffTransport(window['$channel']);
   } catch (error) {
     console.error('[CoreBox] Failed to init plugin transport:', error);

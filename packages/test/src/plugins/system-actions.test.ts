@@ -48,4 +48,19 @@ describe('system actions plugin', () => {
     const order = systemTest.resolveGroupOrder(actions)
     expect(order).toEqual(['power', 'audio', 'window'])
   })
+
+  it('builds normalized search tokens', () => {
+    const tokens = systemTest.buildSearchTokens({
+      name: 'Main Window',
+      description: 'Show Tuff',
+      keywords: ['Open Window'],
+    })
+
+    expect(tokens).toContain('main window')
+    expect(tokens).toContain('mainwindow')
+    expect(tokens).toContain('show tuff')
+    expect(tokens).toContain('showtuff')
+    expect(tokens).toContain('open window')
+    expect(tokens).toContain('openwindow')
+  })
 })
