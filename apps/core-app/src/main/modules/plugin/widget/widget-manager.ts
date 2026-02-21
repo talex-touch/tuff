@@ -11,6 +11,7 @@ import { performance } from 'node:perf_hooks'
 import chokidar from 'chokidar'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../../core'
+import { getCoreBoxWindow } from '../../box-tool/core-box/window'
 import { compileWidgetSource } from './widget-compiler'
 import { pluginWidgetLoader, resolveWidgetFilePath } from './widget-loader'
 
@@ -173,8 +174,17 @@ export class WidgetManager {
     return getTuffTransportMain(channel, keyManager)
   }
 
-  private get mainWindowId(): number {
-    return genTouchApp().window.window.id
+  private getWidgetWindowIds(): number[] {
+    const ids = new Set<number>()
+    const mainWindow = genTouchApp().window.window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      ids.add(mainWindow.id)
+    }
+    const coreBoxWindow = getCoreBoxWindow()?.window
+    if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
+      ids.add(coreBoxWindow.id)
+    }
+    return Array.from(ids)
   }
 
   async registerWidget(
@@ -398,7 +408,10 @@ export class WidgetManager {
   }
 
   async unregisterWidget(widgetId: string): Promise<void> {
-    this.transport.broadcastToWindow(this.mainWindowId, pluginWidgetUnregisterEvent, { widgetId })
+    const targets = this.getWidgetWindowIds()
+    targets.forEach((windowId) => {
+      this.transport.broadcastToWindow(windowId, pluginWidgetUnregisterEvent, { widgetId })
+    })
   }
 
   async releasePlugin(pluginName: string): Promise<void> {
@@ -427,7 +440,10 @@ export class WidgetManager {
 
   private async emitPayload(event: WidgetEvent, payload: WidgetRegistrationPayload): Promise<void> {
     const eventHandler = event === 'update' ? pluginWidgetUpdateEvent : pluginWidgetRegisterEvent
-    this.transport.broadcastToWindow(this.mainWindowId, eventHandler, payload)
+    const targets = this.getWidgetWindowIds()
+    targets.forEach((windowId) => {
+      this.transport.broadcastToWindow(windowId, eventHandler, payload)
+    })
   }
 
   private pushIssue(

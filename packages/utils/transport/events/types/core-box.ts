@@ -61,6 +61,11 @@ export interface CoreBoxLayoutUpdateRequest {
   activationCount: number
 
   /**
+   * Force CoreBox to expand to maximum height (e.g. widget loading).
+   */
+  forceMax?: boolean
+
+  /**
    * Optional debug source tag.
    */
   source?: string

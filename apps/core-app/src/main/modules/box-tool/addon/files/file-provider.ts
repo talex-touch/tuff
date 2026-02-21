@@ -20,7 +20,7 @@ import type {
   FileIndexRebuildResult
 } from '@talex-touch/utils/transport/events/types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import type { Buffer } from 'node:buffer'
+import { Buffer } from 'node:buffer'
 import type { FileChangedEvent, FileUnlinkedEvent } from '../../../../core/eventbus/touch-event'
 import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
@@ -111,6 +111,20 @@ import {
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
 const fileProviderLog = getLogger('file-provider')
+const BASE64_MARKER = 'base64,'
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
+function isValidBase64DataUrl(value: string): boolean {
+  const markerIndex = value.indexOf(BASE64_MARKER)
+  if (markerIndex === -1) {
+    return true
+  }
+  const payload = value.slice(markerIndex + BASE64_MARKER.length)
+  if (!payload) {
+    return false
+  }
+  return BASE64_PAYLOAD_PATTERN.test(payload)
+}
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
 
@@ -2055,7 +2069,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     try {
       const buffer = await this.extractFileIconQueued(appPath)
       if (buffer && buffer.length > 0) {
-        return `data:image/png;base64,${buffer.toString('base64')}`
+        const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
+        const iconValue = `data:image/png;base64,${normalized.toString('base64')}`
+        return isValidBase64DataUrl(iconValue) ? iconValue : ''
       }
     } catch (error) {
       this.logWarn('Failed to extract icon', error, {
@@ -2081,10 +2097,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     this.pendingIconExtractions.add(fileId)
     try {
       const icon = await this.extractFileIconQueued(filePath)
-      if (!icon) {
+      if (!icon || icon.length === 0) {
         return
       }
-      const iconValue = `data:image/png;base64,${icon.toString('base64')}`
+      const iconBuffer = Buffer.isBuffer(icon) ? icon : Buffer.from(icon)
+      const iconValue = `data:image/png;base64,${iconBuffer.toString('base64')}`
+      if (!isValidBase64DataUrl(iconValue)) {
+        this.logWarn('Invalid base64 icon generated, skipping persist', {
+          fileId,
+          path: filePath
+        })
+        return
+      }
 
       const meta: IconCacheMeta = {
         mtime: file ? this.toTimestamp(file.mtime) : Date.now(),
@@ -3353,11 +3377,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       'icon',
       ICON_META_EXTENSION_KEY
     ])
+    const invalidIconFileIds: number[] = []
 
     for (const row of rows) {
       const entry = cache.get(row.fileId) ?? {}
       if (row.key === 'icon') {
-        entry.icon = row.value
+        if (row.value && !isValidBase64DataUrl(row.value)) {
+          invalidIconFileIds.push(row.fileId)
+        } else {
+          entry.icon = row.value
+        }
       } else if (row.key === ICON_META_EXTENSION_KEY && row.value) {
         try {
           const parsed = JSON.parse(row.value) as IconCacheMeta
@@ -3372,7 +3401,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       cache.set(row.fileId, entry)
     }
 
+    if (invalidIconFileIds.length > 0) {
+      this.logWarn('Invalid icon cache detected, will re-extract', {
+        count: invalidIconFileIds.length,
+        sample: invalidIconFileIds.slice(0, 3)
+      })
+    }
+
     return cache
+  }
+
+  private sanitizeFileExtensions(extensions: Record<string, string>): Record<string, string> {
+    const iconValue = extensions.icon
+    const thumbnailValue = extensions.thumbnail
+    if (
+      (!iconValue || isValidBase64DataUrl(iconValue)) &&
+      (!thumbnailValue || isValidBase64DataUrl(thumbnailValue))
+    ) {
+      return extensions
+    }
+
+    const sanitized = { ...extensions }
+    if (iconValue && !isValidBase64DataUrl(iconValue)) {
+      delete sanitized.icon
+    }
+    if (thumbnailValue && !isValidBase64DataUrl(thumbnailValue)) {
+      delete sanitized.thumbnail
+    }
+    return sanitized
   }
 
   private needsIconExtraction(
@@ -4030,9 +4086,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+      const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
       const tuffItem = mapFileToTuffItem(
         file,
-        extensions,
+        sanitizedExtensions,
         this.id,
         this.name,
         (file) => {
@@ -4107,9 +4164,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
+      const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
       const tuffItem = mapFileToTuffItem(
         file,
-        extensions,
+        sanitizedExtensions,
         this.id,
         this.name,
         (file) => {
@@ -4499,6 +4557,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const scoredItems = Array.from(filesMap.values())
       .map(({ file, extensions }) => {
+        const sanitizedExtensions = this.sanitizeFileExtensions(extensions)
         const usage = usageMap.get(file.path)
         const lastUsed = usage ? new Date(usage.lastUsed).getTime() : 0
         const daysSinceLastUsed = lastUsed > 0 ? (now - lastUsed) / (1000 * 3600 * 24) : Infinity
@@ -4526,7 +4585,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
         const tuffItem = mapFileToTuffItem(
           file,
-          extensions,
+          sanitizedExtensions,
           this.id,
           this.name,
           (file) => {

@@ -7,7 +7,7 @@ import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
@@ -18,6 +18,518 @@ const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
 const widgetUnregisterEvent = PluginEvents.widget.unregister
 const isDev = import.meta.env?.DEV ?? false
+
+const WIDGET_STORAGE_FLUSH_MS = 250
+const WIDGET_STORAGE_MAX_BYTES = 512 * 1024
+const WIDGET_STORAGE_ENTRY_MAX_BYTES = 64 * 1024
+const WIDGET_STORAGE_SECURE_PREFIX = 'widget.storage.'
+const WIDGET_STORAGE_SECURE_KEY_MAX = 80
+const WIDGET_STORAGE_SECURE_NAME_MAX = Math.max(
+  8,
+  WIDGET_STORAGE_SECURE_KEY_MAX - WIDGET_STORAGE_SECURE_PREFIX.length
+)
+
+type WidgetStorageState = {
+  local: Map<string, Map<string, string>>
+  session: Map<string, Map<string, string>>
+  cookies: Map<string, Map<string, string>>
+  loaded: boolean
+  loading?: Promise<void>
+  flushTimer?: number
+}
+
+const widgetStorageState = new Map<string, WidgetStorageState>()
+
+function resolveStorageKey(pluginName?: string): string {
+  return pluginName?.trim() || 'unknown'
+}
+
+function resolveSecureStorageKey(pluginName?: string): string | null {
+  const name = pluginName?.trim()
+  if (!name) {
+    return null
+  }
+  const safe = name.replace(/[^a-z0-9._-]/gi, '_') || 'unknown'
+  if (safe.length <= WIDGET_STORAGE_SECURE_NAME_MAX) {
+    return `${WIDGET_STORAGE_SECURE_PREFIX}${safe}`
+  }
+  let hash = 0
+  for (let i = 0; i < safe.length; i += 1) {
+    hash = (hash * 31 + safe.charCodeAt(i)) >>> 0
+  }
+  const hashSuffix = hash.toString(36)
+  const maxHashLength = Math.max(1, WIDGET_STORAGE_SECURE_NAME_MAX - 2)
+  const trimmedHash = hashSuffix.slice(0, maxHashLength)
+  const headLength = Math.max(1, WIDGET_STORAGE_SECURE_NAME_MAX - trimmedHash.length - 1)
+  const head = safe.slice(0, headLength)
+  return `${WIDGET_STORAGE_SECURE_PREFIX}${head}-${trimmedHash}`
+}
+
+function getStorageState(pluginName?: string): WidgetStorageState {
+  const key = resolveStorageKey(pluginName)
+  const existing = widgetStorageState.get(key)
+  if (existing) {
+    return existing
+  }
+  const created: WidgetStorageState = {
+    local: new Map(),
+    session: new Map(),
+    cookies: new Map(),
+    loaded: false
+  }
+  widgetStorageState.set(key, created)
+  return created
+}
+
+function getWidgetStore(
+  map: Map<string, Map<string, string>>,
+  widgetId: string
+): Map<string, string> {
+  const existing = map.get(widgetId)
+  if (existing) {
+    return existing
+  }
+  const store = new Map<string, string>()
+  map.set(widgetId, store)
+  return store
+}
+
+function estimateEntrySize(key: string, value: string): number {
+  return key.length + value.length
+}
+
+function estimateStoreSize(store: Map<string, string>): number {
+  let total = 0
+  store.forEach((value, key) => {
+    total += estimateEntrySize(key, value)
+  })
+  return total
+}
+
+function estimatePluginLocalSize(state: WidgetStorageState): number {
+  let total = 0
+  state.local.forEach((store) => {
+    total += estimateStoreSize(store)
+  })
+  state.cookies.forEach((store) => {
+    total += estimateStoreSize(store)
+  })
+  return total
+}
+
+function toRecord(store: Map<string, string>): Record<string, string> {
+  const record: Record<string, string> = {}
+  store.forEach((value, key) => {
+    record[key] = value
+  })
+  return record
+}
+
+function applyRecord(store: Map<string, string>, record: unknown): void {
+  if (!record || typeof record !== 'object') {
+    return
+  }
+  Object.entries(record as Record<string, unknown>).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      store.set(key, value)
+    }
+  })
+}
+
+function deserializeStorageState(state: WidgetStorageState, payload: unknown): void {
+  if (!payload || typeof payload !== 'object') {
+    return
+  }
+  const root = payload as Record<string, unknown>
+  Object.entries(root).forEach(([widgetId, value]) => {
+    if (!value || typeof value !== 'object') {
+      return
+    }
+    const block = value as Record<string, unknown>
+    const localStore = getWidgetStore(state.local, widgetId)
+    const cookieStore = getWidgetStore(state.cookies, widgetId)
+    if (block.local && typeof block.local === 'object') {
+      applyRecord(localStore, block.local)
+    } else {
+      applyRecord(localStore, block)
+    }
+    if (block.cookies && typeof block.cookies === 'object') {
+      applyRecord(cookieStore, block.cookies)
+    }
+  })
+}
+
+function serializeStorageState(state: WidgetStorageState): Record<string, unknown> {
+  const payload: Record<string, unknown> = {}
+  state.local.forEach((store, widgetId) => {
+    const cookies = state.cookies.get(widgetId)
+    const record: Record<string, unknown> = { local: toRecord(store) }
+    if (cookies && cookies.size > 0) {
+      record.cookies = toRecord(cookies)
+    }
+    payload[widgetId] = record
+  })
+  return payload
+}
+
+async function ensureLocalStorageLoaded(pluginName?: string): Promise<void> {
+  const key = resolveStorageKey(pluginName)
+  const state = getStorageState(key)
+  if (state.loaded) {
+    return
+  }
+  if (!pluginName) {
+    state.loaded = true
+    return
+  }
+  if (state.loading) {
+    return state.loading
+  }
+
+  state.loading = (async () => {
+    try {
+      const secureKey = resolveSecureStorageKey(pluginName)
+      if (!secureKey) {
+        return
+      }
+      const raw = await transport.send(AppEvents.system.getSecureValue, { key: secureKey })
+      if (!raw) {
+        return
+      }
+      const parsed = JSON.parse(raw)
+      deserializeStorageState(state, parsed)
+    } catch (error) {
+      if (isDev) {
+        console.warn('[WidgetRegistry] Failed to load widget storage', error)
+      }
+    } finally {
+      state.loaded = true
+      state.loading = undefined
+    }
+  })()
+
+  return state.loading
+}
+
+function scheduleLocalStorageFlush(pluginName?: string): void {
+  if (!pluginName) {
+    return
+  }
+  const secureKey = resolveSecureStorageKey(pluginName)
+  if (!secureKey) {
+    return
+  }
+  const key = resolveStorageKey(pluginName)
+  const state = getStorageState(key)
+  if (state.flushTimer) {
+    return
+  }
+
+  state.flushTimer = window.setTimeout(() => {
+    state.flushTimer = undefined
+    const payload = serializeStorageState(state)
+    const value = Object.keys(payload).length > 0 ? JSON.stringify(payload) : null
+    transport
+      .send(AppEvents.system.setSecureValue, {
+        key: secureKey,
+        value
+      })
+      .catch(() => {})
+  }, WIDGET_STORAGE_FLUSH_MS)
+}
+
+function withinLocalStorageQuota(state: WidgetStorageState, nextSize: number): boolean {
+  return nextSize <= WIDGET_STORAGE_MAX_BYTES
+}
+
+function createStorageFacade(
+  type: 'local' | 'session',
+  pluginName?: string,
+  widgetId?: string
+): Storage {
+  const key = resolveStorageKey(pluginName)
+  const state = getStorageState(key)
+  const id = widgetId || 'unknown'
+  const map = type === 'local' ? state.local : state.session
+  const store = getWidgetStore(map, id)
+
+  const persistIfNeeded = () => {
+    if (type === 'local') {
+      scheduleLocalStorageFlush(key)
+    }
+  }
+
+  return {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store.clear()
+      persistIfNeeded()
+    },
+    getItem(itemKey: string) {
+      return store.has(itemKey) ? store.get(itemKey)! : null
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(itemKey: string) {
+      if (store.delete(itemKey)) {
+        persistIfNeeded()
+      }
+    },
+    setItem(itemKey: string, value: string) {
+      const nextValue = String(value)
+      if (nextValue.length > WIDGET_STORAGE_ENTRY_MAX_BYTES) {
+        console.warn('[WidgetRegistry] Storage entry too large, ignoring setItem')
+        return
+      }
+      const previousValue = store.get(itemKey)
+      store.set(itemKey, nextValue)
+      if (type === 'local') {
+        const nextSize = estimatePluginLocalSize(state)
+        if (!withinLocalStorageQuota(state, nextSize)) {
+          if (previousValue === undefined) {
+            store.delete(itemKey)
+          } else {
+            store.set(itemKey, previousValue)
+          }
+          console.warn('[WidgetRegistry] Storage quota exceeded, ignoring setItem')
+          return
+        }
+      }
+      persistIfNeeded()
+    }
+  } as Storage
+}
+
+function parseCookieValue(value: string): { key: string; value: string } | null {
+  const [pair] = value.split(';')
+  if (!pair) return null
+  const index = pair.indexOf('=')
+  if (index <= 0) return null
+  const key = pair.slice(0, index).trim()
+  const val = pair.slice(index + 1).trim()
+  if (!key) return null
+  return { key, value: val }
+}
+
+function stringifyCookies(store: Map<string, string>): string {
+  return Array.from(store.entries())
+    .map(([key, value]) => `${key}=${value}`)
+    .join('; ')
+}
+
+function createSandboxDocument(
+  pluginName?: string,
+  widgetId?: string,
+  getSandboxWindow?: () => Window | undefined
+): Document {
+  const key = resolveStorageKey(pluginName)
+  const state = getStorageState(key)
+  const cookieStore = getWidgetStore(state.cookies, widgetId || 'unknown')
+  return new Proxy(document, {
+    get(target, prop, receiver) {
+      if (prop === 'cookie') {
+        return stringifyCookies(cookieStore)
+      }
+      if (prop === 'defaultView' || prop === 'parentWindow' || prop === 'window') {
+        return getSandboxWindow?.() ?? null
+      }
+      return Reflect.get(target, prop, receiver)
+    },
+    set(target, prop, value, receiver) {
+      if (prop === 'cookie') {
+        const parsed = parseCookieValue(String(value ?? ''))
+        if (parsed) {
+          const nextValue = parsed.value
+          if (nextValue.length > WIDGET_STORAGE_ENTRY_MAX_BYTES) {
+            console.warn('[WidgetRegistry] Cookie entry too large, ignoring set')
+            return true
+          }
+          const previousValue = cookieStore.get(parsed.key)
+          cookieStore.set(parsed.key, nextValue)
+          const nextSize = estimatePluginLocalSize(state)
+          if (!withinLocalStorageQuota(state, nextSize)) {
+            if (previousValue === undefined) {
+              cookieStore.delete(parsed.key)
+            } else {
+              cookieStore.set(parsed.key, previousValue)
+            }
+            console.warn('[WidgetRegistry] Storage quota exceeded, ignoring cookie set')
+            return true
+          }
+          scheduleLocalStorageFlush(pluginName)
+        }
+        return true
+      }
+      return Reflect.set(target, prop, value, receiver)
+    }
+  })
+}
+
+function createNamespacedIndexedDB(pluginName?: string): IDBFactory {
+  if (typeof indexedDB === 'undefined') {
+    return {} as IDBFactory
+  }
+  const prefix = `${resolveStorageKey(pluginName)}::`
+  return new Proxy(indexedDB, {
+    get(target, prop, receiver) {
+      if (prop === 'open') {
+        return (name: string, version?: number) => target.open(`${prefix}${name}`, version as any)
+      }
+      if (prop === 'deleteDatabase') {
+        return (name: string) => target.deleteDatabase(`${prefix}${name}`)
+      }
+      return Reflect.get(target, prop, receiver)
+    }
+  })
+}
+
+function createNamespacedCacheStorage(pluginName?: string): CacheStorage {
+  if (typeof caches === 'undefined') {
+    return {} as CacheStorage
+  }
+  const prefix = `${resolveStorageKey(pluginName)}::`
+  return new Proxy(caches, {
+    get(target, prop, receiver) {
+      if (prop === 'open') {
+        return (name: string) => target.open(`${prefix}${name}`)
+      }
+      if (prop === 'delete') {
+        return (name: string) => target.delete(`${prefix}${name}`)
+      }
+      if (prop === 'has') {
+        return (name: string) => target.has(`${prefix}${name}`)
+      }
+      return Reflect.get(target, prop, receiver)
+    }
+  })
+}
+
+function createNamespacedBroadcastChannel(pluginName?: string): typeof BroadcastChannel {
+  if (typeof BroadcastChannel === 'undefined') {
+    return class WidgetBroadcastChannel {
+      constructor() {
+        throw new Error('[WidgetSandbox] BroadcastChannel is not available')
+      }
+    } as typeof BroadcastChannel
+  }
+  const prefix = `${resolveStorageKey(pluginName)}::`
+  return class WidgetBroadcastChannel extends BroadcastChannel {
+    constructor(name: string) {
+      super(`${prefix}${name}`)
+    }
+  }
+}
+
+function createSandboxWindow(
+  pluginName?: string,
+  widgetId?: string,
+  sandboxDocument?: Document,
+  sandboxIndexedDB?: IDBFactory,
+  sandboxBroadcastChannel?: typeof BroadcastChannel,
+  sandboxCaches?: CacheStorage,
+  localStorage?: Storage,
+  sessionStorage?: Storage
+): Window {
+  const local = localStorage ?? createStorageFacade('local', pluginName, widgetId)
+  const session = sessionStorage ?? createStorageFacade('session', pluginName, widgetId)
+  const doc = sandboxDocument ?? createSandboxDocument(pluginName, widgetId)
+  const indexed = sandboxIndexedDB ?? createNamespacedIndexedDB(pluginName)
+  const bc = sandboxBroadcastChannel ?? createNamespacedBroadcastChannel(pluginName)
+  const cacheStorage = sandboxCaches ?? createNamespacedCacheStorage(pluginName)
+
+  return new Proxy(window, {
+    get(target, prop, receiver) {
+      if (
+        prop === 'window' ||
+        prop === 'self' ||
+        prop === 'top' ||
+        prop === 'parent' ||
+        prop === 'globalThis'
+      ) {
+        return receiver
+      }
+      if (prop === 'opener') {
+        return null
+      }
+      if (prop === 'localStorage') return local
+      if (prop === 'sessionStorage') return session
+      if (prop === 'document') return doc
+      if (prop === 'indexedDB') return indexed
+      if (prop === 'BroadcastChannel') return bc
+      if (prop === 'caches') return cacheStorage
+      return Reflect.get(target, prop, receiver)
+    },
+    set(target, prop, value, receiver) {
+      if (
+        prop === 'window' ||
+        prop === 'self' ||
+        prop === 'top' ||
+        prop === 'parent' ||
+        prop === 'globalThis' ||
+        prop === 'opener' ||
+        prop === 'localStorage' ||
+        prop === 'sessionStorage' ||
+        prop === 'document' ||
+        prop === 'indexedDB' ||
+        prop === 'BroadcastChannel' ||
+        prop === 'caches'
+      ) {
+        return true
+      }
+      return Reflect.set(target, prop, value, receiver)
+    }
+  })
+}
+
+type WidgetSandboxContext = {
+  window: Window
+  globalThis: Window
+  localStorage: Storage
+  sessionStorage: Storage
+  document: Document
+  indexedDB: IDBFactory
+  BroadcastChannel: typeof BroadcastChannel
+  caches: CacheStorage
+  self: Window
+}
+
+async function createWidgetSandbox(
+  pluginName?: string,
+  widgetId?: string
+): Promise<WidgetSandboxContext> {
+  await ensureLocalStorageLoaded(pluginName)
+  const localStorage = createStorageFacade('local', pluginName, widgetId)
+  const sessionStorage = createStorageFacade('session', pluginName, widgetId)
+  let sandboxWindow: Window | undefined
+  const document = createSandboxDocument(pluginName, widgetId, () => sandboxWindow)
+  const indexedDB = createNamespacedIndexedDB(pluginName)
+  const BroadcastChannel = createNamespacedBroadcastChannel(pluginName)
+  const caches = createNamespacedCacheStorage(pluginName)
+  sandboxWindow = createSandboxWindow(
+    pluginName,
+    widgetId,
+    document,
+    indexedDB,
+    BroadcastChannel,
+    caches,
+    localStorage,
+    sessionStorage
+  )
+  return {
+    window: sandboxWindow,
+    globalThis: sandboxWindow,
+    localStorage,
+    sessionStorage,
+    document,
+    indexedDB,
+    BroadcastChannel,
+    caches,
+    self: sandboxWindow
+  }
+}
 
 function resolveWidgetSourceType(filePath?: string): string {
   if (!filePath) return 'unknown'
@@ -294,14 +806,51 @@ function createSandboxRequire(allowedDependencies: string[]): (id: string) => un
 function evaluateWidgetComponent(
   code: string,
   dependencies: string[] = [],
-  debugLabel?: string
+  debugLabel?: string,
+  sandbox?: WidgetSandboxContext
 ): Component {
   const module: { exports: unknown } = { exports: {} }
   const customRequire = createSandboxRequire(dependencies)
+  const sandboxWindow = sandbox?.window ?? window
+  const sandboxGlobal = sandbox?.globalThis ?? window
+  const sandboxLocalStorage = sandbox?.localStorage ?? window.localStorage
+  const sandboxSessionStorage = sandbox?.sessionStorage ?? window.sessionStorage
+  const sandboxDocument = sandbox?.document ?? window.document
+  const sandboxIndexedDB = sandbox?.indexedDB ?? window.indexedDB
+  const sandboxBroadcastChannel = sandbox?.BroadcastChannel ?? window.BroadcastChannel
+  const sandboxCaches = sandbox?.caches ?? window.caches
+  const sandboxSelf = sandbox?.self ?? window
 
   try {
-    const executor = new Function('require', 'module', 'exports', code)
-    executor(customRequire, module, module.exports)
+    const executor = new Function(
+      'require',
+      'module',
+      'exports',
+      'window',
+      'globalThis',
+      'localStorage',
+      'sessionStorage',
+      'document',
+      'indexedDB',
+      'BroadcastChannel',
+      'caches',
+      'self',
+      code
+    )
+    executor(
+      customRequire,
+      module,
+      module.exports,
+      sandboxWindow,
+      sandboxGlobal,
+      sandboxLocalStorage,
+      sandboxSessionStorage,
+      sandboxDocument,
+      sandboxIndexedDB,
+      sandboxBroadcastChannel,
+      sandboxCaches,
+      sandboxSelf
+    )
   } catch (error) {
     console.error('[WidgetRegistry] Widget execution failed:', error)
     throw error
@@ -371,7 +920,7 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
-transport.on(widgetRegisterEvent, (payload: WidgetRegistrationPayload) => {
+transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => {
   try {
     if (isDev) {
       console.debug(
@@ -387,8 +936,9 @@ transport.on(widgetRegisterEvent, (payload: WidgetRegistrationPayload) => {
         console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
       }
     }
+    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
     const component = attachPluginInfoToComponent(
-      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId),
+      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId, sandbox),
       { name: payload.pluginName, featureId: payload.featureId }
     )
     registerCustomRenderer(payload.widgetId, component)
@@ -406,7 +956,7 @@ transport.on(widgetRegisterEvent, (payload: WidgetRegistrationPayload) => {
   }
 })
 
-transport.on(widgetUpdateEvent, (payload: WidgetRegistrationPayload) => {
+transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
   try {
     if (isDev) {
       console.debug(
@@ -422,8 +972,9 @@ transport.on(widgetUpdateEvent, (payload: WidgetRegistrationPayload) => {
         console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
       }
     }
+    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
     const component = attachPluginInfoToComponent(
-      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId),
+      evaluateWidgetComponent(payload.code, payload.dependencies || [], payload.widgetId, sandbox),
       { name: payload.pluginName, featureId: payload.featureId }
     )
     registerCustomRenderer(payload.widgetId, component)

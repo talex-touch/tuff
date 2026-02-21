@@ -50,6 +50,7 @@
 - `docs/plan-prd/03-features/flow-transfer-prd.md` - Flow Transfer PRD
 - `docs/plan-prd/03-features/flow-transfer-detailed-prd.md` - Flow Transfer 详细 PRD
 - `docs/plan-prd/03-features/division-box-prd.md` - DivisionBox PRD
+- `docs/plan-prd/04-implementation/WidgetSandboxIsolation260221.md` - Widget 沙箱隔离与持久化收口计划
 - `docs/plan-prd/docs/DIVISION_BOX_INDEX.md` - DivisionBox 文档索引
 
 ## 迁移参考

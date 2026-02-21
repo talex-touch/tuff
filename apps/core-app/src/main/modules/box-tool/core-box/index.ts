@@ -221,6 +221,7 @@ export class CoreBoxModule extends BaseModule {
     const resultCount = Number.isFinite(payload.resultCount) ? Math.max(0, payload.resultCount) : 0
     const loading = payload.loading === true
     const recommendationPending = payload.recommendationPending === true
+    const forceMax = payload.forceMax === true
 
     if (logEnabled) {
       coreBoxLog.info('Layout update received', {
@@ -230,9 +231,23 @@ export class CoreBoxModule extends BaseModule {
           activationCount,
           loading,
           recommendationPending,
+          forceMax,
           source: String(payload.source ?? '')
         }
       })
+    }
+
+    if (forceMax) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update: expand (force max)', {
+          meta: {
+            activationCount,
+            resultCount
+          }
+        })
+      }
+      coreBoxManager.expand({ forceMax: true })
+      return
     }
 
     if (activationCount > 0 && resultCount > 0) {

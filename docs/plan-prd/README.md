@@ -125,6 +125,15 @@
      - 生命周期语义与文档补齐（prepare/attach/detach 等时序说明）
      - 与 FlowTransfer 的触发链路联调验收
 
+ - **Widget 沙箱隔离与存储收口**（进行中）
+   - **PRD**：`./04-implementation/WidgetSandboxIsolation260221.md`
+   - **代码**
+     - `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+     - `apps/core-app/src/main/channel/common.ts`
+   - **缺口**
+     - 扩展拦截（navigator/clipboard/history/location/postMessage/worker）
+     - 权限中心联动与审计
+
  - **AttachUIView 缓存优化**（已做 Hot/LRU 的 MVP，PRD 大部分未落地）
    - **PRD**：`./03-features/view/attach-view-cache-prd.md`
    - **代码**

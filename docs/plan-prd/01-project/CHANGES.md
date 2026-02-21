@@ -19,6 +19,24 @@
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 
+### CoreBox 图标 base64 规范修复
+
+**变更类型**: 体验修复 / 稳定性
+
+**描述**: 修复图标提取在 worker 返回 Uint8Array 时被错误拼接为数字串的 data URL，导致 `ERR_INVALID_URL`；新增 base64 合法性校验与无效缓存重提取，避免脏数据重复进入渲染。
+
+**主要变更**:
+1. **Buffer 归一化**：Icon worker 结果强制转为 Buffer，确保 base64 输出正确。
+2. **合法性校验**：缓存 icon 不符合 base64 规范时跳过并触发重提取。
+3. **Windows 图标修复**：Windows 应用图标写入前统一 Buffer，避免错误格式落盘。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/workers/icon-worker-client.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/search-processing-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/win.ts`
+
 ### tfile 路径规范化与缩略图后台生成优化
 
 **变更类型**: 性能优化 / 体验修复
@@ -38,6 +56,33 @@
 - `apps/core-app/src/main/modules/box-tool/addon/files/utils.ts`
 - `apps/core-app/src/main/modules/file-protocol/index.ts`
 - `apps/core-app/src/main/modules/clipboard.ts`
+
+### CoreBox widget 加载保持最大高度
+
+**变更类型**: 体验修复 / 行为一致性
+
+**描述**: widget 激活期间 CoreBox 不再因空结果收缩，强制保持最大高度，避免加载过程窗口抖动。
+
+**主要变更**:
+1. **布局更新扩展**：layout payload 支持 `forceMax` 标记。
+2. **窗口尺寸策略**：检测 widget 激活时强制走最大高度分支，跳过空结果收缩。
+3. **结果更新容错**：BoxItem update 在目标不存在时自动 upsert，避免 widget 结果首次更新丢失。
+4. **事件广播补全**：widget 注册/更新事件同步发送至 CoreBox 窗口，确保自定义渲染可用。
+5. **展示模式优化**：widget 模式下禁用外层滚动并使用全高渲染容器，避免 footer 抖动与列表滚动干扰。
+6. **Widget 沙箱隔离**：为 widget 注入独立的 localStorage/sessionStorage/document.cookie，并改用 secure storage 持久化 localStorage + cookie，追加单条/总量限制以约束访问。
+7. **隔离命名空间**：为 widget 提供独立的 BroadcastChannel / indexedDB / caches 命名空间，阻断跨插件通道。
+8. **窗口逃逸拦截**：阻断 widget 通过 window/self/top/parent/opener/document.defaultView 获取真实窗口上下文。
+9. **CoreBox 输入兼容**：补充 `core-box:set-query` handler，避免 widget 通过旧事件设置输入时报错。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/renderer/src/views/box/CoreBox.vue`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `packages/utils/transport/events/types/core-box.ts`
 - `apps/core-app/src/renderer/src/utils/tfile-url.ts`
 
 ## 2026-02-20

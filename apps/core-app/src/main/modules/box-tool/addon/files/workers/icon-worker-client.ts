@@ -1,4 +1,4 @@
-import type { Buffer } from 'node:buffer'
+import { Buffer } from 'node:buffer'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
@@ -115,7 +115,8 @@ export class IconWorkerClient {
 
     if (message.type === 'done') {
       this.pending.delete(message.taskId)
-      pending.resolve(message.buffer ?? null)
+      const normalized = message.buffer ? Buffer.from(message.buffer) : null
+      pending.resolve(normalized)
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),

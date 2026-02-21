@@ -13,6 +13,20 @@ import { formatLog, generateAcronym, LogStyle } from './app-utils'
 import { calculateHighlights } from './highlighting-service'
 
 const SLOW_PROCESS_THRESHOLD_MS = 300
+const BASE64_MARKER = 'base64,'
+const BASE64_PAYLOAD_PATTERN = /^[A-Za-z0-9+/=]+$/
+
+function isValidBase64DataUrl(value: string): boolean {
+  const markerIndex = value.indexOf(BASE64_MARKER)
+  if (markerIndex === -1) {
+    return true
+  }
+  const payload = value.slice(markerIndex + BASE64_MARKER.length)
+  if (!payload) {
+    return false
+  }
+  return BASE64_PAYLOAD_PATTERN.test(payload)
+}
 
 interface ProcessedTuffItem extends TuffItem {
   score: number // 用于排序的内部评分
@@ -190,7 +204,8 @@ export async function processSearchResults(
     }
 
     // --- 2. 结果组装 ---
-    const iconValue = app.extensions.icon ?? ''
+    const rawIconValue = app.extensions.icon ?? ''
+    const iconValue = rawIconValue && !isValidBase64DataUrl(rawIconValue) ? '' : rawIconValue
     const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
       .setKind('app')
       .setTitle(displayName)

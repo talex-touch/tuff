@@ -272,6 +272,14 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
+      transport.on(CoreBoxEvents.input.setQuery, async (request: SetInputRequest) => {
+        const value = typeof request?.value === 'string' ? request.value : ''
+        await this.sendInputValueToRenderer(value)
+        return { value }
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(CoreBoxEvents.input.clear, async () => {
         await this.sendInputValueToRenderer('')
         return { cleared: true }
