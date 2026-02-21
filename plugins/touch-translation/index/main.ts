@@ -37,6 +37,7 @@ const lastQueryByFeature = new Map<string, string>()
 const widgetStateByFeature = new Map<string, WidgetState>()
 
 let networkPermissionState: boolean | null = null
+let aiPermissionState: boolean | null = null
 
 const providers = new Map([
   ['tuffintelligence', new TuffIntelligenceProvider()],
@@ -65,6 +66,27 @@ async function ensureNetworkPermission(): Promise<boolean> {
   return networkPermissionState
 }
 
+async function ensureAiPermission(): Promise<boolean> {
+  if (!permission) {
+    return true
+  }
+  if (aiPermissionState === true) {
+    return true
+  }
+  if (aiPermissionState === false) {
+    return false
+  }
+
+  const hasAi = await permission.check('intelligence.basic')
+  if (hasAi) {
+    aiPermissionState = true
+    return true
+  }
+
+  const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
+  aiPermissionState = Boolean(granted)
+  return aiPermissionState
+}
 function formatProviderName(providerId: string): string {
   const map: Record<string, string> = {
     tuffintelligence: 'Tuff Intelligence',
@@ -255,6 +277,17 @@ async function startTranslationRequest(
       const provider = providers.get(providerId)
       if (!provider) {
         return
+      }
+
+      if (providerId === 'tuffintelligence') {
+        const hasAiPermission = await ensureAiPermission()
+        if (!hasAiPermission) {
+          updateProviderState(featureId, providerId, {
+            status: 'error',
+            error: '请在插件设置中授予 AI 权限以使用智能翻译',
+          })
+          return
+        }
       }
 
       try {

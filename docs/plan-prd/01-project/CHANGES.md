@@ -142,6 +142,26 @@
 - `apps/nexus/server/api/sync/push.post.ts`
 - `apps/nexus/server/api/sync/pull.get.ts`
 
+### 翻译插件 SDK 升级与实验性功能隐藏
+
+**变更类型**: 权限治理 / 行为一致性
+
+**描述**: 翻译插件升级到最新 sdkapi，补充分类与 AI 权限；新增 feature.experimental 标记，非 dev 模式自动隐藏实验性功能（截图翻译默认隐藏）。
+
+**主要变更**:
+1. **SDK 与权限**：touch-translation 补齐 `sdkapi`、`category` 与 `intelligence.basic` 权限说明。
+2. **实验性特性**：支持 `feature.experimental` 并在非 dev 模式过滤展示。
+3. **权限前置**：智能翻译调用前增加 AI 权限校验与提示。
+
+**修改文件**:
+- `packages/utils/plugin/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+
 ## 2026-02-19
 
 ### Intelligence OpenAI 兼容 Base URL 归一化

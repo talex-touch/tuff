@@ -3,7 +3,8 @@
   "name": "touch-translation",
   "version": "1.0.1",
   "author": "TalexTouch Team",
-  "sdkapi": 251212,
+  "sdkapi": 260215,
+  "category": "utilities",
   "icon": {
     "type": "file",
     "value": "assets/logo.svg"
@@ -16,12 +17,13 @@
     "source": true
   },
   "permissions": {
-    "required": ["clipboard.read", "network.internet"],
+    "required": ["clipboard.read", "network.internet", "intelligence.basic"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "clipboard.read": "读取剪贴板中的待翻译文本",
     "network.internet": "连接翻译服务 API（如 Google、DeepL、百度等）",
+    "intelligence.basic": "调用智能翻译服务",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },
   "features": [
@@ -92,6 +94,7 @@
       "keywords": ["screenshot", "截图", "ocr", "识别"],
       "push": false,
       "priority": 5,
+      "experimental": true,
       "acceptedInputTypes": ["text", "image"],
       "platform": {
         "win32": true,

@@ -45,9 +45,9 @@ code: |
 | **系统** | `system.shell` | 高 | 执行系统命令 |
 | | `system.notification` | 低 | 发送系统通知 |
 | | `system.tray` | 中 | 操作系统托盘 |
-| **AI** | `ai.basic` | 低 | 基础 AI 能力 |
-| | `ai.advanced` | 中 | 高级 AI 模型 |
-| | `ai.agents` | 高 | 智能体系统 |
+| **智能** | `intelligence.basic` | 低 | 基础智能能力 |
+| | `intelligence.admin` | 高 | 管理级智能能力 |
+| | `intelligence.agents` | 高 | 智能体系统 |
 | **存储** | `storage.plugin` | 低 | 插件私有存储（自动授予） |
 | | `storage.shared` | 中 | 跨插件共享存储 |
 | | `storage.sqlite` | 中 | 访问插件本地 SQLite 数据库 |

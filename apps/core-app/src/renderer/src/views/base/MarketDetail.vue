@@ -10,6 +10,7 @@ import type { MarketPluginListItem } from '~/composables/market/useMarketData'
  */
 import { hasWindow } from '@talex-touch/utils/env'
 import { SharedPluginDetailMetaList, SharedPluginDetailReadme } from '@talex-touch/utils/renderer'
+import { TxRating } from '@talex-touch/tuffex'
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -222,7 +223,11 @@ onBeforeUnmount(() => {
           <div v-if="canRate" class="sidebar-card">
             <h4>{{ t('market.rating.title', 'Rating') }}</h4>
             <div class="rating-row">
-              <el-rate v-model="userRating" :disabled="ratingSubmitting" @change="onRatingChange" />
+              <TxRating
+                v-model="userRating"
+                :disabled="ratingSubmitting"
+                @change="onRatingChange"
+              />
               <span v-if="ratingAverage !== null" class="rating-meta">
                 {{ ratingAverage.toFixed(1) }} · {{ ratingCount }}
               </span>

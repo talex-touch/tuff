@@ -64,9 +64,9 @@ code: |
 | `system.shell` | High | Execute commands |
 | `system.notification` | Low | System notifications |
 | `system.tray` | Medium | System tray |
-| `ai.basic` | Low | Basic AI |
-| `ai.advanced` | Medium | Advanced AI |
-| `ai.agents` | High | AI Agents |
+| `intelligence.basic` | Low | Basic intelligence |
+| `intelligence.admin` | High | Admin intelligence |
+| `intelligence.agents` | High | Intelligence agents |
 | `storage.plugin` | Low | Plugin storage (auto-granted) |
 | `storage.shared` | Medium | Shared storage |
 | `storage.sqlite` | Medium | Plugin SQLite database access |

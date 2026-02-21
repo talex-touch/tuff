@@ -48,6 +48,12 @@ const lastQueryByFeature = new Map()
 const widgetStateByFeature = new Map()
 
 let networkPermissionState = null
+let aiPermissionState = null
+const fallbackProviders = [
+  { id: 'tuffintelligence', enabled: true },
+  { id: 'google', enabled: true },
+  { id: 'mymemory', enabled: true },
+]
 
 async function ensureNetworkPermission() {
   if (!permission) {
@@ -72,6 +78,28 @@ async function ensureNetworkPermission() {
   return networkPermissionState
 }
 
+async function ensureAiPermission() {
+  if (!permission) {
+    return true
+  }
+
+  if (aiPermissionState === true) {
+    return true
+  }
+  if (aiPermissionState === false) {
+    return false
+  }
+
+  const hasAi = await permission.check('intelligence.basic')
+  if (hasAi) {
+    aiPermissionState = true
+    return true
+  }
+
+  const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
+  aiPermissionState = Boolean(granted)
+  return aiPermissionState
+}
 async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
   plugin.search.updateQuery(textToTranslate)
   plugin.feature.clearItems()
@@ -81,13 +109,13 @@ async function startTranslationRequest(textToTranslate, featureId, signal, nextS
   const requestId = `translation-${Date.now()}-${nextSeq}`
 
   const providersConfig = await plugin.storage.getFile('providers_config')
-  const enabledProviders = providersConfig
+  const enabledProviders = providersConfig && typeof providersConfig === 'object'
     ? Object.entries(providersConfig)
         .filter(([_id, config]) => config.enabled)
         .map(([id, config]) => ({ id, ...config }))
-    : [{ id: 'tuffintelligence', enabled: true }]
+    : fallbackProviders
 
-  const providersToShow = enabledProviders.length > 0 ? enabledProviders : [{ id: 'tuffintelligence', enabled: true }]
+  const providersToShow = enabledProviders.length > 0 ? enabledProviders : fallbackProviders
   const state = createWidgetState(
     featureId,
     textToTranslate,
@@ -292,6 +320,13 @@ async function translateAndUpsertResults(textToTranslate, featureId, signal, req
       let result = null
       switch (provider.id) {
         case 'tuffintelligence':
+          if (!(await ensureAiPermission())) {
+            updateProviderState(featureId, provider.id, {
+              status: 'error',
+              error: '请在插件设置中授予 AI 权限以使用智能翻译',
+            })
+            return
+          }
           result = await translateWithTuffIntelligence(textToTranslate, detectedLang, targetLang)
           break
         case 'google':

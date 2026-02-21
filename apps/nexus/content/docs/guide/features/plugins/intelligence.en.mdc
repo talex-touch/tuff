@@ -16,7 +16,7 @@
 - Plugin directory: `plugins/touch-intelligence`
 
 ## Permissions
-- Required: `ai.basic`; Optional: `clipboard.write`
+- Required: `intelligence.basic`; Optional: `clipboard.write`
 
 ## Quick Start
 1. In CoreBox, type `ai`.

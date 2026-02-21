@@ -319,6 +319,13 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     return plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
   }
 
+  private isFeatureVisible(plugin: ITouchPlugin, feature: IPluginFeature): boolean {
+    if (!feature.experimental) {
+      return true
+    }
+    return Boolean(plugin.dev?.enable)
+  }
+
   public createTuffItem(
     plugin: ITouchPlugin,
     feature: IPluginFeature,
@@ -394,7 +401,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
         if (plugin && feature && this.isPluginActive(plugin)) {
           if (!query.text) {
-            const allFeatures = plugin.getFeatures()
+            const allFeatures = plugin
+              .getFeatures()
+              .filter((feature) => this.isFeatureVisible(plugin, feature))
             const items = allFeatures
               .map((f) => this.createTuffItem(plugin, f))
               .sort((a, b) => (b.meta?.priority ?? 0) - (a.meta?.priority ?? 0))
@@ -433,6 +442,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
       const features = plugin.getFeatures()
       for (const feature of features as IPluginFeature[]) {
+        if (!this.isFeatureVisible(plugin, feature)) {
+          continue
+        }
         // Ensure search tokens are built
         if (!feature.searchTokens) {
           feature.searchTokens = buildFeatureSearchTokens(feature)

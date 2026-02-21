@@ -542,7 +542,8 @@ async function updateConfig(config: DownloadConfig) {
   flex-direction: column;
 }
 
-.download-tabs :deep(.el-tabs__content) {
+.download-tabs :deep(.tx-tabs__content-scroll),
+.download-tabs :deep(.tx-tabs__content-wrapper) {
   flex: 1;
   overflow: auto;
 }
