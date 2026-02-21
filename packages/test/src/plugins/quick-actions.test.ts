@@ -30,4 +30,16 @@ describe('quick actions plugin', () => {
 
     expect(order).toEqual(['instant', 'settings'])
   })
+
+  it('returns all actions when keyword is empty', () => {
+    const actions = quickActionsTest.resolveActions('darwin')
+    const matched = quickActionsTest.matchActions(actions, '')
+
+    expect(matched.length).toBe(actions.length)
+  })
+
+  it('returns empty list on unsupported platform', () => {
+    const actions = quickActionsTest.resolveActions('linux')
+    expect(actions.length).toBe(0)
+  })
 })
