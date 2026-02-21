@@ -11,7 +11,7 @@ import {
   VideoPause,
   VideoPlay
 } from '@element-plus/icons-vue'
-import { TxBottomDialog } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -352,11 +352,11 @@ async function updateConfig(config: DownloadConfig) {
     </div>
 
     <!-- 标签页 -->
-    <el-tabs v-model="activeTab" class="download-tabs">
-      <el-tab-pane
-        :label="`${$t('download.downloading')} (${tasksByStatus.downloading.length})`"
-        name="downloading"
-      >
+    <TxTabs v-model="activeTab" class="download-tabs" placement="top" :content-padding="0">
+      <TxTabItem name="downloading">
+        <template #name>
+          {{ `${$t('download.downloading')} (${tasksByStatus.downloading.length})` }}
+        </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.downloading"
@@ -375,11 +375,11 @@ async function updateConfig(config: DownloadConfig) {
           @show-details="showTaskDetails"
           @priority-change="handlePriorityChange"
         />
-      </el-tab-pane>
-      <el-tab-pane
-        :label="`${$t('download.waiting')} (${tasksByStatus.pending.length})`"
-        name="pending"
-      >
+      </TxTabItem>
+      <TxTabItem name="pending">
+        <template #name>
+          {{ `${$t('download.waiting')} (${tasksByStatus.pending.length})` }}
+        </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.pending"
@@ -398,11 +398,11 @@ async function updateConfig(config: DownloadConfig) {
           @show-details="showTaskDetails"
           @priority-change="handlePriorityChange"
         />
-      </el-tab-pane>
-      <el-tab-pane
-        :label="`${$t('download.completed')} (${tasksByStatus.completed.length})`"
-        name="completed"
-      >
+      </TxTabItem>
+      <TxTabItem name="completed">
+        <template #name>
+          {{ `${$t('download.completed')} (${tasksByStatus.completed.length})` }}
+        </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.completed"
@@ -423,11 +423,11 @@ async function updateConfig(config: DownloadConfig) {
           @remove="removeTask"
           @delete="deleteTask"
         />
-      </el-tab-pane>
-      <el-tab-pane
-        :label="`${$t('download.failed')} (${tasksByStatus.failed.length})`"
-        name="failed"
-      >
+      </TxTabItem>
+      <TxTabItem name="failed">
+        <template #name>
+          {{ `${$t('download.failed')} (${tasksByStatus.failed.length})` }}
+        </template>
         <VirtualTaskList
           v-if="shouldUseVirtualScroll"
           :tasks="filteredTasks.failed"
@@ -444,11 +444,12 @@ async function updateConfig(config: DownloadConfig) {
           @show-details="showTaskDetails"
           @remove="removeTask"
         />
-      </el-tab-pane>
-      <el-tab-pane :label="$t('download.history')" name="history">
+      </TxTabItem>
+      <TxTabItem name="history">
+        <template #name>{{ $t('download.history') }}</template>
         <DownloadHistoryView />
-      </el-tab-pane>
-    </el-tabs>
+      </TxTabItem>
+    </TxTabs>
 
     <!-- 设置对话框 -->
     <DownloadSettings v-model:visible="settingsVisible" @update-config="updateConfig" />

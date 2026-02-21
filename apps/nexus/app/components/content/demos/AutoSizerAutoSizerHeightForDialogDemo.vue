@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 const { locale } = useI18n()
-const toggle = () => {}
+const mode = ref<'short' | 'long'>('short')
+const toggle = () => {
+  mode.value = mode.value === 'short' ? 'long' : 'short'
+}
 </script>
 
 <template>

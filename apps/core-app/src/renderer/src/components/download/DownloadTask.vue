@@ -12,6 +12,7 @@ import {
   VideoPlay
 } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { TuffProgress } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 // Props
@@ -95,14 +96,12 @@ function getTaskStatusIcon(status: DownloadStatus) {
 }
 
 // 获取进度条状态
-function getProgressStatus(
-  status: DownloadStatus
-): '' | 'success' | 'warning' | 'exception' | undefined {
+function getProgressStatus(status: DownloadStatus): '' | 'success' | 'warning' | 'error' {
   switch (status) {
     case DownloadStatus.COMPLETED:
       return 'success'
     case DownloadStatus.FAILED:
-      return 'exception'
+      return 'error'
     default:
       return ''
   }
@@ -257,7 +256,7 @@ function formatRemainingTime(seconds: number): string {
           {{ formatRemainingTime(task.progress.remainingTime) }}
         </span>
       </div>
-      <el-progress
+      <TuffProgress
         :percentage="task.progress?.percentage || 0"
         :status="getProgressStatus(task.status)"
         :show-text="false"
@@ -461,11 +460,11 @@ function formatRemainingTime(seconds: number): string {
   border-color: var(--task-strong);
 }
 
-.task-progress :deep(.el-progress-bar__outer) {
+.task-progress :deep(.tx-progress-bar__track) {
   background-color: var(--el-fill-color-light);
 }
 
-.task-progress :deep(.el-progress-bar__inner) {
+.task-progress :deep(.tx-progress-bar) {
   background-color: var(--task-strong);
   transition: width 0.3s ease;
 }

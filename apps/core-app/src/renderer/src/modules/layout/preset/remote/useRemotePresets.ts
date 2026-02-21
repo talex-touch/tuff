@@ -1,6 +1,6 @@
 import type { PresetExportData } from '@talex-touch/utils'
 import { validatePresetData } from '@talex-touch/utils'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
 import { compareVersions } from '~/composables/market/useVersionCompare'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
@@ -174,7 +174,7 @@ export function useRemotePresets() {
         }
       })
 
-      ElMessage.success('Nexus preset applied')
+      toast.success('Nexus preset applied')
     } catch (error) {
       console.error('[RemotePreset] apply failed:', error)
       rollbackLastRemotePreset()

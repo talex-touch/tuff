@@ -17,7 +17,7 @@ const maxOffset = ref(26)
         :max="1"
         :step="0.02"
         show-value
-        :format-value="(value) => value.toFixed(2)"
+        :format-value="(value: number) => value.toFixed(2)"
         class="card-inertial-slider"
       />
     </div>

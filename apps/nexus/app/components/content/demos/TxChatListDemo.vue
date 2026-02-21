@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const messages = ref('')
+const messages = ref([
+  { role: 'assistant', content: 'Hello, how can I help?' },
+  { role: 'user', content: 'Show me the docs.' },
+])
+const handleImageClick = (event: MouseEvent) => {
+  console.log('imageClick', event)
+}
 </script>
 
 <template>
@@ -11,7 +17,7 @@ const messages = ref('')
         :messages="messages"
         :markdown="true"
         :stagger="true"
-        @image-click="(e) => console.log('imageClick', e)"
+        @image-click="handleImageClick"
       />
     </div>
   </div>
@@ -21,7 +27,7 @@ const messages = ref('')
         :messages="messages"
         :markdown="true"
         :stagger="true"
-        @image-click="(e) => console.log('imageClick', e)"
+        @image-click="handleImageClick"
       />
     </div>
   </div>

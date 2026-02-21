@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const list = ref([])
+const list = ref([
+  { id: 1, title: 'Alpha' },
+  { id: 2, title: 'Beta' },
+  { id: 3, title: 'Gamma' },
+])
+const handleReorder = (event: unknown) => {
+  console.log('reorder', event)
+}
 </script>
 
 <template>
   <div v-if="locale === 'zh'">
     <div style="width: 420px;">
-      <TxSortableList v-model="list" @reorder="(event) => console.log('reorder', event)">
+      <TxSortableList v-model="list" @reorder="handleReorder">
         <template #item="{ item }">
           <div
             style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;"
@@ -21,7 +28,7 @@ const list = ref([])
   </div>
   <div v-else>
     <div style="width: 420px;">
-      <TxSortableList v-model="list" @reorder="(event) => console.log('reorder', event)">
+      <TxSortableList v-model="list" @reorder="handleReorder">
         <template #item="{ item }">
           <div
             style="padding: 10px 12px; display: flex; justify-content: space-between; align-items: center;"

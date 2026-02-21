@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const blurPx = ref('')
-const duration = ref('')
-const text = ref('')
-const toggle = () => {}
+const blurPx = ref(10)
+const duration = ref(280)
+const text = ref('Hello world')
+const accent = ref(false)
+const toggle = () => {
+  accent.value = !accent.value
+  text.value = accent.value ? 'Accent copy' : 'Hello world'
+}
 </script>
 
 <template>

@@ -10,7 +10,8 @@ import {
   Upload
 } from '@element-plus/icons-vue'
 import { DownloadStatus } from '@talex-touch/utils'
-import { computed } from 'vue'
+import { TxModal } from '@talex-touch/tuffex'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
 
@@ -48,9 +49,16 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<Emits>()
 
+const allowClose = ref(false)
 const visible = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => {
+    if (!value && !allowClose.value) return
+    emit('update:modelValue', value)
+    if (!value) {
+      allowClose.value = false
+    }
+  }
 })
 
 const dialogTitle = computed(() => {
@@ -146,9 +154,14 @@ function formatSize(bytes: number): string {
   }
 }
 
+function requestClose() {
+  allowClose.value = true
+  visible.value = false
+}
+
 function handleClose() {
   if (!isDownloading.value) {
-    visible.value = false
+    requestClose()
   }
 }
 
@@ -167,13 +180,13 @@ function handleInstall() {
 function handleIgnoreVersion() {
   if (props.release) {
     emit('ignore-version', props.release.tag_name)
-    visible.value = false
+    requestClose()
   }
 }
 
 function handleRemindLater() {
   emit('remind-later')
-  visible.value = false
+  requestClose()
 }
 
 function handleCancelDownload() {
@@ -184,14 +197,7 @@ function handleCancelDownload() {
 </script>
 
 <template>
-  <el-dialog
-    v-model="visible"
-    :title="dialogTitle"
-    width="650px"
-    :close-on-click-modal="false"
-    :close-on-press-escape="false"
-    @close="handleClose"
-  >
+  <TxModal v-model="visible" :title="dialogTitle" width="650px" @close="handleClose">
     <div v-if="release" class="update-prompt">
       <!-- Version Comparison -->
       <div class="version-section">
@@ -292,7 +298,7 @@ function handleCancelDownload() {
         </div>
       </div>
     </template>
-  </el-dialog>
+  </TxModal>
 </template>
 
 <style scoped>

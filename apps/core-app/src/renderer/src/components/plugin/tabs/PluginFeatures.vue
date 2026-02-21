@@ -5,7 +5,7 @@ import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { resolveI18nMessage } from '@talex-touch/utils/i18n'
 import { TxFlipOverlay, type TxFlipOverlayInstance } from '@talex-touch/tuffex'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
@@ -677,10 +677,10 @@ async function copyToClipboard(value?: string | null): Promise<void> {
   if (!value) return
   try {
     await navigator.clipboard.writeText(value)
-    ElMessage.success(t('corebox.copied'))
+    toast.success(t('corebox.copied'))
   } catch (error) {
     console.error('[PluginFeatures] Failed to copy path:', error)
-    ElMessage.error(t('plugin.features.widget.copyFailed'))
+    toast.error(t('plugin.features.widget.copyFailed'))
   }
 }
 
@@ -689,11 +689,11 @@ async function revealWidgetFile(pathValue?: string | null): Promise<void> {
   try {
     const result = await pluginSDK.revealPath(props.plugin.name, pathValue)
     if (!result?.success) {
-      ElMessage.warning(t('plugin.features.widget.openFailed'))
+      toast.warning(t('plugin.features.widget.openFailed'))
     }
   } catch (error) {
     console.error('[PluginFeatures] Failed to reveal widget file:', error)
-    ElMessage.warning(t('plugin.features.widget.openFailed'))
+    toast.warning(t('plugin.features.widget.openFailed'))
   }
 }
 
@@ -724,7 +724,7 @@ async function reloadPreviewWidget(): Promise<void> {
   }
   const success = await requestWidgetRegister(widgetId, { emitAsUpdate: true, force: true })
   if (!success) {
-    ElMessage.warning('Widget 重新加载失败')
+    toast.warning('Widget 重新加载失败')
   }
 }
 
@@ -737,7 +737,7 @@ async function reloadAllWidgets(): Promise<void> {
     }
     await requestWidgetRegister(option.value, { emitAsUpdate: true, force: true })
   }
-  ElMessage.success('已触发全部 Widget 重新加载')
+  toast.success('已触发全部 Widget 重新加载')
 }
 
 function handlePreviewRenderError(error: Error): void {

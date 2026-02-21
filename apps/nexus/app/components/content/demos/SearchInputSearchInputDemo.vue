@@ -2,7 +2,10 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const value = ref('')
-const onSearch = () => {}
+const last = ref('')
+const onSearch = (next: string) => {
+  last.value = next
+}
 </script>
 
 <template>

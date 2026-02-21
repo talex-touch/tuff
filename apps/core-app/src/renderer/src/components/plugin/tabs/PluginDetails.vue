@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxButton } from '@talex-touch/tuffex'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -161,7 +161,7 @@ async function saveDevSettings(): Promise<void> {
   try {
     const manifest = await pluginSDK.getManifest(plugin.value.name)
     if (!manifest) {
-      ElMessage.error(t('plugin.details.saveError'))
+      toast.error(t('plugin.details.saveError'))
       return
     }
 
@@ -174,15 +174,15 @@ async function saveDevSettings(): Promise<void> {
 
     const success = await pluginSDK.saveManifest(plugin.value.name, manifest, true)
     if (success) {
-      ElMessage.success(t('plugin.details.saveSuccess'))
+      toast.success(t('plugin.details.saveSuccess'))
       hasChanges.value = false
       loadManifest()
     } else {
-      ElMessage.error(t('plugin.details.saveError'))
+      toast.error(t('plugin.details.saveError'))
     }
   } catch (error) {
     console.error('Failed to save dev settings:', error)
-    ElMessage.error(t('plugin.details.saveError'))
+    toast.error(t('plugin.details.saveError'))
   } finally {
     isSaving.value = false
   }

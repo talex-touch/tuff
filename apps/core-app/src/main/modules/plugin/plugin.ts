@@ -246,7 +246,8 @@ export class TouchPlugin implements ITouchPlugin {
           platform: feature.platform,
           commands: feature.commands,
           interaction: feature.interaction,
-          priority: feature.priority || 0
+          priority: feature.priority || 0,
+          experimental: feature.experimental
         }
       }),
       issues: this.issues

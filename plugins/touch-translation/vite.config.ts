@@ -63,7 +63,6 @@ export default defineConfig({
   ],
 
   // https://github.com/vitest-dev/vitest
-  // @ts-expect-error - test is for vitest config
   test: {
     environment: 'jsdom',
   },

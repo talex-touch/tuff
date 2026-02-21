@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const blurPx = ref('')
-const duration = ref('')
-const toggle = () => {}
+const status = ref<'ok' | 'warn'>('ok')
+const blurPx = ref(10)
+const duration = ref(260)
+const toggle = () => {
+  status.value = status.value === 'ok' ? 'warn' : 'ok'
+}
+const label = () => (status.value === 'ok' ? 'Operational' : 'Degraded')
+const color = () => (status.value === 'ok' ? 'var(--tx-color-success)' : 'var(--tx-color-warning)')
 </script>
 
 <template>

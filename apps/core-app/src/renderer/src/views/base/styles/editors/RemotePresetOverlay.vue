@@ -1,7 +1,7 @@
 <script setup lang="ts" name="RemotePresetOverlay">
 import type { RemotePresetSummary } from '~/modules/layout/preset/remote/useRemotePresets'
 import { TxButton, TxCard, TxFlipOverlay, TxStatusBadge } from '@talex-touch/tuffex'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRemotePresets } from '~/modules/layout'
@@ -38,7 +38,7 @@ watch(
       }
     } catch (error) {
       console.error('[RemotePresetOverlay] Failed to load preset list:', error)
-      ElMessage.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
+      toast.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
     }
   }
 )
@@ -86,11 +86,11 @@ async function handleApply(close: () => void): Promise<void> {
 
   try {
     await applyRemotePreset(selectedItem.value.id)
-    ElMessage.success(t('preset.remoteApplySuccess', 'Nexus preset applied'))
+    toast.success(t('preset.remoteApplySuccess', 'Nexus preset applied'))
     close()
   } catch (error) {
     console.error('[RemotePresetOverlay] Failed to apply preset:', error)
-    ElMessage.error(t('preset.remoteApplyFailed', 'Failed to apply Nexus preset'))
+    toast.error(t('preset.remoteApplyFailed', 'Failed to apply Nexus preset'))
   }
 }
 
@@ -103,7 +103,7 @@ async function handleRefresh(): Promise<void> {
     await listRemotePresets('beta')
   } catch (error) {
     console.error('[RemotePresetOverlay] Failed to refresh presets:', error)
-    ElMessage.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
+    toast.error(t('preset.remoteListFailed', 'Failed to load Nexus preset list'))
   }
 }
 </script>

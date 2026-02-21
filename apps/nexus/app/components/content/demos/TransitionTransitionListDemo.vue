@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const list = ref([])
-const preset = ref('')
-const add = () => {}
-const remove = () => {}
+const list = ref([
+  { id: 1, text: 'Item 1' },
+  { id: 2, text: 'Item 2' },
+])
+const preset = ref('fade')
+const add = () => {
+  const nextId = list.value.length ? list.value[list.value.length - 1].id + 1 : 1
+  list.value.push({ id: nextId, text: `Item ${nextId}` })
+}
+const remove = () => {
+  list.value.pop()
+}
 </script>
 
 <template>

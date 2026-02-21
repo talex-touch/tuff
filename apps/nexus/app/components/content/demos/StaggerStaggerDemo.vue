@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const items = ref([])
+const items = ref([
+  { id: 1, text: 'First' },
+  { id: 2, text: 'Second' },
+  { id: 3, text: 'Third' },
+])
 </script>
 
 <template>

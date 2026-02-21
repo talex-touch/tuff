@@ -1,10 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const i = ref('')
-const items = ref([])
-const onPullingDown = () => {}
-const onPullingUp = () => {}
+const i = ref(0)
+const items = ref<number[]>([1, 2, 3, 4, 5])
+const loading = ref(false)
+const onPullingDown = () => {
+  loading.value = true
+  i.value = 0
+  items.value = [1, 2, 3, 4, 5]
+  loading.value = false
+}
+const onPullingUp = () => {
+  loading.value = true
+  i.value += 1
+  const start = items.value.length + 1
+  items.value.push(start, start + 1, start + 2)
+  loading.value = false
+}
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 import type { DownloadTask } from '@talex-touch/utils'
 import { Folder, FolderOpened } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
+import { TxModal } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -136,7 +137,7 @@ function formatDate(date: Date | number | undefined): string {
 </script>
 
 <template>
-  <el-dialog
+  <TxModal
     v-model="visible"
     :title="$t('download.task_details')"
     width="600px"
@@ -267,7 +268,7 @@ function formatDate(date: Date | number | undefined): string {
         </TxButton>
       </div>
     </template>
-  </el-dialog>
+  </TxModal>
 </template>
 
 <style scoped>

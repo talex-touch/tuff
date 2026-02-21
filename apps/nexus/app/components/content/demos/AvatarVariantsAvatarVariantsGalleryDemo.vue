@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const activeTab = ref(false)
-const tab = ref('')
-const tabs = ref([])
+const tabs = ref(['Status', 'Activity', 'Platform', 'System', 'Social', 'Context'])
+const activeTab = ref('Status')
+const isActive = (name: string) => activeTab.value === name
 </script>
 
 <template>

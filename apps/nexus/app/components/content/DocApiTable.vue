@@ -173,7 +173,9 @@ function normalizeText(value: unknown): string {
   if (value && typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
     if (entries.length === 1) {
-      const [key, rawVal] = entries[0]
+      const entry = entries[0]
+      if (!entry) return ''
+      const [key, rawVal] = entry
       const val = normalizeText(rawVal)
       return val ? `${key}: ${val}` : key
     }
@@ -603,7 +605,7 @@ async function openTypeReference(typeInfo: RefType) {
         <template #cell-description="{ row }">
           <div class="doc-api-table__desc-cell">
             <TxAutoSizer
-              :ref="el => setDescSizerRef('desktop', row.key, el as AutoSizerActionApi | null)"
+              :ref="(el: unknown) => setDescSizerRef('desktop', row.key, el as AutoSizerActionApi | null)"
               :width="false"
               :height="true"
               :duration-ms="200"
@@ -815,7 +817,7 @@ async function openTypeReference(typeInfo: RefType) {
             </div>
             <div class="doc-api-table__mobile-value doc-api-table__desc-cell">
               <TxAutoSizer
-                :ref="el => setDescSizerRef('mobile', row.key, el as AutoSizerActionApi | null)"
+                :ref="(el: unknown) => setDescSizerRef('mobile', row.key, el as AutoSizerActionApi | null)"
                 :width="false"
                 :height="true"
                 :duration-ms="180"

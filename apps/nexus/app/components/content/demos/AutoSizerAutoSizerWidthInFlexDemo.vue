@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 const { locale } = useI18n()
-const toggle = () => {}
+const wide = ref(false)
+const toggle = () => {
+  wide.value = !wide.value
+}
 </script>
 
 <template>

@@ -1,7 +1,8 @@
 <script lang="ts" name="AgentDetail" setup>
 import type { AgentDescriptor, AgentTask } from '@talex-touch/utils'
 import { useAgentsSdk } from '@talex-touch/utils/renderer/hooks/use-agents-sdk'
-import { ElMessage } from 'element-plus'
+import { TuffProgress } from '@talex-touch/tuffex'
+import { toast } from 'vue-sonner'
 import { onBeforeUnmount, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -43,7 +44,7 @@ function finalizeTaskByPolledStatus(status: string) {
     stopTaskStatusPolling()
 
     if (!taskResult.value) {
-      ElMessage.info(t('intelligence.agents.task_completed_no_result'))
+      toast.info(t('intelligence.agents.task_completed_no_result'))
     }
     return
   }
@@ -55,7 +56,7 @@ function finalizeTaskByPolledStatus(status: string) {
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    ElMessage.error(taskError.value)
+    toast.error(taskError.value)
     return
   }
 
@@ -66,7 +67,7 @@ function finalizeTaskByPolledStatus(status: string) {
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    ElMessage.warning(taskError.value)
+    toast.warning(taskError.value)
   }
 }
 
@@ -133,9 +134,9 @@ const taskListeners = [
     stopTaskStatusPolling()
 
     if (payload.result?.success) {
-      ElMessage.success(t('intelligence.agents.task_success'))
+      toast.success(t('intelligence.agents.task_success'))
     } else {
-      ElMessage.error(taskError.value || t('intelligence.agents.task_failed'))
+      toast.error(taskError.value || t('intelligence.agents.task_failed'))
     }
   }),
   agentsSdk.onTaskFailed((payload) => {
@@ -149,7 +150,7 @@ const taskListeners = [
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    ElMessage.error(taskError.value)
+    toast.error(taskError.value)
   }),
   agentsSdk.onTaskCancelled((payload) => {
     if (!isCurrentTask(payload.taskId, props.agent.id)) {
@@ -162,7 +163,7 @@ const taskListeners = [
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    ElMessage.warning(taskError.value)
+    toast.warning(taskError.value)
   })
 ]
 
@@ -216,7 +217,7 @@ async function executeTask() {
     canceling.value = false
     currentTaskId.value = null
     stopTaskStatusPolling()
-    ElMessage.error(taskError.value)
+    toast.error(taskError.value)
   }
 }
 
@@ -235,11 +236,11 @@ async function cancelTask() {
     }
 
     taskStep.value = t('intelligence.agents.task_cancel_requested')
-    ElMessage.info(t('intelligence.agents.task_cancel_requested'))
+    toast.info(t('intelligence.agents.task_cancel_requested'))
   } catch (err) {
     canceling.value = false
     const message = err instanceof Error ? err.message : t('intelligence.agents.cancel_failed')
-    ElMessage.error(message)
+    toast.error(message)
   }
 }
 
@@ -354,7 +355,7 @@ function getCapabilityIcon(type: string): string {
           <span>{{ taskStep || t('intelligence.agents.task_running') }}</span>
           <span>{{ taskProgress }}%</span>
         </div>
-        <el-progress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
+        <TuffProgress :percentage="taskProgress" :show-text="false" :stroke-width="8" />
       </div>
 
       <div v-if="taskError" class="execute-error">

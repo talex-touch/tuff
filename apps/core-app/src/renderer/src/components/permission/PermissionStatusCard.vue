@@ -6,8 +6,8 @@
  */
 
 import { Check, Close, InfoFilled, Warning } from '@element-plus/icons-vue'
-import { TxButton, TxTag } from '@talex-touch/tuffex'
-import { ElAlert, ElCard, ElIcon, ElProgress } from 'element-plus'
+import { TuffProgress, TxButton, TxCard, TxTag } from '@talex-touch/tuffex'
+import { ElAlert, ElIcon } from 'element-plus'
 import { computed } from 'vue'
 
 interface Props {
@@ -57,22 +57,16 @@ const statusText = computed(() => {
   return '所有权限已授予'
 })
 
-const progressColor = computed(() => {
-  switch (statusType.value) {
-    case 'danger':
-      return 'var(--el-color-danger)'
-    case 'warning':
-      return 'var(--el-color-warning)'
-    case 'success':
-      return 'var(--el-color-success)'
-    default:
-      return 'var(--el-color-primary)'
-  }
+const progressStatus = computed(() => {
+  if (statusType.value === 'danger') return 'error'
+  if (statusType.value === 'warning') return 'warning'
+  if (statusType.value === 'success') return 'success'
+  return ''
 })
 </script>
 
 <template>
-  <ElCard class="permission-status-card" shadow="never">
+  <TxCard class="permission-status-card" shadow="none">
     <template #header>
       <div class="card-header">
         <div class="header-left">
@@ -119,10 +113,10 @@ const progressColor = computed(() => {
 
       <!-- Progress -->
       <div v-if="enforcePermissions && totalDeclared > 0" class="progress-section">
-        <ElProgress
+        <TuffProgress
           :percentage="grantProgress"
           :stroke-width="8"
-          :color="progressColor"
+          :status="progressStatus"
           :show-text="false"
         />
         <span class="progress-text">{{ grantedCount }} / {{ totalDeclared }}</span>
@@ -151,16 +145,16 @@ const progressColor = computed(() => {
         </TxButton>
       </div>
     </div>
-  </ElCard>
+  </TxCard>
 </template>
 
 <style scoped lang="scss">
 .permission-status-card {
-  :deep(.el-card__header) {
+  :deep(.tx-card__header) {
     padding: 12px 16px;
   }
 
-  :deep(.el-card__body) {
+  :deep(.tx-card__body) {
     padding: 16px;
   }
 }

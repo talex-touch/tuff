@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const contentKey = ref('')
-const preset = ref('')
-const toggle = () => {}
+const contentKey = ref('panel-a')
+const preset = ref('fade')
+const value = ref<'A' | 'B'>('A')
+const toggle = () => {
+  value.value = value.value === 'A' ? 'B' : 'A'
+  contentKey.value = value.value === 'A' ? 'panel-a' : 'panel-b'
+}
 </script>
 
 <template>

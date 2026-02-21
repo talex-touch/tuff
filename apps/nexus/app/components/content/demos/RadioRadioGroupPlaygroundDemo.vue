@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
+interface SelectOption { value: string; label: string }
 const blur = ref('')
 const blurAmount = ref('')
 const damping = ref('')
 const direction = ref('')
-const directionOptions = ref([])
+const directionOptions = ref<SelectOption[]>([])
 const disabled = ref(false)
 const elastic = ref('')
 const glass = ref('')
@@ -16,7 +17,7 @@ const shouldShowDirection = ref(false)
 const shouldShowIndicatorProps = ref(false)
 const stiffness = ref('')
 const type = ref('')
-const typeOptions = ref([])
+const typeOptions = ref<SelectOption[]>([])
 const value = ref('')
 </script>
 

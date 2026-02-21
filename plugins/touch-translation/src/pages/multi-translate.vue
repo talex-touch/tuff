@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TranslationProvider } from '../types/translation'
 
-import { onCoreBoxInputChange } from '@talex-touch/utils'
+import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk'
 import ProviderConfigModal from '../components/ProviderConfigModal.vue'
 import TranslationCard from '../components/TranslationCard.vue'
 import { useTranslation } from '../composables/useTranslation'
@@ -11,7 +11,7 @@ const query = ref('')
 const showSettings = ref(false)
 
 onMounted(() => {
-  onCoreBoxInputChange(({ data }) => {
+  onCoreBoxInputChange(({ data }: { data: unknown }) => {
     const newQuery = (data as any)?.query
     query.value = typeof newQuery === 'string'
       ? newQuery

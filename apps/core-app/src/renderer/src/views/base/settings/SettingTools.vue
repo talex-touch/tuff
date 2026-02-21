@@ -9,9 +9,9 @@ import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { TxButton, TxFlipOverlay, TxSelectItem } from '@talex-touch/tuffex'
-import { ElMessage } from 'element-plus'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TSwitch from '~/components/base/switch/TSwitch.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -190,7 +190,7 @@ async function saveShortcut(
     if (saveRunIdMap.get(id) !== nextRunId) return success
     if (!success) {
       setRowSaveState(id, 'error')
-      ElMessage.error(t('settingTools.shortcutsDialog.saveFailed'))
+      toast.error(t('settingTools.shortcutsDialog.saveFailed'))
       return false
     }
     setRowSaveState(id, 'success')
@@ -198,7 +198,7 @@ async function saveShortcut(
   } catch (error) {
     if (saveRunIdMap.get(id) !== nextRunId) return false
     setRowSaveState(id, 'error')
-    ElMessage.error(t('settingTools.shortcutsDialog.saveFailed'))
+    toast.error(t('settingTools.shortcutsDialog.saveFailed'))
     return false
   }
 }

@@ -28,6 +28,10 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
+const handleClick = (event: MouseEvent) => {
+  emit('click', event)
+}
+
 </script>
 
 <template>
@@ -41,7 +45,7 @@ const emit = defineEmits<{
     :closable="closable"
     :disabled="disabled"
     v-bind="$attrs"
-    @click="(event) => emit('click', event)"
+    @click="handleClick"
     @close="() => emit('close')"
   >
     <slot />
