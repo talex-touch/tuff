@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { ref } from 'vue'
+import { devLog } from '~/utils/dev-log'
 
 /**
  * 文件索引监控 Composable
@@ -65,7 +66,7 @@ export function useFileIndexMonitor() {
       const message = error instanceof Error ? error.message : ''
       // Ignore timeout errors during startup - module may not be ready yet
       if (message.includes('timed out')) {
-        console.debug('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
+        devLog('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
         return null
       }
       console.error('[FileIndexMonitor] Failed to get index stats:', error)
@@ -80,15 +81,15 @@ export function useFileIndexMonitor() {
     request?: FileIndexRebuildRequest
   ): Promise<FileIndexRebuildResult> => {
     try {
-      console.log('[FileIndexMonitor] Triggering manual index rebuild...')
+      devLog('[FileIndexMonitor] Triggering manual index rebuild...')
       const result = await settingsSdk.fileIndex.rebuild(request)
 
       if (result?.requiresConfirm) {
-        console.log('[FileIndexMonitor] Rebuild requires confirmation before proceeding')
+        devLog('[FileIndexMonitor] Rebuild requires confirmation before proceeding')
         return result
       }
       if (result?.success) {
-        console.log('[FileIndexMonitor] Rebuild triggered successfully')
+        devLog('[FileIndexMonitor] Rebuild triggered successfully')
         return result
       }
       console.error('[FileIndexMonitor] Rebuild failed:', result?.error)

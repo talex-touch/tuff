@@ -169,6 +169,8 @@ function handleKeydown(event: KeyboardEvent) {
       nextIdx = currentIdx < 0 ? entries.length - 1 : (currentIdx - 1 + entries.length) % entries.length
     }
     const next = entries[nextIdx]
+    if (!next)
+      return
     currentValue.value = next.value
     selectedLabel.value = next.label
   }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MarketProviderType } from '@talex-touch/utils/market'
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffSwitch, TxButton } from '@talex-touch/tuffex'
 import { onClickOutside } from '@vueuse/core'
 import { onMounted, reactive, ref } from 'vue'
 import { vDraggable } from 'vue-draggable-plus'
@@ -114,8 +114,7 @@ function handleAdd() {
             class="MarketSourceEditor-Content-Item Item"
           >
             <div class="handle" />
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <div class="GhostTitle" v-html="item.name" />
+            <div class="GhostTitle">{{ item.name }}</div>
 
             <div class="Item-Container">
               <div class="Item-Title">
@@ -127,7 +126,7 @@ function handleAdd() {
               </div>
             </div>
             <div class="Item-Actions">
-              <el-switch
+              <TuffSwitch
                 :model-value="item.enabled !== false"
                 size="small"
                 @change="toggleSource(ind)"

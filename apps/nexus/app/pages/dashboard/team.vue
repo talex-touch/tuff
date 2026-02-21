@@ -753,7 +753,7 @@ watch(() => creditTab.value, (value) => {
 
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <TxButton variant="secondary" size="small" @click="fetchTeamCreditUsage">
+                <TxButton variant="secondary" size="small" @click="() => fetchTeamCreditUsage()">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>
@@ -884,7 +884,7 @@ watch(() => creditTab.value, (value) => {
 
             <div class="space-y-4">
               <div class="flex items-center justify-between">
-                <TxButton variant="secondary" size="small" @click="fetchTeamCreditLedger">
+                <TxButton variant="secondary" size="small" @click="() => fetchTeamCreditLedger()">
                   {{ t('common.refresh', '刷新') }}
                 </TxButton>
               </div>

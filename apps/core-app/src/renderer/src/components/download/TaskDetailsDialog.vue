@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
-import { Folder, FolderOpened } from '@element-plus/icons-vue'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { TxModal } from '@talex-touch/tuffex'
 import { computed } from 'vue'
@@ -259,11 +258,11 @@ function formatDate(date: Date | number | undefined): string {
           {{ $t('common.close') }}
         </TxButton>
         <TxButton v-if="task?.status === 'completed'" type="primary" @click="handleOpenFile">
-          <el-icon><FolderOpened /></el-icon>
+          <i class="i-carbon-folder-open" />
           {{ $t('download.open_file') }}
         </TxButton>
         <TxButton v-if="task?.status === 'completed'" @click="handleShowInFolder">
-          <el-icon><Folder /></el-icon>
+          <i class="i-carbon-folder" />
           {{ $t('download.show_in_folder') }}
         </TxButton>
       </div>

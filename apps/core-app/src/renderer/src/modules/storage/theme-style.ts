@@ -98,8 +98,19 @@ export async function triggerThemeTransition(
   const [x, y] = pos
   const isChangingToDark = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
 
-  // @ts-ignore - View Transitions API may not be recognized by TypeScript
-  const transition = document.startViewTransition(() => {
+  const viewTransitionDocument = document as Document & {
+    startViewTransition?: (callback: () => void) => { ready: Promise<void> }
+  }
+
+  const startViewTransition = viewTransitionDocument.startViewTransition
+  if (!startViewTransition) {
+    themeStyle.value.theme.style.auto = mode === 'auto'
+    isDark.value = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)
+    updateDocumentClass(isDark.value)
+    return
+  }
+
+  const transition = startViewTransition(() => {
     // Update theme settings
     themeStyle.value.theme.style.auto = mode === 'auto'
 
@@ -115,7 +126,6 @@ export async function triggerThemeTransition(
   })
 
   // Calculate animation radius
-  // @ts-ignore - Math.hypot with these parameters is valid
   const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))
 
   // Animate the transition when ready

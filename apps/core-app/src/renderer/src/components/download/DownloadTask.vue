@@ -1,16 +1,5 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
-import {
-  Check,
-  Clock,
-  Close,
-  Delete,
-  Loading,
-  Refresh,
-  Remove,
-  VideoPause,
-  VideoPlay
-} from '@element-plus/icons-vue'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { TuffProgress } from '@talex-touch/tuffex'
 import { computed } from 'vue'
@@ -78,20 +67,20 @@ function getTaskStatusColor(status: DownloadStatus): string {
 }
 
 // 获取任务状态图标
-function getTaskStatusIcon(status: DownloadStatus) {
+function getTaskStatusIcon(status: DownloadStatus): string {
   switch (status) {
     case DownloadStatus.COMPLETED:
-      return Check
+      return 'i-carbon-checkmark'
     case DownloadStatus.FAILED:
-      return Close
+      return 'i-carbon-close'
     case DownloadStatus.PAUSED:
-      return VideoPause
+      return 'i-carbon-pause'
     case DownloadStatus.CANCELLED:
-      return Remove
+      return 'i-carbon-close'
     case DownloadStatus.PENDING:
-      return Clock
+      return 'i-carbon-time'
     default:
-      return Clock
+      return 'i-carbon-time'
   }
 }
 
@@ -180,12 +169,12 @@ function formatRemainingTime(seconds: number): string {
     <div class="task-header">
       <div class="task-info">
         <div class="task-icon">
-          <el-icon v-if="task.status === 'downloading'" class="loading">
-            <Loading />
-          </el-icon>
-          <el-icon v-else :color="getTaskStatusColor(task.status)">
-            <component :is="getTaskStatusIcon(task.status)" />
-          </el-icon>
+          <i v-if="task.status === 'downloading'" class="i-carbon-circle-dash loading" />
+          <i
+            v-else
+            :class="getTaskStatusIcon(task.status)"
+            :style="{ color: getTaskStatusColor(task.status) }"
+          />
         </div>
         <div class="task-details">
           <div class="task-name">
@@ -206,7 +195,7 @@ function formatRemainingTime(seconds: number): string {
           size="small"
           @click="$emit('pause', task.id)"
         >
-          <el-icon><VideoPause /></el-icon>
+          <i class="i-carbon-pause" />
           {{ $t('download.pause') }}
         </TxButton>
         <TxButton
@@ -215,7 +204,7 @@ function formatRemainingTime(seconds: number): string {
           type="primary"
           @click="$emit('resume', task.id)"
         >
-          <el-icon><VideoPlay /></el-icon>
+          <i class="i-carbon-play" />
           {{ $t('download.resume') }}
         </TxButton>
         <TxButton
@@ -224,7 +213,7 @@ function formatRemainingTime(seconds: number): string {
           type="warning"
           @click="$emit('retry', task.id)"
         >
-          <el-icon><Refresh /></el-icon>
+          <i class="i-carbon-renew" />
           {{ $t('download.retry') }}
         </TxButton>
         <TxButton
@@ -233,7 +222,7 @@ function formatRemainingTime(seconds: number): string {
           type="danger"
           @click="$emit('cancel', task.id)"
         >
-          <el-icon><Close /></el-icon>
+          <i class="i-carbon-close" />
           {{ $t('download.cancel') }}
         </TxButton>
         <TxButton
@@ -242,7 +231,7 @@ function formatRemainingTime(seconds: number): string {
           type="danger"
           @click="$emit('remove', task.id)"
         >
-          <el-icon><Delete /></el-icon>
+          <i class="i-carbon-trash-can" />
           {{ $t('download.remove') }}
         </TxButton>
       </div>

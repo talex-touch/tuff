@@ -1,10 +1,34 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const multiple = ref('')
-const nodes = ref('')
-const placeholder = ref('')
-const value = ref('')
+
+interface TreeNode {
+  label: string
+  value: string
+  children?: TreeNode[]
+}
+
+const multiple = ref(false)
+const nodes = ref<TreeNode[]>([
+  {
+    label: 'Group A',
+    value: 'group-a',
+    children: [
+      { label: 'Alpha', value: 'alpha' },
+      { label: 'Beta', value: 'beta' },
+    ],
+  },
+  {
+    label: 'Group B',
+    value: 'group-b',
+    children: [
+      { label: 'Gamma', value: 'gamma' },
+      { label: 'Delta', value: 'delta' },
+    ],
+  },
+])
+const placeholder = ref('Select item')
+const value = ref<string | string[] | undefined>(undefined)
 </script>
 
 <template>

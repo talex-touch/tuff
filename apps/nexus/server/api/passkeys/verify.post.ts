@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Passkey does not match challenge.' })
   }
   const resolvedUserId = storedChallenge.userId ?? passkey.user_id
-  if (!resolvedUserId) {
+  if (typeof resolvedUserId !== 'string' || !resolvedUserId) {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }
 

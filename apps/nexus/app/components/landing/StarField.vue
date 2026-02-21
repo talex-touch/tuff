@@ -47,7 +47,7 @@ const resetStar = (index: number, width: number, height: number, initial = false
     size: Math.random() * 1.5 + 0.5,
     opacity: Math.random() * 0.8 + 0.2,
     speed: Math.random() * 0.5 + 0.5,
-    color: colors[Math.floor(Math.random() * colors.length)]
+    color: colors[Math.floor(Math.random() * colors.length)] ?? '#ffffff'
   }
 }
 

@@ -277,9 +277,12 @@ const treeStructure = computed<TreeNode[]>(() => {
     // Check if this is the last child at its indent level under the same parent
     let isLastChild = true
     for (let j = idx + 1; j < entries.length; j++) {
-      if (entries[j].indent < entry.indent)
+      const next = entries[j]
+      if (!next)
+        continue
+      if (next.indent < entry.indent)
         break
-      if (entries[j].indent === entry.indent && entries[j].parentId === entry.parentId) {
+      if (next.indent === entry.indent && next.parentId === entry.parentId) {
         isLastChild = false
         break
       }
@@ -288,9 +291,12 @@ const treeStructure = computed<TreeNode[]>(() => {
     // Check if has visible children (next entries with indent + 1)
     let hasChildren = false
     for (let j = idx + 1; j < entries.length; j++) {
-      if (entries[j].indent <= entry.indent)
+      const next = entries[j]
+      if (!next)
+        continue
+      if (next.indent <= entry.indent)
         break
-      if (entries[j].indent === entry.indent + 1) {
+      if (next.indent === entry.indent + 1) {
         hasChildren = true
         break
       }
@@ -329,6 +335,8 @@ const svgPaths = computed(() => {
   for (const [, group] of siblingGroups) {
     const first = group[0]
     const last = group[group.length - 1]
+    if (!first || !last)
+      continue
     const firstPos = positions.get(first.id)
     const lastPos = positions.get(last.id)
     if (!firstPos || !lastPos)
@@ -345,10 +353,13 @@ const svgPaths = computed(() => {
       let firstChildCy = Infinity
       let lastChildCy = -Infinity
       for (let j = entryIdx + 1; j < nodes.length; j++) {
-        if (nodes[j].indent <= entry.indent)
+        const next = nodes[j]
+        if (!next)
+          continue
+        if (next.indent <= entry.indent)
           break
-        if (nodes[j].indent === entry.indent + 1) {
-          const cp = positions.get(nodes[j].id)
+        if (next.indent === entry.indent + 1) {
+          const cp = positions.get(next.id)
           if (cp) {
             if (cp.centerY < firstChildCy)
               firstChildCy = cp.centerY
@@ -380,8 +391,9 @@ const svgPaths = computed(() => {
       gaps.sort((a, b) => a.start - b.start)
       const merged: { start: number, end: number }[] = []
       for (const gap of gaps) {
-        if (merged.length && gap.start <= merged[merged.length - 1].end)
-          merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, gap.end)
+        const lastGap = merged[merged.length - 1]
+        if (lastGap && gap.start <= lastGap.end)
+          lastGap.end = Math.max(lastGap.end, gap.end)
         else
           merged.push({ start: gap.start, end: gap.end })
       }
@@ -429,10 +441,13 @@ const svgPaths = computed(() => {
     const nodeIdx = nodes.indexOf(node)
     let lastChild: TreeNode | null = null
     for (let j = nodeIdx + 1; j < nodes.length; j++) {
-      if (nodes[j].indent <= node.indent)
+      const next = nodes[j]
+      if (!next)
+        continue
+      if (next.indent <= node.indent)
         break
-      if (nodes[j].indent === node.indent + 1)
-        lastChild = nodes[j]
+      if (next.indent === node.indent + 1)
+        lastChild = next
     }
     if (!lastChild)
       continue
@@ -508,12 +523,15 @@ const indicatorTrackRange = computed<{ start: number, length: number } | null>((
   const activeIdx = nodes.findIndex(n => n.id === activeHash.value)
   if (activeIdx >= 0) {
     const activeNode = nodes[activeIdx]
-    if (activeNode.hasChildren) {
+    if (activeNode && activeNode.hasChildren) {
       for (let j = activeIdx + 1; j < nodes.length; j++) {
-        if (nodes[j].indent <= activeNode.indent)
+        const next = nodes[j]
+        if (!next)
+          continue
+        if (next.indent <= activeNode.indent)
           break
-        if (nodes[j].indent === activeNode.indent + 1) {
-          const d = distances.get(nodes[j].id)
+        if (next.indent === activeNode.indent + 1) {
+          const d = distances.get(next.id)
           if (d != null && d > endDist)
             endDist = d
         }
@@ -543,6 +561,8 @@ const treeTrack = computed(() => {
 
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i]
+    if (!node)
+      continue
     const pos = positions.get(node.id)
     if (!pos)
       continue
@@ -559,6 +579,8 @@ const treeTrack = computed(() => {
     }
 
     const prevNode = nodes[i - 1]
+    if (!prevNode)
+      continue
 
     if (node.indent > prevNode.indent) {
       // Going deeper: trunk down to branch start, then forward 45° diagonal
@@ -613,6 +635,8 @@ const skeletonSvgPaths = computed(() => {
   // Branch connectors for indented items
   for (let i = 0; i < skeletonEntries.length; i++) {
     const entry = skeletonEntries[i]
+    if (!entry)
+      continue
     const centerY = i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
 
     if (entry.indent > 0) {
@@ -629,7 +653,10 @@ const skeletonSvgPaths = computed(() => {
   // Group by indent level
   const groups = new Map<number, number[]>()
   for (let i = 0; i < skeletonEntries.length; i++) {
-    const indent = skeletonEntries[i].indent
+    const entry = skeletonEntries[i]
+    if (!entry)
+      continue
+    const indent = entry.indent
     let group = groups.get(indent)
     if (!group) {
       group = []
@@ -641,13 +668,20 @@ const skeletonSvgPaths = computed(() => {
   // For indent-0 group: continuous vertical line from first to last
   const rootIndices = groups.get(0)
   if (rootIndices && rootIndices.length >= 2) {
-    const firstY = rootIndices[0] * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-    let lastY = rootIndices[rootIndices.length - 1] * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
+    const firstIndex = rootIndices[0]
+    const lastIndex = rootIndices[rootIndices.length - 1]
+    if (firstIndex == null || lastIndex == null)
+      return paths
+    const firstY = firstIndex * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
+    let lastY = lastIndex * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
 
     // Extend to cover children below last root
     for (const ri of rootIndices) {
       for (let j = ri + 1; j < skeletonEntries.length; j++) {
-        if (skeletonEntries[j].indent === 0)
+        const child = skeletonEntries[j]
+        if (!child)
+          continue
+        if (child.indent === 0)
           break
         const childY = j * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
         if (childY > lastY)

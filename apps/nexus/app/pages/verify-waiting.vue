@@ -16,7 +16,7 @@ const email = computed(() => (typeof route.query.email === 'string' ? route.quer
 const emailHint = computed(() => {
   if (!email.value)
     return t('auth.verifyWaitingSubtitle', 'We sent a verification link to your inbox.')
-  return t('auth.verifyWaitingEmail', 'We sent a verification link to {email}.', { email: email.value })
+  return t('auth.verifyWaitingEmail', { email: email.value }, 'We sent a verification link to {email}.')
 })
 
 function goTo(path: string) {
@@ -71,4 +71,3 @@ function goBack() {
     </template>
   </AuthVisualShell>
 </template>
-

@@ -17,6 +17,7 @@ import {
   shouldShowPlatformWarning,
   showPlatformCompatibilityWarning
 } from '~/modules/mention/platform-warning'
+import { devLog } from '~/utils/dev-log'
 import { useCoreBox } from './core-box'
 import { useStartupInfo } from './useStartupInfo'
 import { useApplicationUpgrade } from './useUpdate'
@@ -38,7 +39,7 @@ export function useAppLifecycle() {
     setupUpdateListener()
 
     if (!appSetting?.beginner?.init) {
-      console.log('[useAppLifecycle] Skipping update check - beginner.init is false')
+      devLog('[useAppLifecycle] Skipping update check - beginner.init is false')
       return
     }
 

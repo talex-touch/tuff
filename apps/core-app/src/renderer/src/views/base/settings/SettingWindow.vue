@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 // Import UI components
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { devLog } from '~/utils/dev-log'
 
 // Import storage
 const { t } = useI18n()
@@ -63,7 +64,7 @@ onMounted(async () => {
       autoStart: autoStart as boolean
     }
 
-    console.log('[SettingWindow] Window settings loaded:', windowSettings.value)
+    devLog('[SettingWindow] Window settings loaded:', windowSettings.value)
   } catch (error) {
     console.error('[SettingWindow] Failed to load window settings:', error)
   }
@@ -77,7 +78,7 @@ async function updateCloseToTray(value: boolean) {
       clear: false
     })
     windowSettings.value.closeToTray = value
-    console.log('[SettingWindow] Close to tray setting updated:', value)
+    devLog('[SettingWindow] Close to tray setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update close to tray setting:', error)
   }
@@ -91,7 +92,7 @@ async function updateStartMinimized(value: boolean) {
       clear: false
     })
     windowSettings.value.startMinimized = value
-    console.log('[SettingWindow] Start minimized setting updated:', value)
+    devLog('[SettingWindow] Start minimized setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update start minimized setting:', error)
   }
@@ -105,7 +106,7 @@ async function updateStartSilent(value: boolean) {
       clear: false
     })
     windowSettings.value.startSilent = value
-    console.log('[SettingWindow] Start silent setting updated:', value)
+    devLog('[SettingWindow] Start silent setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update start silent setting:', error)
   }
@@ -120,7 +121,7 @@ async function updateAutoStart(value: boolean) {
     })
     await transport.send(TrayEvents.autostart.update, value)
     windowSettings.value.autoStart = value
-    console.log('[SettingWindow] Auto start setting updated:', value)
+    devLog('[SettingWindow] Auto start setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update auto start setting:', error)
   }

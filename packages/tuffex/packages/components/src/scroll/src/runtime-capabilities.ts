@@ -19,7 +19,9 @@ function parseMajorVersion(version: string | undefined): number | null {
   if (typeof version !== 'string' || version.length === 0)
     return null
 
-  const majorSegment = version.split('.')[0]
+  const [majorSegment] = version.split('.')
+  if (!majorSegment)
+    return null
   const major = Number.parseInt(majorSegment, 10)
   return Number.isFinite(major) ? major : null
 }

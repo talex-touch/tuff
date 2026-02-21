@@ -59,7 +59,6 @@ function showUpdateDialog() {
 }
 
 function handleDownload(release: GitHubRelease) {
-  console.log('Download update:', release.tag_name)
   // Simulate download start
   downloadTaskId.value = `update-task-${Date.now()}`
   downloadStatus.value = DownloadStatus.DOWNLOADING
@@ -92,21 +91,20 @@ function simulateDownload() {
 }
 
 function handleInstall(taskId: string) {
-  console.log('Install update:', taskId)
   // Implement installation logic
   dialogVisible.value = false
+  void taskId
 }
 
 function handleIgnoreVersion(version: string) {
-  console.log('Ignore version:', version)
+  void version
 }
 
 function handleRemindLater() {
-  console.log('Remind later')
+  dialogVisible.value = false
 }
 
 function handleCancelDownload(taskId: string) {
-  console.log('Cancel download:', taskId)
   downloadStatus.value = DownloadStatus.CANCELLED
   downloadTaskId.value = undefined
 }

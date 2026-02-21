@@ -5,20 +5,8 @@
  * Shows when a plugin requests a permission at runtime.
  */
 
-import {
-  Check,
-  Coin,
-  Connection,
-  Cpu,
-  Document,
-  DocumentCopy,
-  InfoFilled,
-  Monitor,
-  Platform,
-  Warning
-} from '@element-plus/icons-vue'
 import { TxButton, TxModal } from '@talex-touch/tuffex'
-import { ElAlert, ElIcon } from 'element-plus'
+import { ElAlert } from 'element-plus'
 import { computed, ref } from 'vue'
 
 interface Props {
@@ -79,25 +67,25 @@ const riskLabel = computed(() => {
   }
 })
 
-const iconComponent = computed(() => {
+const iconClass = computed(() => {
   const category = props.permissionId.split('.')[0]
   switch (category) {
     case 'fs':
-      return Document
+      return 'i-carbon-document'
     case 'clipboard':
-      return DocumentCopy
+      return 'i-carbon-document-copy'
     case 'network':
-      return Connection
+      return 'i-carbon-network-1'
     case 'system':
-      return Cpu
+      return 'i-carbon-cpu'
     case 'intelligence':
-      return Coin
+      return 'i-carbon-currency-dollar'
     case 'storage':
-      return Platform
+      return 'i-carbon-application'
     case 'window':
-      return Monitor
+      return 'i-carbon-monitor'
     default:
-      return Check
+      return 'i-carbon-checkmark'
   }
 })
 
@@ -128,9 +116,7 @@ function requestClose() {
       <!-- Header -->
       <div class="permission-header">
         <div class="permission-icon" :style="{ color: riskColor }">
-          <ElIcon :size="32">
-            <component :is="iconComponent" />
-          </ElIcon>
+          <i :class="iconClass" class="text-2xl" />
         </div>
         <div class="permission-title">
           <h3>{{ pluginName }}</h3>
@@ -141,15 +127,12 @@ function requestClose() {
       <!-- Permission Info -->
       <div class="permission-info">
         <div class="permission-name">
-          <ElIcon v-if="riskLevel === 'high'" :size="18" class="risk-icon high">
-            <Warning />
-          </ElIcon>
-          <ElIcon v-else-if="riskLevel === 'medium'" :size="18" class="risk-icon medium">
-            <InfoFilled />
-          </ElIcon>
-          <ElIcon v-else :size="18" class="risk-icon low">
-            <Check />
-          </ElIcon>
+          <i v-if="riskLevel === 'high'" class="i-carbon-warning risk-icon high text-lg" />
+          <i
+            v-else-if="riskLevel === 'medium'"
+            class="i-carbon-information risk-icon medium text-lg"
+          />
+          <i v-else class="i-carbon-checkmark risk-icon low text-lg" />
           <span>{{ permissionName }}</span>
           <span class="risk-badge" :class="riskLevel">{{ riskLabel }}</span>
         </div>

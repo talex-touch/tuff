@@ -1,7 +1,8 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElLoading } from 'element-plus'
-import { h } from 'vue'
+import { TxLoadingOverlay } from '@talex-touch/tuffex'
+import { hasDocument } from '@talex-touch/utils/env'
+import { h, render } from 'vue'
 import PluginApplyInstall from '~/components/plugin/action/mention/PluginApplyInstall.vue'
 import { blowMention, popperMention } from '../mention/dialog-mention'
 
@@ -34,6 +35,27 @@ type DropEventPayload = {
 const dropPluginEvent = defineRawEvent<DropPluginRequest, DropPluginResponse>('drop:plugin')
 const dropEvent = defineRawEvent<DropEventPayload, void>('drop')
 
+function createLoadingOverlay(text: string) {
+  if (!hasDocument()) {
+    return { close: () => {} }
+  }
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const vnode = h(TxLoadingOverlay, {
+    loading: true,
+    fullscreen: true,
+    text,
+    background: 'rgba(0, 0, 0, 0.7)'
+  })
+  render(vnode, container)
+  return {
+    close: () => {
+      render(null, container)
+      container.remove()
+    }
+  }
+}
+
 export function getBufferedFile(name: string): Buffer | undefined {
   return bufferCache.get(name)
 }
@@ -49,11 +71,7 @@ async function handlePluginDrop(file: File): Promise<boolean> {
   }
 
   if (file.name.endsWith('.tpex')) {
-    const loadingInstance = ElLoading.service({
-      lock: true,
-      text: 'Parsing plugin package...',
-      background: 'rgba(0, 0, 0, 0.7)'
-    })
+    const loadingInstance = createLoadingOverlay('Parsing plugin package...')
 
     try {
       const arrayBuffer = await file.arrayBuffer()

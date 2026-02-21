@@ -33,7 +33,7 @@ export function wrapperAxios(
     },
     (error) => {
       // Do something with response error
-      console.log(error)
+      console.error('[Axios] Request failed', error)
 
       return {
         code: 500,

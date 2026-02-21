@@ -172,9 +172,13 @@ function handleKeydown(e: KeyboardEvent) {
   const enabled = getEnabledValues()
   if (enabled.length === 0) return
 
+  const fallbackValue = enabled[0]
+  if (fallbackValue == null)
+    return
+  const singleValue = Array.isArray(props.modelValue) ? undefined : props.modelValue
   const currentVal = props.multiple
-    ? (focusedValue.value ?? enabled[0])
-    : (props.modelValue as TxFlatRadioValue)
+    ? (focusedValue.value ?? fallbackValue)
+    : (singleValue ?? fallbackValue)
   const currentIdx = enabled.indexOf(currentVal)
   let nextIdx = -1
 
@@ -211,10 +215,13 @@ function handleKeydown(e: KeyboardEvent) {
   }
 
   if (nextIdx >= 0) {
+    const nextValue = enabled[nextIdx]
+    if (nextValue == null)
+      return
     if (props.multiple) {
-      focusedValue.value = enabled[nextIdx]
-    } else if (enabled[nextIdx] !== props.modelValue) {
-      select(enabled[nextIdx])
+      focusedValue.value = nextValue
+    } else if (nextValue !== props.modelValue) {
+      select(nextValue)
     }
   }
 }

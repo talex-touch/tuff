@@ -1,6 +1,6 @@
 <script setup lang="ts" name="MarketHeader">
 import type { MarketProviderResultMeta } from '@talex-touch/utils/market'
-import { TxButton, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
+import { TxButton, TxFlipOverlay, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
@@ -28,12 +28,21 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const showErrorDrawer = ref(false)
+const errorDrawerSource = ref<HTMLElement | null>(null)
+
+const FLIP_DURATION = 420
+const FLIP_ROTATE_X = 6
+const FLIP_ROTATE_Y = 8
+const FLIP_SPEED_BOOST = 1.08
 
 function handleSearch(query: string): void {
   emit('search', query)
 }
 
-function openErrorDetails(): void {
+function openErrorDetails(event?: MouseEvent): void {
+  if (event?.currentTarget instanceof HTMLElement) {
+    errorDrawerSource.value = event.currentTarget
+  }
   showErrorDrawer.value = true
 }
 
@@ -62,11 +71,14 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
           <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
             {{ sourcesCount }} {{ t('market.sources') }}
           </span>
-          <span
+          <TxButton
             v-if="providerStats"
+            variant="flat"
+            size="sm"
             class="provider-status"
             :class="{ clickable: providerStats.failed > 0 }"
-            @click="providerStats.failed > 0 && openErrorDetails()"
+            :disabled="providerStats.failed === 0"
+            @click="providerStats.failed > 0 && openErrorDetails($event)"
           >
             <span class="status-success">
               <i class="i-ri-check-line" />
@@ -80,7 +92,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
               <i class="i-ri-close-line" />
               {{ providerStats.failed }}
             </span>
-          </span>
+          </TxButton>
         </div>
         <TxButton variant="flat" size="sm" @click="emit('open-source-editor')">
           <div class="i-carbon-list" />
@@ -113,45 +125,62 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   </div>
 
   <!-- Error Details Drawer -->
-  <el-drawer
-    v-model="showErrorDrawer"
-    :title="t('market.errorDetails')"
-    direction="rtl"
-    size="400px"
-  >
-    <div class="error-drawer-content">
-      <div v-if="providerDetails?.length" class="provider-list">
-        <div
-          v-for="provider in providerDetails"
-          :key="provider.providerId"
-          class="provider-item"
-          :class="{ 'is-error': !provider.success }"
-        >
-          <div class="provider-header">
-            <span class="provider-name">{{ provider.providerName }}</span>
-            <span class="provider-type">{{ provider.providerType }}</span>
+  <Teleport to="body">
+    <TxFlipOverlay
+      v-model="showErrorDrawer"
+      :source="errorDrawerSource"
+      :duration="FLIP_DURATION"
+      :rotate-x="FLIP_ROTATE_X"
+      :rotate-y="FLIP_ROTATE_Y"
+      :speed-boost="FLIP_SPEED_BOOST"
+      transition-name="MarketErrorDrawer-Mask"
+      mask-class="MarketErrorDrawer-Mask"
+      card-class="MarketErrorDrawer-Card"
+    >
+      <template #default="{ close }">
+        <div class="error-drawer">
+          <div class="error-drawer-header">
+            <span class="error-drawer-title">{{ t('market.errorDetails') }}</span>
+            <TxButton variant="flat" size="sm" @click="close">
+              <i class="i-carbon-close" />
+            </TxButton>
           </div>
-          <div class="provider-status-row">
-            <span v-if="provider.success" class="status-badge success">
-              <i class="i-ri-check-line" />
-              {{ t('market.statusSuccess') }}
-            </span>
-            <span v-else class="status-badge error">
-              <i class="i-ri-close-line" />
-              {{ t('market.statusFailed') }}
-            </span>
-            <span class="item-count">{{ provider.itemCount }} {{ t('market.plugins') }}</span>
-          </div>
-          <div v-if="!provider.success && provider.error" class="error-message">
-            <code>{{ provider.error }}</code>
+          <div class="error-drawer-content">
+            <div v-if="providerDetails?.length" class="provider-list">
+              <div
+                v-for="provider in providerDetails"
+                :key="provider.providerId"
+                class="provider-item"
+                :class="{ 'is-error': !provider.success }"
+              >
+                <div class="provider-header">
+                  <span class="provider-name">{{ provider.providerName }}</span>
+                  <span class="provider-type">{{ provider.providerType }}</span>
+                </div>
+                <div class="provider-status-row">
+                  <span v-if="provider.success" class="status-badge success">
+                    <i class="i-ri-check-line" />
+                    {{ t('market.statusSuccess') }}
+                  </span>
+                  <span v-else class="status-badge error">
+                    <i class="i-ri-close-line" />
+                    {{ t('market.statusFailed') }}
+                  </span>
+                  <span class="item-count">{{ provider.itemCount }} {{ t('market.plugins') }}</span>
+                </div>
+                <div v-if="!provider.success && provider.error" class="error-message">
+                  <code>{{ provider.error }}</code>
+                </div>
+              </div>
+            </div>
+            <div v-else class="empty-state">
+              {{ t('market.noProviderData') }}
+            </div>
           </div>
         </div>
-      </div>
-      <div v-else class="empty-state">
-        {{ t('market.noProviderData') }}
-      </div>
-    </div>
-  </el-drawer>
+      </template>
+    </TxFlipOverlay>
+  </Teleport>
 </template>
 
 <style scoped lang="scss">
@@ -210,6 +239,41 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 }
 
 // Error drawer styles
+:global(.MarketErrorDrawer-Mask) {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+:global(.MarketErrorDrawer-Card) {
+  width: min(420px, 90vw);
+  max-height: 80vh;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.error-drawer {
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.error-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.error-drawer-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
 .error-drawer-content {
   padding: 0.5rem;
 }

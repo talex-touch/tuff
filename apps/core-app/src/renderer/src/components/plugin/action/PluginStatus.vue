@@ -3,6 +3,7 @@ import type { ITouchPlugin } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils'
 import { useI18n } from 'vue-i18n'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { devLog } from '~/utils/dev-log'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -48,7 +49,7 @@ function refresh(): void {
   )
   el.classList.add(mapper[status.value])
 
-  console.debug('PluginStatus', props.plugin.name, status.value)
+  devLog('[PluginStatus]', props.plugin.name, status.value)
 
   if (status.value === PluginStatus.DISABLED) {
     el.innerHTML = t('plugin.status.disabled')
@@ -85,9 +86,9 @@ function refresh(): void {
 
     func.value = async () => {
       try {
-        console.log(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
+        devLog(`[PluginStatus] Attempting to reload failed plugin: ${props.plugin.name}`)
         await pluginSDK.reload(props.plugin.name)
-        console.log(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
+        devLog(`[PluginStatus] Plugin reload initiated for: ${props.plugin.name}`)
       } catch (error) {
         console.error(`[PluginStatus] Failed to reload plugin ${props.plugin.name}:`, error)
         el.innerHTML = `${t('plugin.status.loadFailed')}`

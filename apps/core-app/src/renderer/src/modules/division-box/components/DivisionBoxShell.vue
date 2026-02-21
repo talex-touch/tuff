@@ -4,6 +4,7 @@ import type { DivisionBoxStateChangedPayload } from '@talex-touch/utils/transpor
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { devLog } from '~/utils/dev-log'
 import { useDrag } from '../composables/useDrag'
 import { useResize } from '../composables/useResize'
 import { useDivisionBoxStore } from '../store/division-box'
@@ -158,7 +159,7 @@ onMounted(() => {
       const oldState = currentState.value
       currentState.value = data.newState
 
-      console.log(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
+      devLog(`[DivisionBox ${props.sessionId}] State changed: ${oldState} -> ${data.newState}`)
 
       // Update loading state based on new state
       if (data.newState === 'active') {

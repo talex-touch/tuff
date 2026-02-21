@@ -7,12 +7,18 @@
 <script setup lang="ts" name="SettingPermission">
 import type { PermissionAuditLog } from '@talex-touch/utils'
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { Check, Clock, Delete, InfoFilled, Refresh, Search, Warning } from '@element-plus/icons-vue'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxTag } from '@talex-touch/tuffex'
-import { ElCollapse, ElCollapseItem, ElEmpty, ElIcon } from 'element-plus'
+import {
+  TuffInput,
+  TuffSelect,
+  TuffSelectItem,
+  TxButton,
+  TxEmpty,
+  TxTag
+} from '@talex-touch/tuffex'
+import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { PermissionList } from '~/components/permission'
@@ -343,15 +349,15 @@ onMounted(() => {
       <!-- Stats -->
       <div class="permission-stats">
         <div class="stat-item">
-          <ElIcon><Check /></ElIcon>
+          <i class="i-carbon-checkmark" />
           <span>{{ stats.total }} 个插件</span>
         </div>
         <div v-if="stats.withMissing > 0" class="stat-item warning">
-          <ElIcon><Warning /></ElIcon>
+          <i class="i-carbon-warning" />
           <span>{{ stats.withMissing }} 个缺少权限</span>
         </div>
         <div v-if="stats.legacy > 0" class="stat-item info">
-          <ElIcon><InfoFilled /></ElIcon>
+          <i class="i-carbon-information" />
           <span>{{ stats.legacy }} 个旧版 SDK</span>
         </div>
       </div>
@@ -360,7 +366,7 @@ onMounted(() => {
       <div class="permission-filters">
         <TuffInput v-model="searchQuery" placeholder="搜索插件..." clearable class="search-input">
           <template #prefix>
-            <ElIcon><Search /></ElIcon>
+            <i class="i-carbon-search" />
           </template>
         </TuffInput>
         <TuffSelect v-model="filterStatus" class="status-select">
@@ -369,7 +375,7 @@ onMounted(() => {
           <TuffSelectItem value="missing" label="缺少权限" />
         </TuffSelect>
         <TxButton :loading="loading" @click="loadData">
-          <ElIcon class="mr-1"><Refresh /></ElIcon>
+          <i class="i-carbon-renew mr-1" />
           刷新
         </TxButton>
       </div>
@@ -377,25 +383,22 @@ onMounted(() => {
       <!-- Plugin List -->
       <div v-if="loading" class="loading-state">加载中...</div>
 
-      <ElEmpty v-else-if="filteredPlugins.length === 0" description="没有找到插件" />
+      <TxEmpty v-else-if="filteredPlugins.length === 0" title="没有找到插件" compact />
 
       <ElCollapse v-else v-model="expandedPlugins" class="plugin-list">
         <ElCollapseItem v-for="plugin in filteredPlugins" :key="plugin.id" :name="plugin.id">
           <template #title>
             <div class="plugin-header">
               <div class="plugin-info">
-                <ElIcon
+                <i
                   v-if="plugin.missingRequired.length === 0 && plugin.enforcePermissions"
-                  class="status-icon success"
-                >
-                  <Check />
-                </ElIcon>
-                <ElIcon v-else-if="plugin.missingRequired.length > 0" class="status-icon danger">
-                  <Warning />
-                </ElIcon>
-                <ElIcon v-else class="status-icon warning">
-                  <InfoFilled />
-                </ElIcon>
+                  class="i-carbon-checkmark status-icon success"
+                />
+                <i
+                  v-else-if="plugin.missingRequired.length > 0"
+                  class="i-carbon-warning status-icon danger"
+                />
+                <i v-else class="i-carbon-information status-icon warning" />
                 <span class="plugin-name">{{ plugin.name }}</span>
                 <TxTag
                   v-if="!plugin.enforcePermissions && !plugin.warning"
@@ -423,7 +426,7 @@ onMounted(() => {
           <div class="plugin-content">
             <!-- Warning -->
             <div v-if="plugin.warning && !plugin.enforcePermissions" class="legacy-warning">
-              <ElIcon><InfoFilled /></ElIcon>
+              <i class="i-carbon-information" />
               <span>{{ plugin.warning }}</span>
             </div>
 
@@ -459,7 +462,7 @@ onMounted(() => {
     <TuffBlockSlot>
       <div class="audit-header">
         <TxButton @click="toggleAuditLogs">
-          <ElIcon class="mr-1"><Clock /></ElIcon>
+          <i class="i-carbon-time mr-1" />
           {{ showAuditLogs ? '收起日志' : '查看日志' }}
         </TxButton>
 
@@ -474,12 +477,12 @@ onMounted(() => {
           </TuffSelect>
 
           <TxButton :loading="auditLogsLoading" @click="loadAuditLogs">
-            <ElIcon class="mr-1"><Refresh /></ElIcon>
+            <i class="i-carbon-renew mr-1" />
             刷新
           </TxButton>
 
           <TxButton type="danger" plain @click="clearAuditLogs">
-            <ElIcon class="mr-1"><Delete /></ElIcon>
+            <i class="i-carbon-trash-can mr-1" />
             清空
           </TxButton>
         </template>
@@ -488,7 +491,7 @@ onMounted(() => {
       <div v-if="showAuditLogs" class="audit-content">
         <div v-if="auditLogsLoading" class="loading-state">加载中...</div>
 
-        <ElEmpty v-else-if="auditLogs.length === 0" description="暂无操作记录" :image-size="60" />
+        <TxEmpty v-else-if="auditLogs.length === 0" title="暂无操作记录" compact />
 
         <div v-else class="audit-list">
           <div class="audit-summary">共 {{ auditLogsTotal }} 条记录</div>

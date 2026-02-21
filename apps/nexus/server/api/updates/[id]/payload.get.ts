@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
   const asset = await requireUpdateAsset(event, update.payloadKey)
   setHeader(event, 'Content-Type', update.payloadContentType || asset.contentType)
   setHeader(event, 'Cache-Control', 'public, max-age=300')
-  setHeader(event, 'Content-Length', String(asset.data.byteLength))
+  setHeader(event, 'Content-Length', asset.data.byteLength)
 
   return asset.data
 })

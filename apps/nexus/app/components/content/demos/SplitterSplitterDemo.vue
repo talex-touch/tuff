@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const ratio = ref('')
+const ratio = ref(0.5)
 </script>
 
 <template>

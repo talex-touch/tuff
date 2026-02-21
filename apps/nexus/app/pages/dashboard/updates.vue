@@ -173,7 +173,7 @@ async function confirmDeleteUpdate(): Promise<boolean> {
   if (!pendingDeleteUpdate.value)
     return true
   try {
-    await $fetch(`/api/dashboard/updates/${pendingDeleteUpdate.value.id}`, { method: 'DELETE' })
+    await $fetch(`/api/dashboard/updates/${pendingDeleteUpdate.value.id}`, { method: 'DELETE' as unknown as 'PATCH' })
     await refreshUpdates()
   }
   catch (error: unknown) {

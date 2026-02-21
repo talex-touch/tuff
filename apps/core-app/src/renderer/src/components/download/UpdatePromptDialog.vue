@@ -1,14 +1,5 @@
 <script setup lang="ts">
 import type { GitHubRelease } from '@talex-touch/utils'
-import {
-  Calendar,
-  Close,
-  Document,
-  Download,
-  Loading,
-  Right,
-  Upload
-} from '@element-plus/icons-vue'
 import { DownloadStatus } from '@talex-touch/utils'
 import { TxModal } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
@@ -208,9 +199,7 @@ function handleCancelDownload() {
           </TxTag>
         </div>
         <div class="version-arrow">
-          <el-icon :size="24">
-            <Right />
-          </el-icon>
+          <i class="i-carbon-arrow-right text-2xl" />
         </div>
         <div class="version-item">
           <span class="version-label">{{ t('update.new_version') }}</span>
@@ -223,11 +212,11 @@ function handleCancelDownload() {
       <!-- Release Info -->
       <div class="release-info">
         <div class="info-item">
-          <el-icon><Calendar /></el-icon>
+          <i class="i-carbon-calendar" />
           <span>{{ formatDate(release.published_at) }}</span>
         </div>
         <div v-if="downloadSize > 0" class="info-item">
-          <el-icon><Download /></el-icon>
+          <i class="i-carbon-download" />
           <span>{{ formatSize(downloadSize) }}</span>
         </div>
       </div>
@@ -235,7 +224,7 @@ function handleCancelDownload() {
       <!-- Release Notes -->
       <div class="release-notes-section">
         <h3 class="section-title">
-          <el-icon><Document /></el-icon>
+          <i class="i-carbon-document" />
           {{ t('update.release_notes') }}
         </h3>
         <!-- eslint-disable-next-line vue/no-v-html -->
@@ -245,7 +234,7 @@ function handleCancelDownload() {
       <!-- Download Progress (when downloading) -->
       <div v-if="isDownloading && downloadProgress" class="download-progress-section">
         <h3 class="section-title">
-          <el-icon><Loading /></el-icon>
+          <i class="i-carbon-circle-dash animate-spin" />
           {{ t('update.downloading') }}
         </h3>
         <ProgressBar
@@ -284,15 +273,15 @@ function handleCancelDownload() {
             type="primary"
             @click="handleDownload"
           >
-            <el-icon><Download /></el-icon>
+            <i class="i-carbon-download" />
             {{ t('update.download_now') }}
           </TxButton>
           <TxButton v-if="isDownloadComplete" type="success" @click="handleInstall">
-            <el-icon><Upload /></el-icon>
+            <i class="i-carbon-upload" />
             {{ t('update.install_now') }}
           </TxButton>
           <TxButton v-if="isDownloading" type="warning" @click="handleCancelDownload">
-            <el-icon><Close /></el-icon>
+            <i class="i-carbon-close" />
             {{ t('update.cancel_download') }}
           </TxButton>
         </div>
@@ -353,7 +342,7 @@ function handleCancelDownload() {
   font-size: 14px;
 }
 
-.info-item .el-icon {
+.info-item i {
   color: var(--el-color-primary);
 }
 
@@ -371,7 +360,7 @@ function handleCancelDownload() {
   margin: 0 0 16px 0;
 }
 
-.section-title .el-icon {
+.section-title i {
   color: var(--el-color-primary);
 }
 

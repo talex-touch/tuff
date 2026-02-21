@@ -45,8 +45,6 @@ watch(
 )
 
 function handleOrderWay() {
-  console.log('a', orderWay.value)
-
   if (orderWay.value === EOrderWay.SORT_DESC) {
     _list.value = [...props.list]
     return
@@ -78,21 +76,12 @@ watch(
   }
 )
 
-function highlightText(text: string, matched: [number, number]) {
-  let result = ''
-
+function highlightParts(text: string, matched: [number, number]) {
   const [startIndex, endIndex] = matched
-
-  // replace text index 2 html
-  for (let i = 0; i < text.length; i++) {
-    if (i >= startIndex && i <= endIndex) {
-      result += `<span class="matched">${text[i]}</span>`
-    } else {
-      result += text[i]
-    }
-  }
-
-  return result
+  return text.split('').map((char, index) => ({
+    text: char,
+    matched: index >= startIndex && index <= endIndex
+  }))
 }
 
 function handleClick(item: AppListItem, ind: number) {
@@ -133,8 +122,15 @@ function handleClick(item: AppListItem, ind: number) {
         </div>
 
         <div class="Main">
-          <!-- eslint-disable-next-line vue/no-v-html -->
-          <p v-if="item.matched" v-html="highlightText(item.name, item.matched)" />
+          <p v-if="item.matched">
+            <span
+              v-for="(part, partIndex) in highlightParts(item.name, item.matched)"
+              :key="partIndex"
+              :class="{ matched: part.matched }"
+            >
+              {{ part.text }}
+            </span>
+          </p>
           <p v-else v-text="item.name" />
           <!-- <p class="desc">{{ item.desc }}</p> -->
         </div>

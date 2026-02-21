@@ -1,5 +1,58 @@
 import { describe, expect, it } from 'vitest'
-import { loadPluginModule } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+
+class FakeBuilder {
+  item: Record<string, unknown>
+
+  constructor(id: string) {
+    this.item = { id }
+  }
+
+  setSource() {
+    return this
+  }
+
+  setTitle(title: string) {
+    this.item.title = title
+    return this
+  }
+
+  setSubtitle(subtitle: string) {
+    this.item.subtitle = subtitle
+    return this
+  }
+
+  setIcon() {
+    return this
+  }
+
+  setMeta() {
+    return this
+  }
+
+  build() {
+    return this.item
+  }
+}
+
+function createTestGlobals(
+  items: Array<{ title?: string, subtitle?: string }>,
+  permissionAllowed: boolean,
+) {
+  return createPluginGlobals({
+    TuffItemBuilder: FakeBuilder,
+    permission: {
+      check: async () => permissionAllowed,
+      request: async () => permissionAllowed,
+    },
+    plugin: {
+      feature: {
+        clearItems() { items.length = 0 },
+        pushItems(next: Array<{ title?: string, subtitle?: string }>) { items.push(...next) },
+      },
+    },
+  })
+}
 
 const systemPlugin = loadPluginModule(new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url))
 const { __test: systemTest } = systemPlugin
@@ -62,5 +115,46 @@ describe('system actions plugin', () => {
     expect(tokens).toContain('showtuff')
     expect(tokens).toContain('open window')
     expect(tokens).toContain('openwindow')
+  })
+
+  it('shows permission hint when denied', async () => {
+    const items: Array<{ title?: string, subtitle?: string }> = []
+    const globals = createTestGlobals(items, false)
+
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      globals,
+    )
+
+    await pluginModule.onFeatureTriggered('system.actions', '')
+    expect(items.length).toBe(1)
+    expect(items[0]?.title).toBe('缺少系统权限')
+  })
+
+  it('returns empty hint when no matches', async () => {
+    const items: Array<{ title?: string }> = []
+    const globals = createTestGlobals(items, true)
+
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      globals,
+    )
+
+    await pluginModule.onFeatureTriggered('system.actions', '不存在的指令')
+    expect(items[0]?.title).toBe('没有匹配的系统操作')
+  })
+
+  it('builds grouped items for matches', async () => {
+    const items: Array<{ title?: string }> = []
+    const globals = createTestGlobals(items, true)
+
+    const pluginModule = loadPluginModule(
+      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+      globals,
+    )
+
+    await pluginModule.onFeatureTriggered('system.actions', '关机')
+    expect(items.length).toBeGreaterThan(1)
+    expect(items[0]?.title).toBe('电源操作')
   })
 })

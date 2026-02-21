@@ -42,7 +42,7 @@ const SDK_DOCS_MAP: Record<string, string> = {
 }
 
 const heroHighlightItems: FeatureSearchItem[] = heroHighlights
-  .map((item) => {
+  .map((item): FeatureSearchItem | null => {
     const path = HERO_HIGHLIGHT_PATHS[item.titleKey]
     if (!path)
       return null
@@ -54,7 +54,7 @@ const heroHighlightItems: FeatureSearchItem[] = heroHighlights
       path,
     }
   })
-  .filter((item): item is FeatureSearchItem => Boolean(item))
+  .filter((item): item is FeatureSearchItem => item !== null)
 
 const featureCardItems: FeatureSearchItem[] = featureCards.map(item => ({
   id: `feature-${extractKeySegment(item.titleKey, item.titleKey)}`,

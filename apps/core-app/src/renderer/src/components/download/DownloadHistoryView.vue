@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
-import { Clock, Delete, Search } from '@element-plus/icons-vue'
-import { TxBottomDialog } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxEmpty } from '@talex-touch/tuffex'
 import { DownloadModule } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -201,14 +200,14 @@ onMounted(() => {
     <div class="history-header">
       <div class="header-left">
         <h3 class="title">
-          <el-icon><Clock /></el-icon>
+          <i class="i-carbon-time" />
           {{ $t('download.history_title') }}
         </h3>
         <span class="history-count">{{ filteredHistory.length }} {{ $t('download.items') }}</span>
       </div>
       <div class="header-right">
         <TxButton v-if="historyList.length > 0" type="danger" @click="handleClearAllHistory">
-          <el-icon><Delete /></el-icon>
+          <i class="i-carbon-trash-can" />
           {{ $t('download.clear_all_history') }}
         </TxButton>
       </div>
@@ -223,7 +222,7 @@ onMounted(() => {
         @input="handleSearch"
       >
         <template #prefix>
-          <el-icon><Search /></el-icon>
+          <i class="i-carbon-search" />
         </template>
       </TuffInput>
       <TuffSelect
@@ -266,7 +265,7 @@ onMounted(() => {
         <el-skeleton :rows="5" animated />
       </div>
       <div v-else-if="filteredHistory.length === 0" class="empty-state">
-        <el-empty :description="$t('download.no_history')" />
+        <TxEmpty :title="$t('download.no_history')" />
       </div>
       <div v-else class="history-items">
         <HistoryCard

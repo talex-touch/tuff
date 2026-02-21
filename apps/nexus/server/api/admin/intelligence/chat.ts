@@ -207,14 +207,15 @@ export default defineEventHandler(async (event) => {
 
   const session = await getRuntimeSession(event, userId, sessionId)
   const history = ensureHistory(session?.history ?? [])
-  const nextHistory: ChatHistoryItem[] = [
-    ...history,
-    {
-      role: 'user',
-      content: message,
-      timestamp: Date.now(),
-    },
-  ].slice(-MAX_HISTORY)
+  const nextHistory = [...history]
+  nextHistory.push({
+    role: 'user',
+    content: message,
+    timestamp: Date.now(),
+  })
+  if (nextHistory.length > MAX_HISTORY) {
+    nextHistory.splice(0, nextHistory.length - MAX_HISTORY)
+  }
 
   await upsertRuntimeSession(event, {
     sessionId,

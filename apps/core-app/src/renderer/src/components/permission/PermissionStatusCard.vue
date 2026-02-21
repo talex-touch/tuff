@@ -5,9 +5,8 @@
  * Shows permission summary for a plugin.
  */
 
-import { Check, Close, InfoFilled, Warning } from '@element-plus/icons-vue'
 import { TuffProgress, TxButton, TxCard, TxTag } from '@talex-touch/tuffex'
-import { ElAlert, ElIcon } from 'element-plus'
+import { ElAlert } from 'element-plus'
 import { computed } from 'vue'
 
 interface Props {
@@ -43,11 +42,11 @@ const statusType = computed(() => {
   return 'success'
 })
 
-const statusIcon = computed(() => {
-  if (!props.enforcePermissions) return Close
-  if (props.missingRequired.length > 0) return Warning
-  if (props.grantedCount < totalDeclared.value) return InfoFilled
-  return Check
+const statusIcon = computed((): string => {
+  if (!props.enforcePermissions) return 'i-carbon-close'
+  if (props.missingRequired.length > 0) return 'i-carbon-warning'
+  if (props.grantedCount < totalDeclared.value) return 'i-carbon-information'
+  return 'i-carbon-checkmark'
 })
 
 const statusText = computed(() => {
@@ -70,9 +69,7 @@ const progressStatus = computed(() => {
     <template #header>
       <div class="card-header">
         <div class="header-left">
-          <ElIcon :size="20" class="status-icon" :class="[statusType]">
-            <component :is="statusIcon" />
-          </ElIcon>
+          <i :class="[statusIcon, statusType]" class="status-icon text-lg" />
           <span class="header-title">权限状态</span>
         </div>
         <TxButton size="small" @click="emit('manage')"> 管理权限 </TxButton>
@@ -89,9 +86,7 @@ const progressStatus = computed(() => {
       >
         <template #title>
           <div class="warning-title">
-            <ElIcon :size="16">
-              <Warning />
-            </ElIcon>
+            <i class="i-carbon-warning text-base" />
             <span>旧版 SDK</span>
           </div>
         </template>
@@ -125,9 +120,7 @@ const progressStatus = computed(() => {
       <!-- Missing Required -->
       <div v-if="missingRequired.length > 0" class="missing-section">
         <div class="missing-title">
-          <ElIcon :size="14">
-            <Warning />
-          </ElIcon>
+          <i class="i-carbon-warning text-sm" />
           <span>缺少必需权限：</span>
         </div>
         <div class="missing-list">

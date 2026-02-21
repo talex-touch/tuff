@@ -4,15 +4,11 @@ import { gsap } from 'gsap'
 import { computed, nextTick, onMounted, watch } from 'vue'
 import { hasDocument } from '@talex-touch/utils/env'
 import { TxCommandPalette } from '@talex-touch/tuffex'
+import type { CommandPaletteItem } from '@talex-touch/tuffex'
 import { useGlobalSearch } from '~/composables/useGlobalSearch'
 
-interface SearchCommandItem {
-  id: string
-  title: string
-  description?: string
-  keywords?: string[]
-  icon?: string
-  to: string
+type SearchCommandItem = CommandPaletteItem & {
+  to?: string
 }
 
 const { t } = useI18n()
@@ -70,9 +66,10 @@ function onQueryUpdate(value: string) {
   runSearch(value)
 }
 
-function onSelect(item: SearchCommandItem) {
-  if (item.to)
-    navigateTo(item.to)
+function onSelect(item: CommandPaletteItem) {
+  const target = (item as SearchCommandItem).to
+  if (target)
+    navigateTo(target)
 }
 
 function resolveSearchTrigger() {

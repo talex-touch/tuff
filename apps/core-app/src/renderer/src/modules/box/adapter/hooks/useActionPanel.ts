@@ -6,6 +6,7 @@ import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/eve
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { devLog } from '~/utils/dev-log'
 
 interface UseActionPanelOptions {
   openFlowSelector?: (item: TuffItem) => void
@@ -96,10 +97,10 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   // Window event listener for ⌘K - opens ActionPanel
   function handleTogglePinEvent(event: Event): void {
-    console.log('[useActionPanel] ⌘K event received')
+    devLog('[useActionPanel] ⌘K event received')
     const detail = (event as CustomEvent).detail
     if (detail?.item) {
-      console.log('[useActionPanel] opening action panel for item:', detail.item.id)
+      devLog('[useActionPanel] opening action panel for item:', detail.item.id)
       open(detail.item)
     }
   }

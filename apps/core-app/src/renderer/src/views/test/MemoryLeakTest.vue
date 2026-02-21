@@ -12,7 +12,6 @@ let testApp: ReturnType<typeof createApp> | null = null
 
 function addLog(message: string) {
   logs.value.push(`[${new Date().toLocaleTimeString()}] ${message}`)
-  console.log(message)
 }
 
 function createComponent() {

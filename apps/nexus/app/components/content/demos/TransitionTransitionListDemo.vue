@@ -7,7 +7,8 @@ const list = ref([
 ])
 const preset = ref('fade')
 const add = () => {
-  const nextId = list.value.length ? list.value[list.value.length - 1].id + 1 : 1
+  const last = list.value[list.value.length - 1]
+  const nextId = last ? last.id + 1 : 1
   list.value.push({ id: nextId, text: `Item ${nextId}` })
 }
 const remove = () => {

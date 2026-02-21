@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Delete, Download, Refresh } from '@element-plus/icons-vue'
-import { TxBottomDialog, TxCard, TxModal } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxCard, TxEmpty, TxModal } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
 import { computed, ref, watch } from 'vue'
@@ -168,11 +167,11 @@ function requestClose() {
     <div class="log-toolbar">
       <div class="toolbar-left">
         <TxButton :loading="loading" @click="refreshLogs">
-          <el-icon><Refresh /></el-icon>
+          <i class="i-carbon-renew" />
           {{ $t('common.refresh') }}
         </TxButton>
         <TxButton type="danger" @click="clearLogs">
-          <el-icon><Delete /></el-icon>
+          <i class="i-carbon-trash-can" />
           {{ $t('download.clear_logs') }}
         </TxButton>
       </div>
@@ -230,7 +229,7 @@ function requestClose() {
     <div class="log-content">
       <TxScroll height="500px">
         <pre v-if="logs" class="log-text">{{ logs }}</pre>
-        <el-empty v-else :description="$t('download.no_logs')" />
+        <TxEmpty v-else :title="$t('download.no_logs')" />
       </TxScroll>
     </div>
 
@@ -239,7 +238,7 @@ function requestClose() {
         {{ $t('common.close') }}
       </TxButton>
       <TxButton type="primary" @click="downloadLogs">
-        <el-icon><Download /></el-icon>
+        <i class="i-carbon-download" />
         {{ $t('download.download_logs') }}
       </TxButton>
     </template>

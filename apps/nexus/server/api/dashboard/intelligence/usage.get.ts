@@ -11,7 +11,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const limitRaw = typeof query.limit === 'string' ? Number(query.limit) : undefined
-  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 50), 500) : 200
+  const limit = typeof limitRaw === 'number' && Number.isFinite(limitRaw)
+    ? Math.min(Math.max(limitRaw, 50), 500)
+    : 200
 
   const { audits, total } = await listAudits(event, { limit, userId: targetUserId })
 

@@ -1,6 +1,7 @@
 <script lang="ts" name="TerminalTemplate" setup>
 import { useI18n } from 'vue-i18n'
 import InteractiveTerminal from '../terminal/InteractiveTerminal.vue'
+import { devLog } from '~/utils/dev-log'
 
 withDefaults(
   defineProps<{
@@ -16,7 +17,7 @@ const { t } = useI18n()
 const terminal = ref()
 
 onMounted(() => {
-  console.log('[TerminalTemplate] terminal reference', terminal.value)
+  devLog('[TerminalTemplate] terminal reference', terminal.value)
 })
 </script>
 

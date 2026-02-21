@@ -199,7 +199,7 @@ onMounted(() => {
             {{ t('dashboard.adminCredits.usage.subtitle', '按当前月份统计，支持搜索用户 ID / 邮箱') }}
           </p>
         </div>
-        <TxButton variant="secondary" size="small" @click="fetchUsage">
+        <TxButton variant="secondary" size="small" @click="() => fetchUsage()">
           {{ t('common.refresh', '刷新') }}
         </TxButton>
       </div>
@@ -291,7 +291,7 @@ onMounted(() => {
             {{ t('dashboard.adminCredits.ledger.subtitle', '记录每一次积分消耗') }}
           </p>
         </div>
-        <TxButton variant="secondary" size="small" @click="fetchLedger">
+        <TxButton variant="secondary" size="small" @click="() => fetchLedger()">
           {{ t('common.refresh', '刷新') }}
         </TxButton>
       </div>

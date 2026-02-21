@@ -7,10 +7,9 @@
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
-import { TxButton, TxTag } from '@talex-touch/tuffex'
+import { TxButton, TxEmpty, TxTag } from '@talex-touch/tuffex'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
-import { ElEmpty } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
@@ -363,11 +362,7 @@ onMounted(() => {
     </div>
 
     <!-- No Permissions -->
-    <ElEmpty
-      v-else-if="!hasPermissions"
-      :description="t('plugin.permissions.empty')"
-      :image-size="80"
-    />
+    <TxEmpty v-else-if="!hasPermissions" :title="t('plugin.permissions.empty')" compact />
 
     <!-- Permission Content -->
     <template v-else>
@@ -472,10 +467,10 @@ onMounted(() => {
         <div v-if="shortcutsLoading" class="PluginShortcuts-Loading">
           {{ t('plugin.permissions.shortcuts.loading') }}
         </div>
-        <ElEmpty
+        <TxEmpty
           v-else-if="pluginShortcuts.length === 0"
-          :description="t('plugin.permissions.shortcuts.empty')"
-          :image-size="80"
+          :title="t('plugin.permissions.shortcuts.empty')"
+          compact
         />
         <div v-else class="PluginShortcuts-List">
           <div v-for="shortcut in pluginShortcuts" :key="shortcut.id" class="PluginShortcuts-Item">

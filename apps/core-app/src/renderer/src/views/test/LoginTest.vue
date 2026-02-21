@@ -18,7 +18,7 @@ async function handleLogin() {
     const result = await login({
       onSuccess: (user) => {
         toast.success('登录成功！')
-        console.log('用户登录成功:', user)
+        void user
       },
       onError: (error) => {
         toast.error(`登录失败: ${error.message || error}`)
