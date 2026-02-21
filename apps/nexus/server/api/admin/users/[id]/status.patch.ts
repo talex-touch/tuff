@@ -16,10 +16,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Cannot change your own status.' })
 
   const body = await readBody<{ status?: string }>(event)
-  const status = body?.status?.trim().toLowerCase()
-
-  if (!status || !(ALLOWED_STATUSES as readonly string[]).includes(status))
+  const rawStatus = body?.status?.trim().toLowerCase()
+  if (!rawStatus || !(ALLOWED_STATUSES as readonly string[]).includes(rawStatus))
     throw createError({ statusCode: 400, statusMessage: 'Invalid status.' })
+  const status = rawStatus as (typeof ALLOWED_STATUSES)[number]
 
   const existing = await getUserById(event, id)
   if (!existing)

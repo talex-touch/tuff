@@ -1,18 +1,5 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
-import {
-  Box,
-  Calendar,
-  Check,
-  Close,
-  Delete,
-  Files,
-  Folder,
-  FolderOpened,
-  Odometer,
-  Remove,
-  Timer
-} from '@element-plus/icons-vue'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -46,16 +33,16 @@ const statusColor = computed(() => {
   }
 })
 
-const statusIcon = computed(() => {
+const statusIcon = computed((): string => {
   switch (props.history.status) {
     case DownloadStatus.COMPLETED:
-      return Check
+      return 'i-carbon-checkmark'
     case DownloadStatus.FAILED:
-      return Close
+      return 'i-carbon-close'
     case DownloadStatus.CANCELLED:
-      return Remove
+      return 'i-carbon-close'
     default:
-      return Check
+      return 'i-carbon-checkmark'
   }
 })
 
@@ -155,9 +142,7 @@ function formatSpeed(bytesPerSecond: number): string {
       <!-- 左侧图标和信息 -->
       <div class="history-info">
         <div class="history-icon">
-          <el-icon :color="statusColor">
-            <component :is="statusIcon" />
-          </el-icon>
+          <i :class="statusIcon" :style="{ color: statusColor }" />
         </div>
         <div class="history-details">
           <div class="history-name" :title="history.filename">
@@ -165,23 +150,23 @@ function formatSpeed(bytesPerSecond: number): string {
           </div>
           <div class="history-meta">
             <span class="meta-item">
-              <el-icon><Calendar /></el-icon>
+              <i class="i-carbon-calendar" />
               {{ formatDate(history.completedAt || history.createdAt) }}
             </span>
             <span class="meta-item">
-              <el-icon><Files /></el-icon>
+              <i class="i-carbon-document-multiple" />
               {{ formatSize(history.totalSize || 0) }}
             </span>
             <span class="meta-item">
-              <el-icon><Box /></el-icon>
+              <i class="i-carbon-box" />
               {{ getModuleName(history.module) }}
             </span>
             <span v-if="history.duration" class="meta-item">
-              <el-icon><Timer /></el-icon>
+              <i class="i-carbon-time" />
               {{ formatDuration(history.duration) }}
             </span>
             <span v-if="history.averageSpeed" class="meta-item">
-              <el-icon><Odometer /></el-icon>
+              <i class="i-carbon-gauge" />
               {{ formatSpeed(history.averageSpeed) }}
             </span>
           </div>
@@ -196,7 +181,7 @@ function formatSpeed(bytesPerSecond: number): string {
           placement="top"
         >
           <TxButton size="small" type="primary" circle @click="$emit('open-file', history.id)">
-            <el-icon><FolderOpened /></el-icon>
+            <i class="i-carbon-folder-open" />
           </TxButton>
         </TxTooltip>
         <TxTooltip
@@ -205,12 +190,12 @@ function formatSpeed(bytesPerSecond: number): string {
           placement="top"
         >
           <TxButton size="small" circle @click="$emit('show-in-folder', history.id)">
-            <el-icon><Folder /></el-icon>
+            <i class="i-carbon-folder" />
           </TxButton>
         </TxTooltip>
         <TxTooltip :content="$t('download.clear_history_item')" placement="top">
           <TxButton size="small" type="danger" circle @click="$emit('clear', history.id)">
-            <el-icon><Delete /></el-icon>
+            <i class="i-carbon-trash-can" />
           </TxButton>
         </TxTooltip>
       </div>
@@ -278,7 +263,7 @@ function formatSpeed(bytesPerSecond: number): string {
   flex-shrink: 0;
 }
 
-.history-icon .el-icon {
+.history-icon i {
   font-size: 20px;
 }
 
@@ -311,7 +296,7 @@ function formatSpeed(bytesPerSecond: number): string {
   gap: 4px;
 }
 
-.meta-item .el-icon {
+.meta-item i {
   font-size: 14px;
 }
 

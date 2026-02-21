@@ -85,7 +85,10 @@ function close() {
             <div class="file-path-row">
               <div class="i-carbon-document text-14px shrink-0 text-secondary" />
               <span class="file-path" :title="file.path">{{ file.path }}</span>
-              <button
+              <TxButton
+                variant="ghost"
+                size="sm"
+                :border="false"
                 class="copy-btn"
                 :class="{ copied: copiedId === file.fileId }"
                 :title="t('common.copy')"
@@ -100,7 +103,7 @@ function close() {
                   :class="copiedId === file.fileId ? 'i-carbon-checkmark' : 'i-carbon-copy'"
                   class="text-12px"
                 />
-              </button>
+              </TxButton>
             </div>
             <div v-if="file.lastError" class="file-error">
               {{ file.lastError }}
@@ -246,6 +249,7 @@ function close() {
   justify-content: center;
   width: 24px;
   height: 24px;
+  padding: 0;
   border: none;
   border-radius: 4px;
   background: transparent;

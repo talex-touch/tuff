@@ -8,6 +8,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
 import { createCoreBoxKeyTransport } from '../transport/key-transport'
+import { devLog } from '~/utils/dev-log'
 
 interface SectionRange {
   start: number
@@ -401,7 +402,7 @@ export function useKeyboard(
   function onKeyDown(event: KeyboardEvent): void {
     // Debug: log all meta+arrow events at entry point
     if (event.metaKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
-      console.log(
+      devLog(
         '[useKeyboard] META+ARROW at entry, key:',
         event.key,
         'hasClass:',
@@ -448,7 +449,7 @@ export function useKeyboard(
 
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
-      console.log(
+      devLog(
         '[useKeyboard] ⌘← after class check, uiMode:',
         uiMode,
         'shouldForward:',
@@ -539,7 +540,7 @@ export function useKeyboard(
     } else if (event.key === 'ArrowLeft') {
       // Meta+Left: show calculation history (check first to ensure it works in all modes)
       if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-        console.log('[useKeyboard] Dispatching corebox:show-calculation-history event')
+        devLog('[useKeyboard] Dispatching corebox:show-calculation-history event')
         window.dispatchEvent(new CustomEvent('corebox:show-calculation-history'))
         event.preventDefault()
         return

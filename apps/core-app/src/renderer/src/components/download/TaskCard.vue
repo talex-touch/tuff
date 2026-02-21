@@ -1,20 +1,5 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
-import {
-  Check,
-  Clock,
-  Close,
-  Delete,
-  Folder,
-  FolderOpened,
-  InfoFilled,
-  Loading,
-  MoreFilled,
-  Refresh,
-  Remove,
-  VideoPause,
-  VideoPlay
-} from '@element-plus/icons-vue'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,20 +46,20 @@ const statusColor = computed(() => {
   }
 })
 
-const statusIcon = computed(() => {
+const statusIcon = computed((): string => {
   switch (props.task.status) {
     case DownloadStatus.COMPLETED:
-      return Check
+      return 'i-carbon-checkmark'
     case DownloadStatus.FAILED:
-      return Close
+      return 'i-carbon-close'
     case DownloadStatus.PAUSED:
-      return VideoPause
+      return 'i-carbon-pause'
     case DownloadStatus.CANCELLED:
-      return Remove
+      return 'i-carbon-subtract'
     case DownloadStatus.PENDING:
-      return Clock
+      return 'i-carbon-time'
     default:
-      return Clock
+      return 'i-carbon-time'
   }
 })
 
@@ -116,12 +101,8 @@ function formatSize(bytes: number): string {
     <div class="task-header">
       <div class="task-info">
         <div class="task-icon">
-          <el-icon v-if="task.status === 'downloading'" class="loading-icon">
-            <Loading />
-          </el-icon>
-          <el-icon v-else :color="statusColor">
-            <component :is="statusIcon" />
-          </el-icon>
+          <i v-if="task.status === 'downloading'" class="i-carbon-circle-dash loading-icon" />
+          <i v-else :class="statusIcon" :style="{ color: statusColor }" />
         </div>
         <div class="task-details">
           <div class="task-name" :title="task.filename">
@@ -140,7 +121,7 @@ function formatSize(bytes: number): string {
           circle
           @click="$emit('pause', task.id)"
         >
-          <el-icon><VideoPause /></el-icon>
+          <i class="i-carbon-pause" />
         </TxButton>
         <TxButton
           v-else-if="task.status === 'paused'"
@@ -149,7 +130,7 @@ function formatSize(bytes: number): string {
           circle
           @click="$emit('resume', task.id)"
         >
-          <el-icon><VideoPlay /></el-icon>
+          <i class="i-carbon-play" />
         </TxButton>
         <TxButton
           v-if="task.status === 'failed'"
@@ -158,7 +139,7 @@ function formatSize(bytes: number): string {
           circle
           @click="$emit('retry', task.id)"
         >
-          <el-icon><Refresh /></el-icon>
+          <i class="i-carbon-renew" />
         </TxButton>
         <TxButton
           v-if="task.status === 'completed'"
@@ -167,23 +148,23 @@ function formatSize(bytes: number): string {
           circle
           @click="$emit('open-file', task.id)"
         >
-          <el-icon><FolderOpened /></el-icon>
+          <i class="i-carbon-folder-open" />
         </TxButton>
         <el-dropdown v-if="showMoreActions" trigger="click">
           <TxButton size="small" circle>
-            <el-icon><MoreFilled /></el-icon>
+            <i class="i-carbon-overflow-menu-vertical" />
           </TxButton>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item @click="$emit('show-details', task.id)">
-                <el-icon><InfoFilled /></el-icon>
+                <i class="i-carbon-information" />
                 {{ $t('download.show_details') }}
               </el-dropdown-item>
               <el-dropdown-item
                 v-if="task.status === 'completed'"
                 @click="$emit('show-in-folder', task.id)"
               >
-                <el-icon><Folder /></el-icon>
+                <i class="i-carbon-folder" />
                 {{ $t('download.show_in_folder') }}
               </el-dropdown-item>
               <el-dropdown-item
@@ -191,7 +172,7 @@ function formatSize(bytes: number): string {
                 divided
                 @click="$emit('cancel', task.id)"
               >
-                <el-icon><Close /></el-icon>
+                <i class="i-carbon-close" />
                 {{ $t('download.cancel') }}
               </el-dropdown-item>
               <el-dropdown-item
@@ -199,14 +180,14 @@ function formatSize(bytes: number): string {
                 divided
                 @click="$emit('remove', task.id)"
               >
-                <el-icon><Remove /></el-icon>
+                <i class="i-carbon-subtract" />
                 {{ $t('download.remove_from_list') }}
               </el-dropdown-item>
               <el-dropdown-item
                 v-if="task.status === 'completed'"
                 @click="$emit('delete', task.id)"
               >
-                <el-icon><Delete /></el-icon>
+                <i class="i-carbon-trash-can" />
                 {{ $t('download.delete_file') }}
               </el-dropdown-item>
             </el-dropdown-menu>

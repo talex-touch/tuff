@@ -3,6 +3,7 @@ import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { blowMention, forTouchTip } from '../mention/dialog-mention'
+import { devLog } from '~/utils/dev-log'
 
 export async function urlHooker(): Promise<void> {
   const transport = useTuffTransport()
@@ -114,11 +115,11 @@ export function screenCapture(): void {
       }
     })
 
-    console.log(data, media.getTracks())
+    devLog('[screenCapture]', data, media.getTracks())
     //
     // const track = media.getVideoTracks()[0]
 
-    console.log(data, media)
+    devLog('[screenCapture]', data, media)
 
     // video.srcObject = media
     // video.onloadedmetadata = (e) => {

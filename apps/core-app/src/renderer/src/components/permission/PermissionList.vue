@@ -5,21 +5,7 @@
  * Displays a list of permissions with their grant status.
  */
 
-import {
-  Check,
-  Coin,
-  Connection,
-  Cpu,
-  Document,
-  DocumentCopy,
-  InfoFilled,
-  Monitor,
-  Platform,
-  Warning
-} from '@element-plus/icons-vue'
-import { TxTag, TxTooltip } from '@talex-touch/tuffex'
-import { ElEmpty, ElIcon, ElSwitch } from 'element-plus'
-import type { Component } from 'vue'
+import { TuffSwitch, TxEmpty, TxTag, TxTooltip } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 interface PermissionItem {
@@ -71,14 +57,14 @@ const categoryNames: Record<string, string> = {
   window: '窗口'
 }
 
-const categoryIcons: Record<string, Component> = {
-  fs: Document,
-  clipboard: DocumentCopy,
-  network: Connection,
-  system: Cpu,
-  intelligence: Coin,
-  storage: Platform,
-  window: Monitor
+const categoryIcons: Record<string, string> = {
+  fs: 'i-carbon-document',
+  clipboard: 'i-carbon-document-copy',
+  network: 'i-carbon-network-1',
+  system: 'i-carbon-cpu',
+  intelligence: 'i-carbon-currency-dollar',
+  storage: 'i-carbon-application',
+  window: 'i-carbon-monitor'
 }
 
 function getRiskColor(risk: string) {
@@ -114,17 +100,11 @@ function handleToggle(id: string, granted: boolean) {
 
 <template>
   <div class="permission-list">
-    <ElEmpty
-      v-if="showEmpty && permissions.length === 0"
-      description="此插件未声明任何权限"
-      :image-size="60"
-    />
+    <TxEmpty v-if="showEmpty && permissions.length === 0" title="此插件未声明任何权限" />
 
     <div v-for="(perms, category) in groupedPermissions" :key="category" class="permission-group">
       <div class="group-header">
-        <ElIcon :size="16">
-          <component :is="categoryIcons[category] || Check" />
-        </ElIcon>
+        <i :class="categoryIcons[category] || 'i-carbon-checkmark'" class="text-sm" />
         <span>{{ categoryNames[category] || category }}</span>
       </div>
 
@@ -147,9 +127,7 @@ function handleToggle(id: string, granted: boolean) {
               {{ perm.desc }}
             </p>
             <div v-if="perm.reason" class="item-reason">
-              <ElIcon :size="12">
-                <InfoFilled />
-              </ElIcon>
+              <i class="i-carbon-information text-xs" />
               <span>{{ perm.reason }}</span>
             </div>
           </div>
@@ -160,14 +138,10 @@ function handleToggle(id: string, granted: boolean) {
               content="此权限为必需权限"
               :anchor="{ placement: 'top', showArrow: true }"
             >
-              <ElIcon :size="18" class="required-icon">
-                <Warning />
-              </ElIcon>
+              <i class="i-carbon-warning required-icon text-lg" />
             </TxTooltip>
-            <ElIcon v-else-if="perm.granted" :size="18" class="granted-icon">
-              <Check />
-            </ElIcon>
-            <ElSwitch
+            <i v-else-if="perm.granted" class="i-carbon-checkmark granted-icon text-lg" />
+            <TuffSwitch
               v-if="!readonly"
               :model-value="perm.granted"
               :disabled="perm.required && perm.granted"

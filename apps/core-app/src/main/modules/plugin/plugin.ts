@@ -1681,6 +1681,7 @@ export class TouchPlugin implements ITouchPlugin {
     const _path = {
       relative: path.relative(app.rootPath, this.pluginPath),
       root: app.rootPath,
+      app: app.app?.getAppPath?.(),
       plugin: this.pluginPath
     }
 

@@ -278,9 +278,12 @@ function encryptApiKey(apiKey: string): string {
   const key = getEncryptionKey()
   const bytes = new TextEncoder().encode(apiKey)
   const keyBytes = new TextEncoder().encode(key)
+  const keyLength = keyBytes.length || 1
   const encrypted = new Uint8Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) {
-    encrypted[i] = bytes[i] ^ keyBytes[i % keyBytes.length]
+    const keyByte = keyBytes[i % keyLength] ?? 0
+    const plainByte = bytes[i] ?? 0
+    encrypted[i] = plainByte ^ keyByte
   }
   return btoa(String.fromCharCode(...encrypted))
 }
@@ -289,9 +292,12 @@ function decryptApiKey(encrypted: string): string {
   const key = getEncryptionKey()
   const bytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0))
   const keyBytes = new TextEncoder().encode(key)
+  const keyLength = keyBytes.length || 1
   const decrypted = new Uint8Array(bytes.length)
   for (let i = 0; i < bytes.length; i++) {
-    decrypted[i] = bytes[i] ^ keyBytes[i % keyBytes.length]
+    const keyByte = keyBytes[i % keyLength] ?? 0
+    const cipherByte = bytes[i] ?? 0
+    decrypted[i] = cipherByte ^ keyByte
   }
   return new TextDecoder().decode(decrypted)
 }

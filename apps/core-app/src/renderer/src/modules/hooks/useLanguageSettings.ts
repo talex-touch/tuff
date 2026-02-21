@@ -2,6 +2,7 @@ import type { SupportedLanguage } from '~/modules/lang'
 import { computed } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { SUPPORTED_LANGUAGES, useLanguage } from '~/modules/lang'
+import { devLog } from '~/utils/dev-log'
 
 /**
  * 语言设置相关的 hooks
@@ -28,11 +29,11 @@ export function useLanguageSettings() {
 
   const selectedLanguage = computed({
     get: () => {
-      console.debug('[useLanguageSettings] Getting selectedLanguage:', currentLanguage.value)
+      devLog('[useLanguageSettings] Getting selectedLanguage:', currentLanguage.value)
       return currentLanguage.value
     },
     set: async (value: string) => {
-      console.log('[useLanguageSettings] Setting selectedLanguage to:', value)
+      devLog('[useLanguageSettings] Setting selectedLanguage to:', value)
       try {
         await switchLanguage(value as SupportedLanguage)
       } catch (error) {
@@ -44,7 +45,7 @@ export function useLanguageSettings() {
   const handleLanguageChange = async (lang: string) => {
     try {
       await switchLanguage(lang as SupportedLanguage)
-      console.debug(`[useLanguageSettings] Language changed to: ${lang}`)
+      devLog(`[useLanguageSettings] Language changed to: ${lang}`)
     } catch (error) {
       console.error('[useLanguageSettings] Failed to change language:', error)
     }
@@ -53,7 +54,7 @@ export function useLanguageSettings() {
   const handleFollowSystemChange = async (follow: boolean) => {
     try {
       await setFollowSystemLanguage(follow)
-      console.debug(`[useLanguageSettings] Follow system language: ${follow}`)
+      devLog(`[useLanguageSettings] Follow system language: ${follow}`)
     } catch (error) {
       console.error('[useLanguageSettings] Failed to change follow system setting:', error)
     }

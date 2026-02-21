@@ -407,7 +407,7 @@ function resolveStatusLabels(locale: string): Record<StatusStage, string> {
   }
 }
 
-function resolveToolChoice(toolAvailable: boolean) {
+function resolveToolChoice(toolAvailable: boolean): 'auto' | 'none' | { type: 'function'; function: { name: string } } | undefined {
   if (!toolAvailable)
     return undefined
   return { type: 'function', function: { name: 'docs_context' } }
@@ -454,6 +454,23 @@ function resolveUsage(result: ProviderChatResult, messages: AssistantMessage[], 
     }
   }
   return estimateUsage(messages, doc, result.content, summary)
+}
+
+function mergeUsage(first?: TokenUsage, second?: TokenUsage): TokenUsage | undefined {
+  if (!first && !second)
+    return undefined
+  if (!first)
+    return second
+  if (!second)
+    return first
+  const promptTokens = (first.promptTokens || 0) + (second.promptTokens || 0)
+  const completionTokens = (first.completionTokens || 0) + (second.completionTokens || 0)
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    estimated: Boolean(first.estimated || second.estimated),
+  }
 }
 
 async function recordAudit(
@@ -1715,6 +1732,8 @@ function buildOpenAiChatEndpoints(baseUrl: string): string[] {
   if (directMatch) {
     push(trimmed)
     const prefix = directMatch[1]
+    if (!prefix)
+      return endpoints
     for (const candidate of buildOpenAiCompatBaseUrls(prefix)) {
       push(`${candidate.replace(/\/+$/, '')}/chat/completions`)
     }

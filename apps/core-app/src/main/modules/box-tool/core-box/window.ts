@@ -4,6 +4,7 @@ import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { CoreBoxInputChange } from './input-transport'
 import * as fs from 'node:fs'
+import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -1132,9 +1133,18 @@ export class WindowManager {
       // Pre-compute initial data to inject synchronously
       const initialThemeData = { dark: this.currentThemeIsDark }
 
+      let resolvedTransportModulePath: string | null = null
+      try {
+        const requireFromMain = createRequire(import.meta.url)
+        resolvedTransportModulePath = requireFromMain.resolve('@talex-touch/utils/transport')
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to resolve transport module path', { error })
+      }
+
       const channelScript = `
 (function() {
   const uniqueKey = "${plugin._uniqueChannelKey}";
+  const transportModulePath = ${JSON.stringify(resolvedTransportModulePath)};
 
   // Inject initial data synchronously so it's available immediately
   window['$tuffInitialData'] = ${JSON.stringify({ theme: initialThemeData })};
@@ -1376,11 +1386,34 @@ export class WindowManager {
   try {
     const { createRequire } = require('node:module');
     const path = require('node:path');
-    const rootPath = window?.$plugin?.path?.root;
-    const requireFromRoot = rootPath
-      ? createRequire(path.join(rootPath, 'package.json'))
-      : require;
-    const { createPluginTuffTransport } = requireFromRoot('@talex-touch/utils/transport');
+    let transportModule;
+    if (transportModulePath) {
+      transportModule = require(transportModulePath);
+    }
+    if (!transportModule) {
+      const appPath = window?.$plugin?.path?.app;
+      const rootPath = window?.$plugin?.path?.root;
+      const pluginPath = window?.$plugin?.path?.plugin;
+      const baseCandidates = [
+        appPath,
+        rootPath,
+        pluginPath ? path.resolve(pluginPath, '..', '..') : undefined
+      ].filter(Boolean);
+      const uniqueCandidates = Array.from(new Set(baseCandidates));
+      for (const base of uniqueCandidates) {
+        try {
+          const requireFromRoot = createRequire(path.join(base, 'package.json'));
+          transportModule = requireFromRoot('@talex-touch/utils/transport');
+          break;
+        } catch (error) {
+          void error;
+        }
+      }
+    }
+    if (!transportModule) {
+      transportModule = require('@talex-touch/utils/transport');
+    }
+    const { createPluginTuffTransport } = transportModule;
     window['$transport'] = createPluginTuffTransport(window['$channel']);
   } catch (error) {
     console.error('[CoreBox] Failed to init plugin transport:', error);

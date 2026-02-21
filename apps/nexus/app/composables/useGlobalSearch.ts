@@ -35,6 +35,8 @@ interface SearchContentRecord {
 
 let searchRunId = 0
 
+const isSearchResult = (item: GlobalSearchResult | null): item is GlobalSearchResult => item !== null
+
 interface DocIndexItem {
   id: string
   path: string
@@ -100,16 +102,17 @@ async function loadComponentIndex(locale: string) {
         if (!rawPath || !matchesLocale(rawPath, locale))
           return null
         const path = normalizeDocPath(rawPath)
-        return {
+        const searchTokens = Array.isArray(record.tags) ? record.tags : undefined
+        const base: DocIndexItem = {
           id: `component-${path}`,
           path,
           title: resolveDocTitle(record) || path,
           description: resolveDocDescription(record),
           icon: 'i-carbon-cube',
-          searchTokens: Array.isArray(record.tags) ? record.tags : undefined,
         }
+        return searchTokens ? { ...base, searchTokens } : base
       })
-      .filter((item): item is DocIndexItem => Boolean(item))
+      .filter((item): item is DocIndexItem => item !== null)
 
     componentIndexCache.set(locale, items)
     componentIndexPromise.delete(locale)
@@ -254,7 +257,7 @@ export function useGlobalSearch() {
   async function searchComponents(trimmed: string) {
     const index = await loadComponentIndex(locale.value)
     return index
-      .map((item) => {
+      .map((item): GlobalSearchResult | null => {
         const match = matchFeature({
           title: item.title,
           desc: item.description,
@@ -274,14 +277,14 @@ export function useGlobalSearch() {
           keywords: item.searchTokens,
         }
       })
-      .filter((item): item is GlobalSearchResult => Boolean(item))
+      .filter(isSearchResult)
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
   }
 
   function searchPages(trimmed: string) {
     return pageSearchItems
-      .map((item) => {
+      .map((item): GlobalSearchResult | null => {
         const title = t(item.titleKey)
         const description = item.descriptionKey ? t(item.descriptionKey) : ''
         const match = matchFeature({
@@ -303,14 +306,14 @@ export function useGlobalSearch() {
           keywords: item.searchTokens,
         }
       })
-      .filter((item): item is GlobalSearchResult => Boolean(item))
+      .filter(isSearchResult)
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
   }
 
   function searchFeatures(trimmed: string) {
     const matched = featureSearchItems
-      .map((item) => {
+      .map((item): GlobalSearchResult | null => {
         const title = t(item.titleKey)
         const description = item.descriptionKey ? t(item.descriptionKey) : ''
         const match = matchFeature({
@@ -332,7 +335,7 @@ export function useGlobalSearch() {
           keywords: item.searchTokens,
         }
       })
-      .filter((item): item is GlobalSearchResult => Boolean(item))
+      .filter(isSearchResult)
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
     return matched

@@ -36,7 +36,7 @@ const listItems = [
 ]
 
 function handleClick(type: string) {
-  console.log('Clicked:', type)
+  void type
 }
 </script>
 

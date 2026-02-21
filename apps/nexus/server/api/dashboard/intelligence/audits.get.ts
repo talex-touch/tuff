@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   const limitRaw = typeof query.limit === 'string' ? Number(query.limit) : undefined
   const limit = Number.isFinite(limitRaw) ? Number(limitRaw) : undefined
   const pageRaw = typeof query.page === 'string' ? Number(query.page) : undefined
-  const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1
+  const page = typeof pageRaw === 'number' && Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1
   const providerId = typeof query.providerId === 'string' ? query.providerId.trim() : null
   const targetUserId = typeof query.userId === 'string' ? query.userId.trim() : null
 

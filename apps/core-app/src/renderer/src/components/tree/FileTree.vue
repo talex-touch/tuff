@@ -2,6 +2,7 @@
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
 import IconButton from '~/components/base/button/IconButton.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
+import { devLog } from '~/utils/dev-log'
 
 const props = defineProps({
   fileAdpoter: {
@@ -40,10 +41,10 @@ function currentChange(val) {
 let _resolve, g_node
 async function refresh() {
   if (!g_node || !_resolve) return
-  console.log(treeDom.value)
+  devLog('[FileTree] Refresh tree', treeDom.value)
 
   g_node.childNodes = []
-  console.log(g_node)
+  devLog('[FileTree] Refresh node', g_node)
   _resolve(item2Obj(await props.fileAdpoter.list()))
 }
 
@@ -122,6 +123,18 @@ function suffix2Icon(suffix) {
   }
 }
 
+function resolveIsFile(item) {
+  if (!item || typeof item !== 'object') return false
+  if (typeof item.isFile === 'function') return item.isFile()
+  if (typeof item.isFile === 'boolean') return item.isFile
+  if (typeof item.file === 'boolean') return item.file
+  if (typeof item.type === 'number') return item.type === 1
+  const symbols = Object.getOwnPropertySymbols(item)
+  const typeSymbol = symbols.find((symbol) => symbol.description === 'type')
+  if (typeSymbol) return item[typeSymbol] === 1
+  return false
+}
+
 function item2Obj(array, paths = []) {
   if (!array) return []
   const t = []
@@ -129,7 +142,7 @@ function item2Obj(array, paths = []) {
   array.forEach((item) => {
     t.push({
       name: item.name,
-      file: item[Symbol('type')] === 1,
+      file: resolveIsFile(item),
       suffix: suffix2Icon(item.name.split('.')),
       children: [],
       paths

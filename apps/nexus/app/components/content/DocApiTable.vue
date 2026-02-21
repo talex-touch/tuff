@@ -120,8 +120,12 @@ const tableColumns = computed(() => ([
 ]))
 
 function extractEnumValuesFromType(typeLabel: string): string[] {
-  const singleQuotes = Array.from(typeLabel.matchAll(/'([^']+)'/g)).map(match => match[1].trim())
-  const doubleQuotes = Array.from(typeLabel.matchAll(/"([^"]+)"/g)).map(match => match[1].trim())
+  const singleQuotes = Array.from(typeLabel.matchAll(/'([^']+)'/g))
+    .map(match => match[1]?.trim())
+    .filter((value): value is string => Boolean(value))
+  const doubleQuotes = Array.from(typeLabel.matchAll(/"([^"]+)"/g))
+    .map(match => match[1]?.trim())
+    .filter((value): value is string => Boolean(value))
   const values = singleQuotes.length ? singleQuotes : doubleQuotes
   return [...new Set(values.filter(Boolean))]
 }
@@ -373,6 +377,18 @@ function getTypeKey(rowKey: string) {
   return `type:${rowKey}`
 }
 
+function getDefaultKey(rowKey: string) {
+  return `default:${rowKey}`
+}
+
+function getTypeCopyValue(typeInfo: NormalizedType): string {
+  return typeInfo.kind === 'text' ? typeInfo.copyValue : ''
+}
+
+function getTypeLabel(typeInfo: NormalizedType): string {
+  return typeInfo.label
+}
+
 function getEnumKey(rowKey: string, value: string) {
   return `enum:${rowKey}:${value}`
 }
@@ -528,7 +544,7 @@ async function openTypeReference(typeInfo: RefType) {
                   @click="openTypeReference(row.typeInfo)"
                   @keydown="handleKeyOpenReference($event, row.typeInfo)"
                 >
-                  <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                  <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                   <span class="doc-api-table__type-action-icon i-carbon-launch" aria-hidden="true" />
                 </span>
               </TxTooltip>
@@ -551,13 +567,13 @@ async function openTypeReference(typeInfo: RefType) {
               >
                 <span
                   class="doc-api-table__type-action is-popover"
-                  :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                  :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                  :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                  @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                  @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                  :class="{ 'is-copyable': isCopyable(getTypeCopyValue(row.typeInfo)) }"
+                  :role="isCopyable(getTypeCopyValue(row.typeInfo)) ? 'button' : undefined"
+                  :tabindex="isCopyable(getTypeCopyValue(row.typeInfo)) ? 0 : undefined"
+                  @click="copyText(getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
+                  @keydown="handleKeyCopy($event, getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
                 >
-                  <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                  <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                   <span class="doc-api-table__type-action-icon i-carbon-code" aria-hidden="true" />
                 </span>
                 <template #content>
@@ -569,16 +585,16 @@ async function openTypeReference(typeInfo: RefType) {
                   </div>
                 </template>
               </TxTooltip>
-              <TxTooltip v-else :content="isCopyable(row.typeInfo.copyValue) ? labels.copyType : ''" :disabled="!isCopyable(row.typeInfo.copyValue)">
+              <TxTooltip v-else :content="isCopyable(getTypeCopyValue(row.typeInfo)) ? labels.copyType : ''" :disabled="!isCopyable(getTypeCopyValue(row.typeInfo))">
                 <span
                   class="doc-api-table__type-action"
-                  :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                  :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                  :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                  @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                  @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                  :class="{ 'is-copyable': isCopyable(getTypeCopyValue(row.typeInfo)) }"
+                  :role="isCopyable(getTypeCopyValue(row.typeInfo)) ? 'button' : undefined"
+                  :tabindex="isCopyable(getTypeCopyValue(row.typeInfo)) ? 0 : undefined"
+                  @click="copyText(getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
+                  @keydown="handleKeyCopy($event, getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
                 >
-                  <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                  <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                 </span>
               </TxTooltip>
             </template>
@@ -734,7 +750,7 @@ async function openTypeReference(typeInfo: RefType) {
                       @click="openTypeReference(row.typeInfo)"
                       @keydown="handleKeyOpenReference($event, row.typeInfo)"
                     >
-                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                      <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                       <span class="doc-api-table__type-action-icon i-carbon-launch" aria-hidden="true" />
                     </span>
                   </TxTooltip>
@@ -756,13 +772,13 @@ async function openTypeReference(typeInfo: RefType) {
                   >
                     <span
                       class="doc-api-table__type-action is-popover"
-                      :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                      :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                      :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                      @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                      @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                      :class="{ 'is-copyable': isCopyable(getTypeCopyValue(row.typeInfo)) }"
+                      :role="isCopyable(getTypeCopyValue(row.typeInfo)) ? 'button' : undefined"
+                      :tabindex="isCopyable(getTypeCopyValue(row.typeInfo)) ? 0 : undefined"
+                      @click="copyText(getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
+                      @keydown="handleKeyCopy($event, getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
                     >
-                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                      <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                       <span class="doc-api-table__type-action-icon i-carbon-code" aria-hidden="true" />
                     </span>
                     <template #content>
@@ -774,16 +790,16 @@ async function openTypeReference(typeInfo: RefType) {
                       </div>
                     </template>
                   </TxTooltip>
-                  <TxTooltip v-else :content="isCopyable(row.typeInfo.copyValue) ? labels.copyType : ''" :disabled="!isCopyable(row.typeInfo.copyValue)">
+                  <TxTooltip v-else :content="isCopyable(getTypeCopyValue(row.typeInfo)) ? labels.copyType : ''" :disabled="!isCopyable(getTypeCopyValue(row.typeInfo))">
                     <span
                       class="doc-api-table__type-action"
-                      :class="{ 'is-copyable': isCopyable(row.typeInfo.copyValue) }"
-                      :role="isCopyable(row.typeInfo.copyValue) ? 'button' : undefined"
-                      :tabindex="isCopyable(row.typeInfo.copyValue) ? 0 : undefined"
-                      @click="copyText(row.typeInfo.copyValue, getTypeKey(row.key))"
-                      @keydown="handleKeyCopy($event, row.typeInfo.copyValue, getTypeKey(row.key))"
+                      :class="{ 'is-copyable': isCopyable(getTypeCopyValue(row.typeInfo)) }"
+                      :role="isCopyable(getTypeCopyValue(row.typeInfo)) ? 'button' : undefined"
+                      :tabindex="isCopyable(getTypeCopyValue(row.typeInfo)) ? 0 : undefined"
+                      @click="copyText(getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
+                      @keydown="handleKeyCopy($event, getTypeCopyValue(row.typeInfo), getTypeKey(row.key))"
                     >
-                      <span class="doc-api-table__type-action-text">{{ row.typeInfo.label }}</span>
+                      <span class="doc-api-table__type-action-text">{{ getTypeLabel(row.typeInfo) }}</span>
                     </span>
                   </TxTooltip>
                 </template>

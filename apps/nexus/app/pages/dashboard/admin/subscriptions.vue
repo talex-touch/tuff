@@ -272,8 +272,9 @@ async function grantSubscription() {
   }
   catch (err: any) {
     const fallback = t('dashboard.sections.subscriptions.grant.errors.failed', 'Failed to grant subscription.')
-    grantError.value = err?.data?.message || err?.message || fallback
-    toast.warning(grantError.value)
+    const message = err?.data?.message || err?.message || fallback
+    grantError.value = message
+    toast.warning(message)
   }
   finally {
     grantLoading.value = false

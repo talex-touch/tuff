@@ -39,7 +39,8 @@ export function resolveProviderBaseUrl(type: string, baseUrl?: string | null): s
   if (typeof baseUrl === 'string' && baseUrl.trim().length > 0)
     return trimBaseUrl(baseUrl.trim())
 
-  return DEFAULT_BASE_URLS[type] ?? DEFAULT_BASE_URLS.openai
+  const fallback = DEFAULT_BASE_URLS.openai ?? 'https://api.openai.com/v1'
+  return DEFAULT_BASE_URLS[type] ?? fallback
 }
 
 function buildOpenAiModelEndpoints(baseUrl: string): string[] {

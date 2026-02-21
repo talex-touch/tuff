@@ -100,7 +100,13 @@ const api: PreloadAPI = {
    * Update loading overlay from renderer when needed.
    */
   sendPreloadEvent(event: LoadingEvent) {
-    window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, '*')
+    const targetOrigin =
+      window.location.origin !== 'null'
+        ? window.location.origin
+        : window.location.protocol === 'file:'
+          ? 'file://'
+          : '*'
+    window.postMessage({ channel: PRELOAD_LOADING_CHANNEL, data: event }, targetOrigin)
   }
 } satisfies PreloadAPI
 

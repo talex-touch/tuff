@@ -9,6 +9,7 @@ import { UpdateProviderType } from '@talex-touch/utils'
 import { CustomUpdateProvider } from './CustomUpdateProvider'
 import { GithubUpdateProvider } from './GithubUpdateProvider'
 import { OfficialUpdateProvider } from './OfficialUpdateProvider'
+import { devLog } from '~/utils/dev-log'
 // Note: GitHubRelease, UpdateError, UpdateErrorType are imported in other files if needed
 
 export class UpdateProviderManager {
@@ -36,7 +37,7 @@ export class UpdateProviderManager {
   registerProvider(provider: UpdateProvider): void {
     if (!this.providers.find((p) => p.type === provider.type)) {
       this.providers.push(provider)
-      console.log(`[UpdateProviderManager] Registered provider: ${provider.name}`)
+      devLog(`[UpdateProviderManager] Registered provider: ${provider.name}`)
     }
   }
 
@@ -45,7 +46,7 @@ export class UpdateProviderManager {
     const provider = new CustomUpdateProvider(config)
     this.customProviders.set(config.url, provider)
     this.registerProvider(provider)
-    console.log(`[UpdateProviderManager] Registered custom provider: ${config.name}`)
+    devLog(`[UpdateProviderManager] Registered custom provider: ${config.name}`)
     return provider
   }
 
@@ -55,7 +56,7 @@ export class UpdateProviderManager {
     if (provider) {
       this.providers = this.providers.filter((p) => p !== provider)
       this.customProviders.delete(url)
-      console.log(`[UpdateProviderManager] Removed custom provider: ${url}`)
+      devLog(`[UpdateProviderManager] Removed custom provider: ${url}`)
       return true
     }
     return false
@@ -64,7 +65,7 @@ export class UpdateProviderManager {
   // 根据配置选择Provider
   selectProvider(config: UpdateSourceConfig): UpdateProvider | null {
     if (!config.enabled) {
-      console.log('[UpdateProviderManager] Provider disabled, skipping')
+      devLog('[UpdateProviderManager] Provider disabled, skipping')
       return null
     }
 
@@ -73,7 +74,7 @@ export class UpdateProviderManager {
 
     if (provider) {
       this.activeProvider = provider
-      console.log(`[UpdateProviderManager] Selected provider: ${provider.name}`)
+      devLog(`[UpdateProviderManager] Selected provider: ${provider.name}`)
       return provider
     }
 
@@ -110,7 +111,7 @@ export class UpdateProviderManager {
         throw new Error('No update provider available')
       }
 
-      console.log(`[UpdateProviderManager] Checking updates with provider: ${provider.name}`)
+      devLog(`[UpdateProviderManager] Checking updates with provider: ${provider.name}`)
 
       const release = await provider.fetchLatestRelease(channel)
 

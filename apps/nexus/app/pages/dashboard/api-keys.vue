@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay, TxPopperDialog } from '@talex-touch/tuffex'
+import type { TxSelectValue } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
 
 definePageMeta({
@@ -43,7 +44,7 @@ const createTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const emptyCreateTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const newKeyName = ref('')
 const newKeyScopes = ref<string[]>(['plugin:publish'])
-const newKeyExpiry = ref<number | null>(null)
+const newKeyExpiry = ref<TxSelectValue | undefined>(undefined)
 
 // Newly created key (show once)
 const newlyCreatedKey = ref<{ name: string, secretKey: string } | null>(null)
@@ -89,7 +90,7 @@ async function createKey() {
       body: {
         name: newKeyName.value.trim(),
         scopes: newKeyScopes.value,
-        expiresInDays: newKeyExpiry.value,
+        expiresInDays: typeof newKeyExpiry.value === 'number' ? newKeyExpiry.value : undefined,
       },
     })
 
@@ -101,7 +102,7 @@ async function createKey() {
     showCreateModal.value = false
     newKeyName.value = ''
     newKeyScopes.value = ['plugin:publish']
-    newKeyExpiry.value = null
+    newKeyExpiry.value = undefined
 
     await fetchKeys()
   }
@@ -217,7 +218,7 @@ const releaseScopes = [
 const availableScopes = computed(() => (isAdmin.value ? [...baseScopes, ...releaseScopes] : baseScopes))
 
 const expiryOptions = [
-  { value: null, label: 'Never expires' },
+  { value: 'never', label: 'Never expires' },
   { value: 30, label: '30 days' },
   { value: 90, label: '90 days' },
   { value: 180, label: '180 days' },

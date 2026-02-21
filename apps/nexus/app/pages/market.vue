@@ -81,6 +81,8 @@ const reviewForm = reactive({
   content: '',
 })
 
+const handleSignIn = () => navigateTo('/sign-in')
+
 const {
   data: pluginsPayload,
   pending: pluginsPending,
@@ -480,7 +482,7 @@ useSeoMeta({
               </div>
               <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
                 <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
-                <TxButton size="small" @click="navigateTo('/sign-in')">
+                <TxButton size="small" @click="handleSignIn">
                   {{ t('market.detail.reviews.signInAction', 'Sign in') }}
                 </TxButton>
               </div>

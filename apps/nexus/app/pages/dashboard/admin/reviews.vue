@@ -169,7 +169,7 @@ onMounted(() => {
       </div>
 
       <div class="mt-3">
-        <TxButton size="small" type="secondary" :disabled="pendingLoading" @click="refreshReviews">
+        <TxButton size="small" type="text" :disabled="pendingLoading" @click="refreshReviews">
           <TxSpinner v-if="pendingLoading" :size="14" />
           <span class="ml-2">
             {{ t('dashboard.sections.reviews.refresh', 'Refresh') }}
@@ -246,7 +246,7 @@ onMounted(() => {
       </div>
 
       <div v-if="hasMore" class="mt-5 flex justify-center">
-        <TxButton size="small" type="secondary" :loading="pendingLoading" @click="loadMore">
+        <TxButton size="small" type="text" :loading="pendingLoading" @click="loadMore">
           {{ t('dashboard.sections.reviews.loadMore', 'Load more') }}
         </TxButton>
       </div>

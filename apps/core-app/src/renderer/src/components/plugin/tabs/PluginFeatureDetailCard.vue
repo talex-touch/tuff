@@ -7,12 +7,12 @@ import {
   TuffInput,
   TuffSelect,
   TuffSelectItem,
+  TuffSwitch,
   TxButton,
   TxSplitButton,
   TxTabItem,
   TxTabs
 } from '@talex-touch/tuffex'
-import { ElSwitch } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
@@ -632,7 +632,7 @@ function handleClose(): void {
                           <span class="text-xs text-[var(--el-text-color-secondary)]">
                             Mock Payload
                           </span>
-                          <ElSwitch
+                          <TuffSwitch
                             v-model="currentMockPayloadEnabled"
                             size="small"
                             :disabled="isOperationDisabled"
@@ -704,10 +704,13 @@ function handleClose(): void {
                           <div v-else class="text-sm text-[var(--el-text-color-secondary)]">
                             预览需要有效的 widgetId。
                           </div>
-                          <button
-                            type="button"
+                          <TxButton
+                            variant="ghost"
+                            :border="false"
+                            :disabled="isOperationDisabled || !previewWidgetId"
                             class="PluginFeature-PreviewResizeHandle"
                             :class="{ 'is-disabled': isOperationDisabled || !previewWidgetId }"
+                            aria-label="Resize preview"
                             @pointerdown="handlePreviewResizeStart"
                           />
                         </div>
@@ -1023,6 +1026,8 @@ pre {
   bottom: 8px;
   width: 14px;
   height: 14px;
+  padding: 0;
+  box-shadow: none;
   border-radius: 4px;
   border: 1px solid var(--el-border-color);
   background: var(--el-fill-color-light);

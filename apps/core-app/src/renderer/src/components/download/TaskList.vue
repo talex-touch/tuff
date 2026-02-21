@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
+import { TxEmpty } from '@talex-touch/tuffex'
 import { ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
 import type { DraggableEvent } from 'vue-draggable-plus'
@@ -65,7 +66,7 @@ function calculatePriority(index: number, total: number): number {
 <template>
   <div class="task-list" :class="{ 'compact-mode': viewMode === 'compact' }">
     <div v-if="tasks.length === 0" class="empty-state">
-      <el-empty :description="$t('download.no_tasks_in_category')" />
+      <TxEmpty :title="$t('download.no_tasks_in_category')" />
     </div>
     <draggable
       v-else

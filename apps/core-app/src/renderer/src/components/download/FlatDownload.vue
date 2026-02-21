@@ -1,5 +1,4 @@
 <script setup lang="ts" name="FlatDownload">
-import { Download } from '@element-plus/icons-vue'
 import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -105,9 +104,7 @@ function handleClick(event: MouseEvent): void {
 
     <div class="download-content">
       <div class="download-main">
-        <el-icon :size="16">
-          <Download />
-        </el-icon>
+        <i class="i-carbon-download text-base" />
         <span class="download-text">{{ t('download.title') }}</span>
       </div>
       <span class="download-meta">{{ summaryLabel }}</span>
@@ -175,7 +172,7 @@ function handleClick(event: MouseEvent): void {
 
   --h: 30px;
 
-  .el-icon {
+  i {
     color: var(--el-color-primary);
   }
 }

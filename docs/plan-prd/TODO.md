@@ -23,7 +23,7 @@
 - [x] 新增产品总览与 8 周路线图（`01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`）
 - [x] 新增 PRD 质量基线（`docs/PRD-QUALITY-BASELINE.md`）
 - [x] 新增 Week 1 执行清单（`01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`）
-- [ ] 活跃 PRD 补齐“最终目标 / 质量约束 / 回滚策略”章节（首批已覆盖 Flow/DivisionBox/ViewMode/AttachViewCache/Agents/PlatformCapabilities）
+- [ ] 活跃 PRD 补齐“最终目标 / 质量约束 / 回滚策略”章节（首批已覆盖 Flow/DivisionBox/ViewMode/AttachViewCache/Agents/PlatformCapabilities/ModuleLogging）
 - [ ] 在每周例行更新中同步 `README.md` + `TODO.md` + `CHANGES.md`（形成固定节奏）
 
 ---
@@ -140,6 +140,23 @@
 ## 🔴 P0 紧急任务
 
 - [ ] P0 风险点登记与收口（`01-project/RISK-REGISTER-2026-02.md`）
+
+## 🧯 v2.4.8 风险清理清单（来自风险复核）
+
+- [ ] **P0** 风险登记收口流程固化：形成发布前风险清单模板 + Owner/缓解策略闭环机制，确保每次 GA 可复用（`docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`）。
+- [ ] **P0** 旧同步链路明文存储彻底收口：`/api/sync/*` 旧链路保持禁用，迁移/清理 `syncStore.ts` 与 `authStore.ts` 的 `value_json` 明文写入，确保只剩 `/api/v1/sync/*` 写入路径（`apps/nexus/server/utils/syncStore.ts`、`apps/nexus/server/utils/authStore.ts`）。
+- [ ] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 中 auth token / deviceId / device name 从 `localStorage` 迁移到主进程 `safeStorage` 通道，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/main/channel/common.ts`）。
+- [ ] **P1** 更新下载链路迁移 Signed URL：从 GitHub 直链迁移至 R2/S3 Signed URL（302 + TTL，可配置），保留本地 fallback（后续云存储接入项）。
+- [ ] **P1** Flow ↔ DivisionBox 权限入口回归标准化：沉淀回归清单与最小用例集，保证 actor/sdkapi/权限提示一致性。
+  - [ ] 插件来源 Flow -> DivisionBox 未授权时拦截并提示。
+  - [ ] 插件来源 Flow -> DivisionBox 授权后正常触发。
+  - [ ] corebox 来源 Flow 不触发插件权限校验。
+  - [ ] `division-box:flow:trigger` 缺 `window.create` 或 `storage.shared` 任一权限即拒绝。
+  - [ ] payload `_sdkapi` 覆盖插件 sdkapi，权限判定一致。
+  - [ ] `actorPluginId` 缺失时不误判为插件调用。
+- [ ] **P1** 大文件拆分与职责收敛：`file-provider.ts`（box-tool addon）、`plugin-module.ts`、`search-core.ts` 按 SRP 拆分模块，降低单文件风险与变更冲突面。
+- [ ] **P2** 迁移壳收口：移除 `channel` 兼容层，清理 `@deprecated` 通道 API，统一走 `transport`（`packages/utils/channel`、`packages/utils/transport`、相关 hooks）。
+- [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
 ### 🧩 TuffEx 迁移收尾（tuffex-ui -> tuffex）
 

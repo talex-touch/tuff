@@ -3,6 +3,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
+import { devLog } from '~/utils/dev-log'
 
 export interface CalculationHistoryEntry {
   id?: string | number
@@ -76,9 +77,9 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
         category: 'preview',
         limit: 20
       })
-      console.log('[usePreviewHistory] Query response:', response)
+      devLog('[usePreviewHistory] Query response:', response)
       items.value = Array.isArray(response) ? response : (response?.data ?? [])
-      console.log('[usePreviewHistory] Loaded items:', items.value.length)
+      devLog('[usePreviewHistory] Loaded items:', items.value.length)
       ensureSelection()
     } catch (error) {
       console.error('[usePreviewHistory] Failed to load:', error)
@@ -89,9 +90,9 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   }
 
   function open(): void {
-    console.log('[usePreviewHistory] open() called, visible before:', visible.value)
+    devLog('[usePreviewHistory] open() called, visible before:', visible.value)
     if (!visible.value) visible.value = true
-    console.log('[usePreviewHistory] open() visible after:', visible.value)
+    devLog('[usePreviewHistory] open() visible after:', visible.value)
     void load()
   }
 
@@ -130,7 +131,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   function handleKeydown(event: KeyboardEvent): void {
     // Debug: log ⌘← events
     if (event.metaKey && event.key === 'ArrowLeft') {
-      console.log(
+      devLog(
         '[usePreviewHistory] handleKeydown ⌘←, visible:',
         visible.value,
         'hasClass:',
@@ -189,7 +190,7 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   const unregNewItem = transport.on(clipboardNewItemEvent, (data) => {
     if (!data?.meta?.category) return
     if (data.meta.category === 'preview') {
-      console.log('[usePreviewHistory] New preview item detected, refreshing if visible')
+      devLog('[usePreviewHistory] New preview item detected, refreshing if visible')
       if (visible.value) {
         void load()
       }
@@ -198,11 +199,11 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
 
   // Window event listeners for show/hide history (from keyboard shortcuts and PreviewResultCard)
   function handleShowHistoryEvent(): void {
-    console.log('[usePreviewHistory] show-calculation-history event received, calling open()')
+    devLog('[usePreviewHistory] show-calculation-history event received, calling open()')
     open()
   }
   function handleHideHistoryEvent(): void {
-    console.log('[usePreviewHistory] hide-calculation-history event received, calling close()')
+    devLog('[usePreviewHistory] hide-calculation-history event received, calling close()')
     close()
   }
 

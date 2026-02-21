@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import { isCoreBox } from '@talex-touch/utils/renderer'
+import { devLog } from '~/utils/dev-log'
 
 /**
  * 对话框优先级级别
@@ -106,7 +107,7 @@ export class DialogManager {
     // 显示新对话框（现在是最顶层）
     this.showDialog(config)
 
-    console.log(`[DialogManager] 已注册对话框 "${config.id}"，堆栈大小: ${this.stack.length}`)
+    devLog(`[DialogManager] 已注册对话框 "${config.id}"，堆栈大小: ${this.stack.length}`)
   }
 
   /**
@@ -129,7 +130,7 @@ export class DialogManager {
       dialog.onDestroy()
     }
 
-    console.log(`[DialogManager] 已注销对话框 "${id}"，堆栈大小: ${this.stack.length}`)
+    devLog(`[DialogManager] 已注销对话框 "${id}"，堆栈大小: ${this.stack.length}`)
 
     // 如果移除的是可见的对话框，显示下一个
     if (wasVisible && this.stack.length > 0) {
@@ -169,7 +170,7 @@ export class DialogManager {
    * 清除堆栈中的所有对话框
    */
   clearAll(): void {
-    console.log(`[DialogManager] 正在清除所有对话框（共 ${this.stack.length} 个）`)
+    devLog(`[DialogManager] 正在清除所有对话框（共 ${this.stack.length} 个）`)
 
     // 为所有对话框调用清理函数
     this.stack.forEach((dialog) => {

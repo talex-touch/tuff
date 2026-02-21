@@ -606,7 +606,7 @@ watch(showDetailsOverlay, (open) => {
                 </div>
               </td>
               <td>
-                <TxButton variant="flat" size="xs" @click="handleOpenSyncDetails">
+                <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
                   {{ t('dashboard.storage.view', 'View') }}
                 </TxButton>
               </td>
@@ -670,7 +670,7 @@ watch(showDetailsOverlay, (open) => {
                   : t('dashboard.storage.recoveryMissing', '未配置恢复码')
               }}
             </span>
-            <TxButton variant="flat" size="xs" @click="handleOpenSyncDetails">
+            <TxButton variant="flat" size="mini" @click="handleOpenSyncDetails">
               {{ t('dashboard.storage.viewSyncDetails', '查看同步内容') }}
             </TxButton>
           </div>

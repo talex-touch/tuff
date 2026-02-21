@@ -32,11 +32,11 @@ function handleListeners(viewData, webview) {
   const { styles, js } = viewData
 
   webview.addEventListener('crashed', () => {
-    console.log('Webview crashed', props.plugin)
+    console.error('[PluginView] Webview crashed', props.plugin)
   })
 
   webview.addEventListener('did-fail-load', async (e) => {
-    console.log('Webview did-fail-load', e, props.plugin)
+    console.warn('[PluginView] Webview did-fail-load', e, props.plugin)
 
     await forDialogMention(props.plugin.name, e.errorDescription, props.plugin.icon, [
       {

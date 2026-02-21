@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 const props = defineProps<{
@@ -14,16 +15,17 @@ const visible = computed(() => props.visible)
 
 <template>
   <transition name="layout-nav-fade" mode="out-in">
-    <button
+    <TxButton
       v-if="visible"
+      variant="ghost"
+      :border="false"
       class="LayoutNavButton fake-background"
-      type="button"
       aria-label="Back to previous section"
       @click="$emit('click')"
     >
       <span class="LayoutNavButton-Icon i-ri-arrow-left-s-line" />
       <span class="LayoutNavButton-Text">{{ $t('layout.back') }}</span>
-    </button>
+    </TxButton>
   </transition>
 </template>
 

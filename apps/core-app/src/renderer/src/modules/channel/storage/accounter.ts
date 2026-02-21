@@ -82,15 +82,6 @@ export class AccountStorage {
   saveToStr(): string {
     const { user, eller, token } = this
 
-    console.log(
-      'Accounter',
-      JSON.stringify({
-        user,
-        eller,
-        token
-      })
-    )
-
     return JSON.stringify({
       user,
       eller,

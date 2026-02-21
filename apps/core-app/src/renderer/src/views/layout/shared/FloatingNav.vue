@@ -1,4 +1,5 @@
 <script lang="ts" name="FloatingNav" setup>
+import { TxButton } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 
@@ -11,15 +12,16 @@ function toggle() {
 
 <template>
   <div class="FloatingNav">
-    <button
-      type="button"
+    <TxButton
+      variant="ghost"
+      :border="false"
       class="FloatingNav-Trigger"
       aria-haspopup="true"
       :aria-expanded="open"
       @click="toggle"
     >
       <TuffIcon name="i-ri-menu-line" class="FloatingNav-TriggerIcon" />
-    </button>
+    </TxButton>
     <Transition name="floating-nav">
       <div v-show="open" class="FloatingNav-Panel" role="menu">
         <div class="FloatingNav-PanelInner">
@@ -45,6 +47,7 @@ function toggle() {
   justify-content: center;
   width: 44px;
   height: 44px;
+  padding: 0;
   border: none;
   border-radius: 50%;
   background: var(--el-bg-color-overlay);

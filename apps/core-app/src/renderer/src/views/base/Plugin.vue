@@ -1,6 +1,6 @@
 <script lang="ts" name="Plugin" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -26,12 +26,18 @@ const visiblePlugins = computed(() => {
 })
 
 const drawerVisible = ref(false)
+const drawerSource = ref<HTMLElement | null>(null)
 const searchQuery = ref('')
 const selectedPlugin = ref<ITouchPlugin | null>(null)
 
 const loadingStates = ref({
   openFolder: false
 })
+
+const FLIP_DURATION = 420
+const FLIP_ROTATE_X = 6
+const FLIP_ROTATE_Y = 8
+const FLIP_SPEED_BOOST = 1.08
 
 // Running plugins (status 3 or 4)
 const runningPlugins = computed(() =>
@@ -60,6 +66,13 @@ const filteredAllPlugins = computed(() => {
 function handleSelectPlugin(plugin: ITouchPlugin | null) {
   selectedPlugin.value = plugin
   if (plugin) selectPlugin(plugin.name)
+}
+
+function openNewPluginDrawer(event: MouseEvent) {
+  if (event.currentTarget instanceof HTMLElement) {
+    drawerSource.value = event.currentTarget
+  }
+  drawerVisible.value = true
 }
 
 async function handleOpenPluginFolder(): Promise<void> {
@@ -114,7 +127,7 @@ async function handleOpenPluginFolder(): Promise<void> {
     <!-- Footer with actions -->
     <template #footer>
       <div class="flex gap-2">
-        <TxButton variant="flat" class="action-btn add-btn flex-1" @click="drawerVisible = true">
+        <TxButton variant="flat" class="action-btn add-btn flex-1" @click="openNewPluginDrawer">
           <i class="i-ri-add-line" />
           <span>{{ t('plugin.add', 'Add') }}</span>
         </TxButton>
@@ -142,9 +155,25 @@ async function handleOpenPluginFolder(): Promise<void> {
   </TuffAsideTemplate>
 
   <!-- New Plugin Drawer -->
-  <el-drawer v-model="drawerVisible" direction="ltr" size="100%" :with-header="false">
-    <PluginNew @close="drawerVisible = false" />
-  </el-drawer>
+  <Teleport to="body">
+    <TxFlipOverlay
+      v-model="drawerVisible"
+      :source="drawerSource"
+      :duration="FLIP_DURATION"
+      :rotate-x="FLIP_ROTATE_X"
+      :rotate-y="FLIP_ROTATE_Y"
+      :speed-boost="FLIP_SPEED_BOOST"
+      transition-name="PluginDrawer-Mask"
+      mask-class="PluginDrawer-Mask"
+      card-class="PluginDrawer-Card"
+    >
+      <template #default="{ close }">
+        <div class="PluginDrawer">
+          <PluginNew @close="close" />
+        </div>
+      </template>
+    </TxFlipOverlay>
+  </Teleport>
 </template>
 
 <style lang="scss" scoped>
@@ -179,6 +208,27 @@ async function handleOpenPluginFolder(): Promise<void> {
 
 .folder-btn :deep(.tx-button:hover:not(:disabled)) {
   @apply bg-[var(--el-fill-color-light)] border-[var(--el-color-primary-light-5)] text-[var(--el-color-primary)];
+}
+
+:global(.PluginDrawer-Mask) {
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+:global(.PluginDrawer-Card) {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  background: var(--el-bg-color-page);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.PluginDrawer {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 @keyframes spin {

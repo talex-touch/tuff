@@ -1,16 +1,5 @@
 <script setup lang="ts">
 import type { DownloadConfig, DownloadTask } from '@talex-touch/utils'
-import {
-  Delete,
-  Document,
-  Download,
-  Grid,
-  List,
-  Search,
-  Setting,
-  VideoPause,
-  VideoPlay
-} from '@element-plus/icons-vue'
 import { TxBottomDialog, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -300,25 +289,25 @@ async function updateConfig(config: DownloadConfig) {
     <div class="download-header">
       <div class="header-left">
         <h2 class="title">
-          <el-icon><Download /></el-icon>
+          <i class="i-carbon-download" />
           {{ $t('download.title') }}
         </h2>
       </div>
       <div class="header-right">
         <div class="view-mode-group">
           <TxButton :type="viewMode === 'detailed' ? 'primary' : ''" @click="viewMode = 'detailed'">
-            <el-icon><List /></el-icon>
+            <i class="i-carbon-list" />
           </TxButton>
           <TxButton :type="viewMode === 'compact' ? 'primary' : ''" @click="viewMode = 'compact'">
-            <el-icon><Grid /></el-icon>
+            <i class="i-carbon-grid" />
           </TxButton>
         </div>
         <TxButton @click="openLogs">
-          <el-icon><Document /></el-icon>
+          <i class="i-carbon-document" />
           {{ $t('download.view_logs') }}
         </TxButton>
         <TxButton @click="openSettings">
-          <el-icon><Setting /></el-icon>
+          <i class="i-carbon-settings" />
         </TxButton>
       </div>
     </div>
@@ -332,20 +321,20 @@ async function updateConfig(config: DownloadConfig) {
         @input="handleSearch(searchQuery)"
       >
         <template #prefix>
-          <el-icon><Search /></el-icon>
+          <i class="i-carbon-search" />
         </template>
       </TuffInput>
       <div class="filter-actions">
         <TxButton v-if="tasksByStatus.downloading.length > 0" @click="pauseAllTasks">
-          <el-icon><VideoPause /></el-icon>
+          <i class="i-carbon-pause" />
           {{ $t('download.pause_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.paused.length > 0" @click="resumeAllTasks">
-          <el-icon><VideoPlay /></el-icon>
+          <i class="i-carbon-play" />
           {{ $t('download.resume_all') }}
         </TxButton>
         <TxButton v-if="tasksByStatus.completed.length > 0" @click="clearHistory">
-          <el-icon><Delete /></el-icon>
+          <i class="i-carbon-trash-can" />
           {{ $t('download.clear_history') }}
         </TxButton>
       </div>

@@ -1,5 +1,6 @@
 import type { MarketPlugin, MarketProviderListOptions } from '@talex-touch/utils/market'
 import { BaseMarketProvider } from './base-provider'
+import { devLog } from '~/utils/dev-log'
 
 interface NexusManifestEntry {
   id: string
@@ -50,7 +51,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
       return []
     }
 
-    console.log('[NexusStoreProvider] Requesting:', manifestUrl)
+    devLog('[NexusStoreProvider] Requesting:', manifestUrl)
 
     let response: Awaited<ReturnType<typeof this.request<NexusApiResponse | NexusManifestEntry[]>>>
     try {
@@ -59,7 +60,7 @@ export class NexusStoreProvider extends BaseMarketProvider {
         method: 'GET',
         headers: { Accept: 'application/json' }
       })
-      console.log('[NexusStoreProvider] Response status:', response.status)
+      devLog('[NexusStoreProvider] Response status:', response.status)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       console.error('[NexusStoreProvider] Request failed:', manifestUrl, message)

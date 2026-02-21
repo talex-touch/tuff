@@ -7,6 +7,7 @@ import type { AppConfigureData } from './AppConfigure.vue'
 import ApplicationEmpty from './ApplicationEmpty.vue'
 import AppList from './AppList.vue'
 import type { AppListItem } from './AppList.vue'
+import { devLog } from '~/utils/dev-log'
 
 defineProps<{
   modelValue?: boolean
@@ -42,7 +43,7 @@ onMounted(() => {
   unregisterEnd = transport.on(CoreBoxEvents.search.end, (channelData) => {
     const { searchId } = channelData as SearchUpdatePayload
     if (searchId !== currentSearchId) return
-    console.log('[ApplicationIndex] Search ended', channelData)
+    devLog('[ApplicationIndex] Search ended', channelData)
   })
 })
 

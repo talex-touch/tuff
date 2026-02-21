@@ -562,15 +562,18 @@ async function triggerRebuild() {
         <span class="stat-divider">·</span>
         <div class="stat-item">
           <span class="stat-label">{{ t('settings.settingFileIndex.failedFiles') }}</span>
-          <button
+          <TxButton
             v-if="indexStats.failedFiles > 0"
+            variant="ghost"
+            size="sm"
+            :border="false"
             class="stat-value-btn failed"
             :title="t('settings.settingFileIndex.viewFailedFiles')"
             @click="openFailedFilesDialog"
           >
             &nbsp;{{ indexStats.failedFiles }}
             <div class="i-carbon-chevron-right text-10px ml-2px" />
-          </button>
+          </TxButton>
           <span v-else class="stat-value">&nbsp;{{ indexStats.failedFiles }}</span>
         </div>
         <span class="stat-divider">·</span>

@@ -20,6 +20,7 @@ import { h, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
+import { devLog } from '~/utils/dev-log'
 import { blowMention } from '../mention/dialog-mention'
 import { useAppState } from './useAppStates'
 import { useStartupInfo } from './useStartupInfo'
@@ -561,7 +562,7 @@ export function useApplicationUpgrade() {
       const { setAppUpdate } = useStartupInfo()
 
       const result = await appUpdate.check(force)
-      console.log('[useApplicationUpgrade] Update check result:', result)
+      devLog('[useApplicationUpgrade] Update check result:', result)
 
       setAppUpdate(result.hasUpdate)
 
@@ -816,7 +817,7 @@ export function useApplicationUpgrade() {
 
       updateListenerDisposers.push(
         updateSdk.onAvailable((data: UpdateAvailablePayload) => {
-          console.log('[useApplicationUpgrade] Received update notification:', data)
+          devLog('[useApplicationUpgrade] Received update notification:', data)
 
           if (data.hasUpdate && data.release) {
             appStates.hasUpdate = true

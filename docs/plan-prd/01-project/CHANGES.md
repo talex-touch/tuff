@@ -85,6 +85,31 @@
 - `packages/utils/transport/events/types/core-box.ts`
 - `apps/core-app/src/renderer/src/utils/tfile-url.ts`
 
+### Core-app UI 安全与按钮一致性修复
+
+**变更类型**: 体验修复 / 安全加固
+
+**描述**: App 列表与市场来源列表移除 `v-html` 渲染避免注入；文件树文件类型识别更稳健；主题过渡兼容无 ViewTransition 环境；预加载消息发送限制 targetOrigin；多个原生 button 统一为 tuffex 按钮。
+
+**主要变更**:
+1. **安全渲染**：AppList / MarketSourceEditor 改为文本渲染，避免注入风险。
+2. **文件类型判断**：FileTree 兼容 `isFile` / `type` / Symbol 标记。
+3. **主题过渡兼容**：无 ViewTransition 时直接切换主题。
+4. **postMessage 限域**：预加载消息按 origin 发送。
+5. **按钮一致性**：settings/浮动导航/返回/预览句柄统一 TxButton。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
+- `apps/core-app/src/renderer/src/views/base/market/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/components/FailedFilesListDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/views/layout/shared/FloatingNav.vue`
+- `apps/core-app/src/renderer/src/components/layout/LayoutBackButton.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+
 ## 2026-02-20
 
 ### CI Windows 构建命令执行修复
@@ -211,15 +236,30 @@
 
 **变更类型**: 稳定性 / 行为修复
 
-**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；改为从应用根路径创建 require，以保证依赖解析稳定。
+**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；主进程预解析 transport 绝对路径注入 preload，并回落到 appPath/rootPath/插件根路径解析，保证依赖稳定。
 
 **主要变更**:
-1. **依赖解析根**：preload 内通过 `createRequire(root/package.json)` 解析 transport，避免临时目录找不到依赖。
+1. **预解析路径**：主进程预先 resolve transport 绝对路径并注入 preload，减少临时目录解析失败。
+2. **解析回落**：preload 内通过 `createRequire(appPath/package.json)` 并回落 rootPath/插件根路径解析 transport，避免临时目录找不到依赖。
 2. **通道初始化**：CoreBox 与 DivisionBox 的 webcontent 注入一致化处理，避免特定容器失效。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
 - `apps/core-app/src/main/modules/division-box/session.ts`
+
+### Intelligence 审计写入降噪
+
+**变更类型**: 性能优化 / 稳定性
+
+**描述**: intelligence audit flush 在主线程批量序列化与写库时可能引发 event loop lag；缩小单批写入规模，并引入异步调度与分段 flush，降低阻塞时长。
+
+**主要变更**:
+1. **批次缩小**：flush 批次从 50 降至 20。
+2. **延迟写入**：达到批次阈值后使用异步调度再写入，避免请求路径阻塞。
+3. **分段 flush**：flush 过程按批次分段并让出事件循环，避免长时间占用主线程。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
 
 ## 2026-02-19
 
@@ -477,7 +517,8 @@
 3. **新增产品总览与 8 周路线图**：`docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`。
 4. **新增 PRD 质量基线文档**：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`，要求活跃 PRD 必含目标、约束、验收、回滚。
 5. **新增 Week 1 执行清单**：`docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`。
-6. **TODO 与索引对齐**：`docs/plan-prd/TODO.md`、`docs/INDEX.md` 新增治理入口与执行项。
+6. **补齐模块日志 PRD 质量段落**：`docs/plan-prd/02-architecture/module-logging-system-prd.md` 新增最终目标/质量约束/回滚策略。
+7. **TODO 与索引对齐**：`docs/plan-prd/TODO.md`、`docs/INDEX.md` 新增治理入口与执行项。
 
 ### TuffIntelligence Lab 流式对话语义修正
 

@@ -768,7 +768,17 @@ const docsAnalyticsAdvancedOpen = ref(false)
 const docsAnalyticsConfigTriggerRef = ref<{ $el?: HTMLElement | null } | null>(null)
 const docsAnalyticsConfigTriggerEl = computed(() => docsAnalyticsConfigTriggerRef.value?.$el || null)
 
-const DOCS_ANALYTICS_DEFAULTS = Object.freeze({
+interface DocsAnalyticsOptions {
+  days: number
+  hotSectionLimit: number
+  evidenceLimit: number
+  showSectionBlocks: boolean
+  showBadges: boolean
+  showCopy: boolean
+  showSelect: boolean
+}
+
+const DOCS_ANALYTICS_DEFAULTS: DocsAnalyticsOptions = Object.freeze({
   days: 30,
   hotSectionLimit: 6,
   evidenceLimit: 160,
@@ -779,7 +789,7 @@ const DOCS_ANALYTICS_DEFAULTS = Object.freeze({
 })
 const DOCS_ANALYTICS_STORAGE_KEY = 'nexus.docs.analytics.overlay.v1'
 
-const docsAnalyticsOptions = reactive({
+const docsAnalyticsOptions = reactive<DocsAnalyticsOptions>({
   days: DOCS_ANALYTICS_DEFAULTS.days,
   hotSectionLimit: DOCS_ANALYTICS_DEFAULTS.hotSectionLimit,
   evidenceLimit: DOCS_ANALYTICS_DEFAULTS.evidenceLimit,
@@ -1070,6 +1080,8 @@ function resolveNodeOffset(context: SectionDomContext, anchor: number) {
     }
   }
   const last = context.textNodes[context.textNodes.length - 1]
+  if (!last)
+    return null
   return {
     node: last.node,
     offset: Math.max(0, (last.node.textContent?.length || 1) - 1),

@@ -24,7 +24,11 @@ function base64UrlDecode(input: string): Uint8Array {
 }
 
 function readDerLength(buffer: Uint8Array, offset: number): { length: number, offset: number } {
-  let length = buffer[offset++]
+  const initial = buffer[offset]
+  if (initial == null)
+    throw new Error('Invalid DER length.')
+  let length = initial
+  offset += 1
   if (length & 0x80) {
     const byteCount = length & 0x7f
     if (byteCount === 0 || byteCount > 2) {
@@ -32,7 +36,11 @@ function readDerLength(buffer: Uint8Array, offset: number): { length: number, of
     }
     length = 0
     for (let i = 0; i < byteCount; i += 1) {
-      length = (length << 8) | buffer[offset++]
+      const next = buffer[offset]
+      if (next == null)
+        throw new Error('Invalid DER length.')
+      length = (length << 8) | next
+      offset += 1
     }
   }
   return { length, offset }

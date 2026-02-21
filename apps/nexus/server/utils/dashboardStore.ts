@@ -341,7 +341,19 @@ export interface UpdateInput {
   tags: string[]
   link: string
   payload?: unknown
-  payloadVersion?: string
+  payloadVersion?: string | null
+}
+
+export interface NormalizedUpdateInput {
+  type: UpdateType
+  scope: UpdateScope
+  channels: string[]
+  releaseTag: string | null
+  title: LocalizedText
+  timestamp: string
+  summary: LocalizedText
+  tags: string[]
+  link: string
 }
 
 function validIsoDate(value: string) {
@@ -376,7 +388,7 @@ function normalizeDate(value: string) {
 function normalizeUpdateInput(
   input: Partial<UpdateInput>,
   options: { forUpdate?: boolean, allowRelease?: boolean } = {},
-): UpdateInput {
+): NormalizedUpdateInput {
   const { forUpdate = false, allowRelease = false } = options
   const { title, timestamp, summary, tags, link, type, releaseTag, scope, channels } = input
 
@@ -669,7 +681,7 @@ export async function updateUpdate(
     if (existing.type === 'release' && !options.allowRelease)
       throw createError({ statusCode: 403, statusMessage: 'Release updates are managed automatically.' })
 
-    const mergedInput: UpdateInput = normalizeUpdateInput(
+    const mergedInput = normalizeUpdateInput(
       {
         ...existing,
         ...rawInput,

@@ -86,8 +86,11 @@ export class IntelligenceAuditLogger {
   private readonly pollingService = PollingService.getInstance()
   private readonly flushTaskId = 'intelligence-audit.flush'
   private pendingLogs: IntelligenceAuditLogEntry[] = []
-  private readonly flushBatchSize = 50
+  private readonly flushBatchSize = 20
   private readonly flushIntervalMs = 30_000
+  private readonly flushDelayMs = 200
+  private flushPromise: Promise<void> | null = null
+  private flushTimer: NodeJS.Timeout | null = null
 
   constructor() {
     this.startFlushInterval()
@@ -145,8 +148,22 @@ export class IntelligenceAuditLogger {
 
     // Flush if batch is full
     if (this.pendingLogs.length >= this.flushBatchSize) {
-      await this.flushToDB()
+      this.scheduleFlush()
     }
+  }
+
+  private scheduleFlush(delayMs: number = this.flushDelayMs): void {
+    if (this.flushTimer) {
+      return
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null
+      void this.flushToDB()
+    }, delayMs)
+  }
+
+  private async yieldToEventLoop(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 0))
   }
 
   /**
@@ -154,10 +171,35 @@ export class IntelligenceAuditLogger {
    */
   async flushToDB(): Promise<void> {
     if (this.pendingLogs.length === 0) return
+    if (this.flushPromise) return this.flushPromise
 
-    const logsToFlush = [...this.pendingLogs]
-    this.pendingLogs = []
+    this.flushPromise = (async () => {
+      while (this.pendingLogs.length > 0) {
+        const logsToFlush = this.pendingLogs.splice(0, this.flushBatchSize)
+        if (logsToFlush.length === 0) {
+          break
+        }
+        const success = await this.flushBatch(logsToFlush)
+        if (!success) {
+          break
+        }
+        if (this.pendingLogs.length > 0) {
+          await this.yieldToEventLoop()
+        }
+      }
+    })()
 
+    try {
+      await this.flushPromise
+    } finally {
+      this.flushPromise = null
+      if (this.pendingLogs.length > 0) {
+        this.scheduleFlush()
+      }
+    }
+  }
+
+  private async flushBatch(logsToFlush: IntelligenceAuditLogEntry[]): Promise<boolean> {
     let metadataBytes = 0
     const disposeSerialize = enterPerfContext('IntelligenceAudit.serialize', {
       count: logsToFlush.length
@@ -190,8 +232,8 @@ export class IntelligenceAuditLogger {
       })
     } catch (error) {
       console.error('[AuditLogger] Failed to serialize logs:', error)
-      this.pendingLogs.push(...logsToFlush)
-      return
+      this.pendingLogs.unshift(...logsToFlush)
+      return false
     } finally {
       disposeSerialize()
     }
@@ -210,10 +252,11 @@ export class IntelligenceAuditLogger {
           await this.updateUsageStats(tx, logsToFlush)
         })
       })
+      return true
     } catch (error) {
       console.error('[AuditLogger] Failed to flush logs:', error)
-      // Re-add failed logs to buffer
-      this.pendingLogs.push(...logsToFlush)
+      this.pendingLogs.unshift(...logsToFlush)
+      return false
     } finally {
       disposeFlush()
     }
@@ -501,11 +544,10 @@ export class IntelligenceAuditLogger {
     if (this.pollingService.isRegistered(this.flushTaskId)) {
       this.pollingService.unregister(this.flushTaskId)
     }
-    this.pollingService.register(
-      this.flushTaskId,
-      () => this.flushToDB().catch((err) => console.error('[AuditLogger] Flush error:', err)),
-      { interval: this.flushIntervalMs, unit: 'milliseconds' }
-    )
+    this.pollingService.register(this.flushTaskId, () => this.scheduleFlush(0), {
+      interval: this.flushIntervalMs,
+      unit: 'milliseconds'
+    })
     this.pollingService.start()
   }
 
