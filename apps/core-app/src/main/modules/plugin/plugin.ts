@@ -228,28 +228,30 @@ export class TouchPlugin implements ITouchPlugin {
             reasons: { ...this.declaredPermissions.reasons }
           }
         : undefined,
-      features: this.features.map((feature) => {
-        // 防御性检查：确保 feature 有 toJSONObject 方法
-        if (typeof feature.toJSONObject === 'function') {
-          return feature.toJSONObject()
-        }
-        // 如果不是 PluginFeature 实例，尝试手动构造对象
-        pluginSystemLog.warn(
-          `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
-        )
-        return {
-          id: feature.id,
-          name: feature.name,
-          desc: feature.desc,
-          icon: feature.icon,
-          push: feature.push,
-          platform: feature.platform,
-          commands: feature.commands,
-          interaction: feature.interaction,
-          priority: feature.priority || 0,
-          experimental: feature.experimental
-        }
-      }),
+      features: this.features
+        .filter((feature) => !feature.experimental || this.dev?.enable)
+        .map((feature) => {
+          // 防御性检查：确保 feature 有 toJSONObject 方法
+          if (typeof feature.toJSONObject === 'function') {
+            return feature.toJSONObject()
+          }
+          // 如果不是 PluginFeature 实例，尝试手动构造对象
+          pluginSystemLog.warn(
+            `[Plugin ${this.name}] Feature ${feature.id} does not have toJSONObject method, using fallback`
+          )
+          return {
+            id: feature.id,
+            name: feature.name,
+            desc: feature.desc,
+            icon: feature.icon,
+            push: feature.push,
+            platform: feature.platform,
+            commands: feature.commands,
+            interaction: feature.interaction,
+            priority: feature.priority || 0,
+            experimental: feature.experimental
+          }
+        }),
       issues: this.issues
     }
   }

@@ -16,7 +16,7 @@
 - 插件目录：`plugins/touch-intelligence`
 
 ## 权限说明
-- 必需：`ai.basic`；可选：`clipboard.write`
+- 必需：`intelligence.basic`；可选：`clipboard.write`
 
 ## 快速上手
 1. 在 CoreBox 输入 `ai`。

@@ -240,7 +240,7 @@ const pluginLifecycle = {
         if (!prompt)
           return
 
-        const hasPermission = await ensurePermission('ai.basic', '需要 AI 权限以执行智能问答')
+        const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
         if (!hasPermission)
           return
 

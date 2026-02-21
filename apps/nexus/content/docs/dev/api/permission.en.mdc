@@ -45,9 +45,9 @@ code: |
 | **System** | `system.shell` | High | Execute system commands |
 |  | `system.notification` | Low | Send system notifications |
 |  | `system.tray` | Medium | Operate system tray |
-| **AI** | `ai.basic` | Low | Basic AI capabilities |
-|  | `ai.advanced` | Medium | Advanced AI models |
-|  | `ai.agents` | High | Agent system |
+| **Intelligence** | `intelligence.basic` | Low | Basic intelligence capabilities |
+|  | `intelligence.admin` | High | Admin intelligence capabilities |
+|  | `intelligence.agents` | High | Agent system |
 | **Storage** | `storage.plugin` | Low | Plugin private storage (auto-granted) |
 |  | `storage.shared` | Medium | Cross-plugin shared storage |
 |  | `storage.sqlite` | Medium | Plugin local SQLite database access |

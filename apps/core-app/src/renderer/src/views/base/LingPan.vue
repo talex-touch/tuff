@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import type { FileIndexStage } from '@talex-touch/utils/transport/events/types'
-import { TxButton } from '@talex-touch/tuffex'
-import { TxBottomDialog } from '@talex-touch/tuffex'
+import { TuffProgress, TxBottomDialog, TxButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import { ElProgress, ElTabPane, ElTabs } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
@@ -643,18 +641,19 @@ onUnmounted(() => {
             </p>
           </div>
         </div>
-        <ElProgress
+        <TuffProgress
           :percentage="overallProgress"
-          :status="indexingProgress.stage === 'completed' ? 'success' : undefined"
+          :status="indexingProgress.stage === 'completed' ? 'success' : ''"
           :stroke-width="8"
           class="progress-bar"
         />
       </div>
 
       <!-- Tabs for different sections -->
-      <ElTabs v-model="activeTab" class="debug-tabs">
+      <TxTabs v-model="activeTab" class="debug-tabs" placement="top" :content-padding="0">
         <!-- System Tab -->
-        <ElTabPane label="系统" name="system">
+        <TxTabItem name="system">
+          <template #name>系统</template>
           <div class="tab-content">
             <!-- System Overview -->
             <section class="debug-section">
@@ -853,10 +852,11 @@ onUnmounted(() => {
               </div>
             </section>
           </div>
-        </ElTabPane>
+        </TxTabItem>
 
         <!-- Indexing Tab -->
-        <ElTabPane label="索引" name="indexing">
+        <TxTabItem name="indexing">
+          <template #name>索引</template>
           <div class="tab-content">
             <!-- Indexing Progress -->
             <section class="debug-section">
@@ -921,10 +921,11 @@ onUnmounted(() => {
               </div>
             </section>
           </div>
-        </ElTabPane>
+        </TxTabItem>
 
         <!-- OCR Tab -->
-        <ElTabPane label="OCR" name="ocr">
+        <TxTabItem name="ocr">
+          <template #name>OCR</template>
           <div class="tab-content">
             <!-- OCR Status -->
             <section class="debug-section">
@@ -1013,10 +1014,11 @@ onUnmounted(() => {
               </div>
             </section>
           </div>
-        </ElTabPane>
+        </TxTabItem>
 
         <!-- Logs Tab -->
-        <ElTabPane label="日志" name="logs">
+        <TxTabItem name="logs">
+          <template #name>日志</template>
           <div class="tab-content">
             <!-- Logs Information -->
             <section class="debug-section">
@@ -1056,8 +1058,8 @@ onUnmounted(() => {
               </div>
             </section>
           </div>
-        </ElTabPane>
-      </ElTabs>
+        </TxTabItem>
+      </TxTabs>
     </div>
 
     <TxBottomDialog
@@ -1119,7 +1121,7 @@ onUnmounted(() => {
   margin-top: 1rem;
 }
 
-.debug-tabs :deep(.el-tabs__header) {
+.debug-tabs :deep(.tx-tabs__nav) {
   background: #111111;
   border: 1px solid #333333;
   border-radius: 2px 2px 0 0;
@@ -1127,13 +1129,16 @@ onUnmounted(() => {
   padding: 0 1rem;
 }
 
-.debug-tabs :deep(.el-tabs__nav-wrap) {
+.debug-tabs :deep(.tx-tabs__nav-bar) {
   background: transparent;
 }
 
-.debug-tabs :deep(.el-tabs__item) {
-  color: #888888;
+.debug-tabs :deep(.tx-tab-item) {
+  margin: 0;
+  border-radius: 0;
   border-bottom: 2px solid transparent;
+  --fake-color: transparent;
+  color: #888888;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.8rem;
   font-weight: 600;
@@ -1141,16 +1146,20 @@ onUnmounted(() => {
   padding: 0.75rem 1rem;
 }
 
-.debug-tabs :deep(.el-tabs__item:hover) {
+.debug-tabs :deep(.tx-tab-item:hover) {
   color: #ffffff;
 }
 
-.debug-tabs :deep(.el-tabs__item.is-active) {
+.debug-tabs :deep(.tx-tab-item.is-active) {
   color: #ffffff;
   border-bottom-color: #ffffff;
 }
 
-.debug-tabs :deep(.el-tabs__content) {
+.debug-tabs :deep(.tx-tab-item__name) {
+  color: inherit;
+}
+
+.debug-tabs :deep(.tx-tabs__content-wrapper) {
   padding: 0;
 }
 

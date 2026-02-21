@@ -66,9 +66,9 @@ code: |
 | `system.shell` | 高 | 执行命令 |
 | `system.notification` | 低 | 系统通知 |
 | `system.tray` | 中 | 托盘交互 |
-| `ai.basic` | 低 | 基础 AI |
-| `ai.advanced` | 中 | 高级 AI |
-| `ai.agents` | 高 | 智能体 |
+| `intelligence.basic` | 低 | 基础智能能力 |
+| `intelligence.admin` | 高 | 管理级智能能力 |
+| `intelligence.agents` | 高 | 智能体 |
 | `storage.plugin` | 低 | 插件存储（自动授予） |
 | `storage.shared` | 中 | 共享存储 |
 | `storage.sqlite` | 中 | 插件 SQLite 数据库访问 |

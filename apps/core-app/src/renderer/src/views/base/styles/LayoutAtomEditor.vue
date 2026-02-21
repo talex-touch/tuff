@@ -1,8 +1,8 @@
 <script lang="ts" name="LayoutAtomEditor" setup>
 import type { LayoutAtomConfig } from '@talex-touch/utils'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSlider } from '@talex-touch/tuffex'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
-import { ElCollapse, ElCollapseItem, ElSlider } from 'element-plus'
+import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -114,7 +114,7 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label"
             >{{ t('layoutSection.atomHeaderHeight', 'Height') }} (px)</span
           >
-          <ElSlider
+          <TxSlider
             :model-value="atomConfig.header.height"
             :min="20"
             :max="48"
@@ -153,7 +153,7 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label"
             >{{ t('layoutSection.atomAsideWidth', 'Width') }} (px)</span
           >
-          <ElSlider
+          <TxSlider
             :model-value="atomConfig.aside.width"
             :min="36"
             :max="120"
@@ -170,7 +170,7 @@ const viewShadowOptions = [
           <span class="LayoutAtomEditor-Label"
             >{{ t('layoutSection.atomViewRadius', 'Corner radius') }} (px)</span
           >
-          <ElSlider
+          <TxSlider
             :model-value="atomConfig.view.radius[0]"
             :min="0"
             :max="24"
