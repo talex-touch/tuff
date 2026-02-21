@@ -35,6 +35,15 @@ export function buildTfileUrl(filePath: string): string {
   }
 
   const resolveInputPath = (): string => {
+    if (/^tfile:\/\//i.test(raw)) {
+      const tail = raw.replace(/^tfile:\/\//i, '')
+      const tailIndex = tail.search(/[?#]/)
+      const body = tailIndex >= 0 ? tail.slice(0, tailIndex) : tail
+      if (body.startsWith('/')) {
+        return decodeStable(body)
+      }
+      return decodeStable(`/${body}`)
+    }
     if (raw.startsWith('tfile:')) {
       try {
         const parsed = new URL(raw)

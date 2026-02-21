@@ -7,10 +7,10 @@
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxTag } from '@talex-touch/tuffex'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
-import { ElEmpty, ElTag } from 'element-plus'
+import { ElEmpty } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
@@ -175,18 +175,16 @@ function getPermissionIcon(permissionId: string): string {
   return icons[permissionId] || 'i-carbon-checkmark'
 }
 
-function getRiskTagType(
-  risk: 'low' | 'medium' | 'high'
-): 'success' | 'warning' | 'danger' | 'info' {
+function getRiskTagColor(risk: 'low' | 'medium' | 'high'): string {
   switch (risk) {
     case 'low':
-      return 'success'
+      return 'var(--tx-color-success)'
     case 'medium':
-      return 'warning'
+      return 'var(--tx-color-warning)'
     case 'high':
-      return 'danger'
+      return 'var(--tx-color-danger)'
     default:
-      return 'info'
+      return 'var(--tx-color-info)'
   }
 }
 
@@ -211,11 +209,11 @@ function getShortcutStatusLabel(shortcut: ShortcutWithStatus): string | null {
   return t('plugin.permissions.shortcuts.status.unavailable')
 }
 
-function getShortcutStatusTagType(shortcut: ShortcutWithStatus): 'danger' | 'warning' | 'info' {
+function getShortcutStatusTagColor(shortcut: ShortcutWithStatus): string {
   const status = shortcut.status
-  if (!status || status.state === 'active') return 'info'
-  if (status.state === 'conflict') return 'danger'
-  return 'warning'
+  if (!status || status.state === 'active') return 'var(--tx-color-info)'
+  if (status.state === 'conflict') return 'var(--tx-color-danger)'
+  return 'var(--tx-color-warning)'
 }
 
 function getShortcutWarningLabel(warning: ShortcutWarning): string {
@@ -397,23 +395,23 @@ onMounted(() => {
       >
         <TuffBlockLine :title="t('plugin.permissions.required')">
           <template #description>
-            <ElTag type="danger" effect="light" size="small">
+            <TxTag color="var(--tx-color-danger)" size="sm">
               {{ status?.required.length || 0 }}
-            </ElTag>
+            </TxTag>
           </template>
         </TuffBlockLine>
         <TuffBlockLine :title="t('plugin.permissions.optional')">
           <template #description>
-            <ElTag type="info" effect="light" size="small">
+            <TxTag color="var(--tx-color-info)" size="sm">
               {{ status?.optional.length || 0 }}
-            </ElTag>
+            </TxTag>
           </template>
         </TuffBlockLine>
         <TuffBlockLine :title="t('plugin.permissions.granted')">
           <template #description>
-            <ElTag type="success" effect="light" size="small">
+            <TxTag color="var(--tx-color-success)" size="sm">
               {{ status?.granted.length || 0 }}
-            </ElTag>
+            </TxTag>
           </template>
         </TuffBlockLine>
 
@@ -486,20 +484,19 @@ onMounted(() => {
                 {{ getShortcutTitle(shortcut) }}
               </div>
               <div v-if="getShortcutStatusLabel(shortcut)" class="PluginShortcuts-Status">
-                <ElTag :type="getShortcutStatusTagType(shortcut)" effect="light" size="small">
+                <TxTag :color="getShortcutStatusTagColor(shortcut)" size="sm">
                   {{ getShortcutStatusLabel(shortcut) }}
-                </ElTag>
+                </TxTag>
               </div>
               <div v-if="(shortcut.status?.warnings || []).length" class="PluginShortcuts-Warnings">
-                <ElTag
+                <TxTag
                   v-for="warning in shortcut.status?.warnings || []"
                   :key="warning"
-                  type="warning"
-                  effect="light"
-                  size="small"
+                  color="var(--tx-color-warning)"
+                  size="sm"
                 >
                   {{ getShortcutWarningLabel(warning) }}
-                </ElTag>
+                </TxTag>
               </div>
             </div>
             <FlatKeyInput
@@ -533,12 +530,12 @@ onMounted(() => {
           @change="(val) => handleToggle(perm.id, val)"
         >
           <template #tags>
-            <ElTag v-if="perm.required" type="danger" effect="light" size="small">
+            <TxTag v-if="perm.required" color="var(--tx-color-danger)" size="sm">
               {{ t('plugin.permissions.requiredTag') }}
-            </ElTag>
-            <ElTag :type="getRiskTagType(perm.risk)" effect="light" size="small">
+            </TxTag>
+            <TxTag :color="getRiskTagColor(perm.risk)" size="sm">
               {{ getRiskLabel(perm.risk) }}
-            </ElTag>
+            </TxTag>
           </template>
         </TuffBlockSwitch>
       </TuffGroupBlock>

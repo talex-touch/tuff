@@ -67,11 +67,11 @@ provide('setLoading', (val: boolean) => (loading.value = val))
     </div>
 
     <div mr-10 absolute :style="`${contentStyle}`" w-full>
-      <el-scrollbar>
+      <TxScroll>
         <slot>
           <p>Content</p>
         </slot>
-      </el-scrollbar>
+      </TxScroll>
     </div>
 
     <div class="Form-Loading transition-cubic">
@@ -120,7 +120,7 @@ provide('setLoading', (val: boolean) => (loading.value = val))
   --fake-inner-opacity: 0;
 }
 
-:deep(.el-scrollbar__view) {
+:deep(.tx-scroll__content) {
   position: relative;
 
   width: 100%;

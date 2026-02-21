@@ -127,9 +127,9 @@ function clearLogs() {
     <h2>内存泄漏测试</h2>
 
     <div class="test-controls">
-      <el-button type="primary" @click="createComponent"> 创建组件 </el-button>
-      <el-button type="danger" @click="destroyComponent"> 销毁组件 </el-button>
-      <el-button type="default" @click="clearLogs"> 清除日志 </el-button>
+      <TxButton type="primary" @click="createComponent"> 创建组件 </TxButton>
+      <TxButton type="danger" @click="destroyComponent"> 销毁组件 </TxButton>
+      <TxButton type="default" @click="clearLogs"> 清除日志 </TxButton>
     </div>
 
     <div class="test-info">

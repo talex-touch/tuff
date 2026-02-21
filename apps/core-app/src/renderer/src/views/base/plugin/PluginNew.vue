@@ -432,19 +432,19 @@ async function handleInstallDegit(): Promise<void> {
         </div>
         <div class="InstallForm-Line">
           <label>来源类型提示</label>
-          <el-select
+          <TuffSelect
             v-model="installState.hintType"
             clearable
             class="InstallSelect"
             placeholder="自动识别"
           >
-            <el-option
+            <TuffSelectItem
               v-for="option in providerOptions"
               :key="option"
               :label="providerLabels[option]"
               :value="option"
             />
-          </el-select>
+          </TuffSelect>
         </div>
         <p class="InstallHint">支持 GitHub 仓库 / release、NPM 包、.tpex 包或本地压缩包路径。</p>
       </BlockTemplate>

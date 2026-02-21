@@ -1,6 +1,5 @@
 <script lang="ts" name="IntelligencePromptSelector" setup>
-import { TxButton } from '@talex-touch/tuffex'
-import { ElInput, ElOption, ElOptionGroup, ElSelect, ElTag } from 'element-plus'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxTag } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -52,6 +51,11 @@ watch(selectedPrompt, (newPrompt) => {
 })
 
 function handlePromptSelect(promptId: string) {
+  if (!promptId) {
+    handlePromptClear()
+    return
+  }
+
   if (promptId === '__create_new__') {
     handleManagePrompts()
     return
@@ -103,68 +107,85 @@ function handleManagePrompts() {
 
     <!-- Quick Prompt Selection -->
     <div class="prompt-quick-select mb-3">
-      <ElSelect
+      <TuffSelect
         :model-value="selectedPromptId"
         :placeholder="t('intelligence.selectPrompt')"
-        clearable
-        filterable
+        searchable
         class="w-full"
         @update:model-value="handlePromptSelect"
-        @clear="handlePromptClear"
       >
+        <TuffSelectItem value="" :label="t('common.remove')">
+          {{ t('common.remove') }}
+        </TuffSelectItem>
         <!-- Built-in Prompts Group -->
-        <ElOptionGroup v-if="builtinPrompts.length > 0" :label="t('intelligence.builtinPrompts')">
-          <ElOption
-            v-for="prompt in builtinPrompts"
-            :key="prompt.id"
-            :value="prompt.id"
-            :label="prompt.name"
-          >
-            <div class="flex items-center justify-between w-full">
-              <span>{{ prompt.name }}</span>
-              <ElTag size="small" type="info">
-                {{ t('intelligence.builtin') }}
-              </ElTag>
-            </div>
-          </ElOption>
-        </ElOptionGroup>
+        <TuffSelectItem
+          v-if="builtinPrompts.length > 0"
+          value="__group_builtin__"
+          :label="t('intelligence.builtinPrompts')"
+          disabled
+        >
+          <div class="prompt-group-label">
+            {{ t('intelligence.builtinPrompts') }}
+          </div>
+        </TuffSelectItem>
+        <TuffSelectItem
+          v-for="prompt in builtinPrompts"
+          :key="prompt.id"
+          :value="prompt.id"
+          :label="prompt.name"
+        >
+          <div class="flex items-center justify-between w-full">
+            <span>{{ prompt.name }}</span>
+            <TxTag size="small" type="info">
+              {{ t('intelligence.builtin') }}
+            </TxTag>
+          </div>
+        </TuffSelectItem>
 
         <!-- Custom Prompts Group -->
-        <ElOptionGroup v-if="customPrompts.length > 0" :label="t('intelligence.customPrompts')">
-          <ElOption
-            v-for="prompt in customPrompts"
-            :key="prompt.id"
-            :value="prompt.id"
-            :label="prompt.name"
-          >
-            <div class="flex items-center justify-between w-full">
-              <span>{{ prompt.name }}</span>
-              <ElTag size="small" type="success">
-                {{ t('intelligence.custom') }}
-              </ElTag>
-            </div>
-          </ElOption>
-        </ElOptionGroup>
+        <TuffSelectItem
+          v-if="customPrompts.length > 0"
+          value="__group_custom__"
+          :label="t('intelligence.customPrompts')"
+          disabled
+        >
+          <div class="prompt-group-label">
+            {{ t('intelligence.customPrompts') }}
+          </div>
+        </TuffSelectItem>
+        <TuffSelectItem
+          v-for="prompt in customPrompts"
+          :key="prompt.id"
+          :value="prompt.id"
+          :label="prompt.name"
+        >
+          <div class="flex items-center justify-between w-full">
+            <span>{{ prompt.name }}</span>
+            <TxTag size="small" type="success">
+              {{ t('intelligence.custom') }}
+            </TxTag>
+          </div>
+        </TuffSelectItem>
 
         <!-- Add New Prompt Option -->
-        <ElOption value="__create_new__" :label="t('intelligence.createNewPrompt')">
+        <TuffSelectItem value="__create_new__" :label="t('intelligence.createNewPrompt')">
           <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('intelligence.createNewPrompt') }}</span>
           </div>
-        </ElOption>
-      </ElSelect>
+        </TuffSelectItem>
+      </TuffSelect>
     </div>
 
     <!-- Custom Text Input -->
     <div class="prompt-custom-input">
-      <ElInput
+      <TuffInput
+        class="prompt-input"
         :model-value="customInstructions"
         type="textarea"
         :placeholder="t('intelligence.instructionsPlaceholder')"
         :rows="4"
         :disabled="!!selectedPromptId && selectedPromptId !== '__create_new__'"
-        resize="vertical"
         @update:model-value="handleCustomInstructionsChange"
       />
       <div
@@ -185,9 +206,9 @@ function handleManagePrompts() {
         <span class="text-sm font-medium text-[var(--el-text-color-primary)]">
           {{ selectedPrompt.name }}
         </span>
-        <ElTag size="small" :type="selectedPrompt.builtin ? 'info' : 'success'">
+        <TxTag size="small" :type="selectedPrompt.builtin ? 'info' : 'success'">
           {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
-        </ElTag>
+        </TxTag>
       </div>
       <div class="text-sm text-[var(--el-text-color-regular)] whitespace-pre-wrap">
         {{ selectedPrompt.content }}
@@ -209,18 +230,21 @@ function handleManagePrompts() {
     }
   }
 
-  :deep(.el-select) {
-    .el-select__wrapper {
-      border-radius: 8px;
-    }
+  :deep(.tuff-select .tx-input) {
+    border-radius: 8px;
   }
 
-  :deep(.el-textarea) {
-    .el-textarea__inner {
-      border-radius: 8px;
-      font-family: var(--el-font-family);
-      line-height: 1.5;
-    }
+  :deep(.prompt-input .tx-input__textarea) {
+    border-radius: 8px;
+    font-family: var(--el-font-family);
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  .prompt-group-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--el-text-color-secondary);
   }
 
   .prompt-preview {

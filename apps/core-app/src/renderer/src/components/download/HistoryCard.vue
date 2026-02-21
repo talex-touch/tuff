@@ -190,29 +190,29 @@ function formatSpeed(bytesPerSecond: number): string {
 
       <!-- 右侧操作按钮 -->
       <div class="history-actions">
-        <el-tooltip
+        <TxTooltip
           v-if="history.status === DownloadStatus.COMPLETED"
           :content="$t('download.open_file')"
           placement="top"
         >
-          <el-button size="small" type="primary" circle @click="$emit('open-file', history.id)">
+          <TxButton size="small" type="primary" circle @click="$emit('open-file', history.id)">
             <el-icon><FolderOpened /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip
+          </TxButton>
+        </TxTooltip>
+        <TxTooltip
           v-if="history.status === DownloadStatus.COMPLETED"
           :content="$t('download.show_in_folder')"
           placement="top"
         >
-          <el-button size="small" circle @click="$emit('show-in-folder', history.id)">
+          <TxButton size="small" circle @click="$emit('show-in-folder', history.id)">
             <el-icon><Folder /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip :content="$t('download.clear_history_item')" placement="top">
-          <el-button size="small" type="danger" circle @click="$emit('clear', history.id)">
+          </TxButton>
+        </TxTooltip>
+        <TxTooltip :content="$t('download.clear_history_item')" placement="top">
+          <TxButton size="small" type="danger" circle @click="$emit('clear', history.id)">
             <el-icon><Delete /></el-icon>
-          </el-button>
-        </el-tooltip>
+          </TxButton>
+        </TxTooltip>
       </div>
     </div>
 

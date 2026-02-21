@@ -1,10 +1,10 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
-import { TxButton } from '@talex-touch/tuffex'
+import { TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { ElOption, ElOptionGroup, ElSelect, ElTransfer } from 'element-plus'
+import { ElTransfer } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -291,19 +291,6 @@ function handleDefaultModelChange() {
   validateDefaultModel()
 }
 
-function handleDefaultModelCreate(value: string) {
-  const modelName = normalizeModel(value)
-
-  if (!modelName) return
-
-  if (!localModels.value.includes(modelName)) {
-    applyModelUpdates([...localModels.value, modelName])
-  }
-
-  localDefaultModel.value = modelName
-  validateDefaultModel()
-}
-
 function handleInstructionsChange() {
   // Instructions are handled automatically by computed property
 }
@@ -506,26 +493,38 @@ watch(
         {{ t('intelligence.config.model.defaultModelPlaceholder') }}
       </p>
       <div class="default-model-select">
-        <ElSelect
+        <TuffSelect
           v-model="localDefaultModel"
-          filterable
-          allow-create
+          searchable
           :placeholder="t('intelligence.config.model.defaultModelPlaceholder')"
           class="default-model-dropdown"
           :disabled="disabled || localModels.length === 0"
           @change="handleDefaultModelChange"
-          @created="handleDefaultModelCreate"
         >
-          <ElOptionGroup v-for="group in defaultModelGroups" :key="group.key" :label="group.label">
-            <ElOption v-for="model in group.models" :key="model" :label="model" :value="model" />
-          </ElOptionGroup>
-          <ElOption
+          <TuffSelectItem
+            v-for="group in defaultModelGroups"
+            :key="`group-${group.key}`"
+            :value="`__group_${group.key}`"
+            :label="group.label"
+            disabled
+          >
+            <div class="default-model-group-label">
+              {{ group.label }}
+            </div>
+          </TuffSelectItem>
+          <TuffSelectItem
+            v-for="model in defaultModelGroups.flatMap((group) => group.models)"
+            :key="model"
+            :label="model"
+            :value="model"
+          />
+          <TuffSelectItem
             v-if="!defaultModelGroups.length"
             :label="t('intelligence.config.model.noModels')"
             value=""
             disabled
           />
-        </ElSelect>
+        </TuffSelect>
         <p v-if="defaultModelError" class="drawer-error">
           {{ defaultModelError }}
         </p>
@@ -573,6 +572,12 @@ watch(
       margin-top: 8px;
       color: var(--el-color-error);
       font-size: 12px;
+    }
+
+    .default-model-group-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--el-text-color-secondary);
     }
   }
 }

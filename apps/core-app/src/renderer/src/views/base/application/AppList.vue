@@ -106,7 +106,7 @@ function handleClick(item: AppListItem, ind: number) {
 </script>
 
 <template>
-  <el-scrollbar>
+  <TxScroll>
     <TransitionGroup name="list" tag="ul" class="AppList">
       <div class="AppList-Toolbox">
         <FlatInput v-model="search" :placeholder="t('appList.searchPlaceholder')" :fetch="search" />
@@ -150,7 +150,7 @@ function handleClick(item: AppListItem, ind: number) {
         <span v-if="orderWay === 3">{{ t('appList.order.freq') }}</span>
       </span>
     </div>
-  </el-scrollbar>
+  </TxScroll>
 </template>
 
 <style lang="scss">

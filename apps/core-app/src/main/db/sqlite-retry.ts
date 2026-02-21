@@ -19,7 +19,12 @@ export function isSqliteBusyError(error: unknown): boolean {
     message?: string
   }
 
+  // Match all SQLITE_BUSY extended error codes:
+  //   SQLITE_BUSY (5), SQLITE_BUSY_RECOVERY (261),
+  //   SQLITE_BUSY_SNAPSHOT (517), SQLITE_BUSY_TIMEOUT (773)
   if (code === 'SQLITE_BUSY' || rawCode === 5) return true
+  if (typeof code === 'string' && code.startsWith('SQLITE_BUSY')) return true
+  if (typeof rawCode === 'number' && rawCode > 5 && rawCode % 256 === 5) return true
 
   return typeof message === 'string' && message.includes('SQLITE_BUSY')
 }

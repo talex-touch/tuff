@@ -6,10 +6,10 @@
 
 import type { PermissionStartupRequestPayload } from '@talex-touch/utils/transport/events/types'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
-import type { ElMessageBoxOptions } from 'element-plus'
-import { ElButton, ElMessageBox } from 'element-plus'
-import { h, onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
+import { showSonnerDialog } from '~/modules/notification/sonner-dialog'
 
 type PermissionStartupRequest = PermissionStartupRequestPayload
 
@@ -38,78 +38,44 @@ export function usePermissionStartup() {
       })
       .join('\n')
 
-    const userChoice = await new Promise<'always' | 'session' | 'deny'>((resolve) => {
-      let timeoutId: ReturnType<typeof setTimeout> | null = null
-      let resolved = false
-
-      const cleanup = () => {
-        if (timeoutId) clearTimeout(timeoutId)
-      }
-
-      const finish = (choice: 'always' | 'session' | 'deny') => {
-        if (resolved) return
-        resolved = true
-        cleanup()
-        ElMessageBox.close()
-        resolve(choice)
-      }
-
-      timeoutId = setTimeout(() => finish('deny'), PERMISSION_TIMEOUT_MS)
-
-      const options: ElMessageBoxOptions = {
-        title: t('plugin.permissions.startup.title'),
-        message: h('div', { style: 'white-space: pre-wrap' }, [
-          h('p', {}, t('plugin.permissions.startup.requestMessage', { name: request.pluginName })),
-          h(
-            'pre',
-            {
-              style:
-                'background: var(--el-fill-color); padding: 8px; border-radius: 4px; margin: 8px 0'
-            },
-            permList
-          ),
-          h(
-            'p',
-            {
-              style: 'color: var(--el-text-color-secondary); font-size: 12px; margin-top: 12px'
-            },
-            t('plugin.permissions.startup.timeout', {
-              seconds: Math.floor(PERMISSION_TIMEOUT_MS / 1000)
-            })
-          ),
-          h(
-            'div',
-            {
-              style: 'display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px'
-            },
-            [
-              h(ElButton, { onClick: () => finish('deny') }, () =>
-                t('plugin.permissions.startup.actions.deny')
-              ),
-              h(ElButton, { onClick: () => finish('session') }, () =>
-                t('plugin.permissions.startup.actions.session')
-              ),
-              h(ElButton, { type: 'primary', onClick: () => finish('always') }, () =>
-                t('plugin.permissions.startup.actions.always')
-              )
-            ]
-          )
-        ]),
-        showConfirmButton: false,
-        showCancelButton: false,
-        closeOnClickModal: false,
-        closeOnPressEscape: false,
-        showClose: false,
-        type: 'warning',
-        beforeClose: (_action, _instance, done) => {
-          finish('deny')
-          done()
-        }
-      }
-      ElMessageBox(options).catch(() => {
-        finish('deny')
+    const message = [
+      t('plugin.permissions.startup.requestMessage', { name: request.pluginName }),
+      '',
+      permList,
+      '',
+      t('plugin.permissions.startup.timeout', {
+        seconds: Math.floor(PERMISSION_TIMEOUT_MS / 1000)
       })
+    ].join('\n')
+
+    const { id, result } = showSonnerDialog<'always' | 'session' | 'deny'>({
+      title: t('plugin.permissions.startup.title'),
+      message,
+      actions: [
+        {
+          value: 'deny',
+          label: t('plugin.permissions.startup.actions.deny'),
+          type: 'danger'
+        },
+        {
+          value: 'session',
+          label: t('plugin.permissions.startup.actions.session')
+        },
+        {
+          value: 'always',
+          label: t('plugin.permissions.startup.actions.always'),
+          type: 'primary'
+        }
+      ],
+      onDismiss: () => 'deny'
     })
+
+    const timeoutId = setTimeout(() => {
+      toast.dismiss(id)
+    }, PERMISSION_TIMEOUT_MS)
+
+    const userChoice = await result
+    clearTimeout(timeoutId)
 
     // Handle user choice
     switch (userChoice) {

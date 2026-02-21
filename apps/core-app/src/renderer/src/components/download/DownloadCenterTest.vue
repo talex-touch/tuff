@@ -152,11 +152,11 @@ async function testGetTasks() {
 
     <!-- 测试按钮 -->
     <div class="test-buttons">
-      <el-button type="primary" @click="testSmallFile"> 测试小文件下载 </el-button>
-      <el-button type="primary" @click="testLargeFile"> 测试大文件下载 </el-button>
-      <el-button type="primary" @click="testConcurrentDownloads"> 测试并发下载 </el-button>
-      <el-button type="primary" @click="testResumeDownload"> 测试断点续传 </el-button>
-      <el-button type="success" @click="testGetTasks"> 获取任务列表 </el-button>
+      <TxButton type="primary" @click="testSmallFile"> 测试小文件下载 </TxButton>
+      <TxButton type="primary" @click="testLargeFile"> 测试大文件下载 </TxButton>
+      <TxButton type="primary" @click="testConcurrentDownloads"> 测试并发下载 </TxButton>
+      <TxButton type="primary" @click="testResumeDownload"> 测试断点续传 </TxButton>
+      <TxButton type="success" @click="testGetTasks"> 获取任务列表 </TxButton>
     </div>
 
     <!-- 测试结果 -->
@@ -218,7 +218,7 @@ async function testGetTasks() {
     flex-direction: column;
   }
 
-  .test-buttons .el-button {
+  .test-buttons .tx-button {
     width: 100%;
   }
 }

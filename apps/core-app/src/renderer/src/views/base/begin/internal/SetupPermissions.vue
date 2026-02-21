@@ -381,9 +381,9 @@ function getStatusIcon(status: string): string {
               />
               <span>{{ getStatusText(permissions.fileAccess.status) }}</span>
             </div>
-            <el-button size="small" :loading="isLoading" @click="checkAllPermissions">
+            <TxButton size="small" :loading="isLoading" @click="checkAllPermissions">
               {{ t('setupPermissions.recheck') }}
-            </el-button>
+            </TxButton>
           </div>
         </div>
 
@@ -407,14 +407,14 @@ function getStatusIcon(status: string): string {
               />
               <span>{{ getStatusText(permissions.accessibility.status) }}</span>
             </div>
-            <el-button
+            <TxButton
               v-if="permissions.accessibility.status !== 'granted'"
               size="small"
               type="primary"
               @click="requestPermission('accessibility')"
             >
               {{ t('setupPermissions.openSettings') }}
-            </el-button>
+            </TxButton>
           </div>
         </div>
 
@@ -438,14 +438,14 @@ function getStatusIcon(status: string): string {
               />
               <span>{{ getStatusText(permissions.adminPrivileges.status) }}</span>
             </div>
-            <el-button
+            <TxButton
               v-if="permissions.adminPrivileges.status !== 'granted'"
               size="small"
               type="warning"
               @click="checkAllPermissions"
             >
               {{ t('setupPermissions.recheck') }}
-            </el-button>
+            </TxButton>
           </div>
         </div>
 
@@ -469,14 +469,14 @@ function getStatusIcon(status: string): string {
               />
               <span>{{ getStatusText(permissions.notifications.status) }}</span>
             </div>
-            <el-button
+            <TxButton
               v-if="permissions.notifications.status !== 'granted'"
               size="small"
               type="primary"
               @click="requestPermission('notifications')"
             >
               {{ t('setupPermissions.openSettings') }}
-            </el-button>
+            </TxButton>
           </div>
         </div>
       </TGroupBlock>
@@ -509,12 +509,12 @@ function getStatusIcon(status: string): string {
     </div>
 
     <div class="SetupPermissions-Actions">
-      <el-button :loading="isLoading" @click="checkAllPermissions">
+      <TxButton :loading="isLoading" @click="checkAllPermissions">
         {{ t('setupPermissions.recheck') }}
-      </el-button>
-      <el-button type="primary" :disabled="!canContinue()" @click="handleContinue">
+      </TxButton>
+      <TxButton type="primary" :disabled="!canContinue()" @click="handleContinue">
         {{ t('setupPermissions.continue') }}
-      </el-button>
+      </TxButton>
     </div>
   </div>
 </template>

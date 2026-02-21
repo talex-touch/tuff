@@ -25,11 +25,11 @@ onMounted(() => {
     <p font-600>
       {{ t(title) }}
     </p>
-    <el-scrollbar>
+    <TxScroll>
       <div class="TerminalTemplate-Content">
         <InteractiveTerminal ref="terminal" />
       </div>
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 

@@ -123,7 +123,15 @@ export class DbWriteScheduler {
       this.currentTaskLabel = task.label
 
       if (waitedMs > 2000) {
-        log.warn(`DB write task waited ${waitedMs}ms: ${task.label}`)
+        // Rate-limit slow-wait warnings: only log every 20th occurrence
+        // during heavy indexing to avoid flooding the log with 11K+ entries.
+        taskCount++
+        if (taskCount <= 3 || taskCount % 20 === 0) {
+          log.warn(
+            `DB write task waited ${waitedMs}ms: ${task.label}` +
+              (taskCount > 3 ? ` (${taskCount} slow tasks so far)` : '')
+          )
+        }
       }
 
       // Drop droppable tasks that have waited too long (queue pressure relief)
@@ -152,7 +160,6 @@ export class DbWriteScheduler {
       // Yield to event loop after every task to prevent blocking.
       // SQLite operations are synchronous at the driver level — even a single
       // INSERT can block for 50-200ms, so yielding every 3 tasks is not enough.
-      taskCount++
       await new Promise<void>((resolve) => setImmediate(resolve))
     }
 

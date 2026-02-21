@@ -102,7 +102,7 @@ function handleAdd() {
     <p op-75 text-lg>Edit plugin market source.</p>
 
     <div class="MarketSourceEditor-Container">
-      <el-scrollbar>
+      <TxScroll>
         <div
           v-draggable="[sources, { animation: 150, handle: '.handle', ghostClass: 'ghost' }]"
           class="MarketSourceEditor-Content"
@@ -164,7 +164,7 @@ function handleAdd() {
             </div>
           </div>
         </div>
-      </el-scrollbar>
+      </TxScroll>
     </div>
   </div>
 </template>

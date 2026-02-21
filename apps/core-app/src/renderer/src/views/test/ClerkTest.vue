@@ -17,12 +17,12 @@ const { authState, isLoading, isAuthenticated, signIn, signOut, getDisplayName, 
       <p>邮箱: {{ getPrimaryEmail() }}</p>
       <p>会话ID: {{ authState.sessionId }}</p>
 
-      <el-button type="danger" @click="signOut"> 登出 </el-button>
+      <TxButton type="danger" @click="signOut"> 登出 </TxButton>
     </div>
 
     <div v-else class="not-authenticated">
       <h3>未登录</h3>
-      <el-button type="primary" @click="signIn"> 登录 </el-button>
+      <TxButton type="primary" @click="signIn"> 登录 </TxButton>
     </div>
 
     <div class="debug-info">

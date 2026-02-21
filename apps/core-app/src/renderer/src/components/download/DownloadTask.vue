@@ -202,15 +202,15 @@ function formatRemainingTime(seconds: number): string {
         </div>
       </div>
       <div class="task-actions">
-        <el-button
+        <TxButton
           v-if="task.status === 'downloading'"
           size="small"
           @click="$emit('pause', task.id)"
         >
           <el-icon><VideoPause /></el-icon>
           {{ $t('download.pause') }}
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-else-if="task.status === 'paused'"
           size="small"
           type="primary"
@@ -218,8 +218,8 @@ function formatRemainingTime(seconds: number): string {
         >
           <el-icon><VideoPlay /></el-icon>
           {{ $t('download.resume') }}
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-if="task.status === 'failed'"
           size="small"
           type="warning"
@@ -227,8 +227,8 @@ function formatRemainingTime(seconds: number): string {
         >
           <el-icon><Refresh /></el-icon>
           {{ $t('download.retry') }}
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-if="['pending', 'downloading', 'paused'].includes(task.status)"
           size="small"
           type="danger"
@@ -236,8 +236,8 @@ function formatRemainingTime(seconds: number): string {
         >
           <el-icon><Close /></el-icon>
           {{ $t('download.cancel') }}
-        </el-button>
-        <el-button
+        </TxButton>
+        <TxButton
           v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
           size="small"
           type="danger"
@@ -245,7 +245,7 @@ function formatRemainingTime(seconds: number): string {
         >
           <el-icon><Delete /></el-icon>
           {{ $t('download.remove') }}
-        </el-button>
+        </TxButton>
       </div>
     </div>
 
@@ -449,7 +449,7 @@ function formatRemainingTime(seconds: number): string {
   word-break: break-all;
 }
 
-.task-actions :deep(.el-button) {
+.task-actions :deep(.tx-button) {
   background: transparent;
   border-color: var(--el-border-color-light);
   color: var(--task-strong);
@@ -457,7 +457,7 @@ function formatRemainingTime(seconds: number): string {
   padding: 0 10px;
 }
 
-.task-actions :deep(.el-button:hover) {
+.task-actions :deep(.tx-button:hover) {
   border-color: var(--task-strong);
 }
 

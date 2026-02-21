@@ -130,7 +130,7 @@ export class PollingService {
   public unregister(id: string): void {
     if (this.tasks.delete(id)) {
       if (this.shouldVerboseLog()) {
-        console.log(`[PollingService] Task '${id}' unregistered.`)
+        console.debug(`[PollingService] Task '${id}' unregistered.`)
       }
       if (this.isRunning) {
         this._reschedule()

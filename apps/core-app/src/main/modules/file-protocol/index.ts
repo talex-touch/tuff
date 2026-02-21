@@ -67,6 +67,29 @@ function isAllowedTfilePath(filePath: string, roots: string[]): boolean {
   )
 }
 
+function normalizeDarwinUsersPath(filePath: string): string {
+  if (process.platform !== 'darwin') {
+    return filePath
+  }
+  const normalized = normalizeAbsolutePath(filePath)
+  if (!normalized) {
+    return filePath
+  }
+  const lowerPath = normalized.toLowerCase()
+  if (!lowerPath.startsWith('/users/')) {
+    return normalized
+  }
+  const home = normalizeAbsolutePath(os.homedir())
+  if (!home) {
+    return normalized
+  }
+  const lowerHome = home.toLowerCase()
+  if (lowerPath.startsWith(lowerHome)) {
+    return `${home}${normalized.slice(lowerHome.length)}`
+  }
+  return normalized
+}
+
 /**
  * Extract an absolute file path from a tfile:// URL.
  *
@@ -104,6 +127,14 @@ function extractAbsolutePath(rawUrl: string): string {
     return decoded
   }
 
+  const prefix = `${FILE_SCHEMA}://`
+  if (rawUrl.startsWith(prefix)) {
+    const rawWithTail = rawUrl.slice(prefix.length)
+    const tailIndex = rawWithTail.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    return normalizeDecodedPath(decodeStable(body))
+  }
+
   try {
     const parsed = new URL(rawUrl)
     if (parsed.hostname && /^[a-z]$/i.test(parsed.hostname) && parsed.pathname.startsWith('/')) {
@@ -112,10 +143,8 @@ function extractAbsolutePath(rawUrl: string): string {
     const merged = parsed.hostname ? `/${parsed.hostname}${parsed.pathname}` : parsed.pathname
     return normalizeDecodedPath(decodeStable(merged))
   } catch {
-    const prefix = `${FILE_SCHEMA}://`
-    const rawWithTail = rawUrl.startsWith(prefix) ? rawUrl.slice(prefix.length) : rawUrl
-    const tailIndex = rawWithTail.search(/[?#]/)
-    const body = tailIndex >= 0 ? rawWithTail.slice(0, tailIndex) : rawWithTail
+    const tailIndex = rawUrl.search(/[?#]/)
+    const body = tailIndex >= 0 ? rawUrl.slice(0, tailIndex) : rawUrl
     return normalizeDecodedPath(decodeStable(body))
   }
 }
@@ -135,7 +164,7 @@ class FileProtocolModule extends BaseModule {
     const allowedRoots = buildAllowedRoots()
 
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
-      const filePath = extractAbsolutePath(request.url)
+      const filePath = normalizeDarwinUsersPath(extractAbsolutePath(request.url))
       const normalizedPath = normalizeAbsolutePath(filePath)
       if (!normalizedPath || !isAllowedTfilePath(normalizedPath, allowedRoots)) {
         if (!loggedErrorPaths.has(filePath)) {

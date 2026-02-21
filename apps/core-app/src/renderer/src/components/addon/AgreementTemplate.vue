@@ -38,9 +38,9 @@ async function dispose(agree: boolean): Promise<void> {
     </p>
     <span mb-2> {{ t('agreement.description') }} </span>
     <div class="AgreeTemplate-Content">
-      <el-scrollbar>
+      <TxScroll>
         <FlatMarkdown v-model="content" :readonly="true" />
-      </el-scrollbar>
+      </TxScroll>
     </div>
 
     <div justify-center box-border w="85%" mt-4 flex gap-8>
@@ -77,7 +77,7 @@ async function dispose(agree: boolean): Promise<void> {
     font-size: 0.9rem;
   }
 
-  .el-scrollbar {
+  .tx-scroll {
     flex: 1;
     width: 100%;
     max-width: 1280px;

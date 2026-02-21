@@ -56,7 +56,7 @@ import { fileParserRegistry } from '@talex-touch/utils/electron/file-parsers'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
-import { app, nativeImage, shell } from 'electron'
+import { app, shell } from 'electron'
 // extract-file-icon removed — sync native call blocks event loop; icon extraction is done via IconWorkerClient only
 import plist from 'plist'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
@@ -95,17 +95,21 @@ import {
   WHITELISTED_EXTENSIONS
 } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
+import { THUMBNAIL_EXTENSIONS, isThumbnailCandidate } from './thumbnail-config'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
 import { IconWorkerClient } from './workers/icon-worker-client'
+import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
+import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
+import {
+  SearchIndexWorkerClient,
+  type PersistEntry
+} from '../../search-engine/workers/search-index-worker-client'
 
 const MAX_CONTENT_LENGTH = 200_000
 const ICON_META_EXTENSION_KEY = 'iconMeta'
-const THUMBNAIL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'])
-const THUMBNAIL_MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
-const THUMBNAIL_SIZE = 64
 const fileProviderLog = getLogger('file-provider')
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
@@ -263,6 +267,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private databaseFilePath: string | null = null
   private searchIndex: SearchIndexService | null = null
   private embeddingService: EmbeddingService | null = null
+  /** AIMD adaptive batch scheduler for flush operations — persists across flushes. */
+  private readonly flushBatchScheduler = new AdaptiveBatchScheduler({
+    initialSize: 5,
+    maxSize: 20,
+    targetMs: 400,
+    minSize: 2,
+    ssthresh: 10
+  })
+  /** AIMD adaptive batch scheduler for fullScan upsert — persists across scans. */
+  private readonly upsertBatchScheduler = new AdaptiveBatchScheduler({
+    initialSize: 5,
+    maxSize: 20,
+    targetMs: 300,
+    minSize: 2,
+    ssthresh: 10
+  })
   private fsEventsSubscribed = false
   private watchPathsRegistered = false
   private incrementalTaskChain: Promise<void> = Promise.resolve()
@@ -305,6 +325,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   )
 
   private readonly iconWorker = new IconWorkerClient()
+  private readonly searchIndexWorker = new SearchIndexWorkerClient()
   private readonly openerCache = new Map<string, ResolvedOpener>()
   private readonly openerPromises = new Map<string, Promise<ResolvedOpener | null>>()
   private readonly openerIconJobs = new Map<string, Promise<void>>()
@@ -317,6 +338,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private indexWorkerFlushTimer: NodeJS.Timeout | null = null
+  /** Guard to prevent overlapping flushIndexWorkerResults calls */
+  private indexWorkerFlushing = false
 
   private readonly pendingContentProgress = new Map<
     number,
@@ -879,6 +902,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ? path.join(databaseDir, 'database.db')
       : path.join(app.getPath('userData'), 'database.db')
 
+    // Initialize the search index worker with the database path so that
+    // all FTS5 + keyword_mappings write operations run off the main thread.
+    void this.searchIndexWorker.init(this.databaseFilePath).catch((error) => {
+      this.logError('SearchIndexWorkerClient init failed', error)
+    })
+
     // 🔍 DEBUG: 确认 onLoad 被调用
     this.logDebug('[DEBUG] FileProvider.onLoad called', {
       watchPathsCount: this.WATCH_PATHS.length,
@@ -1103,6 +1132,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       embeddingCompletedFiles,
       embeddingRows
     }
+  }
+
+  /**
+   * 获取失败文件的详细信息列表
+   */
+  public async getFailedFiles(): Promise<
+    Array<{
+      fileId: number
+      path: string
+      lastError: string | null
+      updatedAt: string | null
+    }>
+  > {
+    if (!this.dbUtils) return []
+
+    const db = this.dbUtils.getDb()
+    const rows = await db
+      .select({
+        fileId: fileIndexProgress.fileId,
+        path: filesSchema.path,
+        lastError: fileIndexProgress.lastError,
+        updatedAt: fileIndexProgress.updatedAt
+      })
+      .from(fileIndexProgress)
+      .innerJoin(filesSchema, eq(fileIndexProgress.fileId, filesSchema.id))
+      .where(eq(fileIndexProgress.status, 'failed'))
+      .limit(500)
+
+    return rows.map((row) => ({
+      fileId: row.fileId,
+      path: row.path,
+      lastError: row.lastError,
+      updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null
+    }))
   }
 
   /**
@@ -1364,7 +1427,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    const chunkSize = 80
+    const chunkSize = 30
     for (let i = 0; i < payload.length; i += chunkSize) {
       const chunk = payload.slice(i, i + chunkSize)
       void this.fileIndexWorker
@@ -1388,7 +1451,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.indexWorkerFlushTimer) {
       // Use a longer flush interval to accumulate more results per batch,
       // reducing the number of heavy indexItems calls on the main thread.
-      const flushDelay = this.pendingIndexWorkerResults.size > 50 ? 300 : 120
+      const flushDelay = this.pendingIndexWorkerResults.size > 30 ? 500 : 250
       this.indexWorkerFlushTimer = setTimeout(() => {
         this.indexWorkerFlushTimer = null
         void this.flushIndexWorkerResults()
@@ -1405,11 +1468,34 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    // Take at most FLUSH_BATCH_SIZE items per flush to avoid blocking the
-    // main thread with heavy FTS5 + keyword_mappings writes inside indexItems.
-    // Each document involves DELETE+INSERT on FTS5 + keyword table, which are
-    // synchronous SQLite operations that block the event loop.
-    const FLUSH_BATCH_SIZE = 2
+    // Prevent overlapping flushes: if a previous flush (including its
+    // indexItems call with heavy FTS5 writes) is still running, defer.
+    // This avoids multiple competing SQLite transactions that compound
+    // event loop blocking.
+    if (this.indexWorkerFlushing) {
+      if (!this.indexWorkerFlushTimer) {
+        this.indexWorkerFlushTimer = setTimeout(() => {
+          this.indexWorkerFlushTimer = null
+          void this.flushIndexWorkerResults()
+        }, 300)
+      }
+      return
+    }
+
+    this.indexWorkerFlushing = true
+    try {
+      await this.doFlushIndexWorkerResults()
+    } finally {
+      this.indexWorkerFlushing = false
+    }
+  }
+
+  private async doFlushIndexWorkerResults(): Promise<void> {
+    if (!this.dbUtils || !this.searchIndex) return
+    if (this.pendingIndexWorkerResults.size === 0) return
+
+    // Adaptive flush batch size — AIMD scheduler adjusts based on transaction duration.
+    const FLUSH_BATCH_SIZE = this.flushBatchScheduler.currentSize
     let entries: IndexWorkerFileResult[]
     if (this.pendingIndexWorkerResults.size <= FLUSH_BATCH_SIZE) {
       entries = Array.from(this.pendingIndexWorkerResults.values())
@@ -1430,82 +1516,51 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         this.indexWorkerFlushTimer = setTimeout(() => {
           this.indexWorkerFlushTimer = null
           void this.flushIndexWorkerResults()
-        }, 200)
+        }, 400)
       }
     }
 
-    const db = this.dbUtils.getDb()
-    const indexItems = entries.map((entry) => entry.indexItem)
-    const withContent = indexItems.filter((item) => item.content && item.content.length > 0).length
+    const withContent = entries.filter(
+      (e) => e.indexItem.content && e.indexItem.content.length > 0
+    ).length
     if (withContent > 0) {
       this.logDebug(`Flushing ${entries.length} worker results (${withContent} with content)`)
     }
 
-    // Persist each entry in its own scheduled transaction so the
-    // dbWriteScheduler can yield between entries, keeping the event loop responsive.
-    for (const entry of entries) {
-      await dbWriteScheduler.waitForCapacity(8)
-      await dbWriteScheduler.schedule('file-index.worker.persist', () =>
-        withSqliteRetry(
-          () =>
-            db.transaction(async (tx) => {
-              const progress = entry.progress
+    // Build PersistEntry[] — all data needed for persist + FTS5 index in one
+    // worker call.  This eliminates SQLITE_BUSY_SNAPSHOT errors by making the
+    // worker the single DB writer for this hot path.
+    const persistEntries: PersistEntry[] = entries.map((entry) => ({
+      fileId: entry.fileId,
+      fileUpdate: entry.fileUpdate
+        ? {
+            content: entry.fileUpdate.content,
+            embeddingStatus: entry.fileUpdate.embeddingStatus,
+            embeddings: entry.fileUpdate.embeddings?.map((emb) => ({
+              vector: emb.vector,
+              model: emb.model
+            })),
+            contentHash:
+              entry.fileUpdate.contentHash ?? this.buildContentHash(entry.fileUpdate.content ?? '')
+          }
+        : null,
+      progress: {
+        status: entry.progress.status,
+        progress: entry.progress.progress,
+        processedBytes: entry.progress.processedBytes,
+        totalBytes: entry.progress.totalBytes,
+        lastError: entry.progress.lastError,
+        startedAt: entry.progress.startedAt ?? null,
+        updatedAt: entry.progress.updatedAt ?? new Date().toISOString()
+      },
+      indexItem: entry.indexItem
+    }))
 
-              if (entry.fileUpdate) {
-                await tx
-                  .update(filesSchema)
-                  .set({
-                    content: entry.fileUpdate.content,
-                    embeddingStatus: entry.fileUpdate.embeddingStatus
-                  })
-                  .where(eq(filesSchema.id, entry.fileId))
-
-                if (entry.fileUpdate.embeddings && entry.fileUpdate.embeddings.length > 0) {
-                  const contentHash =
-                    entry.fileUpdate.contentHash ??
-                    this.buildContentHash(entry.fileUpdate.content ?? '')
-                  await this.persistEmbeddings(
-                    tx,
-                    entry.fileId,
-                    contentHash,
-                    entry.fileUpdate.embeddings
-                  )
-                }
-              }
-
-              await tx
-                .insert(fileIndexProgress)
-                .values({
-                  fileId: entry.fileId,
-                  status: progress.status,
-                  progress: progress.progress,
-                  processedBytes: progress.processedBytes,
-                  totalBytes: progress.totalBytes,
-                  lastError: progress.lastError,
-                  startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
-                  updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date()
-                })
-                .onConflictDoUpdate({
-                  target: fileIndexProgress.fileId,
-                  set: {
-                    status: progress.status,
-                    progress: progress.progress,
-                    processedBytes: progress.processedBytes,
-                    totalBytes: progress.totalBytes,
-                    lastError: progress.lastError,
-                    startedAt: progress.startedAt ? new Date(progress.startedAt) : null,
-                    updatedAt: progress.updatedAt ? new Date(progress.updatedAt) : new Date()
-                  }
-                })
-            }),
-          { label: 'file-index.worker.persist' }
-        )
-      )
-    }
-
-    // Index search items outside dbWriteScheduler to avoid scheduler nesting
-    // (indexItems internally schedules its own DB writes)
-    await this.searchIndex!.indexItems(indexItems)
+    // Single worker call: persist files/embeddings/progress + index into FTS5.
+    // All DB writes happen in the worker thread — no main-thread SQLite contention.
+    const flushStart = performance.now()
+    await this.searchIndexWorker.persistAndIndex(persistEntries)
+    this.flushBatchScheduler.recordDuration(performance.now() - flushStart)
   }
 
   private extractFileIconQueued(filePath: string): Promise<Buffer | null> {
@@ -2011,6 +2066,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private readonly pendingIconExtractions = new Set<number>()
+  private readonly pendingThumbnailExtractions = new Set<number>()
   private _thumbnailTaskRunning = false
 
   private async ensureFileIcon(
@@ -2072,21 +2128,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private generateThumbnail(filePath: string): string | null {
+  private readonly thumbnailWorker = new ThumbnailWorkerClient()
+
+  private async ensureFileThumbnail(
+    fileId: number,
+    filePath: string,
+    file?: typeof filesSchema.$inferSelect
+  ): Promise<void> {
+    if (this.pendingThumbnailExtractions.has(fileId)) {
+      return
+    }
+    if (file && !isThumbnailCandidate(file.extension, file.size)) {
+      return
+    }
+
+    this.pendingThumbnailExtractions.add(fileId)
     try {
-      const img = nativeImage.createFromPath(filePath)
-      if (img.isEmpty()) return null
-
-      const size = img.getSize()
-      if (size.width <= THUMBNAIL_SIZE && size.height <= THUMBNAIL_SIZE) return null
-
-      const resized = img.resize({ width: THUMBNAIL_SIZE, height: THUMBNAIL_SIZE, quality: 'good' })
-      const jpegBuffer = resized.toJPEG(50)
-      if (jpegBuffer.length === 0) return null
-
-      return `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`
-    } catch {
-      return null
+      const thumbnail = await this.thumbnailWorker.generate(filePath)
+      if (!thumbnail || !this.dbUtils) {
+        return
+      }
+      await this.withDbWrite('thumbnail.worker', () =>
+        this.dbUtils!.addFileExtensions([{ fileId, key: 'thumbnail', value: thumbnail }])
+      )
+    } catch (error) {
+      this.logWarn('Failed to generate thumbnail', error, { path: filePath })
+    } finally {
+      this.pendingThumbnailExtractions.delete(fileId)
     }
   }
 
@@ -2128,14 +2196,18 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       for (const file of candidates) {
         if (!this._thumbnailTaskRunning) break // allow cancellation
 
-        const fileSize = typeof file.size === 'number' ? file.size : 0
-        if (fileSize <= 0 || fileSize > THUMBNAIL_MAX_FILE_SIZE) continue
+        if (!isThumbnailCandidate(file.extension, file.size)) continue
 
         // Yield to event loop before each thumbnail
         await new Promise<void>((resolve) => setImmediate(resolve))
         await appTaskGate.waitForIdle()
 
-        const thumbnail = this.generateThumbnail(file.path)
+        let thumbnail: string | null = null
+        try {
+          thumbnail = await this.thumbnailWorker.generate(file.path)
+        } catch (error) {
+          this.logWarn('Thumbnail worker failed', error, { path: file.path })
+        }
         if (thumbnail && typeof file.id === 'number') {
           await this.withDbWrite('thumbnail.deferred', () =>
             this.dbUtils!.addFileExtensions([
@@ -2289,8 +2361,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       await db.delete(filesSchema).where(inArray(filesSchema.id, idsToDelete))
       await this.deleteEmbeddingsByFileIds(db, idsToDelete)
     })
-    // Remove from FTS5 OUTSIDE withDbWrite to avoid inline re-entrancy
-    await this.searchIndex?.removeItems(pathsToDelete)
+    // Remove from FTS5 via worker thread to avoid blocking main thread
+    await this.searchIndexWorker.removeItems(pathsToDelete)
     this.logDebug('Incremental remove completed', {
       removed: existing.length
     })
@@ -2502,13 +2574,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const start = performance.now()
     this.logInfo('Running cross-table integrity check')
 
-    const searchIndex = this.searchIndex!
     const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve))
 
     // 1. Compare FTS5 row count vs files table count
     // Each query is a synchronous SQLite operation — yield between them
     // to keep the event loop responsive.
-    const ftsCount = await searchIndex.countByProvider(this.id)
+    const ftsCount = await this.searchIndexWorker.countByProvider(this.id)
     await yieldToEventLoop()
 
     const fileCountResult = await db
@@ -2533,7 +2604,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
       // Clear stale FTS5 entries so the re-scan writes fresh data
       if (ftsCount > 0) {
-        await searchIndex.removeByProvider(this.id)
+        await this.searchIndexWorker.removeByProvider(this.id)
         this.logInfo('Cleared stale FTS5 entries')
       }
 
@@ -2638,16 +2709,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         await db.delete(scanProgress).where(inArray(scanProgress.path, pathsToDelete))
       })
 
-      // Remove from FTS5 index OUTSIDE of withDbWrite — removeItems
-      // schedules its own tasks; calling it inside a scheduled task would
-      // run all sub-tasks inline without yielding (taskContext re-entrancy).
+      // Remove from FTS5 index via worker thread — no longer blocks main event loop
       const pathsToRemove = filesToDelete.map((f) => f.path)
       if (pathsToRemove.length > 0) {
         const removeChunkSize = 50
         for (let i = 0; i < pathsToRemove.length; i += removeChunkSize) {
           const chunk = pathsToRemove.slice(i, i + removeChunkSize)
-          await this.searchIndex?.removeItems(chunk)
-          await new Promise<void>((resolve) => setImmediate(resolve))
+          await this.searchIndexWorker.removeItems(chunk)
         }
       }
     }
@@ -2733,59 +2801,59 @@ class FileProvider implements ISearchProvider<ProviderContext> {
               path: newPath,
               files: newFileRecords.length
             })
-            const chunkSize = 20
-            const chunks: (typeof newFileRecords)[] = []
-            for (let i = 0; i < newFileRecords.length; i += chunkSize) {
-              chunks.push(newFileRecords.slice(i, i + chunkSize))
-            }
-
+            // Adaptive chunking: use AIMD scheduler to size upsert batches
+            // based on real-time transaction duration feedback.
             let indexedFiles = 0
             this.emitIndexingProgress('indexing', 0, newFileRecords.length)
-            await runAdaptiveTaskQueue(
-              chunks,
-              async (chunk, chunkIndex) => {
-                await appTaskGate.waitForIdle()
-                // Backpressure: wait if the DB scheduler queue is too deep.
-                // Fire-and-forget processFileExtensions + index worker flushes
-                // can flood the queue — slow down the producer to let it drain.
-                await dbWriteScheduler.waitForCapacity(8)
-                const chunkStart = performance.now()
-                const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
-                  db
-                    .insert(filesSchema)
-                    .values(chunk)
-                    .onConflictDoUpdate({
-                      target: filesSchema.path,
-                      set: {
-                        name: sql`excluded.name`,
-                        extension: sql`excluded.extension`,
-                        size: sql`excluded.size`,
-                        mtime: sql`excluded.mtime`,
-                        ctime: sql`excluded.ctime`,
-                        lastIndexedAt: sql`excluded.last_indexed_at`
-                      }
-                    })
-                    .returning()
-                )
-                this.logDebug('Full scan chunk inserted', {
-                  path: newPath,
-                  chunk: `${chunkIndex + 1}/${chunks.length}`,
-                  size: chunk.length,
-                  duration: formatDuration(performance.now() - chunkStart)
-                })
-                // Fire-and-forget: keyword/icon processing should not block the scan pipeline
-                void this.processFileExtensions(inserted).catch((e) =>
-                  this.logWarn('processFileExtensions failed (full-scan)', e)
-                )
-                this.scheduleIndexing(inserted, 'full-scan')
-                indexedFiles += chunk.length
-                this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
-              },
-              {
-                estimatedTaskTimeMs: 20,
-                label: `FileProvider::fullScan(${newPath})`
-              }
-            )
+            let recordOffset = 0
+            while (recordOffset < newFileRecords.length) {
+              const chunkSize = this.upsertBatchScheduler.currentSize
+              const chunk = newFileRecords.slice(recordOffset, recordOffset + chunkSize)
+              recordOffset += chunk.length
+
+              await appTaskGate.waitForIdle()
+              await dbWriteScheduler.waitForCapacity(4)
+              const chunkStart = performance.now()
+              const inserted = await this.withDbWrite('file-index.full-scan.upsert', async () =>
+                db
+                  .insert(filesSchema)
+                  .values(chunk)
+                  .onConflictDoUpdate({
+                    target: filesSchema.path,
+                    set: {
+                      name: sql`excluded.name`,
+                      extension: sql`excluded.extension`,
+                      size: sql`excluded.size`,
+                      mtime: sql`excluded.mtime`,
+                      ctime: sql`excluded.ctime`,
+                      lastIndexedAt: sql`excluded.last_indexed_at`
+                    }
+                  })
+                  .returning()
+              )
+              this.upsertBatchScheduler.recordDuration(performance.now() - chunkStart)
+              this.logDebug('Full scan chunk inserted', {
+                path: newPath,
+                chunk: `batch(${chunkSize})`,
+                size: chunk.length,
+                duration: formatDuration(performance.now() - chunkStart)
+              })
+              // Fire-and-forget: keyword/icon processing should not block the scan pipeline
+              void this.processFileExtensions(inserted).catch((e) =>
+                this.logWarn('processFileExtensions failed (full-scan)', e)
+              )
+              this.scheduleIndexing(inserted, 'full-scan')
+              indexedFiles += chunk.length
+              this.emitIndexingProgress('indexing', indexedFiles, newFileRecords.length)
+              // Pacing delay: sleep proportional to batch duration to avoid
+              // flooding the serial DbWriteScheduler queue with cascading writes.
+              // This mirrors TCP pacing — we space out packets (batches) so the
+              // downstream pipeline (indexWorker → flush → FTS5) can drain.
+              const batchMs = performance.now() - chunkStart
+              await new Promise<void>((resolve) =>
+                setTimeout(resolve, Math.max(100, Math.round(batchMs)))
+              )
+            }
           }
         }
       } finally {
@@ -2902,7 +2970,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
           for (const chunk of deleteChunks) {
             await appTaskGate.waitForIdle()
-            await dbWriteScheduler.waitForCapacity(8)
+            await dbWriteScheduler.waitForCapacity(4)
             await this.withDbWrite('file-index.reconcile.delete', async () => {
               await db.delete(filesSchema).where(inArray(filesSchema.id, chunk))
               await this.deleteEmbeddingsByFileIds(db, chunk)
@@ -2922,7 +2990,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             }
             for (const chunk of pathChunks) {
               await appTaskGate.waitForIdle()
-              await this.searchIndex?.removeItems(chunk)
+              await this.searchIndexWorker.removeItems(chunk)
             }
           }
         }
@@ -2956,7 +3024,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             chunks,
             async (chunk, chunkIndex) => {
               await appTaskGate.waitForIdle()
-              await dbWriteScheduler.waitForCapacity(8)
+              await dbWriteScheduler.waitForCapacity(4)
               const chunkStart = performance.now()
               const inserted = await this.withDbWrite('file-index.reconcile.upsert', () =>
                 db
@@ -3043,7 +3111,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       chunks,
       async (chunk) => {
         await appTaskGate.waitForIdle()
-        await dbWriteScheduler.waitForCapacity(8)
+        await dbWriteScheduler.waitForCapacity(4)
         const chunkStart = performance.now()
 
         // Run each UPDATE as a separate scheduled task so the scheduler
@@ -3096,12 +3164,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async indexFilesForSearch(files: (typeof filesSchema.$inferSelect)[]): Promise<void> {
-    if (!this.searchIndex) return
     if (files.length === 0) return
 
     const indexStart = performance.now()
     const items: SearchIndexItem[] = files.map((file) => this.buildSearchIndexItem(file))
-    await this.searchIndex.indexItems(items)
+    await this.searchIndexWorker.indexItems(items)
 
     // 只在处理大量文件时输出详细日志，减少日志噪音
     if (files.length >= 50) {
@@ -3963,13 +4030,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
-      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
-        if (typeof file.id === 'number') {
-          this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-            this.logWarn('Failed to lazy load icon', error, { path: file.path })
-          })
+      const tuffItem = mapFileToTuffItem(
+        file,
+        extensions,
+        this.id,
+        this.name,
+        (file) => {
+          if (typeof file.id === 'number') {
+            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+              this.logWarn('Failed to lazy load icon', error, { path: file.path })
+            })
+          }
+        },
+        (file) => {
+          if (typeof file.id === 'number') {
+            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
+              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+            })
+          }
         }
-      })
+      )
       tuffItem.scoring = {
         final: 0.4,
         match: 0.4,
@@ -4027,13 +4107,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const items = Array.from(filesMap.values()).map(({ file, extensions }) => {
-      const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
-        if (typeof file.id === 'number') {
-          this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-            this.logWarn('Failed to lazy load icon', error, { path: file.path })
-          })
+      const tuffItem = mapFileToTuffItem(
+        file,
+        extensions,
+        this.id,
+        this.name,
+        (file) => {
+          if (typeof file.id === 'number') {
+            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+              this.logWarn('Failed to lazy load icon', error, { path: file.path })
+            })
+          }
+        },
+        (file) => {
+          if (typeof file.id === 'number') {
+            this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
+              this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+            })
+          }
         }
-      })
+      )
       tuffItem.scoring = {
         final: 0.4,
         match: 0.4,
@@ -4128,7 +4221,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.fileScanWorker.getStatus(),
       this.fileIndexWorker.getStatus(),
       this.reconcileWorker.getStatus(),
-      this.iconWorker.getStatus()
+      this.iconWorker.getStatus(),
+      this.thumbnailWorker.getStatus(),
+      this.searchIndexWorker.getStatus()
     ])
 
     const summary = workers.reduce(
@@ -4342,7 +4437,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const staleIds = candidatePaths.filter((path) => !filesMap.has(path))
     if (staleIds.length > 0) {
-      await this.searchIndex.removeItems(staleIds)
+      await this.searchIndexWorker.removeItems(staleIds)
     }
 
     if (filesMap.size === 0) {
@@ -4429,13 +4524,26 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           (typeFilters.size > 0 ? 0.15 * typeScore : 0) +
           0.25 * semanticScore
 
-        const tuffItem = mapFileToTuffItem(file, extensions, this.id, this.name, (file) => {
-          if (typeof file.id === 'number') {
-            this.ensureFileIcon(file.id, file.path, file).catch((error) => {
-              this.logWarn('Failed to lazy load icon', error, { path: file.path })
-            })
+        const tuffItem = mapFileToTuffItem(
+          file,
+          extensions,
+          this.id,
+          this.name,
+          (file) => {
+            if (typeof file.id === 'number') {
+              this.ensureFileIcon(file.id, file.path, file).catch((error) => {
+                this.logWarn('Failed to lazy load icon', error, { path: file.path })
+              })
+            }
+          },
+          (file) => {
+            if (typeof file.id === 'number') {
+              this.ensureFileThumbnail(file.id, file.path, file).catch((error) => {
+                this.logWarn('Failed to lazy load thumbnail', error, { path: file.path })
+              })
+            }
           }
-        })
+        )
         const matchScore = Math.max(keywordScore, ftsScore, semanticScore)
         tuffItem.scoring = {
           final: finalScore,

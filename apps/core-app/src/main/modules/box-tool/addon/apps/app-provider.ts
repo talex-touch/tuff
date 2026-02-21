@@ -1235,23 +1235,33 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (fileIds.length === 0) return []
 
     const db = this.dbUtils.getDb()
-    const extensions = await db
-      .select()
-      .from(fileExtensions)
-      .where(inArray(fileExtensions.fileId, fileIds))
 
-    const extensionsByFileId = extensions.reduce(
-      (acc, ext) => {
-        if (!acc[ext.fileId]) {
-          acc[ext.fileId] = {}
+    // Chunk the query to avoid a single massive IN(...) that blocks the event
+    // loop while SQLite scans hundreds of IDs.  Yield between chunks.
+    const CHUNK_SIZE = 50
+    const extensionsByFileId: Record<number, Record<string, string | null>> = {}
+
+    for (let i = 0; i < fileIds.length; i += CHUNK_SIZE) {
+      const chunk = fileIds.slice(i, i + CHUNK_SIZE)
+      const rows = await db
+        .select()
+        .from(fileExtensions)
+        .where(inArray(fileExtensions.fileId, chunk))
+
+      for (const ext of rows) {
+        if (!extensionsByFileId[ext.fileId]) {
+          extensionsByFileId[ext.fileId] = {}
         }
         if (ext.value) {
-          acc[ext.fileId][ext.key] = ext.value
+          extensionsByFileId[ext.fileId][ext.key] = ext.value
         }
-        return acc
-      },
-      {} as Record<number, Record<string, string | null>>
-    )
+      }
+
+      // Yield between chunks to keep the event loop responsive
+      if (i + CHUNK_SIZE < fileIds.length) {
+        await new Promise<void>((resolve) => setImmediate(resolve))
+      }
+    }
 
     return files.map((file) => ({
       ...file,
@@ -1887,9 +1897,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         return
       }
 
+      // Yield after the heavy SELECT on files table
+      await new Promise<void>((resolve) => setImmediate(resolve))
+
       const dbAppsWithExtensions = await this.fetchExtensionsForFiles(allDbApps)
       const t2 = performance.now()
-      const scannedApps = dbAppsWithExtensions.map((app) => this._mapDbAppToScannedInfo(app))
+
+      // Yield after fetching all extensions (heavy query + reduce)
+      await new Promise<void>((resolve) => setImmediate(resolve))
+
+      // Map in chunks with yields to avoid blocking the event loop
+      const scannedApps: ScannedAppInfo[] = []
+      for (let mi = 0; mi < dbAppsWithExtensions.length; mi++) {
+        scannedApps.push(this._mapDbAppToScannedInfo(dbAppsWithExtensions[mi]))
+        if ((mi + 1) % 50 === 0) {
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        }
+      }
       const dbAppsByUniqueId = new Map(
         dbAppsWithExtensions.map((app) => [app.extensions.bundleId || app.path, app])
       )

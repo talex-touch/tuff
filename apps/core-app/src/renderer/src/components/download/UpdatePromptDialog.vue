@@ -197,9 +197,9 @@ function handleCancelDownload() {
       <div class="version-section">
         <div class="version-item">
           <span class="version-label">{{ t('update.current_version') }}</span>
-          <el-tag type="info" size="large">
+          <TxTag type="info" size="large">
             {{ currentVersion }}
-          </el-tag>
+          </TxTag>
         </div>
         <div class="version-arrow">
           <el-icon :size="24">
@@ -208,9 +208,9 @@ function handleCancelDownload() {
         </div>
         <div class="version-item">
           <span class="version-label">{{ t('update.new_version') }}</span>
-          <el-tag type="success" size="large">
+          <TxTag type="success" size="large">
             {{ release.tag_name }}
-          </el-tag>
+          </TxTag>
         </div>
       </div>
 
@@ -265,30 +265,30 @@ function handleCancelDownload() {
     <template #footer>
       <div class="dialog-footer">
         <div class="footer-left">
-          <el-button v-if="!isDownloading && !isDownloadComplete" text @click="handleIgnoreVersion">
+          <TxButton v-if="!isDownloading && !isDownloadComplete" text @click="handleIgnoreVersion">
             {{ t('update.ignore_version') }}
-          </el-button>
+          </TxButton>
         </div>
         <div class="footer-right">
-          <el-button v-if="!isDownloading && !isDownloadComplete" @click="handleRemindLater">
+          <TxButton v-if="!isDownloading && !isDownloadComplete" @click="handleRemindLater">
             {{ t('update.remind_later') }}
-          </el-button>
-          <el-button
+          </TxButton>
+          <TxButton
             v-if="!isDownloading && !isDownloadComplete"
             type="primary"
             @click="handleDownload"
           >
             <el-icon><Download /></el-icon>
             {{ t('update.download_now') }}
-          </el-button>
-          <el-button v-if="isDownloadComplete" type="success" @click="handleInstall">
+          </TxButton>
+          <TxButton v-if="isDownloadComplete" type="success" @click="handleInstall">
             <el-icon><Upload /></el-icon>
             {{ t('update.install_now') }}
-          </el-button>
-          <el-button v-if="isDownloading" type="warning" @click="handleCancelDownload">
+          </TxButton>
+          <TxButton v-if="isDownloading" type="warning" @click="handleCancelDownload">
             <el-icon><Close /></el-icon>
             {{ t('update.cancel_download') }}
-          </el-button>
+          </TxButton>
         </div>
       </div>
     </template>

@@ -167,7 +167,7 @@ class OcrService {
     pollingService.register(this.pollTaskId, () => this.processQueue().catch(() => {}), {
       interval: PROCESS_INTERVAL_SECONDS,
       unit: 'seconds',
-      initialDelayMs: 10_000
+      initialDelayMs: 3_000
     })
 
     this.initialized = true

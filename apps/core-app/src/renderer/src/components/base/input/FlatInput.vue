@@ -1,4 +1,5 @@
 <script lang="ts" name="FlatInput" setup>
+import { TxTag } from '@talex-touch/tuffex'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 
 const props = withDefaults(
@@ -59,13 +60,15 @@ function onKeyDown(e) {
       relative
       :type="password ? 'password' : 'text'"
     />
-    <el-tag v-if="password" v-show="lapsLock" type="danger" effect="plain"> Caps Lock </el-tag>
+    <TxTag v-if="password" v-show="lapsLock" color="var(--tx-color-danger)" size="sm">
+      Caps Lock
+    </TxTag>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .FlatInput-Container {
-  :deep(.el-tag) {
+  :deep(.tx-tag) {
     position: absolute;
 
     top: -30px;

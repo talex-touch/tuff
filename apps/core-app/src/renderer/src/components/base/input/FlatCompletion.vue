@@ -88,7 +88,7 @@ function blur() {
   </div>
   <teleport to="body">
     <div ref="completionWrapper" class="FlatInput-Completion" @click="value = ''">
-      <!--      <el-scrollbar> -->
+      <!--      <TxScroll> -->
       <div
         v-for="(item, index) in _res"
         :key="item"
@@ -100,7 +100,7 @@ function blur() {
           {{ item }}
         </slot>
       </div>
-      <!--      </el-scrollbar> -->
+      <!--      </TxScroll> -->
     </div>
   </teleport>
 </template>

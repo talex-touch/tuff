@@ -17,7 +17,8 @@ import {
   Platform,
   Warning
 } from '@element-plus/icons-vue'
-import { ElEmpty, ElIcon, ElSwitch, ElTag, ElTooltip } from 'element-plus'
+import { TxTag, TxTooltip } from '@talex-touch/tuffex'
+import { ElEmpty, ElIcon, ElSwitch } from 'element-plus'
 import type { Component } from 'vue'
 import { computed } from 'vue'
 
@@ -83,13 +84,13 @@ const categoryIcons: Record<string, Component> = {
 function getRiskColor(risk: string) {
   switch (risk) {
     case 'low':
-      return 'success'
+      return 'var(--tx-color-success)'
     case 'medium':
-      return 'warning'
+      return 'var(--tx-color-warning)'
     case 'high':
-      return 'danger'
+      return 'var(--tx-color-danger)'
     default:
-      return 'info'
+      return 'var(--tx-color-info)'
   }
 }
 
@@ -137,10 +138,10 @@ function handleToggle(id: string, granted: boolean) {
           <div class="item-main">
             <div class="item-header">
               <span class="item-name">{{ perm.name }}</span>
-              <ElTag v-if="perm.required" size="small" type="danger" effect="plain"> 必需 </ElTag>
-              <ElTag :type="getRiskColor(perm.risk)" size="small" effect="light">
+              <TxTag v-if="perm.required" size="sm" color="var(--tx-color-danger)"> 必需 </TxTag>
+              <TxTag :color="getRiskColor(perm.risk)" size="sm">
                 {{ getRiskLabel(perm.risk) }}
-              </ElTag>
+              </TxTag>
             </div>
             <p class="item-desc">
               {{ perm.desc }}
@@ -154,15 +155,15 @@ function handleToggle(id: string, granted: boolean) {
           </div>
 
           <div class="item-action">
-            <ElTooltip
+            <TxTooltip
               v-if="perm.required && !perm.granted"
               content="此权限为必需权限"
-              placement="top"
+              :anchor="{ placement: 'top', showArrow: true }"
             >
               <ElIcon :size="18" class="required-icon">
                 <Warning />
               </ElIcon>
-            </ElTooltip>
+            </TxTooltip>
             <ElIcon v-else-if="perm.granted" :size="18" class="granted-icon">
               <Check />
             </ElIcon>

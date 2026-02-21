@@ -152,22 +152,22 @@ function downloadLogs() {
     <!-- 头部工具栏 -->
     <div class="log-toolbar">
       <div class="toolbar-left">
-        <el-button :loading="loading" @click="refreshLogs">
+        <TxButton :loading="loading" @click="refreshLogs">
           <el-icon><Refresh /></el-icon>
           {{ $t('common.refresh') }}
-        </el-button>
-        <el-button type="danger" @click="clearLogs">
+        </TxButton>
+        <TxButton type="danger" @click="clearLogs">
           <el-icon><Delete /></el-icon>
           {{ $t('download.clear_logs') }}
-        </el-button>
+        </TxButton>
       </div>
       <div class="toolbar-right">
-        <el-select v-model="logLimit" style="width: 150px" @change="refreshLogs">
-          <el-option :label="$t('download.last_50_lines')" :value="50" />
-          <el-option :label="$t('download.last_100_lines')" :value="100" />
-          <el-option :label="$t('download.last_500_lines')" :value="500" />
-          <el-option :label="$t('download.all_logs')" :value="0" />
-        </el-select>
+        <TuffSelect v-model="logLimit" style="width: 150px" @change="refreshLogs">
+          <TuffSelectItem :label="$t('download.last_50_lines')" :value="50" />
+          <TuffSelectItem :label="$t('download.last_100_lines')" :value="100" />
+          <TuffSelectItem :label="$t('download.last_500_lines')" :value="500" />
+          <TuffSelectItem :label="$t('download.all_logs')" :value="0" />
+        </TuffSelect>
       </div>
     </div>
 
@@ -213,20 +213,20 @@ function downloadLogs() {
 
     <!-- 日志内容 -->
     <div class="log-content">
-      <el-scrollbar height="500px">
+      <TxScroll height="500px">
         <pre v-if="logs" class="log-text">{{ logs }}</pre>
         <el-empty v-else :description="$t('download.no_logs')" />
-      </el-scrollbar>
+      </TxScroll>
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">
+      <TxButton @click="visible = false">
         {{ $t('common.close') }}
-      </el-button>
-      <el-button type="primary" @click="downloadLogs">
+      </TxButton>
+      <TxButton type="primary" @click="downloadLogs">
         <el-icon><Download /></el-icon>
         {{ $t('download.download_logs') }}
-      </el-button>
+      </TxButton>
     </template>
   </el-dialog>
 

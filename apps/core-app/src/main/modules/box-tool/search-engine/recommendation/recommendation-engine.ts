@@ -67,7 +67,7 @@ export class RecommendationEngine {
     if (this.pollingService.isRegistered(this.refreshTaskId)) {
       this.pollingService.unregister(this.refreshTaskId)
     }
-    const initialDelayMs = 60_000 + Math.floor(Math.random() * this.REFRESH_JITTER_MS)
+    const initialDelayMs = 15_000 + Math.floor(Math.random() * this.REFRESH_JITTER_MS)
     this.pollingService.register(
       this.refreshTaskId,
       () => {
