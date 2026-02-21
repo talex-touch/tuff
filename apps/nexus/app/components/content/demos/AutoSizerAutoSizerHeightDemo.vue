@@ -1,5 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 const { locale } = useI18n()
+const active = ref<'a' | 'b'>('a')
+const setTab = (next: 'a' | 'b') => {
+  active.value = next
+}
 </script>
 
 <template>

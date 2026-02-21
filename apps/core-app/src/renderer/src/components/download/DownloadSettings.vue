@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DownloadConfig } from '@talex-touch/utils'
+import { TxCard, TxModal, TxSlider } from '@talex-touch/tuffex'
 import { computed, reactive, watch } from 'vue'
 // Note: ref is intentionally not imported as it's not used
 import { toast } from 'vue-sonner'
@@ -114,27 +115,21 @@ watch(
 </script>
 
 <template>
-  <el-dialog
+  <TxModal
     v-model="dialogVisible"
     :title="$t('settings.download.title')"
     width="600px"
-    :before-close="handleClose"
+    @close="handleClose"
   >
     <el-form :model="form" label-width="140px" label-position="left">
       <!-- 并发设置 -->
-      <el-card class="settings-card">
+      <TxCard class="settings-card">
         <template #header>
           <span>{{ $t('settings.download.concurrency_settings') }}</span>
         </template>
 
         <el-form-item :label="$t('settings.download.concurrency')">
-          <el-slider
-            v-model="form.concurrency.maxConcurrent"
-            :min="1"
-            :max="10"
-            :marks="concurrencyMarks"
-            show-stops
-          />
+          <TxSlider v-model="form.concurrency.maxConcurrent" :min="1" :max="10" />
           <div class="form-help">
             {{ $t('settings.download.concurrency_help') }}
           </div>
@@ -157,10 +152,10 @@ watch(
             {{ $t('settings.download.priority_based') }}
           </el-checkbox>
         </el-form-item>
-      </el-card>
+      </TxCard>
 
       <!-- 切片设置 -->
-      <el-card class="settings-card">
+      <TxCard class="settings-card">
         <template #header>
           <span>{{ $t('settings.download.chunk_settings') }}</span>
         </template>
@@ -199,10 +194,10 @@ watch(
             style="width: 120px"
           />
         </el-form-item>
-      </el-card>
+      </TxCard>
 
       <!-- 存储设置 -->
-      <el-card class="settings-card">
+      <TxCard class="settings-card">
         <template #header>
           <span>{{ $t('settings.download.storage_settings') }}</span>
         </template>
@@ -239,10 +234,10 @@ watch(
             {{ $t('settings.download.auto_cleanup') }}
           </el-checkbox>
         </el-form-item>
-      </el-card>
+      </TxCard>
 
       <!-- 网络设置 -->
-      <el-card class="settings-card">
+      <TxCard class="settings-card">
         <template #header>
           <span>{{ $t('settings.download.network_settings') }}</span>
         </template>
@@ -286,7 +281,7 @@ watch(
             {{ $t('settings.download.max_retries_help') }}
           </div>
         </el-form-item>
-      </el-card>
+      </TxCard>
     </el-form>
 
     <template #footer>
@@ -299,7 +294,7 @@ watch(
         </TxButton>
       </div>
     </template>
-  </el-dialog>
+  </TxModal>
 </template>
 
 <style scoped>
@@ -331,7 +326,7 @@ watch(
 
 /* 响应式设计 */
 @media (max-width: 768px) {
-  .el-dialog {
+  :deep(.tx-modal__content) {
     width: 90% !important;
     margin: 5vh auto !important;
   }

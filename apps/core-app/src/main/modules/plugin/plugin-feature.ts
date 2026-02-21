@@ -123,6 +123,7 @@ export class PluginFeature implements IPluginFeature {
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
   priority: number
+  experimental?: boolean
   dev: IPluginDev
   searchTokens?: string[]
 
@@ -137,6 +138,7 @@ export class PluginFeature implements IPluginFeature {
     this.commands = [...options.commands]
     this.interaction = options.interaction
     this.priority = options.priority ?? 0
+    this.experimental = options.experimental ?? false
     this.dev = dev
   }
 
@@ -159,7 +161,8 @@ export class PluginFeature implements IPluginFeature {
       platform: this.platform,
       commands: this.commands,
       interaction: this.interaction,
-      priority: this.priority
+      priority: this.priority,
+      experimental: this.experimental
     }
   }
 }

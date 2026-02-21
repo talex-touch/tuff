@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const blurPx = ref('')
-const duration = ref('')
-const label = ref('')
-const toggle = () => {}
+const blurPx = ref(12)
+const duration = ref(320)
+const label = ref('Adaptive text')
+const accent = ref(false)
+const toggle = () => {
+  accent.value = !accent.value
+  label.value = accent.value ? 'Accent text' : 'Adaptive text'
+}
 </script>
 
 <template>

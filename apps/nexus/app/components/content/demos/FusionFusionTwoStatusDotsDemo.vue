@@ -1,7 +1,18 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 const { locale } = useI18n()
-const variants = ref('')
+type FusionVariantKey = 'membrane' | 'glass' | 'gummy'
+interface FusionVariant { key: FusionVariantKey; title: string; hint: string }
+const variants = ref<FusionVariant[]>([
+  { key: 'membrane', title: 'Membrane', hint: 'Soft gradient blend' },
+  { key: 'glass', title: 'Glass', hint: 'Translucent blur' },
+  { key: 'gummy', title: 'Gummy', hint: 'Vibrant tint' },
+])
+const active = reactive<Record<FusionVariantKey, boolean>>({
+  membrane: false,
+  glass: false,
+  gummy: false,
+})
 </script>
 
 <template>

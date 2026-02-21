@@ -2,8 +2,13 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const open = ref(false)
-const toggleItems = () => {}
-const toggleOpen = () => {}
+const mode = ref<'short' | 'long'>('short')
+const toggleItems = () => {
+  mode.value = mode.value === 'short' ? 'long' : 'short'
+}
+const toggleOpen = () => {
+  open.value = !open.value
+}
 </script>
 
 <template>

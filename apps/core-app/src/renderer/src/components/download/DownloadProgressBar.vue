@@ -1,5 +1,6 @@
 <script setup name="DownloadProgressBar" lang="ts">
 import { DownloadStatus } from '@talex-touch/utils'
+import { TuffProgress } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 interface Props {
@@ -21,11 +22,11 @@ const progressStatus = computed(() => {
     case DownloadStatus.COMPLETED:
       return 'success'
     case DownloadStatus.FAILED:
-      return 'exception'
+      return 'error'
     case DownloadStatus.PAUSED:
       return 'warning'
     default:
-      return undefined
+      return ''
   }
 })
 
@@ -84,7 +85,7 @@ function formatRemainingTime(seconds: number): string {
         </span>
       </div>
     </div>
-    <el-progress
+    <TuffProgress
       :percentage="percentage"
       :status="progressStatus"
       :show-text="false"
@@ -147,7 +148,7 @@ function formatRemainingTime(seconds: number): string {
 }
 
 /* 进度条动画 */
-.el-progress.animated :deep(.el-progress-bar__inner) {
+.tx-progress-bar-wrapper.animated :deep(.tx-progress-bar) {
   animation: progress-pulse 2s ease-in-out infinite;
 }
 
@@ -162,12 +163,12 @@ function formatRemainingTime(seconds: number): string {
 }
 
 /* 进度条样式优化 */
-.el-progress :deep(.el-progress-bar__outer) {
+.tx-progress-bar-wrapper :deep(.tx-progress-bar__track) {
   background-color: var(--el-fill-color-light);
   border-radius: 4px;
 }
 
-.el-progress :deep(.el-progress-bar__inner) {
+.tx-progress-bar-wrapper :deep(.tx-progress-bar) {
   border-radius: 4px;
   background-color: var(--progress-strong);
   transition: width 0.3s ease;

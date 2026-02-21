@@ -1,7 +1,7 @@
 <script lang="ts" name="LayoutSection" setup>
 import type { Component } from 'vue'
 import { TxButton, TxCard, TxScroll, TxStatusBadge } from '@talex-touch/tuffex'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { computed, markRaw, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LayoutPreviewFrame from '~/components/layout/LayoutPreviewFrame.vue'
@@ -108,7 +108,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
     await switchLayout(layoutName)
   } catch (error) {
     console.error('[LayoutSection] Failed to switch layout:', error)
-    ElMessage.error(t('layoutSection.switchError'))
+    toast.error(t('layoutSection.switchError'))
   }
 }
 </script>

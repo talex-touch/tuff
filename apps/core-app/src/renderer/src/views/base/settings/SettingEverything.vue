@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingEverything">
 import { TxButton } from '@talex-touch/tuffex'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
@@ -59,7 +59,7 @@ async function toggleEverything() {
     await channel.send('everything:toggle', { enabled: newEnabled })
     everythingStatus.value.enabled = newEnabled
 
-    ElMessage.success(
+    toast.success(
       newEnabled
         ? t('settings.settingEverything.enabledSuccess')
         : t('settings.settingEverything.disabledSuccess')
@@ -67,7 +67,7 @@ async function toggleEverything() {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[SettingEverything] Failed to toggle:', error)
-    ElMessage.error(
+    toast.error(
       t('settings.settingEverything.toggleFailed', {
         error: message
       })
@@ -83,14 +83,14 @@ async function testSearch() {
     const result = await channel.send('everything:test')
 
     if (result.success) {
-      ElMessage.success(
+      toast.success(
         t('settings.settingEverything.testSuccess', {
           count: result.resultCount,
           duration: result.duration
         })
       )
     } else {
-      ElMessage.error(
+      toast.error(
         t('settings.settingEverything.testFailed', {
           error: result.error || 'Unknown error'
         })
@@ -99,7 +99,7 @@ async function testSearch() {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[SettingEverything] Test search failed:', error)
-    ElMessage.error(
+    toast.error(
       t('settings.settingEverything.testFailed', {
         error: message
       })

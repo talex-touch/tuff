@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { Delete, Download, Refresh } from '@element-plus/icons-vue'
-import { TxBottomDialog } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxCard, TxModal } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { DownloadEvents } from '@talex-touch/utils/transport/events'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 
@@ -23,6 +23,17 @@ interface Emits {
 }
 
 const visible = ref(props.modelValue)
+const allowClose = ref(false)
+const modalVisible = computed({
+  get: () => visible.value,
+  set: (val) => {
+    if (!val && !allowClose.value) return
+    visible.value = val
+    if (!val) {
+      allowClose.value = false
+    }
+  }
+})
 const loading = ref(false)
 const logs = ref<string>('')
 type DownloadErrorStats = {
@@ -139,14 +150,18 @@ function downloadLogs() {
 
   toast.success(t('download.logs_downloaded'))
 }
+
+function requestClose() {
+  allowClose.value = true
+  modalVisible.value = false
+}
 </script>
 
 <template>
-  <el-dialog
-    v-model="visible"
+  <TxModal
+    v-model="modalVisible"
     :title="$t('download.error_logs')"
     width="80%"
-    :close-on-click-modal="false"
     class="error-log-viewer"
   >
     <!-- 头部工具栏 -->
@@ -173,7 +188,7 @@ function downloadLogs() {
 
     <!-- 错误统计 -->
     <div v-if="errorStats" class="error-stats">
-      <el-card shadow="never">
+      <TxCard shadow="none">
         <div class="stats-grid">
           <div class="stat-item">
             <div class="stat-label">
@@ -208,7 +223,7 @@ function downloadLogs() {
             </div>
           </div>
         </div>
-      </el-card>
+      </TxCard>
     </div>
 
     <!-- 日志内容 -->
@@ -220,7 +235,7 @@ function downloadLogs() {
     </div>
 
     <template #footer>
-      <TxButton @click="visible = false">
+      <TxButton @click="requestClose">
         {{ $t('common.close') }}
       </TxButton>
       <TxButton type="primary" @click="downloadLogs">
@@ -228,7 +243,7 @@ function downloadLogs() {
         {{ $t('download.download_logs') }}
       </TxButton>
     </template>
-  </el-dialog>
+  </TxModal>
 
   <TxBottomDialog
     v-if="clearConfirmVisible"
@@ -243,7 +258,7 @@ function downloadLogs() {
 </template>
 
 <style scoped>
-.error-log-viewer :deep(.el-dialog__body) {
+.error-log-viewer :deep(.tx-modal__body) {
   padding: 20px;
 }
 

@@ -10,7 +10,7 @@ import { createPresetExport, validatePresetData } from '@talex-touch/utils'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ElMessage } from 'element-plus'
+import { toast } from 'vue-sonner'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getLayoutAtomPreset, isLayoutPresetKey } from '~/modules/layout/atoms'
@@ -182,7 +182,7 @@ export function usePresetExport() {
       !includeMainCanvas &&
       !includeCoreBoxCanvas
     ) {
-      ElMessage.warning(t('preset.nothingToExport', 'Nothing selected to export'))
+      toast.warning(t('preset.nothingToExport', 'Nothing selected to export'))
       return
     }
 
@@ -221,10 +221,10 @@ export function usePresetExport() {
         data: JSON.stringify(preset, null, 2)
       })
 
-      ElMessage.success(t('preset.exportSuccess', 'Preset exported successfully'))
+      toast.success(t('preset.exportSuccess', 'Preset exported successfully'))
     } catch (error) {
       console.error('[PresetExport] Export failed:', error)
-      ElMessage.error(t('preset.exportError', 'Failed to export preset'))
+      toast.error(t('preset.exportError', 'Failed to export preset'))
     } finally {
       isExporting.value = false
     }
@@ -249,7 +249,7 @@ export function usePresetExport() {
 
       const fileResult = await transport.send(readFileEvent, { path: result.filePaths[0] })
       if (fileResult.error || !fileResult.data) {
-        ElMessage.error(t('preset.readError', 'Failed to read preset file'))
+        toast.error(t('preset.readError', 'Failed to read preset file'))
         isImporting.value = false
         return
       }
@@ -258,16 +258,14 @@ export function usePresetExport() {
       try {
         preset = JSON.parse(fileResult.data)
       } catch {
-        ElMessage.error(t('preset.parseError', 'Invalid JSON format'))
+        toast.error(t('preset.parseError', 'Invalid JSON format'))
         isImporting.value = false
         return
       }
 
       const validation = validatePresetData(preset)
       if (!validation.valid) {
-        ElMessage.error(
-          t('preset.validationError', 'Invalid preset: ') + validation.errors.join(', ')
-        )
+        toast.error(t('preset.validationError', 'Invalid preset: ') + validation.errors.join(', '))
         isImporting.value = false
         return
       }
@@ -280,7 +278,7 @@ export function usePresetExport() {
       await confirmAndApplyPreset(presetData)
     } catch (error) {
       console.error('[PresetExport] Import failed:', error)
-      ElMessage.error(t('preset.importError', 'Failed to import preset'))
+      toast.error(t('preset.importError', 'Failed to import preset'))
     } finally {
       isImporting.value = false
     }
@@ -347,7 +345,7 @@ export function usePresetExport() {
       }
 
       applyPreset(preset)
-      ElMessage.success(t('preset.importSuccess', 'Preset imported successfully'))
+      toast.success(t('preset.importSuccess', 'Preset imported successfully'))
     } catch {
       // User cancelled
     }
@@ -409,7 +407,7 @@ export function usePresetExport() {
 
   function rollbackLastRemotePreset() {
     if (!appSettingsData?.presetState?.rollbackSnapshot) {
-      ElMessage.warning(t('preset.noRollbackSnapshot', 'No rollback snapshot found'))
+      toast.warning(t('preset.noRollbackSnapshot', 'No rollback snapshot found'))
       return
     }
 
@@ -420,7 +418,7 @@ export function usePresetExport() {
       rollbackSnapshot: null
     }
 
-    ElMessage.success(t('preset.rollbackSuccess', 'Restored previous preset successfully'))
+    toast.success(t('preset.rollbackSuccess', 'Restored previous preset successfully'))
   }
 
   return {

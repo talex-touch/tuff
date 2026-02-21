@@ -197,6 +197,10 @@ export interface IPluginFeature {
   commands: IFeatureCommand[]
   interaction?: IFeatureInteraction
   /**
+   * Experimental features are hidden unless the plugin runs in dev mode.
+   */
+  experimental?: boolean
+  /**
    * Internal search tokens generated at runtime for better matching
    */
   searchTokens?: string[]

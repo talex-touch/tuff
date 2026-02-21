@@ -1,3 +1,4 @@
+/// <reference path="./path-browserify.d.ts" />
 export * from './agent'
 export * from './cloud-sync'
 export * from './division-box'

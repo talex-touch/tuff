@@ -71,7 +71,7 @@ function isTuffTransport(
 
 function createChannelTransport(channel: IntelligenceClientChannel): IntelligenceSdkTransport {
   return {
-    send: (event, payload) => channel.send(event.toEventName(), payload),
+    send: (event: { toEventName: () => string }, payload?: unknown) => channel.send(event.toEventName(), payload),
   }
 }
 

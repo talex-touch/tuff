@@ -1,12 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const h = ref('')
-const hits = ref('')
+const hits = ref<string[]>([])
 const loading = ref(false)
 const open = ref(false)
 const value = ref('')
-const onSearch = () => {}
+const onSearch = (term: string) => {
+  loading.value = true
+  const normalized = term.trim()
+  hits.value = normalized
+    ? Array.from({ length: 3 }, (_, idx) => `${normalized} result ${idx + 1}`)
+    : []
+  loading.value = false
+}
+const onPick = (item: string) => {
+  value.value = item
+  open.value = false
+}
 </script>
 
 <template>

@@ -8,7 +8,6 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { TxButton, TxPopover } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
-import { ElMessage } from 'element-plus'
 import { computed, h, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -385,14 +384,14 @@ function toggleErrorPopover(): void {
 
 async function triggerRebuild() {
   if (isRebuilding.value) {
-    ElMessage.warning(t('settings.settingFileIndex.alertRebuilding'))
+    toast.warning(t('settings.settingFileIndex.alertRebuilding'))
     return
   }
 
   await checkStatus()
 
   if (indexStatus.value?.isInitializing) {
-    ElMessage.warning(t('settings.settingFileIndex.alertInitPending'))
+    toast.warning(t('settings.settingFileIndex.alertInitPending'))
     return
   }
 
@@ -415,7 +414,7 @@ async function triggerRebuild() {
     if (result?.requiresConfirm) {
       const level = result.battery?.level ?? battery?.level
       if (typeof level === 'number') {
-        ElMessage.warning(
+        toast.warning(
           t('settings.settingFileIndex.alertBatteryLow', {
             level,
             critical: result.threshold ?? defaultCriticalBattery
@@ -448,7 +447,7 @@ async function triggerRebuild() {
       }
     }
 
-    ElMessage.success(t('settings.settingFileIndex.alertRebuildStarted'))
+    toast.success(t('settings.settingFileIndex.alertRebuildStarted'))
     setTimeout(async () => {
       await checkStatus()
       isRebuilding.value = false
@@ -457,7 +456,7 @@ async function triggerRebuild() {
     console.error('[SettingFileIndex] Rebuild failed:', error)
     isRebuilding.value = false
     const errorMsg = error instanceof Error ? error.message : String(error)
-    ElMessage.error(
+    toast.error(
       t('settings.settingFileIndex.alertRebuildFailed', {
         error: errorMsg
       })

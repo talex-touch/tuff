@@ -17,9 +17,9 @@ import {
   Platform,
   Warning
 } from '@element-plus/icons-vue'
-import { TxButton } from '@talex-touch/tuffex'
-import { ElAlert, ElDialog, ElIcon } from 'element-plus'
-import { computed } from 'vue'
+import { TxButton, TxModal } from '@talex-touch/tuffex'
+import { ElAlert, ElIcon } from 'element-plus'
+import { computed, ref } from 'vue'
 
 interface Props {
   visible: boolean
@@ -41,9 +41,16 @@ const emit = defineEmits<{
   (e: 'deny'): void
 }>()
 
+const allowClose = ref(false)
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val)
+  set: (val) => {
+    if (!val && !allowClose.value) return
+    emit('update:visible', val)
+    if (!val) {
+      allowClose.value = false
+    }
+  }
 })
 
 const riskColor = computed(() => {
@@ -96,30 +103,27 @@ const iconComponent = computed(() => {
 
 function handleAllowOnce() {
   emit('allow-once')
-  dialogVisible.value = false
+  requestClose()
 }
 
 function handleAllowAlways() {
   emit('allow-always')
-  dialogVisible.value = false
+  requestClose()
 }
 
 function handleDeny() {
   emit('deny')
+  requestClose()
+}
+
+function requestClose() {
+  allowClose.value = true
   dialogVisible.value = false
 }
 </script>
 
 <template>
-  <ElDialog
-    v-model="dialogVisible"
-    title="权限请求"
-    width="420px"
-    :close-on-click-modal="false"
-    :close-on-press-escape="false"
-    :show-close="false"
-    class="permission-dialog"
-  >
+  <TxModal v-model="dialogVisible" title="权限请求" width="420px" class="permission-dialog">
     <div class="permission-content">
       <!-- Header -->
       <div class="permission-header">
@@ -175,13 +179,17 @@ function handleDeny() {
         <TxButton type="primary" @click="handleAllowAlways"> 始终允许 </TxButton>
       </div>
     </template>
-  </ElDialog>
+  </TxModal>
 </template>
 
 <style scoped lang="scss">
 .permission-dialog {
-  :deep(.el-dialog__body) {
+  :deep(.tx-modal__body) {
     padding: 16px 20px;
+  }
+
+  :deep(.tx-modal__close) {
+    display: none;
   }
 }
 
