@@ -649,9 +649,7 @@ export function useKeyboard(
 
       // Step 1: Clear clipboard/file attachments
       if (clipboardOptions.last || boxOptions.file?.paths?.length > 0) {
-        if (clipboardOptions.last) {
-          clearClipboard({ remember: true })
-        }
+        clearClipboard({ remember: true })
         if (boxOptions.mode === BoxMode.FILE) {
           boxOptions.mode = BoxMode.INPUT
           boxOptions.file = { buffer: null, paths: [] }

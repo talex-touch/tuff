@@ -12,6 +12,7 @@ import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer
 import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
+import { applyExternalAuthCallback, applyStepUpToken } from './auth'
 
 type ChannelKeyManagerHolder = {
   keyManager?: unknown
@@ -24,10 +25,6 @@ const resolveKeyManager = (channel: unknown): unknown => {
 }
 
 const addonOpenerLog = createLogger('AddonOpener')
-const authExternalCallbackEvent = defineRawEvent<{ token: string; appToken?: string }, void>(
-  'auth:external-callback'
-)
-const authStepUpCallbackEvent = defineRawEvent<{ loginToken: string }, void>('auth:stepup-callback')
 const openPluginEvent = defineRawEvent<string, void>('@open-plugin')
 const installPluginEvent = defineRawEvent<
   { name: string; buffer: Buffer; forceUpdate?: boolean },
@@ -83,12 +80,7 @@ const schemaHandlers: SchemaHandler[] = [
             meta: { appTokenLength: appToken.length }
           })
         }
-        const channel = $app.channel
-        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-        void transport.sendTo($app.window.window.webContents, authExternalCallbackEvent, {
-          token,
-          appToken
-        })
+        void applyExternalAuthCallback(token, appToken)
       } else {
         addonOpenerLog.warn('Auth callback received without token')
       }
@@ -102,11 +94,7 @@ const schemaHandlers: SchemaHandler[] = [
         addonOpenerLog.debug('Step-up callback received', {
           meta: { tokenLength: loginToken.length }
         })
-        const channel = $app.channel
-        const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-        void transport.sendTo($app.window.window.webContents, authStepUpCallbackEvent, {
-          loginToken
-        })
+        applyStepUpToken(loginToken)
       } else {
         addonOpenerLog.warn('Step-up callback received without token')
       }

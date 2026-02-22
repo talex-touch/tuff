@@ -1,6 +1,6 @@
-import type { AuthUser, LoginOptions, LoginResult } from '@talex-touch/utils/renderer'
+import type { AuthState, AuthUser, LoginOptions, LoginResult } from '@talex-touch/utils/renderer'
 import type { AppContext } from 'vue'
-import { useAppSdk, useAuthState, useCurrentUser } from '@talex-touch/utils/renderer'
+import { useAuthState, useCurrentUser } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
@@ -17,94 +17,42 @@ import {
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
-import { devLog } from '~/utils/dev-log'
 import { appSetting } from '../channel/storage/index'
-import {
-  clearAppAuthToken,
-  getAppAuthToken,
-  getAuthBaseUrl,
-  getAppDeviceId,
-  getAppDeviceName,
-  getAppDevicePlatform,
-  resolveAuthTokenDeviceId,
-  setAppAuthToken
-} from './auth-env'
 import { attestCurrentDevice } from './device-attest'
 import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
 
-let authCallbackCleanup: (() => void) | null = null
-let stepUpCallbackCleanup: (() => void) | null = null
+let authStateCleanup: (() => void) | null = null
 let focusPromptCleanup: (() => void) | null = null
+let devTokenCleanup: (() => void) | null = null
 let isInitialized = false
 let activeConsumers = 0
 
 const transport = useTuffTransport()
-const authTokenUpdatedEvent = defineRawEvent<{ status: 'set' | 'cleared' }, void>(
-  'auth:token-updated'
+const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
+const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
+  'auth:login'
 )
-const appSdk = useAppSdk()
+const authLogoutEvent = defineRawEvent<void, { success: boolean }>('auth:logout')
+const authUpdateProfileEvent = defineRawEvent<
+  { displayName?: string; bio?: string },
+  AuthUser | null
+>('auth:update-profile')
+const authUpdateAvatarEvent = defineRawEvent<{ dataUrl: string }, AuthUser | null>(
+  'auth:update-avatar'
+)
+const authStateChangedEvent = defineRawEvent<AuthState, void>('auth:state-changed')
+const authManualTokenEvent = defineRawEvent<
+  { token: string; appToken?: string },
+  { success: boolean }
+>('auth:manual-token')
+const authRequestStepUpEvent = defineRawEvent<void, { initiated: boolean }>('auth:request-stepup')
+const authGetStepUpTokenEvent = defineRawEvent<void, string | null>('auth:get-stepup-token')
+const authClearStepUpTokenEvent = defineRawEvent<void, { success: boolean }>(
+  'auth:clear-stepup-token'
+)
 const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const BROWSER_LOGIN_CALLBACK_GRACE_MS = 5000
 const FOCUS_PROMPT_RECHECK_DELAY_MS = 400
-
-interface RemoteUserProfilePayload {
-  id: string
-  email: string
-  name: string | null
-  image: string | null
-  role?: string | null
-  locale?: string | null
-  emailVerified?: boolean
-}
-
-function toAuthUserProfile(data: RemoteUserProfilePayload): AuthUser {
-  return {
-    id: data.id,
-    email: data.email,
-    name: data.name ?? data.email,
-    avatar: data.image ?? null,
-    role: data.role ?? null,
-    locale: data.locale ?? null,
-    emailVerified: data.emailVerified ?? false
-  }
-}
-
-async function patchRemoteUserProfile(
-  token: string,
-  payload: { name?: string | null; image?: string | null }
-): Promise<RemoteUserProfilePayload> {
-  const url = new URL('/api/v1/auth/profile', getAuthBaseUrl()).toString()
-  const response = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
-  })
-  if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`)
-  }
-  return (await response.json()) as RemoteUserProfilePayload
-}
-
-async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
-  try {
-    const url = new URL('/api/v1/auth/me', getAuthBaseUrl()).toString()
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    })
-    if (!response.ok) {
-      return null
-    }
-    const data = (await response.json()) as RemoteUserProfilePayload
-    return toAuthUserProfile(data)
-  } catch {
-    return null
-  }
-}
 
 const pendingBrowserLogin = ref<{
   resolve: (result: LoginResult) => void
@@ -124,38 +72,12 @@ const authLoadingState = reactive({
   loginTimeRemaining: 0
 })
 
-const STEP_UP_TOKEN_TTL_MS = 1000 * 60 * 10
-const stepUpToken = ref<string | null>(null)
-const stepUpTokenExpiresAt = ref<number>(0)
-
-function maskDeviceId(value: string | null): string {
-  if (!value) return '-'
-  const normalized = value.trim()
-  if (normalized.length <= 10) {
-    return normalized
-  }
-  return `${normalized.slice(0, 6)}...${normalized.slice(-4)}`
+async function clearStepUpToken(): Promise<void> {
+  await transport.send(authClearStepUpTokenEvent)
 }
 
-function setStepUpToken(token: string): void {
-  const trimmed = token.trim()
-  if (!trimmed) return
-  stepUpToken.value = trimmed
-  stepUpTokenExpiresAt.value = Date.now() + STEP_UP_TOKEN_TTL_MS
-}
-
-function clearStepUpToken(): void {
-  stepUpToken.value = null
-  stepUpTokenExpiresAt.value = 0
-}
-
-function getStepUpToken(): string | null {
-  if (!stepUpToken.value) return null
-  if (stepUpTokenExpiresAt.value && stepUpTokenExpiresAt.value <= Date.now()) {
-    clearStepUpToken()
-    return null
-  }
-  return stepUpToken.value
+async function getStepUpToken(): Promise<string | null> {
+  return (await transport.send(authGetStepUpTokenEvent)) as string | null
 }
 
 function isStepUpRequiredError(error: unknown): boolean {
@@ -185,20 +107,21 @@ function isStepUpRequiredError(error: unknown): boolean {
 }
 
 async function waitForStepUpToken(timeoutMs = 2 * 60 * 1000): Promise<string> {
-  const existing = getStepUpToken()
+  const existing = await getStepUpToken()
   if (existing) {
     return existing
   }
 
   return await new Promise((resolve, reject) => {
     const timer = setInterval(() => {
-      const token = getStepUpToken()
-      if (!token) {
-        return
-      }
-      clearInterval(timer)
-      clearTimeout(timeout)
-      resolve(token)
+      void getStepUpToken().then((token) => {
+        if (!token) {
+          return
+        }
+        clearInterval(timer)
+        clearTimeout(timeout)
+        resolve(token)
+      })
     }, 250)
 
     const timeout = setTimeout(() => {
@@ -211,7 +134,7 @@ async function waitForStepUpToken(timeoutMs = 2 * 60 * 1000): Promise<string> {
 async function runWithStepUpToken<T>(
   executor: (stepUpToken: string | null) => Promise<T>
 ): Promise<T> {
-  const currentToken = getStepUpToken()
+  const currentToken = await getStepUpToken()
   try {
     return await executor(currentToken)
   } catch (error) {
@@ -219,7 +142,7 @@ async function runWithStepUpToken<T>(
       throw error
     }
 
-    clearStepUpToken()
+    await clearStepUpToken()
     await requestStepUp()
     const refreshedToken = await waitForStepUpToken()
     return await executor(refreshedToken)
@@ -261,16 +184,7 @@ const isAuthenticated = computed(() => authState.isSignedIn)
 const user = computed(() => authState.user)
 const isLoggedIn = computed(() => authState.isSignedIn)
 
-function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
-  authState.isLoaded = true
-  authState.isSignedIn = Boolean(nextUser)
-  authState.user = nextUser
-  authState.sessionId = sessionId ?? null
-
-  if (nextUser) {
-    applyDefaultSyncOnLogin()
-  }
-
+function syncSentryUser(nextUser: AuthUser | null): void {
   void (async () => {
     try {
       const safeUser = nextUser
@@ -293,18 +207,33 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
   })()
 }
 
-function notifyAuthTokenUpdated(status: 'set' | 'cleared'): void {
-  transport.send(authTokenUpdatedEvent, { status }).catch(() => {})
+function applyAuthState(nextState: AuthState): void {
+  const wasSignedIn = authState.isSignedIn
+  authState.isLoaded = nextState.isLoaded ?? true
+  authState.isSignedIn = Boolean(nextState.isSignedIn)
+  authState.user = nextState.user ?? null
+  authState.sessionId = nextState.sessionId ?? null
+
+  if (authState.user) {
+    applyDefaultSyncOnLogin()
+  }
+
+  syncSentryUser(authState.user)
+
+  if (authState.isSignedIn && !wasSignedIn) {
+    void runSyncBootstrap().catch(() => {
+      // ignore sync bootstrap failure
+    })
+  }
 }
 
-function setAuthToken(token: string): void {
-  setAppAuthToken(token)
-  notifyAuthTokenUpdated('set')
-}
-
-function clearAuthToken(): void {
-  clearAppAuthToken()
-  notifyAuthTokenUpdated('cleared')
+function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): void {
+  applyAuthState({
+    isLoaded: true,
+    isSignedIn: Boolean(nextUser),
+    user: nextUser,
+    sessionId: sessionId ?? null
+  })
 }
 
 function getDisplayName(): string {
@@ -336,20 +265,13 @@ async function updateUserProfile(payload: {
     return authState.user
   }
 
-  const token = getAppAuthToken()
-  if (!token) {
-    throw new Error('Not authenticated')
+  const nextUser = (await transport.send(authUpdateProfileEvent, {
+    displayName: payload.displayName,
+    bio: payload.bio
+  })) as AuthUser | null
+  if (nextUser) {
+    updateAuthState(nextUser, authState.sessionId)
   }
-
-  const data = await patchRemoteUserProfile(token, {
-    name: payload.displayName ?? authState.user?.name ?? null
-  })
-  const nextUser: AuthUser = {
-    ...authState.user,
-    ...toAuthUserProfile(data),
-    bio: payload.bio ?? authState.user?.bio ?? null
-  }
-  updateAuthState(nextUser, authState.sessionId)
   return nextUser
 }
 
@@ -363,18 +285,13 @@ async function fileToDataUrl(file: File): Promise<string> {
 }
 
 async function updateUserAvatar(file: File): Promise<AuthUser | null> {
-  const token = getAppAuthToken()
-  if (!token) {
-    throw new Error('Not authenticated')
-  }
   const dataUrl = await fileToDataUrl(file)
-  const data = await patchRemoteUserProfile(token, { image: dataUrl })
-  const nextUser: AuthUser = {
-    ...authState.user,
-    ...toAuthUserProfile(data),
-    avatar: data.image ?? dataUrl
+  const nextUser = (await transport.send(authUpdateAvatarEvent, {
+    dataUrl
+  })) as AuthUser | null
+  if (nextUser) {
+    updateAuthState(nextUser, authState.sessionId)
   }
-  updateAuthState(nextUser, authState.sessionId)
   return nextUser
 }
 
@@ -383,26 +300,15 @@ async function openLoginSettings(): Promise<boolean> {
 }
 
 async function requestStepUp(): Promise<void> {
-  const url = `${getAuthBaseUrl()}/auth/stepup-callback`
-  await appSdk.openExternal(url)
+  await transport.send(authRequestStepUpEvent)
   toast.info('请在浏览器中完成二次验证')
 }
 
-async function runSyncBootstrap(token?: string): Promise<boolean> {
+async function runSyncBootstrap(): Promise<boolean> {
   if (!getSyncPreferenceState().enabled) {
     return false
   }
-
-  const resolvedToken = token ?? getAppAuthToken()
-  if (!resolvedToken) {
-    return false
-  }
-
-  await attestCurrentDevice(resolvedToken, {
-    getOS: appSdk.getOS,
-    getSecureValue: appSdk.getSecureValue,
-    setSecureValue: appSdk.setSecureValue
-  })
+  await attestCurrentDevice()
   return true
 }
 
@@ -410,22 +316,12 @@ async function initializeAuth() {
   if (isInitialized) return
 
   try {
-    const appToken = getAppAuthToken()
-    if (appToken) {
-      const remoteUser = await fetchRemoteUser(appToken)
-      if (remoteUser) {
-        updateAuthState(remoteUser, appToken)
-        notifyAuthTokenUpdated('set')
-        void runSyncBootstrap(appToken).catch(() => {
-          // ignore sync bootstrap failure
-        })
-        isInitialized = true
-        return
-      }
-      clearAuthToken()
+    const state = (await transport.send(authGetStateEvent)) as AuthState
+    if (state) {
+      applyAuthState(state)
+    } else {
+      updateAuthState(null)
     }
-
-    updateAuthState(null)
     isInitialized = true
   } catch (error) {
     updateAuthState(null)
@@ -456,8 +352,7 @@ async function signUp(): Promise<void> {
 async function signOut(): Promise<void> {
   authLoadingState.isSigningOut = true
   try {
-    updateAuthState(null)
-    clearAuthToken()
+    await transport.send(authLogoutEvent)
   } finally {
     authLoadingState.isSigningOut = false
   }
@@ -524,10 +419,6 @@ async function logout(): Promise<void> {
   } catch (error) {
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
-  } finally {
-    if (getAppAuthToken()) {
-      clearAuthToken()
-    }
   }
 }
 
@@ -546,26 +437,13 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       return
     }
 
-    setAuthToken(resolvedToken)
-    const localDeviceId = getAppDeviceId()
-    const tokenDeviceId = resolveAuthTokenDeviceId(resolvedToken)
-    if (localDeviceId || tokenDeviceId) {
-      devLog('[Auth] app token device check', {
-        localDeviceId: maskDeviceId(localDeviceId),
-        tokenDeviceId: maskDeviceId(tokenDeviceId),
-        matches: Boolean(localDeviceId && tokenDeviceId && localDeviceId === tokenDeviceId)
-      })
+    const result = (await transport.send(authManualTokenEvent, {
+      token: resolvedToken,
+      appToken
+    })) as { success?: boolean } | null
+    if (!result?.success) {
+      throw new Error('Auth callback failed')
     }
-    const remoteUser = await fetchRemoteUser(resolvedToken)
-    if (!remoteUser) {
-      throw new Error('Failed to fetch user profile')
-    }
-    updateAuthState(remoteUser, resolvedToken)
-    void runSyncBootstrap(resolvedToken).catch(() => {
-      // ignore sync bootstrap failure
-    })
-    authLoadingState.loginProgress = 100
-    toast.success('登录成功')
 
     if (pendingBrowserLogin.value) {
       clearTimeout(pendingBrowserLogin.value.timeoutId)
@@ -587,25 +465,21 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
   }
 }
 
-function setupAuthCallbackListener(): void {
-  if (authCallbackCleanup && stepUpCallbackCleanup) return
-  const authCallbackEvent = defineRawEvent<{ token?: string; appToken?: string }, void>(
-    'auth:external-callback'
-  )
-  authCallbackCleanup = transport.on(authCallbackEvent, (payload) => {
-    const token = payload?.token || ''
-    const appToken = payload?.appToken || ''
-    if (token || appToken) {
-      handleExternalAuthCallback(token, appToken)
+function setupAuthStateListener(): void {
+  if (authStateCleanup) return
+  authStateCleanup = transport.on(authStateChangedEvent, (payload) => {
+    if (!payload) {
+      return
     }
-  })
-
-  const stepUpCallbackEvent = defineRawEvent<{ loginToken?: string }, void>('auth:stepup-callback')
-  stepUpCallbackCleanup = transport.on(stepUpCallbackEvent, (payload) => {
-    const loginToken = payload?.loginToken || ''
-    if (!loginToken) return
-    setStepUpToken(loginToken)
-    toast.success('二次验证完成')
+    applyAuthState(payload)
+    if (payload.isSignedIn && pendingBrowserLogin.value) {
+      clearTimeout(pendingBrowserLogin.value.timeoutId)
+      pendingBrowserLogin.value.resolve({ success: true, user: currentUser.value })
+      pendingBrowserLogin.value = null
+      authLoadingState.isLoggingIn = false
+      authLoadingState.loginProgress = 100
+      toast.success('登录成功')
+    }
   })
 
   if (isDevEnv()) {
@@ -618,49 +492,26 @@ function setupAuthCallbackListener(): void {
     window.__devAuthToken = (token: string) => {
       handleExternalAuthCallback(token)
     }
-    window.__devStepUpToken = (token: string) => {
-      setStepUpToken(token)
-      toast.success('二次验证完成')
+    devTokenCleanup = () => {
+      window.removeEventListener('dev-auth-token', devTokenHandler as EventListener)
+      window.__devAuthToken = undefined
     }
   }
 }
 
-function cleanupAuthCallbackListener(): void {
-  if (authCallbackCleanup) {
-    authCallbackCleanup()
-    authCallbackCleanup = null
+function cleanupAuthStateListener(): void {
+  if (authStateCleanup) {
+    authStateCleanup()
+    authStateCleanup = null
   }
-  if (stepUpCallbackCleanup) {
-    stepUpCallbackCleanup()
-    stepUpCallbackCleanup = null
+  if (devTokenCleanup) {
+    devTokenCleanup()
+    devTokenCleanup = null
   }
-}
-
-function buildSignInUrl(mode: 'sign-in' | 'sign-up' = 'sign-in'): string {
-  const nexusUrl = getAuthBaseUrl()
-  const deviceId = getAppDeviceId()
-  const deviceName = getAppDeviceName()
-  const devicePlatform = getAppDevicePlatform()
-  const redirectUrl = new URL('/auth/app-callback', nexusUrl)
-  if (deviceId) {
-    redirectUrl.searchParams.set('device_id', deviceId)
-  }
-  if (deviceName) {
-    redirectUrl.searchParams.set('device_name', deviceName)
-  }
-  if (devicePlatform) {
-    redirectUrl.searchParams.set('device_platform', devicePlatform)
-  }
-
-  const entry = mode === 'sign-up' ? '/sign-up' : '/sign-in'
-  const url = new URL(entry, nexusUrl)
-  url.searchParams.set('redirect_url', redirectUrl.pathname + redirectUrl.search)
-  return url.toString()
 }
 
 async function openBrowserLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
-  const signInUrl = buildSignInUrl(mode)
-  await appSdk.openExternal(signInUrl)
+  await transport.send(authLoginEvent, { mode })
 }
 
 function createBrowserLoginTimeout(resolve: (result: LoginResult) => void): NodeJS.Timeout {
@@ -849,7 +700,7 @@ export function useAuth() {
 
   onMounted(() => {
     activeConsumers += 1
-    setupAuthCallbackListener()
+    setupAuthStateListener()
     setupAuthFocusPrompt()
 
     if (!appSetting?.beginner?.init) {
@@ -867,7 +718,7 @@ export function useAuth() {
   onUnmounted(() => {
     const shouldCleanupGlobalResources = cleanup()
     if (shouldCleanupGlobalResources) {
-      cleanupAuthCallbackListener()
+      cleanupAuthStateListener()
       cleanupAuthFocusPrompt()
       authPromptAppContext = null
     }

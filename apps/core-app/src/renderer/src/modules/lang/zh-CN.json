@@ -130,6 +130,8 @@
       "saving": "正在保存…",
       "saveSuccess": "已保存",
       "saveFailed": "保存失败，请重试",
+      "copySuccess": "命令 ID 已复制",
+      "copyFailed": "命令 ID 复制失败",
       "statusActive": "可用",
       "statusDisabled": "已停用",
       "count": "显示 {count} 项",
@@ -143,7 +145,7 @@
         "source": "来源",
         "id": "命令 ID",
         "key": "快捷键",
-        "enabled": "启用",
+        "enabled": "启用/状态",
         "status": "状态"
       }
     },

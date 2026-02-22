@@ -38,6 +38,7 @@ import { fileProvider } from '../addon/files/file-provider'
 import { previewProvider } from '../addon/preview'
 import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
+import { resolveClipboardInputs } from './utils/resolve-clipboard-inputs'
 import { windowManager } from '../core-box/window'
 import { QueryCompletionService } from './query-completion-service'
 import { RecommendationEngine } from './recommendation/recommendation-engine'
@@ -504,6 +505,13 @@ export class SearchEngineCore
     if (providerFilter) {
       query.text = parsedQuery.text
       searchEngineLog.debug(`Provider filter detected: @${providerFilter}, query: "${query.text}"`)
+    }
+
+    const resolved = await resolveClipboardInputs(query.inputs)
+    if (resolved.resolvedCount > 0) {
+      searchEngineLog.debug('Resolved clipboard inputs', {
+        meta: { resolvedCount: resolved.resolvedCount, clipboardIds: resolved.clipboardIds }
+      })
     }
 
     // Fast Layer cache: return cached result for identical queries within TTL

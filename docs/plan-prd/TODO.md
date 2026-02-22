@@ -161,6 +161,7 @@
   - [ ] `actorPluginId` 缺失时不误判为插件调用。
 - [ ] **P1** 大文件拆分与职责收敛：`file-provider.ts`（box-tool addon）、`plugin-module.ts`、`search-core.ts` 按 SRP 拆分模块，降低单文件风险与变更冲突面。
 - [ ] **P2** 迁移壳收口：移除 `channel` 兼容层，清理 `@deprecated` 通道 API，统一走 `transport`（`packages/utils/channel`、`packages/utils/transport`、相关 hooks）。
+- [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
 ### 🧩 TuffEx 迁移收尾（tuffex-ui -> tuffex）

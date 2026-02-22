@@ -17,6 +17,7 @@ import { getTuffBaseUrl, isDevEnv } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { BaseModule } from '../abstract-base-module'
+import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
 import {
   getConfig as getMainStorageConfig,
   getMainConfig,
@@ -92,8 +93,8 @@ let blobBatchTimer: ReturnType<typeof setTimeout> | null = null
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 let pluginStorageListenerBound = false
 let transport: ITuffTransportMain | null = null
-let requestRendererValue: (<T>(eventName: string) => Promise<T | null>) | null = null
 let syncEnabledWatcherCleanup: (() => void) | null = null
+let authStateCleanup: (() => void) | null = null
 
 const syncStartEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:start')
 const syncStopEvent = defineRawEvent<{ reason?: string }, { success: boolean }>('sync:stop')
@@ -101,9 +102,6 @@ const syncTriggerEvent = defineRawEvent<
   { reason?: 'user' | 'focus' | 'online' },
   { success: boolean }
 >('sync:trigger')
-const authTokenUpdatedEvent = defineRawEvent<{ status?: 'set' | 'cleared' }, void>(
-  'auth:token-updated'
-)
 
 function isSyncStorageKey(name: string): boolean {
   return SYNC_STORAGE_KEYS.includes(name)
@@ -347,19 +345,12 @@ function resolveAuthBaseUrl(): string {
   return localAuth ? LOCAL_AUTH_BASE_URL : getTuffBaseUrl()
 }
 
-async function resolveRendererValue<T>(eventName: string): Promise<T | null> {
-  if (!requestRendererValue) {
-    return null
-  }
-  return await requestRendererValue<T>(eventName)
-}
-
 async function resolveAuthToken(): Promise<string | null> {
-  return await resolveRendererValue<string>('account:get-auth-token')
+  return getAuthToken()
 }
 
 async function resolveDeviceId(): Promise<string | null> {
-  return await resolveRendererValue<string>('account:get-device-id')
+  return getDeviceId()
 }
 
 function resolveSdk(): CloudSyncSDK {
@@ -1740,26 +1731,6 @@ export class SyncModule extends BaseModule<TalexEvents> {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     transport = getTuffTransportMain(channel, keyManager)
 
-    requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
-      const sendMain = (
-        channel as { sendMain?: (event: string, arg?: unknown) => Promise<unknown> }
-      ).sendMain
-      if (!sendMain) {
-        syncLog.warn(`TouchChannel sendMain unavailable for ${eventName}`)
-        return null
-      }
-      try {
-        const response = await sendMain(eventName)
-        if (response && typeof response === 'object' && 'data' in response) {
-          return (response as { data?: T }).data ?? null
-        }
-        return (response as T) ?? null
-      } catch (error) {
-        syncLog.warn(`Failed to resolve ${eventName}`, { error })
-        return null
-      }
-    }
-
     if (transport) {
       this.transportDisposers.push(
         transport.on(syncStartEvent, async () => {
@@ -1782,23 +1753,23 @@ export class SyncModule extends BaseModule<TalexEvents> {
           return { success: true }
         })
       )
-      this.transportDisposers.push(
-        transport.on(authTokenUpdatedEvent, async (payload) => {
-          const status = payload?.status === 'cleared' ? 'cleared' : 'set'
-          if (status === 'cleared') {
-            stopAutoSync('logout')
-            return
-          }
-          if (getSyncPreferenceState().enabled) {
-            await startAutoSync()
-          }
-        })
-      )
     }
 
     if (!syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
         handleSyncEnabledChange(data as AppSetting)
+      })
+    }
+
+    if (!authStateCleanup) {
+      authStateCleanup = subscribeAuthState((state) => {
+        if (!state.isSignedIn) {
+          stopAutoSync('logout')
+          return
+        }
+        if (getSyncPreferenceState().enabled) {
+          void startAutoSync()
+        }
       })
     }
   }
@@ -1808,6 +1779,10 @@ export class SyncModule extends BaseModule<TalexEvents> {
     if (syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup()
       syncEnabledWatcherCleanup = null
+    }
+    if (authStateCleanup) {
+      authStateCleanup()
+      authStateCleanup = null
     }
     cleanupPluginStorageListener()
     cleanupStorageWatchers()
@@ -1820,7 +1795,6 @@ export class SyncModule extends BaseModule<TalexEvents> {
     }
     this.transportDisposers = []
     transport = null
-    requestRendererValue = null
     sdk = null
   }
 }

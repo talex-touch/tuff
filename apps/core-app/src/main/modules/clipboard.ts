@@ -844,6 +844,30 @@ export class ClipboardModule extends BaseModule {
     return this.memoryCache[0]
   }
 
+  public async getItemById(id: number): Promise<IClipboardItem | null> {
+    if (!this.db || !Number.isFinite(id)) {
+      return null
+    }
+
+    const cached = this.memoryCache.find((item) => item.id === id)
+    if (cached) {
+      return cached
+    }
+
+    const rows = await this.db
+      .select()
+      .from(clipboardHistory)
+      .where(eq(clipboardHistory.id, id))
+      .limit(1)
+
+    if (rows.length === 0) {
+      return null
+    }
+
+    const [hydrated] = await this.hydrateWithMeta(rows)
+    return (hydrated as IClipboardItem) ?? null
+  }
+
   public async queryHistoryByMeta(
     request: ClipboardMetaQueryRequest = {}
   ): Promise<IClipboardItem[]> {
@@ -1808,13 +1832,24 @@ export class ClipboardModule extends BaseModule {
 
       const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
       const persistStart = performance.now()
+      const queueStats = dbWriteScheduler.getStats()
       const inserted = await this.withDbWrite('clipboard.persist', () =>
         this.db!.insert(clipboardHistory).values(record).returning()
       )
       const persistDuration = performance.now() - persistStart
       if (persistDuration > 200) {
+        const contentLength = typeof item.content === 'string' ? item.content.length : 0
+        const thumbnailLength = typeof item.thumbnail === 'string' ? item.thumbnail.length : 0
         clipboardLog.warn('Clipboard persist slow', {
-          meta: { durationMs: Math.round(persistDuration), type: item.type }
+          meta: {
+            durationMs: Math.round(persistDuration),
+            type: item.type,
+            queued: queueStats.queued,
+            processing: queueStats.processing,
+            currentTaskLabel: queueStats.currentTaskLabel,
+            contentLength,
+            thumbnailLength
+          }
         })
       }
       persistContext()

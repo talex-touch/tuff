@@ -145,6 +145,11 @@ const _appSettingOriginData = {
      */
     blockedReason: '' as '' | 'quota' | 'device' | 'auth',
   },
+  auth: {
+    deviceId: '',
+    deviceName: '',
+    devicePlatform: '',
+  },
   dev: {
     autoCloseDev: true,
     authServer: 'production' as 'production' | 'local',

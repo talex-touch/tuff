@@ -48,6 +48,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object'
 }
 
+type ClipboardItem = NonNullable<IClipboardOptions['last']>
+
 export function useSearch(
   boxOptions: IBoxOptions,
   clipboardOptions?: IClipboardOptions
@@ -154,6 +156,18 @@ export function useSearch(
     }
   }
 
+  function buildClipboardMetadata(
+    item: ClipboardItem,
+    extra?: Record<string, unknown>
+  ): Record<string, unknown> | undefined {
+    const baseMeta = safeSerializeMetadata(item.meta) ?? {}
+    const merged = { ...baseMeta, ...(extra ?? {}) }
+    if (typeof item.id === 'number') {
+      merged.clipboardId = item.id
+    }
+    return Object.keys(merged).length > 0 ? merged : undefined
+  }
+
   function truncateContent(content: string, maxLength: number): string {
     if (content.length <= maxLength) return content
     return content.slice(0, maxLength)
@@ -180,7 +194,10 @@ export function useSearch(
       .map((input) => {
         const contentSig = buildStringSignature(input.content)
         const rawSig = buildStringSignature(input.rawContent)
-        return `${input.type}:${contentSig}:${rawSig}`
+        const meta = input.metadata as { clipboardId?: unknown } | undefined
+        const clipboardId = typeof meta?.clipboardId === 'number' ? meta.clipboardId : ''
+        const metaSig = clipboardId ? `:cb:${clipboardId}` : ''
+        return `${input.type}:${contentSig}:${rawSig}${metaSig}`
       })
       .join('|')
   }
@@ -201,11 +218,16 @@ export function useSearch(
     const inputs: TuffQueryInput[] = []
 
     if (clipboardOptions?.last?.type === 'image') {
+      const content = clipboardOptions.last.thumbnail || clipboardOptions.last.content || ''
+      const metadata = buildClipboardMetadata(clipboardOptions.last, {
+        contentKind: 'preview',
+        canResolveOriginal: true
+      })
       inputs.push({
         type: TuffInputType.Image,
-        content: clipboardOptions.last.content,
+        content,
         thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+        metadata
       })
     } else if (boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0) {
       inputs.push({
@@ -214,10 +236,13 @@ export function useSearch(
         metadata: undefined
       })
     } else if (clipboardOptions?.last?.type === 'files') {
+      const shouldInline = typeof clipboardOptions.last.id !== 'number'
+      const content = shouldInline ? clipboardOptions.last.content : ''
+      const metadata = buildClipboardMetadata(clipboardOptions.last, { contentKind: 'clipboard' })
       inputs.push({
         type: TuffInputType.Files,
-        content: clipboardOptions.last.content,
-        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+        content,
+        metadata
       })
     } else if (clipboardOptions?.last?.type === 'text' || clipboardOptions?.last?.type === 'html') {
       const content = clipboardOptions.last.content ?? ''

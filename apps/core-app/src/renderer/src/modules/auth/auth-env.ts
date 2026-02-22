@@ -37,7 +37,7 @@ export function resolveAuthTokenDeviceId(token: string): string | null {
   return deviceId || null
 }
 
-export function getAppAuthToken(): string | null {
+export function getLegacyAuthToken(): string | null {
   if (typeof localStorage === 'undefined') {
     return null
   }
@@ -53,21 +53,21 @@ export function getAppAuthToken(): string | null {
   return raw
 }
 
-export function setAppAuthToken(token: string): void {
+export function setLegacyAuthToken(token: string): void {
   if (typeof localStorage === 'undefined') {
     return
   }
   localStorage.setItem(APP_AUTH_STORAGE_KEY, token)
 }
 
-export function clearAppAuthToken(): void {
+export function clearLegacyAuthToken(): void {
   if (typeof localStorage === 'undefined') {
     return
   }
   localStorage.removeItem(APP_AUTH_STORAGE_KEY)
 }
 
-export function getAppDeviceId(): string | null {
+export function getLegacyDeviceId(): string | null {
   if (typeof localStorage === 'undefined') {
     return null
   }
@@ -79,7 +79,14 @@ export function getAppDeviceId(): string | null {
   return deviceId
 }
 
-export function getAppDevicePlatform(): string {
+export function clearLegacyDeviceId(): void {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+  localStorage.removeItem(APP_DEVICE_ID_KEY)
+}
+
+export function getLegacyDevicePlatform(): string {
   if (!hasNavigator()) {
     return 'desktop'
   }
@@ -87,19 +94,26 @@ export function getAppDevicePlatform(): string {
   return nav.userAgentData?.platform || navigator.platform || 'desktop'
 }
 
-export function getAppDeviceName(): string | null {
+export function getLegacyDeviceName(): string | null {
   if (typeof localStorage === 'undefined') {
     return null
   }
   let name = localStorage.getItem(APP_DEVICE_NAME_KEY)
   if (!name) {
-    name = `Desktop-${getAppDevicePlatform()}`
+    name = `Desktop-${getLegacyDevicePlatform()}`
     localStorage.setItem(APP_DEVICE_NAME_KEY, name)
   }
   return name
 }
 
-export function setAppDeviceName(name: string): void {
+export function clearLegacyDeviceName(): void {
+  if (typeof localStorage === 'undefined') {
+    return
+  }
+  localStorage.removeItem(APP_DEVICE_NAME_KEY)
+}
+
+export function setLegacyDeviceName(name: string): void {
   if (typeof localStorage === 'undefined') {
     return
   }
