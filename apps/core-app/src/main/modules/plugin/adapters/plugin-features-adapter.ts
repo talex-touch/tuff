@@ -21,6 +21,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
 import searchEngineCore from '../../box-tool/search-engine/search-core'
+import { resolveClipboardInputs } from '../../box-tool/search-engine/utils/resolve-clipboard-inputs'
 
 import { pluginModule } from '../plugin-module'
 import { PluginViewLoader } from '../view/plugin-view-loader'
@@ -140,6 +141,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
   public async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {
     const { item } = args
+    const searchQuery = args.searchResult?.query
 
     if (item.meta?.defaultAction) {
       const pluginName = item.meta?.pluginName
@@ -204,6 +206,15 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return null
     }
 
+    if (searchQuery && typeof searchQuery === 'object' && Array.isArray(searchQuery.inputs)) {
+      const resolved = await resolveClipboardInputs(searchQuery.inputs)
+      if (resolved.resolvedCount > 0) {
+        pluginFeaturesLog.debug('Resolved clipboard inputs for feature execute', {
+          meta: { resolvedCount: resolved.resolvedCount, clipboardIds: resolved.clipboardIds }
+        })
+      }
+    }
+
     const feature = plugin.getFeature(featureId)
     if (!feature) {
       pluginFeaturesLog.error(
@@ -213,7 +224,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
     }
 
     if (feature.interaction && feature.interaction.type === 'webcontent') {
-      const query = args.searchResult?.query
+      const query = searchQuery
 
       // Determine if input should be shown while webcontent view is attached
       const hasAcceptedInputTypes =
@@ -258,7 +269,7 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
       return activation
     }
 
-    const query = args.searchResult?.query || args.searchResult?.query?.text
+    const query = searchQuery || (searchQuery as TuffQuery | undefined)?.text
 
     // For push-mode features, pre-activate BEFORE triggering to ensure
     // items pushed during onFeatureTriggered have correct activation state

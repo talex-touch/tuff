@@ -74,6 +74,20 @@ function safeSerializeMetadata(
   }
 }
 
+type ClipboardItem = NonNullable<IClipboardOptions['last']>
+
+function buildClipboardMetadata(
+  item: ClipboardItem,
+  extra?: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  const baseMeta = safeSerializeMetadata(item.meta) ?? {}
+  const merged = { ...baseMeta, ...(extra ?? {}) }
+  if (typeof item.id === 'number') {
+    merged.clipboardId = item.id
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined
+}
+
 /**
  * Clipboard state management hook
  *
@@ -126,17 +140,15 @@ export function useClipboardState(options: UseClipboardStateOptions): ClipboardS
 
     // Priority 1: Image clipboard
     if (clipboardOptions.last?.type === 'image') {
-      const baseMeta = safeSerializeMetadata(clipboardOptions.last.meta)
+      const metadata = buildClipboardMetadata(clipboardOptions.last, {
+        contentKind: 'preview',
+        canResolveOriginal: true
+      })
       inputs.push({
         type: TuffInputType.Image,
         content: clipboardOptions.last.content,
         thumbnail: clipboardOptions.last.thumbnail ?? undefined,
-        metadata: {
-          ...baseMeta,
-          clipboardId: clipboardOptions.last.id,
-          contentKind: 'preview',
-          canResolveOriginal: true
-        }
+        metadata
       })
       return inputs
     }
@@ -153,10 +165,13 @@ export function useClipboardState(options: UseClipboardStateOptions): ClipboardS
 
     // Priority 3: Clipboard files
     if (clipboardOptions.last?.type === 'files') {
+      const shouldInline = typeof clipboardOptions.last.id !== 'number'
+      const content = shouldInline ? clipboardOptions.last.content : ''
+      const metadata = buildClipboardMetadata(clipboardOptions.last, { contentKind: 'clipboard' })
       inputs.push({
         type: TuffInputType.Files,
-        content: clipboardOptions.last.content,
-        metadata: safeSerializeMetadata(clipboardOptions.last.meta)
+        content,
+        metadata
       })
       return inputs
     }

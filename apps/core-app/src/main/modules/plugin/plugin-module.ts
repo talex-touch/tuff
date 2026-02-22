@@ -53,6 +53,7 @@ import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
+import { getAuthToken, getDeviceId } from '../auth'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
@@ -2069,15 +2070,6 @@ export class PluginModule extends BaseModule {
           console.error('Error in plugin:performance:get-paths handler:', error)
           throw error instanceof Error ? error : new Error('Unknown error')
         }
-      })
-    )
-
-    this.transportDisposers.push(
-      transport.on(defineRawEvent<void, string | null>('account:get-auth-token'), async () => {
-        return this.requestRendererValue<string>('account:get-auth-token')
-      }),
-      transport.on(defineRawEvent<void, string | null>('account:get-device-id'), async () => {
-        return this.requestRendererValue<string>('account:get-device-id')
       })
     )
 

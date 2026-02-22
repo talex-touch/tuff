@@ -30,6 +30,7 @@ import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
 import { syncModule } from './modules/sync'
+import { authModule } from './modules/auth'
 import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
 import { permissionCheckerModule } from './modules/system/permission-checker'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
@@ -146,6 +147,7 @@ const modulesToLoad = [
   intelligenceModule,
   pluginModule,
   pluginLogModule,
+  authModule,
   syncModule,
   flowBusModule, // Flow Transfer system - after plugin module
   divisionBoxModule,

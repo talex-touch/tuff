@@ -179,6 +179,7 @@ export function structuredStrictStringify(value: unknown): string {
 }
 
 export * from './file'
+export * from './clipboard'
 export * from './safe-path'
 export * from './safe-shell'
 

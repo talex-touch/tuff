@@ -2,18 +2,30 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
+import { getUserSubscription } from './subscriptionStore'
+import { getTeamQuota } from './teamStore'
+
+type CreditPlan = 'FREE' | 'PLUS' | 'PRO' | 'TEAM' | 'ENTERPRISE'
 
 const TEAMS_TABLE = 'teams'
 const TEAM_MEMBERS_TABLE = 'team_members'
 const CREDIT_PLANS_TABLE = 'credit_plans'
 const CREDIT_BALANCES_TABLE = 'credit_balances'
 const CREDIT_LEDGER_TABLE = 'credit_ledger'
+const CREDIT_BOOST_CLAIMS_TABLE = 'credit_boost_claims'
+const CREDIT_CHECKINS_TABLE = 'credit_checkins'
 const USERS_TABLE = 'auth_users'
+const ACCOUNTS_TABLE = 'auth_accounts'
+const PASSKEYS_TABLE = 'auth_passkeys'
 
 let creditsSchemaInitialized = false
 
 const DEFAULT_TEAM_QUOTA = 10000
-const DEFAULT_PERSONAL_QUOTA = 5000
+const DEFAULT_PERSONAL_QUOTA = 5
+const BOOSTED_PERSONAL_QUOTA = 100
+const CHECKIN_REWARD = 1
+const TEAM_BASE_SEATS = 5
+const TEAM_POOL_PER_SEAT = 2000
 const DEFAULT_PLAN_ID = 'default'
 const CREDIT_DECIMALS = 2
 const CREDIT_SCALE = 10 ** CREDIT_DECIMALS
@@ -34,6 +46,11 @@ interface D1TeamMemberRow {
   user_id: string
   role: string
   joined_at: string
+}
+
+interface D1UserRow {
+  id: string
+  email_state: string | null
 }
 
 export interface TeamRecord {
@@ -170,9 +187,33 @@ async function ensureCreditsSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${CREDIT_BOOST_CLAIMS_TABLE} (
+      user_id TEXT NOT NULL,
+      month TEXT NOT NULL,
+      claimed_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, month)
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${CREDIT_CHECKINS_TABLE} (
+      user_id TEXT NOT NULL,
+      day TEXT NOT NULL,
+      claimed_at TEXT NOT NULL,
+      PRIMARY KEY (user_id, day)
+    );
+  `).run()
+
+  await db.prepare(`
     INSERT OR IGNORE INTO ${CREDIT_PLANS_TABLE} (plan_id, monthly_quota, personal_quota)
     VALUES (?, ?, ?)
   `).bind(DEFAULT_PLAN_ID, DEFAULT_TEAM_QUOTA, DEFAULT_PERSONAL_QUOTA).run()
+
+  await db.prepare(`
+    UPDATE ${CREDIT_PLANS_TABLE}
+    SET monthly_quota = ?, personal_quota = ?
+    WHERE plan_id = ?
+  `).bind(DEFAULT_TEAM_QUOTA, DEFAULT_PERSONAL_QUOTA, DEFAULT_PLAN_ID).run()
 
   creditsSchemaInitialized = true
 }
@@ -181,6 +222,205 @@ function getMonthKey(date = new Date()): string {
   const year = date.getUTCFullYear()
   const month = `${date.getUTCMonth() + 1}`.padStart(2, '0')
   return `${year}-${month}`
+}
+
+function getDayKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10)
+}
+
+interface CreditBoostRequirements {
+  emailVerified: boolean
+  oauthLinked: boolean
+  passkeyBound: boolean
+}
+
+export interface CreditBoostStatus {
+  eligible: boolean
+  requirements: CreditBoostRequirements
+  claimedThisMonth: boolean
+  baseQuota: number
+  boostedQuota: number
+}
+
+interface BoostContext {
+  requirements: CreditBoostRequirements
+  eligible: boolean
+  activatedMonth: string | null
+}
+
+export interface CreditCheckinStatus {
+  day: string
+  checkedInToday: boolean
+  reward: number
+}
+
+const PERSONAL_QUOTA_BY_PLAN: Record<CreditPlan, number> = {
+  FREE: DEFAULT_PERSONAL_QUOTA,
+  PLUS: 500,
+  PRO: 1200,
+  TEAM: 5000,
+  ENTERPRISE: 5000,
+}
+
+async function resolvePlanForScope(event: H3Event, scope: 'team' | 'user', scopeId: string): Promise<CreditPlan> {
+  if (scope === 'user') {
+    const subscription = await getUserSubscription(event, scopeId)
+    return subscription.plan
+  }
+
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const row = await db.prepare(`
+    SELECT owner_user_id FROM ${TEAMS_TABLE}
+    WHERE id = ?
+    LIMIT 1
+  `).bind(scopeId).first<{ owner_user_id?: string | null }>()
+
+  const ownerId = row?.owner_user_id
+  if (!ownerId)
+    return 'FREE'
+
+  const subscription = await getUserSubscription(event, ownerId)
+  return subscription.plan
+}
+
+async function resolveTeamQuotaByPlan(
+  event: H3Event,
+  teamId: string,
+  plan: CreditPlan,
+): Promise<number> {
+  if (plan !== 'TEAM' && plan !== 'ENTERPRISE')
+    return DEFAULT_TEAM_QUOTA
+
+  const team = await getTeamById(event, teamId)
+  if (!team || team.type !== 'organization')
+    return DEFAULT_TEAM_QUOTA
+
+  const quota = await getTeamQuota(event, teamId, plan)
+  const seatsLimit = Math.max(TEAM_BASE_SEATS, quota.seatsLimit || TEAM_BASE_SEATS)
+  return DEFAULT_TEAM_QUOTA + Math.max(0, seatsLimit - TEAM_BASE_SEATS) * TEAM_POOL_PER_SEAT
+}
+
+async function resolveBoostContext(event: H3Event, userId: string): Promise<BoostContext> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const userRow = await db.prepare(`
+    SELECT id, email_state, email_verified FROM ${USERS_TABLE}
+    WHERE id = ?
+    LIMIT 1
+  `).bind(userId).first<D1UserRow & { email_verified?: string | null }>()
+
+  const emailVerified = userRow?.email_state === 'verified'
+  const oauthRow = await db.prepare(`
+    SELECT COUNT(1) as total FROM ${ACCOUNTS_TABLE}
+    WHERE user_id = ?
+  `).bind(userId).first<{ total?: number }>()
+  const passkeyRow = await db.prepare(`
+    SELECT COUNT(1) as total FROM ${PASSKEYS_TABLE}
+    WHERE user_id = ?
+  `).bind(userId).first<{ total?: number }>()
+
+  const oauthLinked = Number(oauthRow?.total ?? 0) > 0
+  const passkeyBound = Number(passkeyRow?.total ?? 0) > 0
+  const eligible = emailVerified && oauthLinked && passkeyBound
+
+  let activatedMonth: string | null = null
+  if (eligible) {
+    const emailVerifiedAt = userRow?.email_verified ? Date.parse(userRow.email_verified) : NaN
+    const oauthAtRow = await db.prepare(`
+      SELECT MAX(created_at) as created_at FROM ${ACCOUNTS_TABLE}
+      WHERE user_id = ?
+    `).bind(userId).first<{ created_at?: string | null }>()
+    const passkeyAtRow = await db.prepare(`
+      SELECT MAX(created_at) as created_at FROM ${PASSKEYS_TABLE}
+      WHERE user_id = ?
+    `).bind(userId).first<{ created_at?: string | null }>()
+
+    const oauthAt = oauthAtRow?.created_at ? Date.parse(oauthAtRow.created_at) : NaN
+    const passkeyAt = passkeyAtRow?.created_at ? Date.parse(passkeyAtRow.created_at) : NaN
+    const latest = Math.max(
+      Number.isNaN(emailVerifiedAt) ? 0 : emailVerifiedAt,
+      Number.isNaN(oauthAt) ? 0 : oauthAt,
+      Number.isNaN(passkeyAt) ? 0 : passkeyAt,
+    )
+    if (latest > 0) {
+      activatedMonth = getMonthKey(new Date(latest))
+    }
+  }
+
+  return {
+    requirements: {
+      emailVerified,
+      oauthLinked,
+      passkeyBound,
+    },
+    eligible,
+    activatedMonth,
+  }
+}
+
+async function getBoostClaimed(event: H3Event, userId: string, month: string): Promise<boolean> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const row = await db.prepare(`
+    SELECT claimed_at FROM ${CREDIT_BOOST_CLAIMS_TABLE}
+    WHERE user_id = ? AND month = ?
+    LIMIT 1
+  `).bind(userId, month).first()
+  return Boolean(row?.claimed_at)
+}
+
+async function resolvePersonalQuota(
+  event: H3Event,
+  userId: string,
+  baseQuota: number,
+  month: string,
+  plan: CreditPlan,
+): Promise<number> {
+  if (plan !== 'FREE')
+    return baseQuota
+
+  const context = await resolveBoostContext(event, userId)
+  if (!context.eligible)
+    return baseQuota
+
+  if (context.activatedMonth && context.activatedMonth !== month)
+    return BOOSTED_PERSONAL_QUOTA
+
+  return baseQuota
+}
+
+export async function getCreditBoostStatus(
+  event: H3Event,
+  userId: string,
+  month: string = getMonthKey(),
+  plan: CreditPlan = 'FREE',
+): Promise<CreditBoostStatus> {
+  if (plan !== 'FREE') {
+    return {
+      eligible: false,
+      requirements: {
+        emailVerified: false,
+        oauthLinked: false,
+        passkeyBound: false,
+      },
+      claimedThisMonth: false,
+      baseQuota: DEFAULT_PERSONAL_QUOTA,
+      boostedQuota: BOOSTED_PERSONAL_QUOTA,
+    }
+  }
+  const context = await resolveBoostContext(event, userId)
+  const claimedThisMonth = await getBoostClaimed(event, userId, month)
+  const eligible = context.eligible
+
+  return {
+    eligible,
+    requirements: context.requirements,
+    claimedThisMonth,
+    baseQuota: DEFAULT_PERSONAL_QUOTA,
+    boostedQuota: BOOSTED_PERSONAL_QUOTA,
+  }
 }
 
 export async function ensurePersonalTeam(event: H3Event, userId: string): Promise<string> {
@@ -387,9 +627,14 @@ async function ensureBalance(event: H3Event, scope: 'team' | 'user', scopeId: st
   const db = requireDatabase(event)
   await ensureCreditsSchema(db)
   const month = getMonthKey()
-  const plan = await db.prepare(`SELECT * FROM ${CREDIT_PLANS_TABLE} WHERE plan_id = ?`).bind(DEFAULT_PLAN_ID).first()
-  const teamQuota = resolveCreditAmount((plan as any)?.monthly_quota ?? DEFAULT_TEAM_QUOTA)
-  const personalQuota = resolveCreditAmount((plan as any)?.personal_quota ?? DEFAULT_PERSONAL_QUOTA)
+  const plan = await resolvePlanForScope(event, scope, scopeId)
+  const teamQuota = scope === 'team'
+    ? await resolveTeamQuotaByPlan(event, scopeId, plan)
+    : DEFAULT_TEAM_QUOTA
+  const basePersonalQuota = resolveCreditAmount(PERSONAL_QUOTA_BY_PLAN[plan] ?? DEFAULT_PERSONAL_QUOTA)
+  const personalQuota = scope === 'user'
+    ? await resolvePersonalQuota(event, scopeId, basePersonalQuota, month, plan)
+    : basePersonalQuota
   const quota = scope === 'team' ? teamQuota : personalQuota
   await db.prepare(`
     INSERT OR IGNORE INTO ${CREDIT_BALANCES_TABLE} (scope, scope_id, month, quota, used)
@@ -404,16 +649,229 @@ export async function getCreditSummary(event: H3Event, userId: string) {
   await ensureBalance(event, 'team', teamId)
   await ensureBalance(event, 'user', userId)
   const month = getMonthKey()
+  const plan = await resolvePlanForScope(event, 'user', userId)
   const teamBalance = await db.prepare(`
     SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'team' AND scope_id = ? AND month = ?
   `).bind(teamId, month).first()
   const userBalance = await db.prepare(`
     SELECT * FROM ${CREDIT_BALANCES_TABLE} WHERE scope = 'user' AND scope_id = ? AND month = ?
   `).bind(userId, month).first()
+  const boost = plan === 'FREE' ? await getCreditBoostStatus(event, userId, month, plan) : null
+  const userQuota = resolveCreditAmount((userBalance as any)?.quota ?? 0)
+  const canClaimNow = boost ? (boost.eligible && !boost.claimedThisMonth && userQuota < BOOSTED_PERSONAL_QUOTA) : false
   return {
     month,
     team: normalizeCreditBalanceRow(teamBalance),
-    user: normalizeCreditBalanceRow(userBalance)
+    user: normalizeCreditBalanceRow(userBalance),
+    boost: boost
+      ? {
+          ...boost,
+          canClaimNow,
+        }
+      : null,
+  }
+}
+
+export async function claimCreditBoost(event: H3Event, userId: string) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const month = getMonthKey()
+  const plan = await resolvePlanForScope(event, 'user', userId)
+  if (plan !== 'FREE') {
+    return {
+      eligible: false,
+      claimed: false,
+      reason: 'not-free',
+      boost: null,
+    }
+  }
+  const boost = await getCreditBoostStatus(event, userId, month, plan)
+  if (!boost.eligible) {
+    return {
+      eligible: false,
+      claimed: false,
+      reason: 'not-eligible',
+      boost,
+    }
+  }
+
+  const now = new Date().toISOString()
+  const insertResult = await db.prepare(`
+    INSERT OR IGNORE INTO ${CREDIT_BOOST_CLAIMS_TABLE} (user_id, month, claimed_at)
+    VALUES (?, ?, ?)
+  `).bind(userId, month, now).run()
+
+  const insertChanges = Number((insertResult as any)?.meta?.changes ?? 0)
+  if (insertChanges < 1) {
+    return {
+      eligible: true,
+      claimed: false,
+      reason: 'already-claimed',
+      boost,
+    }
+  }
+
+  try {
+    await ensureBalance(event, 'user', userId)
+    const balanceRow = await db.prepare(`
+      SELECT quota FROM ${CREDIT_BALANCES_TABLE}
+      WHERE scope = 'user' AND scope_id = ? AND month = ?
+    `).bind(userId, month).first()
+
+    const currentQuota = resolveCreditAmount((balanceRow as any)?.quota ?? 0)
+    const delta = normalizeCreditAmount(BOOSTED_PERSONAL_QUOTA - currentQuota)
+
+    if (delta > 0) {
+      await db.prepare(`
+        UPDATE ${CREDIT_BALANCES_TABLE}
+        SET quota = ?
+        WHERE scope = 'user' AND scope_id = ? AND month = ?
+      `).bind(BOOSTED_PERSONAL_QUOTA, userId, month).run()
+
+      const ledgerId = crypto.randomUUID()
+      await db.prepare(`
+        INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
+        VALUES (?, 'user', ?, ?, ?, ?, ?)
+      `).bind(
+        ledgerId,
+        userId,
+        delta,
+        'verification-boost',
+        now,
+        JSON.stringify({ userId, month }),
+      ).run()
+    }
+
+    return {
+      eligible: true,
+      claimed: true,
+      delta: Math.max(0, delta),
+      boost: {
+        ...boost,
+        claimedThisMonth: true,
+      },
+    }
+  }
+  catch (error) {
+    await db.prepare(`
+      DELETE FROM ${CREDIT_BOOST_CLAIMS_TABLE}
+      WHERE user_id = ? AND month = ?
+    `).bind(userId, month).run()
+    throw error
+  }
+}
+
+export async function getCheckinStatus(event: H3Event, userId: string): Promise<CreditCheckinStatus> {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const day = getDayKey()
+  const row = await db.prepare(`
+    SELECT claimed_at FROM ${CREDIT_CHECKINS_TABLE}
+    WHERE user_id = ? AND day = ?
+    LIMIT 1
+  `).bind(userId, day).first()
+
+  return {
+    day,
+    checkedInToday: Boolean(row?.claimed_at),
+    reward: CHECKIN_REWARD,
+  }
+}
+
+export async function listCheckinsByMonth(event: H3Event, userId: string, monthInput?: string) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+
+  const currentMonth = getMonthKey()
+  const month = typeof monthInput === 'string' && /^\d{4}-\d{2}$/.test(monthInput)
+    ? monthInput
+    : currentMonth
+  const [yearPart, monthPart] = month.split('-')
+  const year = Number(yearPart)
+  const monthIndex = Number(monthPart) - 1
+
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    return listCheckinsByMonth(event, userId, currentMonth)
+  }
+
+  const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate()
+  const startDay = `${month}-01`
+  const endDay = `${month}-${`${daysInMonth}`.padStart(2, '0')}`
+
+  const { results } = await db.prepare(`
+    SELECT day
+    FROM ${CREDIT_CHECKINS_TABLE}
+    WHERE user_id = ?
+      AND day >= ?
+      AND day <= ?
+    ORDER BY day ASC
+  `).bind(userId, startDay, endDay).all<{ day: string }>()
+
+  const days = (results ?? []).map(row => row.day).filter(Boolean)
+
+  return {
+    month,
+    days,
+    reward: CHECKIN_REWARD,
+  }
+}
+
+export async function claimDailyCheckin(event: H3Event, userId: string) {
+  const db = requireDatabase(event)
+  await ensureCreditsSchema(db)
+  const day = getDayKey()
+  const now = new Date().toISOString()
+
+  const insertResult = await db.prepare(`
+    INSERT OR IGNORE INTO ${CREDIT_CHECKINS_TABLE} (user_id, day, claimed_at)
+    VALUES (?, ?, ?)
+  `).bind(userId, day, now).run()
+
+  const insertChanges = Number((insertResult as any)?.meta?.changes ?? 0)
+  if (insertChanges < 1) {
+    return {
+      claimed: false,
+      day,
+      reward: CHECKIN_REWARD,
+    }
+  }
+
+  try {
+    await ensureBalance(event, 'user', userId)
+    const month = getMonthKey()
+    const delta = normalizeCreditAmount(CHECKIN_REWARD)
+
+    await db.prepare(`
+      UPDATE ${CREDIT_BALANCES_TABLE}
+      SET quota = quota + ?
+      WHERE scope = 'user' AND scope_id = ? AND month = ?
+    `).bind(delta, userId, month).run()
+
+    const ledgerId = crypto.randomUUID()
+    await db.prepare(`
+      INSERT INTO ${CREDIT_LEDGER_TABLE} (id, scope, scope_id, delta, reason, created_at, metadata)
+      VALUES (?, 'user', ?, ?, ?, ?, ?)
+    `).bind(
+      ledgerId,
+      userId,
+      delta,
+      'daily-checkin',
+      now,
+      JSON.stringify({ userId, day }),
+    ).run()
+
+    return {
+      claimed: true,
+      day,
+      reward: delta,
+    }
+  }
+  catch (error) {
+    await db.prepare(`
+      DELETE FROM ${CREDIT_CHECKINS_TABLE}
+      WHERE user_id = ? AND day = ?
+    `).bind(userId, day).run()
+    throw error
   }
 }
 
@@ -473,10 +931,10 @@ export async function listCreditLedger(event: H3Event, userId: string) {
   const teamId = await ensurePersonalTeam(event, userId)
   const result = await db.prepare(`
     SELECT * FROM ${CREDIT_LEDGER_TABLE}
-    WHERE scope_id = ?
+    WHERE (scope = 'team' AND scope_id = ?) OR (scope = 'user' AND scope_id = ?)
     ORDER BY created_at DESC
     LIMIT 100
-  `).bind(teamId).all()
+  `).bind(teamId, userId).all()
   return (result.results ?? []).map((row: any) => ({
     ...row,
     delta: resolveCreditAmount(row?.delta ?? 0)

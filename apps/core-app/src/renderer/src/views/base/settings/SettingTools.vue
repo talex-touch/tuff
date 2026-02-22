@@ -8,20 +8,19 @@
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { TxButton, TxFlipOverlay, TxSelectItem } from '@talex-touch/tuffex'
+import { TxButton, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
-import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
-import TSwitch from '~/components/base/switch/TSwitch.vue'
-import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { appSetting } from '~/modules/channel/storage'
+import type { SaveState, ShortcutRowBase } from './components/shortcut-dialog.types'
 
 const { t } = useI18n()
 
@@ -35,16 +34,10 @@ const shortcutsLoading = computed(() => shortcuts.value === null)
 const shortcutsDialogVisible = ref(false)
 const shortcutsDialogSource = ref<HTMLElement | null>(null)
 const shortcutSearch = ref('')
-type SaveState = 'saving' | 'success' | 'error'
 const saveStateMap = reactive(new Map<string, SaveState>())
 const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
-
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.1
 
 function ensureClipboardPollingSettings(): void {
   const tools = appSetting.tools as {
@@ -185,6 +178,7 @@ async function saveShortcut(
   const nextRunId = (saveRunIdMap.get(id) ?? 0) + 1
   saveRunIdMap.set(id, nextRunId)
   setRowSaveState(id, 'saving')
+  if (saveRunIdMap.get(id) !== nextRunId) return false
   try {
     const success = await shortconApi.update(id, payload.accelerator, payload.enabled)
     if (saveRunIdMap.get(id) !== nextRunId) return success
@@ -208,33 +202,6 @@ function getShortcutLabel(id: string): string {
   const key = `settingTools.shortcutLabels.${normalized}`
   const translated = t(key)
   return translated === key ? id : translated
-}
-
-async function copyShortcutId(id: string): Promise<void> {
-  if (!id) return
-  try {
-    if (navigator?.clipboard?.writeText) {
-      await navigator.clipboard.writeText(id)
-      return
-    }
-  } catch (error) {
-    void error
-  }
-
-  try {
-    const textarea = document.createElement('textarea')
-    textarea.value = id
-    textarea.setAttribute('readonly', 'true')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    textarea.style.pointerEvents = 'none'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-  } catch (error) {
-    void error
-  }
 }
 
 function isSystemShortcut(shortcut: ShortcutWithStatus): boolean {
@@ -307,6 +274,23 @@ const filteredShortcuts = computed(() => {
     )
   })
 })
+
+const shortcutRows = computed<ShortcutRowBase[]>(() =>
+  filteredShortcuts.value.map((shortcut) => {
+    const label = getShortcutLabel(shortcut.id)
+    return {
+      shortcut,
+      label,
+      desc: t('settingTools.shortcutDesc', { shortcut: label }),
+      sourceLabel: getShortcutSourceLabel(shortcut),
+      statusText: getShortcutStatusText(shortcut),
+      spotlightHint: getSpotlightHint(shortcut),
+      saveState: getRowSaveState(shortcut.id),
+      saveText: getRowSaveText(shortcut.id),
+      isEnabled: isShortcutEnabled(shortcut)
+    }
+  })
+)
 
 function openShortcutsDialog(event: MouseEvent): void {
   shortcutsDialogSource.value =
@@ -553,167 +537,16 @@ watch(shortcutsDialogVisible, (visible) => {
     </TuffBlockSelect>
   </TuffGroupBlock>
 
-  <Teleport to="body">
-    <TxFlipOverlay
-      v-model="shortcutsDialogVisible"
-      :source="shortcutsDialogSource"
-      :duration="FLIP_DURATION"
-      :rotate-x="FLIP_ROTATE_X"
-      :rotate-y="FLIP_ROTATE_Y"
-      :speed-boost="FLIP_SPEED_BOOST"
-      transition-name="ShortcutDialog-Mask"
-      mask-class="ShortcutDialog-Mask"
-      card-class="ShortcutDialog-Card"
-    >
-      <template #default="{ close }">
-        <div class="ShortcutDialog">
-          <div class="ShortcutDialog-Header">
-            <div class="ShortcutDialog-TitleBlock">
-              <div class="ShortcutDialog-Title">
-                {{ t('settingTools.shortcutsDialog.title') }}
-              </div>
-              <div class="ShortcutDialog-Subtitle">
-                {{ t('settingTools.shortcutsDialog.desc') }}
-              </div>
-            </div>
-            <div class="ShortcutDialog-Search">
-              <i class="i-carbon-search" />
-              <input
-                v-model="shortcutSearch"
-                type="text"
-                :placeholder="t('settingTools.shortcutsDialog.searchPlaceholder')"
-              />
-            </div>
-          </div>
-
-          <div class="ShortcutDialog-Table">
-            <div class="ShortcutDialog-TableScroller">
-              <div class="ShortcutDialog-TableHeader">
-                <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.enabled') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.status') }}</div>
-                <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
-              </div>
-              <TouchScroll no-padding class="ShortcutDialog-TableBody">
-                <div v-if="shortcutsLoading" class="ShortcutDialog-Empty">
-                  {{ t('settingTools.shortcutsDialog.loading') }}
-                </div>
-                <div v-else-if="filteredShortcuts.length === 0" class="ShortcutDialog-Empty">
-                  {{ t('settingTools.shortcutsDialog.empty') }}
-                </div>
-                <div v-else class="ShortcutDialog-Rows">
-                  <div
-                    v-for="shortcut in filteredShortcuts"
-                    :key="shortcut.id"
-                    class="ShortcutDialog-Row"
-                  >
-                    <div class="ShortcutDialog-Name">
-                      <div class="ShortcutDialog-Label">
-                        {{ getShortcutLabel(shortcut.id) }}
-                      </div>
-                      <div class="ShortcutDialog-Desc">
-                        {{
-                          t('settingTools.shortcutDesc', {
-                            shortcut: getShortcutLabel(shortcut.id)
-                          })
-                        }}
-                      </div>
-                    </div>
-                    <div class="ShortcutDialog-Id">
-                      <button
-                        class="ShortcutDialog-IdCopy"
-                        type="button"
-                        @click="copyShortcutId(shortcut.id)"
-                      >
-                        <span class="ShortcutDialog-IdValue">{{ shortcut.id }}</span>
-                        <i class="i-ri-file-copy-line" />
-                      </button>
-                    </div>
-                    <div class="ShortcutDialog-Key">
-                      <FlatKeyInput
-                        :model-value="shortcut.accelerator"
-                        @update:model-value="
-                          (newValue) => updateShortcut(shortcut.id, String(newValue))
-                        "
-                      />
-                    </div>
-                    <div class="ShortcutDialog-Enabled">
-                      <TSwitch
-                        :model-value="isShortcutEnabled(shortcut)"
-                        @update:model-value="
-                          (value) => updateShortcutEnabled(shortcut.id, Boolean(value))
-                        "
-                      />
-                    </div>
-                    <div class="ShortcutDialog-Status">
-                      <div
-                        class="ShortcutDialog-StatusText"
-                        :class="[
-                          getRowSaveState(shortcut.id) ? `is-${getRowSaveState(shortcut.id)}` : '',
-                          {
-                            active:
-                              !getRowSaveState(shortcut.id) && !getShortcutStatusText(shortcut),
-                            disabled: !getRowSaveState(shortcut.id) && !isShortcutEnabled(shortcut)
-                          }
-                        ]"
-                      >
-                        <template v-if="getRowSaveState(shortcut.id)">
-                          <i
-                            v-if="getRowSaveState(shortcut.id) === 'saving'"
-                            class="i-ri-loader-4-line animate-spin"
-                          />
-                          <i
-                            v-else-if="getRowSaveState(shortcut.id) === 'success'"
-                            class="i-ri-checkbox-circle-fill"
-                          />
-                          <i
-                            v-else-if="getRowSaveState(shortcut.id) === 'error'"
-                            class="i-ri-error-warning-line"
-                          />
-                          <span>{{ getRowSaveText(shortcut.id) }}</span>
-                        </template>
-                        <template v-else>
-                          {{
-                            getShortcutStatusText(shortcut) ||
-                            t('settingTools.shortcutsDialog.statusActive')
-                          }}
-                        </template>
-                      </div>
-                      <div
-                        v-if="!getRowSaveState(shortcut.id) && getSpotlightHint(shortcut)"
-                        class="ShortcutStatusHint"
-                      >
-                        {{ getSpotlightHint(shortcut) }}
-                      </div>
-                    </div>
-                    <div class="ShortcutDialog-Source">
-                      {{ getShortcutSourceLabel(shortcut) }}
-                    </div>
-                  </div>
-                </div>
-              </TouchScroll>
-            </div>
-          </div>
-
-          <div class="ShortcutDialog-Footer">
-            <div class="ShortcutDialog-Count">
-              {{ t('settingTools.shortcutsDialog.count', { count: filteredShortcuts.length }) }}
-            </div>
-            <div class="ShortcutDialog-FooterActions">
-              <TxButton variant="flat" @click="resetShortcutChanges">
-                {{ t('settingTools.shortcutsDialog.reset') }}
-              </TxButton>
-              <TxButton variant="flat" type="primary" @click="close">
-                {{ t('settingTools.shortcutsDialog.close') }}
-              </TxButton>
-            </div>
-          </div>
-        </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+  <ShortcutDialog
+    v-model="shortcutsDialogVisible"
+    v-model:search="shortcutSearch"
+    :source="shortcutsDialogSource"
+    :loading="shortcutsLoading"
+    :rows="shortcutRows"
+    @reset="resetShortcutChanges"
+    @update-accelerator="(id, value) => updateShortcut(id, value)"
+    @update-enabled="(id, value) => updateShortcutEnabled(id, value)"
+  />
 </template>
 
 <style scoped>
@@ -740,12 +573,6 @@ watch(shortcutsDialogVisible, (visible) => {
   opacity: 0.7;
 }
 
-.ShortcutStatusHint {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
 .ShortcutSummary {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
@@ -758,274 +585,5 @@ watch(shortcutsDialogVisible, (visible) => {
 .ShortcutEntry--hidden {
   opacity: 0;
   pointer-events: none;
-}
-
-:global(.ShortcutDialog-Mask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.ShortcutDialog-Mask-enter-active),
-:global(.ShortcutDialog-Mask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.ShortcutDialog-Mask-enter-from),
-:global(.ShortcutDialog-Mask-leave-to) {
-  opacity: 0;
-}
-
-:global(.ShortcutDialog-Card) {
-  width: min(980px, 92vw);
-  height: min(720px, 86vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-}
-
-.ShortcutDialog {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.ShortcutDialog-Header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.ShortcutDialog-TitleBlock {
-  min-width: 180px;
-}
-
-.ShortcutDialog-Title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.ShortcutDialog-Subtitle {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-Search {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--tx-fill-color-lighter);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 12px;
-  min-width: 220px;
-}
-
-.ShortcutDialog-Search input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-size: 13px;
-  color: var(--tx-text-color-primary);
-}
-
-.ShortcutDialog-Table {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.ShortcutDialog-TableScroller {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  overflow-x: auto;
-}
-
-.ShortcutDialog-TableHeader {
-  display: grid;
-  grid-template-columns:
-    minmax(240px, 1.6fr)
-    minmax(220px, 1.2fr)
-    minmax(260px, 1.4fr)
-    minmax(90px, 0.6fr)
-    minmax(140px, 0.9fr)
-    minmax(160px, 1fr);
-  gap: 16px;
-  padding: 12px 24px;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  color: var(--tx-text-color-secondary);
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-  width: max-content;
-  min-width: 100%;
-}
-
-.ShortcutDialog-TableBody {
-  flex: 1;
-  width: max-content;
-  min-width: 100%;
-}
-
-.ShortcutDialog-Empty {
-  padding: 40px 24px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-Rows {
-  display: flex;
-  flex-direction: column;
-  width: max-content;
-  min-width: 100%;
-}
-
-.ShortcutDialog-Row {
-  display: grid;
-  grid-template-columns:
-    minmax(240px, 1.6fr)
-    minmax(220px, 1.2fr)
-    minmax(260px, 1.4fr)
-    minmax(90px, 0.6fr)
-    minmax(140px, 0.9fr)
-    minmax(160px, 1fr);
-  gap: 16px;
-  padding: 16px 24px;
-  align-items: center;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-  width: max-content;
-  min-width: 100%;
-}
-
-.ShortcutDialog-Row:last-child {
-  border-bottom: none;
-}
-
-.ShortcutDialog-Label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.ShortcutDialog-Desc {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-Id {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  white-space: nowrap;
-}
-
-.ShortcutDialog-Source {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-IdCopy {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-}
-
-.ShortcutDialog-IdValue {
-  text-decoration: none;
-}
-
-.ShortcutDialog-IdCopy:hover .ShortcutDialog-IdValue {
-  text-decoration: underline;
-}
-
-.ShortcutDialog-IdCopy i {
-  font-size: 14px;
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-Key :deep(.FlatKeyInput-Control) {
-  min-width: 260px;
-  max-width: 360px;
-}
-
-.ShortcutDialog-Enabled {
-  display: flex;
-  justify-content: flex-start;
-}
-
-.ShortcutDialog-StatusText {
-  font-size: 12px;
-  color: var(--tx-color-danger);
-}
-
-.ShortcutDialog-StatusText.active {
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-StatusText.disabled {
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-StatusText.is-saving,
-.ShortcutDialog-StatusText.is-success,
-.ShortcutDialog-StatusText.is-error {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ShortcutDialog-StatusText.is-saving {
-  color: var(--tx-text-color-secondary);
-}
-
-.ShortcutDialog-StatusText.is-success {
-  color: var(--tx-color-success);
-}
-
-.ShortcutDialog-StatusText.is-error {
-  color: var(--tx-color-danger);
-}
-
-.ShortcutDialog-Footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 24px;
-  border-top: 1px solid var(--tx-border-color-lighter);
-}
-
-.ShortcutDialog-FooterActions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.ShortcutDialog-Count {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
 }
 </style>

@@ -1,52 +1,43 @@
 import { touchChannel } from '~/modules/channel/channel-core'
-import { getAuthToken } from '~/modules/market/auth-token-service'
-import { getAppDeviceId } from './auth-env'
 import {
-  getSyncPreferenceState,
-  markSyncPullActivity,
-  markSyncPushActivity
-} from './sync-preferences'
+  clearLegacyAuthToken,
+  clearLegacyDeviceId,
+  clearLegacyDeviceName,
+  getLegacyAuthToken,
+  getLegacyDeviceId,
+  getLegacyDeviceName,
+  getLegacyDevicePlatform
+} from './auth-env'
+import { resolveFingerprintHash } from './device-attest'
 
-touchChannel.regChannel('account:get-auth-token', async () => {
+touchChannel.regChannel('auth:migrate-legacy', () => {
   try {
-    return await getAuthToken()
+    return {
+      appToken: getLegacyAuthToken(),
+      deviceId: getLegacyDeviceId(),
+      deviceName: getLegacyDeviceName(),
+      devicePlatform: getLegacyDevicePlatform()
+    }
   } catch {
     return null
   }
 })
 
-touchChannel.regChannel('account:get-device-id', () => {
+touchChannel.regChannel('auth:clear-legacy', () => {
   try {
-    return getAppDeviceId()
-  } catch {
-    return null
-  }
-})
-
-touchChannel.regChannel('account:get-sync-enabled', () => {
-  try {
-    return getSyncPreferenceState().enabled
-  } catch {
+    clearLegacyAuthToken()
+    clearLegacyDeviceId()
+    clearLegacyDeviceName()
     return true
+  } catch {
+    return false
   }
 })
 
-touchChannel.regChannel('account:record-sync-activity', (payload) => {
+touchChannel.regChannel('auth:get-fingerprint-hash', async () => {
   try {
-    const kind =
-      payload && typeof payload === 'object' && 'kind' in payload
-        ? String((payload as { kind?: unknown }).kind)
-        : ''
-    if (kind === 'push') {
-      markSyncPushActivity()
-      return true
-    }
-    if (kind === 'pull') {
-      markSyncPullActivity()
-      return true
-    }
-    return false
+    return await resolveFingerprintHash()
   } catch {
-    return false
+    return null
   }
 })

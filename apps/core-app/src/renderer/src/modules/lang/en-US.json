@@ -130,6 +130,8 @@
       "saving": "Saving...",
       "saveSuccess": "Saved",
       "saveFailed": "Save failed, please try again",
+      "copySuccess": "Command ID copied",
+      "copyFailed": "Failed to copy command ID",
       "statusActive": "Available",
       "statusDisabled": "Disabled",
       "count": "Showing {count} items",
@@ -143,7 +145,7 @@
         "source": "Source",
         "id": "Command ID",
         "key": "Shortcut",
-        "enabled": "Enabled",
+        "enabled": "Enabled / Status",
         "status": "Status"
       }
     },

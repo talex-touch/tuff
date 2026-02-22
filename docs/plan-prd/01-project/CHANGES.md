@@ -4,6 +4,32 @@
 
 ## 2026-02-22
 
+### Core-app 认证/凭证/同步触发收敛到主进程
+
+**变更类型**: 架构调整 / 安全与一致性
+
+**描述**: 登录、凭证、设备标识与同步触发统一由主进程持有与执行，渲染进程仅发送意图请求并监听状态，避免 token/设备信息停留在 renderer 导致的存储与同步冲突。
+
+**主要变更**:
+1. **AuthModule**：新增主进程 AuthModule，token 使用 safeStorage 持久化，device profile 写入 appSetting，并统一 `/api/v1/auth/*` 请求与状态广播。
+2. **回调收敛**：登录与 step-up 回调由 addon-opener 直接交给主进程处理，token 变化联动同步启停。
+3. **渲染端降级为代理**：`useAuth`/`account-channel` 仅保留 IPC、legacy 迁移与 fingerprint hash 计算。
+4. **Nexus 请求统一**：渲染端发起的认证请求改为 `auth:nexus-request` 由主进程代理。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/addon-opener.ts`
+- `apps/core-app/src/main/modules/sync/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/index.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/auth/device-attest.ts`
+- `apps/core-app/src/renderer/src/modules/market/auth-token-service.ts`
+- `apps/core-app/src/renderer/src/modules/market/nexus-auth-client.ts`
+
 ### Core-app 同步迁移到主进程
 
 **变更类型**: 架构调整 / 数据一致性
@@ -94,6 +120,23 @@
 - `apps/core-app/src/main/modules/clipboard.ts`
 - `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
 
+### CoreBox 剪贴板输入索引化与 ESC 搜索刷新
+
+**变更类型**: 体验修复 / 性能
+
+**描述**: CoreBox 搜索输入为剪贴板图片/文件补充 `clipboardId` 指引与预览信息，减少重复传输大体积内容；ESC 清除附件时强制触发搜索刷新，保持结果与输入一致。
+
+**主要变更**:
+1. **输入指引**：图片/文件输入 metadata 增加 `clipboardId` 与 `contentKind`，支持按需解析原始内容。
+2. **预览标记**：图片输入补充 `canResolveOriginal` 标记，预览数据保持轻量。
+3. **ESC 清理刷新**：清除附件时无论是否存在 clipboard 数据都触发搜索刷新。
+4. **主进程补齐**：搜索与插件执行阶段按 `clipboardId` 自动补齐文件输入内容。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboardState.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+
 ### 快捷键管理列表布局优化
 
 **变更类型**: 体验优化 / 设置
@@ -104,7 +147,11 @@
 1. **列顺序调整**：来源列移动到末尾，关键内容优先展示。
 2. **快捷键列加宽**：输入框宽度与列宽提升，避免组合键被截断。
 3. **命令 ID 复制**：命令 ID 支持点击复制并在 hover 时显示下划线。
-4. **横向滚动支持**：表格在内容超长时可横向滚动。
+4. **默认无横向滚动**：压缩列宽并省略长文本，保证默认视口内可读。
+5. **保存状态视觉反馈**：保存中 shimmer、成功淡绿、失败淡红并使用 Carbon 图标。
+6. **启用/状态合并**：启用与状态合并同列并保持默认可见。
+7. **命令 ID 复制提示**：复制后显示成功/失败提示。
+8. **复制工具统一**：ID 复制统一使用 clipboard 工具，移除旧式 execCommand 兼容逻辑。
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
@@ -120,6 +167,32 @@
 
 **修改文件**:
 - `apps/nexus/app/components/auth/AuthLegalFooter.vue`
+
+### Nexus Credits 额度优化、签到与支付抽象
+
+**变更类型**: 计费与权益 / 体验增强
+
+**描述**: Free 个人额度调整为每月 5；完成邮箱验证 + OAuth + Passkey 后可领取当月提升额度（下月起自动 100）；Plus/Pro 个人额度分别为 500/1200，Team/Enterprise 个人额度为 5000；Team 计划团队池默认 10000（含 5 席位），每新增 1 席位团队池增加 2000；新增每日签到领积分；引入支付抽象接口以支持多支付方式扩展。
+
+**主要变更**:
+1. **额度规则**：个人额度按资格与月份初始化，新增提升领取与签到奖励。
+2. **API 扩展**：新增 credits claim/checkin/status 接口，summary 增加 boost 信息。
+3. **前端入口**：Credits 页面新增领取与签到卡片、提示与动作。
+4. **支付抽象**：新增 billing provider 接口与注册表，暂不接入真实支付。
+5. **数据可视化**：Credits 页面新增趋势图、个人占比与模型/审计/签到 Tabs，补充趋势与模型/签到日历数据接口。
+
+**修改文件**:
+- `apps/nexus/server/utils/creditsStore.ts`
+- `apps/nexus/server/api/credits/claim.post.ts`
+- `apps/nexus/server/api/credits/checkin.post.ts`
+- `apps/nexus/server/api/credits/checkin/status.get.ts`
+- `apps/nexus/server/api/credits/trend.get.ts`
+- `apps/nexus/server/api/credits/models.get.ts`
+- `apps/nexus/server/api/credits/checkin/month.get.ts`
+- `apps/nexus/app/pages/dashboard/credits.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/server/utils/billing/`
 
 ### Tuff CLI 交互式引导与登录门控
 
