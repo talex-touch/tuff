@@ -10,7 +10,15 @@ import transformerAttributifyJsx from '@unocss/transformer-attributify-jsx'
 import { defineConfig } from 'unocss'
 import { presetAttributify, presetUno } from 'unocss'
 
+const COREBOX_ACTION_ICONS = [
+  'i-carbon-ibm-watsonx-code-assistant-for-z-validation-assistant',
+  'i-carbon-package-node',
+  'i-carbon-app',
+  'i-carbon-folders'
+]
+
 export default defineConfig({
+  safelist: COREBOX_ACTION_ICONS,
   theme: {
     colors: {
       brand: {

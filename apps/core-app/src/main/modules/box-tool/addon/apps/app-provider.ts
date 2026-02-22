@@ -50,6 +50,8 @@ import {
   files as filesSchema,
   keywordMappings
 } from '../../../../db/schema'
+import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
 import { createDbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
@@ -1846,17 +1848,29 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return null
   }
 
-  private async _setConfigTimestamp(key: string, timestamp: number): Promise<void> {
+  private async _setConfigValue(key: string, value: string): Promise<void> {
     if (!this.dbUtils) return
 
     const db = this.dbUtils.getDb()
-    await db
-      .insert(configSchema)
-      .values({ key, value: timestamp.toString() })
-      .onConflictDoUpdate({
-        target: configSchema.key,
-        set: { value: timestamp.toString() }
-      })
+    try {
+      await dbWriteScheduler.schedule(`app-provider.config.${key}`, () =>
+        withSqliteRetry(
+          () =>
+            db.insert(configSchema).values({ key, value }).onConflictDoUpdate({
+              target: configSchema.key,
+              set: { value }
+            }),
+          { label: `app-provider.config.${key}` }
+        )
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      logApp(`Failed to persist config ${key}: ${message}`, LogStyle.warning)
+    }
+  }
+
+  private async _setConfigTimestamp(key: string, timestamp: number): Promise<void> {
+    await this._setConfigValue(key, timestamp.toString())
   }
 
   private async _setLastBackfillTime(timestamp: number): Promise<void> {
@@ -1891,15 +1905,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _setLastMdlsLocale(locale: string): Promise<void> {
-    if (!this.dbUtils) return
-    const db = this.dbUtils.getDb()
-    await db
-      .insert(configSchema)
-      .values({ key: 'app_provider_last_mdls_locale', value: locale })
-      .onConflictDoUpdate({
-        target: configSchema.key,
-        set: { value: locale }
-      })
+    await this._setConfigValue('app_provider_last_mdls_locale', locale)
   }
 
   private async _getKnownMissingIconApps(): Promise<Set<string>> {
@@ -1937,21 +1943,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _saveKnownMissingIconApps(appIds: Set<string>): Promise<void> {
     if (!this.dbUtils) return
 
-    const db = this.dbUtils.getDb()
     const serializedIds = JSON.stringify(Array.from(appIds))
 
-    try {
-      await db
-        .insert(configSchema)
-        .values({ key: MISSING_ICON_CONFIG_KEY, value: serializedIds })
-        .onConflictDoUpdate({
-          target: configSchema.key,
-          set: { value: serializedIds }
-        })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logApp(`Failed to persist missing icon config: ${message}`, LogStyle.warning)
-    }
+    await this._setConfigValue(MISSING_ICON_CONFIG_KEY, serializedIds)
   }
 
   private async _runMdlsUpdateScan(): Promise<void> {
@@ -2142,23 +2136,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _savePendingDeletions(entries: Map<string, PendingDeletionEntry>): Promise<void> {
     if (!this.dbUtils) return
 
-    const db = this.dbUtils.getDb()
     const serialized = JSON.stringify(Array.from(entries.values()))
 
-    try {
-      await db
-        .insert(configSchema)
-        .values({ key: PENDING_DELETION_CONFIG_KEY, value: serialized })
-        .onConflictDoUpdate({
-          target: configSchema.key,
-          set: { value: serialized }
-        })
-    } catch (error) {
-      logApp(
-        `Failed to save pending deletions: ${error instanceof Error ? error.message : String(error)}`,
-        LogStyle.warning
-      )
-    }
+    await this._setConfigValue(PENDING_DELETION_CONFIG_KEY, serialized)
   }
 
   private async _processAppsForDeletion(

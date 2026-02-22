@@ -4,7 +4,7 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import crypto from 'node:crypto'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { and, desc, eq, gte, lte } from 'drizzle-orm'
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
@@ -286,6 +286,7 @@ export class IntelligenceAuditLogger {
     }
 
     // Upsert stats to database
+    const now = new Date()
     for (const [key, stat] of stats) {
       const [caller, periodType, period] = key.split(':')
       if (periodType !== 'day' && periodType !== 'month') {
@@ -294,53 +295,14 @@ export class IntelligenceAuditLogger {
       const fullPeriod = `${periodType}:${period}`
 
       try {
-        // Check if record exists
         const callerTypeValue = caller === 'system' ? 'system' : 'plugin'
-        const existing = await db
-          .select()
-          .from(intelligenceUsageStats)
-          .where(
-            and(
-              eq(intelligenceUsageStats.callerId, caller),
-              eq(intelligenceUsageStats.callerType, callerTypeValue),
-              eq(intelligenceUsageStats.period, fullPeriod)
-            )
-          )
-          .limit(1)
+        const totalRequestCount = sql`${intelligenceUsageStats.requestCount} + ${stat.requestCount}`
+        const totalLatency = sql`${intelligenceUsageStats.avgLatency} * ${intelligenceUsageStats.requestCount} + ${stat.avgLatency} * ${stat.requestCount}`
+        const avgLatency = sql`CASE WHEN ${totalRequestCount} > 0 THEN (${totalLatency}) / ${totalRequestCount} ELSE ${stat.avgLatency} END`
 
-        if (existing.length > 0) {
-          // Update existing record
-          const old = existing[0]
-          const newRequestCount = old.requestCount + stat.requestCount
-          const newAvgLatency =
-            newRequestCount > 0
-              ? (old.avgLatency * old.requestCount + stat.avgLatency * stat.requestCount) /
-                newRequestCount
-              : 0
-
-          await db
-            .update(intelligenceUsageStats)
-            .set({
-              requestCount: newRequestCount,
-              successCount: old.successCount + stat.successCount,
-              failureCount: old.failureCount + stat.failureCount,
-              totalTokens: old.totalTokens + stat.totalTokens,
-              promptTokens: old.promptTokens + stat.promptTokens,
-              completionTokens: old.completionTokens + stat.completionTokens,
-              totalCost: old.totalCost + stat.totalCost,
-              avgLatency: newAvgLatency,
-              updatedAt: new Date()
-            })
-            .where(
-              and(
-                eq(intelligenceUsageStats.callerId, caller),
-                eq(intelligenceUsageStats.callerType, callerTypeValue),
-                eq(intelligenceUsageStats.period, fullPeriod)
-              )
-            )
-        } else {
-          // Insert new record
-          await db.insert(intelligenceUsageStats).values({
+        await db
+          .insert(intelligenceUsageStats)
+          .values({
             callerId: caller,
             callerType: callerTypeValue,
             period: fullPeriod,
@@ -353,9 +315,26 @@ export class IntelligenceAuditLogger {
             completionTokens: stat.completionTokens,
             totalCost: stat.totalCost,
             avgLatency: stat.avgLatency,
-            updatedAt: new Date()
+            updatedAt: now
           })
-        }
+          .onConflictDoUpdate({
+            target: [
+              intelligenceUsageStats.callerId,
+              intelligenceUsageStats.callerType,
+              intelligenceUsageStats.period
+            ],
+            set: {
+              requestCount: totalRequestCount,
+              successCount: sql`${intelligenceUsageStats.successCount} + ${stat.successCount}`,
+              failureCount: sql`${intelligenceUsageStats.failureCount} + ${stat.failureCount}`,
+              totalTokens: sql`${intelligenceUsageStats.totalTokens} + ${stat.totalTokens}`,
+              promptTokens: sql`${intelligenceUsageStats.promptTokens} + ${stat.promptTokens}`,
+              completionTokens: sql`${intelligenceUsageStats.completionTokens} + ${stat.completionTokens}`,
+              totalCost: sql`${intelligenceUsageStats.totalCost} + ${stat.totalCost}`,
+              avgLatency,
+              updatedAt: now
+            }
+          })
       } catch (error) {
         console.error(`[AuditLogger] Failed to update usage stats for ${key}:`, error)
       }

@@ -397,6 +397,7 @@ import type {
   PluginInfo,
   PluginInstallConfirmPayload,
   PluginInstallConfirmResponsePayload,
+  PluginInstallCompletedPayload,
   PluginInstallProgressPayload,
   PluginInstallSourceRequest,
   PluginInstallSourceResponse,
@@ -2038,6 +2039,7 @@ export const PluginEvents = {
     confirm: defineRawEvent<PluginInstallConfirmPayload, void>('plugin:install-confirm'),
     confirmResponse: defineRawEvent<PluginInstallConfirmResponsePayload, void>('plugin:install-confirm-response'),
     source: defineRawEvent<PluginInstallSourceRequest, PluginInstallSourceResponse>('plugin:install-source'),
+    completed: defineRawEvent<PluginInstallCompletedPayload, void>('plugin:install-completed'),
   },
 
   devServer: {

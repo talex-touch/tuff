@@ -5,6 +5,7 @@ import dayjs from 'dayjs'
 import path from 'path-browserify'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 
 const props = defineProps<{
   item: TuffItem
@@ -75,6 +76,8 @@ const recommendationBadge = computed(() => {
   return recommendation?.badge
 })
 
+const resolvedSubtitle = computed(() => resolveI18nText(props.render.basic?.subtitle || '', t))
+
 const badgeStyle = computed(() => {
   const variant = recommendationBadge.value?.variant
   switch (variant) {
@@ -127,7 +130,7 @@ const badgeStyle = computed(() => {
           <span>{{ recommendationBadge.text }}</span>
         </div>
 
-        <span class="truncate">{{ render.basic?.subtitle }}</span>
+        <span class="truncate">{{ resolvedSubtitle }}</span>
       </div>
     </template>
   </p>

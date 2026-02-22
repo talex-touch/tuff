@@ -161,6 +161,17 @@ export interface PluginInfo {
   error?: string
 }
 
+export type PluginInstallSource = 'dev' | 'tpex'
+
+export type PluginInstallStatus = 'success' | 'exists' | 'error'
+
+export interface PluginInstallCompletedPayload {
+  name?: string
+  source: PluginInstallSource
+  status: PluginInstallStatus
+  error?: string
+}
+
 // ============================================================================
 // Feature Types
 // ============================================================================

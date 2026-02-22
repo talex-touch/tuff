@@ -4,6 +4,8 @@ import { computed } from 'vue'
 import type { IClipboardItem } from '../../../modules/box/adapter/hooks/types'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp', 'ico'])
+
 /**
  * Unified file tag component that handles both FILE mode and clipboard files
  * Uses ClipboardFileTag's visual style for consistency
@@ -56,6 +58,19 @@ const filePaths = computed(() => {
   return []
 })
 
+const firstFilePath = computed(() => (filePaths.value.length > 0 ? filePaths.value[0] : null))
+
+function getFileExtension(value: string | null): string {
+  if (!value) return ''
+  return path.extname(value).replace(/^\./, '').toLowerCase()
+}
+
+function isImagePath(value: string | null): boolean {
+  if (!value) return false
+  const extension = getFileExtension(value)
+  return IMAGE_EXTENSIONS.has(extension)
+}
+
 /**
  * Total file count
  */
@@ -70,17 +85,17 @@ const firstFileName = computed(() => {
 })
 
 /**
- * File icon using tfile:// protocol
+ * File preview (image only) using tfile:// protocol
  */
 const fileIconUrl = computed(() => {
   // Priority 1: Explicit icon path (for FILE mode)
-  if (props.iconPath && isValidFilePath(props.iconPath)) {
+  if (props.iconPath && isValidFilePath(props.iconPath) && isImagePath(props.iconPath)) {
     return buildTfileUrl(props.iconPath)
   }
 
   // Priority 2: First file path
-  if (filePaths.value.length > 0) {
-    return buildTfileUrl(filePaths.value[0])
+  if (firstFilePath.value && isImagePath(firstFilePath.value)) {
+    return buildTfileUrl(firstFilePath.value)
   }
 
   return null

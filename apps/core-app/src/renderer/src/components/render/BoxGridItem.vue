@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type { ITuffIcon, TuffItem, TuffRender } from '@talex-touch/utils'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 
 interface Props {
   item: TuffItem
@@ -12,6 +14,7 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const { t } = useI18n()
 
 const displayIcon = computed<ITuffIcon>(() => {
   const icon = props.render?.basic?.icon
@@ -36,7 +39,7 @@ const displayIcon = computed<ITuffIcon>(() => {
 })
 
 const isPinned = computed(() => props.item.meta?.pinned?.isPinned)
-const title = computed(() => props.render.basic?.title || '')
+const title = computed(() => resolveI18nText(props.render.basic?.title || '', t))
 const recommendationBadge = computed(() => {
   const meta = props.item.meta as Record<string, unknown> | undefined
   const recommendation = meta?.recommendation as
