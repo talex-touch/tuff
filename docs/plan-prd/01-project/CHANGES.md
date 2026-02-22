@@ -4,6 +4,20 @@
 
 ## 2026-02-22
 
+### CoreBox UI 恢复事件 URL 修正与索引 addPath 类型收敛
+
+**变更类型**: 稳定性 / 构建修复
+
+**描述**: 修正 CoreBox 插件 UI 恢复事件在无 query 场景使用未定义 URL 的问题，并为 file/app index addPath 事件显式标注返回类型，避免 typecheck 失败。
+
+**主要变更**:
+1. **恢复事件 URL**：无 query 时恢复事件使用当前 attach URL。
+2. **addPath 类型约束**：file/app index addPath 事件 handler 显式标注请求/返回类型，消除返回值类型漂移。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/channel/common.ts`
+
 ### DivisionBox 窗口池延后初始化
 
 **变更类型**: 性能优化 / 启动体验

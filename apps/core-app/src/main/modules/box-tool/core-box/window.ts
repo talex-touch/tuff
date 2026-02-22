@@ -1327,7 +1327,7 @@ export class WindowManager {
           .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
             source: 'attach',
             featureId: feature?.id,
-            url: finalUrl
+            url
           })
           .catch(() => {})
       })
