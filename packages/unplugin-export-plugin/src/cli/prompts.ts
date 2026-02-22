@@ -28,13 +28,36 @@ function clearLine(): void {
 function clearRenderedLines(count: number): void {
   if (count <= 0)
     return
-  readline.moveCursor(process.stdout, 0, -(count - 1))
-  readline.cursorTo(process.stdout, 0)
-  readline.clearScreenDown(process.stdout)
+  try {
+    const rows = process.stdout.rows ?? 0
+    if (rows && count >= rows - 1) {
+      process.stdout.write('\x1B[2J\x1B[0;0H')
+      return
+    }
+    readline.moveCursor(process.stdout, 0, -count)
+    readline.cursorTo(process.stdout, 0)
+    readline.clearScreenDown(process.stdout)
+  }
+  catch {
+    for (let i = 0; i < count; i += 1) {
+      clearLine()
+    }
+    readline.cursorTo(process.stdout, 0)
+  }
 }
 
 function canUseArrowSelect(): boolean {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY)
+}
+
+function isNonInteractive(): boolean {
+  return process.env.TUFF_NON_INTERACTIVE === '1'
+}
+
+function assertInteractive(question: string): void {
+  if (!isNonInteractive())
+    return
+  throw new Error(`Non-interactive mode enabled. Provide inputs for: ${question}`)
 }
 
 /**
@@ -75,6 +98,7 @@ export async function askText(
     validate?: (value: string) => boolean | string
   },
 ): Promise<string> {
+  assertInteractive(question)
   const rl = createRL()
 
   return new Promise((resolve) => {
@@ -111,6 +135,7 @@ export async function askConfirm(
   question: string,
   defaultValue = true,
 ): Promise<boolean> {
+  assertInteractive(question)
   const rl = createRL()
 
   return new Promise((resolve) => {
@@ -137,6 +162,7 @@ export async function askSelect<T = string>(
   question: string,
   options: SelectOption<T>[],
 ): Promise<T> {
+  assertInteractive(question)
   if (!canUseArrowSelect()) {
     const rl = createRL()
     console.log(`${styled('?', colors.cyan)} ${question}`)
