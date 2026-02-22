@@ -140,6 +140,20 @@ export default defineNuxtConfig({
       storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
+    adminControl: {
+      breakglassEnabled: process.env.ADMIN_BREAKGLASS_ENABLED !== 'false',
+      controlPlaneProtectedEnabled: process.env.ADMIN_CONTROL_PLANE_PROTECTED_ENABLED !== 'false',
+      dualControlEnabled: process.env.ADMIN_DUAL_CONTROL_ENABLED !== 'false',
+      preserveInExtremeEnabled: process.env.ADMIN_PRESERVE_IN_EXTREME_ENABLED !== 'false',
+      emergencyJwtSecret: process.env.ADMIN_EMERGENCY_JWT_SECRET,
+      pepper: process.env.ADMIN_CONTROL_PLANE_PEPPER,
+      emergencyIssuerVersion: process.env.ADMIN_EMERGENCY_ISSUER_VERSION || 'v1',
+      oobAccessClientId: process.env.ADMIN_CF_ACCESS_CLIENT_ID,
+      oobAccessClientSecret: process.env.ADMIN_CF_ACCESS_CLIENT_SECRET,
+      oobMtlsEnabled: process.env.ADMIN_OOB_MTLS_ENABLED === 'true',
+      oobMtlsFingerprints: process.env.ADMIN_OOB_MTLS_FINGERPRINTS || '',
+      defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
+    },
     public: {
       turnstile: {
         siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
