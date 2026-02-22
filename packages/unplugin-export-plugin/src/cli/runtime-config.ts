@@ -7,14 +7,23 @@ export interface CliRuntimeConfig {
   locale?: Locale
   onboardingCompleted?: boolean
   termsAcceptedAt?: string
+  deviceId?: string
+  deviceName?: string
 }
 
 function getHomeDir(): string {
   return process.env.HOME || process.env.USERPROFILE || process.cwd()
 }
 
+export function getCliConfigDir(): string {
+  const custom = process.env.TUFF_CONFIG_DIR || process.env.TUFF_CLI_HOME
+  if (custom && custom.trim().length > 0)
+    return custom
+  return path.join(getHomeDir(), '.tuff')
+}
+
 export function getCliConfigPath(): string {
-  return path.join(getHomeDir(), '.tuff', 'cli.json')
+  return path.join(getCliConfigDir(), 'cli.json')
 }
 
 export async function readCliConfig(): Promise<CliRuntimeConfig> {

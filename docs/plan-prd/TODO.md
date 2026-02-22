@@ -93,6 +93,7 @@
 - [ ] Nexus 首页内容整改与占位移除（`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md`）
 - [ ] Release Pipeline：OIDC + RSA + notes/assets 同步（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
+- [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）
@@ -149,6 +150,7 @@
 - [ ] **P0** 深度技术债与兼容性清单落地：以报告为基线明确 Owner/里程碑，并推进收口计划（`docs/engineering/legacy-debt-report-2026-02-21.md`）。
 - [ ] **P0** Legacy Channel 清理（2.4.8）：按 P0 范围统一到 TuffTransport，收口 CoreBox/Clipboard/Flow/DivisionBox/Plugin 主链路（`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md`）。
 - [ ] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 中 auth token / deviceId / device name 从 `localStorage` 迁移到主进程 `safeStorage` 通道，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/main/channel/common.ts`）。
+- [ ] **P1** CoreBox BoxItem 同步回包超时：`box-item:sync-response` 在渲染端未挂载或阻塞时 60s 超时，需改为 fire-and-forget 或增加 ready gating（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`）。
 - [ ] **P1** 更新下载链路迁移 Signed URL：从 GitHub 直链迁移至 R2/S3 Signed URL（302 + TTL，可配置），保留本地 fallback（后续云存储接入项）。
 - [ ] **P1** Flow ↔ DivisionBox 权限入口回归标准化：沉淀回归清单与最小用例集，保证 actor/sdkapi/权限提示一致性。
   - [ ] 插件来源 Flow -> DivisionBox 未授权时拦截并提示。

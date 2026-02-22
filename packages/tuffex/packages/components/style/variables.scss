@@ -231,3 +231,8 @@
   --tx-text-color: var(--tx-text-color-regular);
   --tx-text-color-tertiary: var(--tx-text-color-secondary);
 }
+
+
+html {
+  color: var(--tx-text-color-primary);
+}

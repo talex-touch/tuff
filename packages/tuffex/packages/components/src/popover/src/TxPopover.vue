@@ -133,6 +133,12 @@ const anchorToggleOnReferenceClick = computed(() => {
   return props.trigger === 'click'
 })
 
+const anchorReferenceClass = computed(() => {
+  if (!props.referenceClass && !props.referenceFullWidth)
+    return undefined
+  return [props.referenceClass, { 'is-full-width': props.referenceFullWidth }]
+})
+
 watch(
   () => props.disabled,
   (disabled) => {
@@ -174,6 +180,7 @@ onBeforeUnmount(() => {
     :close-on-click-outside="anchorCloseOnClickOutside"
     :close-on-esc="props.closeOnEsc"
     :toggle-on-reference-click="anchorToggleOnReferenceClick"
+    :reference-class="anchorReferenceClass"
   >
     <template #reference>
       <div

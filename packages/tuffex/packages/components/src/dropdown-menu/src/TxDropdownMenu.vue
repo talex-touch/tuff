@@ -61,6 +61,7 @@ provide('txDropdownMenu', {
     :max-width="360"
     :max-height="maxHeight"
     :unlimited-height="unlimitedHeight"
+    :reference-class="props.referenceClass"
     :panel-variant="panelVariant"
     :panel-background="panelBackground"
     :panel-shadow="panelShadow"

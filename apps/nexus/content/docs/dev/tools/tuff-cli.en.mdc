@@ -5,7 +5,7 @@ description: Command-line tools for building and publishing Tuff plugins
 
 # Tuff CLI
 
-The `@talex-touch/unplugin-export-plugin` package provides a CLI tool called `tuff` for building and publishing Tuff plugins.
+The `@talex-touch/tuff-cli` package provides the `tuff` CLI for building and publishing Tuff plugins (bundling `@talex-touch/unplugin-export-plugin` for the build pipeline).
 
 ## Installation
 
@@ -13,10 +13,10 @@ The `@talex-touch/unplugin-export-plugin` package provides a CLI tool called `tu
 ---
 code: |
   # Global installation
-  pnpm add -g @talex-touch/unplugin-export-plugin
+  pnpm add -g @talex-touch/tuff-cli
   
   # Or use via npx
-  npx tuff <command>
+  npx @talex-touch/tuff-cli <command>
 ---
 :::
 

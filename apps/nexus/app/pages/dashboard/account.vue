@@ -360,6 +360,17 @@ const recentHistory = computed(() => {
   return items.slice(0, 5)
 })
 
+function formatLoginClient(value: string | null | undefined) {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : ''
+  if (normalized === 'cli')
+    return t('dashboard.account.clientTypes.cli', 'CLI')
+  if (normalized === 'external')
+    return t('dashboard.account.clientTypes.external', 'External')
+  if (normalized === 'app')
+    return t('dashboard.account.clientTypes.app', 'App')
+  return t('dashboard.account.clientTypes.unknown', '未知来源')
+}
+
 function formatHistoryTime(value: string) {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
@@ -542,7 +553,7 @@ function formatHistoryTime(value: string) {
                             </span>
                           </div>
                           <p class="text-xs text-black/55 dark:text-white/55">
-                            {{ item.reason || '-' }} · {{ item.ip || 'unknown' }}
+                            {{ formatLoginClient(item.clientType) }} · {{ item.reason || '-' }} · {{ item.ip || 'unknown' }}
                           </p>
                         </div>
                         <div class="text-xs text-black/40 dark:text-white/40 whitespace-nowrap">

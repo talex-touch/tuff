@@ -157,16 +157,24 @@ export async function requireAdminOrApiKey(event: H3Event, requiredScopes: strin
 export async function createAppToken(
   event: H3Event,
   userId: string,
-  options?: { deviceId?: string | null }
+  options?: {
+    deviceId?: string | null
+    ttlSeconds?: number
+    deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null }
+  }
 ): Promise<string> {
   const secret = getAppJwtSecret()
   const now = Math.floor(Date.now() / 1000)
   const hasExplicitDeviceId = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'deviceId'))
   const deviceId = hasExplicitDeviceId ? options?.deviceId ?? null : readDeviceId(event)
+  const ttlSeconds = typeof options?.ttlSeconds === 'number' && Number.isFinite(options.ttlSeconds) && options.ttlSeconds > 0
+    ? Math.floor(options.ttlSeconds)
+    : APP_TOKEN_TTL_SECONDS
   let deviceTokenVersion: number | undefined
 
   if (deviceId) {
-    const device = await upsertDevice(event, userId, deviceId, readDeviceMetadata(event))
+    const metadata = options?.deviceMeta ?? readDeviceMetadata(event)
+    const device = await upsertDevice(event, userId, deviceId, metadata)
     deviceTokenVersion = device.tokenVersion
   }
 
@@ -176,7 +184,7 @@ export async function createAppToken(
     deviceId: deviceId ?? undefined,
     dv: deviceTokenVersion ?? undefined,
     iat: now,
-    exp: now + APP_TOKEN_TTL_SECONDS,
+    exp: now + ttlSeconds,
     iss: APP_TOKEN_ISSUER,
     aud: APP_TOKEN_AUDIENCE,
     typ: 'app'

@@ -9,6 +9,8 @@ export default defineEventHandler(async (event) => {
     success: record.success,
     ip: record.ip,
     ipMasked: record.ip_masked,
+    reason: record.reason,
+    clientType: record.client_type,
     created_at: record.created_at,
     location: {
       countryCode: record.country_code,

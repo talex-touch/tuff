@@ -3,6 +3,7 @@ import type { ButtonEmits, ButtonProps } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import component from './src/button.vue'
 import splitButtonComponent from './src/split-button.vue'
+import './src/style/index.scss'
 
 const TxButton = withInstall(component)
 const TxSplitButton = withInstall(splitButtonComponent)

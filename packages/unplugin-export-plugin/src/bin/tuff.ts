@@ -2,10 +2,17 @@
 /* eslint-disable no-console */
 import type { RollupWatcher } from 'rollup'
 import type { Locale } from '../cli/i18n'
-import type { SelectOption } from '../cli/prompts'
 import type { BuildConfig, DevConfig } from '../types'
 import { createRequire } from 'node:module'
+import { spawn } from 'node:child_process'
+import path from 'node:path'
 import process from 'node:process'
+import {
+  getEnvOrDefault,
+  getTuffBaseUrl,
+  normalizeBaseUrl,
+  setRuntimeEnv,
+} from '@talex-touch/utils/env'
 import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {
@@ -24,12 +31,61 @@ import {
   printList,
   styled,
 } from '../cli/prompts'
+import { ensureCliDeviceInfo } from '../cli/device'
+import { listRepositories, trackRepository } from '../cli/repositories'
 import { getCliConfigPath, readCliConfig, writeCliConfig } from '../cli/runtime-config'
 import { build } from '../core/exporter'
-import { getAuthToken, getAuthTokenPath, saveAuthToken } from '../core/auth'
+import { clearAuthToken, getAuthToken, getAuthTokenPath, readAuthState, saveAuthToken } from '../core/auth'
 
 const require = createRequire(import.meta.url)
 const pkg = require('../../package.json')
+
+const ASCII_TUFF = `
+_________  _   _  _____  _____
+|__   __| | | | ||  ___||  ___|
+   | |    | | | || |_   | |_   
+   | |    | | | ||  _|  |  _|  
+   | |    \\ \\_/ /| |    | |    
+   |_|     \\___/ \\_|    \\_|    
+`
+
+const OFFICIAL_SITE_URL = 'https://tuff.talex.link'
+const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
+const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
+const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
+
+let cliLocalMode = false
+let cliCustomBase = false
+
+function resolveLocalBaseUrl(): string {
+  const envUrl = getEnvOrDefault(
+    'TUFF_LOCAL_BASE_URL',
+    getEnvOrDefault(
+      'NEXUS_API_BASE_LOCAL',
+      getEnvOrDefault('AUTH_ORIGIN', DEFAULT_LOCAL_BASE_URL),
+    ),
+  )
+  return normalizeBaseUrl(envUrl)
+}
+
+function applyLocalRuntime(): void {
+  const localBaseUrl = resolveLocalBaseUrl()
+  setRuntimeEnv({
+    VITE_NEXUS_URL: localBaseUrl,
+  })
+}
+
+function resolveSiteBaseUrl(): string {
+  return cliCustomBase ? getTuffBaseUrl() : OFFICIAL_SITE_URL
+}
+
+function getTermsUrl(): string {
+  return `${resolveSiteBaseUrl()}/protocol`
+}
+
+function getPrivacyUrl(): string {
+  return `${resolveSiteBaseUrl()}/privacy`
+}
 
 // Initialize i18n with system locale
 initI18n()
@@ -50,6 +106,10 @@ function printHelp() {
   console.log('')
   console.log('Options:')
   console.log('  --lang=en|zh   Set CLI language (default: system language)')
+  console.log('  --local        Use local Nexus base URL (default: http://localhost:3200)')
+  console.log('  --api-base     Override Nexus API base URL (e.g. https://staging.example.com)')
+  console.log('  --config-dir   Override CLI config directory (default: ~/.tuff)')
+  console.log('  --non-interactive  Disable interactive prompts')
   console.log('')
   console.log('Run `tuff <command> --help` for command-specific help.')
   console.log('')
@@ -91,8 +151,118 @@ function printDevHelp() {
   console.log('')
 }
 
+function printAsciiLogo(): void {
+  console.log(ASCII_TUFF)
+}
+
+function openBrowser(url: string): void {
+  const platform = process.platform
+  try {
+    if (platform === 'darwin') {
+      const child = spawn('open', [url], { stdio: 'ignore', detached: true })
+      child.unref()
+      return
+    }
+    if (platform === 'win32') {
+      const child = spawn('cmd', ['/c', 'start', '', url], { stdio: 'ignore', detached: true })
+      child.unref()
+      return
+    }
+    const child = spawn('xdg-open', [url], { stdio: 'ignore', detached: true })
+    child.unref()
+  }
+  catch {
+    // Ignore
+  }
+}
+
+async function startDeviceAuth(): Promise<{
+  deviceCode: string
+  userCode: string
+  authorizeUrl: string
+  expiresAt: string
+  intervalSeconds: number
+}> {
+  const baseUrl = getTuffBaseUrl()
+  const { deviceId, deviceName, devicePlatform } = await ensureCliDeviceInfo()
+  const payload = {
+    deviceId,
+    deviceName,
+    devicePlatform,
+    clientType: 'cli',
+  }
+  const response = await fetch(`${baseUrl}/api/app-auth/device/start`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(text || `HTTP ${response.status}`)
+  }
+  return await response.json() as {
+    deviceCode: string
+    userCode: string
+    authorizeUrl: string
+    expiresAt: string
+    intervalSeconds: number
+  }
+}
+
+async function pollDeviceAuth(
+  deviceCode: string,
+  intervalSeconds: number,
+): Promise<{ status: 'approved' | 'expired' | 'cancelled' | 'timeout'; token?: string }> {
+  const baseUrl = getTuffBaseUrl()
+  const intervalMs = Math.max(1000, intervalSeconds * 1000)
+  const startAt = Date.now()
+
+  return await new Promise((resolve) => {
+    const timer = setInterval(async () => {
+      if (Date.now() - startAt > DEVICE_AUTH_TIMEOUT_MS) {
+        clearInterval(timer)
+        resolve({ status: 'timeout' })
+        return
+      }
+      try {
+        const res = await fetch(`${baseUrl}/api/app-auth/device/poll?device_code=${encodeURIComponent(deviceCode)}`, {
+          method: 'GET',
+          headers: {
+            'cache-control': 'no-cache',
+          },
+        })
+        if (!res.ok)
+          return
+        const data = await res.json() as { status?: string, appToken?: string }
+        if (data?.status === 'approved' && data.appToken) {
+          clearInterval(timer)
+          resolve({ status: 'approved', token: data.appToken })
+        }
+        else if (data?.status === 'expired') {
+          clearInterval(timer)
+          resolve({ status: 'expired' })
+        }
+        else if (data?.status === 'cancelled') {
+          clearInterval(timer)
+          resolve({ status: 'cancelled' })
+        }
+      }
+      catch {
+        // Ignore transient errors
+      }
+    }, intervalMs)
+  })
+}
+
 async function loadPublishModule() {
   return await import('../core/publish')
+}
+
+async function runPublishWithTracking(): Promise<void> {
+  await trackRepository('publish')
+  await (await loadPublishModule()).runPublish()
 }
 
 async function runBuilder() {
@@ -100,12 +270,13 @@ async function runBuilder() {
   await build()
 }
 
-async function runBuild() {
-  const args = process.argv.slice(3)
+async function runBuild(args: string[] = []) {
   if (args.includes('--help') || args.includes('-h')) {
     printBuildHelp()
     return
   }
+
+  await trackRepository('build')
 
   const { watch, dev, outputDir } = parseBuildArgs(args)
 
@@ -208,12 +379,13 @@ async function runBuild() {
   }
 }
 
-async function runDev() {
-  const args = process.argv.slice(3)
+async function runDev(args: string[] = []) {
   if (args.includes('--help') || args.includes('-h')) {
     printDevHelp()
     return
   }
+
+  await trackRepository('dev')
 
   const { host, port, open } = parseDevArgs(args)
 
@@ -282,6 +454,8 @@ async function ensureOnboarding(): Promise<boolean> {
     t('onboarding.termsItem1'),
     t('onboarding.termsItem2'),
     t('onboarding.termsItem3'),
+    t('onboarding.termsLink', { url: getTermsUrl() }),
+    t('onboarding.privacyLink', { url: getPrivacyUrl() }),
   ])
 
   const accepted = await askConfirm(t('onboarding.termsConfirm'), false)
@@ -300,27 +474,359 @@ async function ensureOnboarding(): Promise<boolean> {
 }
 
 async function ensureAuthenticated(): Promise<boolean> {
+  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
+  const authState = await readAuthState()
+  if (authState?.token && authState.baseUrl) {
+    const storedBase = normalizeBaseUrl(authState.baseUrl)
+    if (storedBase !== baseUrl) {
+      await clearAuthToken()
+      printInfo(t('notice.baseChanged', { from: storedBase, to: baseUrl }))
+    }
+  }
+
   const existingToken = await getAuthToken()
   if (existingToken) {
     return true
   }
 
+  if (cliLocalMode) {
+    printInfo(t('notice.localMode', { url: baseUrl }))
+  }
+  else if (cliCustomBase) {
+    printInfo(t('notice.customMode', { url: baseUrl }))
+  }
+
   printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
 
-  const token = await askText(t('onboarding.tokenPrompt'), {
-    hint: t('onboarding.tokenHint'),
-    validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
-  })
+  const loginMethod = await askSelect(t('onboarding.loginSelect'), [
+    { label: t('onboarding.loginOptionToken'), value: 'token' },
+    { label: t('onboarding.loginOptionOauth'), value: 'oauth' },
+    { label: t('onboarding.loginOptionExit'), value: 'exit' },
+  ])
 
-  await saveAuthToken(token.trim())
-  printInfo(t('onboarding.loginSuccess'))
-  return true
+  if (loginMethod === 'exit')
+    return false
+
+  if (loginMethod === 'token') {
+    const token = await askText(t('onboarding.tokenPrompt'), {
+      hint: t('onboarding.tokenHint'),
+      validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
+    })
+    const device = await ensureCliDeviceInfo()
+    await saveAuthToken(token.trim(), {
+      baseUrl,
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      devicePlatform: device.devicePlatform,
+    })
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return true
+  }
+
+  printInfo(t('onboarding.oauthPreparing'))
+  try {
+    const auth = await startDeviceAuth()
+    openBrowser(auth.authorizeUrl)
+    printInfo(t('onboarding.oauthOpenHint', { url: auth.authorizeUrl }))
+    printInfo(t('onboarding.oauthWaiting'))
+    const result = await pollDeviceAuth(auth.deviceCode, auth.intervalSeconds || 3)
+    if (result.status !== 'approved' || !result.token) {
+      if (result.status === 'cancelled') {
+        printInfo(t('onboarding.oauthCancelled'))
+      }
+      else {
+        printInfo(t('onboarding.oauthTimeout'))
+      }
+      return false
+    }
+    const device = await ensureCliDeviceInfo()
+    await saveAuthToken(result.token, {
+      baseUrl,
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      devicePlatform: device.devicePlatform,
+    })
+    printInfo(t('onboarding.tokenWarning'))
+    printInfo(t('onboarding.loginSuccess'))
+    return true
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    printInfo(t('onboarding.oauthFailed', { error: message }))
+    return false
+  }
+}
+
+interface AccountProfile {
+  id?: string
+  name?: string | null
+  email?: string | null
+  role?: string | null
+}
+
+async function fetchAccountProfile(): Promise<AccountProfile | null> {
+  const token = await getAuthToken()
+  if (!token)
+    return null
+  try {
+    const response = await fetch(`${getTuffBaseUrl()}/api/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    if (!response.ok)
+      return null
+    return await response.json() as AccountProfile
+  }
+  catch {
+    return null
+  }
+}
+
+async function fetchUserPlugins(): Promise<{ total: number, plugins: any[] } | null> {
+  const token = await getAuthToken()
+  if (!token)
+    return null
+  try {
+    const response = await fetch(`${getTuffBaseUrl()}/api/dashboard/plugins`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    if (!response.ok)
+      return null
+    const data = await response.json() as { total?: number, plugins?: any[] }
+    return {
+      total: typeof data.total === 'number' ? data.total : (data.plugins?.length ?? 0),
+      plugins: Array.isArray(data.plugins) ? data.plugins : [],
+    }
+  }
+  catch {
+    return null
+  }
+}
+
+function formatTimestamp(value?: string | null): string {
+  if (!value)
+    return '-'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime()))
+    return value
+  return parsed.toLocaleString()
+}
+
+async function showAccountSummary(): Promise<void> {
+  printHeader(t('account.title'))
+  const profile = await fetchAccountProfile()
+  const authState = await readAuthState()
+  if (profile) {
+    const name = profile.name || profile.email || profile.id || t('account.userFallback')
+    printInfo(t('account.greeting', { name }))
+    if (profile.email)
+      printInfo(t('account.email', { email: profile.email }))
+    if (profile.role)
+      printInfo(t('account.role', { role: profile.role }))
+  }
+  else {
+    printInfo(t('account.profileUnavailable'))
+  }
+
+  if (authState?.baseUrl)
+    printInfo(t('account.baseUrl', { url: authState.baseUrl }))
+  if (authState?.savedAt)
+    printInfo(t('account.savedAt', { date: formatTimestamp(authState.savedAt) }))
+  if (authState?.deviceName)
+    printInfo(t('account.deviceName', { name: authState.deviceName }))
+  if (authState?.deviceId)
+    printInfo(t('account.deviceId', { id: authState.deviceId }))
+}
+
+async function showRemotePlugins(): Promise<void> {
+  printHeader(t('account.pluginsTitle'))
+  const result = await fetchUserPlugins()
+  if (!result || result.total === 0) {
+    printInfo(t('account.pluginsEmpty'))
+    return
+  }
+
+  printInfo(t('account.pluginsCount', { count: result.total }))
+  const items = result.plugins.slice(0, 10).map((plugin: any) => {
+    const name = plugin?.name || plugin?.title || plugin?.slug || t('account.pluginUnknown')
+    const version = plugin?.latestVersion?.version || plugin?.latestVersion?.tag || ''
+    return version ? `${name} · ${version}` : name
+  })
+  printList(items)
+}
+
+async function showLocalRepositories(): Promise<void> {
+  printHeader(t('repositories.title'))
+  const entries = await listRepositories()
+  if (entries.length === 0) {
+    printInfo(t('repositories.empty'))
+    return
+  }
+  const lines = entries.slice(0, 10).map((entry) => {
+    const version = entry.version ? ` · ${entry.version}` : ''
+    const when = formatTimestamp(entry.lastOpenedAt)
+    return `${entry.name}${version} · ${entry.path} · ${when}`
+  })
+  printList(lines, 2)
+}
+
+async function runTemplatePicker(): Promise<void> {
+  printHeader(t('templates.title'), t('templates.subtitle'))
+  const choice = await askSelect(t('templates.select'), [
+    { label: t('templates.official'), value: 'official' },
+  ])
+  if (choice === 'official') {
+    await runCreate({ template: 'default' })
+  }
+}
+
+async function runPluginMenu(): Promise<void> {
+  while (true) {
+    printHeader(t('plugins.title'))
+    const action = await askSelect(t('plugins.selectAction'), [
+      { label: t('plugins.create'), value: 'create' },
+      { label: t('plugins.templates'), value: 'templates' },
+      { label: t('plugins.build'), value: 'build' },
+      { label: t('plugins.dev'), value: 'dev' },
+      { label: t('plugins.publish'), value: 'publish' },
+      { label: t('plugins.repositories'), value: 'repos' },
+      { label: t('common.back'), value: 'back' },
+    ])
+
+    if (action === 'back')
+      return
+    if (action === 'create')
+      await runCreate()
+    else if (action === 'templates')
+      await runTemplatePicker()
+    else if (action === 'build')
+      await runBuild()
+    else if (action === 'dev')
+      await runDev()
+    else if (action === 'publish')
+      await runPublishWithTracking()
+    else if (action === 'repos')
+      await showLocalRepositories()
+  }
+}
+
+async function runAccountMenu(): Promise<void> {
+  while (true) {
+    printHeader(t('account.menuTitle'))
+    const action = await askSelect(t('account.selectAction'), [
+      { label: t('account.summary'), value: 'summary' },
+      { label: t('account.remotePlugins'), value: 'remote-plugins' },
+      { label: t('account.localRepos'), value: 'local-repos' },
+      { label: t('common.back'), value: 'back' },
+    ])
+    if (action === 'back')
+      return
+    if (action === 'summary')
+      await showAccountSummary()
+    else if (action === 'remote-plugins')
+      await showRemotePlugins()
+    else if (action === 'local-repos')
+      await showLocalRepositories()
+  }
+}
+
+async function runSettingsMenu(): Promise<'logout' | void> {
+  while (true) {
+    printHeader(t('settings.title'))
+    const action = await askSelect(t('settings.selectAction'), [
+      { label: t('settings.language'), value: 'language' },
+      { label: t('settings.relogin'), value: 'relogin' },
+      { label: t('settings.logout'), value: 'logout' },
+      { label: t('common.back'), value: 'back' },
+    ])
+
+    if (action === 'back')
+      return
+    if (action === 'language') {
+      const newLocale = await askLanguageSwitch()
+      await writeCliConfig({ locale: newLocale })
+      printInfo(t('settings.languageChanged', { lang: t(`settings.languages.${newLocale}`) }))
+      continue
+    }
+    if (action === 'relogin') {
+      const authState = await readAuthState()
+      const localBase = resolveLocalBaseUrl()
+      if (!cliLocalMode && authState?.baseUrl) {
+        const storedBase = normalizeBaseUrl(authState.baseUrl)
+        const normalizedLocal = normalizeBaseUrl(localBase)
+        if (storedBase === normalizedLocal) {
+          const useLocal = await askConfirm(
+            t('settings.reloginUseLocal', { url: localBase }),
+            true,
+          )
+          if (useLocal) {
+            setRuntimeEnv({
+              VITE_NEXUS_URL: localBase,
+            })
+            cliLocalMode = true
+            cliCustomBase = true
+            printInfo(t('settings.localModeEnabled', { url: localBase }))
+          }
+          else {
+            printInfo(t('settings.localModeSkipped', { url: localBase }))
+          }
+        }
+      }
+      await clearAuthToken()
+      const ok = await ensureAuthenticated()
+      if (!ok)
+        return 'logout'
+      continue
+    }
+    if (action === 'logout') {
+      await clearAuthToken()
+      printInfo(t('settings.logoutSuccess'))
+      return 'logout'
+    }
+  }
+}
+
+async function runHelpMenu(): Promise<void> {
+  while (true) {
+    printHeader(t('help.title'))
+    const action = await askSelect(t('help.selectAction'), [
+      { label: t('help.official'), value: 'official' },
+      { label: t('help.terms'), value: 'terms' },
+      { label: t('help.privacy'), value: 'privacy' },
+      { label: t('help.github'), value: 'github' },
+      { label: t('common.back'), value: 'back' },
+    ])
+    if (action === 'back')
+      return
+    if (action === 'official') {
+      const siteUrl = resolveSiteBaseUrl()
+      openBrowser(siteUrl)
+      printInfo(t('help.opened', { url: siteUrl }))
+    }
+    else if (action === 'terms') {
+      openBrowser(getTermsUrl())
+      printInfo(t('help.opened', { url: getTermsUrl() }))
+    }
+    else if (action === 'privacy') {
+      openBrowser(getPrivacyUrl())
+      printInfo(t('help.opened', { url: getPrivacyUrl() }))
+    }
+    else if (action === 'github') {
+      openBrowser(GITHUB_REPO_URL)
+      printInfo(t('help.opened', { url: GITHUB_REPO_URL }))
+    }
+  }
 }
 
 /**
  * Interactive menu mode
  */
 async function runInteractiveMode(): Promise<void> {
+  printAsciiLogo()
   const onboardingReady = await ensureOnboarding()
   if (!onboardingReady)
     return
@@ -333,137 +839,196 @@ async function runInteractiveMode(): Promise<void> {
     cli: getCliConfigPath(),
     auth: getAuthTokenPath(),
   }))
+  const profile = await fetchAccountProfile()
+  const greetingName = profile?.name || profile?.email || ''
+  const greeting = greetingName
+    ? t('welcome.greeting', { name: greetingName })
+    : t('welcome.subtitle')
 
-  printHeader(
-    t('welcome.title'),
-    `${t('welcome.subtitle')} · ${t('welcome.version', { version: pkg.version })}`,
-  )
+  while (true) {
+    printHeader(
+      t('welcome.title'),
+      `${greeting} · ${t('welcome.version', { version: pkg.version })}`,
+    )
 
-  const menuOptions: SelectOption<string>[] = [
-    { label: t('menu.create'), value: 'create' },
-    { label: t('menu.build'), value: 'build' },
-    { label: t('menu.dev'), value: 'dev' },
-    { label: t('menu.publish'), value: 'publish' },
-    { label: t('menu.login'), value: 'login' },
-    { label: t('menu.logout'), value: 'logout' },
-    { label: t('menu.settings'), value: 'settings' },
-    { label: t('menu.help'), value: 'help' },
-    { label: t('menu.exit'), value: 'exit' },
-  ]
+    const action = await askSelect(t('welcome.selectAction'), [
+      { label: t('menu.plugins'), value: 'plugins' },
+      { label: t('menu.account'), value: 'account' },
+      { label: t('menu.settings'), value: 'settings' },
+      { label: t('menu.help'), value: 'help' },
+      { label: t('menu.exit'), value: 'exit' },
+    ])
 
-  const action = await askSelect(t('welcome.selectAction'), menuOptions)
-
-  switch (action) {
-    case 'create':
-      await runCreate()
-      break
-    case 'build':
-      await runBuild()
-      break
-    case 'dev':
-      await runDev()
-      break
-    case 'publish':
-      await (await loadPublishModule()).runPublish()
-      break
-    case 'login':
-      await (await loadPublishModule()).login()
-      break
-    case 'logout':
-      await (await loadPublishModule()).logout()
-      break
-    case 'settings':
-      await runSettings()
-      break
-    case 'help':
-      printHelp()
-      break
-    case 'exit':
+    if (action === 'plugins') {
+      await runPluginMenu()
+      continue
+    }
+    if (action === 'account') {
+      await runAccountMenu()
+      continue
+    }
+    if (action === 'settings') {
+      const outcome = await runSettingsMenu()
+      if (outcome === 'logout')
+        return
+      continue
+    }
+    if (action === 'help') {
+      await runHelpMenu()
+      continue
+    }
+    if (action === 'exit') {
       console.log(styled('👋 Bye!', colors.cyan))
-      break
-  }
-}
-
-/**
- * Settings menu
- */
-async function runSettings(): Promise<void> {
-  printHeader(t('settings.title'))
-
-  const settingsOptions: SelectOption<string>[] = [
-    { label: t('settings.language'), value: 'language' },
-    { label: t('common.back'), value: 'back' },
-  ]
-
-  const setting = await askSelect(t('welcome.selectAction'), settingsOptions)
-
-  if (setting === 'language') {
-    const newLocale = await askLanguageSwitch()
-    await writeCliConfig({ locale: newLocale })
-    printInfo(t('settings.languageChanged', { lang: t(`settings.languages.${newLocale}`) }))
-    // Re-run interactive mode with new locale
-    await runInteractiveMode()
-  }
-  else {
-    await runInteractiveMode()
+      return
+    }
   }
 }
 
 /**
  * Parse --lang flag from args
  */
-function parseLangFlag(): Locale | null {
-  for (const arg of process.argv) {
+interface GlobalFlags {
+  args: string[]
+  lang: Locale | null
+  local: boolean
+  apiBase: string | null
+  configDir: string | null
+  nonInteractive: boolean
+}
+
+function parseGlobalFlags(argv: string[]): GlobalFlags {
+  let lang: Locale | null = null
+  let local = false
+  let apiBase: string | null = null
+  let configDir: string | null = null
+  let nonInteractive = false
+  const args: string[] = []
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]
     if (arg.startsWith('--lang=')) {
-      const lang = arg.slice(7).toLowerCase()
-      if (lang === 'en' || lang === 'zh') {
-        return lang
-      }
+      const value = arg.slice(7).toLowerCase()
+      if (value === 'en' || value === 'zh')
+        lang = value
+      continue
     }
+    if (arg === '--lang') {
+      const next = argv[i + 1]
+      if (!next || next.startsWith('-'))
+        throw new Error('Missing value for --lang')
+      const value = next.toLowerCase()
+      if (value !== 'en' && value !== 'zh')
+        throw new Error(`Invalid --lang value: ${next}`)
+      lang = value as Locale
+      i += 1
+      continue
+    }
+    if (arg === '--local') {
+      local = true
+      continue
+    }
+    if (arg === '--non-interactive') {
+      nonInteractive = true
+      continue
+    }
+    if (arg === '--api-base') {
+      const next = argv[i + 1]
+      if (!next || next.startsWith('-'))
+        throw new Error('Missing value for --api-base')
+      apiBase = next
+      i += 1
+      continue
+    }
+    if (arg.startsWith('--api-base=')) {
+      apiBase = arg.slice(11)
+      if (!apiBase)
+        throw new Error('Missing value for --api-base')
+      continue
+    }
+    if (arg === '--config-dir') {
+      const next = argv[i + 1]
+      if (!next || next.startsWith('-'))
+        throw new Error('Missing value for --config-dir')
+      configDir = next
+      i += 1
+      continue
+    }
+    if (arg.startsWith('--config-dir=')) {
+      configDir = arg.slice(13)
+      if (!configDir)
+        throw new Error('Missing value for --config-dir')
+      continue
+    }
+    args.push(arg)
   }
-  return null
+
+  return { args, lang, local, apiBase, configDir, nonInteractive }
 }
 
 async function main() {
   // Check for language flag
-  const langFlag = parseLangFlag()
-  if (langFlag) {
-    setLocale(langFlag)
+  const {
+    args: cliArgs,
+    lang,
+    local,
+    apiBase,
+    configDir,
+    nonInteractive,
+  } = parseGlobalFlags(process.argv.slice(2))
+  if (lang)
+    setLocale(lang)
+  if (configDir) {
+    process.env.TUFF_CONFIG_DIR = path.resolve(configDir)
+  }
+  if (nonInteractive) {
+    process.env.TUFF_NON_INTERACTIVE = '1'
   }
 
-  const command = (process.argv[2] || '').toLowerCase()
-  const hasHelpFlag = process.argv.includes('--help') || process.argv.includes('-h')
+  const hasCustomBase = Boolean(apiBase) || local
+  if (apiBase) {
+    const normalized = normalizeBaseUrl(apiBase)
+    setRuntimeEnv({
+      VITE_NEXUS_URL: normalized,
+    })
+  }
+  else if (local) {
+    applyLocalRuntime()
+  }
+  cliCustomBase = hasCustomBase
+  cliLocalMode = local
 
-  // Filter out --lang flag from command detection
-  const isLangOnly = command.startsWith('--lang=')
+  const command = (cliArgs[0] || '').toLowerCase()
+  const commandArgs = cliArgs.slice(1)
+  const hasHelpFlag = cliArgs.includes('--help') || cliArgs.includes('-h')
 
   try {
+    if (command === '--help' || command === '-h') {
+      printHelp()
+      return
+    }
     if (command === 'create') {
       // Parse create options from args
-      const nameArg = process.argv[3]
+      const nameArg = commandArgs[0]
       await runCreate({
         name: nameArg && !nameArg.startsWith('-') ? nameArg : undefined,
       })
     }
     else if (command === 'build') {
-      if (hasHelpFlag)
-        printBuildHelp()
-      else
-        await runBuild()
+      await runBuild(commandArgs)
     }
     else if (command === 'builder') {
       await runBuilder()
     }
     else if (command === 'dev') {
-      await runDev()
+      await runDev(commandArgs)
     }
     else if (command === 'publish') {
-      const { printPublishHelp, runPublish } = await loadPublishModule()
+      const { printPublishHelp } = await loadPublishModule()
       if (hasHelpFlag) {
         printPublishHelp()
       }
       else {
-        await runPublish()
+        await runPublishWithTracking()
       }
     }
     else if (command === 'login') {
@@ -478,7 +1043,10 @@ async function main() {
     else if (command === 'help') {
       printHelp()
     }
-    else if (command === '' || isLangOnly) {
+    else if (command === '') {
+      if (nonInteractive) {
+        throw new Error('Non-interactive mode requires a command.')
+      }
       // Interactive mode when no command
       await runInteractiveMode()
     }

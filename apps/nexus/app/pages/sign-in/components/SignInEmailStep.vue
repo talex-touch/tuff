@@ -59,7 +59,7 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
     </div>
 
     <div class="auth-method auth-method--full">
-      <TxButton class="auth-button auth-button--passkey" size="lg" block :loading="passkeyLoading" :disabled="!supportsPasskey" @click="emit('passkey')">
+      <TxButton variant="ghost" class="auth-button auth-button--passkey" size="lg" block :loading="passkeyLoading" :disabled="!supportsPasskey" @click="emit('passkey')">
         <span class="i-carbon-fingerprint-recognition text-base" />
         {{ t('auth.passkeyLogin', 'Login with Passkey') }}
       </TxButton>

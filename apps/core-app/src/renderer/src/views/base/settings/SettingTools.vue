@@ -210,6 +210,33 @@ function getShortcutLabel(id: string): string {
   return translated === key ? id : translated
 }
 
+async function copyShortcutId(id: string): Promise<void> {
+  if (!id) return
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(id)
+      return
+    }
+  } catch (error) {
+    void error
+  }
+
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = id
+    textarea.setAttribute('readonly', 'true')
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    textarea.style.pointerEvents = 'none'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  } catch (error) {
+    void error
+  }
+}
+
 function isSystemShortcut(shortcut: ShortcutWithStatus): boolean {
   if (shortcut.type === ShortcutType.MAIN) {
     return true
@@ -560,102 +587,114 @@ watch(shortcutsDialogVisible, (visible) => {
           </div>
 
           <div class="ShortcutDialog-Table">
-            <div class="ShortcutDialog-TableHeader">
-              <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
-              <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
-              <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
-              <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
-              <div>{{ t('settingTools.shortcutsDialog.columns.enabled') }}</div>
-              <div>{{ t('settingTools.shortcutsDialog.columns.status') }}</div>
-            </div>
-            <TouchScroll no-padding class="ShortcutDialog-TableBody">
-              <div v-if="shortcutsLoading" class="ShortcutDialog-Empty">
-                {{ t('settingTools.shortcutsDialog.loading') }}
+            <div class="ShortcutDialog-TableScroller">
+              <div class="ShortcutDialog-TableHeader">
+                <div>{{ t('settingTools.shortcutsDialog.columns.name') }}</div>
+                <div>{{ t('settingTools.shortcutsDialog.columns.id') }}</div>
+                <div>{{ t('settingTools.shortcutsDialog.columns.key') }}</div>
+                <div>{{ t('settingTools.shortcutsDialog.columns.enabled') }}</div>
+                <div>{{ t('settingTools.shortcutsDialog.columns.status') }}</div>
+                <div>{{ t('settingTools.shortcutsDialog.columns.source') }}</div>
               </div>
-              <div v-else-if="filteredShortcuts.length === 0" class="ShortcutDialog-Empty">
-                {{ t('settingTools.shortcutsDialog.empty') }}
-              </div>
-              <div v-else class="ShortcutDialog-Rows">
-                <div
-                  v-for="shortcut in filteredShortcuts"
-                  :key="shortcut.id"
-                  class="ShortcutDialog-Row"
-                >
-                  <div class="ShortcutDialog-Name">
-                    <div class="ShortcutDialog-Label">
-                      {{ getShortcutLabel(shortcut.id) }}
-                    </div>
-                    <div class="ShortcutDialog-Desc">
-                      {{
-                        t('settingTools.shortcutDesc', { shortcut: getShortcutLabel(shortcut.id) })
-                      }}
-                    </div>
-                  </div>
-                  <div class="ShortcutDialog-Source">
-                    {{ getShortcutSourceLabel(shortcut) }}
-                  </div>
-                  <div class="ShortcutDialog-Id">
-                    {{ shortcut.id }}
-                  </div>
-                  <div class="ShortcutDialog-Key">
-                    <FlatKeyInput
-                      :model-value="shortcut.accelerator"
-                      @update:model-value="
-                        (newValue) => updateShortcut(shortcut.id, String(newValue))
-                      "
-                    />
-                  </div>
-                  <div class="ShortcutDialog-Enabled">
-                    <TSwitch
-                      :model-value="isShortcutEnabled(shortcut)"
-                      @update:model-value="
-                        (value) => updateShortcutEnabled(shortcut.id, Boolean(value))
-                      "
-                    />
-                  </div>
-                  <div class="ShortcutDialog-Status">
-                    <div
-                      class="ShortcutDialog-StatusText"
-                      :class="[
-                        getRowSaveState(shortcut.id) ? `is-${getRowSaveState(shortcut.id)}` : '',
-                        {
-                          active: !getRowSaveState(shortcut.id) && !getShortcutStatusText(shortcut),
-                          disabled: !getRowSaveState(shortcut.id) && !isShortcutEnabled(shortcut)
-                        }
-                      ]"
-                    >
-                      <template v-if="getRowSaveState(shortcut.id)">
-                        <i
-                          v-if="getRowSaveState(shortcut.id) === 'saving'"
-                          class="i-ri-loader-4-line animate-spin"
-                        />
-                        <i
-                          v-else-if="getRowSaveState(shortcut.id) === 'success'"
-                          class="i-ri-checkbox-circle-fill"
-                        />
-                        <i
-                          v-else-if="getRowSaveState(shortcut.id) === 'error'"
-                          class="i-ri-error-warning-line"
-                        />
-                        <span>{{ getRowSaveText(shortcut.id) }}</span>
-                      </template>
-                      <template v-else>
+              <TouchScroll no-padding class="ShortcutDialog-TableBody">
+                <div v-if="shortcutsLoading" class="ShortcutDialog-Empty">
+                  {{ t('settingTools.shortcutsDialog.loading') }}
+                </div>
+                <div v-else-if="filteredShortcuts.length === 0" class="ShortcutDialog-Empty">
+                  {{ t('settingTools.shortcutsDialog.empty') }}
+                </div>
+                <div v-else class="ShortcutDialog-Rows">
+                  <div
+                    v-for="shortcut in filteredShortcuts"
+                    :key="shortcut.id"
+                    class="ShortcutDialog-Row"
+                  >
+                    <div class="ShortcutDialog-Name">
+                      <div class="ShortcutDialog-Label">
+                        {{ getShortcutLabel(shortcut.id) }}
+                      </div>
+                      <div class="ShortcutDialog-Desc">
                         {{
-                          getShortcutStatusText(shortcut) ||
-                          t('settingTools.shortcutsDialog.statusActive')
+                          t('settingTools.shortcutDesc', {
+                            shortcut: getShortcutLabel(shortcut.id)
+                          })
                         }}
-                      </template>
+                      </div>
                     </div>
-                    <div
-                      v-if="!getRowSaveState(shortcut.id) && getSpotlightHint(shortcut)"
-                      class="ShortcutStatusHint"
-                    >
-                      {{ getSpotlightHint(shortcut) }}
+                    <div class="ShortcutDialog-Id">
+                      <button
+                        class="ShortcutDialog-IdCopy"
+                        type="button"
+                        @click="copyShortcutId(shortcut.id)"
+                      >
+                        <span class="ShortcutDialog-IdValue">{{ shortcut.id }}</span>
+                        <i class="i-ri-file-copy-line" />
+                      </button>
+                    </div>
+                    <div class="ShortcutDialog-Key">
+                      <FlatKeyInput
+                        :model-value="shortcut.accelerator"
+                        @update:model-value="
+                          (newValue) => updateShortcut(shortcut.id, String(newValue))
+                        "
+                      />
+                    </div>
+                    <div class="ShortcutDialog-Enabled">
+                      <TSwitch
+                        :model-value="isShortcutEnabled(shortcut)"
+                        @update:model-value="
+                          (value) => updateShortcutEnabled(shortcut.id, Boolean(value))
+                        "
+                      />
+                    </div>
+                    <div class="ShortcutDialog-Status">
+                      <div
+                        class="ShortcutDialog-StatusText"
+                        :class="[
+                          getRowSaveState(shortcut.id) ? `is-${getRowSaveState(shortcut.id)}` : '',
+                          {
+                            active:
+                              !getRowSaveState(shortcut.id) && !getShortcutStatusText(shortcut),
+                            disabled: !getRowSaveState(shortcut.id) && !isShortcutEnabled(shortcut)
+                          }
+                        ]"
+                      >
+                        <template v-if="getRowSaveState(shortcut.id)">
+                          <i
+                            v-if="getRowSaveState(shortcut.id) === 'saving'"
+                            class="i-ri-loader-4-line animate-spin"
+                          />
+                          <i
+                            v-else-if="getRowSaveState(shortcut.id) === 'success'"
+                            class="i-ri-checkbox-circle-fill"
+                          />
+                          <i
+                            v-else-if="getRowSaveState(shortcut.id) === 'error'"
+                            class="i-ri-error-warning-line"
+                          />
+                          <span>{{ getRowSaveText(shortcut.id) }}</span>
+                        </template>
+                        <template v-else>
+                          {{
+                            getShortcutStatusText(shortcut) ||
+                            t('settingTools.shortcutsDialog.statusActive')
+                          }}
+                        </template>
+                      </div>
+                      <div
+                        v-if="!getRowSaveState(shortcut.id) && getSpotlightHint(shortcut)"
+                        class="ShortcutStatusHint"
+                      >
+                        {{ getSpotlightHint(shortcut) }}
+                      </div>
+                    </div>
+                    <div class="ShortcutDialog-Source">
+                      {{ getShortcutSourceLabel(shortcut) }}
                     </div>
                   </div>
                 </div>
-              </div>
-            </TouchScroll>
+              </TouchScroll>
+            </div>
           </div>
 
           <div class="ShortcutDialog-Footer">
@@ -812,19 +851,37 @@ watch(shortcutsDialogVisible, (visible) => {
   min-height: 0;
 }
 
+.ShortcutDialog-TableScroller {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+}
+
 .ShortcutDialog-TableHeader {
   display: grid;
-  grid-template-columns: 1.6fr 0.9fr 1.1fr 1fr 0.6fr 0.9fr;
+  grid-template-columns:
+    minmax(240px, 1.6fr)
+    minmax(220px, 1.2fr)
+    minmax(260px, 1.4fr)
+    minmax(90px, 0.6fr)
+    minmax(140px, 0.9fr)
+    minmax(160px, 1fr);
   gap: 16px;
   padding: 12px 24px;
   font-size: 12px;
   letter-spacing: 0.08em;
   color: var(--tx-text-color-secondary);
   border-bottom: 1px solid var(--tx-border-color-lighter);
+  width: max-content;
+  min-width: 100%;
 }
 
 .ShortcutDialog-TableBody {
   flex: 1;
+  width: max-content;
+  min-width: 100%;
 }
 
 .ShortcutDialog-Empty {
@@ -837,15 +894,25 @@ watch(shortcutsDialogVisible, (visible) => {
 .ShortcutDialog-Rows {
   display: flex;
   flex-direction: column;
+  width: max-content;
+  min-width: 100%;
 }
 
 .ShortcutDialog-Row {
   display: grid;
-  grid-template-columns: 1.6fr 0.9fr 1.1fr 1fr 0.6fr 0.9fr;
+  grid-template-columns:
+    minmax(240px, 1.6fr)
+    minmax(220px, 1.2fr)
+    minmax(260px, 1.4fr)
+    minmax(90px, 0.6fr)
+    minmax(140px, 0.9fr)
+    minmax(160px, 1fr);
   gap: 16px;
   padding: 16px 24px;
   align-items: center;
   border-bottom: 1px solid var(--tx-border-color-lighter);
+  width: max-content;
+  min-width: 100%;
 }
 
 .ShortcutDialog-Row:last-child {
@@ -867,12 +934,42 @@ watch(shortcutsDialogVisible, (visible) => {
 .ShortcutDialog-Id {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 .ShortcutDialog-Source {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
+}
+
+.ShortcutDialog-IdCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ShortcutDialog-IdValue {
+  text-decoration: none;
+}
+
+.ShortcutDialog-IdCopy:hover .ShortcutDialog-IdValue {
+  text-decoration: underline;
+}
+
+.ShortcutDialog-IdCopy i {
+  font-size: 14px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ShortcutDialog-Key :deep(.FlatKeyInput-Control) {
+  min-width: 260px;
+  max-width: 360px;
 }
 
 .ShortcutDialog-Enabled {

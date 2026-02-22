@@ -1,4 +1,4 @@
-import type { BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
+import type { BaseAnchorClassValue, BaseAnchorPanelCardProps } from '../../base-anchor/src/types'
 
 export type PopoverPlacement
   = | 'top'
@@ -25,6 +25,7 @@ export interface PopoverProps {
   maxHeight?: number
   unlimitedHeight?: boolean
   referenceFullWidth?: boolean
+  referenceClass?: BaseAnchorClassValue
 
   showArrow?: boolean
   arrowSize?: number

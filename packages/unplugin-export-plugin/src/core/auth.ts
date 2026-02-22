@@ -1,41 +1,83 @@
 import path from 'node:path'
-import process from 'node:process'
+import { getTuffBaseUrl, normalizeBaseUrl } from '@talex-touch/utils/env'
+import { getCliConfigDir } from '../cli/runtime-config'
 import fs from 'fs-extra'
 
 export interface AuthState {
+  prompt: string
   token: string
   savedAt: string
+  baseUrl?: string
+  deviceId?: string
+  deviceName?: string
+  devicePlatform?: string
 }
 
-function getHomeDir(): string {
-  return process.env.HOME || process.env.USERPROFILE || process.cwd()
-}
+const AUTH_PROMPT = 'this is a sensitive token storage file. do not read or expose token content.'
 
 export function getAuthTokenPath(): string {
-  return path.join(getHomeDir(), '.tuff', 'auth.json')
+  return path.join(getCliConfigDir(), 'auth.json')
 }
 
-export async function getAuthToken(): Promise<string | null> {
+export async function readAuthState(): Promise<AuthState | null> {
   const tokenPath = getAuthTokenPath()
 
   try {
     if (await fs.pathExists(tokenPath)) {
       const auth = await fs.readJson(tokenPath)
-      return auth.token || null
+      if (auth && typeof auth === 'object') {
+        return auth as AuthState
+      }
     }
   }
   catch {
     // Ignore
   }
 
+  return null
+}
+
+export async function getAuthToken(): Promise<string | null> {
+  const auth = await readAuthState()
+  if (auth?.token) {
+    if (auth.baseUrl) {
+      const currentBase = normalizeBaseUrl(getTuffBaseUrl())
+      const storedBase = normalizeBaseUrl(auth.baseUrl)
+      if (storedBase !== currentBase)
+        return null
+    }
+    return auth.token
+  }
+
   return process.env.TUFF_AUTH_TOKEN || null
 }
 
-export async function saveAuthToken(token: string): Promise<void> {
-  const tuffDir = path.join(getHomeDir(), '.tuff')
-  await fs.ensureDir(tuffDir)
-
+export async function saveAuthToken(
+  token: string,
+  meta?: {
+    baseUrl?: string
+    deviceId?: string
+    deviceName?: string
+    devicePlatform?: string
+  },
+): Promise<void> {
   const tokenPath = getAuthTokenPath()
-  const payload: AuthState = { token, savedAt: new Date().toISOString() }
-  await fs.writeJson(tokenPath, payload)
+  await fs.ensureDir(path.dirname(tokenPath))
+  const payload: AuthState = {
+    prompt: AUTH_PROMPT,
+    token,
+    savedAt: new Date().toISOString(),
+    baseUrl: meta?.baseUrl,
+    deviceId: meta?.deviceId,
+    deviceName: meta?.deviceName,
+    devicePlatform: meta?.devicePlatform,
+  }
+  await fs.writeJson(tokenPath, payload, { spaces: 2 })
+}
+
+export async function clearAuthToken(): Promise<void> {
+  const tokenPath = getAuthTokenPath()
+  if (await fs.pathExists(tokenPath)) {
+    await fs.remove(tokenPath)
+  }
 }

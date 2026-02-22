@@ -28,6 +28,8 @@ export type BaseAnchorPanelCardProps = Partial<Pick<
   | 'refractionLightSpringDamping'
 >>
 
+export type BaseAnchorClassValue = string | Record<string, boolean> | BaseAnchorClassValue[]
+
 export interface BaseAnchorProps {
   modelValue?: boolean
   disabled?: boolean
@@ -41,6 +43,7 @@ export interface BaseAnchorProps {
   maxHeight?: number
   unlimitedHeight?: boolean
   matchReferenceWidth?: boolean
+  referenceClass?: BaseAnchorClassValue
 
   // animation
   duration?: number
