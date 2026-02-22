@@ -55,9 +55,29 @@ export function sanitizeRedirect(redirect: string | null | undefined, fallback =
 
   const normalized = redirect.trim()
   if (!normalized.startsWith('/') || normalized.startsWith('//'))
-    return fallback
+    return resolveSameOriginRedirect(normalized, fallback)
 
   return normalized
+}
+
+function resolveSameOriginRedirect(value: string, fallback: string) {
+  if (!hasWindow())
+    return fallback
+  if (!value.startsWith('http://') && !value.startsWith('https://'))
+    return fallback
+
+  try {
+    const url = new URL(value)
+    if (url.origin !== window.location.origin)
+      return fallback
+    const path = `${url.pathname}${url.search}${url.hash}`
+    if (!path.startsWith('/') || path.startsWith('//'))
+      return fallback
+    return path
+  }
+  catch {
+    return fallback
+  }
 }
 
 export function buildOauthCallbackUrl(input: BuildOauthCallbackInput) {
