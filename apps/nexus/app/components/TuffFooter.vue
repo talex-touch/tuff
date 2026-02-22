@@ -159,6 +159,10 @@ const socialLinks = computed(() => [
   backdrop-filter: blur(18px) saturate(180%);
 }
 
+.TuffFooter-Main :deep(a) {
+  letter-spacing: var(--wm-letter-space-2, 0px);
+}
+
 .TuffFooter {
   /* overflow: hidden; */
 }

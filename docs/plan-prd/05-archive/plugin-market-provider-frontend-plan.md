@@ -191,7 +191,7 @@ export interface MarketPlugin {
 | NPM Provider | ✅ | `npm-package-provider.ts` |
 | Repository Provider | ✅ | GitHub/Gitee 支持 |
 | UI 集成 | ✅ | Market 页面 + Source Editor |
-| Clerk 登录联动 | ✅ | 浏览器登录回调 |
+| 账号登录联动 | ✅ | 浏览器登录回调 |
 
 ### 📁 相关文件
 

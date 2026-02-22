@@ -980,6 +980,8 @@ watch(
 .outline-link {
   color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 85%, transparent);
   transition: color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+  letter-spacing: var(--wm-letter-space-2, 0px);
+  transform: translateX(var(--wm-jitter-x2, 0px));
 }
 
 .outline-link:hover {

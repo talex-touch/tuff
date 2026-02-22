@@ -53,7 +53,6 @@ import { BaseModule } from '../abstract-base-module'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
-import { getAuthToken, getDeviceId } from '../auth'
 import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
@@ -1264,7 +1263,6 @@ export class PluginModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private pluginSqliteClients = new Map<string, Client>()
-  private requestRendererValue = async <T>(_eventName: string): Promise<T | null> => null
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -1292,26 +1290,6 @@ export class PluginModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
-
-    this.requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
-      const sendMain = (
-        channel as { sendMain?: (event: string, arg?: unknown) => Promise<unknown> }
-      ).sendMain
-      if (!sendMain) {
-        pluginLog.warn(`[PluginModule] TouchChannel sendMain unavailable for ${eventName}`)
-        return null
-      }
-      try {
-        const response = await sendMain(eventName)
-        if (response && typeof response === 'object' && 'data' in response) {
-          return (response as { data?: T }).data ?? null
-        }
-        return (response as T) ?? null
-      } catch (error) {
-        pluginLog.warn(`[PluginModule] Failed to resolve ${eventName}`, { error })
-        return null
-      }
-    }
 
     TouchPlugin.setTransport(this.transport)
 

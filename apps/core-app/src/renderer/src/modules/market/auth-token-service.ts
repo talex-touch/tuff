@@ -1,4 +1,4 @@
-import type { AuthState } from '@talex-touch/utils'
+import type { AuthState } from '@talex-touch/utils/renderer'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 

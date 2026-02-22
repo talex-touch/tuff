@@ -115,7 +115,7 @@ interface UserIdentity {
   deviceFingerprint: string
   
   // Layer 2: 登录用户（可选）
-  userId?: string           // Clerk User ID
+  userId?: string           // 账号系统 User ID
   
   // Layer 3: 付费订阅（可选）
   subscriptionTier?: 'free' | 'pro' | 'team' | 'enterprise'

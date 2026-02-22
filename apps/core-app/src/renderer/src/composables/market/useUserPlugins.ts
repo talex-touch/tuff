@@ -70,8 +70,8 @@ export function useUserPlugins() {
         return
       }
 
-      const data = await response.json()
-      plugins.value = normalizePlugins(data.plugins || [], baseUrl)
+      const data = (await response.json()) as { plugins?: NexusPlugin[] }
+      plugins.value = normalizePlugins(data.plugins ?? [], baseUrl)
       lastUpdated.value = Date.now()
     } catch (err) {
       console.error('[useUserPlugins] Failed to load:', err)

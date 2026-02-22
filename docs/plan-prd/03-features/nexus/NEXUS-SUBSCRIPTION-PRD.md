@@ -5,7 +5,7 @@
 
 ## 概述
 
-整合 Clerk 组织系统与 Tuff 订阅体系，实现：
+整合账号组织系统与 Tuff 订阅体系，实现：
 1. 会员等级展示（App 端 + Nexus Dashboard）
 2. 授权码兑换订阅
 3. 团队邀请完善
@@ -21,11 +21,11 @@
 | Team | `TEAM` | 团队协作，共享配额 |
 | Enterprise | `ENTERPRISE` | 定制化，专属支持 |
 
-## Clerk 集成方案
+## 账号服务集成方案
 
 ### 用户元数据存储
 
-在 Clerk User 的 `publicMetadata` 中存储订阅信息：
+在账号服务 User 的 `publicMetadata` 中存储订阅信息：
 
 ```typescript
 interface UserPublicMetadata {
@@ -44,7 +44,7 @@ interface UserPublicMetadata {
 
 ### 组织元数据
 
-在 Clerk Organization 的 `publicMetadata` 中存储团队订阅：
+在账号服务 Organization 的 `publicMetadata` 中存储团队订阅：
 
 ```typescript
 interface OrgPublicMetadata {
@@ -191,7 +191,7 @@ CREATE TABLE activation_logs (
 - [x] 团队邀请 API
 - [ ] 订阅状态 API
 - [ ] 激活码系统
-- [ ] Clerk 元数据更新
+- [ ] 账号元数据更新
 
 ### Phase 2: Dashboard UI
 - [ ] 订阅状态卡片

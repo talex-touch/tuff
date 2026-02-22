@@ -8,7 +8,7 @@
 ## 根因分析
 - `apps/nexus/app/app.vue` 依赖 `useI18n` 自动导入，但运行时未注入（Nuxt 自动导入失效或打包侧裁剪）。
 - Core App 业务层使用 `getTuffBaseUrl()` 直连 Nexus，未根据 `appSetting.dev.authServer` 统一切换本地基址。
-- `getAuthToken()` 仅走 Clerk token，本地 dev 登录未提供 Clerk session，导致 token 为空。
+- `getAuthToken()` 仅走账号 token，本地 dev 登录未提供账号 session，导致 token 为空。
 
 ## 方案/修复点
 - 新增统一环境解析：`getAuthBaseUrl()` / `isLocalAuthMode()` / `getDevAuthToken()`。

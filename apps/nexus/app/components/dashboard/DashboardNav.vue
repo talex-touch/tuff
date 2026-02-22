@@ -46,6 +46,7 @@ const sectionPaths: Record<string, string> = {
   account: '/dashboard/account',
   devices: '/dashboard/devices',
   storage: '/dashboard/storage',
+  watermark: '/dashboard/watermark',
 }
 
 function mapItems(items: Array<{ id: string, label: string, icon: string }>) {
@@ -162,6 +163,11 @@ const adminMenuItems = computed(() => {
       label: t('dashboard.sections.menu.analytics', 'Analytics'),
       icon: 'i-carbon-chart-line-data',
     },
+    {
+      id: 'watermark',
+      label: t('dashboard.sections.menu.watermark', 'Watermark'),
+      icon: 'i-carbon-identification',
+    },
   ])
 })
 
@@ -180,6 +186,8 @@ const activeSection = computed(() => {
     return 'doc-comments'
   if (route.path.startsWith('/dashboard/admin/analytics'))
     return 'analytics'
+  if (route.path.startsWith('/dashboard/watermark'))
+    return 'watermark'
   if (route.path.startsWith('/dashboard/admin/credits'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/intelligence-lab'))

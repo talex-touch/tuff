@@ -247,11 +247,11 @@
 - [x] NPM Provider 完整实现 ✅ (2025-12-11)
 - [ ] 验收 & 文档 (0.5d)
 
-#### 2.1 ✅ Nexus 联动与 Clerk 登录优化 (2025-12-09)
+#### 2.1 ✅ Nexus 联动与账号登录优化 (2025-12-09)
 - [x] Nexus app-callback 页面 - 浏览器登录后回调到 App
 - [x] tuff:// 协议处理 - addon-opener.ts 支持 auth/callback
 - [x] useAuth.loginWithBrowser() - 外部浏览器登录方法
-- [x] AuthTokenService - Clerk token 获取与缓存
+- [x] AuthTokenService - 账号 token 获取与缓存
 - [x] TpexApiProvider.listUserPlugins() - 认证 API 支持
 - [x] useUserPlugins composable - 获取用户插件列表
 - [x] i18n 翻译 - en/zh 完整
@@ -707,7 +707,7 @@
 - ~~Flow Transfer (P2)~~ - 2025-12
 - ~~DivisionBox 深化 (P2)~~ - 2025-12
 - ~~智能推荐系统 (P2)~~ - 2025-12
-- ~~Nexus 联动 + Clerk 登录优化 (P1)~~ - 2025-12-09
+- ~~Nexus 联动 + 账号登录优化 (P1)~~ - 2025-12-09
 - ~~直接预览计算 (P1)~~ - 2025-12-10 (核心完成)
 - ~~Widget 动态加载 (P2)~~ - 2025-12-10 (核心完成)
 - ~~Intelligence SDK (P3)~~ - 2025-12-10 (核心完成)

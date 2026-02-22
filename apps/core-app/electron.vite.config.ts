@@ -33,6 +33,7 @@ const isProduction =
   process.env.BUILD_TYPE === 'release' ||
   (!process.env.BUILD_TYPE && process.env.NODE_ENV === 'production')
 const enableSourcemap = !isProduction
+const disableSentry = process.env.SENTRY_DISABLE === '1' || process.env.SENTRY_DISABLE === 'true'
 const tuffexAliases = isProduction
   ? []
   : [
@@ -214,7 +215,8 @@ export default defineConfig({
       sentryVitePlugin({
         org: 'quotawish',
         project: 'tuff',
-        telemetry: false
+        telemetry: false,
+        disable: disableSentry
       })
     ]
   }

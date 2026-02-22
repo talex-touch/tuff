@@ -848,10 +848,11 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  padding: 6px 8px 6px 6px;
+  padding: 6px 8px 6px calc(6px + var(--wm-jitter-x2, 0px));
   font-size: 12px;
   line-height: 1.4;
   color: rgba(15, 23, 42, 0.58);
+  letter-spacing: var(--wm-letter-space-2, 0px);
   background: transparent;
   border-radius: 0;
   box-shadow: none;

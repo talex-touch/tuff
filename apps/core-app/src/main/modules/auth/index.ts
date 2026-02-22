@@ -1,10 +1,5 @@
-import type {
-  AuthState,
-  AuthUser,
-  MaybePromise,
-  ModuleInitContext,
-  ModuleKey
-} from '@talex-touch/utils'
+import type { AuthState, AuthUser } from '@talex-touch/utils/auth'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -28,7 +23,6 @@ const SECURE_STORE_FILE = 'secure-store.json'
 const AUTH_TOKEN_KEY = 'auth.token'
 const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
 const MACHINE_CODE_VERSION = 'mc_v1'
-const FINGERPRINT_HASH_VERSION = 'fp_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
@@ -696,6 +690,10 @@ export class AuthModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('AuthModule')
   name: ModuleKey = AuthModule.key
   private transportDisposers: Array<() => void> = []
+
+  constructor() {
+    super(AuthModule.key)
+  }
 
   onInit({ app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     appRootPath =
