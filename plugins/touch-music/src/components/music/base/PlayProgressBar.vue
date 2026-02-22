@@ -38,29 +38,25 @@ function handleProgressChange(value) {
 </script>
 
 <template>
-  <el-slider
+  <TxSlider
     v-model="value" class="PlayerProgressBar-Container" :show-tooltip="false"
     @mouseenter="hover = true" @mouseleave="hover = false"
-    @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
+    @update:model-value="handleProgressChange" @change="debounceFunction(handleProgressChange)"
   />
 </template>
 
 <style lang="scss" scoped>
 .PlayerProgressBar-Container {
-  :deep(.el-slider__button-wrapper) {
-    opacity: 0;
-  }
   position: relative;
   padding: 0 2%;
 
   box-sizing: border-box;
 
-  --el-slider-main-bg-color: var(--el-fill-color-extra-light);
-  --el-slider-runway-bg-color: var(--el-border-color-light);
-  --el-slider-stop-bg-color: var(--el-color-white);
-
-  --el-slider-border-radius: 1px;
-  --el-slider-height: 5px;
+  --tx-fill-color: var(--tx-fill-color-extra-light);
+  --tx-slider-height: 5px !important;
+  --tx-slider-track-height: 5px !important;
+  --tx-slider-thumb-size: 0px !important;
+  --tx-slider-thumb-shadow: none;
   .dark & {
     filter: invert(1);
   }

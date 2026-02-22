@@ -411,8 +411,8 @@ onMounted(() => {
   gap: 16px;
   padding: 16px;
   border-radius: 18px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color);
   box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
   min-height: 280px;
 }
@@ -421,7 +421,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-right: 1px solid var(--el-border-color);
+  border-right: 1px solid var(--tx-border-color);
   padding-right: 12px;
 }
 
@@ -431,13 +431,13 @@ onMounted(() => {
   justify-content: space-between;
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .TranslationWidget__history-clear {
   border: none;
   background: transparent;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
   font-size: 12px;
   cursor: pointer;
 }
@@ -469,7 +469,7 @@ onMounted(() => {
 
 .TranslationWidget__history-text {
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -480,7 +480,7 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TranslationWidget__history-remove {
@@ -489,14 +489,14 @@ onMounted(() => {
   right: 6px;
   border: none;
   background: transparent;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 14px;
   cursor: pointer;
 }
 
 .TranslationWidget__history-empty {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   padding: 8px 0;
 }
 
@@ -515,13 +515,13 @@ onMounted(() => {
 
 .TranslationWidget__query-label {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TranslationWidget__query-text {
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin-top: 2px;
 }
 
@@ -531,20 +531,20 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 600;
   background: rgba(64, 158, 255, 0.15);
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .TranslationWidget__runtime-hint {
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-lighter);
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-lighter);
 }
 
 .TranslationWidget__status.is-error {
   background: rgba(245, 108, 108, 0.15);
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .TranslationWidget__providers {
@@ -555,8 +555,8 @@ onMounted(() => {
 
 .TranslationWidget__provider {
   border-radius: 14px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color-overlay);
   padding: 12px;
 }
 
@@ -570,22 +570,22 @@ onMounted(() => {
 .TranslationWidget__provider-name {
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .TranslationWidget__provider-status {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TranslationWidget__provider-status.is-error {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .TranslationWidget__copy {
   margin-left: auto;
   border: none;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   color: #fff;
   border-radius: 999px;
   font-size: 11px;
@@ -595,7 +595,7 @@ onMounted(() => {
 
 .TranslationWidget__provider-body {
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.5;
   min-height: 20px;
 }
@@ -604,19 +604,19 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-top: 6px;
 }
 
 .TranslationWidget__placeholder {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   padding: 8px 0;
 }
 
 .TranslationWidget__error {
   font-size: 12px;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
   background: rgba(245, 108, 108, 0.12);
   border-radius: 10px;
   padding: 8px 10px;
@@ -630,7 +630,7 @@ onMounted(() => {
   .TranslationWidget__history {
     border-right: none;
     padding-right: 0;
-    border-bottom: 1px solid var(--el-border-color);
+    border-bottom: 1px solid var(--tx-border-color);
     padding-bottom: 12px;
   }
 }

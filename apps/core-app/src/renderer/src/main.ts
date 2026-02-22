@@ -33,7 +33,6 @@ import '~/modules/auth/account-channel'
 import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/style.css'
-import '~/styles/element/index.scss'
 import '~/styles/index.scss'
 
 import '~/styles/accessibility.scss'

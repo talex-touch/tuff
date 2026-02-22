@@ -115,7 +115,6 @@
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0",
     "electron-vite": "^4.0.1",
-    "element-plus": "^2.13.1",
     "eslint": "^9.39.2",
     "eslint-plugin-vue": "^10.7.0",
     "gsap": "^3.14.2",

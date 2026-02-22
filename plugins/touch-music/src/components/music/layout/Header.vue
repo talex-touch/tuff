@@ -45,7 +45,7 @@ function selectSong(song) {
 
 <template>
   <div class="Header-Container">
-    <el-input v-model="searchState" placeholder="搜索音乐..." @blur="searchQuery" />
+    <TxInput v-model="searchState" placeholder="搜索音乐..." @blur="searchQuery" />
   </div>
 
   <div class="Header-List">
@@ -88,7 +88,7 @@ function selectSong(song) {
     width: 100%;
     height: 100%;
 
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
   z-index: 100;
   position: sticky;

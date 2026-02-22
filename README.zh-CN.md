@@ -118,7 +118,7 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 - Electron ^37.2.4
 - Vue.js: ^3.5.18
 - Vue Router: ^4.5.1
-- Element Plus: ^2.10.4
+- Tuffex
 - Milkdown: ^7.15.2
 - Lottie-web: ^5.13.0
 

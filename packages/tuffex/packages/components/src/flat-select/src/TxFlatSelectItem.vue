@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: var(--tx-text-color-primary, var(--el-text-color-primary, #303133));
+  color: var(--tx-text-color-primary, #303133);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
@@ -83,13 +83,13 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 
   &:hover:not(.is-disabled):not(.is-selected) {
-    background: var(--tx-fill-color-light, var(--el-fill-color-light, #f5f7fa));
+    background: var(--tx-fill-color-light, #f5f7fa);
   }
 
   &.is-selected {
-    color: var(--tx-color-primary, var(--el-color-primary, #409eff));
+    color: var(--tx-color-primary, #409eff);
     font-weight: 500;
-    background: color-mix(in srgb, var(--tx-color-primary, var(--el-color-primary, #409eff)) 8%, transparent);
+    background: color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent);
   }
 
   &.is-disabled {

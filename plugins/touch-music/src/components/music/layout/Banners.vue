@@ -131,7 +131,7 @@ export default {
 
     border-radius: 50%;
     opacity: .5;
-    background: var(--el-color-primary-light-9);
+    background: var(--tx-color-primary-light-9);
     margin: 0 5px;
     cursor: pointer;
 
@@ -162,7 +162,7 @@ export default {
 
 .Banner-Item-Wrapper {
   &.now {
-    filter: drop-shadow(-5px 0 4px var(--el-bg-color-overlay));
+    filter: drop-shadow(-5px 0 4px var(--tx-bg-color-overlay));
 
     transition: .2s;
     opacity: 0;

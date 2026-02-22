@@ -68,7 +68,7 @@ $ pnpm build:linux
 
 - **Vue 3** with Composition API
 - **TypeScript** for type safety
-- **Element Plus** UI components
+- **Tuffex** UI components
 - **UnoCSS** for styling
 - **Virtual scrolling** for performance
 

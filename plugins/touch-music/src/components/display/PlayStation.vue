@@ -123,7 +123,7 @@ watch(() => playStatus.value, (value) => {
     height: 100%;
 
     border-radius: 18px;
-    background-color: var(--el-fill-color-darker);
+    background-color: var(--tx-fill-color-darker);
   }
   &:after {
     z-index: -2;
@@ -149,7 +149,7 @@ watch(() => playStatus.value, (value) => {
   width: 90%;
   height: 45%;
 
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   border-radius: 18px;
   box-sizing: border-box;
   overflow: hidden;

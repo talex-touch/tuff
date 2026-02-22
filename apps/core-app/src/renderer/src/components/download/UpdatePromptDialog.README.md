@@ -234,12 +234,12 @@ The component uses Vue I18n for translations. Required translation keys:
 
 The component uses CSS custom properties for theming:
 
-- `--el-color-primary`: Primary color
-- `--el-color-success`: Success color
-- `--el-bg-color-page`: Page background
-- `--el-text-color-primary`: Primary text color
-- `--el-text-color-secondary`: Secondary text color
-- `--el-border-color`: Border color
+- `--tx-color-primary`: Primary color
+- `--tx-color-success`: Success color
+- `--tx-bg-color-page`: Page background
+- `--tx-text-color-primary`: Primary text color
+- `--tx-text-color-secondary`: Secondary text color
+- `--tx-border-color`: Border color
 
 ## Accessibility
 
@@ -257,7 +257,7 @@ The component uses CSS custom properties for theming:
 ## Dependencies
 
 - Vue 3
-- Element Plus
+- Tuffex
 - @talex-touch/utils (for types)
 - Vue I18n (for translations)
 

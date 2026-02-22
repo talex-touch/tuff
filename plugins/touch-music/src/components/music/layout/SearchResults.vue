@@ -24,11 +24,11 @@ function select(song) {
 <template>
   <div class="SearchResults-Container cubic-transition" :class="{ active: res }">
     <span class="SearchResults-Controller" @click="close" />
-    <el-scrollbar>
+    <TxScroll>
       <div v-if="res?.songs" class="SearchResults-Content">
         <SongItem v-for="(song, index) in res.songs" :key="song.id" :shrink="false" :playing="false" :song="song" @click="select(song)" />
       </div>
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 
@@ -66,7 +66,7 @@ function select(song) {
       border-radius: 8px;
       transform: translateX(-50%);
       transition: .25s;
-      background-color: var(--el-text-color-primary);
+      background-color: var(--tx-text-color-primary);
     }
     z-index: 10;
     position: absolute;
@@ -94,7 +94,7 @@ function select(song) {
     width: 100%;
     height: 100%;
 
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
   z-index: 50;
   position: relative;

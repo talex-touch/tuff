@@ -115,7 +115,7 @@ requestAnimationFrame(refresh)
   transition: .125s linear;
   opacity: .75;
   border-radius: 12px;
-  background-color: var(--el-fill-color-darker);
+  background-color: var(--tx-fill-color-darker);
 }
 
 .IndexImages-Container {
@@ -125,11 +125,11 @@ requestAnimationFrame(refresh)
   height: 25%;
 
   //aspect-ratio: 16 / 4;
-  filter: drop-shadow(0 0 16px var(--el-fill-color-light));
+  filter: drop-shadow(0 0 16px var(--tx-fill-color-light));
 
   overflow: hidden;
   border-radius: 12px;
   box-sizing: border-box;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
 }
 </style>

@@ -47,7 +47,7 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **Vue**: 3.5.27+ with Vue Router 4.6.4 and Pinia 3.0.4
 - **TypeScript**: 5.9.3
 - **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.1, Electron-Builder 26.4.0
-- **UI**: Element Plus 2.13.1, UnoCSS 66.6.0, SASS 1.97.2
+- **UI**: Tuffex, UnoCSS 66.6.0, SASS 1.97.2
 - **Database**: Drizzle ORM 0.44.7 with LibSQL 0.15.15
 - **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, Tesseract.js 6.0.1 (OCR), XTerm 5.3.0
 - **Logging**: log4js 6.9.1

@@ -142,8 +142,8 @@ watch(() => _song, async () => {
   height: max-content;
 
   border-radius: 8px;
-  box-shadow: var(--el-box-shadow-light);
-  background-color: var(--el-fill-color-light);
+  box-shadow: var(--tx-box-shadow-light);
+  background-color: var(--tx-fill-color-light);
 
   transition: .2s;
   transform: translate(-50%, 0);
@@ -217,7 +217,7 @@ watch(() => _song, async () => {
       font-size: 20px;
       transition: .25s;
       pointer-events: none;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
       transform: translate(-50%, -50%); // eye-view center align
     }
     position: relative;
@@ -287,7 +287,7 @@ watch(() => _song, async () => {
     height: 100%;
 
     border-radius: 18px;
-    background-color: var(--el-fill-color-darker);
+    background-color: var(--tx-fill-color-darker);
   }
   z-index: 80;
   position: relative;
@@ -301,7 +301,7 @@ watch(() => _song, async () => {
   width: 90%;
   height: 45%;
 
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   border-radius: 18px;
   box-sizing: border-box;
   transition: .25s;

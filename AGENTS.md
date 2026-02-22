@@ -137,7 +137,7 @@
 - **运行时**: Electron 37.2.4+, Node.js 22.16.0+ (Volta 强制)
 - **前端**: Vue 3.5.18+, Vue Router 4.5.1, Pinia 3.0.3
 - **构建**: Electron-Vite 4.0.0, Vite 7.0.6, TypeScript 5.8.3
-- **UI**: Element Plus 2.10.4, UnoCSS 66.3.3, SASS 1.89.2
+- **UI**: Tuffex, UnoCSS 66.3.3, SASS 1.89.2
 - **数据**: Drizzle ORM 0.44.4 + LibSQL 0.15.10
 - **工具**: VueUse 13.6.0, Tesseract.js 5.0.6 (OCR), XTerm 5.3.0, log4js 6.9.1
 

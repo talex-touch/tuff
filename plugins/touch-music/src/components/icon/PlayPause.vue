@@ -71,6 +71,6 @@ function refresh(value) {
   width: 48px;
   height: 48px;
 
-  fill: var(--el-text-color-primary)
+  fill: var(--tx-text-color-primary)
 }
 </style>

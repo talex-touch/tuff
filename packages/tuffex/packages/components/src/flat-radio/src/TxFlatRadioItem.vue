@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
   }
 
   &.is-multiple-selected {
-    background: var(--tx-bg-color-overlay, var(--el-bg-color-overlay, #fff));
+    background: var(--tx-bg-color-overlay, #fff);
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.08),
       0 1px 2px rgba(0, 0, 0, 0.04);

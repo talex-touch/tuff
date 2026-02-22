@@ -250,12 +250,12 @@ interface TuffItemStatusDot {
 
 ### 主题适配
 
-组件使用 Element Plus 的 CSS 变量，自动适配明暗主题：
-- `--el-fill-color-blank` - 背景色
-- `--el-border-color` - 边框色
-- `--el-color-primary` - 主题色
-- `--el-text-color-primary` - 主文本色
-- `--el-text-color-secondary` - 次文本色
+组件使用 Tuffex 的 CSS 变量，自动适配明暗主题：
+- `--tx-fill-color-blank` - 背景色
+- `--tx-border-color` - 边框色
+- `--tx-color-primary` - 主题色
+- `--tx-text-color-primary` - 主文本色
+- `--tx-text-color-secondary` - 次文本色
 
 ## 无障碍支持
 

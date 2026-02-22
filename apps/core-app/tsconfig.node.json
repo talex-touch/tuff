@@ -29,7 +29,6 @@
     "noUnusedParameters": true,
     "noEmit": true,
     /* Type checking */
-    // "types": ["node", "element-plus/global"],
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
     "skipLibCheck": true

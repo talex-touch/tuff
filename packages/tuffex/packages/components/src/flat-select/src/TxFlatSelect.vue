@@ -267,10 +267,10 @@ onBeforeUnmount(() => {
     width: 100%;
     height: 34px;
     padding: 0 10px;
-    border: 1px solid var(--tx-border-color-light, var(--el-border-color-light, #e4e7ed));
+    border: 1px solid var(--tx-border-color-light, #e4e7ed);
     border-radius: 10px;
-    background: var(--tx-bg-color, var(--el-bg-color, #fff));
-    color: var(--tx-text-color-primary, var(--el-text-color-primary, #303133));
+    background: var(--tx-bg-color, #fff);
+    color: var(--tx-text-color-primary, #303133);
     font-size: 13px;
     font-family: inherit;
     cursor: pointer;
@@ -280,12 +280,12 @@ onBeforeUnmount(() => {
     z-index: 2;
 
     &:hover:not(:disabled) {
-      border-color: var(--tx-border-color, var(--el-border-color, #dcdfe6));
+      border-color: var(--tx-border-color, #dcdfe6);
     }
 
     &:focus-visible {
-      border-color: var(--tx-color-primary, var(--el-color-primary, #409eff));
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, var(--el-color-primary, #409eff)) 15%, transparent);
+      border-color: var(--tx-color-primary, #409eff);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 15%, transparent);
     }
 
     &:disabled {
@@ -302,14 +302,14 @@ onBeforeUnmount(() => {
     white-space: nowrap;
 
     &.is-placeholder {
-      color: var(--tx-text-color-placeholder, var(--el-text-color-placeholder, #a8abb2));
+      color: var(--tx-text-color-placeholder, #a8abb2);
     }
   }
 
   &__arrow {
     display: inline-flex;
     align-items: center;
-    color: var(--tx-text-color-secondary, var(--el-text-color-secondary, #909399));
+    color: var(--tx-text-color-secondary, #909399);
     flex-shrink: 0;
   }
 
@@ -321,8 +321,8 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: column;
     padding: 4px;
-    background: var(--tx-bg-color-overlay, var(--el-bg-color-overlay, #fff));
-    border: 1px solid var(--tx-border-color-lighter, var(--el-border-color-lighter, #ebeef5));
+    background: var(--tx-bg-color-overlay, #fff);
+    border: 1px solid var(--tx-border-color-lighter, #ebeef5);
     border-radius: 10px;
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.08),

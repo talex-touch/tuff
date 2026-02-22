@@ -981,7 +981,7 @@ export default defineEventHandler(async (event) => {
       </p>
       
       <div class="toggle-item">
-        <el-switch v-model="config.enabled" @change="updateConfig" />
+        <TxSwitch v-model="config.enabled" @change="updateConfig" />
         <span>启用遥测</span>
       </div>
     </div>
@@ -989,39 +989,39 @@ export default defineEventHandler(async (event) => {
     <div v-if="config.enabled" class="setting-section">
       <h3>隐私级别</h3>
       
-      <el-radio-group v-model="config.privacyMode" @change="updateConfig">
-        <el-radio label="anonymous">
+      <TxRadioGroup v-model="config.privacyMode" @change="updateConfig">
+        <TxRadio label="anonymous">
           <strong>匿名</strong>
           <p>仅发送错误信息，无任何设备或用户标识</p>
-        </el-radio>
+        </TxRadio>
         
-        <el-radio label="pseudonymous">
+        <TxRadio label="pseudonymous">
           <strong>假名</strong>
           <p>发送设备指纹用于去重，不关联账号</p>
-        </el-radio>
+        </TxRadio>
         
-        <el-radio v-if="isLoggedIn" label="identified">
+        <TxRadio v-if="isLoggedIn" label="identified">
           <strong>完整</strong>
           <p>关联账号以获得更好的支持体验</p>
-        </el-radio>
-      </el-radio-group>
+        </TxRadio>
+      </TxRadioGroup>
     </div>
     
     <div v-if="config.enabled" class="setting-section">
       <h3>数据类型</h3>
       
       <div class="toggle-item">
-        <el-switch v-model="config.sendErrors" @change="updateConfig" />
+        <TxSwitch v-model="config.sendErrors" @change="updateConfig" />
         <span>错误与崩溃报告</span>
       </div>
       
       <div class="toggle-item">
-        <el-switch v-model="config.sendPerformance" @change="updateConfig" />
+        <TxSwitch v-model="config.sendPerformance" @change="updateConfig" />
         <span>性能指标</span>
       </div>
       
       <div class="toggle-item">
-        <el-switch v-model="config.sendUsage" @change="updateConfig" />
+        <TxSwitch v-model="config.sendUsage" @change="updateConfig" />
         <span>功能使用统计</span>
       </div>
     </div>
@@ -1035,9 +1035,9 @@ export default defineEventHandler(async (event) => {
         <p>最后上报: {{ lastReportTime }}</p>
       </div>
       
-      <el-button type="danger" @click="deleteMyData">
+      <TxButton type="danger" @click="deleteMyData">
         请求删除我的数据
-      </el-button>
+      </TxButton>
     </div>
   </div>
 </template>

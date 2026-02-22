@@ -168,7 +168,7 @@
 - [ ] 全仓校验：grep 清理旧名（tuff-ui/tuffex-ui/touchx-ui）残留，确认无影响构建的引用
 - [ ] 清理产物：确认 `packages/tuffex/**/node_modules` 与旧 `playground` 目录已删除（仓库内不提交）
 - [ ] 提交变更：README/CONTRIBUTING/Nexus docs 链接更新 + createTestVue 删除 + 构建脚本修复
-- [ ] 现有 ElMessageBox/ElMessage 等弹窗/提示统一迁移到目标组件方案，清点调用点并替换
+- [ ] 现有 MessageBox/Message 弹窗与提示统一迁移到 Sonner/Tuffex 方案，清点调用点并替换
 
 ### ✅ 模块日志系统 (v2.4.8) - Phase 1-4 核心完成
 **来源**: `plan-prd/02-architecture/module-logging-system-prd.md`

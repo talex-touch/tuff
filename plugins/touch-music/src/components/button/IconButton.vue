@@ -78,10 +78,10 @@ watchEffect(() => {
     }
   }
   &.select {
-    box-shadow: var(--el-box-shadow-lighter);
+    box-shadow: var(--tx-box-shadow-lighter);
   }
   &:hover {
-    --fake-color: var(--el-fill-color-lighter);
+    --fake-color: var(--tx-fill-color-lighter);
   }
   .IconButton-Icon {
     &:hover {
@@ -105,8 +105,8 @@ watchEffect(() => {
 
   cursor: pointer;
   border-radius: 8px;
-  box-shadow: var(--el-box-shadow);
-  --fake-color: var(--el-fill-color);
+  box-shadow: var(--tx-box-shadow);
+  --fake-color: var(--tx-fill-color);
   --fake-radius: 8px;
   --fake-opacity: .5;
 }
