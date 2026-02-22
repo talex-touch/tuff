@@ -24,7 +24,7 @@ pnpm install
 ```toml
 name = "tuff-nexus"
 compatibility_date = "2024-08-14"
-pages_build_output_dir = ".output/public"
+pages_build_output_dir = "apps/nexus/dist"
 
 [[d1_databases]]
 binding = "DB"
@@ -121,14 +121,14 @@ pnpm dev
 ```bash
 pnpm preview:cf
 ```
-命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `.output/public` 与 Nitro 产出的 Functions 进行本地模拟。
+命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `dist` 与 Nitro 产出的 Functions 进行本地模拟。
 
 > 如提示未登录 Cloudflare，运行 `npx wrangler login` 或提供 `CLOUDFLARE_API_TOKEN`。
 
 ## 6. 部署流水线建议
 1. 在 Cloudflare Pages 的 **Build settings** 中配置：
    - Build command: `pnpm install && pnpm build`
-   - Build output directory: `.output/public`
+   - Build output directory: `apps/nexus/dist`
 2. 在 Pages 项目的 **Settings → Functions** 区域开启 Functions，并填写与 `wrangler.toml` 一致的绑定。
 3. 在 **Settings → Environment variables** 中补充：
    - `NITRO_PRESET=cloudflare-pages`（冗余保险，Nuxt 会读取）

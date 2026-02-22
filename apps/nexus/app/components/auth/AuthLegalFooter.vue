@@ -55,6 +55,7 @@ function goTo(path: string) {
   left: 0;
   right: 0;
   bottom: 6px;
+  z-index: 20;
 }
 
 .auth-footer-row {

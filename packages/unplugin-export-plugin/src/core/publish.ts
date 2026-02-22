@@ -7,6 +7,7 @@ import process from 'node:process'
 import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import fs from 'fs-extra'
 import { parsePublishArgs } from '../cli/args'
+import { getAuthToken, getAuthTokenPath, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 
 interface PackageInfo {
@@ -18,32 +19,6 @@ interface PackageInfo {
 }
 
 const DEFAULT_API_URL = `${NEXUS_BASE_URL}/api/market/plugins/publish`
-
-async function getAuthToken(): Promise<string | null> {
-  const tokenPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.tuff', 'auth.json')
-
-  try {
-    if (await fs.pathExists(tokenPath)) {
-      const auth = await fs.readJson(tokenPath)
-      return auth.token || null
-    }
-  }
-  catch {
-    // Ignore
-  }
-
-  return process.env.TUFF_AUTH_TOKEN || null
-}
-
-async function saveAuthToken(token: string): Promise<void> {
-  const tuffDir = path.join(process.env.HOME || process.env.USERPROFILE || '', '.tuff')
-  await fs.ensureDir(tuffDir)
-
-  const tokenPath = path.join(tuffDir, 'auth.json')
-  await fs.writeJson(tokenPath, { token, savedAt: new Date().toISOString() })
-
-  console.log(`✓ Token saved to ${tokenPath}`)
-}
 
 async function calculateSha256(filePath: string): Promise<string> {
   const content = await fs.readFile(filePath)
@@ -124,11 +99,12 @@ export async function login(): Promise<void> {
   }
 
   await saveAuthToken(token)
+  console.log(`✓ Token saved to ${getAuthTokenPath()}`)
   console.log('✓ Successfully logged in!')
 }
 
 export async function logout(): Promise<void> {
-  const tokenPath = path.join(process.env.HOME || process.env.USERPROFILE || '', '.tuff', 'auth.json')
+  const tokenPath = getAuthTokenPath()
 
   if (await fs.pathExists(tokenPath)) {
     await fs.remove(tokenPath)

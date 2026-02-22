@@ -26,5 +26,13 @@ export default <Options>{
     'compressing',
     'chalk',
     'cli-progress',
+    'lightningcss',
+    'rollup',
   ],
+  noExternal: [
+    '@talex-touch/utils',
+  ],
+  banner: {
+    js: 'import { createRequire as __createRequire } from \'node:module\'; const require = __createRequire(import.meta.url);',
+  },
 }
