@@ -135,13 +135,23 @@ async function confirmPendingOperation() {
 
 <template>
   <div class="mx-auto max-w-6xl space-y-6 px-5 py-6">
-    <header class="space-y-2">
-      <h1 class="text-2xl font-semibold">
-        {{ t('dashboard.sections.analytics.title', 'Risk Control') }}
-      </h1>
-      <p class="text-sm text-black/60 dark:text-white/60">
-        P0-ADMIN control plane console for emergency risk actions.
-      </p>
+    <header class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div class="space-y-2">
+        <h1 class="text-2xl font-semibold">
+          {{ t('dashboard.sections.analytics.title', 'Risk Control') }}
+        </h1>
+        <p class="text-sm text-black/60 dark:text-white/60">
+          P0-ADMIN control plane console for emergency risk actions.
+        </p>
+      </div>
+      <NuxtLink
+        to="/admin/emergency"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center justify-center rounded-lg border border-black/15 px-4 py-2 text-sm font-medium text-black transition hover:border-black/30 hover:bg-black/5 dark:border-white/20 dark:text-white dark:hover:border-white/40 dark:hover:bg-white/5"
+      >
+        打开应急控制台
+      </NuxtLink>
     </header>
 
     <section class="rounded-xl border border-black/10 bg-white p-4 dark:border-white/15 dark:bg-black/10">
@@ -255,4 +265,3 @@ async function confirmPendingOperation() {
     </section>
   </div>
 </template>
-
