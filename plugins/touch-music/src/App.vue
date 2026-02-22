@@ -6,7 +6,7 @@ import Header from './components/music/layout/Header.vue'
 </script>
 
 <template>
-  <el-scrollbar>
+  <TxScroll>
     <div class="App-Wrapper">
       <div class="TouchMusic-Main">
         <p class="TouchMusic-Title">
@@ -29,7 +29,7 @@ import Header from './components/music/layout/Header.vue'
     </div>
 
     <!-- <Footer></Footer> -->
-  </el-scrollbar>
+  </TxScroll>
 </template>
 
 <style lang="scss" scoped>
@@ -49,7 +49,7 @@ import Header from './components/music/layout/Header.vue'
   overflow: hidden;
   box-sizing: border-box;
   border-radius: 18px 0 0 18px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
 }
 
 .TouchMusic-Main {
@@ -67,9 +67,8 @@ import Header from './components/music/layout/Header.vue'
 }
 
 .App-Container {
-  :deep(.el-scrollbar__view) {
-
-    height: 100%
+  :deep(.tx-scroll__content) {
+    height: 100%;
   }
   width: 100%;
 }
@@ -85,6 +84,6 @@ import Header from './components/music/layout/Header.vue'
   align-items: center;
 
   box-sizing: border-box;
-  background-color: var(--el-fill-color-lighter);
+  background-color: var(--tx-fill-color-lighter);
 }
 </style>

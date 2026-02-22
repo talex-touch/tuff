@@ -22,7 +22,7 @@
 - TypeScript 5.9.3
 - UnoCSS 66.5.4
 - Sass 1.93.3
-- Element Plus 2.11.7
+- Tuffex
 - Pinia 3.0.3
 - VueUse 14.0.0
 

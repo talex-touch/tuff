@@ -7,7 +7,7 @@
  *
  * Strategy:
  * - Phase 1: Settings pages only (SettingUser, SettingApp, etc.)
- * - Phase 2: New features (prefer Tuffex over Element Plus)
+ * - Phase 2: New features (prefer Tuffex over legacy UI)
  * - Phase 3: Gradual migration of existing components
  *
  * @see packages/tuffex/README_ZHCN.md for component documentation

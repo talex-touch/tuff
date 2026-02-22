@@ -2,6 +2,22 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-22
+
+### CoreBox Dev 插件视图路由按 manifest 直出
+
+**变更类型**: 行为调整 / 插件开发
+
+**描述**: Dev 插件视图不再强制 hash 路由，交互路径按 manifest 原样生成；需要 hash 路由时请在 manifest 的 interaction.path 中显式配置 `#/...`。
+
+**主要变更**:
+1. **移除强制 hash**：dev 插件 URL 不再自动改写为 `/#/`。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+
+---
+
 ## 2026-02-21
 
 ### CoreBox 路径动作提示与索引扩展
@@ -185,17 +201,18 @@
 - `apps/core-app/src/renderer/src/views/test/LoginTest.vue`
 - `apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue`
 
-### Renderer Element Plus 全量迁移至 Tuffex
+### Renderer 旧组件库全量迁移至 Tuffex
 
 **变更类型**: 体验一致性 / 组件统一
 
-**描述**: core-app renderer 全面移除 Element Plus 组件依赖，改为 Tuffex 组件体系；新增 Transfer 组件与 Tree 叶子节点支持以补齐迁移能力。
+**描述**: core-app renderer 全面移除旧组件库依赖，改为 Tuffex 组件体系；新增 Transfer 组件与 Tree 叶子节点支持以补齐迁移能力。
 
 **主要变更**:
 1. **组件替换**：Alert/Collapse/Dropdown/Empty/Form/Pagination/Skeleton/Tree 等组件全部迁移至 Tuffex。
 2. **能力补齐**：新增 `TxTransfer` 组件与 `TxTree` 的 `leaf` 能力，覆盖模型管理与文件树场景。
-3. **插件移除**：renderer 启动流程移除 ElementPlus 全量注册。
+3. **插件移除**：renderer 启动流程移除旧组件库全量注册。
 4. **用例同步**：文档模板示例切换到 TxButton/TxTag。
+5. **构建清理**：移除旧组件库自动导入/组件解析器与依赖声明，清理 renderer 主题入口残留。
 
 **修改文件**:
 - `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`
@@ -213,6 +230,51 @@
 - `apps/core-app/src/renderer/src/components/permission/PermissionRequestDialog.vue`
 - `apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue`
 - `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue`
+
+### Nexus / Touch Music 移除旧组件库
+
+**变更类型**: 依赖清理 / 组件统一
+
+**描述**: Nexus 与 touch-music 插件清理旧组件库依赖与锁文件残留，插件 UI 迁移到 Tuffex（TxScroll/TxSlider/TxInput），并统一使用 `--tx-*` 主题变量。
+
+**主要变更**:
+1. **Nexus 清理**：锁文件移除旧组件库与 icons-vue 依赖。
+2. **插件迁移**：touch-music 用 TxScroll/TxSlider/TxInput 替换旧组件库组件，并移除旧样式入口。
+3. **主题变量**：touch-music 相关样式变量统一替换为 `--tx-*`。
+
+**修改文件**:
+- `apps/nexus/pnpm-lock.yaml`
+- `plugins/touch-music/src/main.js`
+- `plugins/touch-music/src/style.css`
+- `plugins/touch-music/src/components/music/base/PlayProgressBar.vue`
+- `plugins/touch-music/src/components/music/FooterFunction.vue`
+- `plugins/touch-music/src/components/music/layout/Header.vue`
+- `plugins/touch-music/src/components/music/layout/SearchResults.vue`
+- `plugins/touch-music/src/components/music/PlayList.vue`
+- `plugins/touch-music/src/components/music/word-lyric/WordLyricScroller.vue`
+- `plugins/touch-music/src/components/music/word-lyric/leaf/LyricScroller.vue`
+- `plugins/touch-music/src/components/music/base/PlayProgressBar.old.old.vue`
+
+### 全仓清理旧组件库痕迹
+
+**变更类型**: 依赖清理 / 文档一致性
+
+**描述**: 全仓移除旧变量兼容与旧示例，统一为 Tuffex 变量与组件命名。
+
+**主要变更**:
+1. **样式兼容移除**：tuffex 组件去除旧变量回退，避免残留引用。
+2. **插件更新**：touch-translation 样式变量统一为 `--tx-*`。
+3. **文档同步**：PRD 示例组件统一切换为 Tuffex 组件命名。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue`
+- `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelectItem.vue`
+- `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue`
+- `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadioItem.vue`
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/02-architecture/telemetry-error-reporting-system-prd.md`
+- `docs/plan-prd/03-features/search/quick-launch-and-search-optimization-prd.md`
+- `docs/plan-prd/TODO.md`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
 - `apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplate.md`
 - `apps/core-app/src/renderer/src/components/tuff/template/DESIGN_EXTENSIONS.md`
@@ -343,14 +405,14 @@
 
 **变更类型**: 稳定性 / 行为修复
 
-**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；主进程将 transport SDK 预打包为临时 CJS 并注入 preload，确保运行时直接可用。
+**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；统一通过 utils transport prelude 输出通道注入脚本，预加载仅负责 `$channel`，`$transport` 由插件前端 prelude 初始化。
 
 **主要变更**:
-1. **Bundle 注入**：主进程使用 esbuild 生成 `tuff-plugin-transport.cjs` 并将绝对路径注入 preload。
+1. **Prelude 注入**：主进程通过 `@talex-touch/utils/transport/prelude` 生成通道脚本并注入 preload。
 2. **通道初始化**：CoreBox 与 DivisionBox 的 webcontent 注入一致化处理，避免特定容器失效。
 
 **修改文件**:
-- `apps/core-app/src/main/utils/plugin-transport-bundle.ts`
+- `packages/utils/transport/prelude.ts`
 - `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
 - `apps/core-app/src/main/modules/division-box/session.ts`
 

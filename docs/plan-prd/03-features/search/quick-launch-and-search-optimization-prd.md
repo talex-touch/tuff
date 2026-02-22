@@ -339,13 +339,13 @@ async function handleSearch(value: string): Promise<void> {
   icon="edit"
 >
   <t-block-slot :title="t('appConfigure.alias')" icon="tag">
-    <el-input 
+    <TxInput 
       v-model="appAlias" 
       :placeholder="t('appConfigure.aliasPlaceholder')"
     />
   </t-block-slot>
   <t-block-slot :title="t('appConfigure.keywords')" icon="key">
-    <el-input 
+    <TxInput 
       v-model="appKeywords" 
       :placeholder="t('appConfigure.keywordsPlaceholder')"
     />

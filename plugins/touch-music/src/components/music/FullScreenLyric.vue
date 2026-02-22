@@ -137,7 +137,7 @@ function handleProgressChange(value) {
   align-items: center;
   justify-content: center;
 
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 
   filter: invert(1);
   .dark & {
@@ -303,7 +303,7 @@ function handleProgressChange(value) {
   transition: .25s ease-in;
   opacity: .5;
   transform: scale(1.2) translateY(150%);
-  background-color: var(--el-overlay-color);
+  background-color: var(--tx-overlay-color);
 }
 
 @keyframes breath {

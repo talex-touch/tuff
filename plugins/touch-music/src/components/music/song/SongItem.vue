@@ -54,7 +54,7 @@ onMounted(() => {
         {{ song.name }}
         <span v-if="song.mv" class="SongItem-Tag" style="--tag-color: #07a3f6dd" v-text="`MV`" />
 
-        <span v-if="song.fee === 1" class="SongItem-Tag" style="--tag-color: var(--el-color-danger-light-3)" v-text="`VIP`" />
+        <span v-if="song.fee === 1" class="SongItem-Tag" style="--tag-color: var(--tx-color-danger-light-3)" v-text="`VIP`" />
         <span v-if="song.hr" class="SongItem-Tag" style="--tag-color: #212121ee" v-text="`Hi-Res`" />
         <span v-else-if="song.sq" class="SongItem-Tag" style="--tag-color: #2c2f2fcc" v-text="`SQ`" />
 
@@ -81,7 +81,7 @@ onMounted(() => {
 <style lang="scss" scoped>
 .SongItem-Container {
   &:hover {
-    background-color: var(--el-fill-color);
+    background-color: var(--tx-fill-color);
     .SongItem-Album {
       opacity: .75;
     }
@@ -107,8 +107,8 @@ onMounted(() => {
       font-size: 14px;
 
       border-radius: 4px;
-      background-color: var(--tag-color, var(--el-border-color));
-      border: 1px solid var(--tag-color, var(--el-border-color));
+      background-color: var(--tag-color, var(--tx-border-color));
+      border: 1px solid var(--tag-color, var(--tx-border-color));
       box-sizing: border-box;
       transform: scale(.7);
     }
@@ -177,8 +177,8 @@ onMounted(() => {
     width: calc(100% - 10px);
   }
   &.active {
-    border: 2px solid var(--el-color-primary);
-    background-color: var(--el-fill-color-dark);
+    border: 2px solid var(--tx-color-primary);
+    background-color: var(--tx-fill-color-dark);
   }
   position: relative;
   display: flex;

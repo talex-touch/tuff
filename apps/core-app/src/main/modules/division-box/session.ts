@@ -13,19 +13,16 @@ import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
+import { ChannelType } from '@talex-touch/utils/channel'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
 import { pluginModule } from '../plugin/plugin-module'
-import { getPluginTransportBundlePath } from '../../utils/plugin-transport-bundle'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 
-const resolveTransportModulePath = async (pluginPath?: string): Promise<string | null> => {
-  return getPluginTransportBundlePath(pluginPath)
-}
 /**
  * Type for state change listener callback
  */
@@ -349,11 +346,7 @@ export class DivisionBoxSession {
         `tuff-division-preload-${plugin.name}-${Date.now()}.js`
       )
 
-      const transportModulePath = await resolveTransportModulePath(plugin?.pluginPath)
-      const channelScript = this.generateChannelScript(
-        plugin._uniqueChannelKey,
-        transportModulePath
-      )
+      const channelScript = this.generateChannelScript(plugin._uniqueChannelKey)
       const pluginInjectionCode = injections.js.trim()
 
       const combinedPreload = `
@@ -434,98 +427,8 @@ export class DivisionBoxSession {
   /**
    * Generate plugin channel script for preload injection
    */
-  private generateChannelScript(uniqueKey: string, transportModulePath?: string | null): string {
-    return `
-(function() {
-  const uniqueKey = "${uniqueKey}";
-  const transportModulePath = ${JSON.stringify(transportModulePath)};
-  window['$tuffInitialData'] = window['$tuffInitialData'] || {};
-  const { ipcRenderer } = require('electron');
-  const DataCode = ${JSON.stringify(DataCode)};
-  const CHANNEL_DEFAULT_TIMEOUT = 60000;
-
-  class TouchChannel {
-    channelMap = new Map();
-    pendingMap = new Map();
-    earlyMessageQueue = new Map();
-
-    constructor() {
-      ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
-    }
-
-    __parse_raw_data(e, arg) {
-      if (!arg?.header) return null;
-      const { uniqueKey: thisKey } = arg.header;
-      if (thisKey && thisKey !== uniqueKey) return null;
-      return {
-        header: { status: arg.header.status || 'request', type: 'main', _originData: arg },
-        sync: arg.sync, code: arg.code, data: arg.data, plugin: arg.plugin, name: arg.name
-      };
-    }
-
-    __handle_main(e, arg) {
-      const rawData = this.__parse_raw_data(e, arg);
-      if (!rawData?.header) return;
-      if (rawData.header.status === 'reply' && rawData.sync) {
-        return this.pendingMap.get(rawData.sync.id)?.(rawData);
-      }
-      const listeners = this.channelMap.get(rawData.name);
-      if (listeners?.length > 0) {
-        this.__dispatch(e, rawData, listeners);
-      } else {
-        const queue = this.earlyMessageQueue.get(rawData.name) || [];
-        queue.push({ e, rawData });
-        this.earlyMessageQueue.set(rawData.name, queue);
-      }
-    }
-
-    __dispatch(e, rawData, listeners) {
-      listeners.forEach(func => {
-        func({ reply: (code, data) => e.sender.send('@plugin-process-message', {
-          code, data, sync: rawData.sync ? { ...rawData.sync, timeStamp: Date.now() } : undefined,
-          name: rawData.name, header: { status: 'reply', type: rawData.header.type }
-        }), ...rawData });
-      });
-    }
-
-    regChannel(eventName, callback) {
-      const listeners = this.channelMap.get(eventName) || [];
-      if (!listeners.includes(callback)) listeners.push(callback);
-      this.channelMap.set(eventName, listeners);
-      const early = this.earlyMessageQueue.get(eventName);
-      if (early?.length) {
-        this.earlyMessageQueue.delete(eventName);
-        early.forEach(({ e, rawData }) => this.__dispatch(e, rawData, [callback]));
-      }
-      return () => { const idx = listeners.indexOf(callback); if (idx !== -1) listeners.splice(idx, 1); };
-    }
-
-    send(eventName, arg) {
-      const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
-      const data = { code: DataCode.SUCCESS, data: arg, sync: { timeStamp: Date.now(), timeout: CHANNEL_DEFAULT_TIMEOUT, id: uniqueId },
-        name: eventName, header: { uniqueKey, status: 'request', type: 'plugin' }
-      };
-      return new Promise((resolve, reject) => {
-        ipcRenderer.send('@plugin-process-message', data);
-        const timeout = setTimeout(() => { this.pendingMap.delete(uniqueId); reject(new Error('Timeout')); }, CHANNEL_DEFAULT_TIMEOUT);
-        this.pendingMap.set(uniqueId, res => { clearTimeout(timeout); this.pendingMap.delete(uniqueId); resolve(res.data); });
-      });
-    }
-  }
-
-  window['$channel'] = new TouchChannel();
-  try {
-    if (!transportModulePath) {
-      throw new Error('[DivisionBox] Plugin transport bundle not resolved');
-    }
-    const transportModule = require(transportModulePath);
-    const { createPluginTuffTransport } = transportModule;
-    window['$transport'] = createPluginTuffTransport(window['$channel']);
-  } catch (error) {
-    console.error('[DivisionBox] Failed to init plugin transport:', error);
-  }
-})();
-`
+  private generateChannelScript(uniqueKey: string): string {
+    return getPluginChannelPreludeCode({ uniqueKey, initialData: {} })
   }
 
   /**

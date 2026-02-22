@@ -89,8 +89,8 @@ export function getStyles() {
                 }
 
                 html.dark {
-                  --el-box-shadow-lighter: 0 0 0 1px rgba(255, 255, 255, .2) !important;
-                  --el-box-shadow: 0 0 4px 1px rgba(29, 29, 29, .2) !important;
+                  --tx-box-shadow-lighter: 0 0 0 1px rgba(255, 255, 255, .2) !important;
+                  --tx-box-shadow: 0 0 4px 1px rgba(29, 29, 29, .2) !important;
                 }
 
                 `

@@ -42,8 +42,8 @@ onMounted(() => {
   <div ref="bar" class="PlayerProgressBar-Container" :style="`--progress: ${(current / max) * 100}%`">
     <div class="PlayerProgressBar-Background" />
   </div>
-<!--  <el-slider class="PlayerProgressBar-Container" @mouseenter="hover = true" @mouseleave="hover = false"
-             @input="handleProgressChange" @change="debounceFunction(handleProgressChange)"
+<!--  <TxSlider class="PlayerProgressBar-Container" @mouseenter="hover = true" @mouseleave="hover = false"
+             @update:modelValue="handleProgressChange" @change="debounceFunction(handleProgressChange)"
              v-model="value" :show-tooltip="false" /> -->
 </template>
 
@@ -60,7 +60,7 @@ onMounted(() => {
     height: 100%;
     width: var(--progress, 0);
 
-    background: var(--el-fill-color);
+    background: var(--tx-fill-color);
   }
   .PlayerProgressBar-Background {
     position: relative;
@@ -72,7 +72,7 @@ onMounted(() => {
     width: 100%;
 
     opacity: 0.5;
-    background-color: var(--el-color-primary-light-9);
+    background-color: var(--tx-color-primary-light-9);
   }
   position: relative;
 

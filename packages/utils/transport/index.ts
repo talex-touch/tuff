@@ -137,3 +137,5 @@ export type {
   TransportPortHandle,
   TransportPortOpenOptions,
 } from './types'
+
+export * from './prelude'

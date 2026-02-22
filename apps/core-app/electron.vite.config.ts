@@ -9,7 +9,6 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import type { Plugin, PluginOption } from 'vite'
 import Unocss from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 import generatorInformation from './generator-information'
@@ -204,13 +203,10 @@ export default defineConfig({
       Unocss(),
       vueJsx(),
       AutoImport({
-        resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
         imports: ['vue', 'vue-router'],
         dts: true
       }),
-      Components({
-        resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
-      }),
+      Components(),
       filteredVueSetupExtend,
       VueI18nPlugin({
         runtimeOnly: false

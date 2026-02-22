@@ -14,7 +14,6 @@ import fse from 'fs-extra'
 import Unocss from 'unocss/vite'
 
 import AutoImport from 'unplugin-auto-import/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import Components from 'unplugin-vue-components/vite'
 import VueSetupExtend from 'vite-plugin-vue-setup-extend'
 
@@ -135,7 +134,6 @@ const package_default = {
     electron: '^38.5.0',
     'electron-builder': '^26.0.12',
     'electron-vite': '^4.0.1',
-    'element-plus': '^2.11.7',
     eslint: '^9.39.0',
     'eslint-plugin-vue': '^10.5.1',
     gsap: '^3.13.0',
@@ -448,13 +446,10 @@ const electron_vite_config_default = defineConfig({
       Unocss(),
       vueJsx(),
       AutoImport({
-        resolvers: [ElementPlusResolver({ importStyle: 'sass' })],
         imports: ['vue', 'vue-router'],
         dts: true
       }),
-      Components({
-        resolvers: [ElementPlusResolver({ importStyle: 'sass' })]
-      }),
+      Components(),
       VueSetupExtend(),
       VueI18nPlugin({
         runtimeOnly: false

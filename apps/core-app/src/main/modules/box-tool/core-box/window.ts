@@ -9,7 +9,6 @@ import path from 'node:path'
 import process from 'node:process'
 import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
-import { DataCode } from '@talex-touch/utils/channel'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { ChannelType } from '@talex-touch/utils/channel'
@@ -30,7 +29,7 @@ import {
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
-import { getPluginTransportBundlePath } from '../../../utils/plugin-transport-bundle'
+import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
@@ -1133,262 +1132,10 @@ export class WindowManager {
       // Pre-compute initial data to inject synchronously
       const initialThemeData = { dark: this.currentThemeIsDark }
 
-      const resolvedTransportModulePath = await getPluginTransportBundlePath(plugin?.pluginPath)
-
-      const channelScript = `
-(function() {
-  const uniqueKey = "${plugin._uniqueChannelKey}";
-  const transportModulePath = ${JSON.stringify(resolvedTransportModulePath)};
-
-  // Inject initial data synchronously so it's available immediately
-  window['$tuffInitialData'] = ${JSON.stringify({ theme: initialThemeData })};
-  const { ipcRenderer } = require('electron')
-  const DataCode = ${JSON.stringify(DataCode)};
-  const CHANNEL_DEFAULT_TIMEOUT = 60000;
-
-  class TouchChannel {
-    channelMap = new Map();
-    pendingMap = new Map();
-    // Queue for messages received before listeners are registered
-    earlyMessageQueue = new Map();
-
-    constructor() {
-      ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this));
-    }
-
-    __parse_raw_data(e, arg) {
-      if (arg) {
-        const { name, header, code, plugin, data, sync } = arg;
-        if (header) {
-          const { uniqueKey: thisUniqueKey } = header
-          if (!thisUniqueKey) {
-            console.warn('[CoreBox] Plugin uniqueKey not found in header:', arg)
-          } else if (thisUniqueKey !== uniqueKey) {
-            console.error("[FatalError] Plugin uniqueKey not match!", e, arg, thisUniqueKey, uniqueKey)
-            return null;
-          }
-
-          return {
-            header: {
-              status: header.status || 'request',
-              type: 'main',
-              _originData: arg,
-              event: e || undefined
-            },
-            sync,
-            code,
-            data,
-            plugin,
-            name: name
-          };
-        }
-      }
-      console.error(e, arg);
-      return null;
-    }
-
-    __handle_main(e, arg) {
-      const rawData = this.__parse_raw_data(e, arg);
-      if (!rawData?.header) {
-        console.error('Invalid message: ', arg);
-        return;
-      }
-      if (rawData.header.status === 'reply' && rawData.sync) {
-        const { id } = rawData.sync;
-        return this.pendingMap.get(id)?.(rawData);
-      }
-      const listeners = this.channelMap.get(rawData.name);
-      if (listeners && listeners.length > 0) {
-        this.__dispatch(e, rawData, listeners);
-      } else {
-        // No listeners yet, queue the message for later replay
-        const queue = this.earlyMessageQueue.get(rawData.name) || [];
-        queue.push({ e, rawData });
-        this.earlyMessageQueue.set(rawData.name, queue);
-      }
-    }
-
-    __dispatch(e, rawData, listeners) {
-      listeners.forEach((func) => {
-        const handInData = {
-          reply: (code, data) => {
-            e.sender.send(
-              '@plugin-process-message',
-              this.__parse_sender(code, rawData, data, rawData.sync)
-            );
-          },
-          ...rawData
-        };
-        func(handInData);
-        handInData.reply(DataCode.SUCCESS, undefined);
-      });
-    }
-
-    __parse_sender(code, rawData, data, sync) {
-      return {
-        code,
-        data,
-        sync: !sync ? undefined : {
-          timeStamp: new Date().getTime(),
-          timeout: sync.timeout,
-          id: sync.id
-        },
-        name: rawData.name,
-        header: {
-          status: 'reply',
-          type: rawData.header.type,
-          _originData: rawData.header._originData
-        }
-      };
-    }
-
-    formatPayloadPreview(payload) {
-      const truncate = (value, maxChars) => {
-        if (typeof value !== 'string') return String(value);
-        if (!Number.isFinite(maxChars) || maxChars <= 0) return '';
-        return value.length > maxChars ? value.slice(0, maxChars) + '…' : value;
-      };
-      const redactDataUrl = (value) => {
-        if (typeof value !== 'string') return value;
-        if (!value.startsWith('data:')) return value;
-        const base64Index = value.indexOf(';base64,');
-        if (base64Index === -1) return value;
-        const prefixEnd = base64Index + ';base64,'.length;
-        const omitted = Math.max(0, value.length - prefixEnd);
-        return truncate(value.slice(0, prefixEnd), 200) + '[base64 omitted ' + omitted + ' chars]';
-      };
-
-      if (payload === null || payload === undefined) return String(payload);
-      if (typeof payload === 'string') return truncate(redactDataUrl(payload), 800);
-      try {
-        const json = JSON.stringify(payload, (_key, value) => {
-          if (typeof value === 'string') return truncate(redactDataUrl(value), 200);
-          if (typeof value === 'bigint') return value.toString() + 'n';
-          return value;
-        });
-        return truncate(json, 800);
-      } catch {
-        return '[unserializable]';
-      }
-    }
-
-    regChannel(eventName, callback) {
-      const listeners = this.channelMap.get(eventName) || [];
-      if (!listeners.includes(callback)) {
-        listeners.push(callback);
-      } else {
-        return () => {};
-      }
-      this.channelMap.set(eventName, listeners);
-
-      // Replay any early messages that were queued before this listener was registered
-      const earlyMessages = this.earlyMessageQueue.get(eventName);
-      if (earlyMessages && earlyMessages.length > 0) {
-        this.earlyMessageQueue.delete(eventName);
-        earlyMessages.forEach(({ e, rawData }) => {
-          this.__dispatch(e, rawData, [callback]);
-        });
-      }
-
-      return () => {
-        const index = listeners.indexOf(callback);
-        if (index !== -1) {
-          listeners.splice(index, 1);
-        }
-      };
-    }
-
-    send(eventName, arg) {
-      const uniqueId = Date.now() + '#' + eventName + '@' + Math.random().toString(12);
-      const data = {
-        code: DataCode.SUCCESS,
-        data: arg,
-        sync: {
-          timeStamp: new Date().getTime(),
-          timeout: CHANNEL_DEFAULT_TIMEOUT,
-          id: uniqueId
-        },
-        name: eventName,
-        header: {
-          uniqueKey,
-          status: 'request',
-          type: 'plugin'
-        }
-      };
-      const instance = this
-      return new Promise((resolve, reject) => {
-        try {
-          ipcRenderer.send('@plugin-process-message', data);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error('[CoreBox] Failed to send plugin channel message', {
-            eventName,
-            error: errorMessage,
-            payloadPreview: instance.formatPayloadPreview(arg)
-          });
-          const sendError = new Error('Failed to send plugin channel message "' + eventName + '": ' + errorMessage);
-          sendError.code = 'plugin_channel_send_failed';
-          reject(sendError);
-          return;
-        }
-
-        const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
-        const timeoutHandle = setTimeout(() => {
-          if (!instance.pendingMap.has(uniqueId)) return;
-          instance.pendingMap.delete(uniqueId);
-          const timeoutError = new Error('Plugin channel request "' + eventName + '" timed out after ' + timeoutMs + 'ms');
-          timeoutError.code = 'plugin_channel_timeout';
-          console.warn(timeoutError.message);
-          reject(timeoutError);
-        }, timeoutMs);
-
-        instance.pendingMap.set(uniqueId, (res) => {
-          clearTimeout(timeoutHandle);
-          instance.pendingMap.delete(uniqueId);
-          resolve(res.data);
-        });
-      });
-    }
-
-    sendSync(eventName, arg) {
-      const data = {
-        code: DataCode.SUCCESS,
-        data: arg,
-        name: eventName,
-        header: {
-          uniqueKey,
-          status: 'request',
-          type: 'plugin'
-        }
-      };
-      try {
-        const res = this.__parse_raw_data(null, ipcRenderer.sendSync('@plugin-process-message', data));
-        if (res?.header?.status === 'reply') return res.data;
-        return res;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('[CoreBox] Failed to sendSync plugin channel message', {
-          eventName,
-          error: errorMessage
-        });
-        throw new Error('Failed to sendSync plugin channel message "' + eventName + '": ' + errorMessage);
-      }
-    }
-  }
-
-  window['$channel'] = new TouchChannel();
-  try {
-    if (!transportModulePath) {
-      throw new Error('[CoreBox] Plugin transport bundle not resolved');
-    }
-    const transportModule = require(transportModulePath);
-    const { createPluginTuffTransport } = transportModule;
-    window['$transport'] = createPluginTuffTransport(window['$channel']);
-  } catch (error) {
-    console.error('[CoreBox] Failed to init plugin transport:', error);
-  }
-})();
-`
+      const channelScript = getPluginChannelPreludeCode({
+        uniqueKey: plugin._uniqueChannelKey,
+        initialData: { theme: initialThemeData }
+      })
 
       const hasOriginalPreload = originalPreloadContent && originalPreloadContent.trim().length > 0
       const pluginInjectionCode = injections.js.trim()
@@ -1518,12 +1265,11 @@ export class WindowManager {
       height: bounds.height - 60
     })
 
-    const finalUrl = this.normalizeUIViewUrl(url, plugin)
-    coreBoxWindowLog.debug(`AttachUIView - resolved URL ${finalUrl}`)
-    this.uiView.webContents.loadURL(finalUrl)
+    coreBoxWindowLog.debug(`AttachUIView - resolved URL ${url}`)
+    this.uiView.webContents.loadURL(url)
 
     if (plugin) {
-      viewCacheManager.set(plugin, view, finalUrl, feature)
+      viewCacheManager.set(plugin, view, url, feature)
     }
 
     metrics.total = performance.now() - startTime
@@ -1569,7 +1315,7 @@ export class WindowManager {
           .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
             source: 'attach',
             featureId: feature?.id,
-            url: finalUrl
+            url
           })
           .catch(() => {})
       })
@@ -1927,35 +1673,6 @@ export class WindowManager {
     }
 
     return false
-  }
-
-  private normalizeUIViewUrl(url: string, plugin?: TouchPlugin): string {
-    const isDevPlugin = Boolean(plugin && plugin.dev && plugin.dev.enable)
-    if (!isDevPlugin) {
-      return url
-    }
-
-    try {
-      const parsed = new URL(url)
-      if (parsed.hash && parsed.hash.startsWith('#/')) {
-        return url
-      }
-
-      const pathWithSearch = `${parsed.pathname ?? ''}${parsed.search ?? ''}` || '/'
-      const normalizedPath = pathWithSearch.startsWith('/') ? pathWithSearch : `/${pathWithSearch}`
-      parsed.pathname = '/'
-      parsed.search = ''
-      parsed.hash = `#${normalizedPath}`
-      return parsed.toString()
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      coreBoxWindowLog.warn(
-        '[CoreBox] Failed to normalize plugin dev URL for hash routing, falling back.',
-        { meta: { url, error: errorMessage } }
-      )
-      const sanitized = url.replace(/#.*$/, '').replace(/\/+$/, '')
-      return `${sanitized}/#/`
-    }
   }
 }
 

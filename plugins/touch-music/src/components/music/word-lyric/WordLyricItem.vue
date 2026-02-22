@@ -190,7 +190,7 @@ watch(() => props.lyric, () => {
       opacity: 0;
       color: transparent;
 
-      background-image: linear-gradient(to right, var(--theme-word-color, var(--el-fill-color-dark)), var(--theme-word-color, var(--el-fill-color-dark)) 50%, transparent 100%);
+      background-image: linear-gradient(to right, var(--theme-word-color, var(--tx-fill-color-dark)), var(--theme-word-color, var(--tx-fill-color-dark)) 50%, transparent 100%);
       -webkit-background-clip: text;
       background-size: 200% 100%;
       background-repeat: no-repeat;
@@ -199,7 +199,7 @@ watch(() => props.lyric, () => {
 
     top: 0;
 
-    color: var(--theme-word-color, var(--el-fill-color-dark));
+    color: var(--theme-word-color, var(--tx-fill-color-dark));
 
     transition: .25s;
   }
@@ -270,13 +270,13 @@ watch(() => props.lyric, () => {
 
     opacity: 0;
     border-radius: 8px;
-    background: linear-gradient(to right, var(--theme-word-color, var(--el-fill-color-dark)), transparent 100%);
+    background: linear-gradient(to right, var(--theme-word-color, var(--tx-fill-color-dark)), transparent 100%);
     transform: translateY(-50%) translateX(20px);
     transition: .25s
   }
   .WordLyricItem-Wrapper {
     &:hover {
-      background-color: #ffffff11//var(--el-color-primary-light-9);
+      background-color: #ffffff11//var(--tx-color-primary-light-9);
     }
     padding: 4px 8px;
     align-items: center;
@@ -295,7 +295,7 @@ watch(() => props.lyric, () => {
 
     font-size: 16px;
 
-    color: var(--theme-word-color, var(--el-fill-color-dark));
+    color: var(--theme-word-color, var(--tx-fill-color-dark));
   }
   &.start .WordLyricItem-Translate {
     font-size: 20px;
@@ -339,9 +339,9 @@ watch(() => props.lyric, () => {
   margin: 8px 0;
 
   font-size: 16px;
-  //color: var(--theme-word-color, var(--el-fill-color-dark));
+  //color: var(--theme-word-color, var(--tx-fill-color-dark));
 
-  --theme-word-color: #eee; // var(--el-bg-color-overlay);
+  --theme-word-color: #eee; // var(--tx-bg-color-overlay);
 
   cursor: pointer;
   filter: blur(2px);

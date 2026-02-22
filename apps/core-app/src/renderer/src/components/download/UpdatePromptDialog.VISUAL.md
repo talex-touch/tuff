@@ -106,13 +106,13 @@
 ## Color Scheme
 
 ### Version Tags
-- **Current Version**: Blue/Info tag (`--el-color-info`)
-- **New Version**: Green/Success tag (`--el-color-success`)
+- **Current Version**: Blue/Info tag (`--tx-color-info`)
+- **New Version**: Green/Success tag (`--tx-color-success`)
 
 ### Status Colors
-- **Downloading**: Blue (`--el-color-primary`)
-- **Complete**: Green (`--el-color-success`)
-- **Failed**: Red (`--el-color-danger`)
+- **Downloading**: Blue (`--tx-color-primary`)
+- **Complete**: Green (`--tx-color-success`)
+- **Failed**: Red (`--tx-color-danger`)
 
 ### Progress Bar
 - **Active**: Blue with pulse animation
@@ -251,7 +251,7 @@
 
 ## Icons
 
-### Used Icons (Element Plus)
+### Used Icons (Carbon/UnoCSS)
 - Right: Version arrow
 - Calendar: Release date
 - Download: Download size & button

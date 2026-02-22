@@ -54,7 +54,7 @@ export default {
     --height: 100%;
     transform: translate(-300%, -50%);
     animation: waving .5s infinite alternate;
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
   }
   &:before {
     --height: 80%;
@@ -73,7 +73,7 @@ export default {
   --height: 6%;
   transform: translate(-50%, -50%);
   animation: waving .5s infinite alternate;
-  background-color: var(--el-color-primary);
+  background-color: var(--tx-color-primary);
 }
 
 .MusicWaving-Container {
@@ -91,7 +91,7 @@ export default {
     height: 100%;
 
     opacity: .5;
-    background-color: var(--el-overlay-color);
+    background-color: var(--tx-overlay-color);
   }
   img {
     width: 100%;

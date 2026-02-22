@@ -100,7 +100,7 @@ async function handleIndex(i) {
     return
   ind.value = i
 
-  const el = scroll.value.$el.children[0].children[0]
+  const el = scroll.value?.$el?.querySelector('.tx-scroll__content')
   if (!el)
     return
   const target = el.children[i].offsetTop - 150
@@ -111,19 +111,19 @@ async function handleIndex(i) {
 
 <template>
   <div class="LyricScroller-Container" :class="{ shine }" :style="`--theme-word-color: ${song.colors && song.colors[song.colors.length > 4 ? 1 : 0].color}`">
-    <el-scrollbar ref="scroll">
+    <TxScroll ref="scroll">
       <WordLyricItem
         v-for="(item, index) in wordLyrics || []"
         :key="index"
         :class="{ 'start': index === ind, 'far-away': index + 2 === ind || index - 2 === ind, 'far': index + 1 === ind || index - 1 === ind }" :index="index" :lyric="item" @index="handleIndex"
       />
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .LyricScroller-Container {
-  :deep(.el-scrollbar__view) {
+  :deep(.tx-scroll__content) {
     margin-top: 100px;
     margin-bottom: 200px;
 

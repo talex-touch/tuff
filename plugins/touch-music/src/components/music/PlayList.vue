@@ -27,9 +27,9 @@ function play(index) {
 
 <template>
   <div class="PlayList-Container" :class="{ active }">
-    <el-scrollbar>
+    <TxScroll>
       <SongItem v-for="(item, index) in playList" :key="index" simple :playing="playing" :active="playIndex === index" :shrink="playList.length > 9" :order="index + 1" :song="item" class="song-item" @click="play(index)" />
-    </el-scrollbar>
+    </TxScroll>
   </div>
 </template>
 
@@ -48,7 +48,7 @@ function play(index) {
 
     opacity: .95;
     border-radius: 8px;
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
   background-color: transparent;
   backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
@@ -57,7 +57,7 @@ function play(index) {
   &.active {
     transform: scale(1) translateX(0%);
   }
-  :deep(.el-scrollbar__view) {
+  :deep(.tx-scroll__content) {
     margin-right: 15px;
   }
   z-index: 100;
@@ -72,8 +72,8 @@ function play(index) {
 
   border-radius: 8px;
   box-sizing: border-box;
-  box-shadow: var(--el-box-shadow-light);
-  background-color: var(--el-fill-color-light);
+  box-shadow: var(--tx-box-shadow-light);
+  background-color: var(--tx-fill-color-light);
   transform: scale(0.9) translateX(120%);
   transition: .25s;
 }

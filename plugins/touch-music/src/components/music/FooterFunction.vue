@@ -36,9 +36,9 @@ function handleVolumeChange(value) {
       <IconButton :select="playListModel" small icon="play-list-2" @click="playListModel = !playListModel" />
     </span>
     <span class="volume-controller">
-      <el-slider
+      <TxSlider
         v-model="volume" class="PlayerProgressBar-Container"
-        :show-tooltip="false" @input="handleVolumeChange"
+        :show-tooltip="false" @update:model-value="handleVolumeChange"
       />
       <span>{{ volume }}%</span>
     </span>
@@ -75,11 +75,11 @@ function handleVolumeChange(value) {
     transition: all 0.2s;
   }
   .volume-controller {
-    :deep(.el-slider) {
-
-      --el-slider-height: 3px;
-      --el-slider-button-size: 10px;
-      --el-slider-button-wrapper-offset: -17px;
+    :deep(.tx-slider) {
+      --tx-slider-height: 3px !important;
+      --tx-slider-track-height: 3px !important;
+      --tx-slider-thumb-size: 10px !important;
+      --tx-slider-thumb-shadow: none;
     }
     span {
       position: relative;

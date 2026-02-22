@@ -282,13 +282,13 @@ const cssVars = computed(() => ({
   gap: var(--tx-flat-radio-gap, 4px);
   font-size: var(--tx-flat-radio-font-size, 13px);
   border-radius: var(--tx-flat-radio-radius, 8px);
-  background: var(--tx-fill-color, var(--el-fill-color, #f0f2f5));
+  background: var(--tx-fill-color, #f0f2f5);
   box-sizing: border-box;
   outline: none;
   user-select: none;
 
   &.is-bordered {
-    border: 1px solid var(--tx-border-color-light, var(--el-border-color-light, #e4e7ed));
+    border: 1px solid var(--tx-border-color-light, #e4e7ed);
   }
 
   &.is-disabled {
@@ -297,7 +297,7 @@ const cssVars = computed(() => ({
   }
 
   &:focus-visible {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, var(--el-color-primary, #409eff)) 25%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 25%, transparent);
   }
 
   :deep(.tx-flat-radio-item) {
@@ -314,7 +314,7 @@ const cssVars = computed(() => ({
   left: 0;
   height: calc(100% - var(--tx-flat-radio-padding, 3px) * 2);
   border-radius: var(--tx-flat-radio-item-radius, 6px);
-  background: var(--tx-bg-color-overlay, var(--el-bg-color-overlay, #fff));
+  background: var(--tx-bg-color-overlay, #fff);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.08),
     0 1px 2px rgba(0, 0, 0, 0.04);

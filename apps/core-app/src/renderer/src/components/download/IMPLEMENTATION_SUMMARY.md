@@ -125,7 +125,7 @@ Comprehensive documentation including:
 
 ### Architecture:
 - **Framework**: Vue 3 Composition API
-- **UI Library**: Element Plus
+- **UI Library**: Tuffex
 - **Type Safety**: Full TypeScript support
 - **Styling**: Scoped CSS with CSS custom properties
 - **State Management**: Reactive refs and computed properties
