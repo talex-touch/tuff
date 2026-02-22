@@ -4,7 +4,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
-import { createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import { consumeLoginToken, createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
 import { validateApiKey } from './apiKeyStore'
 import { ensurePersonalTeam } from './creditsStore'
 
@@ -357,5 +357,26 @@ export async function requireAdmin(event: H3Event) {
   if (!user || user.status !== 'active' || user.role !== 'admin') {
     throw createError({ statusCode: 403, statusMessage: 'Admin permission required.' })
   }
+  return { userId, user }
+}
+
+export async function requireAdminStepUp(event: H3Event) {
+  const { userId, user } = await requireAdmin(event)
+  const loginToken = getHeader(event, 'x-login-token')
+  if (!loginToken) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Passkey step-up required.',
+    })
+  }
+
+  const stepUpUser = await consumeLoginToken(event, loginToken, 'passkey')
+  if (!stepUpUser || stepUpUser.id !== userId) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Passkey step-up required.',
+    })
+  }
+
   return { userId, user }
 }

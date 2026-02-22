@@ -138,10 +138,20 @@ const usageResult = ref<UsageResult | null>(null)
 const ipBans = ref<IpBan[]>([])
 const ipBanLoading = ref(false)
 const ipBanError = ref<string | null>(null)
+const ipBanStepUpToken = ref('')
 const ipBanForm = reactive({
   ip: '',
   reason: '',
 })
+
+function ipBanAuthHeaders() {
+  const token = ipBanStepUpToken.value.trim()
+  if (!token)
+    return undefined
+  return {
+    'X-Login-Token': token,
+  }
+}
 
 // ── Fetch data ──
 async function fetchProviders() {
@@ -256,6 +266,7 @@ async function addIpBan() {
   try {
     await $fetch('/api/dashboard/intelligence/ip-bans', {
       method: 'POST',
+      headers: ipBanAuthHeaders(),
       body: {
         ip,
         reason: ipBanForm.reason.trim() || null,
@@ -279,6 +290,7 @@ async function toggleIpBan(ban: IpBan) {
   try {
     await $fetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
       method: 'PATCH',
+      headers: ipBanAuthHeaders(),
       body: { enabled: !ban.enabled },
     })
     await fetchIpBans()
@@ -295,7 +307,10 @@ async function removeIpBan(ban: IpBan) {
   ipBanLoading.value = true
   ipBanError.value = null
   try {
-    await $fetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, { method: 'DELETE' })
+    await $fetch(`/api/dashboard/intelligence/ip-bans/${ban.id}`, {
+      method: 'DELETE',
+      headers: ipBanAuthHeaders(),
+    })
     await fetchIpBans()
   }
   catch (e: any) {
@@ -844,6 +859,14 @@ function formatEndpointCandidates(list?: string[]) {
               <TxButton variant="bare" size="mini" @click="fetchIpBans">
                 {{ t('dashboard.sections.intelligence.overview.ipBans.refresh') }}
               </TxButton>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <TuffInput
+                v-model="ipBanStepUpToken"
+                placeholder="x-login-token (required for protected writes)"
+                class="w-full max-w-xl"
+              />
             </div>
 
             <div class="flex flex-wrap items-center gap-3">
