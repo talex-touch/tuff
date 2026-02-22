@@ -771,9 +771,10 @@ export class AuthModule extends BaseModule<TalexEvents> {
     transport = getTuffTransportMain(channel, keyManager)
 
     requestRendererValue = async <T>(eventName: string): Promise<T | null> => {
-      const sendMain = (
-        channel as { sendMain?: (event: string, arg?: unknown) => Promise<unknown> }
-      ).sendMain
+      const channelProxy = channel as {
+        sendMain?: (event: string, arg?: unknown) => Promise<unknown>
+      }
+      const sendMain = channelProxy.sendMain?.bind(channelProxy)
       if (!sendMain) {
         authLog.warn(`TouchChannel sendMain unavailable for ${eventName}`)
         return null
