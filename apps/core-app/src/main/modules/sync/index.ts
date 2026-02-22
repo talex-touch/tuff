@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
   EvictedDeviceInfo,
   SyncItemInput,
@@ -1255,16 +1256,17 @@ function cleanupPluginStorageListener(): void {
   pluginStorageListenerBound = false
 }
 
-function handlePluginStorageUpdate(event: PluginStorageUpdatedEvent): void {
+function handlePluginStorageUpdate(event: ITouchEvent<TalexEvents>): void {
   if (!started || !getSyncPreferenceState().enabled) {
     return
   }
-  const pluginName = event.pluginName?.trim()
+  const storageEvent = event as PluginStorageUpdatedEvent
+  const pluginName = storageEvent.pluginName?.trim()
   if (!pluginName) {
     markStorageDirty(PLUGIN_SYNC_ALL_SCOPE)
     return
   }
-  const qualifiedName = buildPluginStorageQualifiedName(pluginName, event.fileName)
+  const qualifiedName = buildPluginStorageQualifiedName(pluginName, storageEvent.fileName)
   if (qualifiedName) {
     markStorageDirty(qualifiedName)
     return
@@ -1721,6 +1723,10 @@ export class SyncModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('SyncModule')
   name: ModuleKey = SyncModule.key
   private transportDisposers: Array<() => void> = []
+
+  constructor() {
+    super(SyncModule.key)
+  }
 
   onInit({ app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
     const channel =
