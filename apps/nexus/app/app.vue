@@ -2,6 +2,8 @@
 import { useI18n } from '#imports'
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import GlobalSearch from '~/components/search/GlobalSearch.vue'
+import InvisibleWatermark from '~/components/watermark/InvisibleWatermark.vue'
+import WatermarkRiskModal from '~/components/watermark/WatermarkRiskModal.vue'
 import { appName } from '~/constants'
 
 useHead({
@@ -199,6 +201,8 @@ watchEffect(() => {
   <ToastContainer />
   <ClientOnly>
     <GlobalSearch />
+    <InvisibleWatermark />
+    <WatermarkRiskModal />
   </ClientOnly>
   <template v-if="isProtectedRoute">
     <div

@@ -47,6 +47,12 @@ export default defineNuxtConfig({
   ],
   ssr: ssrEnabled,
 
+  imports: {
+    dirsScanOptions: {
+      fileFilter: (file) => !file.replace(/\\/g, '/').endsWith('/server/utils/billing/index.ts'),
+    },
+  },
+
   devtools: {
     enabled: false,
   },
@@ -121,6 +127,9 @@ export default defineNuxtConfig({
     },
     turnstile: {
       secretKey: process.env.TURNSTILE_SECRETKEY || process.env.TURNSTILE_SECRET_KEY,
+    },
+    watermark: {
+      secretKey: process.env.WATERMARK_SECRET_KEY || process.env.NUXT_WATERMARK_SECRET_KEY,
     },
     exchangeRate: {
       apiKey: process.env.EXCHANGE_RATE_API_KEY,

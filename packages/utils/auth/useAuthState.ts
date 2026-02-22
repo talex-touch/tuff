@@ -1,4 +1,4 @@
-import type { AuthState, CurrentUser } from './clerk-types'
+import type { AuthState, CurrentUser } from './auth-types'
 import { createGlobalState } from '@vueuse/core'
 import { computed, shallowReactive } from 'vue'
 

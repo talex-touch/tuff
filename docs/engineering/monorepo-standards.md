@@ -94,7 +94,7 @@
 
 - **高优先级（小版本，收益明确）**
   - `apps/core-app/`：`drizzle-orm`、`drizzle-kit`、`electron-log`（beta → stable 需额外验证）、`esbuild`、`iconv-lite`
-  - `apps/nexus/`：`@clerk/nuxt`、`@nuxt/*`（小版本仍需跑一次 `nuxt typecheck` + 站点构建）
+  - `apps/nexus/`：账号/认证相关依赖、`@nuxt/*`（小版本仍需跑一次 `nuxt typecheck` + 站点构建）
 - **中优先级（版本分裂/一致性）**
   - `@vueuse/core`：workspace 内存在 13.x 与 14.x 并存，建议在“核心应用验证通过”后再全仓统一
   - `eslint`：workspace 内已基本对齐到 9.x，但 `packages/unplugin-export-plugin/` 仍停留在 8.x

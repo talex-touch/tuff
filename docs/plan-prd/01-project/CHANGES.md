@@ -4,6 +4,84 @@
 
 ## 2026-02-22
 
+### Nexus 多层水印与风险验证
+
+**变更类型**: 安全与溯源 / 前端体验
+
+**描述**: Nexus 全站引入隐写水印与结构指纹，Dashboard 追加明水印；水印异常或服务端风险信号触发 Turnstile 强制验证，提升溯源与防绕过能力。
+
+**主要变更**:
+1. **隐写水印**：全站覆盖的噪声纹理水印，肉眼不可见且支持拍照/着色场景的服务端检测。
+2. **结构指纹**：通过 CSS 变量对导航、文档侧边栏、目录与 Footer 做轻微扰动，增强溯源。
+3. **明水印**：仅 Dashboard layout 显示可见水印，其他页面保持纯净展示。
+4. **风险阻断**：新增 Turnstile 验证弹窗，接收 428 风险码或检测到篡改即强制验证。
+5. **防删监测**：水印 DOM 被移除/隐藏时自动恢复并触发风险上报。
+
+**修改文件**:
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/layouts/dashboard.vue`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/components/DocsOutline.vue`
+- `apps/nexus/app/components/TuffFooter.vue`
+- `apps/nexus/app/components/watermark/InvisibleWatermark.vue`
+- `apps/nexus/app/components/watermark/VisibleWatermark.vue`
+- `apps/nexus/app/components/watermark/WatermarkRiskModal.vue`
+- `apps/nexus/app/composables/useWatermarkToken.ts`
+- `apps/nexus/app/composables/useWatermarkFingerprint.ts`
+- `apps/nexus/app/composables/useWatermarkRisk.ts`
+- `apps/nexus/app/composables/useWatermarkGuard.ts`
+- `apps/nexus/app/composables/useTurnstileWidget.ts`
+- `apps/nexus/app/plugins/watermark-risk.client.ts`
+- `apps/nexus/app/utils/watermark.ts`
+- `apps/nexus/server/api/watermark/issue.post.ts`
+- `apps/nexus/server/api/watermark/turnstile/verify.post.ts`
+- `apps/nexus/server/utils/watermarkToken.ts`
+- `apps/nexus/server/utils/turnstile.ts`
+- `apps/nexus/server/utils/watermarkGuard.ts`
+- `apps/nexus/server/middleware/watermark-guard.ts`
+- `apps/nexus/server/utils/watermarkDecode.ts`
+- `apps/nexus/server/utils/watermarkStore.ts`
+- `apps/nexus/server/api/watermark/resolve.post.ts`
+- `apps/nexus/app/composables/useWatermarkDecode.ts`
+- `apps/nexus/nuxt.config.ts`
+
+### Nexus 水印溯源解码增强与测试入口
+
+**变更类型**: 安全与溯源 / 管理工具
+
+**描述**: 补强水印多频段解码与旋转/缩放容错，新增 Dashboard 水印溯源入口用于上传截图快速追溯用户与设备。
+
+**主要变更**:
+1. **多频段解码**：引入三频段噪声配置与派生种子，提升压缩图与拍照场景命中率。
+2. **容错检测**：增加小角度旋转/缩放容错扫描，降低拍照倾斜对相关性计算的影响。
+3. **测试入口**：Dashboard 增加水印解析页面，展示置信度与溯源信息。
+4. **溯源留存**：水印种子记录保留 7 天，避免截图延迟解析导致错配。
+5. **开发环境放开解析**：Resolve API 在非生产环境放开为登录用户可用，便于联调与验证。
+6. **水印信号增强**：移除混合模式与模糊处理、提升噪声幅度与整体透明度，提升截图/拍照可检测性。
+7. **块状噪声编码**：水印噪声改为块状低频编码，提升压缩/缩放场景相关性，减少重采样带来的相位漂移。
+8. **二维码溯源**：新增固定追踪码二维码平铺水印，支持截图直接解码追溯用户与设备。
+
+**修改文件**:
+- `apps/nexus/shared/watermark/config.ts`
+- `apps/nexus/app/utils/watermark-config.ts`
+- `apps/nexus/app/utils/watermark.ts`
+- `apps/nexus/app/composables/useWatermarkTrackingCode.ts`
+- `apps/nexus/app/components/watermark/VisibleWatermark.vue`
+- `apps/nexus/server/utils/watermarkTrackingStore.ts`
+- `apps/nexus/server/utils/watermarkQr.ts`
+- `apps/nexus/server/api/watermark/tracking.post.ts`
+- `apps/nexus/package.json`
+- `apps/nexus/app/components/watermark/InvisibleWatermark.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/pages/dashboard/watermark.vue`
+- `apps/nexus/app/composables/useWatermarkDecode.ts`
+- `apps/nexus/server/utils/watermarkDecode.ts`
+- `apps/nexus/server/api/watermark/resolve.post.ts`
+- `apps/nexus/server/utils/watermarkStore.ts`
+- `apps/nexus/server/api/watermark/issue.post.ts`
+- `apps/nexus/app/utils/role.ts`
+
 ### 设置页高级选项收起开关
 
 **变更类型**: 体验优化 / 设置
@@ -1500,7 +1578,7 @@
 
 4. **导入错误 (TS2304)**:
    - 修复了 `useAuthState.ts` 中缺少 `computed` 导入
-   - 修复了 `useClerkConfig.ts` 中环境变量类型问题
+   - 修复了 `useAuthConfig.ts` 中环境变量类型问题
 
 5. **参数类型错误 (TS2345)**:
    - 修复了事件处理器类型，使用 `ITouchEvent` 基类并类型断言
@@ -1516,7 +1594,7 @@
 - `packages/utils/core-box/builder/tuff-builder.ts`
 - `packages/utils/search/types.ts`
 - `packages/utils/auth/useAuthState.ts`
-- `packages/utils/auth/useClerkConfig.ts`
+- `packages/utils/auth/useAuthConfig.ts`
 
 **影响**: 项目现在可以通过 TypeScript 类型检查，构建流程正常
 

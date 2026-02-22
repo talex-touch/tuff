@@ -1,2 +1,2 @@
-export * from './clerk-types'
+export * from './auth-types'
 export * from './useAuthState'

@@ -212,6 +212,14 @@ const headerRevealStyle = computed(() => {
   -webkit-backdrop-filter: var(--header-backdrop-filter, blur(18px) saturate(180%)) !important;
 }
 
+.TuffHeader-Main {
+  transform: translate3d(calc(-50% + var(--wm-jitter-x1, 0px)), var(--wm-jitter-y1, 0px), 0);
+}
+
+nav :deep(a) {
+  letter-spacing: var(--wm-letter-space-1, 0px);
+}
+
 .header-auth-divider {
   width: 1px;
   height: 28px;

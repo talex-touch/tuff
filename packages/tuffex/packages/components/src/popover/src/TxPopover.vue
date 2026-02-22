@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { BaseAnchorClassValue } from '../../base-anchor/src/types'
 import type { PopoverProps } from './types'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { TxBaseAnchor } from '../../base-anchor'
@@ -133,10 +134,15 @@ const anchorToggleOnReferenceClick = computed(() => {
   return props.trigger === 'click'
 })
 
-const anchorReferenceClass = computed(() => {
-  if (!props.referenceClass && !props.referenceFullWidth)
-    return undefined
-  return [props.referenceClass, { 'is-full-width': props.referenceFullWidth }]
+const anchorReferenceClass = computed<BaseAnchorClassValue | undefined>(() => {
+  const classes: BaseAnchorClassValue[] = []
+  if (props.referenceClass) {
+    classes.push(props.referenceClass)
+  }
+  if (props.referenceFullWidth) {
+    classes.push({ 'is-full-width': true })
+  }
+  return classes.length ? classes : undefined
 })
 
 watch(
