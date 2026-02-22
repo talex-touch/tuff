@@ -1,12 +1,12 @@
 import type {
   ChildProcess,
-  ExecException,
   ExecFileOptions,
   SpawnOptionsWithoutStdio,
 } from 'node:child_process'
 import { hasWindow } from '../../env'
 
-type ExecFileCallback = (error: ExecException | null, stdout: string, stderr: string) => void
+type ExecFileFn = typeof import('node:child_process').execFile
+type SpawnFn = typeof import('node:child_process').spawn
 
 const NULL_BYTE_PATTERN = /\0/
 const NEWLINE_PATTERN = /[\r\n]/
@@ -53,8 +53,8 @@ function assertShellArg(value: string): string {
 }
 
 function requireChildProcess(): {
-  execFile: (file: string, args: string[], options: ExecFileOptions, callback: ExecFileCallback) => ChildProcess
-  spawn: (command: string, args?: readonly string[], options?: SpawnOptionsWithoutStdio) => ChildProcess
+  execFile: ExecFileFn
+  spawn: SpawnFn
 } {
   if (!execFileImpl || !spawnImpl) {
     throw new Error('CHILD_PROCESS_UNAVAILABLE')
