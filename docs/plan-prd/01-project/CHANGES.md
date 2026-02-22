@@ -4,6 +4,111 @@
 
 ## 2026-02-22
 
+### Core-app 同步迁移到主进程
+
+**变更类型**: 架构调整 / 数据一致性
+
+**描述**: 同步拉取/推送与冲突处理由主进程统一接管，渲染进程仅触发指令与展示状态，确保落盘与冲突裁决在主进程完成，避免同步数据停留在 renderer 内存导致重启回滚。
+
+**主要变更**:
+1. **同步主流程迁移**：新增主进程同步模块，使用 CloudSyncSDK 进行拉取/推送与冲突处理。
+2. **存储统一裁决**：拉取结果直接写入主进程存储并落盘，必要时合并本地脏数据后回推。
+3. **渲染端降级为代理**：renderer 仅发送 start/stop/trigger 指令，状态从主进程存储同步。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/sync/index.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/renderer/src/modules/sync/auto-sync-manager.ts`
+
+### Tuffex Anchor reference class 透传
+
+**变更类型**: 体验修复 / 组件
+
+**描述**: BaseAnchor reference 容器新增 `referenceClass` 透传，Popover / DropdownMenu 可通过 class 调整 reference 容器布局（例如全宽）。
+
+**主要变更**:
+1. **Reference class**：`TxBaseAnchor` 新增 `referenceClass` 并支持 `is-full-width`。
+2. **透传链路**：`TxPopover`/`TxDropdownMenu` 新增 `referenceClass`，`referenceFullWidth` 同步影响 Anchor reference。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/popover/src/types.ts`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/types.ts`
+- `packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue`
+
+### Nexus Header 用户菜单语言子菜单宽度修复
+
+**变更类型**: 体验修复 / 账号菜单
+
+**描述**: Header 用户菜单语言子菜单改用 reference class 撑满触发区域，确保列表项高亮与子菜单对齐一致。
+
+**主要变更**:
+1. **Reference class**：Language 子菜单 `TxPopover` 使用 `reference-class` 控制外层参考宽度。
+2. **样式补齐**：针对 reference class 设置 100% 宽度，保证触发区域覆盖整行。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+
+### CI 构建引入 Electron 下载镜像与缓存路径
+
+**变更类型**: 稳定性 / 构建修复
+
+**描述**: GitHub Actions 拉取 Electron 产物时出现 502，构建改为使用镜像源并固定缓存目录，降低外网波动影响。
+
+**主要变更**:
+1. **镜像下载**：设置 `ELECTRON_MIRROR` 与 `ELECTRON_BUILDER_BINARIES_MIRROR`。
+2. **缓存路径**：统一 `ELECTRON_CACHE` 与 `ELECTRON_BUILDER_CACHE` 到 workspace 内。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+
+### macOS 自动更新通道校验与旧包清理
+
+**变更类型**: 行为修复 / 更新稳定性
+
+**描述**: 修正 macOS 自动更新在渠道错配与旧包残留情况下触发降级安装的问题，同时避免持久化更新记录与待安装版本在当前版本更高时继续提示更新。
+
+**主要变更**:
+1. **待安装版本校验**：仅允许与当前有效渠道匹配且版本更高的 pending install 进入可安装状态。
+2. **缓存记录过滤**：持久化更新记录在版本不满足更新条件时不再触发提示。
+3. **默认通道对齐**：更新通道缺失时改为对齐当前版本通道，避免 beta 用户回退到 Release 检测。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/update/UpdateService.ts`
+
+### Core-app DB 写入队列与剪贴板持久化优化
+
+**变更类型**: 稳定性 / 性能
+
+**描述**: 解决事件循环阻塞与 SQLite 写入争用导致的分析持久化积压，剪贴板写入改为走串行队列与重试机制，并在队列压力下主动跳过非关键 analytics 写入。
+
+**主要变更**:
+1. **剪贴板持久化串行化**：clipboard history 与 metadata 写入改走 `DbWriteScheduler + withSqliteRetry`。
+2. **Analytics 压力削峰**：队列深度过高时跳过 snapshots / cleanup / plugin analytics，减少锁争用与阻塞。
+3. **队列压力日志节流**：压力告警增加 5s 级别节流，避免刷屏。
+4. **剪贴板元数据降级**：队列压力下跳过 meta 表写入，正常情况下改为异步 + 可丢弃写入。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+
+### 快捷键管理列表布局优化
+
+**变更类型**: 体验优化 / 设置
+
+**描述**: 快捷键管理列表提升可读性，快捷键列加宽、来源列后置，并支持命令 ID 一键复制与横向滚动。
+
+**主要变更**:
+1. **列顺序调整**：来源列移动到末尾，关键内容优先展示。
+2. **快捷键列加宽**：输入框宽度与列宽提升，避免组合键被截断。
+3. **命令 ID 复制**：命令 ID 支持点击复制并在 hover 时显示下划线。
+4. **横向滚动支持**：表格在内容超长时可横向滚动。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+
 ### Nexus 登录页底部协议按钮可点击
 
 **变更类型**: 体验修复 / 登录页
@@ -27,6 +132,13 @@
 2. **首次引导**：首次运行要求选择语言并确认条款，状态写入 `~/.tuff/cli.json`。
 3. **登录门控**：未登录时要求输入 Nexus Token，完成后进入主菜单。
 4. **存储提示**：进入主菜单前提示本地配置与登录信息存储路径。
+5. **设备码 OAuth**：CLI 支持浏览器授权 + 2 分钟心跳轮询，无需本地回调服务。
+6. **官网条款链接**：首次引导直接展示官网服务条款与隐私政策地址。
+7. **ASCII Logo**：CLI 进入交互模式输出 ASCII TUFF 标识。
+8. **本地 URL 支持**：`--local` 时 CLI 使用本地 Nexus URL（默认 http://localhost:3200）。
+9. **授权入口归一**：设备授权链接改为先进入登录页，再跳转到设备确认页面。
+10. **全局参数增强**：新增 `--api-base`、`--config-dir`、`--non-interactive` 以适配多环境与脚本场景。
+11. **设备授权扩展**：新增短期/长期/取消选项，授权完成自动关闭页面，并在 CLI 提示妥善保管 Token。
 
 **修改文件**:
 - `packages/unplugin-export-plugin/src/cli/prompts.ts`
@@ -36,6 +148,57 @@
 - `packages/unplugin-export-plugin/src/core/publish.ts`
 - `packages/unplugin-export-plugin/src/cli/i18n/locales/zh.ts`
 - `packages/unplugin-export-plugin/src/cli/i18n/locales/en.ts`
+- `packages/unplugin-export-plugin/src/cli/prompts.ts`
+- `apps/nexus/server/api/app-auth/device/start.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+
+### Nexus 登录历史与设备管理展示授权来源
+
+**变更类型**: 体验增强 / 安全可见性
+
+**描述**: 登录历史与设备管理新增授权来源标识（App / CLI / External），便于识别设备授权渠道并随时撤回可疑来源。
+
+**主要变更**:
+1. **登录历史来源**：记录并返回 clientType，Dashboard 显示授权来源。
+2. **设备来源标记**：设备列表展示授权来源标签，CLI 设备可直接撤回。
+3. **设备授权补全**：CLI 设备授权写入来源与设备元信息。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/login-history.get.ts`
+- `apps/nexus/server/api/app-auth/device/start.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/auth/[...].ts`
+- `apps/nexus/server/api/passkeys/verify.post.ts`
+- `apps/nexus/app/plugins/device-headers.client.ts`
+- `apps/nexus/app/pages/dashboard/overview.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/devices.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+
+### Nexus 设备授权风控增强
+
+**变更类型**: 安全加固 / 设备授权
+
+**描述**: 设备授权新增 IP 校验与长期授权风控，非常用设备或登录地将被限制长期授权；授权完成后尝试更完整的自动关闭。
+
+**主要变更**:
+1. **IP 校验**：设备授权确认时校验 CLI 发起 IP 与浏览器 IP，不一致拒绝。
+2. **长期授权风控**：仅在常用设备 + 常用登录地组合下允许长期授权。
+3. **自动关闭增强**：授权完成后尝试多种关闭策略。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/app/pages/device-auth.vue`
 
 ### Nexus OAuth 回跳支持同源绝对 redirect_url
 

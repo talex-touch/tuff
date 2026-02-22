@@ -12,16 +12,35 @@ import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 
 const PERSIST_WINDOWS: AnalyticsWindowType[] = ['15m', '1h', '24h']
+const ANALYTICS_QUEUE_LIMIT = 8
+const QUEUE_PRESSURE_LOG_THROTTLE_MS = 5_000
 const log = createLogger('AnalyticsStore')
 
 export class DbStore {
+  private lastQueuePressureLogAt = 0
   constructor(private db: LibSQLDatabase<typeof schema>) {}
+
+  private shouldLogQueuePressure(now: number): boolean {
+    if (now - this.lastQueuePressureLogAt < QUEUE_PRESSURE_LOG_THROTTLE_MS) return false
+    this.lastQueuePressureLogAt = now
+    return true
+  }
 
   async saveSnapshots(snapshots: AnalyticsSnapshot[]): Promise<void> {
     const persistable = snapshots.filter((snapshot) =>
       PERSIST_WINDOWS.includes(snapshot.windowType)
     )
     if (!persistable.length) return
+    const queueStats = dbWriteScheduler.getStats()
+    if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
+      const now = Date.now()
+      if (this.shouldLogQueuePressure(now)) {
+        log.warn('Analytics snapshots skipped (queue pressure)', {
+          meta: { queued: queueStats.queued }
+        })
+      }
+      return
+    }
 
     const createdAt = Math.floor(Date.now() / 1000)
     let totalBytes = 0
@@ -107,6 +126,15 @@ export class DbStore {
       windowType,
       cutoff: nowMs - (retention[windowType] ?? 0)
     }))
+    const queueStats = dbWriteScheduler.getStats()
+    if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
+      if (this.shouldLogQueuePressure(nowMs)) {
+        log.warn('Analytics cleanup skipped (queue pressure)', {
+          meta: { queued: queueStats.queued }
+        })
+      }
+      return
+    }
 
     await dbWriteScheduler.schedule(
       'analytics.cleanup',
@@ -140,6 +168,16 @@ export class DbStore {
     timestamp: number
   }): Promise<void> {
     try {
+      const queueStats = dbWriteScheduler.getStats()
+      if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
+        const now = Date.now()
+        if (this.shouldLogQueuePressure(now)) {
+          log.warn('Plugin analytics skipped (queue pressure)', {
+            meta: { queued: queueStats.queued }
+          })
+        }
+        return
+      }
       await dbWriteScheduler.schedule(
         'analytics.plugin',
         () =>

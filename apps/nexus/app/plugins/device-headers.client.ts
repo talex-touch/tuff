@@ -11,6 +11,7 @@ export default defineNuxtPlugin((nuxtApp) => {
         headers.set('x-device-name', deviceName.value)
       if (platform.value)
         headers.set('x-device-platform', platform.value)
+      headers.set('x-device-client', 'app')
       options.headers = headers
     },
   })

@@ -73,7 +73,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'User not found.' })
   }
 
-  await logLoginAttempt(event, { userId: user.id, deviceId: null, success: true, reason: 'passkey' })
+  await logLoginAttempt(event, { userId: user.id, deviceId: null, success: true, reason: 'passkey', clientType: 'app' })
   const loginToken = await createLoginToken(event, user.id, 'passkey', 1000 * 60 * 10)
 
   return { token: loginToken }

@@ -9,6 +9,8 @@ interface LoginHistoryItem {
   success: boolean
   ip: string | null
   ipMasked?: string | null
+  reason?: string | null
+  clientType?: string | null
   created_at: string
   location?: {
     countryCode: string | null
@@ -322,6 +324,17 @@ function formatNumber(value: number) {
   return new Intl.NumberFormat(localeTag.value).format(value)
 }
 
+function formatLoginClient(value: string | null | undefined): string {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : ''
+  if (normalized === 'cli')
+    return t('dashboard.account.clientTypes.cli', 'CLI')
+  if (normalized === 'external')
+    return t('dashboard.account.clientTypes.external', 'External')
+  if (normalized === 'app')
+    return t('dashboard.account.clientTypes.app', 'App')
+  return t('dashboard.account.clientTypes.unknown', '未知来源')
+}
+
 function formatLoginLocation(item: LoginHistoryItem): string {
   const location = item.location
   if (!location) {
@@ -570,7 +583,7 @@ function isCurrentDevice(device: DeviceItem) {
                   {{ item.success ? t('dashboard.overview.stream.success') : t('dashboard.overview.stream.failed') }}
                 </p>
                 <p class="text-xs text-black/50 dark:text-white/50">
-                  {{ formatDateTime(item.created_at) }} · {{ item.ipMasked || item.ip || t('dashboard.overview.ipUnknown') }}
+                  {{ formatDateTime(item.created_at) }} · {{ formatLoginClient(item.clientType) }} · {{ item.ipMasked || item.ip || t('dashboard.overview.ipUnknown') }}
                 </p>
                 <p class="text-xs text-black/45 dark:text-white/45">
                   {{ formatLoginLocation(item) }}

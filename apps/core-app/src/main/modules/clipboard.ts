@@ -31,7 +31,9 @@ import { and, desc, eq, gt, inArray, lt, or, sql, type SQL } from 'drizzle-orm'
 import { clipboard, nativeImage, powerMonitor } from 'electron'
 import { genTouchApp } from '../core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { dbWriteScheduler } from '../db/db-write-scheduler'
 import { clipboardHistory, clipboardHistoryMeta } from '../db/schema'
+import { withSqliteRetry } from '../db/sqlite-retry'
 import { appTaskGate } from '../service/app-task-gate'
 import { tempFileService } from '../service/temp-file.service'
 import { createLogger } from '../utils/logger'
@@ -232,6 +234,8 @@ const CLIPBOARD_LIVE_IMAGE_NAMESPACE = 'clipboard/live-images'
 const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_TASK_ID = 'clipboard.temp-images.cleanup'
 const CLIPBOARD_IMAGE_ORPHAN_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000
 const CLIPBOARD_IMAGE_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000
+const CLIPBOARD_META_QUEUE_LIMIT = 6
+const CLIPBOARD_META_LOG_THROTTLE_MS = 5_000
 
 function toTfileUrl(filePath: string): string {
   const raw = filePath?.trim()
@@ -581,6 +585,7 @@ export class ClipboardModule extends BaseModule {
   private monitoringStarted = false
   private clipboardCheckCooldownUntil = 0
   private clipboardCheckInFlight = false
+  private lastMetaQueuePressureLogAt = 0
   private coreBoxVisible = false
   private currentPollIntervalMs = CLIPBOARD_DEFAULT_POLL_INTERVAL_MS
   private appSettingSnapshot: AppSetting | null = null
@@ -1449,10 +1454,25 @@ export class ClipboardModule extends BaseModule {
     }
   }
 
+  private async withDbWrite<T>(
+    label: string,
+    operation: () => Promise<T>,
+    options?: { droppable?: boolean }
+  ): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
+  }
+
+  private shouldLogMetaQueuePressure(now: number): boolean {
+    if (now - this.lastMetaQueuePressureLogAt < CLIPBOARD_META_LOG_THROTTLE_MS) return false
+    this.lastMetaQueuePressureLogAt = now
+    return true
+  }
+
   private async persistMetaEntries(
     clipboardId: number,
     meta: Record<string, unknown>,
-    entries?: ClipboardMetaEntry[]
+    entries?: ClipboardMetaEntry[],
+    options?: { droppable?: boolean }
   ): Promise<void> {
     if (!this.db) return
     const resolvedEntries =
@@ -1469,7 +1489,11 @@ export class ClipboardModule extends BaseModule {
 
     if (values.length === 0) return
 
-    await this.db.insert(clipboardHistoryMeta).values(values)
+    await this.withDbWrite(
+      'clipboard.meta',
+      () => this.db!.insert(clipboardHistoryMeta).values(values),
+      options
+    )
   }
 
   /**
@@ -1517,7 +1541,9 @@ export class ClipboardModule extends BaseModule {
       metadata
     }
 
-    const inserted = await this.db.insert(clipboardHistory).values(record).returning()
+    const inserted = await this.withDbWrite('clipboard.custom.persist', () =>
+      this.db!.insert(clipboardHistory).values(record).returning()
+    )
     if (inserted.length === 0) {
       return null
     }
@@ -1526,7 +1552,17 @@ export class ClipboardModule extends BaseModule {
     persisted.meta = mergedMeta
 
     if (persisted.id) {
-      await this.persistMetaEntries(persisted.id, mergedMeta)
+      const queueStats = dbWriteScheduler.getStats()
+      if (queueStats.queued >= CLIPBOARD_META_QUEUE_LIMIT) {
+        const now = Date.now()
+        if (this.shouldLogMetaQueuePressure(now)) {
+          clipboardLog.warn('Clipboard meta skipped (queue pressure)', {
+            meta: { queued: queueStats.queued }
+          })
+        }
+      } else {
+        void this.persistMetaEntries(persisted.id, mergedMeta, undefined, { droppable: true })
+      }
     }
 
     this.updateMemoryCache(persisted)
@@ -1772,7 +1808,9 @@ export class ClipboardModule extends BaseModule {
 
       const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
       const persistStart = performance.now()
-      const inserted = await this.db.insert(clipboardHistory).values(record).returning()
+      const inserted = await this.withDbWrite('clipboard.persist', () =>
+        this.db!.insert(clipboardHistory).values(record).returning()
+      )
       const persistDuration = performance.now() - persistStart
       if (persistDuration > 200) {
         clipboardLog.warn('Clipboard persist slow', {
@@ -1788,7 +1826,19 @@ export class ClipboardModule extends BaseModule {
       persisted.meta = metaObject
 
       if (persisted.id) {
-        await this.persistMetaEntries(persisted.id, metaObject, metaEntries)
+        const queueStats = dbWriteScheduler.getStats()
+        if (queueStats.queued >= CLIPBOARD_META_QUEUE_LIMIT) {
+          const now = Date.now()
+          if (this.shouldLogMetaQueuePressure(now)) {
+            clipboardLog.warn('Clipboard meta skipped (queue pressure)', {
+              meta: { queued: queueStats.queued }
+            })
+          }
+        } else {
+          void this.persistMetaEntries(persisted.id, metaObject, metaEntries, {
+            droppable: true
+          })
+        }
         setImmediate(() => {
           ocrService
             .enqueueFromClipboard({

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxCardProps } from '../../card/src/types'
-import type { BaseAnchorProps } from './types'
+import type { BaseAnchorClassValue, BaseAnchorProps } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
 import gsap from 'gsap'
 import type { StyleValue } from 'vue'
@@ -134,9 +134,9 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(refere
 })
 
 const side = computed(() => (placement.value?.split('-')[0] ?? 'bottom') as 'top' | 'bottom' | 'left' | 'right')
-type ClassValue = string | Record<string, boolean> | Array<string | Record<string, boolean>>
-
-const floatingClass = computed<ClassValue | undefined>(() => (attrs as Record<string, unknown>).class as ClassValue | undefined)
+const floatingClass = computed<BaseAnchorClassValue | undefined>(
+  () => (attrs as Record<string, unknown>).class as BaseAnchorClassValue | undefined,
+)
 const floatingStyle = computed<StyleValue | undefined>(() => (attrs as Record<string, unknown>).style as StyleValue | undefined)
 const floatingAttrs = computed(() => {
   const source = attrs as Record<string, unknown>
@@ -811,6 +811,7 @@ onBeforeUnmount(() => {
   <div
     ref="referenceRef"
     class="tx-base-anchor__reference"
+    :class="props.referenceClass"
     @click.capture="handleReferenceClick"
   >
     <slot name="reference" />
@@ -870,6 +871,10 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   width: fit-content;
+}
+
+.tx-base-anchor__reference.is-full-width {
+  width: 100%;
 }
 
 .tx-base-anchor {

@@ -9,7 +9,7 @@ import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { getSyncPreferenceState, setSyncPreferenceByUser } from '~/modules/auth/sync-preferences'
 import { useAuth } from '~/modules/auth/useAuth'
-import { startAutoSync, stopAutoSync, triggerManualSync } from '~/modules/sync'
+import { triggerManualSync } from '~/modules/sync'
 import { appSetting } from '~/modules/channel/storage'
 
 const { t } = useI18n()
@@ -56,18 +56,9 @@ const syncEnabled = computed({
     const enabled = Boolean(val)
     setSyncPreferenceByUser(enabled)
     if (enabled && isLoggedIn.value) {
-      void runSyncBootstrap()
-        .then((bootstrapped) => {
-          if (bootstrapped) {
-            return startAutoSync()
-          }
-          return undefined
-        })
-        .catch(() => {
-          // ignore sync bootstrap failure on manual toggle
-        })
-    } else if (!enabled) {
-      stopAutoSync('user-disabled')
+      void runSyncBootstrap().catch(() => {
+        // ignore sync bootstrap failure on manual toggle
+      })
     }
   }
 })

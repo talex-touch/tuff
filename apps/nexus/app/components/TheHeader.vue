@@ -184,7 +184,7 @@ const headerRevealStyle = computed(() => {
 
 <style scoped>
 .TuffHeader {
-  z-index: 100000;
+  z-index: 10000;
   position: fixed;
 
   top: 0;

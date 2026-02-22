@@ -17,6 +17,7 @@ const WEBAUTHN_CHALLENGE_TABLE = 'auth_webauthn_challenges'
 const DEVICES_TABLE = 'auth_devices'
 const LOGIN_HISTORY_TABLE = 'auth_login_history'
 const MERGE_LOGS_TABLE = 'auth_user_merges'
+const DEVICE_AUTH_TABLE = 'auth_device_auth_requests'
 
 let authSchemaInitialized = false
 
@@ -123,6 +124,25 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${DEVICE_AUTH_TABLE} (
+      device_code TEXT PRIMARY KEY,
+      user_code TEXT NOT NULL UNIQUE,
+      device_id TEXT NOT NULL,
+      device_name TEXT,
+      device_platform TEXT,
+      client_type TEXT,
+      request_ip TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      grant_type TEXT NOT NULL DEFAULT 'short',
+      user_id TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      approved_at TEXT,
+      cancelled_at TEXT
+    );
+  `).run()
+
+  await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${WEBAUTHN_CHALLENGE_TABLE} (
       challenge TEXT PRIMARY KEY,
       user_id TEXT,
@@ -138,6 +158,7 @@ async function ensureAuthSchema(db: D1Database) {
       user_id TEXT NOT NULL,
       device_name TEXT,
       platform TEXT,
+      client_type TEXT,
       user_agent TEXT,
       last_seen_at TEXT,
       created_at TEXT NOT NULL,
@@ -161,6 +182,7 @@ async function ensureAuthSchema(db: D1Database) {
       longitude REAL,
       timezone TEXT,
       geo_source TEXT,
+      client_type TEXT,
       user_agent TEXT,
       success INTEGER NOT NULL,
       reason TEXT,
@@ -209,6 +231,18 @@ async function ensureAuthSchema(db: D1Database) {
   await addUserColumnIfMissing('merged_by_user_id', 'merged_by_user_id TEXT')
   await addUserColumnIfMissing('disabled_at', 'disabled_at TEXT')
 
+  const deviceAuthColumns = await db.prepare(`PRAGMA table_info(${DEVICE_AUTH_TABLE});`).all<{ name: string }>()
+  const addDeviceAuthColumnIfMissing = async (column: string, ddl: string) => {
+    if (!deviceAuthColumns.results?.some(item => item.name === column)) {
+      await db.prepare(`ALTER TABLE ${DEVICE_AUTH_TABLE} ADD COLUMN ${ddl};`).run()
+    }
+  }
+
+  await addDeviceAuthColumnIfMissing('grant_type', "grant_type TEXT NOT NULL DEFAULT 'short'")
+  await addDeviceAuthColumnIfMissing('cancelled_at', 'cancelled_at TEXT')
+  await addDeviceAuthColumnIfMissing('client_type', 'client_type TEXT')
+  await addDeviceAuthColumnIfMissing('request_ip', 'request_ip TEXT')
+
   await db.prepare(`
     UPDATE ${USERS_TABLE}
     SET email_state = 'verified'
@@ -232,6 +266,15 @@ async function ensureAuthSchema(db: D1Database) {
     CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id);
   `).run()
 
+  const deviceColumns = await db.prepare(`PRAGMA table_info(${DEVICES_TABLE});`).all<{ name: string }>()
+  const addDeviceColumnIfMissing = async (column: string, ddl: string) => {
+    if (!deviceColumns.results?.some(item => item.name === column)) {
+      await db.prepare(`ALTER TABLE ${DEVICES_TABLE} ADD COLUMN ${ddl};`).run()
+    }
+  }
+
+  await addDeviceColumnIfMissing('client_type', 'client_type TEXT')
+
   const loginHistoryColumns = await db.prepare(`PRAGMA table_info(${LOGIN_HISTORY_TABLE});`).all<{ name: string }>()
   const addLoginHistoryColumnIfMissing = async (column: string, ddl: string) => {
     if (!loginHistoryColumns.results?.some(item => item.name === column)) {
@@ -247,12 +290,14 @@ async function ensureAuthSchema(db: D1Database) {
   await addLoginHistoryColumnIfMissing('longitude', 'longitude REAL')
   await addLoginHistoryColumnIfMissing('timezone', 'timezone TEXT')
   await addLoginHistoryColumnIfMissing('geo_source', 'geo_source TEXT')
+  await addLoginHistoryColumnIfMissing('client_type', 'client_type TEXT')
 
   authSchemaInitialized = true
 }
 
 export type UserStatus = 'active' | 'merged' | 'disabled'
 export type EmailState = 'verified' | 'unverified' | 'missing'
+export type AuthClientType = 'app' | 'cli' | 'external'
 
 export interface AuthUser {
   id: string
@@ -276,6 +321,7 @@ export interface AuthDevice {
   userId: string
   deviceName: string | null
   platform: string | null
+  clientType: AuthClientType | null
   userAgent: string | null
   lastSeenAt: string | null
   createdAt: string
@@ -313,6 +359,7 @@ export interface AuthLoginHistoryRecord {
   user_agent: string | null
   success: boolean
   reason: string | null
+  client_type: AuthClientType | null
   created_at: string
   country_code: string | null
   region_code: string | null
@@ -322,6 +369,13 @@ export interface AuthLoginHistoryRecord {
   longitude: number | null
   timezone: string | null
   geo_source: string | null
+}
+
+export interface DeviceAuthLongTermPolicy {
+  allowLongTerm: boolean
+  deviceTrusted: boolean
+  locationTrusted: boolean
+  reason: 'device' | 'location' | 'unknown' | null
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -420,6 +474,7 @@ function mapDevice(row: Record<string, any> | null): AuthDevice | null {
     userId: row.user_id,
     deviceName: row.device_name ?? null,
     platform: row.platform ?? null,
+    clientType: normalizeClientType(row.client_type),
     userAgent: row.user_agent ?? null,
     lastSeenAt: row.last_seen_at ?? null,
     createdAt: row.created_at,
@@ -623,6 +678,193 @@ function generateWebAuthnChallenge(bytes = 32): string {
   const data = new Uint8Array(bytes)
   crypto.getRandomValues(data)
   return base64UrlEncode(data)
+}
+
+export interface DeviceAuthRequest {
+  deviceCode: string
+  userCode: string
+  deviceId: string
+  deviceName?: string | null
+  devicePlatform?: string | null
+  status: 'pending' | 'approved' | 'cancelled'
+  grantType: 'short' | 'long'
+  clientType?: AuthClientType | null
+  requestIp?: string | null
+  userId?: string | null
+  createdAt: string
+  expiresAt: string
+  approvedAt?: string | null
+  cancelledAt?: string | null
+}
+
+function mapDeviceAuthRow(row: Record<string, any>): DeviceAuthRequest {
+  return {
+    deviceCode: row.device_code as string,
+    userCode: row.user_code as string,
+    deviceId: row.device_id as string,
+    deviceName: (row.device_name as string | null) ?? null,
+    devicePlatform: (row.device_platform as string | null) ?? null,
+    status: (row.status as 'pending' | 'approved' | 'cancelled') ?? 'pending',
+    grantType: (row.grant_type as 'short' | 'long') ?? 'short',
+    clientType: normalizeClientType(row.client_type),
+    requestIp: row.request_ip ?? null,
+    userId: (row.user_id as string | null) ?? null,
+    createdAt: row.created_at as string,
+    expiresAt: row.expires_at as string,
+    approvedAt: (row.approved_at as string | null) ?? null,
+    cancelledAt: (row.cancelled_at as string | null) ?? null,
+  }
+}
+
+function isExpiredAt(expiresAt: string): boolean {
+  const expires = Date.parse(expiresAt)
+  return Number.isNaN(expires) || expires <= Date.now()
+}
+
+export async function createDeviceAuthRequest(
+  event: H3Event,
+  payload: {
+    deviceId: string
+    deviceName?: string | null
+    devicePlatform?: string | null
+    clientType?: AuthClientType | null
+    ttlMs: number
+  }
+): Promise<DeviceAuthRequest> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const deviceCode = generateToken(16)
+  const userCode = generateToken(6)
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + payload.ttlMs).toISOString()
+
+  await db.prepare(`
+    INSERT INTO ${DEVICE_AUTH_TABLE} (
+      device_code,
+      user_code,
+      device_id,
+      device_name,
+      device_platform,
+      client_type,
+      request_ip,
+      status,
+      grant_type,
+      user_id,
+      created_at,
+      expires_at,
+      approved_at,
+      cancelled_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    deviceCode,
+    userCode,
+    payload.deviceId,
+    payload.deviceName ?? null,
+    payload.devicePlatform ?? null,
+    payload.clientType ?? null,
+    getRequestIp(event),
+    'pending',
+    'short',
+    null,
+    now,
+    expiresAt,
+    null,
+    null,
+  ).run()
+
+  return {
+    deviceCode,
+    userCode,
+    deviceId: payload.deviceId,
+    deviceName: payload.deviceName ?? null,
+    devicePlatform: payload.devicePlatform ?? null,
+    status: 'pending',
+    grantType: 'short',
+    clientType: payload.clientType ?? null,
+    requestIp: getRequestIp(event),
+    userId: null,
+    createdAt: now,
+    expiresAt,
+    approvedAt: null,
+    cancelledAt: null,
+  }
+}
+
+export async function getDeviceAuthByDeviceCode(event: H3Event, deviceCode: string): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE device_code = ? LIMIT 1
+  `).bind(deviceCode).first()
+  if (!row)
+    return null
+  return mapDeviceAuthRow(row as Record<string, any>)
+}
+
+export async function getDeviceAuthByUserCode(event: H3Event, userCode: string): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
+  `).bind(userCode).first()
+  if (!row)
+    return null
+  return mapDeviceAuthRow(row as Record<string, any>)
+}
+
+export async function approveDeviceAuthRequest(
+  event: H3Event,
+  userCode: string,
+  userId: string,
+  grantType: 'short' | 'long'
+): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
+  `).bind(userCode).first()
+  if (!row)
+    return null
+  const request = mapDeviceAuthRow(row as Record<string, any>)
+  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return null
+  const approvedAt = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET status = ?, user_id = ?, approved_at = ?, grant_type = ?, cancelled_at = NULL
+    WHERE user_code = ?
+  `).bind('approved', userId, approvedAt, grantType, userCode).run()
+  return { ...request, status: 'approved', userId, approvedAt, grantType }
+}
+
+export async function deleteDeviceAuthRequest(event: H3Event, deviceCode: string): Promise<void> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  await db.prepare(`DELETE FROM ${DEVICE_AUTH_TABLE} WHERE device_code = ?`).bind(deviceCode).run()
+}
+
+export async function cancelDeviceAuthRequest(event: H3Event, userCode: string): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
+  `).bind(userCode).first()
+  if (!row)
+    return null
+  const request = mapDeviceAuthRow(row as Record<string, any>)
+  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return null
+  const cancelledAt = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET status = ?, cancelled_at = ?
+    WHERE user_code = ?
+  `).bind('cancelled', cancelledAt, userCode).run()
+  return { ...request, status: 'cancelled', cancelledAt }
+}
+
+export function isDeviceAuthExpired(request: DeviceAuthRequest): boolean {
+  return isExpiredAt(request.expiresAt)
 }
 
 export async function createVerificationToken(event: H3Event, email: string, ttlMs: number, tokenValue?: string): Promise<string> {
@@ -1040,12 +1282,21 @@ function getRequestIp(event: H3Event): string | null {
   return null
 }
 
+export function readRequestIp(event: H3Event): string | null {
+  return getRequestIp(event)
+}
+
 function getUserAgent(event: H3Event): string | null {
   const ua = event.node.req.headers['user-agent']
   return typeof ua === 'string' ? ua : null
 }
 
-export async function upsertDevice(event: H3Event, userId: string, deviceId: string, data?: { deviceName?: string | null, platform?: string | null }): Promise<AuthDevice> {
+export async function upsertDevice(
+  event: H3Event,
+  userId: string,
+  deviceId: string,
+  data?: { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null }
+): Promise<AuthDevice> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
@@ -1055,12 +1306,14 @@ export async function upsertDevice(event: H3Event, userId: string, deviceId: str
       UPDATE ${DEVICES_TABLE}
       SET device_name = COALESCE(?, device_name),
           platform = COALESCE(?, platform),
+          client_type = COALESCE(?, client_type),
           user_agent = COALESCE(?, user_agent),
           last_seen_at = ?
       WHERE id = ? AND user_id = ?
     `).bind(
       data?.deviceName ?? null,
       data?.platform ?? null,
+      data?.clientType ?? null,
       getUserAgent(event),
       now,
       deviceId,
@@ -1069,13 +1322,14 @@ export async function upsertDevice(event: H3Event, userId: string, deviceId: str
   }
   else {
     await db.prepare(`
-      INSERT INTO ${DEVICES_TABLE} (id, user_id, device_name, platform, user_agent, last_seen_at, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ${DEVICES_TABLE} (id, user_id, device_name, platform, client_type, user_agent, last_seen_at, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       deviceId,
       userId,
       data?.deviceName ?? null,
       data?.platform ?? null,
+      data?.clientType ?? null,
       getUserAgent(event),
       now,
       now
@@ -1257,19 +1511,26 @@ export async function revokeDevice(event: H3Event, userId: string, deviceId: str
   `).bind(now, deviceId, userId).run()
 }
 
-export async function logLoginAttempt(event: H3Event, payload: { userId?: string | null, deviceId?: string | null, success: boolean, reason?: string | null }): Promise<void> {
+export async function logLoginAttempt(event: H3Event, payload: {
+  userId?: string | null
+  deviceId?: string | null
+  success: boolean
+  reason?: string | null
+  clientType?: AuthClientType | null
+}): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
   const geo = resolveRequestGeo(event)
+  const clientType = payload.clientType ?? normalizeClientType(event.node.req.headers['x-device-client'])
   await db.prepare(`
     INSERT INTO ${LOGIN_HISTORY_TABLE} (
       id, user_id, device_id, ip,
       country_code, region_code, region_name, city, latitude, longitude, timezone, geo_source,
-      user_agent, success, reason, created_at
+      client_type, user_agent, success, reason, created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     payload.userId ?? null,
@@ -1283,6 +1544,7 @@ export async function logLoginAttempt(event: H3Event, payload: { userId?: string
     geo.longitude,
     geo.timezone,
     geo.source,
+    clientType ?? null,
     getUserAgent(event),
     payload.success ? 1 : 0,
     payload.reason ?? null,
@@ -1312,6 +1574,7 @@ export async function listLoginHistory(event: H3Event, userId: string, days = 90
       user_agent: row.user_agent ?? null,
       success: Number(row.success ?? 0) === 1,
       reason: row.reason ?? null,
+      client_type: normalizeClientType(row.client_type),
       created_at: row.created_at,
       country_code: location?.countryCode ?? null,
       region_code: location?.regionCode ?? null,
@@ -1325,19 +1588,89 @@ export async function listLoginHistory(event: H3Event, userId: string, days = 90
   })
 }
 
+export async function evaluateDeviceAuthLongTermPolicy(
+  event: H3Event,
+  userId: string,
+  deviceId: string
+): Promise<DeviceAuthLongTermPolicy> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const deviceRow = await db.prepare(`
+    SELECT revoked_at
+    FROM ${DEVICES_TABLE}
+    WHERE id = ? AND user_id = ?
+    LIMIT 1
+  `).bind(deviceId, userId).first<{ revoked_at?: string | null }>()
+
+  const deviceTrusted = Boolean(deviceRow && !deviceRow.revoked_at)
+  const geo = resolveRequestGeo(event)
+  const hasGeo = Boolean(geo.countryCode || geo.regionCode || geo.city)
+  if (!hasGeo) {
+    return {
+      allowLongTerm: false,
+      deviceTrusted,
+      locationTrusted: false,
+      reason: deviceTrusted ? 'location' : 'device',
+    }
+  }
+
+  const result = await db.prepare(`
+    SELECT country_code, region_code, city
+    FROM ${LOGIN_HISTORY_TABLE}
+    WHERE user_id = ? AND success = 1
+    ORDER BY created_at DESC
+    LIMIT 80
+  `).bind(userId).all<Record<string, any>>()
+
+  const rows = result.results ?? []
+  const locationTrusted = rows.some((row) => {
+    if (row.country_code && row.country_code !== geo.countryCode)
+      return false
+    if (geo.regionCode && row.region_code && row.region_code !== geo.regionCode)
+      return false
+    if (geo.city && row.city && row.city !== geo.city)
+      return false
+    return Boolean(row.country_code || row.region_code || row.city)
+  })
+
+  const allowLongTerm = deviceTrusted && locationTrusted
+  let reason: DeviceAuthLongTermPolicy['reason'] = null
+  if (!deviceTrusted)
+    reason = 'device'
+  else if (!locationTrusted)
+    reason = 'location'
+
+  return {
+    allowLongTerm,
+    deviceTrusted,
+    locationTrusted,
+    reason,
+  }
+}
+
 export function readDeviceId(event: H3Event): string | null {
   const header = event.node.req.headers['x-device-id']
   return typeof header === 'string' && header.trim().length > 0 ? header.trim() : null
 }
 
-export function readDeviceMetadata(event: H3Event): { deviceName?: string | null, platform?: string | null } {
+export function normalizeClientType(value: unknown): AuthClientType | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'app' || normalized === 'cli' || normalized === 'external')
+    return normalized
+  return null
+}
+
+export function readDeviceMetadata(event: H3Event): { deviceName?: string | null, platform?: string | null, clientType?: AuthClientType | null } {
   const deviceName = typeof event.node.req.headers['x-device-name'] === 'string'
     ? event.node.req.headers['x-device-name'] as string
     : null
   const platform = typeof event.node.req.headers['x-device-platform'] === 'string'
     ? event.node.req.headers['x-device-platform'] as string
     : null
-  return { deviceName, platform }
+  const clientType = normalizeClientType(event.node.req.headers['x-device-client'])
+  return { deviceName, platform, clientType }
 }
 
 export async function ensureDeviceForRequest(event: H3Event, userId: string): Promise<AuthDevice | null> {

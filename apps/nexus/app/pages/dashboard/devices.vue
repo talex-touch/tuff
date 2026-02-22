@@ -13,6 +13,7 @@ interface DeviceItem {
   id: string
   deviceName: string | null
   platform: string | null
+  clientType: string | null
   userAgent: string | null
   lastSeenAt: string | null
   createdAt: string
@@ -67,6 +68,17 @@ function formatLastActive(value: string | null) {
   if (hours < 24)
     return t('dashboard.devices.hoursAgo', { n: hours })
   return t('dashboard.devices.daysAgo', { n: days })
+}
+
+function formatClientType(value: string | null) {
+  const normalized = typeof value === 'string' ? value.toLowerCase() : ''
+  if (normalized === 'cli')
+    return t('dashboard.devices.clientTypes.cli', 'CLI')
+  if (normalized === 'external')
+    return t('dashboard.devices.clientTypes.external', 'External')
+  if (normalized === 'app')
+    return t('dashboard.devices.clientTypes.app', 'App')
+  return t('dashboard.devices.clientTypes.unknown', '未知来源')
 }
 
 function startRename(device: DeviceItem) {
@@ -197,7 +209,7 @@ async function revokeDevice(device: DeviceItem) {
                 </span>
               </p>
               <p class="mt-0.5 text-xs text-black/50 dark:text-white/50">
-                {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }}
+                {{ device.platform || 'Web' }} · {{ formatLastActive(device.lastSeenAt) }} · {{ formatClientType(device.clientType) }}
               </p>
               <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
                 {{ formatLocation(device) }}

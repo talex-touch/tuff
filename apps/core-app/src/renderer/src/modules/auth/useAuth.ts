@@ -31,7 +31,6 @@ import {
 } from './auth-env'
 import { attestCurrentDevice } from './device-attest'
 import { applyDefaultSyncOnLogin, getSyncPreferenceState } from './sync-preferences'
-import { startAutoSync, stopAutoSync } from '~/modules/sync'
 
 let authCallbackCleanup: (() => void) | null = null
 let stepUpCallbackCleanup: (() => void) | null = null
@@ -40,6 +39,9 @@ let isInitialized = false
 let activeConsumers = 0
 
 const transport = useTuffTransport()
+const authTokenUpdatedEvent = defineRawEvent<{ status: 'set' | 'cleared' }, void>(
+  'auth:token-updated'
+)
 const appSdk = useAppSdk()
 const BROWSER_LOGIN_TIMEOUT_MS = 5 * 60 * 1000
 const BROWSER_LOGIN_CALLBACK_GRACE_MS = 5000
@@ -291,6 +293,20 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
   })()
 }
 
+function notifyAuthTokenUpdated(status: 'set' | 'cleared'): void {
+  transport.send(authTokenUpdatedEvent, { status }).catch(() => {})
+}
+
+function setAuthToken(token: string): void {
+  setAppAuthToken(token)
+  notifyAuthTokenUpdated('set')
+}
+
+function clearAuthToken(): void {
+  clearAppAuthToken()
+  notifyAuthTokenUpdated('cleared')
+}
+
 function getDisplayName(): string {
   const name = authState.user?.name?.trim()
   if (name) {
@@ -399,28 +415,20 @@ async function initializeAuth() {
       const remoteUser = await fetchRemoteUser(appToken)
       if (remoteUser) {
         updateAuthState(remoteUser, appToken)
-        void runSyncBootstrap(appToken)
-          .then((bootstrapped) => {
-            if (bootstrapped) {
-              return startAutoSync()
-            }
-            return undefined
-          })
-          .catch(() => {
-            // ignore sync bootstrap failure
-          })
+        notifyAuthTokenUpdated('set')
+        void runSyncBootstrap(appToken).catch(() => {
+          // ignore sync bootstrap failure
+        })
         isInitialized = true
         return
       }
-      clearAppAuthToken()
+      clearAuthToken()
     }
 
     updateAuthState(null)
-    stopAutoSync('logout')
     isInitialized = true
   } catch (error) {
     updateAuthState(null)
-    stopAutoSync('logout')
     isInitialized = true
     const errorMessage = getErrorMessage(error, 'INITIALIZATION_FAILED')
     toast.error(errorMessage)
@@ -449,8 +457,7 @@ async function signOut(): Promise<void> {
   authLoadingState.isSigningOut = true
   try {
     updateAuthState(null)
-    clearAppAuthToken()
-    stopAutoSync('logout')
+    clearAuthToken()
   } finally {
     authLoadingState.isSigningOut = false
   }
@@ -518,8 +525,9 @@ async function logout(): Promise<void> {
     const errorMessage = getErrorMessage(error, 'SIGN_OUT_FAILED')
     toast.error(errorMessage)
   } finally {
-    clearAppAuthToken()
-    stopAutoSync('logout')
+    if (getAppAuthToken()) {
+      clearAuthToken()
+    }
   }
 }
 
@@ -538,7 +546,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       return
     }
 
-    setAppAuthToken(resolvedToken)
+    setAuthToken(resolvedToken)
     const localDeviceId = getAppDeviceId()
     const tokenDeviceId = resolveAuthTokenDeviceId(resolvedToken)
     if (localDeviceId || tokenDeviceId) {
@@ -553,16 +561,9 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
       throw new Error('Failed to fetch user profile')
     }
     updateAuthState(remoteUser, resolvedToken)
-    void runSyncBootstrap(resolvedToken)
-      .then((bootstrapped) => {
-        if (bootstrapped) {
-          return startAutoSync()
-        }
-        return undefined
-      })
-      .catch(() => {
-        // ignore sync bootstrap failure
-      })
+    void runSyncBootstrap(resolvedToken).catch(() => {
+      // ignore sync bootstrap failure
+    })
     authLoadingState.loginProgress = 100
     toast.success('登录成功')
 

@@ -4,9 +4,10 @@ import type { PublishConfig } from '../types'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import process from 'node:process'
-import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
+import { NEXUS_BASE_URL, getTuffBaseUrl, normalizeBaseUrl } from '@talex-touch/utils/env'
 import fs from 'fs-extra'
 import { parsePublishArgs } from '../cli/args'
+import { ensureCliDeviceInfo } from '../cli/device'
 import { getAuthToken, getAuthTokenPath, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 
@@ -18,7 +19,9 @@ interface PackageInfo {
   mtimeMs: number
 }
 
-const DEFAULT_API_URL = `${NEXUS_BASE_URL}/api/market/plugins/publish`
+function getDefaultApiUrl(): string {
+  return `${getTuffBaseUrl()}/api/market/plugins/publish`
+}
 
 async function calculateSha256(filePath: string): Promise<string> {
   const content = await fs.readFile(filePath)
@@ -87,6 +90,11 @@ export async function login(): Promise<void> {
   console.log('\n🔐 Tuff Authentication\n')
 
   const token = process.argv[3]
+  const baseUrl = normalizeBaseUrl(getTuffBaseUrl())
+  const defaultBase = normalizeBaseUrl(NEXUS_BASE_URL)
+  if (baseUrl !== defaultBase) {
+    console.log(`ℹ Using custom Nexus base: ${baseUrl}`)
+  }
 
   if (!token) {
     console.log('Usage: tuff login <token>')
@@ -98,8 +106,15 @@ export async function login(): Promise<void> {
     return
   }
 
-  await saveAuthToken(token)
+  const device = await ensureCliDeviceInfo()
+  await saveAuthToken(token, {
+    baseUrl,
+    deviceId: device.deviceId,
+    deviceName: device.deviceName,
+    devicePlatform: device.devicePlatform,
+  })
   console.log(`✓ Token saved to ${getAuthTokenPath()}`)
+  console.log('⚠️  Keep your token safe and do not share it.')
   console.log('✓ Successfully logged in!')
 }
 
@@ -194,7 +209,7 @@ export async function publish(options: PublishConfig = {}): Promise<void> {
     return
   }
 
-  const apiUrl = options.apiUrl || DEFAULT_API_URL
+  const apiUrl = options.apiUrl || getDefaultApiUrl()
 
   console.log('\n📤 Publishing plugin package...')
 

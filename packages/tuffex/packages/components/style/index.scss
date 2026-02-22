@@ -2,11 +2,6 @@
 @use './variables.scss';
 @use './mixins.scss';
 
-// Component styles
-@use '../src/button/src/style/index.scss' as *;
-@use '../src/switch/style/index.scss' as *;
-@use '../src/flat-button/style/index.scss' as *;
-
 // Fake background utility (glassmorphism effect)
 .fake-background {
   position: relative;

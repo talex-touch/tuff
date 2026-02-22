@@ -146,7 +146,25 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     [AppPreviewChannel.SNAPSHOT]: 1
   }
   private readonly onMacUpdateDownloaded = (info: { version?: string }): void => {
-    const version = info?.version || 'unknown'
+    const version = (info?.version || '').trim()
+    if (!version) {
+      updateLog.warn('macOS update downloaded without version info')
+      return
+    }
+    if (!this.isUpdateCandidate(version)) {
+      updateLog.warn('macOS update ignored (version/channel mismatch)', {
+        meta: {
+          version,
+          current: this.currentVersion,
+          channel: this.getEffectiveChannel()
+        }
+      })
+      this.macUpdateDownloadedVersion = null
+      this.macUpdateReadyNotifiedVersion = null
+      this.settings.pendingInstallVersion = null
+      this.saveSettings()
+      return
+    }
     this.macUpdateDownloadedVersion = version
     this.macUpdateReadyNotifiedVersion = null
     this.settings.pendingInstallVersion = version
@@ -1094,10 +1112,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     taskId: string | null
   }> {
     if (this.isMacAutoUpdaterEnabled() && this.macUpdateDownloadedVersion) {
-      return {
-        downloadReady: true,
-        version: this.macUpdateDownloadedVersion,
-        taskId: null
+      const pendingVersion = this.macUpdateDownloadedVersion
+      if (!this.isUpdateCandidate(pendingVersion)) {
+        updateLog.warn('Ignoring stale macOS pending update', {
+          meta: { version: pendingVersion, channel: this.getEffectiveChannel() }
+        })
+        this.macUpdateDownloadedVersion = null
+        this.macUpdateReadyNotifiedVersion = null
+        this.settings.pendingInstallVersion = null
+        this.saveSettings()
+      } else {
+        return {
+          downloadReady: true,
+          version: pendingVersion,
+          taskId: null
+        }
       }
     }
 
@@ -1129,7 +1158,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const metadata = this.parseDownloadTaskMetadata(task.metadata)
         const version = typeof metadata?.version === 'string' ? metadata.version : null
 
-        if (version && !this.isUpdateNeeded(this.parseVersion(version))) {
+        if (version && !this.isUpdateCandidate(version)) {
           await this.cleanupOutdatedUpdateTask(task.id, filePath, version)
           continue
         }
@@ -1178,11 +1207,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         meta: { taskId, version }
       })
     }
-  }
-
-  private isSameVersionToken(versionA: string, versionB: string): boolean {
-    const normalize = (value: string): string => value.trim().replace(/^v/i, '').toLowerCase()
-    return normalize(versionA) === normalize(versionB)
   }
 
   private parseDownloadTaskMetadata(metadata?: string | null): Record<string, unknown> | null {
@@ -1798,6 +1822,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return null
     }
 
+    if (!this.isUpdateCandidate(release.tag_name)) {
+      return {
+        hasUpdate: false,
+        source: record.source
+      }
+    }
+
     if (record.status === UpdateRecordStatus.SKIPPED) {
       return {
         hasUpdate: false,
@@ -1915,6 +1946,19 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     return this.compareSemverVersions(newVersion.raw, currentVersion.raw) === 1
   }
 
+  private isUpdateCandidate(version: string): boolean {
+    const trimmed = version.trim()
+    if (!trimmed) {
+      return false
+    }
+    const parsed = this.parseVersion(trimmed)
+    const targetChannel = this.getEffectiveChannel()
+    if (parsed.channel !== targetChannel) {
+      return false
+    }
+    return this.isUpdateNeeded(parsed)
+  }
+
   /**
    * Get current version from package.json or environment variable
    * Uses version-util for consistent version reading across the app
@@ -1973,7 +2017,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return AppPreviewChannel.BETA
     }
     if (!normalizedPreferred) {
-      return AppPreviewChannel.RELEASE
+      return this.currentChannel
     }
     if (normalizedPreferred === AppPreviewChannel.SNAPSHOT) {
       return AppPreviewChannel.BETA
@@ -2432,7 +2476,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
         const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()
         if (pendingVersion.length > 0) {
-          if (this.isSameVersionToken(pendingVersion, this.currentVersion)) {
+          if (!this.isUpdateCandidate(pendingVersion)) {
             this.settings.pendingInstallVersion = null
             shouldSaveSettings = true
           } else if (this.isMacAutoUpdaterEnabled()) {

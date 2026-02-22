@@ -94,7 +94,7 @@ export function useSignIn() {
   const { t, locale, setLocale } = useI18n()
   const route = useRoute()
   const router = useRouter()
-  const { signIn, status, getSession } = useAuth()
+  const { signIn, signOut, status, getSession } = useAuth()
   const runtimeConfig = useRuntimeConfig()
 
   const step = ref<AuthStep>('email')
@@ -591,6 +591,7 @@ export function useSignIn() {
   const redirectParam = computed(() => pickQueryValue('redirect_url'))
   const langParam = computed(() => pickQueryValue('lang'))
   const reasonParam = computed(() => pickQueryValue('reason'))
+  const forceReauthParam = computed(() => pickQueryValue('force_reauth'))
   const oauthErrorParam = computed(() => pickQueryValue('error'))
   const oauthErrorDescriptionParam = computed(() => pickQueryValue('error_description'))
 
@@ -692,7 +693,24 @@ export function useSignIn() {
   const shouldHoldRedirectForReauth = computed(() => {
     if (reasonParam.value !== 'reauth')
       return false
+    if (forceReauthParam.value === '1')
+      return true
     return isAuthCallbackTarget(redirectTarget.value)
+  })
+
+  const forceReauthHandled = ref(false)
+
+  watchEffect(() => {
+    if (reasonParam.value !== 'reauth')
+      return
+    if (forceReauthParam.value !== '1')
+      return
+    if (forceReauthHandled.value)
+      return
+    if (status.value !== 'authenticated')
+      return
+    forceReauthHandled.value = true
+    void signOut({ redirect: false })
   })
 
   function isAuthCallbackTarget(target: string) {

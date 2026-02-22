@@ -1367,6 +1367,12 @@ Tuff may update this agreement at any time. Continued submission indicates accep
       loginHistory: 'Login history',
       loginSuccess: 'Login succeeded',
       loginFailed: 'Login failed',
+      clientTypes: {
+        app: 'App',
+        cli: 'CLI',
+        external: 'External',
+        unknown: 'Unknown source',
+      },
       statusSuccess: 'Success',
       statusFailed: 'Failed',
       noHistory: 'No login history',
@@ -1412,6 +1418,12 @@ Tuff may update this agreement at any time. Continued submission indicates accep
     },
     devices: {
       unknown: 'Unknown',
+      clientTypes: {
+        app: 'App',
+        cli: 'CLI',
+        external: 'External',
+        unknown: 'Unknown source',
+      },
       types: {
         desktop: 'Desktop',
         mobile: 'Mobile',

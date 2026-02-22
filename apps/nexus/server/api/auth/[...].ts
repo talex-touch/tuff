@@ -79,24 +79,24 @@ function getAuthOptions(): AuthOptions {
         if (loginToken) {
           const user = await consumeLoginToken(authEvent, loginToken)
           if (user) {
-            await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'login_token' })
+            await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'login_token', clientType: 'app' })
             return { id: user.id, email: user.email, name: user.name, image: user.image }
           }
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid', clientType: 'app' })
           return null
         }
 
         if (!email || !password) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials', clientType: 'app' })
           return null
         }
 
         const user = await verifyUserPassword(authEvent, email, password)
         if (!user) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'invalid_password' })
+          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'invalid_password', clientType: 'app' })
           return null
         }
-        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password' })
+        await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password', clientType: 'app' })
         return { id: user.id, email: user.email, name: user.name, image: user.image }
       }
     }),

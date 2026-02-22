@@ -102,7 +102,8 @@ export async function triggerThemeTransition(
     startViewTransition?: (callback: () => void) => { ready: Promise<void> }
   }
 
-  const startViewTransition = viewTransitionDocument.startViewTransition
+  const startViewTransition =
+    viewTransitionDocument.startViewTransition?.bind(viewTransitionDocument)
   if (!startViewTransition) {
     themeStyle.value.theme.style.auto = mode === 'auto'
     isDark.value = mode === 'dark' || (mode === 'auto' && systemDarkMode.value)

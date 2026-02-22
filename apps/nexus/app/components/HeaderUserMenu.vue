@@ -204,6 +204,7 @@ onBeforeUnmount(() => {
       :panel-padding="0"
       :close-on-select="false"
       :panel-card="userMenuPanelCard"
+      :unlimited-height="true"
       panel-variant="plain"
       panel-background="refraction"
       panel-shadow="medium"
@@ -226,7 +227,7 @@ onBeforeUnmount(() => {
       </template>
 
       <div class="header-user-panel header-user-vars isolate" @mouseenter="setUserMenuHover(true)" @mouseleave="setUserMenuHover(false)">
-        <div class="header-user-profile">
+        <div class="header-user-profile fake-background">
           <TxAvatar
             :src="userAvatar || undefined"
             :name="userLabel || 'U'"
@@ -243,7 +244,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <div class="header-user-stats">
+        <div class="header-user-stats fake-background">
           <div class="header-user-stat">
             <div class="header-user-stat-label">
               {{ tSafe('dashboard.credits.title', 'Credits') }}
@@ -276,7 +277,7 @@ onBeforeUnmount(() => {
             :offset="6"
             :duration="menuMotionDuration"
             :min-width="160"
-            :reference-full-width="true"
+            reference-class="header-user-submenu-reference"
             :panel-padding="0"
             :panel-radius="14"
             panel-variant="plain"
@@ -390,6 +391,17 @@ onBeforeUnmount(() => {
   overflow-x: hidden !important;
 }
 
+:global(.header-user-submenu-reference),
+:global(.header-user-submenu .tx-base-anchor__reference) {
+  width: 100%;
+  display: flex;
+}
+
+:global(.header-user-submenu-reference .tx-popover__reference),
+:global(.header-user-submenu .tx-popover__reference) {
+  width: 100%;
+}
+
 :global(.tx-tooltip:has(.header-user-panel)) {
   --tx-tooltip-max-height: none !important;
   max-height: none !important;
@@ -464,7 +476,8 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
   border-radius: 16px;
   border: 1px solid var(--header-user-border);
-  background: var(--header-user-soft);
+
+  --fake-opacity: 0.25;
 }
 
 .header-user-profile-avatar {
@@ -500,12 +513,13 @@ onBeforeUnmount(() => {
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--header-user-border);
+
+  --fake-opacity: 0.25;
 }
 
 .header-user-stat {
   padding: 12px;
   border-right: 1px solid var(--header-user-border);
-  background: var(--header-user-soft);
 }
 
 .header-user-stat--right {

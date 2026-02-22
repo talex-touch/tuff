@@ -5,7 +5,7 @@ description: 用于构建和发布 Tuff 插件的命令行工具
 
 # Tuff CLI
 
-`@talex-touch/unplugin-export-plugin` 包提供了名为 `tuff` 的 CLI 工具，用于构建和发布 Tuff 插件。
+`@talex-touch/tuff-cli` 包提供名为 `tuff` 的 CLI 工具，用于构建和发布 Tuff 插件（内部依赖 `@talex-touch/unplugin-export-plugin` 以保持构建能力一致）。
 
 ## 安装
 
@@ -13,10 +13,10 @@ description: 用于构建和发布 Tuff 插件的命令行工具
 ---
 code: |
   # 全局安装
-  pnpm add -g @talex-touch/unplugin-export-plugin
+  pnpm add -g @talex-touch/tuff-cli
   
   # 或通过 npx 使用
-  npx tuff <command>
+  npx @talex-touch/tuff-cli <command>
 ---
 :::
 
