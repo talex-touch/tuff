@@ -56,6 +56,7 @@ import type {
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
+import { enterPerfContext } from '../../../utils/perf-context'
 
 import { IntelligenceProviderType } from '@talex-touch/utils'
 
@@ -529,7 +530,16 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
     }
 
     try {
-      return JSON.parse(trimmedBody)
+      const disposeParse = enterPerfContext('Intelligence.parseJsonResponse', {
+        provider: this.type,
+        endpoint: context?.endpoint,
+        size: trimmedBody.length
+      })
+      try {
+        return JSON.parse(trimmedBody)
+      } finally {
+        disposeParse()
+      }
     } catch {
       const normalized = trimmedBody.replace(/\s+/g, ' ')
       const snippet =

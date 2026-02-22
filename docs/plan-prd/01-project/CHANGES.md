@@ -4,6 +4,24 @@
 
 ## 2026-02-22
 
+### 设置页高级选项收起开关
+
+**变更类型**: 体验优化 / 设置
+
+**描述**: 在“应用程序规范”中新增高级设置开关，默认关闭；启用后才显示后台索引策略、应用索引调度与下载设置，减少设置页噪音。
+
+**主要变更**:
+1. **新增开关**：高级设置开关落地到 appSetting 并持久化。
+2. **按需展示**：下载设置与索引策略/调度分组仅在开关启用后显示。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/AppSettings.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
 ### Core-app 认证/凭证/同步触发收敛到主进程
 
 **变更类型**: 架构调整 / 安全与一致性
@@ -15,6 +33,8 @@
 2. **回调收敛**：登录与 step-up 回调由 addon-opener 直接交给主进程处理，token 变化联动同步启停。
 3. **渲染端降级为代理**：`useAuth`/`account-channel` 仅保留 IPC、legacy 迁移与 fingerprint hash 计算。
 4. **Nexus 请求统一**：渲染端发起的认证请求改为 `auth:nexus-request` 由主进程代理。
+5. **Legacy 兼容移除**：移除 renderer 侧 auth/device 的 localStorage 迁移逻辑。
+6. **Widget 沙箱收敛**：widget 执行强制依赖沙箱上下文，不再回退到 window.localStorage/sessionStorage。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/auth/index.ts`

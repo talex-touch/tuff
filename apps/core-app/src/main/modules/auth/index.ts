@@ -34,13 +34,6 @@ const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 type AuthStateListener = (state: AuthState) => void
 
-type LegacyAuthSnapshot = {
-  appToken?: string | null
-  deviceId?: string | null
-  deviceName?: string | null
-  devicePlatform?: string | null
-}
-
 type NexusRequestPayload = {
   url?: string
   path?: string
@@ -364,54 +357,6 @@ function ensureDeviceProfile(): { deviceId: string; deviceName: string; devicePl
   }
 
   return { deviceId, deviceName, devicePlatform }
-}
-
-async function maybeMigrateLegacyCredentials(): Promise<void> {
-  if (!requestRendererValue) {
-    return
-  }
-
-  const snapshot = await requestRendererValue<LegacyAuthSnapshot>('auth:migrate-legacy')
-  if (!snapshot) {
-    return
-  }
-
-  const hasLegacyToken =
-    typeof snapshot.appToken === 'string' && snapshot.appToken.trim().length > 0
-  const { deviceId, deviceName, devicePlatform } = snapshot
-
-  if (hasLegacyToken && !authToken) {
-    await setAuthToken(snapshot.appToken!.trim())
-  }
-
-  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
-  ensureAuthSettings(appSettings)
-  const authSettings = appSettings.auth as {
-    deviceId?: string
-    deviceName?: string
-    devicePlatform?: string
-  }
-  let changed = false
-  if (deviceId && !authSettings.deviceId) {
-    authSettings.deviceId = deviceId
-    changed = true
-  }
-  if (deviceName && !authSettings.deviceName) {
-    authSettings.deviceName = deviceName
-    changed = true
-  }
-  if (devicePlatform && !authSettings.devicePlatform) {
-    authSettings.devicePlatform = devicePlatform
-    changed = true
-  }
-
-  if (changed) {
-    saveMainConfig(StorageList.APP_SETTING, appSettings)
-  }
-
-  if (hasLegacyToken || deviceId || deviceName || devicePlatform) {
-    await requestRendererValue('auth:clear-legacy')
-  }
 }
 
 async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
@@ -867,7 +812,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
 
     void (async () => {
       await loadAuthToken()
-      await maybeMigrateLegacyCredentials()
       ensureDeviceProfile()
       await initializeAuthState()
     })()
