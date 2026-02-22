@@ -57,3 +57,4 @@
 ## 迁移参考
 
 - `docs/plan-prd/04-implementation/TuffTransportMigration260111.md` - TuffTransport 迁移清单
+- `docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md` - Legacy Channel 清理（2.4.8）

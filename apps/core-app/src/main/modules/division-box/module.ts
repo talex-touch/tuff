@@ -5,11 +5,12 @@
  * Handles initialization, IPC registration, and integration with other systems.
  */
 
-import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
+import type { MaybePromise, ModuleKey, ModuleStartContext } from '@talex-touch/utils'
 import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { DivisionBoxIPC } from './ipc'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
+import { TalexEvents } from '../../core/eventbus/touch-event'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import { initializeDivisionBoxIPC } from './ipc'
 import { windowPool } from './window-pool'
@@ -27,6 +28,7 @@ export class DivisionBoxModule extends BaseModule {
   name: ModuleKey = DivisionBoxModule.key
 
   private ipc: DivisionBoxIPC | null = null
+  private disposeAllModulesLoaded: (() => void) | null = null
 
   constructor() {
     super(DivisionBoxModule.key, {
@@ -59,10 +61,32 @@ export class DivisionBoxModule extends BaseModule {
    *
    * - Initializes window pool for fast detach (delayed to ensure dev server is ready)
    */
-  async start(): Promise<void> {
-    // Initialize window pool after all modules loaded (dev server should be ready)
-    await windowPool.initialize()
-    console.log(LOG_PREFIX, '✓ Window pool started')
+  start(ctx: ModuleStartContext<TalexEvents>): void {
+    const schedulePoolInit = (): void => {
+      setTimeout(() => {
+        void windowPool.initialize()
+      }, 0)
+    }
+
+    const events = ctx.events
+    if (!events) {
+      schedulePoolInit()
+      console.warn(LOG_PREFIX, 'Event bus missing, window pool scheduled immediately')
+      return
+    }
+
+    const handleAllModulesLoaded = () => {
+      if (this.disposeAllModulesLoaded) {
+        this.disposeAllModulesLoaded()
+        this.disposeAllModulesLoaded = null
+      }
+      schedulePoolInit()
+    }
+
+    events.on(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
+    this.disposeAllModulesLoaded = () =>
+      events.off(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
+    console.log(LOG_PREFIX, '✓ Window pool deferred until all modules loaded')
   }
 
   /**
@@ -73,6 +97,11 @@ export class DivisionBoxModule extends BaseModule {
    * - Unregisters command provider
    */
   onDestroy(): MaybePromise<void> {
+    if (this.disposeAllModulesLoaded) {
+      this.disposeAllModulesLoaded()
+      this.disposeAllModulesLoaded = null
+    }
+
     // Destroy window pool
     windowPool.destroy()
 

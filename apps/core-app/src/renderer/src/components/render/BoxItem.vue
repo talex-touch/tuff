@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 import { getOpenerByExtension, useOpenerAutoResolve } from '~/modules/openers'
+import { resolveI18nText } from '~/modules/lang/resolve-i18n-text'
 import ItemSubtitle from './ItemSubtitle.vue'
 import { resolveSourceMeta } from './sourceMeta'
 
@@ -18,6 +19,8 @@ interface Props {
 const props = defineProps<Props>()
 
 const { t } = useI18n()
+
+const resolvedTitle = computed(() => resolveI18nText(props.render.basic?.title || '', t))
 
 const displayIcon = computed<ITuffIcon>(() => {
   const icon = props.render?.basic?.icon
@@ -161,7 +164,7 @@ const recommendation = computed(() => props.item.meta?.recommendation)
       <TuffIcon
         :empty="DefaultIcon"
         :icon="displayIcon"
-        :alt="render.basic?.title || 'Tuff Item'"
+        :alt="resolvedTitle || 'Tuff Item'"
         :size="32"
         :colorful="render?.basic?.icon?.colorful ?? true"
         style="--icon-color: var(--tx-text-color-primary)"
@@ -189,9 +192,7 @@ const recommendation = computed(() => props.item.meta?.recommendation)
       <!-- eslint-disable vue/no-v-html -->
       <h5
         class="text-sm font-semibold truncate"
-        v-html="
-          getHighlightedHTML(render.basic?.title || '', props.item.meta?.extension?.matchResult)
-        "
+        v-html="getHighlightedHTML(resolvedTitle, props.item.meta?.extension?.matchResult)"
       />
       <!-- eslint-enable vue/no-v-html -->
       <ItemSubtitle :item="item" :render="render" />

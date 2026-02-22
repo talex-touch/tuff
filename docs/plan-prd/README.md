@@ -58,6 +58,7 @@
     - 批次 A~D 已完成（Settings/Permission/Download/Cloud Sync/Channel → SDK Hooks）
     - 批次 E~F（renderer 直连点清理）进行中
   - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
+  - **2.4.8 P0 收口计划**：`./04-implementation/LegacyChannelCleanup-2408.md`
 
 - **Nexus OAuth 修复**（2026-02，已落地）
   - **代码**

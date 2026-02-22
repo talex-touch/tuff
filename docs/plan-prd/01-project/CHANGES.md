@@ -4,6 +4,19 @@
 
 ## 2026-02-22
 
+### DivisionBox 窗口池延后初始化
+
+**变更类型**: 性能优化 / 启动体验
+
+**描述**: DivisionBox 窗口池初始化延后到全部模块加载完成后异步触发，避免启动阶段被预热窗口阻塞。
+
+**主要变更**:
+1. **延后时机**：监听 `ALL_MODULES_LOADED` 后再调度 window pool 初始化。
+2. **异步调度**：初始化改为非阻塞调度，避免影响模块加载链路。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/module.ts`
+
 ### CoreBox Dev 插件视图路由按 manifest 直出
 
 **变更类型**: 行为调整 / 插件开发
@@ -15,6 +28,30 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+
+### Intelligence 审计用量写入 Upsert 化以降低锁冲突
+
+**变更类型**: 稳定性 / 数据持久化
+
+**描述**: Intelligence 审计用量统计写入改为 `INSERT ... ON CONFLICT DO UPDATE`，避免事务内先读后写导致的 `SQLITE_BUSY_SNAPSHOT` 争用。
+
+**主要变更**:
+1. **Upsert 统计**：用量统计直接累加写入，减少读写锁竞争窗口。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+
+### AppProvider 配置写入串行化避免 SQLITE_BUSY
+
+**变更类型**: 稳定性 / 数据持久化
+
+**描述**: AppProvider 写入 config 表时改为走 `DbWriteScheduler + withSqliteRetry`，降低与索引 worker 并发写入时触发 `SQLITE_BUSY` 的概率，并避免未处理的 Promise 拒绝。
+
+**主要变更**:
+1. **统一配置写入**：mdls 扫描时间/locale、缺失图标缓存、待删除缓存写入走统一写入函数。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
 
 ---
 
@@ -31,6 +68,7 @@
 2. **文件索引扩展路径**：file-provider 支持 `extraPaths` + 动态 watch，新增 addPath 入口并自动触发索引。
 3. **应用索引手动添加**：app-provider 新增 addPath 入口，复用现有更新逻辑。
 4. **传输事件与文案**：新增 app/file index addPath 事件与 SDK 方法，补齐 i18n 文案。
+5. **插件安装反馈**：插件添加成功或失败后，主窗口弹出通知并在成功/已存在时自动打开对应插件详情。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`

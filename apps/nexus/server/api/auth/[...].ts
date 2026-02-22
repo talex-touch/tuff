@@ -12,6 +12,10 @@ import { createD1Adapter } from '../../utils/authAdapter'
 import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 
+const CredentialsProvider = (Credentials as any).default ?? Credentials
+const GitHubProvider = (GitHub as any).default ?? GitHub
+const EmailProvider = (Email as any).default ?? Email
+
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
 
 function resolveAuthHeaders(req?: { headers?: Headers | AuthRequestHeaders } | Request | null): AuthRequestHeaders | undefined {
@@ -59,7 +63,7 @@ function getAuthOptions(): AuthOptions {
   const linuxdoClientId = config.auth?.linuxdo?.clientId
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret
   const providers: AuthOptions['providers'] = [
-    Credentials({
+    CredentialsProvider({
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -101,7 +105,7 @@ function getAuthOptions(): AuthOptions {
   const githubClientId = config.auth?.github?.clientId
   const githubClientSecret = config.auth?.github?.clientSecret
   if (githubClientId && githubClientSecret) {
-    providers.push(GitHub({
+    providers.push(GitHubProvider({
       clientId: githubClientId,
       clientSecret: githubClientSecret,
       allowDangerousEmailAccountLinking: true
@@ -148,7 +152,7 @@ function getAuthOptions(): AuthOptions {
   const emailServer = config.auth?.email?.server
   const emailFrom = config.auth?.email?.from
   if (emailServer && emailFrom) {
-    providers.push(Email({
+    providers.push(EmailProvider({
       server: emailServer,
       from: emailFrom,
       sendVerificationRequest: async ({ identifier, url }) => {

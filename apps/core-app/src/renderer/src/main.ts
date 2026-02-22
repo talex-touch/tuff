@@ -22,6 +22,7 @@ import { setupI18n } from '~/modules/lang/i18n'
 import { registerBuildVerificationListener } from '~/modules/build-verification/register-build-verification'
 import { registerBatteryStatusListener } from '~/modules/hooks/useBatteryOptimizer'
 import { registerNotificationHub } from '~/modules/notification/notification-hub'
+import { registerPluginInstallListener } from '~/modules/plugin/plugin-install-listener'
 import { startAutoSync } from '~/modules/sync'
 
 import { usePluginStore } from '~/stores/plugin'
@@ -135,6 +136,7 @@ async function bootstrap() {
 
   await runBootStep('Registering plugins and global modules', 0.05, () => {
     registerCorePlugins(app, i18n, router)
+    registerPluginInstallListener(transport, router)
     // Expose router to window for MetaOverlay access
     window.__VUE_ROUTER__ = router
   })
