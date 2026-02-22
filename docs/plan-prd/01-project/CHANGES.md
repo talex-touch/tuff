@@ -4,6 +4,39 @@
 
 ## 2026-02-22
 
+### Nexus 登录页底部协议按钮可点击
+
+**变更类型**: 体验修复 / 登录页
+
+**描述**: 登录页底部协议/隐私按钮被主内容层覆盖导致无法点击，现提升 footer 层级避免遮挡。
+
+**主要变更**:
+1. **层级提升**：登录页法律 footer 增加更高层级，确保点击交互可用。
+
+**修改文件**:
+- `apps/nexus/app/components/auth/AuthLegalFooter.vue`
+
+### Tuff CLI 交互式引导与登录门控
+
+**变更类型**: 体验增强 / CLI
+
+**描述**: CLI 默认交互模式升级为上下选择，并在首次进入时新增语言/条款引导与 Nexus 登录门控，确保用户完成登录后再进入主菜单。
+
+**主要变更**:
+1. **交互式选择**：菜单选项支持 ↑/↓ + Enter 操作。
+2. **首次引导**：首次运行要求选择语言并确认条款，状态写入 `~/.tuff/cli.json`。
+3. **登录门控**：未登录时要求输入 Nexus Token，完成后进入主菜单。
+4. **存储提示**：进入主菜单前提示本地配置与登录信息存储路径。
+
+**修改文件**:
+- `packages/unplugin-export-plugin/src/cli/prompts.ts`
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/unplugin-export-plugin/src/cli/runtime-config.ts`
+- `packages/unplugin-export-plugin/src/core/auth.ts`
+- `packages/unplugin-export-plugin/src/core/publish.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/zh.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/en.ts`
+
 ### Nexus OAuth 回跳支持同源绝对 redirect_url
 
 **变更类型**: 行为修复 / 登录体验
@@ -16,6 +49,21 @@
 
 **修改文件**:
 - `apps/nexus/app/composables/useOauthContext.ts`
+
+### Nexus Cloudflare Pages SSR 输出路径对齐
+
+**变更类型**: 部署稳定性 / 路由回落
+
+**描述**: Cloudflare Pages + Workers 场景下，生产构建强制启用 SSR，预览/部署脚本与指引统一使用 `dist` 输出，避免误用静态目录导致刷新回首页。
+
+**主要变更**:
+1. **SSR 强制**：生产环境保持 SSR 启用，确保 Pages Functions 生效。
+2. **输出对齐**：`preview:cf`/`deploy:cf` 与 Cloudflare 指引统一使用 `dist` 目录。
+
+**修改文件**:
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/package.json`
+- `apps/nexus/SETUP.md`
 
 ### CoreBox UI 恢复事件 URL 修正与索引 addPath 类型收敛
 

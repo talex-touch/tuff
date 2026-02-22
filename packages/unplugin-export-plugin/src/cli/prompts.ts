@@ -25,6 +25,18 @@ function clearLine(): void {
   process.stdout.write('\x1B[1A\x1B[2K')
 }
 
+function clearRenderedLines(count: number): void {
+  if (count <= 0)
+    return
+  readline.moveCursor(process.stdout, 0, -(count - 1))
+  readline.cursorTo(process.stdout, 0)
+  readline.clearScreenDown(process.stdout)
+}
+
+function canUseArrowSelect(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY)
+}
+
 /**
  * Print styled text
  */
@@ -125,34 +137,101 @@ export async function askSelect<T = string>(
   question: string,
   options: SelectOption<T>[],
 ): Promise<T> {
+  if (!canUseArrowSelect()) {
+    const rl = createRL()
+    console.log(`${styled('?', colors.cyan)} ${question}`)
+
+    options.forEach((opt, index) => {
+      const num = styled(`  ${index + 1})`, colors.cyan)
+      const hint = opt.hint ? styled(` - ${opt.hint}`, colors.dim) : ''
+      console.log(`${num} ${opt.label}${hint}`)
+    })
+
+    return new Promise((resolve) => {
+      const prompt = styled('  Enter choice (number): ', colors.dim)
+
+      const ask = () => {
+        rl.question(prompt, (answer) => {
+          const num = Number.parseInt(answer.trim(), 10)
+          if (num >= 1 && num <= options.length) {
+            rl.close()
+            resolve(options[num - 1].value)
+          }
+          else {
+            console.log(styled(`  Please enter a number between 1 and ${options.length}`, colors.red))
+            ask()
+          }
+        })
+      }
+
+      ask()
+    })
+  }
+
   const rl = createRL()
+  readline.emitKeypressEvents(process.stdin, rl)
+  process.stdin.setRawMode(true)
+  process.stdin.resume()
 
-  console.log(`${styled('?', colors.cyan)} ${question}`)
-
-  options.forEach((opt, index) => {
-    const num = styled(`  ${index + 1})`, colors.cyan)
-    const hint = opt.hint ? styled(` - ${opt.hint}`, colors.dim) : ''
-    console.log(`${num} ${opt.label}${hint}`)
-  })
+  let selectedIndex = 0
+  let firstRender = true
+  const renderedLines = options.length + 2
 
   return new Promise((resolve) => {
-    const prompt = styled('  Enter choice (number): ', colors.dim)
-
-    const ask = () => {
-      rl.question(prompt, (answer) => {
-        const num = Number.parseInt(answer.trim(), 10)
-        if (num >= 1 && num <= options.length) {
-          rl.close()
-          resolve(options[num - 1].value)
-        }
-        else {
-          console.log(styled(`  Please enter a number between 1 and ${options.length}`, colors.red))
-          ask()
-        }
+    const render = () => {
+      if (!firstRender) {
+        clearRenderedLines(renderedLines)
+      }
+      console.log(`${styled('?', colors.cyan)} ${question}`)
+      options.forEach((opt, index) => {
+        const isSelected = index === selectedIndex
+        const prefix = isSelected ? styled('›', colors.cyan) : ' '
+        const label = isSelected ? styled(opt.label, colors.bold) : opt.label
+        const hint = opt.hint ? styled(` - ${opt.hint}`, colors.dim) : ''
+        console.log(`  ${prefix} ${label}${hint}`)
       })
+      console.log(styled(`  ${t('prompt.selectHint')}`, colors.dim))
+      firstRender = false
     }
 
-    ask()
+    function finish(value: T) {
+      process.stdin.setRawMode(false)
+      process.stdin.pause()
+      process.stdin.removeListener('keypress', onKeypress)
+      rl.close()
+      resolve(value)
+    }
+
+    function onKeypress(input: string, key: readline.Key) {
+      if (key?.name === 'up' || key?.name === 'k') {
+        selectedIndex = (selectedIndex - 1 + options.length) % options.length
+        render()
+        return
+      }
+      if (key?.name === 'down' || key?.name === 'j') {
+        selectedIndex = (selectedIndex + 1) % options.length
+        render()
+        return
+      }
+      if (key?.name === 'return' || key?.name === 'enter') {
+        finish(options[selectedIndex].value)
+        return
+      }
+      if (key?.ctrl && key?.name === 'c') {
+        process.stdin.setRawMode(false)
+        process.stdin.pause()
+        rl.close()
+        process.exit(1)
+      }
+      const numeric = Number.parseInt(input, 10)
+      if (!Number.isNaN(numeric) && numeric >= 1 && numeric <= options.length) {
+        selectedIndex = numeric - 1
+        render()
+      }
+    }
+
+    render()
+    process.stdin.on('keypress', onKeypress)
   })
 }
 

@@ -25,6 +25,8 @@ const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
 const disableNitroMinify = process.env.NUXT_DISABLE_NITRO_MINIFY === 'true'
 const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
 const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
+const isProd = process.env.NODE_ENV === 'production'
+const ssrEnabled = isProd ? true : !disableSsr
 const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === 'true'
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
@@ -43,7 +45,7 @@ export default defineNuxtConfig({
     '@sentry/nuxt/module',
     ...(useCloudflareDev ? ['nitro-cloudflare-dev'] : []),
   ],
-  ssr: !disableSsr,
+  ssr: ssrEnabled,
 
   devtools: {
     enabled: false,

@@ -280,14 +280,14 @@ async function configurePackageJson(
  */
 async function installDependencies(targetDir: string): Promise<void> {
   // Detect package manager
-  let pm = 'npm'
+  let pm: 'npm' | 'pnpm' | 'yarn' = 'npm'
   try {
-    await execAsync('pnpm --version')
+    await execFileSafe('pnpm', ['--version'])
     pm = 'pnpm'
   }
   catch {
     try {
-      await execAsync('yarn --version')
+      await execFileSafe('yarn', ['--version'])
       pm = 'yarn'
     }
     catch {
@@ -295,7 +295,7 @@ async function installDependencies(targetDir: string): Promise<void> {
     }
   }
 
-  await execAsync(`${pm} install`, { cwd: targetDir })
+  await execFileSafe(pm, ['install'], { cwd: targetDir })
 }
 
 /**

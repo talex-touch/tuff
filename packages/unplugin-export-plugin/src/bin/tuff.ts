@@ -6,7 +6,6 @@ import type { SelectOption } from '../cli/prompts'
 import type { BuildConfig, DevConfig } from '../types'
 import { createRequire } from 'node:module'
 import process from 'node:process'
-import { createServer, build as viteBuild } from 'vite'
 import { parseBuildArgs, parseDevArgs } from '../cli/args'
 import { runCreate } from '../cli/commands'
 import {
@@ -15,17 +14,19 @@ import {
   t,
 } from '../cli/i18n'
 import {
+  askConfirm,
   askLanguageSwitch,
   askSelect,
+  askText,
   colors,
   printHeader,
   printInfo,
+  printList,
   styled,
 } from '../cli/prompts'
-import { resolveBuildConfig, resolveDevConfig } from '../core/config'
+import { getCliConfigPath, readCliConfig, writeCliConfig } from '../cli/runtime-config'
 import { build } from '../core/exporter'
-import { login, logout, printPublishHelp, runPublish } from '../core/publish'
-import TouchPluginExport from '../vite'
+import { getAuthToken, getAuthTokenPath, saveAuthToken } from '../core/auth'
 
 const require = createRequire(import.meta.url)
 const pkg = require('../../package.json')
@@ -90,6 +91,10 @@ function printDevHelp() {
   console.log('')
 }
 
+async function loadPublishModule() {
+  return await import('../core/publish')
+}
+
 async function runBuilder() {
   console.log('Running: tuff builder')
   await build()
@@ -114,6 +119,7 @@ async function runBuild() {
     cliOverrides.sourcemap = true
   }
 
+  const { resolveBuildConfig } = await import('../core/config')
   const buildConfig = await resolveBuildConfig(process.cwd(), cliOverrides)
   const resolvedOutput = buildConfig.outDir ?? 'dist'
   const mode = dev ? 'development' : 'production'
@@ -125,6 +131,10 @@ async function runBuild() {
   }
 
   try {
+    const [{ build: viteBuild }, { default: TouchPluginExport }] = await Promise.all([
+      import('vite'),
+      import('../vite'),
+    ])
     const viteResult = await viteBuild({
       root: process.cwd(),
       mode,
@@ -208,6 +218,11 @@ async function runDev() {
   const { host, port, open } = parseDevArgs(args)
 
   try {
+    const [{ createServer }, { default: TouchPluginExport }] = await Promise.all([
+      import('vite'),
+      import('../vite'),
+    ])
+    const { resolveDevConfig } = await import('../core/config')
     const cliOverrides: DevConfig = {}
     if (host !== undefined)
       cliOverrides.host = host
@@ -246,10 +261,79 @@ async function runDev() {
   }
 }
 
+async function ensureOnboarding(): Promise<boolean> {
+  const config = await readCliConfig()
+  const hasLangFlag = process.argv.some(arg => arg.startsWith('--lang='))
+  if (config.locale && !hasLangFlag) {
+    setLocale(config.locale)
+  }
+
+  if (config.onboardingCompleted && config.termsAcceptedAt) {
+    return true
+  }
+
+  printHeader(t('onboarding.title'), t('onboarding.subtitle'))
+
+  const selectedLocale = await askLanguageSwitch()
+
+  printHeader(t('onboarding.termsTitle'))
+  printInfo(t('onboarding.termsIntro'))
+  printList([
+    t('onboarding.termsItem1'),
+    t('onboarding.termsItem2'),
+    t('onboarding.termsItem3'),
+  ])
+
+  const accepted = await askConfirm(t('onboarding.termsConfirm'), false)
+  if (!accepted) {
+    printInfo(t('onboarding.termsDeclined'))
+    return false
+  }
+
+  await writeCliConfig({
+    locale: selectedLocale,
+    onboardingCompleted: true,
+    termsAcceptedAt: new Date().toISOString(),
+  })
+
+  return true
+}
+
+async function ensureAuthenticated(): Promise<boolean> {
+  const existingToken = await getAuthToken()
+  if (existingToken) {
+    return true
+  }
+
+  printHeader(t('onboarding.loginTitle'), t('onboarding.loginSubtitle'))
+
+  const token = await askText(t('onboarding.tokenPrompt'), {
+    hint: t('onboarding.tokenHint'),
+    validate: value => (value.trim() ? true : t('onboarding.tokenInvalid')),
+  })
+
+  await saveAuthToken(token.trim())
+  printInfo(t('onboarding.loginSuccess'))
+  return true
+}
+
 /**
  * Interactive menu mode
  */
 async function runInteractiveMode(): Promise<void> {
+  const onboardingReady = await ensureOnboarding()
+  if (!onboardingReady)
+    return
+
+  const authenticated = await ensureAuthenticated()
+  if (!authenticated)
+    return
+
+  printInfo(t('welcome.storageHint', {
+    cli: getCliConfigPath(),
+    auth: getAuthTokenPath(),
+  }))
+
   printHeader(
     t('welcome.title'),
     `${t('welcome.subtitle')} · ${t('welcome.version', { version: pkg.version })}`,
@@ -280,13 +364,13 @@ async function runInteractiveMode(): Promise<void> {
       await runDev()
       break
     case 'publish':
-      await runPublish()
+      await (await loadPublishModule()).runPublish()
       break
     case 'login':
-      await login()
+      await (await loadPublishModule()).login()
       break
     case 'logout':
-      await logout()
+      await (await loadPublishModule()).logout()
       break
     case 'settings':
       await runSettings()
@@ -315,6 +399,7 @@ async function runSettings(): Promise<void> {
 
   if (setting === 'language') {
     const newLocale = await askLanguageSwitch()
+    await writeCliConfig({ locale: newLocale })
     printInfo(t('settings.languageChanged', { lang: t(`settings.languages.${newLocale}`) }))
     // Re-run interactive mode with new locale
     await runInteractiveMode()
@@ -373,16 +458,19 @@ async function main() {
       await runDev()
     }
     else if (command === 'publish') {
-      if (hasHelpFlag)
+      const { printPublishHelp, runPublish } = await loadPublishModule()
+      if (hasHelpFlag) {
         printPublishHelp()
-      else
+      }
+      else {
         await runPublish()
+      }
     }
     else if (command === 'login') {
-      await login()
+      await (await loadPublishModule()).login()
     }
     else if (command === 'logout') {
-      await logout()
+      await (await loadPublishModule()).logout()
     }
     else if (command === 'about') {
       printAbout()
