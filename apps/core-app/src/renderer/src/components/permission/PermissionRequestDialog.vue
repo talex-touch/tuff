@@ -5,8 +5,7 @@
  * Shows when a plugin requests a permission at runtime.
  */
 
-import { TxButton, TxModal } from '@talex-touch/tuffex'
-import { ElAlert } from 'element-plus'
+import { TxAlert, TxButton, TxModal } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 
 interface Props {
@@ -44,13 +43,13 @@ const dialogVisible = computed({
 const riskColor = computed(() => {
   switch (props.riskLevel) {
     case 'low':
-      return 'var(--el-color-success)'
+      return 'var(--tx-color-success)'
     case 'medium':
-      return 'var(--el-color-warning)'
+      return 'var(--tx-color-warning)'
     case 'high':
-      return 'var(--el-color-danger)'
+      return 'var(--tx-color-danger)'
     default:
-      return 'var(--el-color-info)'
+      return 'var(--tx-color-info)'
   }
 })
 
@@ -142,17 +141,17 @@ function requestClose() {
       </div>
 
       <!-- Reason -->
-      <ElAlert v-if="reason" type="info" :closable="false" class="permission-reason">
+      <TxAlert v-if="reason" type="info" :closable="false" class="permission-reason">
         <template #title>
           <span class="reason-label">插件说明：</span>
         </template>
         {{ reason }}
-      </ElAlert>
+      </TxAlert>
 
       <!-- Warning for high risk -->
-      <ElAlert v-if="riskLevel === 'high'" type="warning" :closable="false" class="risk-warning">
+      <TxAlert v-if="riskLevel === 'high'" type="warning" :closable="false" class="risk-warning">
         此权限风险较高，请确认您信任此插件。
-      </ElAlert>
+      </TxAlert>
     </div>
 
     <template #footer>
@@ -194,7 +193,7 @@ function requestClose() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 12px;
 }
 
@@ -208,12 +207,12 @@ function requestClose() {
   p {
     margin: 4px 0 0;
     font-size: 13px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 }
 
 .permission-info {
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 8px;
   padding: 12px;
 }
@@ -226,13 +225,13 @@ function requestClose() {
 
   .risk-icon {
     &.high {
-      color: var(--el-color-danger);
+      color: var(--tx-color-danger);
     }
     &.medium {
-      color: var(--el-color-warning);
+      color: var(--tx-color-warning);
     }
     &.low {
-      color: var(--el-color-success);
+      color: var(--tx-color-success);
     }
   }
 
@@ -243,16 +242,16 @@ function requestClose() {
     font-weight: normal;
 
     &.high {
-      background: var(--el-color-danger-light-9);
-      color: var(--el-color-danger);
+      background: var(--tx-color-danger-light-9);
+      color: var(--tx-color-danger);
     }
     &.medium {
-      background: var(--el-color-warning-light-9);
-      color: var(--el-color-warning);
+      background: var(--tx-color-warning-light-9);
+      color: var(--tx-color-warning);
     }
     &.low {
-      background: var(--el-color-success-light-9);
-      color: var(--el-color-success);
+      background: var(--tx-color-success-light-9);
+      color: var(--tx-color-success);
     }
   }
 }
@@ -260,21 +259,21 @@ function requestClose() {
 .permission-desc {
   margin: 8px 0 0;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .permission-reason {
-  :deep(.el-alert__title) {
+  :deep(.tx-alert__title) {
     font-weight: 500;
   }
 
   .reason-label {
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
   }
 }
 
 .risk-warning {
-  :deep(.el-alert__content) {
+  :deep(.tx-alert__message) {
     font-size: 13px;
   }
 }

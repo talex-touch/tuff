@@ -174,8 +174,8 @@ function copyAnswer(): void {
   flex-direction: column;
   gap: 16px;
   padding: 18px;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 18px;
   box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
 }
@@ -201,17 +201,17 @@ function copyAnswer(): void {
 .CoreIntelligence__prompt {
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .CoreIntelligence__status {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .CoreIntelligence__action {
   border: none;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   color: #fff;
   padding: 6px 12px;
   border-radius: 999px;
@@ -228,7 +228,7 @@ function copyAnswer(): void {
 .CoreIntelligence__answer {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: normal;
   word-break: break-word;
 }
@@ -239,13 +239,13 @@ function copyAnswer(): void {
 
 .CoreIntelligence__placeholder {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .CoreIntelligence__error {
   font-size: 13px;
-  color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
+  color: var(--tx-color-danger);
+  background: var(--tx-color-danger-light-9);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -255,12 +255,12 @@ function copyAnswer(): void {
   flex-wrap: wrap;
   gap: 8px;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .CoreIntelligence__meta {
   padding: 4px 8px;
   border-radius: 999px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 </style>

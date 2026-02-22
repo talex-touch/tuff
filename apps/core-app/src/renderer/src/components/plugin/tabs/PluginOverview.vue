@@ -64,14 +64,14 @@ const readme = computed<string>(() => props.plugin.readme)
 
   i {
     font-size: 1.25rem;
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
   }
 
   h3 {
     margin: 0;
     font-size: 1.125rem;
     font-weight: 600;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 }
 
@@ -82,8 +82,8 @@ const readme = computed<string>(() => props.plugin.readme)
 }
 
 .platform-card {
-  background: rgba(var(--el-fill-color-rgb), 0.6);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.3);
+  background: rgba(var(--tx-fill-color-rgb), 0.6);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.3);
   border-radius: 12px;
   padding: 1rem;
   transition: all 0.3s ease;
@@ -92,8 +92,8 @@ const readme = computed<string>(() => props.plugin.readme)
   gap: 0.75rem;
 
   &.enabled {
-    border-color: rgba(var(--el-color-success-rgb), 0.3);
-    background: rgba(var(--el-color-success-rgb), 0.05);
+    border-color: rgba(var(--tx-color-success-rgb), 0.3);
+    background: rgba(var(--tx-color-success-rgb), 0.05);
   }
 
   &:not(.enabled) {
@@ -104,7 +104,7 @@ const readme = computed<string>(() => props.plugin.readme)
 .platform-name {
   font-weight: 500;
   text-transform: capitalize;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .platform-status {
@@ -116,11 +116,11 @@ const readme = computed<string>(() => props.plugin.readme)
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--el-color-info);
+    background: var(--tx-color-info);
   }
 
   &.enabled .status-indicator {
-    background: var(--el-color-success);
+    background: var(--tx-color-success);
     animation: pulse 2s infinite;
   }
 }
@@ -131,18 +131,18 @@ const readme = computed<string>(() => props.plugin.readme)
   gap: 0.375rem;
 
   .tag {
-    background: rgba(var(--el-color-primary-rgb), 0.1);
-    color: var(--el-color-primary);
+    background: rgba(var(--tx-color-primary-rgb), 0.1);
+    color: var(--tx-color-primary);
     font-size: 0.625rem;
     font-weight: 500;
     padding: 0.25rem 0.5rem;
     border-radius: 6px;
-    border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
+    border: 1px solid rgba(var(--tx-color-primary-rgb), 0.2);
 
     &.arch {
-      background: rgba(var(--el-color-info-rgb), 0.1);
-      color: var(--el-color-info);
-      border-color: rgba(var(--el-color-info-rgb), 0.2);
+      background: rgba(var(--tx-color-info-rgb), 0.1);
+      color: var(--tx-color-info);
+      border-color: rgba(var(--tx-color-info-rgb), 0.2);
     }
   }
 }
@@ -159,15 +159,15 @@ const readme = computed<string>(() => props.plugin.readme)
     filter: blur(18px);
     background: linear-gradient(
       to bottom,
-      var(--el-color-primary-light-7) 10%,
-      var(--el-fill-color-light) 90%
+      var(--tx-color-primary-light-7) 10%,
+      var(--tx-fill-color-light) 90%
     );
     border-radius: 12px;
     padding: 0.5rem;
   }
   position: relative;
 
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   border-radius: 12px;
   padding: 0.5rem;
 

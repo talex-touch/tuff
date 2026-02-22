@@ -106,7 +106,7 @@ watch(
 
   left: 50%;
 
-  --fake-color: var(--el-text-color-primary);
+  --fake-color: var(--tx-text-color-primary);
   --fake-opacity: 0.25;
   --fake-inner-opacity: 0.25;
   --fake-radius: 50%;
@@ -131,27 +131,27 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 12px;
   padding: 0 12px;
   height: 32px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 
   &:hover {
-    background: var(--el-fill-color-light);
-    border-color: var(--el-border-color);
+    background: var(--tx-fill-color-light);
+    border-color: var(--tx-border-color);
   }
 
   &:focus-within {
-    background: var(--el-fill-color);
-    border-color: var(--el-color-primary-light-5);
-    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+    background: var(--tx-fill-color);
+    border-color: var(--tx-color-primary-light-5);
+    box-shadow: 0 0 0 2px var(--tx-color-primary-light-9);
   }
 }
 
 .search-icon {
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   font-size: 14px;
   margin-right: 8px;
   transition: color 0.3s ease;
@@ -162,17 +162,17 @@ watch(
   border: none;
   outline: none;
   background: transparent;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   font-size: 13px;
   height: 100%;
 
   &::placeholder {
-    color: var(--el-text-color-placeholder);
+    color: var(--tx-text-color-placeholder);
   }
 }
 
 .clear-icon {
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   font-size: 14px;
   margin-left: 8px;
   cursor: pointer;
@@ -185,8 +185,8 @@ watch(
   justify-content: center;
 
   &:hover {
-    color: var(--el-text-color-regular);
-    background: var(--el-fill-color);
+    color: var(--tx-text-color-regular);
+    background: var(--tx-fill-color);
   }
 }
 

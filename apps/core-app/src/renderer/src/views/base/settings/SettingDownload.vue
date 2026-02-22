@@ -12,6 +12,7 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
+import { devLog } from '~/utils/dev-log'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -73,7 +74,7 @@ async function loadConfig() {
     const message = error instanceof Error ? error.message : ''
     // Ignore timeout errors during startup - module may not be ready yet
     if (message.includes('timed out')) {
-      console.debug('[SettingDownload] Config load timed out, module may be initializing')
+      devLog('[SettingDownload] Config load timed out, module may be initializing')
       return
     }
     console.error('[SettingDownload] Failed to load config:', error)
@@ -423,11 +424,11 @@ function formatTimeout(ms: number): string {
 <style lang="scss" scoped>
 .storage-path-display {
   padding: 8px 12px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 6px;
   font-family: monospace;
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   word-break: break-all;
 }
 

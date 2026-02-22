@@ -77,12 +77,12 @@ interface TuffItemStatusDot {
 <!-- 标题插槽 -->
 <template #title>
   <span>Custom Title</span>
-  <el-tag>Pro</el-tag>
+  <TxTag>Pro</TxTag>
 </template>
 
 <!-- 标题内联 Badge -->
 <template #title-badge>
-  <el-tag size="small">New</el-tag>
+  <TxTag size="sm">New</TxTag>
 </template>
 
 <!-- 副标题插槽 -->
@@ -92,7 +92,7 @@ interface TuffItemStatusDot {
 
 <!-- 右侧尾部插槽 -->
 <template #trailing>
-  <el-button>Action</el-button>
+  <TxButton>Action</TxButton>
 </template>
 
 <!-- 顶部 Badge 插槽 -->

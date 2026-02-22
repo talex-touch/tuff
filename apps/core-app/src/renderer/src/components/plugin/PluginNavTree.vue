@@ -316,11 +316,11 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   --fake-color: transparent;
   cursor: pointer;
   user-select: none;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   transition: background-color 0.2s ease;
 
   &:hover {
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
   }
 }
 
@@ -330,7 +330,7 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   justify-content: center;
   width: 18px;
   height: 18px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   transition: transform 0.18s ease;
 
   &.open {
@@ -350,8 +350,8 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   line-height: 18px;
   padding: 0 6px;
   border-radius: 8px;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-secondary);
 }
 
 .PluginNavTree-GroupBody {
@@ -383,19 +383,19 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   --fake-color: transparent;
   cursor: pointer;
   user-select: none;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   transition:
     background-color 0.2s ease,
     color 0.2s ease,
     transform 0.2s ease;
 
   &:hover {
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
   }
 
   &.active {
-    background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
-    color: var(--el-color-primary);
+    background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
+    color: var(--tx-color-primary);
   }
 
   &:active {
@@ -429,13 +429,13 @@ function resolveIndicatorTone(plugin: ITouchPlugin): PluginIndicatorTone {
   font-size: 14px;
 
   &.error {
-    color: var(--el-color-error);
-    background: color-mix(in srgb, var(--el-color-error) 12%, transparent);
+    color: var(--tx-color-error);
+    background: color-mix(in srgb, var(--tx-color-error) 12%, transparent);
   }
 
   &.warning {
-    color: var(--el-color-warning);
-    background: color-mix(in srgb, var(--el-color-warning) 12%, transparent);
+    color: var(--tx-color-warning);
+    background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
   }
 }
 </style>

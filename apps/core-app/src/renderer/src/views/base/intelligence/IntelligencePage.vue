@@ -78,8 +78,8 @@ const boundCapabilities = computed(
   padding: 0.75rem 1.5rem;
   margin: 0 0 0.75rem;
   border-radius: 10px;
-  background: var(--el-fill-color-lighter);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 
   &__item {
     display: flex;
@@ -92,28 +92,28 @@ const boundCapabilities = computed(
   &__value {
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     line-height: 1.2;
 
     &--active {
-      color: var(--el-color-success);
+      color: var(--tx-color-success);
     }
 
     &--bound {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
   }
 
   &__label {
     font-size: 0.75rem;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     white-space: nowrap;
   }
 
   &__divider {
     width: 1px;
     height: 2rem;
-    background: var(--el-border-color-lighter);
+    background: var(--tx-border-color-lighter);
   }
 }
 

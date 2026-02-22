@@ -256,9 +256,9 @@ $container-padding-vertical: 8px;
   min-height: 200px;
   max-height: 80%;
   border-radius: $dialog-border-radius;
-  box-shadow: var(--el-box-shadow);
+  box-shadow: var(--tx-box-shadow);
   box-sizing: border-box;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
   transition: $dialog-transition-duration;
   animation: blow $dialog-transition-duration;
 
@@ -287,9 +287,9 @@ $container-padding-vertical: 8px;
     border-radius: $confirm-button-border-radius;
     background: linear-gradient(
       to right,
-      var(--el-color-primary-light-3),
-      var(--el-color-primary-light-5),
-      var(--el-color-primary-light-3)
+      var(--tx-color-primary-light-3),
+      var(--tx-color-primary-light-5),
+      var(--tx-color-primary-light-3)
     );
   }
 

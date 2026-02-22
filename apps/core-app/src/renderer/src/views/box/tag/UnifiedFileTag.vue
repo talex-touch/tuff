@@ -134,14 +134,14 @@ const thumbnail = computed(() => {
   padding: 0.25rem 0.75rem;
   align-items: center;
   border-radius: 8px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 
   &.loading {
     opacity: 0.6;
 
     .name {
       font-style: italic;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
   }
 
@@ -162,13 +162,13 @@ const thumbnail = computed(() => {
 
   .file-icon-fallback {
     font-size: 28px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .name {
     flex: 1;
     font-size: 14px;
-    color: var(--el-text-color);
+    color: var(--tx-text-color);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -183,7 +183,7 @@ const thumbnail = computed(() => {
     min-width: 28px;
     height: 22px;
     border-radius: 11px;
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
     color: white;
     font-size: 12px;
     font-weight: 600;

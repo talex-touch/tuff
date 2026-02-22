@@ -1,5 +1,6 @@
 'use strict'
 
+const process = require('node:process')
 const loadNative = require('node-gyp-build')
 
 let nativeBinding = null
@@ -7,7 +8,8 @@ let loadError = null
 
 try {
   nativeBinding = loadNative(__dirname)
-} catch (error) {
+}
+catch (error) {
   loadError = error
 }
 
@@ -22,7 +24,7 @@ function getNativeOcrSupport() {
     return {
       supported: false,
       platform: process.platform,
-      reason: 'disabled-by-env'
+      reason: 'disabled-by-env',
     }
   }
 
@@ -30,7 +32,7 @@ function getNativeOcrSupport() {
     return {
       supported: false,
       platform: process.platform,
-      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded'
+      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded',
     }
   }
 
@@ -55,5 +57,5 @@ async function recognizeImageText(options) {
 
 module.exports = {
   getNativeOcrSupport,
-  recognizeImageText
+  recognizeImageText,
 }

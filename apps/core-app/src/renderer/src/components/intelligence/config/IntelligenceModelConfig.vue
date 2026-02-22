@@ -1,10 +1,9 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
 import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
-import { TuffSelect, TuffSelectItem, TxButton } from '@talex-touch/tuffex'
+import { TuffSelect, TuffSelectItem, TxButton, TxTransfer } from '@talex-touch/tuffex'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { ElTransfer } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -367,10 +366,10 @@ watch(
     >
       <div class="models-summary">
         <span class="text-sm op-70">
-          <span v-if="localModels.length === 0" class="text-[var(--el-text-color-placeholder)]">
+          <span v-if="localModels.length === 0" class="text-[var(--tx-text-color-placeholder)]">
             {{ t('intelligence.config.model.noModels') }}
           </span>
-          <span v-else class="text-[var(--el-text-color-primary)]">
+          <span v-else class="text-[var(--tx-text-color-primary)]">
             {{ localModels.length }} {{ t('intelligence.config.model.modelsCount') }}
           </span></span
         >
@@ -422,12 +421,12 @@ watch(
       :title="t('intelligence.config.model.manageModels')"
     >
       <div class="models-drawer-content">
-        <p class="text-sm text-[var(--el-text-color-secondary)] mb-4">
+        <p class="text-sm text-[var(--tx-text-color-secondary)] mb-4">
           {{ t('intelligence.config.model.modelsHint') }}
         </p>
 
         <div class="model-transfer-section">
-          <ElTransfer
+          <TxTransfer
             v-model="transferSelectedModels"
             :data="transferData"
             filterable
@@ -453,7 +452,7 @@ watch(
             <i v-else class="i-carbon-download" />
             {{ t('intelligence.config.model.fetchModels') }}
           </TxButton>
-          <p class="text-xs text-[var(--el-text-color-secondary)]">
+          <p class="text-xs text-[var(--tx-text-color-secondary)]">
             {{ t('intelligence.config.model.fetchModelsHint') }}
           </p>
         </div>
@@ -557,7 +556,7 @@ watch(
 
   .drawer-description {
     margin-bottom: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     font-size: 13px;
   }
 
@@ -570,14 +569,14 @@ watch(
 
     .drawer-error {
       margin-top: 8px;
-      color: var(--el-color-error);
+      color: var(--tx-color-danger);
       font-size: 12px;
     }
 
     .default-model-group-label {
       font-size: 12px;
       font-weight: 600;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
   }
 }
@@ -588,19 +587,19 @@ watch(
   .model-transfer-section {
     margin-bottom: 16px;
 
-    :deep(.el-transfer) {
+    :deep(.tx-transfer) {
       width: 100%;
       border-radius: 12px;
-      border: 1px solid var(--el-border-color-lighter);
-      background: var(--el-fill-color-blank);
+      border: 1px solid var(--tx-border-color-lighter);
+      background: var(--tx-fill-color-blank);
       min-height: 260px;
     }
 
-    :deep(.el-transfer__buttons) {
+    :deep(.tx-transfer__actions) {
       margin: 0 8px;
     }
 
-    :deep(.el-transfer__panel) {
+    :deep(.tx-transfer__panel) {
       min-height: 220px;
     }
   }
@@ -608,7 +607,7 @@ watch(
   .fetch-models-section {
     margin-bottom: 16px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--el-border-color-lighter);
+    border-bottom: 1px solid var(--tx-border-color-lighter);
   }
 
   .fetch-models-button {
@@ -616,7 +615,7 @@ watch(
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    background: var(--el-color-primary);
+    background: var(--tx-color-primary);
     color: white;
     border: none;
     border-radius: 6px;
@@ -628,7 +627,7 @@ watch(
     margin-bottom: 8px;
 
     &:hover:not(.is-disabled) {
-      background: var(--el-color-primary-light-3);
+      background: var(--tx-color-primary-light-3);
     }
 
     &.is-disabled {
@@ -654,19 +653,19 @@ watch(
   .add-model-input {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
     border-radius: 6px;
-    background: var(--el-fill-color-blank);
-    color: var(--el-text-color-primary);
+    background: var(--tx-fill-color-blank);
+    color: var(--tx-text-color-primary);
     font-size: 14px;
     outline: none;
 
     &:focus {
-      border-color: var(--el-color-primary);
+      border-color: var(--tx-color-primary);
     }
 
     &::placeholder {
-      color: var(--el-text-color-placeholder);
+      color: var(--tx-text-color-placeholder);
     }
   }
 
@@ -675,7 +674,7 @@ watch(
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    background: var(--el-color-primary);
+    background: var(--tx-color-primary);
     color: white;
     border: none;
     border-radius: 6px;
@@ -684,7 +683,7 @@ watch(
     transition: all 0.2s;
 
     &:hover:not(.is-disabled) {
-      background: var(--el-color-primary-light-3);
+      background: var(--tx-color-primary-light-3);
     }
 
     &.is-disabled {
@@ -698,7 +697,7 @@ watch(
   }
 
   .error-message {
-    color: var(--el-color-error);
+    color: var(--tx-color-danger);
     font-size: 12px;
     margin: 0;
   }

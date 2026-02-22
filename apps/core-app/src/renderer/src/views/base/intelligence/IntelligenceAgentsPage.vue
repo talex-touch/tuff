@@ -106,7 +106,7 @@ onMounted(() => {
 .agents-content {
   flex: 1;
   min-width: 0;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
   padding: 1.5rem;
   overflow: auto;
@@ -118,6 +118,6 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

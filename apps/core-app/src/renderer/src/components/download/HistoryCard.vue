@@ -211,8 +211,8 @@ function formatSpeed(bytesPerSecond: number): string {
 <style scoped>
 .history-card {
   position: relative;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color-light);
   border-radius: 8px;
   padding: 16px;
   transition: all 0.3s ease;
@@ -221,7 +221,7 @@ function formatSpeed(bytesPerSecond: number): string {
 
 .history-card:hover {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  border-color: var(--el-border-color);
+  border-color: var(--tx-border-color);
 }
 
 /* 状态样式 */
@@ -259,7 +259,7 @@ function formatSpeed(bytesPerSecond: number): string {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   flex-shrink: 0;
 }
 
@@ -275,7 +275,7 @@ function formatSpeed(bytesPerSecond: number): string {
 .history-name {
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin-bottom: 8px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -287,7 +287,7 @@ function formatSpeed(bytesPerSecond: number): string {
   flex-wrap: wrap;
   gap: 16px;
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .meta-item {

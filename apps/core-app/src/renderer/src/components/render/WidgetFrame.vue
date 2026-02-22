@@ -13,6 +13,7 @@ import {
   type VNode
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
+import { devLog } from '~/utils/dev-log'
 
 const props = withDefaults(
   defineProps<{
@@ -73,7 +74,7 @@ const renderModeLabel = computed(() => (useShadowHost.value ? 'shadow' : 'light'
 
 function logLightLifecycle(phase: string): void {
   if (!isDev || useShadowHost.value || !props.rendererId) return
-  console.debug(
+  devLog(
     `[WidgetFrame] light component ${phase}: ${props.rendererId} (${resolveRendererName(renderer.value)})`
   )
 }
@@ -103,10 +104,10 @@ watch(
     if (!isDev || !rendererId) return
     if (resolved) {
       const componentName = resolveRendererName(resolved)
-      console.debug(
+      devLog(
         `[WidgetFrame] renderer ready: ${rendererId} (${componentName}) mode=${renderModeLabel.value}`
       )
-      console.debug('[WidgetFrame] props snapshot:', {
+      devLog('[WidgetFrame] props snapshot:', {
         rendererId,
         preview: props.preview,
         item: props.item,
@@ -123,7 +124,7 @@ watch(
   () => props.payload,
   (value) => {
     if (!isDev || !props.rendererId) return
-    console.debug('[WidgetFrame] payload update:', { rendererId: props.rendererId, payload: value })
+    devLog('[WidgetFrame] payload update:', { rendererId: props.rendererId, payload: value })
   }
 )
 
@@ -131,7 +132,7 @@ watch(
   () => props.item,
   (value) => {
     if (!isDev || !props.rendererId) return
-    console.debug('[WidgetFrame] item update:', { rendererId: props.rendererId, item: value })
+    devLog('[WidgetFrame] item update:', { rendererId: props.rendererId, item: value })
   }
 )
 
@@ -179,7 +180,7 @@ function ensureShadowRoot(): ShadowRoot | null {
   if (!shadowRoot.value) {
     shadowRoot.value = host.attachShadow({ mode: 'open' })
     if (isDev) {
-      console.debug('[WidgetFrame] shadow root created', { rendererId: props.rendererId })
+      devLog('[WidgetFrame] shadow root created', { rendererId: props.rendererId })
     }
   }
   if (!shadowContainer.value) {
@@ -187,7 +188,7 @@ function ensureShadowRoot(): ShadowRoot | null {
     shadowContainer.value.className = 'WidgetFrame-ShadowContainer'
     shadowRoot.value.appendChild(shadowContainer.value)
     if (isDev) {
-      console.debug('[WidgetFrame] shadow container created', { rendererId: props.rendererId })
+      devLog('[WidgetFrame] shadow container created', { rendererId: props.rendererId })
     }
   }
   return shadowRoot.value
@@ -229,7 +230,7 @@ function mountShadowApp(): void {
     shadowApp.value = null
   }
   if (isDev) {
-    console.debug('[WidgetFrame] shadow app creating', {
+    devLog('[WidgetFrame] shadow app creating', {
       rendererId: props.rendererId,
       component: resolveRendererName(renderer.value),
       mode: props.renderMode
@@ -257,7 +258,7 @@ function mountShadowApp(): void {
   app.mount(shadowContainer.value)
   shadowApp.value = app
   if (isDev) {
-    console.debug('[WidgetFrame] shadow app mounted', {
+    devLog('[WidgetFrame] shadow app mounted', {
       rendererId: props.rendererId,
       mode: props.renderMode
     })
@@ -286,7 +287,7 @@ onBeforeUnmount(() => {
     class="WidgetFrame"
     :class="{ 'is-preview': preview, 'is-empty': !renderer, 'has-error': !!renderError }"
   >
-    <div v-if="renderError" class="WidgetFrame-Error text-xs text-[var(--el-color-danger)]">
+    <div v-if="renderError" class="WidgetFrame-Error text-xs text-[var(--tx-color-danger)]">
       <div class="WidgetFrame-ErrorTitle">Widget 渲染失败</div>
       <div class="WidgetFrame-ErrorMessage">{{ renderError.message }}</div>
     </div>
@@ -305,7 +306,7 @@ onBeforeUnmount(() => {
       @show-history="emits('show-history')"
       @copy-primary="emits('copy-primary')"
     />
-    <div v-else class="WidgetFrame-Empty text-xs text-[var(--el-text-color-secondary)]">
+    <div v-else class="WidgetFrame-Empty text-xs text-[var(--tx-text-color-secondary)]">
       Widget 暂未就绪
     </div>
   </div>
@@ -327,7 +328,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
 }
 
 .WidgetFrame-ShadowHost {
@@ -351,7 +352,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   padding: 16px;
   text-align: center;
-  background: var(--el-color-danger-light-9);
+  background: var(--tx-color-danger-light-9);
 }
 
 .WidgetFrame-ErrorTitle {
@@ -361,6 +362,6 @@ onBeforeUnmount(() => {
 .WidgetFrame-ErrorMessage {
   max-width: 100%;
   word-break: break-word;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

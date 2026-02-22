@@ -7,14 +7,14 @@ const { t } = useI18n()
 <template>
   <div class="PluginFeature-EmptyState flex flex-col items-center justify-center py-16 text-center">
     <div
-      class="PluginFeature-EmptyIcon w-20 h-20 bg-[var(--el-bg-color-overlay)] rounded-2xl flex items-center justify-center mb-6"
+      class="PluginFeature-EmptyIcon w-20 h-20 bg-[var(--tx-bg-color-overlay)] rounded-2xl flex items-center justify-center mb-6"
     >
-      <i class="i-ri-function-line text-4xl text-[var(--el-text-color-disabled)]" />
+      <i class="i-ri-function-line text-4xl text-[var(--tx-text-color-disabled)]" />
     </div>
-    <h3 class="text-xl font-semibold text-[var(--el-text-color-primary)] mb-2">
+    <h3 class="text-xl font-semibold text-[var(--tx-text-color-primary)] mb-2">
       {{ t('plugin.features.empty.title') }}
     </h3>
-    <p class="text-[var(--el-text-color-secondary)]">
+    <p class="text-[var(--tx-text-color-secondary)]">
       {{ t('plugin.features.empty.subtitle') }}
     </p>
   </div>

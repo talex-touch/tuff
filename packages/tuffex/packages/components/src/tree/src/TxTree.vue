@@ -63,7 +63,8 @@ function setExpanded(next: Set<TreeKey>) {
 }
 
 function toggleExpand(node: TreeNode) {
-  if (!node.children?.length)
+  const hasChildren = node.leaf === false || !!node.children?.length
+  if (!hasChildren)
     return
   const next = new Set(expandedSet.value)
   const isExpanded = next.has(node.key)
@@ -141,7 +142,7 @@ interface FlatItem {
 
 function flatten(nodes: TreeNode[], level: number, out: FlatItem[]) {
   for (const node of nodes) {
-    const hasChildren = !!node.children?.length
+    const hasChildren = node.leaf === false || !!node.children?.length
     const expanded = hasChildren && effectiveExpanded.value.has(node.key)
     out.push({ node, level, hasChildren, expanded })
     if (hasChildren && expanded)

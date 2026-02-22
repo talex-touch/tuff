@@ -9,6 +9,7 @@ import { isDevEnv } from '@talex-touch/utils/env'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
 import { getBuildInfo } from '../../utils/build-info'
+import { devLog } from '~/utils/dev-log'
 
 // Initialize Sentry in renderer process
 let isInitialized = false
@@ -24,7 +25,7 @@ export async function initSentryRenderer(): Promise<void> {
 
   // Skip Sentry in development mode to avoid CSP warnings
   if (isDevEnv()) {
-    console.debug('[SentryRenderer] Sentry disabled in development mode')
+    devLog('[SentryRenderer] Sentry disabled in development mode')
     return
   }
 
@@ -36,7 +37,7 @@ export async function initSentryRenderer(): Promise<void> {
     }
 
     if (!config?.enabled) {
-      console.debug('[SentryRenderer] Sentry is disabled')
+      devLog('[SentryRenderer] Sentry is disabled')
       return
     }
 
@@ -78,7 +79,7 @@ export async function initSentryRenderer(): Promise<void> {
     watchUserContext()
 
     isInitialized = true
-    console.debug('[SentryRenderer] Sentry initialized')
+    devLog('[SentryRenderer] Sentry initialized')
   } catch (error) {
     console.warn('[SentryRenderer] Failed to initialize Sentry', error)
   }
@@ -141,7 +142,7 @@ function updateUserContext(user: { id?: string; username?: string } | null): voi
         Sentry.setUser(null)
       }
     } catch (error) {
-      console.debug('[SentryRenderer] Failed to update user context', error)
+      devLog('[SentryRenderer] Failed to update user context', error)
     }
   })()
 }

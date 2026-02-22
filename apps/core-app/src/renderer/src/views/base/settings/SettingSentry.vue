@@ -204,7 +204,7 @@ onBeforeUnmount(() => {
 
     <TuffBlockLine v-if="enabled" :title="t('settingSentry.searchCount', '已记录搜索次数')">
       <template #description>
-        <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+        <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
           {{ searchCount }}
         </span>
       </template>
@@ -247,7 +247,7 @@ onBeforeUnmount(() => {
     <template v-if="isDev && enabled && telemetryStats">
       <TuffBlockLine :title="t('settingSentry.bufferSize', 'Buffer 大小')">
         <template #description>
-          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+          <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
             {{ telemetryStats.bufferSize ?? 0 }}
           </span>
         </template>
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
 
       <TuffBlockLine :title="t('settingSentry.totalUploads', '总上传次数')">
         <template #description>
-          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+          <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
             {{ telemetryStats.totalUploads ?? 0 }}
           </span>
         </template>
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
 
       <TuffBlockLine :title="t('settingSentry.failedUploads', '失败次数')">
         <template #description>
-          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+          <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
             {{ telemetryStats.failedUploads ?? 0 }}
           </span>
         </template>
@@ -271,7 +271,7 @@ onBeforeUnmount(() => {
 
       <TuffBlockLine :title="t('settingSentry.lastUpload', '最近上传')">
         <template #description>
-          <span class="font-mono text-base text-[var(--el-text-color-primary)]">
+          <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
             {{ formatTimestamp(telemetryStats.lastUploadTime ?? null) }}
           </span>
         </template>
@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
         :title="t('settingSentry.lastFailure', '最近失败')"
       >
         <template #description>
-          <span class="font-mono text-[var(--el-text-color-primary)]">
+          <span class="font-mono text-[var(--tx-text-color-primary)]">
             {{ formatTimestamp(telemetryStats.lastFailureAt ?? null) }} ·
             {{ telemetryStats.lastFailureMessage }}
           </span>
@@ -291,7 +291,7 @@ onBeforeUnmount(() => {
 
       <TuffBlockLine :title="t('settingSentry.apiBase', 'API 地址')">
         <template #description>
-          <span class="font-mono text-[var(--el-text-color-primary)] break-all">
+          <span class="font-mono text-[var(--tx-text-color-primary)] break-all">
             {{ telemetryStats.apiBase || authBaseUrl }}
           </span>
         </template>

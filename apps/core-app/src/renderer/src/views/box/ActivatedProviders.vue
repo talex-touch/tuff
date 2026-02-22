@@ -78,7 +78,7 @@ function getUniqueKey(provider: IProviderActivate): string {
     inset: 0;
     opacity: 0.5;
     border-radius: 12px 0 0 12px;
-    background: linear-gradient(100deg, var(--el-color-primary-light-7) 95%, #0000 95%);
+    background: linear-gradient(100deg, var(--tx-color-primary-light-7) 95%, #0000 95%);
   }
   position: relative;
   margin-right: -0.25rem;
@@ -100,7 +100,7 @@ function getUniqueKey(provider: IProviderActivate): string {
     inset: 0;
     opacity: 0.25;
     border-radius: 0 12px 12px 0;
-    background: linear-gradient(-80deg, var(--el-color-primary-light-7) 90%, #0000 90%);
+    background: linear-gradient(-80deg, var(--tx-color-primary-light-7) 90%, #0000 90%);
   }
   position: relative;
   padding: 0.5rem 0.75rem;
@@ -108,7 +108,7 @@ function getUniqueKey(provider: IProviderActivate): string {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 
   --fake-inner-opacity: 0.125;
 }
@@ -121,7 +121,7 @@ function getUniqueKey(provider: IProviderActivate): string {
   font-size: 0.8rem;
   white-space: nowrap;
   border-radius: 12px;
-  border: 1px solid var(--el-color-primary-light-5);
+  border: 1px solid var(--tx-color-primary-light-5);
   overflow: hidden;
 }
 </style>

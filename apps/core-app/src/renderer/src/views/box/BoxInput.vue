@@ -111,8 +111,8 @@ const placeholder = computed(() => {
   line-height: 38px;
   opacity: 0.4;
   --fake-inner-opacity: 0.7;
-  --fake-color: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  --fake-color: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
 }
 
 .BoxInput-Placeholder {
@@ -127,7 +127,7 @@ const placeholder = computed(() => {
   transform: translateY(-50%);
 
   pointer-events: none;
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   opacity: 0.75;
 }
 
@@ -149,7 +149,7 @@ input {
   background-color: transparent;
   //color: transparent;
 
-  caret-color: var(--el-text-color-primary);
+  caret-color: var(--tx-text-color-primary);
 
   // opacity: 0;
 }

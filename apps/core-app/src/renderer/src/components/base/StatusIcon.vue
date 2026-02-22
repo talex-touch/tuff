@@ -85,7 +85,7 @@ const indicatorSize = computed(() => {
   height: var(--status-indicator-size, 8px);
   border-radius: 999px;
   box-sizing: border-box;
-  border: 2px solid var(--el-bg-color-overlay, var(--el-bg-color, #fff));
+  border: 2px solid var(--tx-bg-color-overlay, var(--tx-bg-color, #fff));
   background: var(--status-indicator-color, #9ca3af);
 }
 
@@ -106,7 +106,7 @@ const indicatorSize = computed(() => {
 }
 
 .StatusIcon-Indicator.is-loading {
-  --status-indicator-color: var(--el-color-primary, #3b82f6);
+  --status-indicator-color: var(--tx-color-primary, #3b82f6);
 }
 
 .StatusIcon-Indicator.is-loading::after {

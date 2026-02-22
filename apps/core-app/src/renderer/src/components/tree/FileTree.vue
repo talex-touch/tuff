@@ -1,5 +1,7 @@
 <script name="FileTree" setup>
 import { useModelWrapper } from '@talex-touch/utils/renderer/ref'
+import { TxTree } from '@talex-touch/tuffex'
+import { computed, onMounted, reactive, ref } from 'vue'
 import IconButton from '~/components/base/button/IconButton.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { devLog } from '~/utils/dev-log'
@@ -16,111 +18,56 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
-const treeDom = ref()
 const options = reactive({
   select: null
 })
 const files = useModelWrapper(props, emit)
+const treeNodes = ref([])
+const expandedKeys = ref([])
+const loadingKeys = ref(new Set())
 
-onMounted(() => {
-  watchEffect(() => {
-    if (!treeDom.value) {
-      return
-    }
-    ;[...props.modelValue].forEach((item) => {
-      const node = treeDom.value.getNode(item)
-      if (node) treeDom.value.setChecked(node, true)
+const nodeMap = computed(() => {
+  const map = new Map()
+  const walk = (list) => {
+    list.forEach((node) => {
+      map.set(node.key, node)
+      if (node.children?.length) walk(node.children)
     })
-  })
+  }
+  walk(treeNodes.value)
+  return map
 })
 
-function currentChange(val) {
-  options.select = val
-}
+onMounted(() => {
+  refresh()
+})
 
-let _resolve, g_node
 async function refresh() {
-  if (!g_node || !_resolve) return
-  devLog('[FileTree] Refresh tree', treeDom.value)
-
-  g_node.childNodes = []
-  devLog('[FileTree] Refresh node', g_node)
-  _resolve(item2Obj(await props.fileAdpoter.list()))
+  devLog('[FileTree] Refresh tree')
+  treeNodes.value = await buildNodes(await props.fileAdpoter.list())
 }
 
-function click() {
-  const _files = []
-  treeDom.value.getCheckedNodes().forEach((node) => {
-    const data = treeDom.value.getNode(node)
-    _files.push([...data.data.paths, data.data.name].join('/'))
-  })
+async function ensureChildren(key) {
+  if (loadingKeys.value.has(key)) return
+  const node = nodeMap.value.get(key)
+  if (!node || node.file) return
+  if (node.children && node.children.length > 0) return
 
-  files.value = _files
+  loadingKeys.value.add(key)
+  const paths = [...node.paths, node.name]
+  const children = await buildNodes(await props.fileAdpoter.list(paths), paths)
+  node.children = children
+  loadingKeys.value.delete(key)
 }
 
-async function loadNode(node, resolve) {
-  if (!node.parent) {
-    g_node = node
-    _resolve = resolve
-    return resolve(item2Obj(await props.fileAdpoter.list()))
+function handleToggle({ key, expanded }) {
+  if (expanded) {
+    ensureChildren(key)
   }
-
-  const _p = []
-  let _node = node
-  while (_node.parent) {
-    if (_node.data.name) _p.push(_node.data.name)
-
-    _node = _node.parent
-  }
-
-  resolve(item2Obj(await props.fileAdpoter.list(_p.reverse()), _p))
 }
 
-function suffix2Icon(suffix) {
-  if (!suffix || suffix.length < 2) return ''
-  const s = String(suffix.pop()).toLowerCase()
-
-  const mapper = {
-    json: 'braces',
-    js: 'javascript',
-    ts: 'javascript',
-    yaml: 'file-code',
-    yml: 'file-code',
-    iml: 'file-code',
-    xml: 'file-code',
-    html: 'html5',
-    svg: 'image',
-    png: 'image',
-    jpg: 'image',
-    jpeg: 'image',
-    webp: 'image',
-    git: 'git-repository',
-    gitignore: 'git-commit',
-    idea: 'file-shield-2',
-    vscode: 'file-shield-2',
-    pnpm: 'file-shield-2',
-    bin: 'file-shield-2',
-    vite: 'file-shield-2',
-    dockerignore: 'file-shield-2',
-    editorconfig: 'file-shield-2',
-    prettierrc: 'file-shield-2',
-    husky: 'file-shield-2',
-    npmignore: 'npm',
-    github: 'github',
-    md: 'markdown',
-    vue: 'vuejs',
-    css: 'css3',
-    less: 'css3',
-    scss: 'css3',
-    sass: 'css3'
-  }
-
-  const t = mapper[s] ? { t: 'r', n: mapper[s] } : { t: 'u' }
-
-  return {
-    s,
-    ...t
-  }
+function handleSelect({ node }) {
+  options.select = node
 }
 
 function resolveIsFile(item) {
@@ -135,21 +82,51 @@ function resolveIsFile(item) {
   return false
 }
 
-function item2Obj(array, paths = []) {
+function resolveFileIcon(name, isFile) {
+  if (!isFile) return 'i-carbon-folder'
+  const ext = String(name || '')
+    .split('.')
+    .pop()
+    ?.toLowerCase()
+  if (['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'bmp'].includes(ext)) return 'i-carbon-image'
+  if (['md', 'txt', 'log'].includes(ext)) return 'i-carbon-document'
+  if (
+    [
+      'json',
+      'js',
+      'ts',
+      'yaml',
+      'yml',
+      'xml',
+      'html',
+      'css',
+      'scss',
+      'less',
+      'sass',
+      'vue'
+    ].includes(ext)
+  )
+    return 'i-carbon-code'
+  return 'i-carbon-document'
+}
+
+async function buildNodes(array, paths = []) {
   if (!array) return []
-  const t = []
-
-  array.forEach((item) => {
-    t.push({
-      name: item.name,
-      file: resolveIsFile(item),
-      suffix: suffix2Icon(item.name.split('.')),
-      children: [],
-      paths
-    })
+  return array.map((item) => {
+    const file = resolveIsFile(item)
+    const name = item.name
+    const key = [...paths, name].join('/')
+    return {
+      key,
+      label: name,
+      name,
+      paths,
+      file,
+      leaf: file,
+      icon: resolveFileIcon(name, file),
+      children: file ? [] : []
+    }
   })
-
-  return t
 }
 </script>
 
@@ -170,26 +147,15 @@ function item2Obj(array, paths = []) {
     <TxScroll>
       <!--      <div class="FileTree-Container"> -->
 
-      <el-tree
-        ref="treeDom"
-        :props="{ label: 'name', children: 'children', isLeaf: 'leaf' }"
-        :load="loadNode"
-        lazy
-        show-checkbox
-        @current-change="currentChange"
-        @check-change="click"
-      >
-        <template #default="{ node, data }">
-          <span class="FileTree-Item">
-            <span class="File-Icon">
-              <RemixIcon v-if="data.suffix.t === 'r'" :name="data.suffix.n" />
-              <span v-else-if="data.suffix.t === 'u'">{{ data.suffix }}</span>
-              <RemixIcon v-else name="folder" />
-            </span>
-            <span>{{ node.label }}</span>
-          </span>
-        </template>
-      </el-tree>
+      <TxTree
+        v-model="files"
+        v-model:expanded-keys="expandedKeys"
+        :nodes="treeNodes"
+        checkable
+        multiple
+        @toggle="handleToggle"
+        @select="handleSelect"
+      />
 
       <!--      </div> -->
     </TxScroll>
@@ -218,7 +184,7 @@ function item2Obj(array, paths = []) {
 
     border-radius: 4px;
     box-sizing: border-box;
-    background-color: var(--el-fill-color-darker);
+    background-color: var(--tx-fill-color-darker);
   }
   position: relative;
   padding-top: 35px;
@@ -231,17 +197,7 @@ function item2Obj(array, paths = []) {
   //overflow: hidden;
 }
 
-:deep(.el-tree) {
-  .FileTree-Item {
-    .File-Icon {
-      position: relative;
-      top: 2px;
-
-      margin-right: 5px;
-    }
-  }
+:deep(.tx-tree) {
   background: transparent;
-
-  --el-tree-node-hover-bg-color: #ffffff80;
 }
 </style>

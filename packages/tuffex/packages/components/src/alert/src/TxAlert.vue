@@ -51,8 +51,10 @@ function handleClose() {
     </div>
 
     <div class="tx-alert__content">
-      <div v-if="title" class="tx-alert__title">
-        {{ title }}
+      <div v-if="title || $slots.title" class="tx-alert__title">
+        <slot name="title">
+          {{ title }}
+        </slot>
       </div>
       <div class="tx-alert__message">
         <slot>{{ message }}</slot>

@@ -103,7 +103,7 @@ function handleClick(event: MouseEvent) {
       height: 10px;
 
       border-radius: 5px;
-      background-color: var(--el-fill-color);
+      background-color: var(--tx-fill-color);
       opacity: var(--fake-opacity);
 
       transform: translateY(-50%);
@@ -114,7 +114,7 @@ function handleClick(event: MouseEvent) {
       &:after {
         height: 25px;
 
-        background-color: var(--el-color-primary);
+        background-color: var(--tx-color-primary);
       }
     }
 
@@ -148,10 +148,10 @@ function handleClick(event: MouseEvent) {
     }
   }
   &.select {
-    box-shadow: var(--el-box-shadow-lighter);
+    box-shadow: var(--tx-box-shadow-lighter);
   }
   &:hover {
-    --fake-color: var(--el-fill-color-lighter);
+    --fake-color: var(--tx-fill-color-lighter);
   }
   .IconButton-Icon {
     &:hover {
@@ -178,8 +178,8 @@ function handleClick(event: MouseEvent) {
 
   cursor: pointer;
   border-radius: 8px;
-  box-shadow: var(--el-box-shadow);
-  --fake-color: var(--el-fill-color);
+  box-shadow: var(--tx-box-shadow);
+  --fake-color: var(--tx-fill-color);
   --fake-radius: 8px;
   --fake-opacity: 0.5;
 }

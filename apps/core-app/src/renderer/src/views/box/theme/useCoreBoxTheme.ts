@@ -79,13 +79,13 @@ export function useCoreBoxTheme() {
       '--corebox-result-radius': `${t.results.itemRadius}px`,
       '--corebox-result-padding': `${t.results.itemPadding}px`,
       '--corebox-result-divider': t.results.divider
-        ? '1px solid var(--el-border-color-lighter)'
+        ? '1px solid var(--tx-border-color-lighter)'
         : 'none',
       '--corebox-result-hover': t.results.hoverStyle,
       '--corebox-container-radius': `${t.container.radius}px`,
       '--corebox-container-shadow': shadowMap[t.container.shadow],
       '--corebox-container-border': t.container.border
-        ? '1px solid var(--el-border-color-lighter)'
+        ? '1px solid var(--tx-border-color-lighter)'
         : 'none'
     } as Record<string, string>
   })

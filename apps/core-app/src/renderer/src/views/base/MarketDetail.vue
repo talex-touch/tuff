@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 1rem;
   padding: 1rem;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   border-radius: 12px;
 
   &.official-provider {
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   border-radius: 12px;
   padding: 1.5rem;
 }
@@ -323,7 +323,7 @@ onBeforeUnmount(() => {
 .rating-error {
   margin: 0.5rem 0 0;
   font-size: 0.85rem;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .readme-state {
@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
   }
 
   &.error {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     opacity: 1;
   }
 }
@@ -376,14 +376,14 @@ onBeforeUnmount(() => {
 
   :deep(code) {
     padding: 0.2rem 0.4rem;
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
     border-radius: 4px;
     font-size: 0.9em;
   }
 
   :deep(pre) {
     padding: 1rem;
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
     border-radius: 8px;
     overflow-x: auto;
     margin: 1rem 0;
@@ -400,7 +400,7 @@ onBeforeUnmount(() => {
   }
 
   :deep(a) {
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
     text-decoration: none;
     &:hover {
       text-decoration: underline;
@@ -425,7 +425,7 @@ onBeforeUnmount(() => {
 }
 
 .sidebar-card {
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   border-radius: 12px;
   padding: 1rem;
 
@@ -471,22 +471,22 @@ onBeforeUnmount(() => {
 
   &.highlight-upgrade {
     .meta-label {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
       opacity: 1;
     }
     .meta-value {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
       font-weight: 600;
     }
   }
 
   &.highlight-installed {
     .meta-label {
-      color: var(--el-color-success);
+      color: var(--tx-color-success);
       opacity: 0.8;
     }
     .meta-value {
-      color: var(--el-color-success);
+      color: var(--tx-color-success);
     }
   }
 }

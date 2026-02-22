@@ -153,16 +153,16 @@ watch(
 }
 
 .virtual-task-list::-webkit-scrollbar-track {
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 4px;
 }
 
 .virtual-task-list::-webkit-scrollbar-thumb {
-  background: var(--el-fill-color-dark);
+  background: var(--tx-fill-color-dark);
   border-radius: 4px;
 }
 
 .virtual-task-list::-webkit-scrollbar-thumb:hover {
-  background: var(--el-fill-color-darker);
+  background: var(--tx-fill-color-darker);
 }
 </style>

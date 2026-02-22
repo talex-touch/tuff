@@ -135,7 +135,7 @@ onMounted(() => {
   cursor: pointer;
   opacity: 0.75;
   color: #fff;
-  background: var(--el-color-primary-light-3);
+  background: var(--tx-color-primary-light-3);
 }
 
 .PluginStatus-Container.LOADING {
@@ -143,7 +143,7 @@ onMounted(() => {
 
   pointer-events: none;
   opacity: 0.75;
-  background: var(--el-color-primary-light-3);
+  background: var(--tx-color-primary-light-3);
   animation: loading 0.5s infinite;
 }
 
@@ -153,8 +153,8 @@ onMounted(() => {
   cursor: not-allowed;
   opacity: 0.75;
   pointer-events: none;
-  color: var(--el-text-color-primary);
-  background: var(--el-color-success);
+  color: var(--tx-text-color-primary);
+  background: var(--tx-color-success);
   animation: activing 1s infinite;
 }
 
@@ -163,8 +163,8 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 0.75;
-  color: var(--el-text-color-primary);
-  background: var(--el-color-success);
+  color: var(--tx-text-color-primary);
+  background: var(--tx-color-success);
 }
 
 .PluginStatus-Container.CRASHED {
@@ -172,8 +172,8 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 0.75;
-  color: var(--el-color-warning-light-7);
-  background: var(--el-color-danger);
+  color: var(--tx-color-warning-light-7);
+  background: var(--tx-color-danger);
 }
 
 .PluginStatus-Container.LOAD_FAILED {
@@ -181,8 +181,8 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 1;
-  color: var(--el-color-warning-light-7);
-  background: var(--el-color-danger);
+  color: var(--tx-color-warning-light-7);
+  background: var(--tx-color-danger);
 }
 
 .PluginStatus-Container.DISABLED {
@@ -190,7 +190,7 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 0.75;
-  background: var(--el-color-info);
+  background: var(--tx-color-info);
 }
 
 .PluginStatus-Container.DISABLING {
@@ -198,7 +198,7 @@ onMounted(() => {
 
   pointer-events: none;
   opacity: 0.75;
-  background: var(--el-color-info-light-3);
+  background: var(--tx-color-info-light-3);
   animation: loading 0.5s infinite;
 }
 
@@ -207,8 +207,8 @@ onMounted(() => {
 
   cursor: pointer;
   opacity: 0.75;
-  color: var(--el-color-warning-light-7);
-  background: var(--el-color-warning);
+  color: var(--tx-color-warning-light-7);
+  background: var(--tx-color-warning);
 }
 
 .PluginStatus-Container.DEV_RECONNECTING {
@@ -216,7 +216,7 @@ onMounted(() => {
 
   pointer-events: none;
   opacity: 0.75;
-  background: var(--el-color-warning-light-3);
+  background: var(--tx-color-warning-light-3);
   animation: loading 0.5s infinite;
 }
 
@@ -261,6 +261,6 @@ onMounted(() => {
   transition: 0.25s;
   opacity: 0;
   user-select: none;
-  border-bottom: 1px solid var(--el-border-color);
+  border-bottom: 1px solid var(--tx-border-color);
 }
 </style>

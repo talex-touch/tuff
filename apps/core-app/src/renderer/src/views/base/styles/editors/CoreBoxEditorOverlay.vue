@@ -127,19 +127,19 @@ function handleCancel(close: () => void): void {
   justify-content: space-between;
   gap: 16px;
   padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .CoreBoxEditorOverlay-Title {
   font-size: 20px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .CoreBoxEditorOverlay-Subtitle {
   margin-top: 4px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .CoreBoxEditorOverlay-Actions {
@@ -182,8 +182,8 @@ function handleCancel(close: () => void): void {
 .CoreBoxEditorOverlay-Card {
   width: min(1160px, 94vw);
   height: min(820px, 90vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

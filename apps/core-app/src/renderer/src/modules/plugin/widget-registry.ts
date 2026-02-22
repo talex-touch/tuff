@@ -11,6 +11,7 @@ import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Vue from 'vue'
 import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/custom-render'
+import { devLog } from '~/utils/dev-log'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
 const transport = useTuffTransport()
@@ -238,7 +239,7 @@ function scheduleLocalStorageFlush(pluginName?: string): void {
   }, WIDGET_STORAGE_FLUSH_MS)
 }
 
-function withinLocalStorageQuota(state: WidgetStorageState, nextSize: number): boolean {
+function withinLocalStorageQuota(nextSize: number): boolean {
   return nextSize <= WIDGET_STORAGE_MAX_BYTES
 }
 
@@ -288,7 +289,7 @@ function createStorageFacade(
       store.set(itemKey, nextValue)
       if (type === 'local') {
         const nextSize = estimatePluginLocalSize(state)
-        if (!withinLocalStorageQuota(state, nextSize)) {
+        if (!withinLocalStorageQuota(nextSize)) {
           if (previousValue === undefined) {
             store.delete(itemKey)
           } else {
@@ -350,7 +351,7 @@ function createSandboxDocument(
           const previousValue = cookieStore.get(parsed.key)
           cookieStore.set(parsed.key, nextValue)
           const nextSize = estimatePluginLocalSize(state)
-          if (!withinLocalStorageQuota(state, nextSize)) {
+          if (!withinLocalStorageQuota(nextSize)) {
             if (previousValue === undefined) {
               cookieStore.delete(parsed.key)
             } else {
@@ -614,7 +615,7 @@ function normalizeWidgetExport(exported: unknown, renderExport?: unknown): unkno
   }
 
   if (isDev) {
-    console.debug(
+    devLog(
       '[WidgetRegistry] component not extensible, wrapping render',
       describeExportShape(target)
     )
@@ -652,7 +653,7 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
       const shouldMerge = Object.keys(setupState).some((key) => !(key in ctxObject))
       if (shouldMerge) {
         if (isDev) {
-          console.debug('[WidgetRegistry] render ctx missing setupState, patching', {
+          devLog('[WidgetRegistry] render ctx missing setupState, patching', {
             widgetId: debugLabel,
             missing: Object.keys(setupState).filter((key) => !(key in ctxObject))
           })
@@ -699,7 +700,7 @@ function attachPluginInfoToComponent(
       const result = originalSetup ? originalSetup(props, ctx) : undefined
       if (isDev && result && typeof result === 'object') {
         const keys = Object.keys(result as Record<string, unknown>)
-        console.debug('[WidgetRegistry] setup result', {
+        devLog('[WidgetRegistry] setup result', {
           keys,
           hasHistory: 'history' in (result as Record<string, unknown>)
         })
@@ -720,7 +721,7 @@ function attachPluginInfoToComponent(
       candidate.__pluginInjected = true
       wrapRenderWithSetupState(candidate, pluginInfo?.name as string | undefined)
       if (isDev) {
-        console.debug('[WidgetRegistry] component patched', describeExportShape(candidate))
+        devLog('[WidgetRegistry] component patched', describeExportShape(candidate))
       }
       return candidate as Component
     }
@@ -733,7 +734,7 @@ function attachPluginInfoToComponent(
     }
     wrapRenderWithSetupState(wrapped, pluginInfo?.name as string | undefined)
     if (isDev) {
-      console.debug('[WidgetRegistry] component wrapped', describeExportShape(wrapped))
+      devLog('[WidgetRegistry] component wrapped', describeExportShape(wrapped))
     }
     return wrapped as Component
   }
@@ -888,7 +889,7 @@ function evaluateWidgetComponent(
   }
 
   if (isDev) {
-    console.debug('[WidgetRegistry] export resolution', {
+    devLog('[WidgetRegistry] export resolution', {
       widgetId: debugLabel,
       module: describeExportShape(moduleExports),
       defaultExport: describeExportShape(defaultExport),
@@ -923,15 +924,15 @@ function injectStyles(widgetId: string, styles: string): void {
 transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => {
   try {
     if (isDev) {
-      console.debug(
+      devLog(
         `[WidgetRegistry] register widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
       )
       const deps = payload.dependencies?.length ? payload.dependencies.join(', ') : '-'
       const sourceType = resolveWidgetSourceType(payload.filePath)
-      console.debug(
+      devLog(
         `[WidgetRegistry] payload stats: code=${payload.code.length} styles=${payload.styles.length} deps=${deps}`
       )
-      console.debug(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
+      devLog(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
       if (!payload.styles) {
         console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
       }
@@ -948,7 +949,7 @@ transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => 
         (component as { name?: string; __name?: string })?.name ||
         (component as { __name?: string })?.__name ||
         'anonymous'
-      console.debug(`[WidgetRegistry] registered widget ${payload.widgetId} (${componentName})`)
+      devLog(`[WidgetRegistry] registered widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
     console.error('[WidgetRegistry] Widget registration failed', error)
@@ -959,15 +960,15 @@ transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => 
 transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
   try {
     if (isDev) {
-      console.debug(
+      devLog(
         `[WidgetRegistry] update widget ${payload.widgetId} (${payload.pluginName}:${payload.featureId})`
       )
       const deps = payload.dependencies?.length ? payload.dependencies.join(', ') : '-'
       const sourceType = resolveWidgetSourceType(payload.filePath)
-      console.debug(
+      devLog(
         `[WidgetRegistry] payload stats: code=${payload.code.length} styles=${payload.styles.length} deps=${deps}`
       )
-      console.debug(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
+      devLog(`[WidgetRegistry] source type=${sourceType} file=${payload.filePath || '-'}`)
       if (!payload.styles) {
         console.warn(`[WidgetRegistry] widget ${payload.widgetId} has empty styles`)
       }
@@ -984,7 +985,7 @@ transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
         (component as { name?: string; __name?: string })?.name ||
         (component as { __name?: string })?.__name ||
         'anonymous'
-      console.debug(`[WidgetRegistry] updated widget ${payload.widgetId} (${componentName})`)
+      devLog(`[WidgetRegistry] updated widget ${payload.widgetId} (${componentName})`)
     }
   } catch (error) {
     console.error('[WidgetRegistry] Widget update failed', error)
@@ -995,7 +996,7 @@ transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
 transport.on(widgetUnregisterEvent, ({ widgetId }: { widgetId: string }) => {
   try {
     if (isDev) {
-      console.debug(`[WidgetRegistry] unregister widget ${widgetId}`)
+      devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
     }
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)

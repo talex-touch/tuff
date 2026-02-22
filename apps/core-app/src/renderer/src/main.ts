@@ -11,7 +11,6 @@ import { initStorageSubscription } from '@talex-touch/utils/renderer/storage/sto
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 
-import ElementPlus from 'element-plus'
 import { createPinia } from 'pinia'
 import type { Router } from 'vue-router'
 import { createSharedElementDirective, SharedElementRouteGuard } from 'v-shared-element'
@@ -190,13 +189,7 @@ function registerCorePlugins(
   i18n: I18nInstance,
   router: Router
 ) {
-  app
-    .use(router)
-    .use(ElementPlus)
-    .use(createPinia())
-    .use(VWave, {})
-    .use(i18n)
-    .use(createSharedElementDirective())
+  app.use(router).use(createPinia()).use(VWave, {}).use(i18n).use(createSharedElementDirective())
 }
 
 /**

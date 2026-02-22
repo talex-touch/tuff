@@ -277,19 +277,19 @@ $fake-inner-opacity: 0.75;
 
 // Theme color variables
 .success-tip {
-  --theme-color: var(--el-color-success);
+  --theme-color: var(--tx-color-success);
 }
 
 .info-tip {
-  --theme-color: var(--el-color-primary);
+  --theme-color: var(--tx-color-primary);
 }
 
 .warn-tip {
-  --theme-color: var(--el-color-warning);
+  --theme-color: var(--tx-color-warning);
 }
 
 .error-tip {
-  --theme-color: var(--el-color-danger);
+  --theme-color: var(--tx-color-danger);
 }
 
 // Dialog wrapper styles
@@ -314,7 +314,7 @@ $fake-inner-opacity: 0.75;
     width: 100%;
     height: 100%;
 
-    background-color: var(--el-overlay-color);
+    background-color: var(--tx-overlay-color);
     opacity: 0.35;
     animation: fadeIn 0.5s;
   }
@@ -336,8 +336,8 @@ $fake-inner-opacity: 0.75;
   min-width: $dialog-min-width;
   min-height: $dialog-min-height;
 
-  color: var(--theme-color, var(--el-text-color-primary));
-  box-shadow: var(--el-box-shadow-lighter);
+  color: var(--theme-color, var(--tx-text-color-primary));
+  box-shadow: var(--tx-box-shadow-lighter);
   border-radius: $dialog-border-radius;
 
   --fake-opacity: $fake-opacity;
@@ -359,7 +359,7 @@ $fake-inner-opacity: 0.75;
     height: 32px;
     line-height: 32px;
 
-    color: var(--theme-color, var(--el-text-color-primary));
+    color: var(--theme-color, var(--tx-text-color-primary));
     font-size: 18px;
     font-weight: bold;
   }
@@ -444,7 +444,7 @@ $fake-inner-opacity: 0.75;
 
   cursor: pointer;
 
-  color: var(--theme-color, var(--el-text-color-regular));
+  color: var(--theme-color, var(--tx-text-color-regular));
   transition: $dialog-transition-duration $dialog-transition-easing;
 }
 </style>

@@ -79,8 +79,8 @@ function handleCancel() {
   max-width: 360px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  background: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
@@ -93,7 +93,7 @@ function handleCancel() {
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .sonner-dialog__error {

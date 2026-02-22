@@ -153,7 +153,7 @@ function handleAgree(): void {
   height: 8rem;
 
   &.fill {
-    --el-color-primary: var(--el-border-color);
+    --tx-color-primary: var(--tx-border-color);
 
     &::after {
       animation: frame_down 0.75s infinite;
@@ -168,8 +168,8 @@ function handleAgree(): void {
     transition: 0.25s;
     border-radius: 12px;
     transform: translateY(150%);
-    border: 2px solid var(--el-color-primary);
-    background-color: var(--el-color-primary);
+    border: 2px solid var(--tx-color-primary);
+    background-color: var(--tx-color-primary);
   }
 
   &::after {
@@ -179,7 +179,7 @@ function handleAgree(): void {
     transition: 0.25s;
     border-radius: 50%;
     transform: translateY(-50%) scale(0.5);
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
     animation: frame 2s infinite;
   }
 }
@@ -236,17 +236,17 @@ function handleAgree(): void {
       margin: 0 0 1rem 0;
       font-size: 1.4rem;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
 
     span {
       font-size: 0.95rem;
       line-height: 1.6;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
     }
 
     a {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
       text-decoration: none;
 
       &:hover {
@@ -255,13 +255,13 @@ function handleAgree(): void {
     }
 
     &:hover {
-      border-color: var(--el-border-color);
-      background-color: var(--el-fill-color-light);
+      border-color: var(--tx-border-color);
+      background-color: var(--tx-fill-color-light);
     }
 
     &.active {
-      border-color: var(--el-color-primary);
-      background-color: var(--el-color-primary-light-9);
+      border-color: var(--tx-color-primary);
+      background-color: var(--tx-color-primary-light-9);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
   }

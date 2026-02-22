@@ -157,7 +157,7 @@ function handleTokensControlBlur(onBlur: () => void) {
             @focus="focus"
             @blur="handleRequestsControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--el-text-color-secondary)]">
+          <span class="text-sm text-[var(--tx-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.requestsUnit') }}
           </span>
         </div>
@@ -189,7 +189,7 @@ function handleTokensControlBlur(onBlur: () => void) {
             @focus="focus"
             @blur="handleTokensControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--el-text-color-secondary)]">
+          <span class="text-sm text-[var(--tx-text-color-secondary)]">
             {{ t('intelligence.config.rateLimit.tokensUnit') }}
           </span>
         </div>
@@ -219,29 +219,29 @@ function handleTokensControlBlur(onBlur: () => void) {
   .form-label {
     font-size: 14px;
     font-weight: 500;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     transition: color 0.3s ease;
 
     .form-group:focus-within & {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
   }
 
   .form-error {
     font-size: 12px;
-    color: var(--el-color-error);
+    color: var(--tx-color-error);
     margin: 0;
     animation: slideInLeft 0.3s ease;
   }
 
   .form-hint {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     margin: 0;
     transition: color 0.3s ease;
 
     .form-group:hover & {
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
     }
   }
 
@@ -251,8 +251,8 @@ function handleTokensControlBlur(onBlur: () => void) {
     gap: 8px;
     padding: 12px;
     border-radius: 8px;
-    background-color: var(--el-color-info-light-9);
-    border: 1px solid var(--el-color-info-light-7);
+    background-color: var(--tx-color-info-light-9);
+    border: 1px solid var(--tx-color-info-light-7);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     animation: fadeInUp 0.4s ease;
 
@@ -269,8 +269,8 @@ function handleTokensControlBlur(onBlur: () => void) {
     }
 
     &:hover {
-      background-color: var(--el-color-info-light-8);
-      border-color: var(--el-color-info-light-6);
+      background-color: var(--tx-color-info-light-8);
+      border-color: var(--tx-color-info-light-6);
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 
       i {

@@ -188,7 +188,7 @@ function handleInstall(): void {
 
   position: relative;
   border-radius: 22px;
-  border: 1px solid rgba(var(--el-color-primary-rgb), 0.35);
+  border: 1px solid rgba(var(--tx-color-primary-rgb), 0.35);
   cursor: pointer;
   overflow: hidden;
   transition:
@@ -197,7 +197,7 @@ function handleInstall(): void {
     background 0.25s ease;
 
   &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.5);
+    border-color: rgba(var(--tx-color-primary-rgb), 0.5);
   }
 }
 
@@ -205,14 +205,14 @@ function handleInstall(): void {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   transition: color 0.3s ease;
 }
 
 .market-item-description {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   opacity: 0.85;
   display: -webkit-box;
   -webkit-line-clamp: 1;

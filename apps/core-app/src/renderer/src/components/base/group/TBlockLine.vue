@@ -39,7 +39,7 @@ defineProps({
 .TBlockLine-Container {
   &.link {
     &:hover .TBlockLine-Title {
-      background-color: var(--el-fill-color-dark);
+      background-color: var(--tx-fill-color-dark);
     }
 
     .TBlockLine-Title {
@@ -63,13 +63,13 @@ defineProps({
     padding: 1px 12px;
 
     font-size: 12px;
-    color: var(--el-color-primary-dark-2);
+    color: var(--tx-color-primary-dark-2);
   }
 
   .TBlockLine-Title {
     font-size: 14px;
     font-weight: 500;
-    color: var(--el-text-color);
+    color: var(--tx-text-color);
   }
 
   .TBlockLine-Description {
@@ -87,7 +87,7 @@ defineProps({
 
   height: 24px;
 
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
   --fake-opacity: 0.45;
 }
 </style>

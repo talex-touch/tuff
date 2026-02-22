@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
-import { TuffProgress } from '@talex-touch/tuffex'
+import { TuffProgress, TxAlert, TxStack } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 // Props
@@ -254,53 +254,53 @@ function formatRemainingTime(seconds: number): string {
 
     <!-- 错误信息 -->
     <div v-if="task.error" class="task-error">
-      <el-alert :title="task.error" type="error" :closable="false" show-icon />
+      <TxAlert :title="task.error" type="error" :closable="false" :show-icon="true" />
     </div>
 
     <!-- 任务详情 -->
     <div class="task-details-expanded">
-      <el-row :gutter="16">
-        <el-col :span="8">
+      <TxStack class="task-detail-grid" direction="horizontal" :gap="16" wrap>
+        <div class="detail-column">
           <div class="detail-item">
             <span class="detail-label">{{ $t('download.url') }}:</span>
             <span class="detail-value">{{ task.url }}</span>
           </div>
-        </el-col>
-        <el-col :span="8">
+        </div>
+        <div class="detail-column">
           <div class="detail-item">
             <span class="detail-label">{{ $t('download.destination') }}:</span>
             <span class="detail-value">{{ task.destination }}</span>
           </div>
-        </el-col>
-        <el-col :span="8">
+        </div>
+        <div class="detail-column">
           <div class="detail-item">
             <span class="detail-label">{{ $t('download.priority') }}:</span>
             <span class="detail-value" :style="{ color: getPriorityColor(task.priority) }">
               {{ getPriorityName(task.priority) }}
             </span>
           </div>
-        </el-col>
-      </el-row>
+        </div>
+      </TxStack>
     </div>
   </div>
 </template>
 
 <style scoped>
 .download-task {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color-light);
   border-left: 2px solid var(--task-accent);
   border-radius: 10px;
   padding: 16px;
   transition: border-color 0.2s ease;
   --task-accent: #111111;
-  --task-strong: var(--el-text-color-primary);
-  --task-muted: var(--el-text-color-secondary);
-  --task-soft: var(--el-text-color-regular);
+  --task-strong: var(--tx-text-color-primary);
+  --task-muted: var(--tx-text-color-secondary);
+  --task-soft: var(--tx-text-color-regular);
 }
 
 .download-task:hover {
-  border-color: var(--el-border-color);
+  border-color: var(--tx-border-color);
 }
 
 .task-downloading {
@@ -348,7 +348,7 @@ function formatRemainingTime(seconds: number): string {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--tx-border-color-light);
 }
 
 .task-icon .loading {
@@ -416,7 +416,16 @@ function formatRemainingTime(seconds: number): string {
 .task-details-expanded {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--tx-border-color-lighter);
+}
+
+.task-detail-grid {
+  width: 100%;
+}
+
+.detail-column {
+  flex: 1 1 0;
+  min-width: 180px;
 }
 
 .detail-item {
@@ -439,7 +448,7 @@ function formatRemainingTime(seconds: number): string {
 
 .task-actions :deep(.tx-button) {
   background: transparent;
-  border-color: var(--el-border-color-light);
+  border-color: var(--tx-border-color-light);
   color: var(--task-strong);
   height: 28px;
   padding: 0 10px;
@@ -450,7 +459,7 @@ function formatRemainingTime(seconds: number): string {
 }
 
 .task-progress :deep(.tx-progress-bar__track) {
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
 }
 
 .task-progress :deep(.tx-progress-bar) {

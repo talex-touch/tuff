@@ -7,6 +7,8 @@ import process from 'node:process'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { APP_SCHEMA } from '../config/default'
+import type { DevPluginInstallResult } from '../modules/plugin/dev-plugin-installer'
+import { installDevPluginFromPath } from '../modules/plugin/dev-plugin-installer'
 import { PluginResolver, ResolverStatus } from '../modules/plugin/plugin-resolver'
 import { createLogger } from '../utils/logger'
 import { BaseModule } from './abstract-base-module'
@@ -31,6 +33,10 @@ const installPluginEvent = defineRawEvent<
   { name: string; buffer: Buffer; forceUpdate?: boolean },
   unknown
 >('@install-plugin')
+const installDevPluginEvent = defineRawEvent<
+  { path: string; forceUpdate?: boolean },
+  DevPluginInstallResult
+>('plugin:install-dev')
 const dropPluginEvent = defineRawEvent<{ name: string; buffer: Buffer }, unknown>('drop:plugin')
 
 function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
@@ -254,6 +260,16 @@ export class AddonOpenerModule extends BaseModule {
           addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
         })
       }
+    })
+
+    transport.on(installDevPluginEvent, async (payload) => {
+      const sourcePath = payload?.path
+      if (!sourcePath) {
+        return { status: 'error', error: 'INVALID_PATH' }
+      }
+      return await installDevPluginFromPath(sourcePath, {
+        forceUpdate: Boolean(payload?.forceUpdate)
+      })
     })
 
     transport.on(dropPluginEvent, async (payload) => {

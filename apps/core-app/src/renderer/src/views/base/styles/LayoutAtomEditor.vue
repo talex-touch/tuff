@@ -1,8 +1,15 @@
 <script lang="ts" name="LayoutAtomEditor" setup>
 import type { LayoutAtomConfig } from '@talex-touch/utils'
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxSlider } from '@talex-touch/tuffex'
+import {
+  TuffInput,
+  TuffSelect,
+  TuffSelectItem,
+  TxButton,
+  TxCollapse,
+  TxCollapseItem,
+  TxSlider
+} from '@talex-touch/tuffex'
 import { appSettingsData } from '@talex-touch/utils/renderer/storage'
-import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -25,26 +32,31 @@ function applyCustom(config: LayoutAtomConfig) {
   appSettingsData.layout = 'custom'
 }
 
-const headerBorderOptions = [
+type HeaderBorder = LayoutAtomConfig['header']['border']
+type AsidePosition = LayoutAtomConfig['aside']['position']
+type ViewShadow = LayoutAtomConfig['view']['shadow']
+type NavStyle = LayoutAtomConfig['nav']['style']
+
+const headerBorderOptions: Array<{ value: HeaderBorder; label: string }> = [
   { value: 'solid', label: 'Solid' },
   { value: 'none', label: 'None' },
   { value: 'gradient', label: 'Gradient' }
 ]
 
-const asidePositionOptions = [
+const asidePositionOptions: Array<{ value: AsidePosition; label: string }> = [
   { value: 'left', label: 'Left' },
   { value: 'right', label: 'Right' },
   { value: 'bottom', label: 'Bottom' },
   { value: 'hidden', label: 'Hidden' }
 ]
 
-const navStyleOptions = [
+const navStyleOptions: Array<{ value: NavStyle; label: string }> = [
   { value: 'icon', label: 'Icon' },
   { value: 'icon-text', label: 'Icon + Text' },
   { value: 'text', label: 'Text' }
 ]
 
-const viewShadowOptions = [
+const viewShadowOptions: Array<{ value: ViewShadow; label: string }> = [
   { value: 'none', label: 'None' },
   { value: 'sm', label: 'Small' },
   { value: 'md', label: 'Medium' },
@@ -89,8 +101,8 @@ const viewShadowOptions = [
         {{ t('preset.cloudPublish', 'Publish to Cloud') }}
       </TxButton>
     </div>
-    <ElCollapse>
-      <ElCollapseItem :title="t('layoutSection.atomHeader', 'Header')" name="header">
+    <TxCollapse>
+      <TxCollapseItem :title="t('layoutSection.atomHeader', 'Header')" name="header">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label">{{
             t('layoutSection.atomHeaderBorder', 'Border')
@@ -99,7 +111,11 @@ const viewShadowOptions = [
             :model-value="atomConfig.header.border"
             class="w-full"
             @update:model-value="
-              (v) => applyCustom({ ...atomConfig, header: { ...atomConfig.header, border: v } })
+              (v) =>
+                applyCustom({
+                  ...atomConfig,
+                  header: { ...atomConfig.header, border: v as HeaderBorder }
+                })
             "
           >
             <TuffSelectItem
@@ -128,8 +144,8 @@ const viewShadowOptions = [
             "
           />
         </div>
-      </ElCollapseItem>
-      <ElCollapseItem :title="t('layoutSection.atomAside', 'Sidebar')" name="aside">
+      </TxCollapseItem>
+      <TxCollapseItem :title="t('layoutSection.atomAside', 'Sidebar')" name="aside">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label">{{
             t('layoutSection.atomAsidePosition', 'Position')
@@ -138,7 +154,11 @@ const viewShadowOptions = [
             :model-value="atomConfig.aside.position"
             class="w-full"
             @update:model-value="
-              (v) => applyCustom({ ...atomConfig, aside: { ...atomConfig.aside, position: v } })
+              (v) =>
+                applyCustom({
+                  ...atomConfig,
+                  aside: { ...atomConfig.aside, position: v as AsidePosition }
+                })
             "
           >
             <TuffSelectItem
@@ -164,8 +184,8 @@ const viewShadowOptions = [
             "
           />
         </div>
-      </ElCollapseItem>
-      <ElCollapseItem :title="t('layoutSection.atomView', 'Content area')" name="view">
+      </TxCollapseItem>
+      <TxCollapseItem :title="t('layoutSection.atomView', 'Content area')" name="view">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label"
             >{{ t('layoutSection.atomViewRadius', 'Corner radius') }} (px)</span
@@ -194,7 +214,11 @@ const viewShadowOptions = [
             :model-value="atomConfig.view.shadow"
             class="w-full"
             @update:model-value="
-              (v) => applyCustom({ ...atomConfig, view: { ...atomConfig.view, shadow: v } })
+              (v) =>
+                applyCustom({
+                  ...atomConfig,
+                  view: { ...atomConfig.view, shadow: v as ViewShadow }
+                })
             "
           >
             <TuffSelectItem
@@ -205,15 +229,19 @@ const viewShadowOptions = [
             />
           </TuffSelect>
         </div>
-      </ElCollapseItem>
-      <ElCollapseItem :title="t('layoutSection.atomNav', 'Navigation')" name="nav">
+      </TxCollapseItem>
+      <TxCollapseItem :title="t('layoutSection.atomNav', 'Navigation')" name="nav">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label">{{ t('layoutSection.atomNavStyle', 'Style') }}</span>
           <TuffSelect
             :model-value="atomConfig.nav.style"
             class="w-full"
             @update:model-value="
-              (v) => applyCustom({ ...atomConfig, nav: { ...atomConfig.nav, style: v } })
+              (v) =>
+                applyCustom({
+                  ...atomConfig,
+                  nav: { ...atomConfig.nav, style: v as NavStyle }
+                })
             "
           >
             <TuffSelectItem
@@ -224,8 +252,8 @@ const viewShadowOptions = [
             />
           </TuffSelect>
         </div>
-      </ElCollapseItem>
-      <ElCollapseItem :title="t('layoutSection.atomCustomCss', 'Custom CSS')" name="css">
+      </TxCollapseItem>
+      <TxCollapseItem :title="t('layoutSection.atomCustomCss', 'Custom CSS')" name="css">
         <div class="LayoutAtomEditor-Field">
           <span class="LayoutAtomEditor-Label">{{
             t(
@@ -238,11 +266,11 @@ const viewShadowOptions = [
             type="textarea"
             :rows="6"
             placeholder=".AppLayout-Container { /* your css */ }"
-            @update:model-value="(v) => applyCustom({ ...atomConfig, customCSS: v })"
+            @update:model-value="(v) => applyCustom({ ...atomConfig, customCSS: String(v) })"
           />
         </div>
-      </ElCollapseItem>
-    </ElCollapse>
+      </TxCollapseItem>
+    </TxCollapse>
   </TuffGroupBlock>
 </template>
 
@@ -259,13 +287,13 @@ const viewShadowOptions = [
   padding: 6px 12px;
   font-size: 12px;
   border-radius: 8px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-regular);
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: var(--el-fill-color);
-    color: var(--el-color-primary);
+    background: var(--tx-fill-color);
+    color: var(--tx-color-primary);
   }
 
   &:disabled {
@@ -277,8 +305,8 @@ const viewShadowOptions = [
     margin-left: auto;
     background: linear-gradient(
       135deg,
-      var(--el-color-primary-light-8),
-      var(--el-color-success-light-8)
+      var(--tx-color-primary-light-8),
+      var(--tx-color-success-light-8)
     );
   }
 }
@@ -294,7 +322,7 @@ const viewShadowOptions = [
 .LayoutAtomEditor-Label {
   display: block;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-bottom: 4px;
 }
 </style>

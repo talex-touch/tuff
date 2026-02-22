@@ -108,7 +108,7 @@ const publishedAt = computed<string>(() => {
     display: block;
     font-size: 12px;
     text-align: center;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 }
 

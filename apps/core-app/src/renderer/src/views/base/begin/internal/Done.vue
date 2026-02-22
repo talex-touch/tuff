@@ -67,7 +67,7 @@ function goon(): void {
       font-size: 1.3rem;
       font-weight: 500;
       text-align: center;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
   }
 }

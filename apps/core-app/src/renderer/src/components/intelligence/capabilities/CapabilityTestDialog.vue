@@ -147,7 +147,7 @@ function handleCancel(): void {
 
 .capability-test-dialog__description {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
 }
 
@@ -163,17 +163,17 @@ function handleCancel(): void {
   justify-content: space-between;
   padding: 0.85rem 1rem;
   border-radius: 0.9rem;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-blank);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-fill-color-blank);
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    border-color: var(--el-border-color);
+    border-color: var(--tx-border-color);
   }
 
   &.is-selected {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
     background: rgba(99, 102, 241, 0.08);
   }
 }
@@ -186,23 +186,23 @@ function handleCancel(): void {
 
 .provider-select-item__name {
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .provider-select-item__type {
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .provider-select-item__check {
   font-size: 1.25rem;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .provider-select-empty {
   padding: 1rem;
   text-align: center;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
 }
 

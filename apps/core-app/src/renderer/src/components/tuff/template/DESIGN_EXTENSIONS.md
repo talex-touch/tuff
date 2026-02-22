@@ -308,11 +308,11 @@ interface TuffItemTemplateProps {
 >
   <!-- 自定义插槽 -->
   <template #title-badge>
-    <el-tag size="small">Pro</el-tag>
+    <TxTag size="sm">Pro</TxTag>
   </template>
 
   <template #trailing>
-    <el-button size="small" text>Configure</el-button>
+    <TxButton size="sm" variant="flat">Configure</TxButton>
   </template>
 </TuffItemTemplate>
 ```

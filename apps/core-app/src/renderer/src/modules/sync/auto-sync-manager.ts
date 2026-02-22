@@ -11,6 +11,7 @@ import {
   openersStorage
 } from '@talex-touch/utils/renderer/storage'
 import { toast } from 'vue-sonner'
+import { devLog } from '~/utils/dev-log'
 import { getSyncPreferenceState } from '~/modules/auth/sync-preferences'
 import {
   getAppAuthToken,
@@ -525,7 +526,7 @@ function reportSyncError(stage: 'pull' | 'push', error: unknown): void {
     const authToken = getAppAuthToken()
     const tokenDeviceId = authToken ? resolveAuthTokenDeviceId(authToken) : null
     const localDeviceId = getAppDeviceId()
-    console.debug('[AutoSync] sync token rejected', {
+    devLog('[AutoSync] sync token rejected', {
       stage,
       localDeviceId: maskDeviceId(localDeviceId),
       tokenDeviceId: maskDeviceId(tokenDeviceId),

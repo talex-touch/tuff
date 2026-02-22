@@ -75,15 +75,15 @@ function onKeyDown(e) {
   }
 
   &:hover {
-    border-color: var(--el-color-primary-light-3);
-    box-shadow: 0 0 2px 1px var(--el-color-primary-light-5);
+    border-color: var(--tx-color-primary-light-3);
+    box-shadow: 0 0 2px 1px var(--tx-color-primary-light-5);
   }
 
   &:focus-within {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
     box-shadow:
-      0 0 2px 1px var(--el-color-primary-light-3),
-      0 0 4px 2px var(--el-color-primary-light-5);
+      0 0 2px 1px var(--tx-color-primary-light-3),
+      0 0 4px 2px var(--tx-color-primary-light-5);
   }
 
   .FlatInput-Prefix {
@@ -95,7 +95,7 @@ function onKeyDown(e) {
     align-items: center;
 
     font-size: 18px;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   input,
@@ -140,7 +140,7 @@ function onKeyDown(e) {
 
   border-radius: 8px;
   box-sizing: border-box;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 
   --fake-radius: 8px;
   transition:
@@ -161,8 +161,8 @@ div.FlatInput-Container.win {
       --fake-inner-opacity: 0.35;
     }
 
-    border-color: var(--el-border-color);
-    border-bottom: 1px solid var(--el-border-color);
+    border-color: var(--tx-border-color);
+    border-bottom: 1px solid var(--tx-border-color);
     box-shadow: none;
   }
 
@@ -173,13 +173,13 @@ div.FlatInput-Container.win {
       --fake-inner-opacity: 0.5;
     }
 
-    border-color: var(--el-border-color);
-    border-bottom: 2px solid var(--el-color-primary);
+    border-color: var(--tx-border-color);
+    border-bottom: 2px solid var(--tx-color-primary);
     box-shadow: none;
   }
 
   border-radius: 8px;
   --fake-radius: 8px !important;
-  border-bottom: 1px solid var(--el-border-color);
+  border-bottom: 1px solid var(--tx-border-color);
 }
 </style>

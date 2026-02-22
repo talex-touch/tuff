@@ -465,10 +465,10 @@ async function handlePrimaryAction(): Promise<void> {
   cursor: pointer;
   transition: all 0.2s;
   font-size: 14px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 
   &:hover:not(.disabled) {
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
 
   &.disabled {

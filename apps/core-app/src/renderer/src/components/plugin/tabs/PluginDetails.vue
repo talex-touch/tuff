@@ -258,25 +258,25 @@ watch(
     >
       <TuffBlockLine :title="t('plugin.details.pluginId')">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+          <code class="text-xs bg-[var(--tx-fill-color-darker)] px-2 py-0.5 rounded">{{
             plugin.name
           }}</code>
         </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('plugin.details.version')">
         <template #description>
-          <span class="text-[var(--el-color-success)] font-semibold">v{{ plugin.version }}</span>
+          <span class="text-[var(--tx-color-success)] font-semibold">v{{ plugin.version }}</span>
         </template>
       </TuffBlockLine>
       <TuffBlockLine title="SDK API">
         <template #description>
           <span v-if="plugin.sdkapi" class="font-mono text-xs">
             {{ plugin.sdkapi }}
-            <span class="text-[var(--el-text-color-secondary)] ml-1">
+            <span class="text-[var(--tx-text-color-secondary)] ml-1">
               ({{ formatSdkVersion(plugin.sdkapi) }})
             </span>
           </span>
-          <span v-else class="text-[var(--el-color-warning)]">未声明</span>
+          <span v-else class="text-[var(--tx-color-warning)]">未声明</span>
         </template>
       </TuffBlockLine>
       <TuffBlockLine :title="t('plugin.details.mode')">
@@ -284,8 +284,8 @@ watch(
           <span
             :class="
               plugin.dev?.enable
-                ? 'text-[var(--el-color-primary)]'
-                : 'text-[var(--el-color-success)]'
+                ? 'text-[var(--tx-color-primary)]'
+                : 'text-[var(--tx-color-success)]'
             "
             class="font-medium"
           >
@@ -310,7 +310,7 @@ watch(
 
       <TuffBlockLine v-if="manifestSummary.id" title="ID">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+          <code class="text-xs bg-[var(--tx-fill-color-darker)] px-2 py-0.5 rounded">{{
             manifestSummary.id
           }}</code>
         </template>
@@ -328,7 +328,7 @@ watch(
       <TuffBlockLine title="Description" :description="manifestSummary.description || '--'" />
       <TuffBlockLine v-if="manifestSummary.main" title="Main">
         <template #description>
-          <code class="text-xs bg-[var(--el-fill-color-darker)] px-2 py-0.5 rounded">{{
+          <code class="text-xs bg-[var(--tx-fill-color-darker)] px-2 py-0.5 rounded">{{
             manifestSummary.main
           }}</code>
         </template>
@@ -347,11 +347,11 @@ watch(
         <template #description>
           <div class="flex flex-col gap-1">
             <div v-if="manifestSummary.permissions.required.length">
-              <span class="text-[var(--el-color-danger)] font-semibold">Required</span>：
+              <span class="text-[var(--tx-color-danger)] font-semibold">Required</span>：
               <span>{{ manifestSummary.permissions.required.join(', ') }}</span>
             </div>
             <div v-if="manifestSummary.permissions.optional.length">
-              <span class="text-[var(--el-color-warning)] font-semibold">Optional</span>：
+              <span class="text-[var(--tx-color-warning)] font-semibold">Optional</span>：
               <span>{{ manifestSummary.permissions.optional.join(', ') }}</span>
             </div>
           </div>
@@ -359,7 +359,7 @@ watch(
       </TuffBlockLine>
       <TuffBlockLine v-if="manifestError" title="Error">
         <template #description>
-          <span class="text-[var(--el-color-danger)] text-xs">{{ manifestError }}</span>
+          <span class="text-[var(--tx-color-danger)] text-xs">{{ manifestError }}</span>
         </template>
       </TuffBlockLine>
     </TuffGroupBlock>
@@ -431,7 +431,7 @@ watch(
         :description="t('plugin.details.loadTimeDesc')"
         default-icon="i-carbon-timer"
       >
-        <span class="text-sm font-semibold text-[var(--el-color-primary)]">
+        <span class="text-sm font-semibold text-[var(--tx-color-primary)]">
           {{ performanceData ? formatMs(performanceData.performance.loadTime) : '--' }}
         </span>
       </TuffBlockSlot>
@@ -440,7 +440,7 @@ watch(
         :description="t('plugin.details.memoryUsageDesc')"
         default-icon="i-carbon-chip"
       >
-        <span class="text-sm font-semibold text-[var(--el-color-info)]">
+        <span class="text-sm font-semibold text-[var(--tx-color-info)]">
           {{ performanceData ? formatBytes(performanceData.performance.memoryUsage) : '--' }}
         </span>
       </TuffBlockSlot>
@@ -450,19 +450,19 @@ watch(
         default-icon="i-carbon-data-base"
       >
         <div class="flex items-center gap-2">
-          <div class="w-24 h-2 bg-[var(--el-fill-color)] rounded-full overflow-hidden">
+          <div class="w-24 h-2 bg-[var(--tx-fill-color)] rounded-full overflow-hidden">
             <div
               v-if="performanceData"
               class="h-full rounded-full transition-all duration-300"
               :class="
                 performanceData.storage.usagePercent > 80
-                  ? 'bg-[var(--el-color-danger)]'
-                  : 'bg-[var(--el-color-primary)]'
+                  ? 'bg-[var(--tx-color-danger)]'
+                  : 'bg-[var(--tx-color-primary)]'
               "
               :style="{ width: `${performanceData.storage.usagePercent}%` }"
             />
           </div>
-          <span class="text-xs text-[var(--el-text-color-secondary)]">
+          <span class="text-xs text-[var(--tx-text-color-secondary)]">
             {{ performanceData ? `${performanceData.storage.usagePercent.toFixed(1)}%` : '--' }}
           </span>
         </div>
@@ -497,7 +497,7 @@ watch(
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.pluginPath') }}</span>
             <code
-              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              class="text-xs text-[var(--tx-text-color-secondary)] truncate max-w-48"
               :title="pluginPaths?.pluginPath"
             >
               {{ pluginPaths ? shortenPath(pluginPaths.pluginPath) : '...' }}
@@ -505,7 +505,7 @@ watch(
           </div>
         </template>
         <i
-          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+          class="i-carbon-folder-open text-lg text-[var(--tx-color-primary)] cursor-pointer hover:scale-110 transition-transform"
         />
       </TuffBlockSlot>
       <TuffBlockSlot
@@ -517,7 +517,7 @@ watch(
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.dataDirectory') }}</span>
             <code
-              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              class="text-xs text-[var(--tx-text-color-secondary)] truncate max-w-48"
               :title="pluginPaths?.dataPath"
             >
               {{ pluginPaths ? shortenPath(pluginPaths.dataPath) : '...' }}
@@ -525,7 +525,7 @@ watch(
           </div>
         </template>
         <i
-          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+          class="i-carbon-folder-open text-lg text-[var(--tx-color-primary)] cursor-pointer hover:scale-110 transition-transform"
         />
       </TuffBlockSlot>
       <TuffBlockSlot
@@ -537,7 +537,7 @@ watch(
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.configDirectory') }}</span>
             <code
-              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              class="text-xs text-[var(--tx-text-color-secondary)] truncate max-w-48"
               :title="pluginPaths?.configPath"
             >
               {{ pluginPaths ? shortenPath(pluginPaths.configPath) : '...' }}
@@ -545,7 +545,7 @@ watch(
           </div>
         </template>
         <i
-          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+          class="i-carbon-folder-open text-lg text-[var(--tx-color-primary)] cursor-pointer hover:scale-110 transition-transform"
         />
       </TuffBlockSlot>
       <TuffBlockSlot
@@ -557,7 +557,7 @@ watch(
           <div class="flex flex-col">
             <span class="text-sm font-medium">{{ t('plugin.details.logsDirectory') }}</span>
             <code
-              class="text-xs text-[var(--el-text-color-secondary)] truncate max-w-48"
+              class="text-xs text-[var(--tx-text-color-secondary)] truncate max-w-48"
               :title="pluginPaths?.logsPath"
             >
               {{ pluginPaths ? shortenPath(pluginPaths.logsPath) : '...' }}
@@ -565,7 +565,7 @@ watch(
           </div>
         </template>
         <i
-          class="i-carbon-folder-open text-lg text-[var(--el-color-primary)] cursor-pointer hover:scale-110 transition-transform"
+          class="i-carbon-folder-open text-lg text-[var(--tx-color-primary)] cursor-pointer hover:scale-110 transition-transform"
         />
       </TuffBlockSlot>
     </TuffGroupBlock>

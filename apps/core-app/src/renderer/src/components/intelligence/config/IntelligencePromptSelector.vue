@@ -1,5 +1,12 @@
 <script lang="ts" name="IntelligencePromptSelector" setup>
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxTag } from '@talex-touch/tuffex'
+import {
+  TuffInput,
+  TuffSelect,
+  TuffSelectItem,
+  TxButton,
+  TxTag,
+  type TxSelectValue
+} from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -17,7 +24,7 @@ const { t } = useI18n()
 const router = useRouter()
 const promptManager = getPromptManager()
 
-const selectedPromptId = ref<string | null>(null)
+const selectedPromptId = ref<TxSelectValue | undefined>(undefined)
 const customInstructions = ref(props.modelValue || '')
 
 // 分离内置和自定义提示词
@@ -26,8 +33,9 @@ const customPrompts = computed(() => promptManager.prompts.custom)
 
 // 当前选中的提示词
 const selectedPrompt = computed(() => {
-  if (!selectedPromptId.value || selectedPromptId.value === '__create_new__') return null
-  return promptManager.getPromptById(selectedPromptId.value) || null
+  const promptId = selectedPromptId.value
+  if (!promptId || promptId === '__create_new__') return null
+  return promptManager.getPromptById(String(promptId)) || null
 })
 
 // 监听外部值变化
@@ -37,7 +45,7 @@ watch(
     customInstructions.value = newValue || ''
     // 尝试匹配是否使用了预设提示词
     const matchedPrompt = promptManager.getAllPrompts().find((p) => p.content === newValue)
-    selectedPromptId.value = matchedPrompt?.id || null
+    selectedPromptId.value = matchedPrompt?.id
   },
   { immediate: true }
 )
@@ -50,33 +58,35 @@ watch(selectedPrompt, (newPrompt) => {
   }
 })
 
-function handlePromptSelect(promptId: string) {
-  if (!promptId) {
+function handlePromptSelect(promptId: TxSelectValue) {
+  const normalizedId = String(promptId)
+  if (!normalizedId) {
     handlePromptClear()
     return
   }
 
-  if (promptId === '__create_new__') {
+  if (normalizedId === '__create_new__') {
     handleManagePrompts()
     return
   }
 
-  selectedPromptId.value = promptId
+  selectedPromptId.value = normalizedId
 }
 
 function handlePromptClear() {
-  selectedPromptId.value = null
+  selectedPromptId.value = undefined
   customInstructions.value = ''
   emits('update:modelValue', '')
 }
 
-function handleCustomInstructionsChange(value: string) {
-  customInstructions.value = value
-  emits('update:modelValue', value)
+function handleCustomInstructionsChange(value: string | number) {
+  const normalizedValue = String(value)
+  customInstructions.value = normalizedValue
+  emits('update:modelValue', normalizedValue)
 
   // 如果手动输入，清除选中的提示词
-  if (selectedPromptId.value && selectedPrompt.value?.content !== value) {
-    selectedPromptId.value = null
+  if (selectedPromptId.value && selectedPrompt.value?.content !== normalizedValue) {
+    selectedPromptId.value = undefined
   }
 }
 
@@ -89,7 +99,7 @@ function handleManagePrompts() {
 <template>
   <div class="prompt-selector">
     <div class="flex items-center justify-between mb-3">
-      <label class="block text-sm font-medium text-[var(--el-text-color-primary)]">
+      <label class="block text-sm font-medium text-[var(--tx-text-color-primary)]">
         {{ t('intelligence.instructions') }}
       </label>
       <TxButton
@@ -136,7 +146,7 @@ function handleManagePrompts() {
         >
           <div class="flex items-center justify-between w-full">
             <span>{{ prompt.name }}</span>
-            <TxTag size="small" type="info">
+            <TxTag size="sm" type="info">
               {{ t('intelligence.builtin') }}
             </TxTag>
           </div>
@@ -161,7 +171,7 @@ function handleManagePrompts() {
         >
           <div class="flex items-center justify-between w-full">
             <span>{{ prompt.name }}</span>
-            <TxTag size="small" type="success">
+            <TxTag size="sm" type="success">
               {{ t('intelligence.custom') }}
             </TxTag>
           </div>
@@ -169,7 +179,7 @@ function handleManagePrompts() {
 
         <!-- Add New Prompt Option -->
         <TuffSelectItem value="__create_new__" :label="t('intelligence.createNewPrompt')">
-          <div class="flex items-center gap-2 text-[var(--el-color-primary)]">
+          <div class="flex items-center gap-2 text-[var(--tx-color-primary)]">
             <i class="i-carbon-add" aria-hidden="true" />
             <span>{{ t('intelligence.createNewPrompt') }}</span>
           </div>
@@ -190,7 +200,7 @@ function handleManagePrompts() {
       />
       <div
         v-if="selectedPromptId && selectedPromptId !== '__create_new__'"
-        class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+        class="mt-2 text-xs text-[var(--tx-text-color-secondary)]"
       >
         {{ t('intelligence.promptSelectedHint') }}
       </div>
@@ -199,18 +209,18 @@ function handleManagePrompts() {
     <!-- Prompt Preview -->
     <div
       v-if="selectedPrompt"
-      class="prompt-preview mt-3 p-3 rounded-lg bg-[var(--el-fill-color-lighter)] border border-[var(--el-border-color-lighter)]"
+      class="prompt-preview mt-3 p-3 rounded-lg bg-[var(--tx-fill-color-lighter)] border border-[var(--tx-border-color-lighter)]"
     >
       <div class="flex items-center gap-2 mb-2">
-        <i class="i-carbon-view text-[var(--el-color-primary)]" aria-hidden="true" />
-        <span class="text-sm font-medium text-[var(--el-text-color-primary)]">
+        <i class="i-carbon-view text-[var(--tx-color-primary)]" aria-hidden="true" />
+        <span class="text-sm font-medium text-[var(--tx-text-color-primary)]">
           {{ selectedPrompt.name }}
         </span>
-        <TxTag size="small" :type="selectedPrompt.builtin ? 'info' : 'success'">
+        <TxTag size="sm" :type="selectedPrompt.builtin ? 'info' : 'success'">
           {{ selectedPrompt.builtin ? t('intelligence.builtin') : t('intelligence.custom') }}
         </TxTag>
       </div>
-      <div class="text-sm text-[var(--el-text-color-regular)] whitespace-pre-wrap">
+      <div class="text-sm text-[var(--tx-text-color-regular)] whitespace-pre-wrap">
         {{ selectedPrompt.content }}
       </div>
     </div>
@@ -236,7 +246,7 @@ function handleManagePrompts() {
 
   :deep(.prompt-input .tx-input__textarea) {
     border-radius: 8px;
-    font-family: var(--el-font-family);
+    font-family: var(--tx-font-family);
     line-height: 1.5;
     resize: vertical;
   }
@@ -244,7 +254,7 @@ function handleManagePrompts() {
   .prompt-group-label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .prompt-preview {
@@ -256,7 +266,7 @@ function handleManagePrompts() {
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--el-border-color);
+      background: var(--tx-border-color);
       border-radius: 3px;
     }
   }

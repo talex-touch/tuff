@@ -141,7 +141,7 @@ function close() {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .dialog-content {
@@ -158,11 +158,11 @@ function close() {
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .warning-critical {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .dialog-footer {

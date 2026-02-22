@@ -51,12 +51,12 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 </script>
 
 <template>
-  <div flex="~ col" border-b="1 solid [var(--el-border-color-lighter)]">
+  <div flex="~ col" border-b="1 solid [var(--tx-border-color-lighter)]">
     <div
       flex="~ justify-between items-center"
-      border-b="1 solid [var(--el-border-color-lighter)]"
+      border-b="1 solid [var(--tx-border-color-lighter)]"
       p="x-4 y-2"
-      bg="[var(--el-bg-color-page)]"
+      bg="[var(--tx-bg-color-page)]"
       class="fake-background"
       style="--fake-opacity: 0.5"
     >
@@ -68,7 +68,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 
       <div v-if="tabs === 'market'" flex items-center gap-2>
         <div flex items-center gap-2 text-xs>
-          <span op-60 whitespace-nowrap text="[var(--el-text-color-regular)]">
+          <span op-60 whitespace-nowrap text="[var(--tx-text-color-regular)]">
             {{ sourcesCount }} {{ t('market.sources') }}
           </span>
           <TxButton
@@ -195,16 +195,16 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   gap: 0.5rem;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-fill-color-light);
+  border: 1px solid var(--tx-border-color-lighter);
 
   &.clickable {
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--el-fill-color);
-      border-color: var(--el-color-danger-light-5);
+      background: var(--tx-fill-color);
+      border-color: var(--tx-color-danger-light-5);
     }
   }
 }
@@ -213,7 +213,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
   font-weight: 500;
 }
 
@@ -221,7 +221,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
   font-weight: 500;
 }
 
@@ -247,8 +247,8 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 :global(.MarketErrorDrawer-Card) {
   width: min(420px, 90vw);
   max-height: 80vh;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 16px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.25);
   overflow: hidden;
@@ -265,13 +265,13 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .error-drawer-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .error-drawer-content {
@@ -287,12 +287,12 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 .provider-item {
   padding: 0.75rem;
   border-radius: 8px;
-  background: var(--el-fill-color-lighter);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 
   &.is-error {
-    border-color: var(--el-color-danger-light-5);
-    background: var(--el-color-danger-light-9);
+    border-color: var(--tx-color-danger-light-5);
+    background: var(--tx-color-danger-light-9);
   }
 }
 
@@ -305,15 +305,15 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 
 .provider-name {
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .provider-type {
   font-size: 0.75rem;
   padding: 0.125rem 0.5rem;
   border-radius: 999px;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-secondary);
 }
 
 .provider-status-row {
@@ -333,31 +333,31 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
   border-radius: 999px;
 
   &.success {
-    color: var(--el-color-success);
-    background: var(--el-color-success-light-9);
+    color: var(--tx-color-success);
+    background: var(--tx-color-success-light-9);
   }
 
   &.error {
-    color: var(--el-color-danger);
-    background: var(--el-color-danger-light-9);
+    color: var(--tx-color-danger);
+    background: var(--tx-color-danger-light-9);
   }
 }
 
 .item-count {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .error-message {
   margin-top: 0.5rem;
   padding: 0.5rem;
   border-radius: 4px;
-  background: var(--el-fill-color-dark);
+  background: var(--tx-fill-color-dark);
   overflow-x: auto;
 
   code {
     font-size: 0.75rem;
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     word-break: break-all;
     white-space: pre-wrap;
   }
@@ -366,6 +366,6 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
 .empty-state {
   text-align: center;
   padding: 2rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

@@ -143,7 +143,7 @@ export default defineComponent({
   opacity: 0;
   transition: all 0.25s;
   border-radius: 50px;
-  background-color: var(--el-color-primary);
+  background-color: var(--tx-color-primary);
 }
 
 .TMenuTabs-Container {

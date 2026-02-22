@@ -4,6 +4,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { reactive } from 'vue'
 import { logAppEntranceMode } from '~/modules/devtools/app-entrance-log'
+import { devLog } from '~/utils/dev-log'
 import { useStartupInfo } from './useStartupInfo'
 
 /**
@@ -68,7 +69,7 @@ try {
     const show = message.show
     const id = message.id
 
-    console.debug('[core-box.ts] Received core-box:trigger', {
+    devLog('[core-box.ts] Received core-box:trigger', {
       show,
       id,
       type,
@@ -106,7 +107,7 @@ try {
       startupInfo.value?.id !== undefined &&
       id !== startupInfo.value.id
     ) {
-      console.debug('[core-box.ts] ID mismatch, skipping', {
+      devLog('[core-box.ts] ID mismatch, skipping', {
         receivedId: id,
         startupInfoId: startupInfo.value.id
       })
@@ -116,7 +117,7 @@ try {
     // Always keep core-box class - CoreBox is a separate window,
     // visibility is controlled by the window itself, not CSS class
     if (!document.body.classList.contains('core-box')) {
-      console.debug('[core-box.ts] Adding core-box class to body')
+      devLog('[core-box.ts] Adding core-box class to body')
       document.body.classList.add('core-box')
     }
 

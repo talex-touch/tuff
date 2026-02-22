@@ -17,6 +17,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { appSetting } from '~/modules/channel/storage'
+import { devLog } from '~/utils/dev-log'
 import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
@@ -55,7 +56,7 @@ export function useSearch(
     appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
   const logDebug = (...args: unknown[]) => {
     if (!shouldLog()) return
-    console.debug(...args)
+    devLog(...args)
   }
   const searchVal = ref('')
   const select = ref(-1)

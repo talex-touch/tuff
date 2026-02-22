@@ -83,7 +83,7 @@ function handleAgree(): void {
   --s: 2.5;
   --t: 0.5;
   border-radius: 50%;
-  border: 2px solid var(--el-color-primary);
+  border: 2px solid var(--tx-color-primary);
   animation: shining 1.25s infinite;
 
   &::before,
@@ -93,7 +93,7 @@ function handleAgree(): void {
     inset: 0;
     border-radius: 50%;
     transform: scale(1.25);
-    border: 2px solid var(--el-color-primary);
+    border: 2px solid var(--tx-color-primary);
     animation: shining 0.5s infinite;
   }
 
@@ -177,23 +177,23 @@ function handleAgree(): void {
       margin: 0 0 1rem 0;
       font-size: 1.4rem;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
 
     span {
       font-size: 0.95rem;
       line-height: 1.6;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
     }
 
     &:hover {
-      border-color: var(--el-border-color);
-      background-color: var(--el-fill-color-light);
+      border-color: var(--tx-border-color);
+      background-color: var(--tx-fill-color-light);
     }
 
     &.active {
-      border-color: var(--el-color-primary);
-      background-color: var(--el-color-primary-light-9);
+      border-color: var(--tx-color-primary);
+      background-color: var(--tx-color-primary-light-9);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
   }

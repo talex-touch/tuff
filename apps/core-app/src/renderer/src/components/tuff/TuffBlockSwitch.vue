@@ -61,14 +61,14 @@ function handleClick(event: MouseEvent) {
       <div class="flex items-center gap-3">
         <span
           v-if="loading"
-          class="i-ri-loader-4-line text-[var(--el-text-color-secondary)] animate-spin"
+          class="i-ri-loader-4-line text-[var(--tx-text-color-secondary)] animate-spin"
         />
         <TSwitch v-model="value" :disabled="disabled || loading" @change="handleChange" />
       </div>
     </template>
     <template v-else>
       <i
-        class="TuffBlockSwitch-Chevron i-carbon-chevron-right text-lg text-[var(--el-text-color-secondary)]"
+        class="TuffBlockSwitch-Chevron i-carbon-chevron-right text-lg text-[var(--tx-text-color-secondary)]"
       />
     </template>
   </TuffBlockSlot>

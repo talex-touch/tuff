@@ -8,10 +8,16 @@ import type {
   AnalyticsSnapshot,
   AnalyticsWindowType,
 } from '../../../analytics'
-import type { AppIndexSettings } from '../../events/types/app-index'
+import type {
+  AppIndexAddPathRequest,
+  AppIndexAddPathResult,
+  AppIndexSettings,
+} from '../../events/types/app-index'
 import type { AnalyticsToggleRequest, CurrentMetrics, PerformanceHistoryEntry, PerformanceSummary } from '../../events/types/app'
 import type { DeviceIdleSettings } from '../../events/types/device-idle'
 import type {
+  FileIndexAddPathRequest,
+  FileIndexAddPathResult,
   FileIndexBatteryStatus,
   FileIndexFailedFile,
   FileIndexProgress,
@@ -33,6 +39,7 @@ export interface SettingsSdk {
       options: StreamOptions<FileIndexProgress>,
     ) => Promise<StreamController>
     getFailedFiles: () => Promise<FileIndexFailedFile[]>
+    addPath: (payload: FileIndexAddPathRequest) => Promise<FileIndexAddPathResult>
   }
   deviceIdle: {
     getSettings: () => Promise<DeviceIdleSettings>
@@ -41,6 +48,7 @@ export interface SettingsSdk {
   appIndex: {
     getSettings: () => Promise<AppIndexSettings>
     updateSettings: (settings: Partial<AppIndexSettings>) => Promise<AppIndexSettings>
+    addPath: (payload: AppIndexAddPathRequest) => Promise<AppIndexAddPathResult>
   }
   analytics: {
     getSnapshot: (windowType: AnalyticsWindowType) => Promise<AnalyticsSnapshot>
@@ -66,6 +74,7 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
       rebuild: request => transport.send(AppEvents.fileIndex.rebuild, request),
       streamProgress: options => transport.stream(AppEvents.fileIndex.progress, undefined, options),
       getFailedFiles: () => transport.send(AppEvents.fileIndex.failedFiles),
+      addPath: payload => transport.send(AppEvents.fileIndex.addPath, payload),
     },
     deviceIdle: {
       getSettings: () => transport.send(AppEvents.deviceIdle.getSettings),
@@ -74,6 +83,7 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
     appIndex: {
       getSettings: () => transport.send(AppEvents.appIndex.getSettings),
       updateSettings: settings => transport.send(AppEvents.appIndex.updateSettings, settings),
+      addPath: payload => transport.send(AppEvents.appIndex.addPath, payload),
     },
     analytics: {
       getSnapshot: windowType => transport.send(AppEvents.analytics.getSnapshot, { windowType }),

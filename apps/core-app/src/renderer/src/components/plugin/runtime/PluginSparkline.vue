@@ -19,7 +19,7 @@ const props = withDefaults(
   {
     width: 120,
     height: 38,
-    stroke: 'var(--el-color-primary)',
+    stroke: 'var(--tx-color-primary)',
     strokeWidth: 2,
     padding: 4,
     showArea: true

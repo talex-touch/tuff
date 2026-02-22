@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DownloadHistory } from '@talex-touch/utils'
-import { TxBottomDialog, TxEmpty } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxEmpty, TxPagination, TxSkeleton } from '@talex-touch/tuffex'
 import { DownloadModule } from '@talex-touch/utils'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -94,10 +94,6 @@ const paginatedHistory = computed(() => {
 
 function handleSearch() {
   currentPage.value = 1
-}
-
-function handlePageChange(page: number) {
-  currentPage.value = page
 }
 
 async function handleOpenFile(historyId: string) {
@@ -262,7 +258,7 @@ onMounted(() => {
     <!-- 历史记录列表 -->
     <div class="history-list">
       <div v-if="loading" class="loading-state">
-        <el-skeleton :rows="5" animated />
+        <TxSkeleton :lines="5" />
       </div>
       <div v-else-if="filteredHistory.length === 0" class="empty-state">
         <TxEmpty :title="$t('download.no_history')" />
@@ -281,12 +277,10 @@ onMounted(() => {
 
     <!-- 分页 -->
     <div v-if="filteredHistory.length > pageSize" class="pagination">
-      <el-pagination
+      <TxPagination
         v-model:current-page="currentPage"
         :page-size="pageSize"
         :total="filteredHistory.length"
-        layout="prev, pager, next, jumper, total"
-        @current-change="handlePageChange"
       />
     </div>
 
@@ -309,7 +303,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   padding: 20px;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
 }
 
 .history-header {
@@ -332,14 +326,14 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .history-count {
   font-size: 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   padding: 4px 12px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 12px;
 }
 
@@ -381,7 +375,7 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   padding: 16px 0;
-  border-top: 1px solid var(--el-border-color-light);
+  border-top: 1px solid var(--tx-border-color-light);
 }
 
 /* 响应式设计 */

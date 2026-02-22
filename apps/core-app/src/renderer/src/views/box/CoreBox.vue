@@ -40,6 +40,7 @@ import DivisionBoxHeader from './DivisionBoxHeader.vue'
 import PrefixPart from './PrefixPart.vue'
 import IndexingHintTag from './tag/IndexingHintTag.vue'
 import TagSection from './tag/TagSection.vue'
+import { devLog } from '~/utils/dev-log'
 
 declare global {
   interface Window {
@@ -166,7 +167,7 @@ const completionDisplay = computed(() => {
 const shouldLog = () => appSetting.diagnostics?.verboseLogs === true
 function logDebug(...args: unknown[]) {
   if (!shouldLog()) return
-  console.debug(...args)
+  devLog(...args)
 }
 
 // Check if CoreBox is in UI mode (plugin webcontent view attached)
@@ -823,7 +824,7 @@ const customCss = computed(() => {
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-full .BoxInput-Wrapper input {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 }
 
 .CoreBox-Wrapper.CoreBoxInputBorder-none .BoxInput-Wrapper input {
@@ -835,20 +836,20 @@ const customCss = computed(() => {
 }
 
 .CoreBox-Wrapper.CoreBoxInputBg-subtle .BoxInput-Wrapper input {
-  background: color-mix(in srgb, var(--el-bg-color) 70%, var(--el-fill-color-light));
+  background: color-mix(in srgb, var(--tx-bg-color) 70%, var(--tx-fill-color-light));
 }
 
 .CoreBox-Wrapper.CoreBoxInputBg-solid .BoxInput-Wrapper input {
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
 }
 
 .CoreBox-Wrapper.CoreBoxResultHover-background .BoxItem:hover {
-  background: var(--el-fill-color-lighter) !important;
+  background: var(--tx-fill-color-lighter) !important;
 }
 
 .CoreBox-Wrapper.CoreBoxResultHover-border .BoxItem:hover {
   background: transparent !important;
-  box-shadow: inset 0 0 0 1px var(--el-border-color) !important;
+  box-shadow: inset 0 0 0 1px var(--tx-border-color) !important;
 }
 
 .CoreBox-Wrapper.CoreBoxResultHover-scale .BoxItem:hover {
@@ -873,7 +874,7 @@ const customCss = computed(() => {
   font-size: 1.25em;
 
   .cancel-button {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     animation: pulse 1.5s infinite;
   }
 
@@ -903,7 +904,7 @@ div.CoreBoxRes {
   overflow: hidden;
 
   border-radius: 0 0 var(--corebox-container-radius, 8px) var(--corebox-container-radius, 8px);
-  border-top: 1px solid var(--el-border-color);
+  border-top: 1px solid var(--tx-border-color);
 
   .core-box & {
     display: flex;
@@ -1077,7 +1078,7 @@ div.CoreBox {
   inset: 0;
 
   opacity: 0.75;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
 }
 
 // Hide input in UI mode but keep layout

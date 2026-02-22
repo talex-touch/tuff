@@ -25,7 +25,7 @@ const refresh: (value: string) => void = inject('refresh')!
 <style lang="scss">
 .TLabelSelectItem {
   &:hover {
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
   z-index: 1;
   position: relative;

@@ -71,6 +71,6 @@ const { routeLabel, t, handleUpgradeClick } = useLayoutController()
   gap: 0.5rem;
   align-items: center;
 
-  border-right: 1px solid var(--el-border-color);
+  border-right: 1px solid var(--tx-border-color);
 }
 </style>

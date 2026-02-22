@@ -195,8 +195,8 @@ async function testGetTasks() {
 }
 
 .test-results pre {
-  background: var(--el-bg-color-page);
-  border: 1px solid var(--el-border-color-light);
+  background: var(--tx-bg-color-page);
+  border: 1px solid var(--tx-border-color-light);
   border-radius: 4px;
   padding: 12px;
   font-size: 12px;
@@ -207,7 +207,7 @@ async function testGetTasks() {
 }
 
 .download-center-container {
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--tx-border-color-light);
   border-radius: 8px;
   overflow: hidden;
 }

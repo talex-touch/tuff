@@ -168,7 +168,7 @@ function handleClick(event: MouseEvent) {
   user-select: none;
   border-radius: 12px;
   box-sizing: border-box;
-  --fake-color: var(--el-fill-color-dark);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-radius: 12px;
   --fake-opacity: 0.5;
   transition:
@@ -176,7 +176,7 @@ function handleClick(event: MouseEvent) {
     box-shadow 0.25s ease;
 
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 
   &:active:not(.disabled) {
@@ -185,10 +185,10 @@ function handleClick(event: MouseEvent) {
 }
 
 .touch-blur .TBlockSlot-Container {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
 
   &:hover {
-    --fake-color: var(--el-fill-color-dark);
+    --fake-color: var(--tx-fill-color-dark);
   }
 }
 </style>

@@ -6,6 +6,7 @@ export interface TreeNode {
   key: TreeKey
   label: string
   children?: TreeNode[]
+  leaf?: boolean
   disabled?: boolean
   icon?: TxIconSource | string
 }

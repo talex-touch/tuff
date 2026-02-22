@@ -70,7 +70,7 @@ function getCategoryIcon(category: CategoryTag): string {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.7;
 }
 
@@ -87,24 +87,24 @@ function getCategoryIcon(category: CategoryTag): string {
   transition: all 0.2s ease;
   text-align: left;
   font-size: 0.875rem;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 
   &:hover {
-    background: var(--el-fill-color-light);
-    color: var(--el-color-primary);
+    background: var(--tx-fill-color-light);
+    color: var(--tx-color-primary);
 
     .category-icon {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
   }
 
   &.active {
-    background: rgba(var(--el-color-primary-rgb), 0.12);
-    color: var(--el-color-primary);
+    background: rgba(var(--tx-color-primary-rgb), 0.12);
+    color: var(--tx-color-primary);
     font-weight: 600;
 
     .category-icon {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
 
     &::before {
@@ -115,7 +115,7 @@ function getCategoryIcon(category: CategoryTag): string {
       transform: translateY(-50%);
       width: 3px;
       height: 60%;
-      background: var(--el-color-primary);
+      background: var(--tx-color-primary);
       border-radius: 0 4px 4px 0;
     }
   }
@@ -123,7 +123,7 @@ function getCategoryIcon(category: CategoryTag): string {
 
 .category-icon {
   font-size: 1.125rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   transition: color 0.2s ease;
   flex-shrink: 0;
 }

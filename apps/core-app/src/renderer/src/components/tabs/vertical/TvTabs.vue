@@ -372,11 +372,11 @@ export default defineComponent({
     top: -16px;
     left: 12px;
     border-radius: 6px;
-    background: var(--el-color-primary-light-9);
-    color: var(--el-color-primary);
+    background: var(--tx-color-primary-light-9);
+    color: var(--tx-color-primary);
     font-size: 0.75rem;
     font-weight: 600;
-    border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
+    border: 1px solid rgba(var(--tx-color-primary-rgb), 0.2);
   }
 
   & :last-child {
@@ -390,15 +390,15 @@ export default defineComponent({
   margin-right: 8px;
   height: 100%;
   border-radius: 12px;
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.6);
+  background: rgba(var(--tx-fill-color-extra-light-rgb), 0.6);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.3);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.3);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   transition: all 0.3s ease;
   box-sizing: border-box;
 
   &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.4);
+    border-color: rgba(var(--tx-color-primary-rgb), 0.4);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   }
 }
@@ -437,7 +437,7 @@ export default defineComponent({
     bottom: 2px;
     left: 0;
     height: 3px;
-    background: linear-gradient(90deg, var(--el-color-primary), var(--el-color-primary-light-3));
+    background: linear-gradient(90deg, var(--tx-color-primary), var(--tx-color-primary-light-3));
     border-radius: 1.5px;
     transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transform: translateX(0) scaleX(1);
@@ -445,8 +445,8 @@ export default defineComponent({
     width: 0;
     opacity: 0;
     box-shadow:
-      0 2px 8px rgba(var(--el-color-primary-rgb), 0.4),
-      0 0 0 1px rgba(var(--el-color-primary-rgb), 0.1);
+      0 2px 8px rgba(var(--tx-color-primary-rgb), 0.4),
+      0 0 0 1px rgba(var(--tx-color-primary-rgb), 0.1);
 
     &::before {
       content: '';
@@ -457,11 +457,11 @@ export default defineComponent({
       height: 60px;
       background: radial-gradient(
         ellipse 150% 100% at center bottom,
-        rgba(var(--el-color-primary-rgb), 0.35) 0%,
-        rgba(var(--el-color-primary-rgb), 0.25) 20%,
-        rgba(var(--el-color-primary-rgb), 0.15) 40%,
-        rgba(var(--el-color-primary-rgb), 0.08) 60%,
-        rgba(var(--el-color-primary-rgb), 0.03) 80%,
+        rgba(var(--tx-color-primary-rgb), 0.35) 0%,
+        rgba(var(--tx-color-primary-rgb), 0.25) 20%,
+        rgba(var(--tx-color-primary-rgb), 0.15) 40%,
+        rgba(var(--tx-color-primary-rgb), 0.08) 60%,
+        rgba(var(--tx-color-primary-rgb), 0.03) 80%,
         transparent 100%
       );
       filter: blur(10px);
@@ -479,8 +479,8 @@ export default defineComponent({
       height: 5px;
       background: linear-gradient(
         90deg,
-        rgba(var(--el-color-primary-rgb), 0.3),
-        rgba(var(--el-color-primary-rgb), 0.1)
+        rgba(var(--tx-color-primary-rgb), 0.3),
+        rgba(var(--tx-color-primary-rgb), 0.1)
       );
       border-radius: 2.5px;
       filter: blur(2px);
@@ -512,7 +512,7 @@ export default defineComponent({
   width: 100%;
   height: 300px;
   font-size: 16px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   opacity: 0.6;
 }
 
@@ -528,7 +528,7 @@ export default defineComponent({
 
     height: 100%;
     box-sizing: border-box;
-    background: var(--el-bg-color);
+    background: var(--tx-bg-color);
     overflow: hidden;
   }
 
@@ -536,7 +536,7 @@ export default defineComponent({
   width: 100%;
   height: 100%;
   box-sizing: border-box;
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.3);
+  background: rgba(var(--tx-fill-color-extra-light-rgb), 0.3);
   backdrop-filter: blur(20px);
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);

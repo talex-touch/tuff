@@ -221,13 +221,13 @@ function handleClick(event: MouseEvent): void {
   height: 26px;
   border-radius: 50%;
   background: conic-gradient(
-    var(--el-color-primary) var(--progress),
-    rgba(var(--el-color-primary-rgb), 0.15) 0
+    var(--tx-color-primary) var(--progress),
+    rgba(var(--tx-color-primary-rgb), 0.15) 0
   );
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
   font-weight: 600;
   font-size: 0.65rem;
 }
@@ -237,7 +237,7 @@ function handleClick(event: MouseEvent): void {
   position: absolute;
   inset: 3px;
   border-radius: 50%;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
 }
 
 .install-progress span {

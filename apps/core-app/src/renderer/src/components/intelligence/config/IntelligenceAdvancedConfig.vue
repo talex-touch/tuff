@@ -159,7 +159,7 @@ function handleTimeoutControlBlur(onBlur: () => void) {
             @focus="focus"
             @blur="handleTimeoutControlBlur(blur)"
           />
-          <span class="text-sm text-[var(--el-text-color-secondary)]">
+          <span class="text-sm text-[var(--tx-text-color-secondary)]">
             {{ t('intelligence.config.advanced.timeoutUnit') }}
           </span>
         </div>
@@ -173,16 +173,16 @@ function handleTimeoutControlBlur(onBlur: () => void) {
   .tuff-input {
     width: 100%;
     padding: 8px 12px;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
     border-radius: 6px;
-    background: var(--el-fill-color-blank);
-    color: var(--el-text-color-primary);
+    background: var(--tx-fill-color-blank);
+    color: var(--tx-text-color-primary);
     font-size: 14px;
     outline: none;
     transition: all 0.2s;
 
     &:focus {
-      border-color: var(--el-color-primary);
+      border-color: var(--tx-color-primary);
     }
 
     &:disabled {
@@ -191,7 +191,7 @@ function handleTimeoutControlBlur(onBlur: () => void) {
     }
 
     &::placeholder {
-      color: var(--el-text-color-placeholder);
+      color: var(--tx-text-color-placeholder);
     }
   }
 }

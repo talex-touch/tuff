@@ -92,8 +92,8 @@ function dismissBanner() {
   height: 10%;
 
   filter: blur(2px) brightness(1.1);
-  box-shadow: 0 4px 12px 2px var(--el-color-warning);
-  background: var(--el-color-warning);
+  box-shadow: 0 4px 12px 2px var(--tx-color-warning);
+  background: var(--tx-color-warning);
 }
 
 .BuildSecurityBanner {
@@ -102,15 +102,15 @@ function dismissBanner() {
   left: 0;
   right: 0;
   z-index: 10000;
-  background: var(--el-color-warning-light-9);
-  border-bottom: 1px solid var(--el-color-warning);
+  background: var(--tx-color-warning-light-9);
+  border-bottom: 1px solid var(--tx-color-warning);
   padding: 1rem 8rem;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 
   &.verification-failed {
-    background: var(--el-color-danger-light-9);
-    border-bottom-color: var(--el-color-danger);
+    background: var(--tx-color-danger-light-9);
+    border-bottom-color: var(--tx-color-danger);
   }
 
   &-Content {
@@ -127,11 +127,11 @@ function dismissBanner() {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: var(--el-color-warning);
+      color: var(--tx-color-warning);
       font-size: 20px;
 
       .verification-failed & {
-        color: var(--el-color-danger);
+        color: var(--tx-color-danger);
       }
     }
 
@@ -142,13 +142,13 @@ function dismissBanner() {
       .banner-title {
         font-weight: 600;
         font-size: 14px;
-        color: var(--el-text-color-primary);
+        color: var(--tx-text-color-primary);
         margin-bottom: 2px;
       }
 
       .banner-description {
         font-size: 12px;
-        color: var(--el-text-color-regular);
+        color: var(--tx-text-color-regular);
         line-height: 1.4;
       }
     }
@@ -162,14 +162,14 @@ function dismissBanner() {
       justify-content: center;
       border: none;
       background: transparent;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
       cursor: pointer;
       border-radius: 4px;
       transition: all 0.2s;
 
       &:hover {
-        background: var(--el-fill-color-light);
-        color: var(--el-text-color-primary);
+        background: var(--tx-fill-color-light);
+        color: var(--tx-text-color-primary);
       }
 
       i {

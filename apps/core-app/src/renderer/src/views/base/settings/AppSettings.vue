@@ -60,7 +60,7 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
     max-width: 100%;
     height: 100%;
 
-    background-color: var(--color, var(--el-color-info));
+    background-color: var(--color, var(--tx-color-info));
     border-radius: 2px;
     transition: 1s linear;
   }
@@ -79,7 +79,7 @@ const isWindows = computed(() => window.electron?.process?.platform === 'win32')
   height: 20px;
 
   border-radius: 4px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 }
 
 .AppSettings-Container {

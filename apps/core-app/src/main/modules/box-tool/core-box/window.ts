@@ -4,7 +4,6 @@ import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { CoreBoxInputChange } from './input-transport'
 import * as fs from 'node:fs'
-import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -31,6 +30,7 @@ import {
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
+import { getPluginTransportBundlePath } from '../../../utils/plugin-transport-bundle'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
@@ -1022,12 +1022,12 @@ export class WindowManager {
     // No real-time broadcasting to prevent channel timeout issues
   }
 
-  public attachUIView(
+  public async attachUIView(
     url: string,
     plugin?: TouchPlugin,
     query?: TuffQuery | string,
     feature?: IPluginFeature
-  ): void {
+  ): Promise<void> {
     const startTime = performance.now()
     const metrics = { preload: 0, viewCreate: 0, total: 0 }
 
@@ -1133,13 +1133,7 @@ export class WindowManager {
       // Pre-compute initial data to inject synchronously
       const initialThemeData = { dark: this.currentThemeIsDark }
 
-      let resolvedTransportModulePath: string | null = null
-      try {
-        const requireFromMain = createRequire(import.meta.url)
-        resolvedTransportModulePath = requireFromMain.resolve('@talex-touch/utils/transport')
-      } catch (error) {
-        coreBoxWindowLog.warn('Failed to resolve transport module path', { error })
-      }
+      const resolvedTransportModulePath = await getPluginTransportBundlePath(plugin?.pluginPath)
 
       const channelScript = `
 (function() {
@@ -1384,35 +1378,10 @@ export class WindowManager {
 
   window['$channel'] = new TouchChannel();
   try {
-    const { createRequire } = require('node:module');
-    const path = require('node:path');
-    let transportModule;
-    if (transportModulePath) {
-      transportModule = require(transportModulePath);
+    if (!transportModulePath) {
+      throw new Error('[CoreBox] Plugin transport bundle not resolved');
     }
-    if (!transportModule) {
-      const appPath = window?.$plugin?.path?.app;
-      const rootPath = window?.$plugin?.path?.root;
-      const pluginPath = window?.$plugin?.path?.plugin;
-      const baseCandidates = [
-        appPath,
-        rootPath,
-        pluginPath ? path.resolve(pluginPath, '..', '..') : undefined
-      ].filter(Boolean);
-      const uniqueCandidates = Array.from(new Set(baseCandidates));
-      for (const base of uniqueCandidates) {
-        try {
-          const requireFromRoot = createRequire(path.join(base, 'package.json'));
-          transportModule = requireFromRoot('@talex-touch/utils/transport');
-          break;
-        } catch (error) {
-          void error;
-        }
-      }
-    }
-    if (!transportModule) {
-      transportModule = require('@talex-touch/utils/transport');
-    }
+    const transportModule = require(transportModulePath);
     const { createPluginTuffTransport } = transportModule;
     window['$transport'] = createPluginTuffTransport(window['$channel']);
   } catch (error) {

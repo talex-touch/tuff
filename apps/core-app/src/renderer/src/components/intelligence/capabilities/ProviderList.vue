@@ -176,7 +176,7 @@ function handleRemoveProvider(providerId: string): void {
 
 .provider-option__type {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .provider-list__selected {
@@ -190,7 +190,7 @@ function handleRemoveProvider(providerId: string): void {
   font-weight: 600;
   font-size: 0.9rem;
   margin: 0 0 0.5rem 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .provider-list__tags {

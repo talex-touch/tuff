@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
-import { TxModal } from '@talex-touch/tuffex'
+import { TxAlert, TxModal } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -237,7 +237,7 @@ function formatDate(date: Date | number | undefined): string {
         <h3 class="section-title error-title">
           {{ $t('download.error_info') }}
         </h3>
-        <el-alert :title="task.error" type="error" :closable="false" show-icon />
+        <TxAlert :title="task.error" type="error" :closable="false" :show-icon="true" />
       </div>
 
       <!-- 元数据 -->
@@ -279,7 +279,7 @@ function formatDate(date: Date | number | undefined): string {
 .detail-section {
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .detail-section:last-child {
@@ -290,12 +290,12 @@ function formatDate(date: Date | number | undefined): string {
 .section-title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin: 0 0 16px 0;
 }
 
 .error-title {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .detail-item {
@@ -313,12 +313,12 @@ function formatDate(date: Date | number | undefined): string {
   flex-shrink: 0;
   min-width: 120px;
   font-weight: 500;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .detail-value {
   flex: 1;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   word-break: break-word;
 }
 
@@ -326,7 +326,7 @@ function formatDate(date: Date | number | undefined): string {
 .path-text {
   font-family: monospace;
   font-size: 12px;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   padding: 4px 8px;
   border-radius: 4px;
   overflow: hidden;
@@ -346,16 +346,16 @@ function formatDate(date: Date | number | undefined): string {
 }
 
 .task-details::-webkit-scrollbar-track {
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   border-radius: 3px;
 }
 
 .task-details::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
+  background: var(--tx-border-color);
   border-radius: 3px;
 }
 
 .task-details::-webkit-scrollbar-thumb:hover {
-  background: var(--el-border-color-dark);
+  background: var(--tx-border-color-dark);
 }
 </style>

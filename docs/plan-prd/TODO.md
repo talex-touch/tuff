@@ -145,6 +145,7 @@
 
 - [ ] **P0** 风险登记收口流程固化：形成发布前风险清单模板 + Owner/缓解策略闭环机制，确保每次 GA 可复用（`docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`）。
 - [ ] **P0** 旧同步链路明文存储彻底收口：`/api/sync/*` 旧链路保持禁用，迁移/清理 `syncStore.ts` 与 `authStore.ts` 的 `value_json` 明文写入，确保只剩 `/api/v1/sync/*` 写入路径（`apps/nexus/server/utils/syncStore.ts`、`apps/nexus/server/utils/authStore.ts`）。
+- [ ] **P0** 深度技术债与兼容性清单落地：以报告为基线明确 Owner/里程碑，并推进收口计划（`docs/engineering/legacy-debt-report-2026-02-21.md`）。
 - [ ] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 中 auth token / deviceId / device name 从 `localStorage` 迁移到主进程 `safeStorage` 通道，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/main/channel/common.ts`）。
 - [ ] **P1** 更新下载链路迁移 Signed URL：从 GitHub 直链迁移至 R2/S3 Signed URL（302 + TTL，可配置），保留本地 fallback（后续云存储接入项）。
 - [ ] **P1** Flow ↔ DivisionBox 权限入口回归标准化：沉淀回归清单与最小用例集，保证 actor/sdkapi/权限提示一致性。

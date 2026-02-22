@@ -23,12 +23,12 @@ export function resolveLayoutAtomsToCSSVars(
 
   const headerBorder =
     atom.header.border === 'solid'
-      ? '1px solid var(--el-border-color)'
+      ? '1px solid var(--tx-border-color)'
       : atom.header.border === 'gradient'
-        ? '1px solid var(--el-border-color-lighter)'
+        ? '1px solid var(--tx-border-color-lighter)'
         : 'none'
 
-  const asideBorder = atom.aside.border === 'solid' ? '1px solid var(--el-border-color)' : 'none'
+  const asideBorder = atom.aside.border === 'solid' ? '1px solid var(--tx-border-color)' : 'none'
 
   const vars: Record<string, string> = {
     '--layout-view-radius': radius,

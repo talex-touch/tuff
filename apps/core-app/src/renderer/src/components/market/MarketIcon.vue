@@ -86,13 +86,13 @@ const tuffIcon = computed<ITuffIcon>(() => {
   justify-content: center;
   // background: linear-gradient(
   //   135deg,
-  //   rgba(var(--el-color-primary-rgb), 0.18),
-  //   rgba(var(--el-color-primary-rgb), 0.05)
+  //   rgba(var(--tx-color-primary-rgb), 0.18),
+  //   rgba(var(--tx-color-primary-rgb), 0.05)
   // );
   border-radius: 14px;
-  border: 1px solid rgba(var(--el-color-primary-rgb), 0.15);
+  border: 1px solid rgba(var(--tx-color-primary-rgb), 0.15);
   transition: all 0.25s ease;
   font-size: 22px;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 </style>

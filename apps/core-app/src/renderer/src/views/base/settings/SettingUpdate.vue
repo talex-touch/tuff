@@ -526,16 +526,16 @@ function openAssetsDialog(): void {
 <style scoped>
 .status-message {
   font-size: 13px;
-  color: var(--el-color-info);
+  color: var(--tx-color-info);
 }
 
 .status-message.warning {
-  color: var(--el-color-warning);
+  color: var(--tx-color-warning);
 }
 
 .assets-summary {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .assets-dialog {
@@ -549,7 +549,7 @@ function openAssetsDialog(): void {
 
 .assets-empty {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .assets-list {
@@ -563,12 +563,12 @@ function openAssetsDialog(): void {
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .assets-version {
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .asset-item {
@@ -577,9 +577,9 @@ function openAssetsDialog(): void {
   justify-content: space-between;
   gap: 16px;
   padding: 10px 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 10px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 }
 
 .asset-main {
@@ -590,13 +590,13 @@ function openAssetsDialog(): void {
 
 .asset-name {
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   word-break: break-all;
 }
 
 .asset-meta {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .asset-actions {

@@ -50,24 +50,24 @@ const iconClass = computed(() => {
 
 const iconColor = computed(() => {
   if (props.node.type === 'directory') {
-    return 'var(--el-color-warning)'
+    return 'var(--tx-color-warning)'
   }
 
   const ext = props.node.name.split('.').pop()?.toLowerCase()
   const colorMap: Record<string, string> = {
-    json: 'var(--el-color-success)',
-    log: 'var(--el-color-info)',
-    txt: 'var(--el-color-info)',
-    md: 'var(--el-color-info)',
-    png: 'var(--el-color-primary)',
-    jpg: 'var(--el-color-primary)',
-    jpeg: 'var(--el-color-primary)',
-    gif: 'var(--el-color-primary)',
-    webp: 'var(--el-color-primary)',
-    svg: 'var(--el-color-primary)'
+    json: 'var(--tx-color-success)',
+    log: 'var(--tx-color-info)',
+    txt: 'var(--tx-color-info)',
+    md: 'var(--tx-color-info)',
+    png: 'var(--tx-color-primary)',
+    jpg: 'var(--tx-color-primary)',
+    jpeg: 'var(--tx-color-primary)',
+    gif: 'var(--tx-color-primary)',
+    webp: 'var(--tx-color-primary)',
+    svg: 'var(--tx-color-primary)'
   }
 
-  return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
+  return colorMap[ext || ''] || 'var(--tx-text-color-secondary)'
 })
 
 // Methods
@@ -97,9 +97,9 @@ function handleClick(): void {
 <template>
   <div class="StorageTreeItem">
     <div
-      class="StorageTreeItem-Row flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--el-fill-color-light)] transition-colors"
+      class="StorageTreeItem-Row flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-[var(--tx-fill-color-light)] transition-colors"
       :class="{
-        'bg-[var(--el-fill-color)]': isSelected,
+        'bg-[var(--tx-fill-color)]': isSelected,
         'pl-8': level > 0
       }"
       :style="{ paddingLeft: `${level * 20 + 12}px` }"
@@ -121,7 +121,7 @@ function handleClick(): void {
       <span class="flex-1 text-sm truncate">{{ node.name }}</span>
 
       <!-- Size -->
-      <span class="text-xs text-[var(--el-text-color-secondary)]">
+      <span class="text-xs text-[var(--tx-text-color-secondary)]">
         {{ formatSize(node.size) }}
       </span>
     </div>

@@ -28,7 +28,7 @@ defineProps<{
   height: 100%;
 
   overflow: hidden;
-  border-left: 1px solid var(--el-border-color);
+  border-left: 1px solid var(--tx-border-color);
 
   &.show {
     width: 60%;

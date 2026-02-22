@@ -7,7 +7,8 @@ let loadError = null
 
 try {
   nativeBinding = require(path.join(__dirname, 'build/Release/tuff_native_everything.node'))
-} catch (error) {
+}
+catch (error) {
   loadError = error
 }
 
@@ -15,7 +16,7 @@ function createUnavailableError() {
   const error = new Error(
     loadError instanceof Error
       ? `Everything native module is unavailable: ${loadError.message}`
-      : 'Everything native module is unavailable'
+      : 'Everything native module is unavailable',
   )
   error.code = 'ERR_EVERYTHING_NATIVE_UNAVAILABLE'
   return error
@@ -43,5 +44,5 @@ function getVersion() {
 module.exports = {
   search,
   query,
-  getVersion
+  getVersion,
 }

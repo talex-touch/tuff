@@ -384,13 +384,13 @@ function getCapabilityIcon(type: string): string {
   align-items: center;
   gap: 1rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
   margin-bottom: 1.5rem;
 }
 
 .header-icon {
   font-size: 2.5rem;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .header-info {
@@ -401,12 +401,12 @@ function getCapabilityIcon(type: string): string {
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .agent-version {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin: 0.25rem 0 0;
 }
 
@@ -417,13 +417,13 @@ function getCapabilityIcon(type: string): string {
 .section-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin: 0 0 0.75rem;
 }
 
 .section-content {
   font-size: 0.875rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   line-height: 1.6;
   margin: 0;
 }
@@ -436,7 +436,7 @@ function getCapabilityIcon(type: string): string {
 
 .capability-card {
   padding: 0.75rem;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 8px;
 }
 
@@ -446,7 +446,7 @@ function getCapabilityIcon(type: string): string {
   gap: 0.5rem;
 
   span:first-child {
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
   }
 }
 
@@ -483,27 +483,27 @@ function getCapabilityIcon(type: string): string {
   margin-top: 0.75rem;
   padding: 0.75rem;
   border-radius: 8px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
 }
 
 .status-line {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-bottom: 0.5rem;
 }
 
 .execute-error {
   margin-top: 0.75rem;
   font-size: 0.8125rem;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .execute-result {
   margin-top: 1rem;
   padding: 1rem;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 8px;
 }
 
@@ -511,13 +511,13 @@ function getCapabilityIcon(type: string): string {
   font-size: 0.75rem;
   font-weight: 600;
   margin: 0 0 0.5rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .result-content {
   font-size: 0.75rem;
   font-family: 'SF Mono', Monaco, monospace;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   padding: 0.75rem;
   border-radius: 4px;
   overflow: auto;

@@ -269,8 +269,8 @@ onUnmounted(() => {
   left: 0;
   display: flex;
   flex-direction: column;
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -296,7 +296,7 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
 }
 
 // State indicators
@@ -314,7 +314,7 @@ onUnmounted(() => {
 }
 
 .loading-indicator {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 14px;
   font-weight: 500;
   text-align: center;
@@ -323,8 +323,8 @@ onUnmounted(() => {
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--el-border-color);
-  border-top-color: var(--el-color-primary);
+  border: 3px solid var(--tx-border-color);
+  border-top-color: var(--tx-color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -364,31 +364,31 @@ onUnmounted(() => {
 
   &.state-prepare {
     background: rgba(144, 147, 153, 0.15);
-    color: var(--el-color-info);
+    color: var(--tx-color-info);
     border: 1px solid rgba(144, 147, 153, 0.3);
   }
 
   &.state-attach {
     background: rgba(230, 162, 60, 0.15);
-    color: var(--el-color-warning);
+    color: var(--tx-color-warning);
     border: 1px solid rgba(230, 162, 60, 0.3);
   }
 
   &.state-inactive {
     background: rgba(144, 147, 153, 0.15);
-    color: var(--el-color-info);
+    color: var(--tx-color-info);
     border: 1px solid rgba(144, 147, 153, 0.3);
   }
 
   &.state-detach {
     background: rgba(230, 162, 60, 0.15);
-    color: var(--el-color-warning);
+    color: var(--tx-color-warning);
     border: 1px solid rgba(230, 162, 60, 0.3);
   }
 
   &.state-destroy {
     background: rgba(245, 108, 108, 0.15);
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     border: 1px solid rgba(245, 108, 108, 0.3);
   }
 }

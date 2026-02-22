@@ -609,7 +609,7 @@ async function invokeOpenAiCompatibleChat(
       }
     } catch (error) {
       const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
-      const detail = normalized as Record<string, unknown>
+      const detail = normalized as unknown as Record<string, unknown>
       attemptErrors.push({
         endpoint: typeof detail.endpoint === 'string' ? detail.endpoint : endpoint,
         status: typeof detail.status === 'number' ? detail.status : undefined,
@@ -621,7 +621,7 @@ async function invokeOpenAiCompatibleChat(
   }
 
   if (lastError && typeof lastError === 'object') {
-    const errorDetail = lastError as Record<string, unknown>
+    const errorDetail = lastError as unknown as Record<string, unknown>
     errorDetail.endpoints = endpoints
     if (attemptErrors.length) {
       errorDetail.attemptErrors = attemptErrors
@@ -829,7 +829,7 @@ async function invokeModel(
       }
     } catch (error) {
       const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const detail = normalizedError as Record<string, unknown>
+      const detail = normalizedError as unknown as Record<string, unknown>
       detail.attempt = index + 1
       detail.fallbackCandidate = index < contexts.length - 1
       detail.stage = payload.stage || 'invoke'
@@ -889,7 +889,7 @@ async function invokeWithResolvedContext(
     throw new Error(`Unsupported provider type: ${context.provider.type}`)
   } catch (error) {
     const normalized = error instanceof Error ? error : new Error(String(error))
-    const detail = normalized as Record<string, unknown>
+    const detail = normalized as unknown as Record<string, unknown>
     detail.providerId = context.provider.id
     detail.providerName = context.provider.name
     detail.providerType = context.provider.type
@@ -2365,7 +2365,7 @@ export async function orchestrateIntelligenceLabStream(
         name: error.name,
         cause: (error as { cause?: unknown }).cause,
       }
-      const extra = error as Record<string, unknown>
+      const extra = error as unknown as Record<string, unknown>
       for (const key of Object.keys(extra)) {
         if (!(key in detail)) {
           detail[key] = extra[key]

@@ -295,10 +295,10 @@ function handleKeyAdd(event: KeyboardEvent): void {
 }
 
 .capability-transfer__panel {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   padding: 1rem;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   display: flex;
   flex-direction: column;
 
@@ -317,25 +317,25 @@ function handleKeyAdd(event: KeyboardEvent): void {
 
 .capability-transfer__hint {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .capability-transfer__list {
   flex: 1;
-  border: 1px dashed var(--el-border-color);
+  border: 1px dashed var(--tx-border-color);
   border-radius: 0.75rem;
   padding: 0.75rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
 }
 
 .capability-transfer__empty {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-align: center;
 }
 
@@ -344,7 +344,7 @@ function handleKeyAdd(event: KeyboardEvent): void {
   border: 1px solid transparent;
   border-radius: 0.65rem;
   padding: 0.6rem 0.75rem;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -354,11 +354,11 @@ function handleKeyAdd(event: KeyboardEvent): void {
     background 0.2s ease;
 
   i {
-    color: var(--el-text-color-placeholder);
+    color: var(--tx-text-color-placeholder);
   }
 
   &.is-selected {
-    border-color: var(--el-color-primary-light-5);
+    border-color: var(--tx-color-primary-light-5);
     background: rgba(99, 102, 241, 0.08);
   }
 }
@@ -370,10 +370,10 @@ function handleKeyAdd(event: KeyboardEvent): void {
 
   input {
     flex: 1;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
     border-radius: 0.75rem;
     padding: 0.45rem 0.75rem;
-    background: var(--el-bg-color);
+    background: var(--tx-bg-color);
     font: inherit;
   }
 }
@@ -390,8 +390,8 @@ function handleKeyAdd(event: KeyboardEvent): void {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -433,13 +433,13 @@ function handleKeyAdd(event: KeyboardEvent): void {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .capability-transfer__selected-actions {
@@ -450,8 +450,8 @@ function handleKeyAdd(event: KeyboardEvent): void {
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    border: 1px solid var(--el-border-color-lighter);
-    background: var(--el-bg-color);
+    border: 1px solid var(--tx-border-color-lighter);
+    background: var(--tx-bg-color);
     display: inline-flex;
     align-items: center;
     justify-content: center;

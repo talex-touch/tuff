@@ -355,19 +355,19 @@ $content-height: calc(100% - 30px);
 
 // Theme color variables
 .success-tip {
-  --theme-color: var(--el-color-success);
+  --theme-color: var(--tx-color-success);
 }
 
 .info-tip {
-  --theme-color: var(--el-color-primary);
+  --theme-color: var(--tx-color-primary);
 }
 
 .warn-tip {
-  --theme-color: var(--el-color-warning);
+  --theme-color: var(--tx-color-warning);
 }
 
 .error-tip {
-  --theme-color: var(--el-color-danger);
+  --theme-color: var(--tx-color-danger);
 }
 
 // Dialog wrapper styles
@@ -392,7 +392,7 @@ $content-height: calc(100% - 30px);
     width: 100%;
     height: 100%;
 
-    background-color: var(--el-overlay-color);
+    background-color: var(--tx-overlay-color);
     opacity: 0.45;
     animation: fadeIn 0.5s;
   }
@@ -409,8 +409,8 @@ $content-height: calc(100% - 30px);
   min-height: $dialog-min-height;
   line-height: 30px;
 
-  color: var(--theme-color, var(--el-text-color-primary));
-  box-shadow: var(--el-box-shadow-light);
+  color: var(--theme-color, var(--tx-text-color-primary));
+  box-shadow: var(--tx-box-shadow-light);
   border-radius: $dialog-border-radius;
 
   transform: translate(-50%, -50%);
@@ -431,7 +431,7 @@ $content-height: calc(100% - 30px);
     height: 32px;
     line-height: 32px;
 
-    color: var(--theme-color, var(--el-text-color-primary));
+    color: var(--theme-color, var(--tx-text-color-primary));
     font-size: 18px;
     font-weight: bold;
     opacity: 0;
@@ -474,7 +474,7 @@ $content-height: calc(100% - 30px);
   left: 50%;
 
   border-radius: 2px;
-  background-image: radial-gradient(transparent 1px, var(--el-bg-color) 1px);
+  background-image: radial-gradient(transparent 1px, var(--tx-bg-color) 1px);
   transform: translate(-50%, -50%);
   animation: expand 1s ease-in-out forwards;
   overflow: hidden;
@@ -535,7 +535,7 @@ $content-height: calc(100% - 30px);
     text-align: center;
     font-size: 35px;
 
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
     border-radius: $dialog-border-radius;
     transform: translate(-50%, -50%) rotate(45deg);
   }
@@ -568,7 +568,7 @@ $content-height: calc(100% - 30px);
     text-align: center;
     font-size: 35px;
 
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
     border-radius: 8px;
     transform: translate(-50%, -50%);
   }
@@ -606,11 +606,11 @@ $content-height: calc(100% - 30px);
 
   text-align: center;
   border-radius: $dialog-border-radius;
-  background-color: var(--el-color-primary-light-5);
+  background-color: var(--tx-color-primary-light-5);
 
   cursor: pointer;
 
-  color: var(--theme-color, var(--el-text-color-regular));
+  color: var(--theme-color, var(--tx-text-color-regular));
   transition: $dialog-transition-duration $dialog-transition-easing;
 }
 </style>

@@ -138,7 +138,7 @@ function handleClick(type: string) {
       <h3>自定义插槽</h3>
       <TuffItemTemplate :icon="{ type: 'class', value: 'i-carbon-user' }">
         <template #title>
-          <span style="color: var(--el-color-primary)">Custom Title</span>
+          <span style="color: var(--tx-color-primary)">Custom Title</span>
           <TxTag size="small" type="success"> Pro </TxTag>
         </template>
         <template #subtitle>
@@ -181,7 +181,7 @@ function handleClick(type: string) {
 
 .example-section h3 {
   margin-bottom: 1rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .size-examples {

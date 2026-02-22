@@ -57,8 +57,8 @@ function handleLoad() {
     .loading-spinner {
       width: 24px;
       height: 24px;
-      border: 2px solid var(--el-border-color);
-      border-top: 2px solid var(--el-color-primary);
+      border: 2px solid var(--tx-border-color);
+      border-top: 2px solid var(--tx-color-primary);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -71,7 +71,7 @@ function handleLoad() {
     justify-content: center;
     height: 100%;
     gap: 0.5rem;
-    color: var(--el-text-color-placeholder);
+    color: var(--tx-text-color-placeholder);
 
     .error-icon {
       font-size: 2rem;

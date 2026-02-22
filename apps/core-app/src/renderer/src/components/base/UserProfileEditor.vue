@@ -206,7 +206,7 @@ watch(isLoggedIn, (loggedIn) => {
 
 .UserProfileEditor-Empty {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfileEditor-Header {
@@ -220,7 +220,7 @@ watch(isLoggedIn, (loggedIn) => {
   height: 40px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--el-color-primary-light-8);
+  background: var(--tx-color-primary-light-8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -239,8 +239,8 @@ watch(isLoggedIn, (loggedIn) => {
     justify-content: center;
     font-size: 14px;
     font-weight: 600;
-    color: var(--el-color-primary);
-    background: var(--el-color-primary-light-8);
+    color: var(--tx-color-primary);
+    background: var(--tx-color-primary-light-8);
   }
 }
 
@@ -255,7 +255,7 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfileEditor-Name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -263,7 +263,7 @@ watch(isLoggedIn, (loggedIn) => {
 
 .UserProfileEditor-Email {
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -281,7 +281,7 @@ watch(isLoggedIn, (loggedIn) => {
 
 .UserProfileEditor-Label {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfileEditor-Actions {

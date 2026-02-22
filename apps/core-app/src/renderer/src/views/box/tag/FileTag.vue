@@ -61,7 +61,7 @@ const fileLength = computed(() => props?.paths.length || 0)
     height: 24px;
 
     border-radius: 12px;
-    background-color: var(--el-fill-color);
+    background-color: var(--tx-fill-color);
   }
   img {
     margin-top: 0.25rem;
@@ -77,7 +77,7 @@ const fileLength = computed(() => props?.paths.length || 0)
   width: 100%;
   align-items: center;
 
-  color: var(--el-text-color);
+  color: var(--tx-text-color);
   border-radius: 8px;
   box-sizing: border-box;
   border: 1px solid currentColor;

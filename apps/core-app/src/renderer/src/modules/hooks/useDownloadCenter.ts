@@ -8,6 +8,7 @@ import { DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
+import { devLog } from '~/utils/dev-log'
 
 /**
  * Download center composable for managing download tasks
@@ -127,7 +128,7 @@ export function useDownloadCenter() {
       // Ignore timeout errors during startup - module may not be ready yet
       const errMessage = err instanceof Error ? err.message : ''
       if (errMessage.includes('timed out')) {
-        console.debug('[DownloadCenter] Tasks fetch timed out, module may be initializing')
+        devLog('[DownloadCenter] Tasks fetch timed out, module may be initializing')
         return []
       }
       error.value = err instanceof Error ? err.message : 'Unknown error'

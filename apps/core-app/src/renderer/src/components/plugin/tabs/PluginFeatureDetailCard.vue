@@ -11,7 +11,8 @@ import {
   TxButton,
   TxSplitButton,
   TxTabItem,
-  TxTabs
+  TxTabs,
+  type TxSelectValue
 } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'
 import TouchScroll from '~/components/base/TouchScroll.vue'
@@ -105,9 +106,15 @@ const currentTab = computed({
   set: (value: string) => emit('update:detailTab', value)
 })
 
-const currentPreviewWidgetId = computed({
-  get: () => props.previewWidgetId,
-  set: (value: string | null) => emit('update:previewWidgetId', value)
+const currentPreviewWidgetId = computed<TxSelectValue | undefined>({
+  get: () => props.previewWidgetId ?? undefined,
+  set: (value) => {
+    if (value === undefined) {
+      emit('update:previewWidgetId', null)
+      return
+    }
+    emit('update:previewWidgetId', String(value))
+  }
 })
 
 const currentPreviewSizePresetValue = computed({
@@ -194,22 +201,22 @@ function handleClose(): void {
     <div class="PluginFeature-DetailHeader">
       <div class="flex items-center gap-4 py-2">
         <div
-          class="w-10 h-10 bg-gradient-to-br from-[var(--el-color-primary)] to-[var(--el-color-primary-light-3)] rounded-xl flex items-center justify-center overflow-hidden"
+          class="w-10 h-10 bg-gradient-to-br from-[var(--tx-color-primary)] to-[var(--tx-color-primary-light-3)] rounded-xl flex items-center justify-center overflow-hidden"
         >
           <TuffIcon
             v-if="feature?.icon"
             :icon="feature.icon"
             :alt="feature.name"
             :size="24"
-            class="text-[var(--el-color-white)]"
+            class="text-[var(--tx-color-white)]"
           />
-          <i v-else class="i-ri-function-line text-[var(--el-color-white)] text-lg" />
+          <i v-else class="i-ri-function-line text-[var(--tx-color-white)] text-lg" />
         </div>
         <div>
-          <h2 class="text-xl font-bold text-[var(--el-text-color-primary)]">
+          <h2 class="text-xl font-bold text-[var(--tx-text-color-primary)]">
             {{ feature?.name }}
           </h2>
-          <p class="text-sm text-[var(--el-text-color-regular)]">
+          <p class="text-sm text-[var(--tx-text-color-regular)]">
             {{ feature?.desc }}
           </p>
         </div>
@@ -239,43 +246,43 @@ function handleClose(): void {
                   :name="t('plugin.features.drawer.overview')"
                 >
                   <template #icon>
-                    <i class="i-ri-information-line text-[var(--el-color-primary)]" />
+                    <i class="i-ri-information-line text-[var(--tx-color-primary)]" />
                   </template>
                   <div class="p-4 space-y-3">
                     <div class="flex justify-between items-center">
-                      <span class="text-sm text-[var(--el-text-color-regular)]">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
                         {{ t('plugin.features.drawer.featureId') }}
                       </span>
-                      <code class="text-sm bg-[var(--el-fill-color)] px-2 py-1 rounded">{{
+                      <code class="text-sm bg-[var(--tx-fill-color)] px-2 py-1 rounded">{{
                         feature.id
                       }}</code>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-sm text-[var(--el-text-color-regular)]">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
                         {{ t('plugin.features.drawer.commandsCount') }}
                       </span>
                       <span class="text-sm font-medium">{{ feature.commands?.length || 0 }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                      <span class="text-sm text-[var(--el-text-color-regular)]">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
                         {{ t('plugin.features.drawer.featureType') }}
                       </span>
                       <span
-                        class="text-sm bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded"
+                        class="text-sm bg-[var(--tx-color-primary-light-9)] text-[var(--tx-color-primary)] px-2 py-1 rounded"
                         >{{
                           feature.interaction?.type || t('plugin.features.drawer.standardType')
                         }}</span
                       >
                     </div>
                     <div v-if="feature.acceptedInputTypes" class="flex justify-between items-start">
-                      <span class="text-sm text-[var(--el-text-color-regular)]">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
                         支持的输入类型
                       </span>
                       <div class="flex flex-wrap gap-1 justify-end max-w-[60%]">
                         <span
                           v-for="inputType in feature.acceptedInputTypes"
                           :key="inputType"
-                          class="text-xs bg-[var(--el-color-success-light-9)] text-[var(--el-color-success)] px-2 py-1 rounded"
+                          class="text-xs bg-[var(--tx-color-success-light-9)] text-[var(--tx-color-success)] px-2 py-1 rounded"
                         >
                           <i :class="getInputTypeIcon(inputType)" class="mr-1" />
                           {{ inputType }}
@@ -283,10 +290,10 @@ function handleClose(): void {
                       </div>
                     </div>
                     <div v-else class="flex justify-between items-center">
-                      <span class="text-sm text-[var(--el-text-color-regular)]">
+                      <span class="text-sm text-[var(--tx-text-color-regular)]">
                         支持的输入类型
                       </span>
-                      <span class="text-xs text-[var(--el-text-color-secondary)]">
+                      <span class="text-xs text-[var(--tx-text-color-secondary)]">
                         <i class="i-ri-text mr-1" />
                         text (默认)
                       </span>
@@ -295,7 +302,7 @@ function handleClose(): void {
                       v-if="feature.priority !== undefined"
                       class="flex justify-between items-center"
                     >
-                      <span class="text-sm text-[var(--el-text-color-regular)]"> 优先级 </span>
+                      <span class="text-sm text-[var(--tx-text-color-regular)]"> 优先级 </span>
                       <span class="text-sm font-medium">{{ feature.priority }}</span>
                     </div>
                   </div>
@@ -316,12 +323,12 @@ function handleClose(): void {
                     :default-expand="false"
                   >
                     <template #icon>
-                      <i class="i-ri-database-2-line text-[var(--el-color-info)]" />
+                      <i class="i-ri-database-2-line text-[var(--tx-color-info)]" />
                     </template>
                     <div class="p-4">
                       <TouchScroll native no-padding direction="horizontal">
                         <pre
-                          class="PluginFeature-Json text-xs text-[var(--el-text-color-secondary)]"
+                          class="PluginFeature-Json text-xs text-[var(--tx-text-color-secondary)]"
                           >{{ formatJson(feature) }}</pre
                         >
                       </TouchScroll>
@@ -337,12 +344,12 @@ function handleClose(): void {
                     :default-expand="false"
                   >
                     <template #icon>
-                      <i class="i-ri-terminal-box-line text-[var(--el-color-primary)]" />
+                      <i class="i-ri-terminal-box-line text-[var(--tx-color-primary)]" />
                     </template>
                     <div class="p-4">
                       <TouchScroll native no-padding direction="horizontal">
                         <pre
-                          class="PluginFeature-Json text-xs text-[var(--el-text-color-secondary)]"
+                          class="PluginFeature-Json text-xs text-[var(--tx-text-color-secondary)]"
                           >{{ formatJson(command) }}</pre
                         >
                       </TouchScroll>
@@ -351,7 +358,7 @@ function handleClose(): void {
 
                   <div
                     v-if="!feature.commands || feature.commands.length === 0"
-                    class="text-sm text-[var(--el-text-color-secondary)] px-2"
+                    class="text-sm text-[var(--tx-text-color-secondary)] px-2"
                   >
                     暂无命令数据
                   </div>
@@ -367,21 +374,21 @@ function handleClose(): void {
                 <div class="space-y-4">
                   <TuffGroupBlock class="PluginFeature-Interaction" name="Interaction">
                     <template #icon>
-                      <i class="i-ri-exchange-line text-[var(--el-color-primary)]" />
+                      <i class="i-ri-exchange-line text-[var(--tx-color-primary)]" />
                     </template>
                     <div class="p-4 space-y-3">
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--el-text-color-regular)]"> 类型 </span>
+                        <span class="text-sm text-[var(--tx-text-color-regular)]"> 类型 </span>
                         <span class="text-sm font-medium">{{ feature.interaction?.type }}</span>
                       </div>
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--el-text-color-regular)]"> 路径 </span>
-                        <code class="text-sm bg-[var(--el-fill-color)] px-2 py-1 rounded">{{
+                        <span class="text-sm text-[var(--tx-text-color-regular)]"> 路径 </span>
+                        <code class="text-sm bg-[var(--tx-fill-color)] px-2 py-1 rounded">{{
                           feature.interaction?.path || '-'
                         }}</code>
                       </div>
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--el-text-color-regular)]">
+                        <span class="text-sm text-[var(--tx-text-color-regular)]">
                           显示输入框
                         </span>
                         <span class="text-sm font-medium">{{
@@ -389,7 +396,7 @@ function handleClose(): void {
                         }}</span>
                       </div>
                       <div class="flex justify-between items-center">
-                        <span class="text-sm text-[var(--el-text-color-regular)]">
+                        <span class="text-sm text-[var(--tx-text-color-regular)]">
                           自动监听输入
                         </span>
                         <span class="text-sm font-medium">{{
@@ -414,7 +421,7 @@ function handleClose(): void {
                     :name="t('plugin.features.widget.title')"
                   >
                     <template #icon>
-                      <i class="i-ri-layout-2-line text-[var(--el-color-warning)]" />
+                      <i class="i-ri-layout-2-line text-[var(--tx-color-warning)]" />
                     </template>
                     <TuffBlockLine
                       :title="t('plugin.features.widget.status')"
@@ -428,7 +435,7 @@ function handleClose(): void {
                       <div class="space-y-2 w-full">
                         <div class="flex items-center gap-2 min-w-0">
                           <code
-                            class="PluginFeature-Path text-xs bg-[var(--el-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
+                            class="PluginFeature-Path text-xs bg-[var(--tx-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
                           >
                             <span class="PluginFeature-PathText">
                               {{ widgetSourceDisplayPath }}
@@ -467,7 +474,7 @@ function handleClose(): void {
                         </div>
                         <div v-if="widgetSourceUrl" class="flex items-center gap-2 min-w-0">
                           <code
-                            class="PluginFeature-Path text-xs bg-[var(--el-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
+                            class="PluginFeature-Path text-xs bg-[var(--tx-fill-color)] px-2 py-1 rounded flex-1 min-w-0"
                           >
                             <span class="PluginFeature-PathText">
                               {{ widgetSourceUrl }}
@@ -488,7 +495,7 @@ function handleClose(): void {
                           class="flex items-center gap-2 min-w-0"
                         >
                           <code
-                            class="PluginFeature-Path PluginFeature-Path--compiled text-xs bg-[var(--el-color-primary-light-9)] text-[var(--el-color-primary)] px-2 py-1 rounded flex-1 min-w-0 font-semibold"
+                            class="PluginFeature-Path PluginFeature-Path--compiled text-xs bg-[var(--tx-color-primary-light-9)] text-[var(--tx-color-primary)] px-2 py-1 rounded flex-1 min-w-0 font-semibold"
                           >
                             <span class="PluginFeature-PathText">
                               {{ widgetCompiledDisplayPath }}
@@ -527,7 +534,7 @@ function handleClose(): void {
                         </div>
                         <div
                           v-if="widgetPathAliasNote"
-                          class="text-xs text-[var(--el-text-color-secondary)]"
+                          class="text-xs text-[var(--tx-text-color-secondary)]"
                         >
                           {{ widgetPathAliasNote }}
                         </div>
@@ -542,11 +549,11 @@ function handleClose(): void {
                     description="滚动到最底部预览"
                   >
                     <template #icon>
-                      <i class="i-ri-eye-line text-[var(--el-color-primary)]" />
+                      <i class="i-ri-eye-line text-[var(--tx-color-primary)]" />
                     </template>
                     <div class="p-4">
                       <div class="PluginFeature-PreviewControls">
-                        <span class="text-xs text-[var(--el-text-color-secondary)]">
+                        <span class="text-xs text-[var(--tx-text-color-secondary)]">
                           选择预览
                         </span>
                         <TuffSelect
@@ -597,7 +604,7 @@ function handleClose(): void {
                         </div>
                       </div>
                       <div class="PluginFeature-PreviewSize">
-                        <span class="text-xs text-[var(--el-text-color-secondary)]">预览尺寸</span>
+                        <span class="text-xs text-[var(--tx-text-color-secondary)]">预览尺寸</span>
                         <TuffSelect
                           v-model="currentPreviewSizePresetValue"
                           class="PluginFeature-PreviewSizeSelect"
@@ -629,7 +636,7 @@ function handleClose(): void {
                       </div>
                       <div class="PluginFeature-PreviewMock">
                         <div class="PluginFeature-PreviewMockHeader">
-                          <span class="text-xs text-[var(--el-text-color-secondary)]">
+                          <span class="text-xs text-[var(--tx-text-color-secondary)]">
                             Mock Payload
                           </span>
                           <TuffSwitch
@@ -701,7 +708,7 @@ function handleClose(): void {
                             preview
                             @render-error="handleRenderError"
                           />
-                          <div v-else class="text-sm text-[var(--el-text-color-secondary)]">
+                          <div v-else class="text-sm text-[var(--tx-text-color-secondary)]">
                             预览需要有效的 widgetId。
                           </div>
                           <TxButton
@@ -773,7 +780,7 @@ pre {
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .PluginFeature-DetailBody {
@@ -847,7 +854,7 @@ pre {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
 }
 
 .PluginFeature-Json {
@@ -878,25 +885,25 @@ pre {
 
 .PluginFeature-PreviewStatus {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   padding: 4px 8px;
   border-radius: 999px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 }
 
 .PluginFeature-PreviewStatus.is-ready {
-  color: var(--el-color-success);
-  background: var(--el-color-success-light-9);
+  color: var(--tx-color-success);
+  background: var(--tx-color-success-light-9);
 }
 
 .PluginFeature-PreviewStatus.is-loading {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  color: var(--tx-color-primary);
+  background: var(--tx-color-primary-light-9);
 }
 
 .PluginFeature-PreviewStatus.is-error {
-  color: var(--el-color-danger);
-  background: var(--el-color-danger-light-9);
+  color: var(--tx-color-danger);
+  background: var(--tx-color-danger-light-9);
 }
 
 .PluginFeature-PreviewActions {
@@ -919,17 +926,17 @@ pre {
 
 .PluginFeature-PreviewSizeMeta {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .PluginFeature-PreviewSizeHint {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .PluginFeature-PreviewHint {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-bottom: 12px;
 }
 
@@ -955,7 +962,7 @@ pre {
 
 .PluginFeature-PreviewMockError {
   font-size: 12px;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .PluginFeature-PreviewIssues {
@@ -968,35 +975,35 @@ pre {
 .PluginFeature-PreviewIssue {
   border-radius: 8px;
   padding: 8px 10px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-fill-color-lighter);
 }
 
 .PluginFeature-PreviewIssue.is-warning {
-  border-color: var(--el-color-warning-light-7);
-  background: var(--el-color-warning-light-9);
+  border-color: var(--tx-color-warning-light-7);
+  background: var(--tx-color-warning-light-9);
 }
 
 .PluginFeature-PreviewIssue.is-error {
-  border-color: var(--el-color-danger-light-7);
-  background: var(--el-color-danger-light-9);
+  border-color: var(--tx-color-danger-light-7);
+  background: var(--tx-color-danger-light-9);
 }
 
 .PluginFeature-PreviewIssueTitle {
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .PluginFeature-PreviewIssueMessage {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-top: 2px;
 }
 
 .PluginFeature-PreviewIssueHint {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-top: 4px;
 }
 
@@ -1011,8 +1018,8 @@ pre {
 .PluginFeature-PreviewFrame {
   position: relative;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color-page);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color-page);
   overflow: hidden;
 }
 
@@ -1029,8 +1036,8 @@ pre {
   padding: 0;
   box-shadow: none;
   border-radius: 4px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color-light);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color-light);
   cursor: nwse-resize;
   opacity: 0.6;
 }
@@ -1070,9 +1077,9 @@ pre {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 20px;
-  background: var(--el-color-warning-light-9);
-  border-top: 1px solid var(--el-color-warning-light-7);
-  color: var(--el-color-warning);
+  background: var(--tx-color-warning-light-9);
+  border-top: 1px solid var(--tx-color-warning-light-7);
+  color: var(--tx-color-warning);
   border-radius: 0 0 1.5rem 1.5rem;
 }
 
@@ -1097,14 +1104,14 @@ pre {
 
 .PluginFeature-DevWarningTitle {
   font-weight: 600;
-  color: var(--el-color-warning);
+  color: var(--tx-color-warning);
 }
 
 .PluginFeature-DevWarningDesc,
 .PluginFeature-DevWarningReason,
 .PluginFeature-DevWarningSuggestion {
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   word-break: break-word;
 }
 </style>

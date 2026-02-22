@@ -98,9 +98,9 @@ function formatRemainingTime(seconds: number): string {
 <style scoped>
 .progress-bar-component {
   width: 100%;
-  --progress-strong: var(--el-text-color-primary);
-  --progress-muted: var(--el-text-color-secondary);
-  --progress-soft: var(--el-text-color-regular);
+  --progress-strong: var(--tx-text-color-primary);
+  --progress-muted: var(--tx-text-color-secondary);
+  --progress-soft: var(--tx-text-color-regular);
 }
 
 .progress-info {
@@ -164,7 +164,7 @@ function formatRemainingTime(seconds: number): string {
 
 /* 进度条样式优化 */
 .tx-progress-bar-wrapper :deep(.tx-progress-bar__track) {
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
   border-radius: 4px;
 }
 

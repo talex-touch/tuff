@@ -110,7 +110,7 @@ function toAppListItem(item: TuffItem): AppListEntry {
     min-width: 200px;
     width: 30%;
     height: 100%;
-    border-right: 1px solid var(--el-border-color);
+    border-right: 1px solid var(--tx-border-color);
 
     flex-shrink: 0;
   }

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { DownloadTask } from '@talex-touch/utils'
 import { DownloadModule, DownloadStatus } from '@talex-touch/utils'
-import { computed } from 'vue'
+import { TxAlert, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
 import ProgressBar from './DownloadProgressBar.vue'
@@ -72,6 +73,8 @@ const showProgress = computed(() => {
 const showMoreActions = computed(() => {
   return props.viewMode === 'detailed'
 })
+
+const actionMenuOpen = ref(false)
 
 function getModuleName(module: DownloadModule): string {
   const moduleNames = {
@@ -150,49 +153,48 @@ function formatSize(bytes: number): string {
         >
           <i class="i-carbon-folder-open" />
         </TxButton>
-        <el-dropdown v-if="showMoreActions" trigger="click">
-          <TxButton size="small" circle>
-            <i class="i-carbon-overflow-menu-vertical" />
-          </TxButton>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="$emit('show-details', task.id)">
-                <i class="i-carbon-information" />
-                {{ $t('download.show_details') }}
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="task.status === 'completed'"
-                @click="$emit('show-in-folder', task.id)"
-              >
-                <i class="i-carbon-folder" />
-                {{ $t('download.show_in_folder') }}
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="['pending', 'downloading', 'paused'].includes(task.status)"
-                divided
-                @click="$emit('cancel', task.id)"
-              >
-                <i class="i-carbon-close" />
-                {{ $t('download.cancel') }}
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
-                divided
-                @click="$emit('remove', task.id)"
-              >
-                <i class="i-carbon-subtract" />
-                {{ $t('download.remove_from_list') }}
-              </el-dropdown-item>
-              <el-dropdown-item
-                v-if="task.status === 'completed'"
-                @click="$emit('delete', task.id)"
-              >
-                <i class="i-carbon-trash-can" />
-                {{ $t('download.delete_file') }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
+        <TxDropdownMenu v-if="showMoreActions" v-model="actionMenuOpen" placement="bottom-end">
+          <template #trigger>
+            <TxButton size="small" circle>
+              <i class="i-carbon-overflow-menu-vertical" />
+            </TxButton>
           </template>
-        </el-dropdown>
+          <TxDropdownItem @select="$emit('show-details', task.id)">
+            <i class="i-carbon-information" />
+            {{ $t('download.show_details') }}
+          </TxDropdownItem>
+          <TxDropdownItem
+            v-if="task.status === 'completed'"
+            @select="$emit('show-in-folder', task.id)"
+          >
+            <i class="i-carbon-folder" />
+            {{ $t('download.show_in_folder') }}
+          </TxDropdownItem>
+          <TxDropdownItem
+            v-if="['pending', 'downloading', 'paused'].includes(task.status)"
+            danger
+            @select="$emit('cancel', task.id)"
+          >
+            <i class="i-carbon-close" />
+            {{ $t('download.cancel') }}
+          </TxDropdownItem>
+          <TxDropdownItem
+            v-if="['completed', 'failed', 'cancelled'].includes(task.status)"
+            danger
+            @select="$emit('remove', task.id)"
+          >
+            <i class="i-carbon-subtract" />
+            {{ $t('download.remove_from_list') }}
+          </TxDropdownItem>
+          <TxDropdownItem
+            v-if="task.status === 'completed'"
+            danger
+            @select="$emit('delete', task.id)"
+          >
+            <i class="i-carbon-trash-can" />
+            {{ $t('download.delete_file') }}
+          </TxDropdownItem>
+        </TxDropdownMenu>
       </div>
     </div>
 
@@ -211,28 +213,28 @@ function formatSize(bytes: number): string {
 
     <!-- 错误信息 -->
     <div v-if="task.error && appSetting.searchEngine.logsEnabled" class="task-error">
-      <el-alert :title="task.error" type="error" :closable="false" show-icon />
+      <TxAlert :title="task.error" type="error" :closable="false" :show-icon="true" />
     </div>
   </div>
 </template>
 
 <style scoped>
 .task-card {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-light);
+  background: var(--tx-bg-color);
+  border: 1px solid var(--tx-border-color-light);
   border-left: 2px solid var(--task-accent);
   border-radius: 10px;
   padding: 16px;
   transition: border-color 0.2s ease;
   cursor: move;
   --task-accent: #111111;
-  --task-strong: var(--el-text-color-primary);
-  --task-muted: var(--el-text-color-secondary);
-  --task-soft: var(--el-text-color-regular);
+  --task-strong: var(--tx-text-color-primary);
+  --task-muted: var(--tx-text-color-secondary);
+  --task-soft: var(--tx-text-color-regular);
 }
 
 .task-card:hover {
-  border-color: var(--el-border-color);
+  border-color: var(--tx-border-color);
 }
 
 .task-card.compact {
@@ -290,7 +292,7 @@ function formatSize(bytes: number): string {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--tx-border-color-light);
   flex-shrink: 0;
 }
 
@@ -351,7 +353,7 @@ function formatSize(bytes: number): string {
 
 .task-actions :deep(.tx-button) {
   background: transparent;
-  border-color: var(--el-border-color-light);
+  border-color: var(--tx-border-color-light);
   color: var(--task-strong);
 }
 

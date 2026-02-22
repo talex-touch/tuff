@@ -414,19 +414,19 @@ onBeforeUnmount(() => {
 .capability-info__config-section {
   margin: 1rem 0 0.5rem 0;
   padding-bottom: 0.5rem;
-  border-bottom: 2px solid var(--el-border-color-lighter);
+  border-bottom: 2px solid var(--tx-border-color-lighter);
 }
 
 .config-section__title {
   font-size: 1.125rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .config-section__description {
   font-size: 0.875rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin: 0;
 }
 
@@ -438,7 +438,7 @@ onBeforeUnmount(() => {
 
 .capability-info__drawer-description {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
 }
 
@@ -448,13 +448,13 @@ onBeforeUnmount(() => {
 
 .capability-info__footer {
   padding: 1rem 1.5rem;
-  border-top: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-blank);
+  border-top: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-fill-color-blank);
   text-align: center;
 }
 
 .capability-info__footer-text {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

@@ -40,7 +40,7 @@ const hintStyle = computed(() => {
   position: fixed;
   z-index: 999;
   pointer-events: none;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   opacity: 0.1;
   transition: opacity 0.2s ease;
 }
@@ -48,7 +48,7 @@ const hintStyle = computed(() => {
 .dock-hint-border {
   position: absolute;
   inset: 0;
-  border: 2px solid var(--el-color-primary);
+  border: 2px solid var(--tx-color-primary);
   opacity: 0.5;
   animation: pulse 1.5s ease-in-out infinite;
 }

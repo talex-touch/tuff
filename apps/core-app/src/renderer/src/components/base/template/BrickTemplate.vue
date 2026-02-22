@@ -49,7 +49,7 @@ const disabled = computed(() => _disabled?.value ?? false)
 .BrickTemplate.disabled button {
   &:hover {
     cursor: not-allowed;
-    background-color: var(--el-color-danger);
+    background-color: var(--tx-color-danger);
   }
 }
 </style>

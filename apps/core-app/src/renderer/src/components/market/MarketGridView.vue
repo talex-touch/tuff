@@ -288,7 +288,7 @@ watch(
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -296,7 +296,7 @@ watch(
 
     i {
       font-size: 2rem;
-      color: var(--el-text-color-placeholder);
+      color: var(--tx-text-color-placeholder);
     }
   }
 
@@ -304,12 +304,12 @@ watch(
     margin: 0 0 0.5rem 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   p {
     margin: 0;
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
     opacity: 0.8;
     max-width: 400px;
   }

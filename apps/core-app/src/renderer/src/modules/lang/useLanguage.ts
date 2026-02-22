@@ -1,6 +1,7 @@
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { readonly, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
+import { devLog } from '~/utils/dev-log'
 import { getGlobalI18nInstance, loadLocaleMessages, setI18nLanguage } from './i18n'
 
 export const SUPPORTED_LANGUAGES = [
@@ -121,7 +122,7 @@ export function useLanguage() {
         localStorage.setItem('app-follow-system-language', 'false')
       }
 
-      console.debug(`[useLanguage] Language switched to: ${lang}`)
+      devLog(`[useLanguage] Language switched to: ${lang}`)
     } catch (error) {
       console.error('[useLanguage] Failed to switch language:', error)
     }

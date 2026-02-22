@@ -187,7 +187,7 @@ export default defineComponent({
     border-radius: 50px;
     transition: all 0.15s;
     animation: in 0.15s ease-in-out;
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
   }
 
   z-index: 100;
@@ -199,7 +199,7 @@ export default defineComponent({
   flex-direction: column;
   justify-content: space-between;
 
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
   border-radius: 12px;
 
   left: 0;
@@ -229,7 +229,7 @@ export default defineComponent({
   user-select: none;
   box-sizing: border-box;
   transition: all 0.25s;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 }
 
 .TSelect-Container.win {
@@ -245,8 +245,8 @@ export default defineComponent({
       --fake-inner-opacity: 0.35;
     }
 
-    border-color: var(--el-border-color);
-    border-bottom: 1px solid var(--el-border-color);
+    border-color: var(--tx-border-color);
+    border-bottom: 1px solid var(--tx-border-color);
     box-shadow: none;
   }
 
@@ -257,14 +257,14 @@ export default defineComponent({
       --fake-inner-opacity: 0.5;
     }
 
-    border-color: var(--el-border-color);
-    border-bottom: 2px solid var(--el-color-primary);
+    border-color: var(--tx-border-color);
+    border-bottom: 2px solid var(--tx-color-primary);
     box-shadow: none;
   }
 
   border-radius: 4px;
   --fake-radius: 4px !important;
-  border-bottom: 1px solid var(--el-border-color);
+  border-bottom: 1px solid var(--tx-border-color);
 }
 
 @keyframes expand {

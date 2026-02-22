@@ -304,7 +304,7 @@ function formatDate(period: string): string {
     justify-content: center;
     gap: 8px;
     padding: 60px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .chart-container {
@@ -323,44 +323,44 @@ function formatDate(period: string): string {
       align-items: center;
       gap: 4px;
       padding: 12px 16px;
-      background: var(--el-fill-color-lighter);
-      border: 1px solid var(--el-border-color-lighter);
+      background: var(--tx-fill-color-lighter);
+      border: 1px solid var(--tx-border-color-lighter);
       border-radius: 10px;
       cursor: pointer;
       transition: all 0.2s;
 
       i {
         font-size: 18px;
-        color: var(--el-text-color-secondary);
+        color: var(--tx-text-color-secondary);
       }
 
       span {
         font-size: 12px;
-        color: var(--el-text-color-secondary);
+        color: var(--tx-text-color-secondary);
       }
 
       .metric-value {
         font-size: 16px;
         font-weight: 600;
-        color: var(--el-text-color-primary);
+        color: var(--tx-text-color-primary);
         font-variant-numeric: tabular-nums;
       }
 
       &:hover {
-        background: var(--el-fill-color);
+        background: var(--tx-fill-color);
       }
 
       &.active {
-        background: var(--el-color-primary-light-9);
-        border-color: var(--el-color-primary-light-5);
+        background: var(--tx-color-primary-light-9);
+        border-color: var(--tx-color-primary-light-5);
 
         i,
         span {
-          color: var(--el-color-primary);
+          color: var(--tx-color-primary);
         }
 
         .metric-value {
-          color: var(--el-color-primary);
+          color: var(--tx-color-primary);
         }
       }
     }
@@ -379,7 +379,7 @@ function formatDate(period: string): string {
       width: 50px;
       padding: 4px 0;
       font-size: 10px;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
       text-align: right;
     }
 
@@ -389,8 +389,8 @@ function formatDate(period: string): string {
       align-items: flex-end;
       gap: 4px;
       padding: 4px 0;
-      border-left: 1px solid var(--el-border-color-lighter);
-      border-bottom: 1px solid var(--el-border-color-lighter);
+      border-left: 1px solid var(--tx-border-color-lighter);
+      border-bottom: 1px solid var(--tx-border-color-lighter);
     }
 
     .bar-wrapper {
@@ -421,11 +421,11 @@ function formatDate(period: string): string {
           min-height: 2px;
 
           &.success {
-            background: var(--el-color-primary);
+            background: var(--tx-color-primary);
           }
 
           &.failure {
-            background: var(--el-color-warning);
+            background: var(--tx-color-warning);
           }
         }
       }
@@ -438,12 +438,12 @@ function formatDate(period: string): string {
         font-size: 10px;
 
         .day {
-          color: var(--el-text-color-primary);
+          color: var(--tx-text-color-primary);
           font-weight: 500;
         }
 
         .weekday {
-          color: var(--el-text-color-secondary);
+          color: var(--tx-text-color-secondary);
           font-size: 9px;
         }
       }
@@ -453,8 +453,8 @@ function formatDate(period: string): string {
         bottom: calc(100% + 8px);
         left: 50%;
         transform: translateX(-50%);
-        background: var(--el-bg-color-overlay);
-        border: 1px solid var(--el-border-color);
+        background: var(--tx-bg-color-overlay);
+        border: 1px solid var(--tx-border-color);
         border-radius: 8px;
         padding: 10px 12px;
         min-width: 140px;
@@ -464,7 +464,7 @@ function formatDate(period: string): string {
         .tooltip-header {
           font-size: 12px;
           font-weight: 600;
-          color: var(--el-text-color-primary);
+          color: var(--tx-text-color-primary);
           margin-bottom: 8px;
           text-align: center;
         }
@@ -474,10 +474,10 @@ function formatDate(period: string): string {
           justify-content: space-between;
           font-size: 11px;
           padding: 3px 0;
-          color: var(--el-text-color-regular);
+          color: var(--tx-text-color-regular);
 
           &.success-rate {
-            border-top: 1px solid var(--el-border-color-lighter);
+            border-top: 1px solid var(--tx-border-color-lighter);
             margin-top: 4px;
             padding-top: 6px;
             font-weight: 500;
@@ -498,7 +498,7 @@ function formatDate(period: string): string {
       align-items: center;
       gap: 6px;
       font-size: 11px;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
 
       .legend-dot {
         width: 10px;
@@ -506,11 +506,11 @@ function formatDate(period: string): string {
         border-radius: 2px;
 
         &.success {
-          background: var(--el-color-primary);
+          background: var(--tx-color-primary);
         }
 
         &.failure {
-          background: var(--el-color-warning);
+          background: var(--tx-color-warning);
         }
       }
     }

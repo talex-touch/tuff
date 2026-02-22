@@ -36,7 +36,7 @@ const capabilityType = computed(() => {
   align-items: flex-start;
   gap: 1.5rem;
   padding: 1.5rem 1.5rem 1rem 1.5rem;
-  background: linear-gradient(180deg, var(--el-fill-color-blank) 0%, transparent 100%);
+  background: linear-gradient(180deg, var(--tx-fill-color-blank) 0%, transparent 100%);
 }
 
 .capability-header__content {
@@ -54,15 +54,15 @@ const capabilityType = computed(() => {
   font-size: 0.6875rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   font-weight: 600;
 }
 
 .capability-header__type-badge {
   display: inline-flex;
   padding: 0.125rem 0.5rem;
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+  background: var(--tx-color-primary-light-9);
+  color: var(--tx-color-primary);
   border-radius: 0.25rem;
   font-size: 0.6875rem;
   font-weight: 600;
@@ -74,12 +74,12 @@ const capabilityType = computed(() => {
   font-size: 1.875rem;
   font-weight: 700;
   margin: 0 0 0.875rem 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.2;
   background: linear-gradient(
     135deg,
-    var(--el-text-color-primary) 0%,
-    var(--el-text-color-regular) 100%
+    var(--tx-text-color-primary) 0%,
+    var(--tx-text-color-regular) 100%
   );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -88,7 +88,7 @@ const capabilityType = computed(() => {
 
 .capability-header__description {
   margin: 0;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   max-width: 48rem;
   line-height: 1.7;
   font-size: 0.9375rem;

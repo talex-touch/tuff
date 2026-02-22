@@ -63,7 +63,7 @@ function cancelColor() {
 }
 
 :deep(.element) {
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   height: 100%;
   position: relative;
   border-radius: 16px;
@@ -85,7 +85,7 @@ function cancelColor() {
     filter: blur(5px);
     background: radial-gradient(
       250px circle at var(--x) var(--y),
-      var(--el-color-primary) 0,
+      var(--tx-color-primary) 0,
       transparent 100%
     );
     z-index: 0;

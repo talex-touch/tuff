@@ -51,8 +51,8 @@ async function loadTarget() {
     })
   }))
 
-  vi.doMock('element-plus', () => ({
-    ElMessage: {
+  vi.doMock('vue-sonner', () => ({
+    toast: {
       success: vi.fn(),
       error: vi.fn(),
       warning: vi.fn()

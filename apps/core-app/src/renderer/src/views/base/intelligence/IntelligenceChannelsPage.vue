@@ -169,7 +169,7 @@ useKeyboardNavigation({
       </template>
     </TuffAsideTemplate>
 
-    <p v-if="providers.length === 0" class="text-sm text-[var(--el-text-color-secondary)]">
+    <p v-if="providers.length === 0" class="text-sm text-[var(--tx-text-color-secondary)]">
       {{ t('settings.intelligence.emptyProviders') }}
     </p>
   </div>

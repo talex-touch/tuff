@@ -12,16 +12,16 @@ const { t } = useI18n()
     aria-label="No provider selected"
   >
     <div
-      class="icon-wrapper w-20 h-20 rounded-full bg-gradient-to-br from-[var(--el-color-primary-light-9)] to-[var(--el-color-primary-light-8)] flex items-center justify-center mb-6 shadow-lg"
+      class="icon-wrapper w-20 h-20 rounded-full bg-gradient-to-br from-[var(--tx-color-primary-light-9)] to-[var(--tx-color-primary-light-8)] flex items-center justify-center mb-6 shadow-lg"
       aria-hidden="true"
     >
-      <i class="i-carbon-watson-machine-learning text-3xl text-[var(--el-color-primary)]" />
+      <i class="i-carbon-watson-machine-learning text-3xl text-[var(--tx-color-primary)]" />
     </div>
     <div class="max-w-96 content-wrapper">
       <h3 class="text-lg font-semibold mb-2">
         {{ t('intelligence.empty.title') }}
       </h3>
-      <p class="text-[var(--el-text-color-regular)] opacity-80 mb-6">
+      <p class="text-[var(--tx-text-color-regular)] opacity-80 mb-6">
         {{ t('intelligence.empty.description') }}
       </p>
     </div>
@@ -66,7 +66,7 @@ const { t } = useI18n()
 
   &:hover {
     h3 {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
 
     p {

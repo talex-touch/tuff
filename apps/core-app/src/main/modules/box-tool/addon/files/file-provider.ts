@@ -14,6 +14,7 @@ import type {
 } from '@talex-touch/utils/electron/file-parsers'
 import type { StreamContext } from '@talex-touch/utils/transport/main'
 import type {
+  FileIndexAddPathResult,
   FileIndexBatteryStatus,
   FileIndexProgress as FileIndexProgressPayload,
   FileIndexRebuildRequest,
@@ -161,6 +162,7 @@ export interface FileIndexSettings {
   autoScanBlockBatteryBelowPercent: number
   autoScanAllowWhenCharging: boolean
   manualBlockBatteryBelowPercent: number
+  extraPaths: string[]
 }
 
 const execFileAsync = promisify(execFile)
@@ -176,7 +178,8 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanMinBatteryPercent: 60,
   autoScanBlockBatteryBelowPercent: 15,
   autoScanAllowWhenCharging: true,
-  manualBlockBatteryBelowPercent: 15
+  manualBlockBatteryBelowPercent: 15,
+  extraPaths: []
 }
 
 const LAUNCH_SERVICES_PLIST_PATH = path.join(
@@ -276,8 +279,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private initializationFailed: boolean = false
   private initializationError: Error | null = null
   private initializationContext: ProviderContext | null = null
-  private readonly WATCH_PATHS: string[]
-  private readonly normalizedWatchPaths: string[]
+  private readonly baseWatchPaths: string[]
+  private watchPaths: string[]
+  private normalizedWatchPaths: string[]
   private databaseFilePath: string | null = null
   private searchIndex: SearchIndexService | null = null
   private embeddingService: EmbeddingService | null = null
@@ -407,10 +411,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         return null
       }
     })
-    this.WATCH_PATHS = [...new Set(paths.filter((p): p is string => !!p))]
-    this.normalizedWatchPaths = this.WATCH_PATHS.map((p) => this.normalizePath(p))
+    this.baseWatchPaths = [...new Set(paths.filter((p): p is string => !!p))]
+    this.watchPaths = [...this.baseWatchPaths]
+    this.normalizedWatchPaths = this.watchPaths.map((p) => this.normalizePath(p))
     this.logDebug('Watching paths', {
-      count: this.WATCH_PATHS.length
+      count: this.watchPaths.length
     })
 
     void this.indexFilesForSearch
@@ -515,6 +520,23 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       ),
       autoScanBlockBattery
     )
+    const rawExtraPaths = Array.isArray(data.extraPaths)
+      ? data.extraPaths.filter((value): value is string => typeof value === 'string')
+      : []
+    const normalizedExtraPaths: string[] = []
+    const extraPathSet = new Set<string>()
+
+    for (const rawPath of rawExtraPaths) {
+      const trimmed = rawPath.trim()
+      if (!trimmed) continue
+      const resolved = path.resolve(trimmed)
+      const normalized = this.normalizePath(resolved)
+      if (extraPathSet.has(normalized)) {
+        continue
+      }
+      extraPathSet.add(normalized)
+      normalizedExtraPaths.push(resolved)
+    }
 
     return {
       autoScanEnabled:
@@ -542,8 +564,25 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       manualBlockBatteryBelowPercent: clampPercent(
         data.manualBlockBatteryBelowPercent,
         DEFAULT_FILE_INDEX_SETTINGS.manualBlockBatteryBelowPercent
-      )
+      ),
+      extraPaths: normalizedExtraPaths
     }
+  }
+
+  private applyWatchPaths(extraPaths: string[]): void {
+    const next: string[] = []
+    const seen = new Set<string>()
+
+    for (const candidate of [...this.baseWatchPaths, ...extraPaths]) {
+      if (!candidate) continue
+      const normalized = this.normalizePath(candidate)
+      if (seen.has(normalized)) continue
+      seen.add(normalized)
+      next.push(candidate)
+    }
+
+    this.watchPaths = next
+    this.normalizedWatchPaths = next.map((p) => this.normalizePath(p))
   }
 
   private loadFileIndexSettings(): void {
@@ -552,12 +591,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         | Partial<FileIndexSettings>
         | undefined
       this.fileIndexSettings = this.normalizeFileIndexSettings(raw)
+      this.applyWatchPaths(this.fileIndexSettings.extraPaths)
 
       if (!raw || Object.keys(raw).length === 0) {
         saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
       }
     } catch (error) {
       this.fileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
+      this.applyWatchPaths(this.fileIndexSettings.extraPaths)
       this.logWarn('Failed to load file index settings, using defaults', error)
     }
   }
@@ -648,13 +689,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const newPaths = this.WATCH_PATHS.filter((path) => !completedMap.has(path))
+    const newPaths = this.watchPaths.filter((path) => !completedMap.has(path))
     const intervalMs = this.fileIndexSettings.autoScanIntervalMs
     const now = Date.now()
     const stalePaths =
       intervalMs <= 0
-        ? Array.from(completedMap.keys()).filter((path) => this.WATCH_PATHS.includes(path))
-        : this.WATCH_PATHS.filter((path) => {
+        ? Array.from(completedMap.keys()).filter((path) => this.watchPaths.includes(path))
+        : this.watchPaths.filter((path) => {
             const last = completedMap.get(path)
             if (!last) return false
             return now - last >= intervalMs
@@ -680,7 +721,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return { allowed: false, reason: 'missing-context' }
     }
 
-    if (this.WATCH_PATHS.length === 0) {
+    if (this.watchPaths.length === 0) {
       return { allowed: false, reason: 'no-paths' }
     }
 
@@ -814,7 +855,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   // }
 
   public getWatchedPaths(): string[] {
-    return [...this.WATCH_PATHS]
+    return [...this.watchPaths]
   }
 
   private toTimestamp(value: Date | number | string | null | undefined): number | null {
@@ -924,8 +965,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     // 🔍 DEBUG: 确认 onLoad 被调用
     this.logDebug('[DEBUG] FileProvider.onLoad called', {
-      watchPathsCount: this.WATCH_PATHS.length,
-      watchPaths: JSON.stringify(this.WATCH_PATHS.slice(0, 3))
+      watchPathsCount: this.watchPaths.length,
+      watchPaths: JSON.stringify(this.watchPaths.slice(0, 3))
     })
 
     this.initializeBackgroundTaskService()
@@ -953,19 +994,19 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    if (this.WATCH_PATHS.length === 0) {
+    if (this.watchPaths.length === 0) {
       this.logWarn('No watch paths resolved; skipping watcher registration.')
       return
     }
 
     this.logDebug('Registering watch paths', {
-      count: this.WATCH_PATHS.length,
-      sample: this.WATCH_PATHS.slice(0, 3).join(', ')
+      count: this.watchPaths.length,
+      sample: this.watchPaths.slice(0, 3).join(', ')
     })
 
     try {
       await Promise.all(
-        this.WATCH_PATHS.map((watchPath) =>
+        this.watchPaths.map((watchPath) =>
           FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath)).catch(
             (error) => {
               this.logError('Failed to watch path', error, {
@@ -1266,6 +1307,65 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       message: 'Index rebuild started',
       battery: batteryStatus
     }
+  }
+
+  public async addWatchPath(rawPath: string): Promise<FileIndexAddPathResult> {
+    const trimmed = typeof rawPath === 'string' ? rawPath.trim() : ''
+    if (!trimmed) {
+      return { success: false, status: 'invalid', reason: 'path-empty' }
+    }
+
+    const resolved = path.resolve(trimmed)
+    let stats: Awaited<ReturnType<typeof fs.stat>>
+    try {
+      stats = await fs.stat(resolved)
+    } catch (error) {
+      this.logWarn('File index addPath failed: path not found', error, { path: resolved })
+      return { success: false, status: 'invalid', reason: 'path-not-found' }
+    }
+
+    const watchPath = stats.isDirectory() ? resolved : path.dirname(resolved)
+
+    if (this.isWithinWatchRoots(watchPath)) {
+      return { success: true, status: 'exists', path: watchPath }
+    }
+
+    const normalized = this.normalizePath(watchPath)
+    if (this.normalizedWatchPaths.includes(normalized)) {
+      return { success: true, status: 'exists', path: watchPath }
+    }
+
+    const nextExtraPaths = [...this.fileIndexSettings.extraPaths, watchPath]
+    this.fileIndexSettings = { ...this.fileIndexSettings, extraPaths: nextExtraPaths }
+
+    try {
+      saveMainConfig(StorageList.FILE_INDEX_SETTINGS, this.fileIndexSettings)
+    } catch (error) {
+      this.logWarn('Failed to persist file index extra paths', error, { path: watchPath })
+    }
+
+    this.applyWatchPaths(this.fileIndexSettings.extraPaths)
+
+    if (this.watchPathsRegistered) {
+      try {
+        await FileSystemWatcher.addPath(watchPath, this.getWatchDepthForPath(watchPath))
+      } catch (error) {
+        this.logWarn('Failed to register extra watch path', error, { path: watchPath })
+      }
+      if (!this.fsEventsSubscribed) {
+        this.subscribeToFileSystemEvents()
+      }
+    } else {
+      await this.ensureFileSystemWatchers()
+    }
+
+    if (!this.isInitializing) {
+      void this.startIndexing('manual').catch((error) => {
+        this.logWarn('Manual indexing failed after adding watch path', error)
+      })
+    }
+
+    return { success: true, status: 'added', path: watchPath }
   }
 
   /**
@@ -2716,7 +2816,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // Yield after heavy SELECT on files table
     await new Promise<void>((resolve) => setImmediate(resolve))
     const filesToDelete = allDbFilePaths.filter(
-      (file) => !this.WATCH_PATHS.some((watchPath) => file.path.startsWith(watchPath))
+      (file) => !this.watchPaths.some((watchPath) => file.path.startsWith(watchPath))
     )
 
     if (filesToDelete.length > 0) {
@@ -2756,13 +2856,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     await new Promise<void>((resolve) => setImmediate(resolve))
     const completedScanPaths = new Set(completedScans.map((s) => s.path))
 
-    const newPathsToScan = this.WATCH_PATHS.filter((p) => !completedScanPaths.has(p))
-    const reconciliationPaths = this.WATCH_PATHS.filter((p) => completedScanPaths.has(p))
+    const newPathsToScan = this.watchPaths.filter((p) => !completedScanPaths.has(p))
+    const reconciliationPaths = this.watchPaths.filter((p) => completedScanPaths.has(p))
 
     // 🔍 DEBUG: 详细输出扫描策略信息
     this.logDebug('[DEBUG] File indexing scan strategy', {
-      totalWatchPaths: this.WATCH_PATHS.length,
-      watchPaths: JSON.stringify(this.WATCH_PATHS),
+      totalWatchPaths: this.watchPaths.length,
+      watchPaths: JSON.stringify(this.watchPaths),
       completedScansCount: completedScans.length,
       completedPaths: JSON.stringify(Array.from(completedScanPaths)),
       newPathsCount: newPathsToScan.length,

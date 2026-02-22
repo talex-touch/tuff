@@ -161,9 +161,9 @@ withDefaults(
   width: 52px;
   height: 40px;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-secondary);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -180,18 +180,18 @@ withDefaults(
 }
 
 .ThemePreviewIcon.active {
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
-  box-shadow: 0 0 0 2px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.15);
+  border-color: var(--tx-color-primary);
+  color: var(--tx-color-primary);
+  box-shadow: 0 0 0 2px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.15);
   transform: translateY(-1px);
 }
 
 .ThemePreviewIcon .panel {
-  fill: var(--el-fill-color);
+  fill: var(--tx-fill-color);
 }
 
 .ThemePreviewIcon .bar {
-  fill: var(--el-fill-color-darker);
+  fill: var(--tx-fill-color-darker);
 }
 
 .ThemePreviewIcon .knob {
@@ -199,7 +199,7 @@ withDefaults(
 }
 
 .variant-emphasis .bar {
-  fill: var(--el-fill-color-dark);
+  fill: var(--tx-fill-color-dark);
 }
 .variant-emphasis .pulse {
   fill: currentColor;
@@ -224,18 +224,18 @@ withDefaults(
 }
 
 .variant-wallpaper .sky {
-  fill: var(--el-fill-color);
+  fill: var(--tx-fill-color);
 }
 .variant-wallpaper .sun {
   fill: currentColor;
   opacity: 0.8;
 }
 .variant-wallpaper .mount {
-  fill: var(--el-text-color-placeholder);
+  fill: var(--tx-text-color-placeholder);
   opacity: 0.4;
 }
 .variant-wallpaper .ground {
-  fill: var(--el-fill-color-dark);
+  fill: var(--tx-fill-color-dark);
   opacity: 0.6;
 }
 
@@ -249,11 +249,11 @@ withDefaults(
 }
 
 .variant-contrast .split {
-  fill: var(--el-fill-color-dark);
+  fill: var(--tx-fill-color-dark);
   opacity: 0.35;
 }
 .variant-contrast .split-left {
-  fill: var(--el-fill-color);
+  fill: var(--tx-fill-color);
 }
 .variant-contrast .split-right {
   fill: currentColor;

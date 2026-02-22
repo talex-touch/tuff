@@ -681,35 +681,35 @@ watch(shortcutsDialogVisible, (visible) => {
 .TuffBlockInput {
   width: 200px;
   padding: 8px 12px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 8px;
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-primary);
   font-size: 13px;
   outline: none;
   transition: all 0.2s ease;
 }
 
 .TuffBlockInput:focus {
-  border-color: var(--el-color-primary);
-  background: var(--el-bg-color);
-  box-shadow: 0 0 0 2px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.1);
+  border-color: var(--tx-color-primary);
+  background: var(--tx-bg-color);
+  box-shadow: 0 0 0 2px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.1);
 }
 
 .TuffBlockInput::placeholder {
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   opacity: 0.7;
 }
 
 .ShortcutStatusHint {
   margin-top: 2px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutSummary {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutEntry {
@@ -747,8 +747,8 @@ watch(shortcutsDialogVisible, (visible) => {
 :global(.ShortcutDialog-Card) {
   width: min(980px, 92vw);
   height: min(720px, 86vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 24px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   overflow: hidden;
@@ -765,7 +765,7 @@ watch(shortcutsDialogVisible, (visible) => {
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .ShortcutDialog-TitleBlock {
@@ -775,13 +775,13 @@ watch(shortcutsDialogVisible, (visible) => {
 .ShortcutDialog-Title {
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .ShortcutDialog-Subtitle {
   margin-top: 2px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-Search {
@@ -790,8 +790,8 @@ watch(shortcutsDialogVisible, (visible) => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--el-fill-color-lighter);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 12px;
   min-width: 220px;
 }
@@ -802,7 +802,7 @@ watch(shortcutsDialogVisible, (visible) => {
   background: transparent;
   outline: none;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .ShortcutDialog-Table {
@@ -819,8 +819,8 @@ watch(shortcutsDialogVisible, (visible) => {
   padding: 12px 24px;
   font-size: 12px;
   letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  color: var(--tx-text-color-secondary);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .ShortcutDialog-TableBody {
@@ -831,7 +831,7 @@ watch(shortcutsDialogVisible, (visible) => {
   padding: 40px 24px;
   text-align: center;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-Rows {
@@ -845,7 +845,7 @@ watch(shortcutsDialogVisible, (visible) => {
   gap: 16px;
   padding: 16px 24px;
   align-items: center;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .ShortcutDialog-Row:last-child {
@@ -855,24 +855,24 @@ watch(shortcutsDialogVisible, (visible) => {
 .ShortcutDialog-Label {
   font-size: 14px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .ShortcutDialog-Desc {
   margin-top: 4px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-Id {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   word-break: break-all;
 }
 
 .ShortcutDialog-Source {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-Enabled {
@@ -882,15 +882,15 @@ watch(shortcutsDialogVisible, (visible) => {
 
 .ShortcutDialog-StatusText {
   font-size: 12px;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .ShortcutDialog-StatusText.active {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-StatusText.disabled {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-StatusText.is-saving,
@@ -902,15 +902,15 @@ watch(shortcutsDialogVisible, (visible) => {
 }
 
 .ShortcutDialog-StatusText.is-saving {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ShortcutDialog-StatusText.is-success {
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
 }
 
 .ShortcutDialog-StatusText.is-error {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .ShortcutDialog-Footer {
@@ -918,7 +918,7 @@ watch(shortcutsDialogVisible, (visible) => {
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--tx-border-color-lighter);
 }
 
 .ShortcutDialog-FooterActions {
@@ -929,6 +929,6 @@ watch(shortcutsDialogVisible, (visible) => {
 
 .ShortcutDialog-Count {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

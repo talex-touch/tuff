@@ -22,7 +22,7 @@ export default {
     height: 8px;
 
     border-radius: 50%;
-    background-color: var(--bg-color, var(--el-text-color-regular));
+    background-color: var(--bg-color, var(--tx-text-color-regular));
   }
   &:before {
     content: '';
@@ -35,7 +35,7 @@ export default {
     height: 100%;
 
     border-radius: 50%;
-    background-color: var(--bg-color, var(--el-text-color-regular));
+    background-color: var(--bg-color, var(--tx-text-color-regular));
     animation: floater-wave 0.65s infinite;
   }
   position: relative;
@@ -44,7 +44,7 @@ export default {
   height: 32px;
 
   border-radius: 50%;
-  border: 2px solid var(--bg-color, var(--el-text-color-regular));
+  border: 2px solid var(--bg-color, var(--tx-text-color-regular));
   animation: rotate 0.85s linear infinite;
 }
 

@@ -121,20 +121,20 @@ const props = defineProps({
   border-radius: 4px;
   //transition: .5s,;
   box-sizing: border-box;
-  --fake-color: var(--el-fill-color-dark);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-radius: 4px;
   --fake-opacity: 0.45;
 
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 }
 
 .touch-blur .TBlockSlot-Container {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
 
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 </style>

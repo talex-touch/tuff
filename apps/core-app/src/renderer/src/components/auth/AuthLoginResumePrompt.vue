@@ -62,7 +62,7 @@ function handleClose() {
 
 .AuthLoginResumePrompt-Description {
   margin: 0;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   line-height: 1.6;
 }
 </style>

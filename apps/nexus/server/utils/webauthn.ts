@@ -302,10 +302,11 @@ export async function verifyAssertionResponse(params: {
   if (!verified) {
     try {
       const rawSignature = derToRawSignature(signatureBytes, 32)
+      const rawSignatureBuffer = Buffer.from(rawSignature)
       verified = await crypto.subtle.verify(
         { name: 'ECDSA', hash: 'SHA-256' },
         key,
-        rawSignature,
+        rawSignatureBuffer,
         signedData
       )
     }

@@ -94,7 +94,7 @@ function handleCopyPrimary(): void {
   transition: border-color 0.2s ease;
 
   &.active {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
   }
 }
 

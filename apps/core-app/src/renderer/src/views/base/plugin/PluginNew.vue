@@ -713,7 +713,7 @@ async function handleInstallDegit(): Promise<void> {
 }
 
 .PluginNew-Subtitle {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .PluginNew-Install,
@@ -732,7 +732,7 @@ async function handleInstallDegit(): Promise<void> {
   label {
     font-size: 13px;
     font-weight: 600;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 }
 
@@ -743,7 +743,7 @@ async function handleInstallDegit(): Promise<void> {
 
 .InstallHint {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .InstallStatus {
@@ -755,12 +755,12 @@ async function handleInstallDegit(): Promise<void> {
 
   &.success {
     background: rgba(64, 158, 255, 0.12);
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
   }
 
   &.error {
     background: rgba(245, 108, 108, 0.12);
-    color: var(--el-color-error);
+    color: var(--tx-color-error);
   }
 
   i {
@@ -779,13 +779,13 @@ async function handleInstallDegit(): Promise<void> {
   border-radius: 10px;
   font-size: 11px;
   background: rgba(103, 194, 58, 0.15);
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
 }
 
 .InstallManifest {
   margin-top: 4px;
   padding-left: 16px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   font-size: 13px;
 }
 
@@ -810,13 +810,13 @@ async function handleInstallDegit(): Promise<void> {
   height: 28px;
   border-radius: 50%;
   background: conic-gradient(
-    var(--el-color-primary) var(--progress),
-    rgba(var(--el-color-primary-rgb), 0.15) 0
+    var(--tx-color-primary) var(--progress),
+    rgba(var(--tx-color-primary-rgb), 0.15) 0
   );
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
   font-weight: 600;
   font-size: 0.7rem;
 }
@@ -826,7 +826,7 @@ async function handleInstallDegit(): Promise<void> {
   position: absolute;
   inset: 3px;
   border-radius: 50%;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
 }
 
 .InstallProgress span {

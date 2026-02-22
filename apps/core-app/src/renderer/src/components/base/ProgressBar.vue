@@ -50,14 +50,14 @@ defineProps({
     height: 30px;
 
     border-radius: 0;
-    background-color: var(--el-color-danger);
+    background-color: var(--tx-color-danger);
   }
 
   &.success {
     height: 8px;
 
     border-radius: 0;
-    background-color: var(--el-color-success);
+    background-color: var(--tx-color-success);
   }
 
   position: relative;
@@ -71,7 +71,7 @@ defineProps({
 
   transition: 0.25s;
   border-radius: 8px;
-  background-color: var(--el-color-primary);
+  background-color: var(--tx-color-primary);
 }
 
 .ProgressBar-Wrapper {

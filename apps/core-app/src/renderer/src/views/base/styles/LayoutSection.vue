@@ -310,25 +310,25 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 }
 
 .LayoutSection-Item:focus-visible {
-  outline: 2px solid var(--el-color-primary);
+  outline: 2px solid var(--tx-color-primary);
   outline-offset: 2px;
 }
 
 .LayoutSection-Item.active {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 6px 18px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.18);
+  border-color: var(--tx-color-primary);
+  box-shadow: 0 6px 18px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.18);
 }
 
 .LayoutSection-Item.active:hover {
-  box-shadow: 0 8px 22px rgba(var(--el-color-primary-rgb, 64, 158, 255), 0.2);
+  box-shadow: 0 8px 22px rgba(var(--tx-color-primary-rgb, 64, 158, 255), 0.2);
 }
 
 .LayoutSection-Preview {
   width: 100%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-fill-color-light);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
   position: relative;
 }
 
@@ -348,7 +348,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 }
 
 .LayoutSection-Item.active .LayoutSection-Preview {
-  border-bottom-color: var(--el-color-primary-light-7);
+  border-bottom-color: var(--tx-color-primary-light-7);
 }
 
 .LayoutSection-PreviewLayout,
@@ -359,9 +359,9 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-PreviewLayout {
   padding: 4px;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
-  box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
 }
 
 .LayoutSection-PreviewLayout-Inner {
@@ -391,7 +391,7 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-Skeleton-Header {
   height: 20px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   border-radius: 4px;
 }
 
@@ -403,13 +403,13 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 
 .LayoutSection-Skeleton-Sidebar {
   width: 28px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   border-radius: 4px;
 }
 
 .LayoutSection-Skeleton-Main {
   flex: 1;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 4px;
 }
 
@@ -445,21 +445,21 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
 .LayoutSection-Name {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   text-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
   padding: 0.2rem 0.2rem;
 }
 
 .LayoutSection-Item.active .LayoutSection-Name {
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .LayoutSection-CurrentDot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--el-color-primary);
-  box-shadow: 0 0 0 3px var(--el-color-primary-light-8);
+  background: var(--tx-color-primary);
+  box-shadow: 0 0 0 3px var(--tx-color-primary-light-8);
 }
 
 .LayoutSection-Actions {
@@ -473,13 +473,13 @@ async function handleLayoutSelect(layoutName: string): Promise<void> {
   padding: 6px 12px;
   font-size: 12px;
   border-radius: 8px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-regular);
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
-    background: var(--el-fill-color);
-    color: var(--el-color-primary);
+    background: var(--tx-fill-color);
+    color: var(--tx-color-primary);
   }
 }
 </style>

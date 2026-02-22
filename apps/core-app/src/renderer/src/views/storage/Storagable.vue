@@ -950,9 +950,9 @@ onMounted(() => {
 .btn {
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
   cursor: pointer;
 }
 .btn:disabled {
@@ -967,15 +967,15 @@ onMounted(() => {
 }
 
 .card {
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
   padding: 12px 14px;
 }
 
 .label {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 .value {
   margin-top: 6px;
@@ -985,7 +985,7 @@ onMounted(() => {
 .sub {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   word-break: break-all;
 }
 
@@ -1004,7 +1004,7 @@ onMounted(() => {
 
 .section-meta {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .list {
@@ -1033,7 +1033,7 @@ onMounted(() => {
 .table-list {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px dashed color-mix(in srgb, var(--el-border-color) 60%, transparent);
+  border-top: 1px dashed color-mix(in srgb, var(--tx-border-color) 60%, transparent);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1041,7 +1041,7 @@ onMounted(() => {
 
 .table-row {
   border-radius: 10px;
-  background: color-mix(in srgb, var(--el-color-primary) 4%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary) 4%, transparent);
   padding: 8px 10px;
 }
 
@@ -1058,8 +1058,8 @@ onMounted(() => {
 }
 
 .row {
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -1090,7 +1090,7 @@ onMounted(() => {
 
 .meta {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: nowrap;
 }
 .sep {
@@ -1102,27 +1102,27 @@ onMounted(() => {
   margin-top: 8px;
   height: 8px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
   overflow: hidden;
 }
 .fill {
   height: 100%;
   border-radius: 8px;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   transition: width 0.4s ease;
 }
 
 .path {
   margin-top: 8px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   word-break: break-all;
   opacity: 0.85;
 }
 
 .muted {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .btn.action {
@@ -1131,8 +1131,8 @@ onMounted(() => {
 }
 
 .btn.action.danger {
-  border-color: color-mix(in srgb, var(--el-color-danger) 60%, transparent);
-  color: var(--el-color-danger);
+  border-color: color-mix(in srgb, var(--tx-color-danger) 60%, transparent);
+  color: var(--tx-color-danger);
 }
 
 .note {
@@ -1140,9 +1140,9 @@ onMounted(() => {
 }
 
 .error {
-  border: 1px solid color-mix(in srgb, var(--el-color-danger) 35%, transparent);
-  background: color-mix(in srgb, var(--el-color-danger) 12%, transparent);
-  color: var(--el-color-danger);
+  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 35%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
+  color: var(--tx-color-danger);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 12px;
@@ -1151,6 +1151,6 @@ onMounted(() => {
 
 .loading {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

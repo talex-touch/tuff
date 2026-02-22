@@ -2,8 +2,8 @@
 
 ## Summary
 - 基线（2026-02-21）：简单 315 / 中等 137 / 困难 18（去重 470）。
-- 本次完成：简单问题清零；中等问题清理至仅剩 2 条（auth 配置内 TS2345）。
-- 当前剩余（2026-02-21）：中等 2 / 困难 11（去重 13）。
+- 本次完成：简单问题清零；中等/困难问题全部修复完毕（apps/nexus、apps/core-app typecheck 通过）。
+- 当前剩余（2026-02-21）：中等 0 / 困难 0（去重 0）。
 - 分类规则：
   - 简单：TS7006 / TS7016 / TS7031 / TS2578 / TS2305 / TS2488 + demo 目录内 TS2339
   - 中等：TS2339（非 demo）、TS2322 / TS2345 / TS2532 / TS18048 / TS18047 / TS2551
@@ -80,30 +80,31 @@
 | 2026-02-21 | `packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue` | TS2345/TS2322 | 键盘导航 fallback 判空，避免 undefined。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue` | TS18048 | next 项判空后再读取 label。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `packages/tuffex/packages/components/src/scroll/src/runtime-capabilities.ts` | TS2345 | 解析版本号时 guard 空 segment。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/server/api/auth/[...].ts` | TS2352/TS2345/TS2561/TS2353 | 切换至 next-auth providers、解析 headers 并移除不支持字段。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/server/api/docs/feedback.get.ts` | TS2304 | 引入 D1Database 类型声明。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/server/api/docs/feedback.post.ts` | TS2304 | 引入 D1Database 类型声明。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/server/utils/tuffIntelligenceLabService.ts` | TS2352 | Error 转 Record 显式经由 unknown。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/server/utils/webauthn.ts` | TS2769 | 使用 Buffer.from 生成签名 BufferSource。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts` | TS2741/TS2551 | normalize 补齐 extraPaths 并统一 watchPaths 命名。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/main/modules/box-tool/core-box/window.ts` | TS1308 | attachUIView 改为 async 以等待 transport bundle。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` | TS2345 | input.setQuery handler 移除无意义返回值。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/main/utils/plugin-transport-bundle.ts` | TS6133 | 移除未使用的 createRequire 引用。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `packages/tuffex/packages/components/src/input/index.ts` | TS2305 | 增加 TxInput 别名导出，修复缺失成员。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/modules/notification/sonner-dialog.ts` | TS2322 | 引入 SonnerDialogActionInput，允许 actions 省略 onSelect。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/components/base/sonner/SonnerDialogToast.vue` | TS2322 | type/variant 收窄为 TxButtonProps 联合类型。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/components/download/DownloadSettings.vue` | TS6133 | 删除未使用的并发标记常量。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/components/download/UpdatePromptExample.vue` | TS6133 | 使用事件参数避免未使用变量。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/components/intelligence/config/IntelligencePromptSelector.vue` | TS2322/TS6133 | 统一 TxSelectValue 类型、输入归一化并修正 Tag 尺寸。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue` | TS2322 | 预览 widget v-model 转为 TxSelectValue 并归一化。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts` | TS6133 | 移除未使用参数 state，简化配额判断。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue` | TS2322 | Select 选项类型收窄并将自定义 CSS 转为字符串。 | `pnpm -C "apps/core-app" run typecheck` | done |
+| 2026-02-21 | `apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue` | TS2322 | 移除不支持的按钮 type 值。 | `pnpm -C "apps/core-app" run typecheck` | done |
 
 ## Remaining（中等/困难）
-- 中等 2：
-  - `apps/nexus/server/api/auth/[...].ts`（TS2345 ×2）：GitHub/Email provider 类型与 AuthOptions 不匹配，需调整 provider 类型或升级/对齐 auth 类型定义。
-- 困难 11：
-  - `apps/nexus/server/api/auth/[...].ts`（TS2352/TS2561/TS2353）：Request headers、OAuth 配置字段与 AuthOptions 类型不兼容。
-  - `apps/nexus/server/api/docs/feedback.get.ts`（TS2304）：缺失 D1Database 声明。
-  - `apps/nexus/server/api/docs/feedback.post.ts`（TS2304）：缺失 D1Database 声明。
-  - `apps/nexus/server/utils/tuffIntelligenceLabService.ts`（TS2352 ×5）：Error 到 Record 的序列化需要更明确的转换策略。
-  - `apps/nexus/server/utils/webauthn.ts`（TS2769）：Crypto.verify 参数 BufferSource 类型不兼容。
+- 无（apps/nexus typecheck 已通过）。
 
-### Core-app typecheck 结果（仅记录）
-- `apps/core-app` 当前 `pnpm -C "apps/core-app" run typecheck` 失败，均为 TS2322：
-  - `apps/core-app/src/renderer/src/components/base/sonner/SonnerDialogToast.vue`
-  - `apps/core-app/src/renderer/src/components/intelligence/config/IntelligencePromptSelector.vue`
-  - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
-  - `apps/core-app/src/renderer/src/composables/usePermissionStartup.ts`
-  - `apps/core-app/src/renderer/src/modules/layout/preset/usePresetExport.ts`
-  - `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue`
-  - `apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue`
+### Core-app typecheck 结果
+- `apps/core-app` 当前 `pnpm -C "apps/core-app" run typecheck` 通过（2026-02-21）。
 
 ### Top Files (by remaining errors)
-- `apps/nexus/server/api/auth/[...].ts` (5)
-- `apps/nexus/server/utils/tuffIntelligenceLabService.ts` (5)
-- `apps/nexus/server/api/docs/feedback.get.ts` (1)
-- `apps/nexus/server/api/docs/feedback.post.ts` (1)
-- `apps/nexus/server/utils/webauthn.ts` (1)
+- 无。

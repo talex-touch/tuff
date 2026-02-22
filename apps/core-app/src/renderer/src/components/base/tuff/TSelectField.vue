@@ -87,8 +87,8 @@ function clearValue() {
   position: relative;
   width: 100%;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color);
   padding: 0 12px;
   height: 40px;
   display: flex;
@@ -98,11 +98,11 @@ function clearValue() {
     box-shadow 0.25s ease;
 
   &:focus-within {
-    border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
 
     .chevron {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
       transform: rotate(180deg);
     }
   }
@@ -119,13 +119,13 @@ function clearValue() {
     outline: none;
     appearance: none;
     font-size: 14px;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   .chevron {
     position: absolute;
     right: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     pointer-events: none;
     transition:
       transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
@@ -135,7 +135,7 @@ function clearValue() {
   .clear-btn {
     border: none;
     background: transparent;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     cursor: pointer;
     margin-right: 24px;
     font-size: 16px;
@@ -147,7 +147,7 @@ function clearValue() {
       color 0.15s ease;
 
     &:hover {
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
   }
 

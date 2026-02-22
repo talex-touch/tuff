@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
+import { devLog } from '~/utils/dev-log'
 
 interface UseResizeOptions {
   results: ComputedRef<TuffItem[]>
@@ -23,7 +24,7 @@ const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagn
 
 const logResizeDebug = (...args: unknown[]) => {
   if (!shouldLog()) return
-  console.debug('[CoreBoxResize]', ...args)
+  devLog('[CoreBoxResize]', ...args)
 }
 
 function clampHeight(height: number): number {

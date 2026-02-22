@@ -36,7 +36,7 @@ const props = defineProps({
 
   box-sizing: border-box;
   //backdrop-filter: blur(10px);
-  //background-color: var(--el-fill-color-lighter);
+  //background-color: var(--tx-fill-color-lighter);
 }
 
 .touch-blur .TTabHeader-Container {

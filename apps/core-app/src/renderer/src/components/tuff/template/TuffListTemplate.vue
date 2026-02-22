@@ -54,10 +54,10 @@ function setGroupCollapsed(groupId: string, collapsed: boolean): void {
 }
 
 const variantTitleColorMap: Record<NonNullable<TuffListGroup<unknown>['badgeVariant']>, string> = {
-  info: 'var(--el-color-info)',
-  success: 'var(--el-color-success)',
-  warning: 'var(--el-color-warning)',
-  danger: 'var(--el-color-danger)'
+  info: 'var(--tx-color-info)',
+  success: 'var(--tx-color-success)',
+  warning: 'var(--tx-color-warning)',
+  danger: 'var(--tx-color-danger)'
 }
 
 function resolveTitleColor(group: TuffListGroup<unknown>): string {
@@ -203,7 +203,7 @@ function onCollapseAfterLeave(el: Element) {
 
 .TuffListTemplate-Empty {
   padding: 1.5rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-align: center;
 }
 
@@ -227,11 +227,11 @@ function onCollapseAfterLeave(el: Element) {
   cursor: pointer;
 
   &:hover {
-    background-color: var(--el-fill-color-lighter);
+    background-color: var(--tx-fill-color-lighter);
   }
 
   &:active {
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
 }
 
@@ -250,13 +250,13 @@ function onCollapseAfterLeave(el: Element) {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TuffListTemplate-GroupSubtitle {
   margin: 0;
   font-size: 0.85rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .TuffListTemplate-GroupMeta {
@@ -269,13 +269,13 @@ function onCollapseAfterLeave(el: Element) {
   font-size: 0.5rem;
   padding: 0.2rem 0.5rem;
   border-radius: 12px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-secondary);
 }
 
 .TuffListTemplate-Meta {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TuffListTemplate-Toggle {
@@ -295,7 +295,7 @@ function onCollapseAfterLeave(el: Element) {
 .TuffListTemplate-EmptyGroup {
   margin: 0;
   text-align: center;
-  color: var(--el-text-color-tertiary);
+  color: var(--tx-text-color-tertiary);
   font-size: 0.85rem;
 }
 

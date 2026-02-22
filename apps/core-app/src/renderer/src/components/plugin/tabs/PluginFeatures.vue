@@ -9,6 +9,7 @@ import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
+import { devLog } from '~/utils/dev-log'
 import StatCard from '../../base/card/StatCard.vue'
 import GridLayout from '../../base/layout/GridLayout.vue'
 import FeatureCard from '../FeatureCard.vue'
@@ -565,7 +566,7 @@ async function requestWidgetRegister(
 ): Promise<boolean> {
   if (!widgetId || !props.plugin?.name) return false
   if (isPluginDev.value) {
-    console.info(
+    devLog(
       `[PluginFeatures] request widget ${options?.emitAsUpdate ? 'update' : 'register'}: ${widgetId}`
     )
   }
@@ -760,7 +761,7 @@ function handlePreviewRenderError(error: Error): void {
         <StatCard
           :value="totalCommands"
           :label="t('plugin.features.stats.commands')"
-          icon-class="i-ri-terminal-box-line text-6xl text-[var(--el-color-success)]"
+          icon-class="i-ri-terminal-box-line text-6xl text-[var(--tx-color-success)]"
         />
       </div>
     </div>
@@ -878,8 +879,8 @@ function handlePreviewRenderError(error: Error): void {
 :global(.PluginFeature-DetailCard) {
   width: min(980px, 92vw);
   height: min(720px, 86vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.5rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

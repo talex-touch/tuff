@@ -177,7 +177,7 @@ onBeforeUnmount(() => {
 }
 
 .ActionPanel {
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
   width: 320px;
@@ -189,18 +189,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .ActionPanel-Title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .ActionPanel-Hint {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ActionPanel-List {
@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
 
   &:hover,
   &.active {
-    background: var(--el-fill-color);
+    background: var(--tx-fill-color);
   }
 
   &.disabled {
@@ -229,28 +229,28 @@ onBeforeUnmount(() => {
   }
 
   &.danger {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
   }
 }
 
 .ActionPanel-Icon {
   font-size: 16px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   flex-shrink: 0;
 }
 
 .ActionPanel-Label {
   flex: 1;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .ActionPanel-Shortcut {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-secondary);
   font-family:
     system-ui,
     -apple-system,

@@ -41,11 +41,11 @@ function toggle() {
 .TCheckBox-Container {
   &.select .TCheckBox-Inner {
     svg {
-      stroke: var(--el-fill-color-light);
+      stroke: var(--tx-fill-color-light);
       stroke-dashoffset: 0;
     }
 
-    background: var(--el-color-primary);
+    background: var(--tx-color-primary);
   }
   .TCheckBox-Inner {
     svg {
@@ -63,7 +63,7 @@ function toggle() {
     height: 16px;
 
     border-radius: 4px;
-    border: var(--el-border);
+    border: var(--tx-border);
     transition: 0.25s;
   }
   .TCheckBox-Text {

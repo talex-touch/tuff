@@ -1,11 +1,12 @@
 'use strict'
 
 const path = require('node:path')
+const process = require('node:process')
 
 function parseArgs(argv) {
   const args = {
     query: 'test',
-    maxResults: 20
+    maxResults: 20,
   }
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -47,7 +48,7 @@ async function main() {
       skipped: true,
       reason: 'windows-only',
       platform: process.platform,
-      hint: 'Run this command on Windows to verify Everything SDK integration.'
+      hint: 'Run this command on Windows to verify Everything SDK integration.',
     })
     process.exitCode = 0
     return
@@ -62,8 +63,8 @@ async function main() {
     const startedAt = Date.now()
     const results = await Promise.resolve(
       everything.search(options.query, {
-        maxResults: options.maxResults
-      })
+        maxResults: options.maxResults,
+      }),
     )
     const durationMs = Date.now() - startedAt
 
@@ -82,11 +83,12 @@ async function main() {
             fullPath: first.fullPath || null,
             name: first.name || first.filename || null,
             size: typeof first.size === 'number' ? first.size : null,
-            isFolder: typeof first.isFolder === 'boolean' ? first.isFolder : null
+            isFolder: typeof first.isFolder === 'boolean' ? first.isFolder : null,
           }
-        : null
+        : null,
     })
-  } catch (error) {
+  }
+  catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const code = error && typeof error === 'object' ? error.code : undefined
 
@@ -97,7 +99,7 @@ async function main() {
       query: options.query,
       maxResults: options.maxResults,
       error: message,
-      code: typeof code === 'string' ? code : null
+      code: typeof code === 'string' ? code : null,
     })
     process.exitCode = 1
   }

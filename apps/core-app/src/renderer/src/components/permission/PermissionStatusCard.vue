@@ -5,8 +5,7 @@
  * Shows permission summary for a plugin.
  */
 
-import { TuffProgress, TxButton, TxCard, TxTag } from '@talex-touch/tuffex'
-import { ElAlert } from 'element-plus'
+import { TuffProgress, TxAlert, TxButton, TxCard, TxTag } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 
 interface Props {
@@ -78,7 +77,7 @@ const progressStatus = computed(() => {
 
     <div class="card-content">
       <!-- Legacy SDK Warning -->
-      <ElAlert
+      <TxAlert
         v-if="warning && !enforcePermissions"
         type="warning"
         :closable="false"
@@ -91,7 +90,7 @@ const progressStatus = computed(() => {
           </div>
         </template>
         {{ warning }}
-      </ElAlert>
+      </TxAlert>
 
       <!-- Status Summary -->
       <div class="status-summary">
@@ -166,13 +165,13 @@ const progressStatus = computed(() => {
 
 .status-icon {
   &.success {
-    color: var(--el-color-success);
+    color: var(--tx-color-success);
   }
   &.warning {
-    color: var(--el-color-warning);
+    color: var(--tx-color-warning);
   }
   &.danger {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
   }
 }
 
@@ -204,13 +203,13 @@ const progressStatus = computed(() => {
   font-weight: 500;
 
   &.success {
-    color: var(--el-color-success);
+    color: var(--tx-color-success);
   }
   &.warning {
-    color: var(--el-color-warning);
+    color: var(--tx-color-warning);
   }
   &.danger {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
   }
 }
 
@@ -231,13 +230,13 @@ const progressStatus = computed(() => {
 
   .progress-text {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     white-space: nowrap;
   }
 }
 
 .missing-section {
-  background: var(--el-color-danger-light-9);
+  background: var(--tx-color-danger-light-9);
   border-radius: 8px;
   padding: 12px;
 }
@@ -247,7 +246,7 @@ const progressStatus = computed(() => {
   align-items: center;
   gap: 4px;
   font-size: 13px;
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
   margin-bottom: 8px;
 }
 

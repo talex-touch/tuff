@@ -67,7 +67,7 @@ const listItems = [1, 2, 3, 4]
   gap: 6px;
   font-size: 10px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .LayoutPreview-Nav {
@@ -80,7 +80,7 @@ const listItems = [1, 2, 3, 4]
   width: 12px;
   height: 12px;
   border-radius: 6px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-Sidebar {
@@ -98,27 +98,27 @@ const listItems = [1, 2, 3, 4]
   gap: 6px;
   padding: 6px 8px;
   border-radius: 8px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
 }
 
 .LayoutPreview-SidebarDot {
   width: 10px;
   height: 10px;
   border-radius: 4px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-SidebarText {
   font-size: 9px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .LayoutPreview-SidebarItem.active {
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 65%, transparent);
+  background: color-mix(in srgb, var(--tx-color-primary-light-9) 65%, transparent);
 }
 
 .LayoutPreview-SidebarItem.active .LayoutPreview-SidebarDot {
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
 }
 
 .LayoutPreview-Plugins {
@@ -134,7 +134,7 @@ const listItems = [1, 2, 3, 4]
   width: 18px;
   height: 18px;
   border-radius: 6px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-IconFooter {
@@ -148,7 +148,7 @@ const listItems = [1, 2, 3, 4]
   width: 16px;
   height: 16px;
   border-radius: 6px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-View {
@@ -169,7 +169,7 @@ const listItems = [1, 2, 3, 4]
   width: 120px;
   height: 12px;
   border-radius: 6px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-ViewSubtitle {
@@ -177,14 +177,14 @@ const listItems = [1, 2, 3, 4]
   height: 8px;
   margin-top: 6px;
   border-radius: 6px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 }
 
 .LayoutPreview-ViewAction {
   width: 48px;
   height: 16px;
   border-radius: 8px;
-  background: var(--el-color-primary-light-7);
+  background: var(--tx-color-primary-light-7);
 }
 
 .LayoutPreview-Stats {
@@ -196,7 +196,7 @@ const listItems = [1, 2, 3, 4]
 .LayoutPreview-StatCard {
   height: 32px;
   border-radius: 8px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
 }
 
 .LayoutPreview-List {
@@ -208,14 +208,14 @@ const listItems = [1, 2, 3, 4]
 .LayoutPreview-ListItem {
   padding: 8px;
   border-radius: 8px;
-  background: var(--el-bg-color);
-  box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+  background: var(--tx-bg-color);
+  box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
 }
 
 .LayoutPreview-ListLine {
   height: 8px;
   border-radius: 4px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
 }
 
 .LayoutPreview-ListLine.short {

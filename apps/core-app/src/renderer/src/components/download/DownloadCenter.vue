@@ -209,12 +209,12 @@ function removeTask(_taskId: string) {
   padding: 20px;
   max-width: 900px;
   margin: 0 auto;
-  --download-surface: var(--el-bg-color);
-  --download-surface-muted: var(--el-fill-color-light);
-  --download-border: var(--el-border-color-light);
-  --download-strong: var(--el-text-color-primary);
-  --download-muted: var(--el-text-color-secondary);
-  --download-soft: var(--el-text-color-regular);
+  --download-surface: var(--tx-bg-color);
+  --download-surface-muted: var(--tx-fill-color-light);
+  --download-border: var(--tx-border-color-light);
+  --download-strong: var(--tx-text-color-primary);
+  --download-muted: var(--tx-text-color-secondary);
+  --download-soft: var(--tx-text-color-regular);
 }
 
 // Stats Grid
@@ -236,7 +236,7 @@ function removeTask(_taskId: string) {
   transition: border-color 0.2s ease;
 
   &:hover {
-    border-color: var(--el-border-color);
+    border-color: var(--tx-border-color);
   }
 
   &.speed.active {

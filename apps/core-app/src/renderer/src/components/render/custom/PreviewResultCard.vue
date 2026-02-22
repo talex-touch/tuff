@@ -133,7 +133,7 @@ const accentStyle = computed(() => {
   width: 100%;
   border-radius: 25px;
   padding: 0.75rem 1rem 0.5rem;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -144,7 +144,7 @@ const accentStyle = computed(() => {
   align-items: center;
   justify-content: space-between;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 
   .left {
     display: flex;
@@ -155,8 +155,8 @@ const accentStyle = computed(() => {
   .badge {
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--el-color-primary-light-9);
-    color: var(--el-color-primary);
+    background: var(--tx-color-primary-light-9);
+    color: var(--tx-color-primary);
   }
 
   .ability-id {
@@ -169,7 +169,7 @@ const accentStyle = computed(() => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 
   .hint {
     display: flex;
@@ -189,10 +189,10 @@ const accentStyle = computed(() => {
     justify-content: center;
     padding: 2px 6px;
     border-radius: 6px;
-    background: var(--el-fill-color);
+    background: var(--tx-fill-color);
     font-size: 11px;
     font-weight: 500;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 }
 
@@ -209,7 +209,7 @@ const accentStyle = computed(() => {
 
   .primary-label {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .primary-value {
@@ -220,13 +220,13 @@ const accentStyle = computed(() => {
     .primary-unit {
       font-size: 16px;
       margin-left: 8px;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
   }
 
   .primary-sub {
     font-size: 13px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     display: flex;
     gap: 8px;
   }
@@ -234,12 +234,12 @@ const accentStyle = computed(() => {
 
 .title {
   font-size: 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .description {
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .badge-row {
@@ -250,7 +250,7 @@ const accentStyle = computed(() => {
   .pill {
     padding: 2px 10px;
     border-radius: 999px;
-    background: var(--el-fill-color-darker);
+    background: var(--tx-fill-color-darker);
     font-size: 12px;
   }
 }
@@ -263,18 +263,18 @@ const accentStyle = computed(() => {
   .chip {
     border-radius: 8px;
     padding: 6px 8px;
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
     min-width: 120px;
 
     .chip-label {
       font-size: 11px;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
 
     .chip-value {
       font-size: 13px;
       font-weight: 500;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
   }
 }
@@ -291,14 +291,14 @@ const accentStyle = computed(() => {
 
     .detail-label {
       font-size: 11px;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
       text-transform: uppercase;
       letter-spacing: 0.02em;
     }
 
     .detail-value {
       font-size: 13px;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
 
       &.emphasize {
         font-weight: 600;
@@ -315,8 +315,8 @@ const accentStyle = computed(() => {
   .warning {
     padding: 6px 10px;
     border-radius: 6px;
-    background: var(--el-color-warning-light-9);
-    color: var(--el-color-warning-dark-2);
+    background: var(--tx-color-warning-light-9);
+    color: var(--tx-color-warning-dark-2);
     font-size: 12px;
   }
 }

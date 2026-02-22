@@ -70,13 +70,13 @@ const resultClass = computed(() => {
 }
 
 .test-result--success {
-  background: var(--el-color-success-light-9);
-  border-color: var(--el-color-success-light-5);
+  background: var(--tx-color-success-light-9);
+  border-color: var(--tx-color-success-light-5);
 }
 
 .test-result--error {
-  background: var(--el-color-error-light-9);
-  border-color: var(--el-color-error-light-5);
+  background: var(--tx-color-error-light-9);
+  border-color: var(--tx-color-error-light-5);
 }
 
 .test-result__header {
@@ -91,11 +91,11 @@ const resultClass = computed(() => {
 }
 
 .test-result--success .test-result__icon {
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
 }
 
 .test-result--error .test-result__icon {
-  color: var(--el-color-error);
+  color: var(--tx-color-error);
 }
 
 .test-result__title {
@@ -114,7 +114,7 @@ const resultClass = computed(() => {
 .test-result__message {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   line-height: 1.6;
 }
 
@@ -133,21 +133,21 @@ const resultClass = computed(() => {
 .test-result__meta-label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .test-result__meta-value {
   font-size: 0.875rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   font-family: monospace;
 }
 
 .test-result__preview-label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 0.5rem;
@@ -158,7 +158,7 @@ const resultClass = computed(() => {
   padding: 0.875rem;
   border-radius: 0.5rem;
   background: rgba(0, 0, 0, 0.08);
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   font-size: 0.875rem;
   line-height: 1.6;
   white-space: pre-wrap;
@@ -171,7 +171,7 @@ const resultClass = computed(() => {
   }
 
   &::-webkit-scrollbar-thumb {
-    background: var(--el-border-color);
+    background: var(--tx-border-color);
     border-radius: 3px;
   }
 }

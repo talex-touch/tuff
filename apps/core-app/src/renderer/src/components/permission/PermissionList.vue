@@ -169,7 +169,7 @@ function handleToggle(id: string, granted: boolean) {
     gap: 6px;
     font-size: 13px;
     font-weight: 500;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     margin-bottom: 8px;
   }
 }
@@ -186,23 +186,23 @@ function handleToggle(id: string, granted: boolean) {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 8px;
   border: 1px solid transparent;
   transition: all 0.2s;
 
   &.granted {
-    background: var(--el-color-success-light-9);
-    border-color: var(--el-color-success-light-7);
+    background: var(--tx-color-success-light-9);
+    border-color: var(--tx-color-success-light-7);
   }
 
   &.required:not(.granted) {
-    background: var(--el-color-danger-light-9);
-    border-color: var(--el-color-danger-light-7);
+    background: var(--tx-color-danger-light-9);
+    border-color: var(--tx-color-danger-light-7);
   }
 
   &:hover {
-    border-color: var(--el-border-color);
+    border-color: var(--tx-border-color);
   }
 }
 
@@ -226,7 +226,7 @@ function handleToggle(id: string, granted: boolean) {
 .item-desc {
   margin: 4px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .item-reason {
@@ -235,7 +235,7 @@ function handleToggle(id: string, granted: boolean) {
   gap: 4px;
   margin-top: 6px;
   font-size: 11px;
-  color: var(--el-color-info);
+  color: var(--tx-color-info);
 
   svg {
     flex-shrink: 0;
@@ -250,11 +250,11 @@ function handleToggle(id: string, granted: boolean) {
   flex-shrink: 0;
 
   .required-icon {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
   }
 
   .granted-icon {
-    color: var(--el-color-success);
+    color: var(--tx-color-success);
   }
 }
 </style>

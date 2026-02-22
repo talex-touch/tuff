@@ -51,9 +51,9 @@ const entries = ref<StorageEntry[]>([])
 // Computed
 const usageColorClass = computed(() => {
   const percent = storageStats.value.usagePercent
-  if (percent >= 90) return 'text-[var(--el-color-danger)]'
-  if (percent >= 70) return 'text-[var(--el-color-warning)]'
-  return 'text-[var(--el-color-success)]'
+  if (percent >= 90) return 'text-[var(--tx-color-danger)]'
+  if (percent >= 70) return 'text-[var(--tx-color-warning)]'
+  return 'text-[var(--tx-color-success)]'
 })
 
 // Methods
@@ -167,18 +167,18 @@ function getFileIcon(fileName: string): string {
 function getFileColor(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase()
   const colorMap: Record<string, string> = {
-    json: 'var(--el-color-success)',
-    log: 'var(--el-color-info)',
-    txt: 'var(--el-color-info)',
-    md: 'var(--el-color-info)',
-    png: 'var(--el-color-primary)',
-    jpg: 'var(--el-color-primary)',
-    jpeg: 'var(--el-color-primary)',
-    gif: 'var(--el-color-primary)',
-    webp: 'var(--el-color-primary)',
-    svg: 'var(--el-color-primary)'
+    json: 'var(--tx-color-success)',
+    log: 'var(--tx-color-info)',
+    txt: 'var(--tx-color-info)',
+    md: 'var(--tx-color-info)',
+    png: 'var(--tx-color-primary)',
+    jpg: 'var(--tx-color-primary)',
+    jpeg: 'var(--tx-color-primary)',
+    gif: 'var(--tx-color-primary)',
+    webp: 'var(--tx-color-primary)',
+    svg: 'var(--tx-color-primary)'
   }
-  return colorMap[ext || ''] || 'var(--el-text-color-secondary)'
+  return colorMap[ext || ''] || 'var(--tx-text-color-secondary)'
 }
 
 function getEntryIcon(entry: StorageEntry): string {
@@ -187,7 +187,7 @@ function getEntryIcon(entry: StorageEntry): string {
 }
 
 function getEntryColor(entry: StorageEntry): string {
-  if (entry.type === 'directory') return 'var(--el-color-warning)'
+  if (entry.type === 'directory') return 'var(--tx-color-warning)'
   return getFileColor(entry.name)
 }
 
@@ -334,8 +334,8 @@ watch(
     <div class="PluginStorage-Card flex-1 overflow-hidden flex flex-col">
       <div class="PluginStorage-CardHeader flex items-center justify-between">
         <div class="flex items-center gap-2 min-w-0">
-          <i class="i-ri-folder-5-line text-xl text-[var(--el-color-primary)]" />
-          <h3 class="text-lg font-semibold text-[var(--el-text-color-primary)]">Storage Files</h3>
+          <i class="i-ri-folder-5-line text-xl text-[var(--tx-color-primary)]" />
+          <h3 class="text-lg font-semibold text-[var(--tx-text-color-primary)]">Storage Files</h3>
           <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
             {{ storagePath }}
           </span>
@@ -387,7 +387,7 @@ watch(
       <div class="flex-1 mt-4 overflow-hidden">
         <div
           v-if="loading"
-          class="h-full flex items-center justify-center text-sm text-[var(--el-text-color-secondary)]"
+          class="h-full flex items-center justify-center text-sm text-[var(--tx-text-color-secondary)]"
         >
           <i class="i-ri-loader-4-line animate-spin mr-2" />
           {{ t('plugin.storage.actions.refresh') }}...
@@ -395,16 +395,16 @@ watch(
 
         <div
           v-else-if="entries.length === 0"
-          class="PluginStorage-Empty h-full flex items-center justify-center border border-dashed border-[var(--el-border-color-lighter)] rounded-2xl"
+          class="PluginStorage-Empty h-full flex items-center justify-center border border-dashed border-[var(--tx-border-color-lighter)] rounded-2xl"
         >
           <div class="flex flex-col items-center text-center px-6">
             <div class="PluginStorage-EmptyIcon">
               <i class="i-ri-inbox-archive-line" />
             </div>
-            <div class="text-sm font-semibold text-[var(--el-text-color-primary)]">
+            <div class="text-sm font-semibold text-[var(--tx-text-color-primary)]">
               No storage files found
             </div>
-            <div class="text-xs text-[var(--el-text-color-secondary)] mt-1">
+            <div class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
               Start using the plugin to generate data
             </div>
           </div>
@@ -419,7 +419,7 @@ watch(
             <div class="text-right">ACTIONS</div>
           </div>
           <TouchScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
-            <div class="divide-y divide-[var(--el-border-color-lighter)]">
+            <div class="divide-y divide-[var(--tx-border-color-lighter)]">
               <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
                 <div class="flex items-center gap-3 min-w-0">
                   <i
@@ -428,24 +428,24 @@ watch(
                     :style="{ color: getEntryColor(entry) }"
                   />
                   <div class="min-w-0">
-                    <div class="text-sm font-medium text-[var(--el-text-color-primary)] truncate">
+                    <div class="text-sm font-medium text-[var(--tx-text-color-primary)] truncate">
                       {{ entry.name }}
                     </div>
-                    <div class="text-xs text-[var(--el-text-color-secondary)] truncate">
+                    <div class="text-xs text-[var(--tx-text-color-secondary)] truncate">
                       {{ entry.path }}
                     </div>
                   </div>
                 </div>
-                <div class="text-xs text-[var(--el-text-color-secondary)]">
+                <div class="text-xs text-[var(--tx-text-color-secondary)]">
                   {{ getEntryTypeLabel(entry) }}
                 </div>
-                <div class="text-xs text-[var(--el-text-color-secondary)]">
+                <div class="text-xs text-[var(--tx-text-color-secondary)]">
                   {{ entry.type === 'directory' ? '--' : formatSize(entry.size) }}
                 </div>
-                <div class="text-xs text-[var(--el-text-color-secondary)]">
+                <div class="text-xs text-[var(--tx-text-color-secondary)]">
                   {{ formatDate(entry.modified) }}
                 </div>
-                <div class="text-xs text-right text-[var(--el-text-color-secondary)]">--</div>
+                <div class="text-xs text-right text-[var(--tx-text-color-secondary)]">--</div>
               </div>
             </div>
           </TouchScroll>
@@ -453,16 +453,16 @@ watch(
       </div>
 
       <div
-        class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--el-border-color-lighter)]"
+        class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--tx-border-color-lighter)]"
       >
-        <div class="flex items-center gap-3 text-xs text-[var(--el-text-color-secondary)]">
+        <div class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]">
           <span class="flex items-center gap-1">
-            <i class="i-ri-checkbox-circle-fill text-[var(--el-color-success)] text-[10px]" />
+            <i class="i-ri-checkbox-circle-fill text-[var(--tx-color-success)] text-[10px]" />
             Service Ready
           </span>
           <span>UTF-8</span>
         </div>
-        <div class="flex items-center gap-3 text-xs text-[var(--el-text-color-secondary)]">
+        <div class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]">
           <span>
             Space: {{ (storageStats.usagePercent || 0).toFixed(1) }}% /
             {{ formatSize(storageStats.maxSize) }}
@@ -497,8 +497,8 @@ watch(
 
 <style lang="scss" scoped>
 .PluginStorage-StatCard {
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 16px;
   padding: 16px;
   min-height: 92px;
@@ -523,7 +523,7 @@ watch(
 .PluginStorage-StatValue {
   font-size: 20px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.1;
 }
 
@@ -531,22 +531,22 @@ watch(
   margin-top: 4px;
   font-size: 11px;
   letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.8;
 }
 
 .PluginStorage-Card {
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 16px;
   padding: 24px;
 }
 
 .PluginStorage-Path {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  border: 1px solid var(--tx-border-color-lighter);
   padding: 4px 10px;
   border-radius: 999px;
   max-width: 320px;
@@ -559,7 +559,7 @@ watch(
   width: 76px;
   height: 76px;
   border-radius: 999px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -567,7 +567,7 @@ watch(
 
   i {
     font-size: 32px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.6;
   }
 }
@@ -578,8 +578,8 @@ watch(
   gap: 12px;
   padding: 8px 12px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  color: var(--tx-text-color-secondary);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .PluginStorage-Row {

@@ -290,30 +290,30 @@ function requestClose() {
 
 .stat-label {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-bottom: 4px;
 }
 
 .stat-value {
   font-size: 24px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .stat-value.error-network {
-  color: var(--el-color-warning);
+  color: var(--tx-color-warning);
 }
 
 .stat-value.error-timeout {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 .stat-value.error-disk {
-  color: var(--el-color-error);
+  color: var(--tx-color-error);
 }
 
 .log-content {
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 4px;
   padding: 12px;
 }
@@ -323,7 +323,7 @@ function requestClose() {
   font-family: 'Courier New', Courier, monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: pre-wrap;
   word-wrap: break-word;
 }

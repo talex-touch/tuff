@@ -355,13 +355,13 @@ function setItemVisibility(itemId: string, visible: boolean): void {
     margin: 0;
     font-size: 16px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   p {
     margin: 4px 0 0;
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 }
 
@@ -384,9 +384,9 @@ function setItemVisibility(itemId: string, visible: boolean): void {
 }
 
 .CanvasGridEditor-CanvasWrap {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--el-bg-color) 90%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color) 90%, transparent);
   padding: 12px;
   min-height: 0;
   overflow: auto;
@@ -401,12 +401,12 @@ function setItemVisibility(itemId: string, visible: boolean): void {
   background-image:
     linear-gradient(
       to right,
-      color-mix(in srgb, var(--el-border-color-lighter) 70%, transparent) 1px,
+      color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent) 1px,
       transparent 1px
     ),
     linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--el-border-color-lighter) 70%, transparent) 1px,
+      color-mix(in srgb, var(--tx-border-color-lighter) 70%, transparent) 1px,
       transparent 1px
     );
   background-size: calc(100% / var(--canvas-columns)) var(--canvas-row-height);
@@ -415,8 +415,8 @@ function setItemVisibility(itemId: string, visible: boolean): void {
 .CanvasGridEditor-Item {
   user-select: none;
   border-radius: 10px;
-  border: 1px solid var(--el-border-color);
-  background: color-mix(in srgb, var(--el-color-primary-light-9) 35%, var(--el-bg-color));
+  border: 1px solid var(--tx-border-color);
+  background: color-mix(in srgb, var(--tx-color-primary-light-9) 35%, var(--tx-bg-color));
   padding: 6px 8px;
   cursor: grab;
   display: flex;
@@ -426,18 +426,18 @@ function setItemVisibility(itemId: string, visible: boolean): void {
   strong {
     font-size: 12px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     text-transform: capitalize;
   }
 
   span {
     font-size: 11px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   &.active {
-    border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 45%, transparent);
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tx-color-primary) 45%, transparent);
   }
 
   &.dragging {
@@ -445,14 +445,14 @@ function setItemVisibility(itemId: string, visible: boolean): void {
   }
 
   &.invalid {
-    border-color: var(--el-color-danger);
+    border-color: var(--tx-color-danger);
   }
 }
 
 .CanvasGridEditor-Panel {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 12px;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -469,13 +469,13 @@ function setItemVisibility(itemId: string, visible: boolean): void {
     margin: 0;
     font-size: 13px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   p {
     margin: 0;
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     text-transform: capitalize;
   }
 
@@ -485,7 +485,7 @@ function setItemVisibility(itemId: string, visible: boolean): void {
     align-items: center;
     gap: 8px;
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
 
     input[type='checkbox'] {
       justify-self: start;
@@ -495,7 +495,7 @@ function setItemVisibility(itemId: string, visible: boolean): void {
       font-style: normal;
       text-align: right;
       font-size: 11px;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
   }
 }

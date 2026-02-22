@@ -473,7 +473,7 @@ async function updateConfig(config: DownloadConfig) {
   display: flex;
   flex-direction: column;
   padding: 20px;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
 }
 
 .download-header {
@@ -496,7 +496,7 @@ async function updateConfig(config: DownloadConfig) {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .header-right {

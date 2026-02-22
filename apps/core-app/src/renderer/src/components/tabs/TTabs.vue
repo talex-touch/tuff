@@ -289,7 +289,7 @@ export default defineComponent({
   min-width: 220px;
   max-width: 300px;
 
-  border-right: 1px solid var(--el-border-color);
+  border-right: 1px solid var(--tx-border-color);
   box-sizing: border-box;
 }
 
@@ -308,7 +308,7 @@ export default defineComponent({
     height 0.22s cubic-bezier(0.2, 0.9, 0.2, 1),
     opacity 0.18s ease;
   border-radius: 50px;
-  background-color: var(--el-color-primary);
+  background-color: var(--tx-color-primary);
 }
 
 .TTabs-SelectSlot-Empty {
@@ -350,7 +350,7 @@ export default defineComponent({
       height: 100%;
 
       border-radius: 4px 4px 0 0;
-      background-color: var(--el-fill-color-dark);
+      background-color: var(--tx-fill-color-dark);
     }
 
     z-index: 0;
@@ -379,7 +379,7 @@ export default defineComponent({
     top: 0;
 
     border-radius: 0 0 4px 4px;
-    background-color: var(--el-fill-color);
+    background-color: var(--tx-fill-color);
   }
 
   position: relative;
@@ -387,7 +387,7 @@ export default defineComponent({
   margin-top: 30px;
   margin-bottom: 10px;
 
-  //border: 2px solid var(--el-border-color);
+  //border: 2px solid var(--tx-border-color);
 }
 
 .touch-blur .TTabs-Container {
@@ -425,7 +425,7 @@ export default defineComponent({
     top: 0;
     left: 0;
 
-    // background-color: var(--el-fill-color);
+    // background-color: var(--tx-fill-color);
   }
 
   position: relative;

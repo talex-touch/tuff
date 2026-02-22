@@ -34,7 +34,7 @@ const { t } = useI18n()
 
     background-image:
       radial-gradient(circle at top right, rgba(94, 74, 176, 0.2) 50%, transparent 60%),
-      radial-gradient(circle at top right, var(--el-color-primary-light-5) 10%, transparent 80%),
+      radial-gradient(circle at top right, var(--tx-color-primary-light-5) 10%, transparent 80%),
       radial-gradient(circle at top right, rgba(94, 74, 176, 0.8) 20%, rgba(94, 74, 176, 0) 100%);
     background-position:
       top right,
