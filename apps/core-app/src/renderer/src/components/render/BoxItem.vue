@@ -150,10 +150,10 @@ const recommendation = computed(() => props.item.meta?.recommendation)
 
 <template>
   <div
-    class="BoxItem hover:bg-[var(--el-fill-color-lighter)] group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
+    class="BoxItem hover:bg-[var(--tx-fill-color-lighter)] group flex items-center gap-2 mx-2 my-1 p-1.5 w-[calc(100%-1rem)] h-44px box-border cursor-pointer overflow-hidden relative rounded-lg transition-colors duration-100"
     :class="{
       'is-active': active,
-      '!bg-[var(--el-bg-color)]': active,
+      '!bg-[var(--tx-bg-color)]': active,
       recommendation
     }"
   >
@@ -164,17 +164,17 @@ const recommendation = computed(() => props.item.meta?.recommendation)
         :alt="render.basic?.title || 'Tuff Item'"
         :size="32"
         :colorful="render?.basic?.icon?.colorful ?? true"
-        style="--icon-color: var(--el-text-color-primary)"
+        style="--icon-color: var(--tx-text-color-primary)"
       />
       <span
         v-if="showFrequency"
-        class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--el-color-primary)] text-white shadow-sm"
+        class="absolute -top-1 -right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 text-[10px] leading-none rounded-full bg-[var(--tx-color-primary)] text-white shadow-sm"
       >
         {{ frequencyLabel }}
       </span>
       <div
         v-if="showOpenerLogo"
-        class="absolute right-0 bottom-0 flex items-center justify-center w-[14px] h-[14px] rounded-md border border-[var(--el-border-color)] bg-[var(--el-bg-color)]/90 shadow-sm overflow-hidden"
+        class="absolute right-0 bottom-0 flex items-center justify-center w-[14px] h-[14px] rounded-md border border-[var(--tx-border-color)] bg-[var(--tx-bg-color)]/90 shadow-sm overflow-hidden"
         :title="openerName"
       >
         <img
@@ -202,14 +202,14 @@ const recommendation = computed(() => props.item.meta?.recommendation)
         v-if="sourceMeta"
         class="SourceBadge text-10px text-slate-400 dark:text-slate-500 uppercase font-semibold"
       >
-        <i :class="sourceMeta.icon" class="text-[var(--el-text-color-secondary)]" />
+        <i :class="sourceMeta.icon" class="text-[var(--tx-text-color-secondary)]" />
         <span>{{ sourceMeta.label }}</span>
       </span>
       <span v-if="showQuickKey" class="QuickKeyPill">{{ quickKeyLabel }}</span>
     </div>
 
     <div
-      class="absolute left-0 top-[25%] h-[50%] w-1 rounded-3xl bg-[var(--el-color-primary)] shadow-[0_0_2px_0_var(--el-color-primary)] transition-opacity duration-200 opacity-0 group-[.is-active]:opacity-100"
+      class="absolute left-0 top-[25%] h-[50%] w-1 rounded-3xl bg-[var(--tx-color-primary)] shadow-[0_0_2px_0_var(--tx-color-primary)] transition-opacity duration-200 opacity-0 group-[.is-active]:opacity-100"
     />
   </div>
 </template>
@@ -231,8 +231,8 @@ const recommendation = computed(() => props.item.meta?.recommendation)
   border-radius: 6px;
   font-size: 10px;
   font-weight: 600;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-primary);
 }
 
 .SourceBadge {

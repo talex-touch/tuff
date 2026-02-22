@@ -346,29 +346,29 @@ async function handleCapabilityTest(
   padding: 1rem;
   margin-bottom: 0.5rem;
   border-radius: 0.75rem;
-  background: var(--el-fill-color-blank);
-  border: 1.5px solid var(--el-border-color-light);
+  background: var(--tx-fill-color-blank);
+  border: 1.5px solid var(--tx-border-color-light);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: var(--el-color-primary-light-5);
+    border-color: var(--tx-color-primary-light-5);
   }
 
   &--selected {
     background: linear-gradient(
       135deg,
-      var(--el-color-primary-light-9) 0%,
-      var(--el-fill-color-blank) 100%
+      var(--tx-color-primary-light-9) 0%,
+      var(--tx-fill-color-blank) 100%
     );
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
     box-shadow: 0 2px 8px rgba(30, 136, 229, 0.15);
   }
 
   &--configured {
-    border-left: 3px solid var(--el-color-success);
+    border-left: 3px solid var(--tx-color-success);
   }
 }
 
@@ -407,7 +407,7 @@ async function handleCapabilityTest(
 .capability-card__title {
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   flex: 1;
 }
 
@@ -426,13 +426,13 @@ async function handleCapabilityTest(
   }
 
   &--success {
-    background: var(--el-color-success-light-9);
-    color: var(--el-color-success);
+    background: var(--tx-color-success-light-9);
+    color: var(--tx-color-success);
   }
 
   &--inactive {
-    background: var(--el-fill-color);
-    color: var(--el-text-color-secondary);
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-secondary);
   }
 }
 
@@ -440,7 +440,7 @@ async function handleCapabilityTest(
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -453,7 +453,7 @@ async function handleCapabilityTest(
 
   p {
     margin: 0;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     font-size: 0.9rem;
   }
 }

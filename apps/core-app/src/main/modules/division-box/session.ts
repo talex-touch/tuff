@@ -11,7 +11,6 @@ import type { WebPreferences } from 'electron'
 import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
@@ -20,17 +19,12 @@ import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
 import { pluginModule } from '../plugin/plugin-module'
+import { getPluginTransportBundlePath } from '../../utils/plugin-transport-bundle'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 
-const resolveTransportModulePath = (): string | null => {
-  try {
-    const requireFromMain = createRequire(import.meta.url)
-    return requireFromMain.resolve('@talex-touch/utils/transport')
-  } catch (error) {
-    console.warn('[DivisionBox] Failed to resolve transport module path', error)
-    return null
-  }
+const resolveTransportModulePath = async (pluginPath?: string): Promise<string | null> => {
+  return getPluginTransportBundlePath(pluginPath)
 }
 /**
  * Type for state change listener callback
@@ -355,7 +349,11 @@ export class DivisionBoxSession {
         `tuff-division-preload-${plugin.name}-${Date.now()}.js`
       )
 
-      const channelScript = this.generateChannelScript(plugin._uniqueChannelKey)
+      const transportModulePath = await resolveTransportModulePath(plugin?.pluginPath)
+      const channelScript = this.generateChannelScript(
+        plugin._uniqueChannelKey,
+        transportModulePath
+      )
       const pluginInjectionCode = injections.js.trim()
 
       const combinedPreload = `
@@ -436,8 +434,7 @@ export class DivisionBoxSession {
   /**
    * Generate plugin channel script for preload injection
    */
-  private generateChannelScript(uniqueKey: string): string {
-    const transportModulePath = resolveTransportModulePath()
+  private generateChannelScript(uniqueKey: string, transportModulePath?: string | null): string {
     return `
 (function() {
   const uniqueKey = "${uniqueKey}";
@@ -518,35 +515,10 @@ export class DivisionBoxSession {
 
   window['$channel'] = new TouchChannel();
   try {
-    const { createRequire } = require('node:module');
-    const path = require('node:path');
-    let transportModule;
-    if (transportModulePath) {
-      transportModule = require(transportModulePath);
+    if (!transportModulePath) {
+      throw new Error('[DivisionBox] Plugin transport bundle not resolved');
     }
-    if (!transportModule) {
-      const appPath = window?.$plugin?.path?.app;
-      const rootPath = window?.$plugin?.path?.root;
-      const pluginPath = window?.$plugin?.path?.plugin;
-      const baseCandidates = [
-        appPath,
-        rootPath,
-        pluginPath ? path.resolve(pluginPath, '..', '..') : undefined
-      ].filter(Boolean);
-      const uniqueCandidates = Array.from(new Set(baseCandidates));
-      for (const base of uniqueCandidates) {
-        try {
-          const requireFromRoot = createRequire(path.join(base, 'package.json'));
-          transportModule = requireFromRoot('@talex-touch/utils/transport');
-          break;
-        } catch (error) {
-          void error;
-        }
-      }
-    }
-    if (!transportModule) {
-      transportModule = require('@talex-touch/utils/transport');
-    }
+    const transportModule = require(transportModulePath);
     const { createPluginTuffTransport } = transportModule;
     window['$transport'] = createPluginTuffTransport(window['$channel']);
   } catch (error) {

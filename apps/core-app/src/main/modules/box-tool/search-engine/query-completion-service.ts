@@ -2,6 +2,8 @@ import type { TuffItem } from '@talex-touch/utils'
 import type { DbUtils } from '../../../db/utils'
 import { sql } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('QueryCompletionService')
@@ -207,9 +209,18 @@ export class QueryCompletionService {
       const expirationDate = new Date()
       expirationDate.setDate(expirationDate.getDate() - retentionDays)
 
-      await db
-        .delete(schema.queryCompletions)
-        .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`)
+      await dbWriteScheduler.schedule(
+        'query-completions.cleanup',
+        () =>
+          withSqliteRetry(
+            () =>
+              db
+                .delete(schema.queryCompletions)
+                .where(sql`${schema.queryCompletions.lastCompleted} < ${expirationDate}`),
+            { label: 'query-completions.cleanup' }
+          ),
+        { droppable: true }
+      )
 
       timer.end('info')
       log.info('Cleaned up old completions', {

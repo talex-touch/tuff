@@ -171,7 +171,7 @@ onMounted(() => {
 .MessageCount {
   font-weight: 600;
   font-size: 14px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .MessageActions {
@@ -186,7 +186,7 @@ onMounted(() => {
   gap: 8px;
   padding: 12px;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .MessageList {
@@ -198,16 +198,16 @@ onMounted(() => {
 .MessageItem {
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color);
 }
 
 .MessageItem.is-error {
-  border-color: color-mix(in srgb, var(--el-color-danger) 35%, var(--el-border-color-lighter));
+  border-color: color-mix(in srgb, var(--tx-color-danger) 35%, var(--tx-border-color-lighter));
 }
 
 .MessageItem.is-warn {
-  border-color: color-mix(in srgb, var(--el-color-warning) 35%, var(--el-border-color-lighter));
+  border-color: color-mix(in srgb, var(--tx-color-warning) 35%, var(--tx-border-color-lighter));
 }
 
 .MessageHeader {
@@ -227,40 +227,40 @@ onMounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--el-color-info);
+  background: var(--tx-color-info);
 }
 
 .MessageItem.is-error .MessageDot {
-  background: var(--el-color-danger);
+  background: var(--tx-color-danger);
 }
 
 .MessageItem.is-warn .MessageDot {
-  background: var(--el-color-warning);
+  background: var(--tx-color-warning);
 }
 
 .MessageTitleText {
   font-weight: 600;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .MessageBadge {
   padding: 2px 6px;
   border-radius: 999px;
   font-size: 11px;
-  background: color-mix(in srgb, var(--el-color-primary) 18%, transparent);
-  color: var(--el-text-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 18%, transparent);
+  color: var(--tx-text-color-primary);
 }
 
 .MessageTime {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .MessageBody {
   margin: 8px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   line-height: 1.5;
 }
 

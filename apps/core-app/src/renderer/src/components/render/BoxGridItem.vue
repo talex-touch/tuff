@@ -55,7 +55,7 @@ const recommendationBadge = computed(() => {
         :alt="title"
         :size="36"
         :colorful="render?.basic?.icon?.colorful ?? true"
-        style="--icon-color: var(--el-text-color-primary)"
+        style="--icon-color: var(--tx-text-color-primary)"
       />
       <span v-if="isPinned" class="BoxGridItem-Pin">
         <i class="i-ri-pushpin-2-fill" />
@@ -91,12 +91,12 @@ const recommendationBadge = computed(() => {
 
   &:hover {
     --fake-inner-opacity: 0.5;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
   }
 
   &.is-active {
     --fake-inner-opacity: 0.75;
-    border: 1px solid var(--el-color-primary);
+    border: 1px solid var(--tx-color-primary);
   }
 
   &.is-pinned .BoxGridItem-Icon::after {
@@ -104,7 +104,7 @@ const recommendationBadge = computed(() => {
     position: absolute;
     inset: -2px;
     border-radius: 14px;
-    border: 1px dashed var(--el-color-warning);
+    border: 1px dashed var(--tx-color-warning);
     pointer-events: none;
   }
 }
@@ -124,7 +124,7 @@ const recommendationBadge = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-color-warning);
+  background: var(--tx-color-warning);
   border-radius: 50%;
   font-size: 10px;
   color: #fff;
@@ -138,7 +138,7 @@ const recommendationBadge = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.2;
 }
 
@@ -150,8 +150,8 @@ const recommendationBadge = computed(() => {
   font-weight: 600;
   padding: 2px 4px;
   border-radius: 8px;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-primary);
 }
 
 .BoxGridItem-Badge {

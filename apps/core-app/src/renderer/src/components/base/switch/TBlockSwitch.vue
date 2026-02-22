@@ -185,20 +185,20 @@ watch(
   border-radius: 12px;
   //transition: .5s,;
   box-sizing: border-box;
-  --fake-color: var(--el-fill-color-dark);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-radius: 12px;
   --fake-inner-opacity: 0.5;
 
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 }
 
 .touch-blur .TBlockSwitch-Container {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
 
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 </style>

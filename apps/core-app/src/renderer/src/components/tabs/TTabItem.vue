@@ -53,7 +53,7 @@ watchEffect(() => {
 <style lang="scss" scoped>
 .TTabItem-Container {
   &.active {
-    --fake-color: var(--el-fill-color-dark) !important;
+    --fake-color: var(--tx-fill-color-dark) !important;
   }
   .TTabs-Tab-Icon {
     position: relative;
@@ -62,7 +62,7 @@ watchEffect(() => {
     bottom: -0.125em;
   }
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
   &.disabled {
     cursor: not-allowed;
@@ -88,7 +88,7 @@ watchEffect(() => {
 
 .touch-blur .TTabItem-Container {
   &.active {
-    --fake-color: var(--el-fill-color-lighter) !important;
+    --fake-color: var(--tx-fill-color-lighter) !important;
   }
   --fake-opacity: 0.25;
 }

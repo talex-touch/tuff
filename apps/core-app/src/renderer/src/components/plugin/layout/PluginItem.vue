@@ -87,22 +87,22 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
 <style lang="scss" scoped>
 .plugin-item {
   &:hover {
-    border-color: var(--el-border-color);
+    border-color: var(--tx-border-color);
     --fake-inner-opacity: 0.25;
   }
 
   &.dev {
     background: repeating-linear-gradient(
       45deg,
-      rgba(var(--el-color-warning-rgb), 0.05),
-      rgba(var(--el-color-warning-rgb), 0.05) 10px,
-      rgba(var(--el-color-warning-rgb), 0.15) 10px,
-      rgba(var(--el-color-warning-rgb), 0.15) 20px
+      rgba(var(--tx-color-warning-rgb), 0.05),
+      rgba(var(--tx-color-warning-rgb), 0.05) 10px,
+      rgba(var(--tx-color-warning-rgb), 0.15) 10px,
+      rgba(var(--tx-color-warning-rgb), 0.15) 20px
     );
   }
 
   &.target {
-    border-color: var(--el-color-primary-light-3);
+    border-color: var(--tx-color-primary-light-3);
     --fake-opacity: 0.5;
     --fake-inner-opacity: 0.5;
   }
@@ -112,7 +112,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     pointer-events: all !important;
 
     .main-content p {
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
 
     :deep(.PluginIcon-Container) {
@@ -125,7 +125,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
     }
 
     &:hover {
-      border-color: var(--el-color-primary-light-3);
+      border-color: var(--tx-color-primary-light-3);
     }
   }
 }
@@ -138,7 +138,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
   height: 1.25em;
   font-size: 32px;
   border-radius: 12px;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
   box-sizing: border-box;
   z-index: 1;
 }
@@ -156,7 +156,7 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
 .plugin-issues-title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 @keyframes rotate {

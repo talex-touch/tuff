@@ -56,22 +56,22 @@ function getAgentIcon(agent: AgentDescriptor): string {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
 
   &:hover {
-    background: var(--el-fill-color);
+    background: var(--tx-fill-color);
   }
 
   &.selected {
-    background: var(--el-color-primary-light-9);
-    border-left: 3px solid var(--el-color-primary);
+    background: var(--tx-color-primary-light-9);
+    border-left: 3px solid var(--tx-color-primary);
     padding-left: calc(0.75rem - 3px);
   }
 }
 
 .agent-icon {
   font-size: 1.25rem;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
   flex-shrink: 0;
 }
 
@@ -83,7 +83,7 @@ function getAgentIcon(agent: AgentDescriptor): string {
 .agent-name {
   font-weight: 500;
   font-size: 0.875rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -91,7 +91,7 @@ function getAgentIcon(agent: AgentDescriptor): string {
 
 .agent-desc {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

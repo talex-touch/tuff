@@ -357,7 +357,7 @@ onBeforeUnmount(() => {
     font-size: 20px;
     font-weight: 600;
     border-radius: 12px;
-    background-color: var(--el-fill-color-darker);
+    background-color: var(--tx-fill-color-darker);
     z-index: 3;
   }
 
@@ -385,7 +385,7 @@ onBeforeUnmount(() => {
     min-height: 220px;
     padding: 24px 32px;
     border-radius: 18px;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     background: linear-gradient(135deg, #0f172a 0%, #101827 45%, #0b1020 100%);
     background-size: 200% 200%;
     box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);

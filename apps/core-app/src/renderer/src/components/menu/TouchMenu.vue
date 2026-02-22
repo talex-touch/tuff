@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
       opacity-0
       transition=".25s"
       border-rounded
-      class="bg-[color:var(--el-color-primary)]"
+      class="bg-[color:var(--tx-color-primary)]"
     />
   </div>
 </template>

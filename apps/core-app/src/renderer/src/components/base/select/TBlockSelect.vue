@@ -137,18 +137,18 @@ function handleChange(val, e) {
   border-radius: 4px;
   //transition: .5s,;
   box-sizing: border-box;
-  --fake-color: var(--el-fill-color-dark);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-radius: 4px;
   --fake-opacity: 0.5;
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 }
 
 .touch-blur .TBlockSelect-Container {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 </style>

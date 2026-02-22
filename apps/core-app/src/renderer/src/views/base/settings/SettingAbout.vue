@@ -227,16 +227,16 @@ async function openAppFolder() {
     <TuffBlockLine :title="t('settingAbout.startCosts')">
       <template #description>
         {{ startCosts.toFixed(2) }}s
-        <span v-if="startCosts < 1" class="tag" style="color: var(--el-color-success)">
+        <span v-if="startCosts < 1" class="tag" style="color: var(--tx-color-success)">
           {{ t('settingAbout.perfect') }}
         </span>
-        <span v-else-if="startCosts < 2" class="tag" style="color: var(--el-color-warning)">
+        <span v-else-if="startCosts < 2" class="tag" style="color: var(--tx-color-warning)">
           {{ t('settingAbout.good') }}
         </span>
-        <span v-else-if="startCosts < 5" class="tag" style="color: var(--el-color-error)">
+        <span v-else-if="startCosts < 5" class="tag" style="color: var(--tx-color-error)">
           {{ t('settingAbout.bad') }}
         </span>
-        <span v-else class="tag" style="color: var(--el-color-error); font-weight: 600">
+        <span v-else class="tag" style="color: var(--tx-color-error); font-weight: 600">
           {{ t('settingAbout.slowly') }}
         </span>
       </template>
@@ -248,7 +248,7 @@ async function openAppFolder() {
       @click="showPerformanceDetails = !showPerformanceDetails"
     >
       <template #description>
-        <span style="cursor: pointer; color: var(--el-color-primary)">
+        <span style="cursor: pointer; color: var(--tx-color-primary)">
           {{
             showPerformanceDetails ? t('settingAbout.hideDetails') : t('settingAbout.viewDetails')
           }}
@@ -272,12 +272,12 @@ async function openAppFolder() {
           <span
             :style="`color: ${
               performanceSummary.rating === 'excellent'
-                ? 'var(--el-color-success)'
+                ? 'var(--tx-color-success)'
                 : performanceSummary.rating === 'good'
-                  ? 'var(--el-color-warning)'
+                  ? 'var(--tx-color-warning)'
                   : performanceSummary.rating === 'fair'
-                    ? 'var(--el-color-error)'
-                    : 'var(--el-color-danger)'
+                    ? 'var(--tx-color-error)'
+                    : 'var(--tx-color-danger)'
             }`"
           >
             {{ t(`settingAbout.rating.${performanceSummary.rating}`) }}
@@ -286,7 +286,7 @@ async function openAppFolder() {
       </TuffBlockLine>
       <TuffBlockLine :title="t('settingAbout.exportData')" link @click="exportPerformanceData">
         <template #description>
-          <span style="cursor: pointer; color: var(--el-color-primary)">
+          <span style="cursor: pointer; color: var(--tx-color-primary)">
             {{ t('settingAbout.exportJson') }}
           </span>
         </template>
@@ -315,7 +315,7 @@ async function openAppFolder() {
         <span
           :data-text="`${Math.round(cpuUsage[0].value.percentCPUUsage * 10000) / 100}%`"
           class="Usage"
-          :style="`--color: var(--el-color-danger);--percent: ${
+          :style="`--color: var(--tx-color-danger);--percent: ${
             cpuUsage[0].value.percentCPUUsage * 100
           }%`"
         >
@@ -330,7 +330,7 @@ async function openAppFolder() {
             100
           }%`"
           class="Usage"
-          :style="`--color: var(--el-color-primary);--percent: ${
+          :style="`--color: var(--tx-color-primary);--percent: ${
             (memoryUsage[0].value.heapUsed / memoryUsage[0].value.heapTotal) * 100
           }%`"
         >
@@ -339,7 +339,7 @@ async function openAppFolder() {
     </tuff-block-line> -->
     <TuffBlockLine :title="t('settingAbout.openAppFolder')" link @click="openAppFolder">
       <template #description>
-        <span style="cursor: pointer; color: var(--el-color-primary)">
+        <span style="cursor: pointer; color: var(--tx-color-primary)">
           {{ t('settingAbout.openFolder') }}
         </span>
       </template>
@@ -364,7 +364,7 @@ async function openAppFolder() {
     max-width: 100%;
     height: 100%;
 
-    background-color: var(--color, var(--el-color-info));
+    background-color: var(--color, var(--tx-color-info));
     border-radius: 2px;
     transition: 1s linear;
   }
@@ -386,6 +386,6 @@ async function openAppFolder() {
   height: 20px;
 
   border-radius: 4px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 }
 </style>

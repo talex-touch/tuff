@@ -108,16 +108,26 @@ export class DbStore {
       cutoff: nowMs - (retention[windowType] ?? 0)
     }))
 
-    for (const clause of clauses) {
-      await this.db
-        .delete(schema.analyticsSnapshots)
-        .where(
-          and(
-            eq(schema.analyticsSnapshots.windowType, clause.windowType),
-            lt(schema.analyticsSnapshots.timestamp, clause.cutoff)
-          )
-        )
-    }
+    await dbWriteScheduler.schedule(
+      'analytics.cleanup',
+      () =>
+        withSqliteRetry(
+          async () => {
+            for (const clause of clauses) {
+              await this.db
+                .delete(schema.analyticsSnapshots)
+                .where(
+                  and(
+                    eq(schema.analyticsSnapshots.windowType, clause.windowType),
+                    lt(schema.analyticsSnapshots.timestamp, clause.cutoff)
+                  )
+                )
+            }
+          },
+          { label: 'analytics.cleanup' }
+        ),
+      { droppable: true }
+    )
   }
 
   async insertPluginEvent(payload: {

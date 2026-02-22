@@ -5,5 +5,7 @@ TuffInput.install = (app: App) => {
   app.component(TuffInput.name || 'TuffInput', TuffInput)
 }
 
-export { TuffInput }
+const TxInput = TuffInput
+
+export { TuffInput, TxInput }
 export default TuffInput

@@ -209,14 +209,14 @@ function getPayloadPreview(): string {
 
         <!-- Panel -->
         <div
-          class="relative w-[480px] max-h-[70vh] bg-[var(--el-bg-color)] rounded-xl shadow-2xl overflow-hidden flex flex-col"
+          class="relative w-[480px] max-h-[70vh] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden flex flex-col"
         >
           <!-- Header -->
-          <div class="px-4 py-3 border-b border-[var(--el-border-color)]">
-            <h3 class="text-base font-semibold text-[var(--el-text-color-primary)]">
+          <div class="px-4 py-3 border-b border-[var(--tx-border-color)]">
+            <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
               {{ t('flow.selectTarget', '选择目标') }}
             </h3>
-            <p class="text-xs text-[var(--el-text-color-secondary)] mt-1">
+            <p class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
               {{ t('flow.selectTargetDesc', '选择要将数据发送到的插件') }}
             </p>
           </div>
@@ -224,26 +224,26 @@ function getPayloadPreview(): string {
           <!-- Payload Preview -->
           <div
             v-if="payload"
-            class="px-4 py-2 bg-[var(--el-fill-color-light)] border-b border-[var(--el-border-color)]"
+            class="px-4 py-2 bg-[var(--tx-fill-color-light)] border-b border-[var(--tx-border-color)]"
           >
             <div class="flex items-center gap-2">
-              <span class="text-xs font-medium text-[var(--el-text-color-secondary)] uppercase">
+              <span class="text-xs font-medium text-[var(--tx-text-color-secondary)] uppercase">
                 {{ payload.type }}
               </span>
-              <span class="text-xs text-[var(--el-text-color-regular)] truncate flex-1">
+              <span class="text-xs text-[var(--tx-text-color-regular)] truncate flex-1">
                 {{ getPayloadPreview() }}
               </span>
             </div>
           </div>
 
           <!-- Search -->
-          <div class="px-4 py-2 border-b border-[var(--el-border-color)]">
+          <div class="px-4 py-2 border-b border-[var(--tx-border-color)]">
             <input
               ref="inputRef"
               v-model="searchQuery"
               type="text"
               :placeholder="t('flow.searchTargets', '搜索目标...')"
-              class="w-full px-3 py-2 text-sm bg-[var(--el-fill-color)] rounded-lg border-none outline-none focus:ring-2 focus:ring-[var(--el-color-primary)]"
+              class="w-full px-3 py-2 text-sm bg-[var(--tx-fill-color)] rounded-lg border-none outline-none focus:ring-2 focus:ring-[var(--tx-color-primary)]"
             />
           </div>
 
@@ -252,13 +252,13 @@ function getPayloadPreview(): string {
             <div class="p-2">
               <div v-if="loading" class="flex items-center justify-center py-8">
                 <i
-                  class="ri:loader-4-line animate-spin text-2xl text-[var(--el-text-color-secondary)]"
+                  class="ri:loader-4-line animate-spin text-2xl text-[var(--tx-text-color-secondary)]"
                 />
               </div>
 
               <div v-else-if="filteredTargets.length === 0" class="text-center py-8">
-                <i class="ri:inbox-line text-4xl text-[var(--el-text-color-placeholder)]" />
-                <p class="mt-2 text-sm text-[var(--el-text-color-secondary)]">
+                <i class="ri:inbox-line text-4xl text-[var(--tx-text-color-placeholder)]" />
+                <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)]">
                   {{ t('flow.noTargets', '没有可用的目标') }}
                 </p>
               </div>
@@ -270,40 +270,40 @@ function getPayloadPreview(): string {
                   variant="bare"
                   class="FlowTargetItem w-full flex items-center gap-3 p-3 rounded-lg text-left transition-colors"
                   :class="{
-                    'bg-[var(--el-color-primary-light-9)]': index === selectedIndex,
-                    'hover:bg-[var(--el-fill-color-light)]': index !== selectedIndex
+                    'bg-[var(--tx-color-primary-light-9)]': index === selectedIndex,
+                    'hover:bg-[var(--tx-fill-color-light)]': index !== selectedIndex
                   }"
                   @click="handleSelect(target)"
                   @mouseenter="selectedIndex = index"
                 >
                   <!-- Icon -->
                   <div
-                    class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--el-fill-color)]"
+                    class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--tx-fill-color)]"
                   >
                     <TuffIcon
                       v-if="target.icon"
                       :icon="{ type: 'class', value: target.icon }"
                       :size="24"
                     />
-                    <i v-else class="ri:apps-line text-xl text-[var(--el-text-color-secondary)]" />
+                    <i v-else class="ri:apps-line text-xl text-[var(--tx-text-color-secondary)]" />
                   </div>
 
                   <!-- Info -->
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2">
-                      <span class="font-medium text-[var(--el-text-color-primary)] truncate">
+                      <span class="font-medium text-[var(--tx-text-color-primary)] truncate">
                         {{ target.name }}
                       </span>
                       <span
                         v-if="target.pluginName"
-                        class="text-xs text-[var(--el-text-color-placeholder)] truncate"
+                        class="text-xs text-[var(--tx-text-color-placeholder)] truncate"
                       >
                         · {{ target.pluginName }}
                       </span>
                     </div>
                     <p
                       v-if="target.description"
-                      class="text-xs text-[var(--el-text-color-secondary)] truncate mt-0.5"
+                      class="text-xs text-[var(--tx-text-color-secondary)] truncate mt-0.5"
                     >
                       {{ target.description }}
                     </p>
@@ -314,7 +314,7 @@ function getPayloadPreview(): string {
                     <span
                       v-for="type in target.supportedTypes.slice(0, 3)"
                       :key="type"
-                      class="px-1.5 py-0.5 text-[10px] rounded bg-[var(--el-fill-color)] text-[var(--el-text-color-secondary)]"
+                      class="px-1.5 py-0.5 text-[10px] rounded bg-[var(--tx-fill-color)] text-[var(--tx-text-color-secondary)]"
                     >
                       {{ type }}
                     </span>
@@ -326,19 +326,19 @@ function getPayloadPreview(): string {
 
           <!-- Footer -->
           <div
-            class="px-4 py-3 border-t border-[var(--el-border-color)] flex items-center justify-between"
+            class="px-4 py-3 border-t border-[var(--tx-border-color)] flex items-center justify-between"
           >
-            <div class="text-xs text-[var(--el-text-color-placeholder)]">
-              <kbd class="px-1.5 py-0.5 rounded bg-[var(--el-fill-color)]">↑↓</kbd>
+            <div class="text-xs text-[var(--tx-text-color-placeholder)]">
+              <kbd class="px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">↑↓</kbd>
               {{ t('flow.navigate', '导航') }}
-              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--el-fill-color)]">Enter</kbd>
+              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Enter</kbd>
               {{ t('flow.confirm', '确认') }}
-              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--el-fill-color)]">Esc</kbd>
+              <kbd class="ml-2 px-1.5 py-0.5 rounded bg-[var(--tx-fill-color)]">Esc</kbd>
               {{ t('flow.cancel', '取消') }}
             </div>
             <TxButton
               variant="bare"
-              class="px-3 py-1.5 text-sm rounded-lg bg-[var(--el-fill-color)] hover:bg-[var(--el-fill-color-dark)] transition-colors"
+              class="px-3 py-1.5 text-sm rounded-lg bg-[var(--tx-fill-color)] hover:bg-[var(--tx-fill-color-dark)] transition-colors"
               @click="handleClose"
             >
               {{ t('common.cancel', '取消') }}
@@ -354,12 +354,12 @@ function getPayloadPreview(): string {
       <div v-if="consentVisible" class="fixed inset-0 z-[10000] flex items-center justify-center">
         <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="handleConsentDeny" />
         <div
-          class="relative w-[420px] bg-[var(--el-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
+          class="relative w-[420px] bg-[var(--tx-bg-color)] rounded-xl shadow-2xl overflow-hidden p-5"
         >
-          <h3 class="text-base font-semibold text-[var(--el-text-color-primary)]">
+          <h3 class="text-base font-semibold text-[var(--tx-text-color-primary)]">
             {{ t('flow.consentTitle', '流转授权') }}
           </h3>
-          <p class="mt-2 text-sm text-[var(--el-text-color-secondary)] leading-relaxed">
+          <p class="mt-2 text-sm text-[var(--tx-text-color-secondary)] leading-relaxed">
             {{
               t(
                 'flow.consentDesc',
@@ -370,7 +370,7 @@ function getPayloadPreview(): string {
           <div class="mt-4 flex items-center justify-end gap-2">
             <TxButton
               variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
+              class="px-3 py-1.5 text-sm rounded-md border border-[var(--tx-border-color)] text-[var(--tx-text-color-regular)] hover:bg-[var(--tx-fill-color-light)]"
               :disabled="consentLoading"
               @click="handleConsentDeny"
             >
@@ -378,7 +378,7 @@ function getPayloadPreview(): string {
             </TxButton>
             <TxButton
               variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md border border-[var(--el-border-color)] text-[var(--el-text-color-regular)] hover:bg-[var(--el-fill-color-light)]"
+              class="px-3 py-1.5 text-sm rounded-md border border-[var(--tx-border-color)] text-[var(--tx-text-color-regular)] hover:bg-[var(--tx-fill-color-light)]"
               :disabled="consentLoading"
               @click="handleConsent('once')"
             >
@@ -386,7 +386,7 @@ function getPayloadPreview(): string {
             </TxButton>
             <TxButton
               variant="bare"
-              class="px-3 py-1.5 text-sm rounded-md bg-[var(--el-color-primary)] text-white hover:opacity-90"
+              class="px-3 py-1.5 text-sm rounded-md bg-[var(--tx-color-primary)] text-white hover:opacity-90"
               :disabled="consentLoading"
               @click="handleConsent('always')"
             >

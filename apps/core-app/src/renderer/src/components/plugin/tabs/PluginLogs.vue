@@ -843,8 +843,8 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  border: 1px solid var(--el-color-warning);
-  color: var(--el-color-warning);
+  border: 1px solid var(--tx-color-warning);
+  color: var(--tx-color-warning);
   padding: 0.35rem 0.6rem;
   border-radius: 999px;
   background: rgba(250, 173, 20, 0.1);
@@ -1114,14 +1114,14 @@ defineExpose({
   align-items: center;
   justify-content: center;
   font-size: 0.95rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   background: rgba(11, 13, 16, 0.35);
   backdrop-filter: blur(2px);
   pointer-events: none;
 }
 
 .terminal-overlay.loading {
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .terminal-overlay.empty {
@@ -1166,8 +1166,8 @@ defineExpose({
 
 .history-item {
   border: 1px solid transparent;
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-primary);
   padding: 0.65rem 0.75rem;
   border-radius: 8px;
   text-align: left;
@@ -1179,13 +1179,13 @@ defineExpose({
 }
 
 .history-item:hover {
-  border-color: var(--el-color-primary-light-7);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--tx-color-primary-light-7);
+  background: var(--tx-color-primary-light-9);
 }
 
 .history-item.active {
-  border-color: var(--el-color-primary-light-5);
-  background: var(--el-color-primary-light-8);
+  border-color: var(--tx-color-primary-light-5);
+  background: var(--tx-color-primary-light-8);
 }
 
 .history-item.live {
@@ -1205,14 +1205,14 @@ defineExpose({
 
 .history-version {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .history-live-badge {
   font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
   border: 1px solid rgba(34, 197, 94, 0.4);
   background: rgba(34, 197, 94, 0.1);
 }
@@ -1222,7 +1222,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
 }
 
@@ -1234,8 +1234,8 @@ defineExpose({
 }
 
 .pager {
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color-light);
+  background: var(--tx-bg-color);
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
@@ -1247,8 +1247,8 @@ defineExpose({
 }
 
 .pager:hover:not(:disabled) {
-  border-color: var(--el-color-primary-light-7);
-  color: var(--el-color-primary);
+  border-color: var(--tx-color-primary-light-7);
+  color: var(--tx-color-primary);
 }
 
 .pager:disabled {
@@ -1258,7 +1258,7 @@ defineExpose({
 
 .pager-info {
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 @keyframes rotate {

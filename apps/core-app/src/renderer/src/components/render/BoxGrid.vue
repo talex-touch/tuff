@@ -212,7 +212,7 @@ function isPinnedSection(section: TuffSection): boolean {
   padding: 8px 16px 0;
   font-size: 12px;
   font-weight: 500;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.7;
 }
 

@@ -33,8 +33,8 @@ function createComponent() {
       transform: translate(-50%, -50%);
       width: 300px;
       height: 200px;
-      background: var(--el-bg-color);
-      border: 1px solid var(--el-border-color);
+      background: var(--tx-bg-color);
+      border: 1px solid var(--tx-border-color);
       border-radius: 8px;
       padding: 20px;
       z-index: 9999;
@@ -128,7 +128,7 @@ function clearLogs() {
     <div class="test-controls">
       <TxButton type="primary" @click="createComponent"> 创建组件 </TxButton>
       <TxButton type="danger" @click="destroyComponent"> 销毁组件 </TxButton>
-      <TxButton type="default" @click="clearLogs"> 清除日志 </TxButton>
+      <TxButton @click="clearLogs"> 清除日志 </TxButton>
     </div>
 
     <div class="test-info">
@@ -162,7 +162,7 @@ function clearLogs() {
 }
 
 .test-info {
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   padding: 16px;
   border-radius: 8px;
   margin: 20px 0;
@@ -170,7 +170,7 @@ function clearLogs() {
 
 .test-info p {
   margin: 4px 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .test-logs {
@@ -178,8 +178,8 @@ function clearLogs() {
 }
 
 .logs-container {
-  background: var(--el-bg-color-page);
-  border: 1px solid var(--el-border-color);
+  background: var(--tx-bg-color-page);
+  border: 1px solid var(--tx-border-color);
   border-radius: 8px;
   padding: 16px;
   max-height: 300px;
@@ -189,10 +189,10 @@ function clearLogs() {
 .log-item {
   font-family: monospace;
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   margin: 2px 0;
   padding: 2px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .log-item:last-child {

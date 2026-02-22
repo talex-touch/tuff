@@ -201,7 +201,7 @@ function handleSettings(): void {
     justify-content: center;
     padding: 0.35rem;
     font-size: 1.1rem;
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -209,14 +209,14 @@ function handleSettings(): void {
 
     &:hover {
       opacity: 1;
-      color: var(--el-text-color-primary);
-      background-color: var(--el-fill-color-light);
+      color: var(--tx-text-color-primary);
+      background-color: var(--tx-fill-color-light);
     }
 
     &.active {
       opacity: 1;
-      color: var(--el-color-primary);
-      background-color: var(--el-color-primary-light-9);
+      color: var(--tx-color-primary);
+      background-color: var(--tx-color-primary-light-9);
     }
   }
 }

@@ -67,7 +67,7 @@ function close() {
 }
 
 .TModal-Content {
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 16px;
   padding: 20px;
   box-shadow:
@@ -94,7 +94,7 @@ function close() {
     background: transparent;
     font-size: 18px;
     cursor: pointer;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     border-radius: 8px;
     width: 28px;
     height: 28px;
@@ -106,12 +106,12 @@ function close() {
       color 0.2s ease;
 
     &:hover {
-      background-color: var(--el-fill-color);
-      color: var(--el-text-color-primary);
+      background-color: var(--tx-fill-color);
+      color: var(--tx-text-color-primary);
     }
 
     &:active {
-      background-color: var(--el-fill-color-dark);
+      background-color: var(--tx-fill-color-dark);
     }
   }
 }

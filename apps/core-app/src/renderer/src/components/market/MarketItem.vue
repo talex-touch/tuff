@@ -22,14 +22,14 @@ defineProps<MarketItemProps>()
 <style scoped lang="scss">
 .MarketItem-Container {
   &:hover {
-    box-shadow: var(--el-box-shadow-lighter);
+    box-shadow: var(--tx-box-shadow-lighter);
   }
   position: relative;
 
   width: 240px;
   height: 100px;
 
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 
   cursor: pointer;
   border-radius: 8px;

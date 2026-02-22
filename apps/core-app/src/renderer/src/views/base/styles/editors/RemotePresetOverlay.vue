@@ -226,20 +226,20 @@ async function handleRefresh(): Promise<void> {
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .RemotePresetOverlay-Title {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .RemotePresetOverlay-Subtitle {
   margin: 6px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .RemotePresetOverlay-Actions {
@@ -262,14 +262,14 @@ async function handleRefresh(): Promise<void> {
 }
 
 .RemotePresetOverlay-Item {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease;
 
   &.active {
-    border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--el-color-primary) 45%, transparent);
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tx-color-primary) 45%, transparent);
   }
 }
 
@@ -284,7 +284,7 @@ async function handleRefresh(): Promise<void> {
   margin: 0;
   font-size: 14px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .RemotePresetOverlay-Preview {
@@ -292,8 +292,8 @@ async function handleRefresh(): Promise<void> {
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-fill-color-light);
 
   img {
     width: 100%;
@@ -310,33 +310,33 @@ async function handleRefresh(): Promise<void> {
   justify-content: center;
   flex-direction: column;
   gap: 6px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .RemotePresetOverlay-ItemDesc {
   margin: 10px 0 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   line-height: 1.4;
 }
 
 .RemotePresetOverlay-ItemMeta {
   margin: 6px 0 0;
   font-size: 11px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .RemotePresetOverlay-Empty {
   height: 100%;
   min-height: 280px;
-  border: 1px dashed var(--el-border-color-lighter);
+  border: 1px dashed var(--tx-border-color-lighter);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
   gap: 10px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 
   span {
     font-size: 24px;
@@ -376,8 +376,8 @@ async function handleRefresh(): Promise<void> {
 .RemotePresetOverlay-Card {
   width: min(1160px, 94vw);
   height: min(820px, 90vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

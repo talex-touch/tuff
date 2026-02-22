@@ -547,7 +547,7 @@ onBeforeUnmount(() => {
             </p>
             <p
               v-if="testResult.textPreview"
-              class="mt-2 text-xs text-[var(--el-text-color-secondary)]"
+              class="mt-2 text-xs text-[var(--tx-text-color-secondary)]"
             >
               {{ testResult.textPreview }}
             </p>
@@ -603,21 +603,21 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 1rem;
   padding: 1.25rem;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 1.25rem;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 }
 
 .capability-details__eyebrow {
   font-size: 0.75rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .capability-details__description {
   margin: 0.25rem 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   max-width: 42rem;
 }
 
@@ -639,8 +639,8 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
 
   &--muted {
-    background: var(--el-fill-color-light);
-    color: var(--el-text-color-secondary);
+    background: var(--tx-fill-color-light);
+    color: var(--tx-text-color-secondary);
   }
 }
 
@@ -674,20 +674,20 @@ onBeforeUnmount(() => {
 
 .capability-providers__section-hint {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.85rem;
 }
 
 .capability-providers__list {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
-  background: var(--el-fill-color-blank);
+  background: var(--tx-fill-color-blank);
   padding: 0.75rem;
   min-height: 120px;
 }
 
 .capability-providers__empty {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
   text-align: center;
   padding: 1rem 0;
@@ -700,10 +700,10 @@ onBeforeUnmount(() => {
 }
 
 .capability-providers__disabled-section {
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   padding: 0.75rem;
-  background: var(--el-fill-color-blank);
+  background: var(--tx-fill-color-blank);
 }
 
 .capability-providers__disabled-list {
@@ -721,19 +721,19 @@ onBeforeUnmount(() => {
   padding: 0.85rem 1rem;
   border-radius: 0.9rem;
   border: 1px solid transparent;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-primary);
   cursor: pointer;
   transition:
     border 0.2s,
     transform 0.2s;
 
   &:hover {
-    border-color: var(--el-border-color);
+    border-color: var(--tx-border-color);
   }
 
   &.is-focused {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.4);
   }
 }
@@ -755,7 +755,7 @@ onBeforeUnmount(() => {
 
 .provider-card__details {
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .provider-card__meta {
@@ -768,8 +768,8 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;
   border-radius: 999px;
-  border: 1px solid var(--el-border-color);
-  color: var(--el-text-color-secondary);
+  border: 1px solid var(--tx-border-color);
+  color: var(--tx-text-color-secondary);
 
   &.is-active {
     border-color: rgba(34, 197, 94, 0.3);
@@ -781,12 +781,12 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   padding: 0.25rem 0.6rem;
   border-radius: 999px;
-  border: 1px dashed var(--el-border-color);
+  border: 1px dashed var(--tx-border-color);
 }
 
 .provider-card__grab {
   font-size: 1rem;
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   cursor: grab;
 }
 
@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
   flex: 1;
   margin: 0;
   font-size: 0.95rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -822,7 +822,7 @@ onBeforeUnmount(() => {
 
 .capability-details__drawer-description {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 0.9rem;
 }
 

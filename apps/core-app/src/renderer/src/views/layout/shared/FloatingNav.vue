@@ -50,9 +50,9 @@ function toggle() {
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   cursor: pointer;
   transition:
     transform 0.2s ease,
@@ -76,7 +76,7 @@ function toggle() {
   max-height: 70vh;
   overflow-y: auto;
   border-radius: 12px;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   padding: 8px;
 }

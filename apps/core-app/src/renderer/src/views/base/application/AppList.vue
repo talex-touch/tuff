@@ -179,7 +179,7 @@ function handleClick(item: AppListItem, ind: number) {
 
   bottom: 0;
 
-  // background-color: var(--el-fill-color);
+  // background-color: var(--tx-fill-color);
   backdrop-filter: blur(18px) saturate(180%);
 }
 
@@ -194,12 +194,12 @@ function handleClick(item: AppListItem, ind: number) {
     height: 32px;
 
     font-size: 1.25rem;
-    background-color: var(--el-fill-color-dark);
+    background-color: var(--tx-fill-color-dark);
     border-radius: 8px;
     cursor: pointer;
 
     &:hover {
-      background-color: var(--el-color-primary-light-5);
+      background-color: var(--tx-color-primary-light-5);
     }
   }
 
@@ -214,13 +214,13 @@ function handleClick(item: AppListItem, ind: number) {
 
   gap: 0.5rem;
   border-radius: 8px;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
 }
 
 .AppList li {
   &.active {
-    --fake-color: var(--el-color-primary-light-5);
-    border: 1px solid var(--el-color-primary);
+    --fake-color: var(--tx-color-primary-light-5);
+    border: 1px solid var(--tx-color-primary);
   }
 
   padding: 0 0.5rem;
@@ -246,9 +246,9 @@ function handleClick(item: AppListItem, ind: number) {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--el-fill-color-lighter);
+      background: var(--tx-fill-color-lighter);
       border-radius: 4px;
-      color: var(--el-text-color-placeholder);
+      color: var(--tx-text-color-placeholder);
 
       i {
         font-size: 1.2rem;
@@ -264,7 +264,7 @@ function handleClick(item: AppListItem, ind: number) {
 
     .desc {
       font-size: 0.8rem;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
   }
 }
@@ -284,7 +284,7 @@ function handleClick(item: AppListItem, ind: number) {
     overflow: hidden;
 
     border-radius: 8px;
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 }
 </style>

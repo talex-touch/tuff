@@ -106,8 +106,8 @@ onMounted(async () => {
     .loading-spinner {
       width: 24px;
       height: 24px;
-      border: 2px solid var(--el-border-color);
-      border-top: 2px solid var(--el-color-primary);
+      border: 2px solid var(--tx-border-color);
+      border-top: 2px solid var(--tx-color-primary);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -120,7 +120,7 @@ onMounted(async () => {
     justify-content: center;
     height: 100%;
     gap: 1rem;
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
 
     .error-icon {
       font-size: 2rem;

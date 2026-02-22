@@ -173,7 +173,7 @@ function handleClick(event: MouseEvent): void {
   --h: 30px;
 
   i {
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
   }
 }
 
@@ -206,13 +206,13 @@ function handleClick(event: MouseEvent): void {
 .download-text {
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .download-meta {
   font-size: 11px;
   line-height: 1.2;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -230,7 +230,7 @@ function handleClick(event: MouseEvent): void {
   height: 18px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   color: #fff;
   font-size: 11px;
   line-height: 18px;
@@ -239,7 +239,7 @@ function handleClick(event: MouseEvent): void {
 }
 
 .download-badge.error {
-  background: var(--el-color-danger);
+  background: var(--tx-color-danger);
 }
 
 .DownloadDialog {
@@ -255,7 +255,7 @@ function handleClick(event: MouseEvent): void {
   align-items: center;
   justify-content: space-between;
   padding: 16px 18px 10px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .DownloadDialog-TitleBlock {
@@ -267,12 +267,12 @@ function handleClick(event: MouseEvent): void {
 .DownloadDialog-Title {
   font-size: 20px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .DownloadDialog-Subtitle {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -323,8 +323,8 @@ function handleClick(event: MouseEvent): void {
 .DownloadDialog-Card {
   width: min(1120px, 92vw);
   height: min(820px, 86vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

@@ -199,7 +199,7 @@ function handleAdd() {
     }
 
     border: 2px dashed currentColor;
-    background-color: var(--el-fill-color-dark);
+    background-color: var(--tx-fill-color-dark);
   }
 
   &.is-disabled {
@@ -229,22 +229,22 @@ function handleAdd() {
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background-color: var(--el-color-danger-light-7);
-    color: var(--el-color-danger);
+    background-color: var(--tx-color-danger-light-7);
+    color: var(--tx-color-danger);
 
     &:hover {
-      background-color: var(--el-color-danger);
+      background-color: var(--tx-color-danger);
       color: white;
     }
 
     &.disabled {
-      background-color: var(--el-color-success-light-7);
-      color: var(--el-color-success);
+      background-color: var(--tx-color-success-light-7);
+      color: var(--tx-color-success);
       cursor: not-allowed;
 
       &:hover {
-        background-color: var(--el-color-success-light-7);
-        color: var(--el-color-success);
+        background-color: var(--tx-color-success-light-7);
+        color: var(--tx-color-success);
       }
     }
   }
@@ -266,7 +266,7 @@ function handleAdd() {
       radial-gradient(circle, currentColor 10%, transparent 11%) 75% 75%,
       radial-gradient(circle, currentColor 10%, transparent 11%) 25% 50%,
       radial-gradient(circle, currentColor 10%, transparent 11%) 75% 50%;
-    background-color: var(--el-fill-color-dark);
+    background-color: var(--tx-fill-color-dark);
     background-size: 50% 50%;
     background-repeat: no-repeat;
     border-radius: 12px 0 0 12px;
@@ -289,8 +289,8 @@ function handleAdd() {
         font-size: 10px;
         font-weight: 500;
         border-radius: 4px;
-        background-color: var(--el-color-info-light-7);
-        color: var(--el-color-info);
+        background-color: var(--tx-color-info-light-7);
+        color: var(--tx-color-info);
       }
       font-weight: 600;
     }
@@ -330,7 +330,7 @@ function handleAdd() {
   overflow: hidden;
   border-radius: 12px;
   border: 2px dashed transparent;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
 }
 
 .MarketSourceEditor-Content {
@@ -349,9 +349,9 @@ function handleAdd() {
   width: 30%;
   padding: 0.35rem 0.5rem;
   border-radius: 10px;
-  border: 1px solid var(--el-border-color);
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-text-color-primary);
+  border: 1px solid var(--tx-border-color);
+  background-color: var(--tx-color-primary-light-9);
+  color: var(--tx-text-color-primary);
 }
 
 .MarketSourceEditor {
@@ -374,8 +374,8 @@ function handleAdd() {
 
   border-radius: 12px;
   transform: translate(-50%, -200%);
-  background-color: var(--el-fill-color-light);
-  // box-shadow: 0 0 8px 2px var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
+  // box-shadow: 0 0 8px 2px var(--tx-fill-color-light);
   backdrop-filter: blur(18px) saturate(180%);
 }
 </style>

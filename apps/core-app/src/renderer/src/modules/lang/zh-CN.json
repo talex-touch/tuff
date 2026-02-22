@@ -2469,6 +2469,16 @@
       "copyTitle": "复制名称",
       "revealInFinder": "在 Finder 中显示",
       "flowTransfer": "流转到其他插件"
+    },
+    "systemActions": {
+      "addDevPluginTitle": "添加 Dev 插件：{name}",
+      "addDevPluginSubtitle": "路径：{path}",
+      "addTpexPluginTitle": "安装 TPEX 插件：{name}",
+      "addTpexPluginSubtitle": "包路径：{path}",
+      "addAppIndexTitle": "加入应用索引：{name}",
+      "addAppIndexSubtitle": "路径：{path}",
+      "addFileIndexTitle": "加入文件索引：{name}",
+      "addFileIndexSubtitle": "路径：{path}"
     }
   }
 }

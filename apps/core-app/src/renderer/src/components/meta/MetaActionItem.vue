@@ -58,13 +58,13 @@ const defaultIcon = {
 
   &:hover,
   &.active {
-    background: var(--el-fill-color);
-    border-color: var(--el-color-primary-light-7);
+    background: var(--tx-fill-color);
+    border-color: var(--tx-color-primary-light-7);
   }
 
   &.active {
-    background: var(--el-color-primary-light-9);
-    border-color: var(--el-color-primary);
+    background: var(--tx-color-primary-light-9);
+    border-color: var(--tx-color-primary);
   }
 
   &.disabled {
@@ -74,14 +74,14 @@ const defaultIcon = {
 
   &.danger {
     .ActionTitle {
-      color: var(--el-color-danger);
+      color: var(--tx-color-danger);
     }
   }
 }
 
 .ActionIcon {
   flex-shrink: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .ActionContent {
@@ -92,13 +92,13 @@ const defaultIcon = {
 .ActionTitle {
   font-size: 13px;
   font-weight: 500;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.4;
 }
 
 .ActionSubtitle {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-top: 2px;
   line-height: 1.3;
 }
@@ -107,8 +107,8 @@ const defaultIcon = {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-secondary);
   font-family:
     system-ui,
     -apple-system,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { GitHubRelease } from '@talex-touch/utils'
 import { DownloadStatus } from '@talex-touch/utils'
-import { TxModal } from '@talex-touch/tuffex'
+import { TxAlert, TxModal } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProgressBar from './DownloadProgressBar.vue'
@@ -249,11 +249,16 @@ function handleCancelDownload() {
 
       <!-- Install Ready (when download complete) -->
       <div v-if="isDownloadComplete" class="install-ready-section">
-        <el-alert :title="t('update.download_complete')" type="success" :closable="false" show-icon>
+        <TxAlert
+          :title="t('update.download_complete')"
+          type="success"
+          :closable="false"
+          :show-icon="true"
+        >
           <template #default>
             {{ t('update.ready_to_install') }}
           </template>
-        </el-alert>
+        </TxAlert>
       </div>
     </div>
 
@@ -301,7 +306,7 @@ function handleCancelDownload() {
   justify-content: center;
   gap: 24px;
   padding: 24px;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   border-radius: 8px;
   margin-bottom: 24px;
 }
@@ -315,12 +320,12 @@ function handleCancelDownload() {
 
 .version-label {
   font-size: 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-weight: 500;
 }
 
 .version-arrow {
-  color: var(--el-color-success);
+  color: var(--tx-color-success);
   display: flex;
   align-items: center;
 }
@@ -330,7 +335,7 @@ function handleCancelDownload() {
   gap: 24px;
   margin-bottom: 24px;
   padding: 12px 16px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 6px;
 }
 
@@ -338,12 +343,12 @@ function handleCancelDownload() {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   font-size: 14px;
 }
 
 .info-item i {
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .release-notes-section {
@@ -356,45 +361,45 @@ function handleCancelDownload() {
   gap: 8px;
   font-size: 16px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   margin: 0 0 16px 0;
 }
 
 .section-title i {
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .release-notes-content {
   max-height: 300px;
   overflow-y: auto;
   padding: 16px;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   border-radius: 6px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   font-size: 14px;
   line-height: 1.6;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .release-notes-content :deep(h1) {
   font-size: 20px;
   font-weight: 600;
   margin: 16px 0 12px 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .release-notes-content :deep(h2) {
   font-size: 18px;
   font-weight: 600;
   margin: 14px 0 10px 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .release-notes-content :deep(h3) {
   font-size: 16px;
   font-weight: 600;
   margin: 12px 0 8px 0;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .release-notes-content :deep(h1:first-child),
@@ -419,7 +424,7 @@ function handleCancelDownload() {
 
 .release-notes-content :deep(strong) {
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .release-notes-content :deep(em) {
@@ -427,7 +432,7 @@ function handleCancelDownload() {
 }
 
 .release-notes-content :deep(a) {
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
   text-decoration: none;
 }
 
@@ -436,7 +441,7 @@ function handleCancelDownload() {
 }
 
 .release-notes-content :deep(code) {
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   padding: 2px 6px;
   border-radius: 3px;
   font-family: monospace;
@@ -446,7 +451,7 @@ function handleCancelDownload() {
 .download-progress-section {
   margin-bottom: 24px;
   padding: 16px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 6px;
 }
 
@@ -475,17 +480,17 @@ function handleCancelDownload() {
 }
 
 .release-notes-content::-webkit-scrollbar-track {
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 3px;
 }
 
 .release-notes-content::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
+  background: var(--tx-border-color);
   border-radius: 3px;
 }
 
 .release-notes-content::-webkit-scrollbar-thumb:hover {
-  background: var(--el-border-color-dark);
+  background: var(--tx-border-color-dark);
 }
 
 /* Animations */

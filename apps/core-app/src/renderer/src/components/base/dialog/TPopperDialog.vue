@@ -78,9 +78,9 @@ provide('destroy', destroy)
           style="
             background: linear-gradient(
               to right,
-              var(--el-color-primary-light-3),
-              var(--el-color-primary-light-5),
-              var(--el-color-primary-light-3)
+              var(--tx-color-primary-light-3),
+              var(--tx-color-primary-light-5),
+              var(--tx-color-primary-light-3)
             );
           "
           role="button"

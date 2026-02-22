@@ -4,6 +4,43 @@
 
 ## 2026-02-21
 
+### CoreBox 路径动作提示与索引扩展
+
+**变更类型**: 体验增强 / 行为补齐
+
+**描述**: CoreBox 识别拖拽/剪贴板路径时提供系统动作提示，支持一键添加 Dev 插件、TPEX 插件、应用索引与文件索引；文件索引新增 `extraPaths` 并支持动态追加监控路径。
+
+**主要变更**:
+1. **系统动作 Provider**：新增 system actions provider，识别 manifest.json / .tpex / 应用 / 文件路径并生成操作项。
+2. **文件索引扩展路径**：file-provider 支持 `extraPaths` + 动态 watch，新增 addPath 入口并自动触发索引。
+3. **应用索引手动添加**：app-provider 新增 addPath 入口，复用现有更新逻辑。
+4. **传输事件与文案**：新增 app/file index addPath 事件与 SDK 方法，补齐 i18n 文案。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/events/types/file-index.ts`
+- `packages/utils/transport/events/types/app-index.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app 托盘模块恢复 TrayManager
+
+**变更类型**: 行为恢复 / 稳定性
+
+**描述**: 托盘模块切回 TrayManager，恢复统一的托盘事件处理与 IPC 处理链路。
+
+**主要变更**:
+1. **托盘加载恢复**：core-app 启动模块切回 TrayManagerModule。
+
+**修改文件**:
+- `apps/core-app/src/main/index.ts`
+
 ### 文件索引错误提示 Popover 与重建确认修复
 
 **变更类型**: 体验修复 / 行为一致性
@@ -109,6 +146,76 @@
 - `apps/core-app/src/renderer/src/views/layout/shared/FloatingNav.vue`
 - `apps/core-app/src/renderer/src/components/layout/LayoutBackButton.vue`
 - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatureDetailCard.vue`
+
+### Renderer 调试日志收敛与 devLog 封装
+
+**变更类型**: 体验修复 / 可维护性
+
+**描述**: 清理 renderer 侧测试/示例日志输出，运行期调试日志统一走 devLog（仅 DEV 输出），避免生产噪音；保留关键错误日志。
+
+**主要变更**:
+1. **devLog 封装**：新增 `utils/dev-log.ts` 统一开发态日志输出。
+2. **测试/示例日志移除**：LoginTest/MemoryLeakTest/UpdatePromptExample 等不再输出 console.log。
+3. **运行期调试收敛**：CoreBox/更新/市场/对话框等模块日志改为 devLog。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/utils/dev-log.ts`
+- `apps/core-app/src/renderer/src/base/axios.ts`
+- `apps/core-app/src/renderer/src/components/addon/TerminalTemplate.vue`
+- `apps/core-app/src/renderer/src/components/download/UpdatePromptExample.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`
+- `apps/core-app/src/renderer/src/components/plugin/action/PluginStatus.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplateExample.vue`
+- `apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
+- `apps/core-app/src/renderer/src/modules/channel/storage/accounter.ts`
+- `apps/core-app/src/renderer/src/modules/division-box/components/DivisionBoxShell.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/application-hooks.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useLanguageSettings.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
+- `apps/core-app/src/renderer/src/modules/market/providers/nexus-store-provider.ts`
+- `apps/core-app/src/renderer/src/modules/update/UpdateProviderManager.ts`
+- `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
+- `apps/core-app/src/renderer/src/views/base/application/ApplicationIndex.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/test/LoginTest.vue`
+- `apps/core-app/src/renderer/src/views/test/MemoryLeakTest.vue`
+
+### Renderer Element Plus 全量迁移至 Tuffex
+
+**变更类型**: 体验一致性 / 组件统一
+
+**描述**: core-app renderer 全面移除 Element Plus 组件依赖，改为 Tuffex 组件体系；新增 Transfer 组件与 Tree 叶子节点支持以补齐迁移能力。
+
+**主要变更**:
+1. **组件替换**：Alert/Collapse/Dropdown/Empty/Form/Pagination/Skeleton/Tree 等组件全部迁移至 Tuffex。
+2. **能力补齐**：新增 `TxTransfer` 组件与 `TxTree` 的 `leaf` 能力，覆盖模型管理与文件树场景。
+3. **插件移除**：renderer 启动流程移除 ElementPlus 全量注册。
+4. **用例同步**：文档模板示例切换到 TxButton/TxTag。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue`
+- `packages/tuffex/packages/components/src/transfer/index.ts`
+- `packages/tuffex/packages/components/src/tree/src/TxTree.vue`
+- `packages/tuffex/packages/components/src/tree/src/types.ts`
+- `packages/tuffex/packages/components/src/alert/src/TxAlert.vue`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceModelConfig.vue`
+- `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadHistoryView.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadSettings.vue`
+- `apps/core-app/src/renderer/src/components/download/DownloadTask.vue`
+- `apps/core-app/src/renderer/src/components/download/TaskCard.vue`
+- `apps/core-app/src/renderer/src/components/permission/PermissionRequestDialog.vue`
+- `apps/core-app/src/renderer/src/components/permission/PermissionStatusCard.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutAtomEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
+- `apps/core-app/src/renderer/src/components/tuff/template/TuffItemTemplate.md`
+- `apps/core-app/src/renderer/src/components/tuff/template/DESIGN_EXTENSIONS.md`
 
 ## 2026-02-20
 
@@ -236,14 +343,14 @@
 
 **变更类型**: 稳定性 / 行为修复
 
-**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；主进程预解析 transport 绝对路径注入 preload，并回落到 appPath/rootPath/插件根路径解析，保证依赖稳定。
+**描述**: webcontent 动态 preload 脚本在临时目录执行时无法解析 `@talex-touch/utils/transport`，导致插件页面无法建立通信通道；主进程将 transport SDK 预打包为临时 CJS 并注入 preload，确保运行时直接可用。
 
 **主要变更**:
-1. **预解析路径**：主进程预先 resolve transport 绝对路径并注入 preload，减少临时目录解析失败。
-2. **解析回落**：preload 内通过 `createRequire(appPath/package.json)` 并回落 rootPath/插件根路径解析 transport，避免临时目录找不到依赖。
+1. **Bundle 注入**：主进程使用 esbuild 生成 `tuff-plugin-transport.cjs` 并将绝对路径注入 preload。
 2. **通道初始化**：CoreBox 与 DivisionBox 的 webcontent 注入一致化处理，避免特定容器失效。
 
 **修改文件**:
+- `apps/core-app/src/main/utils/plugin-transport-bundle.ts`
 - `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
 - `apps/core-app/src/main/modules/division-box/session.ts`
 

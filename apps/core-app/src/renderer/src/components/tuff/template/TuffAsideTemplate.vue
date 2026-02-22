@@ -92,7 +92,7 @@ const emit = defineEmits<{
 .TuffAsideTemplate-Aside {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--el-border-color-lighter);
+  border-right: 1px solid var(--tx-border-color-lighter);
   overflow: hidden;
 }
 
@@ -125,7 +125,7 @@ const emit = defineEmits<{
 }
 
 .TuffAsideTemplate-Footer {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--tx-border-color-lighter);
   padding: 0.5rem 0.5rem;
 }
 

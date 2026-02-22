@@ -1,6 +1,6 @@
 <script lang="ts" name="IntelligenceProviderHeader" setup>
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton, TxDropdownItem, TxDropdownMenu } from '@talex-touch/tuffex'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -72,6 +72,7 @@ const providerIcon = computed<ITuffIcon>(() => {
 })
 
 const deleteConfirmVisible = ref(false)
+const actionMenuOpen = ref(false)
 
 function handleDelete() {
   deleteConfirmVisible.value = true
@@ -104,30 +105,36 @@ function closeDeleteConfirm() {
       </div>
     </div>
     <div class="flex items-center gap-3" role="group" aria-label="Provider actions">
-      <el-dropdown v-if="provider.type === 'custom'" trigger="click" placement="bottom-end">
-        <TxButton
-          variant="flat"
-          type="text"
-          size="sm"
-          :aria-label="t('settings.intelligence.moreActions')"
-        >
-          <TuffIcon :icon="overflowIcon" :alt="t('settings.intelligence.moreActions')" :size="20" />
-        </TxButton>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="handleDelete">
-              <TuffIcon
-                :icon="trashIcon"
-                :alt="t('settings.intelligence.deleteProvider', { name: provider.name })"
-                :size="18"
-              />
-              <span class="ml-2">
-                {{ t('settings.intelligence.deleteProvider', { name: provider.name }) }}
-              </span>
-            </el-dropdown-item>
-          </el-dropdown-menu>
+      <TxDropdownMenu
+        v-if="provider.type === 'custom'"
+        v-model="actionMenuOpen"
+        placement="bottom-end"
+      >
+        <template #trigger>
+          <TxButton
+            variant="flat"
+            type="text"
+            size="sm"
+            :aria-label="t('settings.intelligence.moreActions')"
+          >
+            <TuffIcon
+              :icon="overflowIcon"
+              :alt="t('settings.intelligence.moreActions')"
+              :size="20"
+            />
+          </TxButton>
         </template>
-      </el-dropdown>
+        <TxDropdownItem danger @select="handleDelete">
+          <TuffIcon
+            :icon="trashIcon"
+            :alt="t('settings.intelligence.deleteProvider', { name: provider.name })"
+            :size="18"
+          />
+          <span class="ml-2">
+            {{ t('settings.intelligence.deleteProvider', { name: provider.name }) }}
+          </span>
+        </TxDropdownItem>
+      </TxDropdownMenu>
       <TSwitch v-model="localEnabled" :aria-label="`Toggle ${provider.name}`" />
     </div>
   </header>
@@ -151,6 +158,6 @@ function closeDeleteConfirm() {
 <style lang="scss" scoped>
 .IntelligenceHeader {
   backdrop-filter: blur(18px) saturate(180%);
-  border-bottom: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid var(--tx-border-color-light);
 }
 </style>

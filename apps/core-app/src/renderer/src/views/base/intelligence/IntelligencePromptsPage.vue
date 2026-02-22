@@ -781,11 +781,11 @@ onBeforeUnmount(() => {
                 >
                   <i
                     v-if="autoSaveStatus === 'pending' || autoSaveStatus === 'saving'"
-                    class="i-carbon-renew animate-spin text-[var(--el-text-color-secondary)]"
+                    class="i-carbon-renew animate-spin text-[var(--tx-text-color-secondary)]"
                   />
                   <i
                     v-else-if="autoSaveStatus === 'saved'"
-                    class="i-carbon-checkmark text-[var(--el-color-success)]"
+                    class="i-carbon-checkmark text-[var(--tx-color-success)]"
                   />
                 </div>
                 <TxButton
@@ -804,7 +804,7 @@ onBeforeUnmount(() => {
         </TouchScroll>
 
         <div v-else class="prompt-empty-state" role="status">
-          <i class="i-carbon-idea text-4xl text-[var(--el-border-color)]" aria-hidden="true" />
+          <i class="i-carbon-idea text-4xl text-[var(--tx-border-color)]" aria-hidden="true" />
           <p class="prompt-empty-state__title">
             {{ t('settings.intelligence.promptEmptyStateTitle') }}
           </p>
@@ -857,12 +857,12 @@ onBeforeUnmount(() => {
 }
 
 .prompt-filter {
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 999px;
   padding: 0.125rem 0.4rem;
   font-size: 0.65rem;
-  color: var(--el-text-color-secondary);
-  background: var(--el-bg-color);
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-bg-color);
   cursor: pointer;
   transition:
     background 0.2s ease,
@@ -870,9 +870,9 @@ onBeforeUnmount(() => {
     border-color 0.2s ease;
 
   &.is-active {
-    border-color: var(--el-color-primary);
-    color: var(--el-color-primary);
-    background: rgba(var(--el-color-primary-rgb), 0.08);
+    border-color: var(--tx-color-primary);
+    color: var(--tx-color-primary);
+    background: rgba(var(--tx-color-primary-rgb), 0.08);
   }
 }
 
@@ -881,12 +881,12 @@ onBeforeUnmount(() => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .prompt-footer-hint {
   font-size: 0.7rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.7;
 }
 
@@ -895,7 +895,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
   padding: 1.5rem;
 }
 
@@ -904,13 +904,13 @@ onBeforeUnmount(() => {
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .prompt-main-desc {
   margin-top: 0.35rem;
   font-size: 0.9rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .prompt-test__body {
@@ -924,33 +924,33 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
   align-items: center;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 0.75rem;
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-regular);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-regular);
 }
 
 .prompt-inline-input,
 .prompt-inline-textarea {
   width: 200px;
   max-width: 100%;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 0.5rem;
   padding: 0.4rem 0.6rem;
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   font-size: 0.85rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   resize: none;
 
   &:disabled {
-    background: var(--el-fill-color-light);
-    color: var(--el-text-color-placeholder);
+    background: var(--tx-fill-color-light);
+    color: var(--tx-text-color-placeholder);
     cursor: not-allowed;
   }
 
   &:focus {
     outline: none;
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
   }
 }
 
@@ -974,7 +974,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .prompt-empty-state {
@@ -984,7 +984,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-align: center;
   padding: 2rem;
 

@@ -77,15 +77,15 @@ function goRouter() {
 
 .SectionItem-Container {
   &:hover {
-    border: 2px solid var(--el-color-primary-light-3);
+    border: 2px solid var(--tx-color-primary-light-3);
   }
 
   &.active {
     cursor: default;
-    box-shadow: 0 0 8px 0 var(--el-color-primary-light-5);
-    border: 2px solid var(--el-color-primary);
+    box-shadow: 0 0 8px 0 var(--tx-color-primary-light-5);
+    border: 2px solid var(--tx-color-primary);
 
-    --section-active-color: var(--el-color-primary);
+    --section-active-color: var(--tx-color-primary);
   }
 
   &.disabled {
@@ -93,7 +93,7 @@ function goRouter() {
       opacity: 0.25;
     }
     cursor: not-allowed;
-    border: 2px solid var(--el-color-danger-light-3);
+    border: 2px solid var(--tx-color-danger-light-3);
   }
 
   flex: 1;
@@ -104,8 +104,8 @@ function goRouter() {
   overflow: hidden;
   user-select: none;
   border-radius: 18px;
-  border: 2px solid var(--el-border-color);
-  --section-active-color: var(--el-color-info);
+  border: 2px solid var(--tx-border-color);
+  --section-active-color: var(--tx-color-info);
 }
 
 .SectionItem-Bar {

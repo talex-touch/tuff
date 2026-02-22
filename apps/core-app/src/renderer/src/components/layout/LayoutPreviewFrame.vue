@@ -48,28 +48,28 @@ defineProps<{
   :deep(.AppLayout-Container.Simple) {
     --nav-width: 74px;
     border-radius: 12px;
-    background: var(--el-bg-color);
-    box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+    background: var(--tx-bg-color);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
   }
 
   :deep(.AppLayout-Container.Simple .AppLayout-Header) {
-    border-bottom: 1px solid var(--el-border-color);
+    border-bottom: 1px solid var(--tx-border-color);
   }
 
   :deep(.AppLayout-Container.Simple .AppLayout-Aside) {
-    border-right: 1px solid var(--el-border-color);
+    border-right: 1px solid var(--tx-border-color);
   }
 
   :deep(.AppLayout-Container.Simple .LayoutPreview-NavDot) {
     width: 10px;
     height: 10px;
     border-radius: 6px;
-    background: var(--el-fill-color);
+    background: var(--tx-fill-color);
   }
 
   :deep(.AppLayout-Container.Simple .LayoutPreview-SidebarItem) {
     background: transparent;
-    border: 1px solid var(--el-border-color-lighter);
+    border: 1px solid var(--tx-border-color-lighter);
   }
 
   :deep(.AppLayout-Container.Simple .LayoutPreview-View) {
@@ -80,7 +80,7 @@ defineProps<{
   :deep(.AppLayout-Container.Flat) {
     --nav-width: 92px;
     border-radius: 18px;
-    background: color-mix(in srgb, var(--el-bg-color) 75%, var(--el-fill-color-light));
+    background: color-mix(in srgb, var(--tx-bg-color) 75%, var(--tx-fill-color-light));
     box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
   }
 
@@ -96,19 +96,19 @@ defineProps<{
     width: 16px;
     height: 6px;
     border-radius: 999px;
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
   }
 
   :deep(.AppLayout-Container.Flat .LayoutPreview-SidebarItem) {
-    background: var(--el-fill-color-lighter);
+    background: var(--tx-fill-color-lighter);
     border: none;
   }
 
   :deep(.AppLayout-Container.Flat .LayoutPreview-View) {
     padding: 10px;
     border-radius: 12px;
-    background: var(--el-fill-color-light);
-    box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+    background: var(--tx-fill-color-light);
+    box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
   }
 
   :deep(.SimpleController-Controller),
@@ -164,7 +164,7 @@ defineProps<{
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
     .LayoutPreview-View {
       border-radius: 12px;
-      box-shadow: inset 0 0 0 1px var(--el-border-color-lighter);
+      box-shadow: inset 0 0 0 1px var(--tx-border-color-lighter);
       padding: 12px;
     }
   }
@@ -179,7 +179,7 @@ defineProps<{
       height: 44px;
       min-height: 44px;
       flex-direction: row;
-      border-top: 1px solid var(--el-border-color-lighter);
+      border-top: 1px solid var(--tx-border-color-lighter);
     }
     .AppLayout-Aside .LayoutPreview-SidebarText {
       display: none;

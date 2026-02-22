@@ -81,6 +81,58 @@
   --tx-disabled-bg-color: var(--tx-fill-color-light);
   --tx-disabled-text-color: var(--tx-text-color-placeholder);
   --tx-disabled-border-color: var(--tx-border-color-light);
+
+  // Compatibility aliases
+  --tx-color-white: #ffffff;
+  --tx-color-primary-rgb: 64 158 255;
+  --tx-color-success-rgb: 103 194 58;
+  --tx-color-warning-rgb: 230 162 60;
+  --tx-color-danger-rgb: 245 108 108;
+  --tx-color-info-rgb: 144 147 153;
+
+  --tx-color-primary-light-8: color-mix(in srgb, var(--tx-color-primary) 20%, white);
+
+  --tx-color-success-light-5: color-mix(in srgb, var(--tx-color-success) 50%, white);
+  --tx-color-success-light-7: color-mix(in srgb, var(--tx-color-success) 30%, white);
+  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, white);
+  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 10%, white);
+
+  --tx-color-warning-light-3: color-mix(in srgb, var(--tx-color-warning) 70%, white);
+  --tx-color-warning-light-5: color-mix(in srgb, var(--tx-color-warning) 50%, white);
+  --tx-color-warning-light-7: color-mix(in srgb, var(--tx-color-warning) 30%, white);
+  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, white);
+  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 10%, white);
+  --tx-color-warning-dark-2: color-mix(in srgb, var(--tx-color-warning) 80%, black);
+
+  --tx-color-danger-light-3: color-mix(in srgb, var(--tx-color-danger) 70%, white);
+
+  --tx-color-info-light-3: color-mix(in srgb, var(--tx-color-info) 70%, white);
+  --tx-color-info-light-6: color-mix(in srgb, var(--tx-color-info) 40%, white);
+  --tx-color-info-light-7: color-mix(in srgb, var(--tx-color-info) 30%, white);
+  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, white);
+  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 10%, white);
+
+  --tx-color-error: var(--tx-color-danger);
+  --tx-color-error-light-5: var(--tx-color-danger-light-5);
+  --tx-color-error-light-9: var(--tx-color-danger-light-9);
+
+  --tx-border: 1px solid var(--tx-border-color);
+  --tx-border-color-dark: color-mix(in srgb, var(--tx-border-color) 80%, black);
+  --tx-border-color-rgb: 220 223 230;
+
+  --tx-fill-color-dark: var(--tx-fill-color-darker);
+  --tx-fill-color-extra-light: var(--tx-fill-color-lighter);
+  --tx-fill-color-rgb: 240 242 245;
+  --tx-fill-color-extra-light-rgb: 250 250 250;
+
+  --tx-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+
+  --tx-mask-color-extra-light: rgba(0, 0, 0, 0.3);
+  --tx-overlay-color: rgba(0, 0, 0, 0.5);
+
+  --tx-skeleton-color: var(--tx-fill-color-lighter);
+  --tx-text-color: var(--tx-text-color-regular);
+  --tx-text-color-tertiary: var(--tx-text-color-secondary);
 }
 
 // Dark theme
@@ -127,4 +179,55 @@
   --tx-box-shadow-lighter: 0px 0px 6px rgba(0, 0, 0, 0.72);
   --tx-box-shadow-dark: 0px 16px 48px 16px rgba(0, 0, 0, 0.72),
     0px 12px 32px rgba(0, 0, 0, 0.72), 0px 8px 16px -8px rgba(0, 0, 0, 0.72);
+
+  --tx-color-white: #ffffff;
+  --tx-color-primary-rgb: 64 158 255;
+  --tx-color-success-rgb: 103 194 58;
+  --tx-color-warning-rgb: 230 162 60;
+  --tx-color-danger-rgb: 245 108 108;
+  --tx-color-info-rgb: 144 147 153;
+
+  --tx-color-primary-light-8: color-mix(in srgb, var(--tx-color-primary) 20%, white);
+
+  --tx-color-success-light-5: color-mix(in srgb, var(--tx-color-success) 50%, white);
+  --tx-color-success-light-7: color-mix(in srgb, var(--tx-color-success) 30%, white);
+  --tx-color-success-light-8: color-mix(in srgb, var(--tx-color-success) 20%, white);
+  --tx-color-success-light-9: color-mix(in srgb, var(--tx-color-success) 10%, white);
+
+  --tx-color-warning-light-3: color-mix(in srgb, var(--tx-color-warning) 70%, white);
+  --tx-color-warning-light-5: color-mix(in srgb, var(--tx-color-warning) 50%, white);
+  --tx-color-warning-light-7: color-mix(in srgb, var(--tx-color-warning) 30%, white);
+  --tx-color-warning-light-8: color-mix(in srgb, var(--tx-color-warning) 20%, white);
+  --tx-color-warning-light-9: color-mix(in srgb, var(--tx-color-warning) 10%, white);
+  --tx-color-warning-dark-2: color-mix(in srgb, var(--tx-color-warning) 80%, black);
+
+  --tx-color-danger-light-3: color-mix(in srgb, var(--tx-color-danger) 70%, white);
+
+  --tx-color-info-light-3: color-mix(in srgb, var(--tx-color-info) 70%, white);
+  --tx-color-info-light-6: color-mix(in srgb, var(--tx-color-info) 40%, white);
+  --tx-color-info-light-7: color-mix(in srgb, var(--tx-color-info) 30%, white);
+  --tx-color-info-light-8: color-mix(in srgb, var(--tx-color-info) 20%, white);
+  --tx-color-info-light-9: color-mix(in srgb, var(--tx-color-info) 10%, white);
+
+  --tx-color-error: var(--tx-color-danger);
+  --tx-color-error-light-5: var(--tx-color-danger-light-5);
+  --tx-color-error-light-9: var(--tx-color-danger-light-9);
+
+  --tx-border: 1px solid var(--tx-border-color);
+  --tx-border-color-dark: var(--tx-border-color);
+  --tx-border-color-rgb: 76 77 79;
+
+  --tx-fill-color-dark: var(--tx-fill-color-darker);
+  --tx-fill-color-extra-light: var(--tx-fill-color-lighter);
+  --tx-fill-color-rgb: 48 48 48;
+  --tx-fill-color-extra-light-rgb: 29 29 29;
+
+  --tx-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+
+  --tx-mask-color-extra-light: rgba(0, 0, 0, 0.3);
+  --tx-overlay-color: rgba(0, 0, 0, 0.5);
+
+  --tx-skeleton-color: var(--tx-fill-color);
+  --tx-text-color: var(--tx-text-color-regular);
+  --tx-text-color-tertiary: var(--tx-text-color-secondary);
 }

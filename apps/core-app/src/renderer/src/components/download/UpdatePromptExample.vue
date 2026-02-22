@@ -60,6 +60,7 @@ function showUpdateDialog() {
 
 function handleDownload(release: GitHubRelease) {
   // Simulate download start
+  void release
   downloadTaskId.value = `update-task-${Date.now()}`
   downloadStatus.value = DownloadStatus.DOWNLOADING
 
@@ -105,6 +106,7 @@ function handleRemindLater() {
 }
 
 function handleCancelDownload(taskId: string) {
+  void taskId
   downloadStatus.value = DownloadStatus.CANCELLED
   downloadTaskId.value = undefined
 }

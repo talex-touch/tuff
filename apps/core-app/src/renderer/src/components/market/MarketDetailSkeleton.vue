@@ -51,7 +51,7 @@ defineOptions({
   gap: 1rem;
   padding: 1rem;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 }
 
 .detail-content-skeleton {
@@ -65,9 +65,9 @@ defineOptions({
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
@@ -83,9 +83,9 @@ defineOptions({
 }
 
 .sidebar-card-skeleton {
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   padding: 1rem;
   display: flex;
   flex-direction: column;
@@ -102,13 +102,13 @@ defineOptions({
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
 .skeleton-line {
   border-radius: 4px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 

@@ -127,7 +127,7 @@ async function handleNext(): Promise<void> {
 
     p {
       margin: 0;
-      color: var(--el-text-color-secondary);
+      color: var(--tx-text-color-secondary);
     }
   }
 
@@ -155,7 +155,7 @@ async function handleNext(): Promise<void> {
   &-SystemDetected {
     margin: 0;
     font-size: 0.875rem;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   &-Options {
@@ -171,7 +171,7 @@ async function handleNext(): Promise<void> {
     }
 
     button {
-      border: 1px solid var(--el-border-color);
+      border: 1px solid var(--tx-border-color);
       border-radius: 10px;
       padding: 0.75rem 1rem;
       text-align: left;
@@ -183,18 +183,18 @@ async function handleNext(): Promise<void> {
       transition: all 0.2s ease;
 
       &:hover:not(:disabled) {
-        border-color: var(--el-color-primary);
-        color: var(--el-color-primary);
+        border-color: var(--tx-color-primary);
+        color: var(--tx-color-primary);
       }
 
       &.active {
-        border-color: var(--el-color-primary);
-        background-color: color-mix(in srgb, var(--el-color-primary) 12%, transparent);
+        border-color: var(--tx-color-primary);
+        background-color: color-mix(in srgb, var(--tx-color-primary) 12%, transparent);
       }
 
       small {
         font-size: 0.75rem;
-        color: var(--el-color-primary);
+        color: var(--tx-color-primary);
       }
     }
   }

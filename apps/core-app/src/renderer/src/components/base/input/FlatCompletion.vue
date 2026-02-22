@@ -117,7 +117,7 @@ function blur() {
   align-items: center;
 
   max-height: 380px;
-  //background-color: var(--el-fill-color-extra-light);
+  //background-color: var(--tx-fill-color-extra-light);
   border-radius: 50px;
   //box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.2);
   overflow: hidden;

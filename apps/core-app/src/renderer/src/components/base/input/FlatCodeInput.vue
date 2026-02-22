@@ -44,8 +44,8 @@ watch(codes, (val) => {
     &.active {
       opacity: 0.5;
 
-      box-shadow: var(--el-box-shadow-lighter);
-      background-color: var(--el-fill-color-dark);
+      box-shadow: var(--tx-box-shadow-lighter);
+      background-color: var(--tx-fill-color-dark);
     }
     &.active.disabled {
       opacity: 0.25;
@@ -67,8 +67,8 @@ watch(codes, (val) => {
     cursor: pointer;
     border-radius: 8px;
     transition: 0.2s;
-    box-shadow: var(--el-box-shadow-light);
-    background-color: var(--el-fill-color-light);
+    box-shadow: var(--tx-box-shadow-light);
+    background-color: var(--tx-fill-color-light);
   }
   position: relative;
   padding: 10px 16px;

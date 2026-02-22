@@ -60,7 +60,7 @@ const expand = ref(!props.shrink)
   --fake-inner-opacity: 0.5;
   .touch-blur & {
     &:hover {
-      --fake-color: var(--el-fill-color-light) !important;
+      --fake-color: var(--tx-fill-color-light) !important;
     }
   }
 }
@@ -126,19 +126,19 @@ const expand = ref(!props.shrink)
   cursor: pointer;
   user-select: none;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  --fake-color: var(--el-fill-color-dark);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-inner-opacity: 0.5;
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
     transition: all 1s; // 避免主题模式切换颜色交替时间过长
   }
 }
 
 .touch-blur .TGroupBlock-Header {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 
@@ -151,7 +151,7 @@ const expand = ref(!props.shrink)
     .TGroupBlock-Header {
       --fake-inner-opacity: 0.65 !important;
     }
-    border-bottom: 1px solid var(--el-border-color);
+    border-bottom: 1px solid var(--tx-border-color);
     margin-bottom: 0;
     border-radius: 0;
     --fake-radius: 0 !important;
@@ -165,7 +165,7 @@ const expand = ref(!props.shrink)
         width: 1px;
         height: 100%;
 
-        background-color: var(--el-border-color);
+        background-color: var(--tx-border-color);
       }
 
       .TBlockSwitch-Content > * {

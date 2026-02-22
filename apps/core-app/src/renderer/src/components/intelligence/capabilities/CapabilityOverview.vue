@@ -50,9 +50,9 @@ const { t } = useI18n()
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.875rem;
   padding: 1.25rem;
-  background: linear-gradient(135deg, var(--el-fill-color-blank) 0%, var(--el-fill-color) 100%);
+  background: linear-gradient(135deg, var(--tx-fill-color-blank) 0%, var(--tx-fill-color) 100%);
   border-radius: 1rem;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
@@ -61,9 +61,9 @@ const { t } = useI18n()
   align-items: center;
   gap: 0.875rem;
   padding: 1rem 1.125rem;
-  background: var(--el-fill-color-blank);
+  background: var(--tx-fill-color-blank);
   border-radius: 0.875rem;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
@@ -83,10 +83,10 @@ const { t } = useI18n()
   border-radius: 0.75rem;
   background: linear-gradient(
     135deg,
-    var(--el-color-primary-light-8) 0%,
-    var(--el-color-primary-light-9) 100%
+    var(--tx-color-primary-light-8) 0%,
+    var(--tx-color-primary-light-9) 100%
   );
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .overview-card__content {
@@ -97,7 +97,7 @@ const { t } = useI18n()
 
 .overview-card__label {
   font-size: 0.75rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-weight: 500;
   letter-spacing: 0.02em;
 }
@@ -105,7 +105,7 @@ const { t } = useI18n()
 .overview-card__value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1;
 }
 </style>

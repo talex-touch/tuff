@@ -1,5 +1,6 @@
 <script lang="ts" name="AgentsList" setup>
 import type { AgentDescriptor } from '@talex-touch/utils'
+import { TxSkeleton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AgentItem from './AgentItem.vue'
@@ -22,7 +23,7 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
 
 <template>
   <div class="agents-list">
-    <el-skeleton v-if="loading" :rows="4" animated />
+    <TxSkeleton v-if="loading" :lines="4" />
 
     <template v-else-if="agents.length > 0">
       <!-- Enabled Agents -->
@@ -92,7 +93,7 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
   padding: 0.5rem 0.25rem;
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -116,13 +117,13 @@ const disabledAgents = computed(() => props.agents.filter((a) => a.enabled === f
   line-height: 1;
 
   &.success {
-    background: var(--el-color-success-light-9);
-    color: var(--el-color-success);
+    background: var(--tx-color-success-light-9);
+    color: var(--tx-color-success);
   }
 
   &.info {
-    background: var(--el-fill-color);
-    color: var(--el-text-color-secondary);
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-secondary);
   }
 }
 

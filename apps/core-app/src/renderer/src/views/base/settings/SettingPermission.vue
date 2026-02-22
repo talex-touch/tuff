@@ -15,10 +15,11 @@ import {
   TuffSelect,
   TuffSelectItem,
   TxButton,
+  TxCollapse,
+  TxCollapseItem,
   TxEmpty,
   TxTag
 } from '@talex-touch/tuffex'
-import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 
 import { PermissionList } from '~/components/permission'
@@ -385,8 +386,8 @@ onMounted(() => {
 
       <TxEmpty v-else-if="filteredPlugins.length === 0" title="没有找到插件" compact />
 
-      <ElCollapse v-else v-model="expandedPlugins" class="plugin-list">
-        <ElCollapseItem v-for="plugin in filteredPlugins" :key="plugin.id" :name="plugin.id">
+      <TxCollapse v-else v-model="expandedPlugins" class="plugin-list">
+        <TxCollapseItem v-for="plugin in filteredPlugins" :key="plugin.id" :name="plugin.id">
           <template #title>
             <div class="plugin-header">
               <div class="plugin-info">
@@ -452,8 +453,8 @@ onMounted(() => {
               @toggle="(id, granted) => handleToggle(plugin.id, id, granted)"
             />
           </div>
-        </ElCollapseItem>
-      </ElCollapse>
+        </TxCollapseItem>
+      </TxCollapse>
     </TuffBlockSlot>
   </TuffGroupBlock>
 
@@ -529,14 +530,14 @@ onMounted(() => {
     align-items: center;
     gap: 6px;
     font-size: 13px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
 
     &.warning {
-      color: var(--el-color-warning);
+      color: var(--tx-color-warning);
     }
 
     &.info {
-      color: var(--el-color-info);
+      color: var(--tx-color-info);
     }
   }
 }
@@ -559,16 +560,16 @@ onMounted(() => {
 .loading-state {
   text-align: center;
   padding: 40px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .plugin-list {
-  :deep(.el-collapse-item__header) {
+  :deep(.tx-collapse-item__header) {
     height: auto;
     padding: 12px 0;
   }
 
-  :deep(.el-collapse-item__content) {
+  :deep(.tx-collapse-item__content-inner) {
     padding-bottom: 16px;
   }
 }
@@ -588,13 +589,13 @@ onMounted(() => {
 
   .status-icon {
     &.success {
-      color: var(--el-color-success);
+      color: var(--tx-color-success);
     }
     &.warning {
-      color: var(--el-color-warning);
+      color: var(--tx-color-warning);
     }
     &.danger {
-      color: var(--el-color-danger);
+      color: var(--tx-color-danger);
     }
   }
 
@@ -607,7 +608,7 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .plugin-content {
@@ -619,11 +620,11 @@ onMounted(() => {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: var(--el-color-warning-light-9);
+  background: var(--tx-color-warning-light-9);
   border-radius: 8px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: var(--el-color-warning-dark-2);
+  color: var(--tx-color-warning-dark-2);
 
   svg {
     flex-shrink: 0;
@@ -655,7 +656,7 @@ onMounted(() => {
 
 .audit-summary {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   margin-bottom: 12px;
 }
 
@@ -669,20 +670,20 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   border-radius: 6px;
   margin-bottom: 6px;
   font-size: 13px;
   flex-wrap: wrap;
 
   &:hover {
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
   }
 }
 
 .audit-time {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-family: monospace;
   min-width: 120px;
 }
@@ -693,19 +694,19 @@ onMounted(() => {
 
 .audit-plugin {
   font-weight: 500;
-  color: var(--el-color-primary);
+  color: var(--tx-color-primary);
 }
 
 .audit-arrow {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .audit-permission {
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .audit-details {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

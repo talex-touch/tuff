@@ -2,6 +2,7 @@ import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { devLog } from '~/utils/dev-log'
 
 type RouteRecordTree = RouteRecordRaw & { children?: RouteRecordTree[] }
 
@@ -293,7 +294,7 @@ export function useSecondaryNavigation(options?: UseSecondaryNavigationOptions) 
           }
         : null
 
-      console.debug(`[${options?.debugLabel ?? 'useSecondaryNavigation'}] Secondary nav debug`, {
+      devLog(`[${options?.debugLabel ?? 'useSecondaryNavigation'}] Secondary nav debug`, {
         route: {
           name: route.name,
           path: normalizePath(route.path),

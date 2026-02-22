@@ -18,6 +18,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { is } from '@electron-toolkit/utils'
+import type { AppIndexAddPathResult } from '@talex-touch/utils/transport/events/types'
 import {
   completeTiming,
   createRetrier,
@@ -413,6 +414,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     return { ...this.appIndexSettings }
+  }
+
+  public async addAppByPath(rawPath: string): Promise<AppIndexAddPathResult> {
+    const appPath = this.resolveAppPath(rawPath, { skipWatchCheck: true })
+    if (!appPath) {
+      return { success: false, status: 'invalid', reason: 'invalid-path' }
+    }
+    return this.processAppPath(appPath)
   }
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
@@ -1135,89 +1144,129 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private handleItemAddedOrChanged = async (event: unknown): Promise<void> => {
-    const fsEvent = event as FileSystemPathEvent
-    if (!fsEvent || !fsEvent.filePath || this.processingPaths.has(fsEvent.filePath)) return
+  private resolveAppPath(
+    rawPath: string,
+    options?: { skipWatchCheck?: boolean; logIgnore?: boolean }
+  ): string | null {
+    if (!rawPath) return null
+    let appPath = rawPath
 
-    let appPath = fsEvent.filePath
     if (this.isMac) {
-      if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
-      if (!appPath.endsWith('.app')) return
-      if (!this._isWatchPathCandidate(appPath)) {
-        logApp(`Ignoring app change outside watch roots: ${chalk.gray(appPath)}`, LogStyle.info)
-        return
+      if (appPath.includes('.app/')) {
+        appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
+      }
+      if (!appPath.endsWith('.app')) {
+        return null
+      }
+      if (!options?.skipWatchCheck && !this._isWatchPathCandidate(appPath)) {
+        if (options?.logIgnore) {
+          logApp(`Ignoring app change outside watch roots: ${chalk.gray(appPath)}`, LogStyle.info)
+        }
+        return null
       }
     }
 
-    logApp(`App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
+    return appPath
+  }
+
+  private async upsertAppInfo(appInfo: ScannedAppInfo): Promise<'added' | 'updated'> {
+    const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
+    const db = this.dbUtils!.getDb()
+
+    if (existingFile) {
+      logApp(`Updating existing app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
+
+      const updateData: Partial<typeof filesSchema.$inferInsert> = {
+        name: appInfo.name,
+        mtime: appInfo.lastModified
+      }
+
+      if (!existingFile.displayName && appInfo.displayName) {
+        updateData.displayName = appInfo.displayName
+      }
+
+      await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
+
+      await this.dbUtils!.addFileExtensions([
+        { fileId: existingFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
+        { fileId: existingFile.id, key: 'icon', value: appInfo.icon }
+      ])
+
+      await this._syncKeywordsForApp(appInfo)
+      logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
+      return 'updated'
+    }
+
+    logApp(`Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
+
+    const [insertedFile] = await db
+      .insert(filesSchema)
+      .values({
+        path: appInfo.path,
+        name: appInfo.name,
+        displayName: appInfo.displayName,
+        type: 'app' as const,
+        mtime: appInfo.lastModified,
+        ctime: new Date()
+      })
+      .returning()
+
+    if (insertedFile) {
+      await this.dbUtils!.addFileExtensions([
+        { fileId: insertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
+        { fileId: insertedFile.id, key: 'icon', value: appInfo.icon }
+      ])
+
+      await this._syncKeywordsForApp(appInfo)
+      logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
+    }
+
+    return 'added'
+  }
+
+  private async processAppPath(appPath: string): Promise<AppIndexAddPathResult> {
+    if (this.processingPaths.has(appPath)) {
+      return { success: false, status: 'invalid', reason: 'processing' }
+    }
+    if (!this.dbUtils) {
+      return { success: false, status: 'error', reason: 'db-not-ready' }
+    }
+
     this.processingPaths.add(appPath)
 
     try {
       if (!(await this._waitForItemStable(appPath))) {
         logApp(`Item is unstable, skipping: ${chalk.yellow(appPath)}`, LogStyle.warning)
-        return
+        return { success: false, status: 'invalid', reason: 'unstable' }
       }
 
       logApp(`Fetching app info: ${chalk.cyan(appPath)}`, LogStyle.process)
       const appInfo = await appScanner.getAppInfoByPath(appPath)
       if (!appInfo) {
         logApp(`Could not get app info for: ${chalk.yellow(appPath)}`, LogStyle.warning)
-        return
+        return { success: false, status: 'invalid', reason: 'not-app' }
       }
-      const existingFile = await this.dbUtils!.getFileByPath(appInfo.path)
-      const db = this.dbUtils!.getDb()
 
-      if (existingFile) {
-        logApp(`Updating existing app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
-
-        const updateData: Partial<typeof filesSchema.$inferInsert> = {
-          name: appInfo.name,
-          mtime: appInfo.lastModified
-        }
-
-        if (!existingFile.displayName && appInfo.displayName) {
-          updateData.displayName = appInfo.displayName
-        }
-
-        await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
-
-        await this.dbUtils!.addFileExtensions([
-          { fileId: existingFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-          { fileId: existingFile.id, key: 'icon', value: appInfo.icon }
-        ])
-
-        await this._syncKeywordsForApp(appInfo)
-        logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
-      } else {
-        logApp(`Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
-
-        const [insertedFile] = await db
-          .insert(filesSchema)
-          .values({
-            path: appInfo.path,
-            name: appInfo.name,
-            displayName: appInfo.displayName,
-            type: 'app' as const,
-            mtime: appInfo.lastModified,
-            ctime: new Date()
-          })
-          .returning()
-
-        if (insertedFile) {
-          await this.dbUtils!.addFileExtensions([
-            { fileId: insertedFile.id, key: 'bundleId', value: appInfo.bundleId || '' },
-            { fileId: insertedFile.id, key: 'icon', value: appInfo.icon }
-          ])
-
-          await this._syncKeywordsForApp(appInfo)
-          logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
-        }
-      }
+      const status = await this.upsertAppInfo(appInfo)
+      return { success: true, status, path: appInfo.path }
     } catch (error) {
-      logApp(`Error processing app change: ${chalk.red((error as Error).message)}`, LogStyle.error)
+      const message = error instanceof Error ? error.message : String(error)
+      logApp(`Error processing app change: ${chalk.red(message)}`, LogStyle.error)
+      return { success: false, status: 'error', reason: message }
     } finally {
       this.processingPaths.delete(appPath)
     }
+  }
+
+  private handleItemAddedOrChanged = async (event: unknown): Promise<void> => {
+    const fsEvent = event as FileSystemPathEvent
+    if (!fsEvent || !fsEvent.filePath || this.processingPaths.has(fsEvent.filePath)) return
+
+    const appPath = this.resolveAppPath(fsEvent.filePath, { logIgnore: true })
+    if (!appPath) return
+
+    logApp(`App change detected: ${chalk.cyan(appPath)}`, LogStyle.info)
+    await this.processAppPath(appPath)
   }
 
   private handleItemUnlinked = async (event: unknown): Promise<void> => {

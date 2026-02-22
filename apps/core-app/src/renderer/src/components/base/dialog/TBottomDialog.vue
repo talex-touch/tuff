@@ -296,19 +296,19 @@ $loading-icon-top: -10px;
 
 // Theme color variables
 .success-tip {
-  --theme-color: var(--el-color-success);
+  --theme-color: var(--tx-color-success);
 }
 
 .info-tip {
-  --theme-color: var(--el-color-primary);
+  --theme-color: var(--tx-color-primary);
 }
 
 .warn-tip {
-  --theme-color: var(--el-color-warning);
+  --theme-color: var(--tx-color-warning);
 }
 
 .error-tip {
-  --theme-color: var(--el-color-danger);
+  --theme-color: var(--tx-color-danger);
 }
 
 // Dialog wrapper styles
@@ -324,11 +324,11 @@ $loading-icon-top: -10px;
   min-height: 260px;
 
   --fake-opacity: 0.25;
-  --fake-color: var(--el-fill-color-light);
+  --fake-color: var(--tx-fill-color-light);
 
   border-radius: $dialog-border-radius;
-  box-shadow: var(--el-box-shadow-light);
-  //background-color: var(--el-fill-color-light);
+  box-shadow: var(--tx-box-shadow-light);
+  //background-color: var(--tx-fill-color-light);
   backdrop-filter: blur(18px) saturate(180%) brightness(1.8);
   transform: translateX(-50%);
   animation: enter 0.2s ease-in-out;
@@ -366,7 +366,7 @@ $loading-icon-top: -10px;
 
     border-radius: $dialog-border-radius;
     box-sizing: border-box;
-    //background-color: var(--el-fill-color-light);
+    //background-color: var(--tx-fill-color-light);
   }
 
   // Dialog buttons container styles
@@ -419,7 +419,7 @@ $loading-icon-top: -10px;
 
         border-radius: $dialog-border-radius;
         opacity: 0.5;
-        background-color: var(--theme-color, var(--el-color-info));
+        background-color: var(--theme-color, var(--tx-color-info));
       }
 
       // Loading icon styles
@@ -450,7 +450,7 @@ $loading-icon-top: -10px;
     height: 30%;
 
     border-radius: $dialog-border-radius;
-    background-color: var(--el-color-primary-light-3);
+    background-color: var(--tx-color-primary-light-3);
     opacity: 0.125;
     transform: scale(2);
     filter: saturate(180%) blur(20px);
@@ -466,7 +466,7 @@ $loading-icon-top: -10px;
     height: 30%;
 
     border-radius: $dialog-border-radius;
-    background-color: var(--el-color-warning-light-3);
+    background-color: var(--tx-color-warning-light-3);
     opacity: 0.125;
     transform: scale(2);
     filter: saturate(180%) blur(20px);

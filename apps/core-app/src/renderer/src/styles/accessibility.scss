@@ -18,7 +18,7 @@
 
 /* Focus visible styles for better keyboard navigation */
 *:focus-visible {
-  outline: 3px solid var(--el-color-primary);
+  outline: 3px solid var(--tx-color-primary);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -28,9 +28,9 @@ button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible,
 [role="link"]:focus-visible {
-  outline: 3px solid var(--el-color-primary);
+  outline: 3px solid var(--tx-color-primary);
   outline-offset: 2px;
-  box-shadow: 0 0 0 4px var(--el-color-primary-light-9);
+  box-shadow: 0 0 0 4px var(--tx-color-primary-light-9);
 }
 
 /* Skip to main content link (for screen readers) */
@@ -38,7 +38,7 @@ a:focus-visible,
   position: absolute;
   top: -40px;
   left: 0;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   color: white;
   padding: 8px 16px;
   text-decoration: none;
@@ -49,7 +49,7 @@ a:focus-visible,
 
   &:focus {
     top: 0;
-    outline: 3px solid var(--el-color-primary-light-3);
+    outline: 3px solid var(--tx-color-primary-light-3);
     outline-offset: 2px;
   }
 }
@@ -82,7 +82,7 @@ a:focus-visible,
 
 /* Ensure sufficient color contrast for text */
 .text-low-contrast {
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 /* Focus trap for modals and dialogs */
@@ -99,7 +99,7 @@ a:focus-visible,
   bottom: -24px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--el-color-info);
+  background: var(--tx-color-info);
   color: white;
   padding: 4px 8px;
   border-radius: 4px;
@@ -118,8 +118,8 @@ a:focus-visible,
 /* Accessible tooltips */
 [role="tooltip"] {
   position: absolute;
-  background: var(--el-bg-color-overlay);
-  color: var(--el-text-color-primary);
+  background: var(--tx-bg-color-overlay);
+  color: var(--tx-text-color-primary);
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 13px;
@@ -154,7 +154,7 @@ a:focus-visible,
     left: 0;
     right: 0;
     bottom: 0;
-    // background: var(--el-mask-color-extra-light);
+    // background: var(--tx-mask-color-extra-light);
     cursor: wait;
     z-index: 1;
   }
@@ -187,7 +187,7 @@ a {
 
 /* Focus within for containers */
 .focus-within-highlight:focus-within {
-  outline: 2px solid var(--el-color-primary-light-5);
+  outline: 2px solid var(--tx-color-primary-light-5);
   outline-offset: 2px;
   border-radius: 8px;
 }

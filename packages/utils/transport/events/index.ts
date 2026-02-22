@@ -100,7 +100,7 @@ import type {
   TrackEventPayload,
 } from './types/app'
 
-import type { AppIndexSettings } from './types/app-index'
+import type { AppIndexAddPathRequest, AppIndexAddPathResult, AppIndexSettings } from './types/app-index'
 
 // ============================================================================
 // App Events
@@ -244,6 +244,8 @@ import type {
 // ============================================================================
 
 import type {
+  FileIndexAddPathRequest,
+  FileIndexAddPathResult,
   FileIndexBatteryStatus,
   FileIndexFailedFile,
   FileIndexProgress,
@@ -777,6 +779,14 @@ export const AppEvents = {
       .module('file-index')
       .event('failed-files')
       .define<void, FileIndexFailedFile[]>(),
+
+    /**
+     * Add a path to file index watch list.
+     */
+    addPath: defineEvent('app')
+      .module('file-index')
+      .event('add-path')
+      .define<FileIndexAddPathRequest, FileIndexAddPathResult>(),
   },
 
   /**
@@ -819,6 +829,14 @@ export const AppEvents = {
       .module('app-index')
       .event('settings.update')
       .define<Partial<AppIndexSettings>, AppIndexSettings>(),
+
+    /**
+     * Add an application path to the index list.
+     */
+    addPath: defineEvent('app')
+      .module('app-index')
+      .event('add-path')
+      .define<AppIndexAddPathRequest, AppIndexAddPathResult>(),
   },
 
   /**

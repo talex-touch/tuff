@@ -151,7 +151,7 @@ function close() {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .dialog-loading {
@@ -159,14 +159,14 @@ function close() {
   align-items: center;
   justify-content: center;
   padding: 32px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .dialog-empty {
   text-align: center;
   padding: 24px;
   font-size: 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .file-list-container {
@@ -183,7 +183,7 @@ function close() {
 
 .file-count {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-weight: 500;
 }
 
@@ -201,7 +201,7 @@ function close() {
 }
 
 .file-list::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
+  background: var(--tx-border-color);
   border-radius: 2px;
 }
 
@@ -212,7 +212,7 @@ function close() {
   padding: 8px 10px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   transition: background 0.2s;
 }
 
@@ -231,7 +231,7 @@ function close() {
   flex: 1;
   font-size: 12px;
   font-family: monospace;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -240,7 +240,7 @@ function close() {
 }
 
 .text-secondary {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .copy-btn {
@@ -253,7 +253,7 @@ function close() {
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
@@ -261,7 +261,7 @@ function close() {
 
 .copy-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .copy-btn.copied {

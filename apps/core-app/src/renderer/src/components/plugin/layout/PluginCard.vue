@@ -44,9 +44,9 @@ const props = defineProps({
   border-radius: 5px;
   background: linear-gradient(
     to right,
-    var(--el-color-primary-light-3),
-    var(--el-color-primary-light-5),
-    var(--el-color-primary-light-3)
+    var(--tx-color-primary-light-3),
+    var(--tx-color-primary-light-5),
+    var(--tx-color-primary-light-3)
   );
 }
 
@@ -71,7 +71,7 @@ const props = defineProps({
 
       opacity: 0.5;
       border-radius: 5px;
-      background-color: var(--el-color-primary);
+      background-color: var(--tx-color-primary);
     }
     position: relative;
     margin-right: 48px;
@@ -96,7 +96,7 @@ const props = defineProps({
 
       opacity: 0.25;
       border-radius: 5px;
-      background-color: var(--el-color-primary);
+      background-color: var(--tx-color-primary);
     }
     position: relative;
     display: inline-block;
@@ -123,7 +123,7 @@ const props = defineProps({
 
   box-sizing: border-box;
   // linear background image
-  //background: linear-gradient(to bottom right, var(--el-color-primary-light-7), var(--el-color-primary-light-9));
+  //background: linear-gradient(to bottom right, var(--tx-color-primary-light-7), var(--tx-color-primary-light-9));
   //background-size: 200% 200%;
   //animation: waving 2.5s infinite;
   transition: 0.25s;

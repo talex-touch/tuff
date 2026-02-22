@@ -2477,6 +2477,16 @@
       "copyTitle": "Copy Title",
       "revealInFinder": "Reveal in Finder",
       "flowTransfer": "Transfer to Plugin"
+    },
+    "systemActions": {
+      "addDevPluginTitle": "Add Dev Plugin: {name}",
+      "addDevPluginSubtitle": "Path: {path}",
+      "addTpexPluginTitle": "Install TPEX Plugin: {name}",
+      "addTpexPluginSubtitle": "Package: {path}",
+      "addAppIndexTitle": "Add to App Index: {name}",
+      "addAppIndexSubtitle": "Path: {path}",
+      "addFileIndexTitle": "Add to File Index: {name}",
+      "addFileIndexSubtitle": "Path: {path}"
     }
   }
 }

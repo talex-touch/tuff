@@ -61,7 +61,7 @@ const { t } = useI18n()
   overflow: hidden;
   user-select: none;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
 
   &::after {
     z-index: -1;

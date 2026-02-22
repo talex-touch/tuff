@@ -7,7 +7,7 @@
 - `docs/plan-prd/README.md` - PRD / 规划索引（产品 + 架构 + 实现）
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` - 产品总览 + 8 周路线图（目标与节奏）
 - `docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md` - Week 1 执行清单（质量基线）
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 最终目标与质量约束基线
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 最终目标与质量约束基线（含质量执行记录）
 - `docs/` - 仓库文档（分析、事故报告、集成指南）
 
 ## 状态快照（压缩版，代码核对）
@@ -42,6 +42,7 @@
 - `docs/engineering/typecheck/TYPECHECK_FIXES.md` - 类型检查修复
 - `docs/engineering/reports/report.md` / `docs/engineering/reports/report-scroll-followup.md` - 调查报告
 - `docs/engineering/reports/sdk-unification-progress-2026-02-08.md` - SDK 统一收口与质量治理进展
+- `docs/engineering/legacy-debt-report-2026-02-21.md` - 深度技术债与兼容性分析报告（P0）
 - `docs/engineering/todo.md` - 工作 TODO 清单
 
 ## 功能文档（Plan-PRD）

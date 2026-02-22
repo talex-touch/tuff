@@ -179,7 +179,7 @@ const keyHints = computed(() => {
 <template>
   <div
     :class="{ display: debouncedDisplay || isIndexing }"
-    class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--el-border-color-lighter)] bg-transparent text-12px text-[color:var(--el-text-color-secondary)]"
+    class="CoreBoxFooter transition-cubic fake-background flex-shrink-0 absolute overflow-hidden z-0 flex items-center justify-between gap-3 h-44px px-3 border-t border-[var(--tx-border-color-lighter)] bg-transparent text-12px text-[color:var(--tx-text-color-secondary)]"
   >
     <div class="FooterInfo">
       <!-- Indexing indicator takes priority when no search results -->
@@ -248,7 +248,7 @@ const keyHints = computed(() => {
 
 .FooterTitle {
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,14 +266,14 @@ const keyHints = computed(() => {
 
 .FooterSubtitleIcon {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .InteractionType {
   padding: 2px 6px;
   border-radius: 4px;
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+  background-color: var(--tx-color-primary-light-9);
+  color: var(--tx-color-primary);
   font-size: 10px;
   font-weight: 500;
   text-transform: uppercase;
@@ -289,14 +289,14 @@ const keyHints = computed(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--el-color-primary);
+  background: var(--tx-color-primary);
   flex-shrink: 0;
   animation: indexing-pulse 1.5s ease-in-out infinite;
 }
 
 .IndexingLabel {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: nowrap;
 }
 
@@ -305,7 +305,7 @@ const keyHints = computed(() => {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: nowrap;
 }
 
@@ -333,8 +333,8 @@ const keyHints = computed(() => {
   min-width: 24px;
   padding: 2px 6px;
   border-radius: 6px;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-primary);
   font-weight: 600;
   font-size: 12px;
 }

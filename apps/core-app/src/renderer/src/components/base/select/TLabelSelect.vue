@@ -80,7 +80,7 @@ provide(
 
   transition: 0.25s;
   border-radius: 4px;
-  background-color: var(--el-fill-color-light);
+  background-color: var(--tx-fill-color-light);
 }
 
 .TLabelSelect {
@@ -97,6 +97,6 @@ provide(
 
   border-radius: 4px;
   box-sizing: border-box;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
 }
 </style>

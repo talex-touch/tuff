@@ -13,7 +13,7 @@ const props = withDefaults(
   {
     label: '',
     icon: '',
-    color: 'var(--el-color-primary)',
+    color: 'var(--tx-color-primary)',
     background: '',
     border: '',
     size: 'sm'
@@ -25,7 +25,7 @@ const safeLabel = computed(() => {
 })
 
 const safeColor = computed(() => {
-  return props.color || 'var(--el-color-primary)'
+  return props.color || 'var(--tx-color-primary)'
 })
 
 const resolvedBackground = computed(() => {
@@ -60,7 +60,7 @@ const styleVars = computed(() => ({
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  color: var(--tuff-tag-color, var(--el-color-primary));
+  color: var(--tuff-tag-color, var(--tx-color-primary));
   background: var(--tuff-tag-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tuff-tag-border, color-mix(in srgb, currentColor 32%, transparent));
   font-weight: 600;

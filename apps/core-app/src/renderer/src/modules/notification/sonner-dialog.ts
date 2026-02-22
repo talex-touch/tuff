@@ -5,11 +5,15 @@ import SonnerDialogToast, {
 } from '~/components/base/sonner/SonnerDialogToast.vue'
 import SonnerPromptToast from '~/components/base/sonner/SonnerPromptToast.vue'
 
+export type SonnerDialogActionInput<T = string> = Omit<SonnerDialogAction, 'onSelect'> & {
+  value: T
+}
+
 export interface SonnerDialogOptions<T = string> {
   title?: string
   message?: string
   description?: string
-  actions: Array<SonnerDialogAction & { value: T }>
+  actions: Array<SonnerDialogActionInput<T>>
   duration?: number
   onDismiss?: () => T
 }

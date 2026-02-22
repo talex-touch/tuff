@@ -108,8 +108,8 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
   gap: 8px;
   padding: 8px 12px;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color);
   position: relative;
   transition: all 0.2s ease;
   width: 100%;
@@ -120,8 +120,8 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
   }
 
   &:focus-within {
-    border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 3px var(--el-color-primary-light-9);
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 3px var(--tx-color-primary-light-9);
   }
 
   .input-element {
@@ -130,12 +130,12 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     background: transparent;
     width: 100%;
     font-size: 14px;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     resize: none;
   }
 
   .icon {
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     font-size: 16px;
     display: flex;
     align-items: center;
@@ -146,7 +146,7 @@ const inputType = computed(() => (props.type === 'password' ? 'password' : props
     top: -18px;
     right: 0;
     font-size: 12px;
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
   }
 }
 </style>

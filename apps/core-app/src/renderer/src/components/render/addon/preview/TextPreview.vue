@@ -179,8 +179,8 @@ onMounted(loadContent)
 
   .highlighted-content {
     :deep(.search-highlight) {
-      background-color: var(--el-color-warning-light-5);
-      color: var(--el-text-color-primary);
+      background-color: var(--tx-color-warning-light-5);
+      color: var(--tx-text-color-primary);
       border-radius: 2px;
       padding: 0 1px;
     }
@@ -193,13 +193,13 @@ onMounted(loadContent)
     justify-content: center;
     height: 100%;
     gap: 1rem;
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
 
     .loading-spinner {
       width: 24px;
       height: 24px;
-      border: 2px solid var(--el-border-color);
-      border-top: 2px solid var(--el-color-primary);
+      border: 2px solid var(--tx-border-color);
+      border-top: 2px solid var(--tx-color-primary);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -212,7 +212,7 @@ onMounted(loadContent)
     justify-content: center;
     height: 100%;
     gap: 1rem;
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
 
     .error-icon {
       font-size: 2rem;

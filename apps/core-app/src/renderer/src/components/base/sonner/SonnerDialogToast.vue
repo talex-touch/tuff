@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { TxButton } from '@talex-touch/tuffex'
+import type { TxButtonProps } from '@talex-touch/tuffex'
 
 export interface SonnerDialogAction {
   label: string
-  type?: string
-  variant?: string
+  type?: TxButtonProps['type']
+  variant?: TxButtonProps['variant']
   onSelect: () => void
 }
 
@@ -50,8 +51,8 @@ defineProps<{
   max-width: 360px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  background: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
@@ -64,12 +65,12 @@ defineProps<{
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .sonner-dialog__description {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: pre-wrap;
 }
 

@@ -188,7 +188,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
     .header-left {
       .logs-count {
         font-size: 14px;
-        color: var(--el-text-color-secondary);
+        color: var(--tx-text-color-secondary);
       }
     }
 
@@ -206,7 +206,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
     justify-content: center;
     gap: 12px;
     padding: 60px 20px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
 
     i {
       font-size: 32px;
@@ -219,19 +219,19 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
     gap: 8px;
 
     .log-item {
-      background: var(--el-fill-color-lighter);
-      border: 1px solid var(--el-border-color-lighter);
+      background: var(--tx-fill-color-lighter);
+      border: 1px solid var(--tx-border-color-lighter);
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s;
 
       &:hover {
-        border-color: var(--el-border-color);
+        border-color: var(--tx-border-color);
       }
 
       &.selected {
-        border-color: var(--el-color-primary);
-        background: var(--el-fill-color-light);
+        border-color: var(--tx-color-primary);
+        background: var(--tx-fill-color-light);
       }
 
       .log-main {
@@ -250,13 +250,13 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           font-size: 16px;
 
           &.success {
-            background: rgba(var(--el-color-success-rgb), 0.1);
-            color: var(--el-color-success);
+            background: rgba(var(--tx-color-success-rgb), 0.1);
+            color: var(--tx-color-success);
           }
 
           &.error {
-            background: rgba(var(--el-color-danger-rgb), 0.1);
-            color: var(--el-color-danger);
+            background: rgba(var(--tx-color-danger-rgb), 0.1);
+            color: var(--tx-color-danger);
           }
         }
 
@@ -267,18 +267,18 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           .log-capability {
             font-size: 14px;
             font-weight: 500;
-            color: var(--el-text-color-primary);
+            color: var(--tx-text-color-primary);
           }
 
           .log-meta {
             display: flex;
             gap: 12px;
             font-size: 12px;
-            color: var(--el-text-color-secondary);
+            color: var(--tx-text-color-secondary);
             margin-top: 4px;
 
             .provider {
-              color: var(--el-color-primary);
+              color: var(--tx-color-primary);
             }
           }
         }
@@ -287,7 +287,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           display: flex;
           gap: 16px;
           font-size: 12px;
-          color: var(--el-text-color-secondary);
+          color: var(--tx-text-color-secondary);
 
           span {
             display: flex;
@@ -296,7 +296,7 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           }
 
           .cost {
-            color: var(--el-color-warning);
+            color: var(--tx-color-warning);
             font-weight: 500;
           }
         }
@@ -304,8 +304,8 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
 
       .log-detail {
         padding: 12px 16px;
-        border-top: 1px solid var(--el-border-color-lighter);
-        background: var(--el-fill-color);
+        border-top: 1px solid var(--tx-border-color-lighter);
+        background: var(--tx-fill-color);
         font-size: 13px;
 
         .detail-row {
@@ -314,20 +314,20 @@ const statusClass = computed(() => (log: IntelligenceAuditLogEntry) => {
           padding: 4px 0;
 
           .label {
-            color: var(--el-text-color-secondary);
+            color: var(--tx-text-color-secondary);
             min-width: 100px;
           }
 
           code {
             font-family: monospace;
-            background: var(--el-fill-color-dark);
+            background: var(--tx-fill-color-dark);
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 12px;
           }
 
           &.error {
-            color: var(--el-color-danger);
+            color: var(--tx-color-danger);
           }
         }
       }

@@ -34,7 +34,7 @@ import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
     left: 50%;
     bottom: 25%;
 
-    background: linear-gradient(90deg, transparent, var(--el-color-primary-light-3), transparent);
+    background: linear-gradient(90deg, transparent, var(--tx-color-primary-light-3), transparent);
     background-size: 400% 100%;
     background-position-x: 0;
     animation: mix 4s infinite linear reverse;

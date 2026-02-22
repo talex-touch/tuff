@@ -14,6 +14,7 @@
  */
 
 import type { App } from 'vue'
+import { devLog } from '~/utils/dev-log'
 
 /**
  * Components currently enabled for use in the application.
@@ -70,7 +71,7 @@ export async function registerTuffexComponents(
       }
     }
 
-    console.debug(`[Tuffex] Registered ${components.length} components`)
+    devLog(`[Tuffex] Registered ${components.length} components`)
   } catch (error) {
     console.warn('[Tuffex] Failed to register components:', error)
   }

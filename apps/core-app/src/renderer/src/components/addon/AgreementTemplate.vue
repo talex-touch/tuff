@@ -68,12 +68,12 @@ async function dispose(agree: boolean): Promise<void> {
     font-size: 1.2rem;
     font-weight: 600;
     margin-bottom: 1rem;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   > span {
     margin-bottom: 1rem;
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
     font-size: 0.9rem;
   }
 
@@ -94,9 +94,9 @@ async function dispose(agree: boolean): Promise<void> {
     font-size: 0.9rem;
     line-height: 1.6;
     overflow: hidden;
-    color: var(--el-text-color-regular);
-    background-color: var(--el-fill-color-light);
-    border: 1px solid var(--el-border-color);
+    color: var(--tx-text-color-regular);
+    background-color: var(--tx-fill-color-light);
+    border: 1px solid var(--tx-border-color);
 
     :deep(.markdown-body) {
       background-color: transparent;
@@ -108,7 +108,7 @@ async function dispose(agree: boolean): Promise<void> {
       h4,
       h5,
       h6 {
-        color: var(--el-text-color-primary);
+        color: var(--tx-text-color-primary);
         margin-top: 1rem;
         margin-bottom: 0.5rem;
       }

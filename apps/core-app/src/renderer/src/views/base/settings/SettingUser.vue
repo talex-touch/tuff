@@ -332,8 +332,8 @@ async function handleSyncNow() {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 11px;
-  background: color-mix(in srgb, var(--el-color-success) 15%, transparent);
-  color: var(--el-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 15%, transparent);
+  color: var(--tx-color-success);
 }
 
 .user-tag + .user-tag {
@@ -345,7 +345,7 @@ async function handleSyncNow() {
   height: 36px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--el-color-primary-light-8);
+  background: var(--tx-color-primary-light-8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,8 +360,8 @@ async function handleSyncNow() {
 .user-avatar-placeholder {
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-8);
+  color: var(--tx-color-primary);
+  background: var(--tx-color-primary-light-8);
 }
 
 .user-actions {

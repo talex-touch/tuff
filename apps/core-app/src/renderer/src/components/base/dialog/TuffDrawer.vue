@@ -35,7 +35,7 @@ function handleClose(): void {
       >
         <TouchScroll class="absolute inset-0">
           <template #header>
-            <header class="p-4 border-b border-[--el-border-color]">
+            <header class="p-4 border-b border-[--tx-border-color]">
               <h2 class="text-xl font-bold">
                 {{ title }}
               </h2>

@@ -97,7 +97,7 @@ const hintText = computed(() => {
   font-size: 10px;
   line-height: 1;
   white-space: nowrap;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.8;
   margin-right: 6px;
   user-select: none;

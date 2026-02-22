@@ -252,8 +252,8 @@ onMounted(() => {
   cursor: pointer;
   user-select: none;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  --fake-color: var(--el-fill-color-dark);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-inner-opacity: 0.5;
   transition:
     background-color 0.25s ease,
@@ -263,23 +263,23 @@ onMounted(() => {
     cursor: default;
 
     &:hover {
-      --fake-color: var(--el-fill-color-dark);
+      --fake-color: var(--tx-fill-color-dark);
     }
   }
 
   &:not(.is-static):hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 
   &:not(.is-static):active {
-    --fake-color: var(--el-fill-color-dark);
+    --fake-color: var(--tx-fill-color-dark);
   }
 }
 
 .touch-blur .TGroupBlock-Header {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
   &:not(.is-static):hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 
@@ -303,7 +303,7 @@ onMounted(() => {
 
     .touch-blur & {
       &:hover {
-        --fake-color: var(--el-fill-color-light) !important;
+        --fake-color: var(--tx-fill-color-light) !important;
       }
     }
 
@@ -322,7 +322,7 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   --fake-radius: 0 !important;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   transition: border-color 0.25s ease;
 }
 </style>

@@ -21,11 +21,11 @@ const props = withDefaults(
 )
 
 const toneMap: Record<StatusTone, { color: string; icon: string }> = {
-  success: { color: 'var(--el-color-success)', icon: 'i-carbon-checkmark-filled' },
-  warning: { color: 'var(--el-color-warning)', icon: 'i-carbon-warning' },
-  danger: { color: 'var(--el-color-error)', icon: 'i-carbon-close-outline' },
-  info: { color: 'var(--el-color-primary)', icon: 'i-carbon-information' },
-  muted: { color: 'var(--el-text-color-secondary)', icon: 'i-carbon-minimize' }
+  success: { color: 'var(--tx-color-success)', icon: 'i-carbon-checkmark-filled' },
+  warning: { color: 'var(--tx-color-warning)', icon: 'i-carbon-warning' },
+  danger: { color: 'var(--tx-color-error)', icon: 'i-carbon-close-outline' },
+  info: { color: 'var(--tx-color-primary)', icon: 'i-carbon-information' },
+  muted: { color: 'var(--tx-text-color-secondary)', icon: 'i-carbon-minimize' }
 }
 
 const resolvedTone = computed<StatusTone>(() => {
@@ -74,7 +74,7 @@ const iconClass = computed(() => props.icon || toneMeta.value.icon)
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--tuff-status-color, var(--el-text-color-primary));
+  color: var(--tuff-status-color, var(--tx-text-color-primary));
   background: var(--tuff-status-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tuff-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition:

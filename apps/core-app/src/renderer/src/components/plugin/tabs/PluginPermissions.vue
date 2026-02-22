@@ -450,7 +450,7 @@ onMounted(() => {
       >
         <TuffBlockLine :title="t('plugin.permissions.recommendationsTitle')">
           <template #description>
-            <span class="text-[var(--el-color-warning)]">{{
+            <span class="text-[var(--tx-color-warning)]">{{
               t('plugin.permissions.legacyHint', { version: 251212 })
             }}</span>
           </template>
@@ -551,16 +551,16 @@ onMounted(() => {
   justify-content: center;
   gap: 12px;
   height: 200px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .danger {
-  color: var(--el-color-danger) !important;
+  color: var(--tx-color-danger) !important;
 }
 
 .PluginShortcuts-Loading {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   padding: 6px 0;
 }
 
@@ -577,7 +577,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   padding: 6px 0;
-  border-bottom: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid var(--tx-border-color-light);
 }
 
 .PluginShortcuts-Item:last-child {
@@ -594,7 +594,7 @@ onMounted(() => {
 .PluginShortcuts-Title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .PluginShortcuts-Status,

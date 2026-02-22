@@ -210,7 +210,7 @@ watch(
     width: 100%;
     height: 100%;
     border-radius: 4px;
-    background: var(--el-color-primary-light-9);
+    background: var(--tx-color-primary-light-9);
     position: relative;
     overflow: hidden;
 
@@ -229,11 +229,11 @@ watch(
     width: 100%;
     height: 100%;
     border-radius: 4px;
-    background: var(--el-fill-color-lighter);
+    background: var(--tx-fill-color-lighter);
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--el-text-color-placeholder);
+    color: var(--tx-text-color-placeholder);
 
     i {
       font-size: 1.2rem;

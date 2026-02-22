@@ -99,14 +99,14 @@ function handlePin() {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: var(--el-bg-color);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
   cursor: move;
   user-select: none;
   min-height: 40px;
 
   &:hover {
-    background: var(--el-fill-color-light);
+    background: var(--tx-fill-color-light);
   }
 }
 
@@ -120,14 +120,14 @@ function handlePin() {
 
 .header-icon {
   font-size: 16px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   flex-shrink: 0;
 }
 
 .header-title {
   font-size: 14px;
   font-weight: 500;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -151,7 +151,7 @@ function handlePin() {
   background: transparent;
   border-radius: 4px;
   cursor: pointer;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   transition: all 0.2s ease;
 
   i {
@@ -159,8 +159,8 @@ function handlePin() {
   }
 
   &:hover {
-    background: var(--el-fill-color);
-    color: var(--el-text-color-primary);
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-primary);
   }
 
   &:active {
@@ -168,7 +168,7 @@ function handlePin() {
   }
 
   &.is-pinned {
-    color: var(--el-color-primary);
+    color: var(--tx-color-primary);
 
     i {
       transform: rotate(45deg);
@@ -178,8 +178,8 @@ function handlePin() {
 
 .header-close-btn {
   &:hover {
-    background: var(--el-color-danger-light-9);
-    color: var(--el-color-danger);
+    background: var(--tx-color-danger-light-9);
+    color: var(--tx-color-danger);
   }
 }
 </style>

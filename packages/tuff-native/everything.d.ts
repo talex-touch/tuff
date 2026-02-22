@@ -25,12 +25,12 @@ export interface EverythingSearchResult {
 
 export declare function search(
   query: string,
-  options?: EverythingSearchOptions
+  options?: EverythingSearchOptions,
 ): EverythingSearchResult[]
 
 export declare function query(
   query: string,
-  options?: EverythingSearchOptions
+  options?: EverythingSearchOptions,
 ): EverythingSearchResult[]
 
 export declare function getVersion(): string | null

@@ -90,7 +90,7 @@ watch(
   width: 0;
   height: 100%;
   overflow: hidden;
-  border-left: 1px solid var(--el-border-color);
+  border-left: 1px solid var(--tx-border-color);
   transition:
     width 0.3s ease,
     opacity 0.25s ease;
@@ -102,8 +102,8 @@ watch(
 
 .panel {
   height: 100%;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-bg-color);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
@@ -135,12 +135,12 @@ header {
   .title {
     font-size: 14px;
     font-weight: 600;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   .count {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 }
 
@@ -156,7 +156,7 @@ header {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-size: 13px;
 }
 
@@ -174,21 +174,21 @@ header {
   padding: 12px 14px;
   border: 1px solid transparent;
   cursor: pointer;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   transition:
     border-color 0.2s ease,
     background 0.2s ease,
     transform 0.15s ease;
 
   &:hover {
-    border-color: var(--el-color-primary);
-    background: var(--el-color-primary-light-9);
+    border-color: var(--tx-color-primary);
+    background: var(--tx-color-primary-light-9);
     transform: translateY(-1px);
   }
 
   .expression {
     font-size: 14px;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     margin-bottom: 6px;
     font-weight: 500;
   }
@@ -198,12 +198,12 @@ header {
     align-items: center;
     justify-content: space-between;
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     gap: 6px;
 
     .result {
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
 
     .ability {
@@ -213,8 +213,8 @@ header {
 }
 
 .history-list li.is-active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-8);
+  border-color: var(--tx-color-primary);
+  background: var(--tx-color-primary-light-8);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 </style>

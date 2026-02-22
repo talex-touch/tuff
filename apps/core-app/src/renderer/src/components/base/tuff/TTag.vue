@@ -50,32 +50,32 @@ const props = withDefaults(
   }
 
   &.type-default {
-    background: var(--el-fill-color-lighter);
-    color: var(--el-text-color-secondary);
+    background: var(--tx-fill-color-lighter);
+    color: var(--tx-text-color-secondary);
   }
 
   &.type-success {
-    background: var(--el-color-success-light-9);
-    color: var(--el-color-success);
-    border-color: var(--el-color-success-light-7);
+    background: var(--tx-color-success-light-9);
+    color: var(--tx-color-success);
+    border-color: var(--tx-color-success-light-7);
   }
 
   &.type-danger {
-    background: var(--el-color-danger-light-9);
-    color: var(--el-color-danger);
-    border-color: var(--el-color-danger-light-7);
+    background: var(--tx-color-danger-light-9);
+    color: var(--tx-color-danger);
+    border-color: var(--tx-color-danger-light-7);
   }
 
   &.type-warning {
-    background: var(--el-color-warning-light-9);
-    color: var(--el-color-warning);
-    border-color: var(--el-color-warning-light-7);
+    background: var(--tx-color-warning-light-9);
+    color: var(--tx-color-warning);
+    border-color: var(--tx-color-warning-light-7);
   }
 
   &.type-info {
-    background: var(--el-color-info-light-9);
-    color: var(--el-color-info);
-    border-color: var(--el-color-info-light-7);
+    background: var(--tx-color-info-light-9);
+    color: var(--tx-color-info);
+    border-color: var(--tx-color-info-light-7);
   }
 }
 </style>

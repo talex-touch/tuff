@@ -149,8 +149,8 @@ function handleSelect(item: T): void {
   cursor: pointer;
 
   &:hover {
-    border-color: var(--el-border-color);
-    background: var(--el-fill-color);
+    border-color: var(--tx-border-color);
+    background: var(--tx-fill-color);
   }
 
   &:active:not(.is-disabled) {
@@ -176,13 +176,13 @@ function handleSelect(item: T): void {
 .tuff-aside-list__title {
   font-weight: 600;
   font-size: 0.95rem;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .tuff-aside-list__desc {
   margin-top: 0.2rem;
   font-size: 0.85rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .tuff-aside-list__badge {
@@ -190,8 +190,8 @@ function handleSelect(item: T): void {
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   border-radius: 999px;
-  background: var(--el-fill-color);
-  color: var(--el-text-color-regular);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-regular);
 
   &.is-info {
     background: rgba(99, 102, 241, 0.1);
@@ -209,17 +209,17 @@ function handleSelect(item: T): void {
   }
 
   &.is-muted {
-    background: var(--el-fill-color);
-    color: var(--el-text-color-secondary);
+    background: var(--tx-fill-color);
+    color: var(--tx-text-color-secondary);
   }
 }
 
 .tuff-aside-list__empty {
   padding: 1rem;
-  border: 1px dashed var(--el-border-color-lighter);
+  border: 1px dashed var(--tx-border-color-lighter);
   border-radius: 1rem;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 </style>

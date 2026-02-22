@@ -156,9 +156,9 @@ const activeTag = computed<ActiveTag>(() => {
     font-size: 15px;
 
     --fake-inner-opacity: 0.5 !important;
-    --fake-color: var(--el-color-primary);
+    --fake-color: var(--tx-color-primary);
     border-radius: 8px;
-    // background-color: var(--el-color-warning-light-5);
+    // background-color: var(--tx-color-warning-light-5);
   }
 }
 </style>

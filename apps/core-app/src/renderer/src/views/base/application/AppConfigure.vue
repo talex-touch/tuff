@@ -228,7 +228,7 @@ function handleHelp(): void {
 
   gap: 1rem;
 
-  border-bottom: 1px solid var(--el-border-color);
+  border-bottom: 1px solid var(--tx-border-color);
 
   &-Left {
     position: relative;
@@ -289,7 +289,7 @@ function handleHelp(): void {
     height: 64px;
 
     box-sizing: border-box;
-    border-top: 1px solid var(--el-border-color);
+    border-top: 1px solid var(--tx-border-color);
   }
 
   position: relative;

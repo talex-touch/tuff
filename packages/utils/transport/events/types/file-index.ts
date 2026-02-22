@@ -46,6 +46,17 @@ export interface FileIndexStats {
   embeddingRows: number
 }
 
+export interface FileIndexAddPathRequest {
+  path: string
+}
+
+export interface FileIndexAddPathResult {
+  success: boolean
+  status: 'added' | 'exists' | 'invalid' | 'error'
+  path?: string
+  reason?: string
+}
+
 export interface FileIndexRebuildRequest {
   force?: boolean
 }

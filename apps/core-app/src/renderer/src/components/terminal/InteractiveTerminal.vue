@@ -45,10 +45,10 @@ onMounted(() => {
 <style lang="scss">
 .xterm-screen {
   .xterm-rows {
-    color: var(--el-text-color-primary) !important;
+    color: var(--tx-text-color-primary) !important;
   }
   .xterm-fg-8 {
-    color: var(--el-text-color-secondary) !important;
+    color: var(--tx-text-color-secondary) !important;
   }
 
   width: 100%;

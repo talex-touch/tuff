@@ -47,7 +47,7 @@ function toggle() {
     top: 15%;
     left: 10%;
     border-radius: 5px;
-    background-color: var(--el-text-color-secondary);
+    background-color: var(--tx-text-color-secondary);
     transition:
       left 0.3s cubic-bezier(0.16, 1, 0.3, 1),
       background-color 0.25s ease,
@@ -63,11 +63,11 @@ function toggle() {
     }
 
     border-color: transparent;
-    background-color: var(--el-color-primary);
+    background-color: var(--tx-color-primary);
   }
 
   &:hover {
-    box-shadow: 0 0 12px 1px color-mix(in srgb, var(--el-color-primary) 20%, transparent);
+    box-shadow: 0 0 12px 1px color-mix(in srgb, var(--tx-color-primary) 20%, transparent);
   }
 
   &:active:before {
@@ -79,7 +79,7 @@ function toggle() {
   height: 24px;
   cursor: pointer;
   border-radius: 8px;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
   transition:
     background-color 0.25s ease,
     border-color 0.25s ease,

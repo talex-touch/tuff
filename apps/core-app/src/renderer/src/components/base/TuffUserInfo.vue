@@ -579,7 +579,7 @@ watch(isLoggedIn, (loggedIn) => {
       transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
-      background-color: var(--el-fill-color-light);
+      background-color: var(--tx-fill-color-light);
 
       .open-external-icon {
         opacity: 1;
@@ -588,7 +588,7 @@ watch(isLoggedIn, (loggedIn) => {
     }
 
     &:active {
-      background-color: var(--el-fill-color);
+      background-color: var(--tx-fill-color);
       transform: scale(0.98);
     }
   }
@@ -606,7 +606,7 @@ watch(isLoggedIn, (loggedIn) => {
   .open-external-icon {
     flex-shrink: 0;
     font-size: 14px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0;
     transition:
       opacity 0.2s ease,
@@ -628,8 +628,8 @@ watch(isLoggedIn, (loggedIn) => {
     background: linear-gradient(
       to right,
       transparent 5%,
-      var(--el-border-color) 15%,
-      var(--el-border-color) 85%,
+      var(--tx-border-color) 15%,
+      var(--tx-border-color) 85%,
       transparent 95%
     );
     background-repeat: no-repeat;
@@ -641,7 +641,7 @@ watch(isLoggedIn, (loggedIn) => {
     height: 32px;
     border-radius: 50%;
     overflow: hidden;
-    background: var(--el-color-primary-light-8);
+    background: var(--tx-color-primary-light-8);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -660,8 +660,8 @@ watch(isLoggedIn, (loggedIn) => {
       justify-content: center;
       font-size: 14px;
       font-weight: 600;
-      color: var(--el-color-primary);
-      background: var(--el-color-primary-light-8);
+      color: var(--tx-color-primary);
+      background: var(--tx-color-primary-light-8);
     }
   }
 
@@ -676,7 +676,7 @@ watch(isLoggedIn, (loggedIn) => {
       margin: 0;
       font-size: 13px;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
       line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
@@ -687,7 +687,7 @@ watch(isLoggedIn, (loggedIn) => {
       margin: 0;
       font-size: 11px;
       font-weight: 400;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
       opacity: 0.8;
       line-height: 1.2;
       white-space: nowrap;
@@ -717,13 +717,13 @@ watch(isLoggedIn, (loggedIn) => {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid var(--tx-border-color-light);
 }
 
 .UserProfileOverlay-Title {
   font-size: 17px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .UserProfileOverlay-CloseBtn {
@@ -747,9 +747,9 @@ watch(isLoggedIn, (loggedIn) => {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: stretch;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--tx-border-color-light);
   border-radius: 14px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
   padding: 14px;
 }
 
@@ -765,7 +765,7 @@ watch(isLoggedIn, (loggedIn) => {
   height: 54px;
   border-radius: 50%;
   overflow: hidden;
-  background: var(--el-color-primary-light-8);
+  background: var(--tx-color-primary-light-8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -784,8 +784,8 @@ watch(isLoggedIn, (loggedIn) => {
     justify-content: center;
     font-size: 17px;
     font-weight: 600;
-    color: var(--el-color-primary);
-    background: var(--el-color-primary-light-8);
+    color: var(--tx-color-primary);
+    background: var(--tx-color-primary-light-8);
   }
 }
 
@@ -808,7 +808,7 @@ watch(isLoggedIn, (loggedIn) => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -820,14 +820,14 @@ watch(isLoggedIn, (loggedIn) => {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
-  color: var(--el-color-primary);
-  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
+  color: var(--tx-color-primary);
+  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
 }
 
 .UserProfile-Email {
   margin: 0;
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -836,7 +836,7 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfile-MetaText {
   margin: 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   line-height: 1.4;
   white-space: nowrap;
   overflow: hidden;
@@ -849,7 +849,7 @@ watch(isLoggedIn, (loggedIn) => {
   flex-direction: column;
   gap: 4px;
   padding-left: 16px;
-  border-left: 1px solid var(--el-border-color-light);
+  border-left: 1px solid var(--tx-border-color-light);
   justify-content: center;
 }
 
@@ -858,7 +858,7 @@ watch(isLoggedIn, (loggedIn) => {
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-TopPlanValue {
@@ -866,13 +866,13 @@ watch(isLoggedIn, (loggedIn) => {
   font-size: 24px;
   line-height: 1;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .UserProfile-TopPlanMeta {
   margin: 0;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-ManagePanel {
@@ -887,10 +887,10 @@ watch(isLoggedIn, (loggedIn) => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--tx-border-color-light);
   border-radius: 12px;
   padding: 10px 12px;
-  background: var(--el-fill-color-lighter);
+  background: var(--tx-fill-color-lighter);
 }
 
 .UserProfile-ManageInfo {
@@ -904,17 +904,17 @@ watch(isLoggedIn, (loggedIn) => {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-ManageValue {
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .UserProfile-ManageHint {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-MetricsGrid {
@@ -929,8 +929,8 @@ watch(isLoggedIn, (loggedIn) => {
   gap: 8px;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--tx-border-color-light);
+  background: var(--tx-fill-color-lighter);
 }
 
 .UserProfile-Actions {
@@ -951,7 +951,7 @@ watch(isLoggedIn, (loggedIn) => {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-Row {
@@ -960,14 +960,14 @@ watch(isLoggedIn, (loggedIn) => {
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 
   .label {
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .value {
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     font-weight: 500;
   }
 }
@@ -978,11 +978,11 @@ watch(isLoggedIn, (loggedIn) => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .UserProfile-Error {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
 }
 
 @media (max-width: 760px) {
@@ -993,7 +993,7 @@ watch(isLoggedIn, (loggedIn) => {
   .UserProfile-TopPlan {
     min-width: 0;
     border-left: none;
-    border-top: 1px solid var(--el-border-color-light);
+    border-top: 1px solid var(--tx-border-color-light);
     padding-left: 0;
     padding-top: 12px;
   }
@@ -1031,8 +1031,8 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfileOverlay-Card {
   width: min(940px, 92vw);
   height: min(760px, 88vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.2rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

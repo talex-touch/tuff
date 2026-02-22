@@ -79,8 +79,8 @@ function closeDrawer(): void {
   width: 450px;
   max-width: 90vw;
   height: 100%;
-  background: var(--el-bg-color);
-  border-left: 1px solid var(--el-border-color);
+  background: var(--tx-bg-color);
+  border-left: 1px solid var(--tx-border-color);
   display: flex;
   flex-direction: column;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
@@ -91,14 +91,14 @@ function closeDrawer(): void {
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--el-border-color);
+  border-bottom: 1px solid var(--tx-border-color);
   flex-shrink: 0;
 
   h3 {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 }
 
@@ -106,9 +106,9 @@ function closeDrawer(): void {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: var(--el-fill-color);
-  border: 1px solid var(--el-border-color);
-  color: var(--el-text-color-regular);
+  background: var(--tx-fill-color);
+  border: 1px solid var(--tx-border-color);
+  color: var(--tx-text-color-regular);
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
@@ -116,9 +116,9 @@ function closeDrawer(): void {
   justify-content: center;
 
   &:hover {
-    background: var(--el-color-danger-light-9);
-    border-color: var(--el-color-danger-light-5);
-    color: var(--el-color-danger);
+    background: var(--tx-color-danger-light-9);
+    border-color: var(--tx-color-danger-light-5);
+    color: var(--tx-color-danger);
   }
 }
 
@@ -132,16 +132,16 @@ function closeDrawer(): void {
 }
 
 .glass-card {
-  background: rgba(var(--el-fill-color-extra-light-rgb), 0.6);
+  background: rgba(var(--tx-fill-color-extra-light-rgb), 0.6);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.2);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.2);
   border-radius: 16px;
   padding: 1.5rem;
   transition: all 0.3s ease;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 
   &:hover {
-    border-color: rgba(var(--el-color-primary-rgb), 0.3);
+    border-color: rgba(var(--tx-color-primary-rgb), 0.3);
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
     transform: translateY(-2px);
   }
@@ -159,25 +159,25 @@ function closeDrawer(): void {
     font-family: 'SF Mono', Monaco, monospace;
     font-size: 1.125rem;
     font-weight: 600;
-    color: var(--el-color-primary);
-    background: rgba(var(--el-color-primary-rgb), 0.1);
+    color: var(--tx-color-primary);
+    background: rgba(var(--tx-color-primary-rgb), 0.1);
     padding: 0.5rem 1rem;
     border-radius: 8px;
-    border: 1px solid rgba(var(--el-color-primary-rgb), 0.2);
+    border: 1px solid rgba(var(--tx-color-primary-rgb), 0.2);
   }
 
   .command-shortcut {
     font-size: 0.75rem;
-    color: var(--el-text-color-secondary);
-    background: rgba(var(--el-fill-color-rgb), 0.8);
+    color: var(--tx-text-color-secondary);
+    background: rgba(var(--tx-fill-color-rgb), 0.8);
     padding: 0.25rem 0.75rem;
     border-radius: 12px;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
   }
 
   .command-description {
     margin: 0;
-    color: var(--el-text-color-regular);
+    color: var(--tx-text-color-regular);
     line-height: 1.5;
   }
 }
@@ -195,14 +195,14 @@ function closeDrawer(): void {
 
     i {
       font-size: 1.25rem;
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
 
     h4 {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
   }
 
@@ -211,11 +211,11 @@ function closeDrawer(): void {
     font-family: 'SF Mono', Monaco, monospace;
     font-size: 0.875rem;
     line-height: 1.5;
-    color: var(--el-text-color-primary);
-    background: var(--el-fill-color-extra-light);
+    color: var(--tx-text-color-primary);
+    background: var(--tx-fill-color-extra-light);
     padding: 1rem;
     border-radius: 8px;
-    border: 1px solid var(--el-border-color);
+    border: 1px solid var(--tx-border-color);
     margin: 0;
     white-space: pre-wrap;
     word-break: break-word;

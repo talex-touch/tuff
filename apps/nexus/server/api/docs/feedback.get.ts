@@ -1,3 +1,4 @@
+import type { D1Database } from '@cloudflare/workers-types'
 import { readCloudflareBindings } from '../../utils/cloudflare'
 
 const DOC_FEEDBACK_TABLE = 'doc_feedback'

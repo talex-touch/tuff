@@ -19,20 +19,20 @@ onMounted(() => {
 
 <template>
   <div
-    class="StatCard fake-background relative overflow-hidden backdrop-blur-xl border-[var(--el-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
+    class="StatCard fake-background relative overflow-hidden backdrop-blur-xl border-[var(--tx-border-color-lighter)] rounded-2xl p-4 flex flex-col items-start justify-end h-28"
   >
     <div class="StatCard-Content">
       <div class="StatCard-Icon transition-cubic top-0 left-0 absolute w-full h-full">
         <i class="absolute right-4 top-[50%] translate-y-[-50%]" :class="iconClass" />
       </div>
-      <span class="text-3xl font-bold text-[var(--el-text-color-primary)]">
+      <span class="text-3xl font-bold text-[var(--tx-text-color-primary)]">
         <NumberFlow :value="displayValue" />
       </span>
-      <span class="block text-sm text-[var(--el-text-color-secondary)]">{{ label }}</span>
+      <span class="block text-sm text-[var(--tx-text-color-secondary)]">{{ label }}</span>
     </div>
     <div class="StatCard-Decoration transition-cubic -z-10 top-0 left-0 w-full h-full absolute">
       <i
-        class="absolute right-4 top-[50%] translate-y-[-50%] text-[var(--el-text-color-secondary)]"
+        class="absolute right-4 top-[50%] translate-y-[-50%] text-[var(--tx-text-color-secondary)]"
         :class="iconClass"
       />
     </div>
@@ -44,7 +44,7 @@ onMounted(() => {
   &:hover {
     cursor: pointer;
     --fake-opacity: 0.75;
-    border-color: var(--el-border-color-light);
+    border-color: var(--tx-border-color-light);
 
     .StatCard-Decoration {
       transform: scale(1.25);
@@ -61,7 +61,7 @@ onMounted(() => {
     filter: blur(20px) brightness(120%) saturate(180%);
   }
   & {
-    border: 1px solid var(--el-border-color-lighter);
+    border: 1px solid var(--tx-border-color-lighter);
   }
 }
 </style>

@@ -41,11 +41,11 @@ const visible = computed(() => props.visible)
   overflow: hidden;
   border-radius: 8px;
 
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   cursor: pointer;
   -webkit-app-region: no-drag;
   --fake-inner-opacity: 0.75;
-  --fake-color: var(--el-bg-color);
+  --fake-color: var(--tx-bg-color);
 
   transition:
     background-color 0.2s ease,

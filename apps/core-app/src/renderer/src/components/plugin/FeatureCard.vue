@@ -107,12 +107,12 @@ function handleClick(event: MouseEvent): void {
           <div class="FeatureCard-HeaderInfo">
             <div class="FeatureCard-TitleRow flex items-center gap-2">
               <h3
-                class="FeatureCard-Title text-lg font-semibold text-[var(--el-text-color-primary)]"
+                class="FeatureCard-Title text-lg font-semibold text-[var(--tx-text-color-primary)]"
               >
                 {{ feature.name }}
               </h3>
               <span
-                class="FeatureCard-InteractionBadge bg-[var(--el-fill-color)] text-[var(--el-text-color-regular)] text-xs px-2 py-1 rounded-full"
+                class="FeatureCard-InteractionBadge bg-[var(--tx-fill-color)] text-[var(--tx-text-color-regular)] text-xs px-2 py-1 rounded-full"
               >
                 {{ getInteractionLabel() }}
               </span>
@@ -120,14 +120,14 @@ function handleClick(event: MouseEvent): void {
           </div>
         </div>
         <div
-          class="FeatureCard-PriorityBadge bg-[var(--el-color-warning-light-9)] text-[var(--el-color-warning)] text-xs px-2 py-1 rounded-full border border-[var(--el-color-warning-light-7)]"
+          class="FeatureCard-PriorityBadge bg-[var(--tx-color-warning-light-9)] text-[var(--tx-color-warning)] text-xs px-2 py-1 rounded-full border border-[var(--tx-color-warning-light-7)]"
         >
           {{ getPriorityLabel() }}
         </div>
       </div>
 
       <div class="FeatureCard-Body">
-        <p class="FeatureCard-Desc text-sm text-[var(--el-text-color-secondary)] line-clamp-2">
+        <p class="FeatureCard-Desc text-sm text-[var(--tx-text-color-secondary)] line-clamp-2">
           {{ feature.desc }}
         </p>
       </div>
@@ -154,9 +154,9 @@ function handleClick(event: MouseEvent): void {
 
 <style lang="scss" scoped>
 .FeatureCard {
-  background: var(--el-bg-color-overlay);
+  background: var(--tx-bg-color-overlay);
   backdrop-filter: blur(12px);
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem; // 20px
   padding: 1.5rem; // 24px
   cursor: pointer;
@@ -205,7 +205,7 @@ function handleClick(event: MouseEvent): void {
 
 .FeatureCard-InteractionBadge {
   text-transform: capitalize;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--tx-border-color-lighter);
 }
 
 .FeatureCard-Footer {
@@ -213,7 +213,7 @@ function handleClick(event: MouseEvent): void {
   align-items: center;
   justify-content: space-between;
   padding-top: 0.85rem;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--tx-border-color-lighter);
   margin-top: 1.25rem;
 }
 
@@ -231,8 +231,8 @@ function handleClick(event: MouseEvent): void {
   align-items: center;
   justify-content: center;
   font-size: 16px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-secondary);
 }
 
 .FeatureCard-PlatformIcon.is-win {
@@ -251,7 +251,7 @@ function handleClick(event: MouseEvent): void {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: var(--el-color-warning);
+  color: var(--tx-color-warning);
 }
 
 .line-clamp-2 {

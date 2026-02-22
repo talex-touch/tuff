@@ -17,6 +17,7 @@ import {
 import { toast } from 'vue-sonner'
 import { isDevEnv } from '@talex-touch/utils/env'
 import AuthLoginResumePrompt from '~/components/auth/AuthLoginResumePrompt.vue'
+import { devLog } from '~/utils/dev-log'
 import { appSetting } from '../channel/storage/index'
 import {
   clearAppAuthToken,
@@ -541,7 +542,7 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     const localDeviceId = getAppDeviceId()
     const tokenDeviceId = resolveAuthTokenDeviceId(resolvedToken)
     if (localDeviceId || tokenDeviceId) {
-      console.debug('[Auth] app token device check', {
+      devLog('[Auth] app token device check', {
         localDeviceId: maskDeviceId(localDeviceId),
         tokenDeviceId: maskDeviceId(tokenDeviceId),
         matches: Boolean(localDeviceId && tokenDeviceId && localDeviceId === tokenDeviceId)

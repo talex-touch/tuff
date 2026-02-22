@@ -294,7 +294,7 @@ onBeforeUnmount(() => {
 }
 
 .MetaPanel {
-  background: var(--el-bg-color);
+  background: var(--tx-bg-color);
   border-radius: 12px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
   width: 400px;
@@ -306,7 +306,7 @@ onBeforeUnmount(() => {
 
 .MetaHeader {
   padding: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .SearchBox {
@@ -314,18 +314,18 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
   border-radius: 8px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   transition: border-color 0.2s;
 
   &:focus-within {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
   }
 }
 
 .SearchIcon {
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   flex-shrink: 0;
 }
 
@@ -335,10 +335,10 @@ onBeforeUnmount(() => {
   background: transparent;
   outline: none;
   font-size: 13px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 
   &::placeholder {
-    color: var(--el-text-color-placeholder);
+    color: var(--tx-text-color-placeholder);
   }
 }
 
@@ -346,8 +346,8 @@ onBeforeUnmount(() => {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--el-fill-color-dark);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-dark);
+  color: var(--tx-text-color-secondary);
   font-family:
     system-ui,
     -apple-system,
@@ -365,7 +365,7 @@ onBeforeUnmount(() => {
   padding: 8px 12px 4px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -376,9 +376,9 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 16px;
   padding: 8px 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--tx-border-color-lighter);
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .meta-fade-enter-active,

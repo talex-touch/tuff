@@ -1,5 +1,7 @@
 /// <reference types="node" />
 
+import type { Buffer } from 'node:buffer'
+
 export interface NativeOcrBlock {
   text: string
   confidence?: number

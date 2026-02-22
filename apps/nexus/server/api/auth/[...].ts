@@ -4,15 +4,31 @@ import { NuxtAuthHandler } from '#auth'
 import { useRuntimeConfig } from '#imports'
 import type { Account, AuthOptions, Profile, Session, User } from 'next-auth'
 import type { JWT } from 'next-auth/jwt'
-import type { OAuthConfig } from '@auth/core/providers/oauth'
-import Credentials from '@auth/core/providers/credentials'
-import GitHub from '@auth/core/providers/github'
-import Email from '@auth/core/providers/email'
+import type { OAuthConfig } from 'next-auth/providers/oauth'
+import Credentials from 'next-auth/providers/credentials'
+import GitHub from 'next-auth/providers/github'
+import Email from 'next-auth/providers/email'
 import { createD1Adapter } from '../../utils/authAdapter'
 import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
+
+function resolveAuthHeaders(req?: { headers?: Headers | AuthRequestHeaders } | Request | null): AuthRequestHeaders | undefined {
+  if (!req)
+    return undefined
+  const headers = 'headers' in req ? req.headers : undefined
+  if (!headers)
+    return undefined
+  if (headers instanceof Headers) {
+    const record: AuthRequestHeaders = {}
+    headers.forEach((value, key) => {
+      record[key] = value
+    })
+    return record
+  }
+  return headers as AuthRequestHeaders
+}
 
 function getRuntimeBindings() {
   const bindings = (globalThis as { __env__?: { DB?: unknown } }).__env__
@@ -42,7 +58,7 @@ function getAuthOptions(): AuthOptions {
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
   const linuxdoClientId = config.auth?.linuxdo?.clientId
   const linuxdoClientSecret = config.auth?.linuxdo?.clientSecret
-  const providers = [
+  const providers: AuthOptions['providers'] = [
     Credentials({
       name: 'Credentials',
       credentials: {
@@ -51,7 +67,7 @@ function getAuthOptions(): AuthOptions {
         loginToken: { label: 'Login Token', type: 'text' }
       },
       async authorize(credentials, req) {
-        const authEvent = createAuthEvent((req as { headers?: AuthRequestHeaders } | undefined)?.headers)
+        const authEvent = createAuthEvent(resolveAuthHeaders(req))
         const email = credentials?.email?.toString().trim().toLowerCase() ?? ''
         const password = credentials?.password?.toString() ?? ''
         const loginToken = credentials?.loginToken?.toString() ?? ''
@@ -79,8 +95,8 @@ function getAuthOptions(): AuthOptions {
         await logLoginAttempt(authEvent, { userId: user.id, deviceId: null, success: true, reason: 'password' })
         return { id: user.id, email: user.email, name: user.name, image: user.image }
       }
-    })
-  ] as unknown as AuthOptions['providers']
+    }),
+  ]
 
   const githubClientId = config.auth?.github?.clientId
   const githubClientSecret = config.auth?.github?.clientSecret
@@ -146,7 +162,6 @@ function getAuthOptions(): AuthOptions {
   }
 
   return {
-    trustHost: true,
     secret: config.auth?.secret,
     session: { strategy: 'jwt' },
     adapter: createD1Adapter(() => createAuthEvent()) as AuthOptions['adapter'],

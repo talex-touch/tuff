@@ -197,20 +197,20 @@ if (availableProviders.value.length > 0) {
 .input-label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .input-select,
 .input-textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 0.5rem;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-blank);
+  color: var(--tx-text-color-primary);
   font-size: 0.875rem;
   transition: all 0.2s;
-  font-family: var(--el-font-family);
+  font-family: var(--tx-font-family);
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -218,13 +218,13 @@ if (availableProviders.value.length > 0) {
   white-space: nowrap;
 
   &:hover:not(:disabled) {
-    border-color: var(--el-color-primary-light-5);
+    border-color: var(--tx-color-primary-light-5);
   }
 
   &:focus {
     outline: none;
-    border-color: var(--el-color-primary);
-    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 2px var(--tx-color-primary-light-9);
   }
 
   &:disabled {

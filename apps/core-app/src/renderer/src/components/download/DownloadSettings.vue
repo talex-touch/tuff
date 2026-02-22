@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DownloadConfig } from '@talex-touch/utils'
-import { TxCard, TxModal, TxSlider } from '@talex-touch/tuffex'
+import { TxCard, TxCheckbox, TxForm, TxFormItem, TxModal, TxSlider } from '@talex-touch/tuffex'
 import { computed, reactive, watch } from 'vue'
 // Note: ref is intentionally not imported as it's not used
 import { toast } from 'vue-sonner'
@@ -49,15 +49,6 @@ const form = reactive<DownloadConfig>({
     maxRetries: 3
   }
 })
-
-// 并发数标记
-const concurrencyMarks = {
-  1: '1',
-  3: '3',
-  5: '5',
-  8: '8',
-  10: '10'
-}
 
 // 切片大小选项
 const chunkSizeOptions = [
@@ -121,37 +112,37 @@ watch(
     width="600px"
     @close="handleClose"
   >
-    <el-form :model="form" label-width="140px" label-position="left">
+    <TxForm :model="form" label-width="140px" label-position="left">
       <!-- 并发设置 -->
       <TxCard class="settings-card">
         <template #header>
           <span>{{ $t('settings.download.concurrency_settings') }}</span>
         </template>
 
-        <el-form-item :label="$t('settings.download.concurrency')">
+        <TxFormItem :label="$t('settings.download.concurrency')">
           <TxSlider v-model="form.concurrency.maxConcurrent" :min="1" :max="10" />
           <div class="form-help">
             {{ $t('settings.download.concurrency_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.concurrency.autoAdjust">
+        <TxFormItem>
+          <TxCheckbox v-model="form.concurrency.autoAdjust">
             {{ $t('settings.download.auto_adjust') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.concurrency.networkAware">
+        <TxFormItem>
+          <TxCheckbox v-model="form.concurrency.networkAware">
             {{ $t('settings.download.network_aware') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.concurrency.priorityBased">
+        <TxFormItem>
+          <TxCheckbox v-model="form.concurrency.priorityBased">
             {{ $t('settings.download.priority_based') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
       </TxCard>
 
       <!-- 切片设置 -->
@@ -160,7 +151,7 @@ watch(
           <span>{{ $t('settings.download.chunk_settings') }}</span>
         </template>
 
-        <el-form-item :label="$t('settings.download.chunk_size')">
+        <TxFormItem :label="$t('settings.download.chunk_size')">
           <TuffSelect v-model="form.chunk.size" style="width: 200px">
             <TuffSelectItem
               v-for="size in chunkSizeOptions"
@@ -172,28 +163,28 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.chunk_size_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.chunk.resume">
+        <TxFormItem>
+          <TxCheckbox v-model="form.chunk.resume">
             {{ $t('settings.download.resume') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.chunk.autoRetry">
+        <TxFormItem>
+          <TxCheckbox v-model="form.chunk.autoRetry">
             {{ $t('settings.download.auto_retry') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
 
-        <el-form-item v-if="form.chunk.autoRetry" :label="$t('settings.download.max_retries')">
+        <TxFormItem v-if="form.chunk.autoRetry" :label="$t('settings.download.max_retries')">
           <TuffInput-number
             v-model="form.chunk.maxRetries"
             :min="1"
             :max="10"
             style="width: 120px"
           />
-        </el-form-item>
+        </TxFormItem>
       </TxCard>
 
       <!-- 存储设置 -->
@@ -202,7 +193,7 @@ watch(
           <span>{{ $t('settings.download.storage_settings') }}</span>
         </template>
 
-        <el-form-item :label="$t('settings.download.temp_dir')">
+        <TxFormItem :label="$t('settings.download.temp_dir')">
           <TuffInput v-model="form.storage.tempDir" readonly style="width: 300px">
             <template #append>
               <TxButton @click="selectTempDir">
@@ -213,9 +204,9 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.temp_dir_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item :label="$t('settings.download.history_retention')">
+        <TxFormItem :label="$t('settings.download.history_retention')">
           <TuffSelect v-model="form.storage.historyRetention" style="width: 200px">
             <TuffSelectItem
               v-for="option in historyRetentionOptions"
@@ -227,13 +218,13 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.history_retention_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item>
-          <el-checkbox v-model="form.storage.autoCleanup">
+        <TxFormItem>
+          <TxCheckbox v-model="form.storage.autoCleanup">
             {{ $t('settings.download.auto_cleanup') }}
-          </el-checkbox>
-        </el-form-item>
+          </TxCheckbox>
+        </TxFormItem>
       </TxCard>
 
       <!-- 网络设置 -->
@@ -242,7 +233,7 @@ watch(
           <span>{{ $t('settings.download.network_settings') }}</span>
         </template>
 
-        <el-form-item :label="$t('settings.download.timeout')">
+        <TxFormItem :label="$t('settings.download.timeout')">
           <TuffInput-number
             v-model="form.network.timeout"
             :min="5000"
@@ -254,9 +245,9 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.timeout_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item :label="$t('settings.download.retry_delay')">
+        <TxFormItem :label="$t('settings.download.retry_delay')">
           <TuffInput-number
             v-model="form.network.retryDelay"
             :min="1000"
@@ -268,9 +259,9 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.retry_delay_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
 
-        <el-form-item :label="$t('settings.download.max_retries')">
+        <TxFormItem :label="$t('settings.download.max_retries')">
           <TuffInput-number
             v-model="form.network.maxRetries"
             :min="1"
@@ -280,9 +271,9 @@ watch(
           <div class="form-help">
             {{ $t('settings.download.max_retries_help') }}
           </div>
-        </el-form-item>
+        </TxFormItem>
       </TxCard>
-    </el-form>
+    </TxForm>
 
     <template #footer>
       <div class="dialog-footer">
@@ -308,14 +299,14 @@ watch(
 
 .form-help {
   font-size: 12px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
   margin-top: 4px;
 }
 
 .form-unit {
   margin-left: 8px;
   font-size: 14px;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .dialog-footer {
@@ -331,7 +322,7 @@ watch(
     margin: 5vh auto !important;
   }
 
-  .el-form-item {
+  .tx-form-item {
     margin-bottom: 16px;
   }
 }

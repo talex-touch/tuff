@@ -9,6 +9,7 @@ import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { devLog } from '~/utils/dev-log'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
@@ -95,7 +96,7 @@ async function loadCapabilities() {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : ''
     if (message.includes('timed out')) {
-      console.debug('[SettingPlatformCapabilities] Load timed out, module may be initializing')
+      devLog('[SettingPlatformCapabilities] Load timed out, module may be initializing')
       return
     }
     console.error('[SettingPlatformCapabilities] Failed to load capabilities:', error)
@@ -212,7 +213,7 @@ onMounted(() => {
   gap: 12px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .PlatformCapabilities-Stats {
@@ -224,8 +225,8 @@ onMounted(() => {
 .PlatformCapabilities-State {
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
@@ -241,14 +242,14 @@ onMounted(() => {
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .PlatformCapabilities-GroupCount {
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
@@ -257,11 +258,11 @@ onMounted(() => {
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-fill-color-light);
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color-light);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   max-width: 240px;
   word-break: break-all;
 }

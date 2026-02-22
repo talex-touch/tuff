@@ -83,7 +83,7 @@ function handleClear(): void {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .TuffAsideSearch-Field {
@@ -91,7 +91,7 @@ function handleClear(): void {
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 0.65rem;
-  color: var(--el-text-color-regular);
+  color: var(--tx-text-color-regular);
 }
 
 .TuffAsideSearch-Input {
@@ -104,7 +104,7 @@ function handleClear(): void {
   border-radius: 999px;
   border: none;
   background: transparent;
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   transition:
     color 0.2s ease,
     background-color 0.2s ease,
@@ -119,8 +119,8 @@ function handleClear(): void {
 }
 
 .TuffAsideSearch-Clear:hover {
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-primary);
 }
 
 .TuffAsideSearch-Clear:active {

@@ -53,11 +53,11 @@ const isActive = computed(() => {
 .TvTabItem-Container {
   &.active {
     .TvTabs-Tab-Name {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
 
     .TvTabs-Tab-Icon :deep(.remix-icon) {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
   }
 
@@ -77,7 +77,7 @@ const isActive = computed(() => {
     font-weight: 500;
     text-align: center;
     line-height: 1.2;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     transition: color 0.3s ease;
   }
 

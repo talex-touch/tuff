@@ -153,7 +153,7 @@ onBeforeUnmount(async () => {
 
       border-radius: 12px;
       transform: translateX(-50%) rotate(-1deg);
-      background-color: var(--el-bg-color);
+      background-color: var(--tx-bg-color);
     }
 
     position: relative;
@@ -179,25 +179,25 @@ onBeforeUnmount(async () => {
     width: calc(100% - 10px);
 
     border-radius: 0 4px 4px 0;
-    border-left: 3px solid var(--el-color-primary);
-    background-color: var(--el-fill-color);
+    border-left: 3px solid var(--tx-color-primary);
+    background-color: var(--tx-fill-color);
     position: relative;
   }
 
   code {
-    color: var(--el-color-primary-dark-2);
+    color: var(--tx-color-primary-dark-2);
 
     padding: 2px 4px;
     border-radius: 4px 4px;
-    background-color: var(--el-fill-color);
+    background-color: var(--tx-fill-color);
   }
 
   a {
     &:visited {
-      color: var(--el-color-primary);
+      color: var(--tx-color-primary);
     }
 
-    color: var(--el-color-primary-dark-2);
+    color: var(--tx-color-primary-dark-2);
   }
 }
 
@@ -219,11 +219,11 @@ onBeforeUnmount(async () => {
   }
 
   &:hover {
-    border-color: var(--el-color-primary-light-7);
+    border-color: var(--tx-color-primary-light-7);
   }
 
   &:focus-visible {
-    border-color: var(--el-color-primary);
+    border-color: var(--tx-color-primary);
   }
 
   position: relative;
@@ -233,6 +233,6 @@ onBeforeUnmount(async () => {
   height: 100%;
 
   box-sizing: border-box;
-  //border: 1px solid var(--el-border-color);
+  //border: 1px solid var(--tx-border-color);
 }
 </style>

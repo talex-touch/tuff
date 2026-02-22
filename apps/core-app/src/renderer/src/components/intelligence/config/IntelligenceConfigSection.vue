@@ -24,15 +24,15 @@ function toggleCollapse() {
       :aria-controls="`${sectionId}-content`"
       @click="toggleCollapse"
     >
-      <i :class="icon" class="text-lg text-[var(--el-color-primary)]" aria-hidden="true" />
+      <i :class="icon" class="text-lg text-[var(--tx-color-primary)]" aria-hidden="true" />
       <h3
         :id="`${sectionId}-heading`"
-        class="text-base font-semibold text-[var(--el-text-color-primary)]"
+        class="text-base font-semibold text-[var(--tx-text-color-primary)]"
       >
         {{ title }}
       </h3>
       <i
-        class="ml-auto text-sm text-[var(--el-text-color-secondary)] transition-transform duration-300"
+        class="ml-auto text-sm text-[var(--tx-text-color-secondary)] transition-transform duration-300"
         :class="[isCollapsed ? 'i-carbon-chevron-down' : 'i-carbon-chevron-up']"
         aria-hidden="true"
       />
@@ -50,7 +50,7 @@ function toggleCollapse() {
         :aria-labelledby="`${sectionId}-heading`"
       >
         <div
-          class="p-4 rounded-lg border border-[var(--el-border-color-lighter)] bg-[var(--el-fill-color-blank)]"
+          class="p-4 rounded-lg border border-[var(--tx-border-color-lighter)] bg-[var(--tx-fill-color-blank)]"
         >
           <slot />
         </div>
@@ -73,7 +73,7 @@ function toggleCollapse() {
   box-shadow: none;
 
   &:hover {
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
     transform: translateX(2px);
 
     i:first-child {
@@ -86,9 +86,9 @@ function toggleCollapse() {
   }
 
   &:focus-visible {
-    outline: 3px solid var(--el-color-primary);
+    outline: 3px solid var(--tx-color-primary);
     outline-offset: 2px;
-    background-color: var(--el-fill-color-light);
+    background-color: var(--tx-fill-color-light);
   }
 
   :deep(> div) {

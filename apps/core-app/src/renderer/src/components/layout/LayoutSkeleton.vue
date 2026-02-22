@@ -91,7 +91,7 @@ defineOptions({
   padding: 0.5rem;
 
   border-radius: 8px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 }
 
 .skeleton-circle {
@@ -99,7 +99,7 @@ defineOptions({
   height: 32px;
 
   border-radius: 50%;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
@@ -116,7 +116,7 @@ defineOptions({
   gap: 0.75rem;
   padding: 1rem;
 
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   border-radius: 8px;
 }
 
@@ -128,7 +128,7 @@ defineOptions({
   height: 100%;
 
   border-radius: 4px;
-  background: var(--el-fill-color);
+  background: var(--tx-fill-color);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 

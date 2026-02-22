@@ -166,19 +166,19 @@ const health = computed(() => {
   justify-content: space-between;
   gap: 14px;
   padding: 10px 14px;
-  border-top: 1px solid rgba(var(--el-border-color-rgb), 0.55);
-  background: color-mix(in srgb, var(--el-bg-color) 76%, transparent);
+  border-top: 1px solid rgba(var(--tx-border-color-rgb), 0.55);
+  background: color-mix(in srgb, var(--tx-bg-color) 76%, transparent);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   user-select: none;
   z-index: 10;
 
   &.stale {
-    background: color-mix(in srgb, var(--el-bg-color) 70%, transparent);
+    background: color-mix(in srgb, var(--tx-bg-color) 70%, transparent);
   }
 
   &.error {
-    border-top-color: color-mix(in srgb, var(--el-color-danger) 48%, transparent);
+    border-top-color: color-mix(in srgb, var(--tx-color-danger) 48%, transparent);
   }
 }
 
@@ -190,7 +190,7 @@ const health = computed(() => {
 
   i {
     font-size: 18px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.9;
   }
 }
@@ -204,19 +204,19 @@ const health = computed(() => {
   .title {
     font-size: 12px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   .hint {
     font-size: 11px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.85;
     white-space: nowrap;
   }
 }
 
 .error-text {
-  color: var(--el-color-danger);
+  color: var(--tx-color-danger);
   opacity: 0.85;
   max-width: 300px;
   overflow: hidden;
@@ -237,8 +237,8 @@ const health = computed(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.35);
-  background: rgba(var(--el-fill-color-rgb), 0.35);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.35);
+  background: rgba(var(--tx-fill-color-rgb), 0.35);
   border-radius: 12px;
   padding: 8px 10px;
   min-width: 110px;
@@ -246,39 +246,39 @@ const health = computed(() => {
   .label {
     font-size: 10px;
     letter-spacing: 0.08em;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.9;
   }
 
   .trend {
     font-size: 12px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.75;
   }
 
   .value {
     font-size: 13px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
     line-height: 1;
     white-space: nowrap;
   }
 }
 
 .metric.tone-success {
-  border-color: color-mix(in srgb, var(--el-color-success) 30%, transparent);
+  border-color: color-mix(in srgb, var(--tx-color-success) 30%, transparent);
 }
 
 .metric.tone-warning {
-  border-color: color-mix(in srgb, var(--el-color-warning) 34%, transparent);
+  border-color: color-mix(in srgb, var(--tx-color-warning) 34%, transparent);
 }
 
 .metric.tone-danger {
-  border-color: color-mix(in srgb, var(--el-color-danger) 36%, transparent);
+  border-color: color-mix(in srgb, var(--tx-color-danger) 36%, transparent);
 }
 
 .metric.tone-info {
-  border-color: color-mix(in srgb, var(--el-color-primary) 30%, transparent);
+  border-color: color-mix(in srgb, var(--tx-color-primary) 30%, transparent);
 }
 
 .right {

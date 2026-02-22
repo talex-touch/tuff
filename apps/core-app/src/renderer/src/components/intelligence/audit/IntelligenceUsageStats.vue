@@ -210,7 +210,7 @@ function formatNumber(num: number): string {
     justify-content: center;
     gap: 8px;
     padding: 40px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
   }
 
   .stats-grid {
@@ -220,10 +220,10 @@ function formatNumber(num: number): string {
   }
 
   .stat-card {
-    background: var(--el-fill-color-lighter);
+    background: var(--tx-fill-color-lighter);
     border-radius: 12px;
     padding: 16px;
-    border: 1px solid var(--el-border-color-lighter);
+    border: 1px solid var(--tx-border-color-lighter);
 
     .stat-header {
       display: flex;
@@ -231,12 +231,12 @@ function formatNumber(num: number): string {
       gap: 8px;
       font-size: 14px;
       font-weight: 500;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
       margin-bottom: 16px;
 
       i {
         font-size: 18px;
-        color: var(--el-color-primary);
+        color: var(--tx-color-primary);
       }
     }
 
@@ -254,13 +254,13 @@ function formatNumber(num: number): string {
         .stat-value {
           font-size: 24px;
           font-weight: 600;
-          color: var(--el-text-color-primary);
+          color: var(--tx-text-color-primary);
           font-variant-numeric: tabular-nums;
         }
 
         .stat-label {
           font-size: 12px;
-          color: var(--el-text-color-secondary);
+          color: var(--tx-text-color-secondary);
           margin-top: 4px;
         }
       }
@@ -272,13 +272,13 @@ function formatNumber(num: number): string {
           display: flex;
           justify-content: space-between;
           font-size: 12px;
-          color: var(--el-text-color-secondary);
+          color: var(--tx-text-color-secondary);
           margin-bottom: 6px;
         }
 
         .bar-track {
           height: 6px;
-          background: var(--el-fill-color);
+          background: var(--tx-fill-color);
           border-radius: 3px;
           overflow: hidden;
         }
@@ -289,13 +289,13 @@ function formatNumber(num: number): string {
           transition: width 0.3s ease;
 
           &.success {
-            background: var(--el-color-success);
+            background: var(--tx-color-success);
           }
           &.warning {
-            background: var(--el-color-warning);
+            background: var(--tx-color-warning);
           }
           &.error {
-            background: var(--el-color-danger);
+            background: var(--tx-color-danger);
           }
         }
       }
@@ -312,13 +312,13 @@ function formatNumber(num: number): string {
           gap: 4px;
 
           &.success {
-            color: var(--el-color-success);
+            color: var(--tx-color-success);
           }
           &.error {
-            color: var(--el-color-danger);
+            color: var(--tx-color-danger);
           }
           &.latency {
-            color: var(--el-text-color-secondary);
+            color: var(--tx-text-color-secondary);
           }
         }
       }

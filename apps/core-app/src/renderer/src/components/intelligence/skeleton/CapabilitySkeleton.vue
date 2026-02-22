@@ -19,8 +19,8 @@
   padding: 1rem;
   margin-bottom: 0.5rem;
   border-radius: 0.75rem;
-  background: var(--el-fill-color-blank);
-  border: 1.5px solid var(--el-border-color-light);
+  background: var(--tx-fill-color-blank);
+  border: 1.5px solid var(--tx-border-color-light);
 }
 
 .skeleton-icon {
@@ -29,9 +29,9 @@
   border-radius: 0.625rem;
   background: linear-gradient(
     90deg,
-    var(--el-fill-color-light) 25%,
-    var(--el-fill-color) 50%,
-    var(--el-fill-color-light) 75%
+    var(--tx-fill-color-light) 25%,
+    var(--tx-fill-color) 50%,
+    var(--tx-fill-color-light) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -56,9 +56,9 @@
   border-radius: 0.25rem;
   background: linear-gradient(
     90deg,
-    var(--el-fill-color-light) 25%,
-    var(--el-fill-color) 50%,
-    var(--el-fill-color-light) 75%
+    var(--tx-fill-color-light) 25%,
+    var(--tx-fill-color) 50%,
+    var(--tx-fill-color-light) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -70,9 +70,9 @@
   border-radius: 0.375rem;
   background: linear-gradient(
     90deg,
-    var(--el-fill-color-light) 25%,
-    var(--el-fill-color) 50%,
-    var(--el-fill-color-light) 75%
+    var(--tx-fill-color-light) 25%,
+    var(--tx-fill-color) 50%,
+    var(--tx-fill-color-light) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
@@ -85,9 +85,9 @@
   border-radius: 0.25rem;
   background: linear-gradient(
     90deg,
-    var(--el-fill-color-light) 25%,
-    var(--el-fill-color) 50%,
-    var(--el-fill-color-light) 75%
+    var(--tx-fill-color-light) 25%,
+    var(--tx-fill-color) 50%,
+    var(--tx-fill-color-light) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;

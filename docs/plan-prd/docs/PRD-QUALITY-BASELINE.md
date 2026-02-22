@@ -68,3 +68,30 @@
 - 项目索引与未闭环能力：`docs/plan-prd/README.md`
 - 执行任务清单：`docs/plan-prd/TODO.md`
 - 变更归档：`docs/plan-prd/01-project/CHANGES.md`
+
+## 6. 项目质量执行记录（示例）
+
+### 6.1 Nexus 组件文档迁移（2026-02-21）
+
+**统计口径**
+- 源文档：`packages/tuffex/docs/components/*.md`（不含 `index.md`）。
+- 目标文档：`apps/nexus/content/docs/dev/components/*.(zh|en).mdc`（不含 `index.*.mdc`）。
+- 状态来源：组件文档 Frontmatter 中的 `syncStatus`、`verified`。
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 源组件总数 | 95 | 基线 |
+| Nexus 双语覆盖（zh+en 同时存在） | 104/104 | 100%（含扩展项） |
+| `syncStatus: migrated`（zh/en） | 104/104 | 已完成 |
+| `verified: true` | 1/104 | 仅 `button` 已验证 |
+| 扩展项 | 9 | `foundations`、`flat-*`、`base-*`、`error/guide-state` |
+
+**已解决**
+- 迁移覆盖：源组件缺失为 0，双语成对齐全。
+- 缺口补齐：`code-editor`、`flip-overlay` 中英文文档已新增并纳入索引。
+- 扩展项已识别：9 个扩展文档已被纳入清单管理。
+
+**待解决（未验收）**
+- 验证覆盖率过低：`verified` 仅 1/104。
+- 联调清单未闭环：入口/看板/双语一致性/新增项验证/扩展项核对/导航检索/lint/收口确认仍待执行。

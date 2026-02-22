@@ -83,7 +83,7 @@ const lastUpdatedAgeLabel = computed(() => {
               <PluginSparkline
                 class="metric-chart"
                 :values="requestRateSeries"
-                stroke="var(--el-color-primary)"
+                stroke="var(--tx-color-primary)"
               />
             </div>
             <div class="metric-value">
@@ -97,7 +97,7 @@ const lastUpdatedAgeLabel = computed(() => {
               <PluginSparkline
                 class="metric-chart"
                 :values="memorySeries"
-                stroke="var(--el-color-info)"
+                stroke="var(--tx-color-info)"
               />
             </div>
             <div class="metric-value">
@@ -114,7 +114,7 @@ const lastUpdatedAgeLabel = computed(() => {
               <PluginSparkline
                 class="metric-chart"
                 :values="cpuSeries"
-                stroke="var(--el-color-warning)"
+                stroke="var(--tx-color-warning)"
               />
             </div>
             <div class="metric-value">
@@ -131,7 +131,7 @@ const lastUpdatedAgeLabel = computed(() => {
               <PluginSparkline
                 class="metric-chart"
                 :values="workerSeries"
-                stroke="var(--el-color-success)"
+                stroke="var(--tx-color-success)"
               />
             </div>
             <div class="metric-value">
@@ -197,19 +197,19 @@ const lastUpdatedAgeLabel = computed(() => {
 
   i {
     font-size: 16px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.9;
   }
 
   .text {
     font-size: 12px;
     font-weight: 700;
-    color: var(--el-text-color-primary);
+    color: var(--tx-text-color-primary);
   }
 
   .hint {
     font-size: 11px;
-    color: var(--el-text-color-secondary);
+    color: var(--tx-text-color-secondary);
     opacity: 0.85;
     white-space: nowrap;
   }
@@ -220,11 +220,11 @@ const lastUpdatedAgeLabel = computed(() => {
   justify-content: flex-end;
   min-width: 0;
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.8;
 
   .error {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     opacity: 0.9;
     max-width: 320px;
     overflow: hidden;
@@ -240,8 +240,8 @@ const lastUpdatedAgeLabel = computed(() => {
 }
 
 .metric {
-  border: 1px solid rgba(var(--el-border-color-rgb), 0.35);
-  background: rgba(var(--el-fill-color-rgb), 0.35);
+  border: 1px solid rgba(var(--tx-border-color-rgb), 0.35);
+  background: rgba(var(--tx-fill-color-rgb), 0.35);
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
@@ -260,7 +260,7 @@ const lastUpdatedAgeLabel = computed(() => {
 .metric-label {
   font-size: 10px;
   letter-spacing: 0.08em;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.9;
 }
 
@@ -274,13 +274,13 @@ const lastUpdatedAgeLabel = computed(() => {
 .metric-value {
   font-size: 16px;
   font-weight: 800;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   line-height: 1.1;
 }
 
 .metric-sub {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   opacity: 0.8;
   overflow: hidden;
   text-overflow: ellipsis;

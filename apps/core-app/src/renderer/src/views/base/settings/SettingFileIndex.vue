@@ -909,7 +909,7 @@ async function triggerRebuild() {
 
 .estimated-time {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-weight: 500;
 }
 
@@ -928,20 +928,20 @@ async function triggerRebuild() {
 }
 
 .stat-divider {
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
   font-size: 12px;
   margin: 0 2px;
 }
 
 .stat-label {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-weight: 400;
 }
 
 .stat-value {
   font-size: 12px;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -990,12 +990,12 @@ async function triggerRebuild() {
 .error-popover-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .error-popover-desc {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .error-popover-content {
@@ -1014,7 +1014,7 @@ async function triggerRebuild() {
 
 .time-text {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   font-family: monospace;
   font-weight: 500;
 }
@@ -1027,24 +1027,24 @@ async function triggerRebuild() {
 
 .input-unit {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
   white-space: nowrap;
 }
 
 .tuff-input {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--tx-border-color);
   border-radius: 6px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-text-color-primary);
+  background: var(--tx-fill-color-blank);
+  color: var(--tx-text-color-primary);
   font-size: 14px;
   outline: none;
   transition: all 0.2s;
 }
 
 .tuff-input:focus {
-  border-color: var(--el-color-primary);
+  border-color: var(--tx-color-primary);
 }
 
 .tuff-input:disabled {
@@ -1053,6 +1053,6 @@ async function triggerRebuild() {
 }
 
 .tuff-input::placeholder {
-  color: var(--el-text-color-placeholder);
+  color: var(--tx-text-color-placeholder);
 }
 </style>

@@ -195,19 +195,19 @@ async function handleOpenPluginFolder(): Promise<void> {
 }
 
 .add-btn :deep(.tx-button) {
-  @apply bg-[var(--el-color-primary)] text-white;
+  @apply bg-[var(--tx-color-primary)] text-white;
 }
 
 .add-btn :deep(.tx-button:hover:not(:disabled)) {
-  @apply bg-[var(--el-color-primary-light-3)] -translate-y-px;
+  @apply bg-[var(--tx-color-primary-light-3)] -translate-y-px;
 }
 
 .folder-btn :deep(.tx-button) {
-  @apply bg-[var(--el-fill-color)] text-[var(--el-text-color-primary)] border border-[var(--el-border-color)] px-3;
+  @apply bg-[var(--tx-fill-color)] text-[var(--tx-text-color-primary)] border border-[var(--tx-border-color)] px-3;
 }
 
 .folder-btn :deep(.tx-button:hover:not(:disabled)) {
-  @apply bg-[var(--el-fill-color-light)] border-[var(--el-color-primary-light-5)] text-[var(--el-color-primary)];
+  @apply bg-[var(--tx-fill-color-light)] border-[var(--tx-color-primary-light-5)] text-[var(--tx-color-primary)];
 }
 
 :global(.PluginDrawer-Mask) {
@@ -220,7 +220,7 @@ async function handleOpenPluginFolder(): Promise<void> {
   height: 100vh;
   max-width: 100vw;
   max-height: 100vh;
-  background: var(--el-bg-color-page);
+  background: var(--tx-bg-color-page);
   border-radius: 0;
   overflow: hidden;
 }

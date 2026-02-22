@@ -95,7 +95,7 @@ function handlePaste(): void {
   font-size: 1.25em;
 
   .cancel-button {
-    color: var(--el-color-danger);
+    color: var(--tx-color-danger);
     animation: pulse 1.5s infinite;
   }
 

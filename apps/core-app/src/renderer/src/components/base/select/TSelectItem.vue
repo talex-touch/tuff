@@ -68,10 +68,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
   user-select: none;
   transition: all 0.25s;
-  background-color: var(--el-fill-color);
+  background-color: var(--tx-fill-color);
 
   &:hover {
-    background-color: var(--el-bg-color);
+    background-color: var(--tx-bg-color);
   }
 }
 </style>

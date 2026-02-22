@@ -75,12 +75,12 @@ onBeforeUnmount(() => {
 }
 
 .ProgressRing-Track {
-  stroke: var(--el-border-color-lighter);
+  stroke: var(--tx-border-color-lighter);
   opacity: 0.4;
 }
 
 .ProgressRing-Arc {
-  stroke: var(--el-color-primary);
+  stroke: var(--tx-color-primary);
   transition: stroke-dashoffset 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 </style>

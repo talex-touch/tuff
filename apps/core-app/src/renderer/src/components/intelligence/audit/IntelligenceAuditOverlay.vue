@@ -83,7 +83,7 @@ function handleViewFullAudit(close: () => void) {
   align-items: center;
   justify-content: space-between;
   padding: 16px 18px 10px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .IntelligenceAuditOverlay-TitleBlock {
@@ -95,12 +95,12 @@ function handleViewFullAudit(close: () => void) {
 .IntelligenceAuditOverlay-Title {
   font-size: 20px;
   font-weight: 700;
-  color: var(--el-text-color-primary);
+  color: var(--tx-text-color-primary);
 }
 
 .IntelligenceAuditOverlay-Subtitle {
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--tx-text-color-secondary);
 }
 
 .IntelligenceAuditOverlay-CloseBtn {
@@ -148,8 +148,8 @@ function handleViewFullAudit(close: () => void) {
 .IntelligenceAuditOverlay-Card {
   width: min(960px, 92vw);
   height: min(720px, 86vh);
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

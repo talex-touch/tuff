@@ -99,12 +99,12 @@ function handleClick($event) {
 .TouchMenuItem-Container {
   &:hover {
     --fake-inner-opacity: 0.5;
-    --fake-color: var(--el-fill-color-dark);
+    --fake-color: var(--tx-fill-color-dark);
   }
 
   &.active {
     --fake-inner-opacity: 0.75 !important;
-    --fake-color: var(--el-fill-color-darker);
+    --fake-color: var(--tx-fill-color-darker);
   }
 
   &.disabled {

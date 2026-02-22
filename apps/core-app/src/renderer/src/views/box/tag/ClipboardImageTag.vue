@@ -56,7 +56,7 @@ const stackWidth = computed(() => {
   padding: 0.25rem 0.5rem;
   align-items: center;
   border-radius: 8px;
-  background: var(--el-fill-color-light);
+  background: var(--tx-fill-color-light);
 
   .image-stack {
     position: relative;
@@ -73,7 +73,7 @@ const stackWidth = computed(() => {
     width: 40px;
     object-fit: cover;
     border-radius: 6px;
-    border: 2px solid var(--el-bg-color);
+    border: 2px solid var(--tx-bg-color);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: transform 0.2s ease;
 
@@ -85,7 +85,7 @@ const stackWidth = computed(() => {
 
   .label {
     font-size: 14px;
-    color: var(--el-text-color);
+    color: var(--tx-text-color);
     white-space: nowrap;
     padding-left: 0.25rem;
   }

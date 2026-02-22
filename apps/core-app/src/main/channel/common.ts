@@ -1492,6 +1492,13 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
       transport.on(AppEvents.fileIndex.failedFiles, () => fileProvider.getFailedFiles()),
       transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
+      transport.on(AppEvents.fileIndex.addPath, (payload) => {
+        const inputPath = getOptionalStringProp(payload, 'path')
+        if (!inputPath) {
+          return { success: false, status: 'invalid', reason: 'path-empty' }
+        }
+        return fileProvider.addWatchPath(inputPath)
+      }),
       transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
         try {
           return await fileProvider.rebuildIndex(payload ?? undefined)
@@ -1507,7 +1514,14 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.appIndex.getSettings, () => appProvider.getAppIndexSettings()),
       transport.on(AppEvents.appIndex.updateSettings, (payload) =>
         appProvider.updateAppIndexSettings(payload ?? {})
-      )
+      ),
+      transport.on(AppEvents.appIndex.addPath, (payload) => {
+        const inputPath = getOptionalStringProp(payload, 'path')
+        if (!inputPath) {
+          return { success: false, status: 'invalid', reason: 'path-empty' }
+        }
+        return appProvider.addAppByPath(inputPath)
+      })
     )
   }
 

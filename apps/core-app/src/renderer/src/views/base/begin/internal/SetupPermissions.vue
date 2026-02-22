@@ -304,13 +304,13 @@ function getStatusText(status: string): string {
 function getStatusColor(status: string): string {
   switch (status) {
     case 'granted':
-      return 'var(--el-color-success)'
+      return 'var(--tx-color-success)'
     case 'denied':
-      return 'var(--el-color-danger)'
+      return 'var(--tx-color-danger)'
     case 'notDetermined':
-      return 'var(--el-color-warning)'
+      return 'var(--tx-color-warning)'
     default:
-      return 'var(--el-color-info)'
+      return 'var(--tx-color-info)'
   }
 }
 
@@ -535,13 +535,13 @@ function getStatusIcon(status: string): string {
       margin: 0 0 0.5rem 0;
       font-size: 1.8rem;
       font-weight: 600;
-      color: var(--el-text-color-primary);
+      color: var(--tx-text-color-primary);
     }
 
     p {
       margin: 0;
       font-size: 0.95rem;
-      color: var(--el-text-color-regular);
+      color: var(--tx-text-color-regular);
       line-height: 1.6;
     }
   }
@@ -561,7 +561,7 @@ function getStatusIcon(status: string): string {
     justify-content: flex-end;
     gap: 1rem;
     padding-top: 1.5rem;
-    border-top: 1px solid var(--el-border-color);
+    border-top: 1px solid var(--tx-border-color);
     margin-top: 1.5rem;
     flex-shrink: 0;
   }
@@ -579,20 +579,20 @@ function getStatusIcon(status: string): string {
   user-select: none;
   border-radius: 0;
   box-sizing: border-box;
-  --fake-color: var(--el-fill-color-dark);
+  --fake-color: var(--tx-fill-color-dark);
   --fake-radius: 0;
   --fake-inner-opacity: 0.5;
 
   &.required {
-    --fake-color: var(--el-color-warning-light-9);
+    --fake-color: var(--tx-color-warning-light-9);
 
     .PermissionItem-Content {
       .PermissionItem-Label h3 .required-badge {
         display: inline-flex;
         margin-left: 0.5rem;
         font-size: 0.75rem;
-        color: var(--el-color-warning);
-        background-color: var(--el-color-warning-light-8);
+        color: var(--tx-color-warning);
+        background-color: var(--tx-color-warning-light-8);
         padding: 2px 6px;
         border-radius: 4px;
         font-weight: 500;
@@ -601,7 +601,7 @@ function getStatusIcon(status: string): string {
   }
 
   &:hover {
-    --fake-color: var(--el-fill-color);
+    --fake-color: var(--tx-fill-color);
   }
 
   .PermissionItem-Content {
@@ -624,7 +624,7 @@ function getStatusIcon(status: string): string {
         margin: 0;
         font-size: 14px;
         font-weight: 400;
-        color: var(--el-text-color-primary);
+        color: var(--tx-text-color-primary);
       }
 
       p {
@@ -632,7 +632,7 @@ function getStatusIcon(status: string): string {
         font-size: 12px;
         font-weight: 300;
         opacity: 0.5;
-        color: var(--el-text-color-regular);
+        color: var(--tx-text-color-regular);
       }
     }
   }
@@ -660,10 +660,10 @@ function getStatusIcon(status: string): string {
 }
 
 .touch-blur .PermissionItem {
-  --fake-color: var(--el-fill-color);
+  --fake-color: var(--tx-fill-color);
 
   &:hover {
-    --fake-color: var(--el-fill-color-light);
+    --fake-color: var(--tx-fill-color-light);
   }
 }
 </style>
