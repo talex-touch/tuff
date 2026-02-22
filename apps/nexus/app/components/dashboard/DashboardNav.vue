@@ -31,12 +31,14 @@ const sectionPaths: Record<string, string> = {
   plugins: '/dashboard/assets',
   intelligence: '/dashboard/admin/intelligence',
   'intelligence-lab': '/dashboard/admin/intelligence-lab',
+  risk: '/dashboard/admin/risk',
   users: '/dashboard/admin/users',
   subscriptions: '/dashboard/admin/subscriptions',
   audits: '/dashboard/admin/audits',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
   credits: '/dashboard/credits',
+  adminCredits: '/dashboard/admin/credits',
   updates: '/dashboard/updates',
   images: '/dashboard/images',
   reviews: '/dashboard/admin/reviews',
@@ -129,6 +131,16 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-machine-learning-model',
     },
     {
+      id: 'risk',
+      label: t('dashboard.sections.menu.risk', '风控控制面'),
+      icon: 'i-carbon-warning-alt',
+    },
+    {
+      id: 'adminCredits',
+      label: t('dashboard.sections.menu.adminCredits', 'AI 积分'),
+      icon: 'i-carbon-currency',
+    },
+    {
       id: 'images',
       label: t('dashboard.sections.menu.images', 'Resources'),
       icon: 'i-carbon-image',
@@ -189,11 +201,13 @@ const activeSection = computed(() => {
   if (route.path.startsWith('/dashboard/watermark'))
     return 'watermark'
   if (route.path.startsWith('/dashboard/admin/credits'))
-    return 'intelligence'
+    return 'adminCredits'
   if (route.path.startsWith('/dashboard/admin/intelligence-lab'))
     return 'intelligence-lab'
   if (route.path.startsWith('/dashboard/admin/intelligence'))
     return 'intelligence'
+  if (route.path.startsWith('/dashboard/admin/risk'))
+    return 'risk'
   if (route.path.startsWith('/dashboard/credits'))
     return 'credits'
   if (route.path.startsWith('/dashboard/account'))
