@@ -59,6 +59,15 @@ const developerMode = computed({
   }
 })
 
+const advancedSettings = computed({
+  get: () => Boolean(appSetting?.dev?.advancedSettings),
+  set: (val: boolean) => {
+    if (appSetting?.dev) {
+      appSetting.dev.advancedSettings = val
+    }
+  }
+})
+
 onMounted(async () => {
   dev.value = import.meta.env.MODE === 'development'
 
@@ -182,6 +191,14 @@ async function openAppFolder() {
       :description="t('settingAbout.developerModeDesc')"
       default-icon="i-carbon-development"
       active-icon="i-carbon-development"
+    />
+
+    <TuffBlockSwitch
+      v-model="advancedSettings"
+      :title="t('settingAbout.advancedSettings')"
+      :description="t('settingAbout.advancedSettingsDesc')"
+      default-icon="i-carbon-settings"
+      active-icon="i-carbon-settings"
     />
 
     <TuffBlockLine :title="t('settingAbout.version')">

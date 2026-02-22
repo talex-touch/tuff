@@ -17,6 +17,7 @@ import {
   recognizeImageText,
   type NativeOcrBlock
 } from '@talex-touch/tuff-native'
+import { enterPerfContext } from '../../../utils/perf-context'
 import { IntelligenceProvider } from '../runtime/base-provider'
 
 export class LocalProvider extends IntelligenceProvider {
@@ -208,7 +209,14 @@ export class LocalProvider extends IntelligenceProvider {
       if (source.base64.startsWith('data:')) {
         return this.decodeDataUrl(source.base64)
       }
-      return Buffer.from(source.base64, 'base64')
+      const disposeDecode = enterPerfContext('VisionOCR.decodeBase64', {
+        length: source.base64.length
+      })
+      try {
+        return Buffer.from(source.base64, 'base64')
+      } finally {
+        disposeDecode()
+      }
     }
 
     if (source.type === 'file' && source.filePath) {
@@ -219,19 +227,26 @@ export class LocalProvider extends IntelligenceProvider {
   }
 
   private decodeDataUrl(dataUrl: string): Buffer {
-    const separatorIndex = dataUrl.indexOf(',')
-    if (separatorIndex === -1) {
-      throw new Error('[LocalProvider] Invalid data URL image source')
+    const disposeDecode = enterPerfContext('VisionOCR.decodeDataUrl', {
+      length: dataUrl.length
+    })
+    try {
+      const separatorIndex = dataUrl.indexOf(',')
+      if (separatorIndex === -1) {
+        throw new Error('[LocalProvider] Invalid data URL image source')
+      }
+
+      const meta = dataUrl.slice(0, separatorIndex)
+      const payload = dataUrl.slice(separatorIndex + 1)
+
+      if (meta.includes(';base64')) {
+        return Buffer.from(payload, 'base64')
+      }
+
+      return Buffer.from(decodeURIComponent(payload), 'utf8')
+    } finally {
+      disposeDecode()
     }
-
-    const meta = dataUrl.slice(0, separatorIndex)
-    const payload = dataUrl.slice(separatorIndex + 1)
-
-    if (meta.includes(';base64')) {
-      return Buffer.from(payload, 'base64')
-    }
-
-    return Buffer.from(decodeURIComponent(payload), 'utf8')
   }
 
   private generateKeywords(text: string): string[] {

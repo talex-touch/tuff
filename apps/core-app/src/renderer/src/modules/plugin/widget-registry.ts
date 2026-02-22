@@ -810,17 +810,20 @@ function evaluateWidgetComponent(
   debugLabel?: string,
   sandbox?: WidgetSandboxContext
 ): Component {
+  if (!sandbox) {
+    throw new Error('[WidgetRegistry] Widget sandbox is required to evaluate component')
+  }
   const module: { exports: unknown } = { exports: {} }
   const customRequire = createSandboxRequire(dependencies)
-  const sandboxWindow = sandbox?.window ?? window
-  const sandboxGlobal = sandbox?.globalThis ?? window
-  const sandboxLocalStorage = sandbox?.localStorage ?? window.localStorage
-  const sandboxSessionStorage = sandbox?.sessionStorage ?? window.sessionStorage
-  const sandboxDocument = sandbox?.document ?? window.document
-  const sandboxIndexedDB = sandbox?.indexedDB ?? window.indexedDB
-  const sandboxBroadcastChannel = sandbox?.BroadcastChannel ?? window.BroadcastChannel
-  const sandboxCaches = sandbox?.caches ?? window.caches
-  const sandboxSelf = sandbox?.self ?? window
+  const sandboxWindow = sandbox.window
+  const sandboxGlobal = sandbox.globalThis
+  const sandboxLocalStorage = sandbox.localStorage
+  const sandboxSessionStorage = sandbox.sessionStorage
+  const sandboxDocument = sandbox.document
+  const sandboxIndexedDB = sandbox.indexedDB
+  const sandboxBroadcastChannel = sandbox.BroadcastChannel
+  const sandboxCaches = sandbox.caches
+  const sandboxSelf = sandbox.self
 
   try {
     const executor = new Function(

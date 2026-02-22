@@ -85,6 +85,8 @@
     },
     "developerMode": "开发者模式",
     "developerModeDesc": "显示内部插件与高级选项（谨慎使用）",
+    "advancedSettings": "高级设置",
+    "advancedSettingsDesc": "启用后显示后台索引策略、应用索引调度与下载设置",
     "systemInfoPlaceholder": "系统信息仅在开发模式下可用"
   },
   "settingLanguage": {

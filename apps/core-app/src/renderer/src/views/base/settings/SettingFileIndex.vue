@@ -16,6 +16,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import { useFileIndexMonitor } from '~/composables/useFileIndexMonitor'
+import { appSetting } from '~/modules/channel/storage'
 import { useEstimatedCompletionText } from '~/modules/hooks/useEstimatedCompletion'
 import { popperMention } from '~/modules/mention/dialog-mention'
 import FailedFilesListDialog from './components/FailedFilesListDialog.vue'
@@ -41,6 +42,7 @@ const indexStats = ref<FileIndexStats | null>(null)
 const defaultMinBattery = 60
 const defaultCriticalBattery = 15
 const errorPopoverVisible = ref(false)
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
 const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
   idleThresholdMs: 60 * 60 * 1000,
@@ -615,6 +617,7 @@ async function triggerRebuild() {
   </TuffGroupBlock>
 
   <TuffGroupBlock
+    v-if="showAdvancedSettings"
     :name="t('settings.settingFileIndex.policyGroupTitle')"
     :description="t('settings.settingFileIndex.policyGroupDesc')"
     default-icon="i-carbon-timer"
@@ -735,6 +738,7 @@ async function triggerRebuild() {
   </TuffGroupBlock>
 
   <TuffGroupBlock
+    v-if="showAdvancedSettings"
     :name="t('settings.settingFileIndex.appIndexGroupTitle')"
     :description="t('settings.settingFileIndex.appIndexGroupDesc')"
     default-icon="i-carbon-application"
