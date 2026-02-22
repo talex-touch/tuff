@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-02-19
+> 更新时间: 2026-02-22
 
  ## PRD Index（以代码实现为准）
  
@@ -133,6 +133,15 @@
    - **缺口**
      - 扩展拦截（navigator/clipboard/history/location/postMessage/worker）
      - 权限中心联动与审计
+
+ - **SQLite 重试机制回退到 Retrier（规划）**
+   - **PRD**：`./04-implementation/SqliteRetryRetrier260222.md`
+   - **代码**
+     - `apps/core-app/src/main/db/sqlite-retry.ts`
+     - `packages/utils/common/utils/time.ts`
+   - **缺口**
+     - createRetrier 的 delay/jitter 扩展
+     - sqlite-retry 迁移到 retrier 并保持签名稳定
 
  - **AttachUIView 缓存优化**（已做 Hot/LRU 的 MVP，PRD 大部分未落地）
    - **PRD**：`./03-features/view/attach-view-cache-prd.md`
