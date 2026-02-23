@@ -38,6 +38,20 @@
 - `apps/nexus/app/components/content/demos/StatCardProgressVariantDemo.vue`
 - `apps/nexus/app/components/content/demos/StatCardStatCardDemo.vue`
 
+### Nexus docs 页面 hydration mismatch 收敛
+
+**变更类型**: 稳定性修复 / SSR 一致性
+
+**描述**: 修复 docs 页面在部署环境中偶发 `Hydration completed but contains mismatches` 的问题。根因是 SSR 与客户端在语言和右侧文档辅助区渲染时机不一致，导致 `DocsOutline` / `DocsAsideCards` 节点树不一致。
+
+**主要变更**:
+1. **语言首屏一致性**：`app.vue` 在服务端优先基于 `Accept-Language` 判定首屏语言，并在 SSR 阶段 `await setLocale(...)`，避免首屏英文渲染后客户端切换中文引发的 hydration mismatch。
+2. **右侧文档辅助区客户端化**：`docs` 布局将右侧 `DocsOutline` 与 `DocsAsideCards` 包裹在 `ClientOnly` 内，规避依赖客户端状态的节点在 SSR 阶段与客户端阶段结构不一致。
+
+**修改文件**:
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/layouts/docs.vue`
+
 ### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
 
 **变更类型**: 部署稳定性 / 配置收敛
