@@ -224,10 +224,10 @@ const _appSettingOriginData = {
   tools: {
     autoPaste: {
       enable: true,
-      time: 180,
+      time: 5,
     },
     autoHide: true,
-    autoClear: 600,
+    autoClear: 300,
     clipboardPolling: {
       interval: 5,
       lowBatteryPolicy: {

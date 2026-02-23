@@ -39,26 +39,40 @@ const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
 
-const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 15, 30, 60, 180, 300, 600, 750] as const
-const AUTO_CLEAR_TIME_OPTIONS = [-1, 0, 15, 30, 60, 180, 300, 600, 750] as const
+const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
+const AUTO_CLEAR_TIME_OPTIONS = [-1, 0, 1, 3, 5, 10, 15, 30, 60, 120, 180, 300] as const
 const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
 const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
+
+function parseSelectNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return null
+}
 
 function normalizeSelectNumber(
   value: unknown,
   allowedValues: readonly number[],
   fallback: number
 ): number {
-  if (typeof value === 'number' && Number.isFinite(value) && allowedValues.includes(value)) {
-    return value
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value)
-    if (Number.isFinite(parsed) && allowedValues.includes(parsed)) {
-      return parsed
+  const parsed = parseSelectNumber(value)
+  if (parsed === null) return fallback
+  if (allowedValues.includes(parsed)) return parsed
+
+  let nearest = allowedValues[0]
+  let nearestDistance = Math.abs(parsed - nearest)
+  for (let i = 1; i < allowedValues.length; i++) {
+    const candidate = allowedValues[i]
+    const distance = Math.abs(parsed - candidate)
+    if (distance < nearestDistance) {
+      nearest = candidate
+      nearestDistance = distance
     }
   }
-  return fallback
+  return nearest
 }
 
 function ensureClipboardPollingSettings(): void {
@@ -66,10 +80,10 @@ function ensureClipboardPollingSettings(): void {
     appSetting.tools = {
       autoPaste: {
         enable: true,
-        time: 180
+        time: 5
       },
       autoHide: true,
-      autoClear: 600,
+      autoClear: 300,
       clipboardPolling: {
         interval: 5,
         lowBatteryPolicy: {
@@ -98,18 +112,13 @@ function ensureClipboardPollingSettings(): void {
   if (!tools.autoPaste || typeof tools.autoPaste !== 'object') {
     tools.autoPaste = {
       enable: true,
-      time: 180
+      time: 5
     }
   }
-  tools.autoPaste.time = normalizeSelectNumber(tools.autoPaste.time, AUTO_PASTE_TIME_OPTIONS, 180)
-  if (typeof tools.autoPaste.enable !== 'boolean') {
-    tools.autoPaste.enable = tools.autoPaste.time !== -1
-  }
-  if (tools.autoPaste.time === -1) {
-    tools.autoPaste.enable = false
-  }
+  tools.autoPaste.time = normalizeSelectNumber(tools.autoPaste.time, AUTO_PASTE_TIME_OPTIONS, 5)
+  tools.autoPaste.enable = tools.autoPaste.time !== -1
 
-  tools.autoClear = normalizeSelectNumber(tools.autoClear, AUTO_CLEAR_TIME_OPTIONS, 600)
+  tools.autoClear = normalizeSelectNumber(tools.autoClear, AUTO_CLEAR_TIME_OPTIONS, 300)
 
   if (!tools.clipboardPolling || typeof tools.clipboardPolling !== 'object') {
     tools.clipboardPolling = {
@@ -162,6 +171,15 @@ watch(
     ensureClipboardPollingSettings()
   },
   { deep: false, immediate: true }
+)
+
+watch(
+  () => appSetting.tools?.autoPaste?.time,
+  (time) => {
+    if (!appSetting.tools?.autoPaste) return
+    appSetting.tools.autoPaste.enable = time !== -1
+  },
+  { immediate: true }
 )
 
 async function updateShortcut(id: string, newAccelerator: string): Promise<void> {
@@ -488,13 +506,16 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="0">
         {{ t('settingTools.noLimit') }}
       </TxSelectItem>
+      <TxSelectItem :value="1"> 1 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="3"> 3 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="5"> 5 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="10"> 10 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="15"> 15 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="30"> 30 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="60"> 1 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="120"> 2 {{ t('settingTools.min') }} </TxSelectItem>
       <TxSelectItem :value="180"> 3 {{ t('settingTools.min') }} </TxSelectItem>
       <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="600"> 10 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="750"> 15 {{ t('settingTools.min') }} </TxSelectItem>
     </TuffBlockSelect>
 
     <!-- Auto clear time selection -->
@@ -511,13 +532,16 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="0">
         {{ t('settingTools.noLimit') }}
       </TxSelectItem>
+      <TxSelectItem :value="1"> 1 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="3"> 3 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="5"> 5 {{ t('settingTools.sec') }} </TxSelectItem>
+      <TxSelectItem :value="10"> 10 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="15"> 15 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="30"> 30 {{ t('settingTools.sec') }} </TxSelectItem>
       <TxSelectItem :value="60"> 1 {{ t('settingTools.min') }} </TxSelectItem>
+      <TxSelectItem :value="120"> 2 {{ t('settingTools.min') }} </TxSelectItem>
       <TxSelectItem :value="180"> 3 {{ t('settingTools.min') }} </TxSelectItem>
       <TxSelectItem :value="300"> 5 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="600"> 10 {{ t('settingTools.min') }} </TxSelectItem>
-      <TxSelectItem :value="750"> 15 {{ t('settingTools.min') }} </TxSelectItem>
     </TuffBlockSelect>
 
     <TuffBlockSelect
