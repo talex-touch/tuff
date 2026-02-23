@@ -92,6 +92,7 @@
       "workerd"
     ],
     "overrides": {
+      "@panva/hkdf": "1.0.2",
       "@types/node": "24.1.0",
       "@nuxt/devtools": "catalog:build",
       "@nuxt/kit": "catalog:build",

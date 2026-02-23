@@ -4,6 +4,21 @@
 
 ## 2026-02-23
 
+### Nexus OAuth 在 Cloudflare Workers 的 HKDF 兼容修复
+
+**变更类型**: 登录稳定性 / Edge 兼容
+
+**描述**: 修复 Nexus 在 Cloudflare Pages/Workers 上点击 LinuxDO OAuth 即返回 `OAuthSignin` 的问题。根因是 Workers 打包后 `@panva/hkdf` 被包装为 namespace，`next-auth` CJS 默认导入在运行时得到非函数对象，导致 state/pkce cookie 生成失败。
+
+**主要变更**:
+1. **依赖收敛**：通过 workspace overrides 固定 `@panva/hkdf` 版本，避免漂移引发的运行时导出形态不一致。
+2. **入口强制收敛**：在 `nuxt.config.ts` 的 `nitro.alias` 与 `vite.resolve.alias` 中将 `@panva/hkdf` 强制映射到 `dist/node/cjs/index.js`，避免 Workers 打包选中 `worker` 条件导出后被 CJS 默认导入误包装。
+3. **运行链路一致化**：Edge SSR 与 Functions 统一走 CJS 入口，保证 `next-auth` 的 HKDF 默认导入在 Cloudflare 运行时可调用。
+
+**修改文件**:
+- `package.json`
+- `apps/nexus/nuxt.config.ts`
+
 ### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
 
 **变更类型**: 部署稳定性 / 配置收敛
