@@ -4,11 +4,11 @@
   Sentry privacy controls and analytics settings
 -->
 <script setup lang="ts" name="SettingSentry">
-import { TxButton } from '@talex-touch/tuffex'
+import { TxButton, TxTooltip } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents, StorageEvents } from '@talex-touch/utils/transport/events'
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
@@ -16,6 +16,8 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import TuffStatusBadge from '~/components/tuff/TuffStatusBadge.vue'
+import { useAuth } from '~/modules/auth/useAuth'
+import { appSetting } from '~/modules/channel/storage'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 
 const { t } = useI18n()
@@ -34,7 +36,7 @@ interface TelemetryStats {
 }
 
 const enabled = ref(false)
-const anonymous = ref(true)
+const anonymous = ref(false)
 const loading = ref(false)
 const statsLoading = ref(false)
 const searchCount = ref(0)
@@ -44,6 +46,15 @@ const autoRefreshTimer = ref<number | null>(null)
 const transport = useTuffTransport()
 const appSdk = useAppSdk()
 const authBaseUrl = getAuthBaseUrl()
+const { isLoggedIn } = useAuth()
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
+const anonymousEffective = computed(() => (isLoggedIn.value ? anonymous.value : false))
+const dataUploadTooltip = computed(() =>
+  t(
+    'settingSentry.uploadTooltip',
+    '启用后会将性能与错误指标上传到 Nexus 和 Sentry。匿名模式仅控制是否关联设备指纹/用户 ID，不影响上传开关。'
+  )
+)
 
 async function loadConfig() {
   try {
@@ -54,7 +65,7 @@ async function loadConfig() {
       anonymous?: boolean
     }
     enabled.value = config?.enabled ?? true
-    anonymous.value = config?.anonymous ?? true
+    anonymous.value = config?.anonymous ?? false
   } catch (error) {
     console.error('Failed to load Sentry config', error)
   }
@@ -122,6 +133,9 @@ async function updateEnabled(value: boolean) {
 }
 
 async function updateAnonymous(value: boolean) {
+  if (!isLoggedIn.value) {
+    return
+  }
   anonymous.value = value
   await saveConfig()
 }
@@ -171,62 +185,42 @@ onBeforeUnmount(() => {
     active-icon="i-carbon-chart-column"
     memory-name="setting-sentry"
   >
-    <TuffBlockLine
-      :title="t('settingSentry.notice', '说明')"
-      :description="
-        t(
-          'settingSentry.descriptionText',
-          '启用数据分析可以帮助我们改进应用性能和用户体验。数据会上传到 Nexus 分析平台和 Sentry 错误监控平台。匿名模式仅影响是否关联到用户（如设备指纹/用户 ID），与是否上传无关。'
-        )
-      "
-    />
-
     <TuffBlockSwitch
       v-model="enabled"
       :title="t('settingSentry.enableDataUpload', '启用数据上传')"
-      :description="t('settingSentry.enableDesc', '上传匿名性能指标，帮助快速定位问题。')"
+      :description="t('settingSentry.enableDesc', '上传性能与错误指标，帮助快速定位问题。')"
       default-icon="i-carbon-cloud"
       active-icon="i-carbon-cloud"
       :loading="loading"
       @update:model-value="updateEnabled"
-    />
+    >
+      <template #tags>
+        <TxTooltip :content="dataUploadTooltip" :anchor="{ placement: 'top', showArrow: true }">
+          <TxButton variant="bare" native-type="button" class="setting-sentry-help-btn" @click.stop>
+            <span class="i-carbon-help text-sm" />
+          </TxButton>
+        </TxTooltip>
+      </template>
+    </TuffBlockSwitch>
 
     <TuffBlockSwitch
       v-if="enabled"
-      v-model="anonymous"
+      :model-value="anonymousEffective"
       :title="t('settingSentry.anonymousMode', '匿名模式')"
-      :description="t('settingSentry.anonymousDesc', '仅记录必要字段，不包含个人身份信息。')"
+      :description="
+        isLoggedIn
+          ? t('settingSentry.anonymousDesc', '仅记录必要字段，不包含个人身份信息。')
+          : t('settingSentry.anonymousLoginRequired', '登录后可切换匿名模式。')
+      "
       default-icon="i-carbon-user-avatar"
       active-icon="i-carbon-user-avatar-filled"
-      :loading="loading"
+      :loading="loading && isLoggedIn"
+      :disabled="loading || !isLoggedIn"
       @update:model-value="updateAnonymous"
     />
 
-    <TuffBlockLine v-if="enabled" :title="t('settingSentry.searchCount', '已记录搜索次数')">
-      <template #description>
-        <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
-          {{ searchCount }}
-        </span>
-      </template>
-    </TuffBlockLine>
-
-    <TuffBlockLine v-if="enabled && !anonymous" :title="t('settingSentry.warningTitle', '提示')">
-      <template #description>
-        <TuffStatusBadge
-          size="md"
-          status="warning"
-          :text="
-            t(
-              'settingSentry.warning',
-              '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。'
-            )
-          "
-        />
-      </template>
-    </TuffBlockLine>
-
     <TuffBlockSlot
-      v-if="enabled"
+      v-if="enabled && showAdvancedSettings"
       :title="t('settingSentry.refreshStats', '刷新统计数据')"
       :description="t('settingSentry.refreshStatsDesc', '从本地数据库获取最新状态')"
       default-icon="i-carbon-renew"
@@ -244,7 +238,36 @@ onBeforeUnmount(() => {
       </TxButton>
     </TuffBlockSlot>
 
-    <template v-if="isDev && enabled && telemetryStats">
+    <TuffBlockLine
+      v-if="enabled && showAdvancedSettings"
+      :title="t('settingSentry.searchCount', '已记录搜索次数')"
+    >
+      <template #description>
+        <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
+          {{ searchCount }}
+        </span>
+      </template>
+    </TuffBlockLine>
+
+    <TuffBlockLine
+      v-if="enabled && showAdvancedSettings && !anonymousEffective"
+      :title="t('settingSentry.warningTitle', '提示')"
+    >
+      <template #description>
+        <TuffStatusBadge
+          size="md"
+          status="warning"
+          :text="
+            t(
+              'settingSentry.warning',
+              '非匿名模式下，会包含设备指纹信息以帮助追踪问题。用户 ID 仅在登录时包含。'
+            )
+          "
+        />
+      </template>
+    </TuffBlockLine>
+
+    <template v-if="isDev && enabled && showAdvancedSettings && telemetryStats">
       <TuffBlockLine :title="t('settingSentry.bufferSize', 'Buffer 大小')">
         <template #description>
           <span class="font-mono text-base text-[var(--tx-text-color-primary)]">
@@ -324,3 +347,14 @@ onBeforeUnmount(() => {
     </TuffBlockSlot>
   </TuffGroupBlock>
 </template>
+
+<style lang="scss" scoped>
+.setting-sentry-help-btn {
+  min-width: 20px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--tx-text-color-secondary);
+}
+</style>

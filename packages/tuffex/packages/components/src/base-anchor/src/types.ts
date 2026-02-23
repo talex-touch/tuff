@@ -33,6 +33,7 @@ export type BaseAnchorClassValue = string | Record<string, boolean> | BaseAnchor
 export interface BaseAnchorProps {
   modelValue?: boolean
   disabled?: boolean
+  eager?: boolean
 
   // positioning
   placement?: BaseAnchorPlacement

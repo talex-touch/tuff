@@ -17,6 +17,7 @@ export type PopoverPlacement
 export interface PopoverProps {
   modelValue?: boolean
   disabled?: boolean
+  eager?: boolean
   placement?: PopoverPlacement
   offset?: number
   width?: number
