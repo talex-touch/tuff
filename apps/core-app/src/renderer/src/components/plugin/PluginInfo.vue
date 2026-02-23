@@ -1,11 +1,10 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { VNode } from 'vue'
-import { TxBottomDialog, TxSplitButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxFlipOverlay, TxSplitButton } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { computed, ref, useSlots, watchEffect } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
@@ -49,28 +48,31 @@ const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type
 
 const isAppDev = computed(() => startupInfo.value?.isDev === true)
 
-// Watch for errors and auto-select the 'Issues' tab
-const slots = useSlots()
-const tabItems = computed(() => {
-  const defaultSlots = slots.default?.() || []
-  return defaultSlots.filter((vnode: VNode) => {
-    const type = vnode.type
-    const name =
-      typeof type === 'object' || typeof type === 'function'
-        ? (type as { name?: string }).name
-        : undefined
-    return name === 'TvTabItem'
-  })
+type PluginIssueSeverity = 'none' | 'warning' | 'error'
+
+const issueSeverity = computed<PluginIssueSeverity>(() => {
+  if (hasErrors.value) return 'error'
+  if (hasIssues.value) return 'warning'
+  return 'none'
 })
 
-watchEffect(() => {
-  if (hasErrors.value) {
-    const issuesTabIndex = tabItems.value.findIndex(
-      (vnode: VNode) => vnode.props?.name === 'Issues'
-    )
-    if (issuesTabIndex !== -1) {
-      tabsModel.value = { [issuesTabIndex + 1]: 'Issues' }
-    }
+const ISSUE_FLIP_DURATION = 460
+const ISSUE_FLIP_ROTATE_X = 5
+const ISSUE_FLIP_ROTATE_Y = 10
+const ISSUE_FLIP_SPEED_BOOST = 1.15
+const issueFabRef = ref<HTMLElement | null>(null)
+const showIssuesOverlay = ref(false)
+const issuesOverlayExpanded = ref(false)
+const issuesOverlayAnimating = ref(false)
+
+function openIssuesOverlay(): void {
+  if (!hasIssues.value) return
+  showIssuesOverlay.value = true
+}
+
+watch(hasIssues, (value) => {
+  if (!value && showIssuesOverlay.value) {
+    showIssuesOverlay.value = false
   }
 })
 
@@ -404,15 +406,6 @@ async function handlePrimaryAction(): Promise<void> {
           <TvTabItem icon="dashboard-line" name="Overview" :label="t('plugin.tabs.overview')">
             <PluginOverview :plugin="plugin" />
           </TvTabItem>
-          <TvTabItem v-if="hasIssues" name="Issues" :label="t('plugin.tabs.issues')">
-            <template #icon>
-              <i
-                class="i-ri-error-warning-fill"
-                :class="{ 'text-red-500': hasErrors, 'text-yellow-500': !hasErrors }"
-              />
-            </template>
-            <PluginIssues :plugin="plugin" />
-          </TvTabItem>
           <TvTabItem icon="function-line" name="Features" :label="t('plugin.tabs.features')">
             <PluginFeatures :plugin="plugin" />
           </TvTabItem>
@@ -435,6 +428,53 @@ async function handlePrimaryAction(): Promise<void> {
         </TvTabs>
       </div>
     </div>
+
+    <button
+      v-if="hasIssues"
+      ref="issueFabRef"
+      type="button"
+      class="PluginInfo-IssueFab"
+      :class="{
+        'is-warning': issueSeverity === 'warning',
+        'is-error': issueSeverity === 'error'
+      }"
+      :title="t('plugin.tabs.issues')"
+      :aria-label="t('plugin.tabs.issues')"
+      @click="openIssuesOverlay"
+    >
+      <span class="PluginInfo-IssueFabSymbol">?</span>
+    </button>
+
+    <Teleport to="body">
+      <TxFlipOverlay
+        v-model="showIssuesOverlay"
+        v-model:expanded="issuesOverlayExpanded"
+        v-model:animating="issuesOverlayAnimating"
+        :source="issueFabRef"
+        :duration="ISSUE_FLIP_DURATION"
+        :rotate-x="ISSUE_FLIP_ROTATE_X"
+        :rotate-y="ISSUE_FLIP_ROTATE_Y"
+        :speed-boost="ISSUE_FLIP_SPEED_BOOST"
+        transition-name="PluginInfo-IssuesMask"
+        mask-class="PluginInfo-IssuesMask"
+        card-class="PluginInfo-IssuesCard"
+      >
+        <template #default="{ close }">
+          <div class="PluginInfo-IssuesDialog">
+            <button
+              type="button"
+              class="PluginInfo-IssuesClose"
+              :title="t('common.close')"
+              :aria-label="t('common.close')"
+              @click="close"
+            >
+              <i class="i-ri-close-line" />
+            </button>
+            <PluginIssues :plugin="plugin" />
+          </div>
+        </template>
+      </TxFlipOverlay>
+    </Teleport>
 
     <TxBottomDialog
       v-if="uninstallConfirmVisible"
@@ -509,6 +549,7 @@ async function handlePrimaryAction(): Promise<void> {
     border-radius: 0.5rem; /* match parent */
     pointer-events: none;
   }
+
   &::after {
     pointer-events: none;
     animation: spin 1s linear infinite;
@@ -518,8 +559,166 @@ async function handlePrimaryAction(): Promise<void> {
   }
 }
 
+.PluginInfo-IssueFab {
+  --fab-accent: rgba(250, 204, 21, 0.42);
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: 1px solid var(--fab-accent);
+  background: linear-gradient(180deg, rgba(40, 43, 50, 0.94), rgba(22, 24, 30, 0.96));
+  color: #fff;
+  cursor: pointer;
+  z-index: 24;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.is-warning {
+    --fab-accent: rgba(250, 204, 21, 0.45);
+
+    &::before {
+      background: radial-gradient(
+        circle,
+        rgba(250, 204, 21, 0.2) 0%,
+        rgba(250, 204, 21, 0.08) 52%,
+        rgba(250, 204, 21, 0) 74%
+      );
+      animation: pluginIssueWarningPulse 2.4s ease-in-out infinite;
+    }
+  }
+
+  &.is-error {
+    --fab-accent: rgba(248, 113, 113, 0.9);
+    box-shadow:
+      0 10px 28px rgba(127, 29, 29, 0.6),
+      0 0 0 1px rgba(248, 113, 113, 0.44),
+      0 0 18px rgba(239, 68, 68, 0.62);
+
+    &::before {
+      background: radial-gradient(
+        circle,
+        rgba(239, 68, 68, 0.5) 0%,
+        rgba(239, 68, 68, 0.2) 55%,
+        rgba(239, 68, 68, 0) 76%
+      );
+      animation: pluginIssueErrorPulse 1.55s cubic-bezier(0.35, 0, 0.22, 1) infinite;
+    }
+  }
+}
+
 .animate-spin {
   animation: spin 1s linear infinite;
+}
+
+.PluginInfo-IssueFabSymbol {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+:global(.PluginInfo-IssuesMask) {
+  position: fixed;
+  inset: 0;
+  z-index: 1850;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 12, 16, 0.52);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  perspective: 1200px;
+}
+
+:global(.PluginInfo-IssuesMask-enter-active),
+:global(.PluginInfo-IssuesMask-leave-active) {
+  transition: opacity 180ms ease;
+}
+
+:global(.PluginInfo-IssuesMask-enter-from),
+:global(.PluginInfo-IssuesMask-leave-to) {
+  opacity: 0;
+}
+
+:global(.PluginInfo-IssuesCard) {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: min(700px, 92vw);
+  height: min(560px, 82vh);
+  border-radius: 1rem;
+  border: 1px solid var(--tx-border-color-lighter);
+  background: var(--tx-bg-color-overlay);
+  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+.PluginInfo-IssuesDialog {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.PluginInfo-IssuesDialog :deep(.p-4) {
+  padding-top: 24px;
+  padding-right: 56px;
+}
+
+.PluginInfo-IssuesClose {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-light);
+  z-index: 4;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+
+  &:hover {
+    color: var(--tx-text-color-primary);
+    background: var(--tx-fill-color);
+    transform: scale(1.05);
+  }
 }
 
 @keyframes spin {
@@ -528,9 +727,36 @@ async function handlePrimaryAction(): Promise<void> {
     border-width: 5px;
     filter: blur(5px);
   }
+
   50% {
     border-width: 2px;
     filter: blur(2px);
+  }
+}
+
+@keyframes pluginIssueWarningPulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.45;
+  }
+
+  50% {
+    transform: scale(1.1);
+    opacity: 0.85;
+  }
+}
+
+@keyframes pluginIssueErrorPulse {
+  0%,
+  100% {
+    transform: scale(0.88);
+    opacity: 0.56;
+  }
+
+  50% {
+    transform: scale(1.16);
+    opacity: 1;
   }
 }
 </style>
