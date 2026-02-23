@@ -463,6 +463,26 @@
     "docsLinkTitle": "Platform Capabilities SDK",
     "docsLinkDesc": "打开 Nexus 文档，了解能力目录与调用方式",
     "docsOpen": "打开 Nexus 文档",
+    "sourceEditor": {
+      "title": "来源",
+      "subtitle": "编辑插件市场来源",
+      "addSource": "新增来源",
+      "addDialogTitle": "新增来源",
+      "cancel": "取消",
+      "add": "新增",
+      "namePlaceholder": "来源名称",
+      "urlPlaceholder": "来源地址",
+      "outdatedSection": "过时来源",
+      "outdatedHiddenHint": "已隐藏 {count} 个过时来源，启用高级设置后可查看",
+      "readonlyBadge": "只读",
+      "outdatedBadge": "过时",
+      "providerTypes": {
+        "tpexApi": "Tpex API",
+        "nexusStore": "Nexus Store",
+        "repository": "仓库",
+        "npmPackage": "NPM 包"
+      }
+    },
     "categories": {
       "title": "分类",
       "all": "全部",

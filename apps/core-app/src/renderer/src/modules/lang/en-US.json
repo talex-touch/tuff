@@ -463,6 +463,26 @@
     "docsLinkTitle": "Platform Capabilities SDK",
     "docsLinkDesc": "Open Nexus docs for capability catalog and usage",
     "docsOpen": "Open Nexus Docs",
+    "sourceEditor": {
+      "title": "Source",
+      "subtitle": "Edit plugin market source.",
+      "addSource": "Add source",
+      "addDialogTitle": "Add source",
+      "cancel": "Cancel",
+      "add": "Add",
+      "namePlaceholder": "Source name",
+      "urlPlaceholder": "Source url",
+      "outdatedSection": "Outdated sources",
+      "outdatedHiddenHint": "{count} outdated source(s) are hidden. Enable Advanced Settings to view.",
+      "readonlyBadge": "readonly",
+      "outdatedBadge": "outdated",
+      "providerTypes": {
+        "tpexApi": "Tpex API",
+        "nexusStore": "Nexus Store",
+        "repository": "Repository",
+        "npmPackage": "NPM Package"
+      }
+    },
     "categories": {
       "title": "Categories",
       "all": "All",
