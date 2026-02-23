@@ -5,12 +5,8 @@ import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
-import {
-  isCoreBox,
-  isDivisionBox,
-  isMainWindow,
-  useArgMapper
-} from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { isCoreBox, isMainWindow, useArgMapper } from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
 import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents } from '@talex-touch/utils/transport'
 // import appIconAsset from '../../public/favicon.ico?asset'
@@ -20,8 +16,6 @@ import appLogoAsset from '../../public/logo.png?asset'
 declare global {
   interface Window {
     $startupInfo?: StartupInfo
-    /** DivisionBox mode flag - set by preload based on command line args */
-    $isDivisionBox?: boolean
     /** MetaOverlay mode flag - set by preload based on URL hash or command line args */
     $isMetaOverlay?: boolean
   }
@@ -132,12 +126,6 @@ if (process.contextIsolated) {
       window.$startupInfo = info
     }
   })
-}
-
-// Set DivisionBox flag in preload (before renderer initialization)
-if (isDivisionBox()) {
-  window.$isDivisionBox = true
-  console.log('[preload] DivisionBox mode detected')
 }
 
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']): Promise<boolean> {
@@ -675,15 +663,19 @@ const { appendLoading, removeLoading, handleEvent, updateMessage, markWindowLoad
 
 domReady().then(() => {
   const info = useInitialize()
-
+  const role = parseWindowArgs(process.argv)
   const argMapper = useArgMapper()
 
   // Check if this is MetaOverlay by URL hash or command line args
   // Priority: 1. URL hash (#/meta-overlay), 2. command line args (--meta-overlay=true)
   const isMetaOverlayByHash =
     window.location.hash === '#/meta-overlay' || window.location.hash === '#meta-overlay'
-  const isMetaOverlayByArgs = argMapper.metaOverlay === 'true'
+  const isMetaOverlayByArgs = role.metaOverlay === true
   const isMetaOverlay = isMetaOverlayByHash || isMetaOverlayByArgs
+  const rendererMode = resolveRendererWindowMode({
+    ...role,
+    metaOverlay: isMetaOverlay
+  })
 
   // Set global flag for AppEntrance to check
   window.$isMetaOverlay = isMetaOverlay
@@ -692,8 +684,10 @@ domReady().then(() => {
     console.log('[preload] process.argv:', process.argv)
     console.log('[preload] argMapper:', argMapper)
     console.log('[preload] touchType:', argMapper.touchType)
+    console.log('[preload] coreType:', argMapper.coreType ?? argMapper.rawCoreType)
     console.log('[preload] isMainWindow:', isMainWindow())
     console.log('[preload] isCoreBox:', isCoreBox())
+    console.log('[preload] rendererMode:', rendererMode)
     console.log('[preload] isMetaOverlay:', isMetaOverlay, {
       byHash: isMetaOverlayByHash,
       byArgs: isMetaOverlayByArgs

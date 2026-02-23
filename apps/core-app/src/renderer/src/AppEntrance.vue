@@ -1,14 +1,7 @@
 <script name="AppEntrance" setup lang="ts">
-import {
-  isAssistantWindow,
-  isCoreBox,
-  isDivisionBox,
-  isFloatingBallWindow,
-  isMetaOverlay,
-  isOmniPanel,
-  isVoicePanelWindow
-} from '@talex-touch/utils/renderer'
+import { resolveRendererWindowMode, useArgMapper, useWindowRole } from '@talex-touch/utils/renderer'
 import { Toaster } from 'vue-sonner'
+import type { AppEntranceMode } from './modules/devtools/app-entrance-log'
 import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
 import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
@@ -32,26 +25,25 @@ const init = ref(false)
 const { appStates } = useAppState()
 const { entry } = useAppLifecycle()
 const { startupInfo } = useStartupInfo()
+const argMapper = useArgMapper()
+const role = useWindowRole()
 
-const isMetaOverlayMode = computed(() => {
-  return window.$isMetaOverlay === true || isMetaOverlay()
+const appEntranceMode = computed<AppEntranceMode>(() => {
+  return resolveRendererWindowMode({
+    ...role,
+    metaOverlay: window.$isMetaOverlay === true || role.metaOverlay === true
+  })
 })
 
 setTimeout(async () => {
   await entry(props.onReady)
-  const mode = isAssistantWindow()
-    ? isFloatingBallWindow()
-      ? 'AssistantFloatingBall'
-      : isVoicePanelWindow()
-        ? 'AssistantVoicePanel'
-        : 'Assistant'
-    : isCoreBox()
-      ? isOmniPanel()
-        ? 'OmniPanel'
-        : isDivisionBox()
-          ? 'DivisionBox'
-          : 'CoreBox'
-      : 'MainApp'
+  const mode = appEntranceMode.value
+  if (mode === 'CoreBox' && argMapper.rawCoreType && import.meta.env.DEV) {
+    console.warn('[AppEntrance] Unknown coreType, fallback to CoreBox', {
+      rawCoreType: argMapper.rawCoreType
+    })
+  }
+
   logAppEntranceMode(
     mode,
     {
@@ -67,24 +59,21 @@ setTimeout(async () => {
 <template>
   <div class="AppEntrance absolute inset-0" :class="{ 'has-update': appStates.hasUpdate }">
     <Toaster position="bottom-left" theme="system" rich-colors />
-    <!-- MetaOverlay: render directly like CoreBox, not via router-view -->
-    <template v-if="isMetaOverlayMode">
+    <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />
     </template>
-    <template v-else-if="isFloatingBallWindow()">
+    <template v-else-if="appEntranceMode === 'AssistantFloatingBall'">
       <FloatingBall />
     </template>
-    <template v-else-if="isVoicePanelWindow()">
+    <template v-else-if="appEntranceMode === 'AssistantVoicePanel'">
       <VoicePanel />
     </template>
-    <template v-else-if="isOmniPanel()">
+    <template v-else-if="appEntranceMode === 'OmniPanel'">
       <OmniPanel />
     </template>
-    <!-- CoreBox: render directly -->
-    <template v-else-if="isCoreBox()">
+    <template v-else-if="appEntranceMode === 'CoreBox' || appEntranceMode === 'DivisionBox'">
       <CoreBox />
     </template>
-    <!-- Main Window: render slot (AppLayout from App.vue) -->
     <template v-else-if="init">
       <slot />
     </template>

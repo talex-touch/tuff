@@ -1,16 +1,25 @@
+import type { AssistantType, CoreType, TouchType, WindowRole } from '../window-role'
+import { isKnownAssistantType, isKnownCoreType, isKnownTouchType, parseWindowArgs } from '../window-role'
+
 /**
  * Interface for command line argument mapper options
  * @interface IArgMapperOptions
  */
 export interface IArgMapperOptions {
   /** The type of touch window - main, core-box popup, or assistant window */
-  touchType?: 'main' | 'core-box' | 'assistant'
+  touchType?: TouchType
   /** The sub-type for core-box windows (e.g., division-box, omni-panel) */
-  coreType?: 'division-box' | 'omni-panel'
+  coreType?: CoreType
   /** The sub-type for assistant windows */
-  assistantType?: 'floating-ball' | 'voice-panel'
+  assistantType?: AssistantType
   /** Whether this is a meta-overlay WebContentsView */
   metaOverlay?: 'true' | 'false'
+  /** Raw touchType value for unknown protocol compatibility */
+  rawTouchType?: string
+  /** Raw coreType value for unknown protocol compatibility */
+  rawCoreType?: string
+  /** Raw assistantType value for unknown protocol compatibility */
+  rawAssistantType?: string
   /** User data directory path */
   userDataDir?: string
   /** Application path */
@@ -52,6 +61,33 @@ export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv
       mapper[camelCaseKey] = value
     }
   }
+
+  const role = parseWindowArgs(args)
+  if (mapper.touchType && !isKnownTouchType(mapper.touchType)) {
+    mapper.rawTouchType = mapper.touchType
+    delete mapper.touchType
+  } else if (role.touchType) {
+    mapper.touchType = role.touchType
+  }
+
+  if (mapper.coreType && !isKnownCoreType(mapper.coreType)) {
+    mapper.rawCoreType = mapper.coreType
+    delete mapper.coreType
+  } else if (role.coreType) {
+    mapper.coreType = role.coreType
+  }
+
+  if (mapper.assistantType && !isKnownAssistantType(mapper.assistantType)) {
+    mapper.rawAssistantType = mapper.assistantType
+    delete mapper.assistantType
+  } else if (role.assistantType) {
+    mapper.assistantType = role.assistantType
+  }
+
+  if (typeof role.metaOverlay === 'boolean') {
+    mapper.metaOverlay = role.metaOverlay ? 'true' : 'false'
+  }
+
   return window.$argMapper = mapper
 }
 
@@ -59,7 +95,7 @@ export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv
  * Gets the current touch type from command line arguments
  * @returns The touch type ('main' | 'core-box' | 'assistant') or undefined
  */
-export function useTouchType() {
+export function useTouchType(): TouchType | undefined {
   const argMapper = useArgMapper()
 
   return argMapper.touchType
@@ -93,7 +129,7 @@ export function isAssistantWindow() {
  * Gets the core-box sub-type from command line arguments
  * @returns The core type ('division-box' | 'omni-panel') or undefined
  */
-export function useCoreType() {
+export function useCoreType(): CoreType | undefined {
   const argMapper = useArgMapper()
   return argMapper.coreType
 }
@@ -102,7 +138,7 @@ export function useCoreType() {
  * Gets the assistant sub-type from command line arguments
  * @returns The assistant type ('floating-ball' | 'voice-panel') or undefined
  */
-export function useAssistantType() {
+export function useAssistantType(): AssistantType | undefined {
   const argMapper = useArgMapper()
   return argMapper.assistantType
 }
@@ -146,4 +182,17 @@ export function isFloatingBallWindow() {
  */
 export function isVoicePanelWindow() {
   return isAssistantWindow() && useAssistantType() === 'voice-panel'
+}
+
+export function useWindowRole(): WindowRole {
+  const argMapper = useArgMapper()
+  return {
+    touchType: argMapper.touchType,
+    coreType: argMapper.coreType,
+    assistantType: argMapper.assistantType,
+    metaOverlay:
+      typeof argMapper.metaOverlay === 'string'
+        ? argMapper.metaOverlay === 'true'
+        : undefined
+  }
 }
