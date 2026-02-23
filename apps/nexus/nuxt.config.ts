@@ -19,6 +19,7 @@ const workspaceRoot = resolve(currentDir, '../..')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
+const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
 const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
@@ -209,6 +210,9 @@ export default defineNuxtConfig({
   nitro: {
     minify: !disableNitroMinify,
     sourceMap: !disableNitroSourceMap,
+    alias: {
+      '@panva/hkdf': hkdfCompatEntry,
+    },
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
     ...(useCloudflareDev
       ? {
@@ -240,6 +244,7 @@ export default defineNuxtConfig({
   vite: {
     resolve: {
       alias: [
+        { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
         { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
