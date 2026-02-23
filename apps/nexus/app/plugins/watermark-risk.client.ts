@@ -1,4 +1,8 @@
 export default defineNuxtPlugin((nuxtApp) => {
+  const runtimeConfig = useRuntimeConfig()
+  if (runtimeConfig.public?.watermark?.enabled !== true)
+    return
+
   const { triggerRisk } = useWatermarkRisk()
   const { token } = useWatermarkToken()
   const baseFetch = nuxtApp.$fetch || $fetch
