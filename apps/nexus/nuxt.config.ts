@@ -31,6 +31,20 @@ const enablePayloadExtraction = process.env.NUXT_ENABLE_PAYLOAD_EXTRACTION === '
 const disableNitroSourceMap = process.env.NUXT_DISABLE_NITRO_SOURCEMAP === 'true'
 const authSecret = process.env.AUTH_SECRET || (isDev ? 'tuff-dev-secret' : undefined)
 
+function isEnvFlagEnabled(value?: string) {
+  if (!value)
+    return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
+const watermarkFeatureEnabled = isEnvFlagEnabled(
+  process.env.NUXT_PUBLIC_WATERMARK_ENABLED || process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED,
+)
+const riskControlFeatureEnabled = isEnvFlagEnabled(
+  process.env.NUXT_PUBLIC_RISK_CONTROL_ENABLED || process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED,
+)
+
 export default defineNuxtConfig({
   modules: [
     '@vueuse/nuxt',
@@ -107,10 +121,6 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    experimentalFeatures: {
-      riskControlEnabled: process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED === 'true',
-      watermarkEnabled: process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED === 'true',
-    },
     auth: {
       secret: authSecret,
       origin: process.env.AUTH_ORIGIN,
@@ -134,6 +144,10 @@ export default defineNuxtConfig({
     },
     watermark: {
       secretKey: process.env.WATERMARK_SECRET_KEY || process.env.NUXT_WATERMARK_SECRET_KEY,
+      enabled: watermarkFeatureEnabled,
+    },
+    riskControl: {
+      enabled: riskControlFeatureEnabled,
     },
     exchangeRate: {
       apiKey: process.env.EXCHANGE_RATE_API_KEY,
@@ -159,15 +173,17 @@ export default defineNuxtConfig({
       defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
     },
     public: {
-      experimentalFeatures: {
-        riskControlEnabled: process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED === 'true',
-        watermarkEnabled: process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED === 'true',
-      },
       turnstile: {
         siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
       },
       docs: {
         asideCardChrome: process.env.NUXT_PUBLIC_DOCS_ASIDE_CARD_CHROME,
+      },
+      watermark: {
+        enabled: watermarkFeatureEnabled,
+      },
+      riskControl: {
+        enabled: riskControlFeatureEnabled,
       },
     },
   },

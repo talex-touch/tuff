@@ -13,6 +13,7 @@ useHead({
 const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
+const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
 
 const { locale, setLocale } = useI18n()
 const { syncLocaleChanges, getSavedLocale } = useUserLocale()
@@ -201,8 +202,8 @@ watchEffect(() => {
   <ToastContainer />
   <ClientOnly>
     <GlobalSearch />
-    <InvisibleWatermark />
-    <WatermarkRiskModal />
+    <InvisibleWatermark v-if="showInvisibleWatermark" />
+    <WatermarkRiskModal v-if="showInvisibleWatermark" />
   </ClientOnly>
   <template v-if="isProtectedRoute">
     <div

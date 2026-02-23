@@ -66,6 +66,8 @@ Observability & feature toggles (optional):
 - `SENTRY_AUTH_TOKEN` (source maps upload)
 - `NUXT_DISABLE_SENTRY`
 - `NUXT_DISABLE_PWA`
+- `NUXT_PUBLIC_WATERMARK_ENABLED` (`true/1/on/yes` to enable watermark system)
+- `NUXT_PUBLIC_RISK_CONTROL_ENABLED` (`true/1/on/yes` to enable risk control entrypoints)
 - `VITE_PLUGIN_PWA`
 - `NUXT_DISABLE_WEB_FONTS`
 - `UNOCSS_WEBFONTS`

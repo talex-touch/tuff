@@ -3,8 +3,8 @@ import { computed, onMounted, watch } from 'vue'
 
 const { t } = useI18n()
 const route = useRoute()
-const runtimeConfig = useRuntimeConfig()
 const { user, refresh, isAuthenticated } = useAuthUser()
+const runtimeConfig = useRuntimeConfig()
 
 const revalidateUser = () => {
   if (!isAuthenticated.value)
@@ -25,8 +25,8 @@ watch(
 )
 
 const isAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
-const riskControlEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.riskControlEnabled === true)
-const watermarkEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.watermarkEnabled === true)
+const riskControlEnabled = computed(() => runtimeConfig.public?.riskControl?.enabled === true)
+const watermarkEnabled = computed(() => runtimeConfig.public?.watermark?.enabled === true)
 
 const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
@@ -176,7 +176,7 @@ const adminMenuItems = computed(() => {
   ]
 
   if (riskControlEnabled.value) {
-    items.splice(2, 0, {
+    items.splice(3, 0, {
       id: 'risk',
       label: t('dashboard.sections.menu.risk', '风控控制面'),
       icon: 'i-carbon-warning-alt',
