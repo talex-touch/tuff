@@ -637,9 +637,17 @@
       "statusTitle": "Permission Status",
       "statusGranted": "All required permissions granted",
       "statusMissing": "Missing {count} required permission(s)",
+      "statusDeprecated": "{count} historical grants were disabled",
       "required": "Required Permissions",
       "optional": "Optional Permissions",
       "granted": "Granted",
+      "deprecatedTitle": "Historical Grants Disabled",
+      "deprecatedDesc": "The plugin no longer declares these permissions. Historical grant records are kept, but runtime access is blocked.",
+      "deprecatedTag": "Disabled",
+      "deprecatedReason": {
+        "appUpdate": "Outdated after app update",
+        "pluginChange": "No longer needed by plugin (previously granted)"
+      },
       "requiredTag": "Required",
       "actionsTitle": "Permission Actions",
       "actionsDesc": "Refresh or manage permissions in batch",
@@ -1121,7 +1129,8 @@
       "noFile": "Unable to get file information",
       "emptyFile": "File is empty, cannot preview",
       "fileTooLarge": "File too large ({size}), cannot preview",
-      "loadFailed": "Failed to load file"
+      "loadFailed": "Failed to load file",
+      "readTimeout": "File read timed out. Please confirm the file is accessible."
     }
   },
   "fileInfo": {

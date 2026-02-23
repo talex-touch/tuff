@@ -637,9 +637,17 @@
       "statusTitle": "权限状态",
       "statusGranted": "所有必需权限已授予",
       "statusMissing": "缺少 {count} 个必需权限",
+      "statusDeprecated": "检测到 {count} 个历史授权已禁用",
       "required": "必需权限",
       "optional": "可选权限",
       "granted": "已授予",
+      "deprecatedTitle": "历史授权已禁用",
+      "deprecatedDesc": "插件当前未声明以下权限，历史授权记录将保留但运行时不会生效",
+      "deprecatedTag": "已禁用",
+      "deprecatedReason": {
+        "appUpdate": "应用更新后已过时",
+        "pluginChange": "插件不再需要（曾授予）"
+      },
       "requiredTag": "必需",
       "actionsTitle": "权限操作",
       "actionsDesc": "刷新或批量管理权限",
@@ -1121,7 +1129,8 @@
       "noFile": "无法获取文件信息",
       "emptyFile": "文件为空，无法预览",
       "fileTooLarge": "文件过大 ({size})，无法预览",
-      "loadFailed": "文件加载失败"
+      "loadFailed": "文件加载失败",
+      "readTimeout": "读取文件超时，请确认文件是否可访问"
     }
   },
   "fileInfo": {

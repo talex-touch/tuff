@@ -203,6 +203,11 @@ export interface ReadFileRequest {
    * If true, ENOENT returns an empty string instead of throwing.
    */
   allowMissing?: boolean
+
+  /**
+   * Optional read timeout in milliseconds.
+   */
+  timeoutMs?: number
 }
 
 /**

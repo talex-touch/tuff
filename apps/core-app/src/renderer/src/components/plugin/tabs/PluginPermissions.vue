@@ -6,18 +6,14 @@
  */
 
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 import { TxButton, TxEmpty, TxTag } from '@talex-touch/tuffex'
-import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { usePermissionSdk } from '@talex-touch/utils/renderer'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { shortconApi } from '~/modules/channel/main/shortcon'
 
 interface Props {
   plugin: ITouchPlugin
@@ -34,6 +30,9 @@ interface PluginPermissionStatus {
   required: string[]
   optional: string[]
   granted: string[]
+  deprecatedGranted: string[]
+  outdatedByAppUpdate: string[]
+  outdatedByPluginChange: string[]
   denied: string[]
   missingRequired: string[]
   warning?: string
@@ -42,8 +41,6 @@ interface PluginPermissionStatus {
 // State
 const loading = ref(true)
 const status = ref<PluginPermissionStatus | null>(null)
-const shortcutsLoading = ref(false)
-const shortcuts = ref<ShortcutWithStatus[]>([])
 
 function getPermissionName(permissionId: string): string {
   const key = `plugin.permissions.registry.${permissionId}.name`
@@ -85,6 +82,49 @@ const permissionList = computed(() => {
   })
 })
 
+const outdatedByAppUpdatePermissions = computed(() => {
+  if (!status.value?.outdatedByAppUpdate?.length) return []
+  return status.value.outdatedByAppUpdate.map((id) => ({
+    id,
+    name: getPermissionName(id),
+    desc: getPermissionDesc(id)
+  }))
+})
+
+const outdatedByPluginChangePermissions = computed(() => {
+  if (!status.value?.outdatedByPluginChange?.length) return []
+  return status.value.outdatedByPluginChange.map((id) => ({
+    id,
+    name: getPermissionName(id),
+    desc: getPermissionDesc(id)
+  }))
+})
+
+const hasOutdatedPermissions = computed(() => {
+  if (!status.value) return false
+  return status.value.deprecatedGranted.length > 0
+})
+
+const hasStatusWarning = computed(() => {
+  if (!status.value) return false
+  return status.value.missingRequired.length > 0 || status.value.deprecatedGranted.length > 0
+})
+
+const statusDescription = computed(() => {
+  if (!status.value) return ''
+  if (status.value.missingRequired.length > 0) {
+    return t('plugin.permissions.statusMissing', {
+      count: status.value.missingRequired.length
+    })
+  }
+  if (status.value.deprecatedGranted.length > 0) {
+    return t('plugin.permissions.statusDeprecated', {
+      count: status.value.deprecatedGranted.length
+    })
+  }
+  return t('plugin.permissions.statusGranted')
+})
+
 // Category definitions
 const categoryInfo: Record<string, { nameKey: string; icon: string }> = {
   fs: { nameKey: 'plugin.permissions.categories.fs', icon: 'i-carbon-folder' },
@@ -115,15 +155,6 @@ const permissionCategories = computed(() => {
     permissions
   }))
 })
-
-const pluginShortcuts = computed(() =>
-  shortcuts.value
-    .filter(
-      (shortcut) =>
-        shortcut.type === ShortcutType.RENDERER && shortcut.meta?.author === props.plugin.name
-    )
-    .sort((a, b) => a.accelerator.localeCompare(b.accelerator))
-)
 
 function getRisk(permissionId: string): 'low' | 'medium' | 'high' {
   const highRisk = [
@@ -187,47 +218,6 @@ function getRiskTagColor(risk: 'low' | 'medium' | 'high'): string {
   }
 }
 
-function getShortcutTitle(shortcut: ShortcutWithStatus): string {
-  const meta = shortcut.meta as { description?: string; shortcutId?: string } | undefined
-  return meta?.description || meta?.shortcutId || shortcut.id
-}
-
-function getShortcutStatusLabel(shortcut: ShortcutWithStatus): string | null {
-  const status = shortcut.status
-  if (!status || status.state === 'active') {
-    return null
-  }
-  if (status.state === 'conflict') {
-    return status.reason === 'conflict-system'
-      ? t('plugin.permissions.shortcuts.status.conflictSystem')
-      : t('plugin.permissions.shortcuts.status.conflictPlugin')
-  }
-  if (status.reason === 'invalid') {
-    return t('plugin.permissions.shortcuts.status.invalid')
-  }
-  return t('plugin.permissions.shortcuts.status.unavailable')
-}
-
-function getShortcutStatusTagColor(shortcut: ShortcutWithStatus): string {
-  const status = shortcut.status
-  if (!status || status.state === 'active') return 'var(--tx-color-info)'
-  if (status.state === 'conflict') return 'var(--tx-color-danger)'
-  return 'var(--tx-color-warning)'
-}
-
-function getShortcutWarningLabel(warning: ShortcutWarning): string {
-  switch (warning) {
-    case 'permission-missing':
-      return t('plugin.permissions.shortcuts.warning.permissionMissing')
-    case 'sdk-legacy':
-      return t('plugin.permissions.shortcuts.warning.legacySdk')
-    case 'missing-description':
-      return t('plugin.permissions.shortcuts.warning.missingDescription')
-    default:
-      return warning
-  }
-}
-
 function getRiskLabel(risk: 'low' | 'medium' | 'high'): string {
   switch (risk) {
     case 'low':
@@ -256,38 +246,18 @@ async function loadStatus() {
       optional
     })
     status.value = result
+      ? {
+          ...result,
+          deprecatedGranted: result.deprecatedGranted || [],
+          outdatedByAppUpdate: result.outdatedByAppUpdate || [],
+          outdatedByPluginChange: result.outdatedByPluginChange || []
+        }
+      : null
   } catch (e) {
     console.error('Failed to load permission status:', e)
   } finally {
     loading.value = false
   }
-}
-
-async function loadShortcuts() {
-  shortcutsLoading.value = true
-  try {
-    shortcuts.value = await shortconApi.getAll()
-  } catch (e) {
-    console.error('Failed to load shortcuts:', e)
-  } finally {
-    shortcutsLoading.value = false
-  }
-}
-
-async function updatePluginShortcut(id: string, newAccelerator: string): Promise<void> {
-  if (!id || !newAccelerator) return
-  const target = shortcuts.value.find((item) => item.id === id)
-  const previousValue = target?.accelerator
-
-  if (target) {
-    target.accelerator = newAccelerator
-  }
-
-  const success = await shortconApi.update(id, newAccelerator)
-  if (!success && target && previousValue) {
-    target.accelerator = previousValue
-  }
-  await loadShortcuts()
 }
 
 // Toggle permission
@@ -343,13 +313,11 @@ watch(
   () => props.plugin.name,
   () => {
     loadStatus()
-    loadShortcuts()
   }
 )
 
 onMounted(() => {
   loadStatus()
-  loadShortcuts()
 })
 </script>
 
@@ -369,23 +337,9 @@ onMounted(() => {
       <!-- Status Overview -->
       <TuffGroupBlock
         :name="t('plugin.permissions.statusTitle')"
-        :description="
-          status?.missingRequired.length === 0
-            ? t('plugin.permissions.statusGranted')
-            : t('plugin.permissions.statusMissing', {
-                count: status?.missingRequired.length || 0
-              })
-        "
-        :default-icon="
-          status?.missingRequired.length === 0
-            ? 'i-carbon-checkmark-filled'
-            : 'i-carbon-warning-filled'
-        "
-        :active-icon="
-          status?.missingRequired.length === 0
-            ? 'i-carbon-checkmark-filled'
-            : 'i-carbon-warning-filled'
-        "
+        :description="statusDescription"
+        :default-icon="hasStatusWarning ? 'i-carbon-warning-filled' : 'i-carbon-checkmark-filled'"
+        :active-icon="hasStatusWarning ? 'i-carbon-warning-filled' : 'i-carbon-checkmark-filled'"
         memory-name="plugin-permissions-status"
       >
         <TuffBlockLine :title="t('plugin.permissions.required')">
@@ -457,53 +411,6 @@ onMounted(() => {
         </TuffBlockLine>
       </TuffGroupBlock>
 
-      <TuffGroupBlock
-        :name="t('plugin.permissions.shortcuts.title')"
-        :description="t('plugin.permissions.shortcuts.desc')"
-        default-icon="i-carbon-keyboard"
-        active-icon="i-carbon-keyboard"
-        memory-name="plugin-permissions-shortcuts"
-      >
-        <div v-if="shortcutsLoading" class="PluginShortcuts-Loading">
-          {{ t('plugin.permissions.shortcuts.loading') }}
-        </div>
-        <TxEmpty
-          v-else-if="pluginShortcuts.length === 0"
-          :title="t('plugin.permissions.shortcuts.empty')"
-          compact
-        />
-        <div v-else class="PluginShortcuts-List">
-          <div v-for="shortcut in pluginShortcuts" :key="shortcut.id" class="PluginShortcuts-Item">
-            <div class="PluginShortcuts-Info">
-              <div class="PluginShortcuts-Title">
-                {{ getShortcutTitle(shortcut) }}
-              </div>
-              <div v-if="getShortcutStatusLabel(shortcut)" class="PluginShortcuts-Status">
-                <TxTag :color="getShortcutStatusTagColor(shortcut)" size="sm">
-                  {{ getShortcutStatusLabel(shortcut) }}
-                </TxTag>
-              </div>
-              <div v-if="(shortcut.status?.warnings || []).length" class="PluginShortcuts-Warnings">
-                <TxTag
-                  v-for="warning in shortcut.status?.warnings || []"
-                  :key="warning"
-                  color="var(--tx-color-warning)"
-                  size="sm"
-                >
-                  {{ getShortcutWarningLabel(warning) }}
-                </TxTag>
-              </div>
-            </div>
-            <FlatKeyInput
-              :model-value="shortcut.accelerator"
-              @update:model-value="
-                (newValue) => updatePluginShortcut(shortcut.id, String(newValue))
-              "
-            />
-          </div>
-        </div>
-      </TuffGroupBlock>
-
       <!-- Permission List by Category -->
       <TuffGroupBlock
         v-for="category in permissionCategories"
@@ -534,6 +441,60 @@ onMounted(() => {
           </template>
         </TuffBlockSwitch>
       </TuffGroupBlock>
+
+      <TuffGroupBlock
+        v-if="hasOutdatedPermissions"
+        :name="t('plugin.permissions.deprecatedTitle')"
+        :description="
+          t('plugin.permissions.deprecatedDesc', { count: status?.deprecatedGranted.length || 0 })
+        "
+        default-icon="i-carbon-warning-alt-filled"
+        active-icon="i-carbon-warning-alt-filled"
+        memory-name="plugin-permissions-deprecated"
+      >
+        <TuffBlockLine :title="t('plugin.permissions.deprecatedReason.appUpdate')">
+          <template #description>
+            <TxTag color="var(--tx-color-warning)" size="sm">
+              {{ outdatedByAppUpdatePermissions.length }}
+            </TxTag>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine :title="t('plugin.permissions.deprecatedReason.pluginChange')">
+          <template #description>
+            <TxTag color="var(--tx-color-warning)" size="sm">
+              {{ outdatedByPluginChangePermissions.length }}
+            </TxTag>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine
+          v-for="perm in outdatedByAppUpdatePermissions"
+          :key="`app-${perm.id}`"
+          :title="perm.name"
+        >
+          <template #description>
+            <div class="DeprecatedPermission-Description">
+              <span>{{ perm.desc || perm.id }}</span>
+              <TxTag color="var(--tx-color-warning)" size="sm">
+                {{ t('plugin.permissions.deprecatedReason.appUpdate') }}
+              </TxTag>
+            </div>
+          </template>
+        </TuffBlockLine>
+        <TuffBlockLine
+          v-for="perm in outdatedByPluginChangePermissions"
+          :key="`plugin-${perm.id}`"
+          :title="perm.name"
+        >
+          <template #description>
+            <div class="DeprecatedPermission-Description">
+              <span>{{ perm.desc || perm.id }}</span>
+              <TxTag color="var(--tx-color-warning)" size="sm">
+                {{ t('plugin.permissions.deprecatedReason.pluginChange') }}
+              </TxTag>
+            </div>
+          </template>
+        </TuffBlockLine>
+      </TuffGroupBlock>
     </template>
   </div>
 </template>
@@ -558,49 +519,10 @@ onMounted(() => {
   color: var(--tx-color-danger) !important;
 }
 
-.PluginShortcuts-Loading {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  padding: 6px 0;
-}
-
-.PluginShortcuts-List {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.PluginShortcuts-Item {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--tx-border-color-light);
-}
-
-.PluginShortcuts-Item:last-child {
-  border-bottom: none;
-}
-
-.PluginShortcuts-Info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.PluginShortcuts-Title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.PluginShortcuts-Status,
-.PluginShortcuts-Warnings {
-  display: flex;
-  gap: 6px;
+.DeprecatedPermission-Description {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 </style>

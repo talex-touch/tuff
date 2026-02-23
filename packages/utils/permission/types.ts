@@ -104,8 +104,14 @@ export interface PluginPermissionStatus {
   required: string[]
   /** Optional permissions from manifest */
   optional: string[]
-  /** Granted permissions */
+  /** Effective declared permissions that are currently granted */
   granted: string[]
+  /** Historically granted permissions that are now inactive (union of all outdated reasons) */
+  deprecatedGranted: string[]
+  /** Historically granted permissions that became outdated because app-side permission definitions changed */
+  outdatedByAppUpdate: string[]
+  /** Historically granted permissions that are still defined but no longer declared by current plugin manifest */
+  outdatedByPluginChange: string[]
   /** Denied permissions */
   denied: string[]
   /** Missing required permissions */

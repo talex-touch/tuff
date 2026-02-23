@@ -46,4 +46,28 @@ describe('permissionGuardPerformance', () => {
     expect(stats.maxDurationMs).toBeLessThan(10)
     expect(stats.meetsTarget).toBe(true)
   })
+
+  it('blocks runtime access when permission was granted before but is no longer declared', () => {
+    store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+      required: ['clipboard.read'],
+      optional: []
+    })
+
+    const result = guard.check(TEST_PLUGIN_ID, TEST_API, SDK_VERSION)
+
+    expect(result.allowed).toBe(false)
+    expect(result.showRequest).toBe(false)
+    expect(result.reason).toContain('previously granted')
+  })
+
+  it('allows runtime access when permission is both declared and granted', () => {
+    store.setDeclaredPermissions(TEST_PLUGIN_ID, {
+      required: [TEST_PERMISSION_ID],
+      optional: []
+    })
+
+    const result = guard.check(TEST_PLUGIN_ID, TEST_API, SDK_VERSION)
+
+    expect(result.allowed).toBe(true)
+  })
 })

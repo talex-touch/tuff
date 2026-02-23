@@ -1,14 +1,18 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { TxButton, TxCodeEditor, TxFlipOverlay } from '@talex-touch/tuffex'
+import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
+import { TxButton, TxCodeEditor, TxEmpty, TxFlipOverlay, TxTag } from '@talex-touch/tuffex'
+import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { shortconApi } from '~/modules/channel/main/shortcon'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 
@@ -60,6 +64,8 @@ const canViewManifestJson = computed(() => hasDevSettings.value || isAppDev.valu
 const manifestJsonText = computed(() =>
   manifestData.value ? JSON.stringify(manifestData.value, null, 2) : ''
 )
+const shortcutsLoading = ref(false)
+const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)
 const manifestDialogSource = ref<HTMLElement | null>(null)
 
@@ -78,6 +84,15 @@ const hasDevChanges = computed(() => {
     devSettings.autoStart !== original.autoStart
   )
 })
+
+const pluginShortcuts = computed(() =>
+  shortcuts.value
+    .filter(
+      (shortcut) =>
+        shortcut.type === ShortcutType.RENDERER && shortcut.meta?.author === plugin.value.name
+    )
+    .sort((a, b) => a.accelerator.localeCompare(b.accelerator))
+)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -112,6 +127,47 @@ function applyDevSettings(settings: DevSettingsForm): void {
   devSettings.autoStart = settings.autoStart
 }
 
+function getShortcutTitle(shortcut: ShortcutWithStatus): string {
+  const meta = shortcut.meta as { description?: string; shortcutId?: string } | undefined
+  return meta?.description || meta?.shortcutId || shortcut.id
+}
+
+function getShortcutStatusLabel(shortcut: ShortcutWithStatus): string | null {
+  const status = shortcut.status
+  if (!status || status.state === 'active') {
+    return null
+  }
+  if (status.state === 'conflict') {
+    return status.reason === 'conflict-system'
+      ? t('plugin.permissions.shortcuts.status.conflictSystem')
+      : t('plugin.permissions.shortcuts.status.conflictPlugin')
+  }
+  if (status.reason === 'invalid') {
+    return t('plugin.permissions.shortcuts.status.invalid')
+  }
+  return t('plugin.permissions.shortcuts.status.unavailable')
+}
+
+function getShortcutStatusTagColor(shortcut: ShortcutWithStatus): string {
+  const status = shortcut.status
+  if (!status || status.state === 'active') return 'var(--tx-color-info)'
+  if (status.state === 'conflict') return 'var(--tx-color-danger)'
+  return 'var(--tx-color-warning)'
+}
+
+function getShortcutWarningLabel(warning: ShortcutWarning): string {
+  switch (warning) {
+    case 'permission-missing':
+      return t('plugin.permissions.shortcuts.warning.permissionMissing')
+    case 'sdk-legacy':
+      return t('plugin.permissions.shortcuts.warning.legacySdk')
+    case 'missing-description':
+      return t('plugin.permissions.shortcuts.warning.missingDescription')
+    default:
+      return warning
+  }
+}
+
 async function loadDetails(): Promise<void> {
   const fallback = readFallbackDevSettings()
   applyDevSettings(fallback)
@@ -132,6 +188,33 @@ async function loadDetails(): Promise<void> {
   } finally {
     devSettingsLoading.value = false
   }
+}
+
+async function loadShortcuts() {
+  shortcutsLoading.value = true
+  try {
+    shortcuts.value = await shortconApi.getAll()
+  } catch (e) {
+    console.error('Failed to load shortcuts:', e)
+  } finally {
+    shortcutsLoading.value = false
+  }
+}
+
+async function updatePluginShortcut(id: string, newAccelerator: string): Promise<void> {
+  if (!id || !newAccelerator) return
+  const target = shortcuts.value.find((item) => item.id === id)
+  const previousValue = target?.accelerator
+
+  if (target) {
+    target.accelerator = newAccelerator
+  }
+
+  const success = await shortconApi.update(id, newAccelerator)
+  if (!success && target && previousValue) {
+    target.accelerator = previousValue
+  }
+  await loadShortcuts()
 }
 
 async function copyPluginId(): Promise<void> {
@@ -192,6 +275,7 @@ async function saveDevSettings(): Promise<void> {
 
 onMounted(() => {
   void loadDetails()
+  void loadShortcuts()
 })
 
 watch(
@@ -202,6 +286,7 @@ watch(
     manifestDialogVisible.value = false
     manifestDialogSource.value = null
     void loadDetails()
+    void loadShortcuts()
   }
 )
 
@@ -269,6 +354,52 @@ function openManifestDialog(event: MouseEvent): void {
           <span>{{ t('plugin.details.viewManifestJson') }}</span>
         </TxButton>
       </TuffBlockSlot>
+    </TuffGroupBlock>
+
+    <TuffGroupBlock
+      class="PluginDetails-ShortcutGroup"
+      :name="t('plugin.permissions.shortcuts.title')"
+      :description="t('plugin.permissions.shortcuts.desc')"
+      default-icon="i-carbon-keyboard"
+      active-icon="i-carbon-keyboard"
+      memory-name="plugin-details-shortcuts"
+    >
+      <div v-if="shortcutsLoading" class="PluginShortcuts-Loading">
+        {{ t('plugin.permissions.shortcuts.loading') }}
+      </div>
+      <TxEmpty
+        v-else-if="pluginShortcuts.length === 0"
+        :title="t('plugin.permissions.shortcuts.empty')"
+        compact
+      />
+      <div v-else class="PluginShortcuts-List">
+        <div v-for="shortcut in pluginShortcuts" :key="shortcut.id" class="PluginShortcuts-Item">
+          <div class="PluginShortcuts-Info">
+            <div class="PluginShortcuts-Title">
+              {{ getShortcutTitle(shortcut) }}
+            </div>
+            <div v-if="getShortcutStatusLabel(shortcut)" class="PluginShortcuts-Status">
+              <TxTag :color="getShortcutStatusTagColor(shortcut)" size="sm">
+                {{ getShortcutStatusLabel(shortcut) }}
+              </TxTag>
+            </div>
+            <div v-if="(shortcut.status?.warnings || []).length" class="PluginShortcuts-Warnings">
+              <TxTag
+                v-for="warning in shortcut.status?.warnings || []"
+                :key="warning"
+                color="var(--tx-color-warning)"
+                size="sm"
+              >
+                {{ getShortcutWarningLabel(warning) }}
+              </TxTag>
+            </div>
+          </div>
+          <FlatKeyInput
+            :model-value="shortcut.accelerator"
+            @update:model-value="(newValue) => updatePluginShortcut(shortcut.id, String(newValue))"
+          />
+        </div>
+      </div>
     </TuffGroupBlock>
 
     <TuffGroupBlock
@@ -406,6 +537,56 @@ function openManifestDialog(event: MouseEvent): void {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+
+.PluginShortcuts-Loading {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+  padding: 6px 0;
+}
+
+.PluginShortcuts-List {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.PluginShortcuts-Item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--tx-border-color-light);
+}
+
+.PluginShortcuts-Item:last-child {
+  border-bottom: none;
+}
+
+.PluginShortcuts-Info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.PluginShortcuts-Title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+.PluginShortcuts-Status,
+.PluginShortcuts-Warnings {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.PluginDetails-ShortcutGroup :deep(.tx-empty-state--card) {
+  border-radius: 0 !important;
 }
 
 .PluginManifest-Panel {

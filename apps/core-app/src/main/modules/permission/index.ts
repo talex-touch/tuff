@@ -95,10 +95,12 @@ export class PermissionModule extends BaseModule {
     // Get permission status for a plugin
     transport.on(PermissionEvents.api.getStatus, async (payload) => {
       if (!payload?.pluginId) return null
-      return this.store.getPluginPermissionStatus(payload.pluginId, payload.sdkapi, {
+      const declared = {
         required: payload.required || [],
         optional: payload.optional || []
-      })
+      }
+      this.store.setDeclaredPermissions(payload.pluginId, declared)
+      return this.store.getPluginPermissionStatus(payload.pluginId, payload.sdkapi, declared)
     })
 
     // Grant permission
@@ -290,6 +292,25 @@ export class PermissionModule extends BaseModule {
    */
   getPerformanceStats() {
     return this.guard.getPerformanceStats()
+  }
+
+  /**
+   * Sync currently declared permissions from plugin manifest.
+   */
+  syncDeclaredPermissions(
+    pluginId: string,
+    declared: { required?: string[]; optional?: string[] }
+  ): void {
+    this.store.setDeclaredPermissions(pluginId, declared)
+    this.broadcastUpdate(pluginId)
+  }
+
+  /**
+   * Remove declared permission snapshot for plugin.
+   */
+  clearDeclaredPermissions(pluginId: string): void {
+    this.store.clearDeclaredPermissions(pluginId)
+    this.broadcastUpdate(pluginId)
   }
 
   onDestroy(): MaybePromise<void> {

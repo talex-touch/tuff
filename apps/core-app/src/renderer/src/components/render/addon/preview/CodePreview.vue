@@ -22,6 +22,7 @@ const error = ref('')
 
 // 1 MB limit for code preview
 const MAX_CODE_SIZE = 1 * 1024 * 1024
+const READ_TIMEOUT_MS = 3000
 
 const LANGUAGE_MAP: Record<string, CodeEditorLanguage> = {
   json: 'json',
@@ -79,7 +80,10 @@ onMounted(async () => {
     if (isElectronRenderer() && transport) {
       // Use IPC channel for file reading in Electron
       const tfileUrl = buildTfileUrl(filePath)
-      content.value = await transport.send(AppEvents.system.readFile, { source: tfileUrl })
+      content.value = await transport.send(AppEvents.system.readFile, {
+        source: tfileUrl,
+        timeoutMs: READ_TIMEOUT_MS
+      })
     } else {
       // Fallback to fetch for non-Electron environments
       const url = buildTfileUrl(filePath)
@@ -90,8 +94,25 @@ onMounted(async () => {
       content.value = await response.text()
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : t('textPreview.error.loadFailed')
-    console.error('CodePreview error:', err)
+    const message = err instanceof Error ? err.message : ''
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code?: string }).code || '')
+        : ''
+    const isTimeoutError =
+      code === 'ETIMEDOUT' ||
+      /ETIMEDOUT/i.test(message) ||
+      /timeout/i.test(message) ||
+      /timed out/i.test(message)
+
+    error.value = isTimeoutError ? t('textPreview.error.readTimeout') : message
+    if (!error.value) {
+      error.value = t('textPreview.error.loadFailed')
+    }
+
+    if (!isTimeoutError) {
+      console.error('CodePreview error:', err)
+    }
   } finally {
     loading.value = false
   }
