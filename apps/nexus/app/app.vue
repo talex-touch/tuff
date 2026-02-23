@@ -109,6 +109,49 @@ const localeFromQuery = computed(() => {
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
+const authFallbackCallbackUrl = computed(() => {
+  const direct = route.query.callbackUrl
+  if (typeof direct === 'string' && direct)
+    return direct
+  const snake = route.query.callback_url
+  if (typeof snake === 'string' && snake)
+    return snake
+  return null
+})
+
+function parseUrlLike(value: string) {
+  try {
+    const base = import.meta.client ? window.location.origin : 'http://localhost'
+    return value.startsWith('/') ? new URL(value, base) : new URL(value)
+  }
+  catch {
+    return null
+  }
+}
+
+function isAuthIntermediatePath(pathname: string) {
+  return pathname.startsWith('/sign-in') || pathname.startsWith('/api/auth/signin')
+}
+
+function shouldRecoverAuthFallbackRoute() {
+  if (route.path !== '/')
+    return false
+
+  const callbackUrl = authFallbackCallbackUrl.value
+  if (!callbackUrl)
+    return false
+
+  const parsed = parseUrlLike(callbackUrl)
+  if (!parsed)
+    return true
+
+  if (isAuthIntermediatePath(parsed.pathname))
+    return true
+
+  return parsed.searchParams.has('oauth')
+    || parsed.searchParams.has('provider')
+    || parsed.searchParams.has('flow')
+}
 
 watchEffect(() => {
   if (import.meta.server)
@@ -156,6 +199,28 @@ watchEffect(() => {
       hash: route.hash,
     })
   }
+})
+
+watchEffect(() => {
+  if (import.meta.server)
+    return
+  if (!shouldRecoverAuthFallbackRoute())
+    return
+
+  const error = typeof route.query.error === 'string' ? route.query.error : ''
+  const errorDescription = typeof route.query.error_description === 'string' ? route.query.error_description : ''
+  const nextQuery: Record<string, string> = {
+    lang: langTag.value,
+  }
+  if (error)
+    nextQuery.error = error
+  if (errorDescription)
+    nextQuery.error_description = errorDescription
+
+  router.replace({
+    path: '/sign-in',
+    query: nextQuery,
+  })
 })
 
 watchEffect(() => {

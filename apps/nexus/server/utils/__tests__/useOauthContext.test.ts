@@ -149,4 +149,19 @@ describe('useOauthContext', () => {
       callbackUrl: '/sign-in?oauth=1&flow=login&provider=linuxdo&redirect_url=%2Fdashboard',
     })).rejects.toThrow('oauth_redirect_fallback:OAuthSignin')
   })
+
+  it('requestOauthAuthorizationUrl 会拦截同源 fallback（无 error 参数）', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ csrfToken: 'csrf-token' })
+      .mockResolvedValueOnce({
+        url: '/?callbackUrl=https://tuff.tagzxia.com/sign-in?oauth=1%2526flow=login%2526provider=linuxdo',
+      })
+
+    ;(globalThis as any).$fetch = fetchMock
+
+    await expect(requestOauthAuthorizationUrl({
+      provider: 'linuxdo',
+      callbackUrl: '/sign-in?oauth=1&flow=login&provider=linuxdo&redirect_url=%2Fdashboard',
+    })).rejects.toThrow('oauth_redirect_fallback')
+  })
 })
