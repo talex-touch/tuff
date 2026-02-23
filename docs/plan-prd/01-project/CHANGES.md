@@ -584,6 +584,9 @@
 1. **统一净化**：`sanitizeRedirect` 清理 `callbackUrl/callback_url/oauth/error` 等临时参数。
 2. **认证路径阻断**：回跳目标命中 `/sign-in` 或 `/api/auth/signin` 时回落到安全默认页。
 3. **入口收敛**：Header、用户菜单、全局认证重定向、sign-up 跳转统一复用净化逻辑。
+4. **同源 fallback 拒绝**：OAuth 授权地址若解析为同源 URL（如 `/?callbackUrl=...`）直接判定为 provider fallback 错误，阻断 `window.location.assign`。
+5. **服务端重定向兜底**：Auth redirect callback 识别并收敛 `/?callbackUrl=...` 异常回跳，统一回落到 `/sign-in` 错误页，避免前端缓存旧逻辑时再次套娃。
+6. **Auth 响应层改写**：对 `/api/auth/signin/*` 的 JSON `url` 与 `Location` 响应头统一执行 fallback 规范化，确保旧前端缓存命中时也不会继续跳转到 `/?callbackUrl=...`。
 
 **修改文件**:
 - `apps/nexus/app/composables/useOauthContext.ts`
@@ -592,6 +595,7 @@
 - `apps/nexus/app/app.vue`
 - `apps/nexus/app/pages/sign-up/index.vue`
 - `apps/nexus/server/utils/__tests__/useOauthContext.test.ts`
+- `apps/nexus/server/api/auth/[...].ts`
 
 ### CoreBox UI 恢复事件 URL 修正与索引 addPath 类型收敛
 

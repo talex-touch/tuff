@@ -207,6 +207,15 @@ function resolveOauthRedirectErrorHint(value: string) {
   return parsed.searchParams.get('error') ?? ''
 }
 
+function isSameOriginUrl(value: string) {
+  if (!hasWindow())
+    return false
+  const parsed = parseUrlLike(value)
+  if (!parsed)
+    return false
+  return parsed.origin === window.location.origin
+}
+
 export async function requestOauthAuthorizationUrl(input: RequestOauthAuthorizationInput) {
   const csrfData = await $fetch<{ csrfToken?: string }>('/api/auth/csrf', {
     credentials: 'include',
@@ -233,6 +242,13 @@ export async function requestOauthAuthorizationUrl(input: RequestOauthAuthorizat
   const redirectUrl = typeof response?.url === 'string' ? response.url.trim() : ''
   if (!redirectUrl)
     throw new Error('oauth_redirect_missing')
+
+  if (isSameOriginUrl(redirectUrl)) {
+    const errorHint = resolveOauthRedirectErrorHint(redirectUrl)
+    if (errorHint)
+      throw new Error(`oauth_redirect_fallback:${errorHint}`)
+    throw new Error('oauth_redirect_fallback')
+  }
 
   if (isOauthFallbackUrl(redirectUrl, input.callbackUrl)) {
     const errorHint = resolveOauthRedirectErrorHint(redirectUrl)

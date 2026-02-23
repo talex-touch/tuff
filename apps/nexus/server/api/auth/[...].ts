@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { defineEventHandler, setCookie, setResponseStatus } from 'h3'
+import { defineEventHandler, getRequestURL, setCookie, setResponseStatus } from 'h3'
 import { NuxtAuthHandler } from '#auth'
 import { useRuntimeConfig } from '#imports'
 import type { Account, AuthOptions, Profile, Session, User } from 'next-auth'
@@ -55,6 +55,156 @@ function createAuthEvent(headers?: AuthRequestHeaders): H3Event {
       },
     },
   } as unknown as H3Event
+}
+
+function parseUrlWithBase(value: string, baseUrl: string) {
+  try {
+    return new URL(value, baseUrl)
+  }
+  catch {
+    return null
+  }
+}
+
+function safeDecodeUriComponent(value: string) {
+  try {
+    const decoded = decodeURIComponent(value)
+    return decoded === value ? null : decoded
+  }
+  catch {
+    return null
+  }
+}
+
+function buildSignInErrorUrl(baseUrl: string, source: URL | null) {
+  const signInUrl = new URL('/sign-in', baseUrl)
+  if (!source)
+    return signInUrl.toString()
+
+  const error = source.searchParams.get('error')
+  const description = source.searchParams.get('error_description')
+  if (error)
+    signInUrl.searchParams.set('error', error)
+  if (description)
+    signInUrl.searchParams.set('error_description', description)
+  return signInUrl.toString()
+}
+
+function normalizeAuthFallbackUrl(url: string, baseUrl: string) {
+  const base = parseUrlWithBase(baseUrl, baseUrl)
+  const parsed = parseUrlWithBase(url, baseUrl)
+  if (!base || !parsed)
+    return url
+  if (parsed.origin !== base.origin)
+    return url
+
+  const callbackUrlRaw = parsed.searchParams.get('callbackUrl') ?? parsed.searchParams.get('callback_url')
+  if (parsed.pathname !== '/' || !callbackUrlRaw)
+    return parsed.toString()
+
+  const callbackCandidates = [callbackUrlRaw, safeDecodeUriComponent(callbackUrlRaw)].filter((value): value is string => Boolean(value))
+  for (const candidate of callbackCandidates) {
+    const nested = parseUrlWithBase(candidate, baseUrl)
+    if (!nested || nested.origin !== base.origin)
+      continue
+
+    if (nested.pathname.startsWith('/sign-in') || nested.pathname.startsWith('/api/auth/signin'))
+      return buildSignInErrorUrl(baseUrl, parsed)
+
+    return nested.toString()
+  }
+
+  return buildSignInErrorUrl(baseUrl, parsed)
+}
+
+function normalizeAuthRedirectUrl(url: string, baseUrl: string) {
+  const base = parseUrlWithBase(baseUrl, baseUrl)
+  const parsed = parseUrlWithBase(url, baseUrl)
+  if (!base || !parsed)
+    return baseUrl
+  if (parsed.origin !== base.origin)
+    return baseUrl
+
+  return normalizeAuthFallbackUrl(parsed.toString(), baseUrl)
+}
+
+function normalizeAuthResponseUrl(url: string, baseUrl: string) {
+  return normalizeAuthFallbackUrl(url, baseUrl)
+}
+
+function resolveAuthBaseUrl(event: H3Event) {
+  const configuredOrigin = useRuntimeConfig().auth?.origin
+  if (typeof configuredOrigin === 'string' && configuredOrigin.trim().length > 0)
+    return configuredOrigin.trim()
+  return getRequestURL(event).origin
+}
+
+function withResponseLocation(response: Response, location: string) {
+  const headers = new Headers(response.headers)
+  headers.set('location', location)
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
+function isSigninActionRequest(event: H3Event) {
+  const method = (event.node.req.method || '').toUpperCase()
+  const path = event.path || event.node.req.url || ''
+  return method === 'POST' && path.includes('/api/auth/signin/')
+}
+
+function isJsonResponse(response: Response) {
+  const contentType = response.headers.get('content-type') || ''
+  return contentType.toLowerCase().includes('application/json')
+}
+
+async function normalizeAuthResponseResult(result: unknown, event: H3Event, baseUrl: string) {
+  if (result instanceof Response) {
+    const location = result.headers.get('location')
+    let normalizedResponse = result
+
+    if (location) {
+      const normalizedLocation = normalizeAuthResponseUrl(location, baseUrl)
+      if (normalizedLocation !== location)
+        normalizedResponse = withResponseLocation(normalizedResponse, normalizedLocation)
+    }
+
+    if (isSigninActionRequest(event) && isJsonResponse(normalizedResponse)) {
+      try {
+        const payload = await normalizedResponse.clone().json() as Record<string, unknown>
+        const url = typeof payload?.url === 'string' ? payload.url : ''
+        if (url) {
+          const normalizedUrl = normalizeAuthResponseUrl(url, baseUrl)
+          if (normalizedUrl !== url) {
+            const headers = new Headers(normalizedResponse.headers)
+            headers.delete('content-length')
+            headers.set('content-type', 'application/json; charset=utf-8')
+            return new Response(JSON.stringify({ ...payload, url: normalizedUrl }), {
+              status: normalizedResponse.status,
+              statusText: normalizedResponse.statusText,
+              headers,
+            })
+          }
+        }
+      }
+      catch {
+        // Ignore JSON parse errors and keep original response.
+      }
+    }
+
+    return normalizedResponse
+  }
+
+  if (result && typeof result === 'object' && 'url' in result && typeof (result as { url?: unknown }).url === 'string') {
+    const currentUrl = (result as { url: string }).url
+    const normalizedUrl = normalizeAuthResponseUrl(currentUrl, baseUrl)
+    if (normalizedUrl !== currentUrl)
+      return { ...(result as Record<string, unknown>), url: normalizedUrl }
+  }
+
+  return result
 }
 
 function getAuthOptions(): AuthOptions {
@@ -176,6 +326,9 @@ function getAuthOptions(): AuthOptions {
     },
     providers,
     callbacks: {
+      async redirect({ url, baseUrl }: { url: string, baseUrl: string }) {
+        return normalizeAuthRedirectUrl(url, baseUrl)
+      },
       async signIn({ user, account, profile }: { user: User, account: Account | null, profile?: Profile | undefined }) {
         const authEvent = createAuthEvent()
         if (!account)
@@ -283,8 +436,10 @@ function markSessionError(event: H3Event) {
 const authHandler = NuxtAuthHandler(getAuthOptions())
 
 export default defineEventHandler(async (event) => {
+  const baseUrl = resolveAuthBaseUrl(event)
   try {
-    return await authHandler(event)
+    const result = await authHandler(event)
+    return await normalizeAuthResponseResult(result, event, baseUrl)
   }
   catch (error) {
     if (isJwtSessionError(error) && isSessionRequest(event)) {
