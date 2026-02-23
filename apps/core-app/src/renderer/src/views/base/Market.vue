@@ -1,6 +1,6 @@
 <script lang="ts" name="Market" setup>
 import type { MarketPluginListItem } from '~/composables/market/useMarketData'
-import { useToggle } from '@vueuse/core'
+import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MarketGridView from '~/components/market/MarketGridView.vue'
@@ -14,6 +14,10 @@ import MarketSourceEditor from '~/views/base/market/MarketSourceEditor.vue'
 
 const router = useRouter()
 const route = useRoute()
+const platformSdk = usePlatformSdk()
+
+type MarketTab = 'market' | 'installed' | 'docs' | 'cli'
+const TUFF_CLI_CAPABILITY_ID = 'platform.tuff-cli'
 
 const { plugins: marketPlugins, stats: providerStats, loading, loadMarketPlugins } = useMarketData()
 
@@ -23,21 +27,26 @@ const { handleInstall } = useMarketInstall()
 
 const { installedPluginNames, installedPluginVersions } = usePluginVersionStatus()
 
-const [sourceEditorShow, toggleSourceEditorShow] = useToggle()
+const sourceEditorShow = ref(false)
+const sourceEditorSource = ref<HTMLElement | null>(null)
 const viewType = ref<'grid' | 'list'>('grid')
-const initialTab =
+const initialTab: MarketTab =
   route.path === '/market/installed'
     ? 'installed'
     : route.path === '/market/docs'
       ? 'docs'
-      : 'market'
-const tabs = ref<'market' | 'installed' | 'docs'>(initialTab)
+      : route.path === '/market/cli'
+        ? 'cli'
+        : 'market'
+const tabs = ref<MarketTab>(initialTab)
+const showCliTab = ref(false)
 const searchKey = ref('')
 const sourcesState = marketSourcesStorage.get()
 const sourcesCount = computed(() => sourcesState.sources.length)
 
 const PluginInstalled = defineAsyncComponent(() => import('~/views/base/Plugin.vue'))
 const MarketDocs = defineAsyncComponent(() => import('~/views/base/market/MarketDocs.vue'))
+const MarketCliBeta = defineAsyncComponent(() => import('~/views/base/market/MarketCliBeta.vue'))
 
 const providerStatsComputed = computed(() => {
   const stats = providerStats.value
@@ -74,6 +83,11 @@ function handleSearch(query: string): void {
   searchKey.value = query
 }
 
+function openSourceEditor(source: HTMLElement | null): void {
+  sourceEditorSource.value = source
+  sourceEditorShow.value = true
+}
+
 async function onInstall(plugin: MarketPluginListItem): Promise<void> {
   const installedVersion = installedPluginVersions.value.get(plugin.name)
   const isUpgrade = Boolean(installedVersion && plugin.version)
@@ -82,6 +96,20 @@ async function onInstall(plugin: MarketPluginListItem): Promise<void> {
 
 function openPluginDetail(plugin: MarketPluginListItem): void {
   router.push({ path: `/market/${plugin.id}`, query: { provider: plugin.providerId } })
+}
+
+async function refreshCliTabVisibility(): Promise<void> {
+  try {
+    const capabilities = await platformSdk.listCapabilities({ scope: 'plugin' })
+    showCliTab.value = capabilities.some((item) => item.id === TUFF_CLI_CAPABILITY_ID)
+  } catch (error) {
+    showCliTab.value = false
+    console.warn('[Market] Failed to check Tuff CLI capability:', error)
+  }
+
+  if (!showCliTab.value && tabs.value === 'cli') {
+    tabs.value = 'market'
+  }
 }
 
 watch(
@@ -94,6 +122,7 @@ watch(
 
 onMounted(() => {
   void loadMarketPlugins()
+  void refreshCliTabVisibility()
 })
 </script>
 
@@ -104,10 +133,11 @@ onMounted(() => {
       v-model:view-type="viewType"
       :loading="loading"
       :sources-count="sourcesCount"
+      :show-cli-tab="showCliTab"
       :provider-stats="providerStatsComputed"
       :provider-details="providerStats"
       @refresh="loadMarketPlugins(true)"
-      @open-source-editor="toggleSourceEditorShow()"
+      @open-source-editor="openSourceEditor"
       @search="handleSearch"
     />
 
@@ -124,11 +154,12 @@ onMounted(() => {
         @open-detail="openPluginDetail"
       />
       <MarketDocs v-else-if="tabs === 'docs'" key="docs" class="flex-1 min-h-0" />
+      <MarketCliBeta v-else-if="tabs === 'cli'" key="cli" class="flex-1 min-h-0" />
       <PluginInstalled v-else key="installed" class="flex-1 min-h-0" />
     </Transition>
   </div>
 
-  <MarketSourceEditor :toggle="toggleSourceEditorShow" :show="sourceEditorShow" />
+  <MarketSourceEditor v-model="sourceEditorShow" :source="sourceEditorSource" />
 </template>
 
 <style lang="scss" scoped>

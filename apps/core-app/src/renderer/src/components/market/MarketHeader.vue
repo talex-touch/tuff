@@ -10,6 +10,7 @@ import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
 defineProps<{
   loading: boolean
   sourcesCount: number
+  showCliTab?: boolean
   providerStats?: {
     total: number
     success: number
@@ -21,7 +22,7 @@ defineProps<{
 
 const emit = defineEmits<{
   refresh: []
-  'open-source-editor': []
+  'open-source-editor': [source: HTMLElement | null]
   search: [query: string]
 }>()
 
@@ -46,8 +47,13 @@ function openErrorDetails(event?: MouseEvent): void {
   showErrorDrawer.value = true
 }
 
+function openSourceEditor(event?: MouseEvent): void {
+  const source = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  emit('open-source-editor', source)
+}
+
 const viewType = defineModel<'grid' | 'list'>('viewType', { default: 'grid' })
-const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'market' })
+const tabs = defineModel<'market' | 'installed' | 'docs' | 'cli'>('tabs', { default: 'market' })
 </script>
 
 <template>
@@ -64,6 +70,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
         <TxRadio value="market" :label="t('flatNavBar.market')" />
         <TxRadio value="installed" :label="t('market.installed')" />
         <TxRadio value="docs" :label="t('market.docs')" />
+        <TxRadio v-if="showCliTab" value="cli" :label="t('market.cli')" />
       </TxRadioGroup>
 
       <div v-if="tabs === 'market'" flex items-center gap-2>
@@ -94,7 +101,7 @@ const tabs = defineModel<'market' | 'installed' | 'docs'>('tabs', { default: 'ma
             </span>
           </TxButton>
         </div>
-        <TxButton variant="flat" size="sm" @click="emit('open-source-editor')">
+        <TxButton variant="flat" size="sm" @click="openSourceEditor($event)">
           <div class="i-carbon-list" />
         </TxButton>
       </div>
