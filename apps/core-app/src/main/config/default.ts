@@ -93,3 +93,59 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     additionalArguments: ['--touch-type=core-box', '--core-type=division-box']
   }
 }
+
+export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} Assistant`,
+  frame: false,
+  width: 56,
+  height: 56,
+  minWidth: 56,
+  minHeight: 56,
+  maxWidth: 72,
+  maxHeight: 72,
+  resizable: false,
+  movable: false,
+  skipTaskbar: true,
+  autoHideMenuBar: true,
+  show: false,
+  transparent: true,
+  hasShadow: true,
+  webPreferences: {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    webSecurity: false,
+    nodeIntegration: true,
+    nodeIntegrationInSubFrames: true,
+    contextIsolation: false,
+    sandbox: false,
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=assistant', '--assistant-type=floating-ball']
+  }
+}
+
+export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} Voice Panel`,
+  frame: false,
+  width: 420,
+  height: 260,
+  minWidth: 360,
+  minHeight: 220,
+  resizable: false,
+  movable: false,
+  skipTaskbar: true,
+  autoHideMenuBar: true,
+  show: false,
+  transparent: true,
+  hasShadow: true,
+  webPreferences: {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    webSecurity: false,
+    nodeIntegration: true,
+    nodeIntegrationInSubFrames: true,
+    contextIsolation: false,
+    sandbox: false,
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=assistant', '--assistant-type=voice-panel']
+  }
+}

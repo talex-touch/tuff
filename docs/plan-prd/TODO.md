@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-02-22
+> 更新时间: 2026-02-23
 
 ---
 
@@ -86,6 +86,7 @@
 ### 🟡 进行中
 - [ ] **SDK Hard-Cut 批次 E~F**：renderer 直连点清理
 - [ ] **Intelligence 管理 UI**：Capabilities/Channels/AuditLogs 组件开发中
+- [ ] **Assistant 实验功能收口**：补齐设置页开关与参数配置，并固化环境变量门禁回归用例（`04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`）
 
 ### 📝 待实现
 - [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）

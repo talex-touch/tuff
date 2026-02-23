@@ -78,6 +78,7 @@ if (!appSetting.setup) {
   appSetting.setup = {
     accessibility: false,
     notifications: false,
+    microphone: false,
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
@@ -275,6 +276,7 @@ async function handleContinue(): Promise<void> {
       appSetting.setup = {
         accessibility: permissions.value.accessibility.status === 'granted',
         notifications: permissions.value.notifications.status === 'granted',
+        microphone: appSetting.setup.microphone ?? false,
         autoStart: settings.value.autoStart,
         showTray: settings.value.showTray,
         adminPrivileges: permissions.value.adminPrivileges.status === 'granted',

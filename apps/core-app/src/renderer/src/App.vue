@@ -1,5 +1,5 @@
 <script name="App" lang="ts" setup>
-import { isCoreBox } from '@talex-touch/utils/renderer'
+import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { useI18n } from 'vue-i18n'
 import TouchMenu from '~/components/menu/TouchMenu.vue'
@@ -31,7 +31,7 @@ useGlobalBatteryOptimizer()
  * Initialize renderer-only services once the lifecycle is ready.
  */
 async function init(): Promise<void> {
-  if (isCoreBox()) {
+  if (isCoreBox() || isAssistantWindow()) {
     return
   }
 

@@ -13,6 +13,7 @@ import { addonOpenerModule } from './modules/addon-opener'
 
 import { intelligenceModule } from './modules/ai/intelligence-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
+import { assistantModule } from './modules/assistant'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
 import FileSystemWatcher from './modules/box-tool/file-system-watcher'
 import { buildVerificationModule } from './modules/build-verification'
@@ -49,6 +50,10 @@ import './core/precore'
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
 process.env.WS_NO_BUFFER_UTIL = 'true'
+const ASSISTANT_EXPERIMENT_ENV_KEY = 'TUFF_ENABLE_ASSISTANT_EXPERIMENT'
+const ASSISTANT_EXPERIMENT_ENABLED =
+  process.env[ASSISTANT_EXPERIMENT_ENV_KEY] === '1' ||
+  process.env[ASSISTANT_EXPERIMENT_ENV_KEY] === 'true'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -128,6 +133,11 @@ applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 
 // Permission module instance
 const permissionModule = new PermissionModule()
+if (!ASSISTANT_EXPERIMENT_ENABLED) {
+  mainLog.info(
+    `Assistant experiment disabled. Set ${ASSISTANT_EXPERIMENT_ENV_KEY}=1 to enable module loading.`
+  )
+}
 
 const modulesToLoad = [
   databaseModule,
@@ -152,6 +162,7 @@ const modulesToLoad = [
   flowBusModule, // Flow Transfer system - after plugin module
   divisionBoxModule,
   coreBoxModule,
+  ...(ASSISTANT_EXPERIMENT_ENABLED ? [assistantModule] : []),
   trayManagerModule,
   addonOpenerModule,
   clipboardModule,

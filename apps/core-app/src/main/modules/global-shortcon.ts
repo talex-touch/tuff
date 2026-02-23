@@ -164,7 +164,12 @@ export class ShortcutModule extends BaseModule {
    * Registers a shortcut that executes a callback within the main process.
    * This is called by other main-process modules during initialization.
    */
-  registerMainShortcut(id: string, defaultAccelerator: string, callback: () => void): boolean {
+  registerMainShortcut(
+    id: string,
+    defaultAccelerator: string,
+    callback: () => void,
+    options?: { enabled?: boolean }
+  ): boolean {
     if (mainCallbackRegistry.has(id)) {
       shortconLog.warn(`Main shortcut with ID ${id} is already registered.`)
       return false
@@ -182,7 +187,7 @@ export class ShortcutModule extends BaseModule {
           creationTime: Date.now(),
           modificationTime: Date.now(),
           author: SYSTEM_SHORTCUT_AUTHOR,
-          enabled: true
+          enabled: options?.enabled ?? true
         }
       })
     }

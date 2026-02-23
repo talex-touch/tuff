@@ -3,10 +3,12 @@
  * @interface IArgMapperOptions
  */
 export interface IArgMapperOptions {
-  /** The type of touch window - either main window or core-box popup */
-  touchType?: 'main' | 'core-box'
+  /** The type of touch window - main, core-box popup, or assistant window */
+  touchType?: 'main' | 'core-box' | 'assistant'
   /** The sub-type for core-box windows (e.g., division-box) */
   coreType?: 'division-box'
+  /** The sub-type for assistant windows */
+  assistantType?: 'floating-ball' | 'voice-panel'
   /** Whether this is a meta-overlay WebContentsView */
   metaOverlay?: 'true' | 'false'
   /** User data directory path */
@@ -55,7 +57,7 @@ export function useArgMapper(args: string[] = (globalThis as any)?.process?.argv
 
 /**
  * Gets the current touch type from command line arguments
- * @returns The touch type ('main' | 'core-box') or undefined
+ * @returns The touch type ('main' | 'core-box' | 'assistant') or undefined
  */
 export function useTouchType() {
   const argMapper = useArgMapper()
@@ -80,12 +82,29 @@ export function isCoreBox() {
 }
 
 /**
+ * Checks if the current window is an assistant window
+ * @returns True if the current window is an assistant window
+ */
+export function isAssistantWindow() {
+  return useTouchType() === 'assistant'
+}
+
+/**
  * Gets the core-box sub-type from command line arguments
  * @returns The core type ('division-box') or undefined
  */
 export function useCoreType() {
   const argMapper = useArgMapper()
   return argMapper.coreType
+}
+
+/**
+ * Gets the assistant sub-type from command line arguments
+ * @returns The assistant type ('floating-ball' | 'voice-panel') or undefined
+ */
+export function useAssistantType() {
+  const argMapper = useArgMapper()
+  return argMapper.assistantType
 }
 
 /**
@@ -103,4 +122,20 @@ export function isDivisionBox() {
 export function isMetaOverlay() {
   const argMapper = useArgMapper()
   return argMapper.metaOverlay === 'true'
+}
+
+/**
+ * Checks if the current assistant window is a floating-ball window
+ * @returns True if the current window is a floating-ball window
+ */
+export function isFloatingBallWindow() {
+  return isAssistantWindow() && useAssistantType() === 'floating-ball'
+}
+
+/**
+ * Checks if the current assistant window is a voice-panel window
+ * @returns True if the current window is a voice-panel window
+ */
+export function isVoicePanelWindow() {
+  return isAssistantWindow() && useAssistantType() === 'voice-panel'
 }

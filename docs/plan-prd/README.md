@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-02-22
+> 更新时间: 2026-02-23
 
  ## PRD Index（以代码实现为准）
  
@@ -171,6 +171,18 @@
      - Intelligence 管理 UI（Capabilities/Channels/AuditLogs/Header 组件）
    - **缺口**
      - Workflow 编辑器、用户自定义代理、协作与测试
+
+ - **Assistant 实验功能（悬浮球 + 语音唤醒）**
+   - **实现说明**：`./04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`
+   - **代码**
+     - `apps/core-app/src/main/modules/assistant/`
+     - `apps/core-app/src/renderer/src/views/assistant/`
+   - **当前约束**
+     - 默认关闭（assistant/floatingBall/voiceWake）
+     - 启动需环境变量门禁：`TUFF_ENABLE_ASSISTANT_EXPERIMENT=1`
+   - **缺口**
+     - 设置页实验开关与参数配置入口
+     - 语音兼容性与最小回归自动化
 
  - **SDK 统一 Hard-Cut 剩余**（批次 E~F）
    - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`

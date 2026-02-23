@@ -5,7 +5,7 @@ import {
   initStorageTransport,
   tryUseChannel
 } from '@talex-touch/utils/renderer'
-import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
+import { isAssistantWindow, isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import type { IStorageChannel } from '@talex-touch/utils/renderer/storage'
 import { initStorageSubscription } from '@talex-touch/utils/renderer/storage/storage-subscription'
 import { useTuffTransport } from '@talex-touch/utils/transport'
@@ -190,7 +190,7 @@ function registerCorePlugins(
  * Initialize the plugin store unless CoreBox mode is active.
  */
 async function maybeInitializePluginStore() {
-  if (isCoreBox()) {
+  if (isCoreBox() || isAssistantWindow()) {
     return
   }
   const pluginStore = usePluginStore()
