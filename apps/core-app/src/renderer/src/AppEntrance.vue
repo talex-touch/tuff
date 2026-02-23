@@ -1,10 +1,19 @@
 <script name="AppEntrance" setup lang="ts">
-import { isCoreBox, isDivisionBox, isMetaOverlay } from '@talex-touch/utils/renderer'
+import {
+  isAssistantWindow,
+  isCoreBox,
+  isDivisionBox,
+  isFloatingBallWindow,
+  isMetaOverlay,
+  isVoicePanelWindow
+} from '@talex-touch/utils/renderer'
 import { Toaster } from 'vue-sonner'
 import { logAppEntranceMode } from './modules/devtools/app-entrance-log'
 import { useAppLifecycle } from './modules/hooks/useAppLifecycle'
 import { useAppState } from './modules/hooks/useAppStates'
 import { useStartupInfo } from './modules/hooks/useStartupInfo'
+import FloatingBall from './views/assistant/FloatingBall.vue'
+import VoicePanel from './views/assistant/VoicePanel.vue'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
 
@@ -28,7 +37,17 @@ const isMetaOverlayMode = computed(() => {
 
 setTimeout(async () => {
   await entry(props.onReady)
-  const mode = isCoreBox() ? (isDivisionBox() ? 'DivisionBox' : 'CoreBox') : 'MainApp'
+  const mode = isAssistantWindow()
+    ? isFloatingBallWindow()
+      ? 'AssistantFloatingBall'
+      : isVoicePanelWindow()
+        ? 'AssistantVoicePanel'
+        : 'Assistant'
+    : isCoreBox()
+      ? isDivisionBox()
+        ? 'DivisionBox'
+        : 'CoreBox'
+      : 'MainApp'
   logAppEntranceMode(
     mode,
     {
@@ -47,6 +66,12 @@ setTimeout(async () => {
     <!-- MetaOverlay: render directly like CoreBox, not via router-view -->
     <template v-if="isMetaOverlayMode">
       <MetaOverlay />
+    </template>
+    <template v-else-if="isFloatingBallWindow()">
+      <FloatingBall />
+    </template>
+    <template v-else-if="isVoicePanelWindow()">
+      <VoicePanel />
     </template>
     <!-- CoreBox: render directly -->
     <template v-else-if="isCoreBox()">

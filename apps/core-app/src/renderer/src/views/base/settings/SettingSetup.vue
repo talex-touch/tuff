@@ -102,6 +102,7 @@ if (!appSetting.setup) {
   appSetting.setup = {
     accessibility: false,
     notifications: false,
+    microphone: false,
     autoStart: false,
     showTray: true,
     adminPrivileges: false,

@@ -11,6 +11,7 @@ import { BaseModule } from '../abstract-base-module'
 export enum PermissionType {
   ACCESSIBILITY = 'accessibility',
   NOTIFICATIONS = 'notifications',
+  MICROPHONE = 'microphone',
   ADMIN_PRIVILEGES = 'adminPrivileges',
   FILE_ACCESS = 'fileAccess'
 }
@@ -132,6 +133,42 @@ export class PermissionChecker {
         status: PermissionStatus.GRANTED,
         canRequest: false,
         message: 'Notifications depend on desktop environment support'
+      }
+    }
+  }
+
+  /**
+   * Check microphone permission
+   */
+  public checkMicrophone(): PermissionCheckResult {
+    if (typeof systemPreferences.getMediaAccessStatus !== 'function') {
+      return {
+        status: PermissionStatus.UNSUPPORTED,
+        canRequest: false,
+        message: 'Microphone permission status is not supported on this platform'
+      }
+    }
+
+    try {
+      const status = systemPreferences.getMediaAccessStatus(
+        'microphone' as Parameters<typeof systemPreferences.getMediaAccessStatus>[0]
+      )
+      return {
+        status:
+          status === 'granted'
+            ? PermissionStatus.GRANTED
+            : status === 'denied'
+              ? PermissionStatus.DENIED
+              : PermissionStatus.NOT_DETERMINED,
+        canRequest: status !== 'denied',
+        message: `Microphone permission: ${status}`
+      }
+    } catch (error) {
+      console.error('[PermissionChecker] Failed to check microphone permission:', error)
+      return {
+        status: PermissionStatus.NOT_DETERMINED,
+        canRequest: false,
+        message: 'Unable to check microphone permission status'
       }
     }
   }
@@ -283,6 +320,20 @@ export class PermissionChecker {
         }
         break
 
+      case PermissionType.MICROPHONE:
+        if (
+          process.platform === 'darwin' &&
+          typeof systemPreferences.askForMediaAccess === 'function'
+        ) {
+          return await systemPreferences.askForMediaAccess(
+            'microphone' as Parameters<typeof systemPreferences.askForMediaAccess>[0]
+          )
+        } else if (process.platform === 'win32') {
+          await shell.openExternal('ms-settings:privacy-microphone')
+          return true
+        }
+        break
+
       case PermissionType.ADMIN_PRIVILEGES:
         if (process.platform === 'win32') {
           // Show dialog explaining how to run as administrator
@@ -373,6 +424,11 @@ export class PermissionCheckerModule extends BaseModule {
           permissionType === PermissionType.NOTIFICATIONS
         ) {
           result = this.checker.checkNotifications()
+        } else if (
+          permissionType === 'microphone' ||
+          permissionType === PermissionType.MICROPHONE
+        ) {
+          result = this.checker.checkMicrophone()
         } else if (
           permissionType === 'adminPrivileges' ||
           permissionType === PermissionType.ADMIN_PRIVILEGES

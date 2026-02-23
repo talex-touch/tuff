@@ -1,7 +1,13 @@
 import { isDevEnv } from '@talex-touch/utils/env'
 import { useStartupInfo } from '../hooks/useStartupInfo'
 
-export type AppEntranceMode = 'CoreBox' | 'MainApp' | 'DivisionBox'
+export type AppEntranceMode =
+  | 'CoreBox'
+  | 'MainApp'
+  | 'DivisionBox'
+  | 'Assistant'
+  | 'AssistantFloatingBall'
+  | 'AssistantVoicePanel'
 
 type LogDetails = Record<string, unknown>
 
@@ -20,6 +26,12 @@ function getModeStyle(mode: AppEntranceMode): string {
       return 'background:#7c3aed;color:#fff;'
     case 'DivisionBox':
       return 'background:#f97316;color:#111827;'
+    case 'Assistant':
+      return 'background:#0ea5e9;color:#082f49;'
+    case 'AssistantFloatingBall':
+      return 'background:#06b6d4;color:#083344;'
+    case 'AssistantVoicePanel':
+      return 'background:#22d3ee;color:#083344;'
     case 'MainApp':
     default:
       return 'background:#22c55e;color:#052e16;'

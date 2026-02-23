@@ -166,6 +166,29 @@ const _appSettingOriginData = {
     plugins: 0,
     settings: 0,
   },
+  assistant: {
+    name: '阿洛 aler',
+    identifier: 'aler',
+    enabled: false,
+  },
+  floatingBall: {
+    enabled: false,
+    size: 56,
+    opacity: 1,
+    edgePadding: 24,
+    position: {
+      x: -1,
+      y: -1,
+    },
+  },
+  voiceWake: {
+    enabled: false,
+    wakeWords: ['阿洛', 'aler'],
+    language: 'zh-CN',
+    continuous: true,
+    cooldownMs: 2200,
+    openPanelOnWake: true,
+  },
   beginner: {
     init: false,
   },
@@ -280,6 +303,7 @@ const _appSettingOriginData = {
   setup: {
     accessibility: false,
     notifications: false,
+    microphone: false,
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
