@@ -39,16 +39,77 @@ const saveRunIdMap = new Map<string, number>()
 const saveTimers = new Map<string, number>()
 const initialShortcutSnapshot = ref(new Map<string, { accelerator: string; enabled: boolean }>())
 
+const AUTO_PASTE_TIME_OPTIONS = [-1, 0, 15, 30, 60, 180, 300, 600, 750] as const
+const AUTO_CLEAR_TIME_OPTIONS = [-1, 0, 15, 30, 60, 180, 300, 600, 750] as const
+const CLIPBOARD_POLLING_INTERVAL_OPTIONS = [1, 3, 5, 10, 15, -1] as const
+const LOW_BATTERY_POLLING_INTERVAL_OPTIONS = [10, 15] as const
+
+function normalizeSelectNumber(
+  value: unknown,
+  allowedValues: readonly number[],
+  fallback: number
+): number {
+  if (typeof value === 'number' && Number.isFinite(value) && allowedValues.includes(value)) {
+    return value
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && allowedValues.includes(parsed)) {
+      return parsed
+    }
+  }
+  return fallback
+}
+
 function ensureClipboardPollingSettings(): void {
-  const tools = appSetting.tools as {
-    clipboardPolling?: {
-      interval?: number
-      lowBatteryPolicy?: {
-        enable?: boolean
-        interval?: number
+  if (!appSetting.tools || typeof appSetting.tools !== 'object') {
+    appSetting.tools = {
+      autoPaste: {
+        enable: true,
+        time: 180
+      },
+      autoHide: true,
+      autoClear: 600,
+      clipboardPolling: {
+        interval: 5,
+        lowBatteryPolicy: {
+          enable: true,
+          interval: 10
+        }
       }
     }
   }
+
+  const tools = appSetting.tools as {
+    autoPaste?: {
+      enable?: boolean
+      time?: unknown
+    } | null
+    autoClear?: unknown
+    clipboardPolling?: {
+      interval?: unknown
+      lowBatteryPolicy?: {
+        enable?: boolean
+        interval?: unknown
+      }
+    }
+  }
+
+  if (!tools.autoPaste || typeof tools.autoPaste !== 'object') {
+    tools.autoPaste = {
+      enable: true,
+      time: 180
+    }
+  }
+  tools.autoPaste.time = normalizeSelectNumber(tools.autoPaste.time, AUTO_PASTE_TIME_OPTIONS, 180)
+  if (typeof tools.autoPaste.enable !== 'boolean') {
+    tools.autoPaste.enable = tools.autoPaste.time !== -1
+  }
+  if (tools.autoPaste.time === -1) {
+    tools.autoPaste.enable = false
+  }
+
+  tools.autoClear = normalizeSelectNumber(tools.autoClear, AUTO_CLEAR_TIME_OPTIONS, 600)
 
   if (!tools.clipboardPolling || typeof tools.clipboardPolling !== 'object') {
     tools.clipboardPolling = {
@@ -62,9 +123,7 @@ function ensureClipboardPollingSettings(): void {
   }
 
   const polling = tools.clipboardPolling
-  if (typeof polling.interval !== 'number') {
-    polling.interval = 5
-  }
+  polling.interval = normalizeSelectNumber(polling.interval, CLIPBOARD_POLLING_INTERVAL_OPTIONS, 5)
 
   if (!polling.lowBatteryPolicy || typeof polling.lowBatteryPolicy !== 'object') {
     polling.lowBatteryPolicy = {
@@ -77,9 +136,11 @@ function ensureClipboardPollingSettings(): void {
   if (typeof polling.lowBatteryPolicy.enable !== 'boolean') {
     polling.lowBatteryPolicy.enable = true
   }
-  if (polling.lowBatteryPolicy.interval !== 10 && polling.lowBatteryPolicy.interval !== 15) {
-    polling.lowBatteryPolicy.interval = 10
-  }
+  polling.lowBatteryPolicy.interval = normalizeSelectNumber(
+    polling.lowBatteryPolicy.interval,
+    LOW_BATTERY_POLLING_INTERVAL_OPTIONS,
+    10
+  )
 }
 
 const clipboardPollingLowBatteryDisabled = computed(

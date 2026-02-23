@@ -9,6 +9,7 @@ defineOptions({ name: 'TxPopover' })
 const props = withDefaults(defineProps<PopoverProps>(), {
   modelValue: undefined,
   disabled: false,
+  eager: false,
   placement: 'bottom-start',
   width: 0,
   minWidth: 0,
@@ -164,6 +165,7 @@ onBeforeUnmount(() => {
   <TxBaseAnchor
     v-model="open"
     :disabled="props.disabled"
+    :eager="props.eager"
     :placement="props.placement"
     :offset="resolvedOffset"
     :width="props.width"

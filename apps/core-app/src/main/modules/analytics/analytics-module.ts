@@ -42,6 +42,7 @@ import { setIpcTracer } from '../../core/channel-core'
 import { createLogger } from '../../utils/logger'
 import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
+import { getAuthToken, subscribeAuthState } from '../auth'
 import { databaseModule } from '../database'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig } from '../storage'
@@ -99,6 +100,7 @@ export class AnalyticsModule extends BaseModule {
   private messageReportTimer: NodeJS.Timeout | null = null
   private messageReportInFlight = false
   private messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+  private isSignedIn = false
 
   constructor() {
     super(AnalyticsModule.key, {
@@ -108,6 +110,13 @@ export class AnalyticsModule extends BaseModule {
   }
 
   onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
+    this.isSignedIn = Boolean(getAuthToken())
+    this.disposers.push(
+      subscribeAuthState((state) => {
+        this.isSignedIn = Boolean(state.isSignedIn)
+      })
+    )
+
     this.dbStore = new DbStore(databaseModule.getDb())
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
     this.sampler = new SystemSampler((sample) => this.core.recordSystemSample(sample))
@@ -480,9 +489,10 @@ export class AnalyticsModule extends BaseModule {
     const config = getMainConfig(StorageList.SENTRY_CONFIG) as
       | { enabled?: boolean; anonymous?: boolean }
       | undefined
+    const anonymous = config?.anonymous ?? false
     return {
       enabled: true,
-      anonymous: config?.anonymous ?? true
+      anonymous: anonymous && this.isSignedIn
     }
   }
 

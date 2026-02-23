@@ -14,6 +14,7 @@ defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
 const props = withDefaults(defineProps<BaseAnchorProps>(), {
   modelValue: undefined,
   disabled: false,
+  eager: false,
   placement: 'bottom-start',
   offset: 8,
   width: 0,
@@ -819,7 +820,7 @@ onBeforeUnmount(() => {
 
   <Teleport to="body">
     <div
-      v-if="mounted || open"
+      v-if="mounted || open || props.eager"
       ref="floatingRef"
       v-bind="floatingAttrs"
       class="tx-base-anchor"

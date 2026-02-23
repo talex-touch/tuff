@@ -127,10 +127,11 @@ export class SentryServiceModule extends BaseModule {
   static key: symbol = Symbol.for('SentryService')
   name: ModuleKey = SentryServiceModule.key
 
-  private config: SentryConfig = { enabled: false, anonymous: true }
+  private config: SentryConfig = { enabled: false, anonymous: false }
   private deviceFingerprint: string | null = null
   private clientId: string | null = null
   private currentUserId: string | null = null
+  private authUser: AuthUserSnapshot | null = null
   private searchCount = 0
   private searchMetricsBuffer: SearchMetrics[] = []
   private isInitialized = false
@@ -174,16 +175,16 @@ export class SentryServiceModule extends BaseModule {
         const parsed = JSON.parse(raw) as Partial<SentryConfig>
         this.config = {
           enabled: parsed?.enabled ?? true,
-          anonymous: parsed?.anonymous ?? true
+          anonymous: parsed?.anonymous ?? false
         }
       } else {
-        this.config = { enabled: true, anonymous: true }
+        this.config = { enabled: true, anonymous: false }
       }
     } catch (error) {
       sentryLog.warn('Failed to pre-load Sentry config, using defaults', {
         meta: { error: error instanceof Error ? error.message : String(error) }
       })
-      this.config = { enabled: true, anonymous: true }
+      this.config = { enabled: true, anonymous: false }
     }
 
     if (!this.config.enabled) {
@@ -288,16 +289,20 @@ export class SentryServiceModule extends BaseModule {
       const config = getMainConfig(StorageList.SENTRY_CONFIG) as Partial<SentryConfig> | undefined
       this.config = {
         enabled: config?.enabled ?? true,
-        anonymous: config?.anonymous ?? true
+        anonymous: config?.anonymous ?? false
       }
       sentryLog.debug('Loaded Sentry config', {
-        meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
+        meta: {
+          enabled: this.config.enabled,
+          anonymous: this.config.anonymous,
+          effectiveAnonymous: this.resolveEffectiveAnonymous()
+        }
       })
     } catch (error) {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
         meta: { error: error instanceof Error ? error.message : String(error) }
       })
-      this.config = { enabled: true, anonymous: true }
+      this.config = { enabled: true, anonymous: false }
     }
   }
 
@@ -374,7 +379,11 @@ export class SentryServiceModule extends BaseModule {
     this.config = { ...this.config, ...config }
     saveMainConfig(StorageList.SENTRY_CONFIG, this.config)
     sentryLog.info('Saved Sentry config', {
-      meta: { enabled: this.config.enabled, anonymous: this.config.anonymous }
+      meta: {
+        enabled: this.config.enabled,
+        anonymous: this.config.anonymous,
+        effectiveAnonymous: this.resolveEffectiveAnonymous()
+      }
     })
 
     // Reinitialize if enabled state changed
@@ -544,7 +553,10 @@ export class SentryServiceModule extends BaseModule {
    * Get current configuration
    */
   getConfig(): SentryConfig {
-    return { ...this.config }
+    return {
+      ...this.config,
+      anonymous: this.resolveEffectiveAnonymous()
+    }
   }
 
   /**
@@ -593,7 +605,8 @@ export class SentryServiceModule extends BaseModule {
       sentryLog.success('Sentry initialized', {
         meta: {
           environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
-          anonymous: this.config.anonymous
+          anonymous: this.config.anonymous,
+          effectiveAnonymous: this.resolveEffectiveAnonymous()
         }
       })
     } catch (error) {
@@ -631,8 +644,18 @@ export class SentryServiceModule extends BaseModule {
   /**
    * Update user context based on authentication and privacy settings
    */
+  private resolveEffectiveAnonymous(): boolean {
+    return this.config.anonymous && !!this.authUser?.id
+  }
+
   updateUserContext(user?: AuthUserSnapshot | null): void {
-    if (this.config.anonymous) {
+    if (user !== undefined) {
+      this.authUser = user?.id ? user : null
+    }
+
+    const effectiveAnonymous = this.resolveEffectiveAnonymous()
+
+    if (effectiveAnonymous) {
       this.currentUserId = null
       // Anonymous mode: no user ID or fingerprint
       if (this.isInitialized) {
@@ -643,14 +666,14 @@ export class SentryServiceModule extends BaseModule {
     }
 
     // Non-anonymous mode
-    if (user && user.id) {
-      this.currentUserId = user.id
+    if (this.authUser?.id) {
+      this.currentUserId = this.authUser.id
 
       if (!this.isInitialized) return
 
       const userContext: Sentry.User = {
-        id: user.id,
-        username: user.username || undefined,
+        id: this.authUser.id,
+        username: this.authUser.username || undefined,
         email: undefined // Never send email
       }
 
@@ -663,7 +686,7 @@ export class SentryServiceModule extends BaseModule {
 
       Sentry.setUser(userContext)
       sentryLog.debug('User context updated', {
-        meta: { userId: user.id, hasFingerprint: !!this.deviceFingerprint }
+        meta: { userId: this.authUser.id, hasFingerprint: !!this.deviceFingerprint }
       })
     } else {
       this.currentUserId = null
@@ -891,7 +914,7 @@ export class SentryServiceModule extends BaseModule {
       lastFailureMessage: record.lastFailureMessage,
       apiBase: resolveTelemetryApiBase(),
       isEnabled: this.config.enabled,
-      isAnonymous: this.config.anonymous
+      isAnonymous: this.resolveEffectiveAnonymous()
     }
   }
 
@@ -913,7 +936,7 @@ export class SentryServiceModule extends BaseModule {
       failedUploads: this.failedNexusUploads,
       apiBase: resolveTelemetryApiBase(),
       isEnabled: this.config.enabled,
-      isAnonymous: this.config.anonymous
+      isAnonymous: this.resolveEffectiveAnonymous()
     }
   }
 
@@ -932,7 +955,7 @@ export class SentryServiceModule extends BaseModule {
       this.schedulePersistTelemetryStats()
     }
 
-    const isAnonymous = this.config.anonymous
+    const isAnonymous = this.resolveEffectiveAnonymous()
     const telemetryEvent: NexusTelemetryEvent = {
       ...event,
       clientId: this.clientId || undefined,

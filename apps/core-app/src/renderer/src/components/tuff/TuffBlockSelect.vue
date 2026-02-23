@@ -49,6 +49,7 @@ function handleChange(val: string | number, evt?: Event) {
       <div class="flex items-center justify-end w-full">
         <TxSelect
           v-model="value"
+          eager
           :class="disabled ? 'pointer-events-none opacity-70' : ''"
           @change="handleChange"
         >

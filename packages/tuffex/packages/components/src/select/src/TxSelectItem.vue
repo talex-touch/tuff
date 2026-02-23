@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, inject, onMounted } from 'vue'
+import { computed, inject, onMounted, useSlots, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import { SELECT_KEY } from './types'
 
@@ -19,11 +19,57 @@ const props = withDefaults(
 )
 
 const txSelect = inject(SELECT_KEY)
+const slots = useSlots()
+
+function resolveChildrenText(children: unknown): string {
+  if (children == null || typeof children === 'boolean')
+    return ''
+
+  if (typeof children === 'string' || typeof children === 'number')
+    return String(children)
+
+  if (Array.isArray(children))
+    return children.map(item => resolveChildrenText(item)).join('')
+
+  if (typeof children === 'object') {
+    const maybeSlot = (children as Record<string, unknown>).default
+    if (typeof maybeSlot === 'function') {
+      return resolveChildrenText((maybeSlot as () => unknown)())
+    }
+    if ('children' in (children as Record<string, unknown>)) {
+      return resolveChildrenText((children as { children?: unknown }).children)
+    }
+  }
+
+  return ''
+}
+
+const resolvedLabel = computed(() => {
+  if (props.label)
+    return props.label
+
+  const slotContent = slots.default?.()
+  const extracted = resolveChildrenText(slotContent).replace(/\s+/g, ' ').trim()
+  if (extracted)
+    return extracted
+
+  return String(props.value)
+})
+
+function registerCurrentOption() {
+  txSelect?.registerOption(props.value, resolvedLabel.value)
+}
 
 onMounted(() => {
-  const label = props.label || String(props.value)
-  txSelect?.registerOption(props.value, label)
+  registerCurrentOption()
 })
+
+watch(
+  () => resolvedLabel.value,
+  () => {
+    registerCurrentOption()
+  },
+)
 
 const isSelected = computed(() => {
   return txSelect?.currentValue.value === props.value
@@ -33,14 +79,14 @@ const visible = computed(() => {
   const q = (txSelect?.searchQuery?.value ?? '').trim().toLowerCase()
   if (!q)
     return true
-  const label = (props.label || String(props.value)).toLowerCase()
+  const label = resolvedLabel.value.toLowerCase()
   return label.includes(q)
 })
 
 function handleClick() {
   if (props.disabled)
     return
-  txSelect?.handleSelect(props.value, props.label || String(props.value))
+  txSelect?.handleSelect(props.value, resolvedLabel.value)
 }
 </script>
 
@@ -55,7 +101,7 @@ function handleClick() {
     @click="handleClick"
   >
     <template #title>
-      <slot>{{ label || value }}</slot>
+      <slot>{{ resolvedLabel }}</slot>
     </template>
   </TxCardItem>
 </template>

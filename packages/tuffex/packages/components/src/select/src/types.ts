@@ -7,6 +7,7 @@ export interface TxSelectProps {
   modelValue?: TxSelectValue
   placeholder?: string
   disabled?: boolean
+  eager?: boolean
   searchable?: boolean
   searchPlaceholder?: string
   editable?: boolean
