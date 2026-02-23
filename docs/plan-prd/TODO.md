@@ -95,6 +95,7 @@
 - [ ] Release Pipeline：OIDC + RSA + notes/assets 同步（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
+- [ ] OmniPanel Feature Hub（安装插件后自动装载首个 Feature、Feature 执行链路、选中文本上下文注入）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）

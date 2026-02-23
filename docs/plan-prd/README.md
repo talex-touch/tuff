@@ -184,6 +184,17 @@
      - 设置页实验开关与参数配置入口
      - 语音兼容性与最小回归自动化
 
+ - **OmniPanel Feature Hub（全景面板能力中心）**
+   - **PRD**：`./03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`
+   - **代码**
+     - `apps/core-app/src/main/modules/omni-panel/`
+     - `apps/core-app/src/renderer/src/views/omni-panel/`
+     - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+   - **缺口**
+     - 通用设置新增“安装插件后自动装载首个 Feature 到 OmniPanel”
+     - OmniPanel 从固定快捷动作升级为可执行插件 Feature
+     - 选中文本上下文注入（自动翻译等高频场景）
+
  - **SDK 统一 Hard-Cut 剩余**（批次 E~F）
    - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`
    - **缺口**
