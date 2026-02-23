@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import NumberFlow from '@number-flow/vue'
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 
 const value = ref(123.45)
 const sizerRef = ref<any>(null)
+const NumberFlowComponent = import.meta.client
+  ? defineAsyncComponent(() => import('@number-flow/vue'))
+  : null
 
 function shuffle() {
   const next = Math.random() > 0.5
@@ -26,7 +28,8 @@ function shuffle() {
       <TxButton variant="secondary">
         <span style="display: inline-flex; align-items: center; gap: 6px;">
           <span style="opacity: 0.7;">$</span>
-          <NumberFlow :value="value" />
+          <component :is="NumberFlowComponent" v-if="NumberFlowComponent" :value="value" />
+          <span v-else>{{ value.toLocaleString() }}</span>
         </span>
       </TxButton>
     </TxAutoSizer>

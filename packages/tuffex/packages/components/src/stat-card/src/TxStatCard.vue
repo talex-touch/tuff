@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { StatCardProps } from './types.ts'
-import NumberFlow from '@number-flow/vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxStatCard',
@@ -12,6 +11,9 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   clickable: false,
   variant: 'default',
 })
+const NumberFlowComponent = import.meta.client
+  ? defineAsyncComponent(() => import('@number-flow/vue'))
+  : null
 
 const isProgressVariant = computed(() => {
   if (props.variant === 'progress')
@@ -277,7 +279,7 @@ watch(
 
       <div class="tx-stat-card__value">
         <slot name="value">
-          <NumberFlow v-if="numericValue != null" :value="displayNumber" />
+          <component :is="NumberFlowComponent" v-if="numericValue != null && NumberFlowComponent" :value="displayNumber" />
           <span v-else>{{ displayString ?? displayText }}</span>
         </slot>
       </div>
@@ -291,7 +293,8 @@ watch(
       <div v-else-if="hasInsight" class="tx-stat-card__insight" :style="{ color: insightColor || undefined }">
         <i class="tx-stat-card__insight-icon" :class="insightIconClass" aria-hidden="true" />
         <span v-if="insightPrefix" class="tx-stat-card__insight-prefix">{{ insightPrefix }}</span>
-        <NumberFlow v-if="insightValue != null" :value="insightDisplayNumber" />
+        <component :is="NumberFlowComponent" v-if="insightValue != null && NumberFlowComponent" :value="insightDisplayNumber" />
+        <span v-else-if="insightValue != null">{{ insightDisplayNumber }}</span>
         <span v-if="insightSuffix" class="tx-stat-card__insight-suffix">{{ insightSuffix }}</span>
       </div>
       <div v-else-if="isProgressVariant && ($slots.meta || meta)" class="tx-stat-card__meta">

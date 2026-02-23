@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import NumberFlow from '@number-flow/vue'
-import { computed, ref } from 'vue'
+import { computed, defineAsyncComponent, ref } from 'vue'
 
 const { locale } = useI18n()
+const NumberFlowComponent = import.meta.client
+  ? defineAsyncComponent(() => import('@number-flow/vue'))
+  : null
 
 const isZh = computed(() => locale.value === 'zh')
 const texts = computed(() => {
@@ -138,7 +140,8 @@ function bump() {
         >
           <template #value>
             <div style="display: flex; align-items: baseline; gap: 6px;">
-              <NumberFlow :value="resourceLoad" />
+              <component :is="NumberFlowComponent" v-if="NumberFlowComponent" :value="resourceLoad" />
+              <span v-else>{{ resourceLoad }}</span>
               <span style="font-size: 16px;">%</span>
             </div>
           </template>

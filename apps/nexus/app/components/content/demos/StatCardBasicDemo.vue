@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import NumberFlow from '@number-flow/vue'
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 
 const totalPlugins = ref(2847)
+const NumberFlowComponent = import.meta.client
+  ? defineAsyncComponent(() => import('@number-flow/vue'))
+  : null
 
 const activeUsers = ref(18200)
 const activeInsight = ref({
@@ -97,7 +99,8 @@ function bump() {
         >
           <template #value>
             <div style="display: flex; align-items: baseline; gap: 6px;">
-              <NumberFlow :value="resourceLoad" />
+              <component :is="NumberFlowComponent" v-if="NumberFlowComponent" :value="resourceLoad" />
+              <span v-else>{{ resourceLoad }}</span>
               <span style="font-size: 16px;">%</span>
             </div>
           </template>
