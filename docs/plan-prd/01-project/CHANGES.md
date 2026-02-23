@@ -52,6 +52,19 @@
 - `apps/nexus/app/app.vue`
 - `apps/nexus/app/layouts/docs.vue`
 
+### Nexus PWA 导航回退冲突修复（刷新回首页）
+
+**变更类型**: 部署稳定性 / PWA 与 SSR 兼容
+
+**描述**: 修复部署后在 docs、OAuth 回调等路由刷新或回跳时被错误落到首页的问题。根因是 Workbox `navigateFallback: '/'` 与 SSR 路由冲突，Service Worker 将导航请求统一回退到首页 HTML，导致页面错配与 hydration mismatch。
+
+**主要变更**:
+1. **禁用导航回退匹配**：将 `workbox.navigateFallbackDenylist` 收敛为全量拒绝（`/.*/`），避免 Service Worker 对 SSR 页面导航请求命中首页回退。
+2. **开发配置同步收敛**：删除 `devOptions.navigateFallback`，保证本地预览与线上行为一致。
+
+**修改文件**:
+- `apps/nexus/app/config/pwa.ts`
+
 ### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
 
 **变更类型**: 部署稳定性 / 配置收敛

@@ -39,8 +39,7 @@ export const pwa: ModuleOptions = {
   workbox: {
     globPatterns: ['**/*.{js,css,html,txt,png,ico,svg}'],
     maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-    navigateFallbackDenylist: [/^\/api\//],
-    navigateFallback: '/',
+    navigateFallbackDenylist: [/.*/],
     cleanupOutdatedCaches: true,
     runtimeCaching: [
       {
@@ -77,6 +76,5 @@ export const pwa: ModuleOptions = {
   writePlugin: true,
   devOptions: {
     enabled: process.env.VITE_PLUGIN_PWA === 'true',
-    navigateFallback: scope,
   },
 }
