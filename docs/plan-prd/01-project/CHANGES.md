@@ -60,6 +60,32 @@
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 
+### Core-app 窗口协议统一（WindowRole）
+
+**变更类型**: 架构治理 / 稳定性修复
+
+**描述**: 统一 main/preload/renderer 的窗口参数协议解析与模式判定，消除 `touchType/coreType/assistantType/metaOverlay` 在多处手写字符串导致的漂移风险；`omni-panel` 全链路由单一协议模块驱动。
+
+**主要变更**:
+1. **协议单一来源**：新增 `window-role` 模块，统一导出窗口角色常量、类型、参数构建/解析与渲染模式解析函数。
+2. **主进程发参收敛**：所有窗口 `additionalArguments` 改为通过 `buildWindowArgs` 生成，移除分散手写参数字符串。
+3. **解析链路统一**：`arg-mapper` 改为复用统一协议解析，同时保留原有 API 外观与原始未知值记录能力。
+4. **入口路由收敛**：`AppEntrance` 改为单入口 mode 分发；未知 `coreType` 在开发态告警并安全回退 CoreBox。
+5. **预加载收敛**：移除 DivisionBox 预加载全局特判标记，改为协议判定；保留 MetaOverlay hash/参数双路径识别。
+6. **测试补齐**：新增 `window-role` 单测，覆盖构建、解析、未知值降级和模式映射。
+
+**修改文件**:
+- `packages/utils/renderer/window-role.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/renderer/index.ts`
+- `packages/utils/__tests__/renderer/window-role.test.ts`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/modules/devtools/app-entrance-log.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/core-box.ts`
+
 ## 2026-02-22
 
 ### Core-app Assistant（阿洛 aler）悬浮球与语音唤醒

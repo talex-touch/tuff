@@ -16,6 +16,7 @@ import type { BrowserWindow } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
 import path from 'node:path'
 import process from 'node:process'
+import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
@@ -108,7 +109,7 @@ export class MetaOverlayManager {
       nodeIntegration: true,
       contextIsolation: false,
       sandbox: false,
-      additionalArguments: ['--touch-type=core-box', '--meta-overlay=true']
+      additionalArguments: buildWindowArgs({ touchType: 'core-box', metaOverlay: true })
     }
 
     this.metaView = new WebContentsView({ webPreferences })

@@ -18,21 +18,11 @@ export interface DivisionBoxInitialData {
   theme: { dark: boolean }
 }
 
-declare global {
-  interface Window {
-    /** DivisionBox mode flag set by preload */
-    $isDivisionBox?: boolean
-  }
-}
-
 /**
  * Window type state
- * Uses preload flag $isDivisionBox OR arg-mapper for initial detection
+ * Uses arg-mapper protocol for initial detection
  */
 function detectDivisionBox(): boolean {
-  // Check preload flag first
-  if (window.$isDivisionBox) return true
-  // Fallback to arg-mapper check
   try {
     return checkIsDivisionBox()
   } catch {

@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 
 export const AppName = 'Tuff'
 
@@ -32,7 +33,7 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     contextIsolation: false,
     sandbox: false,
     webviewTag: true,
-    additionalArguments: ['--touch-type=main']
+    additionalArguments: buildWindowArgs({ touchType: 'main' })
   }
 }
 
@@ -57,7 +58,7 @@ export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=core-box']
+    additionalArguments: buildWindowArgs({ touchType: 'core-box' })
   }
 }
 
@@ -90,7 +91,7 @@ export const DivisionBoxWindowOption: Electron.BrowserWindowConstructorOptions =
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=core-box', '--core-type=division-box']
+    additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'division-box' })
   }
 }
 
@@ -119,7 +120,10 @@ export const AssistantFloatingBallWindowOption: Electron.BrowserWindowConstructo
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=assistant', '--assistant-type=floating-ball']
+    additionalArguments: buildWindowArgs({
+      touchType: 'assistant',
+      assistantType: 'floating-ball'
+    })
   }
 }
 
@@ -146,7 +150,10 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=assistant', '--assistant-type=voice-panel']
+    additionalArguments: buildWindowArgs({
+      touchType: 'assistant',
+      assistantType: 'voice-panel'
+    })
   }
 }
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
@@ -178,6 +185,6 @@ export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
     sandbox: false,
     webviewTag: true,
     scrollBounce: true,
-    additionalArguments: ['--touch-type=core-box', '--core-type=omni-panel']
+    additionalArguments: buildWindowArgs({ touchType: 'core-box', coreType: 'omni-panel' })
   }
 }
