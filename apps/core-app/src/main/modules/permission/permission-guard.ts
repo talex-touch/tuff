@@ -6,12 +6,7 @@
  */
 
 import type { PermissionStore } from './permission-store'
-import {
-  DEFAULT_PERMISSIONS,
-  getPermissionIdCandidates,
-  normalizePermissionId,
-  permissionRegistry
-} from '@talex-touch/utils/permission'
+import { normalizePermissionId, permissionRegistry } from '@talex-touch/utils/permission'
 import { checkSdkCompatibility } from '@talex-touch/utils/plugin'
 
 /**
@@ -172,26 +167,23 @@ export class PermissionGuard {
     // Check each required permission
     for (const permissionId of requiredPermissions) {
       const normalizedPermissionId = normalizePermissionId(permissionId)
-      const candidatePermissionIds = getPermissionIdCandidates(permissionId)
+      const accessState = this.store.checkPermissionAccess(pluginId, normalizedPermissionId, sdkapi)
 
-      // Check default permissions
-      if (candidatePermissionIds.some((candidate) => DEFAULT_PERMISSIONS.includes(candidate))) {
-        continue
-      }
-
-      // Check granted permissions
-      const hasPermission = candidatePermissionIds.some((candidate) =>
-        this.store.hasPermission(pluginId, candidate, sdkapi)
-      )
-      if (!hasPermission) {
+      if (!accessState.allowed) {
         const duration = performance.now() - startTime
         this.recordPerformance(duration)
+        const blockedByDeclaration = accessState.reason === 'not-declared'
+        const reason = blockedByDeclaration
+          ? accessState.hasHistoricalGrant
+            ? `Permission '${normalizedPermissionId}' was previously granted but is no longer declared`
+            : `Permission '${normalizedPermissionId}' is not declared in plugin manifest`
+          : `Permission '${normalizedPermissionId}' not granted`
         return {
           allowed: false,
           permissionId: normalizedPermissionId,
           pluginId,
-          reason: `Permission '${normalizedPermissionId}' not granted`,
-          showRequest: true,
+          reason,
+          showRequest: !blockedByDeclaration,
           durationMs: duration
         }
       }

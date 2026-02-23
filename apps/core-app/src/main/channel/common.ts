@@ -1697,6 +1697,20 @@ export class CommonChannelModule extends BaseModule {
     const source = payload?.source?.trim()
     const resolvedPath = source ? resolveLocalFilePath(source) : null
     const allowMissing = payload?.allowMissing === true
+    const timeoutMs =
+      typeof payload?.timeoutMs === 'number' && Number.isFinite(payload.timeoutMs)
+        ? Math.max(0, Math.trunc(payload.timeoutMs))
+        : 0
+    const isAbortError = (error: unknown): boolean =>
+      typeof error === 'object' &&
+      error !== null &&
+      'name' in error &&
+      (error as { name?: string }).name === 'AbortError'
+    const withTimeoutError = (timeout: number): Error => {
+      const error = new Error(`Read file timeout after ${timeout}ms`) as Error & { code?: string }
+      error.code = 'ETIMEDOUT'
+      return error
+    }
     const isFileMissingError = (error: unknown): boolean =>
       typeof error === 'object' &&
       error !== null &&
@@ -1733,12 +1747,18 @@ export class CommonChannelModule extends BaseModule {
     })
 
     const task = fs
-      .readFile(resolvedPath, { encoding: 'utf8' })
+      .readFile(resolvedPath, {
+        encoding: 'utf8',
+        signal: timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
+      })
       .then((content) => {
         setCachedReadFile(resolvedPath, content)
         return content
       })
       .catch((error) => {
+        if (timeoutMs > 0 && isAbortError(error)) {
+          throw withTimeoutError(timeoutMs)
+        }
         if (allowMissing && isFileMissingError(error)) {
           return ''
         }

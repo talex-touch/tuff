@@ -376,6 +376,20 @@ function createPluginModuleInternal(
     pluginModuleLog.info(message)
   }
   const pluginTag = (name: string): string => `[${name}]`
+  const syncPluginDeclaredPermissions = (plugin: ITouchPlugin): void => {
+    const permissionModule = getPermissionModule()
+    if (!permissionModule) return
+
+    permissionModule.syncDeclaredPermissions(plugin.name, {
+      required: plugin.declaredPermissions?.required || [],
+      optional: plugin.declaredPermissions?.optional || []
+    })
+  }
+  const clearPluginDeclaredPermissions = (pluginId: string): void => {
+    const permissionModule = getPermissionModule()
+    if (!permissionModule) return
+    permissionModule.clearDeclaredPermissions(pluginId)
+  }
 
   const installer = new PluginInstaller()
 
@@ -743,6 +757,7 @@ function createPluginModuleInternal(
         touchPlugin.status = PluginStatus.LOAD_FAILED
         touchPlugin.logger.error('[Lifecycle] load failed: manifest.json missing')
         plugins.set(pluginName, touchPlugin)
+        syncPluginDeclaredPermissions(touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -806,6 +821,7 @@ function createPluginModuleInternal(
 
         localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
         plugins.set(pluginName, touchPlugin)
+        syncPluginDeclaredPermissions(touchPlugin)
         devWatcherInstance.addPlugin(touchPlugin)
 
         logDebug(
@@ -852,6 +868,7 @@ function createPluginModuleInternal(
         touchPlugin.status = PluginStatus.LOAD_FAILED
         touchPlugin.logger.error('[Lifecycle] load failed', error as Error)
         plugins.set(pluginName, touchPlugin)
+        syncPluginDeclaredPermissions(touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -894,6 +911,7 @@ function createPluginModuleInternal(
       logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
     }
 
+    clearPluginDeclaredPermissions(plugin.name)
     plugins.delete(pluginName)
     enabledPlugins.delete(pluginName)
 
@@ -979,6 +997,7 @@ function createPluginModuleInternal(
     pluginInstance.meta = { ...(pluginInstance.meta ?? {}), internal: true }
 
     plugins.set(pluginName, pluginInstance)
+    syncPluginDeclaredPermissions(pluginInstance)
     INTERNAL_PLUGIN_NAMES.add(pluginName)
 
     logDebug('Internal plugin registered', pluginTag(pluginName))

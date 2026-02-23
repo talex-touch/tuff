@@ -72,19 +72,29 @@ export function getPluginPermissionStatus(
   const sdkCompat = checkSdkCompatibility(sdkapi, pluginId)
   const required = [...new Set(declaredPermissions.required.map(id => normalizePermissionId(id)))]
   const optional = [...new Set(declaredPermissions.optional.map(id => normalizePermissionId(id)))]
-  const granted = [...new Set(grantedPermissions.map(id => normalizePermissionId(id)))]
+  const declared = [...new Set([...required, ...optional])]
+  const declaredSet = new Set(declared)
+  const grantedSet = new Set(grantedPermissions.map(id => normalizePermissionId(id)))
   const defaultPermissions = [...new Set(DEFAULT_PERMISSIONS.map(id => normalizePermissionId(id)))]
+  const defaultSet = new Set(defaultPermissions)
 
-  // Calculate missing required permissions
-  const missingRequired = required.filter(
-    p => !granted.includes(p) && !defaultPermissions.includes(p),
-  )
+  // Effective granted permissions only include current declarations.
+  const effectiveGranted = declared.filter(permissionId => {
+    return grantedSet.has(permissionId) || defaultSet.has(permissionId)
+  })
 
-  // Calculate denied (not in granted and not default)
-  const allDeclared = [...required, ...optional]
-  const denied = allDeclared.filter(
-    p => !granted.includes(p) && !defaultPermissions.includes(p),
+  // Historically granted permissions that are no longer declared should be retained but inactive.
+  const deprecatedGranted = [...grantedSet].filter(
+    permissionId => !declaredSet.has(permissionId) && !defaultSet.has(permissionId),
   )
+  const outdatedByAppUpdate = deprecatedGranted.filter(permissionId => !permissionRegistry.has(permissionId))
+  const outdatedByPluginChange = deprecatedGranted.filter(permissionId => permissionRegistry.has(permissionId))
+
+  // Calculate missing required permissions.
+  const missingRequired = required.filter(permissionId => !effectiveGranted.includes(permissionId))
+
+  // Calculate denied (declared but not effectively granted).
+  const denied = declared.filter(permissionId => !effectiveGranted.includes(permissionId))
 
   return {
     pluginId,
@@ -92,7 +102,10 @@ export function getPluginPermissionStatus(
     enforcePermissions: sdkCompat.enforcePermissions,
     required,
     optional,
-    granted: [...new Set([...granted, ...defaultPermissions])],
+    granted: effectiveGranted,
+    deprecatedGranted,
+    outdatedByAppUpdate,
+    outdatedByPluginChange,
     denied,
     missingRequired,
     warning: sdkCompat.warning,

@@ -31,6 +31,9 @@ interface PluginPermissionStatus {
   required: string[]
   optional: string[]
   granted: string[]
+  deprecatedGranted: string[]
+  outdatedByAppUpdate: string[]
+  outdatedByPluginChange: string[]
   denied: string[]
   missingRequired: string[]
   warning?: string

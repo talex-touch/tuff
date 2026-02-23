@@ -30,6 +30,12 @@ interface PermissionData {
   auditLogs?: AuditLogEntry[]
 }
 
+export interface PermissionAccessState {
+  allowed: boolean
+  reason: 'legacy' | 'default' | 'granted' | 'not-granted' | 'not-declared'
+  hasHistoricalGrant: boolean
+}
+
 const CURRENT_VERSION = 1
 
 /**
@@ -42,6 +48,9 @@ export class PermissionStore {
 
   /** Session-level permissions (memory only, cleared on app restart) */
   private sessionGrants: Record<string, Set<string>> = {}
+
+  /** Declared permissions from currently loaded plugin manifests (memory only) */
+  private declaredPermissions: Record<string, Set<string>> = {}
 
   constructor(dirPath: string) {
     this.filePath = path.join(dirPath, 'permissions.json')
@@ -199,31 +208,98 @@ export class PermissionStore {
   }
 
   /**
-   * Check if plugin has permission
+   * Update declared permissions for a plugin (runtime memory state).
    */
-  hasPermission(pluginId: string, permissionId: string, sdkapi?: number): boolean {
+  setDeclaredPermissions(
+    pluginId: string,
+    declared: { required?: string[]; optional?: string[] }
+  ): void {
+    const ids = [...(declared.required || []), ...(declared.optional || [])]
+      .map((id) => normalizePermissionId(id))
+      .filter(Boolean)
+    this.declaredPermissions[pluginId] = new Set(ids)
+  }
+
+  /**
+   * Clear declared permission snapshot for a plugin.
+   */
+  clearDeclaredPermissions(pluginId: string): void {
+    delete this.declaredPermissions[pluginId]
+  }
+
+  /**
+   * Check whether permission is declared by current plugin manifest.
+   * Returns null when declaration info is unavailable.
+   */
+  private isPermissionDeclared(pluginId: string, permissionId: string): boolean | null {
+    const declaredSet = this.declaredPermissions[pluginId]
+    if (!declaredSet) return null
+    const candidates = getPermissionIdCandidates(permissionId)
+    return candidates.some((candidate) => declaredSet.has(candidate))
+  }
+
+  /**
+   * Resolve runtime access state for a permission.
+   */
+  checkPermissionAccess(
+    pluginId: string,
+    permissionId: string,
+    sdkapi?: number
+  ): PermissionAccessState {
     const normalizedPermissionId = normalizePermissionId(permissionId)
     const candidates = getPermissionIdCandidates(normalizedPermissionId)
 
-    // Check SDK compatibility
     const compat = checkSdkCompatibility(sdkapi, pluginId)
     if (!compat.enforcePermissions) {
-      // Enforcement disabled - allow all
-      return true
+      return {
+        allowed: true,
+        reason: 'legacy',
+        hasHistoricalGrant: false
+      }
     }
 
-    // Check default permissions
     if (candidates.some((candidate) => DEFAULT_PERMISSIONS.includes(candidate))) {
-      return true
+      return {
+        allowed: true,
+        reason: 'default',
+        hasHistoricalGrant: false
+      }
     }
 
-    // Check session grants first
-    if (this.hasSessionPermission(pluginId, normalizedPermissionId)) {
-      return true
+    const hasSessionGrant = this.hasSessionPermission(pluginId, normalizedPermissionId)
+    const hasStoredGrant = candidates.some((candidate) =>
+      Boolean(this.data.grants[pluginId]?.[candidate])
+    )
+    const declared = this.isPermissionDeclared(pluginId, normalizedPermissionId)
+
+    if (declared === false) {
+      return {
+        allowed: false,
+        reason: 'not-declared',
+        hasHistoricalGrant: hasSessionGrant || hasStoredGrant
+      }
     }
 
-    // Check granted permissions
-    return candidates.some((candidate) => Boolean(this.data.grants[pluginId]?.[candidate]))
+    if (hasSessionGrant || hasStoredGrant) {
+      return {
+        allowed: true,
+        reason: 'granted',
+        hasHistoricalGrant: false
+      }
+    }
+
+    return {
+      allowed: false,
+      reason: 'not-granted',
+      hasHistoricalGrant: false
+    }
+  }
+
+  /**
+   * Check if plugin has permission
+   */
+  hasPermission(pluginId: string, permissionId: string, sdkapi?: number): boolean {
+    return this.checkPermissionAccess(pluginId, permissionId, sdkapi).allowed
   }
 
   /**
