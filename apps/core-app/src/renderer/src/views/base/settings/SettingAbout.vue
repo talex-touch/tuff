@@ -6,6 +6,8 @@
 -->
 <script setup lang="ts" name="SettingAbout">
 import { AppPreviewChannel } from '@talex-touch/utils'
+import { getTuffBaseUrl } from '@talex-touch/utils/env'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -26,6 +28,7 @@ import { getBuildInfo } from '~/utils/build-info'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const appSdk = useAppSdk()
 const { packageJson, os, processInfo } = useEnv()
 const { startupInfo } = useStartupInfo()
 const { getUpdateSettings } = useApplicationUpgrade()
@@ -43,6 +46,8 @@ interface PerformanceSummary {
 const performanceSummary = ref<PerformanceSummary | null>(null)
 const showPerformanceDetails = ref(false)
 const updateChannel = ref<AppPreviewChannel | null>(null)
+const termsOfServiceUrl = `${getTuffBaseUrl()}/license`
+const softwareLicenseUrl = `${getTuffBaseUrl()}/protocol`
 const runtimeVersions = computed(() => {
   const info = processInfo.value as
     | { versions?: { electron?: string; v8?: string; chrome?: string; node?: string } }
@@ -174,6 +179,14 @@ async function openAppFolder() {
     console.error('Failed to open app folder', error)
     toast.error(t('settingAbout.folderOpenFailed'))
   }
+}
+
+function openTermsOfService() {
+  void appSdk.openExternal(termsOfServiceUrl)
+}
+
+function openSoftwareLicense() {
+  void appSdk.openExternal(softwareLicenseUrl)
 }
 </script>
 
@@ -380,8 +393,8 @@ async function openAppFolder() {
         </span>
       </template>
     </TuffBlockLine>
-    <TuffBlockLine :title="t('settingAbout.terms')" link />
-    <TuffBlockLine :title="t('settingAbout.license')" link />
+    <TuffBlockLine :title="t('settingAbout.terms')" link @click="openTermsOfService" />
+    <TuffBlockLine :title="t('settingAbout.license')" link @click="openSoftwareLicense" />
   </TuffGroupBlock>
 </template>
 

@@ -1,4 +1,9 @@
-import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type {
+  MaybePromise,
+  ModuleInitContext,
+  ModuleKey,
+  PlatformCapability
+} from '@talex-touch/utils'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type {
   AppIndexAddPathRequest,
@@ -7,6 +12,7 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   PackageInfo,
+  PlatformCapabilityListRequest,
   ReadFileRequest,
   SecureValueGetRequest,
   SecureValueSetRequest,
@@ -106,9 +112,21 @@ const SECURE_STORE_FILE = 'secure-store.json'
 const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
+const TUFF_CLI_DETECT_CACHE_TTL_MS = 60_000
+const TUFF_CLI_DETECT_TIMEOUT_MS = 1_500
+const TUFF_CLI_COMMAND_CANDIDATES =
+  process.platform === 'win32' ? ['tuff.cmd', 'tuff.exe', 'tuff'] : ['tuff']
+const TUFF_CLI_CAPABILITY: PlatformCapability = {
+  id: 'platform.tuff-cli',
+  name: 'Tuff CLI',
+  description: 'CLI 工具联动能力（Beta，开发中）',
+  scope: 'plugin',
+  status: 'beta'
+}
 const log = createLogger('CommonChannel')
 
 const dialogApprovedPaths = new Map<string, number>()
+let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
 
 const legacyCloseEvent = defineRawEvent<void, void>('close')
 const legacyHideEvent = defineRawEvent<void, void>('hide')
@@ -534,6 +552,81 @@ function getOptionalStringProp(value: unknown, key: string): string | undefined 
   if (!isRecord(value)) return undefined
   const prop = value[key]
   return typeof prop === 'string' ? prop : undefined
+}
+
+function normalizeCapabilityQuery(payload: unknown): PlatformCapabilityListRequest {
+  const query: PlatformCapabilityListRequest = {}
+  const scope = getOptionalStringProp(payload, 'scope')
+  if (scope === 'system' || scope === 'plugin' || scope === 'ai') {
+    query.scope = scope
+  }
+  const status = getOptionalStringProp(payload, 'status')
+  if (status === 'stable' || status === 'beta' || status === 'alpha') {
+    query.status = status
+  }
+  return query
+}
+
+function matchCapabilityQuery(
+  capability: PlatformCapability,
+  query: PlatformCapabilityListRequest
+): boolean {
+  if (query.scope && capability.scope !== query.scope) return false
+  if (query.status && capability.status !== query.status) return false
+  return true
+}
+
+async function detectTuffCliAvailability(): Promise<boolean> {
+  const now = Date.now()
+  if (
+    tuffCliDetectionCache &&
+    now - tuffCliDetectionCache.checkedAt <= TUFF_CLI_DETECT_CACHE_TTL_MS
+  ) {
+    return tuffCliDetectionCache.available
+  }
+
+  for (const command of TUFF_CLI_COMMAND_CANDIDATES) {
+    try {
+      await execFileAsync(command, ['--version'], {
+        timeout: TUFF_CLI_DETECT_TIMEOUT_MS,
+        windowsHide: true
+      })
+      tuffCliDetectionCache = { available: true, checkedAt: now }
+      return true
+    } catch (error) {
+      const code = getOptionalStringProp(error, 'code')
+      const signal = getOptionalStringProp(error, 'signal')
+      if (code !== 'ENOENT' && signal !== 'SIGTERM') {
+        log.debug('[CommonChannel] Tuff CLI probe failed', {
+          meta: {
+            command,
+            code,
+            signal,
+            error: toErrorMessage(error)
+          }
+        })
+      }
+    }
+  }
+
+  tuffCliDetectionCache = { available: false, checkedAt: now }
+  return false
+}
+
+async function listPlatformCapabilities(
+  query: PlatformCapabilityListRequest
+): Promise<PlatformCapability[]> {
+  const capabilities = platformCapabilityRegistry.list(query)
+  const hasBuiltinTuffCli = capabilities.some((item) => item.id === TUFF_CLI_CAPABILITY.id)
+  if (hasBuiltinTuffCli) {
+    return capabilities
+  }
+
+  const tuffCliAvailable = await detectTuffCliAvailability()
+  if (tuffCliAvailable && matchCapabilityQuery(TUFF_CLI_CAPABILITY, query)) {
+    capabilities.push(TUFF_CLI_CAPABILITY)
+  }
+  return capabilities
 }
 
 function isLocale(value: string): value is Locale {
@@ -1367,8 +1460,9 @@ export class CommonChannelModule extends BaseModule {
           }
         }
       ),
-      transport.on(PlatformEvents.capabilities.list, (payload) => {
-        return platformCapabilityRegistry.list(payload ?? {})
+      transport.on(PlatformEvents.capabilities.list, async (payload) => {
+        const query = normalizeCapabilityQuery(payload)
+        return await listPlatformCapabilities(query)
       }),
       transport.on(AppEvents.window.close, () => closeApp(touchApp)),
       transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
