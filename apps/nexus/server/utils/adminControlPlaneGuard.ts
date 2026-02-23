@@ -10,6 +10,7 @@ import { parseBearerToken, verifyAdminEmergencyToken } from './adminEmergencyTok
 import { requireAdminOobAuth } from './adminOobGuard'
 import { enforceAdminRateLimit } from './adminRateLimitStore'
 import { isControlPlanePreservedPath, isExtremeMode } from './defenseModeController'
+import { assertRiskControlEnabled } from './featureFlags'
 import { resolveRequestIp } from './ipSecurityStore'
 
 export interface AdminControlContext {
@@ -279,6 +280,7 @@ export async function requireAdminControlPlaneAuth(
   requiredScope?: AdminRiskScope,
   options?: GuardOptions,
 ): Promise<AdminControlContext> {
+  assertRiskControlEnabled(event)
   const path = event.path || event.node.req.url || ''
   const shouldUseOob = path.startsWith('/api/admin/oob/risk/')
 

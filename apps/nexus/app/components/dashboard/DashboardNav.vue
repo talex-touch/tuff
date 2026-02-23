@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from 'vue'
 
 const { t } = useI18n()
 const route = useRoute()
+const runtimeConfig = useRuntimeConfig()
 const { user, refresh, isAuthenticated } = useAuthUser()
 
 const revalidateUser = () => {
@@ -24,6 +25,8 @@ watch(
 )
 
 const isAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
+const riskControlEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.riskControlEnabled === true)
+const watermarkEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.watermarkEnabled === true)
 
 const sectionPaths: Record<string, string> = {
   overview: '/dashboard/overview',
@@ -114,7 +117,7 @@ const adminMenuItems = computed(() => {
     return []
   }
 
-  return mapItems([
+  const items: Array<{ id: string, label: string, icon: string }> = [
     {
       id: 'updates',
       label: t('dashboard.sections.menu.updates'),
@@ -129,11 +132,6 @@ const adminMenuItems = computed(() => {
       id: 'intelligence',
       label: t('dashboard.sections.menu.intelligence', 'Intelligence 模块'),
       icon: 'i-carbon-machine-learning-model',
-    },
-    {
-      id: 'risk',
-      label: t('dashboard.sections.menu.risk', '风控控制面'),
-      icon: 'i-carbon-warning-alt',
     },
     {
       id: 'adminCredits',
@@ -175,12 +173,25 @@ const adminMenuItems = computed(() => {
       label: t('dashboard.sections.menu.analytics', 'Analytics'),
       icon: 'i-carbon-chart-line-data',
     },
-    {
+  ]
+
+  if (riskControlEnabled.value) {
+    items.splice(2, 0, {
+      id: 'risk',
+      label: t('dashboard.sections.menu.risk', '风控控制面'),
+      icon: 'i-carbon-warning-alt',
+    })
+  }
+
+  if (watermarkEnabled.value) {
+    items.push({
       id: 'watermark',
       label: t('dashboard.sections.menu.watermark', 'Watermark'),
       icon: 'i-carbon-identification',
-    },
-  ])
+    })
+  }
+
+  return mapItems(items)
 })
 
 const activeSection = computed(() => {
