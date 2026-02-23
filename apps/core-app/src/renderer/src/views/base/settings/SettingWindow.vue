@@ -6,13 +6,14 @@
 -->
 <script setup lang="ts" name="SettingWindow">
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { TrayEvents } from '@talex-touch/utils/transport/events'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 // Import UI components
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import { appSetting } from '~/modules/channel/storage'
 import { devLog } from '~/utils/dev-log'
 
 // Import storage
@@ -26,42 +27,42 @@ const windowSettings = ref({
   autoStart: false
 })
 
+function ensureWindowSettings(): void {
+  if (!appSetting.window) {
+    appSetting.window = {
+      closeToTray: true,
+      startMinimized: false,
+      startSilent: false
+    }
+    return
+  }
+
+  if (appSetting.window.closeToTray === undefined) {
+    appSetting.window.closeToTray = true
+  }
+  if (appSetting.window.startMinimized === undefined) {
+    appSetting.window.startMinimized = false
+  }
+  if (appSetting.window.startSilent === undefined) {
+    appSetting.window.startSilent = false
+  }
+}
+
 onMounted(async () => {
   try {
-    const [
-      closeToTrayResult,
-      startMinimizedResult,
-      startSilentResult,
-      autoStartResult,
-      autoStartStatus
-    ] = await Promise.all([
-      transport.send(StorageEvents.app.get, { key: 'app.window.closeToTray' }),
-      transport.send(StorageEvents.app.get, { key: 'app.window.startMinimized' }),
-      transport.send(StorageEvents.app.get, { key: 'app.window.startSilent' }),
-      transport.send(StorageEvents.app.get, { key: 'app.autoStart' }),
-      transport.send(TrayEvents.autostart.get)
-    ])
-
-    const closeToTray =
-      closeToTrayResult !== null && closeToTrayResult !== undefined ? closeToTrayResult : true
-    const startMinimized =
-      startMinimizedResult !== null && startMinimizedResult !== undefined
-        ? startMinimizedResult
-        : false
-    const startSilent =
-      startSilentResult !== null && startSilentResult !== undefined ? startSilentResult : false
+    ensureWindowSettings()
+    const autoStartStatus = await transport.send(TrayEvents.autostart.get)
     const autoStart =
-      autoStartStatus !== null
-        ? autoStartStatus
-        : autoStartResult !== null && autoStartResult !== undefined
-          ? autoStartResult
-          : false
+      autoStartStatus !== null ? Boolean(autoStartStatus) : !!appSetting.setup?.autoStart
 
     windowSettings.value = {
-      closeToTray: closeToTray as boolean,
-      startMinimized: startMinimized as boolean,
-      startSilent: startSilent as boolean,
-      autoStart: autoStart as boolean
+      closeToTray: !!appSetting.window.closeToTray,
+      startMinimized: !!appSetting.window.startMinimized,
+      startSilent: !!appSetting.window.startSilent,
+      autoStart
+    }
+    if (appSetting.setup) {
+      appSetting.setup.autoStart = autoStart
     }
 
     devLog('[SettingWindow] Window settings loaded:', windowSettings.value)
@@ -72,11 +73,8 @@ onMounted(async () => {
 
 async function updateCloseToTray(value: boolean) {
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.window.closeToTray',
-      content: JSON.stringify(value),
-      clear: false
-    })
+    ensureWindowSettings()
+    appSetting.window.closeToTray = value
     windowSettings.value.closeToTray = value
     devLog('[SettingWindow] Close to tray setting updated:', value)
   } catch (error) {
@@ -86,11 +84,8 @@ async function updateCloseToTray(value: boolean) {
 
 async function updateStartMinimized(value: boolean) {
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.window.startMinimized',
-      content: JSON.stringify(value),
-      clear: false
-    })
+    ensureWindowSettings()
+    appSetting.window.startMinimized = value
     windowSettings.value.startMinimized = value
     devLog('[SettingWindow] Start minimized setting updated:', value)
   } catch (error) {
@@ -100,11 +95,8 @@ async function updateStartMinimized(value: boolean) {
 
 async function updateStartSilent(value: boolean) {
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.window.startSilent',
-      content: JSON.stringify(value),
-      clear: false
-    })
+    ensureWindowSettings()
+    appSetting.window.startSilent = value
     windowSettings.value.startSilent = value
     devLog('[SettingWindow] Start silent setting updated:', value)
   } catch (error) {
@@ -114,11 +106,9 @@ async function updateStartSilent(value: boolean) {
 
 async function updateAutoStart(value: boolean) {
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.autoStart',
-      content: JSON.stringify(value),
-      clear: false
-    })
+    if (appSetting.setup) {
+      appSetting.setup.autoStart = value
+    }
     await transport.send(TrayEvents.autostart.update, value)
     windowSettings.value.autoStart = value
     devLog('[SettingWindow] Auto start setting updated:', value)
