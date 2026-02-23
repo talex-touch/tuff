@@ -10,6 +10,7 @@ import {
   updateEmergencySessionVerified,
   verifyAndConsumeAdminRecoveryCode,
 } from '../../../utils/adminEmergencyStore'
+import { assertRiskControlEnabled } from '../../../utils/featureFlags'
 import { enforceAdminRateLimit } from '../../../utils/adminRateLimitStore'
 import { getPasskeyByCredentialId, getUserById, updatePasskeyCounter } from '../../../utils/authStore'
 import { verifyAssertionResponse } from '../../../utils/webauthn'
@@ -45,6 +46,7 @@ async function ensureMinLatency(startAt: number) {
 }
 
 export default defineEventHandler(async (event) => {
+  assertRiskControlEnabled(event)
   const runtimeConfig = useRuntimeConfig(event)
   if (runtimeConfig.adminControl?.breakglassEnabled === false || String(runtimeConfig.adminControl?.breakglassEnabled) === 'false') {
     throw createError({

@@ -99,6 +99,10 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
+    experimentalFeatures: {
+      riskControlEnabled: process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED === 'true',
+      watermarkEnabled: process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED === 'true',
+    },
     auth: {
       secret: authSecret,
       origin: process.env.AUTH_ORIGIN,
@@ -136,6 +140,10 @@ export default defineNuxtConfig({
       defaultDefenseMode: process.env.ADMIN_DEFAULT_DEFENSE_MODE || 'NORMAL',
     },
     public: {
+      experimentalFeatures: {
+        riskControlEnabled: process.env.NEXUS_EXPERIMENTAL_RISK_ENABLED === 'true',
+        watermarkEnabled: process.env.NEXUS_EXPERIMENTAL_WATERMARK_ENABLED === 'true',
+      },
       turnstile: {
         siteKey: process.env.TURNSTILE_SITEKEY || process.env.NUXT_PUBLIC_TURNSTILE_SITE_KEY,
       },
