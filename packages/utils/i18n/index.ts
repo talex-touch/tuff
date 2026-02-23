@@ -33,6 +33,8 @@ export { default as zhMessages } from './locales/zh.json'
 
 // Message keys and utilities for backend
 export {
+  type CoreBoxOmniPanelKey,
+  CoreBoxOmniPanelKeys,
   type DevServerKey,
   DevServerKeys,
   type FlowTransferKey,

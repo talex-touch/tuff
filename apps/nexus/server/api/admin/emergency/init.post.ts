@@ -9,7 +9,6 @@ import {
   hashIpValue,
   recordEmergencyAttempt,
 } from '../../../utils/adminEmergencyStore'
-import { assertRiskControlEnabled } from '../../../utils/featureFlags'
 import { enforceAdminRateLimit } from '../../../utils/adminRateLimitStore'
 import { generateChallenge } from '../../../utils/webauthn'
 import { resolveRequestIp } from '../../../utils/ipSecurityStore'
@@ -46,7 +45,6 @@ async function ensureMinLatency(startAt: number) {
 }
 
 export default defineEventHandler(async (event) => {
-  assertRiskControlEnabled(event)
   const config = useRuntimeConfig(event)
   if (config.adminControl?.breakglassEnabled === false || String(config.adminControl?.breakglassEnabled) === 'false') {
     throw createError({

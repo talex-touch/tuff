@@ -1,6 +1,11 @@
 export enum ShortcutType {
   MAIN = 'main',
   RENDERER = 'renderer',
+  TRIGGER = 'trigger',
+}
+
+export enum ShortcutTriggerKind {
+  MOUSE_RIGHT_LONG_PRESS = 'mouse:right-long-press',
 }
 
 export interface ShortcutMeta {
@@ -9,6 +14,7 @@ export interface ShortcutMeta {
   author: string
   description?: string
   enabled?: boolean
+  triggerKind?: ShortcutTriggerKind | string
 }
 
 export interface Shortcut {

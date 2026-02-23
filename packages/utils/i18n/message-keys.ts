@@ -162,6 +162,23 @@ export const SystemKeys = {
 } as const
 
 /**
+ * CoreBox OmniPanel related message keys
+ */
+export const CoreBoxOmniPanelKeys = {
+  TITLE: 'corebox.omniPanel.title',
+  SOURCE: 'corebox.omniPanel.source',
+  EMPTY_SELECTION: 'corebox.omniPanel.emptySelection',
+  TRANSLATE: 'corebox.omniPanel.translate',
+  TRANSLATE_DESC: 'corebox.omniPanel.translateDesc',
+  SEARCH: 'corebox.omniPanel.search',
+  SEARCH_DESC: 'corebox.omniPanel.searchDesc',
+  COREBOX_SEARCH: 'corebox.omniPanel.coreBoxSearch',
+  COREBOX_SEARCH_DESC: 'corebox.omniPanel.coreBoxSearchDesc',
+  COPY: 'corebox.omniPanel.copy',
+  COPY_DESC: 'corebox.omniPanel.copyDesc',
+} as const
+
+/**
  * All message keys
  */
 export const MessageKeys = {
@@ -171,6 +188,9 @@ export const MessageKeys = {
   permission: PermissionKeys,
   widget: WidgetKeys,
   system: SystemKeys,
+  coreBox: {
+    omniPanel: CoreBoxOmniPanelKeys,
+  },
 } as const
 
 /**
@@ -234,3 +254,4 @@ export type PluginKey = typeof PluginKeys[keyof typeof PluginKeys]
 export type PermissionKey = typeof PermissionKeys[keyof typeof PermissionKeys]
 export type WidgetKey = typeof WidgetKeys[keyof typeof WidgetKeys]
 export type SystemKey = typeof SystemKeys[keyof typeof SystemKeys]
+export type CoreBoxOmniPanelKey = typeof CoreBoxOmniPanelKeys[keyof typeof CoreBoxOmniPanelKeys]

@@ -9,6 +9,7 @@ import type {
   EventHandler,
   ITouchEvent,
   MaybePromise,
+  ModuleEnvFlag,
   ModuleCreateContext,
   ModuleDestroyContext,
   ModuleDirectory,
@@ -32,10 +33,13 @@ export abstract class BaseModule<E = TalexEvents> implements TalexTouch.IModule<
    * If create === true, the manager will create `<root>/modules/<dirName>` by default.
    */
   public readonly file?: ModuleFileConfig
+  /** Optional env flag(s) to gate module auto-loading. */
+  public readonly env?: ModuleEnvFlag
 
-  protected constructor(key: ModuleKey, file?: ModuleFileConfig) {
+  protected constructor(key: ModuleKey, file?: ModuleFileConfig, env?: ModuleEnvFlag) {
     this.name = key
     this.file = file
+    this.env = env
   }
 
   filePath?: string | undefined

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
 import { useLocalePreference } from '~/composables/useLocalePreference'
+import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
 
 const { data: session, signOut } = useAuth()
@@ -62,10 +63,7 @@ const creditsLabel = computed(() => new Intl.NumberFormat().format(creditsRemain
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const fullPath = computed(() => route.fullPath || '/')
 const authRedirectTarget = computed(() => {
-  const target = fullPath.value
-  if (target.startsWith('/sign-in') || target.startsWith('/sign-up'))
-    return '/dashboard'
-  return target
+  return sanitizeRedirect(fullPath.value, '/dashboard')
 })
 const normalizedPath = computed(() => {
   const rawPath = route.path || '/'

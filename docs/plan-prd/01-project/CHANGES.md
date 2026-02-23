@@ -2,7 +2,170 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-23
+
+### Nexus 实验内容噪点水印隐藏策略收敛
+
+**变更类型**: 体验修复 / 水印策略
+
+**描述**: Nexus 风控与水印策略收敛为环境变量单开关，未启用时统一关闭导航入口、页面访问与服务端 API，避免“入口隐藏但链路仍可访问”的不一致行为。
+
+**主要变更**:
+1. **单一开关**：新增 `NUXT_PUBLIC_WATERMARK_ENABLED` 与 `NUXT_PUBLIC_RISK_CONTROL_ENABLED`（默认关闭），分别控制水印与风险控制能力。
+2. **导航统一收敛**：Dashboard Nav 根据开关动态隐藏 `watermark` 与 `risk` 入口。
+3. **路由统一拦截**：新增全局路由中间件，关闭时阻断 `/dashboard/watermark`、`/dashboard/admin/risk` 与 `/admin/emergency` 访问。
+4. **服务端统一拦截**：新增服务端特性中间件，关闭时对风险/水印 API 返回 404，避免绕过前端直连调用。
+5. **水印链路收敛**：`useWatermarkDisplayPolicy` 与 `watermark-risk` 插件只读取环境开关；关闭时不挂载噪点层、风险弹层，也不注入水印 token header。
+6. **运行时配置补齐**：`nuxt.config.ts` 同步暴露 `runtimeConfig.{watermark,riskControl}.enabled` 与 `runtimeConfig.public` 对应字段。
+
+**修改文件**:
+- `apps/nexus/app/composables/useWatermarkDisplayPolicy.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/components/dashboard/DashboardNav.vue`
+- `apps/nexus/app/plugins/watermark-risk.client.ts`
+- `apps/nexus/app/middleware/feature-gates.global.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/server/middleware/feature-gates.ts`
+- `apps/nexus/server/middleware/watermark-guard.ts`
+- `apps/nexus/server/utils/runtime-features.ts`
+- `apps/nexus/README.md`
+
+### Core-app 设置项位置调整（详细信息与搜索引擎日志）
+
+**变更类型**: 体验优化 / 设置分组整理
+
+**描述**: 将「详细信息」与「搜索引擎日志」两个开关从「实用工具」分组迁移到「应用程序规范（Touch）」分组，保证设置语义与分组一致。
+
+**主要变更**:
+1. **分组迁移**：在 `SettingAbout` 中新增两个开关入口，并复用原有配置字段。
+2. **工具页收敛**：从 `SettingTools` 移除上述两个开关，减少实用工具分组噪音。
+3. **高级设置门禁**：仅当“高级设置”开启后显示这两个开关，默认隐藏。
+4. **国际化迁移**：中英文文案从 `settingTools` 收敛到 `settingAbout`。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
 ## 2026-02-22
+
+### Core-app Assistant（阿洛 aler）悬浮球与语音唤醒
+
+**变更类型**: 新功能 / AI 默认能力接入
+
+**描述**: 新增 Assistant 悬浮球与语音面板窗口，语音唤醒从 Porcupine 路线切换为浏览器 SpeechRecognition；同时 Intelligence 默认绑定内置 Tuff Nexus provider，并在主进程注入登录令牌，用户无需手动配置 provider 即可直接使用 AI 能力。
+
+**主要变更**:
+1. **悬浮球窗口**：新增独立 assistant touchType 的悬浮球窗口，支持位置拖拽与持久化。
+2. **语音唤醒**：悬浮球侧实现 Web Speech 连续监听，默认唤醒词为“阿洛 / aler”，命中后打开语音面板。
+3. **语音面板**：新增语音转写面板，可将识别文本直接提交到 CoreBox 输入并触发后续搜索流程。
+4. **快捷键策略**：CoreBox 相关系统快捷键改为默认注册但禁用，避免首次安装即占用默认组合键。
+5. **Intelligence 默认 provider**：`tuff-nexus-default` 默认启用并绑定核心文本能力；主进程加载配置时自动注入 auth token（无 token 时走 guest 占位）。
+6. **权限能力扩展**：系统权限检查增加麦克风权限查询/请求通道，为语音能力提供统一权限入口。
+7. **实验开关默认态**：Assistant 实验开关默认关闭，且悬浮球与语音唤醒默认关闭；仅在用户显式启用后生效。主进程需带 `TUFF_ENABLE_ASSISTANT_EXPERIMENT=1` 启动参数才会加载 Assistant 模块。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/assistant/index.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `apps/core-app/src/main/modules/system/permission-checker.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/App.vue`
+- `apps/core-app/src/renderer/src/main.ts`
+- `apps/core-app/src/renderer/src/views/assistant/FloatingBall.vue`
+- `apps/core-app/src/renderer/src/views/assistant/VoicePanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/transport/events/assistant.ts`
+- `packages/utils/types/intelligence.ts`
+
+**实现说明**:
+- `docs/plan-prd/04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`
+
+### Core-app OmniPanel（全景面板）命名统一与配置入口
+
+**变更类型**: 功能增强 / 交互入口
+
+**描述**: 全景面板统一命名为 `OmniPanel`，并新增设置页配置入口，支持按需启停快捷键与右键长按唤起。
+
+**主要变更**:
+1. **命名统一**：主进程模块、事件、窗口参数、preload 标记与渲染入口统一为 `omni-panel` / `OmniPanel`。
+2. **配置入口**：设置页增加 `OmniPanel 快捷键` 与 `OmniPanel 右键长按唤起` 两个开关。
+3. **运行时生效**：主进程监听 APP_SETTING 变化，实时更新全局快捷键启用状态与鼠标长按 Hook。
+4. **快捷键可读性**：快捷键管理面板增加 `core.omniPanel.toggle` 的中英文展示文案。
+5. **国际化键收敛**：补齐 `corebox.omniPanel.*` 文案并新增统一 i18n key 常量，避免硬编码。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/preload/index.ts`
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `packages/utils/i18n/message-keys.ts`
+- `packages/utils/i18n/index.ts`
+
+### Core-app OmniPanel 触发方式接入快捷方式管理
+
+**变更类型**: 功能增强 / 交互一致性
+
+**描述**: OmniPanel 的键盘快捷键与鼠标右键长按触发统一接入 `global-shortcon` 管理，快捷方式弹窗可直接查看并启停两种触发方式。
+
+**主要变更**:
+1. **ShortcutType 扩展**：新增 `trigger` 类型，支持非键盘触发方式的统一存储与展示。
+2. **主进程接入**：`global-shortcon` 新增 `registerMainTrigger`，触发项参与状态管理但不走 `globalShortcut.register`。
+3. **OmniPanel 注册**：主进程注册 `core.omniPanel.toggle`（键盘）与 `core.omniPanel.mouseLongPress`（鼠标右键长按）两条系统触发项。
+4. **设置页收敛**：移除 OmniPanel 独立开关，改为在快捷方式管理弹窗集中配置启停。
+5. **弹窗展示增强**：快捷方式表格支持“快捷键/触发方式”混合展示，鼠标触发显示为只读触发标签。
+6. **文案补齐**：中英文补充 OmniPanel 鼠标触发标签与行描述，保证可读性一致。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/shortcut-settings.ts`
+- `apps/core-app/src/main/modules/global-shortcon.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/shortcut-dialog.types.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialogRow.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app OmniPanel 启动链路修复与模块 Env Gate
+
+**变更类型**: 稳定性修复 / 架构治理
+
+**描述**: 修复 OmniPanel 未进入主进程加载链路与渲染入口误路由问题；同时为 `BaseModule` 增加 `env` 自动启用门控，支持按环境变量控制模块加载。
+
+**主要变更**:
+1. **模块 Env Gate**：`BaseModule` / `IBaseModule` 新增 `env` 属性，ModuleManager 仅在对应 env flag 启用时自动加载模块。
+2. **Assistant 收敛**：Assistant 改为声明式 env 门控（`TUFF_ENABLE_ASSISTANT_EXPERIMENT`），移除模块内部重复判断逻辑。
+3. **OmniPanel Env 门控**：OmniPanel 改为声明式 env 门控（`TUFF_ENABLE_OMNIPANEL_EXPERIMENT`），与 Assistant 保持一致的模块启用策略。
+4. **OmniPanel 主进程接入**：`omniPanelModule` 正式加入 `modulesToLoad`，快捷键、鼠标触发与 IPC 处理器可正常初始化。
+5. **OmniPanel 渲染入口**：AppEntrance 按 `coreType=omni-panel` 渲染独立 `OmniPanel` 视图，不再误落到 CoreBox。
+6. **arg-mapper 类型补齐**：`coreType` 增加 `omni-panel`，并新增 `isOmniPanel()` 判断函数。
+7. **选中文本捕获优化**：macOS 优先尝试通过 AXSelectedText 直读选中文本；复制兜底路径改为完整剪贴板快照恢复，避免覆盖图片/文件/HTML 剪贴板内容。
+
+**修改文件**:
+- `packages/utils/types/modules/module.ts`
+- `apps/core-app/src/main/modules/abstract-base-module.ts`
+- `apps/core-app/src/main/core/module-manager.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/assistant/module.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `packages/utils/renderer/hooks/arg-mapper.ts`
+- `apps/core-app/src/renderer/src/AppEntrance.vue`
 
 ### Nexus 多层水印与风险验证
 
@@ -398,6 +561,25 @@
 - `apps/nexus/nuxt.config.ts`
 - `apps/nexus/package.json`
 - `apps/nexus/SETUP.md`
+
+### Nexus OAuth redirect_url 套娃与 sign-in 500 修复
+
+**变更类型**: 行为修复 / 登录稳定性
+
+**描述**: 登录失败重试场景下，`callbackUrl/error/oauth` 等中间态参数可能被带入 `redirect_url` 并反复嵌套，导致 URL 膨胀、刷新 `/sign-in` 出现 500。现统一净化回跳地址并阻断回跳到认证中间页。
+
+**主要变更**:
+1. **统一净化**：`sanitizeRedirect` 清理 `callbackUrl/callback_url/oauth/error` 等临时参数。
+2. **认证路径阻断**：回跳目标命中 `/sign-in` 或 `/api/auth/signin` 时回落到安全默认页。
+3. **入口收敛**：Header、用户菜单、全局认证重定向、sign-up 跳转统一复用净化逻辑。
+
+**修改文件**:
+- `apps/nexus/app/composables/useOauthContext.ts`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/pages/sign-up/index.vue`
+- `apps/nexus/server/utils/__tests__/useOauthContext.test.ts`
 
 ### CoreBox UI 恢复事件 URL 修正与索引 addPath 类型收敛
 
@@ -1188,26 +1370,6 @@
 3. **文件访问限制**：`fs:read-file`/`fs:write-file` 仅允许对话框批准路径；`tfile://` 访问限制在白名单根目录。
 4. **命令执行去 shell**：App Scanner、Darwin app icon、Native Share、Terminal、Open-in-editor 等改为安全执行，并为终端执行增加权限校验。
 5. **通道 key 回收修复**：修复 revokeKey 删除顺序导致的 key 残留。
-
-### Nexus 风控/水印改为实验性手动启用
-
-**变更类型**: 安全开关治理
-
-**描述**: 新增 Nexus 实验功能开关，风控控制面与水印系统默认关闭，需通过环境变量手动启用。
-
-**主要变更**:
-1. **新增环境变量**:
-   - `NEXUS_EXPERIMENTAL_RISK_ENABLED`（默认 `false`）
-   - `NEXUS_EXPERIMENTAL_WATERMARK_ENABLED`（默认 `false`）
-2. **风控控制面受开关控制**:
-   - 服务端风控守卫与应急 API 关闭时 fail-closed（`404`）
-   - 管理台导航/页面在未启用时不提供入口
-3. **部署配置与类型补齐**:
-   - `wrangler.toml` 预览与生产 vars 增加实验开关占位
-   - Cloudflare bindings 类型同步更新
-4. **实验功能全链路拦截**:
-   - 新增前端全局中间件，关闭时阻断 risk/emergency/watermark 页面直达
-   - 新增服务端中间件，关闭时阻断 risk 兼容接口与 watermark API 访问
 
 ---
 

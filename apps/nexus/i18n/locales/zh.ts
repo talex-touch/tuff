@@ -448,13 +448,6 @@ export default {
         failed: '签到失败',
       },
     },
-    watermark: {
-      title: '水印',
-      subtitle: '水印工具属于实验功能，默认关闭。',
-      retry: '重试',
-      disabled: '水印功能未启用。',
-      invalidColor: '水印颜色无效，请使用十六进制格式，例如 #FFFFFF。',
-    },
     team: {
       credits: {
         title: 'AI 积分消耗',

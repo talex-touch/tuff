@@ -13,6 +13,8 @@ export type ShortcutRowBase = {
   saveState?: SaveState
   saveText: string
   isEnabled: boolean
+  inputMode: 'keyboard' | 'trigger'
+  triggerLabel: string
 }
 
 export type ShortcutRowView = ShortcutRowBase & {

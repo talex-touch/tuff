@@ -60,11 +60,6 @@ const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
 
-function isAssistantEnvEnabled(): boolean {
-  const value = process.env[ASSISTANT_EXPERIMENT_ENV_KEY]
-  return value === '1' || value === 'true'
-}
-
 function clamp(value: number, min: number, max: number): number {
   if (value < min) return min
   if (value > max) return max
@@ -88,19 +83,16 @@ export class AssistantModule extends BaseModule {
   private positionSaveTimer: NodeJS.Timeout | null = null
 
   constructor() {
-    super(AssistantModule.key, {
-      create: false
-    })
+    super(
+      AssistantModule.key,
+      {
+        create: false
+      },
+      ASSISTANT_EXPERIMENT_ENV_KEY
+    )
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
-    if (!isAssistantEnvEnabled()) {
-      assistantLog.info(
-        `Assistant module skipped. Set ${ASSISTANT_EXPERIMENT_ENV_KEY}=1 to enable experiment.`
-      )
-      return
-    }
-
     this.ensureSettingsIntegrity()
     this.setupTransport()
     this.registerTransportHandlers()
@@ -324,9 +316,6 @@ export class AssistantModule extends BaseModule {
   }
 
   private isAssistantExperimentEnabled(setting: AppSetting): boolean {
-    if (!isAssistantEnvEnabled()) {
-      return false
-    }
     return setting.assistant?.enabled === true
   }
 

@@ -18,6 +18,7 @@ import type { ITouchEventBus } from 'packages/utils/eventbus'
 import type { TalexEvents } from './eventbus/touch-event'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import process from 'node:process'
 import { moduleLog } from '../utils/logger'
 import { getSentryService } from '../modules/sentry/sentry-service'
 
@@ -347,6 +348,16 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     }
 
     const moduleName = key.description ?? key.toString()
+    if (!this.isModuleEnvEnabled(instance)) {
+      const envFlags = this.normalizeModuleEnvFlags(instance.env)
+      moduleLog.info('Module skipped by env flag', {
+        meta: {
+          module: moduleName,
+          envFlags: envFlags.join(', ')
+        }
+      })
+      return false
+    }
 
     moduleLog.info('Loading module', {
       meta: { module: moduleName }
@@ -745,6 +756,33 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       return path.join(file.dirPath, 'index.js')
     }
     return undefined
+  }
+
+  private isModuleEnvEnabled(module: TalexTouch.IModule<TalexEvents>): boolean {
+    const flags = this.normalizeModuleEnvFlags(module.env)
+    if (flags.length === 0) {
+      return true
+    }
+    return flags.some((flag) => this.isEnvFlagEnabled(flag))
+  }
+
+  private normalizeModuleEnvFlags(env?: TalexTouch.IModule<TalexEvents>['env']): string[] {
+    if (!env) {
+      return []
+    }
+    const raw = Array.isArray(env) ? env : [env]
+    return raw.map((flag) => String(flag).trim()).filter(Boolean)
+  }
+
+  private isEnvFlagEnabled(flag: string): boolean {
+    const value = process.env[flag]
+    if (!value) {
+      return false
+    }
+    const normalized = value.trim().toLowerCase()
+    return (
+      normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+    )
   }
 
   /**

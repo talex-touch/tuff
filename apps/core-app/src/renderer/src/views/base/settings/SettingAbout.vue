@@ -201,6 +201,24 @@ async function openAppFolder() {
       active-icon="i-carbon-settings"
     />
 
+    <TuffBlockSwitch
+      v-if="advancedSettings"
+      v-model="appSetting.dashboard.enable"
+      :title="t('settingAbout.dashboard')"
+      :description="t('settingAbout.dashboardDesc')"
+      default-icon="i-carbon-dashboard"
+      active-icon="i-carbon-dashboard"
+    />
+
+    <TuffBlockSwitch
+      v-if="advancedSettings"
+      v-model="appSetting.searchEngine.logsEnabled"
+      :title="t('settingAbout.searchEngineLogs')"
+      :description="t('settingAbout.searchEngineLogsDesc')"
+      default-icon="i-carbon-warning-alt"
+      active-icon="i-carbon-warning-alt"
+    />
+
     <TuffBlockLine :title="t('settingAbout.version')">
       <template #description>
         {{ versionStr }}
@@ -215,6 +233,7 @@ async function openAppFolder() {
       </template>
     </TuffBlockLine>
     <TuffBlockLine :title="t('settingAbout.specification')" :description="`${currentQuarter}`" />
+
     <TuffBlockLine v-if="buildInfo.version" title="Version" :description="buildInfo.version" />
     <TuffBlockLine
       v-if="buildInfo.buildIdentifier"
