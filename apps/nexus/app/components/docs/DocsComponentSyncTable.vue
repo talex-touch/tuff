@@ -86,34 +86,43 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <div class="docs-sync-table">
-    <div v-if="pending" class="docs-sync-table__hint">
-      {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
+  <ClientOnly>
+    <div class="docs-sync-table">
+      <div v-if="pending" class="docs-sync-table__hint">
+        {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
+      </div>
+      <div v-else-if="error" class="docs-sync-table__hint">
+        {{ localeKey === 'zh' ? '同步状态加载失败' : 'Failed to load sync status.' }}
+      </div>
+      <table v-else class="docs-sync-table__table">
+        <thead>
+          <tr>
+            <th>{{ localeKey === 'zh' ? '组件' : 'Component' }}</th>
+            <th>{{ localeKey === 'zh' ? '同步状态' : 'Sync Status' }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in rows" :key="row.path">
+            <td>
+              <NuxtLink :to="row.path" class="docs-sync-table__link">
+                {{ row.title }}
+              </NuxtLink>
+            </td>
+            <td class="docs-sync-table__status" :data-status="row.statusKey">
+              {{ row.statusDisplay }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <div v-else-if="error" class="docs-sync-table__hint">
-      {{ localeKey === 'zh' ? '同步状态加载失败' : 'Failed to load sync status.' }}
-    </div>
-    <table v-else class="docs-sync-table__table">
-      <thead>
-        <tr>
-          <th>{{ localeKey === 'zh' ? '组件' : 'Component' }}</th>
-          <th>{{ localeKey === 'zh' ? '同步状态' : 'Sync Status' }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.path">
-          <td>
-            <NuxtLink :to="row.path" class="docs-sync-table__link">
-              {{ row.title }}
-            </NuxtLink>
-          </td>
-          <td class="docs-sync-table__status" :data-status="row.statusKey">
-            {{ row.statusDisplay }}
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+    <template #fallback>
+      <div class="docs-sync-table">
+        <div class="docs-sync-table__hint">
+          {{ localeKey === 'zh' ? '加载中...' : 'Loading...' }}
+        </div>
+      </div>
+    </template>
+  </ClientOnly>
 </template>
 
 <style scoped>

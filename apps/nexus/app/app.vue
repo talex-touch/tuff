@@ -40,20 +40,32 @@ function normalizeLocale(value?: string | null): SupportedLocale | null {
 }
 
 /**
- * Detect browser language as fallback
+ * Detect runtime language as fallback.
+ * - server: Accept-Language request header
+ * - client: navigator language
  */
-function detectBrowserLocale(): SupportedLocale {
-  if (import.meta.server)
+function detectRuntimeLocale(): SupportedLocale {
+  if (import.meta.server) {
+    const headers = useRequestHeaders(['accept-language'])
+    const acceptLanguage = headers['accept-language']
+    if (acceptLanguage) {
+      for (const item of acceptLanguage.split(',')) {
+        const normalized = normalizeLocale(item.split(';')[0]?.trim())
+        if (normalized)
+          return normalized
+      }
+    }
     return 'en'
+  }
 
   const browserLang = navigator.language || navigator.languages?.[0] || 'en'
   return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 }
 
 if (import.meta.server) {
-  const immediatePreference = getPreferredLocale()
+  const immediatePreference = getPreferredLocale() ?? detectRuntimeLocale()
   if (immediatePreference && immediatePreference !== locale.value)
-    setLocale(immediatePreference)
+    await setLocale(immediatePreference)
 }
 
 function bootstrapLocalePreference() {
@@ -70,7 +82,7 @@ function bootstrapLocalePreference() {
     return
   }
 
-  const browserLocale = detectBrowserLocale()
+  const browserLocale = detectRuntimeLocale()
   if (browserLocale !== locale.value)
     setLocale(browserLocale)
   persistPreferredLocale(browserLocale)
