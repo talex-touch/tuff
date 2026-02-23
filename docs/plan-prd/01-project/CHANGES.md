@@ -2,6 +2,30 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-22
+
+### Nexus 风控/水印改为实验性手动启用
+
+**变更类型**: 安全开关治理
+
+**描述**: 新增 Nexus 实验功能开关，风控控制面与水印系统默认关闭，需通过环境变量手动启用。
+
+**主要变更**:
+1. **新增环境变量**:
+   - `NEXUS_EXPERIMENTAL_RISK_ENABLED`（默认 `false`）
+   - `NEXUS_EXPERIMENTAL_WATERMARK_ENABLED`（默认 `false`）
+2. **风控控制面受开关控制**:
+   - 服务端风控守卫与应急 API 关闭时 fail-closed（`404`）
+   - 管理台导航/页面在未启用时不提供入口
+3. **部署配置与类型补齐**:
+   - `wrangler.toml` 预览与生产 vars 增加实验开关占位
+   - Cloudflare bindings 类型同步更新
+4. **实验功能全链路拦截**:
+   - 新增前端全局中间件，关闭时阻断 risk/emergency/watermark 页面直达
+   - 新增服务端中间件，关闭时阻断 risk 兼容接口与 watermark API 访问
+
+---
+
 ## 2026-02-10
 
 ### CoreBox 内置能力抽离为独立插件

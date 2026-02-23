@@ -7,6 +7,7 @@ import {
   hashIpValue,
   recordEmergencyAttempt,
 } from '../../../utils/adminEmergencyStore'
+import { assertRiskControlEnabled } from '../../../utils/featureFlags'
 import type { AdminRiskScope } from '../../../utils/adminEmergencyToken'
 import { signAdminEmergencyToken } from '../../../utils/adminEmergencyToken'
 import { enforceAdminRateLimit } from '../../../utils/adminRateLimitStore'
@@ -34,6 +35,7 @@ function normalizeScopes(value: unknown): AdminRiskScope[] {
 }
 
 export default defineEventHandler(async (event) => {
+  assertRiskControlEnabled(event)
   const config = useRuntimeConfig(event)
   if (config.adminControl?.breakglassEnabled === false || String(config.adminControl?.breakglassEnabled) === 'false') {
     throw createError({
