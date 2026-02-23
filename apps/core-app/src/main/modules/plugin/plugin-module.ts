@@ -2666,7 +2666,7 @@ export class PluginModule extends BaseModule {
             return null
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             return null
           }
@@ -2701,7 +2701,7 @@ export class PluginModule extends BaseModule {
             return { success: false, error: 'Manifest content is required' }
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             return { success: false, error: `Plugin ${name} not found` }
           }
@@ -2739,7 +2739,7 @@ export class PluginModule extends BaseModule {
             return { success: false, error: 'Widget source is required' }
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             return { success: false, error: `Plugin ${name} not found` }
           }
@@ -2783,7 +2783,7 @@ export class PluginModule extends BaseModule {
             throw new Error('Plugin name is required')
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             throw new Error(`Plugin ${name} not found`)
           }
@@ -2817,7 +2817,7 @@ export class PluginModule extends BaseModule {
             return { success: false, error: 'Path type is required' }
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             return { success: false, error: `Plugin ${name} not found` }
           }
@@ -2869,7 +2869,7 @@ export class PluginModule extends BaseModule {
             return { success: false, error: 'Path is required' }
           }
 
-          const plugin = manager.plugins.get(name) as TouchPlugin
+          const plugin = manager.getPluginByName(name) as TouchPlugin
           if (!plugin) {
             return { success: false, error: `Plugin ${name} not found` }
           }

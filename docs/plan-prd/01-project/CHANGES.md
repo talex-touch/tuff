@@ -4,6 +4,27 @@
 
 ## 2026-02-23
 
+### Core-app 插件详情开发设置分组下移与保存链路收敛
+
+**变更类型**: 体验优化 / 可维护性修复
+
+**描述**: 插件详情页改为“基础信息 + 开发设置分组”结构。开发配置不再通过弹窗管理，而是新增独立 `TuffGroupBlock` 下移展示；同时修复开发设置保存链路中的状态漂移问题，并补齐 manifest 全文查看能力。
+
+**主要变更**:
+1. **基础信息收敛**：详情页仅展示插件 ID、插件名称、插件描述；插件 ID 支持点击复制，hover 时仅对 ID 值增加下划线提示可复制。
+2. **基础信息增强**：`自动启动` 从开发设置分组上移到基础信息分组；在“插件开发模式启用”或“应用处于 dev 环境”时提供 `manifest.json` 全文查看入口，后者显示 `Dev Only` 标记；点击后通过 Flip 动画弹出对话框，并以只读 JSON 编辑器展示全文。
+3. **开发设置分组下移**：仅在插件启用开发模式时，在基础信息下方新增独立 `开发设置` 分组，展示保存、热重载、开发地址、源码模式。
+4. **保存流程修复**：开发设置加载时统一读取最新 manifest 并建立快照，保存时合并写回 `manifest.dev`；主进程详情 API 改为按插件显示名/目录名双路匹配，避免保存请求命中失败。
+5. **Dev 配置优先级修复**：开发模式加载远端 manifest 时，`plugin.dev` 统一以本地 manifest 的 dev 配置为准，避免热重载/开发地址/源码模式保存后被远端 manifest 覆盖。
+6. **i18n 补齐**：新增中英文文案，覆盖插件名称、复制反馈、manifest 展开文案与加载态提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+
 ### Nexus OAuth 在 Cloudflare Workers 的 HKDF 兼容修复
 
 **变更类型**: 登录稳定性 / Edge 兼容

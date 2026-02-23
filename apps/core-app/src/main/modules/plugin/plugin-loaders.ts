@@ -401,7 +401,10 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       return this.touchPlugin
     }
 
-    await this.loadCommon(pluginInfo)
+    await this.loadCommon({
+      ...pluginInfo,
+      dev: this.devConfig
+    })
 
     // Load README from dev server
     try {
