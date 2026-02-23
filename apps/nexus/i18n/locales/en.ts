@@ -449,6 +449,13 @@ export default {
         failed: 'Check-in failed',
       },
     },
+    watermark: {
+      title: 'Watermark',
+      subtitle: 'Watermark tools are experimental and disabled by default.',
+      retry: 'Retry',
+      disabled: 'Watermark feature is disabled.',
+      invalidColor: 'Invalid watermark color. Use hex format, e.g. #FFFFFF.',
+    },
     team: {
       credits: {
         title: 'AI Credits Usage',
