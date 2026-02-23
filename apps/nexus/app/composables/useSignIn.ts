@@ -26,6 +26,16 @@ const LAST_LOGIN_METHOD_KEY = 'tuff_last_login_method'
 const LOGIN_METHODS: LoginMethod[] = ['passkey', 'password', 'magic', 'github', 'linuxdo']
 const TURNSTILE_SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
 const CALLBACK_FEEDBACK_MIN_MS = 800
+const OAUTH_REDIRECT_NOISE_KEYS = [
+  'callbackUrl',
+  'callback_url',
+  'oauth',
+  'oauth_relay',
+  'flow',
+  'provider',
+  'error',
+  'error_description',
+]
 
 type TurnstileWidgetId = string | number
 interface TurnstileRenderOptions {
@@ -60,35 +70,63 @@ function pickFirstQueryValue(input: unknown) {
   return typeof input === 'string' ? input : null
 }
 
-  function waitForCallbackFeedback(ms: number) {
-    return new Promise<void>(resolve => setTimeout(resolve, ms))
+function parseUrlLike(value: string) {
+  try {
+    const base = hasWindow() ? window.location.origin : 'http://localhost'
+    return value.startsWith('/') ? new URL(value, base) : new URL(value)
   }
+  catch {
+    return null
+  }
+}
 
-  async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, intervalMs = 250) {
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      try {
-        const profile = await $fetch<{ linkedAccounts?: Array<{ provider?: string }> }>('/api/user/me', {
-          query: { _oauthCheckAt: Date.now() },
-          cache: 'no-store',
-          headers: {
-            'cache-control': 'no-cache',
-            pragma: 'no-cache',
-          },
-        })
-        const linked = Boolean(profile?.linkedAccounts?.some(account => account.provider === provider))
-        if (linked)
-          return true
-      }
-      catch {
-        // Ignore transient read errors during OAuth callback convergence and retry.
-      }
+function sanitizeOauthRedirectTarget(redirect: string | null | undefined, fallback: string) {
+  const normalized = sanitizeRedirect(redirect, fallback)
+  if (normalized !== '/')
+    return normalized
+  if (!redirect)
+    return normalized
 
-      if (attempt < maxAttempts - 1)
-        await waitForCallbackFeedback(intervalMs)
+  const parsed = parseUrlLike(redirect)
+  if (!parsed)
+    return normalized
+
+  const hasAuthNoise = OAUTH_REDIRECT_NOISE_KEYS.some(key => parsed.searchParams.has(key))
+  if (!hasAuthNoise)
+    return normalized
+
+  return fallback
+}
+
+function waitForCallbackFeedback(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, intervalMs = 250) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const profile = await $fetch<{ linkedAccounts?: Array<{ provider?: string }> }>('/api/user/me', {
+        query: { _oauthCheckAt: Date.now() },
+        cache: 'no-store',
+        headers: {
+          'cache-control': 'no-cache',
+          pragma: 'no-cache',
+        },
+      })
+      const linked = Boolean(profile?.linkedAccounts?.some(account => account.provider === provider))
+      if (linked)
+        return true
+    }
+    catch {
+      // Ignore transient read errors during OAuth callback convergence and retry.
     }
 
-    return false
+    if (attempt < maxAttempts - 1)
+      await waitForCallbackFeedback(intervalMs)
   }
+
+  return false
+}
 
 export function useSignIn() {
   const { t, locale, setLocale } = useI18n()
@@ -670,7 +708,7 @@ export function useSignIn() {
 
   watchEffect(() => {
     if (redirectParam.value)
-      stickyRedirectTarget.value = sanitizeRedirect(redirectParam.value, stickyRedirectTarget.value)
+      stickyRedirectTarget.value = sanitizeOauthRedirectTarget(redirectParam.value, stickyRedirectTarget.value)
   })
 
   watchEffect(() => {
@@ -678,7 +716,7 @@ export function useSignIn() {
       return
 
     oauthFlow.value = oauthContext.value.flow
-    stickyRedirectTarget.value = sanitizeRedirect(
+    stickyRedirectTarget.value = sanitizeOauthRedirectTarget(
       oauthContext.value.redirect,
       oauthFlow.value === 'bind' ? '/dashboard/account' : stickyRedirectTarget.value,
     )
@@ -1005,7 +1043,7 @@ export function useSignIn() {
 
     const flow = oauthContext.value.flow
     const provider = oauthContext.value.provider
-    const target = sanitizeRedirect(
+    const target = sanitizeOauthRedirectTarget(
       oauthContext.value.redirect,
       flow === 'bind' ? '/dashboard/account' : '/dashboard',
     )
@@ -1189,7 +1227,7 @@ export function useSignIn() {
     if (redirectAutoNavigating.value)
       return
 
-    const target = sanitizeRedirect(redirectTarget.value, '/dashboard')
+    const target = sanitizeOauthRedirectTarget(redirectTarget.value, '/dashboard')
     if (isSignInTarget(target))
       return
 

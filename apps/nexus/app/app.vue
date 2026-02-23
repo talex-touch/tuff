@@ -121,14 +121,17 @@ const localeFromQuery = computed(() => {
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
+
+function pickFirstQueryValue(value: unknown) {
+  if (!value)
+    return null
+  if (Array.isArray(value))
+    return typeof value[0] === 'string' ? value[0] : null
+  return typeof value === 'string' ? value : null
+}
+
 const authFallbackCallbackUrl = computed(() => {
-  const direct = route.query.callbackUrl
-  if (typeof direct === 'string' && direct)
-    return direct
-  const snake = route.query.callback_url
-  if (typeof snake === 'string' && snake)
-    return snake
-  return null
+  return pickFirstQueryValue(route.query.callbackUrl) ?? pickFirstQueryValue(route.query.callback_url)
 })
 
 function parseUrlLike(value: string) {
@@ -145,25 +148,145 @@ function isAuthIntermediatePath(pathname: string) {
   return pathname.startsWith('/sign-in') || pathname.startsWith('/api/auth/signin')
 }
 
-function shouldRecoverAuthFallbackRoute() {
+function safeDecodeUriComponent(value: string) {
+  try {
+    const decoded = decodeURIComponent(value)
+    return decoded === value ? null : decoded
+  }
+  catch {
+    return null
+  }
+}
+
+function resolveAuthFallbackTarget(value: string, depth = 0): URL | null {
+  if (depth > 4)
+    return null
+
+  const parsed = parseUrlLike(value)
+  if (!parsed)
+    return null
+
+  if (isAuthIntermediatePath(parsed.pathname))
+    return parsed
+
+  const nestedRaw = parsed.searchParams.get('callbackUrl') ?? parsed.searchParams.get('callback_url')
+  if (!nestedRaw)
+    return parsed
+
+  const nested = resolveAuthFallbackTarget(nestedRaw, depth + 1)
+  if (nested)
+    return nested
+
+  const decoded = safeDecodeUriComponent(nestedRaw)
+  if (!decoded)
+    return parsed
+
+  return resolveAuthFallbackTarget(decoded, depth + 1) ?? parsed
+}
+
+function isOauthProvider(value: string | null): value is 'github' | 'linuxdo' {
+  return value === 'github' || value === 'linuxdo'
+}
+
+function isAuthFlow(value: string | null): value is 'login' | 'bind' {
+  return value === 'login' || value === 'bind'
+}
+
+const AUTH_REDIRECT_NOISE_KEYS = [
+  'callbackUrl',
+  'callback_url',
+  'oauth',
+  'oauth_relay',
+  'flow',
+  'provider',
+  'error',
+  'error_description',
+]
+
+function sanitizeRecoveredRedirect(raw: string | null | undefined, fallback: string) {
+  const normalized = sanitizeRedirect(raw, fallback)
+  if (normalized !== '/')
+    return normalized
+  if (!raw)
+    return normalized
+
+  const parsed = parseUrlLike(raw)
+  if (!parsed)
+    return normalized
+
+  const hasAuthNoise = AUTH_REDIRECT_NOISE_KEYS.some(key => parsed.searchParams.has(key))
+  if (!hasAuthNoise)
+    return normalized
+
+  return fallback
+}
+
+const authFallbackRecoveryQuery = computed(() => {
   if (route.path !== '/')
-    return false
+    return null
 
   const callbackUrl = authFallbackCallbackUrl.value
   if (!callbackUrl)
-    return false
+    return null
 
-  const parsed = parseUrlLike(callbackUrl)
-  if (!parsed)
-    return true
+  const parsed = resolveAuthFallbackTarget(callbackUrl)
+  const routeError = pickFirstQueryValue(route.query.error)
+  const routeErrorDescription = pickFirstQueryValue(route.query.error_description)
 
-  if (isAuthIntermediatePath(parsed.pathname))
-    return true
+  if (!parsed) {
+    if (!routeError && !routeErrorDescription)
+      return null
+    const fallbackQuery: Record<string, string> = {
+      lang: langTag.value,
+    }
+    if (routeError)
+      fallbackQuery.error = routeError
+    if (routeErrorDescription)
+      fallbackQuery.error_description = routeErrorDescription
+    return fallbackQuery
+  }
 
-  return parsed.searchParams.has('oauth')
+  const hasOauthHints = isAuthIntermediatePath(parsed.pathname)
+    || parsed.searchParams.has('oauth')
     || parsed.searchParams.has('provider')
     || parsed.searchParams.has('flow')
-}
+
+  if (!hasOauthHints && !routeError && !routeErrorDescription)
+    return null
+
+  const query: Record<string, string> = {
+    lang: langTag.value,
+  }
+
+  const provider = parsed.searchParams.get('provider')
+  const flow = parsed.searchParams.get('flow')
+  const oauth = parsed.searchParams.get('oauth')
+  const redirectRaw = parsed.searchParams.get('redirect_url')
+  const nestedLang = parsed.searchParams.get('lang')
+
+  if (oauth === '1')
+    query.oauth = '1'
+  if (isOauthProvider(provider))
+    query.provider = provider
+  if (isAuthFlow(flow))
+    query.flow = flow
+
+  const redirectFallback = flow === 'bind' ? '/dashboard/account' : '/dashboard'
+  if (redirectRaw)
+    query.redirect_url = sanitizeRecoveredRedirect(redirectRaw, redirectFallback)
+
+  if (nestedLang)
+    query.lang = nestedLang
+
+  const parsedError = parsed.searchParams.get('error')
+  const parsedErrorDescription = parsed.searchParams.get('error_description')
+  if (routeError || parsedError)
+    query.error = routeError || (parsedError as string)
+  if (routeErrorDescription || parsedErrorDescription)
+    query.error_description = routeErrorDescription || (parsedErrorDescription as string)
+
+  return query
+})
 
 watchEffect(() => {
   if (import.meta.server)
@@ -216,22 +339,12 @@ watchEffect(() => {
 watchEffect(() => {
   if (import.meta.server)
     return
-  if (!shouldRecoverAuthFallbackRoute())
+  if (!authFallbackRecoveryQuery.value)
     return
-
-  const error = typeof route.query.error === 'string' ? route.query.error : ''
-  const errorDescription = typeof route.query.error_description === 'string' ? route.query.error_description : ''
-  const nextQuery: Record<string, string> = {
-    lang: langTag.value,
-  }
-  if (error)
-    nextQuery.error = error
-  if (errorDescription)
-    nextQuery.error_description = errorDescription
 
   router.replace({
     path: '/sign-in',
-    query: nextQuery,
+    query: authFallbackRecoveryQuery.value,
   })
 })
 
