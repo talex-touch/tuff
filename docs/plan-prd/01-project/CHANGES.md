@@ -19,6 +19,25 @@
 - `package.json`
 - `apps/nexus/nuxt.config.ts`
 
+### Nexus 组件文档页 SSR 崩溃修复（NumberFlow）
+
+**变更类型**: 稳定性修复 / Edge SSR 兼容
+
+**描述**: 修复 `https://tuff.tagzxia.com/docs/dev/components/index` 在 Cloudflare Pages/Workers 上返回 500 的问题。根因是 `@number-flow/vue` 在 SSR 打包路径中触发 `HTMLElement is not defined`，导致页面服务端渲染异常。
+
+**主要变更**:
+1. **SSR 导入收敛**：将相关组件中的 `@number-flow/vue` 从静态导入改为 `import.meta.client` 条件下的异步组件加载，避免 server bundle 初始化时触发浏览器全局对象引用。
+2. **降级渲染兜底**：在 NumberFlow 组件不可用时回退为纯文本数值渲染，确保 SSR 输出稳定可用。
+3. **示例页同步修复**：同步修复 Nexus docs 相关 demo 组件，消除文档页触发同类崩溃的入口。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue`
+- `apps/nexus/app/components/content/demos/AutoSizerNumberFlowDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardBasicDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardInsightVariantDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardProgressVariantDemo.vue`
+- `apps/nexus/app/components/content/demos/StatCardStatCardDemo.vue`
+
 ### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
 
 **变更类型**: 部署稳定性 / 配置收敛
