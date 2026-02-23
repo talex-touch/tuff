@@ -44,11 +44,15 @@ const emit = defineEmits<{
     </div>
     <div class="ShortcutDialog-Key">
       <FlatKeyInput
+        v-if="row.inputMode === 'keyboard'"
         :model-value="row.shortcut.accelerator"
         @update:model-value="
           (newValue) => emit('update-accelerator', row.shortcut.id, String(newValue))
         "
       />
+      <div v-else class="ShortcutDialog-TriggerText">
+        {{ row.triggerLabel }}
+      </div>
     </div>
     <div class="ShortcutDialog-Source">
       {{ row.sourceLabel }}
@@ -232,6 +236,18 @@ const emit = defineEmits<{
 .ShortcutDialog-Key :deep(.FlatKeyInput-Control) {
   width: 100%;
   min-width: 160px;
+}
+
+.ShortcutDialog-TriggerText {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed var(--tx-border-color);
+  background: var(--tx-fill-color-lighter);
+  color: var(--tx-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .ShortcutDialog-Enabled {

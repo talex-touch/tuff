@@ -10,15 +10,9 @@ defineI18nRoute(false)
 
 const { t } = useI18n()
 const { user } = useAuthUser()
-const runtimeConfig = useRuntimeConfig()
 
 const isAdmin = computed(() => user.value?.role === 'admin')
-const riskControlEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.riskControlEnabled === true)
-watch([isAdmin, riskControlEnabled], ([admin, riskEnabled]) => {
-  if (!riskEnabled) {
-    navigateTo('/dashboard/overview')
-    return
-  }
+watch(isAdmin, (admin) => {
   if (user.value && !admin)
     navigateTo('/dashboard/overview')
 }, { immediate: true })

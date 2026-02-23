@@ -3,6 +3,7 @@ import { useStartupInfo } from '../hooks/useStartupInfo'
 
 export type AppEntranceMode =
   | 'CoreBox'
+  | 'OmniPanel'
   | 'MainApp'
   | 'DivisionBox'
   | 'Assistant'
@@ -24,6 +25,8 @@ function getModeStyle(mode: AppEntranceMode): string {
   switch (mode) {
     case 'CoreBox':
       return 'background:#7c3aed;color:#fff;'
+    case 'OmniPanel':
+      return 'background:#1d4ed8;color:#dbeafe;'
     case 'DivisionBox':
       return 'background:#f97316;color:#111827;'
     case 'Assistant':

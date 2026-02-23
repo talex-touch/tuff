@@ -1,7 +1,10 @@
 import type { MaybePromise, ModuleKey } from '@talex-touch/utils'
 import type { Shortcut } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import process from 'node:process'
-import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import {
+  ShortcutTriggerKind,
+  ShortcutType
+} from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import ShortcutStorage from '@talex-touch/utils/common/storage/shortcut-storage'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -28,6 +31,11 @@ const shortconTriggerEvent = defineRawEvent<{ id: string }, void>('shortcon:trig
 
 // A runtime map to hold callbacks for 'main' type shortcuts
 const mainCallbackRegistry = new Map<string, () => void>()
+interface MainTriggerRegistration {
+  onStateChange?: (enabled: boolean) => void
+  onTrigger?: () => void
+}
+const mainTriggerRegistry = new Map<string, MainTriggerRegistration>()
 const SYSTEM_SHORTCUT_AUTHOR = 'system'
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -110,8 +118,10 @@ export class ShortcutModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    this.syncMainTriggerStates(new Map<string, ShortcutStatus>())
     globalShortcut.unregisterAll()
     mainCallbackRegistry.clear()
+    mainTriggerRegistry.clear()
   }
 
   /**
@@ -194,6 +204,73 @@ export class ShortcutModule extends BaseModule {
 
     shortconLog.success(`Main shortcut registered: ${id} (${defaultAccelerator})`)
 
+    this.reregisterAllShortcuts()
+    return true
+  }
+
+  registerMainTrigger(
+    id: string,
+    triggerKind: ShortcutTriggerKind | string,
+    options?: {
+      enabled?: boolean
+      onStateChange?: (enabled: boolean) => void
+      onTrigger?: () => void
+    }
+  ): boolean {
+    if (mainTriggerRegistry.has(id)) {
+      shortconLog.warn(`Main trigger with ID ${id} is already registered.`)
+      return false
+    }
+
+    mainTriggerRegistry.set(id, {
+      onStateChange: options?.onStateChange,
+      onTrigger: options?.onTrigger
+    })
+
+    const existingShortcut = this.storage!.getShortcutById(id)
+    if (existingShortcut && existingShortcut.type !== ShortcutType.TRIGGER) {
+      shortconLog.warn(`Shortcut with ID ${id} exists but is not trigger type.`)
+      mainTriggerRegistry.delete(id)
+      return false
+    }
+
+    if (!existingShortcut) {
+      this.storage!.addShortcut({
+        id,
+        accelerator: triggerKind,
+        type: ShortcutType.TRIGGER,
+        meta: {
+          creationTime: Date.now(),
+          modificationTime: Date.now(),
+          author: SYSTEM_SHORTCUT_AUTHOR,
+          enabled: options?.enabled ?? true,
+          triggerKind
+        }
+      })
+    } else {
+      let updated = false
+      if (existingShortcut.accelerator !== triggerKind) {
+        this.storage!.updateShortcutAccelerator(id, triggerKind)
+        existingShortcut.accelerator = triggerKind
+        updated = true
+      }
+      const meta = existingShortcut.meta
+      if (meta && meta.triggerKind !== triggerKind) {
+        meta.triggerKind = triggerKind
+        meta.modificationTime = Date.now()
+        updated = true
+      }
+      if (typeof options?.enabled === 'boolean' && meta?.enabled === undefined) {
+        this.storage!.updateShortcutEnabled(id, options.enabled)
+        existingShortcut.meta.enabled = options.enabled
+        updated = true
+      }
+      if (updated) {
+        this.persistShortcutMeta()
+      }
+    }
+
+    shortconLog.success(`Main trigger registered: ${id} (${triggerKind})`)
     this.reregisterAllShortcuts()
     return true
   }
@@ -300,6 +377,7 @@ export class ShortcutModule extends BaseModule {
     if (!this.isEnabled) return
     globalShortcut.unregisterAll()
     this.isEnabled = false
+    this.syncMainTriggerStates(new Map<string, ShortcutStatus>())
     shortconLog.info('All global shortcuts disabled')
   }
 
@@ -334,6 +412,33 @@ export class ShortcutModule extends BaseModule {
         statusMap.set(shortcut.id, { state: 'disabled', reason: 'disabled' })
         continue
       }
+      if (shortcut.type === ShortcutType.TRIGGER) {
+        const triggerKind =
+          typeof shortcut.meta?.triggerKind === 'string' &&
+          shortcut.meta.triggerKind.trim().length > 0
+            ? shortcut.meta.triggerKind
+            : shortcut.accelerator
+
+        if (!triggerKind) {
+          statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
+          shortconLog.error(`Invalid trigger kind for shortcut ${shortcut.id}`)
+          continue
+        }
+
+        if (shortcut.accelerator !== triggerKind) {
+          this.storage!.updateShortcutAccelerator(shortcut.id, triggerKind)
+          shortcut.accelerator = triggerKind
+        }
+        if (shortcut.meta?.triggerKind !== triggerKind) {
+          shortcut.meta.triggerKind = triggerKind
+          shortcut.meta.modificationTime = Date.now()
+          this.persistShortcutMeta()
+        }
+
+        statusMap.set(shortcut.id, { state: 'active' })
+        continue
+      }
+
       const normalizedAccelerator = this.normalizeAccelerator(shortcut.accelerator)
       if (!normalizedAccelerator) {
         statusMap.set(shortcut.id, { state: 'unavailable', reason: 'invalid' })
@@ -393,6 +498,7 @@ export class ShortcutModule extends BaseModule {
     }
 
     this.shortcutStatusMap = statusMap
+    this.syncMainTriggerStates(statusMap)
     shortconLog.success(`Successfully registered ${successCount} shortcuts`)
   }
 
@@ -497,10 +603,22 @@ export class ShortcutModule extends BaseModule {
   }
 
   private isSystemShortcut(shortcut: Shortcut): boolean {
-    if (shortcut.type === ShortcutType.MAIN) {
+    if (shortcut.type === ShortcutType.MAIN || shortcut.type === ShortcutType.TRIGGER) {
       return true
     }
     return shortcut.meta?.author === SYSTEM_SHORTCUT_AUTHOR
+  }
+
+  private syncMainTriggerStates(statusMap: Map<string, ShortcutStatus>): void {
+    for (const [id, registration] of mainTriggerRegistry.entries()) {
+      const status = statusMap.get(id)
+      const active = this.isEnabled && status?.state === 'active'
+      try {
+        registration.onStateChange?.(active)
+      } catch (error) {
+        shortconLog.warn(`Failed to sync trigger state for ${id}`, { error })
+      }
+    }
   }
 
   private persistShortcutMeta(): void {
@@ -545,6 +663,15 @@ export class ShortcutModule extends BaseModule {
             .catch(() => {})
         }
         shortconLog.debug(`Forwarded trigger '${triggerId}' to all renderer processes`)
+        break
+      }
+      case ShortcutType.TRIGGER: {
+        const registration = mainTriggerRegistry.get(shortcut.id)
+        if (!registration?.onTrigger) {
+          shortconLog.debug(`Trigger shortcut ${shortcut.id} has no onTrigger callback`)
+          return
+        }
+        registration.onTrigger()
         break
       }
     }

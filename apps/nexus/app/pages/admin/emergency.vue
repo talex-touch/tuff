@@ -7,13 +7,6 @@ definePageMeta({
 
 type EmergencyScope = 'risk.mode.override' | 'risk.actor.unblock' | 'risk.case.review'
 
-const runtimeConfig = useRuntimeConfig()
-const riskControlEnabled = computed(() => runtimeConfig.public.experimentalFeatures?.riskControlEnabled === true)
-watch(riskControlEnabled, (enabled) => {
-  if (!enabled)
-    navigateTo('/')
-}, { immediate: true })
-
 const adminHint = ref('')
 const recoveryCode = ref('')
 const sessionId = ref('')
@@ -291,3 +284,4 @@ async function unblockByToken() {
     </div>
   </div>
 </template>
+

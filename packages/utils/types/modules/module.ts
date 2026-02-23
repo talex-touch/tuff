@@ -1,6 +1,8 @@
 import type { MaybePromise, ModuleFileConfig, ModuleKey } from './base'
 import type { ModuleCreateContext, ModuleDestroyContext, ModuleInitContext, ModuleStartContext, ModuleStopContext } from './module-lifecycle'
 
+export type ModuleEnvFlag = string | readonly string[]
+
 /**
  * Contract that every module must implement.
  *
@@ -39,6 +41,16 @@ export interface IBaseModule<E = any> {
    * - If `file.create !== true`, no directory will be created and `context.directory` will be `undefined`.
    */
   file?: ModuleFileConfig
+
+  /**
+   * Optional environment flag guard for auto-loading.
+   *
+   * @remarks
+   * - If configured, the module manager will only auto-load this module when any listed
+   *   environment flag is enabled (`1`, `true`, `yes`, `on`).
+   * - Single string means one flag; array means OR semantics.
+   */
+  env?: ModuleEnvFlag
 
   /**
    * Optional hook invoked after construction/registration and before `init`.

@@ -205,7 +205,7 @@ function getShortcutLabel(id: string): string {
 }
 
 function isSystemShortcut(shortcut: ShortcutWithStatus): boolean {
-  if (shortcut.type === ShortcutType.MAIN) {
+  if (shortcut.type === ShortcutType.MAIN || shortcut.type === ShortcutType.TRIGGER) {
     return true
   }
   return shortcut.meta?.author === 'system'
@@ -213,6 +213,10 @@ function isSystemShortcut(shortcut: ShortcutWithStatus): boolean {
 
 function isShortcutEnabled(shortcut: ShortcutWithStatus): boolean {
   return shortcut.meta?.enabled !== false
+}
+
+function isTriggerShortcut(shortcut: ShortcutWithStatus): boolean {
+  return shortcut.type === ShortcutType.TRIGGER
 }
 
 function getShortcutSourceLabel(shortcut: ShortcutWithStatus): string {
@@ -246,6 +250,7 @@ function getShortcutStatusText(shortcut: ShortcutWithStatus): string | null {
 }
 
 function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
+  if (isTriggerShortcut(shortcut)) return null
   if (!isShortcutEnabled(shortcut)) return null
   if (!isMac) return null
   const status = shortcut.status
@@ -257,6 +262,13 @@ function getSpotlightHint(shortcut: ShortcutWithStatus): string | null {
   return null
 }
 
+function getShortcutTriggerLabel(shortcut: ShortcutWithStatus): string {
+  if (shortcut.id === 'core.omniPanel.mouseLongPress') {
+    return t('settingTools.shortcutsDialog.triggerMouseRightLongPress')
+  }
+  return shortcut.accelerator
+}
+
 const filteredShortcuts = computed(() => {
   const query = shortcutSearch.value.trim().toLowerCase()
   if (!query) {
@@ -264,12 +276,12 @@ const filteredShortcuts = computed(() => {
   }
   return systemShortcuts.value.filter((shortcut) => {
     const label = getShortcutLabel(shortcut.id).toLowerCase()
-    const accelerator = shortcut.accelerator?.toLowerCase() ?? ''
+    const triggerText = getShortcutTriggerLabel(shortcut).toLowerCase()
     const source = getShortcutSourceLabel(shortcut).toLowerCase()
     return (
       label.includes(query) ||
       shortcut.id.toLowerCase().includes(query) ||
-      accelerator.includes(query) ||
+      triggerText.includes(query) ||
       source.includes(query)
     )
   })
@@ -278,16 +290,21 @@ const filteredShortcuts = computed(() => {
 const shortcutRows = computed<ShortcutRowBase[]>(() =>
   filteredShortcuts.value.map((shortcut) => {
     const label = getShortcutLabel(shortcut.id)
+    const isTrigger = isTriggerShortcut(shortcut)
     return {
       shortcut,
       label,
-      desc: t('settingTools.shortcutDesc', { shortcut: label }),
+      desc: t(isTrigger ? 'settingTools.triggerDesc' : 'settingTools.shortcutDesc', {
+        shortcut: label
+      }),
       sourceLabel: getShortcutSourceLabel(shortcut),
       statusText: getShortcutStatusText(shortcut),
       spotlightHint: getSpotlightHint(shortcut),
       saveState: getRowSaveState(shortcut.id),
       saveText: getRowSaveText(shortcut.id),
-      isEnabled: isShortcutEnabled(shortcut)
+      isEnabled: isShortcutEnabled(shortcut),
+      inputMode: isTrigger ? 'trigger' : 'keyboard',
+      triggerLabel: getShortcutTriggerLabel(shortcut)
     }
   })
 )
@@ -484,24 +501,6 @@ watch(shortcutsDialogVisible, (visible) => {
       :description="t('settingTools.autoHideDesc')"
       default-icon="i-carbon-view-off"
       active-icon="i-carbon-view-off"
-    />
-
-    <!-- Dashboard switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.dashboard.enable"
-      :title="t('settingTools.dashboard')"
-      :description="t('settingTools.dashboardDesc')"
-      default-icon="i-carbon-dashboard"
-      active-icon="i-carbon-dashboard"
-    />
-
-    <!-- Search Engine Logs switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.searchEngine.logsEnabled"
-      :title="t('settingTools.searchEngineLogs')"
-      :description="t('settingTools.searchEngineLogsDesc')"
-      default-icon="i-carbon-warning-alt"
-      active-icon="i-carbon-warning-alt"
     />
 
     <!-- Recommendation Enabled switch -->

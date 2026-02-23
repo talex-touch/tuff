@@ -5,8 +5,8 @@
 export interface IArgMapperOptions {
   /** The type of touch window - main, core-box popup, or assistant window */
   touchType?: 'main' | 'core-box' | 'assistant'
-  /** The sub-type for core-box windows (e.g., division-box) */
-  coreType?: 'division-box'
+  /** The sub-type for core-box windows (e.g., division-box, omni-panel) */
+  coreType?: 'division-box' | 'omni-panel'
   /** The sub-type for assistant windows */
   assistantType?: 'floating-ball' | 'voice-panel'
   /** Whether this is a meta-overlay WebContentsView */
@@ -91,7 +91,7 @@ export function isAssistantWindow() {
 
 /**
  * Gets the core-box sub-type from command line arguments
- * @returns The core type ('division-box') or undefined
+ * @returns The core type ('division-box' | 'omni-panel') or undefined
  */
 export function useCoreType() {
   const argMapper = useArgMapper()
@@ -113,6 +113,14 @@ export function useAssistantType() {
  */
 export function isDivisionBox() {
   return isCoreBox() && useCoreType() === 'division-box'
+}
+
+/**
+ * Checks if the current window is an OmniPanel window
+ * @returns True if the current window is an OmniPanel
+ */
+export function isOmniPanel() {
+  return isCoreBox() && useCoreType() === 'omni-panel'
 }
 
 /**

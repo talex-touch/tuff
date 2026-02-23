@@ -27,6 +27,7 @@ import { flowBusModule } from './modules/flow-bus'
 // import DropManager from './modules/drop-manager'
 import { shortcutModule } from './modules/global-shortcon'
 import { notificationModule } from './modules/notification'
+import { omniPanelModule } from './modules/omni-panel'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { sentryModule } from './modules/sentry'
@@ -50,10 +51,6 @@ import './core/precore'
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
 process.env.WS_NO_BUFFER_UTIL = 'true'
-const ASSISTANT_EXPERIMENT_ENV_KEY = 'TUFF_ENABLE_ASSISTANT_EXPERIMENT'
-const ASSISTANT_EXPERIMENT_ENABLED =
-  process.env[ASSISTANT_EXPERIMENT_ENV_KEY] === '1' ||
-  process.env[ASSISTANT_EXPERIMENT_ENV_KEY] === 'true'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -133,11 +130,6 @@ applyLoggerConfig({ diagnostics: { verboseLogs: false } })
 
 // Permission module instance
 const permissionModule = new PermissionModule()
-if (!ASSISTANT_EXPERIMENT_ENABLED) {
-  mainLog.info(
-    `Assistant experiment disabled. Set ${ASSISTANT_EXPERIMENT_ENV_KEY}=1 to enable module loading.`
-  )
-}
 
 const modulesToLoad = [
   databaseModule,
@@ -162,7 +154,8 @@ const modulesToLoad = [
   flowBusModule, // Flow Transfer system - after plugin module
   divisionBoxModule,
   coreBoxModule,
-  ...(ASSISTANT_EXPERIMENT_ENABLED ? [assistantModule] : []),
+  omniPanelModule,
+  assistantModule,
   trayManagerModule,
   addonOpenerModule,
   clipboardModule,

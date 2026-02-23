@@ -5,6 +5,7 @@ import {
   isDivisionBox,
   isFloatingBallWindow,
   isMetaOverlay,
+  isOmniPanel,
   isVoicePanelWindow
 } from '@talex-touch/utils/renderer'
 import { Toaster } from 'vue-sonner'
@@ -16,6 +17,7 @@ import FloatingBall from './views/assistant/FloatingBall.vue'
 import VoicePanel from './views/assistant/VoicePanel.vue'
 import CoreBox from './views/box/CoreBox.vue'
 import MetaOverlay from './views/meta/MetaOverlay.vue'
+import OmniPanel from './views/omni-panel/OmniPanel.vue'
 
 declare global {
   interface Window {
@@ -44,9 +46,11 @@ setTimeout(async () => {
         ? 'AssistantVoicePanel'
         : 'Assistant'
     : isCoreBox()
-      ? isDivisionBox()
-        ? 'DivisionBox'
-        : 'CoreBox'
+      ? isOmniPanel()
+        ? 'OmniPanel'
+        : isDivisionBox()
+          ? 'DivisionBox'
+          : 'CoreBox'
       : 'MainApp'
   logAppEntranceMode(
     mode,
@@ -72,6 +76,9 @@ setTimeout(async () => {
     </template>
     <template v-else-if="isVoicePanelWindow()">
       <VoicePanel />
+    </template>
+    <template v-else-if="isOmniPanel()">
+      <OmniPanel />
     </template>
     <!-- CoreBox: render directly -->
     <template v-else-if="isCoreBox()">

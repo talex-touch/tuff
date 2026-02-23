@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, watchEffect } from 'vue'
+import { sanitizeRedirect } from '~/composables/useOauthContext'
 
 definePageMeta({
   layout: false,
@@ -13,7 +14,7 @@ const route = useRoute()
 const redirectTarget = computed(() => {
   const redirect = route.query.redirect_url
   if (typeof redirect === 'string' && redirect.length > 0) {
-    return redirect
+    return sanitizeRedirect(redirect, '/dashboard')
   }
   return '/dashboard'
 })

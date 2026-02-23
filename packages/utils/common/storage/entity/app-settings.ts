@@ -171,6 +171,10 @@ const _appSettingOriginData = {
     identifier: 'aler',
     enabled: false,
   },
+  omniPanel: {
+    enableShortcut: true,
+    enableMouseLongPress: true,
+  },
   floatingBall: {
     enabled: false,
     size: 56,

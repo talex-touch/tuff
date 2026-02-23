@@ -2,6 +2,7 @@
 import { useI18n } from '#imports'
 import { computed, onMounted, ref, watch, watchEffect } from 'vue'
 import GlobalSearch from '~/components/search/GlobalSearch.vue'
+import { sanitizeRedirect } from '~/composables/useOauthContext'
 import InvisibleWatermark from '~/components/watermark/InvisibleWatermark.vue'
 import WatermarkRiskModal from '~/components/watermark/WatermarkRiskModal.vue'
 import { appName } from '~/constants'
@@ -107,7 +108,7 @@ const localeFromQuery = computed(() => {
 })
 
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-const redirectTarget = computed(() => route.fullPath || '/dashboard')
+const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
 
 watchEffect(() => {
   if (import.meta.server)

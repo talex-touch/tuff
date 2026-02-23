@@ -85,6 +85,7 @@
       "simple-git-hooks",
       "tesseract.js",
       "typeit",
+      "uiohook-napi",
       "unrs-resolver",
       "utf-8-validate",
       "vue-demi",

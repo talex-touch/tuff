@@ -149,3 +149,35 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
     additionalArguments: ['--touch-type=assistant', '--assistant-type=voice-panel']
   }
 }
+export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
+  title: `${AppName} OmniPanel`,
+  frame: false,
+  minWidth: 520,
+  minHeight: 420,
+  width: 640,
+  height: 520,
+  movable: true,
+  resizable: true,
+  skipTaskbar: false,
+  autoHideMenuBar: true,
+  show: false,
+  transparent: true,
+  titleBarStyle: 'hidden',
+  trafficLightPosition: { x: 18, y: 22 },
+  titleBarOverlay: {
+    color: 'rgba(0,0,0,0)',
+    height: 54,
+    symbolColor: 'white'
+  },
+  webPreferences: {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    webSecurity: false,
+    nodeIntegration: true,
+    nodeIntegrationInSubFrames: true,
+    contextIsolation: false,
+    sandbox: false,
+    webviewTag: true,
+    scrollBounce: true,
+    additionalArguments: ['--touch-type=core-box', '--core-type=omni-panel']
+  }
+}

@@ -36,6 +36,24 @@ interface ResolveOauthContextInput {
 
 const OAUTH_STATE_KEY = 'tuff_oauth_state'
 export const OAUTH_CONTEXT_TTL_MS = 10 * 60 * 1000
+const AUTH_REDIRECT_BLOCKED_KEYS = new Set([
+  'callbackUrl',
+  'callback_url',
+  'oauth',
+  'oauth_relay',
+  'flow',
+  'provider',
+  'error',
+  'error_description',
+])
+const AUTH_REDIRECT_TRIGGER_KEYS = new Set([
+  'callbackUrl',
+  'callback_url',
+  'oauth',
+  'oauth_relay',
+  'flow',
+  'provider',
+])
 
 function isAuthFlow(value: unknown): value is AuthFlow {
   return value === 'login' || value === 'bind'
@@ -53,11 +71,34 @@ export function sanitizeRedirect(redirect: string | null | undefined, fallback =
   if (!redirect)
     return fallback
 
-  const normalized = redirect.trim()
-  if (!normalized.startsWith('/') || normalized.startsWith('//'))
-    return resolveSameOriginRedirect(normalized, fallback)
+  const normalized = resolveRedirectPath(redirect.trim(), fallback)
+  if (!normalized)
+    return fallback
+  if (normalized.startsWith('/sign-in') || normalized.startsWith('/api/auth/signin'))
+    return fallback
 
-  return normalized
+  try {
+    const parsed = parseUrlLike(normalized)
+    if (!parsed)
+      return fallback
+
+    const shouldStripAuthNoise = Array.from(AUTH_REDIRECT_TRIGGER_KEYS).some(key => parsed.searchParams.has(key))
+    if (shouldStripAuthNoise) {
+      AUTH_REDIRECT_BLOCKED_KEYS.forEach((key) => {
+        parsed.searchParams.delete(key)
+      })
+    }
+
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`
+    if (!path.startsWith('/') || path.startsWith('//'))
+      return fallback
+    if (path.startsWith('/sign-in') || path.startsWith('/api/auth/signin'))
+      return fallback
+    return path
+  }
+  catch {
+    return fallback
+  }
 }
 
 function resolveSameOriginRedirect(value: string, fallback: string) {
@@ -78,6 +119,16 @@ function resolveSameOriginRedirect(value: string, fallback: string) {
   catch {
     return fallback
   }
+}
+
+function resolveRedirectPath(value: string, fallback: string) {
+  if (!value)
+    return ''
+  if (value.startsWith('//'))
+    return ''
+  if (value.startsWith('/'))
+    return value
+  return resolveSameOriginRedirect(value, fallback)
 }
 
 export function buildOauthCallbackUrl(input: BuildOauthCallbackInput) {
@@ -114,6 +165,36 @@ function isOauthFallbackUrl(value: string, callbackUrl: string) {
     return false
 
   if (parsed.pathname.startsWith('/api/auth/signin') || parsed.pathname.startsWith('/sign-in'))
+    return true
+
+  const callbackParams = [
+    parsed.searchParams.get('callbackUrl'),
+    parsed.searchParams.get('callback_url'),
+  ].filter((item): item is string => Boolean(item))
+
+  const isAuthLikePath = (pathname: string) => pathname.startsWith('/api/auth/signin') || pathname.startsWith('/sign-in')
+  const tryParseNestedCallback = (rawValue: string) => {
+    const attempts = [rawValue]
+    try {
+      const decoded = decodeURIComponent(rawValue)
+      if (decoded !== rawValue)
+        attempts.push(decoded)
+    }
+    catch {
+      // ignore malformed URI segments
+    }
+    for (const attempt of attempts) {
+      const nested = parseUrlLike(attempt)
+      if (nested && isAuthLikePath(nested.pathname))
+        return true
+    }
+    return false
+  }
+
+  if (callbackParams.some(item => item === callbackUrl || tryParseNestedCallback(item)))
+    return true
+
+  if (callbackParams.length > 0 && parsed.searchParams.has('error'))
     return true
 
   return false

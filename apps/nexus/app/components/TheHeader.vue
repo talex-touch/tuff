@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
+import { sanitizeRedirect } from '~/composables/useOauthContext'
 import HeaderUserMenu from './HeaderUserMenu.vue'
 
 withDefaults(defineProps<{
@@ -32,10 +33,7 @@ const links = computed(() => [
 const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const fullPath = computed(() => route.fullPath || '/')
 const authRedirectTarget = computed(() => {
-  const target = fullPath.value
-  if (target.startsWith('/sign-in') || target.startsWith('/sign-up'))
-    return '/dashboard'
-  return target
+  return sanitizeRedirect(fullPath.value, '/dashboard')
 })
 
 const signInRoute = computed(() => ({

@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   OAUTH_CONTEXT_TTL_MS,
   buildOauthCallbackUrl,
   clearOauthContext,
   persistOauthContext,
   readOauthContext,
+  requestOauthAuthorizationUrl,
   resolveOauthContext,
   sanitizeRedirect,
 } from '../../../app/composables/useOauthContext'
@@ -34,11 +35,15 @@ describe('useOauthContext', () => {
   beforeEach(() => {
     (globalThis as any).window = {
       localStorage: createMemoryStorage(),
+      location: {
+        origin: 'https://tuff.tagzxia.com',
+      },
     }
   })
 
   afterEach(() => {
     delete (globalThis as any).window
+    delete (globalThis as any).$fetch
   })
 
   it('buildOauthCallbackUrl 会固定到 /sign-in 并带上标准参数', () => {
@@ -58,8 +63,11 @@ describe('useOauthContext', () => {
     expect(query.get('lang')).toBe('zh-CN')
   })
 
-  it('sanitizeRedirect 只允许站内相对路径', () => {
+  it('sanitizeRedirect 只允许站内相对路径，并会清理 oauth 中间态参数', () => {
     expect(sanitizeRedirect('/dashboard/account', '/dashboard')).toBe('/dashboard/account')
+    expect(sanitizeRedirect('/?callbackUrl=https://tuff.tagzxia.com/sign-in?oauth=1&error=OAuthSignin', '/dashboard')).toBe('/')
+    expect(sanitizeRedirect('/sign-in?oauth=1&provider=linuxdo', '/dashboard')).toBe('/dashboard')
+    expect(sanitizeRedirect('https://tuff.tagzxia.com/market?callbackUrl=%2Fsign-in&error=OAuthSignin', '/dashboard')).toBe('/market')
     expect(sanitizeRedirect('https://evil.com', '/dashboard')).toBe('/dashboard')
     expect(sanitizeRedirect('//evil.com', '/dashboard')).toBe('/dashboard')
     expect(sanitizeRedirect('', '/dashboard')).toBe('/dashboard')
@@ -125,5 +133,20 @@ describe('useOauthContext', () => {
 
     clearOauthContext()
     expect(readOauthContext()).toBeNull()
+  })
+
+  it('requestOauthAuthorizationUrl 会拦截 callbackUrl 套娃 fallback', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ csrfToken: 'csrf-token' })
+      .mockResolvedValueOnce({
+        url: '/?callbackUrl=https://tuff.tagzxia.com/sign-in?oauth=1%2526flow=login%2526provider=linuxdo&error=OAuthSignin',
+      })
+
+    ;(globalThis as any).$fetch = fetchMock
+
+    await expect(requestOauthAuthorizationUrl({
+      provider: 'linuxdo',
+      callbackUrl: '/sign-in?oauth=1&flow=login&provider=linuxdo&redirect_url=%2Fdashboard',
+    })).rejects.toThrow('oauth_redirect_fallback:OAuthSignin')
   })
 })
