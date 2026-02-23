@@ -535,25 +535,27 @@ watch(shortcutsDialogVisible, (visible) => {
       <TxSelectItem :value="-1">{{ t('settingTools.never') }}</TxSelectItem>
     </TuffBlockSelect>
 
-    <TuffBlockSwitch
-      v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
-      :title="t('settingTools.clipboardPollingLowBattery')"
-      :description="t('settingTools.clipboardPollingLowBatteryDesc')"
-      default-icon="i-carbon-battery-charging"
-      active-icon="i-carbon-battery-charging"
-    />
+    <template v-if="appSetting?.dev?.advancedSettings">
+      <TuffBlockSwitch
+        v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.enable"
+        :title="t('settingTools.clipboardPollingLowBattery')"
+        :description="t('settingTools.clipboardPollingLowBatteryDesc')"
+        default-icon="i-carbon-battery-charging"
+        active-icon="i-carbon-battery-charging"
+      />
 
-    <TuffBlockSelect
-      v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
-      :title="t('settingTools.clipboardPollingLowBatteryInterval')"
-      :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
-      default-icon="i-carbon-battery-empty"
-      active-icon="i-carbon-battery-empty"
-      :disabled="clipboardPollingLowBatteryDisabled"
-    >
-      <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
-      <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
-    </TuffBlockSelect>
+      <TuffBlockSelect
+        v-model="appSetting.tools.clipboardPolling.lowBatteryPolicy.interval"
+        :title="t('settingTools.clipboardPollingLowBatteryInterval')"
+        :description="t('settingTools.clipboardPollingLowBatteryIntervalDesc')"
+        default-icon="i-carbon-battery-empty"
+        active-icon="i-carbon-battery-empty"
+        :disabled="clipboardPollingLowBatteryDisabled"
+      >
+        <TxSelectItem :value="10">10 {{ t('settingTools.sec') }}</TxSelectItem>
+        <TxSelectItem :value="15">15 {{ t('settingTools.sec') }}</TxSelectItem>
+      </TuffBlockSelect>
+    </template>
 
     <!-- Auto hide switch -->
     <TuffBlockSwitch
