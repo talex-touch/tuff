@@ -4,6 +4,18 @@
 
 ## 2026-02-23
 
+### Nexus Cloudflare 变量绑定冲突收敛（LINUXDO_ISSUER）
+
+**变更类型**: 部署稳定性 / 配置收敛
+
+**描述**: Cloudflare Functions 发布阶段出现 `Binding name 'LINUXDO_ISSUER' already in use`。将 `LINUXDO_ISSUER` 收敛为单处 wrangler 定义，避免环境变量重复绑定冲突。
+
+**主要变更**:
+1. **单点定义**：移除 `env.preview.vars` 中的 `LINUXDO_ISSUER`，仅保留顶层 `[vars]` 定义。
+
+**修改文件**:
+- `wrangler.toml`
+
 ### Nexus 实验内容噪点水印隐藏策略收敛
 
 **变更类型**: 体验修复 / 水印策略
