@@ -17,6 +17,21 @@ function cloneDefinition(definition: MarketProviderDefinition): MarketProviderDe
   return JSON.parse(JSON.stringify(definition))
 }
 
+const NON_OUTDATED_PROVIDER_IDS = new Set<string>(['tuff-nexus', 'npm-scope'])
+const BUILTIN_PROVIDER_IDS = new Set<string>(DEFAULT_MARKET_PROVIDERS.map((item) => item.id))
+
+function resolveOutdatedFlag(source: MarketProviderDefinition): boolean | undefined {
+  if (BUILTIN_PROVIDER_IDS.has(source.id)) {
+    return !NON_OUTDATED_PROVIDER_IDS.has(source.id)
+  }
+
+  if (typeof source.outdated === 'boolean') {
+    return source.outdated
+  }
+
+  return undefined
+}
+
 class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
   #initialized = false
 
@@ -90,7 +105,9 @@ class MarketSourcesStorage extends TouchStorage<MarketSourcesPayload> {
         priority: typeof source.priority === 'number' ? source.priority : 0,
         trustLevel: source.trustLevel ?? 'unverified',
         tags: Array.isArray(source.tags) ? [...source.tags] : undefined,
-        readOnly: source.readOnly ?? false
+        readOnly: source.readOnly ?? false,
+        isOfficial: source.isOfficial ?? false,
+        outdated: resolveOutdatedFlag(source)
       }))
   }
 }

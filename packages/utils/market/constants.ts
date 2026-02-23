@@ -32,6 +32,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     priority: 110,
     trustLevel: 'official',
     isOfficial: true,
+    outdated: false,
     readOnly: true,
     config: {
       apiUrl: `${NEXUS_BASE_URL}/api/market/plugins`,
@@ -63,6 +64,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     enabled: false,
     priority: 80,
     trustLevel: 'unverified',
+    outdated: true,
     config: {
       platform: 'github',
       apiBase: 'https://api.github.com',
@@ -76,6 +78,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     enabled: false,
     priority: 70,
     trustLevel: 'unverified',
+    outdated: true,
     config: {
       platform: 'gitee',
       apiBase: 'https://gitee.com/api/v5',
@@ -89,6 +92,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     enabled: false,
     priority: 60,
     trustLevel: 'unverified',
+    outdated: false,
     config: {
       registryUrl: 'https://registry.npmjs.org',
       keyword: 'talex-touch-plugin',
