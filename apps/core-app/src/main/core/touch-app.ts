@@ -58,23 +58,112 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   private mainWindowBoundsSaveTimer: NodeJS.Timeout | null = null
 
+  private readLegacyBooleanSettingFromDisk(
+    settingFile: string
+  ): { value: boolean; mtimeMs: number } | null {
+    const legacyPath = path.join(this.rootPath, 'modules', 'config', settingFile)
+    try {
+      if (!fse.existsSync(legacyPath)) return null
+      const content = fse.readFileSync(legacyPath, 'utf-8').trim()
+      if (!content) return null
+
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(content)
+      } catch {
+        parsed = content
+      }
+
+      if (parsed !== true && parsed !== false) {
+        return null
+      }
+
+      const stat = fse.statSync(legacyPath)
+      return {
+        value: parsed,
+        mtimeMs: stat.mtimeMs
+      }
+    } catch (error) {
+      mainLog.warn(`Failed to read legacy setting file: ${settingFile}`, { error })
+      return null
+    }
+  }
+
   /**
    * Read app-setting.ini directly from disk before StorageModule is initialized.
+   * Also merges legacy split setting files when they are newer than app-setting.ini.
    */
   private readAppSettingsConfigFromDisk(): Record<string, unknown> {
+    const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
+    let appSettings: Record<string, unknown> = {}
+    let appSettingMtimeMs = 0
+    let appSettingLoaded = false
+
     try {
-      const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
       if (fse.existsSync(configPath)) {
+        const stat = fse.statSync(configPath)
+        appSettingMtimeMs = stat.mtimeMs
+
         const content = fse.readFileSync(configPath, 'utf-8')
         if (content.length > 0) {
           const parsed: unknown = JSON.parse(content)
-          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>
+          if (parsed && typeof parsed === 'object') {
+            appSettings = parsed as Record<string, unknown>
+            appSettingLoaded = true
+          }
         }
       }
     } catch (error) {
       mainLog.warn('Failed to read app-setting.ini from disk', { error })
+      appSettings = {}
+      appSettingLoaded = false
     }
-    return {}
+
+    const legacyStartSilent = this.readLegacyBooleanSettingFromDisk('app.window.startSilent')
+    if (!legacyStartSilent) {
+      return appSettings
+    }
+
+    const rawWindow =
+      appSettings.window && typeof appSettings.window === 'object'
+        ? (appSettings.window as Record<string, unknown>)
+        : {}
+    const startSilentFromAppSetting =
+      typeof rawWindow.startSilent === 'boolean' ? rawWindow.startSilent : undefined
+    const shouldUseLegacy =
+      startSilentFromAppSetting === undefined || legacyStartSilent.mtimeMs > appSettingMtimeMs
+
+    if (!shouldUseLegacy) {
+      return appSettings
+    }
+
+    const nextWindow = {
+      ...rawWindow,
+      startSilent: legacyStartSilent.value
+    }
+    appSettings = {
+      ...appSettings,
+      window: nextWindow
+    }
+
+    mainLog.info('Merged legacy startSilent setting into app-setting.ini snapshot', {
+      meta: {
+        value: legacyStartSilent.value,
+        source: 'app.window.startSilent'
+      }
+    })
+
+    if (!appSettingLoaded) {
+      return appSettings
+    }
+
+    try {
+      fse.writeFileSync(configPath, JSON.stringify(appSettings, null, 2))
+    } catch (error) {
+      mainLog.warn('Failed to persist merged startSilent setting to app-setting.ini', { error })
+    }
+
+    return appSettings
   }
 
   private resolveRendererOverrideStatePath(): string {
@@ -442,6 +531,8 @@ export class TouchApp implements TalexTouch.TouchApp {
 
     const startSilent = this._startSilent
 
+    const shouldOpenDevtools = this.version === TalexTouch.AppVersion.DEV && !startSilent
+
     if (app.isPackaged || this.version === TalexTouch.AppVersion.RELEASE) {
       mainLog.info('Booting packaged build', {
         meta: { appPath: app.getAppPath() }
@@ -503,7 +594,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
         try {
           await this.window.loadFile(testPath, {
-            devtools: this.version === TalexTouch.AppVersion.DEV
+            devtools: shouldOpenDevtools
           })
           loaded = true
           mainLog.info(`Found index.html at: ${testPath}`)
@@ -566,7 +657,7 @@ export class TouchApp implements TalexTouch.TouchApp {
         meta: { url }
       })
 
-      await this.window.loadURL(url, { devtools: this.version === TalexTouch.AppVersion.DEV })
+      await this.window.loadURL(url, { devtools: shouldOpenDevtools })
     }
 
     renderTimer.end('Renderer ready', {

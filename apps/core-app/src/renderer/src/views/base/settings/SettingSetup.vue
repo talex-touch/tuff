@@ -8,7 +8,7 @@
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { TrayEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
@@ -184,22 +184,7 @@ async function loadSettings(): Promise<void> {
     console.error('[SettingSetup] Failed to load autoStart:', error)
   }
 
-  // Load startSilent from existing setting
-  try {
-    const startSilentResult = await transport.send(StorageEvents.app.get, {
-      key: 'app.window.startSilent'
-    })
-    if (startSilentResult !== null && startSilentResult !== undefined) {
-      settings.value.startSilent = Boolean(startSilentResult)
-    } else {
-      const windowSettings = appSetting.window
-      if (windowSettings && windowSettings.startSilent !== undefined) {
-        settings.value.startSilent = windowSettings.startSilent
-      }
-    }
-  } catch (error) {
-    console.error('[SettingSetup] Failed to load startSilent:', error)
-  }
+  settings.value.startSilent = Boolean(appSetting.window?.startSilent)
 }
 
 async function requestPermission(type: string): Promise<void> {
@@ -222,11 +207,6 @@ async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.autoStart',
-      content: JSON.stringify(value),
-      clear: false
-    })
     await transport.send(TrayEvents.autostart.update, value)
     toast.success(t('common.success'))
   } catch (error) {
@@ -239,11 +219,6 @@ async function updateShowTray(value: boolean): Promise<void> {
   settings.value.showTray = value
   appSetting.setup.showTray = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.setup.showTray',
-      content: JSON.stringify(value),
-      clear: false
-    })
     await transport.send(TrayEvents.show.set, value)
     toast.success(t('common.success'))
   } catch (error) {
@@ -256,11 +231,6 @@ async function updateHideDock(value: boolean): Promise<void> {
   settings.value.hideDock = value
   appSetting.setup.hideDock = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.setup.hideDock',
-      content: JSON.stringify(value),
-      clear: false
-    })
     await transport.send(TrayEvents.hideDock.set)
     toast.success(t('common.success'))
   } catch (error) {
@@ -274,11 +244,6 @@ async function updateStartSilent(value: boolean): Promise<void> {
   ensureWindowSettings()
   appSetting.window.startSilent = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.window.startSilent',
-      content: JSON.stringify(value),
-      clear: false
-    })
     // Update auto-start setting to apply the change
     await transport.send(TrayEvents.autostart.update, settings.value.autoStart)
     toast.success(t('common.success'))
@@ -292,11 +257,6 @@ async function updateRunAsAdmin(value: boolean): Promise<void> {
   settings.value.runAsAdmin = value
   appSetting.setup.runAsAdmin = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.setup.runAsAdmin',
-      content: JSON.stringify(value),
-      clear: false
-    })
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update runAsAdmin:', error)
@@ -308,11 +268,6 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
   settings.value.customDesktop = value
   appSetting.setup.customDesktop = value
   try {
-    await transport.send(StorageEvents.app.save, {
-      key: 'app.setup.customDesktop',
-      content: JSON.stringify(value),
-      clear: false
-    })
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update customDesktop:', error)
