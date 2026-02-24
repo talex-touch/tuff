@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import path from 'node:path'
 import { makeWidgetId } from '@talex-touch/utils/plugin/widget'
 import fse from 'fs-extra'
+import { pushWidgetFeatureIssue } from './widget-issue'
 
 export interface WidgetSource {
   widgetId: string
@@ -211,12 +212,9 @@ export class WidgetLoader {
     code: string,
     message: string
   ): void {
-    plugin.issues.push({
-      type: 'error',
+    pushWidgetFeatureIssue(plugin, feature, {
       code,
-      message,
-      source: `feature:${feature.id}`,
-      timestamp: Date.now()
+      message
     })
   }
 }

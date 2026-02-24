@@ -13,6 +13,7 @@ import fse from 'fs-extra'
 import { genTouchApp } from '../../../core'
 import { getCoreBoxWindow } from '../../box-tool/core-box/window'
 import { compileWidgetSource } from './widget-compiler'
+import { pushWidgetFeatureIssue } from './widget-issue'
 import { pluginWidgetLoader, resolveWidgetFilePath } from './widget-loader'
 
 type WidgetEvent = 'register' | 'update'
@@ -452,12 +453,9 @@ export class WidgetManager {
     code: string,
     message: string
   ): void {
-    plugin.issues.push({
-      type: 'error',
+    pushWidgetFeatureIssue(plugin, feature, {
       code,
-      message,
-      source: `feature:${feature.id}`,
-      timestamp: Date.now()
+      message
     })
   }
 

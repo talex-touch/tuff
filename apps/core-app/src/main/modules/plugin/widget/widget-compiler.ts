@@ -4,6 +4,7 @@ import path from 'node:path'
 import { WidgetScriptProcessor } from './processors/script-processor'
 import { WidgetTsxProcessor } from './processors/tsx-processor'
 import { WidgetVueProcessor } from './processors/vue-processor'
+import { pushWidgetFeatureIssue } from './widget-issue'
 import { widgetProcessorRegistry } from './widget-processor'
 
 // Register default processors
@@ -27,13 +28,10 @@ export async function compileWidgetSource(
   const processor = widgetProcessorRegistry.getProcessor(ext)
 
   if (!processor) {
-    context.plugin.issues.push({
-      type: 'error',
+    pushWidgetFeatureIssue(context.plugin, context.feature, {
       code: 'WIDGET_UNSUPPORTED_TYPE',
       message: `Unsupported widget file type: ${ext}`,
-      source: `feature:${context.feature.id}`,
-      suggestion: `Supported extensions: ${widgetProcessorRegistry.getSupportedExtensions().join(', ')}`,
-      timestamp: Date.now()
+      suggestion: `Supported extensions: ${widgetProcessorRegistry.getSupportedExtensions().join(', ')}`
     })
 
     context.plugin.logger.error(
