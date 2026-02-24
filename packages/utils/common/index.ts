@@ -1,4 +1,5 @@
 export * from '../electron/file-parsers'
+export * from './battery-policy'
 export * from './file-scan-constants'
 export * from './file-scan-utils'
 export { getLogger, LoggerManager, loggerManager } from './logger/logger-manager'

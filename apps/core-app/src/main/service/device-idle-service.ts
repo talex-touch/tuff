@@ -2,7 +2,12 @@ import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { StorageList } from '@talex-touch/utils'
+import {
+  StorageList,
+  evaluateBatteryPolicy,
+  normalizeBatteryPolicy,
+  type BatteryPolicy
+} from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { powerMonitor } from 'electron'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -16,11 +21,8 @@ import {
 const execFileAsync = promisify(execFile)
 const deviceIdleLog = getLogger('device-idle-service')
 
-export interface DeviceIdleSettings {
+export interface DeviceIdleSettings extends BatteryPolicy {
   idleThresholdMs: number
-  minBatteryPercent: number
-  blockBatteryBelowPercent: number
-  allowWhenCharging: boolean
   forceAfterHours: number
 }
 
@@ -35,11 +37,8 @@ export interface DeviceIdleSnapshot {
   battery: DeviceBatteryStatus | null
 }
 
-export interface DeviceIdlePolicy {
+export interface DeviceIdlePolicy extends BatteryPolicy {
   idleThresholdMs: number
-  minBatteryPercent: number
-  blockBatteryBelowPercent: number
-  allowWhenCharging: boolean
   lastRunAt?: number
   forceAfterMs?: number
 }
@@ -124,16 +123,9 @@ export class DeviceIdleService {
       }
     }
 
-    const battery = snapshot.battery
-    if (battery) {
-      if (battery.level < policy.blockBatteryBelowPercent) {
-        return { allowed: false, reason: 'battery-critical', snapshot }
-      }
-      if (battery.level < policy.minBatteryPercent) {
-        if (!(battery.charging && policy.allowWhenCharging)) {
-          return { allowed: false, reason: 'battery-low', snapshot }
-        }
-      }
+    const batteryDecision = evaluateBatteryPolicy(snapshot.battery, policy)
+    if (!batteryDecision.allowed) {
+      return { allowed: false, reason: batteryDecision.reason, snapshot }
     }
 
     return { allowed: true, forced, snapshot }
@@ -300,12 +292,6 @@ export class DeviceIdleService {
 
   private normalizeSettings(raw?: Partial<DeviceIdleSettings> | null): DeviceIdleSettings {
     const data = raw && typeof raw === 'object' ? raw : {}
-    const clampPercent = (value: unknown, fallback: number) => {
-      if (typeof value !== 'number' || !Number.isFinite(value)) {
-        return fallback
-      }
-      return Math.max(0, Math.min(100, value))
-    }
     const clampMs = (value: unknown, fallback: number) => {
       if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
         return fallback
@@ -319,23 +305,22 @@ export class DeviceIdleService {
       return value
     }
 
-    const blockBattery = clampPercent(
-      data.blockBatteryBelowPercent,
-      DEFAULT_DEVICE_IDLE_SETTINGS.blockBatteryBelowPercent
-    )
-    const minBattery = Math.max(
-      clampPercent(data.minBatteryPercent, DEFAULT_DEVICE_IDLE_SETTINGS.minBatteryPercent),
-      blockBattery
+    const batteryPolicy = normalizeBatteryPolicy(
+      {
+        minBatteryPercent: data.minBatteryPercent,
+        blockBatteryBelowPercent: data.blockBatteryBelowPercent,
+        allowWhenCharging: data.allowWhenCharging
+      },
+      {
+        minBatteryPercent: DEFAULT_DEVICE_IDLE_SETTINGS.minBatteryPercent,
+        blockBatteryBelowPercent: DEFAULT_DEVICE_IDLE_SETTINGS.blockBatteryBelowPercent,
+        allowWhenCharging: DEFAULT_DEVICE_IDLE_SETTINGS.allowWhenCharging
+      }
     )
 
     return {
       idleThresholdMs: clampMs(data.idleThresholdMs, DEFAULT_DEVICE_IDLE_SETTINGS.idleThresholdMs),
-      minBatteryPercent: minBattery,
-      blockBatteryBelowPercent: blockBattery,
-      allowWhenCharging:
-        typeof data.allowWhenCharging === 'boolean'
-          ? data.allowWhenCharging
-          : DEFAULT_DEVICE_IDLE_SETTINGS.allowWhenCharging,
+      ...batteryPolicy,
       forceAfterHours: clampHours(
         data.forceAfterHours,
         DEFAULT_DEVICE_IDLE_SETTINGS.forceAfterHours

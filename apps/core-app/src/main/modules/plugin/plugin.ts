@@ -21,6 +21,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import { clampBatteryPercent } from '@talex-touch/utils'
 import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginStatus } from '@talex-touch/utils/plugin'
@@ -54,6 +55,7 @@ import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
 import { getBoxItemManager } from '../box-tool/item-sdk'
+import { deviceIdleService } from '../../service/device-idle-service'
 import {
   loadPluginFeatureContext,
   loadPluginFeatureContextFromContent,
@@ -912,14 +914,20 @@ export class TouchPlugin implements ITouchPlugin {
     pluginName: string,
     touchChannel: { send: (eventName: string, payload?: unknown) => Promise<unknown> }
   ) {
+    const DEFAULT_LOW_POWER_THRESHOLD = 15
+    const getDefaultLowPowerThreshold = () => {
+      return clampBatteryPercent(
+        deviceIdleService.getSettings().blockBatteryBelowPercent,
+        DEFAULT_LOW_POWER_THRESHOLD
+      )
+    }
+
     const normalizeLowPowerThreshold = (threshold?: number): number => {
+      const fallback = getDefaultLowPowerThreshold()
       if (typeof threshold !== 'number' || !Number.isFinite(threshold)) {
-        return 20
+        return fallback
       }
-      const normalized = Math.floor(threshold)
-      if (normalized <= 0) return 1
-      if (normalized > 100) return 100
-      return normalized
+      return clampBatteryPercent(Math.floor(threshold), fallback)
     }
 
     const getLowPowerStatus = async (options: { threshold?: number } = {}) => {
