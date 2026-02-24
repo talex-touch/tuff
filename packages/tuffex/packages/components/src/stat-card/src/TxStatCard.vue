@@ -11,7 +11,7 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   clickable: false,
   variant: 'default',
 })
-const NumberFlowComponent = import.meta.client
+const NumberFlowComponent = typeof window !== 'undefined'
   ? defineAsyncComponent(() => import('@number-flow/vue'))
   : null
 
