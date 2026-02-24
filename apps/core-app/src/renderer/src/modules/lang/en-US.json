@@ -110,6 +110,46 @@
       "systemTag": "System default",
       "changeLanguage": "Change Language",
       "next": "Continue"
+    },
+    "account": {
+      "recommended": "RECOMMENDED",
+      "toastSignInSuccess": "Signed in successfully!",
+      "toastSignInFailed": "Sign-in failed, please try again",
+      "signIn": {
+        "title": "Sign In",
+        "description": "Create an account or sign in to unlock full capabilities, sync data across devices, and access cloud services.",
+        "learnMore": "Learn more",
+        "action": "Sign In"
+      },
+      "offline": {
+        "title": "Continue Offline",
+        "description": "You can continue without signing in, but cross-device sync and cloud features will be unavailable.",
+        "action": "Continue Offline"
+      }
+    },
+    "done": {
+      "description": "You're all set. Let's get started.",
+      "action": "Get Started"
+    },
+    "forbidden": {
+      "description": "We're sorry, but we're unable to provide service at this time.",
+      "close": "Close",
+      "back": "Back"
+    },
+    "optionMode": {
+      "recommended": "RECOMMENDED",
+      "guided": {
+        "title": "Guided Tour",
+        "description": "I'm new to this app and want a comprehensive walkthrough of its core features."
+      },
+      "selfGuided": {
+        "title": "Self-Guided",
+        "description": "I'm familiar with similar apps and prefer exploring the interface at my own pace."
+      },
+      "action": "Continue"
+    },
+    "license": {
+      "title": "License"
     }
   },
   "settingStorage": {

@@ -3,12 +3,10 @@ import type { Ref } from 'vue'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
 import { computed, inject, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
-// import Forbidden from './Forbidden.vue'
-// import OptionMode from './OptionMode.vue'
-// import Done from './Done.vue'
 import SetupPermissions from './SetupPermissions.vue'
 
 type StepFunction = (call: { comp: unknown; rect?: { width: number; height: number } }) => void
@@ -16,8 +14,8 @@ type StepFunction = (call: { comp: unknown; rect?: { width: number; height: numb
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
 const appSdk = useAppSdk()
+const { t } = useI18n()
 
-// 集成认证
 const { signIn, isAuthenticated, authLoadingState, initializeAuth } = useAuth()
 const learnMoreUrl = computed(() => `${getAuthBaseUrl().replace(/\/$/, '')}/sign-in`)
 const isActionLoading = computed(
@@ -28,11 +26,9 @@ onMounted(() => {
   void initializeAuth()
 })
 
-// 监听认证状态变化
 watch(isAuthenticated, (authenticated) => {
   if (authenticated) {
-    toast.success('登录成功！')
-    // 登录成功后跳转到权限设置页面
+    toast.success(t('beginner.account.toastSignInSuccess'))
     step({
       comp: SetupPermissions
     })
@@ -44,7 +40,7 @@ async function handleBrowserSignIn(): Promise<void> {
     await signIn()
   } catch (error) {
     console.error('Browser sign in failed:', error)
-    toast.error('登录失败，请重试')
+    toast.error(t('beginner.account.toastSignInFailed'))
   }
 }
 
@@ -52,21 +48,10 @@ function openLearnMore(): void {
   void appSdk.openExternal(learnMoreUrl.value)
 }
 
-// async function handleSignUp(): Promise<void> {
-//   try {
-//     await signUp()
-//   } catch (error) {
-//     console.error('Sign up failed:', error)
-//     toast.error('注册失败，请重试')
-//   }
-// }
-
 function handleAgree(): void {
   if (choice.value === 0) {
-    // 选择登录，通过浏览器认证
     handleBrowserSignIn()
   } else {
-    // 选择离线模式，跳转到权限设置页面
     step({
       comp: SetupPermissions
     })
@@ -90,13 +75,15 @@ function handleAgree(): void {
         @keydown.enter="choice = 0"
         @keydown.space="choice = 0"
       >
-        <h1>Sign In<span class="tag">RECOMMENDED</span></h1>
+        <h1>
+          {{ t('beginner.account.signIn.title') }}
+          <span class="tag">{{ t('beginner.account.recommended') }}</span>
+        </h1>
         <span>
-          Create an account or sign in to unlock the full potential of this application. Seamlessly
-          synchronize your data across all your devices and access cloud services.
-          <a :href="learnMoreUrl" target="_blank" rel="noreferrer" @click.prevent="openLearnMore"
-            >Learn more</a
-          >
+          {{ t('beginner.account.signIn.description') }}
+          <a :href="learnMoreUrl" target="_blank" rel="noreferrer" @click.prevent="openLearnMore">{{
+            t('beginner.account.signIn.learnMore')
+          }}</a>
         </span>
       </div>
 
@@ -109,17 +96,18 @@ function handleAgree(): void {
         @keydown.enter="choice = 1"
         @keydown.space="choice = 1"
       >
-        <h1>Continue Offline</h1>
+        <h1>{{ t('beginner.account.offline.title') }}</h1>
         <span>
-          You can use this application without signing in. However, please note that you will not be
-          able to synchronize your data across devices or access cloud-based features.
+          {{ t('beginner.account.offline.description') }}
         </span>
       </div>
     </div>
 
     <div class="AccountDo-Next">
       <TxButton variant="flat" type="primary" :loading="isActionLoading" @click="handleAgree">
-        {{ choice === 0 ? 'Sign In' : 'Continue Offline' }}
+        {{
+          choice === 0 ? t('beginner.account.signIn.action') : t('beginner.account.offline.action')
+        }}
       </TxButton>
     </div>
   </div>

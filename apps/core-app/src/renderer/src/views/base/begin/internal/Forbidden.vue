@@ -2,6 +2,7 @@
 import type { Ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
+import { useI18n } from 'vue-i18n'
 import HelloData from '~/assets/lotties/compress-loading.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 
@@ -9,6 +10,7 @@ type BackFunction = () => void
 
 const back: Ref<BackFunction> = inject('back')!
 const appSdk = useAppSdk()
+const { t } = useI18n()
 
 function close(): void {
   void appSdk.close()
@@ -19,10 +21,12 @@ function close(): void {
   <div class="Forbidden">
     <LottieFrame :loop="true" :data="HelloData" />
     <div class="Forbidden-Content">
-      <p>We're sorry, but we are unable to provide service at this time.</p>
+      <p>{{ t('beginner.forbidden.description') }}</p>
       <div flex gap-8>
-        <TxButton variant="flat" @click="close"> CLOSE </TxButton>
-        <TxButton variant="flat" type="primary" @click="back"> BACK </TxButton>
+        <TxButton variant="flat" @click="close"> {{ t('beginner.forbidden.close') }} </TxButton>
+        <TxButton variant="flat" type="primary" @click="back">
+          {{ t('beginner.forbidden.back') }}
+        </TxButton>
       </div>
     </div>
   </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts" name="SetupPermissions">
+import { TuffSwitch, TxButton, TxCard, TxCardItem, TxStatusBadge } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
@@ -7,7 +8,6 @@ import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import TGroupBlock from '~/components/base/group/TGroupBlock.vue'
-import TBlockSwitch from '~/components/base/switch/TBlockSwitch.vue'
 import RemixIcon from '~/components/icon/RemixIcon.vue'
 import { appSetting } from '~/modules/channel/storage/index'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
@@ -72,6 +72,7 @@ const settings = ref({
 })
 
 const isLoading = ref(false)
+const isContinuing = ref(false)
 
 // Initialize appSettingtata.setup if not exists
 if (!appSetting.setup) {
@@ -245,11 +246,6 @@ async function updateShowTray(value: boolean): Promise<void> {
   }
 }
 
-function canContinue(): boolean {
-  // Check file access permission (required)
-  return permissions.value.fileAccess.status === 'granted'
-}
-
 async function canContinueAsync(): Promise<boolean> {
   // Check file access permission (required)
   if (permissions.value.fileAccess.checked) {
@@ -261,31 +257,37 @@ async function canContinueAsync(): Promise<boolean> {
 }
 
 async function handleContinue(): Promise<void> {
-  const canProceed = await canContinueAsync()
-  if (!canProceed) {
-    toast.warning(t('setupPermissions.requiredFileAccess'))
-    return
-  }
-
-  step(
-    {
-      comp: Done
-    },
-    () => {
-      // Save all settings before proceeding
-      appSetting.setup = {
-        accessibility: permissions.value.accessibility.status === 'granted',
-        notifications: permissions.value.notifications.status === 'granted',
-        microphone: appSetting.setup.microphone ?? false,
-        autoStart: settings.value.autoStart,
-        showTray: settings.value.showTray,
-        adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
-        hideDock: settings.value.hideDock ?? false,
-        runAsAdmin: appSetting.setup.runAsAdmin ?? false,
-        customDesktop: appSetting.setup.customDesktop ?? false
-      }
+  if (isContinuing.value) return
+  isContinuing.value = true
+  try {
+    const canProceed = await canContinueAsync()
+    if (!canProceed) {
+      toast.warning(t('setupPermissions.requiredFileAccess'))
+      return
     }
-  )
+
+    step(
+      {
+        comp: Done
+      },
+      () => {
+        // Save all settings before proceeding
+        appSetting.setup = {
+          accessibility: permissions.value.accessibility.status === 'granted',
+          notifications: permissions.value.notifications.status === 'granted',
+          microphone: appSetting.setup.microphone ?? false,
+          autoStart: settings.value.autoStart,
+          showTray: settings.value.showTray,
+          adminPrivileges: permissions.value.adminPrivileges.status === 'granted',
+          hideDock: settings.value.hideDock ?? false,
+          runAsAdmin: appSetting.setup.runAsAdmin ?? false,
+          customDesktop: appSetting.setup.customDesktop ?? false
+        }
+      }
+    )
+  } finally {
+    isContinuing.value = false
+  }
 }
 
 function getStatusText(status: string): string {
@@ -303,19 +305,6 @@ function getStatusText(status: string): string {
   }
 }
 
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'granted':
-      return 'var(--tx-color-success)'
-    case 'denied':
-      return 'var(--tx-color-danger)'
-    case 'notDetermined':
-      return 'var(--tx-color-warning)'
-    default:
-      return 'var(--tx-color-info)'
-  }
-}
-
 function getPermissionIcon(type: string): string {
   const icons: Record<string, string> = {
     fileAccess: 'folder-open',
@@ -324,19 +313,6 @@ function getPermissionIcon(type: string): string {
     adminPrivileges: 'shield-user'
   }
   return icons[type] || 'settings'
-}
-
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'granted':
-      return 'checkbox-circle'
-    case 'denied':
-      return 'close-circle'
-    case 'notDetermined':
-      return 'question-line'
-    default:
-      return 'information'
-  }
 }
 </script>
 
@@ -356,13 +332,18 @@ function getStatusIcon(status: string): string {
         :shrink="false"
       >
         <!-- File Access Permission (Required) -->
-        <div
-          class="PermissionItem TBlockSelection fake-background index-fix"
+        <TxCard
+          class="PermissionItem"
           :class="{ required: permissions.fileAccess.required }"
+          variant="solid"
+          background="mask"
+          shadow="none"
+          :radius="12"
+          :padding="0"
         >
-          <div class="PermissionItem-Content TBlockSelection-Content">
+          <div class="PermissionItem-Content">
             <RemixIcon :name="getPermissionIcon('fileAccess')" :style="'line'" />
-            <div class="PermissionItem-Label TBlockSelection-Label">
+            <div class="PermissionItem-Label">
               <h3>
                 {{ t('setupPermissions.fileAccess') }}
                 <span v-if="permissions.fileAccess.required" class="required-badge">{{
@@ -372,43 +353,43 @@ function getStatusIcon(status: string): string {
               <p>{{ t('setupPermissions.fileAccessDesc') }}</p>
             </div>
           </div>
-          <div class="PermissionItem-Action TBlockSelection-Func">
-            <div
+          <div class="PermissionItem-Action">
+            <TxStatusBadge
               class="StatusBadge"
-              :style="{ color: getStatusColor(permissions.fileAccess.status) }"
-            >
-              <RemixIcon
-                :name="getStatusIcon(permissions.fileAccess.status)"
-                :style="permissions.fileAccess.status === 'granted' ? 'fill' : 'line'"
-              />
-              <span>{{ getStatusText(permissions.fileAccess.status) }}</span>
-            </div>
+              size="sm"
+              :text="getStatusText(permissions.fileAccess.status)"
+              :status-key="permissions.fileAccess.status"
+            />
             <TxButton size="small" :loading="isLoading" @click="checkAllPermissions">
               {{ t('setupPermissions.recheck') }}
             </TxButton>
           </div>
-        </div>
+        </TxCard>
 
         <!-- Accessibility Permission (macOS, Optional) -->
-        <div v-if="isMacOS" class="PermissionItem TBlockSelection fake-background index-fix">
-          <div class="PermissionItem-Content TBlockSelection-Content">
+        <TxCard
+          v-if="isMacOS"
+          class="PermissionItem"
+          variant="solid"
+          background="mask"
+          shadow="none"
+          :radius="12"
+          :padding="0"
+        >
+          <div class="PermissionItem-Content">
             <RemixIcon :name="getPermissionIcon('accessibility')" :style="'line'" />
-            <div class="PermissionItem-Label TBlockSelection-Label">
+            <div class="PermissionItem-Label">
               <h3>{{ t('setupPermissions.accessibility') }}</h3>
               <p>{{ t('setupPermissions.accessibilityDesc') }}</p>
             </div>
           </div>
-          <div class="PermissionItem-Action TBlockSelection-Func">
-            <div
+          <div class="PermissionItem-Action">
+            <TxStatusBadge
               class="StatusBadge"
-              :style="{ color: getStatusColor(permissions.accessibility.status) }"
-            >
-              <RemixIcon
-                :name="getStatusIcon(permissions.accessibility.status)"
-                :style="permissions.accessibility.status === 'granted' ? 'fill' : 'line'"
-              />
-              <span>{{ getStatusText(permissions.accessibility.status) }}</span>
-            </div>
+              size="sm"
+              :text="getStatusText(permissions.accessibility.status)"
+              :status-key="permissions.accessibility.status"
+            />
             <TxButton
               v-if="permissions.accessibility.status !== 'granted'"
               size="small"
@@ -418,28 +399,32 @@ function getStatusIcon(status: string): string {
               {{ t('setupPermissions.openSettings') }}
             </TxButton>
           </div>
-        </div>
+        </TxCard>
 
         <!-- Admin Privileges (Windows) -->
-        <div v-if="isWindows" class="PermissionItem TBlockSelection fake-background index-fix">
-          <div class="PermissionItem-Content TBlockSelection-Content">
+        <TxCard
+          v-if="isWindows"
+          class="PermissionItem"
+          variant="solid"
+          background="mask"
+          shadow="none"
+          :radius="12"
+          :padding="0"
+        >
+          <div class="PermissionItem-Content">
             <RemixIcon :name="getPermissionIcon('adminPrivileges')" :style="'line'" />
-            <div class="PermissionItem-Label TBlockSelection-Label">
+            <div class="PermissionItem-Label">
               <h3>{{ t('setupPermissions.adminPrivileges') }}</h3>
               <p>{{ t('setupPermissions.adminPrivilegesDesc') }}</p>
             </div>
           </div>
-          <div class="PermissionItem-Action TBlockSelection-Func">
-            <div
+          <div class="PermissionItem-Action">
+            <TxStatusBadge
               class="StatusBadge"
-              :style="{ color: getStatusColor(permissions.adminPrivileges.status) }"
-            >
-              <RemixIcon
-                :name="getStatusIcon(permissions.adminPrivileges.status)"
-                :style="permissions.adminPrivileges.status === 'granted' ? 'fill' : 'line'"
-              />
-              <span>{{ getStatusText(permissions.adminPrivileges.status) }}</span>
-            </div>
+              size="sm"
+              :text="getStatusText(permissions.adminPrivileges.status)"
+              :status-key="permissions.adminPrivileges.status"
+            />
             <TxButton
               v-if="permissions.adminPrivileges.status !== 'granted'"
               size="small"
@@ -449,28 +434,31 @@ function getStatusIcon(status: string): string {
               {{ t('setupPermissions.recheck') }}
             </TxButton>
           </div>
-        </div>
+        </TxCard>
 
         <!-- Notification Permission -->
-        <div class="PermissionItem TBlockSelection fake-background index-fix">
-          <div class="PermissionItem-Content TBlockSelection-Content">
+        <TxCard
+          class="PermissionItem"
+          variant="solid"
+          background="mask"
+          shadow="none"
+          :radius="12"
+          :padding="0"
+        >
+          <div class="PermissionItem-Content">
             <RemixIcon :name="getPermissionIcon('notifications')" :style="'line'" />
-            <div class="PermissionItem-Label TBlockSelection-Label">
+            <div class="PermissionItem-Label">
               <h3>{{ t('setupPermissions.notifications') }}</h3>
               <p>{{ t('setupPermissions.notificationsDesc') }}</p>
             </div>
           </div>
-          <div class="PermissionItem-Action TBlockSelection-Func">
-            <div
+          <div class="PermissionItem-Action">
+            <TxStatusBadge
               class="StatusBadge"
-              :style="{ color: getStatusColor(permissions.notifications.status) }"
-            >
-              <RemixIcon
-                :name="getStatusIcon(permissions.notifications.status)"
-                :style="permissions.notifications.status === 'granted' ? 'fill' : 'line'"
-              />
-              <span>{{ getStatusText(permissions.notifications.status) }}</span>
-            </div>
+              size="sm"
+              :text="getStatusText(permissions.notifications.status)"
+              :status-key="permissions.notifications.status"
+            />
             <TxButton
               v-if="permissions.notifications.status !== 'granted'"
               size="small"
@@ -480,7 +468,7 @@ function getStatusIcon(status: string): string {
               {{ t('setupPermissions.openSettings') }}
             </TxButton>
           </div>
-        </div>
+        </TxCard>
       </TGroupBlock>
 
       <!-- Settings Section -->
@@ -490,23 +478,36 @@ function getStatusIcon(status: string): string {
         :description="t('setupPermissions.settingsTitle')"
         :shrink="false"
       >
-        <!-- Auto Start -->
-        <TBlockSwitch
-          v-model="settings.autoStart"
-          :title="t('setupPermissions.autoStart')"
-          icon="play-circle"
-          :description="t('setupPermissions.autoStartDesc')"
-          @update:model-value="updateAutoStart"
-        />
+        <TxCard
+          class="SetupPermissions-SettingCard"
+          variant="solid"
+          background="mask"
+          shadow="none"
+          :radius="12"
+          :padding="0"
+        >
+          <TxCardItem
+            :title="t('setupPermissions.autoStart')"
+            :description="t('setupPermissions.autoStartDesc')"
+            icon-class="i-ri-play-circle-line"
+            class="SetupPermissions-SettingItem"
+          >
+            <template #right>
+              <TuffSwitch v-model="settings.autoStart" @update:model-value="updateAutoStart" />
+            </template>
+          </TxCardItem>
 
-        <!-- Show Tray -->
-        <TBlockSwitch
-          v-model="settings.showTray"
-          :title="t('setupPermissions.showTray')"
-          icon="tray"
-          :description="t('setupPermissions.showTrayDesc')"
-          @update:model-value="updateShowTray"
-        />
+          <TxCardItem
+            :title="t('setupPermissions.showTray')"
+            :description="t('setupPermissions.showTrayDesc')"
+            icon-class="i-ri-inbox-line"
+            class="SetupPermissions-SettingItem"
+          >
+            <template #right>
+              <TuffSwitch v-model="settings.showTray" @update:model-value="updateShowTray" />
+            </template>
+          </TxCardItem>
+        </TxCard>
       </TGroupBlock>
     </div>
 
@@ -514,7 +515,7 @@ function getStatusIcon(status: string): string {
       <TxButton :loading="isLoading" @click="checkAllPermissions">
         {{ t('setupPermissions.recheck') }}
       </TxButton>
-      <TxButton type="primary" :disabled="!canContinue()" @click="handleContinue">
+      <TxButton type="primary" :loading="isContinuing" @click="handleContinue">
         {{ t('setupPermissions.continue') }}
       </TxButton>
     </div>
@@ -523,149 +524,155 @@ function getStatusIcon(status: string): string {
 
 <style lang="scss" scoped>
 .SetupPermissions {
-  position: relative;
-  height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 2rem;
-  overflow-y: auto;
+  height: 100%;
+  padding: 1.5rem;
+  gap: 1rem;
+  overflow: hidden;
 
   &-Header {
-    margin-bottom: 2rem;
-
     h1 {
-      margin: 0 0 0.5rem 0;
-      font-size: 1.8rem;
-      font-weight: 600;
+      margin: 0 0 0.35rem;
+      font-size: 1.7rem;
+      font-weight: 700;
       color: var(--tx-text-color-primary);
     }
 
     p {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: 0.96rem;
       color: var(--tx-text-color-regular);
-      line-height: 1.6;
+      line-height: 1.45;
     }
   }
 
   &-Content {
     flex: 1;
-    overflow-y: auto;
+    overflow: auto;
+    padding-right: 0.2rem;
 
-    // Override TGroupBlock spacing
     :deep(.TGroupBlock-Container) {
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
     }
   }
 
   &-Actions {
     display: flex;
     justify-content: flex-end;
-    gap: 1rem;
-    padding-top: 1.5rem;
+    gap: 0.75rem;
+    padding-top: 0.95rem;
     border-top: 1px solid var(--tx-border-color);
-    margin-top: 1.5rem;
+    margin-top: 0.25rem;
     flex-shrink: 0;
   }
 }
 
 .PermissionItem {
-  position: relative;
-  margin-bottom: 0;
-  padding: 4px 16px;
+  margin-bottom: 0.6rem;
+  padding: 0.8rem 1rem;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  height: 56px;
-  user-select: none;
-  border-radius: 0;
-  box-sizing: border-box;
-  --fake-color: var(--tx-fill-color-dark);
-  --fake-radius: 0;
-  --fake-inner-opacity: 0.5;
+  align-items: flex-start;
+  gap: 0.75rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 
   &.required {
-    --fake-color: var(--tx-color-warning-light-9);
-
-    .PermissionItem-Content {
-      .PermissionItem-Label h3 .required-badge {
-        display: inline-flex;
-        margin-left: 0.5rem;
-        font-size: 0.75rem;
-        color: var(--tx-color-warning);
-        background-color: var(--tx-color-warning-light-8);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 500;
-      }
-    }
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tx-color-warning) 30%, transparent);
   }
 
-  &:hover {
-    --fake-color: var(--tx-fill-color);
-  }
-
-  .PermissionItem-Content {
+  &-Content {
     display: flex;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    cursor: default;
-
-    > * {
-      margin-right: 16px;
-      font-size: 20px;
-    }
-
-    .PermissionItem-Label {
-      flex: 1;
-
-      h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 400;
-        color: var(--tx-text-color-primary);
-      }
-
-      p {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 300;
-        opacity: 0.5;
-        color: var(--tx-text-color-regular);
-      }
-    }
-  }
-
-  .PermissionItem-Action {
-    display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.75rem;
-    margin-right: 32px;
+    flex: 1;
+    min-width: 0;
 
-    .StatusBadge {
+    :deep(.remix) {
+      font-size: 1.05rem;
+      margin-top: 0.15rem;
+      color: var(--tx-text-color-secondary);
+    }
+  }
+
+  &-Label {
+    flex: 1;
+    min-width: 0;
+
+    h3 {
+      margin: 0 0 0.2rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--tx-text-color-primary);
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      font-size: 12px;
-      font-weight: 500;
-      min-width: 100px;
-      white-space: nowrap;
-
-      .remix {
-        font-size: 16px;
-      }
+      gap: 0.4rem;
+      flex-wrap: wrap;
     }
+
+    p {
+      margin: 0;
+      font-size: 0.88rem;
+      color: var(--tx-text-color-secondary);
+      line-height: 1.35;
+    }
+  }
+
+  &-Action {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-shrink: 0;
   }
 }
 
-.touch-blur .PermissionItem {
-  --fake-color: var(--tx-fill-color);
+.required-badge {
+  display: inline-flex;
+  font-size: 0.72rem;
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 18%, transparent);
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
 
-  &:hover {
-    --fake-color: var(--tx-fill-color-light);
+.StatusBadge {
+  min-width: 84px;
+  justify-content: center;
+}
+
+.SetupPermissions-SettingCard {
+  overflow: hidden;
+}
+
+.SetupPermissions-SettingItem {
+  --tx-card-item-padding: 0.72rem 0.9rem;
+  --tx-card-item-gap: 0.72rem;
+}
+
+.SetupPermissions-SettingItem + .SetupPermissions-SettingItem {
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color) 80%, transparent);
+}
+
+@media (max-width: 900px) {
+  .PermissionItem {
+    flex-direction: column;
+
+    &-Action {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+
+  .SetupPermissions-Actions {
+    justify-content: stretch;
+
+    :deep(button) {
+      flex: 1;
+    }
   }
 }
 </style>

@@ -110,6 +110,46 @@
       "systemTag": "跟随系统",
       "changeLanguage": "切换语言",
       "next": "继续"
+    },
+    "account": {
+      "recommended": "推荐",
+      "toastSignInSuccess": "登录成功！",
+      "toastSignInFailed": "登录失败，请重试",
+      "signIn": {
+        "title": "登录",
+        "description": "创建账户或登录以解锁完整能力，跨设备同步数据并访问云服务。",
+        "learnMore": "了解更多",
+        "action": "登录"
+      },
+      "offline": {
+        "title": "离线继续",
+        "description": "您可以不登录继续使用应用，但无法进行跨设备同步，也无法使用云端功能。",
+        "action": "离线继续"
+      }
+    },
+    "done": {
+      "description": "一切就绪，开始使用吧。",
+      "action": "开始使用"
+    },
+    "forbidden": {
+      "description": "很抱歉，我们暂时无法提供服务。",
+      "close": "关闭",
+      "back": "返回"
+    },
+    "optionMode": {
+      "recommended": "推荐",
+      "guided": {
+        "title": "引导模式",
+        "description": "我刚接触这个应用，希望通过完整引导快速了解核心功能和能力。"
+      },
+      "selfGuided": {
+        "title": "自助探索",
+        "description": "我熟悉类似应用，想按自己的节奏直接探索界面与功能。"
+      },
+      "action": "继续"
+    },
+    "license": {
+      "title": "许可协议"
     }
   },
   "settingStorage": {
