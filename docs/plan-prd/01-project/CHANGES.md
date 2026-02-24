@@ -14,6 +14,11 @@
 1. **移除独立 Hello 步骤**：`Beginner` 首屏恢复为 `LanguageSetup`，删除 `Greeting` 页面链路，减少一次页面切换。
 2. **首屏主视觉替换**：语言页头部从“欢迎来到 Tuff”文本替换为 `hello.json` Lottie 动效，保留“我们已将您的语言设置为 {lang}”说明文案。
 3. **流程保持稳定**：默认仍为系统语言确认，点击 `Change Language` 才展开列表，`Continue` 进入账号步骤。
+4. **交互收敛到 Tuffex 组件**：语言信息区改为 `TxCard`，减少超宽占位并统一卡片视觉；底部 `Change Language` 保持 `TxButton`。
+5. **列表可回退 + 过渡动画**：语言列表新增返回入口，支持从列表回到默认态，并增加入场/退场过渡动画；`hello` 动效与 startup 音效在语言页持续可见可听。
+6. **尺寸与对齐再收敛**：语言区块整体缩小并左对齐，语言默认态与语言列表项前增加语言 icon，提升信息密度与识别度。
+7. **布局回归居中与样式简化**：语言页整体重新居中，默认语言卡片采用“左侧语言 icon + 右侧文案”的结构，并合并样式规则以减少组件级微调代码。
+8. **字号继续收敛 + 默认勾选态显式化**：语言页文本字号整体再收缩约 40%，并在默认态与列表态的右侧统一展示 checkmark（选中填充、未选中描边）。
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
@@ -119,6 +124,29 @@
 - `apps/core-app/src/main/modules/storage/index.ts`
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
 - `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Analytics 上报压缩与失败熔断（减少高频重试与噪音）
+
+**变更类型**: 观测优化 / 稳定性增强
+
+**描述**: 针对 `analytics messages` 在网络异常下高频重试、重复告警与上报节奏过密问题，改为“批量压缩 + 抖动调度 + 失败熔断 + 节流日志”策略，降低上报风暴与日志噪音。
+
+**主要变更**:
+1. **上报节奏压缩**：基础 flush 周期由 30s 调整到 2min，批次由 10 提升到 25，减少请求频率。
+2. **请求抖动分散**：flush 调度增加 ±20% jitter，避免多实例同周期集中上报。
+3. **失败熔断**：连续失败达到阈值后开启 circuit cooldown（10m 起步，指数拉长，最大 60m），冷却期内暂停主动上报。
+4. **日志节流聚合**：`Failed to report analytics messages` 改为 3min 节流输出，并附 `suppressedFailures` 汇总。
+5. **队列元信息增强**：上报 payload 增加 `firstAt/lastAt/avgIntervalMs/count` 聚合字段，便于服务端按窗口做均值/频次分析。
+6. **快照持久化降频**：`15m/1h/24h` 窗口写入增加最小持久化间隔（2min/5min/15min），并输出 `snapshotsThrottled` 汇总，减少 DB 写放大与无效上报。
+7. **窗口封口写入**：`AnalyticsCore` 增加最小记录间隔 + 窗口强制封口策略，避免高频事件导致 1m 扇出快照过密。
+8. **动态采样**：插件 SDK 非关键埋点按 DB 队列深度动态降采样（100%/50%/25%/10%），高压时优先保护主流程。
+9. **健康指标日志**：新增 5min reporter health 指标（`requestsPerMin`、`queueDepth`、`dropRate`、`failRate`、`sdkSampleDropRate`），便于量化压缩收益。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+- `apps/core-app/src/main/modules/analytics/core/analytics-core.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Core-app 构建阶段预打包内置插件 Prelude（修复 utils 子路径 require 失败）

@@ -14,9 +14,17 @@ import { enterPerfContext } from '../../../utils/perf-context'
 const PERSIST_WINDOWS: AnalyticsWindowType[] = ['15m', '1h', '24h']
 const ANALYTICS_QUEUE_LIMIT = 8
 const QUEUE_PRESSURE_LOG_THROTTLE_MS = 60_000
+const SNAPSHOT_MIN_PERSIST_INTERVAL_MS: Record<AnalyticsWindowType, number> = {
+  '1m': 0,
+  '5m': 0,
+  '15m': 2 * 60_000,
+  '1h': 5 * 60_000,
+  '24h': 15 * 60_000
+}
 const log = createLogger('AnalyticsStore')
 
 type QueuePressureKind =
+  | 'snapshotsThrottled'
   | 'snapshotsSkipped'
   | 'snapshotsDropped'
   | 'snapshotsFailed'
@@ -26,6 +34,7 @@ type QueuePressureKind =
   | 'pluginFailed'
 
 interface QueuePressureStats {
+  snapshotsThrottled: number
   snapshotsSkipped: number
   snapshotsDropped: number
   snapshotsFailed: number
@@ -36,8 +45,10 @@ interface QueuePressureStats {
 }
 
 export class DbStore {
+  private lastSnapshotPersistAt = new Map<AnalyticsWindowType, number>()
   private lastQueuePressureLogAt = 0
   private queuePressureStats: QueuePressureStats = {
+    snapshotsThrottled: 0,
     snapshotsSkipped: 0,
     snapshotsDropped: 0,
     snapshotsFailed: 0,
@@ -58,9 +69,9 @@ export class DbStore {
 
   private recordQueuePressure(
     kind: QueuePressureKind,
-    options?: { queued?: number; error?: unknown }
+    options?: { queued?: number; error?: unknown; count?: number }
   ): void {
-    this.queuePressureStats[kind] += 1
+    this.queuePressureStats[kind] += Math.max(1, options?.count ?? 1)
     if (typeof options?.queued === 'number') {
       this.lastQueuePressureQueued = options.queued
     }
@@ -81,6 +92,7 @@ export class DbStore {
   private flushQueuePressureSummary(): void {
     const stats = this.queuePressureStats
     const total =
+      stats.snapshotsThrottled +
       stats.snapshotsSkipped +
       stats.snapshotsDropped +
       stats.snapshotsFailed +
@@ -96,6 +108,7 @@ export class DbStore {
     log.warn('Analytics queue pressure summary', {
       meta: {
         total,
+        snapshotsThrottled: stats.snapshotsThrottled,
         snapshotsSkipped: stats.snapshotsSkipped,
         snapshotsDropped: stats.snapshotsDropped,
         snapshotsFailed: stats.snapshotsFailed,
@@ -109,6 +122,7 @@ export class DbStore {
     })
 
     this.queuePressureStats = {
+      snapshotsThrottled: 0,
       snapshotsSkipped: 0,
       snapshotsDropped: 0,
       snapshotsFailed: 0,
@@ -122,9 +136,29 @@ export class DbStore {
   }
 
   async saveSnapshots(snapshots: AnalyticsSnapshot[]): Promise<void> {
-    const persistable = snapshots.filter((snapshot) =>
-      PERSIST_WINDOWS.includes(snapshot.windowType)
-    )
+    const now = Date.now()
+    const persistable: AnalyticsSnapshot[] = []
+    let throttled = 0
+
+    for (const snapshot of snapshots) {
+      if (!PERSIST_WINDOWS.includes(snapshot.windowType)) {
+        continue
+      }
+
+      const minIntervalMs = SNAPSHOT_MIN_PERSIST_INTERVAL_MS[snapshot.windowType] ?? 0
+      const lastPersistAt = this.lastSnapshotPersistAt.get(snapshot.windowType) ?? 0
+      if (minIntervalMs > 0 && now - lastPersistAt < minIntervalMs) {
+        throttled += 1
+        continue
+      }
+
+      persistable.push(snapshot)
+    }
+
+    if (throttled > 0) {
+      this.recordQueuePressure('snapshotsThrottled', { count: throttled })
+    }
+
     if (!persistable.length) return
     const queueStats = dbWriteScheduler.getStats()
     if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
@@ -172,6 +206,9 @@ export class DbStore {
           }),
         { droppable: true }
       )
+      for (const snapshot of persistable) {
+        this.lastSnapshotPersistAt.set(snapshot.windowType, now)
+      }
     } catch (error) {
       const isDropped = error instanceof Error && error.message.includes('dropped')
       if (isDropped) {

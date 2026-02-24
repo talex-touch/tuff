@@ -1161,8 +1161,8 @@ importers:
   plugins/touch-translation:
     dependencies:
       '@talex-touch/unplugin-export-plugin':
-        specifier: 1.2.7
-        version: 1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@40.0.0)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.27(typescript@5.9.3))
+        specifier: workspace:^
+        version: link:../../packages/unplugin-export-plugin
       '@talex-touch/utils':
         specifier: workspace:^
         version: link:../../packages/utils
@@ -5188,23 +5188,6 @@ packages:
 
   '@talex-touch/unplugin-export-plugin@0.2.13':
     resolution: {integrity: sha512-Jh8jwvkcreTrKhua2xbqfWE+O+kwmzzG2L1/5OSyJDN+Yc6lYsD+xNqXzEwmHuRZx08tNa2RifeWPdCD6RPt8g==}
-
-  '@talex-touch/unplugin-export-plugin@1.2.7':
-    resolution: {integrity: sha512-51tuaENICuiqmWUKPpurlSWIxTOnk2K9OyuDnqJepMyLgxAapkzqSWgCDZWiwveGG8PBcZqgyLvB3P11BlVsxA==}
-    peerDependencies:
-      chalk: ^5.6.0
-      cli-progress: ^3.12.0
-      compressing: ^1.10.3
-      debug: ^4.3.5
-      fs-extra: ^11.3.1
-      pathe: ^1.1.2
-      unplugin: ^2.3.5
-
-  '@talex-touch/utils@1.0.31':
-    resolution: {integrity: sha512-sLSPjHpQlHTwejH0k+wFdPNTbMMhYLTgXgCUAAL7DLqG7sBuYCedHdPdGbsDYtXFkNs4XqZY6RP8dwRMNCGwMQ==}
-    peerDependencies:
-      electron: ^37.2.4
-      vue: ^3.5.15
 
   '@tsconfig/node10@1.0.12':
     resolution: {integrity: sha512-UCYBaeFvM11aU2y3YPZ//O5Rhj+xKyzy7mvcIoAjASbigy8mHMryP5cK7dgjlz2hWxh1g5pLw084E0a/wlUSFQ==}
@@ -18206,27 +18189,6 @@ snapshots:
       compressing: 1.10.3
       fs: 0.0.1-security
       unplugin: 2.3.10
-
-  '@talex-touch/unplugin-export-plugin@1.2.7(chalk@5.6.2)(cli-progress@3.12.0)(compressing@2.0.0)(debug@4.4.3)(electron@40.0.0)(fs-extra@11.3.3)(pathe@2.0.3)(unplugin@2.3.10)(vue@3.5.27(typescript@5.9.3))':
-    dependencies:
-      '@talex-touch/utils': 1.0.31(electron@40.0.0)(vue@3.5.27(typescript@5.9.3))
-      chalk: 5.6.2
-      cli-progress: 3.12.0
-      compressing: 2.0.0
-      debug: 4.4.3
-      fs-extra: 11.3.3
-      pathe: 2.0.3
-      unplugin: 2.3.10
-    transitivePeerDependencies:
-      - electron
-      - vue
-
-  '@talex-touch/utils@1.0.31(electron@40.0.0)(vue@3.5.27(typescript@5.9.3))':
-    dependencies:
-      '@vueuse/core': 13.9.0(vue@3.5.27(typescript@5.9.3))
-      electron: 40.0.0
-      path-browserify: 1.0.1
-      vue: 3.5.27(typescript@5.9.3)
 
   '@tsconfig/node10@1.0.12': {}
 

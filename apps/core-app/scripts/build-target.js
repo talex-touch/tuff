@@ -221,6 +221,107 @@ function ensureBuildNodeOptions(buildEnv) {
   }
 }
 
+function resolvePluginPreludeNodePaths() {
+  const candidates = [
+    path.join(projectRoot, 'node_modules'),
+    path.join(workspaceRoot, 'node_modules'),
+    ...(require.resolve.paths('@talex-touch/utils') || [])
+  ];
+
+  return Array.from(
+    new Set(
+      candidates.filter((value) => typeof value === 'string' && value.length > 0 && fs.existsSync(value))
+    )
+  );
+}
+
+function bundleBuiltinPluginPreludes() {
+  const pluginsRoot = path.join(projectRoot, 'tuff', 'modules', 'plugins');
+  if (!fs.existsSync(pluginsRoot)) {
+    console.log(`[build-target] Built-in plugins directory not found, skip prelude bundling: ${pluginsRoot}`);
+    return;
+  }
+
+  const { buildSync } = require('esbuild');
+  const nodePaths = resolvePluginPreludeNodePaths();
+  const pluginDirs = fs
+    .readdirSync(pluginsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => path.join(pluginsRoot, entry.name));
+
+  let bundledCount = 0;
+  let skippedCount = 0;
+
+  for (const pluginDir of pluginDirs) {
+    const manifestPath = path.join(pluginDir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      skippedCount += 1;
+      continue;
+    }
+
+    let manifest;
+    try {
+      manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    } catch (error) {
+      throw new Error(`[build-target] Failed to parse manifest: ${manifestPath} (${error.message})`);
+    }
+
+    const pluginName = manifest?.name || path.basename(pluginDir);
+    const mainRelativePath =
+      typeof manifest?.main === 'string' && manifest.main.trim().length > 0
+        ? manifest.main.trim()
+        : 'index.js';
+    const mainEntryPath = path.resolve(pluginDir, mainRelativePath);
+    const mainExtension = path.extname(mainEntryPath).toLowerCase();
+
+    if (!fs.existsSync(mainEntryPath)) {
+      console.warn(`[build-target] Skip plugin prelude bundling (entry missing): ${pluginName} -> ${mainRelativePath}`);
+      skippedCount += 1;
+      continue;
+    }
+
+    if (!['.js', '.cjs', '.mjs', '.ts', '.cts', '.mts'].includes(mainExtension)) {
+      console.warn(`[build-target] Skip plugin prelude bundling (unsupported entry): ${pluginName} -> ${mainRelativePath}`);
+      skippedCount += 1;
+      continue;
+    }
+
+    const tempOutputPath = `${mainEntryPath}.bundle-tmp.cjs`;
+
+    try {
+      buildSync({
+        entryPoints: [mainEntryPath],
+        absWorkingDir: pluginDir,
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        target: 'node18',
+        outfile: tempOutputPath,
+        external: ['electron'],
+        minify: true,
+        sourcemap: false,
+        logLevel: 'silent',
+        nodePaths
+      });
+
+      fs.renameSync(tempOutputPath, mainEntryPath);
+      bundledCount += 1;
+      console.log(`[build-target] Bundled plugin prelude: ${pluginName} -> ${mainRelativePath}`);
+    } catch (error) {
+      if (fs.existsSync(tempOutputPath)) {
+        fs.rmSync(tempOutputPath, { force: true });
+      }
+      throw new Error(
+        `[build-target] Failed to bundle plugin prelude for ${pluginName} (${mainRelativePath}): ${error.message}`
+      );
+    }
+  }
+
+  console.log(
+    `[build-target] Plugin prelude bundling completed. bundled=${bundledCount}, skipped=${skippedCount}`
+  );
+}
+
 function build() {
   const cleanupTempLock = ensureLocalPnpmLockfile();
   console.time('build-target:total');
@@ -326,6 +427,13 @@ function build() {
   }
 
   console.log(`Setting BUILD_TARGET=${normalizedTarget}, BUILD_ARCH=${effectiveArch}, ELECTRON_PLATFORM=${electronPlatform}`);
+
+  console.time('build-target:bundle-plugin-preludes');
+  try {
+    bundleBuiltinPluginPreludes();
+  } finally {
+    console.timeEnd('build-target:bundle-plugin-preludes');
+  }
 
   console.log('Running application build (npm run build)...');
   // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set

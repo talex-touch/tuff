@@ -103,11 +103,12 @@
   },
   "beginner": {
     "language": {
-      "title": "选择你的语言",
-      "desc": "先选好界面语言，接下来的引导才能看得顺眼。",
+      "title": "欢迎来到 Tuff",
+      "desc": "我们已将您的语言设置为 {lang}",
       "followSystem": "跟随系统语言",
       "systemDetected": "检测到的系统语言：{lang}",
-      "systemTag": "系统语言",
+      "systemTag": "跟随系统",
+      "changeLanguage": "切换语言",
       "next": "继续"
     }
   },

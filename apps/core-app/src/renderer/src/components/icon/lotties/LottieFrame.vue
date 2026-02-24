@@ -1,5 +1,6 @@
-<script name="LottieFrame" setup>
+<script name="LottieFrame" setup lang="ts">
 import lottie from 'lottie-web'
+import type { AnimationItem } from 'lottie-web'
 
 const props = defineProps({
   data: {
@@ -11,12 +12,22 @@ const props = defineProps({
     default: true
   }
 })
-const dom = ref()
+const emit = defineEmits<{
+  complete: []
+  loaded: [animation: AnimationItem]
+}>()
+const dom = ref<HTMLElement | null>(null)
+let animation: AnimationItem | null = null
+
+function handleComplete(): void {
+  emit('complete')
+}
 
 onMounted(() => {
   const el = dom.value
+  if (!el || !props.data) return
 
-  const animation = lottie.loadAnimation({
+  animation = lottie.loadAnimation({
     container: el,
     renderer: 'svg',
     loop: props.loop,
@@ -25,8 +36,17 @@ onMounted(() => {
   })
 
   animation.resize()
+  animation.addEventListener('complete', handleComplete)
+  ;(el as HTMLElement & { _lottieFrame?: AnimationItem })._lottieFrame = animation
 
-  el._lottieFrame = animation
+  emit('loaded', animation)
+})
+
+onUnmounted(() => {
+  if (!animation) return
+  animation.removeEventListener('complete', handleComplete)
+  animation.destroy()
+  animation = null
 })
 </script>
 
