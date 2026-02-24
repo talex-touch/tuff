@@ -1,5 +1,6 @@
 name = "tuff"
 compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
 pages_build_output_dir = "apps/nexus/dist"
 
 [env.production]

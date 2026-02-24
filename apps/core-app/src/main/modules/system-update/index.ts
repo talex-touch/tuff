@@ -22,6 +22,12 @@ const log = createLogger('SystemUpdate')
 
 const SYSTEM_UPDATE_STATE_ID = 'global'
 const SYSTEM_UPDATE_POLL_ID = 'system-update.poll'
+const SYSTEM_UPDATE_POLL_INTERVAL_MS = 60 * 60 * 1000
+const SYSTEM_UPDATE_POLL_STAGGER_MS = 4 * 60 * 1000
+const SYSTEM_UPDATE_POLL_STAGGER_JITTER_MS = 2 * 60 * 1000
+const SYSTEM_UPDATE_SLOW_THRESHOLD_MS = 800
+const SYSTEM_UPDATE_SLOW_BACKOFF_MS = 10 * 60 * 1000
+const SYSTEM_UPDATE_SLOW_BACKOFF_JITTER_MS = 2 * 60 * 1000
 const FX_RATE_DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 10_000
 
@@ -78,8 +84,27 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     this.db = databaseModule.getDb()
     await this.ensureState()
     await this.hydrateFxRates()
+    await this.runRefreshUpdates('startup')
     fxRateProvider.start()
 
+    const initialDelayMs =
+      SYSTEM_UPDATE_POLL_INTERVAL_MS +
+      SYSTEM_UPDATE_POLL_STAGGER_MS +
+      this.resolveJitter(SYSTEM_UPDATE_POLL_STAGGER_JITTER_MS)
+    this.scheduleRefreshPoll(initialDelayMs)
+    this.pollingService.start()
+  }
+
+  onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
+    this.pollingService.unregister(SYSTEM_UPDATE_POLL_ID)
+    fxRateProvider.stop()
+  }
+
+  private resolveJitter(maxMs: number): number {
+    return Math.floor(Math.random() * Math.max(1, maxMs))
+  }
+
+  private scheduleRefreshPoll(initialDelayMs: number): void {
     if (this.pollingService.isRegistered(SYSTEM_UPDATE_POLL_ID)) {
       this.pollingService.unregister(SYSTEM_UPDATE_POLL_ID)
     }
@@ -87,18 +112,33 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     this.pollingService.register(
       SYSTEM_UPDATE_POLL_ID,
       async () => {
-        await this.refreshUpdates()
+        await this.runRefreshUpdates('poll')
       },
-      { interval: 60 * 60 * 1000, unit: 'milliseconds' }
+      {
+        interval: SYSTEM_UPDATE_POLL_INTERVAL_MS,
+        unit: 'milliseconds',
+        initialDelayMs
+      }
     )
-
-    this.pollingService.start()
-    await this.refreshUpdates()
   }
 
-  onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
-    this.pollingService.unregister(SYSTEM_UPDATE_POLL_ID)
-    fxRateProvider.stop()
+  private async runRefreshUpdates(trigger: 'startup' | 'poll'): Promise<void> {
+    const startedAt = Date.now()
+    await this.refreshUpdates()
+    const durationMs = Date.now() - startedAt
+
+    if (trigger !== 'poll' || durationMs < SYSTEM_UPDATE_SLOW_THRESHOLD_MS) {
+      return
+    }
+
+    const nextDelayMs =
+      SYSTEM_UPDATE_POLL_INTERVAL_MS +
+      SYSTEM_UPDATE_SLOW_BACKOFF_MS +
+      this.resolveJitter(SYSTEM_UPDATE_SLOW_BACKOFF_JITTER_MS)
+    this.scheduleRefreshPoll(nextDelayMs)
+    log.warn('System update poll is slow, deferred next run', {
+      meta: { durationMs, nextDelayMs }
+    })
   }
 
   private resolveChannel(): AppPreviewChannel {
