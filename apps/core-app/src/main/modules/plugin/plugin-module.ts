@@ -57,6 +57,7 @@ import { DevServerHealthMonitor } from './dev-server-monitor'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
+import { isWidgetFeatureEnabled } from './widget/widget-issue'
 import { widgetManager } from './widget/widget-manager'
 
 import { createPluginLoader } from './plugin-loaders'
@@ -110,6 +111,7 @@ async function collectWidgetFiles(rootDir: string): Promise<string[]> {
 async function precompilePluginWidgets(plugin: TouchPlugin): Promise<void> {
   const widgetFeatures = plugin.features.filter(
     (feature) =>
+      isWidgetFeatureEnabled(plugin, feature) &&
       feature.interaction?.type === 'widget' &&
       typeof feature.interaction?.path === 'string' &&
       feature.interaction.path.trim().length > 0
@@ -144,6 +146,7 @@ async function warnUnusedWidgets(plugin: TouchPlugin): Promise<void> {
 
     const usedWidgetFiles = new Set<string>()
     plugin.features.forEach((feature) => {
+      if (!isWidgetFeatureEnabled(plugin, feature)) return
       if (feature.interaction?.type !== 'widget') return
       if (typeof feature.interaction?.path !== 'string') return
       const resolved = resolveWidgetFeaturePath(plugin, feature.interaction.path)

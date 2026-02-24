@@ -7,6 +7,7 @@ import type {
 } from '../widget-processor'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { transform } from 'esbuild'
+import { pushWidgetFeatureIssue } from '../widget-issue'
 
 /**
  * Allowed packages in widget sandbox
@@ -118,14 +119,11 @@ export class WidgetVueProcessor implements IWidgetProcessor {
 
     if (!validation.valid) {
       validation.errors.forEach((err) => {
-        plugin.issues.push({
-          type: 'error',
+        pushWidgetFeatureIssue(plugin, feature, {
           code: 'WIDGET_INVALID_DEPENDENCY',
           message: err.message,
-          source: `feature:${feature.id}`,
           meta: { module: err.module },
-          suggestion: `Only these packages are allowed: ${ALLOWED_PACKAGES.join(', ')}`,
-          timestamp: Date.now()
+          suggestion: `Only these packages are allowed: ${ALLOWED_PACKAGES.join(', ')}`
         })
       })
 
@@ -210,13 +208,10 @@ module.exports = __component
         error as Error
       )
 
-      plugin.issues.push({
-        type: 'error',
+      pushWidgetFeatureIssue(plugin, feature, {
         code: 'WIDGET_COMPILE_FAILED',
         message: `Failed to compile Vue widget: ${(error as Error).message}`,
-        source: `feature:${feature.id}`,
-        meta: { error: (error as Error).stack },
-        timestamp: Date.now()
+        meta: { error: (error as Error).stack }
       })
 
       return null
