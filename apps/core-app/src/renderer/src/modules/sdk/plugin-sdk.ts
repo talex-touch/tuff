@@ -34,6 +34,17 @@ function isNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function cloneManifestForTransport(
+  manifest: Record<string, unknown>
+): Record<string, unknown> | null {
+  try {
+    return JSON.parse(JSON.stringify(manifest)) as Record<string, unknown>
+  } catch (error) {
+    console.error('[PluginSDK] Manifest payload is not JSON serializable:', error)
+    return null
+  }
+}
+
 class PluginSDK {
   private subscribers: Set<PluginStateCallback> = new Set()
   private pluginSubscribers: Map<string, Set<PluginCallback>> = new Map()
@@ -426,9 +437,14 @@ class PluginSDK {
     reload = true
   ): Promise<boolean> {
     try {
+      const clonedManifest = cloneManifestForTransport(manifest)
+      if (!clonedManifest) {
+        return false
+      }
+
       const response = await pluginTransportSdk.saveManifest({
         name,
-        manifest,
+        manifest: clonedManifest,
         reload
       })
       return response?.success || false
