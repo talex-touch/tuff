@@ -284,7 +284,6 @@ onUnmounted(() => {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--tx-bg-color-card, #fff) 92%, transparent);
     font-size: 1.4rem;
     line-height: 1;
     flex: 0 0 auto;

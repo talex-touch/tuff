@@ -4,6 +4,7 @@ import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/ev
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
@@ -18,6 +19,7 @@ import { windowManager } from './window'
 
 const coreBoxLog = createLogger('CoreBox')
 const COREBOX_MIN_HEIGHT = 64
+const beginnerShortcutTriggeredEvent = defineRawEvent<void, void>('beginner:shortcut-triggered')
 
 export { getCoreBoxWindow } from './window'
 
@@ -60,13 +62,23 @@ export class CoreBoxModule extends BaseModule {
         // Check if initialization is complete
         try {
           const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
-          if (!appSetting?.beginner?.init) {
+          const beginnerState = appSetting?.beginner as
+            | { init: boolean; shortcutArmed?: boolean }
+            | undefined
+          if (!beginnerState?.init) {
             coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
             // Optionally show a notification or dialog to user
             const mainWindow = $app.window.window
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.show()
               mainWindow.focus()
+              if (beginnerState?.shortcutArmed === true && this.transport) {
+                void this.transport
+                  .sendToWindow(mainWindow.id, beginnerShortcutTriggeredEvent, undefined)
+                  .catch((error) => {
+                    coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
+                  })
+              }
             }
             return
           }

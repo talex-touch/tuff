@@ -19,6 +19,24 @@
 - `apps/nexus/server/middleware/canonical-origin.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### Nexus OAuth 回调修复（Cloudflare Pages 下移除对 Node `https.request` 依赖）
+
+**变更类型**: 登录修复 / 运行时兼容性
+
+**描述**: 生产环境 `OAuthCallback` 报错定位为 `https.request is not implemented yet`。根因是 `next-auth` 的默认 OAuth 回调链路依赖 `openid-client`，其 token/userinfo 交换会走 Node `https` 模块；而 Nitro `cloudflare-pages` 产物对 `http/https` 仍为 unenv stub。现将 GitHub/LinuxDO 的 token 与 userinfo 交换改为 `fetch`，规避该运行时限制。
+
+**主要变更**:
+1. **OAuth 交换改造**：为 GitHub/LinuxDO provider 增加 `token.request` 与 `userinfo.request` 自定义实现，统一改用 `fetch`。
+2. **行为兼容**：保留现有账号绑定策略（`allowDangerousEmailAccountLinking`）；GitHub 额外补齐 `/user/emails` 拉取，维持邮箱可用性。
+3. **运行时兜底**：Pages 根环境与 preview 继续保留 `enable_nodejs_http_modules`，减少后续依赖升级时的兼容风险。
+4. **回调稳定性增强**：`token.request` 透传 next-auth `checks.code_verifier`（PKCE），并对 GitHub token 交换改为不强制提交 `redirect_uri`，降低 provider 侧 `redirect_uri_mismatch` 触发概率。
+5. **部署配置对齐**：`wrangler.toml` 生产配置显式迁移到 `env.production`，避免根级 `[vars]` 在本地 CLI 部署时覆盖/偏离 Dashboard 的生产环境绑定。
+
+**修改文件**:
+- `apps/nexus/server/api/auth/[...].ts`
+- `wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app 首引导完成页 Welcome 收敛（对齐 Hello）+ ShortKey 组件
 
 **变更类型**: 交互优化 / 视觉一致性
@@ -29,15 +47,17 @@
 1. **Welcome 对齐 Hello 结构**：完成页动效区域改为固定容器 + 内部缩放，避免全屏占位导致主视觉失衡。
 2. **ShortKey 独立组件**：新增 `BeginShortcutKey`，将按键外观与 hover/active 动效封装，供引导页复用。
 3. **组合键展示完善**：完成页快捷键区改为 `Command/Ctrl + E` 双键展示，右侧补充独立 `E` 键位。
-4. **按键联动反馈**：监听 `Meta/Ctrl` 与 `E` 键盘事件，按下时同步触发键帽“按压态”视觉反馈。
-5. **引导快捷完成**：在 Done 步骤按下 `Meta/Ctrl + E` 时自动完成引导并隐藏主窗口，无需手动点击关闭。
-6. **i18n 补齐**：`zh-CN/en-US` 新增 `beginner.done.shortcut.*` 文案键，并补充“可在设置中修改快捷键”提示。
+4. **Done 阶段快捷标记**：进入 Done 页面时标记 `beginner.shortcutArmed`，即使 `beginner.init=false` 也可响应 `Meta/Ctrl + E` 快捷触发。
+5. **按键联动反馈**：监听 `Meta/Ctrl` 与 `E` 键盘事件，按下时同步触发双键帽“按压态”，随后追加绿色发光阴影。
+6. **延迟唤起 CoreBox**：在 Done 步骤按下 `Meta/Ctrl + E` 后先播放按压+发光反馈，延迟后自动完成引导、隐藏主窗口并唤起 CoreBox。
+7. **i18n 补齐**：`zh-CN/en-US` 新增 `beginner.done.shortcut.*` 文案键，并补充“可在设置中修改快捷键”提示。
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
 - `apps/core-app/src/renderer/src/views/base/begin/internal/components/BeginShortcutKey.vue`
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Core-app 引导语言切换实时保存（点击即生效）
@@ -121,6 +141,22 @@
 3. **Tx 组件替换**：权限条目容器切换为 `TxCard`，状态展示切换为 `TxStatusBadge`，保留 `TxButton` 操作入口。
 4. **设置区组件化**：开关区切到 `TxCardItem + TuffSwitch` 组合，统一条目结构与交互语义，减少自定义块级布局。
 5. **样式简化**：删除对 legacy `TBlockSelection` 的依赖样式，改为更扁平的结构样式与响应式收敛。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app SetupPermissions 权限页切换为 GroupBlock 方案（对齐 Settings 视觉）
+
+**变更类型**: 交互优化 / 视觉一致性
+
+**描述**: 首引导权限页移除 `TxCard` 形态，改为与 App Settings 一致的 `groupblock` 套件组织结构，减少样式分叉，提升组件一致性。
+
+**主要变更**:
+1. **权限区收敛**：权限条目统一使用 `TuffGroupBlock + TuffBlockSlot + TuffStatusBadge`，移除 `TxCard/TxCardItem` 组合。
+2. **设置区收敛**：开关项统一使用 `TuffBlockSwitch`，保持与设置页相同交互语义。
+3. **操作入口保留**：继续沿用 `TxButton` 作为重检/继续入口，兼容当前引导流程按钮交互。
+4. **样式降复杂**：删除卡片特化样式，保留最小必要布局样式（状态区与响应式按钮排列）。
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`

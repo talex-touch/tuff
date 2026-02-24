@@ -3,10 +3,12 @@ withDefaults(
   defineProps<{
     label?: string
     active?: boolean
+    success?: boolean
   }>(),
   {
     label: 'command',
-    active: false
+    active: false,
+    success: false
   }
 )
 </script>
@@ -14,7 +16,7 @@ withDefaults(
 <template>
   <button
     class="BeginShortcutKey"
-    :class="{ 'is-active': active }"
+    :class="{ 'is-active': active, 'is-success': success }"
     type="button"
     :aria-pressed="active"
   >
@@ -50,8 +52,8 @@ withDefaults(
   outline: none;
   background: var(--tx-bg-color-page);
   box-shadow:
-    -3px -8px 10px color-mix(in srgb, #ffffff 88%, transparent),
-    3px 8px 10px rgba(0, 0, 0, 0.16);
+    -3px -8px 10px color-mix(in srgb, var(--tx-color-white) 88%, transparent),
+    3px 8px 10px color-mix(in srgb, var(--tx-text-color-primary) 16%, transparent);
   transition:
     transform 0.25s ease,
     box-shadow 0.25s ease;
@@ -61,8 +63,8 @@ withDefaults(
 .BeginShortcutKey:hover {
   transform: translateY(-2px);
   box-shadow:
-    -3px -10px 12px color-mix(in srgb, #ffffff 90%, transparent),
-    4px 10px 14px rgba(0, 0, 0, 0.2);
+    -3px -10px 12px color-mix(in srgb, var(--tx-color-white) 90%, transparent),
+    4px 10px 14px color-mix(in srgb, var(--tx-text-color-primary) 20%, transparent);
 }
 
 .BeginShortcutKey:active {
@@ -72,6 +74,14 @@ withDefaults(
 .BeginShortcutKey.is-active {
   transform: translateY(0) scale(0.95);
   box-shadow: none;
+}
+
+.BeginShortcutKey.is-success {
+  border-color: var(--tx-color-success);
+  box-shadow:
+    -2px -7px 10px color-mix(in srgb, var(--tx-color-white) 86%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--tx-color-success) 26%, transparent),
+    0 0 18px color-mix(in srgb, var(--tx-color-success) 42%, transparent);
 }
 
 .BeginShortcutKey-Content {
@@ -84,7 +94,7 @@ withDefaults(
   grid-template-rows: repeat(2, 1fr);
   border-radius: 16px;
   box-shadow:
-    inset 0 -3px 0 color-mix(in srgb, var(--tx-fill-color) 70%, #000 6%),
+    inset 0 -3px 0 color-mix(in srgb, var(--tx-fill-color) 92%, var(--tx-text-color-primary)),
     0 -3px 0 var(--tx-bg-color-page);
 }
 
@@ -110,7 +120,7 @@ withDefaults(
 .BeginShortcutKey-Icon svg {
   width: 16px;
   height: 16px;
-  fill: color-mix(in srgb, var(--tx-text-color-secondary) 80%, #9a9a9a 20%);
+  fill: color-mix(in srgb, var(--tx-text-color-secondary) 84%, var(--tx-text-color-regular));
 }
 
 .BeginShortcutKey-Text {
@@ -121,7 +131,7 @@ withDefaults(
   text-align: center;
   font-size: 0.85rem;
   font-weight: 600;
-  color: color-mix(in srgb, var(--tx-text-color-primary) 78%, #7a7a7a 22%);
+  color: color-mix(in srgb, var(--tx-text-color-primary) 82%, var(--tx-text-color-regular));
   transform: translate3d(0, -2px, 0);
   transition: transform 0.25s ease;
 }
@@ -132,5 +142,9 @@ withDefaults(
 
 .BeginShortcutKey.is-active .BeginShortcutKey-Text {
   transform: translate3d(0, -1px, 0);
+}
+
+.BeginShortcutKey.is-success .BeginShortcutKey-Text {
+  color: color-mix(in srgb, var(--tx-color-success) 70%, var(--tx-text-color-primary) 30%);
 }
 </style>
