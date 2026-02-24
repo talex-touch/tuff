@@ -72,6 +72,67 @@ function normalizeObject<T>(value: unknown, fallback: T): T {
   return isPlainObject(value) ? (value as T) : fallback
 }
 
+function removeLegacyLayoutOpacity(
+  value: AppSetting,
+  fallback: AppSetting
+): { normalized: AppSetting; changed: boolean } {
+  const rawSetting = value as unknown as Record<string, unknown>
+  const rawLayout = rawSetting.layoutAtomConfig
+  if (!isPlainObject(rawLayout)) {
+    return { normalized: value, changed: false }
+  }
+
+  const rawHeader = rawLayout.header
+  const rawAside = rawLayout.aside
+  const headerIsObject = isPlainObject(rawHeader)
+  const asideIsObject = isPlainObject(rawAside)
+
+  const headerHasLegacyOpacity =
+    headerIsObject && Object.prototype.hasOwnProperty.call(rawHeader, 'opacity')
+  const asideHasLegacyOpacity =
+    asideIsObject && Object.prototype.hasOwnProperty.call(rawAside, 'opacity')
+
+  if (!headerHasLegacyOpacity && !asideHasLegacyOpacity) {
+    return { normalized: value, changed: false }
+  }
+
+  const nextHeader = headerHasLegacyOpacity
+    ? (() => {
+        return Object.fromEntries(Object.entries(rawHeader).filter(([key]) => key !== 'opacity'))
+      })()
+    : headerIsObject
+      ? rawHeader
+      : fallback.layoutAtomConfig.header
+
+  const nextAside = asideHasLegacyOpacity
+    ? (() => {
+        return Object.fromEntries(Object.entries(rawAside).filter(([key]) => key !== 'opacity'))
+      })()
+    : asideIsObject
+      ? rawAside
+      : fallback.layoutAtomConfig.aside
+
+  const nextLayoutAtomConfig = {
+    ...(rawLayout as Record<string, unknown>),
+    header: nextHeader as AppSetting['layoutAtomConfig']['header'],
+    aside: nextAside as AppSetting['layoutAtomConfig']['aside']
+  } as unknown as AppSetting['layoutAtomConfig']
+
+  return {
+    normalized: {
+      ...value,
+      layoutAtomConfig: nextLayoutAtomConfig
+    },
+    changed: true
+  }
+}
+
+function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
+  const normalized = normalizeObject(value, fallback)
+  const cleaned = removeLegacyLayoutOpacity(normalized, fallback)
+  return cleaned.normalized
+}
+
 function normalizeArray<T>(value: unknown, fallback: T): T {
   return Array.isArray(value) ? (value as T) : fallback
 }
@@ -121,7 +182,7 @@ export const mainStorageRegistry = {
   [StorageList.APP_SETTING]: defineEntry<AppSetting>({
     key: StorageList.APP_SETTING,
     defaultValue: appSettingOriginData,
-    normalize: normalizeObject
+    normalize: normalizeAppSetting
   }),
   [StorageList.SHORTCUT_SETTING]: defineEntry<ShortcutSetting>({
     key: StorageList.SHORTCUT_SETTING,

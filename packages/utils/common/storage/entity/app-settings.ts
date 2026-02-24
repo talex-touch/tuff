@@ -8,8 +8,8 @@ import type {
 /** Default layout atom for 'simple' preset */
 const defaultLayoutAtomSimple: LayoutAtomConfig = {
   preset: 'simple',
-  header: { border: 'solid', opacity: 1, height: 26, blur: false },
-  aside: { position: 'left', width: 68, border: 'solid', opacity: 0.5, collapsed: false },
+  header: { border: 'solid', height: 26, blur: false },
+  aside: { position: 'left', width: 68, border: 'solid', collapsed: false },
   view: { radius: [0, 0, 0, 0], shadow: 'none', padding: 0, background: 'transparent' },
   nav: { style: 'icon', activeIndicator: 'dot' },
 }
@@ -255,7 +255,6 @@ const _appSettingOriginData = {
     resultTransition: false,
     coreBoxResize: false,
     autoDisableOnLowBattery: true,
-    lowBatteryThreshold: 20,
   },
   viewCache: {
     maxCachedViews: 4,

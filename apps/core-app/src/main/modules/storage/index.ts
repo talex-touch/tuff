@@ -60,6 +60,14 @@ let storageUpdateEmitter: ((name: string, version: number) => void) | null = nul
 
 const SQLITE_PILOT_CONFIGS = new Set<string>([StorageList.SEARCH_ENGINE_LOGS_ENABLED])
 
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[unserializable]'
+  }
+}
+
 /**
  * Broadcast storage update to all windows
  * @param name - Configuration name
@@ -137,6 +145,22 @@ export class StorageModule extends BaseModule {
       30000, // cleanupInterval
       this.hotConfigs // Pass hot configs to LRU manager
     )
+  }
+
+  private normalizeAppSettingPayload(
+    name: string,
+    value: unknown
+  ): { normalized: object; changed: boolean } {
+    if (name !== StorageList.APP_SETTING) {
+      return { normalized: (value ?? {}) as object, changed: false }
+    }
+
+    const normalized = resolveMainStorageValue(StorageList.APP_SETTING as MainStorageKey, value)
+    const changed = safeJsonStringify(value) !== safeJsonStringify(normalized)
+    return {
+      normalized: normalized as unknown as object,
+      changed
+    }
   }
 
   onInit({ file, app }: ModuleInitContext<TalexEvents>): MaybePromise<void> {
@@ -493,8 +517,17 @@ export class StorageModule extends BaseModule {
       disposeLoad()
     }
 
+    const normalizedResult = this.normalizeAppSettingPayload(name, file)
+    file = normalizedResult.normalized
+    if (normalizedResult.changed) {
+      serialized = undefined
+    }
+
     // Use setWithVersion for initial load (version 1, not dirty)
     this.cache.setWithVersion(name, file, 1, serialized)
+    if (normalizedResult.changed) {
+      this.cache.markDirty(name)
+    }
 
     // Return through cache.get() to ensure deep copy protection
     return this.cache.get(name)!
@@ -548,8 +581,16 @@ export class StorageModule extends BaseModule {
       disposeReload()
     }
 
+    const normalizedResult = this.normalizeAppSettingPayload(name, file)
+    file = normalizedResult.normalized
+    if (normalizedResult.changed) {
+      serialized = undefined
+    }
+
     this.cache.set(name, file, true, serialized)
-    this.cache.clearDirty(name)
+    if (!normalizedResult.changed) {
+      this.cache.clearDirty(name)
+    }
     this.cache.clearInvalidated(name)
 
     return file
@@ -629,6 +670,12 @@ export class StorageModule extends BaseModule {
       } else {
         const cached = this.cache.getRaw(name)
         parsed = cached === undefined ? {} : cached
+      }
+
+      const normalizedResult = this.normalizeAppSettingPayload(name, parsed ?? {})
+      parsed = normalizedResult.normalized
+      if (normalizedResult.changed) {
+        serialized = undefined
       }
 
       // Conflict detection: if client has older version, reject the save
