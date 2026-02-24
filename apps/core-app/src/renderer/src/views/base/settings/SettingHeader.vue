@@ -94,19 +94,6 @@ onMounted(() => {
     ctx.fillRect(0, 0, width, height)
 
     ctx.globalCompositeOperation = 'source-over'
-    ctx.lineWidth = 1
-    for (let i = 0; i < 5; i += 1) {
-      ctx.beginPath()
-      const baseY = height * 0.3 + i * 18
-      for (let x = 0; x <= width; x += 12) {
-        const sway = Math.sin((x / width) * Math.PI * 2 + t * 1.4 + i) * 8
-        const y = baseY + sway
-        if (x === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
-      }
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)'
-      ctx.stroke()
-    }
 
     ctx.fillStyle = 'rgba(226, 232, 240, 0.6)'
     particles.forEach((particle) => {
@@ -288,31 +275,6 @@ onBeforeUnmount(() => {
     justify-content: center;
     z-index: 1;
 
-    &:before,
-    &:after {
-      content: '';
-      position: absolute;
-
-      left: 50%;
-      top: 50%;
-
-      width: 100%;
-      height: 100%;
-
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      border: 1px solid rgba(226, 232, 240, 0.35);
-
-      animation: header-breathing 2.4s ease-in-out infinite;
-    }
-
-    &:after {
-      width: 125%;
-      height: 125%;
-
-      animation-delay: 1.2s;
-    }
-
     .Home-Logo-Bg {
       position: absolute;
       inset: 12%;
@@ -361,18 +323,6 @@ onBeforeUnmount(() => {
     z-index: 3;
   }
 
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.35), transparent 45%),
-      radial-gradient(circle at 85% 60%, rgba(14, 165, 233, 0.25), transparent 50%);
-    opacity: 0.9;
-    pointer-events: none;
-    z-index: 0;
-  }
-
   & {
     position: relative;
     overflow: hidden;
@@ -386,9 +336,14 @@ onBeforeUnmount(() => {
     padding: 24px 32px;
     border-radius: 18px;
     color: var(--tx-text-color-primary);
-    background: linear-gradient(135deg, #0f172a 0%, #101827 45%, #0b1020 100%);
+    border: 1px solid var(--tx-border-color);
+    background: linear-gradient(
+      135deg,
+      var(--tx-color-primary) 0%,
+      var(--tx-color-primary-light-3) 45%,
+      var(--tx-color-primary-light-5) 100%
+    );
     background-size: 200% 200%;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
     animation: header-flow 12s ease infinite;
   }
 
@@ -407,23 +362,6 @@ onBeforeUnmount(() => {
   50% {
     opacity: 0.55;
     transform: scale(1.4);
-  }
-}
-
-@keyframes header-breathing {
-  0% {
-    opacity: 0.2;
-    transform: translate(-50%, -50%) scale(0.8);
-  }
-
-  50% {
-    opacity: 0.9;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  100% {
-    opacity: 0.2;
-    transform: translate(-50%, -50%) scale(1.2);
   }
 }
 

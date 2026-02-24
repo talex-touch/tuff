@@ -19,7 +19,9 @@ const { currentLanguage, switchLanguage, setFollowSystemLanguage, getSystemLangu
 const isLanguageListVisible = ref(false)
 const followSystem = ref(true)
 const selectedLanguage = ref<SupportedLanguage>(getSystemLanguage())
+const STARTUP_SOUND_URL = new URL('../../../../assets/sounds/startup.m4a', import.meta.url).href
 let startupAudio: HTMLAudioElement | null = null
+let removeAudioRetryListeners: (() => void) | null = null
 const LANGUAGE_ICONS: Record<SupportedLanguage, string> = {
   'zh-CN': '🇨🇳',
   'en-US': '🇺🇸'
@@ -42,13 +44,22 @@ function handleOpenLanguageList(): void {
   isLanguageListVisible.value = true
 }
 
-function handleBackToDefault(): void {
+async function handleBackToDefault(): Promise<void> {
   isLanguageListVisible.value = false
+  selectedLanguage.value = systemLanguage.value
+  followSystem.value = true
+  await setFollowSystemLanguage(true)
 }
 
-function handleSelectLanguage(lang: (typeof SUPPORTED_LANGUAGES)[number]): void {
+async function handleSelectLanguage(lang: (typeof SUPPORTED_LANGUAGES)[number]): Promise<void> {
   selectedLanguage.value = lang.key
-  followSystem.value = lang.key === systemLanguage.value
+  const shouldFollowSystem = lang.key === systemLanguage.value
+  followSystem.value = shouldFollowSystem
+
+  await setFollowSystemLanguage(shouldFollowSystem)
+  if (!shouldFollowSystem) {
+    await switchLanguage(lang.key)
+  }
 }
 
 async function handleNext(): Promise<void> {
@@ -63,14 +74,49 @@ async function handleNext(): Promise<void> {
   })
 }
 
+function cleanupAudioRetryListeners(): void {
+  if (!removeAudioRetryListeners) return
+  removeAudioRetryListeners()
+  removeAudioRetryListeners = null
+}
+
+function bindAudioRetryOnInteraction(): void {
+  if (removeAudioRetryListeners) return
+
+  const retryPlay = () => {
+    void playStartupAudio(true)
+  }
+
+  window.addEventListener('pointerdown', retryPlay, { passive: true })
+  window.addEventListener('keydown', retryPlay)
+  removeAudioRetryListeners = () => {
+    window.removeEventListener('pointerdown', retryPlay)
+    window.removeEventListener('keydown', retryPlay)
+  }
+}
+
+async function playStartupAudio(fromInteraction = false): Promise<void> {
+  if (!startupAudio) return
+
+  try {
+    await startupAudio.play()
+    cleanupAudioRetryListeners()
+  } catch {
+    if (!fromInteraction) {
+      bindAudioRetryOnInteraction()
+    }
+  }
+}
+
 onMounted(() => {
-  startupAudio = new Audio('/sound/startup.m4a')
-  startupAudio.volume = 0.45
+  startupAudio = new Audio(STARTUP_SOUND_URL)
+  startupAudio.volume = 0.65
   startupAudio.preload = 'auto'
-  void startupAudio.play().catch(() => {})
+  void playStartupAudio()
 })
 
 onUnmounted(() => {
+  cleanupAudioRetryListeners()
   if (!startupAudio) return
   startupAudio.pause()
   startupAudio.currentTime = 0
@@ -104,7 +150,9 @@ onUnmounted(() => {
             <strong>{{ systemLanguageName }}</strong>
             <small>{{ t('beginner.language.systemTag') }}</small>
           </div>
-          <div class="LanguageSetup-CurrentCheck ml-auto i-carbon-checkmark" />
+          <div class="LanguageSetup-CurrentCheck ml-auto bg-brand-primary rounded-full">
+            <div class="i-carbon-checkmark text-white" />
+          </div>
         </div>
       </TxCard>
 
@@ -127,7 +175,7 @@ onUnmounted(() => {
             :padding="0"
             :clickable="true"
             class="LanguageSetup-OptionCard"
-            :class="{ active: selectedLanguage === lang.key }"
+            :style="`${selectedLanguage === lang.key ? '--tx-border-color-light: var(--tx-color-primary)' : ''}`"
             role="button"
             tabindex="0"
             @click="handleSelectLanguage(lang)"
@@ -143,8 +191,10 @@ onUnmounted(() => {
               </div>
               <div
                 v-if="selectedLanguage === lang.key"
-                class="LanguageSetup-OptionCheck ml-auto i-carbon-checkmark"
-              />
+                class="LanguageSetup-OptionCheck ml-auto bg-brand-primary rounded-full"
+              >
+                <div class="i-carbon-checkmark text-white" />
+              </div>
             </div>
           </TxCard>
         </div>
@@ -168,6 +218,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="scss">
+.LanguageSetup-CurrentMain {
+  border-radius: 16px;
+  border: 1px solid var(--tx-color-primary);
+}
+
 .LanguageSetup {
   display: flex;
   flex-direction: column;
@@ -277,17 +332,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    box-shadow: inset 0 0 0 1px var(--tx-border-color);
     transition: all 0.2s ease;
-
-    &:hover {
-      box-shadow: inset 0 0 0 1px var(--tx-color-primary);
-    }
-
-    &.active {
-      box-shadow: inset 0 0 0 1px var(--tx-color-primary);
-      background-color: color-mix(in srgb, var(--tx-color-primary) 10%, transparent);
-    }
   }
 
   &-OptionMain {
