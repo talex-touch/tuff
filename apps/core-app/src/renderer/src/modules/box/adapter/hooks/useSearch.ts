@@ -610,7 +610,7 @@ export function useSearch(
 
     if (!isPluginFeature && !keepCoreBoxOpen) {
       searchVal.value = ''
-      transport.send(CoreBoxEvents.ui.hide).catch(() => {})
+      await transport.send(CoreBoxEvents.ui.hide).catch(() => {})
     }
 
     if (isPluginFeature) {

@@ -236,7 +236,7 @@ onBeforeUnmount(() => {
             <div class="header-user-name">
               {{ userLabel || tSafe('nav.account', 'Account') }}
             </div>
-            <div v-if="userEmail" class="header-user-email">
+            <div v-if="userEmail" class="header-user-email" :title="userEmail">
               {{ userEmail }}
             </div>
           </div>
@@ -501,7 +501,10 @@ onBeforeUnmount(() => {
 .header-user-email {
   font-size: 12px;
   color: var(--header-user-muted);
-  word-break: break-all;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .header-user-stats {
