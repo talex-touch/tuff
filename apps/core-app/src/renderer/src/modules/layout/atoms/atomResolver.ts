@@ -37,12 +37,10 @@ export function resolveLayoutAtomsToCSSVars(
     '--layout-view-background': atom.view.background,
 
     '--layout-header-border': headerBorder,
-    '--layout-header-fake-opacity': String(atom.header.opacity),
     '--layout-header-height': `${atom.header.height}px`,
     '--layout-header-blur': atom.header.blur ? '1' : '0',
 
     '--layout-aside-border': asideBorder,
-    '--layout-aside-opacity': String(atom.aside.opacity),
     '--layout-aside-position': atom.aside.position,
     '--layout-aside-collapsed': atom.aside.collapsed ? '1' : '0',
     '--layout-dock-height': atom.aside.position === 'bottom' ? '56px' : '0',

@@ -89,9 +89,7 @@ const customCss = computed(() => sanitizeUserCss(props.atomConfig?.customCSS ?? 
 .AppLayout-Container[data-variant='simple'] {
   --layout-view-radius: 0;
   --layout-header-border: 1px solid var(--tx-border-color);
-  --layout-header-fake-opacity: 1;
   --layout-aside-border: 1px solid var(--tx-border-color);
-  --layout-aside-opacity: 0.5;
   --layout-display-ctr-height: 26px;
   --layout-display-nav-width: 68px;
   --layout-display-padding: 0.5rem;
