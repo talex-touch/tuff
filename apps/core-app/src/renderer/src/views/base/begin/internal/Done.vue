@@ -147,7 +147,7 @@ onUnmounted(() => {
   gap: 0.9rem;
 
   &-Welcome {
-    width: 230px;
+    width: 630px;
     height: 128px;
     display: flex;
     align-items: center;
@@ -157,7 +157,6 @@ onUnmounted(() => {
     :deep(.LottieFrame-Container) {
       width: 100%;
       height: 100%;
-      transform: scale(2.05);
       transform-origin: center;
     }
   }
