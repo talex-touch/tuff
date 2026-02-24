@@ -186,6 +186,31 @@ export interface IFeatureCommand {
 
 export type FeatureCommandMatcher = (queryText: string) => boolean
 
+export type OmniTransferTarget = 'plugin' | 'corebox' | 'system'
+
+export interface IFeatureOmniTransfer {
+  /**
+   * Whether this feature should be exposed in OmniPanel by declaration.
+   */
+  enabled?: boolean
+  /**
+   * Optional display title override in OmniPanel.
+   */
+  title?: string
+  /**
+   * Optional display subtitle override in OmniPanel.
+   */
+  subtitle?: string
+  /**
+   * Transfer target. Defaults to plugin execution.
+   */
+  target?: OmniTransferTarget
+  /**
+   * Optional default payload template for OmniPanel execution.
+   */
+  payload?: Record<string, unknown>
+}
+
 export interface IPluginFeature {
   id: string
   name: string
@@ -219,6 +244,11 @@ export interface IPluginFeature {
    * @example ['image', 'files'] - Feature only accepts images and files (no text-only queries)
    */
   acceptedInputTypes?: Array<'text' | 'image' | 'files' | 'html'>
+  /**
+   * OmniPanel transfer declaration.
+   * Effective only when plugin sdkapi reaches the Omni transfer baseline.
+   */
+  omniTransfer?: IFeatureOmniTransfer
 }
 
 export interface IFeatureInteraction {

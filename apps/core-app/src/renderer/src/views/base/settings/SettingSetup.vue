@@ -70,6 +70,7 @@ const settings = ref({
   showTray: true,
   hideDock: false,
   startSilent: false,
+  omniAutoMountFeature: false,
   runAsAdmin: false,
   customDesktop: false
 })
@@ -97,6 +98,38 @@ function ensureWindowSettings(): void {
   }
 }
 
+function ensureOmniPanelSettings(): void {
+  if (!appSetting.omniPanel || typeof appSetting.omniPanel !== 'object') {
+    appSetting.omniPanel = {
+      enableShortcut: true,
+      enableMouseLongPress: true,
+      autoMountFirstFeatureOnPluginInstall: false,
+      featureHub: {
+        items: []
+      }
+    }
+    return
+  }
+
+  if (appSetting.omniPanel.enableShortcut === undefined) {
+    appSetting.omniPanel.enableShortcut = true
+  }
+  if (appSetting.omniPanel.enableMouseLongPress === undefined) {
+    appSetting.omniPanel.enableMouseLongPress = true
+  }
+  if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
+    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false
+  }
+  if (!appSetting.omniPanel.featureHub || typeof appSetting.omniPanel.featureHub !== 'object') {
+    appSetting.omniPanel.featureHub = {
+      items: []
+    }
+  }
+  if (!Array.isArray(appSetting.omniPanel.featureHub.items)) {
+    appSetting.omniPanel.featureHub.items = []
+  }
+}
+
 // Initialize appSetting.setup if not exists
 if (!appSetting.setup) {
   appSetting.setup = {
@@ -119,6 +152,8 @@ if (appSetting.setup.runAsAdmin === undefined) {
 if (appSetting.setup.customDesktop === undefined) {
   appSetting.setup.customDesktop = false
 }
+
+ensureOmniPanelSettings()
 
 onMounted(async () => {
   await checkAllPermissions()
@@ -173,6 +208,7 @@ async function loadSettings(): Promise<void> {
   }
 
   ensureWindowSettings()
+  ensureOmniPanelSettings()
 
   // Load autoStart from existing setting
   try {
@@ -185,6 +221,9 @@ async function loadSettings(): Promise<void> {
   }
 
   settings.value.startSilent = Boolean(appSetting.window?.startSilent)
+  settings.value.omniAutoMountFeature = Boolean(
+    appSetting.omniPanel?.autoMountFirstFeatureOnPluginInstall
+  )
 }
 
 async function requestPermission(type: string): Promise<void> {
@@ -249,6 +288,18 @@ async function updateStartSilent(value: boolean): Promise<void> {
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
+    toast.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+async function updateOmniAutoMountFeature(value: boolean): Promise<void> {
+  settings.value.omniAutoMountFeature = value
+  ensureOmniPanelSettings()
+  appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = value
+  try {
+    toast.success(t('common.success'))
+  } catch (error) {
+    console.error('[SettingSetup] Failed to update omni auto mount setting:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -442,6 +493,15 @@ function getStatusIconClass(status: string): string {
       default-icon="i-carbon-notification-off"
       active-icon="i-carbon-notification-off"
       @update:model-value="updateStartSilent"
+    />
+
+    <TuffBlockSwitch
+      v-model="settings.omniAutoMountFeature"
+      :title="t('settings.setup.omniAutoMountFeature')"
+      :description="t('settings.setup.omniAutoMountFeatureDesc')"
+      default-icon="i-carbon-data-share"
+      active-icon="i-carbon-data-share"
+      @update:model-value="updateOmniAutoMountFeature"
     />
 
     <TuffBlockSwitch

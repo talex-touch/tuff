@@ -40,6 +40,7 @@ export enum TalexEvents {
 
   // Plugin Storage Event
   PLUGIN_STORAGE_UPDATED = 'plugin/storage-updated',
+  PLUGIN_INSTALL_COMPLETED = 'plugin/install-completed',
 
   // Clipboard Events
   CLIPBOARD_CHANGE = 'clipboard/change',
@@ -351,6 +352,19 @@ export class PluginStorageUpdatedEvent implements ITouchEvent<TalexEvents> {
   constructor(pluginName: string, fileName?: string) {
     this.pluginName = pluginName
     this.fileName = fileName
+  }
+}
+
+export class PluginInstallCompletedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PLUGIN_INSTALL_COMPLETED
+  pluginName: string
+  source: string
+  installedAt: number
+
+  constructor(pluginName: string, source: string, installedAt: number) {
+    this.pluginName = pluginName
+    this.source = source
+    this.installedAt = installedAt
   }
 }
 

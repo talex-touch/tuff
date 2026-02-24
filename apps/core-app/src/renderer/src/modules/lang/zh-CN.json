@@ -2096,6 +2096,8 @@
       "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）",
       "startSilent": "静默启动",
       "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
+      "omniAutoMountFeature": "安装后自动装载 OmniPanel Feature",
+      "omniAutoMountFeatureDesc": "启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。",
       "runAsAdmin": "使用管理员权限运行",
       "runAsAdminDesc": "以管理员权限启动应用，启用系统级功能。",
       "customDesktop": "使用自定义桌面",
@@ -2581,7 +2583,15 @@
       "coreBoxSearch": "在 CoreBox 中搜索",
       "coreBoxSearchDesc": "回到启动器继续执行动作",
       "copy": "复制文本",
-      "copyDesc": "把当前文本写回剪贴板"
+      "copyDesc": "把当前文本写回剪贴板",
+      "searchPlaceholder": "搜索 OmniPanel Feature",
+      "loading": "正在加载 Feature...",
+      "empty": "当前没有可用 Feature",
+      "loadFailed": "加载 OmniPanel Feature 失败，请稍后重试。",
+      "executeFailed": "执行失败，请稍后重试。",
+      "toggleFailed": "更新 Feature 状态失败。",
+      "reorderFailed": "Feature 排序更新失败。",
+      "featureUnavailable": "该 Feature 当前不可用，请检查插件状态。"
     },
     "actions": {
       "title": "操作",

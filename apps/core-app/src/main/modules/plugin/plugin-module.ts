@@ -34,7 +34,11 @@ import {
 } from '@talex-touch/utils/transport/events'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import {
+  PluginInstallCompletedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
@@ -426,7 +430,16 @@ function createPluginModuleInternal(
   }
 
   const installQueue = new PluginInstallQueue(installer, transport, mainWindowId, {
-    onInstallCompleted: persistInstallSourceMetadata
+    onInstallCompleted: async ({ request, manifest, providerResult }) => {
+      await persistInstallSourceMetadata({ request, manifest, providerResult })
+      const pluginName = manifest?.name
+      if (pluginName) {
+        touchEventBus.emit(
+          TalexEvents.PLUGIN_INSTALL_COMPLETED,
+          new PluginInstallCompletedEvent(pluginName, request.source, Date.now())
+        )
+      }
+    }
   })
   const localProvider = new LocalPluginProvider(pluginPath)
 

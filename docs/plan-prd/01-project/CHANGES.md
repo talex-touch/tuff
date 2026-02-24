@@ -2,6 +2,72 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-24
+
+### Core-app OCR 队列失败熔断与延迟重试收敛（降低 SQLite 写争用）
+
+**变更类型**: Bug 修复 / 稳定性增强
+
+**描述**: 针对 OCR 高频失败导致的 `ocr_jobs` 重试风暴与 SQLite 写入争用，新增“按错误分类延迟重试 + 失败熔断自动停队列 + 用户提醒”机制，优先抑制异常配置或外部服务故障带来的持续回压。
+
+**主要变更**:
+1. **重试策略延长**：补充 `Native OCR module unavailable`、`OCR provider network failure` 等错误分类，并拉长相应重试间隔。
+2. **持久化重试时间**：调度改为依赖 `ocr_jobs.nextRetryAt` 过滤可执行任务，移除仅内存重试节流依赖，避免重启后行为漂移。
+3. **自动熔断停队列**：在时间窗内连续失败达到阈值后自动暂停 OCR 队列 30 分钟，避免持续冲击数据库写队列。
+4. **用户可感知告警**：触发自动暂停时写入通知 Inbox，提示“多次错误已自动暂停”并附带恢复时间与排查建议。
+5. **状态可观测**：OCR dashboard 快照新增 `queueDisabled` 状态，便于排障与运维观测。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件 Prelude 在打包态启用运行时 Bundling（修复 utils 子路径 require 失败）
+
+**变更类型**: Bug 修复 / 运行时兼容性增强
+
+**描述**: 修复插件 `index.js` 在打包产物中直接 `require('@talex-touch/utils/*')` 子路径时可能触发 `Cannot find module` 的问题。插件启用阶段现在在打包态也会优先执行 Prelude bundling，并为 esbuild 注入默认 `nodePaths`（含插件目录与主进程可解析路径），失败时仍回退原脚本执行。
+
+**主要变更**:
+1. **打包态默认尝试 Bundling**：插件启用逻辑由“仅开发态 bundling”调整为“打包态或开发态都尝试 bundling”。
+2. **解析路径增强**：Prelude 编译器新增默认 `nodePaths` 解析策略，优先复用主进程 `@talex-touch/utils` 的解析路径。
+3. **向后兼容回退**：若 bundling 失败，保持原有回退到原始 `index.js` 执行，不阻断插件生命周期。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-prelude-compiler.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app OmniPanel Feature Hub 首期落地（自动装载 + Feature 执行链）
+
+**变更类型**: 功能增强 / 架构收敛
+
+**描述**: OmniPanel 从固定快捷动作升级为 Feature Hub，支持插件 Feature 执行、安装后自动装载首个 Feature、声明式 omniTransfer（含 SDK 门槛）与主渲染协议统一事件。
+
+**主要变更**:
+1. **Feature Hub 协议**：`omni-panel` 事件新增 `list/toggle/reorder/execute/refresh` typed payload，替代纯前端固定动作。
+2. **主进程执行链**：OmniPanel 主进程模块新增注册表持久化、builtin/plugin/corebox 分发执行、上下文注入与刷新广播。
+3. **自动装载策略**：新增安装后自动装载逻辑（声明式优先，回退首个可执行 feature），并接入插件安装完成事件。
+4. **设置项落地**：通用设置新增 `autoMountFirstFeatureOnPluginInstall` 开关，默认关闭。
+5. **SDK 与类型扩展**：插件类型新增 `feature.omniTransfer`；SDK 新增 `260225` 与声明式门槛常量。
+6. **面板 UI 重构**：OmniPanel 渲染层改为 Feature 列表视图，支持启停、排序、搜索与执行反馈。
+
+**修改文件**:
+- `apps/core-app/src/shared/events/omni-panel.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-feature.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `packages/utils/plugin/index.ts`
+- `packages/utils/plugin/sdk-version.ts`
+
 ## 2026-02-23
 
 ### Core-app Widget Feature issue 降级为 warning，并忽略非开发模式下隐藏实验特性

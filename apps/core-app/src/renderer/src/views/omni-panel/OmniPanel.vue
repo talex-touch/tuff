@@ -1,32 +1,37 @@
 <script setup lang="ts">
-import type { OmniPanelContextPayload } from '../../../../shared/events/omni-panel'
+import type {
+  OmniPanelContextPayload,
+  OmniPanelFeatureExecuteResponse,
+  OmniPanelFeatureItemPayload,
+  OmniPanelFeatureListResponse
+} from '../../../../shared/events/omni-panel'
 import { CoreBoxOmniPanelKeys } from '@talex-touch/utils/i18n'
-import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import TuffIcon from '~/components/base/TuffIcon.vue'
-import { omniPanelContextEvent, omniPanelHideEvent } from '../../../../shared/events/omni-panel'
-
-interface QuickAction {
-  id: string
-  icon: string
-  title: string
-  subtitle: string
-  shortcut: string
-  run: (text: string) => Promise<void>
-}
+import {
+  omniPanelContextEvent,
+  omniPanelFeatureExecuteEvent,
+  omniPanelFeatureListEvent,
+  omniPanelFeatureRefreshEvent,
+  omniPanelFeatureReorderEvent,
+  omniPanelFeatureToggleEvent,
+  omniPanelHideEvent
+} from '../../../../shared/events/omni-panel'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-const appSdk = useAppSdk()
 
 const selectedText = ref('')
 const hasSelection = ref(false)
 const source = ref('manual')
 const capturedAt = ref<number | null>(null)
-const executingAction = ref<string | null>(null)
+const loading = ref(false)
+const executingId = ref<string | null>(null)
+const searchKeyword = ref('')
+const features = ref<OmniPanelFeatureItemPayload[]>([])
 
 const displayText = computed(() => {
   if (hasSelection.value) return selectedText.value
@@ -36,73 +41,100 @@ const displayText = computed(() => {
   )
 })
 
+const filteredFeatures = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return features.value
+  return features.value.filter((item) => {
+    const title = item.title.toLowerCase()
+    const subtitle = item.subtitle.toLowerCase()
+    const pluginName = (item.pluginName || '').toLowerCase()
+    return title.includes(keyword) || subtitle.includes(keyword) || pluginName.includes(keyword)
+  })
+})
+
+function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): { type: any; value: string } {
+  if (!item.icon) {
+    return { type: 'class', value: 'i-ri-apps-2-line' }
+  }
+  return {
+    type: item.icon.type as any,
+    value: item.icon.value
+  }
+}
+
 async function closePanel(): Promise<void> {
   await transport.send(omniPanelHideEvent)
 }
 
-async function openTranslate(text: string): Promise<void> {
-  const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(text)}&op=translate`
-  await appSdk.openExternal(url)
-}
-
-async function openWebSearch(text: string): Promise<void> {
-  const url = `https://www.google.com/search?q=${encodeURIComponent(text)}`
-  await appSdk.openExternal(url)
-}
-
-async function copySelection(text: string): Promise<void> {
-  await transport.send(ClipboardEvents.write, { type: 'text', value: text })
-}
-
-async function searchInCoreBox(text: string): Promise<void> {
-  await transport.send(CoreBoxEvents.ui.show)
-  await transport.send(CoreBoxEvents.input.setQuery, { value: text })
-}
-
-const quickActions = computed<QuickAction[]>(() => [
-  {
-    id: 'translate',
-    icon: 'i-ri-translate-2',
-    title: t(CoreBoxOmniPanelKeys.TRANSLATE, '快速翻译'),
-    subtitle: t(CoreBoxOmniPanelKeys.TRANSLATE_DESC, '将选中文本发送到翻译页面'),
-    shortcut: '⌘↵',
-    run: openTranslate
-  },
-  {
-    id: 'search',
-    icon: 'i-ri-search-line',
-    title: t(CoreBoxOmniPanelKeys.SEARCH, '网页搜索'),
-    subtitle: t(CoreBoxOmniPanelKeys.SEARCH_DESC, '用浏览器搜索选中文本'),
-    shortcut: '⌘S',
-    run: openWebSearch
-  },
-  {
-    id: 'corebox-search',
-    icon: 'i-ri-command-line',
-    title: t(CoreBoxOmniPanelKeys.COREBOX_SEARCH, '在 CoreBox 中搜索'),
-    subtitle: t(CoreBoxOmniPanelKeys.COREBOX_SEARCH_DESC, '回到启动器继续执行动作'),
-    shortcut: '⌘K',
-    run: searchInCoreBox
-  },
-  {
-    id: 'copy',
-    icon: 'i-ri-file-copy-line',
-    title: t(CoreBoxOmniPanelKeys.COPY, '复制文本'),
-    subtitle: t(CoreBoxOmniPanelKeys.COPY_DESC, '把当前文本写回剪贴板'),
-    shortcut: '⌘C',
-    run: copySelection
-  }
-])
-
-async function executeAction(action: QuickAction): Promise<void> {
-  if (!hasSelection.value || !selectedText.value.trim()) return
-  if (executingAction.value) return
-
-  executingAction.value = action.id
+async function loadFeatures(): Promise<void> {
+  loading.value = true
   try {
-    await action.run(selectedText.value)
+    const response = await transport.send(omniPanelFeatureListEvent)
+    const payload = response as OmniPanelFeatureListResponse
+    features.value = Array.isArray(payload?.features) ? payload.features : []
+  } catch (error) {
+    console.error('[OmniPanel] Failed to load features:', error)
+    toast.error(t('corebox.omniPanel.loadFailed', '加载 OmniPanel Feature 失败，请稍后重试。'))
   } finally {
-    executingAction.value = null
+    loading.value = false
+  }
+}
+
+async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
+  if (executingId.value) return
+  if (item.unavailable) {
+    toast.error(
+      t('corebox.omniPanel.featureUnavailable', '该 Feature 当前不可用，请检查插件状态。')
+    )
+    return
+  }
+
+  executingId.value = item.id
+  try {
+    const response = (await transport.send(omniPanelFeatureExecuteEvent, {
+      id: item.id,
+      contextText: selectedText.value,
+      source: source.value
+    })) as OmniPanelFeatureExecuteResponse
+
+    if (!response?.success) {
+      const fallback = t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。')
+      toast.error(response?.error || fallback)
+    }
+  } catch (error) {
+    console.error('[OmniPanel] Failed to execute feature:', error)
+    toast.error(t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。'))
+  } finally {
+    executingId.value = null
+  }
+}
+
+async function toggleFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
+  try {
+    await transport.send(omniPanelFeatureToggleEvent, {
+      id: item.id,
+      enabled: !item.enabled
+    })
+    item.enabled = !item.enabled
+  } catch (error) {
+    console.error('[OmniPanel] Failed to toggle feature:', error)
+    toast.error(t('corebox.omniPanel.toggleFailed', '更新 Feature 状态失败。'))
+  }
+}
+
+async function reorderFeature(
+  item: OmniPanelFeatureItemPayload,
+  direction: 'up' | 'down'
+): Promise<void> {
+  try {
+    await transport.send(omniPanelFeatureReorderEvent, {
+      id: item.id,
+      direction
+    })
+    await loadFeatures()
+  } catch (error) {
+    console.error('[OmniPanel] Failed to reorder feature:', error)
+    toast.error(t('corebox.omniPanel.reorderFailed', 'Feature 排序更新失败。'))
   }
 }
 
@@ -124,12 +156,18 @@ const disposeContext = transport.on(omniPanelContextEvent, (payload) => {
   handleContext(payload as OmniPanelContextPayload)
 })
 
-onMounted(() => {
+const disposeFeatureRefresh = transport.on(omniPanelFeatureRefreshEvent, async () => {
+  await loadFeatures()
+})
+
+onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
+  await loadFeatures()
 })
 
 onBeforeUnmount(() => {
   disposeContext()
+  disposeFeatureRefresh()
   window.removeEventListener('keydown', handleKeydown)
 })
 </script>
@@ -154,23 +192,67 @@ onBeforeUnmount(() => {
       <p class="OmniPanel__contextText">{{ displayText }}</p>
     </div>
 
-    <div class="OmniPanel__actions">
-      <button
-        v-for="action in quickActions"
-        :key="action.id"
-        class="OmniPanel__action"
-        :disabled="!hasSelection || !!executingAction"
-        @click="executeAction(action)"
-      >
-        <span class="OmniPanel__actionIcon">
-          <TuffIcon :icon="{ type: 'class', value: action.icon }" :size="18" />
-        </span>
-        <span class="OmniPanel__actionContent">
-          <span class="OmniPanel__actionTitle">{{ action.title }}</span>
-          <span class="OmniPanel__actionSubtitle">{{ action.subtitle }}</span>
-        </span>
-        <span class="OmniPanel__shortcut">{{ action.shortcut }}</span>
-      </button>
+    <div class="OmniPanel__search">
+      <input
+        v-model="searchKeyword"
+        type="text"
+        :placeholder="t('corebox.omniPanel.searchPlaceholder', '搜索 OmniPanel Feature')"
+      />
+    </div>
+
+    <div v-if="loading" class="OmniPanel__state">
+      {{ t('corebox.omniPanel.loading', '正在加载 Feature...') }}
+    </div>
+    <div v-else-if="filteredFeatures.length === 0" class="OmniPanel__state">
+      {{ t('corebox.omniPanel.empty', '当前没有可用 Feature') }}
+    </div>
+    <div v-else class="OmniPanel__actions">
+      <div v-for="(item, index) in filteredFeatures" :key="item.id" class="OmniPanel__actionRow">
+        <button
+          class="OmniPanel__action"
+          :disabled="!item.enabled || !!executingId || item.unavailable"
+          @click="executeFeature(item)"
+        >
+          <span class="OmniPanel__actionIcon">
+            <TuffIcon :icon="resolveFeatureIcon(item)" :size="18" />
+          </span>
+          <span class="OmniPanel__actionContent">
+            <span class="OmniPanel__actionTitle">
+              {{ item.title }}
+              <small v-if="item.source === 'plugin'" class="OmniPanel__pluginTag">
+                {{ item.pluginName }}
+              </small>
+            </span>
+            <span class="OmniPanel__actionSubtitle">{{ item.subtitle }}</span>
+          </span>
+          <span class="OmniPanel__actionMeta">
+            <span v-if="executingId === item.id" class="OmniPanel__executing">...</span>
+            <span v-else>{{
+              item.enabled ? t('common.enabled', '已启用') : t('common.disabled', '已停用')
+            }}</span>
+          </span>
+        </button>
+
+        <div class="OmniPanel__controls">
+          <button class="OmniPanel__controlBtn" @click="toggleFeature(item)">
+            {{ item.enabled ? t('common.disable', '停用') : t('common.enable', '启用') }}
+          </button>
+          <button
+            class="OmniPanel__controlBtn"
+            :disabled="index === 0"
+            @click="reorderFeature(item, 'up')"
+          >
+            ↑
+          </button>
+          <button
+            class="OmniPanel__controlBtn"
+            :disabled="index === filteredFeatures.length - 1"
+            @click="reorderFeature(item, 'down')"
+          >
+            ↓
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -179,7 +261,7 @@ onBeforeUnmount(() => {
 .OmniPanel {
   width: 100%;
   min-height: 100vh;
-  padding: 24px;
+  padding: 22px;
   color: #eef2ff;
   background:
     radial-gradient(circle at 100% -20%, rgba(76, 139, 245, 0.3), transparent 45%),
@@ -188,7 +270,7 @@ onBeforeUnmount(() => {
   font-family: 'SF Pro Display', 'PingFang SC', sans-serif;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .OmniPanel__header {
@@ -207,7 +289,7 @@ onBeforeUnmount(() => {
 
 .OmniPanel__title {
   margin: 6px 0 0;
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.2;
   font-weight: 650;
 }
@@ -243,8 +325,26 @@ onBeforeUnmount(() => {
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 180px;
+  max-height: 120px;
   overflow: auto;
+}
+
+.OmniPanel__search input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 10px 12px;
+}
+
+.OmniPanel__state {
+  border: 1px dashed rgba(129, 140, 248, 0.35);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: rgba(191, 219, 254, 0.92);
 }
 
 .OmniPanel__actions {
@@ -253,16 +353,22 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+.OmniPanel__actionRow {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.52);
+  overflow: hidden;
+}
+
 .OmniPanel__action {
   display: flex;
   align-items: center;
   width: 100%;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.52);
-  color: inherit;
   text-align: left;
   padding: 12px;
+  color: inherit;
+  background: transparent;
+  border: none;
   cursor: pointer;
 }
 
@@ -293,6 +399,14 @@ onBeforeUnmount(() => {
 .OmniPanel__actionTitle {
   font-size: 14px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.OmniPanel__pluginTag {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.9);
 }
 
 .OmniPanel__actionSubtitle {
@@ -300,8 +414,44 @@ onBeforeUnmount(() => {
   color: rgba(148, 163, 184, 0.92);
 }
 
-.OmniPanel__shortcut {
+.OmniPanel__actionMeta {
   font-size: 12px;
   color: rgba(191, 219, 254, 0.92);
+}
+
+.OmniPanel__controls {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.OmniPanel__controlBtn {
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.OmniPanel__controlBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.OmniPanel__executing {
+  animation: blink 1.2s infinite;
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 </style>

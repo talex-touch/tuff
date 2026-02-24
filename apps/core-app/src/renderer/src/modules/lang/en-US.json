@@ -2104,6 +2104,8 @@
       "hideDockDesc": "Hide Dock icon after closing main window (macOS only)",
       "startSilent": "Silent Start",
       "startSilentDesc": "Launch application without showing window, run in background only",
+      "omniAutoMountFeature": "Auto-mount OmniPanel feature after install",
+      "omniAutoMountFeatureDesc": "When enabled, the first executable feature from a newly installed plugin is added to OmniPanel automatically.",
       "runAsAdmin": "Run with administrator privileges",
       "runAsAdminDesc": "Run elevated on Windows to unlock system-level tasks.",
       "customDesktop": "Use custom desktop shell",
@@ -2589,7 +2591,15 @@
       "coreBoxSearch": "Search in CoreBox",
       "coreBoxSearchDesc": "Return to launcher and continue actions",
       "copy": "Copy Text",
-      "copyDesc": "Write current text back to clipboard"
+      "copyDesc": "Write current text back to clipboard",
+      "searchPlaceholder": "Search OmniPanel features",
+      "loading": "Loading features...",
+      "empty": "No available features",
+      "loadFailed": "Failed to load OmniPanel features. Please retry later.",
+      "executeFailed": "Execution failed. Please retry later.",
+      "toggleFailed": "Failed to update feature status.",
+      "reorderFailed": "Failed to reorder features.",
+      "featureUnavailable": "This feature is currently unavailable. Check plugin status."
     },
     "actions": {
       "title": "Actions",
