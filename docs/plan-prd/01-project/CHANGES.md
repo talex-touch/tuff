@@ -4,6 +4,89 @@
 
 ## 2026-02-24
 
+### Nexus 认证入口统一到 AUTH_ORIGIN（防止 OAuth 跨域回调失败）
+
+**变更类型**: 部署稳定性 / 登录修复
+
+**描述**: Pages 默认域与自定义域并存时，用户若从非 `AUTH_ORIGIN` 域发起 OAuth，会出现 state cookie 与 callback 域不一致，导致回调失败。现新增 canonical origin 中间件，对页面请求统一重定向到 `AUTH_ORIGIN`。
+
+**主要变更**:
+1. **域名收敛**：生产环境下，非 `AUTH_ORIGIN` 的页面 GET/HEAD 请求统一 307 到 canonical origin。
+2. **范围控制**：跳过 `/api/*`、`/_nuxt/*` 与 `__nuxt_error`，避免影响 API 与静态资源路径。
+3. **开发保护**：开发环境与 localhost 请求保持原行为，不影响本地调试。
+
+**修改文件**:
+- `apps/nexus/server/middleware/canonical-origin.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首引导完成页 Welcome 收敛（对齐 Hello）+ ShortKey 组件
+
+**变更类型**: 交互优化 / 视觉一致性
+
+**描述**: 完成页 Welcome 动效布局对齐语言页 Hello 视觉比例，并新增独立 ShortKey 组件用于展示系统快捷键提示。
+
+**主要变更**:
+1. **Welcome 对齐 Hello 结构**：完成页动效区域改为固定容器 + 内部缩放，避免全屏占位导致主视觉失衡。
+2. **ShortKey 独立组件**：新增 `BeginShortcutKey`，将按键外观与 hover/active 动效封装，供引导页复用。
+3. **组合键展示完善**：完成页快捷键区改为 `Command/Ctrl + E` 双键展示，右侧补充独立 `E` 键位。
+4. **按键联动反馈**：监听 `Meta/Ctrl` 与 `E` 键盘事件，按下时同步触发键帽“按压态”视觉反馈。
+5. **引导快捷完成**：在 Done 步骤按下 `Meta/Ctrl + E` 时自动完成引导并隐藏主窗口，无需手动点击关闭。
+6. **i18n 补齐**：`zh-CN/en-US` 新增 `beginner.done.shortcut.*` 文案键，并补充“可在设置中修改快捷键”提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/components/BeginShortcutKey.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 引导语言切换实时保存（点击即生效）
+
+**变更类型**: 交互优化
+
+**描述**: 首引导语言列表点击语言项后立即落盘并生效，不再依赖点击 Continue 才持久化。
+
+**主要变更**:
+1. **点击即保存**：语言列表点击时立刻更新 `followSystem` 与语言偏好。
+2. **状态同步**：选择系统语言时实时切回 follow-system；选择其他语言时实时切换并持久化。
+3. **返回默认态即跟随设备**：从语言列表返回默认卡片时强制切回系统语言并开启 follow-system，保证“默认=跟随设备”语义一致。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首引导统一返回导航（跨步骤回退）
+
+**变更类型**: 交互优化 / 流程修复
+
+**描述**: 为首引导容器增加统一返回按钮，并修复原“仅记忆上一步”的回退逻辑，支持多步骤连续回退，避免来回跳转。
+
+**主要变更**:
+1. **统一返回入口**：在 `Beginner` 容器顶部新增 `TxButton` 返回按钮，所有引导步骤都可见。
+2. **历史栈回退**：将原单一 `last_component` 改为历史栈，实现 `A -> B -> C -> Back -> B -> Back -> A` 的正确行为。
+3. **回退一致性**：`provide('back')` 统一走容器回退逻辑，内嵌步骤调用与顶部按钮行为一致。
+4. **首屏无返回按钮**：当无历史页面时隐藏返回入口，避免在 hello/首步骤出现无意义返回操作。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 引导语言页 startup 音效可听性修复（资源打包 + 交互重试）
+
+**变更类型**: Bug 修复 / 体验优化
+
+**描述**: 修复首引导语言页 startup 音效在部分环境“无声”的问题，避免静态资源未进包与自动播放策略拦截导致的失声。
+
+**主要变更**:
+1. **音效资源入包**：将 startup 音效放入 renderer 资产目录并通过 `import.meta.url` 解析，确保 dev/build 下路径一致可访问。
+2. **自动播放失败兜底**：首次播放失败时自动绑定用户交互重试（pointer/keyboard），首个交互后自动重放并清理监听。
+3. **音量微调**：引导音效默认音量从 `0.45` 调整为 `0.65`，提升可感知度。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/assets/sounds/startup.m4a`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app 引导页 i18n 全量补齐（Begin Flow）
 
 **变更类型**: 体验优化 / 国际化一致性
@@ -58,11 +141,13 @@
 6. **尺寸与对齐再收敛**：语言区块整体缩小并左对齐，语言默认态与语言列表项前增加语言 icon，提升信息密度与识别度。
 7. **布局回归居中与样式简化**：语言页整体重新居中，默认语言卡片采用“左侧语言 icon + 右侧文案”的结构，并合并样式规则以减少组件级微调代码。
 8. **字号继续收敛 + 默认勾选态显式化**：语言页文本字号整体再收缩约 40%，并在默认态与列表态的右侧统一展示 checkmark（选中填充、未选中描边）。
+9. **动效速度微调**：语言页 `hello` 动效恢复默认速率（1x）；完成页 `welcome` 动效在加载后设置 `setSpeed(1.5)`，保证节奏更紧凑但不突兀。
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
 - `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
 - `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Core-app 首次引导语言流程重排（Hello 自动切换 + 系统语言默认确认）

@@ -1,13 +1,18 @@
 <script setup lang="ts" name="Beginner">
 import type { Component, Ref } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
+import { TxButton } from '@talex-touch/tuffex'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { appSetting, storageManager } from '~/modules/channel/storage/index'
 import LanguageSetup from './internal/LanguageSetup.vue'
 
 const main: Ref<HTMLElement | null> = ref(null)
 const content: Ref<HTMLElement | null> = ref(null)
 const component: Ref<Component | null> = ref(null)
-const last_component: Ref<Component | null> = ref(null)
+const historyStack: Ref<Component[]> = ref([])
+const { t } = useI18n()
+const canBack = computed(() => historyStack.value.length > 0)
 
 if (!appSetting.beginner) {
   appSetting.beginner = {
@@ -17,7 +22,8 @@ if (!appSetting.beginner) {
 
 async function step(
   call: { comp: Component | null; rect?: { width: number; height: number } },
-  dataAction?: (storage: unknown) => void
+  dataAction?: (storage: unknown) => void,
+  options: { pushHistory?: boolean } = { pushHistory: true }
 ): Promise<void> {
   if (!content.value) return
 
@@ -45,7 +51,9 @@ async function step(
     await sleep(300)
   }
 
-  last_component.value = component.value
+  if (options.pushHistory !== false && comp && component.value) {
+    historyStack.value.push(component.value)
+  }
   component.value = comp
   await sleep(100)
 
@@ -54,12 +62,15 @@ async function step(
   }
 }
 
+function back(): void {
+  if (!canBack.value) return
+  const previous = historyStack.value.pop()
+  if (!previous) return
+  void step({ comp: previous }, undefined, { pushHistory: false })
+}
+
 provide('step', step)
-provide('back', () => {
-  step({
-    comp: last_component.value
-  })
-})
+provide('back', back)
 
 onMounted(async () => {
   await sleep(100)
@@ -73,6 +84,12 @@ onMounted(async () => {
 <template>
   <div class="Beginner">
     <div ref="main" class="Beginner-Main fake-background transition-cubic">
+      <div v-if="canBack" class="Beginner-TopBar">
+        <TxButton variant="bare" size="small" @click="back">
+          <i class="i-ri-arrow-left-line" />
+          <span>{{ t('layout.back') }}</span>
+        </TxButton>
+      </div>
       <div ref="content" class="Beginner-Content transition-cubic">
         <component :is="component" />
       </div>
@@ -99,6 +116,13 @@ onMounted(async () => {
     height: 100%;
     border-radius: 8px;
     box-sizing: border-box;
+  }
+
+  &-TopBar {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 2;
   }
 
   &-Main {

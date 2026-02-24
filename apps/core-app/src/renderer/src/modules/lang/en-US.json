@@ -129,7 +129,13 @@
     },
     "done": {
       "description": "You're all set. Let's get started.",
-      "action": "Get Started"
+      "action": "Get Started",
+      "shortcut": {
+        "command": "command",
+        "ctrl": "ctrl",
+        "hint": "Press {shortcut} to quickly open Tuff",
+        "changeInSettings": "You can change this shortcut in Settings"
+      }
     },
     "forbidden": {
       "description": "We're sorry, but we're unable to provide service at this time.",

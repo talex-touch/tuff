@@ -129,7 +129,13 @@
     },
     "done": {
       "description": "一切就绪，开始使用吧。",
-      "action": "开始使用"
+      "action": "开始使用",
+      "shortcut": {
+        "command": "command",
+        "ctrl": "ctrl",
+        "hint": "按下 {shortcut} 可快速唤起 Tuff",
+        "changeInSettings": "可在设置中修改快捷键"
+      }
     },
     "forbidden": {
       "description": "很抱歉，我们暂时无法提供服务。",
