@@ -20,6 +20,20 @@
 - `plugins/touch-translation/shared/tuffintelligence.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### CoreBox 启动应用前先隐藏窗口（避免 hide 与 execute 并发）
+
+**变更类型**: 交互修复 / 行为时序优化
+
+**描述**: 调整 CoreBox 执行项的时序，执行应用启动前先等待 CoreBox 隐藏完成，避免 `ui.hide` 与 `item.execute` 并发触发导致的视觉闪烁或前后台切换突兀。
+
+**主要变更**:
+1. **执行链路串行化**：`handleExecute` 中非插件功能且不要求保持窗口打开时，`CoreBoxEvents.ui.hide` 改为 `await`，确保先隐藏再执行。
+2. **最小改动范围**：仅调整 renderer 侧执行流程，不改 provider 执行语义，保持插件功能与 `keepCoreBoxOpen` 逻辑不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app 后台轮询错峰与性能日志降噪（SystemUpdate/FxRate/PerfMonitor）
 
 **变更类型**: 性能优化 / 稳定性修复
@@ -71,6 +85,23 @@
 - `apps/nexus/server/api/auth/[...].ts`
 - `wrangler.toml`
 - `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus 登录与账户邮箱展示优化（长邮箱省略）
+
+**变更类型**: 交互优化 / 可读性改进
+
+**描述**: 优化长邮箱在账户菜单与登录流程中的展示。原先长邮箱可能出现难读换行或撑破布局，现统一改为单行省略并保留 `title` 全量提示。
+
+**主要变更**:
+1. **账户菜单**：`HeaderUserMenu` 邮箱文本改为单行省略，避免 `break-all` 导致的域名断裂。
+2. **登录流程**：登录/注册步骤里的邮箱预览改为单行省略，防止长邮箱挤压“更换邮箱”操作按钮。
+3. **可访问性**：邮箱字段增加 `title`，鼠标悬停可查看完整邮箱。
+
+**修改文件**:
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/pages/sign-in/components/SignInLoginStep.vue`
+- `apps/nexus/app/pages/sign-in/components/SignInSignupStep.vue`
+- `apps/nexus/app/pages/sign-in/index.vue`
 
 ### Core-app 首引导完成页 Welcome 收敛（对齐 Hello）+ ShortKey 组件
 

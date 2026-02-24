@@ -45,7 +45,7 @@ const signInLabel = computed(() => {
 <template>
   <div class="auth-step">
     <div class="auth-row">
-      <span>{{ emailPreview }}</span>
+      <span class="auth-row__email" :title="emailPreview">{{ emailPreview }}</span>
       <TxButton variant="ghost" size="sm" class="auth-text-button" @click="emit('reset-email')">
         {{ t('auth.changeEmail', '更换邮箱') }}
       </TxButton>

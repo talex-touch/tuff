@@ -312,6 +312,14 @@ function goTo(path: string) {
   color: rgba(255, 255, 255, 0.6);
 }
 
+:deep(.auth-row__email) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 :deep(.auth-divider) {
   display: flex;
   align-items: center;

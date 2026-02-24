@@ -1,31 +1,14 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
-import { TxButton, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton, TxCard, TxTooltip } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TuffDrawer from '~/components/base/dialog/TuffDrawer.vue'
-import PluginPerfCharts from '~/components/plugin/runtime/PluginPerfCharts.vue'
 import LogTerminal from '~/components/terminal/LogTerminal.vue'
-import { formatLogForTerminal } from '~/utils/log-formatter'
-
-interface LogSessionMeta {
-  id: string
-  folder: string
-  startedAt?: string
-  version?: string
-  hasLogFile: boolean
-}
-
-interface SessionResponse {
-  sessions: LogSessionMeta[]
-  total: number
-  page: number
-  pageSize: number
-  latestSessionId: string | null
-}
+import { usePluginLogManager } from '~/modules/hooks/usePluginLogManager'
+import { usePluginLogSessions } from '~/modules/hooks/usePluginLogSessions'
 
 const props = defineProps<{
   plugin: ITouchPlugin
@@ -40,32 +23,8 @@ const toolbarTooltipAnchor = {
   showArrow: true
 } as const
 
-const pluginLogEvents = {
-  subscribe: defineRawEvent<{ pluginName: string }, void>('plugin-log:subscribe'),
-  unsubscribe: defineRawEvent<{ pluginName: string }, void>('plugin-log:unsubscribe'),
-  getSessionLog: defineRawEvent<{ pluginName: string; session: string }, LogItem[]>(
-    'plugin-log:get-session-log'
-  ),
-  getBuffer: defineRawEvent<{ pluginName: string }, LogItem[]>('plugin-log:get-buffer'),
-  getSessions: defineRawEvent<
-    { pluginName: string; page: number; pageSize: number },
-    SessionResponse
-  >('plugin-log:get-sessions'),
-  openSessionFile: defineRawEvent<{ pluginName: string; session: string }, void>(
-    'plugin-log:open-session-file'
-  ),
-  openLogDirectory: defineRawEvent<{ pluginName: string }, void>('plugin-log:open-log-directory'),
-  stream: defineRawEvent<LogItem, void>('plugin-log-stream')
-}
-
 const isHistoryDrawerOpen = ref(false)
-const sessions = ref<LogSessionMeta[]>([])
-const sessionCache = ref<Record<string, LogSessionMeta>>({})
-const selectedSessionId = ref<string | null>(null)
-const latestSessionId = ref<string | null>(null)
-const terminalLogs = ref<string[]>([])
 const isLivePaused = ref(false)
-const isLoadingLogs = ref(false)
 const isRefreshing = ref(false)
 const pendingLiveUpdates = ref(false)
 const currentPluginName = ref<string | null>(null)
@@ -75,82 +34,51 @@ const liveClock = ref(Date.now())
 let liveClockTimer: number | null = null
 let unsubscribeLogStream: (() => void) | null = null
 
-const currentPage = ref(1)
-const pageSize = ref(12)
-const totalSessions = ref(0)
+const { terminalLogs, setLogs, appendLog, clearLogs, exportLogs } = usePluginLogManager()
 
-const historyTitle = computed(() => {
-  const value = t('plugin.logs.historyTitle')
-  return value === 'plugin.logs.historyTitle' ? '历史记录' : value
-})
-const historyActionLabel = computed(() => {
-  const value = t('plugin.logs.toolbar.history')
-  return value === 'plugin.logs.toolbar.history' ? '历史记录' : value
-})
-const refreshLabel = computed(() => {
-  const value = t('plugin.logs.refresh')
-  return value === 'plugin.logs.refresh' ? '刷新' : value
-})
-const openFileLabel = computed(() => {
-  const value = t('plugin.logs.openFile')
-  return value === 'plugin.logs.openFile' ? '打开日志文件' : value
-})
-const openDirectoryLabel = computed(() => {
-  const value = t('plugin.logs.openDirectory')
-  return value === 'plugin.logs.openDirectory' ? '打开日志目录' : value
-})
-const liveLabel = computed(() => {
-  const value = t('plugin.logs.liveLabel')
-  return value === 'plugin.logs.liveLabel' ? '实时' : value
-})
-const archiveLabel = computed(() => {
-  const value = t('plugin.logs.archiveLabel')
-  return value === 'plugin.logs.archiveLabel' ? '历史会话' : value
-})
-const liveStreamLabel = computed(() => {
-  const value = t('plugin.logs.liveStreamLabel')
-  return value === 'plugin.logs.liveStreamLabel' ? 'Live Stream' : value
-})
+const {
+  sessions,
+  selectedSessionId,
+  latestSessionId,
+  selectedSession,
+  isLoadingLogs,
+  isViewingLiveSession,
+  canOpenLogFile: canOpenLogFileBySession,
+  currentPage,
+  totalPages,
+  hasPrevPage,
+  hasNextPage,
+  formatSessionLabel,
+  readSessionLogs,
+  fetchSessions: fetchLogSessions,
+  subscribeStream,
+  openSessionFile,
+  openLogDirectory: requestOpenLogDirectory,
+  reset: resetSessions
+} = usePluginLogSessions(transport)
+
+const withFallback = (key: string, fallback: string) =>
+  computed(() => {
+    const value = t(key)
+    return value === key ? fallback : value
+  })
+
+const historyTitle = withFallback('plugin.logs.historyTitle', '历史记录')
+const historyActionLabel = withFallback('plugin.logs.toolbar.history', '历史记录')
+const refreshLabel = withFallback('plugin.logs.refresh', '刷新')
+const openFileLabel = withFallback('plugin.logs.openFile', '打开日志文件')
+const openDirectoryLabel = withFallback('plugin.logs.openDirectory', '打开日志目录')
+const liveLabel = withFallback('plugin.logs.liveLabel', '实时')
+const liveStreamLabel = withFallback('plugin.logs.liveStreamLabel', 'Live Stream')
 const liveClockLabel = computed(() => new Date(liveClock.value).toLocaleTimeString())
-const loadingLabel = computed(() => {
-  const value = t('common.loading')
-  return value === 'common.loading' ? '加载中…' : value
-})
-const emptyLabel = computed(() => {
-  const value = t('plugin.logs.noLogs')
-  return value === 'plugin.logs.noLogs' ? '暂无日志输出' : value
-})
-const historyEmpty = computed(() => {
-  const value = t('plugin.logs.historyEmpty')
-  return value === 'plugin.logs.historyEmpty' ? '暂无历史日志' : value
-})
-
-const pendingUpdatesLabel = computed(() => {
-  const value = t('plugin.logs.newLogs')
-  return value === 'plugin.logs.newLogs' ? '有新的实时日志' : value
-})
-void pendingUpdatesLabel.value
-
-const clearLabel = computed(() => {
-  const value = t('common.clear')
-  return value === 'common.clear' ? '清空' : value
-})
-
-const exportLabel = computed(() => {
-  const value = t('common.export')
-  return value === 'common.export' ? '导出' : value
-})
-
-const isViewingLiveSession = computed(
-  () => selectedSessionId.value !== null && selectedSessionId.value === latestSessionId.value
-)
+const loadingLabel = withFallback('common.loading', '加载中…')
+const emptyLabel = withFallback('plugin.logs.noLogs', '暂无日志输出')
+const historyEmpty = withFallback('plugin.logs.historyEmpty', '暂无历史日志')
+const pendingUpdatesLabel = withFallback('plugin.logs.newLogs', '有新的实时日志')
+const clearLabel = withFallback('common.clear', '清空')
+const exportLabel = withFallback('common.export', '导出')
 
 const isLiveStreaming = computed(() => isViewingLiveSession.value && !isLivePaused.value)
-
-const selectedSession = computed<LogSessionMeta | null>(() => {
-  if (!selectedSessionId.value) return null
-  return sessionCache.value[selectedSessionId.value] ?? null
-})
 
 const activeSessionLabel = computed(() => {
   if (!selectedSession.value) return ''
@@ -161,72 +89,11 @@ const noLogs = computed(() => !isLoadingLogs.value && terminalLogs.value.length 
 
 const historySessions = computed(() => sessions.value)
 
-const totalPages = computed(() => {
-  if (!totalSessions.value || !pageSize.value) return 1
-  return Math.max(1, Math.ceil(totalSessions.value / pageSize.value))
-})
-
-const hasPrevPage = computed(() => currentPage.value > 1)
-const hasNextPage = computed(() => currentPage.value < totalPages.value)
-
-const canOpenLogFile = computed(() => {
-  const session = selectedSession.value
-  return Boolean(currentPluginName.value && session?.hasLogFile)
-})
+const canOpenLogFile = computed(
+  () => Boolean(currentPluginName.value) && canOpenLogFileBySession.value
+)
 
 const canOpenLogDirectory = computed(() => Boolean(currentPluginName.value))
-
-const logKeySet = new Set<string>()
-
-function computeLogKey(log: LogItem): string {
-  const payload = log.data?.length ? JSON.stringify(log.data) : ''
-  return `${log.timestamp}|${log.level}|${log.message}|${payload}`
-}
-
-function dedupeLogs(items: LogItem[]): LogItem[] {
-  const seen = new Set<string>()
-  return items
-    .filter((item) => {
-      const key = computeLogKey(item)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-}
-
-function upsertSessionCache(list: LogSessionMeta[]): void {
-  if (!list.length) return
-  const next = { ...sessionCache.value }
-  for (const item of list) {
-    next[item.id] = item
-  }
-  sessionCache.value = next
-}
-
-function setLogs(items: LogItem[]): void {
-  const deduped = dedupeLogs(items)
-  logKeySet.clear()
-  deduped.forEach((log) => logKeySet.add(computeLogKey(log)))
-  terminalLogs.value = deduped.map((log) => formatLogForTerminal(log))
-}
-
-function appendLog(log: LogItem): void {
-  const key = computeLogKey(log)
-  if (logKeySet.has(key)) return
-  logKeySet.add(key)
-  terminalLogs.value = [...terminalLogs.value, formatLogForTerminal(log)]
-}
-
-function formatSessionLabel(session: LogSessionMeta): string {
-  if (session.startedAt) {
-    const date = new Date(session.startedAt)
-    if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleString()
-    }
-  }
-  return session.id
-}
 
 function toggleLiveIndicator(): void {
   liveIndicatorExpanded.value = !liveIndicatorExpanded.value
@@ -261,34 +128,17 @@ function toggleLiveStream(): void {
 
   isLivePaused.value = !isLivePaused.value
   if (!isLivePaused.value && currentPluginName.value && latestSessionId.value) {
-    void readSessionLogs(currentPluginName.value, latestSessionId.value, { includeBuffer: true })
+    void loadSessionLogs(currentPluginName.value, latestSessionId.value, { includeBuffer: true })
   }
 }
 
 function clearTerminal(): void {
-  setLogs([])
+  clearLogs()
   pendingLiveUpdates.value = false
 }
 
 function exportTerminalLogs(): void {
-  if (!terminalLogs.value.length) return
-
-  const pluginName = (currentPluginName.value ?? 'plugin').replace(/[^\w.-]+/g, '_')
-  const sessionId = (selectedSessionId.value ?? 'session').replace(/[^\w.-]+/g, '_')
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const filename = `${pluginName}-${sessionId}-${timestamp}.log.txt`
-  const blob = new Blob([`${terminalLogs.value.join('\n')}\n`], {
-    type: 'text/plain;charset=utf-8'
-  })
-  const url = window.URL.createObjectURL(blob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  window.URL.revokeObjectURL(url)
+  exportLogs(currentPluginName.value ?? 'plugin', selectedSessionId.value ?? 'session')
 }
 
 function detachStream(): void {
@@ -299,94 +149,21 @@ function detachStream(): void {
 }
 
 function cleanup(): void {
-  const pluginName = currentPluginName.value
-  if (!pluginName) return
   detachStream()
-  void transport.send(pluginLogEvents.unsubscribe, { pluginName })
   currentPluginName.value = null
-  sessions.value = []
-  sessionCache.value = {}
-  selectedSessionId.value = null
-  latestSessionId.value = null
   pendingLiveUpdates.value = false
-  setLogs([])
+  resetSessions()
+  clearLogs()
 }
 
-async function readSessionLogs(
+async function loadSessionLogs(
   pluginName: string,
   sessionId: string,
   options?: { includeBuffer?: boolean }
 ): Promise<void> {
-  isLoadingLogs.value = true
-  try {
-    const chunks: LogItem[] = []
-    const meta = sessionCache.value[sessionId]
-
-    if (meta?.hasLogFile) {
-      try {
-        const sessionLogs: LogItem[] = await transport.send(pluginLogEvents.getSessionLog, {
-          pluginName,
-          session: sessionId
-        })
-        chunks.push(...sessionLogs)
-      } catch (error) {
-        console.warn('[PluginLogs] Failed to load session log:', error)
-      }
-    }
-
-    if (options?.includeBuffer) {
-      try {
-        const buffer: LogItem[] = await transport.send(pluginLogEvents.getBuffer, {
-          pluginName
-        })
-        chunks.push(...buffer)
-      } catch (error) {
-        console.warn('[PluginLogs] Failed to load buffer:', error)
-      }
-    }
-
-    setLogs(chunks)
-    pendingLiveUpdates.value = false
-  } finally {
-    isLoadingLogs.value = false
-  }
-}
-
-async function fetchSessions(
-  pluginName: string,
-  options?: { page?: number; preferLatest?: boolean; preserveSelection?: boolean }
-): Promise<void> {
-  const targetPage = options?.page ?? currentPage.value
-  try {
-    const response: SessionResponse = await transport.send(pluginLogEvents.getSessions, {
-      pluginName,
-      page: targetPage,
-      pageSize: pageSize.value
-    })
-
-    sessions.value = response.sessions ?? []
-    upsertSessionCache(response.sessions ?? [])
-    totalSessions.value = response.total ?? response.sessions?.length ?? 0
-    currentPage.value = response.page ?? targetPage
-    pageSize.value = response.pageSize ?? pageSize.value
-    latestSessionId.value = response.latestSessionId ?? latestSessionId.value
-
-    const shouldUseLatest = Boolean(options?.preferLatest || !selectedSessionId.value)
-
-    if (shouldUseLatest && latestSessionId.value) {
-      selectedSessionId.value = latestSessionId.value
-    } else if (!options?.preserveSelection) {
-      const first = response.sessions?.[0]
-      selectedSessionId.value = first ? first.id : selectedSessionId.value
-    }
-  } catch (error) {
-    console.error('[PluginLogs] Failed to fetch sessions:', error)
-    sessions.value = []
-    totalSessions.value = 0
-    if (!options?.preserveSelection) {
-      selectedSessionId.value = null
-    }
-  }
+  const chunks = await readSessionLogs(pluginName, sessionId, options)
+  setLogs(chunks)
+  pendingLiveUpdates.value = false
 }
 
 async function refreshSessions(options?: {
@@ -399,7 +176,7 @@ async function refreshSessions(options?: {
   const preserveSelection = options?.preserveSelection ?? !gotoLatest
   const targetPage = gotoLatest ? 1 : currentPage.value
 
-  await fetchSessions(currentPluginName.value, {
+  await fetchLogSessions(currentPluginName.value, {
     page: targetPage,
     preferLatest: gotoLatest,
     preserveSelection
@@ -408,7 +185,7 @@ async function refreshSessions(options?: {
   if (options?.reloadLogs ?? gotoLatest) {
     const sessionId = selectedSessionId.value
     if (sessionId) {
-      await readSessionLogs(currentPluginName.value, sessionId, {
+      await loadSessionLogs(currentPluginName.value, sessionId, {
         includeBuffer: sessionId === latestSessionId.value
       })
     }
@@ -417,10 +194,7 @@ async function refreshSessions(options?: {
 
 function attachStream(pluginName: string): void {
   detachStream()
-  void transport.send(pluginLogEvents.subscribe, { pluginName })
-  unsubscribeLogStream = transport.on(pluginLogEvents.stream, (log) => {
-    handleLogStream(log)
-  })
+  unsubscribeLogStream = subscribeStream(pluginName, handleLogStream)
 }
 
 async function initialize(pluginName: string): Promise<void> {
@@ -448,20 +222,17 @@ async function selectSession(
   isLivePaused.value = false
 
   if (options?.fromHistory) {
-    const session = sessionCache.value[sessionId]
-    if (session) {
-      const sessionPageIndex = sessions.value.findIndex((item) => item.id === sessionId)
-      if (sessionPageIndex === -1) {
-        await refreshSessions({
-          gotoLatest: sessionId === latestSessionId.value,
-          reloadLogs: false,
-          preserveSelection: true
-        })
-      }
+    const sessionPageIndex = sessions.value.findIndex((item) => item.id === sessionId)
+    if (sessionPageIndex === -1) {
+      await refreshSessions({
+        gotoLatest: sessionId === latestSessionId.value,
+        reloadLogs: false,
+        preserveSelection: true
+      })
     }
   }
 
-  await readSessionLogs(currentPluginName.value, sessionId, {
+  await loadSessionLogs(currentPluginName.value, sessionId, {
     includeBuffer: sessionId === latestSessionId.value
   })
 
@@ -472,17 +243,12 @@ async function selectSession(
 
 function openSelectedSessionFile(): void {
   if (!currentPluginName.value || !selectedSessionId.value || !canOpenLogFile.value) return
-  void transport.send(pluginLogEvents.openSessionFile, {
-    pluginName: currentPluginName.value,
-    session: selectedSessionId.value
-  })
+  openSessionFile(currentPluginName.value, selectedSessionId.value)
 }
 
 function openLogDirectory(): void {
   if (!currentPluginName.value || !canOpenLogDirectory.value) return
-  void transport.send(pluginLogEvents.openLogDirectory, {
-    pluginName: currentPluginName.value
-  })
+  requestOpenLogDirectory(currentPluginName.value)
 }
 
 async function handleManualRefresh(): Promise<void> {
@@ -504,7 +270,7 @@ async function changePage(page: number): Promise<void> {
   if (!currentPluginName.value) return
   const safePage = Math.min(Math.max(page, 1), totalPages.value)
   currentPage.value = safePage
-  await fetchSessions(currentPluginName.value, {
+  await fetchLogSessions(currentPluginName.value, {
     page: safePage,
     preferLatest: safePage === 1,
     preserveSelection: true
@@ -563,7 +329,10 @@ defineExpose({
 </script>
 
 <template>
-  <div class="plugin-logs-wrapper">
+  <TxCard
+    class="PluginLogs-Wrapper w-full min-h-0 h-full flex flex-col flex-grow p-1!"
+    variant="solid"
+  >
     <section class="plugin-logs-terminal">
       <div class="terminal-body">
         <LogTerminal :logs="terminalLogs" :auto-scroll="isLiveStreaming" />
@@ -574,132 +343,124 @@ defineExpose({
           {{ emptyLabel }}
         </div>
       </div>
-      <footer class="terminal-footer">
-        <div class="terminal-meta">
-          <div class="toolbar-metrics">
-            <PluginPerfCharts :plugin-name="plugin.name" layout="bar" />
-          </div>
-          <div class="terminal-session">
-            <span class="terminal-session-label">{{ activeSessionLabel }}</span>
-            <span
-              class="terminal-state"
-              :class="[isViewingLiveSession ? 'state-live' : 'state-archive']"
-            >
-              {{ isViewingLiveSession ? liveLabel : archiveLabel }}
-            </span>
-            <span v-if="isViewingLiveSession" class="terminal-clock">{{ liveClockLabel }}</span>
-          </div>
-          <div
-            class="live-indicator"
-            :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
-            @click="toggleLiveIndicator"
-          >
-            <span class="indicator-dot" />
-            <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
-          </div>
-        </div>
-        <div class="terminal-toolbar">
-          <TxTooltip :content="isLivePaused ? 'RESUME' : 'PAUSE'" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="terminal-icon terminal-icon-live"
-              native-type="button"
-              :disabled="!isViewingLiveSession"
-              :class="{ active: isLiveStreaming, paused: isViewingLiveSession && isLivePaused }"
-              @click="toggleLiveStream"
-            >
-              <i :class="isLivePaused ? 'i-ri-play-circle-line' : 'i-ri-pause-circle-line'" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip
-            v-if="pendingLiveUpdates"
-            :content="pendingUpdatesLabel"
-            :anchor="toolbarTooltipAnchor"
-          >
-            <TxButton
-              variant="bare"
-              class="terminal-icon terminal-icon-new"
-              native-type="button"
-              @click="jumpToLive"
-            >
-              <i class="i-ri-sparkling-fill" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip :content="clearLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="terminal-icon"
-              native-type="button"
-              @click="clearTerminal"
-            >
-              <i class="i-ri-delete-bin-6-line" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip :content="exportLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="terminal-icon"
-              native-type="button"
-              :disabled="!terminalLogs.length"
-              @click="exportTerminalLogs"
-            >
-              <i class="i-ri-download-2-line" />
-            </TxButton>
-          </TxTooltip>
-        </div>
-        <div class="toolbar-actions">
-          <TxTooltip :content="historyActionLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="toolbar-icon"
-              native-type="button"
-              @click="openHistoryDrawer"
-            >
-              <i class="i-ri-history-line" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip :content="refreshLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="toolbar-icon"
-              native-type="button"
-              @click="handleManualRefresh"
-            >
-              <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip :content="openFileLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="toolbar-icon"
-              native-type="button"
-              :disabled="!canOpenLogFile"
-              @click="openSelectedSessionFile"
-            >
-              <i class="i-ri-file-text-line" />
-            </TxButton>
-          </TxTooltip>
-
-          <TxTooltip :content="openDirectoryLabel" :anchor="toolbarTooltipAnchor">
-            <TxButton
-              variant="bare"
-              class="toolbar-icon"
-              native-type="button"
-              :disabled="!canOpenLogDirectory"
-              @click="openLogDirectory"
-            >
-              <i class="i-ri-folder-open-line" />
-            </TxButton>
-          </TxTooltip>
-        </div>
-      </footer>
     </section>
-  </div>
+
+    <footer class="terminal-footer">
+      <div class="terminal-meta">
+        <div class="terminal-session">
+          <span class="terminal-session-label">{{ activeSessionLabel }}</span>
+          <span v-if="isViewingLiveSession" class="terminal-clock">{{ liveClockLabel }}</span>
+        </div>
+        <div
+          class="live-indicator"
+          :class="{ collapsed: !liveIndicatorExpanded, inactive: !isViewingLiveSession }"
+          @click="toggleLiveIndicator"
+        >
+          <span class="indicator-dot" />
+          <span v-if="liveIndicatorExpanded" class="indicator-label">{{ liveStreamLabel }}</span>
+        </div>
+      </div>
+      <div class="terminal-toolbar">
+        <TxTooltip :content="isLivePaused ? 'RESUME' : 'PAUSE'" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="terminal-icon terminal-icon-live"
+            native-type="button"
+            :disabled="!isViewingLiveSession"
+            :class="{ active: isLiveStreaming, paused: isViewingLiveSession && isLivePaused }"
+            @click="toggleLiveStream"
+          >
+            <i :class="isLivePaused ? 'i-ri-play-circle-line' : 'i-ri-pause-circle-line'" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip
+          v-if="pendingLiveUpdates"
+          :content="pendingUpdatesLabel"
+          :anchor="toolbarTooltipAnchor"
+        >
+          <TxButton
+            variant="bare"
+            class="terminal-icon terminal-icon-new"
+            native-type="button"
+            @click="jumpToLive"
+          >
+            <i class="i-ri-sparkling-fill" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip :content="clearLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="terminal-icon"
+            native-type="button"
+            @click="clearTerminal"
+          >
+            <i class="i-ri-delete-bin-6-line" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip :content="exportLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="terminal-icon"
+            native-type="button"
+            :disabled="!terminalLogs.length"
+            @click="exportTerminalLogs"
+          >
+            <i class="i-ri-download-2-line" />
+          </TxButton>
+        </TxTooltip>
+      </div>
+      <div class="toolbar-actions">
+        <TxTooltip :content="historyActionLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            @click="openHistoryDrawer"
+          >
+            <i class="i-ri-history-line" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip :content="refreshLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            @click="handleManualRefresh"
+          >
+            <i class="i-ri-refresh-line" :class="{ spin: isRefreshing }" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip :content="openFileLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            :disabled="!canOpenLogFile"
+            @click="openSelectedSessionFile"
+          >
+            <i class="i-ri-file-text-line" />
+          </TxButton>
+        </TxTooltip>
+
+        <TxTooltip :content="openDirectoryLabel" :anchor="toolbarTooltipAnchor">
+          <TxButton
+            variant="bare"
+            class="toolbar-icon"
+            native-type="button"
+            :disabled="!canOpenLogDirectory"
+            @click="openLogDirectory"
+          >
+            <i class="i-ri-folder-open-line" />
+          </TxButton>
+        </TxTooltip>
+      </div>
+    </footer>
+  </TxCard>
 
   <TuffDrawer v-model:visible="isHistoryDrawerOpen" :title="historyTitle">
     <section class="history-panel">
@@ -754,20 +515,6 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
-.plugin-logs-wrapper {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  align-self: stretch;
-  background: #0b0d10;
-  gap: 0;
-  padding: 0;
-  margin: 0;
-  box-sizing: border-box;
-}
-
 .plugin-logs-toolbar {
   display: flex;
   align-items: center;
@@ -778,19 +525,6 @@ defineExpose({
   border: none;
   box-shadow: none;
   min-height: 0;
-}
-
-.toolbar-metrics {
-  min-width: 0;
-  flex: 1 1 260px;
-  max-width: 420px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-}
-
-.toolbar-metrics :deep(.PluginPerfCharts.layout-bar) {
-  width: 100%;
 }
 
 .toolbar-actions {
@@ -914,25 +648,6 @@ defineExpose({
   font-family:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
-}
-
-.terminal-state {
-  font-size: 0.78rem;
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  border: 1px solid transparent;
-}
-
-.terminal-state.state-live {
-  color: rgba(34, 197, 94, 0.92);
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.14);
-}
-
-.terminal-state.state-archive {
-  color: rgba(148, 163, 184, 0.92);
-  border-color: rgba(148, 163, 184, 0.22);
-  background: rgba(148, 163, 184, 0.08);
 }
 
 .terminal-toolbar {
