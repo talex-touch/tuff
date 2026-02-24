@@ -10,6 +10,7 @@ import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
 import { databaseModule } from '../database'
 import { enterPerfContext } from '../../utils/perf-context'
+import { createLogger } from '../../utils/logger'
 
 /**
  * Extended audit log with additional tracking fields
@@ -77,6 +78,8 @@ const MODEL_COSTS: Record<string, ModelCostConfig> = {
   default: { promptCostPer1k: 0.001, completionCostPer1k: 0.002 }
 }
 
+const auditLog = createLogger('AuditLogger')
+
 /**
  * IntelligenceAuditLogger - Manages audit logging and usage statistics
  */
@@ -91,6 +94,12 @@ export class IntelligenceAuditLogger {
   private readonly flushDelayMs = 200
   private flushPromise: Promise<void> | null = null
   private flushTimer: NodeJS.Timeout | null = null
+  private readonly flushErrorThrottleMs = 60_000
+  private lastFlushErrorLogAt = 0
+  private suppressedFlushErrorCount = 0
+  private readonly usageStatsErrorThrottleMs = 60_000
+  private lastUsageStatsErrorLogAt = 0
+  private suppressedUsageStatsErrorCount = 0
 
   constructor() {
     this.startFlushInterval()
@@ -166,6 +175,49 @@ export class IntelligenceAuditLogger {
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
 
+  private toErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
+  }
+
+  private logFlushError(error: unknown, batchSize: number): void {
+    const now = Date.now()
+    if (now - this.lastFlushErrorLogAt < this.flushErrorThrottleMs) {
+      this.suppressedFlushErrorCount += 1
+      return
+    }
+
+    auditLog.warn('Failed to flush logs', {
+      meta: {
+        batchSize,
+        error: this.toErrorMessage(error),
+        suppressed: this.suppressedFlushErrorCount > 0 ? this.suppressedFlushErrorCount : undefined
+      }
+    })
+
+    this.lastFlushErrorLogAt = now
+    this.suppressedFlushErrorCount = 0
+  }
+
+  private logUsageStatsError(key: string, error: unknown): void {
+    const now = Date.now()
+    if (now - this.lastUsageStatsErrorLogAt < this.usageStatsErrorThrottleMs) {
+      this.suppressedUsageStatsErrorCount += 1
+      return
+    }
+
+    auditLog.warn('Failed to update usage stats', {
+      meta: {
+        key,
+        error: this.toErrorMessage(error),
+        suppressed:
+          this.suppressedUsageStatsErrorCount > 0 ? this.suppressedUsageStatsErrorCount : undefined
+      }
+    })
+
+    this.lastUsageStatsErrorLogAt = now
+    this.suppressedUsageStatsErrorCount = 0
+  }
+
   /**
    * Flush buffered logs to database
    */
@@ -231,7 +283,12 @@ export class IntelligenceAuditLogger {
         }
       })
     } catch (error) {
-      console.error('[AuditLogger] Failed to serialize logs:', error)
+      auditLog.warn('Failed to serialize logs', {
+        meta: {
+          count: logsToFlush.length,
+          error: this.toErrorMessage(error)
+        }
+      })
       this.pendingLogs.unshift(...logsToFlush)
       return false
     } finally {
@@ -254,7 +311,7 @@ export class IntelligenceAuditLogger {
       })
       return true
     } catch (error) {
-      console.error('[AuditLogger] Failed to flush logs:', error)
+      this.logFlushError(error, logsToFlush.length)
       this.pendingLogs.unshift(...logsToFlush)
       return false
     } finally {
@@ -336,7 +393,7 @@ export class IntelligenceAuditLogger {
             }
           })
       } catch (error) {
-        console.error(`[AuditLogger] Failed to update usage stats for ${key}:`, error)
+        this.logUsageStatsError(key, error)
       }
     }
   }

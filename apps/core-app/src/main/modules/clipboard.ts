@@ -1832,27 +1832,31 @@ export class ClipboardModule extends BaseModule {
 
       const persistContext = enterPerfContext('Clipboard.persist', { type: item.type })
       const persistStart = performance.now()
-      const queueStats = dbWriteScheduler.getStats()
-      const inserted = await this.withDbWrite('clipboard.persist', () =>
-        this.db!.insert(clipboardHistory).values(record).returning()
-      )
-      const persistDuration = performance.now() - persistStart
-      if (persistDuration > 200) {
-        const contentLength = typeof item.content === 'string' ? item.content.length : 0
-        const thumbnailLength = typeof item.thumbnail === 'string' ? item.thumbnail.length : 0
-        clipboardLog.warn('Clipboard persist slow', {
-          meta: {
-            durationMs: Math.round(persistDuration),
-            type: item.type,
-            queued: queueStats.queued,
-            processing: queueStats.processing,
-            currentTaskLabel: queueStats.currentTaskLabel,
-            contentLength,
-            thumbnailLength
-          }
-        })
+      let inserted: IClipboardItem[] = []
+      try {
+        const queueStats = dbWriteScheduler.getStats()
+        inserted = await this.withDbWrite('clipboard.persist', () =>
+          this.db!.insert(clipboardHistory).values(record).returning()
+        )
+        const persistDuration = performance.now() - persistStart
+        if (persistDuration > 200) {
+          const contentLength = typeof item.content === 'string' ? item.content.length : 0
+          const thumbnailLength = typeof item.thumbnail === 'string' ? item.thumbnail.length : 0
+          clipboardLog.warn('Clipboard persist slow', {
+            meta: {
+              durationMs: Math.round(persistDuration),
+              type: item.type,
+              queued: queueStats.queued,
+              processing: queueStats.processing,
+              currentTaskLabel: queueStats.currentTaskLabel,
+              contentLength,
+              thumbnailLength
+            }
+          })
+        }
+      } finally {
+        persistContext()
       }
-      persistContext()
       if (inserted.length === 0) {
         return
       }

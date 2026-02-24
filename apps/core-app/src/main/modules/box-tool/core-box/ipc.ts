@@ -178,6 +178,7 @@ export class IpcManager {
   }
 
   public register(): void {
+    getBoxItemManager()
     this.registerTransportHandlers()
     coreBoxInputTransport.register()
     coreBoxKeyTransport.register()

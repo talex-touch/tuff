@@ -45,11 +45,47 @@ class AppTaskGate {
     }
   }
 
-  async waitForIdle(): Promise<void> {
+  async waitForIdle(timeoutMs?: number): Promise<boolean> {
     if (!this.isActive()) {
-      return
+      return true
     }
-    await new Promise<void>((resolve) => this.waiters.push(resolve))
+
+    const normalizedTimeout =
+      typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 0
+
+    return await new Promise<boolean>((resolve) => {
+      let settled = false
+      let timer: NodeJS.Timeout | null = null
+
+      const cleanup = (): void => {
+        const index = this.waiters.indexOf(waiter)
+        if (index >= 0) {
+          this.waiters.splice(index, 1)
+        }
+        if (timer) {
+          clearTimeout(timer)
+          timer = null
+        }
+      }
+
+      const waiter = (): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(true)
+      }
+
+      this.waiters.push(waiter)
+
+      if (normalizedTimeout > 0) {
+        timer = setTimeout(() => {
+          if (settled) return
+          settled = true
+          cleanup()
+          resolve(false)
+        }, normalizedTimeout)
+      }
+    })
   }
 }
 

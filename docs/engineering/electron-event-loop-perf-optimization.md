@@ -831,7 +831,29 @@ private async persistConfig(name: string): Promise<void> {
 
 ---
 
-## 13. 最终性能分析（2026-02-20 更新）
+## 13. 最终性能分析（2026-02-24 更新）
+
+### 13.1 当日日志未解决项（来源：`D.2026-02-24.log` / `E.2026-02-24.err`）
+
+| 优先级 | 日志信号 | 现状 | 后续动作 |
+|------|------|------|------|
+| P0 | `Perf:EventLoop` 12s/18s，关联 `storage.polling` + `AppProvider.startupBackfill` | 已落地修复（Storage gate wait 上限、backfill 延后、box-item handler 前置） | 需复测确认：新日志中是否仍出现 >2s lag |
+| P1 | `[Perf:IPC] /setting ui.route.transition ~2.0s` | 未修复 | 排查路由切换时的重渲染与动画主线程占用，增加分段埋点（prepare/render/transition） |
+| P1 | `[Clipboard] Clipboard check slow 453ms~971ms` | 部分优化后仍有尾延迟 | 继续拆分 `Clipboard.check` 热路径，限制单轮最大处理预算并增加降级分支 |
+| P2 | `[StartupAnalytics] Failed to report metrics (fetch failed)` | 未修复（已入队重试，不阻塞主流程） | 增加 endpoint 可用性探测与静默降级，降低错误级别噪音 |
+| P2 | `[Analytics] Failed to report analytics messages`（重试退避） | 未修复（已有指数退避） | 合并重复日志并补充“连续失败窗口”聚合统计，避免分钟级重复告警 |
+
+### 13.2 已完成但待验证回归项
+
+1. `box-item:sync` 无 handler：已通过 CoreBox IPC 启动时前置初始化 `BoxItemManager` 处理。
+2. `StoragePolling` 长时间 active：已将 `persistConfig` 等待 `appTaskGate` 改为 250ms 预算化等待。
+3. `startupBackfill` 冷启动抢占：已从 500ms 延后至 15s 执行。
+
+### 13.3 下一轮性能分析关注点
+
+1. 启动后 60 秒内 event loop lag P95/P99（目标：P99 < 500ms，且无 >2s error）。
+2. `/setting` 路由切换总耗时拆分（目标：`ui.route.transition` < 800ms）。
+3. Clipboard 轮询慢路径占比（目标：`Clipboard.check > 400ms` 占比 < 1%）。
 
 ### 13.1 模块加载时间分布
 
