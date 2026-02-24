@@ -17,6 +17,14 @@ const GitHubProvider = (GitHub as any).default ?? GitHub
 const EmailProvider = (Email as any).default ?? Email
 
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
+interface OAuthTokenRequestContext {
+  provider: { callbackUrl: string }
+  params: Record<string, unknown>
+  checks?: Record<string, unknown>
+}
+interface OAuthUserInfoRequestContext {
+  tokens: Record<string, unknown>
+}
 
 function resolveAuthHeaders(req?: { headers?: Headers | AuthRequestHeaders } | Request | null): AuthRequestHeaders | undefined {
   if (!req)
@@ -207,6 +215,155 @@ async function normalizeAuthResponseResult(result: unknown, event: H3Event, base
   return result
 }
 
+function toRecord(value: unknown) {
+  if (value && typeof value === 'object')
+    return value as Record<string, unknown>
+  return {}
+}
+
+async function parseOauthPayload(response: Response) {
+  const text = await response.text()
+  if (!text)
+    return {}
+
+  try {
+    return toRecord(JSON.parse(text))
+  }
+  catch {
+    const params = new URLSearchParams(text)
+    const payload: Record<string, string> = {}
+    params.forEach((value, key) => {
+      payload[key] = value
+    })
+    return payload
+  }
+}
+
+function normalizeOauthTokenPayload(payload: Record<string, unknown>) {
+  const normalized: Record<string, unknown> = { ...payload }
+  const expiresIn = normalized.expires_in
+  if (typeof expiresIn === 'string') {
+    const parsed = Number.parseInt(expiresIn, 10)
+    if (!Number.isNaN(parsed))
+      normalized.expires_in = parsed
+  }
+
+  const scope = normalized.scope
+  if (typeof scope === 'string' && scope.includes(',')) {
+    normalized.scope = scope
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  return normalized
+}
+
+function buildOauthTokenRequestBody(
+  params: Record<string, unknown>,
+  checks: Record<string, unknown> | undefined,
+  callbackUrl: string,
+  clientId: string,
+  clientSecret: string,
+  includeRedirectUri: boolean,
+) {
+  const body = new URLSearchParams()
+  const code = typeof params.code === 'string' ? params.code : ''
+  if (code)
+    body.set('code', code)
+
+  const checksRecord = toRecord(checks)
+  const codeVerifierFromParams = typeof params.code_verifier === 'string' ? params.code_verifier : ''
+  const codeVerifierFromChecks = typeof checksRecord.code_verifier === 'string' ? checksRecord.code_verifier : ''
+  const codeVerifier = codeVerifierFromParams || codeVerifierFromChecks
+  if (codeVerifier)
+    body.set('code_verifier', codeVerifier)
+
+  const redirectUriFromParams = typeof params.redirect_uri === 'string' ? params.redirect_uri : ''
+  const redirectUri = redirectUriFromParams || callbackUrl
+  if (includeRedirectUri && redirectUri)
+    body.set('redirect_uri', redirectUri)
+
+  const grantType = typeof params.grant_type === 'string' ? params.grant_type : 'authorization_code'
+  body.set('grant_type', grantType)
+  body.set('client_id', clientId)
+  body.set('client_secret', clientSecret)
+  return body
+}
+
+function formatOauthError(prefix: string, payload: Record<string, unknown>, status: number) {
+  const error = typeof payload.error === 'string' ? payload.error : ''
+  const description = typeof payload.error_description === 'string' ? payload.error_description : ''
+  const details = [error, description].filter(Boolean).join(': ')
+  return `${prefix}: ${details || `http_${status}`}`
+}
+
+async function requestOauthTokenByFetch(input: {
+  tokenUrl: string
+  callbackUrl: string
+  clientId: string
+  clientSecret: string
+  params: Record<string, unknown>
+  checks?: Record<string, unknown>
+  headers?: Record<string, string>
+  providerName: string
+  includeRedirectUri?: boolean
+}) {
+  const requestBody = buildOauthTokenRequestBody(
+    input.params,
+    input.checks,
+    input.callbackUrl,
+    input.clientId,
+    input.clientSecret,
+    input.includeRedirectUri !== false,
+  )
+
+  const response = await fetch(input.tokenUrl, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'content-type': 'application/x-www-form-urlencoded',
+      ...input.headers,
+    },
+    body: requestBody.toString(),
+  })
+
+  const payload = normalizeOauthTokenPayload(await parseOauthPayload(response))
+  if (!response.ok || typeof payload.error === 'string') {
+    throw new Error(formatOauthError(`${input.providerName}_token_exchange_failed`, payload, response.status))
+  }
+
+  if (typeof payload.access_token !== 'string' || payload.access_token.length === 0) {
+    throw new Error(`${input.providerName}_token_exchange_failed: missing_access_token`)
+  }
+
+  return payload
+}
+
+async function requestOauthProfileByFetch(input: {
+  userInfoUrl: string
+  accessToken: string
+  providerName: string
+  headers?: Record<string, string>
+}) {
+  const response = await fetch(input.userInfoUrl, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${input.accessToken}`,
+      ...input.headers,
+    },
+  })
+
+  const payload = toRecord(await response.json().catch(() => ({})))
+  if (!response.ok) {
+    throw new Error(formatOauthError(`${input.providerName}_userinfo_failed`, payload, response.status))
+  }
+
+  return payload
+}
+
 function getAuthOptions(): AuthOptions {
   const config = useRuntimeConfig()
   const linuxdoIssuer = config.auth?.linuxdo?.issuer || 'https://connect.linux.do'
@@ -258,7 +415,82 @@ function getAuthOptions(): AuthOptions {
     providers.push(GitHubProvider({
       clientId: githubClientId,
       clientSecret: githubClientSecret,
-      allowDangerousEmailAccountLinking: true
+      allowDangerousEmailAccountLinking: true,
+      token: {
+        async request(context: OAuthTokenRequestContext) {
+          const tokens = await requestOauthTokenByFetch({
+            tokenUrl: 'https://github.com/login/oauth/access_token',
+            callbackUrl: context.provider.callbackUrl,
+            clientId: githubClientId,
+            clientSecret: githubClientSecret,
+            params: context.params,
+            checks: context.checks,
+            headers: {
+              accept: 'application/json',
+            },
+            providerName: 'github',
+            includeRedirectUri: false,
+          })
+          return { tokens }
+        },
+      },
+      userinfo: {
+        async request(context: OAuthUserInfoRequestContext) {
+          const accessToken = typeof context.tokens.access_token === 'string'
+            ? context.tokens.access_token
+            : ''
+          if (!accessToken)
+            throw new Error('github_userinfo_failed: missing_access_token')
+
+          const headers = {
+            accept: 'application/vnd.github+json',
+            'user-agent': 'tuff-nexus-auth',
+          }
+          const profile = await requestOauthProfileByFetch({
+            userInfoUrl: 'https://api.github.com/user',
+            accessToken,
+            providerName: 'github',
+            headers,
+          })
+
+          if (!profile.email) {
+            const emailResponse = await fetch('https://api.github.com/user/emails', {
+              method: 'GET',
+              headers: {
+                ...headers,
+                authorization: `Bearer ${accessToken}`,
+              },
+            })
+
+            if (emailResponse.ok) {
+              const emails = await emailResponse.json().catch(() => []) as Array<Record<string, unknown>>
+              if (Array.isArray(emails)) {
+                const primary = emails.find((item) => {
+                  return item
+                    && typeof item.email === 'string'
+                    && item.email.length > 0
+                    && item.verified === true
+                    && item.primary === true
+                }) ?? emails.find((item) => {
+                  return item
+                    && typeof item.email === 'string'
+                    && item.email.length > 0
+                    && item.verified === true
+                }) ?? emails.find((item) => {
+                  return item
+                    && typeof item.email === 'string'
+                    && item.email.length > 0
+                })
+
+                if (primary && typeof primary.email === 'string')
+                  profile.email = primary.email
+              }
+            }
+          }
+
+          return profile
+        },
+      },
     }))
   }
 
@@ -279,8 +511,37 @@ function getAuthOptions(): AuthOptions {
         url: `${linuxdoIssuer}/oauth2/authorize`,
         params: { scope: 'profile email' },
       },
-      token: { url: `${linuxdoIssuer}/oauth2/token` },
-      userinfo: { url: `${linuxdoIssuer}/api/user` },
+      token: {
+        url: `${linuxdoIssuer}/oauth2/token`,
+        async request(context: OAuthTokenRequestContext) {
+          const tokens = await requestOauthTokenByFetch({
+            tokenUrl: `${linuxdoIssuer}/oauth2/token`,
+            callbackUrl: context.provider.callbackUrl,
+            clientId: linuxdoClientId,
+            clientSecret: linuxdoClientSecret,
+            params: context.params,
+            checks: context.checks,
+            providerName: 'linuxdo',
+          })
+          return { tokens }
+        },
+      },
+      userinfo: {
+        url: `${linuxdoIssuer}/api/user`,
+        async request(context: OAuthUserInfoRequestContext) {
+          const accessToken = typeof context.tokens.access_token === 'string'
+            ? context.tokens.access_token
+            : ''
+          if (!accessToken)
+            throw new Error('linuxdo_userinfo_failed: missing_access_token')
+
+          return await requestOauthProfileByFetch({
+            userInfoUrl: `${linuxdoIssuer}/api/user`,
+            accessToken,
+            providerName: 'linuxdo',
+          })
+        },
+      },
       idToken: false,
       profile(profile: Record<string, any>) {
         const id = profile.sub ?? profile.id ?? profile.user_id ?? profile.uid

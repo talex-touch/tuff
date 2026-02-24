@@ -1,26 +1,47 @@
 name = "tuff"
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat", "no_nodejs_compat_v2"]
 pages_build_output_dir = "apps/nexus/dist"
 
-[[d1_databases]]
+[env.production]
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
+
+[[env.production.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-prod"
 database_id = "ebdeb7fc-74a4-4963-9bca-310a9aa0e4d6"
 
-[[r2_buckets]]
+[[env.production.r2_buckets]]
 binding = "R2"
 bucket_name = "tuff-nexus-imgable-prod"
-preview_bucket_name = "tuff-nexus-imgable-dev"
 
-[[kv_namespaces]]
+[[env.production.kv_namespaces]]
 binding = "TUFF_INTELLIGENCE_RUNTIME"
 id = "8c235ea8b96d4209bed631ee6c698803"
-preview_id = "77c5f7ddc0014c49b0b5977b23e599e3"
+
+[env.production.vars]
+NODE_OPTIONS = "--max-old-space-size=6144"
+AUTH_ORIGIN = "https://tuff.tagzxia.com"
+AUTH_EMAIL_FROM = "tuff@tagzxia.com"
+LINUXDO_ISSUER = "https://connect.linux.do"
+RESEND_API_KEY = ""
+ADMIN_BREAKGLASS_ENABLED = "false"
+ADMIN_CONTROL_PLANE_PROTECTED_ENABLED = "false"
+ADMIN_DUAL_CONTROL_ENABLED = "false"
+ADMIN_PRESERVE_IN_EXTREME_ENABLED = "false"
+ADMIN_EMERGENCY_ISSUER_VERSION = "v1"
+ADMIN_OOB_MTLS_ENABLED = "false"
+ADMIN_OOB_MTLS_FINGERPRINTS = ""
+ADMIN_DEFAULT_DEFENSE_MODE = "NORMAL"
+EXCHANGE_RATE_BASE_URL = "https://v6.exchangerate-api.com/v6"
+EXCHANGE_RATE_TTL_MS = "28800000"
+EXCHANGE_RATE_TIMEOUT_MS = "10000"
+EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
+EXCHANGE_RATE_STORE_RATE_ROWS = "true"
 
 [env.preview]
 compatibility_date = "2024-09-23"
-compatibility_flags = ["nodejs_compat", "no_nodejs_compat_v2"]
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules", "no_nodejs_compat_v2"]
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-nexus-dev"
@@ -56,23 +77,3 @@ bucket_name = "tuff-nexus-imgable-dev"
 [[env.preview.kv_namespaces]]
 binding = "TUFF_INTELLIGENCE_RUNTIME"
 id = "77c5f7ddc0014c49b0b5977b23e599e3"
-
-[vars]
-NODE_OPTIONS = "--max-old-space-size=6144"
-AUTH_ORIGIN = "https://tuff.tagzxia.com"
-AUTH_EMAIL_FROM = "tuff@tagzxia.com"
-LINUXDO_ISSUER = "https://connect.linux.do"
-RESEND_API_KEY = ""
-ADMIN_BREAKGLASS_ENABLED = "false"
-ADMIN_CONTROL_PLANE_PROTECTED_ENABLED = "false"
-ADMIN_DUAL_CONTROL_ENABLED = "false"
-ADMIN_PRESERVE_IN_EXTREME_ENABLED = "false"
-ADMIN_EMERGENCY_ISSUER_VERSION = "v1"
-ADMIN_OOB_MTLS_ENABLED = "false"
-ADMIN_OOB_MTLS_FINGERPRINTS = ""
-ADMIN_DEFAULT_DEFENSE_MODE = "NORMAL"
-EXCHANGE_RATE_BASE_URL = "https://v6.exchangerate-api.com/v6"
-EXCHANGE_RATE_TTL_MS = "28800000"
-EXCHANGE_RATE_TIMEOUT_MS = "10000"
-EXCHANGE_RATE_HISTORY_RETENTION_DAYS = "0"
-EXCHANGE_RATE_STORE_RATE_ROWS = "true"
