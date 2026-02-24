@@ -112,6 +112,13 @@ const BACKUP_API = 'https://open.er-api.com/v6/latest/USD'
 const REFRESH_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const CACHE_MAX_AGE_MS = 72 * 60 * 60 * 1000 // 72 hours
 const REQUEST_TIMEOUT_MS = 10_000
+const REFRESH_STAGGER_MS = 7 * 60 * 1000
+const REFRESH_STAGGER_JITTER_MS = 2 * 60 * 1000
+const STARTUP_REFRESH_DELAY_MS = 12_000
+const STARTUP_REFRESH_JITTER_MS = 6_000
+const SLOW_REFRESH_THRESHOLD_MS = 800
+const SLOW_REFRESH_BACKOFF_MS = 10 * 60 * 1000
+const SLOW_REFRESH_BACKOFF_JITTER_MS = 2 * 60 * 1000
 
 /**
  * FxRateProvider 类
@@ -127,6 +134,8 @@ export class FxRateProvider {
   private readonly pollingService = PollingService.getInstance()
   private readonly refreshTaskId = 'fx-rate.refresh'
   private isRefreshing = false
+  private started = false
+  private startupRefreshTimer: NodeJS.Timeout | null = null
   private retryCount = 0
   private maxRetries = 3
 
@@ -139,18 +148,13 @@ export class FxRateProvider {
    * Initialize and start auto-refresh
    */
   start(): void {
+    this.started = true
     log.info('Starting FxRateProvider')
-    this.refresh()
-    if (this.pollingService.isRegistered(this.refreshTaskId)) {
-      this.pollingService.unregister(this.refreshTaskId)
-    }
-    this.pollingService.register(
-      this.refreshTaskId,
-      async () => {
-        await this.refresh()
-      },
-      { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds' }
-    )
+
+    this.scheduleStartupRefresh()
+    const initialDelayMs =
+      REFRESH_INTERVAL_MS + REFRESH_STAGGER_MS + this.resolveJitter(REFRESH_STAGGER_JITTER_MS)
+    this.scheduleRefreshPolling(initialDelayMs)
     this.pollingService.start()
   }
 
@@ -158,8 +162,59 @@ export class FxRateProvider {
    * Stop auto-refresh
    */
   stop(): void {
+    this.started = false
+    if (this.startupRefreshTimer) {
+      clearTimeout(this.startupRefreshTimer)
+      this.startupRefreshTimer = null
+    }
     this.pollingService.unregister(this.refreshTaskId)
     log.info('FxRateProvider stopped')
+  }
+
+  private resolveJitter(maxMs: number): number {
+    return Math.floor(Math.random() * Math.max(1, maxMs))
+  }
+
+  private scheduleStartupRefresh(): void {
+    if (this.startupRefreshTimer) {
+      clearTimeout(this.startupRefreshTimer)
+      this.startupRefreshTimer = null
+    }
+
+    const startupDelayMs = STARTUP_REFRESH_DELAY_MS + this.resolveJitter(STARTUP_REFRESH_JITTER_MS)
+    this.startupRefreshTimer = setTimeout(() => {
+      this.startupRefreshTimer = null
+      void this.refresh()
+    }, startupDelayMs)
+  }
+
+  private scheduleRefreshPolling(initialDelayMs: number): void {
+    if (!this.started) return
+    if (this.pollingService.isRegistered(this.refreshTaskId)) {
+      this.pollingService.unregister(this.refreshTaskId)
+    }
+
+    this.pollingService.register(
+      this.refreshTaskId,
+      async () => {
+        const startedAt = Date.now()
+        await this.refresh()
+        if (!this.started) return
+
+        const durationMs = Date.now() - startedAt
+        if (durationMs < SLOW_REFRESH_THRESHOLD_MS) return
+
+        const nextDelayMs =
+          REFRESH_INTERVAL_MS +
+          SLOW_REFRESH_BACKOFF_MS +
+          this.resolveJitter(SLOW_REFRESH_BACKOFF_JITTER_MS)
+        this.scheduleRefreshPolling(nextDelayMs)
+        log.warn('FX refresh task is slow, deferred next run', {
+          meta: { durationMs, nextDelayMs }
+        })
+      },
+      { interval: REFRESH_INTERVAL_MS, unit: 'milliseconds', initialDelayMs }
+    )
   }
 
   /**

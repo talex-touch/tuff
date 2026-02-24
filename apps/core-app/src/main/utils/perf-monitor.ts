@@ -111,6 +111,7 @@ const PERF_HEAP_TASK_ID = 'perf-monitor.heap'
 const IPC_LOG_THROTTLE_MS = 5_000
 const RENDERER_LOG_THROTTLE_MS = 5_000
 const LOOP_LOG_THROTTLE_MS = 3_000
+const LOOP_SLEEP_SKIP_LOG_THROTTLE_MS = 60_000
 const LOOP_DIAGNOSTIC_WARN_THROTTLE_MS = 120_000
 const LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS = 30_000
 const PERF_SUMMARY_LOG_SLOW_MS = 2_000
@@ -270,9 +271,17 @@ export class PerfMonitor {
 
           if (this.isLagFromSystemSleep(lag)) {
             const durationSec = Math.round(lag / 1000)
-            loopPerfLog.info(
-              `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
+            const nowAt = Date.now()
+            const shouldLogSleep = this.shouldLog(
+              'event_loop.sleep_skip',
+              LOOP_SLEEP_SKIP_LOG_THROTTLE_MS,
+              nowAt
             )
+            if (shouldLogSleep) {
+              loopPerfLog.info(
+                `System sleep/suspend detected (${durationSec}s) — skipping event loop lag report`
+              )
+            }
             return
           }
 

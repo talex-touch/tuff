@@ -4,6 +4,40 @@
 
 ## 2026-02-24
 
+### touch-translation Prelude 打包修复（移除 `process is not defined`）
+
+**变更类型**: 构建修复 / 运行时稳定性
+
+**描述**: 修复 `touch-translation` 插件打包后在 plugin prelude VM 中报错 `ReferenceError: process is not defined`。根因是 prelude 侧间接打入 Vue CJS 包，触发 `process.env.NODE_ENV` 访问。
+
+**主要变更**:
+1. **收敛翻译客户端依赖**：`shared/tuffintelligence.ts` 移除对 `@talex-touch/utils/plugin/sdk/intelligence` 的静态依赖，改为基于 `createIntelligenceClient` 构建最小调用链。
+2. **Renderer 通道兼容**：在 renderer 场景优先复用 `window.$channel`，并透传 `_sdkapi`（来自 `window.$plugin.sdkapi`）保持权限校验语义一致。
+3. **Prelude 运行时兼容**：在非 renderer 场景继续走默认 channel resolver，避免引入 browser-only/renderer-only 依赖。
+4. **产物体积回归正常**：`dist/build/index.js` 从异常膨胀降至轻量体积，且不再包含 `process.env.NODE_ENV` 引用。
+
+**修改文件**:
+- `plugins/touch-translation/shared/tuffintelligence.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 后台轮询错峰与性能日志降噪（SystemUpdate/FxRate/PerfMonitor）
+
+**变更类型**: 性能优化 / 稳定性修复
+
+**描述**: 针对 `system-update.poll` 与 `fx-rate.refresh` 在同一时间窗触发导致的事件循环抖动，以及休眠恢复场景下日志噪音过高问题，新增轮询错峰、慢任务退避与 sleep/suspend 日志节流机制。
+
+**主要变更**:
+1. **轮询错峰**：`system-update.poll` 与 `fx-rate.refresh` 首轮执行延迟引入固定偏移 + 随机抖动，避免小时级任务同窗叠加。
+2. **慢任务退避**：当轮询任务单次执行耗时超过 800ms 时，自动延后下一轮调度窗口，降低持续高负载下的抖动风险。
+3. **启动期解耦**：`SystemUpdateModule` 先执行一次启动刷新，再启动 FX 定时刷新，减少启动阶段并发网络任务竞争。
+4. **日志降噪**：`PerfMonitor` 对 `System sleep/suspend detected ... skipping event loop lag report` 增加 60s 节流，保留关键信号同时抑制刷屏。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/preview/providers/fx-rate-provider.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Nexus 认证入口统一到 AUTH_ORIGIN（防止 OAuth 跨域回调失败）
 
 **变更类型**: 部署稳定性 / 登录修复
@@ -31,6 +65,7 @@
 3. **运行时兜底**：Pages 根环境与 preview 继续保留 `enable_nodejs_http_modules`，减少后续依赖升级时的兼容风险。
 4. **回调稳定性增强**：`token.request` 透传 next-auth `checks.code_verifier`（PKCE），并对 GitHub token 交换改为不强制提交 `redirect_uri`，降低 provider 侧 `redirect_uri_mismatch` 触发概率。
 5. **部署配置对齐**：`wrangler.toml` 生产配置显式迁移到 `env.production`，避免根级 `[vars]` 在本地 CLI 部署时覆盖/偏离 Dashboard 的生产环境绑定。
+6. **Dashboard 构建兼容**：保留根级 `compatibility_flags`（`nodejs_compat` 等）与生产一致，避免 Dashboard 集成构建路径落到无 `nodejs_compat` 配置后触发 `crypto.getHashes` unenv 报错。
 
 **修改文件**:
 - `apps/nexus/server/api/auth/[...].ts`
