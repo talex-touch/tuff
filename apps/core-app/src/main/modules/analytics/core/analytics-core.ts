@@ -33,6 +33,22 @@ interface AnalyticsCoreOptions {
   dbStore?: DbStore
 }
 
+const WINDOW_DURATION_MS: Record<AnalyticsWindowType, number> = {
+  '1m': 60_000,
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '1h': 60 * 60_000,
+  '24h': 24 * 60 * 60_000
+}
+
+const BASE_WINDOW_MIN_RECORD_INTERVAL_MS: Record<AnalyticsWindowType, number> = {
+  '1m': 15_000,
+  '5m': 60_000,
+  '15m': 2 * 60_000,
+  '1h': 5 * 60_000,
+  '24h': 15 * 60_000
+}
+
 /**
  * Core engine responsible for aggregating and serving analytics metrics.
  */
@@ -47,6 +63,9 @@ export class AnalyticsCore {
   private totalSearchDuration = 0
 
   private currentMetrics: CoreMetrics = {}
+  private lastRecordAtByWindow = new Map<AnalyticsWindowType, number>()
+  private lastRecordSignatureByWindow = new Map<AnalyticsWindowType, string>()
+  private lastRecordIpcErrorCountByWindow = new Map<AnalyticsWindowType, number>()
 
   constructor(options?: AnalyticsCoreOptions) {
     this.store = options?.store ?? new MemoryStore()
@@ -226,10 +245,74 @@ export class AnalyticsCore {
     metrics: CoreMetrics,
     baseWindow: AnalyticsWindowType
   ): AnalyticsSnapshot[] {
+    if (!this.shouldRecordSnapshot(metrics, baseWindow)) {
+      return []
+    }
+
     const snapshots = this.collector.record(metrics, baseWindow)
+    this.updateRecordState(metrics, baseWindow)
     if (this.dbStore) {
       void this.dbStore.saveSnapshots(snapshots)
     }
     return snapshots
+  }
+
+  private shouldRecordSnapshot(metrics: CoreMetrics, baseWindow: AnalyticsWindowType): boolean {
+    const now = Date.now()
+    const lastAt = this.lastRecordAtByWindow.get(baseWindow) ?? 0
+    if (lastAt <= 0) return true
+
+    const forceIntervalMs = WINDOW_DURATION_MS[baseWindow] ?? WINDOW_DURATION_MS['1m']
+    if (now - lastAt >= forceIntervalMs) {
+      return true
+    }
+
+    const previousErrorCount = this.lastRecordIpcErrorCountByWindow.get(baseWindow) ?? 0
+    const currentErrorCount = metrics.ipc?.errorCount ?? 0
+    if (currentErrorCount > previousErrorCount) {
+      return true
+    }
+
+    const minIntervalMs =
+      BASE_WINDOW_MIN_RECORD_INTERVAL_MS[baseWindow] ?? BASE_WINDOW_MIN_RECORD_INTERVAL_MS['1m']
+    if (now - lastAt < minIntervalMs) {
+      return false
+    }
+
+    const lastSignature = this.lastRecordSignatureByWindow.get(baseWindow)
+    if (!lastSignature) return true
+    return this.buildRecordSignature(metrics) !== lastSignature
+  }
+
+  private updateRecordState(metrics: CoreMetrics, baseWindow: AnalyticsWindowType): void {
+    this.lastRecordAtByWindow.set(baseWindow, Date.now())
+    this.lastRecordSignatureByWindow.set(baseWindow, this.buildRecordSignature(metrics))
+    this.lastRecordIpcErrorCountByWindow.set(baseWindow, metrics.ipc?.errorCount ?? 0)
+  }
+
+  private buildRecordSignature(metrics: CoreMetrics): string {
+    const system = metrics.system
+    const ipc = metrics.ipc
+    const search = metrics.search
+    const pluginCount = Object.keys(metrics.plugins ?? {}).length
+    const moduleCount = Object.keys(metrics.modules ?? {}).length
+
+    const memoryTotal = Math.max(1, system?.memoryTotal ?? 1)
+    const heapTotal = Math.max(1, system?.heapTotal ?? 1)
+    const memoryUsageRatio = (system?.memoryUsed ?? 0) / memoryTotal
+    const heapUsageRatio = (system?.heapUsed ?? 0) / heapTotal
+
+    return [
+      Math.round((system?.cpuUsage ?? 0) / 5),
+      Math.round(memoryUsageRatio * 20),
+      Math.round(heapUsageRatio * 20),
+      Math.round((ipc?.avgLatency ?? 0) / 25),
+      ipc?.errorCount ?? 0,
+      ipc?.slowRequests ?? 0,
+      Math.floor((search?.totalSearches ?? 0) / 10),
+      Math.round((search?.avgDuration ?? 0) / 25),
+      pluginCount,
+      moduleCount
+    ].join('|')
   }
 }

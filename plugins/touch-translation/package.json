@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "packageManager": "pnpm@10.25.0",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tuff builder",
     "dev": "vite --port 3733 --open",
     "lint": "eslint .",
     "typecheck": "vue-tsc --noEmit",
@@ -13,7 +13,7 @@
     "postinstall": "node -e \"if (process.env.INIT_CWD && process.env.INIT_CWD === process.cwd()) require('child_process').execSync('npx simple-git-hooks', { stdio: 'inherit' })\""
   },
   "dependencies": {
-    "@talex-touch/unplugin-export-plugin": "1.2.7",
+    "@talex-touch/unplugin-export-plugin": "workspace:^",
     "@talex-touch/utils": "workspace:^",
     "@vueuse/core": "^14.1.0",
     "vue": "^3.5.27",

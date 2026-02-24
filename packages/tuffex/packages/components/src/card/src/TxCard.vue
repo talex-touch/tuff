@@ -597,6 +597,7 @@ function onClick(ev: MouseEvent) {
   position: relative;
   z-index: 1;
   min-height: 0;
+  width: 100%;
 }
 
 .tx-card__footer {

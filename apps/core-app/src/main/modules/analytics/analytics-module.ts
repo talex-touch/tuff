@@ -39,6 +39,7 @@ import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
 import { getStartupAnalytics } from '.'
 import { setIpcTracer } from '../../core/channel-core'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { createLogger } from '../../utils/logger'
 import { setPerfSummaryReporter } from '../../utils/perf-monitor'
 import { BaseModule } from '../abstract-base-module'
@@ -53,11 +54,21 @@ import { DbStore } from './storage/db-store'
 import { DEFAULT_RETENTION_MS } from './storage/memory-store'
 
 const analyticsLog = createLogger('Analytics')
-const MESSAGE_REPORT_BASE_DELAY_MS = 30_000
-const MESSAGE_REPORT_MAX_DELAY_MS = 5 * 60_000
+const MESSAGE_REPORT_BASE_DELAY_MS = 2 * 60_000
+const MESSAGE_REPORT_MAX_DELAY_MS = 10 * 60_000
 const MESSAGE_REPORT_MAX_QUEUE = 120
-const MESSAGE_REPORT_BATCH_SIZE = 10
+const MESSAGE_REPORT_BATCH_SIZE = 25
 const MESSAGE_REPORT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+const MESSAGE_REPORT_JITTER_RATIO = 0.2
+const MESSAGE_REPORT_FAILURE_LOG_THROTTLE_MS = 3 * 60_000
+const MESSAGE_REPORT_CIRCUIT_OPEN_AFTER_FAILURES = 3
+const MESSAGE_REPORT_CIRCUIT_BASE_COOLDOWN_MS = 10 * 60_000
+const MESSAGE_REPORT_CIRCUIT_MAX_COOLDOWN_MS = 60 * 60_000
+const MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS = 5 * 60_000
+const ANALYTICS_REPORT_HEALTH_TASK_ID = 'analytics.report-health'
+const SDK_EVENT_SAMPLE_QUEUE_HIGH_WATERMARK = 8
+const SDK_EVENT_SAMPLE_QUEUE_CRITICAL_WATERMARK = 16
+const SDK_EVENT_SAMPLE_QUEUE_OVERLOAD_WATERMARK = 24
 
 type StartupPerformanceSummary = {
   totalTime: number
@@ -80,6 +91,9 @@ interface QueuedMessageReport {
   key: string
   message: AnalyticsMessage
   createdAt: number
+  firstSeenAt: number
+  lastSeenAt: number
+  avgIntervalMs: number
   lastAttemptAt?: number
   attempts: number
   count: number
@@ -100,6 +114,20 @@ export class AnalyticsModule extends BaseModule {
   private messageReportTimer: NodeJS.Timeout | null = null
   private messageReportInFlight = false
   private messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+  private messageReportConsecutiveFailures = 0
+  private messageReportCircuitOpenUntil = 0
+  private messageReportSuppressedFailures = 0
+  private messageReportLastFailureLogAt = 0
+  private messageReportLastError = ''
+  private messageReportObservedCount = 0
+  private messageReportDroppedCount = 0
+  private messageReportAttemptCount = 0
+  private messageReportFailureCount = 0
+  private messageReportAttemptedItems = 0
+  private messageReportSucceededItems = 0
+  private sdkEventSampleAcceptedCount = 0
+  private sdkEventSampledOutCount = 0
+  private reportHealthWindowStartedAt = Date.now()
   private isSignedIn = false
 
   constructor() {
@@ -138,6 +166,7 @@ export class AnalyticsModule extends BaseModule {
     })
 
     this.registerHandlers()
+    this.startReportHealthLogging()
 
     // 将非关键操作延迟到启动窗口之后，避免在启动高峰期触发 DB 写入和采样
     // hydrateStartupMetrics → recordAndPersist → DB INSERT
@@ -161,6 +190,7 @@ export class AnalyticsModule extends BaseModule {
     this.sampler.stop()
     setIpcTracer(null)
     pollingService.unregister(ANALYTICS_CLEANUP_TASK_ID)
+    pollingService.unregister(ANALYTICS_REPORT_HEALTH_TASK_ID)
     if (this.messageReportTimer) {
       clearTimeout(this.messageReportTimer)
       this.messageReportTimer = null
@@ -242,6 +272,11 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
+          const lowerName = payload.eventName.toLowerCase()
+          const forceKeep = /error|fail|timeout|crash|exception/.test(lowerName)
+          if (!this.shouldSampleSdkEvent(forceKeep)) {
+            return { ok: true }
+          }
           this.core.trackPluginEvent(pluginName, payload.featureId, payload.metadata)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -262,6 +297,10 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
+          const forceKeep = payload.durationMs >= 1_500
+          if (!this.shouldSampleSdkEvent(forceKeep)) {
+            return { ok: true }
+          }
           this.core.trackPluginDuration(pluginName, payload.featureId, payload.durationMs)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -325,6 +364,9 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
+          if (!this.shouldSampleSdkEvent(false)) {
+            return { ok: true }
+          }
           this.core.incrementPluginCounter(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -344,6 +386,9 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
+          if (!this.shouldSampleSdkEvent(false)) {
+            return { ok: true }
+          }
           this.core.setPluginGauge(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -363,6 +408,9 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
+          if (!this.shouldSampleSdkEvent(false)) {
+            return { ok: true }
+          }
           this.core.recordPluginHistogram(pluginName, payload.name, payload.value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
@@ -544,15 +592,25 @@ export class AnalyticsModule extends BaseModule {
 
   private enqueueMessageReport(message: AnalyticsMessage): void {
     const now = Date.now()
+    this.messageReportObservedCount += 1
     const key = this.buildMessageReportKey(message)
     const existing = this.messageReportIndex.get(key)
     if (existing) {
+      const intervalMs = Math.max(0, now - existing.lastSeenAt)
+      const intervalSamples = Math.max(0, existing.count - 1)
+      existing.avgIntervalMs =
+        intervalSamples <= 0
+          ? intervalMs
+          : (existing.avgIntervalMs * intervalSamples + intervalMs) / (intervalSamples + 1)
+      existing.lastSeenAt = now
       existing.count += 1
       existing.message.createdAt = Math.max(existing.message.createdAt, message.createdAt)
       existing.message.meta = {
         ...existing.message.meta,
         count: existing.count,
-        lastAt: now
+        firstAt: existing.firstSeenAt,
+        lastAt: existing.lastSeenAt,
+        avgIntervalMs: Math.round(existing.avgIntervalMs)
       }
       return
     }
@@ -561,6 +619,9 @@ export class AnalyticsModule extends BaseModule {
       key,
       message,
       createdAt: now,
+      firstSeenAt: now,
+      lastSeenAt: now,
+      avgIntervalMs: 0,
       attempts: 0,
       count: 1
     }
@@ -572,6 +633,7 @@ export class AnalyticsModule extends BaseModule {
       const dropped = this.messageReportQueue.shift()
       if (dropped) {
         this.messageReportIndex.delete(dropped.key)
+        this.messageReportDroppedCount += 1
       }
     }
 
@@ -587,10 +649,12 @@ export class AnalyticsModule extends BaseModule {
       clearTimeout(this.messageReportTimer)
     }
 
+    const jitteredDelay = this.applyReportDelayJitter(delayMs)
+
     this.messageReportTimer = setTimeout(() => {
       this.messageReportTimer = null
       void this.flushMessageReportQueue()
-    }, delayMs)
+    }, jitteredDelay)
   }
 
   private async flushMessageReportQueue(): Promise<void> {
@@ -603,19 +667,36 @@ export class AnalyticsModule extends BaseModule {
       this.messageReportQueue = []
       this.messageReportIndex.clear()
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+      this.messageReportConsecutiveFailures = 0
+      this.messageReportCircuitOpenUntil = 0
+      return
+    }
+
+    const now = Date.now()
+    if (this.messageReportCircuitOpenUntil > now) {
+      this.scheduleMessageReportFlush(this.messageReportCircuitOpenUntil - now, true)
       return
     }
 
     const endpoint = this.resolveMessageEndpoint()
     if (!endpoint) {
-      this.scheduleMessageReportFlush(this.messageReportBackoffMs, false)
+      this.messageReportBackoffMs = Math.min(
+        this.messageReportBackoffMs * 2,
+        MESSAGE_REPORT_MAX_DELAY_MS
+      )
+      this.logMessageReportFailure('endpoint unavailable', {
+        batchSize: 0,
+        attempt: 0,
+        nextRetryMs: this.messageReportBackoffMs
+      })
+      this.scheduleMessageReportFlush(this.messageReportBackoffMs, true)
       return
     }
 
-    const now = Date.now()
     this.pruneMessageReportQueue(now)
     if (this.messageReportQueue.length === 0) {
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+      this.messageReportConsecutiveFailures = 0
       return
     }
 
@@ -626,6 +707,8 @@ export class AnalyticsModule extends BaseModule {
 
     this.messageReportInFlight = true
     try {
+      this.messageReportAttemptCount += 1
+      this.messageReportAttemptedItems += batch.length
       const payload = {
         messages: batch.map((entry) => ({
           id: entry.message.id,
@@ -638,7 +721,10 @@ export class AnalyticsModule extends BaseModule {
             : {
                 ...entry.message.meta,
                 count: entry.count,
-                lastAt: entry.lastAttemptAt ?? entry.createdAt
+                firstAt: entry.firstSeenAt,
+                lastAt: entry.lastSeenAt,
+                avgIntervalMs: Math.round(entry.avgIntervalMs),
+                lastAttemptAt: entry.lastAttemptAt ?? entry.createdAt
               },
           status: entry.message.status,
           createdAt: entry.message.createdAt,
@@ -666,9 +752,16 @@ export class AnalyticsModule extends BaseModule {
       this.messageReportQueue = this.messageReportQueue.filter(
         (entry) => !batch.some((done) => done.key === entry.key)
       )
+      this.messageReportSucceededItems += batch.length
       this.messageReportBackoffMs = MESSAGE_REPORT_BASE_DELAY_MS
+      this.messageReportConsecutiveFailures = 0
+      this.messageReportCircuitOpenUntil = 0
+      this.messageReportSuppressedFailures = 0
+      this.messageReportLastFailureLogAt = 0
+      this.messageReportLastError = ''
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
+      this.messageReportFailureCount += 1
       for (const entry of batch) {
         entry.attempts += 1
         entry.lastAttemptAt = now
@@ -677,22 +770,39 @@ export class AnalyticsModule extends BaseModule {
           lastError: errorMessage
         }
       }
+      this.messageReportConsecutiveFailures += 1
       this.messageReportBackoffMs = Math.min(
         this.messageReportBackoffMs * 2,
         MESSAGE_REPORT_MAX_DELAY_MS
       )
-      analyticsLog.warn('Failed to report analytics messages', {
-        error: errorMessage,
-        meta: {
-          batchSize: batch.length,
-          attempt: batch[0]?.attempts ?? 0,
-          nextRetryMs: this.messageReportBackoffMs
-        }
+      const cooldownMs =
+        this.messageReportConsecutiveFailures >= MESSAGE_REPORT_CIRCUIT_OPEN_AFTER_FAILURES
+          ? this.getCircuitCooldownMs(this.messageReportConsecutiveFailures)
+          : 0
+      if (cooldownMs > 0) {
+        this.messageReportCircuitOpenUntil = now + cooldownMs
+      }
+
+      const nextRetryMs =
+        this.messageReportCircuitOpenUntil > now
+          ? Math.max(this.messageReportBackoffMs, this.messageReportCircuitOpenUntil - now)
+          : this.messageReportBackoffMs
+
+      this.logMessageReportFailure(errorMessage, {
+        batchSize: batch.length,
+        attempt: batch[0]?.attempts ?? 0,
+        nextRetryMs,
+        circuitCooldownMs: cooldownMs > 0 ? cooldownMs : undefined
       })
     } finally {
       this.messageReportInFlight = false
       if (this.messageReportQueue.length > 0) {
-        this.scheduleMessageReportFlush(this.messageReportBackoffMs, true)
+        const now = Date.now()
+        const nextDelayMs =
+          this.messageReportCircuitOpenUntil > now
+            ? Math.max(this.messageReportBackoffMs, this.messageReportCircuitOpenUntil - now)
+            : this.messageReportBackoffMs
+        this.scheduleMessageReportFlush(nextDelayMs, true)
       }
     }
   }
@@ -709,6 +819,142 @@ export class AnalyticsModule extends BaseModule {
 
   private buildMessageReportKey(message: AnalyticsMessage): string {
     return [message.source, message.severity, message.title, message.message].join('|')
+  }
+
+  private applyReportDelayJitter(delayMs: number): number {
+    const safeDelay = Math.max(1_000, delayMs)
+    const jitterRange = safeDelay * MESSAGE_REPORT_JITTER_RATIO
+    const jittered = safeDelay - jitterRange + Math.random() * jitterRange * 2
+    return Math.round(Math.max(1_000, jittered))
+  }
+
+  private getCircuitCooldownMs(failureCount: number): number {
+    const exponent = Math.max(0, failureCount - MESSAGE_REPORT_CIRCUIT_OPEN_AFTER_FAILURES)
+    return Math.min(
+      MESSAGE_REPORT_CIRCUIT_BASE_COOLDOWN_MS * 2 ** exponent,
+      MESSAGE_REPORT_CIRCUIT_MAX_COOLDOWN_MS
+    )
+  }
+
+  private logMessageReportFailure(
+    error: string,
+    meta: {
+      batchSize: number
+      attempt: number
+      nextRetryMs: number
+      circuitCooldownMs?: number
+    }
+  ): void {
+    const now = Date.now()
+    const shouldLogNow =
+      now - this.messageReportLastFailureLogAt >= MESSAGE_REPORT_FAILURE_LOG_THROTTLE_MS
+
+    if (!shouldLogNow) {
+      this.messageReportSuppressedFailures += 1
+      this.messageReportLastError = error
+      return
+    }
+
+    analyticsLog.warn('Failed to report analytics messages', {
+      error,
+      meta: {
+        ...meta,
+        suppressedFailures:
+          this.messageReportSuppressedFailures > 0
+            ? this.messageReportSuppressedFailures
+            : undefined,
+        lastSuppressedError:
+          this.messageReportSuppressedFailures > 0 ? this.messageReportLastError : undefined
+      }
+    })
+
+    this.messageReportLastFailureLogAt = now
+    this.messageReportSuppressedFailures = 0
+    this.messageReportLastError = ''
+  }
+
+  private shouldSampleSdkEvent(forceKeep: boolean): boolean {
+    if (forceKeep) {
+      this.sdkEventSampleAcceptedCount += 1
+      return true
+    }
+
+    const sampleRate = this.resolveSdkEventSampleRate()
+    if (sampleRate >= 1 || Math.random() <= sampleRate) {
+      this.sdkEventSampleAcceptedCount += 1
+      return true
+    }
+
+    this.sdkEventSampledOutCount += 1
+    return false
+  }
+
+  private resolveSdkEventSampleRate(): number {
+    const queueDepth = dbWriteScheduler.getStats().queued
+    if (queueDepth >= SDK_EVENT_SAMPLE_QUEUE_OVERLOAD_WATERMARK) return 0.1
+    if (queueDepth >= SDK_EVENT_SAMPLE_QUEUE_CRITICAL_WATERMARK) return 0.25
+    if (queueDepth >= SDK_EVENT_SAMPLE_QUEUE_HIGH_WATERMARK) return 0.5
+    return 1
+  }
+
+  private startReportHealthLogging(): void {
+    pollingService.register(ANALYTICS_REPORT_HEALTH_TASK_ID, () => this.logReporterHealth(), {
+      interval: MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS,
+      unit: 'milliseconds',
+      initialDelayMs: MESSAGE_REPORT_HEALTH_LOG_INTERVAL_MS
+    })
+    pollingService.start()
+  }
+
+  private logReporterHealth(): void {
+    const now = Date.now()
+    const elapsedMs = Math.max(1, now - this.reportHealthWindowStartedAt)
+    const elapsedMinutes = elapsedMs / 60_000
+    const attempts = this.messageReportAttemptCount
+    const failures = this.messageReportFailureCount
+    const queueDepth = this.messageReportQueue.length
+    const observed = this.messageReportObservedCount
+    const dropped = this.messageReportDroppedCount
+    const requestsPerMin = attempts / elapsedMinutes
+    const failRate = attempts > 0 ? failures / attempts : 0
+    const dropRate = observed > 0 ? dropped / observed : 0
+    const avgBatchSize = attempts > 0 ? this.messageReportAttemptedItems / attempts : 0
+    const deliveryRate =
+      this.messageReportAttemptedItems > 0
+        ? this.messageReportSucceededItems / this.messageReportAttemptedItems
+        : 1
+    const sampledTotal = this.sdkEventSampleAcceptedCount + this.sdkEventSampledOutCount
+    const sampleDropRate = sampledTotal > 0 ? this.sdkEventSampledOutCount / sampledTotal : 0
+    const sampleRate = this.resolveSdkEventSampleRate()
+
+    const logFn =
+      failRate >= 0.5 || dropRate >= 0.3 || queueDepth >= MESSAGE_REPORT_MAX_QUEUE / 2
+        ? analyticsLog.warn.bind(analyticsLog)
+        : analyticsLog.info.bind(analyticsLog)
+
+    logFn('Analytics reporter health', {
+      meta: {
+        windowMinutes: Math.round(elapsedMinutes * 10) / 10,
+        requestsPerMin: Number(requestsPerMin.toFixed(2)),
+        queueDepth,
+        failRate: Number((failRate * 100).toFixed(1)),
+        dropRate: Number((dropRate * 100).toFixed(1)),
+        avgBatchSize: Number(avgBatchSize.toFixed(1)),
+        deliveryRate: Number((deliveryRate * 100).toFixed(1)),
+        sdkSampleRate: Number((sampleRate * 100).toFixed(0)),
+        sdkSampleDropRate: Number((sampleDropRate * 100).toFixed(1))
+      }
+    })
+
+    this.reportHealthWindowStartedAt = now
+    this.messageReportObservedCount = 0
+    this.messageReportDroppedCount = 0
+    this.messageReportAttemptCount = 0
+    this.messageReportFailureCount = 0
+    this.messageReportAttemptedItems = 0
+    this.messageReportSucceededItems = 0
+    this.sdkEventSampleAcceptedCount = 0
+    this.sdkEventSampledOutCount = 0
   }
 
   private startCleanup(): void {

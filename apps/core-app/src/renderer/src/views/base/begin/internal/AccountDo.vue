@@ -1,9 +1,11 @@
 <script setup lang="ts" name="AccountDo">
 import type { Ref } from 'vue'
+import { useAppSdk } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
-import { inject, ref, watch } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useAuth } from '~/modules/auth/useAuth'
+import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 // import Forbidden from './Forbidden.vue'
 // import OptionMode from './OptionMode.vue'
 // import Done from './Done.vue'
@@ -13,9 +15,18 @@ type StepFunction = (call: { comp: unknown; rect?: { width: number; height: numb
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
+const appSdk = useAppSdk()
 
 // 集成认证
-const { signIn, isAuthenticated, isLoading } = useAuth()
+const { signIn, isAuthenticated, authLoadingState, initializeAuth } = useAuth()
+const learnMoreUrl = computed(() => `${getAuthBaseUrl().replace(/\/$/, '')}/sign-in`)
+const isActionLoading = computed(
+  () => choice.value === 0 && (authLoadingState.isSigningIn || authLoadingState.isLoggingIn)
+)
+
+onMounted(() => {
+  void initializeAuth()
+})
 
 // 监听认证状态变化
 watch(isAuthenticated, (authenticated) => {
@@ -35,6 +46,10 @@ async function handleBrowserSignIn(): Promise<void> {
     console.error('Browser sign in failed:', error)
     toast.error('登录失败，请重试')
   }
+}
+
+function openLearnMore(): void {
+  void appSdk.openExternal(learnMoreUrl.value)
 }
 
 // async function handleSignUp(): Promise<void> {
@@ -79,9 +94,7 @@ function handleAgree(): void {
         <span>
           Create an account or sign in to unlock the full potential of this application. Seamlessly
           synchronize your data across all your devices and access cloud services.
-          <a
-            href="https://talex-touch.github.io/talex-touch/docs/documents/account.html"
-            target="_blank"
+          <a :href="learnMoreUrl" target="_blank" rel="noreferrer" @click.prevent="openLearnMore"
             >Learn more</a
           >
         </span>
@@ -105,7 +118,7 @@ function handleAgree(): void {
     </div>
 
     <div class="AccountDo-Next">
-      <TxButton variant="flat" type="primary" :loading="isLoading" @click="handleAgree">
+      <TxButton variant="flat" type="primary" :loading="isActionLoading" @click="handleAgree">
         {{ choice === 0 ? 'Sign In' : 'Continue Offline' }}
       </TxButton>
     </div>

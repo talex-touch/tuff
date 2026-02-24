@@ -103,11 +103,12 @@
   },
   "beginner": {
     "language": {
-      "title": "Choose your language",
-      "desc": "Pick a language before continuing the guided setup.",
+      "title": "Welcome to Tuff",
+      "desc": "We've set your language to {lang}",
       "followSystem": "Follow system language",
       "systemDetected": "Detected system language: {lang}",
       "systemTag": "System default",
+      "changeLanguage": "Change Language",
       "next": "Continue"
     }
   },

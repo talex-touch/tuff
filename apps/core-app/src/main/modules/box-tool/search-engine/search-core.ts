@@ -8,6 +8,7 @@ import type {
   TuffQuery,
   TuffSearchResult
 } from '@talex-touch/utils'
+import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ModuleInitContext } from 'packages/utils/types/modules'
 import type { TouchApp } from '../../../core/touch-app'
 import type { DbUtils } from '../../../db/utils'
@@ -15,7 +16,7 @@ import type { ProviderContext } from './types'
 import crypto from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
-import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -31,7 +32,7 @@ import { enterPerfContext } from '../../../utils/perf-context'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
-import { storageModule } from '../../storage'
+import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
@@ -223,6 +224,10 @@ export class SearchEngineCore
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
+  private providersLoaded = false
+  private providerLoadPromise: Promise<void> | null = null
+  private startupServicesStarted = false
+  private onboardingReadyUnsubscribe: (() => void) | null = null
 
   private cacheSearchResult(
     query: TuffQuery,
@@ -286,6 +291,102 @@ export class SearchEngineCore
 
     this.registerProvider(PluginFeaturesAdapter)
     this.registerProvider(previewProvider)
+  }
+
+  private hasCompletedOnboarding(setting?: AppSetting | null): boolean {
+    const source =
+      setting ??
+      (() => {
+        try {
+          return getMainConfig(StorageList.APP_SETTING) as AppSetting
+        } catch (error) {
+          searchEngineLog.warn(
+            'Failed to read app setting while checking onboarding state, fallback to ready',
+            {
+              error
+            }
+          )
+          return { beginner: { init: true } } as AppSetting
+        }
+      })()
+
+    if (!source?.beginner) {
+      return false
+    }
+
+    return source.beginner.init === true
+  }
+
+  private startRuntimeServicesOnce(): void {
+    if (this.startupServicesStarted) {
+      return
+    }
+    this.startupServicesStarted = true
+    this.usageSummaryService?.start()
+    this.startMaintenance()
+  }
+
+  private clearOnboardingSubscription(): void {
+    if (!this.onboardingReadyUnsubscribe) {
+      return
+    }
+    this.onboardingReadyUnsubscribe()
+    this.onboardingReadyUnsubscribe = null
+  }
+
+  private async ensureProvidersLoaded(reason: string): Promise<void> {
+    if (this.providersLoaded) {
+      this.startRuntimeServicesOnce()
+      return
+    }
+
+    if (!this.providerLoadPromise) {
+      this.providerLoadPromise = (async () => {
+        const dispose = enterPerfContext('SearchEngine.loadProviders')
+        try {
+          // Load providers sequentially to avoid database lock contention
+          // 串行加载 providers 以避免数据库锁竞争
+          searchEngineLog.debug(
+            `Loading ${this.providersToLoad.length} providers sequentially (reason: ${reason})...`
+          )
+          for (const provider of this.providersToLoad) {
+            await this.loadProvider(provider)
+            // 每加载一个 provider 后让出事件循环
+            await new Promise<void>((resolve) => setImmediate(resolve))
+          }
+          this.providersToLoad = []
+          this.providersLoaded = true
+          searchEngineLog.info('All providers loaded successfully')
+        } finally {
+          dispose()
+          this.providerLoadPromise = null
+        }
+      })()
+    }
+
+    await this.providerLoadPromise
+    this.startRuntimeServicesOnce()
+  }
+
+  private deferProviderLoadingUntilOnboardingReady(): void {
+    if (this.onboardingReadyUnsubscribe) {
+      return
+    }
+
+    searchEngineLog.info('Onboarding not completed, deferring provider loading and index tasks')
+
+    this.onboardingReadyUnsubscribe = subscribeMainConfig(
+      StorageList.APP_SETTING,
+      (nextSetting) => {
+        if (!this.hasCompletedOnboarding(nextSetting as AppSetting)) {
+          return
+        }
+
+        this.clearOnboardingSubscription()
+        searchEngineLog.info('Onboarding completed, resuming provider loading')
+        void this.ensureProvidersLoaded('onboarding-complete')
+      }
+    )
   }
 
   static getInstance(): SearchEngineCore {
@@ -1719,27 +1820,12 @@ export class SearchEngineCore
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, async () => {
-      const dispose = enterPerfContext('SearchEngine.loadProviders')
-      try {
-        // Load providers sequentially to avoid database lock contention
-        // 串行加载 providers 以避免数据库锁竞争
-        searchEngineLog.debug(
-          `Loading ${instance.providersToLoad.length} providers sequentially...`
-        )
-        for (const provider of instance.providersToLoad) {
-          await instance.loadProvider(provider)
-          // 每加载一个 provider 后让出事件循环
-          await new Promise<void>((resolve) => setImmediate(resolve))
-        }
-        instance.providersToLoad = []
-        searchEngineLog.info('All providers loaded successfully')
-      } finally {
-        dispose()
+      if (instance.hasCompletedOnboarding()) {
+        await instance.ensureProvidersLoaded('all-modules-loaded')
+        return
       }
 
-      // 启动汇总服务
-      instance.usageSummaryService?.start()
-      instance.startMaintenance()
+      instance.deferProviderLoadingUntilOnboardingReady()
     })
 
     // Register IPC handlers
@@ -1857,6 +1943,7 @@ export class SearchEngineCore
       )
     }
     this.currentGatherController?.abort()
+    this.clearOnboardingSubscription()
 
     // 停止汇总服务
     this.usageSummaryService?.stop()

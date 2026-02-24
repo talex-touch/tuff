@@ -667,7 +667,7 @@ export class TouchPlugin implements ITouchPlugin {
     this._runtimeStats.errorTimestamps = []
 
     try {
-      const shouldBundlePrelude = app.isPackaged || this.dev.enable
+      const shouldBundlePrelude = !app.isPackaged && this.dev.enable
 
       if (this.dev.enable && this.dev.source && this.dev.address) {
         // Dev mode: load from remote

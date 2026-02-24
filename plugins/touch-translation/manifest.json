@@ -16,6 +16,16 @@
     "address": "http://localhost:3733/",
     "source": true
   },
+  "build": {
+    "index": {
+      "entry": "index/main.ts",
+      "format": "cjs",
+      "target": "node18",
+      "external": ["electron"],
+      "minify": true,
+      "sourcemap": false
+    }
+  },
   "permissions": {
     "required": ["clipboard.read", "network.internet", "intelligence.basic"],
     "optional": ["clipboard.write"]
