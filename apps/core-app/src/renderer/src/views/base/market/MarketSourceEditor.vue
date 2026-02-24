@@ -55,7 +55,7 @@ const isAdvancedMode = computed(() => {
   if (typeof advancedSettings === 'string') {
     return advancedSettings === 'true' || advancedSettings === '1'
   }
-  return advancedSettings === true || advancedSettings === 1
+  return advancedSettings === true
 })
 const sortableSources = computed(() => sources.filter((item) => !item.outdated))
 const outdatedSources = computed(() => sources.filter((item) => item.outdated))
@@ -77,7 +77,11 @@ const providerTypeOptions = computed<{ label: string; value: MarketProviderType 
   { label: t('market.sourceEditor.providerTypes.npmPackage'), value: 'npmPackage' }
 ])
 
-const newSource = reactive({
+const newSource = reactive<{
+  name: string
+  url: string
+  type: MarketProviderType
+}>({
   name: '',
   url: '',
   type: DEFAULT_PROVIDER_TYPE
