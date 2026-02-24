@@ -111,6 +111,11 @@ const PERF_HEAP_TASK_ID = 'perf-monitor.heap'
 const IPC_LOG_THROTTLE_MS = 5_000
 const RENDERER_LOG_THROTTLE_MS = 5_000
 const LOOP_LOG_THROTTLE_MS = 3_000
+const LOOP_DIAGNOSTIC_WARN_THROTTLE_MS = 120_000
+const LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS = 30_000
+const PERF_SUMMARY_LOG_SLOW_MS = 2_000
+const PERF_SUMMARY_TOP_SLOW_MIN_MS = 500
+const PERF_SUMMARY_LOG_TOP_LIMIT = 3
 
 const pollingService = PollingService.getInstance()
 
@@ -233,6 +238,7 @@ export class PerfMonitor {
   private logThrottle = new Map<string, number>()
   private lastHeapSnapshotAt = 0
   private readonly heapSnapshotIntervalMs = 10_000
+  private lastLoopDiagnosticKey = ''
 
   /** Timestamp (Date.now) of the most recent system resume, or 0 if none. */
   private systemResumedAt = 0
@@ -555,9 +561,7 @@ export class PerfMonitor {
     this.pushIncident(incident)
 
     const shouldLog = this.shouldLog(`event_loop.lag:${severity}`, LOOP_LOG_THROTTLE_MS, now)
-    const shouldLogDiagnostic =
-      lagMs >= 500 && this.shouldLog('event_loop.lag:diagnostic', 10000, now)
-    if (shouldLog || shouldLogDiagnostic) {
+    if (shouldLog || lagMs >= 500) {
       const contexts = getPerfContextSnapshot(3)
       const heapNow = Date.now()
       const heapStats =
@@ -618,6 +622,18 @@ export class PerfMonitor {
       const primaryPollingRecent = pollingRecent[0]
         ? `${pollingRecent[0].id} ${formatDuration(pollingRecent[0].durationMs)}`
         : undefined
+      const diagnosticKey = `${primaryContext ?? 'none'}|${primaryPollingRecent ?? 'none'}`
+      const diagnosticCauseChanged = diagnosticKey !== this.lastLoopDiagnosticKey
+      if (diagnosticCauseChanged) {
+        this.lastLoopDiagnosticKey = diagnosticKey
+      }
+      const diagnosticThrottleMs =
+        severity === 'error' ? LOOP_DIAGNOSTIC_ERROR_THROTTLE_MS : LOOP_DIAGNOSTIC_WARN_THROTTLE_MS
+      const shouldLogDiagnostic =
+        lagMs >= 500 &&
+        (diagnosticCauseChanged ||
+          (lagMs >= LOOP_LAG_ERROR_MS &&
+            this.shouldLog(`event_loop.lag:diagnostic:${severity}`, diagnosticThrottleMs, now)))
       const messageHints = [
         primaryContext ? `context=${primaryContext}` : null,
         primaryPollingActive ? `polling=${primaryPollingActive}` : null,
@@ -727,17 +743,25 @@ export class PerfMonitor {
       .map(([kind, count]) => `${kind}=${count}`)
       .join(' ')
 
-    perfLog.warn(`Perf summary (last ${snapshot.length})`, { meta: { kinds } })
-
     // Show top slow incidents
     const slow = snapshot
       .filter((i) => typeof i.durationMs === 'number')
       .sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0))
       .slice(0, 5)
 
-    for (const incident of slow) {
-      const name = incident.eventName ?? incident.kind
-      perfLog.warn(`Top slow: ${name} ${formatDuration(incident.durationMs ?? 0)}`)
+    const topSlowForLog = slow
+      .filter((incident) => (incident.durationMs ?? 0) >= PERF_SUMMARY_TOP_SLOW_MIN_MS)
+      .slice(0, PERF_SUMMARY_LOG_TOP_LIMIT)
+    const shouldLogSummary =
+      errorCount > 0 ||
+      topSlowForLog.some((incident) => (incident.durationMs ?? 0) >= PERF_SUMMARY_LOG_SLOW_MS)
+
+    if (shouldLogSummary) {
+      perfLog.warn(`Perf summary (last ${snapshot.length})`, { meta: { kinds } })
+      for (const incident of topSlowForLog) {
+        const name = incident.eventName ?? incident.kind
+        perfLog.warn(`Top slow: ${name} ${formatDuration(incident.durationMs ?? 0)}`)
+      }
     }
 
     const eventCounts = new Map<string, number>()

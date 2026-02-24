@@ -237,6 +237,7 @@ const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
 const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
 const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
 const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
+const STARTUP_BACKFILL_INITIAL_DELAY_MS = 15_000
 
 export interface AppIndexSettings {
   startupBackfillEnabled: boolean
@@ -474,10 +475,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.startupBackfillStarted) return
     this.startupBackfillStarted = true
 
-    logApp('Scheduling startup backfill (deferred 500ms)', LogStyle.info)
+    logApp(
+      `Scheduling startup backfill (deferred ${Math.round(STARTUP_BACKFILL_INITIAL_DELAY_MS / 1000)}s)`,
+      LogStyle.info
+    )
     setTimeout(() => {
       void this._runStartupBackfillWithRetry()
-    }, 500)
+    }, STARTUP_BACKFILL_INITIAL_DELAY_MS)
   }
 
   private async _runStartupBackfillWithRetry(): Promise<void> {

@@ -14,17 +14,32 @@ export interface SqliteRetryOptions {
   label?: string
 }
 
-const RETRY_LOG_THROTTLE = new Map<string, number>()
+interface RetryLogState {
+  lastAt: number
+  suppressed: number
+}
 
-function shouldLogRetry(label: string, throttleMs: number): boolean {
-  if (throttleMs <= 0) return true
+const RETRY_LOG_STATE = new Map<string, RetryLogState>()
+
+function nextRetryLogState(
+  label: string,
+  throttleMs: number
+): { shouldLog: boolean; suppressed: number } {
+  if (throttleMs <= 0) return { shouldLog: true, suppressed: 0 }
+
   const now = Date.now()
-  const lastAt = RETRY_LOG_THROTTLE.get(label) ?? 0
-  if (now - lastAt < throttleMs) {
-    return false
+  const state = RETRY_LOG_STATE.get(label) ?? { lastAt: 0, suppressed: 0 }
+  if (now - state.lastAt < throttleMs) {
+    state.suppressed += 1
+    RETRY_LOG_STATE.set(label, state)
+    return { shouldLog: false, suppressed: state.suppressed }
   }
-  RETRY_LOG_THROTTLE.set(label, now)
-  return true
+
+  const suppressed = state.suppressed
+  state.lastAt = now
+  state.suppressed = 0
+  RETRY_LOG_STATE.set(label, state)
+  return { shouldLog: true, suppressed }
 }
 
 function isSqliteBusyErrorNode(error: unknown): boolean {
@@ -84,7 +99,7 @@ export async function withSqliteRetry<T>(
   const baseDelayMs = options.baseDelayMs ?? 200
   const maxDelayMs = options.maxDelayMs ?? 2_000
   const jitterRatio = options.jitterRatio ?? 0.2
-  const logThrottleMs = options.logThrottleMs ?? 5_000
+  const logThrottleMs = options.logThrottleMs ?? 30_000
   const label = options.label ?? 'sqlite'
 
   let lastError: unknown
@@ -101,9 +116,13 @@ export async function withSqliteRetry<T>(
       const jitter = backoffBase * jitterRatio
       const backoff = Math.max(0, Math.round(backoffBase + (Math.random() * 2 - 1) * jitter))
 
-      if (shouldLogRetry(label, logThrottleMs)) {
+      const logState = nextRetryLogState(label, logThrottleMs)
+      if (logState.shouldLog) {
         log.warn(`SQLITE_BUSY during ${label}, retry ${attempt + 1}/${retries}`, {
-          meta: { delayMs: backoff }
+          meta: {
+            delayMs: backoff,
+            suppressedRetries: logState.suppressed > 0 ? logState.suppressed : undefined
+          }
         })
       }
       await sleep(backoff)

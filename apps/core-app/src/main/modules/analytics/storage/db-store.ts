@@ -13,17 +13,112 @@ import { enterPerfContext } from '../../../utils/perf-context'
 
 const PERSIST_WINDOWS: AnalyticsWindowType[] = ['15m', '1h', '24h']
 const ANALYTICS_QUEUE_LIMIT = 8
-const QUEUE_PRESSURE_LOG_THROTTLE_MS = 5_000
+const QUEUE_PRESSURE_LOG_THROTTLE_MS = 60_000
 const log = createLogger('AnalyticsStore')
+
+type QueuePressureKind =
+  | 'snapshotsSkipped'
+  | 'snapshotsDropped'
+  | 'snapshotsFailed'
+  | 'cleanupSkipped'
+  | 'pluginSkipped'
+  | 'pluginDropped'
+  | 'pluginFailed'
+
+interface QueuePressureStats {
+  snapshotsSkipped: number
+  snapshotsDropped: number
+  snapshotsFailed: number
+  cleanupSkipped: number
+  pluginSkipped: number
+  pluginDropped: number
+  pluginFailed: number
+}
 
 export class DbStore {
   private lastQueuePressureLogAt = 0
+  private queuePressureStats: QueuePressureStats = {
+    snapshotsSkipped: 0,
+    snapshotsDropped: 0,
+    snapshotsFailed: 0,
+    cleanupSkipped: 0,
+    pluginSkipped: 0,
+    pluginDropped: 0,
+    pluginFailed: 0
+  }
+  private lastQueuePressureQueued = 0
+  private lastQueuePressureError: string | null = null
   constructor(private db: LibSQLDatabase<typeof schema>) {}
 
   private shouldLogQueuePressure(now: number): boolean {
     if (now - this.lastQueuePressureLogAt < QUEUE_PRESSURE_LOG_THROTTLE_MS) return false
     this.lastQueuePressureLogAt = now
     return true
+  }
+
+  private recordQueuePressure(
+    kind: QueuePressureKind,
+    options?: { queued?: number; error?: unknown }
+  ): void {
+    this.queuePressureStats[kind] += 1
+    if (typeof options?.queued === 'number') {
+      this.lastQueuePressureQueued = options.queued
+    }
+    if (options && Object.prototype.hasOwnProperty.call(options, 'error')) {
+      const errorMessage =
+        options.error instanceof Error ? options.error.message : String(options.error ?? '')
+      this.lastQueuePressureError = errorMessage.slice(0, 180)
+    }
+
+    const now = Date.now()
+    if (!this.shouldLogQueuePressure(now)) {
+      return
+    }
+
+    this.flushQueuePressureSummary()
+  }
+
+  private flushQueuePressureSummary(): void {
+    const stats = this.queuePressureStats
+    const total =
+      stats.snapshotsSkipped +
+      stats.snapshotsDropped +
+      stats.snapshotsFailed +
+      stats.cleanupSkipped +
+      stats.pluginSkipped +
+      stats.pluginDropped +
+      stats.pluginFailed
+
+    if (total <= 0) {
+      return
+    }
+
+    log.warn('Analytics queue pressure summary', {
+      meta: {
+        total,
+        snapshotsSkipped: stats.snapshotsSkipped,
+        snapshotsDropped: stats.snapshotsDropped,
+        snapshotsFailed: stats.snapshotsFailed,
+        cleanupSkipped: stats.cleanupSkipped,
+        pluginSkipped: stats.pluginSkipped,
+        pluginDropped: stats.pluginDropped,
+        pluginFailed: stats.pluginFailed,
+        queued: this.lastQueuePressureQueued > 0 ? this.lastQueuePressureQueued : undefined,
+        lastError: this.lastQueuePressureError ?? undefined
+      }
+    })
+
+    this.queuePressureStats = {
+      snapshotsSkipped: 0,
+      snapshotsDropped: 0,
+      snapshotsFailed: 0,
+      cleanupSkipped: 0,
+      pluginSkipped: 0,
+      pluginDropped: 0,
+      pluginFailed: 0
+    }
+    this.lastQueuePressureQueued = 0
+    this.lastQueuePressureError = null
   }
 
   async saveSnapshots(snapshots: AnalyticsSnapshot[]): Promise<void> {
@@ -33,12 +128,7 @@ export class DbStore {
     if (!persistable.length) return
     const queueStats = dbWriteScheduler.getStats()
     if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
-      const now = Date.now()
-      if (this.shouldLogQueuePressure(now)) {
-        log.warn('Analytics snapshots skipped (queue pressure)', {
-          meta: { queued: queueStats.queued }
-        })
-      }
+      this.recordQueuePressure('snapshotsSkipped', { queued: queueStats.queued })
       return
     }
 
@@ -84,13 +174,11 @@ export class DbStore {
       )
     } catch (error) {
       const isDropped = error instanceof Error && error.message.includes('dropped')
-      const message = isDropped
-        ? 'Analytics snapshots dropped (queue pressure)'
-        : 'Failed to save analytics snapshots'
-      log.warn(message, {
-        error: isDropped ? undefined : error,
-        meta: { count: persistable.length }
-      })
+      if (isDropped) {
+        this.recordQueuePressure('snapshotsDropped')
+      } else {
+        this.recordQueuePressure('snapshotsFailed', { error })
+      }
     } finally {
       disposePersist()
     }
@@ -128,11 +216,7 @@ export class DbStore {
     }))
     const queueStats = dbWriteScheduler.getStats()
     if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
-      if (this.shouldLogQueuePressure(nowMs)) {
-        log.warn('Analytics cleanup skipped (queue pressure)', {
-          meta: { queued: queueStats.queued }
-        })
-      }
+      this.recordQueuePressure('cleanupSkipped', { queued: queueStats.queued })
       return
     }
 
@@ -170,12 +254,7 @@ export class DbStore {
     try {
       const queueStats = dbWriteScheduler.getStats()
       if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
-        const now = Date.now()
-        if (this.shouldLogQueuePressure(now)) {
-          log.warn('Plugin analytics skipped (queue pressure)', {
-            meta: { queued: queueStats.queued }
-          })
-        }
+        this.recordQueuePressure('pluginSkipped', { queued: queueStats.queued })
         return
       }
       await dbWriteScheduler.schedule(
@@ -198,13 +277,11 @@ export class DbStore {
       )
     } catch (error) {
       const isDropped = error instanceof Error && error.message.includes('dropped')
-      log.warn(
-        isDropped ? 'Plugin analytics dropped (queue pressure)' : 'Failed to save plugin analytics',
-        {
-          error: isDropped ? undefined : error,
-          meta: { plugin: payload.pluginName, event: payload.eventType }
-        }
-      )
+      if (isDropped) {
+        this.recordQueuePressure('pluginDropped')
+      } else {
+        this.recordQueuePressure('pluginFailed', { error })
+      }
     }
   }
 }

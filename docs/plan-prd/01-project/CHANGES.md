@@ -4,6 +4,64 @@
 
 ## 2026-02-24
 
+### Core-app 首次引导收敛为单页语言确认（内嵌 Hello 动效）
+
+**变更类型**: 交互优化 / 流程简化
+
+**描述**: 根据最新交互调整，将原本独立的 Hello 页面合并进语言确认页顶部展示，移除单独 Hello 步骤，首次引导直接从 LanguageSetup 开始。
+
+**主要变更**:
+1. **移除独立 Hello 步骤**：`Beginner` 首屏恢复为 `LanguageSetup`，删除 `Greeting` 页面链路，减少一次页面切换。
+2. **首屏主视觉替换**：语言页头部从“欢迎来到 Tuff”文本替换为 `hello.json` Lottie 动效，保留“我们已将您的语言设置为 {lang}”说明文案。
+3. **流程保持稳定**：默认仍为系统语言确认，点击 `Change Language` 才展开列表，`Continue` 进入账号步骤。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首次引导语言流程重排（Hello 自动切换 + 系统语言默认确认）
+
+**变更类型**: 交互优化 / 流程修正
+
+**描述**: 调整首次引导顺序为「Hello 动画页 → 语言确认页 → 账号步骤」，并将语言页默认交互改为“系统语言直接继续、点击 Change Language 再进入列表选择”。
+
+**主要变更**:
+1. **引导链路重排**：`Beginner` 首屏改为 `Greeting`，`LanguageSetup` 的下一步改为 `AccountDo`，去除“语言页后再进 Hello 页”的反直觉路径。
+2. **Hello 自动过渡**：`Greeting` 阶段监听 Lottie 播放完成与启动音效结束，二者都完成后延迟 1 秒自动跳转语言页，无需手动点击。
+3. **语言页默认态收敛**：首屏文案改为“欢迎来到 Tuff / 我们已将您的语言设置为 {lang}”，默认按系统语言继续；点击底部 `Change Language` 才展开语言列表。
+4. **Lottie 组件事件补齐**：`LottieFrame` 新增 `complete` 事件与卸载清理，支撑引导页对动画结束时机的精确编排。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/Beginner.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `apps/core-app/src/renderer/src/components/icon/lotties/LottieFrame.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 首次引导体验修复（索引延后 + 登录态修正 + Hello 音效 + 语言页美化）
+
+**变更类型**: Bug 修复 / 体验优化
+
+**描述**: 修复首次引导阶段“索引任务与引导并发导致启动期噪音/卡顿体感”与“登录按钮长期 loading”问题；同时补齐 Hello 阶段音效与语言选择页视觉优化。
+
+**主要变更**:
+1. **索引任务延后**：SearchEngine provider 加载改为“首次引导完成后再启动”，并通过 `appSetting.beginner.init` 订阅恢复加载，减少首次引导期间的扫描/索引竞争。
+2. **登录 loading 语义修正**：引导登录页按钮 loading 改为仅跟随登录动作（`isSigningIn/isLoggingIn`），不再绑定认证初始化状态。
+3. **Learn more 接入 Nexus**：引导登录说明链接切到 `getAuthBaseUrl()/sign-in`，统一走 Nexus 入口。
+4. **Hello 音效**：Greeting 阶段挂载时播放 `public/sound/startup.m4a`，离开阶段自动停止。
+5. **语言选择页视觉优化**：增强卡片层次、渐变背景、选中态与按钮反馈，保持现有流程与交互不变。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/AccountDo.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Greeting.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/LanguageSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app OCR 队列失败熔断与延迟重试收敛（降低 SQLite 写争用）
 
 **变更类型**: Bug 修复 / 稳定性增强
@@ -13,7 +71,7 @@
 **主要变更**:
 1. **重试策略延长**：补充 `Native OCR module unavailable`、`OCR provider network failure` 等错误分类，并拉长相应重试间隔。
 2. **持久化重试时间**：调度改为依赖 `ocr_jobs.nextRetryAt` 过滤可执行任务，移除仅内存重试节流依赖，避免重启后行为漂移。
-3. **自动熔断停队列**：在时间窗内连续失败达到阈值后自动暂停 OCR 队列 30 分钟，避免持续冲击数据库写队列。
+3. **自动熔断停队列**：在时间窗内连续失败达到阈值后自动暂停 OCR 队列，并在 24h 内重复触发时按阶梯拉长冷却（30m → 1h → 2h …，上限 12h），避免持续冲击数据库写队列。
 4. **用户可感知告警**：触发自动暂停时写入通知 Inbox，提示“多次错误已自动暂停”并附带恢复时间与排查建议。
 5. **状态可观测**：OCR dashboard 快照新增 `queueDisabled` 状态，便于排障与运维观测。
 
@@ -22,20 +80,60 @@
 - `apps/core-app/src/main/modules/ocr/ocr-service.test.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
-### Core-app 插件 Prelude 在打包态启用运行时 Bundling（修复 utils 子路径 require 失败）
+### Core-app 性能诊断与重试日志降噪（聚合输出）
 
-**变更类型**: Bug 修复 / 运行时兼容性增强
+**变更类型**: 观测优化 / 稳定性增强
 
-**描述**: 修复插件 `index.js` 在打包产物中直接 `require('@talex-touch/utils/*')` 子路径时可能触发 `Cannot find module` 的问题。插件启用阶段现在在打包态也会优先执行 Prelude bundling，并为 esbuild 注入默认 `nodePaths`（含插件目录与主进程可解析路径），失败时仍回退原脚本执行。
+**描述**: 针对 `D.2026-02-24.log` 中高频重复日志（`DbRetry`、`AnalyticsStore`、`Perf:EventLoop`、`AuditLogger`）引发的信噪比下降问题，改为“按窗口聚合 + 节流输出”，保留关键异常可见性并显著降低刷屏。
 
 **主要变更**:
-1. **打包态默认尝试 Bundling**：插件启用逻辑由“仅开发态 bundling”调整为“打包态或开发态都尝试 bundling”。
-2. **解析路径增强**：Prelude 编译器新增默认 `nodePaths` 解析策略，优先复用主进程 `@talex-touch/utils` 的解析路径。
-3. **向后兼容回退**：若 bundling 失败，保持原有回退到原始 `index.js` 执行，不阻断插件生命周期。
+1. **DbRetry 聚合节流**：`SQLITE_BUSY` 重试日志默认节流窗口从 5s 提升至 30s，并追加 `suppressedRetries` 聚合计数。
+2. **AnalyticsStore 汇总**：快照/插件/清理的 queue-pressure 日志收敛为 60s 周期汇总，避免同类 warn 高频重复。
+3. **EventLoop diagnostics 收敛**：`Event loop lag diagnostics` 改为“根因变化或高严重度窗口触发”再输出，减少重复诊断行。
+4. **Perf summary 门禁**：`Perf summary / Top slow` 仅在存在 error 或慢事件超阈值时输出。
+5. **AuditLogger 错误节流**：`flush` 与 `usage stats` 失败日志改为节流聚合，保留首条与 suppression 计数。
+6. **Clipboard.persist 上下文释放修复**：将 `Clipboard.persist` 性能上下文释放迁移到 `finally`，避免异常路径遗漏释放导致事件循环诊断出现“超长持续中”误报。
 
 **修改文件**:
-- `apps/core-app/src/main/modules/plugin/plugin.ts`
-- `apps/core-app/src/main/modules/plugin/runtime/plugin-prelude-compiler.ts`
+- `apps/core-app/src/main/db/sqlite-retry.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/utils/perf-monitor.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 启动链路卡顿治理（Storage Polling 不再被 AppTask 长时间阻塞）
+
+**变更类型**: 性能修复 / 稳定性增强
+
+**描述**: 结合 `D.2026-02-24.log` 与 `E.2026-02-24.err` 中 `storage.polling` 长时间活跃（12s/18s）与 `AppProvider.startupBackfill` 同窗问题，收敛主线程调度阻塞链路，避免“单任务长占用”放大为全局 perf 告警。
+
+**主要变更**:
+1. **AppTaskGate 支持超时等待**：`waitForIdle(timeoutMs)` 新增超时返回与 waiter 清理，避免等待队列在超时场景累积。
+2. **Storage 持久化等待预算化**：`persistConfig` 对 app task 空闲等待增加 250ms 上限，超时后继续落盘，避免 `storage.polling` callback 长时间占用 PollingService 调度循环。
+3. **Backfill 启动延后**：`AppProvider` 启动补漏从 500ms 延后至 15s，降低冷启动阶段与配置持久化、渲染初始化的竞争。
+4. **BoxItem 同步通道前置注册**：CoreBox IPC register 阶段主动初始化 `BoxItemManager`，消除冷启动窗口期 `box-item:sync` 无 handler 错误。
+
+**修改文件**:
+- `apps/core-app/src/main/service/app-task-gate.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 构建阶段预打包内置插件 Prelude（修复 utils 子路径 require 失败）
+
+**变更类型**: Bug 修复 / 构建链增强
+
+**描述**: 修复内置插件 `index.js` 在构建产物运行时直接 `require('@talex-touch/utils/*')` 子路径可能触发 `Cannot find module` 的问题。构建脚本新增“内置插件 Prelude 预打包”步骤，在 `npm run build` 前统一将 `tuff/modules/plugins/*` 的 `manifest.main` 入口打包为单文件，避免运行时再解析 workspace 子路径。
+
+**主要变更**:
+1. **构建前统一预打包**：`build-target.js` 增加内置插件 Prelude bundling 步骤，覆盖 `apps/core-app/tuff/modules/plugins` 下可执行插件入口。
+2. **解析路径显式兜底**：预打包时注入 `nodePaths`（`apps/core-app/node_modules` + workspace 解析链），确保可解析 `@talex-touch/utils/*` 子路径。
+3. **失败即中断构建**：任一插件 Prelude 预打包失败时直接中止打包流程，避免生成带隐患构建产物。
+
+**修改文件**:
+- `apps/core-app/scripts/build-target.js`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Core-app OmniPanel Feature Hub 首期落地（自动装载 + Feature 执行链）

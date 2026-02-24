@@ -15,7 +15,7 @@ import path from 'node:path'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm'
 import { genTouchApp } from '../../core'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import {
@@ -35,6 +35,7 @@ import {
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { windowManager } from '../box-tool/core-box/window'
 import { databaseModule } from '../database'
+import { notificationModule } from '../notification'
 
 export interface ClipboardOcrPayload {
   clipboardId: number
@@ -84,12 +85,19 @@ const MAX_OCR_META_TEXT_CHARS = 8000
 const MAX_OCR_BLOCKS = 120
 const MAX_OCR_TEXT_CHARS = 200_000
 const MAX_EMBEDDING_INPUT_CHARS = 8000
+const OCR_FAILURE_THRESHOLD = 5
+const OCR_FAILURE_WINDOW_MS = 10 * 60 * 1000
+const OCR_QUEUE_DISABLE_BASE_MS = 30 * 60 * 1000
+const OCR_QUEUE_DISABLE_MAX_MS = 12 * 60 * 60 * 1000
+const OCR_QUEUE_DISABLE_ESCALATE_WINDOW_MS = 24 * 60 * 60 * 1000
 
 // 重试延迟配置(秒)
 const RETRY_DELAYS: Record<string, number> = {
   'No enabled providers available': 3600, // 1小时
-  'Provider factory missing': 300, // 5分钟
-  default: 60 // 默认1分钟
+  'Provider factory missing': 1800, // 30分钟
+  'Native OCR module unavailable': 3600, // 1小时
+  'OCR provider network failure': 300, // 5分钟
+  default: 120 // 默认2分钟
 }
 const getRetryDelaySeconds = (lastError: string | null | undefined): number => {
   if (!lastError) return RETRY_DELAYS.default
@@ -149,7 +157,12 @@ class OcrService {
   private pollTaskId = 'ocr-service:dispatcher'
   private processing = false
   private activeJobs = new Map<number, Promise<void>>()
-  private lastAttemptMap = new Map<number, number>() // jobId -> timestamp
+  private queueDisabledUntil: number | null = null
+  private queueDisableReason: string | null = null
+  private queueDisableStrike = 0
+  private lastQueueDisabledAt: number | null = null
+  private consecutiveFailureCount = 0
+  private recentFailureTimestamps: number[] = []
   private clipboardMetaListener:
     | ((clipboardId: number, patch: Record<string, unknown>) => void)
     | null = null
@@ -270,7 +283,8 @@ class OcrService {
       'ocr:last-queued',
       'ocr:last-dispatch',
       'ocr:last-success',
-      'ocr:last-failure'
+      'ocr:last-failure',
+      'ocr:queue-disabled'
     ]
 
     const configRows = await this.db.select().from(config).where(inArray(config.key, configKeys))
@@ -386,7 +400,8 @@ class OcrService {
         lastQueued: configMap['ocr:last-queued'] ?? null,
         lastDispatch: configMap['ocr:last-dispatch'] ?? null,
         lastSuccess: configMap['ocr:last-success'] ?? null,
-        lastFailure: configMap['ocr:last-failure'] ?? null
+        lastFailure: configMap['ocr:last-failure'] ?? null,
+        queueDisabled: configMap['ocr:queue-disabled'] ?? null
       },
       indexes: {
         fileSources: Array.from(fileSources),
@@ -411,6 +426,17 @@ class OcrService {
   async enqueueFromClipboard(payload: ClipboardOcrPayload): Promise<void> {
     this.ensureInitialized()
     if (!this.db) return
+
+    if (await this.isQueueDisabled()) {
+      await this.updateClipboardMeta(payload.clipboardId, {
+        ocr_status: 'paused',
+        ocr_last_error: this.queueDisableReason ?? 'OCR queue auto-disabled',
+        ocr_queue_disabled_until: this.queueDisabledUntil
+          ? new Date(this.queueDisabledUntil).toISOString()
+          : null
+      })
+      return
+    }
 
     let jobInput: Awaited<ReturnType<typeof this.buildJobPayload>>
     try {
@@ -666,61 +692,28 @@ class OcrService {
   private async processQueue(): Promise<void> {
     if (this.processing) return
     if (!this.db) return
+    if (await this.isQueueDisabled()) return
 
     this.processing = true
     try {
       while (this.activeJobs.size < WORKER_CONCURRENCY) {
-        const now = Date.now()
+        if (await this.isQueueDisabled()) {
+          break
+        }
 
-        // 查询所有 pending 任务
-        const allPending = await this.db
+        const now = new Date()
+        const readyJobs = await this.db
           .select()
           .from(ocrJobs)
-          .where(eq(ocrJobs.status, 'pending'))
+          .where(
+            and(
+              eq(ocrJobs.status, 'pending'),
+              lt(ocrJobs.attempts, MAX_ATTEMPTS),
+              or(isNull(ocrJobs.nextRetryAt), lte(ocrJobs.nextRetryAt, now))
+            )
+          )
           .orderBy(desc(ocrJobs.priority), ocrJobs.queuedAt)
-
-        // 在应用层过滤:只处理未尝试或已超过重试延迟的任务
-        const readyJobs = allPending.filter((job) => {
-          if (!job.id) return false
-
-          // 首先检查是否已达到最大重试次数
-          const currentAttempts = job.attempts ?? 0
-          if (currentAttempts >= MAX_ATTEMPTS) {
-            // 这种情况不应该发生,说明数据库状态不一致,直接标记为失败
-            this.failJob(job.id, 'Max attempts exceeded').catch(() => {})
-            return false
-          }
-
-          // 如果没有错误记录,说明是首次尝试
-          if (!job.lastError) return true
-
-          // 检查内存中的最后尝试时间
-          const lastAttempt = this.lastAttemptMap.get(job.id)
-          if (!lastAttempt) {
-            // 内存中没有记录(可能是应用重启),检查数据库中的 startedAt
-            if (job.startedAt) {
-              const startedAtMs =
-                typeof job.startedAt === 'number'
-                  ? job.startedAt * 1000
-                  : new Date(job.startedAt).getTime()
-
-              const delaySeconds = getRetryDelaySeconds(job.lastError)
-              const delayMs = delaySeconds * 1000
-              const timeSinceStart = now - startedAtMs
-
-              return timeSinceStart >= delayMs
-            }
-            // 没有 startedAt,说明从未执行过,允许执行
-            return true
-          }
-
-          // 根据错误类型确定延迟时间
-          const delaySeconds = getRetryDelaySeconds(job.lastError)
-          const delayMs = delaySeconds * 1000
-          const timeSinceLastAttempt = now - lastAttempt
-
-          return timeSinceLastAttempt >= delayMs
-        })
+          .limit(1)
 
         if (readyJobs.length === 0) {
           break
@@ -736,7 +729,8 @@ class OcrService {
               status: 'processing',
               attempts: attemptCount,
               startedAt: new Date(),
-              lastError: null
+              lastError: null,
+              nextRetryAt: null
             })
             .where(eq(ocrJobs.id, job.id!))
         )
@@ -841,6 +835,15 @@ class OcrService {
     if (message.includes('No provider factory')) {
       return 'Provider factory missing'
     }
+    if (
+      message.includes('native-module-not-loaded') ||
+      message.includes('Native OCR unavailable')
+    ) {
+      return 'Native OCR module unavailable'
+    }
+    if (message.includes('fetch failed')) {
+      return 'OCR provider network failure'
+    }
     return null
   }
 
@@ -855,12 +858,17 @@ class OcrService {
       return
     }
 
-    // 记录最后尝试时间到内存 Map
-    this.lastAttemptMap.set(job.id, Date.now())
+    const retryDelaySeconds = getRetryDelaySeconds(reason)
+    const nextRetryAt = new Date(Date.now() + retryDelaySeconds * 1000)
 
     await this.withDbWrite('ocr.jobs.retry', () =>
       this.db!.update(ocrJobs)
-        .set({ status: 'pending', lastError: reason, finishedAt: null })
+        .set({
+          status: 'pending',
+          lastError: reason,
+          nextRetryAt,
+          finishedAt: null
+        })
         .where(eq(ocrJobs.id, job.id!))
     )
 
@@ -868,9 +876,13 @@ class OcrService {
       await this.updateClipboardMeta(job.clipboardId, {
         ocr_status: 'pending',
         ocr_last_error: reason,
-        ocr_retry_count: currentAttempts
+        ocr_retry_count: currentAttempts,
+        ocr_retry_after_seconds: retryDelaySeconds,
+        ocr_next_retry_at: nextRetryAt.toISOString()
       })
     }
+
+    await this.recordJobFailure(reason)
   }
 
   private buildAgentPrompt(payload: { options?: AgentJobPayload['options'] }): string {
@@ -898,6 +910,8 @@ class OcrService {
     invocation: IntelligenceInvokeResult<IntelligenceVisionOcrResult>
   ): Promise<void> {
     if (!this.db) return
+
+    this.resetFailureTracker()
 
     const { result } = invocation
     const jobId = job.id!
@@ -1060,6 +1074,124 @@ class OcrService {
     }
   }
 
+  private resetFailureTracker(): void {
+    this.consecutiveFailureCount = 0
+    this.recentFailureTimestamps = []
+  }
+
+  private async isQueueDisabled(): Promise<boolean> {
+    if (!this.queueDisabledUntil) {
+      return false
+    }
+    if (Date.now() < this.queueDisabledUntil) {
+      return true
+    }
+    await this.clearQueueDisableState('cooldown-expired')
+    return false
+  }
+
+  private async recordJobFailure(reason: string): Promise<void> {
+    try {
+      if (await this.isQueueDisabled()) {
+        return
+      }
+
+      const now = Date.now()
+      this.consecutiveFailureCount += 1
+      this.recentFailureTimestamps.push(now)
+      this.recentFailureTimestamps = this.recentFailureTimestamps.filter(
+        (timestamp) => now - timestamp <= OCR_FAILURE_WINDOW_MS
+      )
+
+      const shouldDisableQueue =
+        this.consecutiveFailureCount >= OCR_FAILURE_THRESHOLD ||
+        this.recentFailureTimestamps.length >= OCR_FAILURE_THRESHOLD
+
+      if (shouldDisableQueue) {
+        await this.disableQueue(reason)
+      }
+    } catch {
+      // ignore failure tracking errors
+    }
+  }
+
+  private async disableQueue(reason: string): Promise<void> {
+    const now = Date.now()
+    if (this.queueDisabledUntil && now < this.queueDisabledUntil) {
+      return
+    }
+
+    const shouldEscalate =
+      this.lastQueueDisabledAt != null &&
+      now - this.lastQueueDisabledAt <= OCR_QUEUE_DISABLE_ESCALATE_WINDOW_MS
+    this.queueDisableStrike = shouldEscalate ? this.queueDisableStrike + 1 : 1
+    this.lastQueueDisabledAt = now
+
+    const cooldownMs = Math.min(
+      OCR_QUEUE_DISABLE_MAX_MS,
+      OCR_QUEUE_DISABLE_BASE_MS * 2 ** Math.max(0, this.queueDisableStrike - 1)
+    )
+    const disabledUntil = now + cooldownMs
+    this.queueDisabledUntil = disabledUntil
+    this.queueDisableReason = reason
+
+    await this.upsertConfig('ocr:queue-disabled', {
+      disabled: true,
+      reason,
+      disabledAt: new Date(now).toISOString(),
+      disabledUntil: new Date(disabledUntil).toISOString(),
+      cooldownMs,
+      strike: this.queueDisableStrike,
+      consecutiveFailureCount: this.consecutiveFailureCount,
+      failureWindowCount: this.recentFailureTimestamps.length
+    })
+
+    const disabledUntilText = new Date(disabledUntil).toLocaleString()
+    const userHint = this.isLikelyConfigError(reason)
+      ? '请检查 OCR 提供者与模型配置后，等待自动恢复。'
+      : '请检查网络或 OCR 服务可用性，稍后会自动恢复。'
+
+    notificationModule.pushInboxEntry({
+      title: 'OCR 多次失败已自动暂停',
+      message: `OCR 队列已自动关闭至 ${disabledUntilText}。原因: ${reason}。${userHint}`,
+      level: 'warning',
+      dedupeKey: 'ocr-queue-auto-disabled',
+      payload: {
+        reason,
+        disabledUntil: new Date(disabledUntil).toISOString(),
+        cooldownMs,
+        strike: this.queueDisableStrike,
+        consecutiveFailureCount: this.consecutiveFailureCount,
+        failureWindowCount: this.recentFailureTimestamps.length
+      }
+    })
+  }
+
+  private async clearQueueDisableState(trigger: 'cooldown-expired' | 'manual'): Promise<void> {
+    this.queueDisabledUntil = null
+    this.queueDisableReason = null
+    this.resetFailureTracker()
+
+    await this.upsertConfig('ocr:queue-disabled', {
+      disabled: false,
+      trigger,
+      resumedAt: new Date().toISOString()
+    })
+  }
+
+  private isLikelyConfigError(reason: string): boolean {
+    const message = reason.toLowerCase()
+    return (
+      message.includes('no enabled providers') ||
+      message.includes('provider factory') ||
+      message.includes('native ocr module') ||
+      message.includes('native-module-not-loaded') ||
+      message.includes('api key') ||
+      message.includes('unauthorized') ||
+      message.includes('401')
+    )
+  }
+
   private async failJob(jobId: number, reason: string, details?: unknown): Promise<void> {
     if (!this.db) return
 
@@ -1070,12 +1202,15 @@ class OcrService {
     const job = jobs[0]
     const attempts = job.attempts ?? 0
     const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending'
+    const retryDelaySeconds = status === 'pending' ? getRetryDelaySeconds(reason) : null
+    const nextRetryAt = retryDelaySeconds ? new Date(Date.now() + retryDelaySeconds * 1000) : null
 
     await this.withDbWrite('ocr.jobs.fail', () =>
       this.db!.update(ocrJobs)
         .set({
           status,
           lastError: reason,
+          nextRetryAt,
           finishedAt: status === 'failed' ? new Date() : null
         })
         .where(eq(ocrJobs.id, jobId))
@@ -1086,7 +1221,9 @@ class OcrService {
         ocr_status: status === 'failed' ? 'failed' : 'retrying',
         ocr_last_error: reason,
         ocr_job_id: jobId,
-        ocr_retry_count: attempts
+        ocr_retry_count: attempts,
+        ocr_retry_after_seconds: retryDelaySeconds,
+        ocr_next_retry_at: nextRetryAt ? nextRetryAt.toISOString() : null
       })
 
       if (status === 'failed') {
@@ -1098,6 +1235,8 @@ class OcrService {
         })
       }
     }
+
+    await this.recordJobFailure(reason)
 
     if (status === 'failed') {
       void details

@@ -59,6 +59,8 @@ const resolveKeyManager = (channel: unknown): unknown =>
 let storageUpdateEmitter: ((name: string, version: number) => void) | null = null
 
 const SQLITE_PILOT_CONFIGS = new Set<string>([StorageList.SEARCH_ENGINE_LOGS_ENABLED])
+const STORAGE_PERSIST_GATE_WAIT_MAX_MS = 250
+const STORAGE_PERSIST_GATE_WAIT_WARN_MS = 1_000
 
 function safeJsonStringify(value: unknown): string {
   try {
@@ -726,9 +728,16 @@ export class StorageModule extends BaseModule {
     }
 
     const gateStart = performance.now()
-    await appTaskGate.waitForIdle()
+    const becameIdle = await appTaskGate.waitForIdle(STORAGE_PERSIST_GATE_WAIT_MAX_MS)
     const gateWaitMs = performance.now() - gateStart
-    if (gateWaitMs > 200) {
+    if (!becameIdle && appTaskGate.isActive()) {
+      storageLog.debug(`persistConfig continue with active app task for ${name}`, {
+        meta: {
+          gateWaitMs: Math.round(gateWaitMs),
+          timeoutMs: STORAGE_PERSIST_GATE_WAIT_MAX_MS
+        }
+      })
+    } else if (gateWaitMs > STORAGE_PERSIST_GATE_WAIT_WARN_MS) {
       storageLog.warn(`persistConfig gate wait for ${name}`, {
         meta: { gateWaitMs: Math.round(gateWaitMs) }
       })
