@@ -124,6 +124,8 @@ export class PluginFeature implements IPluginFeature {
   interaction?: IFeatureInteraction
   priority: number
   experimental?: boolean
+  acceptedInputTypes?: IPluginFeature['acceptedInputTypes']
+  omniTransfer?: IPluginFeature['omniTransfer']
   dev: IPluginDev
   searchTokens?: string[]
 
@@ -139,6 +141,15 @@ export class PluginFeature implements IPluginFeature {
     this.interaction = options.interaction
     this.priority = options.priority ?? 0
     this.experimental = options.experimental ?? false
+    this.acceptedInputTypes = options.acceptedInputTypes
+      ? [...options.acceptedInputTypes]
+      : undefined
+    this.omniTransfer = options.omniTransfer
+      ? {
+          ...options.omniTransfer,
+          payload: options.omniTransfer.payload ? { ...options.omniTransfer.payload } : undefined
+        }
+      : undefined
     this.dev = dev
   }
 
@@ -162,7 +173,9 @@ export class PluginFeature implements IPluginFeature {
       commands: this.commands,
       interaction: this.interaction,
       priority: this.priority,
-      experimental: this.experimental
+      experimental: this.experimental,
+      acceptedInputTypes: this.acceptedInputTypes,
+      omniTransfer: this.omniTransfer
     }
   }
 }

@@ -2,29 +2,55 @@ import type {
   MaybePromise,
   ModuleDestroyContext,
   ModuleInitContext,
-  ModuleKey
+  ModuleKey,
+  TuffQuery
 } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
-import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import type { OmniPanelShowRequest } from '../../../shared/events/omni-panel'
+import type {
+  OmniPanelContextPayload,
+  OmniPanelFeatureIconPayload,
+  OmniPanelFeatureInputType,
+  OmniPanelFeatureItemPayload,
+  OmniPanelFeatureListResponse,
+  OmniPanelFeatureRefreshPayload,
+  OmniPanelFeatureSource,
+  OmniPanelFeatureToggleRequest,
+  OmniPanelFeatureExecuteRequest,
+  OmniPanelFeatureExecuteResponse,
+  OmniPanelFeatureReorderRequest,
+  OmniPanelShowRequest,
+  OmniPanelTransferTarget
+} from '../../../shared/events/omni-panel'
 import { execFile } from 'node:child_process'
 import { createRequire } from 'node:module'
 import process from 'node:process'
 import { promisify } from 'node:util'
-import { StorageList } from '@talex-touch/utils'
+import { StorageList, TuffInputType } from '@talex-touch/utils'
+import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
+import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { app, clipboard } from 'electron'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { app, clipboard, screen, shell } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { genTouchApp } from '../../core'
+import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { TouchWindow } from '../../core/touch-window'
+import { getCoreBoxWindow } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
-import { getMainConfig } from '../storage'
+import { pluginModule } from '../plugin/plugin-module'
+import { getMainConfig, saveMainConfig } from '../storage'
 import {
   omniPanelContextEvent,
+  omniPanelFeatureExecuteEvent,
+  omniPanelFeatureListEvent,
+  omniPanelFeatureRefreshEvent,
+  omniPanelFeatureReorderEvent,
+  omniPanelFeatureToggleEvent,
   omniPanelHideEvent,
   omniPanelShowEvent,
   omniPanelToggleEvent
@@ -39,6 +65,44 @@ const LONG_PRESS_MOVE_THRESHOLD = 6
 const OMNI_PANEL_SHORTCUT_ID = 'core.omniPanel.toggle'
 const OMNI_PANEL_MOUSE_TRIGGER_ID = 'core.omniPanel.mouseLongPress'
 const OMNI_PANEL_EXPERIMENT_ENV_KEY = 'TUFF_ENABLE_OMNIPANEL_EXPERIMENT'
+const OMNI_PANEL_SETTING_KEY = StorageList.APP_SETTING
+
+const OMNI_INPUT_TYPES = ['text', 'image', 'files', 'html'] as const
+
+const BUILTIN_FEATURE_DEFINITIONS = [
+  {
+    id: 'builtin.translate',
+    title: '快速翻译',
+    subtitle: '将选中文本发送到翻译页面',
+    icon: { type: 'class', value: 'i-ri-translate-2' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.search',
+    title: '网页搜索',
+    subtitle: '用浏览器搜索选中文本',
+    icon: { type: 'class', value: 'i-ri-search-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  },
+  {
+    id: 'builtin.corebox-search',
+    title: '在 CoreBox 中搜索',
+    subtitle: '回到启动器继续执行动作',
+    icon: { type: 'class', value: 'i-ri-command-line' } as OmniPanelFeatureIconPayload,
+    target: 'corebox' as const
+  },
+  {
+    id: 'builtin.copy',
+    title: '复制文本',
+    subtitle: '把当前文本写回剪贴板',
+    icon: { type: 'class', value: 'i-ri-file-copy-line' } as OmniPanelFeatureIconPayload,
+    target: 'system' as const
+  }
+] as const
+
+const BUILTIN_FEATURE_MAP: Map<string, (typeof BUILTIN_FEATURE_DEFINITIONS)[number]> = new Map(
+  BUILTIN_FEATURE_DEFINITIONS.map((item) => [item.id, item] as const)
+)
 
 interface MouseHookEvent {
   button?: number
@@ -54,9 +118,40 @@ interface MouseHookApi {
   removeAllListeners?: (event?: string) => void
 }
 
+interface OmniPanelFeatureRegistryItem {
+  id: string
+  source: OmniPanelFeatureSource
+  target: OmniPanelTransferTarget
+  title: string
+  subtitle: string
+  icon: OmniPanelFeatureIconPayload | null
+  enabled: boolean
+  order: number
+  pluginName?: string
+  featureId?: string
+  acceptedInputTypes?: OmniPanelFeatureInputType[]
+  sdkapi?: number
+  autoMounted?: boolean
+  declarationMode?: 'declared' | 'fallback'
+  payloadTemplate?: Record<string, unknown>
+  updatedAt: number
+  createdAt: number
+}
+
 interface OmniPanelSettings {
   enableShortcut: boolean
   enableMouseLongPress: boolean
+  autoMountFirstFeatureOnPluginInstall: boolean
+  featureHubItems: OmniPanelFeatureRegistryItem[]
+}
+
+interface OmniPanelSettingRecord {
+  enableShortcut?: boolean
+  enableMouseLongPress?: boolean
+  autoMountFirstFeatureOnPluginInstall?: boolean
+  featureHub?: {
+    items?: unknown[]
+  }
 }
 
 interface ClipboardSnapshot {
@@ -66,12 +161,58 @@ interface ClipboardSnapshot {
   }>
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeInputTypes(value: unknown): OmniPanelFeatureInputType[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const result = value.filter(
+    (item): item is OmniPanelFeatureInputType =>
+      typeof item === 'string' && OMNI_INPUT_TYPES.includes(item as OmniPanelFeatureInputType)
+  )
+  return result.length > 0 ? result : undefined
+}
+
+function normalizeTarget(
+  value: unknown,
+  fallback: OmniPanelTransferTarget
+): OmniPanelTransferTarget {
+  if (value === 'corebox' || value === 'plugin' || value === 'system') return value
+  return fallback
+}
+
+function normalizeIcon(value: unknown): OmniPanelFeatureIconPayload | null {
+  if (!isRecord(value)) return null
+  if (typeof value.type !== 'string' || typeof value.value !== 'string') return null
+  const iconType = value.type.trim()
+  const iconValue = value.value.trim()
+  if (!iconType || !iconValue) return null
+  return {
+    type: iconType,
+    value: iconValue
+  }
+}
+
+function toFeatureIcon(feature: IPluginFeature): OmniPanelFeatureIconPayload | null {
+  if (!feature.icon || typeof feature.icon !== 'object') return null
+  const iconType = (feature.icon as { type?: unknown }).type
+  const iconValue = (feature.icon as { value?: unknown }).value
+  if (typeof iconType !== 'string' || typeof iconValue !== 'string') return null
+  if (!iconType.trim() || !iconValue.trim()) return null
+  return {
+    type: iconType,
+    value: iconValue
+  }
+}
+
 class OmniPanelModule extends BaseModule {
   static key: symbol = Symbol.for('OmniPanel')
   name: ModuleKey = OmniPanelModule.key
 
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
+  private eventDisposers: Array<() => void> = []
   private panelWindow: TouchWindow | null = null
   private isVisible = false
   private mouseHook: MouseHookApi | null = null
@@ -81,6 +222,15 @@ class OmniPanelModule extends BaseModule {
     event: string
     callback: (event: MouseHookEvent) => void
   }> = []
+  private featureRegistry: OmniPanelFeatureRegistryItem[] = []
+  private registryUpdatedAt = Date.now()
+  private lastContext: OmniPanelContextPayload = {
+    text: '',
+    hasSelection: false,
+    source: 'manual',
+    capturedAt: Date.now()
+  }
+  private handlingInstallEvent = false
 
   constructor() {
     super(OmniPanelModule.key, { create: false }, OMNI_PANEL_EXPERIMENT_ENV_KEY)
@@ -91,11 +241,26 @@ class OmniPanelModule extends BaseModule {
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
-    this.registerTransportHandlers()
+
     const settings = this.getSettingsSnapshot()
+    const normalized = this.initializeFeatureRegistry(settings.featureHubItems)
+    this.featureRegistry = normalized.items
+    this.registryUpdatedAt = Date.now()
+
+    if (normalized.changed) {
+      this.persistFeatureRegistry()
+    }
+
+    this.registerTransportHandlers()
+    this.registerInstallCompletedListener()
     this.registerShortcut(settings.enableShortcut)
     this.registerMouseLongPressTrigger(settings.enableMouseLongPress)
-    omniPanelLog.info('Module initialized')
+
+    omniPanelLog.info('Module initialized', {
+      meta: {
+        featureCount: this.featureRegistry.length
+      }
+    })
   }
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): MaybePromise<void> {
@@ -110,6 +275,16 @@ class OmniPanelModule extends BaseModule {
       }
     }
     this.transportDisposers = []
+
+    for (const dispose of this.eventDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.eventDisposers = []
+
     this.transport = null
 
     if (this.panelWindow && !this.panelWindow.window.isDestroyed()) {
@@ -120,13 +295,188 @@ class OmniPanelModule extends BaseModule {
   }
 
   private getSettingsSnapshot(setting?: AppSetting): OmniPanelSettings {
-    const appSetting = setting ?? ((getMainConfig(StorageList.APP_SETTING) as AppSetting) || {})
-    const omniPanel = (appSetting as AppSetting & { omniPanel?: Record<string, unknown> }).omniPanel
+    const appSetting = setting ?? ((getMainConfig(OMNI_PANEL_SETTING_KEY) as AppSetting) || {})
+    const omniPanel = (
+      isRecord(appSetting.omniPanel) ? appSetting.omniPanel : {}
+    ) as OmniPanelSettingRecord
+    const featureHubItems = Array.isArray(omniPanel.featureHub?.items)
+      ? omniPanel.featureHub.items
+          .map((item, index) => this.normalizeRegistryItem(item, index))
+          .filter((item): item is OmniPanelFeatureRegistryItem => item !== null)
+      : []
+
     return {
       enableShortcut:
-        typeof omniPanel?.enableShortcut === 'boolean' ? omniPanel.enableShortcut : true,
+        typeof omniPanel.enableShortcut === 'boolean' ? omniPanel.enableShortcut : true,
       enableMouseLongPress:
-        typeof omniPanel?.enableMouseLongPress === 'boolean' ? omniPanel.enableMouseLongPress : true
+        typeof omniPanel.enableMouseLongPress === 'boolean' ? omniPanel.enableMouseLongPress : true,
+      autoMountFirstFeatureOnPluginInstall:
+        typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
+          ? omniPanel.autoMountFirstFeatureOnPluginInstall
+          : false,
+      featureHubItems
+    }
+  }
+
+  private normalizeRegistryItem(
+    value: unknown,
+    fallbackOrder: number
+  ): OmniPanelFeatureRegistryItem | null {
+    if (!isRecord(value)) return null
+    if (typeof value.id !== 'string' || !value.id.trim()) return null
+    const source: OmniPanelFeatureSource = value.source === 'plugin' ? 'plugin' : 'builtin'
+    const fallbackTarget: OmniPanelTransferTarget = source === 'plugin' ? 'plugin' : 'system'
+
+    const title =
+      typeof value.title === 'string' && value.title.trim() ? value.title.trim() : value.id
+    const subtitle = typeof value.subtitle === 'string' ? value.subtitle : ''
+    const enabled = typeof value.enabled === 'boolean' ? value.enabled : true
+    const order =
+      typeof value.order === 'number' && Number.isFinite(value.order) ? value.order : fallbackOrder
+    const createdAt =
+      typeof value.createdAt === 'number' && Number.isFinite(value.createdAt)
+        ? value.createdAt
+        : Date.now()
+    const updatedAt =
+      typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
+        ? value.updatedAt
+        : createdAt
+    const target = normalizeTarget(value.target, fallbackTarget)
+    const icon = normalizeIcon(value.icon)
+    const pluginName =
+      typeof value.pluginName === 'string' && value.pluginName.trim()
+        ? value.pluginName.trim()
+        : undefined
+    const featureId =
+      typeof value.featureId === 'string' && value.featureId.trim()
+        ? value.featureId.trim()
+        : undefined
+
+    if (source === 'plugin' && (!pluginName || !featureId)) {
+      return null
+    }
+
+    const item: OmniPanelFeatureRegistryItem = {
+      id: value.id.trim(),
+      source,
+      target,
+      title,
+      subtitle,
+      icon,
+      enabled,
+      order,
+      pluginName,
+      featureId,
+      acceptedInputTypes: normalizeInputTypes(value.acceptedInputTypes),
+      sdkapi: typeof value.sdkapi === 'number' ? value.sdkapi : undefined,
+      autoMounted: value.autoMounted === true,
+      declarationMode:
+        value.declarationMode === 'declared' || value.declarationMode === 'fallback'
+          ? value.declarationMode
+          : undefined,
+      payloadTemplate: isRecord(value.payloadTemplate) ? value.payloadTemplate : undefined,
+      createdAt,
+      updatedAt
+    }
+
+    return item
+  }
+
+  private createBuiltinRegistryItem(
+    definition: (typeof BUILTIN_FEATURE_DEFINITIONS)[number],
+    order: number
+  ): OmniPanelFeatureRegistryItem {
+    const now = Date.now()
+    return {
+      id: definition.id,
+      source: 'builtin',
+      target: definition.target,
+      title: definition.title,
+      subtitle: definition.subtitle,
+      icon: definition.icon,
+      enabled: true,
+      order,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  private initializeFeatureRegistry(items: OmniPanelFeatureRegistryItem[]): {
+    items: OmniPanelFeatureRegistryItem[]
+    changed: boolean
+  } {
+    const byId = new Map<string, OmniPanelFeatureRegistryItem>()
+    for (const item of items) {
+      if (!item.id) continue
+      byId.set(item.id, { ...item })
+    }
+
+    let changed = false
+    for (let i = 0; i < BUILTIN_FEATURE_DEFINITIONS.length; i++) {
+      const builtin = BUILTIN_FEATURE_DEFINITIONS[i]
+      const existing = byId.get(builtin.id)
+      if (!existing) {
+        byId.set(builtin.id, this.createBuiltinRegistryItem(builtin, i))
+        changed = true
+        continue
+      }
+      const target = normalizeTarget(existing.target, builtin.target)
+      const next: OmniPanelFeatureRegistryItem = {
+        ...existing,
+        source: 'builtin',
+        target,
+        title: existing.title || builtin.title,
+        subtitle: existing.subtitle || builtin.subtitle,
+        icon: existing.icon ?? builtin.icon
+      }
+      if (JSON.stringify(next) !== JSON.stringify(existing)) {
+        byId.set(builtin.id, next)
+        changed = true
+      }
+    }
+
+    const normalized = Array.from(byId.values())
+      .sort((a, b) => a.order - b.order)
+      .map((item, index) => {
+        if (item.order === index) return item
+        changed = true
+        return { ...item, order: index }
+      })
+
+    return { items: normalized, changed }
+  }
+
+  private persistFeatureRegistry(): void {
+    try {
+      const currentAppSetting = getMainConfig(OMNI_PANEL_SETTING_KEY) as AppSetting
+      const omniPanelRaw = (
+        isRecord(currentAppSetting.omniPanel) ? currentAppSetting.omniPanel : {}
+      ) as OmniPanelSettingRecord
+
+      const nextOmniPanel: AppSetting['omniPanel'] = {
+        enableShortcut:
+          typeof omniPanelRaw.enableShortcut === 'boolean' ? omniPanelRaw.enableShortcut : true,
+        enableMouseLongPress:
+          typeof omniPanelRaw.enableMouseLongPress === 'boolean'
+            ? omniPanelRaw.enableMouseLongPress
+            : true,
+        autoMountFirstFeatureOnPluginInstall:
+          typeof omniPanelRaw.autoMountFirstFeatureOnPluginInstall === 'boolean'
+            ? omniPanelRaw.autoMountFirstFeatureOnPluginInstall
+            : false,
+        featureHub: {
+          items: this.featureRegistry.map((item) => ({
+            ...item
+          }))
+        }
+      }
+      const nextAppSetting: AppSetting = {
+        ...currentAppSetting,
+        omniPanel: nextOmniPanel
+      }
+      saveMainConfig(OMNI_PANEL_SETTING_KEY, nextAppSetting)
+    } catch (error) {
+      omniPanelLog.warn('Failed to persist OmniPanel feature registry', { error })
     }
   }
 
@@ -163,24 +513,47 @@ class OmniPanelModule extends BaseModule {
     this.cleanupMouseLongPressHook()
   }
 
+  private registerInstallCompletedListener(): void {
+    const handler = (event: unknown) => {
+      if (this.handlingInstallEvent) return
+      const payload = isRecord(event) ? event : {}
+      const pluginName =
+        typeof payload.pluginName === 'string' && payload.pluginName.trim()
+          ? payload.pluginName.trim()
+          : ''
+      if (!pluginName) return
+      void this.autoMountFeatureForPlugin(pluginName)
+    }
+    touchEventBus.on(MainEvents.PLUGIN_INSTALL_COMPLETED, handler)
+    this.eventDisposers.push(() => {
+      touchEventBus.off(MainEvents.PLUGIN_INSTALL_COMPLETED, handler)
+    })
+  }
+
   private registerTransportHandlers(): void {
     if (!this.transport) return
 
     this.transportDisposers.push(
       this.transport.on(omniPanelToggleEvent, async (payload) => {
         await this.toggle(payload)
-      })
-    )
-
-    this.transportDisposers.push(
+      }),
       this.transport.on(omniPanelShowEvent, async (payload) => {
         await this.show(payload)
-      })
-    )
-
-    this.transportDisposers.push(
+      }),
       this.transport.on(omniPanelHideEvent, async () => {
         this.hide()
+      }),
+      this.transport.on(omniPanelFeatureListEvent, async () => {
+        return this.buildFeatureListResponse()
+      }),
+      this.transport.on(omniPanelFeatureToggleEvent, async (payload) => {
+        this.toggleFeature(payload)
+      }),
+      this.transport.on(omniPanelFeatureReorderEvent, async (payload) => {
+        this.reorderFeature(payload)
+      }),
+      this.transport.on(omniPanelFeatureExecuteEvent, async (payload) => {
+        return await this.executeFeature(payload)
       })
     )
   }
@@ -234,10 +607,12 @@ class OmniPanelModule extends BaseModule {
       text = await this.captureSelectionText()
     }
 
+    this.positionWindowNearCursor(targetWindow)
     targetWindow.window.show()
     targetWindow.window.focus()
     this.isVisible = true
     await this.pushContext(text, source)
+    this.notifyFeatureRefresh('sync')
   }
 
   private hide(): void {
@@ -246,18 +621,443 @@ class OmniPanelModule extends BaseModule {
     this.isVisible = false
   }
 
+  private positionWindowNearCursor(targetWindow: TouchWindow): void {
+    try {
+      const cursor = screen.getCursorScreenPoint()
+      const display = screen.getDisplayNearestPoint(cursor)
+      const workArea = display.workArea
+      const bounds = targetWindow.window.getBounds()
+      const offsetX = 12
+      const offsetY = 18
+
+      let x = cursor.x + offsetX
+      let y = cursor.y + offsetY
+
+      if (x + bounds.width > workArea.x + workArea.width) {
+        x = cursor.x - bounds.width - offsetX
+      }
+      if (y + bounds.height > workArea.y + workArea.height) {
+        y = cursor.y - bounds.height - offsetY
+      }
+
+      x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - bounds.width))
+      y = Math.max(workArea.y, Math.min(y, workArea.y + workArea.height - bounds.height))
+
+      targetWindow.window.setPosition(Math.round(x), Math.round(y), false)
+    } catch (error) {
+      omniPanelLog.debug('Failed to position OmniPanel near cursor', { error })
+    }
+  }
+
   private async pushContext(text: string, source: string): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
 
-    const payload = {
+    const payload: OmniPanelContextPayload = {
       text,
       hasSelection: text.trim().length > 0,
       source,
       capturedAt: Date.now()
     }
+    this.lastContext = payload
 
     await this.transport.sendTo(this.panelWindow.window.webContents, omniPanelContextEvent, payload)
+  }
+
+  private buildFeatureListResponse(): OmniPanelFeatureListResponse {
+    const features = this.featureRegistry
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map((item) => this.resolveFeatureItemPayload(item))
+
+    return {
+      features,
+      updatedAt: this.registryUpdatedAt
+    }
+  }
+
+  private resolveFeatureItemPayload(
+    item: OmniPanelFeatureRegistryItem
+  ): OmniPanelFeatureItemPayload {
+    if (item.source !== 'plugin') {
+      const builtin = BUILTIN_FEATURE_MAP.get(item.id)
+      return {
+        ...item,
+        title: builtin?.title ?? item.title,
+        subtitle: builtin?.subtitle ?? item.subtitle,
+        icon: builtin?.icon ?? item.icon,
+        unavailable: false
+      }
+    }
+
+    const plugin = this.getPluginInstance(item.pluginName)
+    if (!plugin) {
+      return { ...item, unavailable: true }
+    }
+
+    const feature = item.featureId ? plugin.getFeature(item.featureId) : null
+    if (!feature || !this.isFeatureExecutable(plugin, feature)) {
+      return { ...item, unavailable: true }
+    }
+
+    const declared = this.resolveDeclaredTransfer(plugin, feature)
+    const icon = toFeatureIcon(feature)
+
+    return {
+      ...item,
+      target: declared?.target ? normalizeTarget(declared.target, item.target) : item.target,
+      title: declared?.title?.trim() || feature.name || item.title,
+      subtitle: declared?.subtitle?.trim() || feature.desc || item.subtitle,
+      icon: icon ?? item.icon,
+      acceptedInputTypes:
+        normalizeInputTypes(feature.acceptedInputTypes) ?? item.acceptedInputTypes,
+      sdkapi: plugin.sdkapi,
+      declarationMode: declared ? 'declared' : item.declarationMode,
+      unavailable: false
+    }
+  }
+
+  private toggleFeature(payload: OmniPanelFeatureToggleRequest): void {
+    if (!payload || typeof payload.id !== 'string') return
+    const target = this.featureRegistry.find((item) => item.id === payload.id)
+    if (!target) return
+    if (target.enabled === payload.enabled) return
+
+    target.enabled = payload.enabled
+    target.updatedAt = Date.now()
+    this.registryUpdatedAt = Date.now()
+    this.persistFeatureRegistry()
+    this.notifyFeatureRefresh('toggle')
+  }
+
+  private reorderFeature(payload: OmniPanelFeatureReorderRequest): void {
+    if (!payload || typeof payload.id !== 'string') return
+    if (payload.direction !== 'up' && payload.direction !== 'down') return
+
+    const sorted = this.featureRegistry.slice().sort((a, b) => a.order - b.order)
+    const index = sorted.findIndex((item) => item.id === payload.id)
+    if (index < 0) return
+    const swapIndex = payload.direction === 'up' ? index - 1 : index + 1
+    if (swapIndex < 0 || swapIndex >= sorted.length) return
+
+    const current = sorted[index]
+    sorted[index] = sorted[swapIndex]
+    sorted[swapIndex] = current
+
+    const now = Date.now()
+    this.featureRegistry = sorted.map((item, idx) => ({
+      ...item,
+      order: idx,
+      updatedAt: item.id === payload.id ? now : item.updatedAt
+    }))
+    this.registryUpdatedAt = now
+    this.persistFeatureRegistry()
+    this.notifyFeatureRefresh('reorder')
+  }
+
+  private async executeFeature(
+    payload: OmniPanelFeatureExecuteRequest
+  ): Promise<OmniPanelFeatureExecuteResponse> {
+    if (!payload || typeof payload.id !== 'string' || !payload.id.trim()) {
+      return { success: false, code: 'INVALID_FEATURE', error: 'Invalid feature id' }
+    }
+
+    const item = this.featureRegistry.find((feature) => feature.id === payload.id)
+    if (!item) {
+      return { success: false, code: 'FEATURE_NOT_FOUND', error: 'Feature not found' }
+    }
+
+    if (!item.enabled) {
+      return { success: false, code: 'FEATURE_DISABLED', error: 'Feature is disabled' }
+    }
+
+    const contextText =
+      typeof payload.contextText === 'string' ? payload.contextText : this.lastContext.text
+    const source =
+      typeof payload.source === 'string' && payload.source.trim()
+        ? payload.source
+        : this.lastContext.source
+
+    let result: OmniPanelFeatureExecuteResponse
+    if (item.source === 'builtin') {
+      result = await this.executeBuiltinFeature(item.id, contextText, source)
+    } else if (item.target === 'corebox') {
+      result = await this.executeCoreBoxTransfer(contextText)
+    } else if (item.target === 'system') {
+      result = {
+        success: false,
+        code: 'SYSTEM_TARGET_NOT_IMPLEMENTED',
+        error: 'System transfer target is not implemented yet'
+      }
+    } else {
+      result = await this.executePluginFeature(item, contextText)
+    }
+
+    if (result.success) {
+      this.hide()
+    }
+    return result
+  }
+
+  private async executeBuiltinFeature(
+    featureId: string,
+    contextText: string,
+    _source: string
+  ): Promise<OmniPanelFeatureExecuteResponse> {
+    const text = contextText.trim()
+
+    if (featureId === 'builtin.translate') {
+      if (!text) {
+        return {
+          success: false,
+          code: 'SELECTION_REQUIRED',
+          error: 'No selected text to translate'
+        }
+      }
+      const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(text)}&op=translate`
+      await shell.openExternal(url)
+      return { success: true }
+    }
+
+    if (featureId === 'builtin.search') {
+      if (!text) {
+        return { success: false, code: 'SELECTION_REQUIRED', error: 'No selected text to search' }
+      }
+      const url = `https://www.google.com/search?q=${encodeURIComponent(text)}`
+      await shell.openExternal(url)
+      return { success: true }
+    }
+
+    if (featureId === 'builtin.copy') {
+      if (!text) {
+        return { success: false, code: 'SELECTION_REQUIRED', error: 'No selected text to copy' }
+      }
+      clipboard.writeText(text)
+      return { success: true }
+    }
+
+    if (featureId === 'builtin.corebox-search') {
+      return await this.executeCoreBoxTransfer(text)
+    }
+
+    return { success: false, code: 'UNKNOWN_BUILTIN', error: 'Unknown builtin feature' }
+  }
+
+  private async executeCoreBoxTransfer(
+    contextText: string
+  ): Promise<OmniPanelFeatureExecuteResponse> {
+    const coreBoxWindow = getCoreBoxWindow()
+    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed() || !this.transport) {
+      return { success: false, code: 'COREBOX_UNAVAILABLE', error: 'CoreBox window is unavailable' }
+    }
+
+    try {
+      await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
+      if (contextText.trim()) {
+        await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.input.setQuery, {
+          value: contextText
+        })
+      }
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        code: 'COREBOX_TRANSFER_FAILED',
+        error: error instanceof Error ? error.message : 'Failed to open CoreBox'
+      }
+    }
+  }
+
+  private async executePluginFeature(
+    item: OmniPanelFeatureRegistryItem,
+    contextText: string
+  ): Promise<OmniPanelFeatureExecuteResponse> {
+    const plugin = this.getPluginInstance(item.pluginName)
+    if (!plugin) {
+      return { success: false, code: 'PLUGIN_NOT_FOUND', error: 'Plugin not found' }
+    }
+
+    const feature = item.featureId ? plugin.getFeature(item.featureId) : null
+    if (!feature || !this.isFeatureExecutable(plugin, feature)) {
+      return { success: false, code: 'FEATURE_NOT_FOUND', error: 'Feature not found in plugin' }
+    }
+
+    const query = this.buildFeatureQuery(contextText, item, feature)
+    try {
+      await plugin.triggerFeature(feature, query)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        code: 'FEATURE_EXECUTION_FAILED',
+        error: error instanceof Error ? error.message : 'Failed to execute feature'
+      }
+    }
+  }
+
+  private buildFeatureQuery(
+    contextText: string,
+    item: OmniPanelFeatureRegistryItem,
+    feature: IPluginFeature
+  ): string | TuffQuery {
+    const text = contextText.trim()
+    const acceptsText =
+      !feature.acceptedInputTypes || feature.acceptedInputTypes.includes(TuffInputType.Text)
+    if (!text) {
+      return ''
+    }
+    if (!acceptsText) {
+      return text
+    }
+
+    const query: TuffQuery = {
+      text,
+      type: 'text',
+      inputs: [
+        {
+          type: TuffInputType.Text,
+          content: text,
+          metadata: {
+            source: 'omni-panel',
+            featureId: item.id
+          }
+        }
+      ]
+    }
+    return query
+  }
+
+  private notifyFeatureRefresh(reason: OmniPanelFeatureRefreshPayload['reason']): void {
+    if (!this.transport) return
+    this.transport.broadcast(omniPanelFeatureRefreshEvent, {
+      reason,
+      updatedAt: this.registryUpdatedAt
+    })
+  }
+
+  private getPluginInstance(pluginName: string | undefined): ITouchPlugin | undefined {
+    if (!pluginName) return undefined
+    const manager = pluginModule.pluginManager
+    if (!manager) return undefined
+    return manager.getPluginByName(pluginName)
+  }
+
+  private isFeatureExecutable(plugin: ITouchPlugin, feature: IPluginFeature): boolean {
+    if (!feature || !feature.id) return false
+    if (feature.experimental && !plugin.dev.enable) return false
+    return Array.isArray(feature.commands) && feature.commands.length > 0
+  }
+
+  private resolveDeclaredTransfer(
+    plugin: ITouchPlugin,
+    feature: IPluginFeature
+  ): IFeatureOmniTransfer | null {
+    const declaration = feature.omniTransfer
+    if (!declaration || declaration.enabled !== true) return null
+    if (!plugin.sdkapi || plugin.sdkapi < OMNI_TRANSFER_DECLARATIVE_MIN_VERSION) {
+      return null
+    }
+    return declaration
+  }
+
+  private async autoMountFeatureForPlugin(pluginName: string): Promise<void> {
+    const settings = this.getSettingsSnapshot()
+    if (!settings.autoMountFirstFeatureOnPluginInstall) return
+
+    if (this.handlingInstallEvent) return
+    this.handlingInstallEvent = true
+    try {
+      const plugin = this.getPluginInstance(pluginName)
+      if (!plugin) {
+        omniPanelLog.debug('Skip auto-mount, plugin not found', { meta: { pluginName } })
+        return
+      }
+
+      const executableFeatures = plugin
+        .getFeatures()
+        .filter((feature) => this.isFeatureExecutable(plugin, feature))
+
+      if (executableFeatures.length === 0) {
+        omniPanelLog.debug('Skip auto-mount, no executable feature', { meta: { pluginName } })
+        return
+      }
+
+      let pickedFeature = executableFeatures[0]
+      let declarationMode: OmniPanelFeatureRegistryItem['declarationMode'] = 'fallback'
+      let declaration: IFeatureOmniTransfer | null = null
+
+      for (const feature of executableFeatures) {
+        const declared = this.resolveDeclaredTransfer(plugin, feature)
+        if (!declared) continue
+        pickedFeature = feature
+        declarationMode = 'declared'
+        declaration = declared
+        break
+      }
+
+      const id = `plugin:${plugin.name}:${pickedFeature.id}`
+      const now = Date.now()
+      const current = this.featureRegistry.find((item) => item.id === id)
+      const nextOrder =
+        current?.order ??
+        (this.featureRegistry.length > 0
+          ? Math.max(...this.featureRegistry.map((item) => item.order)) + 1
+          : 0)
+
+      const nextItem: OmniPanelFeatureRegistryItem = {
+        id,
+        source: 'plugin',
+        target: normalizeTarget(declaration?.target, 'plugin'),
+        title: declaration?.title?.trim() || pickedFeature.name || pickedFeature.id,
+        subtitle: declaration?.subtitle?.trim() || pickedFeature.desc || '',
+        icon: toFeatureIcon(pickedFeature),
+        enabled: current?.enabled ?? true,
+        order: nextOrder,
+        pluginName: plugin.name,
+        featureId: pickedFeature.id,
+        acceptedInputTypes: normalizeInputTypes(pickedFeature.acceptedInputTypes),
+        sdkapi: plugin.sdkapi,
+        autoMounted: true,
+        declarationMode,
+        payloadTemplate:
+          declaration?.payload && Object.keys(declaration.payload).length > 0
+            ? declaration.payload
+            : {
+                mode: 'fallback-first-feature',
+                pluginName: plugin.name,
+                featureId: pickedFeature.id
+              },
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now
+      }
+
+      if (current) {
+        const index = this.featureRegistry.findIndex((item) => item.id === id)
+        this.featureRegistry[index] = nextItem
+      } else {
+        this.featureRegistry.push(nextItem)
+      }
+
+      this.featureRegistry = this.featureRegistry
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((item, index) => ({
+          ...item,
+          order: index
+        }))
+      this.registryUpdatedAt = now
+      this.persistFeatureRegistry()
+      this.notifyFeatureRefresh('plugin-install')
+      omniPanelLog.info('Auto-mounted plugin feature into OmniPanel', {
+        meta: {
+          pluginName: plugin.name,
+          featureId: pickedFeature.id,
+          declarationMode
+        }
+      })
+    } finally {
+      this.handlingInstallEvent = false
+    }
   }
 
   private async captureSelectionText(): Promise<string> {

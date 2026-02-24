@@ -13,6 +13,7 @@ import {
   CATEGORY_REQUIRED_MIN_VERSION,
   checkSdkCompatibility,
   CURRENT_SDK_VERSION,
+  OMNI_TRANSFER_DECLARATIVE_MIN_VERSION,
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import axios from 'axios'
@@ -271,6 +272,25 @@ abstract class BasePluginLoader {
     if (pluginInfo.features) {
       const iconInitPromises: Promise<void>[] = []
       ;[...pluginInfo.features].forEach((feature: IPluginFeature) => {
+        if (
+          feature.omniTransfer?.enabled === true &&
+          (resolvedSdkapi === undefined || resolvedSdkapi < OMNI_TRANSFER_DECLARATIVE_MIN_VERSION)
+        ) {
+          this.touchPlugin.issues.push({
+            type: 'warning',
+            message: `Feature '${feature.name || feature.id}' declares omniTransfer but sdkapi is below ${OMNI_TRANSFER_DECLARATIVE_MIN_VERSION}. Declaration will be ignored.`,
+            source: `feature:${feature.id}`,
+            code: 'OMNI_TRANSFER_SDK_TOO_LOW',
+            meta: {
+              featureId: feature.id,
+              declaredSdkapi: pluginInfo.sdkapi,
+              resolvedSdkapi,
+              requiredSdkapi: OMNI_TRANSFER_DECLARATIVE_MIN_VERSION
+            },
+            timestamp: Date.now()
+          })
+        }
+
         // C.2: Validate feature commands structure
         if (!feature.commands || !Array.isArray(feature.commands)) {
           this.touchPlugin.issues.push({
