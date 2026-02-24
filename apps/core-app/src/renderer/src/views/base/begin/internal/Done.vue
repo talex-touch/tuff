@@ -1,6 +1,7 @@
 <script setup lang="ts" name="Done">
 import type { Component } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 import HelloData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
 import { appSetting } from '~/modules/channel/storage'
@@ -11,6 +12,7 @@ type StepFunction = (
 ) => void
 
 const step: StepFunction = inject('step')!
+const { t } = useI18n()
 
 function goon(): void {
   step(
@@ -29,8 +31,10 @@ function goon(): void {
     <LottieFrame :loop="true" :data="HelloData" />
 
     <div class="Greeting-Content">
-      <p>You're all set! Let's get started.</p>
-      <TxButton variant="flat" type="primary" @click="goon"> Get Started </TxButton>
+      <p>{{ t('beginner.done.description') }}</p>
+      <TxButton variant="flat" type="primary" @click="goon">
+        {{ t('beginner.done.action') }}
+      </TxButton>
     </div>
   </div>
 </template>

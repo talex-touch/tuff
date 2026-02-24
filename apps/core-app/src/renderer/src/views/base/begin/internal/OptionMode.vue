@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import type { Ref } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
+import { useI18n } from 'vue-i18n'
 import Done from './Done.vue'
 import Forbidden from './Forbidden.vue'
 
@@ -9,6 +10,7 @@ type StepFunction = (call: { comp: Component; rect?: { width: number; height: nu
 
 const choice: Ref<number> = ref(0)
 const step: StepFunction = inject('step')!
+const { t } = useI18n()
 
 function handleAgree(): void {
   step({
@@ -33,10 +35,12 @@ function handleAgree(): void {
         @keydown.enter="choice = 0"
         @keydown.space="choice = 0"
       >
-        <h1>Guided Tour<span class="tag">RECOMMENDED</span></h1>
+        <h1>
+          {{ t('beginner.optionMode.guided.title') }}
+          <span class="tag">{{ t('beginner.optionMode.recommended') }}</span>
+        </h1>
         <span>
-          I'm new to this application and would like a comprehensive walkthrough to help me
-          understand its features and capabilities.
+          {{ t('beginner.optionMode.guided.description') }}
         </span>
       </div>
 
@@ -49,16 +53,17 @@ function handleAgree(): void {
         @keydown.enter="choice = 1"
         @keydown.space="choice = 1"
       >
-        <h1>Self-Guided</h1>
+        <h1>{{ t('beginner.optionMode.selfGuided.title') }}</h1>
         <span>
-          I'm familiar with similar applications and prefer to explore the interface at my own pace
-          without a formal tutorial.
+          {{ t('beginner.optionMode.selfGuided.description') }}
         </span>
       </div>
     </div>
 
     <div class="OptionMode-Next">
-      <TxButton variant="flat" type="primary" @click="handleAgree"> Continue </TxButton>
+      <TxButton variant="flat" type="primary" @click="handleAgree">
+        {{ t('beginner.optionMode.action') }}
+      </TxButton>
     </div>
   </div>
 </template>

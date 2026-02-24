@@ -4,6 +4,45 @@
 
 ## 2026-02-24
 
+### Core-app 引导页 i18n 全量补齐（Begin Flow）
+
+**变更类型**: 体验优化 / 国际化一致性
+
+**描述**: 对首引导 `begin` 流程进行全量文案排查，移除页面硬编码文案并统一接入 `vue-i18n`，确保中英文切换下引导体验一致。
+
+**主要变更**:
+1. **文案全量收敛到 i18n**：`AccountDo / Done / Forbidden / OptionMode / License` 中所有用户可见文案改为 `t(...)` 获取，去除模板硬编码字符串。
+2. **交互提示国际化**：账号引导页登录成功/失败 toast 统一改为 i18n key，避免固定中文提示。
+3. **语言包补齐**：`zh-CN/en-US` 新增 `beginner.account / beginner.done / beginner.forbidden / beginner.optionMode / beginner.license` 文案分组。
+4. **代码清理**：删除引导页内无效注释与废弃注释代码，降低噪音并保持结构清晰。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/AccountDo.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Forbidden.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/OptionMode.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/License.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app SetupPermissions 首引导页可继续性修复（Tx 组件化收敛）
+
+**变更类型**: Bug 修复 / 交互优化
+
+**描述**: 修复权限页“已授权但继续按钮不可点”的体验问题，并将权限条目状态展示收敛到 Tuffex 组件，减少自定义样式复杂度。
+
+**主要变更**:
+1. **继续按钮可操作性修复**：移除基于同步状态的 `disabled` 门禁，改为点击时执行异步校验并给出提示，避免状态短暂未同步导致按钮“看起来不可点”。
+2. **防重复提交**：新增 `isContinuing` 保护，继续动作进入加载态，避免多次点击触发重复跳转。
+3. **Tx 组件替换**：权限条目容器切换为 `TxCard`，状态展示切换为 `TxStatusBadge`，保留 `TxButton` 操作入口。
+4. **设置区组件化**：开关区切到 `TxCardItem + TuffSwitch` 组合，统一条目结构与交互语义，减少自定义块级布局。
+5. **样式简化**：删除对 legacy `TBlockSelection` 的依赖样式，改为更扁平的结构样式与响应式收敛。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app 首次引导收敛为单页语言确认（内嵌 Hello 动效）
 
 **变更类型**: 交互优化 / 流程简化
