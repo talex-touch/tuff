@@ -28,9 +28,9 @@
     "server": "服务器错误"
   },
   "themePreference": {
-    "Default": "拥抱默认窗口风格的熟悉舒适。",
-    "Mica": "沉浸在迷人的实时玻璃般背景中，点缀着愉悦的噪点纹理！",
-    "Filter": "享受窗口背景的迷人之处，采用引人入胜的跟踪模糊模态壁纸，为您的屏幕增添一丝优雅。"
+    "pure": "使用纯色背景遮罩窗口特效，界面观感稳定清晰。",
+    "refraction": "透出系统折射特效，让界面具备更明显的玻璃质感。",
+    "filter": "在折射基础上叠加滤镜层，获得更柔和的视觉过渡。"
   },
   "settingHeader": {
     "subTitle": "为创造者们重新构想的命令栏。",
@@ -186,10 +186,10 @@
     "autoClearDesc": "隐藏框后清除搜索栏。",
     "clipboardPollingInterval": "剪贴板轮询间隔",
     "clipboardPollingIntervalDesc": "空闲状态下检查剪贴板的频率，频率越高越耗电。CoreBox 显示时会自动提速到 0.5 秒。",
-    "clipboardPollingLowBattery": "省电轮询策略",
-    "clipboardPollingLowBatteryDesc": "电池供电时自动降低轮询频率以节省能耗。",
-    "clipboardPollingLowBatteryInterval": "省电轮询间隔",
-    "clipboardPollingLowBatteryIntervalDesc": "启用省电策略后，电池供电状态下使用的轮询间隔。",
+    "clipboardPollingLowBattery": "剪贴板省电轮询策略",
+    "clipboardPollingLowBatteryDesc": "电池供电时自动降低剪贴板轮询频率以节省能耗。",
+    "clipboardPollingLowBatteryInterval": "剪贴板省电轮询间隔",
+    "clipboardPollingLowBatteryIntervalDesc": "启用剪贴板省电策略后，电池供电状态下使用的轮询间隔。",
     "never": "从不",
     "autoHide": "自动隐藏",
     "autoHideDesc": "触发模糊时隐藏搜索栏。",
@@ -295,6 +295,10 @@
   "themeStyle": {
     "styles": "样式",
     "defaultTip": "点击选择。",
+    "windowPure": "Pure",
+    "windowRefraction": "Refraction",
+    "windowFilter": "Filter",
+    "windowSwitching": "正在切换窗口偏好...",
     "micaTip": "Mica 风格可能会影响设备性能。",
     "filterTip": "此功能仅支持 Windows 11。",
     "personalized": "个性化",
@@ -352,7 +356,11 @@
     "routeTransitionDesc": "控制应用页面路由切换动画（可能影响性能）。",
     "routeTransitionSlide": "滑动",
     "routeTransitionFade": "淡入淡出",
-    "routeTransitionZoom": "缩放"
+    "routeTransitionZoom": "缩放",
+    "coreBoxResize": "CoreBox 窗口动画",
+    "coreBoxResizeDesc": "搜索窗口展开/收起时的平滑动画效果。",
+    "lowBatteryMode": "低电量模式",
+    "lowBatteryModeDesc": "电量较低时自动关闭动画效果。"
   },
   "layoutSection": {
     "title": "布局样式",
@@ -801,18 +809,54 @@
       "title": "存储文件",
       "stats": {
         "totalStorage": "总存储空间",
+        "totalStorageMb": "存储容量 (MB)",
         "files": "文件",
+        "totalFiles": "总文件数",
         "directories": "目录",
-        "usage": "使用率"
+        "usage": "使用率",
+        "usageRate": "占用率"
       },
       "actions": {
         "openFolder": "打开文件夹",
         "openInEditor": "编辑器中打开",
-        "clearAll": "清空存储",
+        "clearAll": "清空全部",
         "clearing": "清空中...",
-        "refresh": "刷新数据"
+        "refresh": "刷新",
+        "details": "详细信息"
       },
-      "empty": "暂无存储文件",
+      "loading": "正在刷新存储数据...",
+      "empty": {
+        "title": "未发现存储文件",
+        "description": "开始使用插件后会自动生成数据"
+      },
+      "table": {
+        "name": "名称",
+        "type": "类型",
+        "size": "大小",
+        "lastModified": "最后修改",
+        "actions": "操作",
+        "directoryTag": "目录",
+        "fileTag": "文件"
+      },
+      "footer": {
+        "serviceReady": "服务就绪",
+        "encoding": "UTF-8",
+        "space": "占用空间：{percent}% / {maxSize}"
+      },
+      "configuration": {
+        "title": "配置系统",
+        "description": "插件文件路径和目录",
+        "detailsTitle": "存储详情",
+        "detailsDesc": "查看完整存储文件表格",
+        "pluginPath": "插件路径",
+        "dataDirectory": "数据目录",
+        "configDirectory": "配置目录",
+        "logsDirectory": "日志目录"
+      },
+      "details": {
+        "title": "存储文件详情",
+        "description": "{files} 个文件，{directories} 个目录"
+      },
       "confirm": {
         "clearTitle": "清空存储",
         "clearMessage": "确定要清空该插件的所有存储吗？此操作不可撤销。",
@@ -824,7 +868,8 @@
         "clearFailed": "清空存储失败",
         "loadFailed": "加载存储数据失败",
         "openFolderFailed": "打开存储文件夹失败",
-        "openEditorFailed": "在编辑器中打开失败"
+        "openEditorFailed": "在编辑器中打开失败",
+        "openPathFailed": "打开路径失败"
       }
     },
     "issues": {

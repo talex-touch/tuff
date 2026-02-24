@@ -15,20 +15,64 @@
 
   .AppLayout-Aside {
     border-right: var(--layout-aside-border, none);
-    --fake-inner-opacity: var(--layout-aside-opacity, 0);
+    --fake-inner-opacity: var(--layout-window-aside-opacity, 0.5);
   }
 
   .AppLayout-Header {
     padding: 0;
     justify-content: space-between;
     border-bottom: var(--layout-header-border, none);
-    --fake-opacity: var(--layout-header-fake-opacity, 0.75);
+    --layout-header-side-width: var(--nav-width, 64px);
+    --layout-header-right-opacity: var(--layout-window-header-opacity, 0.95);
+    --layout-header-left-opacity: var(--layout-window-aside-opacity, 0.5);
+    --fake-opacity: var(--layout-window-aside-opacity, 0.5);
+
+    &::before {
+      width: var(--layout-header-side-width, var(--nav-width, 64px));
+      border-radius: 8px 0 0 0;
+      opacity: var(--layout-header-left-opacity, var(--layout-window-aside-opacity, 0.5));
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: var(--layout-header-side-width, var(--nav-width, 64px));
+      width: calc(100% - var(--layout-header-side-width, var(--nav-width, 64px)));
+      height: 100%;
+      z-index: var(--fake-index, -1);
+      background: var(--fake-color, var(--tx-fill-color-lighter));
+      border-radius: 0 8px 0 0;
+      opacity: var(--layout-header-right-opacity, var(--layout-window-header-opacity, 0.95));
+      pointer-events: none;
+    }
 
     body.darwin & {
       flex-direction: row-reverse;
       justify-content: center;
     }
   }
+
+  &.aside-hidden .AppLayout-Header,
+  &.aside-bottom .AppLayout-Header {
+    --layout-header-side-width: 0px;
+    --layout-header-left-opacity: var(--layout-window-header-opacity, 0.95);
+    --fake-opacity: var(--layout-window-header-opacity, 0.95);
+  }
+
+  &.aside-right .AppLayout-Header {
+    &::before {
+      left: auto;
+      right: 0;
+      border-radius: 0 8px 0 0;
+    }
+
+    &::after {
+      left: 0;
+      border-radius: 8px 0 0 0;
+    }
+  }
+
 }
 
 @mixin layout-shell-display {

@@ -2,12 +2,30 @@ import type { RemovableRef } from '@vueuse/core'
 import { useDark, usePreferredDark, useStorage } from '@vueuse/core'
 import { watchEffect } from 'vue'
 
+export type ThemeWindowPreference = 'pure' | 'refraction' | 'filter'
+
+export function normalizeWindowPreference(value: unknown): ThemeWindowPreference {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+
+  if (normalized === 'pure' || normalized === 'default') {
+    return 'pure'
+  }
+  if (normalized === 'refraction' || normalized === 'mica') {
+    return 'refraction'
+  }
+  if (normalized === 'filter') {
+    return 'filter'
+  }
+
+  return 'refraction'
+}
+
 /**
  * Interface for theme style configuration
  */
 interface IThemeStyle {
   theme: {
-    window: string
+    window: ThemeWindowPreference
     style: {
       dark: boolean
       auto: boolean
@@ -27,7 +45,7 @@ interface IThemeStyle {
  */
 const defaultThemeStyle: IThemeStyle = {
   theme: {
-    window: 'Mica',
+    window: 'refraction',
     style: {
       dark: false,
       auto: true
@@ -59,6 +77,13 @@ export const isDark = useDark()
  * System dark mode preference
  */
 export const systemDarkMode = usePreferredDark()
+
+watchEffect(() => {
+  const normalizedWindow = normalizeWindowPreference(themeStyle.value.theme.window)
+  if (themeStyle.value.theme.window !== normalizedWindow) {
+    themeStyle.value.theme.window = normalizedWindow
+  }
+})
 
 // Automatically sync theme with system when in auto mode
 watchEffect(() => {

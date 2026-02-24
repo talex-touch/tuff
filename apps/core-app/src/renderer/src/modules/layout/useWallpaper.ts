@@ -3,7 +3,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { appSetting } from '~/modules/channel/storage'
-import { themeStyle } from '~/modules/storage/theme-style'
+import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
 import { buildTfileUrl } from '~/utils/tfile-url'
 
 type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
@@ -85,12 +85,9 @@ export function useWallpaper() {
     if (!wallpaperActive.value) return {}
     const url = resolveWallpaperUrl(activeImagePath.value)
     if (!url) return {}
-    const isDefault = themeStyle.value.theme.window === 'Default'
-    const blur = Math.max(0, background.value.blur + (isDefault ? 0 : 2))
-    const opacity = Math.max(
-      0,
-      Math.min(1, (background.value.opacity / 100) * (isDefault ? 1 : 0.85))
-    )
+    const isPure = normalizeWindowPreference(themeStyle.value.theme.window) === 'pure'
+    const blur = Math.max(0, background.value.blur + (isPure ? 0 : 2))
+    const opacity = Math.max(0, Math.min(1, (background.value.opacity / 100) * (isPure ? 1 : 0.85)))
     const filter = `blur(${blur}px) brightness(${background.value.filter.brightness}%) contrast(${background.value.filter.contrast}%) saturate(${background.value.filter.saturate}%)`
     return {
       backgroundImage: `url("${url}")`,

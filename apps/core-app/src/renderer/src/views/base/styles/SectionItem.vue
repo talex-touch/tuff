@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 
 const props = defineProps<{
   title: string
+  label?: string
   disabled?: boolean
   tip?: string
 }>()
@@ -47,7 +48,7 @@ function goRouter() {
     <div class="SectionItem-Bar px-2 flex items-center cursor-pointer gap-2" @click="goRouter">
       <div w-3 h-3 rounded-full class="bg-[var(--section-active-color)]" />
       <span v-shared-element:[`theme-preference-${title}`]>
-        {{ title }}
+        {{ label ?? title }}
       </span>
     </div>
   </div>

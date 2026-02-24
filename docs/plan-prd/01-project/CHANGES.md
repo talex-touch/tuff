@@ -4,6 +4,344 @@
 
 ## 2026-02-23
 
+### Core-app Widget Feature issue 降级为 warning，并忽略非开发模式下隐藏实验特性
+
+**变更类型**: Bug 修复 / 噪音收敛
+
+**描述**: 修复 widget feature 在资源缺失或编译失败时统一上报为 error 的问题，改为 warning；同时对 `experimental` 且插件非开发模式的 feature，不再触发 widget 预编译与 issue 上报，避免对正式可见功能造成干扰告警。
+
+**主要变更**:
+1. **issue 级别收敛**：widget loader/manager/compiler/processors 的 feature 级问题统一走 warning。
+2. **隐藏实验特性免打扰**：新增 `isWidgetFeatureEnabled` 判定，非开发模式下跳过 `experimental` feature 的 issue 产生。
+3. **预编译流程对齐可见性**：插件加载阶段的 widget 预编译与未使用扫描仅处理当前模式可见 feature。
+4. **复用统一入口**：新增 `pushWidgetFeatureIssue`，统一注入 source/timestamp 并减少重复实现。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/widget/widget-issue.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-loader.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-compiler.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/script-processor.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/tsx-processor.ts`
+- `apps/core-app/src/main/modules/plugin/widget/processors/vue-processor.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 窗口偏好切换为 pure/refraction/filter 并修正语义
+
+**变更类型**: 交互修复 / 语义收敛
+
+**描述**: 窗口偏好统一为 `pure` / `refraction` / `filter` 三档，并修正“普通与 Mica 观感反向”的问题。`pure` 使用纯色背景阻断窗口材质透出，`refraction` 保持材质透出，`filter` 在透出基础上叠加滤镜。
+
+**主要变更**:
+1. **偏好值统一**：窗口偏好类型改为 `pure/refraction/filter`，并兼容历史 `Default/Mica/Filter` 自动归一化。
+2. **设置页切换**：ThemeStyle 的窗口偏好入口改为三档新值，Filter 可直接选择。
+3. **渲染语义修复**：`AppLayout` 重新对齐 pure/refraction/filter 的透明度策略与 touch-blur 触发条件，pure 下增加纯色底阻断窗口特效透出。
+4. **Header 分区透明度对齐**：Header 左侧（侧栏对应区）跟随 aside 透明度，右侧使用 header 透明度，消除左右明暗错位。
+5. **壁纸链路兼容**：壁纸模糊与透明度附加策略改为基于 pure/refraction/filter 判定。
+6. **文案与预览更新**：窗口偏好文案改为首字母大写（Pure/Refraction/Filter），ThemePreference 展示与预览样式切换到新值语义。
+7. **切换反馈增强**：切换窗口偏好后增加全屏遮罩 + Spinner 短暂加载态，明确“窗口效果应用中”状态。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/layout-atom-types.ts`
+- `packages/utils/__tests__/preset-export-types.test.ts`
+- `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/SectionItem.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/sub/ThemePreference.vue`
+- `apps/core-app/src/renderer/src/views/layout/AppLayout.vue`
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件 Manifest 保存通道克隆失败修复
+
+**变更类型**: Bug 修复 / 传输稳定性
+
+**描述**: 修复插件详情页保存 dev 配置时，`manifest` 通过 transport 发送前携带 Vue 响应式代理对象，触发 `An object could not be cloned` 导致保存失败的问题。
+
+**主要变更**:
+1. **发送前序列化**：`pluginSDK.saveManifest` 在发送前统一将 `manifest` 转换为 JSON 可序列化的普通对象，避免 Proxy 进入 IPC payload。
+2. **失败可观测**：当 `manifest` 不可 JSON 序列化时记录明确错误日志并返回失败，避免继续发送导致 transport 层克隆异常。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/sdk/plugin-sdk.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 低电量阈值配置移除（保留低电量模式开关）
+
+**变更类型**: 配置收敛 / UI 简化
+
+**描述**: 动效设置中移除“低电量阈值”滑块与相关可配置字段，低电量模式仅保留开关；阈值改为统一跟随 `DeviceIdle` 电量策略，避免重复配置。
+
+**主要变更**:
+1. **设置页简化**：`ThemeStyle` 移除阈值滑块，仅保留“低电量模式”开关。
+2. **运行时收敛**：`useBatteryOptimizer` 不再读取用户阈值配置，统一读取 `DeviceIdle.blockBatteryBelowPercent` 作为低电量判定阈值。
+3. **配置模型清理**：`app-settings` 默认配置移除 `animation.lowBatteryThreshold` 字段，并清理对应 i18n 文案键。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useBatteryOptimizer.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 后台索引调度电量策略抽离（BatteryPolicy）
+
+**变更类型**: 架构收敛 / 调度策略复用
+
+**描述**: 将后台索引调度相关的“低电量禁区”判断抽离为统一 `BatteryPolicy`，并将插件电量 SDK、渲染侧低电量动效判定统一接入同一阈值来源，避免多处重复实现与阈值漂移。
+
+**主要变更**:
+1. **统一策略模型**：在 `packages/utils/common` 新增 `BatteryPolicy`、`normalizeBatteryPolicy`、`evaluateBatteryPolicy` 与 `clampBatteryPercent`。
+2. **服务判定复用**：`DeviceIdleService.canRun` 改用统一策略评估函数返回 `battery-low / battery-critical`。
+3. **索引策略单源化**：`FileProvider` 移除本地电量阈值字段，自动扫描/手动重建统一以 `DeviceIdleService` 电量策略为准。
+4. **插件与渲染对齐**：插件 `power` SDK 默认阈值与渲染侧 `useBatteryOptimizer` 统一读取 `DeviceIdle.blockBatteryBelowPercent`。
+5. **前端入口下沉**：`SettingFileIndex` 的策略配置组改为常显，用户可直接配置统一 BatteryPolicy。
+6. **回归保障**：新增 `battery-policy` 单测，覆盖策略归一化、critical 优先级、充电豁免与阈值裁剪行为。
+
+**修改文件**:
+- `packages/utils/common/battery-policy.ts`
+- `packages/utils/common/index.ts`
+- `packages/utils/__tests__/battery-policy.test.ts`
+- `apps/core-app/src/main/service/device-idle-service.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/renderer/src/modules/hooks/useBatteryOptimizer.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 剪贴板自动粘贴/自动清除时间档位收敛
+
+**变更类型**: 配置优化 / Bug 修复
+
+**描述**: 调整工具设置中的时间档位，自动粘贴默认值改为 5 秒，自动清除默认值改为 5 分钟；同时将时间范围收敛为最短 1 秒、最长 5 分钟，并修复自动粘贴在从“禁用”切回定时值后偶发不生效的问题。
+
+**主要变更**:
+1. **默认值调整**：`tools.autoPaste.time` 默认改为 `5`（秒），`tools.autoClear` 默认改为 `300`（秒）。
+2. **档位范围收敛**：自动粘贴/自动清除时间档位统一为 `1s ~ 5min`，移除 `10min/15min` 档位。
+3. **生效逻辑修复**：`autoPaste.enable` 与 `autoPaste.time` 强绑定，避免历史 `enable=false` 遗留导致时间已切回但仍不触发自动粘贴。
+4. **历史值兼容**：对超出新档位的历史时间值按最近档位归一，减少迁移冲击。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 剪贴板省电轮询项高级设置门禁修复
+
+**变更类型**: Bug 修复 / 设置门禁一致性
+
+**描述**: 修复工具设置中「剪贴板省电轮询策略」「剪贴板省电轮询间隔」在未开启高级设置时仍可见的问题，现仅在 `advancedSettings` 开启后展示。
+
+**主要变更**:
+1. **显示门禁补齐**：`SettingTools` 新增 `showAdvancedSettings` 计算属性，并将两个省电轮询项包裹在高级设置条件渲染下。
+2. **行为一致性恢复**：与项目其他高级项保持一致，默认模式下不暴露高级策略配置。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Nexus 数据上传说明与匿名模式登录门禁
+
+**变更类型**: 体验优化 / 隐私策略收敛
+
+**描述**: Nexus 数据分析设置移除独立说明行，改为“启用数据上传”后的帮助 Tooltip；匿名模式默认关闭且未登录时不可切换，并在运行时对未登录状态强制按 `false` 生效。
+
+**主要变更**:
+1. **说明形态调整**：将原“说明”文案收敛到“启用数据上传”后的 `?` 图标 Tooltip，并精简提示文本。
+2. **匿名门禁**：匿名模式开关在未登录时禁用，UI 展示固定为关闭；登录后才允许切换。
+3. **生效逻辑收敛**：主进程对匿名模式新增登录态门禁，未登录即使配置为开启也按关闭执行。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSentry.vue`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/analytics/analytics-module.ts`
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+
+### Core-app 静默启动配置链路修复（dev/prod）
+
+**变更类型**: Bug 修复 / 配置一致性修复
+
+**描述**: 修复“静默启动”在开发与生产环境均可能不生效的问题。根因是设置页部分入口仍在读写历史分散键（如 `app.window.startSilent` 独立文件），而启动阶段与托盘逻辑读取的是 `app-setting.ini` 的 `window.startSilent`，导致配置来源不一致。
+
+**主要变更**:
+1. **主进程启动兼容**：`TouchApp` 启动前读取 `app-setting.ini` 时，兼容合并历史 `app.window.startSilent` 文件值（仅在历史文件更新更晚或主配置缺失时生效），并回写到 `app-setting.ini`，保证后续链路单一来源。
+2. **设置页写入收敛（Window）**：`SettingWindow` 改为直接读写 `appSetting.window.*` 与 `appSetting.setup.autoStart`，不再写入历史分散键文件。
+3. **设置页写入收敛（Setup）**：`SettingSetup` 移除对历史分散键的读写，统一使用 `appSetting` 持久化并保留托盘/开机自启实时同步调用。
+4. **行为结果**：静默启动设置可在 dev/prod 一致生效，且后续修改不会再被历史分散键污染。
+5. **开发环境窗口行为修复**：静默启动时不再自动打开 DevTools，避免 dev 下因 DevTools 自动弹出导致主窗口被显式激活。
+
+**修改文件**:
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 布局方案与窗口透明度解耦
+
+**变更类型**: 交互一致性修复 / 视觉策略收敛
+
+**描述**: 布局方案（simple/flat/compact 等）不再驱动主界面 header/aside 的透明度。透明度统一由窗口偏好（Default/Mica/Filter）控制，避免切换布局时出现非预期明暗变化。
+
+**主要变更**:
+1. **类型模型清理**：`LayoutAtomConfig` 移除 `header.opacity` 与 `aside.opacity` 字段，布局模型不再承载透明度语义。
+2. **默认值与预设清理**：应用默认布局原子与各布局 preset（simple/flat/compact/minimal/classic/card/dock）移除 opacity 字段，避免旧预设继续影响透明度。
+3. **布局原子解析收敛**：`resolveLayoutAtomsToCSSVars` 不再输出 `header/aside` 的 opacity 变量，只保留布局结构相关变量（边框、高度、宽度、位置等）。
+4. **Layout Shell 变量改造**：`header/aside` 的 fake opacity 改为读取 `--layout-window-*` 变量，不再依赖 `--layout-*opacity`。
+5. **窗口偏好接管透明度**：`AppLayout` 按 `theme.window` 计算并注入 `--layout-window-header-opacity` / `--layout-window-aside-opacity`，实现“窗口偏好影响透明度，布局方案仅影响布局”。
+6. **预设默认清理**：移除 `LayoutShell` 中按布局 preset 注入的透明度变量，避免默认值回流干扰。
+7. **历史配置自动清洗**：主进程 Storage 在读取/保存 `app-setting.ini` 时自动移除 `layoutAtomConfig.header/aside.opacity` 遗留字段，并在后续持久化时写回清洗结果。
+
+**修改文件**:
+- `packages/utils/common/storage/entity/layout-atom-types.ts`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `apps/core-app/src/renderer/src/modules/layout/atoms/presets.ts`
+- `apps/core-app/src/renderer/src/modules/layout/atoms/atomResolver.ts`
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `apps/core-app/src/renderer/src/views/layout/shared/LayoutShell.vue`
+- `apps/core-app/src/renderer/src/views/layout/AppLayout.vue`
+- `packages/utils/__tests__/preset-export-types.test.ts`
+- `apps/core-app/src/main/modules/storage/main-storage-registry.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 布局预设编辑入口双门禁（Dev + 高级设置）
+
+**变更类型**: 体验收敛 / 权限边界修正
+
+**描述**: “自定义主界面 / 自定义 CoreBox / Nexus 预设” 三个 Beta 入口改为仅在 `dev` 启动版本且开启 `advancedSettings` 时可见，避免普通用户误触开发中能力。
+
+**主要变更**:
+1. **门禁条件统一**：`LayoutSection` 新增 `showPresetEditors`，仅在 `startupInfo.isDev === true && appSetting.dev.advancedSettings === true` 时显示入口。
+2. **可见性收敛**：三个入口统一切换为条件渲染，非门禁状态下不占位、不展示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/LayoutSection.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app Header 左右分区透明度对齐 Sidebar
+
+**变更类型**: 视觉一致性修复
+
+**描述**: 窗口 Header 透明度按左右区域拆分：左侧（或右侧 Sidebar 对应区）与 Sidebar 保持相同透明度，另一侧保持 Header 透明度，避免顶部与侧栏交界处明暗不一致。
+
+**主要变更**:
+1. **Header 分区渲染**：将 Header 背景拆分为“侧栏对应区 + 主内容区”两段透明度。
+2. **透明度对齐规则**：侧栏对应区使用 `--layout-window-aside-opacity`，主内容区使用 `--layout-window-header-opacity`。
+3. **位置兼容**：适配 `aside-right`、`aside-bottom`、`aside-hidden` 三种布局位置，确保各模式下透明度行为一致。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/styles/layout/_layout-shell.scss`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 关于页条款入口接入官网文档跳转
+
+**变更类型**: 体验修复 / 链路补齐
+
+**描述**: 设置页「应用程序规范（Touch）」中的 `TalexTouch 服务条款` 与 `TalexTouch 软件许可证` 由仅展示文本改为可点击跳转，直接打开官网对应文档页面。
+
+**主要变更**:
+1. **条款链接接入**：点击 `服务条款` 跳转至 `Nexus /license`（服务条款页）。
+2. **许可证链接接入**：点击 `软件许可证` 跳转至 `Nexus /protocol`（软件许可证页）。
+3. **URL 来源统一**：链接基于 `getTuffBaseUrl()` 生成，避免硬编码域名。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingAbout.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Core-app 插件权限历史授权软禁用与预览读文件超时收敛
+
+**变更类型**: 安全修复 / 稳定性修复 / 体验优化
+
+**描述**: 修复插件权限在 Manifest 缩减后仍可沿用历史授权的问题。现在历史授权记录保留在本地存储中，但当权限未被当前 Manifest 声明时，运行时将拒绝访问；插件权限页同步提示“历史授权已禁用”。同时修复文件预览 `app:system:read-file` 在不可达路径场景下长时间阻塞导致的 IPC 超时报错。
+
+**主要变更**:
+1. **运行时权限收敛**：权限检查新增“声明态”约束，未在当前 Manifest 中声明的非默认权限即使历史上已授予，也不会在运行时生效。
+2. **历史记录保留**：权限存储不删除历史授权记录，新增 `deprecatedGranted` 状态用于标记“保留但失效”的历史授权。
+3. **插件页提醒**：插件详情权限页新增历史授权禁用提示区，按“应用更新后已过时 / 插件不再需要（曾授予）”两类标记展示，状态摘要支持显示“历史授权已禁用”。
+4. **读文件超时控制**：`app:system:read-file` 新增可选超时参数并在主进程执行超时中断，Code/Text/Markdown 预览对超时给出用户友好提示，减少控制台噪音。
+5. **快捷键入口迁移**：将“插件注册的全局快捷键”管理区从权限页迁移到详情页，权限页聚焦权限治理，详情页集中展示插件基础信息与运行配置。
+6. **快捷键空态样式收敛**：插件详情页快捷键分组中的空态内层卡片去除圆角，避免与外层分组圆角叠加造成视觉噪点。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/permission/permission-store.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.ts`
+- `apps/core-app/src/main/modules/permission/index.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/CodePreview.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/TextPreview.vue`
+- `apps/core-app/src/renderer/src/components/render/addon/preview/MarkdownPreview.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `packages/utils/permission/index.ts`
+- `packages/utils/permission/types.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
+- `packages/utils/__tests__/permission-status.test.ts`
+
+### Core-app Market 新增 Tuff CLI Beta 页签联动
+
+**变更类型**: 新功能 / 市场联动（Beta）
+
+**描述**: Core-app 市场页新增 Tuff CLI 联动能力：当系统检测到已安装 `tuff` CLI 时，市场顶部出现 `CLI` 页签；当前阶段该页签仅提供 Beta 占位说明，标注“开发中”。
+
+**主要变更**:
+1. **安装检测接入**：平台能力列表查询时动态探测 `tuff --version`（含 Windows 候选命令），并引入 TTL 缓存降低探测频率。
+2. **能力映射收敛**：检测通过后动态注入 `platform.tuff-cli` Beta 能力，供渲染层统一读取。
+3. **市场页签联动**：`Market` 页按能力结果动态展示 `CLI` 页签，且在能力不可用时自动回退到 `market` 页签。
+4. **Beta 占位页**：新增 `MarketCliBeta` 视图，展示“Beta Feature / 开发中”提示，明确当前交付状态。
+5. **i18n 补齐**：补充中英文市场 CLI 文案键，保证多语言一致。
+
+**修改文件**:
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/views/base/Market.vue`
+- `apps/core-app/src/renderer/src/components/market/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/market/MarketCliBeta.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+
+### Core-app PluginInfo 问题入口改为悬浮按钮 + Flip 弹窗
+
+**变更类型**: 交互优化 / 可视反馈增强
+
+**描述**: PluginInfo 页面移除独立「问题」Tab，改为右下角常驻悬浮 `?` 按钮；点击后使用 Flip 动画打开问题弹窗。按钮根据问题等级显示差异化呼吸光效，无问题时不展示入口。
+
+**主要变更**:
+1. **入口形态调整**：移除 `Issues` Tab，仅在存在 `plugin.issues` 时渲染右下角悬浮按钮。
+2. **Flip 弹层接入**：接入 `TxFlipOverlay`，以悬浮按钮为 source 打开问题弹窗，弹层内复用 `PluginIssues` 内容。
+3. **风险视觉分级**：warning 显示浅黄色呼吸环；error 显示更强红色呼吸光效并叠加阴影，提升问题感知优先级。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+
+### Core-app 插件存储页汉化与配置分组迁移
+
+**变更类型**: 体验优化 / i18n 收敛 / UI 组件标准化
+
+**描述**: 插件存储页完成全量 i18n 接入，替换原自定义统计卡为 tuffex `TxStatCard`，并将插件详情页中的“配置系统（路径目录）”信息迁移到存储页，统一“存储 + 路径”操作入口。
+
+**主要变更**:
+1. **统计卡标准化**：存储页顶部四个数据卡改为 `TxStatCard`（含占用率 progress 变体），移除重复样式实现。
+2. **页面文案汉化**：存储页标题、按钮、空态、表头、状态栏、路径配置区全部接入 i18n，不再存在硬编码英文。
+3. **配置系统迁移**：在存储页新增 `TuffGroupBlock` 配置分组，承载插件路径/数据目录/配置目录/日志目录，并支持直接打开对应路径。
+4. **详情入口下移**：存储文件表格从主卡片主体迁移为“配置系统”中的“详细信息”入口，点击按钮通过 `TxFlipOverlay` 打开完整表格详情。
+5. **文案字典补齐**：补充 `plugin.storage.*` 中英文键，覆盖统计、空态、表格、底栏、配置区、详情入口与路径打开失败提示。
+6. **路径展示收敛**：配置系统中的路径展示统一为 `~/` 别名样式（如 `~/data/`、`~/data/config/`），右侧操作入口统一使用 `TxButton` 图标按钮。
+7. **整块迁移完成**：原“存储文件”整块（标题、操作按钮、文件表格、底栏状态）整体迁移到“详细信息”弹窗中；配置系统仅保留“详细信息”入口与路径配置项。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-app 插件详情开发设置分组下移与保存链路收敛
 
 **变更类型**: 体验优化 / 可维护性修复
@@ -24,6 +362,61 @@
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+
+### Core-app Source Market Editor 滚动修复
+
+**变更类型**: Bug 修复 / 交互可用性
+
+**描述**: 修复 Source Market Editor 在来源项较多时无法滚动的问题，避免底部来源项被裁切后不可见。
+
+**主要变更**:
+1. **弹窗结构重写**：将 Source Editor 从绝对定位面板重构为 `TxFlipOverlay` 弹窗，统一使用 body 级遮罩和卡片容器，消除父级布局裁剪影响。
+2. **新增入口上移**：新增来源入口改为 Header 区按钮。
+3. **二次 Flip 弹窗**：新增来源表单改为独立 `TxFlipOverlay`（二级弹窗），与主来源弹窗解耦，打开/关闭均使用 Flip 动画。
+4. **过时来源分区展示**：带 `outdated` 标记的来源在非高级模式默认隐藏；开启高级设置后在列表底部单独分区展示，不参与上方主列表排序索引。
+5. **过时基线收敛**：默认来源中仅 `Tuff Nexus` 与 `NPM` 标记为非过时，其余内置来源标记为过时；对历史存储数据增加兼容归一化。
+6. **拖拽排序保留**：主来源列表继续支持拖拽排序，且排序范围仅限非过时来源，避免与过时项发生索引干扰。
+7. **滚动链路重建**：列表区改为 `TouchScroll native` 承载，使用 `flex + min-height: 0` 固定可滚动区域，确保长列表稳定可达。
+8. **Flip 动画收敛**：来源列表使用 `TransitionGroup(source-flip)`，拖拽排序将 Sortable `animation` 设为 `0`，由 FLIP 过渡统一处理重排动画。
+9. **来源定位增强**：市场页来源按钮点击时透传 source 元素，弹窗打开动画从触发点起始，交互反馈更明确。
+10. **i18n 收敛**：Source Editor 页面文案（标题、副标题、按钮、占位符、来源类型与状态标签）接入中英文语言包，移除硬编码文本。
+11. **弹窗尺寸微调**：主来源弹窗尺寸下调，降低遮挡；新增来源二级弹窗尺寸上调，提升表单可读性与可操作空间。
+12. **表单组件统一**：新增来源二级弹窗内部输入控件统一替换为 tuffex `TxInput` / `TxSelect` / `TxSelectItem`，移除原生 `select` 与旧输入组件。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/market/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/Market.vue`
+- `apps/core-app/src/renderer/src/components/market/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/storage/market-sources.ts`
+- `packages/utils/market/constants.ts`
+
+### Core App 工具设置下拉框返显修复
+
+**变更类型**: Bug 修复 / 设置兼容性
+
+**描述**: 修复 App Settings 中工具设置下拉框（自动粘贴、自动清除、剪贴板轮询）在旧配置数据下选择后不返显、持续显示“请选择”的问题。根因是历史数据存在字符串数值与结构漂移（如 `autoPaste` 形态不一致），导致 `TxSelect` 无法匹配当前值。
+
+**主要变更**:
+1. **配置形态校正**：在 `SettingTools` 初始化阶段补齐 `tools.autoPaste` 对象结构，避免 `v-model="appSetting.tools.autoPaste.time"` 在旧数据下写入失败。
+2. **数值归一化**：对 `autoPaste.time`、`autoClear`、`clipboardPolling.interval`、`lowBatteryPolicy.interval` 增加统一的数字与可选值归一化，兼容历史字符串值并回落到安全默认值。
+3. **禁用语义对齐**：当 `autoPaste.time === -1` 时同步修正 `autoPaste.enable`，避免 UI 与实际行为状态不一致。
+4. **下拉值匹配增强**：`TxSelect` 增加字符串/数字值宽松匹配（如 `"180"` 与 `180`），避免历史字符串配置导致选项已存在但不回显。
+5. **首屏返显修复**：`TuffBlockSelect` 改为 eager 挂载下拉内容，避免选项未挂载时 `TxSelect` 无法建立值到文案映射而首屏显示“请选择”。
+6. **文案提取增强**：`TxSelectItem` 支持从默认 slot 文本提取 label（未显式传 `label` 时），避免选择后仅显示数字值（如 `180`）而不是“3 分钟”。
+7. **兜底映射增强**：`TxSelect` 新增从 slot VNode 直接解析 value/label 的兜底逻辑，即使选项注册时机滞后也能在首屏用当前值解析展示文案。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `apps/core-app/src/renderer/src/components/tuff/TuffBlockSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelect.vue`
+- `packages/tuffex/packages/components/src/select/src/TxSelectItem.vue`
+- `packages/tuffex/packages/components/src/popover/src/TxPopover.vue`
+- `packages/tuffex/packages/components/src/popover/src/types.ts`
+- `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`
+- `packages/tuffex/packages/components/src/base-anchor/src/types.ts`
+- `packages/tuffex/packages/components/src/select/src/types.ts`
 
 ### Nexus OAuth 在 Cloudflare Workers 的 HKDF 兼容修复
 

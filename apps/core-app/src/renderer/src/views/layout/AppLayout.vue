@@ -5,9 +5,19 @@ import LayoutBackButton from '~/components/layout/LayoutBackButton.vue'
 import { useSecondaryNavigation } from '~/modules/layout/useSecondaryNavigation'
 import { useWallpaper } from '~/modules/layout/useWallpaper'
 import { reportPerfToMain } from '~/modules/perf/perf-report'
-import { themeStyle, triggerThemeTransition } from '~/modules/storage/theme-style'
+import {
+  normalizeWindowPreference,
+  themeStyle,
+  triggerThemeTransition,
+  type ThemeWindowPreference
+} from '~/modules/storage/theme-style'
 
-const mica = computed(() => themeStyle.value.theme.window === 'Mica')
+const windowPreference = computed<ThemeWindowPreference>(() =>
+  normalizeWindowPreference(themeStyle.value.theme.window)
+)
+const isRefractionWindow = computed(() => windowPreference.value === 'refraction')
+const isFilterWindow = computed(() => windowPreference.value === 'filter')
+const isPureWindow = computed(() => windowPreference.value === 'pure')
 const coloring = computed(() => themeStyle.value.theme.addon.coloring)
 const contrast = computed(() => themeStyle.value.theme.addon.contrast)
 const routeTransitionStyle = computed(() => themeStyle.value.theme.transition?.route ?? 'slide')
@@ -26,8 +36,40 @@ const { canNavigateBack, navigateBack } = useSecondaryNavigation({
   debugLabel: 'AppLayout'
 })
 const { wallpaperActive, wallpaperStyle } = useWallpaper()
-const touchBlur = computed(() => mica.value || wallpaperActive.value)
-const wrapperStyle = computed(() => (wallpaperActive.value ? { '--fake-index': -2 } : undefined))
+const touchBlur = computed(
+  () => isRefractionWindow.value || isFilterWindow.value || wallpaperActive.value
+)
+const windowOpacityVars = computed<Record<string, string>>(() => {
+  switch (windowPreference.value) {
+    case 'pure':
+      return {
+        '--layout-window-header-opacity': '1',
+        '--layout-window-aside-opacity': '1'
+      }
+    case 'refraction':
+      return {
+        '--layout-window-header-opacity': '0.85',
+        '--layout-window-aside-opacity': '0.45'
+      }
+    case 'filter':
+      return {
+        '--layout-window-header-opacity': '0.8',
+        '--layout-window-aside-opacity': '0.4'
+      }
+    default:
+      return {
+        '--layout-window-header-opacity': '1',
+        '--layout-window-aside-opacity': '1'
+      }
+  }
+})
+const wrapperStyle = computed<Record<string, string | number>>(() => {
+  const style: Record<string, string | number> = { ...windowOpacityVars.value }
+  if (wallpaperActive.value) {
+    style['--fake-index'] = -2
+  }
+  return style
+})
 
 const routeTransitionStartedAt = new Map<string, number>()
 
@@ -94,7 +136,14 @@ onMounted(() => {
 <template>
   <div
     class="AppLayout-Wrapper fake-background"
-    :class="{ mica, coloring, contrast, 'touch-blur': touchBlur }"
+    :class="{
+      'window-pure': isPureWindow,
+      'window-refraction': isRefractionWindow,
+      'window-filter': isFilterWindow,
+      coloring,
+      contrast,
+      'touch-blur': touchBlur
+    }"
     :style="wrapperStyle"
   >
     <div v-if="wallpaperActive" class="AppWallpaper" :style="wallpaperStyle" />
@@ -295,7 +344,8 @@ onMounted(() => {
   -webkit-app-region: no-drag;
 }
 
-.mica.AppLayout-Wrapper {
+.window-refraction.AppLayout-Wrapper,
+.window-filter.AppLayout-Wrapper {
   --fake-inner-opacity: 0.5;
 }
 
@@ -322,8 +372,13 @@ onMounted(() => {
     font-size: 12px;
   }
 
-  &.mica .AppLayout-View {
+  &.window-refraction .AppLayout-View,
+  &.window-filter .AppLayout-View {
     --fake-opacity: 0.85;
+  }
+
+  &.window-pure {
+    background: var(--tx-fill-color);
   }
 
   .AppLayout-View {
@@ -365,5 +420,7 @@ onMounted(() => {
 
   box-sizing: border-box;
   -webkit-app-region: drag;
+
+  --fake-opacity: var(--layout-window-aside-opacity, 0.5);
 }
 </style>

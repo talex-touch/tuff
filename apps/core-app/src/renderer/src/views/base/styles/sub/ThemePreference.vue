@@ -2,14 +2,27 @@
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import FormTemplate from '~/components/base/template/FormTemplate.vue'
+import { normalizeWindowPreference } from '~/modules/storage/theme-style'
 
 const route = useRoute()
 const { t } = useI18n()
+const resolvedTheme = computed(() => normalizeWindowPreference(route.query.theme))
+const resolvedThemeLabel = computed(() => {
+  switch (resolvedTheme.value) {
+    case 'pure':
+      return t('themeStyle.windowPure')
+    case 'filter':
+      return t('themeStyle.windowFilter')
+    case 'refraction':
+    default:
+      return t('themeStyle.windowRefraction')
+  }
+})
 
 const copyWriting = computed(() => {
-  const theme: string = route.query.theme as string
+  const theme = resolvedTheme.value
   const key = `themePreference.${theme}`
-  const fallbackKey = 'themePreference.Default'
+  const fallbackKey = 'themePreference.pure'
 
   // Check if the key exists, otherwise use the fallback
   const options = { missing: () => t(fallbackKey) } as unknown as Parameters<typeof t>[2]
@@ -30,7 +43,7 @@ const copyWriting = computed(() => {
           @click="() => $router.back()"
         />
         <p v-shared-element:[`theme-preference-${route.query.theme}`] my-4 font-extrabold text-2xl>
-          {{ route.query.theme }}
+          {{ resolvedThemeLabel }}
         </p>
       </div>
     </template>
@@ -40,7 +53,7 @@ const copyWriting = computed(() => {
       <div
         v-shared-element:[`theme-preference-${route.query.theme}-img`]
         class="ThemePreference-Display"
-        :class="route.query.theme"
+        :class="resolvedTheme"
       />
     </div>
   </FormTemplate>
