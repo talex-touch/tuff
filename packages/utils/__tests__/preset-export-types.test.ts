@@ -11,8 +11,8 @@ import type {
 
 const layoutConfig: LayoutAtomConfig = {
   preset: 'custom',
-  header: { border: 'solid', opacity: 1, height: 26, blur: false },
-  aside: { position: 'left', width: 68, border: 'solid', opacity: 0.6, collapsed: false },
+  header: { border: 'solid', height: 26, blur: false },
+  aside: { position: 'left', width: 68, border: 'solid', collapsed: false },
   view: { radius: [0, 0, 0, 0], shadow: 'none', padding: 0, background: 'transparent' },
   nav: { style: 'icon', activeIndicator: 'dot' },
 }
@@ -50,7 +50,7 @@ describe('preset-export-types', () => {
       layout: layoutConfig,
       coreBox: coreBoxConfig,
       theme: {
-        window: 'Mica',
+        window: 'refraction',
         style: { dark: false, auto: true },
         addon: { contrast: false, coloring: true },
         transition: { route: 'slide' },

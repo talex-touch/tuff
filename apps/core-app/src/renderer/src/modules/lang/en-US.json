@@ -28,9 +28,9 @@
     "server": "Server error"
   },
   "themePreference": {
-    "Default": "Embrace the familiar comfort of the default window style.",
-    "Mica": "Immerse yourself in a mesmerizing, real-time glass-like background adorned with a delightful noise texture!",
-    "Filter": "Delight in a window background featuring a captivating tracked-blur modal wallpaper that adds a touch of elegance to your screen."
+    "pure": "Use a solid background layer to fully block window material effects.",
+    "refraction": "Let the system material refract through for a stronger glass-like feeling.",
+    "filter": "Apply an extra filtered layer on top of refraction for softer transitions."
   },
   "settingHeader": {
     "subTitle": "The command bar, reimagined for those who build.",
@@ -186,10 +186,10 @@
     "autoClearDesc": "Clear searchbar after box hidden.",
     "clipboardPollingInterval": "Clipboard polling interval",
     "clipboardPollingIntervalDesc": "How often clipboard is checked while idle. Higher frequency uses more power. When CoreBox is visible, polling is boosted to 0.5s.",
-    "clipboardPollingLowBattery": "Low-battery polling policy",
-    "clipboardPollingLowBatteryDesc": "Automatically reduce polling frequency on battery power to save energy.",
-    "clipboardPollingLowBatteryInterval": "Low-battery interval",
-    "clipboardPollingLowBatteryIntervalDesc": "Polling interval used on battery when low-battery policy is enabled.",
+    "clipboardPollingLowBattery": "Clipboard low-battery polling policy",
+    "clipboardPollingLowBatteryDesc": "Automatically reduce clipboard polling frequency on battery power to save energy.",
+    "clipboardPollingLowBatteryInterval": "Clipboard low-battery interval",
+    "clipboardPollingLowBatteryIntervalDesc": "Clipboard polling interval used on battery when the low-battery policy is enabled.",
     "never": "Never",
     "autoHide": "Auto hide",
     "autoHideDesc": "Hide searchbar when blur triggered.",
@@ -295,6 +295,10 @@
   "themeStyle": {
     "styles": "Styles",
     "defaultTip": "Click to select.",
+    "windowPure": "Pure",
+    "windowRefraction": "Refraction",
+    "windowFilter": "Filter",
+    "windowSwitching": "Switching window preference...",
     "micaTip": "Mica style may impact device performance.",
     "filterTip": "This feature only supports Windows11.",
     "personalized": "Personalized",
@@ -352,7 +356,11 @@
     "routeTransitionDesc": "Controls page route transition animations (may impact performance).",
     "routeTransitionSlide": "Slide",
     "routeTransitionFade": "Fade",
-    "routeTransitionZoom": "Zoom"
+    "routeTransitionZoom": "Zoom",
+    "coreBoxResize": "CoreBox Window Animation",
+    "coreBoxResizeDesc": "Smooth expand/collapse animation for the search window.",
+    "lowBatteryMode": "Low Battery Mode",
+    "lowBatteryModeDesc": "Automatically disable animations when battery is low."
   },
   "layoutSection": {
     "title": "Layouts",
@@ -801,18 +809,54 @@
       "title": "Storage Files",
       "stats": {
         "totalStorage": "Total Storage",
+        "totalStorageMb": "Storage (MB)",
         "files": "Files",
+        "totalFiles": "Total Files",
         "directories": "Directories",
-        "usage": "Usage"
+        "usage": "Usage",
+        "usageRate": "Usage Rate"
       },
       "actions": {
         "openFolder": "Open Folder",
         "openInEditor": "Open in Editor",
-        "clearAll": "Clear All Storage",
+        "clearAll": "Clear All",
         "clearing": "Clearing...",
-        "refresh": "Refresh Data"
+        "refresh": "Refresh",
+        "details": "Details"
       },
-      "empty": "No files in storage",
+      "loading": "Refreshing storage data...",
+      "empty": {
+        "title": "No storage files found",
+        "description": "Start using the plugin to generate data"
+      },
+      "table": {
+        "name": "Name",
+        "type": "Type",
+        "size": "Size",
+        "lastModified": "Last Modified",
+        "actions": "Actions",
+        "directoryTag": "DIR",
+        "fileTag": "FILE"
+      },
+      "footer": {
+        "serviceReady": "Service Ready",
+        "encoding": "UTF-8",
+        "space": "Space: {percent}% / {maxSize}"
+      },
+      "configuration": {
+        "title": "Configuration",
+        "description": "Plugin file paths and directories",
+        "detailsTitle": "Storage Details",
+        "detailsDesc": "Open the full storage file table",
+        "pluginPath": "Plugin Path",
+        "dataDirectory": "Data Directory",
+        "configDirectory": "Config Directory",
+        "logsDirectory": "Logs Directory"
+      },
+      "details": {
+        "title": "Storage File Details",
+        "description": "{files} files, {directories} directories"
+      },
       "confirm": {
         "clearTitle": "Clear Storage",
         "clearMessage": "Are you sure you want to clear ALL storage for this plugin? This action cannot be undone.",
@@ -824,7 +868,8 @@
         "clearFailed": "Failed to clear storage",
         "loadFailed": "Failed to load storage data",
         "openFolderFailed": "Failed to open storage folder",
-        "openEditorFailed": "Failed to open in editor"
+        "openEditorFailed": "Failed to open in editor",
+        "openPathFailed": "Failed to open this path"
       }
     },
     "issues": {

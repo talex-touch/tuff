@@ -7,7 +7,6 @@ export interface LayoutAtomConfig {
 
   header: {
     border: 'solid' | 'none' | 'gradient'
-    opacity: number
     height: number
     blur: boolean
   }
@@ -16,7 +15,6 @@ export interface LayoutAtomConfig {
     position: 'left' | 'right' | 'bottom' | 'hidden'
     width: number
     border: 'solid' | 'none'
-    opacity: number
     collapsed: boolean
   }
 
@@ -69,7 +67,7 @@ export interface CoreBoxThemeConfig {
   customCSS?: string
 }
 
-export type ThemeWindowStyle = 'Default' | 'Mica' | 'Filter'
+export type ThemeWindowStyle = 'pure' | 'refraction' | 'filter'
 export type ThemeRouteTransitionStyle = 'slide' | 'fade' | 'zoom'
 
 /**
