@@ -158,10 +158,6 @@ export interface FileIndexSettings {
   autoScanIntervalMs: number
   autoScanIdleThresholdMs: number
   autoScanCheckIntervalMs: number
-  autoScanMinBatteryPercent: number
-  autoScanBlockBatteryBelowPercent: number
-  autoScanAllowWhenCharging: boolean
-  manualBlockBatteryBelowPercent: number
   extraPaths: string[]
 }
 
@@ -175,10 +171,6 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
   autoScanIntervalMs: 24 * 60 * 60 * 1000,
   autoScanIdleThresholdMs: 60 * 60 * 1000,
   autoScanCheckIntervalMs: 5 * 60 * 1000,
-  autoScanMinBatteryPercent: 60,
-  autoScanBlockBatteryBelowPercent: 15,
-  autoScanAllowWhenCharging: true,
-  manualBlockBatteryBelowPercent: 15,
   extraPaths: []
 }
 
@@ -496,12 +488,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   private normalizeFileIndexSettings(raw?: Partial<FileIndexSettings> | null): FileIndexSettings {
     const data = raw && typeof raw === 'object' ? raw : {}
-    const clampPercent = (value: unknown, fallback: number) => {
-      if (typeof value !== 'number' || !Number.isFinite(value)) {
-        return fallback
-      }
-      return Math.max(0, Math.min(100, value))
-    }
     const clampMs = (value: unknown, fallback: number) => {
       if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
         return fallback
@@ -509,17 +495,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return value
     }
 
-    const autoScanBlockBattery = clampPercent(
-      data.autoScanBlockBatteryBelowPercent,
-      DEFAULT_FILE_INDEX_SETTINGS.autoScanBlockBatteryBelowPercent
-    )
-    const autoScanMinBattery = Math.max(
-      clampPercent(
-        data.autoScanMinBatteryPercent,
-        DEFAULT_FILE_INDEX_SETTINGS.autoScanMinBatteryPercent
-      ),
-      autoScanBlockBattery
-    )
     const rawExtraPaths = Array.isArray(data.extraPaths)
       ? data.extraPaths.filter((value): value is string => typeof value === 'string')
       : []
@@ -554,16 +529,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       autoScanCheckIntervalMs: clampMs(
         data.autoScanCheckIntervalMs,
         DEFAULT_FILE_INDEX_SETTINGS.autoScanCheckIntervalMs
-      ),
-      autoScanMinBatteryPercent: autoScanMinBattery,
-      autoScanBlockBatteryBelowPercent: autoScanBlockBattery,
-      autoScanAllowWhenCharging:
-        typeof data.autoScanAllowWhenCharging === 'boolean'
-          ? data.autoScanAllowWhenCharging
-          : DEFAULT_FILE_INDEX_SETTINGS.autoScanAllowWhenCharging,
-      manualBlockBatteryBelowPercent: clampPercent(
-        data.manualBlockBatteryBelowPercent,
-        DEFAULT_FILE_INDEX_SETTINGS.manualBlockBatteryBelowPercent
       ),
       extraPaths: normalizedExtraPaths
     }
@@ -735,10 +700,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     const decision = await deviceIdleService.canRun({
-      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs,
-      minBatteryPercent: this.fileIndexSettings.autoScanMinBatteryPercent,
-      blockBatteryBelowPercent: this.fileIndexSettings.autoScanBlockBatteryBelowPercent,
-      allowWhenCharging: this.fileIndexSettings.autoScanAllowWhenCharging
+      idleThresholdMs: this.fileIndexSettings.autoScanIdleThresholdMs
     })
 
     const battery = decision.snapshot.battery
@@ -1257,7 +1219,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const force = request?.force === true
     const batteryStatus = await this.getBatteryLevel()
-    const criticalThreshold = this.fileIndexSettings.manualBlockBatteryBelowPercent
+    const criticalThreshold = deviceIdleService.getSettings().blockBatteryBelowPercent
 
     if (batteryStatus && batteryStatus.level < criticalThreshold && !force) {
       return {
