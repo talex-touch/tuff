@@ -23,16 +23,18 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 const { refresh } = useAuthUser()
+const { signOut } = useAuth()
 
 const secret = ref('')
 const submitting = ref(false)
+const reauthing = ref(false)
 
 const {
   data: statusData,
   pending: statusPending,
   error: statusError,
   refresh: refreshStatus,
-} = await useFetch<AdminBootstrapStatus>('/api/auth/admin-bootstrap/status', {
+} = await useFetch<AdminBootstrapStatus>('/api/admin-bootstrap/status', {
   cache: 'no-store',
 })
 
@@ -67,6 +69,25 @@ watchEffect(() => {
   void navigateTo(redirectTarget.value, { replace: true })
 })
 
+watchEffect(() => {
+  if (reauthing.value)
+    return
+  const code = statusError.value?.statusCode ?? statusError.value?.data?.statusCode
+  if (code !== 401)
+    return
+  reauthing.value = true
+  void (async () => {
+    await signOut({ redirect: false })
+    await navigateTo({
+      path: '/sign-in',
+      query: {
+        reason: 'reauth',
+        redirect_url: redirectTarget.value,
+      },
+    }, { replace: true })
+  })()
+})
+
 async function handleSubmit() {
   if (!statusData.value?.canPromote) {
     toast.error(t('auth.adminBootstrapBlocked', '当前账号无法执行管理员初始化。'))
@@ -79,7 +100,7 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    await $fetch('/api/auth/admin-bootstrap/promote', {
+    await $fetch('/api/admin-bootstrap/promote', {
       method: 'POST',
       body: {
         secret: secret.value,
