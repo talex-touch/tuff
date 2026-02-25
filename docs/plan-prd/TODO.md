@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-02-23
+> 更新时间: 2026-02-25
 
 ---
 
@@ -59,6 +59,9 @@
 ## 🧩 2026-02 新增进展
 
 ### ✅ 已落地
+- [x] **Quick Actions 插件稳定性修复（feature id + 权限 issue 回收）**
+  - 修复 `quick.actions` id 格式导致 feature 添加失败
+  - 权限授权后即时清理 `PERMISSION_MISSING` issue 并广播更新
 - [x] **CoreBox 内置能力抽离为 7 个独立插件**
   - `touch-browser-open`、`touch-browser-bookmarks`、`touch-quick-actions`、`touch-window-presets`、`touch-workspace-scripts`、`touch-system-actions`、`touch-intelligence-actions`
   - 移除内置 URL 系统和内部 AI providers
