@@ -264,6 +264,11 @@ export default {
       versions: '已审核版本',
       noVersions: '暂时没有已通过审核的版本。',
       download: '下载插件包',
+      tabs: {
+        overview: '概览',
+        versions: '版本',
+        reviews: '评论',
+      },
       sizeUnknown: '大小未知',
       author: '由 {name} 发布',
       reviews: {

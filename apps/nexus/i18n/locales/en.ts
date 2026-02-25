@@ -264,6 +264,11 @@ export default {
       versions: 'Approved versions',
       noVersions: 'No approved versions are available yet.',
       download: 'Download package',
+      tabs: {
+        overview: 'Overview',
+        versions: 'Versions',
+        reviews: 'Reviews',
+      },
       sizeUnknown: 'Size unknown',
       author: 'Published by {name}',
       reviews: {
