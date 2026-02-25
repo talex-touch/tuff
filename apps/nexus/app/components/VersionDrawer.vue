@@ -250,13 +250,6 @@ onBeforeUnmount(() => {
     <TxFlipOverlay
       v-model="visibleModel"
       :source="props.source"
-      :duration="360"
-      :rotate-x="4"
-      :rotate-y="6"
-      :speed-boost="1.05"
-      transition-name="VersionOverlay-Mask"
-      mask-class="VersionOverlay-Mask"
-      card-class="VersionOverlay-Card"
       :header-title="t('dashboard.sections.plugins.publishVersion')"
       :header-desc="pluginName"
     >
@@ -546,50 +539,5 @@ onBeforeUnmount(() => {
   .VersionOverlay-Warning {
     min-height: 280px;
   }
-}
-</style>
-
-<style>
-.VersionOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  z-index: 1865;
-  perspective: 1200px;
-}
-
-.VersionOverlay-Mask-enter-active,
-.VersionOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.VersionOverlay-Mask-enter-from,
-.VersionOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.VersionOverlay-Card {
-  width: min(760px, 94vw);
-  min-height: 320px;
-  max-height: min(90vh, 880px);
-  border-radius: 1.2rem;
-  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
-}
-
-.VersionOverlay-Card.is-expanded {
-  transform: translate(-50%, -50%);
 }
 </style>

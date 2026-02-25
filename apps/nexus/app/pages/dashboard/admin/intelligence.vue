@@ -1620,12 +1620,6 @@ function formatEndpointCandidates(list?: string[]) {
       <TxFlipOverlay
         v-model="showFormOverlay"
         :source="formOverlaySource"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="ProviderOverlay-Mask"
-        mask-class="ProviderOverlay-Mask"
-        card-class="ProviderOverlay-Card"
       >
         <template #default="{ close }">
           <div class="ProviderOverlay-Inner">
@@ -1813,43 +1807,6 @@ function formatEndpointCandidates(list?: string[]) {
 </style>
 
 <style>
-.ProviderOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.ProviderOverlay-Mask-enter-active,
-.ProviderOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.ProviderOverlay-Mask-enter-from,
-.ProviderOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.ProviderOverlay-Card {
-  width: min(560px, 92vw);
-  min-height: 400px;
-  max-height: 85vh;
-  border-radius: 1rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-}
-
 .ProviderDeleteDialog {
   display: flex;
   flex-direction: column;

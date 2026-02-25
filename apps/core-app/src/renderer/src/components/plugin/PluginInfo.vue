@@ -56,11 +56,6 @@ const issueSeverity = computed<PluginIssueSeverity>(() => {
   if (hasIssues.value) return 'warning'
   return 'none'
 })
-
-const ISSUE_FLIP_DURATION = 460
-const ISSUE_FLIP_ROTATE_X = 5
-const ISSUE_FLIP_ROTATE_Y = 10
-const ISSUE_FLIP_SPEED_BOOST = 1.15
 const issueFabRef = ref<HTMLElement | null>(null)
 const showIssuesOverlay = ref(false)
 const issuesOverlayExpanded = ref(false)
@@ -450,13 +445,6 @@ console.log(props)
         v-model:expanded="issuesOverlayExpanded"
         v-model:animating="issuesOverlayAnimating"
         :source="issueFabRef"
-        :duration="ISSUE_FLIP_DURATION"
-        :rotate-x="ISSUE_FLIP_ROTATE_X"
-        :rotate-y="ISSUE_FLIP_ROTATE_Y"
-        :speed-boost="ISSUE_FLIP_SPEED_BOOST"
-        transition-name="PluginInfo-IssuesMask"
-        mask-class="PluginInfo-IssuesMask"
-        card-class="PluginInfo-IssuesCard"
         :header-title="t('plugin.tabs.issues')"
       >
         <template #default>
@@ -551,43 +539,6 @@ console.log(props)
 
 .animate-spin {
   animation: spin 1s linear infinite;
-}
-
-:global(.PluginInfo-IssuesMask) {
-  position: fixed;
-  inset: 0;
-  z-index: 1850;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(12, 12, 16, 0.52);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  perspective: 1200px;
-}
-
-:global(.PluginInfo-IssuesMask-enter-active),
-:global(.PluginInfo-IssuesMask-leave-active) {
-  transition: opacity 180ms ease;
-}
-
-:global(.PluginInfo-IssuesMask-enter-from),
-:global(.PluginInfo-IssuesMask-leave-to) {
-  opacity: 0;
-}
-
-:global(.PluginInfo-IssuesCard) {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  width: min(700px, 92vw);
-  height: min(560px, 82vh);
-  border-radius: 1rem;
-  box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45);
-  overflow: hidden;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
 }
 
 .PluginInfo-IssuesDialog {

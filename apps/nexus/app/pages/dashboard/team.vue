@@ -986,12 +986,6 @@ watch(() => creditTab.value, (value) => {
       <TxFlipOverlay
         v-model="createOverlayVisible"
         :source="createTriggerRef?.$el || null"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="TeamOverlay-Mask"
-        mask-class="TeamOverlay-Mask"
-        card-class="TeamOverlay-Card"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1025,12 +1019,6 @@ watch(() => creditTab.value, (value) => {
       <TxFlipOverlay
         v-model="inviteOverlayVisible"
         :source="inviteTriggerRef?.$el || null"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="TeamOverlay-Mask"
-        mask-class="TeamOverlay-Mask"
-        card-class="TeamOverlay-Card"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1072,12 +1060,6 @@ watch(() => creditTab.value, (value) => {
       <TxFlipOverlay
         v-model="joinOverlayVisible"
         :source="joinTriggerRef?.$el || null"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="TeamOverlay-Mask"
-        mask-class="TeamOverlay-Mask"
-        card-class="TeamOverlay-Card"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1132,12 +1114,6 @@ watch(() => creditTab.value, (value) => {
       <TxFlipOverlay
         v-model="disbandOverlayVisible"
         :source="disbandTriggerRef?.$el || null"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="TeamOverlay-Mask"
-        mask-class="TeamOverlay-Mask"
-        card-class="TeamOverlay-Card"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1188,44 +1164,5 @@ watch(() => creditTab.value, (value) => {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-</style>
-
-<style>
-.TeamOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.TeamOverlay-Mask-enter-active,
-.TeamOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.TeamOverlay-Mask-enter-from,
-.TeamOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.TeamOverlay-Card {
-  width: min(520px, 92vw);
-  min-height: 260px;
-  max-height: 82vh;
-  border-radius: 1rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  overflow: auto;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

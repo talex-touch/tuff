@@ -682,12 +682,6 @@ watch(showDetailsOverlay, (open) => {
       <TxFlipOverlay
         v-model="showDetailsOverlay"
         :source="detailsOverlaySource"
-        :duration="420"
-        :rotate-x="5"
-        :rotate-y="8"
-        transition-name="StorageDetailOverlay-Mask"
-        mask-class="StorageDetailOverlay-Mask"
-        card-class="StorageDetailOverlay-Card"
         :header-title="t('dashboard.storage.syncDetailTitle', '同步内容明细')"
         :header-desc="t('dashboard.storage.syncDetailDesc', '仅展示分类与元信息，不展示业务明文。')"
       >
@@ -1420,44 +1414,5 @@ watch(showDetailsOverlay, (open) => {
   .StorageHero-Title {
     font-size: 30px;
   }
-}
-</style>
-
-<style>
-.StorageDetailOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-  background: rgba(9, 11, 20, 0.42);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-.StorageDetailOverlay-Mask-enter-active,
-.StorageDetailOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.StorageDetailOverlay-Mask-enter-from,
-.StorageDetailOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.StorageDetailOverlay-Card {
-  width: min(860px, 94vw);
-  min-height: 380px;
-  max-height: 84vh;
-  border-radius: 16px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
-  overflow: auto;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

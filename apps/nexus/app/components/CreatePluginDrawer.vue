@@ -377,13 +377,6 @@ function onSubmit() {
     <TxFlipOverlay
       v-model="visibleModel"
       :source="props.source"
-      :duration="380"
-      :rotate-x="5"
-      :rotate-y="7"
-      :speed-boost="1.06"
-      transition-name="CreatePluginOverlay-Mask"
-      mask-class="CreatePluginOverlay-Mask"
-      card-class="CreatePluginOverlay-Card"
       :header-title="t('dashboard.sections.plugins.addButton')"
       :header-desc="t('dashboard.sections.plugins.manageSubtitle')"
     >
@@ -714,50 +707,5 @@ function onSubmit() {
     min-height: 200px;
     padding: 0 10px 10px;
   }
-}
-</style>
-
-<style>
-.CreatePluginOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 10, 12, 0.44);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  z-index: 1860;
-  perspective: 1200px;
-}
-
-.CreatePluginOverlay-Mask-enter-active,
-.CreatePluginOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.CreatePluginOverlay-Mask-enter-from,
-.CreatePluginOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.CreatePluginOverlay-Card {
-  width: min(900px, 94vw);
-  min-height: 360px;
-  max-height: min(90vh, 920px);
-  border-radius: 1.2rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
-}
-
-.CreatePluginOverlay-Card.is-expanded {
-  transform: translate(-50%, -50%);
 }
 </style>
