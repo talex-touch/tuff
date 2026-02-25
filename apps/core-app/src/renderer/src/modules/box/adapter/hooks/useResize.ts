@@ -52,6 +52,17 @@ function calculateDesiredHeight(resultCount: number): number {
     return MIN_HEIGHT
   }
 
+  // Prefer measuring real result content first.
+  // TxScroll content uses `min-height: 100%`, so measuring wrapper/content directly
+  // can lock the next height to current viewport height and prevent shrinking.
+  const resultContent = scrollRoot.querySelector('.CoreBoxRes-ScrollContent') as HTMLElement | null
+  if (resultContent) {
+    const contentHeight = resultContent.scrollHeight
+    if (Number.isFinite(contentHeight) && contentHeight > 0) {
+      return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
+    }
+  }
+
   const nativeWrap = scrollRoot.querySelector(
     '.native-scroll-wrapper, .tx-scroll__native'
   ) as HTMLElement | null

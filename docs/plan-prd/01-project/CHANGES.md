@@ -4,6 +4,21 @@
 
 ## 2026-02-25
 
+### CoreBox 推荐态展开高度修复（避免窗口尺寸“锁高”）
+
+**变更类型**: Bug 修复 / 交互稳定性
+
+**描述**: 修复 CoreBox 在推荐态（`recommend`）下，窗口高度偶发无法随内容减少而收缩的问题。根因是高度计算链路依赖 `TxScroll` 容器高度，而其内容层存在 `min-height: 100%` 约束，导致“当前窗口高度”被反向带入下一轮计算，形成尺寸锁定。
+
+**主要变更**:
+1. **测量对象调整**：`useResize` 优先改为测量 `.CoreBoxRes-ScrollContent` 的真实内容高度，不再优先依赖 scroll wrapper。
+2. **保留兜底路径**：当内容节点不可用时，仍沿用原有 wrapper 测量逻辑，保证兼容性与回退能力。
+3. **行为结果**：推荐结果数量减少后，CoreBox 高度可随内容正常回落，减少空白区域与视觉“过展开”。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Nexus 首管理员初始化提权（ADMINSECRET + 首用户校验）
 
 **变更类型**: 安全增强 / 认证流程改进
