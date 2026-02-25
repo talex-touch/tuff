@@ -34,6 +34,23 @@
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useResize.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### Widget 分离窗口修复（Detached 模式状态回填）
+
+**变更类型**: Bug 修复 / DivisionBox 稳定性
+
+**描述**: 修复 Widget 从 CoreBox 分离到独立窗口后内容异常的问题。根因是 `tuff://detached` 场景仍走 `WebContentsView.loadURL`，导致分离窗口未正确复用 CoreBox 渲染链路，同时缺少分离项上下文回填。
+
+**主要变更**:
+1. **主进程分流**：DivisionBox 会对 `tuff://detached` URL 跳过 `attachUIView`，直接启用原生 DivisionBox CoreBox 渲染层。
+2. **会话状态回填**：分离成功后将当前 item/query 写入 session state（`detachedPayload`），供新窗口启动时恢复上下文。
+3. **渲染端恢复**：`useSearch` 在 detached 模式下优先读取 session state 恢复目标 item；若恢复失败则回退到 query 搜索，并按 `itemId/source` 过滤结果，避免窗口展示偏移。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/manager.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Nexus 首管理员初始化提权（ADMINSECRET + 首用户校验）
 
 **变更类型**: 安全增强 / 认证流程改进
