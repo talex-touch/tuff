@@ -13,6 +13,10 @@ interface Props {
   isOpen: boolean
   pluginId: string
   pluginName: string
+  mode?: 'create' | 'reedit'
+  initialVersion?: string
+  initialChannel?: 'RELEASE' | 'BETA' | 'SNAPSHOT'
+  initialChangelog?: string
   loading?: boolean
   error?: string | null
   source?: HTMLElement | null
@@ -45,6 +49,7 @@ const packageFiles = ref<FileUploaderFile[]>([])
 const packageLoading = ref(false)
 const packageError = ref<string | null>(null)
 const manifestPreview = ref<TpexExtractedManifest | null>(null)
+const isReeditMode = computed(() => props.mode === 'reedit')
 
 type Step = 'form' | 'warning' | 'license'
 const step = ref<Step>('form')
@@ -59,9 +64,9 @@ let viewportResizeHandler: (() => void) | null = null
 watch(() => props.isOpen, async (isOpen) => {
   if (isOpen) {
     formData.value = {
-      version: '',
-      channel: 'SNAPSHOT',
-      changelog: '',
+      version: props.initialVersion ?? '',
+      channel: props.initialChannel ?? 'SNAPSHOT',
+      changelog: props.initialChangelog ?? '',
       packageFile: null as any,
     }
     packageFiles.value = []
@@ -104,11 +109,11 @@ async function handlePackageChange(files: FileUploaderFile[]) {
     if (result.manifest) {
       manifestPreview.value = result.manifest as TpexExtractedManifest
 
-      if (result.manifest.version && !formData.value.version) {
+      if (!isReeditMode.value && result.manifest.version && !formData.value.version) {
         formData.value.version = String(result.manifest.version)
       }
 
-      if (result.manifest.channel) {
+      if (!isReeditMode.value && result.manifest.channel) {
         const channel = String(result.manifest.channel).toUpperCase()
         if (['RELEASE', 'BETA', 'SNAPSHOT'].includes(channel)) {
           formData.value.channel = channel as 'RELEASE' | 'BETA' | 'SNAPSHOT'
@@ -150,6 +155,42 @@ const channelDescription = computed(() =>
 
 const channelVisibility = computed(() =>
   t(`dashboard.sections.plugins.channels.${formData.value.channel}.visibility`),
+)
+
+const headerTitle = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.reeditVersion')
+    : t('dashboard.sections.plugins.publishVersion'),
+)
+
+const submitLabel = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.versionForm.reeditSubmit')
+    : t('dashboard.sections.plugins.versionForm.submit'),
+)
+
+const warningTitle = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.warnings.reedit.title')
+    : t('dashboard.sections.plugins.warnings.immutable.title'),
+)
+
+const warningMessage = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.warnings.reedit.message')
+    : t('dashboard.sections.plugins.warnings.immutable.message'),
+)
+
+const warningConfirmText = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.warnings.reedit.understand')
+    : t('dashboard.sections.plugins.warnings.immutable.understand'),
+)
+
+const warningCancelText = computed(() =>
+  isReeditMode.value
+    ? t('dashboard.sections.plugins.warnings.reedit.cancel')
+    : t('dashboard.sections.plugins.warnings.immutable.cancel'),
 )
 
 const steps = ['form', 'warning', 'license'] as const
@@ -250,7 +291,7 @@ onBeforeUnmount(() => {
     <TxFlipOverlay
       v-model="visibleModel"
       :source="props.source"
-      :header-title="t('dashboard.sections.plugins.publishVersion')"
+      :header-title="headerTitle"
       :header-desc="pluginName"
     >
       <template #default>
@@ -301,6 +342,7 @@ onBeforeUnmount(() => {
                       <Input
                         v-model="formData.version"
                         placeholder="1.0.0"
+                        :disabled="isReeditMode"
                         pattern="^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
                       />
                     </div>
@@ -309,7 +351,7 @@ onBeforeUnmount(() => {
                       <label class="apple-section-title">
                         {{ t('dashboard.sections.plugins.versionForm.channel') }}
                       </label>
-                      <TuffSelect v-model="formData.channel" class="w-full">
+                      <TuffSelect v-model="formData.channel" class="w-full" :disabled="isReeditMode">
                         <TuffSelectItem value="RELEASE" label="RELEASE" />
                         <TuffSelectItem value="BETA" label="BETA" />
                         <TuffSelectItem value="SNAPSHOT" label="SNAPSHOT" />
@@ -375,7 +417,7 @@ onBeforeUnmount(() => {
                     <div class="pt-2">
                       <TxButton block :disabled="loading" native-type="submit">
                         <span v-if="loading" class="i-carbon-circle-dash mr-2 animate-spin" />
-                        {{ t('dashboard.sections.plugins.versionForm.submit') }}
+                        {{ submitLabel }}
                       </TxButton>
                       <p v-if="error" class="mt-2 text-center text-xs text-red-500">
                         {{ error }}
@@ -388,17 +430,17 @@ onBeforeUnmount(() => {
                       <span class="i-carbon-warning-alt text-4xl" />
                     </div>
                     <h3 class="mb-3 text-lg font-semibold text-black dark:text-white">
-                      {{ t('dashboard.sections.plugins.warnings.immutable.title') }}
+                      {{ warningTitle }}
                     </h3>
                     <p class="mx-auto mb-10 max-w-sm text-sm text-black/50 dark:text-white/50">
-                      {{ t('dashboard.sections.plugins.warnings.immutable.message') }}
+                      {{ warningMessage }}
                     </p>
                     <div class="flex flex-col gap-3">
                       <TxButton block class="rounded-xl" @click="onWarningConfirm">
-                        {{ t('dashboard.sections.plugins.warnings.immutable.understand') }}
+                        {{ warningConfirmText }}
                       </TxButton>
                       <FlatButton @click="step = 'form'">
-                        {{ t('dashboard.sections.plugins.warnings.immutable.cancel') }}
+                        {{ warningCancelText }}
                       </FlatButton>
                     </div>
                   </div>

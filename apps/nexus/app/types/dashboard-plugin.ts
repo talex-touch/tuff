@@ -25,8 +25,32 @@ export interface DashboardPluginVersion {
   manifest?: Record<string, unknown> | null
   status: VersionStatus
   reviewedAt?: string | null
+  rejectReason?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type PluginTimelineActorRole = 'owner' | 'admin' | 'system'
+
+export type PluginTimelineEventType =
+  | 'plugin.created'
+  | 'plugin.status.changed'
+  | 'version.created'
+  | 'version.status.changed'
+  | 'version.reedited'
+
+export interface DashboardPluginTimelineEvent {
+  id: string
+  pluginId: string
+  versionId?: string | null
+  eventType: PluginTimelineEventType
+  actorId?: string | null
+  actorRole: PluginTimelineActorRole
+  fromStatus?: string | null
+  toStatus?: string | null
+  reason?: string | null
+  meta?: Record<string, unknown> | null
+  createdAt: string
 }
 
 export interface DashboardPlugin {
@@ -49,6 +73,7 @@ export interface DashboardPlugin {
   createdAt: string
   updatedAt: string
   versions?: DashboardPluginVersion[]
+  timeline?: DashboardPluginTimelineEvent[]
   latestVersion?: DashboardPluginVersion | null
   hasPendingReview?: boolean
   pendingReviewCount?: number

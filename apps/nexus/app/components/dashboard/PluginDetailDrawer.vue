@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   DashboardPlugin as Plugin,
+  DashboardPluginTimelineEvent,
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
   VersionStatus,
@@ -18,6 +19,9 @@ interface Props {
   categoryLabel?: string
   isOwner?: boolean
   isAdmin?: boolean
+  timeline?: DashboardPluginTimelineEvent[]
+  timelineLoading?: boolean
+  timelineError?: string | null
   loading?: boolean
 }
 
@@ -32,6 +36,7 @@ const emit = defineEmits<{
   (e: 'withdrawReview', plugin: Plugin): void
   (e: 'download-version', version: PluginVersion): void
   (e: 'deleteVersion', plugin: Plugin, version: PluginVersion): void
+  (e: 'reeditVersion', plugin: Plugin, version: PluginVersion): void
 }>()
 
 const { t, locale } = useI18n()
@@ -101,6 +106,7 @@ const canPublishVersion = computed(() => {
 
 const canEdit = computed(() => props.isOwner || props.isAdmin)
 const canDelete = computed(() => props.isOwner || props.isAdmin)
+const canViewTimeline = computed(() => props.isOwner || props.isAdmin)
 
 const visibleModel = computed({
   get: () => props.isOpen,
@@ -109,6 +115,52 @@ const visibleModel = computed({
       emit('close')
   },
 })
+
+function resolveStatusLabel(status?: string | null) {
+  if (!status)
+    return '—'
+  if (status === 'draft' || status === 'pending' || status === 'approved' || status === 'rejected')
+    return t(`dashboard.sections.plugins.statuses.${status}`)
+  return status
+}
+
+function resolveTimelineActorLabel(actorRole: DashboardPluginTimelineEvent['actorRole']) {
+  return t(`dashboard.sections.plugins.timelineActors.${actorRole}`)
+}
+
+function resolveTimelineVersionTag(event: DashboardPluginTimelineEvent) {
+  const metaVersion = event.meta && typeof event.meta.version === 'string'
+    ? event.meta.version
+    : ''
+  if (metaVersion)
+    return metaVersion
+  return ''
+}
+
+function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
+  const from = resolveStatusLabel(event.fromStatus)
+  const to = resolveStatusLabel(event.toStatus)
+  const version = resolveTimelineVersionTag(event)
+
+  switch (event.eventType) {
+    case 'plugin.created':
+      return t('dashboard.sections.plugins.timelineEvents.pluginCreated')
+    case 'plugin.status.changed':
+      return t('dashboard.sections.plugins.timelineEvents.pluginStatusChanged', { from, to })
+    case 'version.created':
+      return t('dashboard.sections.plugins.timelineEvents.versionCreated', { version: version || '-' })
+    case 'version.status.changed':
+      return t('dashboard.sections.plugins.timelineEvents.versionStatusChanged', {
+        version: version || '-',
+        from,
+        to,
+      })
+    case 'version.reedited':
+      return t('dashboard.sections.plugins.timelineEvents.versionReedited', { version: version || '-' })
+    default:
+      return event.eventType
+  }
+}
 </script>
 
 <template>
@@ -231,6 +283,9 @@ const visibleModel = computed({
                       <p v-if="version.changelog" class="mt-2 text-xs text-black/60 dark:text-white/60">
                         {{ version.changelog }}
                       </p>
+                      <p v-if="version.status === 'rejected' && version.rejectReason" class="mt-1 text-xs text-rose-600 dark:text-rose-300">
+                        {{ t('dashboard.sections.plugins.rejectedReason') }}: {{ version.rejectReason }}
+                      </p>
                     </div>
                     <div class="flex shrink-0 items-center gap-1">
                       <a
@@ -243,6 +298,13 @@ const visibleModel = computed({
                         <span class="i-carbon-download text-sm" />
                       </a>
                       <FlatButton
+                        v-if="canEdit && version.status === 'rejected'"
+                        :title="t('dashboard.sections.plugins.reeditVersion')"
+                        @click="emit('reeditVersion', plugin, version)"
+                      >
+                        <span class="i-carbon-edit text-sm" />
+                      </FlatButton>
+                      <FlatButton
                         v-if="canDelete"
                         @click="emit('deleteVersion', plugin, version)"
                       >
@@ -254,6 +316,40 @@ const visibleModel = computed({
               </div>
               <p v-else class="text-center text-sm text-black/40 dark:text-white/40">
                 {{ t('dashboard.sections.plugins.noVersions') }}
+              </p>
+            </div>
+
+            <div v-if="canViewTimeline" class="border-t border-black/[0.04] py-4 dark:border-white/[0.06]">
+              <p class="mb-3 text-xs font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.plugins.timelineTitle') }}
+              </p>
+
+              <div v-if="timelineLoading" class="flex items-center gap-2 text-xs text-black/50 dark:text-white/50">
+                <span class="i-carbon-circle-dash animate-spin" />
+                {{ t('dashboard.sections.plugins.timelineLoading') }}
+              </div>
+              <p v-else-if="timelineError" class="text-xs text-rose-600 dark:text-rose-300">
+                {{ timelineError }}
+              </p>
+              <div v-else-if="timeline?.length" class="space-y-2">
+                <div
+                  v-for="item in timeline"
+                  :key="item.id"
+                  class="rounded-xl border border-black/[0.04] bg-black/[0.02] px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.02]"
+                >
+                  <p class="text-xs text-black/70 dark:text-white/70">
+                    {{ resolveTimelineEventLabel(item) }}
+                  </p>
+                  <p class="mt-1 text-[11px] text-black/45 dark:text-white/45">
+                    {{ formatDate(item.createdAt) }} · {{ resolveTimelineActorLabel(item.actorRole) }}
+                  </p>
+                  <p v-if="item.reason" class="mt-1 text-[11px] text-rose-600 dark:text-rose-300">
+                    {{ t('dashboard.sections.plugins.rejectReason') }}: {{ item.reason }}
+                  </p>
+                </div>
+              </div>
+              <p v-else class="text-xs text-black/40 dark:text-white/40">
+                {{ t('dashboard.sections.plugins.timelineEmpty') }}
               </p>
             </div>
           </div>

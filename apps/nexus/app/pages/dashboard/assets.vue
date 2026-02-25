@@ -4,7 +4,7 @@ import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import PluginMetadataOverlay from '~/components/dashboard/PluginMetadataOverlay.vue'
 import type { ReviewItem } from '~/components/dashboard/ReviewModalOverlay.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
-import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
+import type { DashboardPlugin, DashboardPluginTimelineEvent, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
 import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
@@ -19,6 +19,8 @@ type PendingReviewItem = ReviewItem
 
 interface VersionFormState {
   pluginId: string
+  versionId: string | null
+  mode: 'create' | 'reedit'
   version: string
   channel: PluginChannel
   changelog: string
@@ -284,6 +286,9 @@ const pluginFormVisibleModel = computed({
 const selectedPlugin = ref<DashboardPlugin | null>(null)
 const showDetailDrawer = ref(false)
 const detailOverlaySource = ref<HTMLElement | null>(null)
+const pluginTimeline = ref<DashboardPluginTimelineEvent[]>([])
+const pluginTimelineLoading = ref(false)
+const pluginTimelineError = ref<string | null>(null)
 const showReviewModal = ref(false)
 const reviewItem = ref<ReviewItem | null>(null)
 const reviewOverlaySource = ref<HTMLElement | null>(null)
@@ -355,16 +360,40 @@ const pluginsLoadErrorMessage = computed(() => {
 
 function openPluginDetail(plugin: DashboardPlugin, event?: MouseEvent) {
   selectedPlugin.value = plugin
+  pluginTimeline.value = []
+  pluginTimelineError.value = null
   detailOverlaySource.value = event?.currentTarget instanceof HTMLElement
     ? event.currentTarget
     : null
   showDetailDrawer.value = true
+  void loadPluginTimeline(plugin.id)
 }
 
 function closePluginDetail() {
   showDetailDrawer.value = false
   selectedPlugin.value = null
+  pluginTimeline.value = []
+  pluginTimelineLoading.value = false
+  pluginTimelineError.value = null
   detailOverlaySource.value = null
+}
+
+async function loadPluginTimeline(pluginId: string) {
+  pluginTimelineLoading.value = true
+  pluginTimelineError.value = null
+  try {
+    const result = await $fetch<{ timeline: DashboardPluginTimelineEvent[] }>(`/api/dashboard/plugins/${pluginId}/timeline`)
+    if (selectedPlugin.value?.id === pluginId)
+      pluginTimeline.value = result.timeline ?? []
+  }
+  catch (error: unknown) {
+    if (selectedPlugin.value?.id === pluginId)
+      pluginTimelineError.value = error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
+  }
+  finally {
+    if (selectedPlugin.value?.id === pluginId)
+      pluginTimelineLoading.value = false
+  }
 }
 
 function openReviewModal(item: PendingReviewItem, event?: MouseEvent) {
@@ -397,14 +426,14 @@ async function handleReviewApprove(item: ReviewItem) {
   }
 }
 
-async function handleReviewReject(item: ReviewItem, _reason: string) {
+async function handleReviewReject(item: ReviewItem, reason: string) {
   reviewLoading.value = true
   try {
     if (item.type === 'plugin') {
-      await rejectPlugin(item.plugin as DashboardPlugin)
+      await rejectPlugin(item.plugin as DashboardPlugin, reason)
     }
     else if (item.version) {
-      await rejectVersion(item.plugin as DashboardPlugin, item.version as DashboardPluginVersion)
+      await rejectVersion(item.plugin as DashboardPlugin, item.version as DashboardPluginVersion, reason)
     }
     closeReviewModal()
   }
@@ -440,6 +469,11 @@ function handleDetailWithdrawReview(plugin: DashboardPlugin) {
 
 function handleDetailDeleteVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
   deletePluginVersion(plugin, version)
+}
+
+function handleDetailReeditVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
+  closePluginDetail()
+  openReeditVersionForm(plugin, version)
 }
 
 function resetPluginForm() {
@@ -682,13 +716,16 @@ async function handlePluginPackageChange(files: FileUploaderFile[]) {
   }
 }
 
-async function updatePluginStatusAction(plugin: DashboardPlugin, status: DashboardPlugin['status']) {
+async function updatePluginStatusAction(plugin: DashboardPlugin, status: DashboardPlugin['status'], reason?: string) {
   pluginStatusUpdating.value = plugin.id
   pluginActionError.value = null
   try {
     await $fetch(`/api/dashboard/plugins/${plugin.id}/status`, {
       method: 'PATCH',
-      body: { status },
+      body: {
+        status,
+        reason: reason?.trim() || undefined,
+      },
     })
     await refreshPlugins()
   }
@@ -712,17 +749,25 @@ function approvePlugin(plugin: DashboardPlugin) {
   return updatePluginStatusAction(plugin, 'approved')
 }
 
-function rejectPlugin(plugin: DashboardPlugin) {
-  return updatePluginStatusAction(plugin, 'rejected')
+function rejectPlugin(plugin: DashboardPlugin, reason?: string) {
+  return updatePluginStatusAction(plugin, 'rejected', reason)
 }
 
-async function updateVersionStatus(plugin: DashboardPlugin, version: DashboardPluginVersion, status: DashboardPluginVersion['status']) {
+async function updateVersionStatus(
+  plugin: DashboardPlugin,
+  version: DashboardPluginVersion,
+  status: DashboardPluginVersion['status'],
+  reason?: string,
+) {
   versionStatusUpdating.value = version.id
   versionActionError.value = null
   try {
     await $fetch(`/api/dashboard/plugins/${plugin.id}/versions/${version.id}`, {
       method: 'PATCH',
-      body: { status },
+      body: {
+        status,
+        reason: reason?.trim() || undefined,
+      },
     })
     await refreshPlugins()
   }
@@ -738,8 +783,8 @@ function approveVersion(plugin: DashboardPlugin, version: DashboardPluginVersion
   return updateVersionStatus(plugin, version, 'approved')
 }
 
-function rejectVersion(plugin: DashboardPlugin, version: DashboardPluginVersion) {
-  return updateVersionStatus(plugin, version, 'rejected')
+function rejectVersion(plugin: DashboardPlugin, version: DashboardPluginVersion, reason?: string) {
+  return updateVersionStatus(plugin, version, 'rejected', reason)
 }
 
 function closePluginForm() {
@@ -875,6 +920,8 @@ async function deletePluginItem(plugin: DashboardPlugin) {
 function createVersionFormState(plugin?: DashboardPlugin): VersionFormState {
   return {
     pluginId: plugin?.id ?? '',
+    versionId: null,
+    mode: 'create',
     version: '',
     channel: 'SNAPSHOT',
     changelog: '',
@@ -883,23 +930,36 @@ function createVersionFormState(plugin?: DashboardPlugin): VersionFormState {
 }
 
 const versionForm = reactive(createVersionFormState())
+const versionFormPluginName = ref('')
 const showVersionForm = ref(false)
 const versionFormError = ref<string | null>(null)
 const versionSaving = ref(false)
 
 function resetVersionForm(plugin?: DashboardPlugin) {
   Object.assign(versionForm, createVersionFormState(plugin))
+  versionFormPluginName.value = plugin?.name ?? ''
   versionFormError.value = null
   showVersionForm.value = Boolean(plugin)
 }
 
 function closeVersionForm() {
   showVersionForm.value = false
+  versionFormPluginName.value = ''
   resetVersionForm()
 }
 
 function openPublishVersionForm(plugin: DashboardPlugin) {
   resetVersionForm(plugin)
+  showVersionForm.value = true
+}
+
+function openReeditVersionForm(plugin: DashboardPlugin, version: DashboardPluginVersion) {
+  resetVersionForm(plugin)
+  versionForm.versionId = version.id
+  versionForm.mode = 'reedit'
+  versionForm.version = version.version
+  versionForm.channel = version.channel
+  versionForm.changelog = version.changelog ?? ''
   showVersionForm.value = true
 }
 
@@ -917,10 +977,20 @@ async function submitVersionForm(data: VersionFormData) {
     formData.append('changelog', data.changelog.trim())
     formData.append('package', data.packageFile)
 
-    await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
-      method: 'POST',
-      body: formData,
-    })
+    if (versionForm.mode === 'reedit') {
+      if (!versionForm.versionId)
+        throw new Error(t('dashboard.sections.plugins.errors.missingVersion'))
+      await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions/${versionForm.versionId}/reedit`, {
+        method: 'PATCH',
+        body: formData,
+      })
+    }
+    else {
+      await $fetch(`/api/dashboard/plugins/${versionForm.pluginId}/versions`, {
+        method: 'POST',
+        body: formData,
+      })
+    }
 
     await refreshPlugins()
     closeVersionForm()
@@ -1284,7 +1354,11 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
     <VersionDrawer
       :is-open="showVersionForm"
       :plugin-id="versionForm.pluginId"
-      :plugin-name="selectedPlugin?.name || ''"
+      :plugin-name="versionFormPluginName"
+      :mode="versionForm.mode"
+      :initial-version="versionForm.version"
+      :initial-channel="versionForm.channel"
+      :initial-changelog="versionForm.changelog"
       :loading="versionSaving"
       :error="versionFormError"
       @close="closeVersionForm"
@@ -1307,6 +1381,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       :category-label="selectedPlugin ? resolvePluginCategory(selectedPlugin.category) : ''"
       :is-owner="selectedPlugin ? isPluginOwner(selectedPlugin) : false"
       :is-admin="isAdmin"
+      :timeline="pluginTimeline"
+      :timeline-loading="pluginTimelineLoading"
+      :timeline-error="pluginTimelineError"
       :loading="pluginStatusUpdating !== null"
       @close="closePluginDetail"
       @edit="handleDetailEdit"
@@ -1315,6 +1392,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       @submit-review="handleDetailSubmitReview"
       @withdraw-review="handleDetailWithdrawReview"
       @delete-version="handleDetailDeleteVersion"
+      @reedit-version="handleDetailReeditVersion"
     />
 
     <ReviewOverlayDialog

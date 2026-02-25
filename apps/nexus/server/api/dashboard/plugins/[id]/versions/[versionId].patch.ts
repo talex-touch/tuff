@@ -13,8 +13,9 @@ export default defineEventHandler(async (event) => {
   if (!id || !versionId)
     throw createError({ statusCode: 400, statusMessage: 'Plugin id and version id are required.' })
 
-  const body = await readBody<{ status?: string }>(event)
+  const body = await readBody<{ status?: string, reason?: string }>(event)
   const status = body?.status?.trim()
+  const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
 
   if (!status || !(ALLOWED_VERSION_STATUSES as readonly string[]).includes(status))
     throw createError({ statusCode: 400, statusMessage: 'Invalid status.' })
@@ -30,7 +31,11 @@ export default defineEventHandler(async (event) => {
   if (!isAdmin)
     throw createError({ statusCode: 403, statusMessage: 'Only administrators can moderate versions.' })
 
-  const version = await setPluginVersionStatus(event, id, versionId, status as (typeof ALLOWED_VERSION_STATUSES)[number])
+  const version = await setPluginVersionStatus(event, id, versionId, status as (typeof ALLOWED_VERSION_STATUSES)[number], {
+    actorId: userId,
+    actorRole: 'admin',
+    reason: status === 'rejected' ? (reason || null) : null,
+  })
 
   return {
     version,

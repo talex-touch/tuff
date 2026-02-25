@@ -12,8 +12,9 @@ export default defineEventHandler(async (event) => {
   if (!id)
     throw createError({ statusCode: 400, statusMessage: 'Plugin id is required.' })
 
-  const body = await readBody<{ status?: string }>(event)
+  const body = await readBody<{ status?: string, reason?: string }>(event)
   const status = body?.status?.trim()
+  const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
 
   if (!status || !(ALLOWED_STATUSES as readonly string[]).includes(status))
     throw createError({ statusCode: 400, statusMessage: 'Invalid status.' })
@@ -34,7 +35,11 @@ export default defineEventHandler(async (event) => {
   if (!isAdmin && !['draft', 'pending'].includes(status))
     throw createError({ statusCode: 403, statusMessage: 'You cannot set this status.' })
 
-  const updated = await setPluginStatus(event, id, status as (typeof ALLOWED_STATUSES)[number])
+  const updated = await setPluginStatus(event, id, status as (typeof ALLOWED_STATUSES)[number], {
+    actorId: userId,
+    actorRole: isAdmin ? 'admin' : 'owner',
+    reason: status === 'rejected' ? (reason || null) : null,
+  })
 
   return {
     plugin: updated,
