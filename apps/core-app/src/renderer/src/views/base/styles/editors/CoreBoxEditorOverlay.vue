@@ -182,8 +182,6 @@ function handleCancel(close: () => void): void {
 .CoreBoxEditorOverlay-Card {
   width: min(1160px, 94vw);
   height: min(820px, 90vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

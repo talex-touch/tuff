@@ -131,19 +131,11 @@ function handleClick(event: MouseEvent): void {
       transition-name="DownloadDialog-Mask"
       mask-class="DownloadDialog-Mask"
       card-class="DownloadDialog-Card"
+      :header-title="t('download.title')"
+      :header-desc="summaryLabel"
     >
-      <template #default="{ close }">
+      <template #default>
         <div class="DownloadDialog">
-          <div class="DownloadDialog-Header">
-            <div class="DownloadDialog-TitleBlock">
-              <div class="DownloadDialog-Title">{{ t('download.title') }}</div>
-              <div class="DownloadDialog-Subtitle">{{ summaryLabel }}</div>
-            </div>
-            <TxButton variant="flat" size="sm" class="DownloadDialog-CloseBtn" @click="close">
-              <i class="i-ri-close-line" />
-            </TxButton>
-          </div>
-
           <div class="DownloadDialog-Body">
             <DownloadCenter />
           </div>
@@ -250,36 +242,6 @@ function handleClick(event: MouseEvent): void {
   min-height: 0;
 }
 
-.DownloadDialog-Header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 18px 10px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.DownloadDialog-TitleBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.DownloadDialog-Title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.DownloadDialog-Subtitle {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.DownloadDialog-CloseBtn {
-  flex: 0 0 auto;
-}
-
 .DownloadDialog-Body {
   flex: 1;
   min-height: 0;
@@ -323,8 +285,6 @@ function handleClick(event: MouseEvent): void {
 .DownloadDialog-Card {
   width: min(1120px, 92vw);
   height: min(820px, 86vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

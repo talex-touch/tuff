@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { AssetCreateType, AssetTypeOption } from './types'
-import { TxAutoSizer, TxButton, TxFlipOverlay, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxAutoSizer, TxFlipOverlay } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AssetBetaStep from './AssetBetaStep.vue'
 import AssetPluginFormStep from './AssetPluginFormStep.vue'
-import AssetPluginStep from './AssetPluginStep.vue'
 import AssetStepCarousel from './AssetStepCarousel.vue'
 import AssetTypePickerStep from './AssetTypePickerStep.vue'
 
 interface AutoSizerActionApi {
-  action?: (fn: () => void | Promise<void>) => Promise<void> | void
   refresh?: () => Promise<void> | void
 }
 
@@ -29,12 +27,20 @@ const visible = defineModel<boolean>({ default: false })
 const { t } = useI18n()
 
 const sizerRef = ref<AutoSizerActionApi | null>(null)
-const headerRef = ref<HTMLElement | null>(null)
 const currentType = ref<AssetCreateType | null>(null)
 const step = ref<'type' | 'detail' | 'plugin_form'>('type')
 const stepDirection = ref<1 | -1>(1)
 const maxBodyHeight = ref<number | null>(null)
+const isStepSwitching = ref(false)
 let resizeHandler: (() => void) | null = null
+
+function startStepSwitch() {
+  isStepSwitching.value = true
+}
+
+function resetStepSwitchState() {
+  isStepSwitching.value = false
+}
 
 const typeOptions = computed<AssetTypeOption[]>(() => [
   {
@@ -65,7 +71,8 @@ const typeOptions = computed<AssetTypeOption[]>(() => [
       'Reusable style tokens and CSS packs. Beta preview only for now.'
     ),
     icon: 'i-carbon-code',
-    beta: true
+    beta: true,
+    disabled: true
   },
   {
     type: 'layout_resource',
@@ -75,7 +82,8 @@ const typeOptions = computed<AssetTypeOption[]>(() => [
       'Layout / preset assets, used for dynamic UI composition. Beta preview only.'
     ),
     icon: 'i-carbon-grid',
-    beta: true
+    beta: true,
+    disabled: true
   }
 ])
 
@@ -104,48 +112,22 @@ const overlayCardClass = computed(() => {
   return `${base} is-compact`
 })
 
-async function runWithAutoSizer(fn: () => void | Promise<void>) {
-  const action = sizerRef.value?.action
-  if (action) {
-    await action(fn)
-    return
-  }
-  await fn()
-}
-
-async function handleSelectType(option: AssetTypeOption) {
+function handleSelectType(option: AssetTypeOption) {
   if (option.disabled) {
     return
   }
 
+  startStepSwitch()
   stepDirection.value = 1
-  await runWithAutoSizer(async () => {
-    currentType.value = option.type
-    step.value = 'detail'
-  })
+  currentType.value = option.type
+  step.value = option.type === 'plugin' ? 'plugin_form' : 'detail'
 }
 
-async function handleBackToType() {
-  if (step.value === 'plugin_form') {
-    stepDirection.value = -1
-    await runWithAutoSizer(async () => {
-      step.value = 'detail'
-    })
-    return
-  }
-
+function handleBackToType() {
+  startStepSwitch()
   stepDirection.value = -1
-  await runWithAutoSizer(async () => {
-    step.value = 'type'
-    currentType.value = null
-  })
-}
-
-async function handleOpenPluginForm() {
-  stepDirection.value = 1
-  await runWithAutoSizer(async () => {
-    step.value = 'plugin_form'
-  })
+  step.value = 'type'
+  currentType.value = null
 }
 
 function handleSubmitPlugin(data: PluginFormData) {
@@ -153,21 +135,26 @@ function handleSubmitPlugin(data: PluginFormData) {
 }
 
 async function handleChildLayoutChange() {
-  const refresh = sizerRef.value?.refresh
-  if (refresh) {
-    await refresh()
+  if (isStepSwitching.value)
     return
-  }
-  await runWithAutoSizer(async () => {})
+
+  const refresh = sizerRef.value?.refresh
+  if (refresh)
+    await refresh()
+}
+
+function handleStepSettled() {
+  if (isStepSwitching.value)
+    isStepSwitching.value = false
+  void handleChildLayoutChange()
 }
 
 function resolveMaxBodyHeight() {
   if (!hasWindow())
     return 620
   const viewportMax = Math.floor(window.innerHeight * 0.7)
-  const headerHeight = headerRef.value?.getBoundingClientRect().height ?? 0
   const bodyPadding = 24
-  return Math.max(260, viewportMax - headerHeight - bodyPadding)
+  return Math.max(260, viewportMax - bodyPadding)
 }
 
 function updateMaxBodyHeight() {
@@ -196,6 +183,7 @@ watch(
   () => visible.value,
   (opened) => {
     if (opened) {
+      resetStepSwitchState()
       nextTick(() => {
         updateMaxBodyHeight()
         void handleChildLayoutChange()
@@ -203,6 +191,7 @@ watch(
       return
     }
 
+    resetStepSwitchState()
     step.value = 'type'
     currentType.value = null
     stepDirection.value = 1
@@ -223,6 +212,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  resetStepSwitchState()
   if (!hasWindow() || !resizeHandler)
     return
   window.removeEventListener('resize', resizeHandler)
@@ -242,46 +232,20 @@ onBeforeUnmount(() => {
       transition-name="AssetCreateOverlay-Mask"
       mask-class="AssetCreateOverlay-Mask"
       :card-class="overlayCardClass"
+      :header-title="t('dashboard.sections.plugins.assetCreate.title', 'Create Asset')"
+      :header-desc="t('dashboard.sections.plugins.assetCreate.subtitle', 'Select a type first, then continue with the dedicated publishing flow.')"
     >
-      <template #default="overlaySlot">
+      <template #default>
         <div class="AssetCreateOverlay">
-          <div ref="headerRef" class="AssetCreateOverlay-Header">
-            <div class="AssetCreateOverlay-TitleWrap">
-              <p class="AssetCreateOverlay-Title">
-                {{ t('dashboard.sections.plugins.assetCreate.title', 'Create Asset') }}
-              </p>
-              <p class="AssetCreateOverlay-Subtitle">
-                {{
-                  t(
-                    'dashboard.sections.plugins.assetCreate.subtitle',
-                    'Select a type first, then continue with the dedicated publishing flow.'
-                  )
-                }}
-              </p>
-            </div>
-
-            <div class="AssetCreateOverlay-Actions">
-              <TxStatusBadge text="Beta" status="warning" size="sm" />
-              <TxButton v-if="step !== 'type'" variant="secondary" size="small" @click="handleBackToType">
-                <span class="i-carbon-arrow-left mr-1" />
-                {{ t('dashboard.sections.plugins.assetCreate.back', 'Back') }}
-              </TxButton>
-              <TxButton variant="flat" size="small" @click="overlaySlot?.close?.()">
-                {{ t('common.close', 'Close') }}
-              </TxButton>
-            </div>
-          </div>
-
-          <div class="AssetCreateOverlay-Body">
             <TxAutoSizer
               ref="sizerRef"
-              :width="true"
+              :width="false"
               :height="true"
-              :duration-ms="260"
+              :duration-ms="0"
               easing="cubic-bezier(0.4, 0, 0.2, 1)"
               outer-class="AssetCreateOverlay-SizerOuter"
             >
-            <AssetStepCarousel :active-key="currentStepKey" :direction="stepDirection" @settled="handleChildLayoutChange">
+            <AssetStepCarousel :active-key="currentStepKey" :direction="stepDirection" @settled="handleStepSettled">
                 <AssetTypePickerStep
                   v-if="step === 'type'"
                   :options="typeOptions"
@@ -295,13 +259,9 @@ onBeforeUnmount(() => {
                   :loading="props.pluginLoading"
                   :error="props.pluginError"
                   :is-admin="props.isAdmin"
+                  :suspend-layout-emit="isStepSwitching"
                   @layout-change="handleChildLayoutChange"
                   @submit="handleSubmitPlugin"
-                />
-
-                <AssetPluginStep
-                  v-else-if="currentType === 'plugin'"
-                  @open-plugin-drawer="handleOpenPluginForm"
                 />
 
                 <AssetBetaStep
@@ -313,7 +273,6 @@ onBeforeUnmount(() => {
                 />
               </AssetStepCarousel>
             </TxAutoSizer>
-          </div>
         </div>
       </template>
     </TxFlipOverlay>
@@ -327,41 +286,6 @@ onBeforeUnmount(() => {
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.AssetCreateOverlay-Header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.AssetCreateOverlay-Title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.AssetCreateOverlay-Subtitle {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.AssetCreateOverlay-Actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.AssetCreateOverlay-Body {
-  flex: 0 0 auto;
-  min-height: 0;
-  overflow: hidden;
-  padding: 12px;
 }
 
 :deep(.AssetCreateOverlay-SizerOuter) {
@@ -399,8 +323,6 @@ onBeforeUnmount(() => {
 .AssetCreateOverlay-Card {
   min-height: 320px;
   max-height: 90vh;
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.2rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;
@@ -413,6 +335,7 @@ onBeforeUnmount(() => {
   transform-style: preserve-3d;
   backface-visibility: hidden;
   will-change: transform;
+  transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .AssetCreateOverlay-Card.is-compact {

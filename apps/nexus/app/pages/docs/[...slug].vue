@@ -1801,52 +1801,41 @@ watch(
                 mask-class="docs-analytics-config-mask"
                 card-class="docs-analytics-config-card"
               >
+                <template #header-display>
+                  <div class="docs-analytics-config__title-wrap">
+                    <span class="i-carbon-chart-line-data docs-analytics-config__title-icon" />
+                    <h3 class="docs-analytics-config__title">
+                      {{ locale === 'zh' ? '文档热区配置' : 'Docs Overlay Settings' }}
+                    </h3>
+                  </div>
+                </template>
+                <template #header-actions>
+                  <div class="docs-analytics-config__header-actions">
+                    <TxTooltip :content="docsAnalyticsQuickTips.refresh" :anchor="{ placement: 'bottom', showArrow: true }">
+                      <TxButton
+                        circle
+                        size="small"
+                        variant="bare"
+                        native-type="button"
+                        class="docs-analytics-icon-btn"
+                        :loading="docsAnalyticsLoading"
+                        @click="loadDocsAnalyticsOverlay(true)"
+                      >
+                        <span class="i-carbon-renew" />
+                      </TxButton>
+                    </TxTooltip>
+                    <TxTooltip :content="docsAnalyticsQuickTips.analytics" :anchor="{ placement: 'bottom', showArrow: true }">
+                      <NuxtLink
+                        :to="adminAnalyticsHref"
+                        class="docs-analytics-icon-link"
+                      >
+                        <span class="i-carbon-launch" />
+                      </NuxtLink>
+                    </TxTooltip>
+                  </div>
+                </template>
                 <template #default>
                   <section class="docs-analytics-config">
-                    <header class="docs-analytics-config__header">
-                      <div class="docs-analytics-config__title-wrap">
-                        <span class="i-carbon-chart-line-data docs-analytics-config__title-icon" />
-                        <h3 class="docs-analytics-config__title">
-                          {{ locale === 'zh' ? '文档热区配置' : 'Docs Overlay Settings' }}
-                        </h3>
-                      </div>
-                      <div class="docs-analytics-config__header-actions">
-                        <TxTooltip :content="docsAnalyticsQuickTips.refresh" :anchor="{ placement: 'bottom', showArrow: true }">
-                          <TxButton
-                            circle
-                            size="small"
-                            variant="bare"
-                            native-type="button"
-                            class="docs-analytics-icon-btn"
-                            :loading="docsAnalyticsLoading"
-                            @click="loadDocsAnalyticsOverlay(true)"
-                          >
-                            <span class="i-carbon-renew" />
-                          </TxButton>
-                        </TxTooltip>
-                        <TxTooltip :content="docsAnalyticsQuickTips.analytics" :anchor="{ placement: 'bottom', showArrow: true }">
-                          <NuxtLink
-                            :to="adminAnalyticsHref"
-                            class="docs-analytics-icon-link"
-                          >
-                            <span class="i-carbon-launch" />
-                          </NuxtLink>
-                        </TxTooltip>
-                        <TxTooltip :content="docsAnalyticsQuickTips.close" :anchor="{ placement: 'left', showArrow: true }">
-                          <TxButton
-                            circle
-                            size="small"
-                            variant="bare"
-                            native-type="button"
-                            class="docs-analytics-icon-btn"
-                            @click="docsAnalyticsConfigOpen = false"
-                          >
-                            <span class="i-carbon-close" />
-                          </TxButton>
-                        </TxTooltip>
-                      </div>
-                    </header>
-
                     <div class="docs-analytics-config__group">
                       <label class="docs-analytics-config__label">
                         {{ locale === 'zh' ? '统计窗口（天）' : 'Window (days)' }}
@@ -2257,13 +2246,6 @@ watch(
   gap: 14px;
   height: 100%;
   padding: 18px;
-}
-
-.docs-analytics-config__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
 }
 
 .docs-analytics-config__title-wrap {
@@ -2790,8 +2772,6 @@ a.docs-hero-crumb:hover {
 .docs-analytics-config-card {
   width: min(440px, 92vw);
   height: min(520px, 78vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 16px;
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
   overflow: hidden;

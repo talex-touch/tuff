@@ -131,10 +131,6 @@ function formatToolMessage(name?: string, rawArgs?: string) {
   return `${label}: ${toolName}\n${preview}`
 }
 
-function closeDialog() {
-  emit('update:modelValue', false)
-}
-
 function loadStoredSessionId() {
   if (!import.meta.client)
     return
@@ -365,25 +361,14 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
       mask-class="AssistantOverlay-Mask"
       card-class="AssistantOverlay-Card"
     >
+      <template #header-display>
+        <div class="assistant-dialog__title">
+          <span class="assistant-dialog__spark">✦</span>
+          {{ labels.title }}
+        </div>
+      </template>
       <template #default>
         <div class="assistant-dialog">
-          <header class="assistant-dialog__header">
-            <div class="assistant-dialog__title">
-              <span class="assistant-dialog__spark">✦</span>
-              {{ labels.title }}
-            </div>
-            <TxButton
-              variant="ghost"
-              size="mini"
-              class="assistant-dialog__close"
-              native-type="button"
-              :aria-label="labels.close"
-              @click="closeDialog"
-            >
-              <span class="i-carbon-close" />
-            </TxButton>
-          </header>
-
           <div ref="scrollRef" class="assistant-dialog__messages">
             <div v-if="!messages.length" class="assistant-dialog__empty">
               {{ labels.empty }}
@@ -460,12 +445,6 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
   gap: 16px;
 }
 
-.assistant-dialog__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .assistant-dialog__title {
   display: flex;
   align-items: center;
@@ -478,10 +457,6 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
 .assistant-dialog__spark {
   color: #3b82f6;
   font-size: 16px;
-}
-
-.assistant-dialog__close {
-  color: var(--tx-text-color-secondary);
 }
 
 .assistant-dialog__messages {
@@ -623,8 +598,6 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
 .AssistantOverlay-Card {
   width: min(860px, 92vw);
   height: min(72vh, 720px);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.1rem;
   box-shadow: 0 26px 70px rgba(0, 0, 0, 0.35);
   overflow: hidden;

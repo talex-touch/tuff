@@ -32,6 +32,21 @@ interface NewKeyResponse {
   message: string
 }
 
+interface ApiKeyScope {
+  id: string
+  label: string
+  description: string
+  sensitive?: boolean
+}
+
+interface ApiKeyScopeGroup {
+  id: string
+  label: string
+  description: string
+  adminOnly?: boolean
+  children: ApiKeyScope[]
+}
+
 const keys = ref<ApiKey[]>([])
 const loading = ref(true)
 const creating = ref(false)
@@ -201,21 +216,41 @@ function isExpired(date: string | null): boolean {
   return new Date(date) < new Date()
 }
 
-
-const baseScopes = [
-  { id: 'plugin:publish', label: 'Publish Plugins', description: 'Upload and publish plugins to the marketplace' },
-  { id: 'plugin:read', label: 'Read Plugins', description: 'View plugin information' },
-  { id: 'account:read', label: 'Read Account', description: 'View account information' },
+const scopeTree: ApiKeyScopeGroup[] = [
+  {
+    id: 'plugins',
+    label: 'Plugins',
+    description: 'Manage plugin registry visibility and publishing',
+    children: [
+      { id: 'plugin:read', label: 'Read Plugins', description: 'View plugin information' },
+      { id: 'plugin:publish', label: 'Publish Plugins', description: 'Upload and publish plugins to the store', sensitive: true },
+    ],
+  },
+  {
+    id: 'account',
+    label: 'Account',
+    description: 'Read account level profile information',
+    children: [
+      { id: 'account:read', label: 'Read Account', description: 'View account information' },
+    ],
+  },
+  {
+    id: 'releases',
+    label: 'Releases',
+    description: 'Manage release sync, metadata, publishing and assets',
+    adminOnly: true,
+    children: [
+      { id: 'release:sync', label: 'Sync Releases', description: 'Sync releases, assets, and publish status from CI', sensitive: true },
+      { id: 'release:write', label: 'Write Releases', description: 'Create or update release metadata', sensitive: true },
+      { id: 'release:publish', label: 'Publish Releases', description: 'Publish release notes and channels', sensitive: true },
+      { id: 'release:assets', label: 'Manage Release Assets', description: 'Upload or link release assets', sensitive: true },
+      { id: 'release:news', label: 'Sync Update News', description: 'Create dashboard updates/news records from CI', sensitive: true },
+    ],
+  },
 ]
 
-const releaseScopes = [
-  { id: 'release:sync', label: 'Sync Releases', description: 'Sync releases, assets, and publish status from CI' },
-  { id: 'release:write', label: 'Write Releases', description: 'Create or update release metadata' },
-  { id: 'release:publish', label: 'Publish Releases', description: 'Publish release notes and channels' },
-  { id: 'release:assets', label: 'Manage Release Assets', description: 'Upload or link release assets' },
-]
-
-const availableScopes = computed(() => (isAdmin.value ? [...baseScopes, ...releaseScopes] : baseScopes))
+const availableScopeTree = computed(() => scopeTree.filter(group => !group.adminOnly || isAdmin.value))
+const selectedScopeCount = computed(() => newKeyScopes.value.length)
 
 const expiryOptions = [
   { value: 'never', label: 'Never expires' },
@@ -361,21 +396,16 @@ const expiryOptions = [
         :duration="420"
         :rotate-x="6"
         :rotate-y="8"
+        :mask-closable="false"
+        :prevent-accidental-close="true"
         transition-name="ApiKeyOverlay-Mask"
         mask-class="ApiKeyOverlay-Mask"
         card-class="ApiKeyOverlay-Card"
+        header-title="Create API Key"
+        header-desc="Generate a new API key for CLI tools"
       >
         <template #default="{ close }">
           <div class="ApiKeyOverlay-Inner">
-            <div class="space-y-1">
-              <h2 class="ApiKeyOverlay-Title">
-                Create API Key
-              </h2>
-              <p class="ApiKeyOverlay-Desc">
-                Generate a new API key for CLI tools
-              </p>
-            </div>
-
             <div class="space-y-4">
               <div class="space-y-2">
                 <label class="text-xs text-black/60 dark:text-white/60">
@@ -393,23 +423,61 @@ const expiryOptions = [
                 <label class="text-xs text-black/60 dark:text-white/60">
                   Permissions
                 </label>
-                <div class="space-y-2">
-                  <label
-                    v-for="scope in availableScopes"
-                    :key="scope.id"
-                    class="flex cursor-pointer items-start gap-3 rounded-xl bg-black/[0.03] p-3 transition hover:bg-black/[0.06] dark:bg-white/[0.04] dark:hover:bg-white/[0.07]"
+                <div class="ApiKeyScopeTree">
+                  <section
+                    v-for="group in availableScopeTree"
+                    :key="group.id"
+                    class="ApiKeyScopeTree-Group"
                   >
-                    <TxCheckbox
-                      class="mt-0.5"
-                      :model-value="newKeyScopes.includes(scope.id)"
-                      @change="(value: boolean) => toggleScope(scope.id, value)"
-                    />
-                    <div>
-                      <p class="text-sm font-medium text-black dark:text-white">{{ scope.label }}</p>
-                      <p class="text-xs text-black/50 dark:text-white/50">{{ scope.description }}</p>
+                    <div class="ApiKeyScopeTree-GroupHeader">
+                      <p class="ApiKeyScopeTree-GroupTitle">
+                        {{ group.label }}
+                      </p>
+                      <p class="ApiKeyScopeTree-GroupDesc">
+                        {{ group.description }}
+                      </p>
                     </div>
-                  </label>
+                    <div class="ApiKeyScopeTree-Children">
+                      <label
+                        v-for="scope in group.children"
+                        :key="scope.id"
+                        class="ApiKeyScopeTree-Node"
+                        :class="{ 'is-sensitive': scope.sensitive }"
+                      >
+                        <TxCheckbox
+                          class="mt-0.5"
+                          :model-value="newKeyScopes.includes(scope.id)"
+                          @change="(value: boolean) => toggleScope(scope.id, value)"
+                        />
+                        <div class="min-w-0">
+                          <div class="ApiKeyScopeTree-NodeTitleRow">
+                            <p
+                              class="ApiKeyScopeTree-NodeTitle"
+                              :class="{ 'is-sensitive': scope.sensitive }"
+                            >
+                              {{ scope.label }}
+                            </p>
+                            <span v-if="scope.sensitive" class="ApiKeyScopeTree-RiskTag">
+                              不建议
+                            </span>
+                          </div>
+                          <p
+                            class="ApiKeyScopeTree-NodeDesc"
+                            :class="{ 'is-sensitive': scope.sensitive }"
+                          >
+                            {{ scope.description }}
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </section>
                 </div>
+                <p class="ApiKeyScopeTree-Count">
+                  Selected permissions: {{ selectedScopeCount }}
+                </p>
+                <p class="ApiKeyScopeTree-RiskHint">
+                  红色权限属于敏感操作，不建议分配给长期或共享 API Key。
+                </p>
               </div>
 
               <div class="space-y-2">
@@ -458,22 +526,124 @@ const expiryOptions = [
   padding: 18px;
 }
 
-.ApiKeyOverlay-Title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.ApiKeyOverlay-Desc {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-}
-
 .ApiKeyOverlay-Actions {
   margin-top: auto;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.ApiKeyScopeTree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ApiKeyScopeTree-Group {
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-lighter) 76%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 90%, transparent);
+  padding: 10px 12px;
+}
+
+.ApiKeyScopeTree-GroupHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ApiKeyScopeTree-GroupTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--tx-text-color-primary);
+  text-transform: uppercase;
+}
+
+.ApiKeyScopeTree-GroupDesc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ApiKeyScopeTree-Children {
+  margin-top: 8px;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid color-mix(in srgb, var(--tx-border-color-lighter) 74%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ApiKeyScopeTree-Node {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px 10px;
+  transition: background-color 160ms ease;
+}
+
+.ApiKeyScopeTree-Node:hover {
+  background: color-mix(in srgb, var(--tx-color-primary, #409eff) 7%, transparent);
+}
+
+.ApiKeyScopeTree-Node.is-sensitive {
+  border: 1px solid color-mix(in srgb, #ef4444 35%, transparent);
+  background: color-mix(in srgb, #ef4444 8%, transparent);
+}
+
+.ApiKeyScopeTree-NodeTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ApiKeyScopeTree-NodeTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
+}
+
+.ApiKeyScopeTree-NodeTitle.is-sensitive {
+  color: color-mix(in srgb, #ef4444 80%, var(--tx-text-color-primary));
+}
+
+.ApiKeyScopeTree-NodeDesc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ApiKeyScopeTree-NodeDesc.is-sensitive {
+  color: color-mix(in srgb, #ef4444 70%, var(--tx-text-color-secondary));
+}
+
+.ApiKeyScopeTree-RiskTag {
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, #ef4444 55%, transparent);
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 8px;
+}
+
+.ApiKeyScopeTree-Count {
+  margin: 2px 4px 0;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+}
+
+.ApiKeyScopeTree-RiskHint {
+  margin: 4px 4px 0;
+  font-size: 12px;
+  color: color-mix(in srgb, #ef4444 75%, var(--tx-text-color-secondary));
 }
 </style>
 
@@ -501,12 +671,20 @@ const expiryOptions = [
   opacity: 0;
 }
 
+.ApiKeyOverlay-Mask.is-close-guard-warning::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 62, 62, 0.26) 0%, rgba(255, 62, 62, 0.14) 42%, rgba(255, 62, 62, 0) 72%);
+  animation: ApiKeyOverlayMaskAlert 520ms ease-out;
+}
+
 .ApiKeyOverlay-Card {
   width: min(520px, 92vw);
   min-height: 320px;
   max-height: 82vh;
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
   overflow: auto;
@@ -515,6 +693,15 @@ const expiryOptions = [
   top: 50%;
   display: flex;
   flex-direction: column;
+  z-index: 1;
+}
+
+.ApiKeyOverlay-Card.is-close-guard-warning {
+  animation: ApiKeyOverlayCardAlert 760ms ease-out !important;
+}
+
+.ApiKeyOverlay-Card .TxFlipOverlay-Shell.is-close-guard-focus {
+  animation: ApiKeyOverlayFocusKick 420ms cubic-bezier(0.2, 0.72, 0.2, 1) !important;
 }
 
 .ApiKeyDeleteDialog {
@@ -549,5 +736,58 @@ const expiryOptions = [
   display: flex;
   justify-content: center;
   gap: 10px;
+}
+
+@keyframes ApiKeyOverlayMaskAlert {
+  0% {
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes ApiKeyOverlayCardAlert {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(255, 66, 66, 0));
+  }
+
+  24% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 96, 96, 0.96))
+      drop-shadow(0 0 24px rgba(255, 67, 67, 0.74))
+      drop-shadow(0 0 46px rgba(255, 46, 46, 0.56));
+  }
+
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 66, 66, 0));
+  }
+}
+
+@keyframes ApiKeyOverlayFocusKick {
+  0% {
+    transform: scale(1);
+  }
+
+  28% {
+    transform: scale(1.05);
+  }
+
+  52% {
+    transform: scale(0.982);
+  }
+
+  72% {
+    transform: scale(1.018);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 </style>

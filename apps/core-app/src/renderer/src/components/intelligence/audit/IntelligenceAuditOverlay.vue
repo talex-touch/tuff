@@ -32,34 +32,17 @@ function handleViewFullAudit(close: () => void) {
       transition-name="IntelligenceAuditOverlay-Mask"
       mask-class="IntelligenceAuditOverlay-Mask"
       card-class="IntelligenceAuditOverlay-Card"
+      :header-title="t('intelligence.audit.logsTitle')"
+      :header-desc="t('intelligence.audit.logsDescription')"
     >
-      <template #default="{ close }">
+      <template #header-actions="{ close }">
+        <TxButton variant="flat" size="sm" @click="handleViewFullAudit(close)">
+          <i class="i-carbon-launch" />
+          {{ t('intelligence.audit.viewFullAudit') }}
+        </TxButton>
+      </template>
+      <template #default>
         <div class="IntelligenceAuditOverlay">
-          <div class="IntelligenceAuditOverlay-Header">
-            <div class="IntelligenceAuditOverlay-TitleBlock">
-              <div class="IntelligenceAuditOverlay-Title">
-                {{ t('intelligence.audit.logsTitle') }}
-              </div>
-              <div class="IntelligenceAuditOverlay-Subtitle">
-                {{ t('intelligence.audit.logsDescription') }}
-              </div>
-            </div>
-            <div class="IntelligenceAuditOverlay-Actions">
-              <TxButton variant="flat" size="sm" @click="handleViewFullAudit(close)">
-                <i class="i-carbon-launch" />
-                {{ t('intelligence.audit.viewFullAudit') }}
-              </TxButton>
-              <TxButton
-                variant="flat"
-                size="sm"
-                class="IntelligenceAuditOverlay-CloseBtn"
-                @click="close"
-              >
-                <i class="i-ri-close-line" />
-              </TxButton>
-            </div>
-          </div>
-
           <div class="IntelligenceAuditOverlay-Body">
             <IntelligenceAuditLogs :caller-id="callerId" />
           </div>
@@ -84,33 +67,6 @@ function handleViewFullAudit(close: () => void) {
   justify-content: space-between;
   padding: 16px 18px 10px;
   border-bottom: 1px solid var(--tx-border-color-lighter);
-}
-
-.IntelligenceAuditOverlay-TitleBlock {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.IntelligenceAuditOverlay-Title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.IntelligenceAuditOverlay-Subtitle {
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.IntelligenceAuditOverlay-CloseBtn {
-  flex: 0 0 auto;
-}
-
-.IntelligenceAuditOverlay-Actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 .IntelligenceAuditOverlay-Body {
@@ -148,8 +104,6 @@ function handleViewFullAudit(close: () => void) {
 .IntelligenceAuditOverlay-Card {
   width: min(960px, 92vw);
   height: min(720px, 86vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.25rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;
