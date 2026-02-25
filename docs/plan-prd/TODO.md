@@ -59,6 +59,13 @@
 ## 🧩 2026-02 新增进展
 
 ### ✅ 已落地
+- [x] **插件 issue 生命周期修复（保留静态问题，清理瞬时运行时问题）**
+  - `enable()` 不再全量清空 `plugin.issues`
+  - 仅清理 `RUNTIME_ERROR` / `LIFECYCLE_SCRIPT_FAILED` 等瞬时 issue，保留 manifest/权限类问题可见性
+- [x] **插件 issue 同步机制升级（首帧全量 + 增量 CRUD + 周期对账）**
+  - issue 引入稳定 `id`，主进程按 id 做 created/updated/deleted 增量推送
+  - 首次仍走插件全量下发，后续 issue 仅走 transport 增量同步
+  - 增加 45 分钟周期全量 `issues-reset` 对账，兜底一致性
 - [x] **Quick Actions 插件稳定性修复（feature id + 权限 issue 回收）**
   - 修复 `quick.actions` id 格式导致 feature 添加失败
   - 权限授权后即时清理 `PERMISSION_MISSING` issue 并广播更新

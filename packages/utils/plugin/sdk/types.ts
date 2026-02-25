@@ -957,6 +957,10 @@ export type PluginStateEvent
     | { type: 'updated', name: string, changes: Partial<any> }
     | { type: 'status-changed', name: string, status: number }
     | { type: 'readme-updated', name: string, readme: string }
+    | { type: 'issue-created', name: string, issue: any }
+    | { type: 'issue-updated', name: string, issue: any }
+    | { type: 'issue-deleted', name: string, issueId: string }
+    | { type: 'issues-reset', name: string, issues: any[] }
 
 /**
  * Plugin filter options for list queries

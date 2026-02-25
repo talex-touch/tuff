@@ -81,7 +81,11 @@ class PluginSDK {
           event.type === 'added' ||
           event.type === 'updated' ||
           event.type === 'status-changed' ||
-          event.type === 'readme-updated'
+          event.type === 'readme-updated' ||
+          event.type === 'issue-created' ||
+          event.type === 'issue-updated' ||
+          event.type === 'issue-deleted' ||
+          event.type === 'issues-reset'
         ) {
           const pluginName = event.type === 'added' ? event.plugin.name : event.name
           const callbacks = this.pluginSubscribers.get(pluginName)

@@ -1,4 +1,4 @@
-import type { ITouchPlugin } from '@talex-touch/utils'
+import type { ITouchPlugin, PluginIssue } from '@talex-touch/utils'
 import type { PluginStateEvent } from '@talex-touch/utils/plugin/sdk/types'
 import { defineStore } from 'pinia'
 import { reactive } from 'vue'
@@ -93,6 +93,22 @@ export const usePluginStore = defineStore('plugin', () => {
         updatePluginReadme(event.name, event.readme)
         break
 
+      case 'issue-created':
+        upsertPluginIssue(event.name, event.issue as PluginIssue)
+        break
+
+      case 'issue-updated':
+        upsertPluginIssue(event.name, event.issue as PluginIssue)
+        break
+
+      case 'issue-deleted':
+        removePluginIssue(event.name, event.issueId)
+        break
+
+      case 'issues-reset':
+        resetPluginIssues(event.name, event.issues as PluginIssue[])
+        break
+
       default: {
         const unknownEvent = event as { type?: string }
         console.warn('[PluginStore] Unknown state event type:', unknownEvent.type ?? 'unknown')
@@ -124,6 +140,52 @@ export const usePluginStore = defineStore('plugin', () => {
     if (plugin) {
       plugin.readme = readme
     }
+  }
+
+  function resolveIssueId(issue: PluginIssue): string {
+    const id = typeof issue.id === 'string' ? issue.id.trim() : ''
+    if (id) return id
+    const code = typeof issue.code === 'string' ? issue.code.trim() : ''
+    const source = typeof issue.source === 'string' ? issue.source.trim() : ''
+    if (code || source) return `${code || 'NO_CODE'}::${source || 'NO_SOURCE'}`
+    return `ISSUE::${issue.message}`
+  }
+
+  function upsertPluginIssue(name: string, issue: PluginIssue): void {
+    const plugin = getPlugin(name)
+    if (!plugin) return
+
+    const nextIssue: PluginIssue = {
+      ...issue,
+      id: resolveIssueId(issue)
+    }
+    const issues = Array.isArray(plugin.issues) ? plugin.issues : []
+    const issueIndex = issues.findIndex((item) => resolveIssueId(item) === nextIssue.id)
+
+    if (issueIndex >= 0) {
+      const nextIssues = [...issues]
+      nextIssues[issueIndex] = nextIssue
+      plugin.issues = nextIssues
+      return
+    }
+
+    plugin.issues = [...issues, nextIssue]
+  }
+
+  function removePluginIssue(name: string, issueId: string): void {
+    const plugin = getPlugin(name)
+    if (!plugin) return
+    const issues = Array.isArray(plugin.issues) ? plugin.issues : []
+    plugin.issues = issues.filter((issue) => resolveIssueId(issue) !== issueId)
+  }
+
+  function resetPluginIssues(name: string, issues: PluginIssue[]): void {
+    const plugin = getPlugin(name)
+    if (!plugin) return
+    plugin.issues = issues.map((issue) => ({
+      ...issue,
+      id: resolveIssueId(issue)
+    }))
   }
 
   /**
@@ -158,6 +220,9 @@ export const usePluginStore = defineStore('plugin', () => {
     handleStateEvent,
     updatePluginStatus,
     updatePluginReadme,
+    upsertPluginIssue,
+    removePluginIssue,
+    resetPluginIssues,
     initialize
   }
 })

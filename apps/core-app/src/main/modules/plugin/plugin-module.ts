@@ -4,6 +4,7 @@ import type {
   IManifest,
   IPluginManager,
   ITouchPlugin,
+  PluginIssue,
   PluginInstallConfirmResponse
 } from '@talex-touch/utils/plugin'
 import type {
@@ -17,6 +18,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
 import type { PluginWithSource } from '../../service/market-api.service'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
 import { createClient } from '@libsql/client'
@@ -75,6 +77,7 @@ const devWatcherLog = pluginLog.child('DevWatcher')
 const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
 const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
+const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
 
 function resolveWidgetFeaturePath(plugin: TouchPlugin, widgetPath: string): string | null {
   const trimmed = widgetPath.trim()
@@ -176,6 +179,8 @@ async function warnUnusedWidgets(plugin: TouchPlugin): Promise<void> {
 type IPluginManagerWithInternals = IPluginManager & {
   __installQueue?: PluginInstallQueue
   pendingPermissionPlugins?: Map<string, { pluginName: string; autoRetry: boolean }>
+  emitIssueDelta?: (plugin: ITouchPlugin) => boolean
+  emitIssueReset?: (plugin: ITouchPlugin) => void
 }
 
 type WindowNewPayload = TalexTouch.TouchWindowConstructorOptions & {
@@ -203,6 +208,77 @@ interface IndexCommunicatePayload {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function buildIssueId(issue: PluginIssue): string {
+  const rawId = typeof issue.id === 'string' ? issue.id.trim() : ''
+  if (rawId) return rawId
+
+  const code = typeof issue.code === 'string' ? issue.code.trim() : ''
+  const source = typeof issue.source === 'string' ? issue.source.trim() : ''
+  if (code || source) {
+    return `${code || 'NO_CODE'}::${source || 'NO_SOURCE'}`
+  }
+
+  const hashSeed = `${issue.type}|${issue.message}|${source}|${code}`
+  const hash = createHash('sha1').update(hashSeed).digest('hex').slice(0, 12)
+  return `ISSUE::${hash}`
+}
+
+function normalizeIssue(issue: PluginIssue): PluginIssue {
+  const id = buildIssueId(issue)
+  if (issue.id === id) return issue
+  return { ...issue, id }
+}
+
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return String(value)
+  }
+}
+
+function getIssueFingerprint(issue: PluginIssue): string {
+  return [
+    issue.type,
+    issue.code || '',
+    issue.source || '',
+    issue.message || '',
+    issue.suggestion || '',
+    String(issue.timestamp || 0),
+    stableStringify(issue.meta ?? null)
+  ].join('|')
+}
+
+function normalizePluginIssues(plugin: ITouchPlugin): boolean {
+  const sourceIssues = Array.isArray(plugin.issues) ? plugin.issues : []
+  const nextIssuesById = new Map<string, PluginIssue>()
+  let changed = false
+
+  sourceIssues.forEach((issue) => {
+    const normalized = normalizeIssue(issue)
+    if (normalized.id !== issue.id) changed = true
+
+    const id = normalized.id as string
+    const existing = nextIssuesById.get(id)
+    if (!existing) {
+      nextIssuesById.set(id, normalized)
+      return
+    }
+
+    const nextTs = normalized.timestamp || 0
+    const currentTs = existing.timestamp || 0
+    if (nextTs >= currentTs) {
+      nextIssuesById.set(id, normalized)
+    }
+    changed = true
+  })
+
+  const nextIssues = Array.from(nextIssuesById.values())
+  if (!changed && nextIssues.length === sourceIssues.length) return false
+  plugin.issues = nextIssues
+  return true
 }
 
 function syncPermissionMissingIssue(plugin: ITouchPlugin): boolean {
@@ -384,6 +460,8 @@ function createPluginModuleInternal(
   const reloadingPlugins = new Set<string>()
   const pendingPermissionPlugins = new Map<string, { pluginName: string; autoRetry: boolean }>()
   const pluginNameIndex: Map<string, string> = new Map()
+  const issueSnapshots = new Map<string, Map<string, string>>()
+  let issueFullResyncTimer: NodeJS.Timeout | null = null
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
 
@@ -444,6 +522,81 @@ function createPluginModuleInternal(
     const permissionModule = getPermissionModule()
     if (!permissionModule) return
     permissionModule.clearDeclaredPermissions(pluginId)
+  }
+
+  const createIssueSnapshot = (plugin: ITouchPlugin): Map<string, string> => {
+    normalizePluginIssues(plugin)
+    const snapshot = new Map<string, string>()
+    plugin.issues.forEach((issue) => {
+      const normalized = normalizeIssue(issue)
+      snapshot.set(normalized.id as string, getIssueFingerprint(normalized))
+    })
+    return snapshot
+  }
+
+  const rememberIssueSnapshot = (plugin: ITouchPlugin): void => {
+    issueSnapshots.set(plugin.name, createIssueSnapshot(plugin))
+  }
+
+  const clearIssueSnapshot = (pluginName: string): void => {
+    issueSnapshots.delete(pluginName)
+  }
+
+  const emitIssueDelta = (plugin: ITouchPlugin): boolean => {
+    const previous = issueSnapshots.get(plugin.name) ?? new Map<string, string>()
+    const next = createIssueSnapshot(plugin)
+    issueSnapshots.set(plugin.name, next)
+
+    let hasChanges = false
+
+    plugin.issues.forEach((issue) => {
+      const normalized = normalizeIssue(issue)
+      const id = normalized.id as string
+      const fingerprint = next.get(id)
+      const previousFingerprint = previous.get(id)
+
+      if (!previousFingerprint) {
+        hasChanges = true
+        transport.broadcast(PluginEvents.push.stateChanged, {
+          type: 'issue-created',
+          name: plugin.name,
+          issue: normalized
+        })
+        return
+      }
+
+      if (previousFingerprint !== fingerprint) {
+        hasChanges = true
+        transport.broadcast(PluginEvents.push.stateChanged, {
+          type: 'issue-updated',
+          name: plugin.name,
+          issue: normalized
+        })
+      }
+    })
+
+    previous.forEach((_fingerprint, issueId) => {
+      if (!next.has(issueId)) {
+        hasChanges = true
+        transport.broadcast(PluginEvents.push.stateChanged, {
+          type: 'issue-deleted',
+          name: plugin.name,
+          issueId
+        })
+      }
+    })
+
+    return hasChanges
+  }
+
+  const emitIssueReset = (plugin: ITouchPlugin): void => {
+    const snapshot = createIssueSnapshot(plugin)
+    issueSnapshots.set(plugin.name, snapshot)
+    transport.broadcast(PluginEvents.push.stateChanged, {
+      type: 'issues-reset',
+      name: plugin.name,
+      issues: plugin.issues.map((issue) => normalizeIssue(issue))
+    })
   }
 
   const installer = new PluginInstaller()
@@ -687,6 +840,7 @@ function createPluginModuleInternal(
     }
 
     const success = await plugin.enable()
+    emitIssueDelta(plugin)
     if (success) {
       enabledPlugins.add(pluginName)
       await persistEnabledPlugins()
@@ -746,6 +900,7 @@ function createPluginModuleInternal(
       if (newPlugin) {
         if (_enabled) {
           await newPlugin.enable()
+          emitIssueDelta(newPlugin)
           enabledPlugins.add(pluginName)
           await persistEnabledPlugins()
           startHealthMonitoringIfNeeded(newPlugin)
@@ -822,6 +977,7 @@ function createPluginModuleInternal(
         touchPlugin.logger.error('[Lifecycle] load failed: manifest.json missing')
         plugins.set(pluginName, touchPlugin)
         syncPluginDeclaredPermissions(touchPlugin)
+        rememberIssueSnapshot(touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -887,6 +1043,7 @@ function createPluginModuleInternal(
         plugins.set(pluginName, touchPlugin)
         syncPluginDeclaredPermissions(touchPlugin)
         syncPermissionMissingIssue(touchPlugin)
+        rememberIssueSnapshot(touchPlugin)
         devWatcherInstance.addPlugin(touchPlugin)
 
         logDebug(
@@ -934,6 +1091,7 @@ function createPluginModuleInternal(
         touchPlugin.logger.error('[Lifecycle] load failed', error as Error)
         plugins.set(pluginName, touchPlugin)
         syncPluginDeclaredPermissions(touchPlugin)
+        rememberIssueSnapshot(touchPlugin)
         transport.broadcast(PluginEvents.push.stateChanged, {
           type: 'added',
           plugin: touchPlugin.toJSONObject()
@@ -977,6 +1135,7 @@ function createPluginModuleInternal(
     }
 
     clearPluginDeclaredPermissions(plugin.name)
+    clearIssueSnapshot(plugin.name)
     plugins.delete(pluginName)
     enabledPlugins.delete(pluginName)
 
@@ -1098,6 +1257,8 @@ function createPluginModuleInternal(
   ;(managerInstance as IPluginManagerWithInternals).__installQueue = installQueue
   ;(managerInstance as IPluginManagerWithInternals).pendingPermissionPlugins =
     pendingPermissionPlugins
+  ;(managerInstance as IPluginManagerWithInternals).emitIssueDelta = emitIssueDelta
+  ;(managerInstance as IPluginManagerWithInternals).emitIssueReset = emitIssueReset
 
   const devWatcherInstance: DevPluginWatcher = new DevPluginWatcher(managerInstance)
   managerInstance.devWatcher = devWatcherInstance
@@ -1164,9 +1325,25 @@ function createPluginModuleInternal(
 
       __initDevWatcher()
 
+      if (!issueFullResyncTimer) {
+        issueFullResyncTimer = setInterval(() => {
+          if (loadingPlugins.size > 0 || reloadingPlugins.size > 0) return
+
+          for (const plugin of plugins.values()) {
+            if (plugin.meta?.internal) continue
+            emitIssueReset(plugin)
+          }
+        }, ISSUE_FULL_RESYNC_INTERVAL_MS)
+        issueFullResyncTimer.unref?.()
+      }
+
       touchEventBus.on(TalexEvents.BEFORE_APP_QUIT, () => {
         void localProvider.stopWatching()
         devWatcherInstance.stop()
+        if (issueFullResyncTimer) {
+          clearInterval(issueFullResyncTimer)
+          issueFullResyncTimer = null
+        }
         logModuleInfo('Watchers closed.')
       })
 
@@ -1396,11 +1573,8 @@ export class PluginModule extends BaseModule {
 
       const plugin = manager.getPluginByName(pluginId)
       if (plugin && plugin instanceof TouchPlugin && syncPermissionMissingIssue(plugin)) {
-        this.transport?.broadcast(PluginEvents.push.stateChanged, {
-          type: 'updated',
-          name: plugin.name,
-          changes: plugin.toJSONObject()
-        })
+        const internals = manager as IPluginManagerWithInternals
+        internals.emitIssueDelta?.(plugin)
       }
 
       // Check if this plugin is pending permission

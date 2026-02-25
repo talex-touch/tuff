@@ -6,6 +6,8 @@ import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
+import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { tryUseChannel } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
@@ -19,6 +21,9 @@ const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
 const widgetUnregisterEvent = PluginEvents.widget.unregister
 const isDev = import.meta.env?.DEV ?? false
+const pollingService = PollingService.getInstance()
+let transportBindingsReady = false
+let transportBindingTaskId: string | null = null
 
 const WIDGET_STORAGE_FLUSH_MS = 250
 const WIDGET_STORAGE_MAX_BYTES = 512 * 1024
@@ -924,7 +929,7 @@ function injectStyles(widgetId: string, styles: string): void {
   injectedStyles.set(widgetId, style)
 }
 
-transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => {
+async function handleWidgetRegister(payload: WidgetRegistrationPayload): Promise<void> {
   try {
     if (isDev) {
       devLog(
@@ -958,9 +963,9 @@ transport.on(widgetRegisterEvent, async (payload: WidgetRegistrationPayload) => 
     console.error('[WidgetRegistry] Widget registration failed', error)
     throw error
   }
-})
+}
 
-transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
+async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Promise<void> {
   try {
     if (isDev) {
       devLog(
@@ -994,9 +999,9 @@ transport.on(widgetUpdateEvent, async (payload: WidgetRegistrationPayload) => {
     console.error('[WidgetRegistry] Widget update failed', error)
     throw error
   }
-})
+}
 
-transport.on(widgetUnregisterEvent, ({ widgetId }: { widgetId: string }) => {
+function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
   try {
     if (isDev) {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
@@ -1011,4 +1016,57 @@ transport.on(widgetUnregisterEvent, ({ widgetId }: { widgetId: string }) => {
     console.error('[WidgetRegistry] Widget unregister failed', error)
     throw error
   }
-})
+}
+
+function bindTransportHandlers(): void {
+  if (transportBindingsReady) return
+  transportBindingsReady = true
+  transport.on(widgetRegisterEvent, handleWidgetRegister)
+  transport.on(widgetUpdateEvent, handleWidgetUpdate)
+  transport.on(widgetUnregisterEvent, handleWidgetUnregister)
+}
+
+function ensureTransportHandlersReady(): void {
+  if (transportBindingsReady) return
+
+  if (tryUseChannel()) {
+    bindTransportHandlers()
+    return
+  }
+
+  if (transportBindingTaskId) return
+  const taskId = `widget-registry.channel-check.${Date.now()}`
+  transportBindingTaskId = taskId
+
+  pollingService.register(
+    taskId,
+    () => {
+      if (transportBindingsReady) {
+        pollingService.unregister(taskId)
+        if (transportBindingTaskId === taskId) {
+          transportBindingTaskId = null
+        }
+        return
+      }
+
+      if (tryUseChannel()) {
+        bindTransportHandlers()
+        pollingService.unregister(taskId)
+        if (transportBindingTaskId === taskId) {
+          transportBindingTaskId = null
+        }
+      }
+    },
+    { interval: 100, unit: 'milliseconds' }
+  )
+  pollingService.start()
+
+  setTimeout(() => {
+    if (transportBindingTaskId === taskId) {
+      pollingService.unregister(taskId)
+      transportBindingTaskId = null
+    }
+  }, 5000)
+}
+
+ensureTransportHandlersReady()

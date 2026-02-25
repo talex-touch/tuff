@@ -24,6 +24,7 @@ export enum PluginStatus {
 }
 
 export interface PluginIssue {
+  id?: string
   type: 'error' | 'warning'
   message: string
   source?: string // e.g., 'manifest.json', 'feature:feature-id', 'icon'
