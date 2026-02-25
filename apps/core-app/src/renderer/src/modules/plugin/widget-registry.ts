@@ -16,6 +16,36 @@ import { registerCustomRenderer, unregisterCustomRenderer } from '~/modules/box/
 import { devLog } from '~/utils/dev-log'
 
 const injectedStyles = new Map<string, HTMLStyleElement>()
+const widgetRuntimeSources = new Map<string, string[]>()
+
+function cacheWidgetRuntimeSource(widgetId: string | undefined, code: string): void {
+  if (!widgetId) return
+  widgetRuntimeSources.set(widgetId, code.split('\n'))
+}
+
+function clearWidgetRuntimeSource(widgetId?: string): void {
+  if (!widgetId) return
+  widgetRuntimeSources.delete(widgetId)
+}
+
+export function getWidgetRuntimeSnippet(
+  widgetId: string,
+  line: number,
+  radius = 2
+): Array<{ line: number; text: string }> {
+  const lines = widgetRuntimeSources.get(widgetId)
+  if (!lines || !Number.isFinite(line) || line <= 0) return []
+  const start = Math.max(1, line - radius)
+  const end = Math.min(lines.length, line + radius)
+  const result: Array<{ line: number; text: string }> = []
+  for (let current = start; current <= end; current += 1) {
+    result.push({
+      line: current,
+      text: lines[current - 1] ?? ''
+    })
+  }
+  return result
+}
 const transport = useTuffTransport()
 const widgetRegisterEvent = PluginEvents.widget.register
 const widgetUpdateEvent = PluginEvents.widget.update
@@ -334,15 +364,26 @@ function createSandboxDocument(
   const key = resolveStorageKey(pluginName)
   const state = getStorageState(key)
   const cookieStore = getWidgetStore(state.cookies, widgetId || 'unknown')
+  const boundMethodCache = new Map<PropertyKey, Function>()
   return new Proxy(document, {
-    get(target, prop, receiver) {
+    get(target, prop) {
       if (prop === 'cookie') {
         return stringifyCookies(cookieStore)
       }
       if (prop === 'defaultView' || prop === 'parentWindow' || prop === 'window') {
         return getSandboxWindow?.() ?? null
       }
-      return Reflect.get(target, prop, receiver)
+      const value = Reflect.get(target, prop, target)
+      if (typeof value === 'function') {
+        const cached = boundMethodCache.get(prop)
+        if (cached) {
+          return cached
+        }
+        const bound = value.bind(target)
+        boundMethodCache.set(prop, bound)
+        return bound
+      }
+      return value
     },
     set(target, prop, value, receiver) {
       if (prop === 'cookie') {
@@ -445,6 +486,7 @@ function createSandboxWindow(
   const indexed = sandboxIndexedDB ?? createNamespacedIndexedDB(pluginName)
   const bc = sandboxBroadcastChannel ?? createNamespacedBroadcastChannel(pluginName)
   const cacheStorage = sandboxCaches ?? createNamespacedCacheStorage(pluginName)
+  const boundMethodCache = new Map<PropertyKey, Function>()
 
   return new Proxy(window, {
     get(target, prop, receiver) {
@@ -466,7 +508,17 @@ function createSandboxWindow(
       if (prop === 'indexedDB') return indexed
       if (prop === 'BroadcastChannel') return bc
       if (prop === 'caches') return cacheStorage
-      return Reflect.get(target, prop, receiver)
+      const value = Reflect.get(target, prop, target)
+      if (typeof value === 'function') {
+        const cached = boundMethodCache.get(prop)
+        if (cached) {
+          return cached
+        }
+        const bound = value.bind(target)
+        boundMethodCache.set(prop, bound)
+        return bound
+      }
+      return value
     },
     set(target, prop, value, receiver) {
       if (
@@ -664,11 +716,14 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
           })
         }
         const merged = new Proxy(ctxObject, {
-          get(target, key) {
+          get(target, key, receiver) {
             if (key in setupState) {
-              return setupState[key as keyof typeof setupState]
+              return Reflect.get(setupState, key, receiver)
             }
-            return target[key as keyof typeof target]
+            return Reflect.get(target, key, receiver)
+          },
+          has(target, key) {
+            return key in setupState || key in target
           }
         })
         return originalRender.call(instance, merged, ...args.slice(1))
@@ -831,6 +886,7 @@ function evaluateWidgetComponent(
   const sandboxSelf = sandbox.self
 
   try {
+    cacheWidgetRuntimeSource(debugLabel, code)
     const executor = new Function(
       'require',
       'module',
@@ -1006,6 +1062,7 @@ function handleWidgetUnregister({ widgetId }: { widgetId: string }): void {
     if (isDev) {
       devLog(`[WidgetRegistry] unregister widget ${widgetId}`)
     }
+    clearWidgetRuntimeSource(widgetId)
     unregisterCustomRenderer(widgetId)
     const style = injectedStyles.get(widgetId)
     if (style) {

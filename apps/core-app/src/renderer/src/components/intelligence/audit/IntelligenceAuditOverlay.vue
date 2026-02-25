@@ -25,13 +25,6 @@ function handleViewFullAudit(close: () => void) {
     <TxFlipOverlay
       v-model="visible"
       :source="source"
-      :duration="420"
-      :rotate-x="6"
-      :rotate-y="8"
-      :speed-boost="1.1"
-      transition-name="IntelligenceAuditOverlay-Mask"
-      mask-class="IntelligenceAuditOverlay-Mask"
-      card-class="IntelligenceAuditOverlay-Card"
       :header-title="t('intelligence.audit.logsTitle')"
       :header-desc="t('intelligence.audit.logsDescription')"
     >
@@ -74,47 +67,5 @@ function handleViewFullAudit(close: () => void) {
   min-height: 0;
   overflow: auto;
   padding: 16px 18px;
-}
-</style>
-
-<style lang="scss">
-.IntelligenceAuditOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.IntelligenceAuditOverlay-Mask-enter-active,
-.IntelligenceAuditOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.IntelligenceAuditOverlay-Mask-enter-from,
-.IntelligenceAuditOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.IntelligenceAuditOverlay-Card {
-  width: min(960px, 92vw);
-  height: min(720px, 86vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
 }
 </style>

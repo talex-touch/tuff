@@ -2,7 +2,7 @@ import type { IntelligenceSDKPersistedConfig } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { OpenersConfig } from '@talex-touch/utils/common/storage/entity/openers'
 import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import type { MarketSourcesPayload } from '@talex-touch/utils/market'
+import type { StoreSourcesPayload } from '@talex-touch/utils/store'
 import type { NotificationInboxEntry } from '@talex-touch/utils/transport/events'
 import type { DeviceIdleSettings } from '../../service/device-idle-service'
 import type { FileReportQueueItem } from '../analytics/startup-analytics'
@@ -16,7 +16,7 @@ import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { openersOriginData } from '@talex-touch/utils/common/storage/entity/openers'
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
-import { createDefaultMarketSourcesPayload } from '@talex-touch/utils/market'
+import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
 
 export type SearchEngineLogsSetting = boolean
 
@@ -32,7 +32,7 @@ export interface TelemetryClientConfig {
   clientId: string
 }
 
-export interface AgentMarketStore {
+export interface AgentStoreState {
   installed: Record<string, string>
 }
 
@@ -214,13 +214,13 @@ export const mainStorageRegistry = {
     defaultValue: {} as IntelligenceSDKPersistedConfig,
     normalize: normalizeObject
   }),
-  [StorageList.MARKET_SOURCES]: defineEntry<MarketSourcesPayload>({
-    key: StorageList.MARKET_SOURCES,
-    defaultValue: () => createDefaultMarketSourcesPayload(),
+  [StorageList.STORE_SOURCES]: defineEntry<StoreSourcesPayload>({
+    key: StorageList.STORE_SOURCES,
+    defaultValue: () => createDefaultStoreSourcesPayload(),
     normalize: normalizeObject
   }),
-  [StorageList.AGENT_MARKET]: defineEntry<AgentMarketStore>({
-    key: StorageList.AGENT_MARKET,
+  [StorageList.AGENT_STORE]: defineEntry<AgentStoreState>({
+    key: StorageList.AGENT_STORE,
     defaultValue: { installed: {} },
     normalize: normalizeObject
   }),

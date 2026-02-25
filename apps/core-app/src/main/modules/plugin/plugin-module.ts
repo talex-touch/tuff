@@ -17,7 +17,7 @@ import type {
   PluginPerformanceGetPathsResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
-import type { PluginWithSource } from '../../service/market-api.service'
+import type { PluginWithSource } from '../../service/store-api.service'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
@@ -31,7 +31,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   CoreBoxEvents,
-  MarketEvents,
+  StoreEvents,
   PermissionEvents,
   PluginEvents
 } from '@talex-touch/utils/transport/events'
@@ -51,8 +51,8 @@ import {
   startUpdateScheduler,
   stopUpdateScheduler,
   triggerUpdateCheck
-} from '../../service/market-api.service'
-import { performMarketHttpRequest } from '../../service/market-http.service'
+} from '../../service/store-api.service'
+import { performStoreHttpRequest } from '../../service/store-http.service'
 import { getOfficialPlugins } from '../../service/official-plugin.service'
 import { debounce } from '../../utils/common-util'
 import { createLogger } from '../../utils/logger'
@@ -1175,7 +1175,7 @@ function createPluginModuleInternal(
     const manifestName = pluginInstance?.name ?? identifier
     const pluginDir = path.resolve(pluginPath, folderName)
 
-    // Report uninstall to market (fire and forget, use folder name as slug)
+    // Report uninstall to store (fire and forget, use folder name as slug)
     reportPluginUninstall(folderName).catch(() => {})
 
     await unloadPlugin(folderName)
@@ -1664,16 +1664,16 @@ export class PluginModule extends BaseModule {
       checkIntervalMs: 24 * 60 * 60 * 1000, // 24 hours
       getPluginsWithSource: () => this.getPluginsWithSource(),
       onUpdatesFound: (updates) => {
-        transport.broadcast(MarketEvents.push.updatesAvailable, { updates })
+        transport.broadcast(StoreEvents.push.updatesAvailable, { updates })
       }
     })
     const installQueue = this.installQueue
 
     this.transportDisposers.push(
-      transport.on(MarketEvents.api.httpRequest, async (request) =>
-        performMarketHttpRequest(request)
+      transport.on(StoreEvents.api.httpRequest, async (request) =>
+        performStoreHttpRequest(request)
       ),
-      transport.on(MarketEvents.api.checkUpdates, async () => {
+      transport.on(StoreEvents.api.checkUpdates, async () => {
         const updates = await triggerUpdateCheck()
         return { updates, checkedAt: new Date().toISOString() }
       }),
@@ -2641,6 +2641,27 @@ export class PluginModule extends BaseModule {
       }
     })
 
+    const readInstallSource = async (pluginName: string): Promise<unknown | null> => {
+      try {
+        const sourceData = await manager.dbUtils.getPluginData(pluginName, 'install_source')
+        const raw = sourceData?.value
+        if (typeof raw !== 'string' || raw.trim().length === 0) {
+          return null
+        }
+        return JSON.parse(raw)
+      } catch {
+        return null
+      }
+    }
+
+    const serializePluginWithInstallSource = async (
+      plugin: TouchPlugin
+    ): Promise<ITouchPlugin & { installSource?: unknown | null }> => {
+      const base = plugin.toJSONObject() as ITouchPlugin & { installSource?: unknown | null }
+      base.installSource = await readInstallSource(plugin.name)
+      return base
+    }
+
     this.transportDisposers.push(
       transport.on(PluginEvents.api.list, async (payload) => {
         try {
@@ -2658,7 +2679,9 @@ export class PluginModule extends BaseModule {
             plugins = plugins.filter((p) => p.dev?.enable === filters.dev)
           }
 
-          return plugins.map((p) => p.toJSONObject())
+          return await Promise.all(
+            plugins.map((plugin) => serializePluginWithInstallSource(plugin))
+          )
         } catch (error) {
           console.error('Error in plugin:api:list handler:', error)
           return []
@@ -2673,7 +2696,11 @@ export class PluginModule extends BaseModule {
           }
 
           const plugin = manager.plugins.get(name) as TouchPlugin | undefined
-          return plugin ? plugin.toJSONObject() : null
+          if (!plugin) {
+            return null
+          }
+
+          return await serializePluginWithInstallSource(plugin)
         } catch (error) {
           console.error('Error in plugin:api:get handler:', error)
           return null
@@ -3333,31 +3360,12 @@ export class PluginModule extends BaseModule {
     )
 
     /**
-     * Check for plugin updates from market (manual trigger)
-     * Uses the scheduler to check by install source
+     * Search plugins in the store (NPM + TPEX)
      */
     this.transportDisposers.push(
-      transport.on(MarketEvents.api.checkUpdates, async () => {
+      transport.on(StoreEvents.api.search, async (payload) => {
         try {
-          const updates = await triggerUpdateCheck()
-          return {
-            updates,
-            checkedAt: new Date().toISOString()
-          }
-        } catch (error) {
-          console.error('Error in market:check-updates handler:', error)
-          return { updates: [], checkedAt: new Date().toISOString() }
-        }
-      })
-    )
-
-    /**
-     * Search plugins in the market (NPM + TPEX)
-     */
-    this.transportDisposers.push(
-      transport.on(MarketEvents.api.search, async (payload) => {
-        try {
-          const { searchPlugins } = await import('../../service/plugin-market.service')
+          const { searchPlugins } = await import('../../service/plugin-store.service')
           const source =
             payload?.source === 'tpex' || payload?.source === 'npm' || payload?.source === 'all'
               ? payload.source
@@ -3370,19 +3378,19 @@ export class PluginModule extends BaseModule {
             offset: payload?.offset
           })
         } catch (error: unknown) {
-          console.error('Market search failed:', error)
-          return { error: error instanceof Error ? error.message : 'MARKET_SEARCH_FAILED' }
+          console.error('Store search failed:', error)
+          return { error: error instanceof Error ? error.message : 'STORE_SEARCH_FAILED' }
         }
       })
     )
 
     /**
-     * Get plugin details from market
+     * Get plugin details from store
      */
     this.transportDisposers.push(
-      transport.on(MarketEvents.api.getPlugin, async (payload) => {
+      transport.on(StoreEvents.api.getPlugin, async (payload) => {
         try {
-          const { getPluginDetails } = await import('../../service/plugin-market.service')
+          const { getPluginDetails } = await import('../../service/plugin-store.service')
           const identifier = payload?.identifier
           if (!identifier) return null
           const source =
@@ -3397,12 +3405,12 @@ export class PluginModule extends BaseModule {
     )
 
     /**
-     * Get featured plugins from market
+     * Get featured plugins from store
      */
     this.transportDisposers.push(
-      transport.on(MarketEvents.api.featured, async (payload) => {
+      transport.on(StoreEvents.api.featured, async (payload) => {
         try {
-          const { getFeaturedPlugins } = await import('../../service/plugin-market.service')
+          const { getFeaturedPlugins } = await import('../../service/plugin-store.service')
           const limit =
             isRecord(payload) && typeof payload.limit === 'number' ? payload.limit : undefined
           const plugins = await getFeaturedPlugins(limit)
@@ -3418,9 +3426,9 @@ export class PluginModule extends BaseModule {
      * List plugins from NPM
      */
     this.transportDisposers.push(
-      transport.on(MarketEvents.api.npmList, async () => {
+      transport.on(StoreEvents.api.npmList, async () => {
         try {
-          const { listNpmPlugins } = await import('../../service/plugin-market.service')
+          const { listNpmPlugins } = await import('../../service/plugin-store.service')
           const plugins = await listNpmPlugins()
           return { plugins }
         } catch (error: unknown) {

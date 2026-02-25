@@ -12,6 +12,10 @@ export const usePluginStore = defineStore('plugin', () => {
   const plugins = reactive(new Map<string, ITouchPlugin>())
   const notifiedCategoryMissing = new Set<string>()
 
+  type PluginWithInstallSource = ITouchPlugin & {
+    installSource?: unknown
+  }
+
   function maybeNotifyPluginIssues(plugin: ITouchPlugin): void {
     const hasCategoryMissing = plugin.issues?.some((issue) => issue.code === 'CATEGORY_MISSING')
     if (!hasCategoryMissing) return
@@ -29,8 +33,16 @@ export const usePluginStore = defineStore('plugin', () => {
    * @param plugin - Plugin to add/update
    */
   function setPlugin(plugin: ITouchPlugin): void {
-    plugins.set(plugin.name, reactive(plugin))
-    maybeNotifyPluginIssues(plugin)
+    const incoming = plugin as PluginWithInstallSource
+    const current = plugins.get(plugin.name) as PluginWithInstallSource | undefined
+
+    const normalizedPlugin =
+      incoming.installSource === undefined && current?.installSource !== undefined
+        ? ({ ...incoming, installSource: current.installSource } as PluginWithInstallSource)
+        : incoming
+
+    plugins.set(plugin.name, reactive(normalizedPlugin))
+    maybeNotifyPluginIssues(normalizedPlugin)
   }
 
   /**

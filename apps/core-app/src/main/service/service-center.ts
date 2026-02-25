@@ -163,7 +163,7 @@ export default {
           if (!service) {
             dialog.showErrorBox(
               'Error',
-              `The type ${extName} has no plugin to handle, please install in plugin market!`
+              `The type ${extName} has no plugin to handle, please install in plugin store!`
             )
             return
           }

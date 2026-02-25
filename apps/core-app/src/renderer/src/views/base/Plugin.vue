@@ -34,11 +34,6 @@ const loadingStates = ref({
   openFolder: false
 })
 
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.08
-
 // Running plugins (status 3 or 4)
 const runningPlugins = computed(() =>
   visiblePlugins.value.filter((plugin) => plugin.status === 3 || plugin.status === 4)
@@ -156,18 +151,7 @@ async function handleOpenPluginFolder(): Promise<void> {
 
   <!-- New Plugin Drawer -->
   <Teleport to="body">
-    <TxFlipOverlay
-      v-model="drawerVisible"
-      :source="drawerSource"
-      :duration="FLIP_DURATION"
-      :rotate-x="FLIP_ROTATE_X"
-      :rotate-y="FLIP_ROTATE_Y"
-      :speed-boost="FLIP_SPEED_BOOST"
-      transition-name="PluginDrawer-Mask"
-      mask-class="PluginDrawer-Mask"
-      card-class="PluginDrawer-Card"
-      :closable="false"
-    >
+    <TxFlipOverlay v-model="drawerVisible" :source="drawerSource" :closable="false">
       <template #default="{ close }">
         <div class="PluginDrawer">
           <PluginNew @close="close" />
@@ -209,23 +193,6 @@ async function handleOpenPluginFolder(): Promise<void> {
 
 .folder-btn :deep(.tx-button:hover:not(:disabled)) {
   @apply bg-[var(--tx-fill-color-light)] border-[var(--tx-color-primary-light-5)] text-[var(--tx-color-primary)];
-}
-
-:global(.PluginDrawer-Mask) {
-  background: rgba(15, 23, 42, 0.42);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-:global(.PluginDrawer-Card) {
-  width: min(1060px, 92vw);
-  height: min(760px, 86vh);
-  min-height: 520px;
-  background: var(--tx-bg-color-page);
-  border-radius: 18px;
-  border: 1px solid var(--tx-border-color-lighter);
-  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
 }
 
 .PluginDrawer {

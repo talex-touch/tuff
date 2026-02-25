@@ -329,13 +329,6 @@ watch(isLoggedIn, (loggedIn) => {
     <TxFlipOverlay
       v-model="profileVisible"
       :source="profileTriggerRef"
-      :duration="420"
-      :rotate-x="6"
-      :rotate-y="8"
-      :speed-boost="1.1"
-      transition-name="UserProfileOverlay-Mask"
-      mask-class="UserProfileOverlay-Mask"
-      card-class="UserProfileOverlay-Card"
       :header-title="t('userProfile.title', 'Account')"
     >
       <template #default>
@@ -978,47 +971,5 @@ watch(isLoggedIn, (loggedIn) => {
   .UserProfile-MetricsGrid {
     grid-template-columns: 1fr;
   }
-}
-</style>
-
-<style lang="scss">
-.UserProfileOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.UserProfileOverlay-Mask-enter-active,
-.UserProfileOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.UserProfileOverlay-Mask-enter-from,
-.UserProfileOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.UserProfileOverlay-Card {
-  width: min(940px, 92vw);
-  height: min(760px, 88vh);
-  border-radius: 1.2rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
 }
 </style>

@@ -485,14 +485,14 @@
   "flatNavBar": {
     "main": "主要",
     "dashboard": "仪表盘",
-    "market": "市场",
+    "store": "市场",
     "plugin": "插件",
     "details": "详细信息",
     "intelligence": "智能",
     "style": "样式",
     "setting": "设置"
   },
-  "market": {
+  "store": {
     "title": "插件市场",
     "subtitle": "发现适合您工作流程的优秀插件",
     "searchPlaceholder": "搜索插件...",
@@ -578,7 +578,7 @@
       "readmeError": "加载 README 失败",
       "notFound": "未找到插件",
       "notFoundDesc": "请检查插件 ID 或返回市场",
-      "backToMarket": "返回市场"
+      "backToStore": "返回市场"
     },
     "error": {
       "loadFailed": "官方插件列表加载失败。"
@@ -639,7 +639,7 @@
     "openFolder": "打开文件夹",
     "emptyState": {
       "message": "选择一个插件查看详情",
-      "exploreMarket": "浏览市场"
+      "exploreStore": "浏览市场"
     },
     "actions": {
       "history": "历史记录",
@@ -1194,10 +1194,11 @@
   "router": {
     "login": "请先登录!",
     "permission": "您没有权限!",
-    "pluginMarket": "插件市场",
+    "pluginStore": "插件市场",
     "installedPlugins": "已安装插件",
-    "marketDocs": "市场文档",
-    "marketDetail": "插件详情",
+    "storeDocs": "市场文档",
+    "storeCli": "CLI Beta",
+    "storeDetail": "插件详情",
     "plugin": "插件",
     "downloads": "下载中心",
     "details": "详细信息",
@@ -1689,6 +1690,8 @@
       "forceAfterDesc": "超过该时长未执行时允许跳过空闲判断",
       "appIndexGroupTitle": "应用索引调度",
       "appIndexGroupDesc": "控制启动补漏与周期性全量同步",
+      "hideNoisySystemAppsTitle": "过滤系统噪音应用",
+      "hideNoisySystemAppsDesc": "隐藏 Simulator / 系统 Helper/Agent 等不常用辅助应用（仅隐藏结果，不删除索引）",
       "startupBackfillTitle": "启动补漏",
       "startupBackfillDesc": "应用启动后后台补漏应用列表",
       "startupBackfillRetryMaxTitle": "补漏重试次数",

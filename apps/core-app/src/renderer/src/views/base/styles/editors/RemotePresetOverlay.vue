@@ -110,17 +110,7 @@ async function handleRefresh(): Promise<void> {
 
 <template>
   <Teleport to="body">
-    <TxFlipOverlay
-      v-model="visible"
-      :source="props.source"
-      :duration="420"
-      :rotate-x="6"
-      :rotate-y="8"
-      :speed-boost="1.1"
-      transition-name="RemotePresetOverlay-Mask"
-      mask-class="RemotePresetOverlay-Mask"
-      card-class="RemotePresetOverlay-Card"
-    >
+    <TxFlipOverlay v-model="visible" :source="props.source">
       <template #default="{ close }">
         <div class="RemotePresetOverlay">
           <div class="RemotePresetOverlay-Header">
@@ -346,47 +336,5 @@ async function handleRefresh(): Promise<void> {
     margin: 0;
     font-size: 13px;
   }
-}
-</style>
-
-<style lang="scss">
-.RemotePresetOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1850;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.RemotePresetOverlay-Mask-enter-active,
-.RemotePresetOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.RemotePresetOverlay-Mask-enter-from,
-.RemotePresetOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.RemotePresetOverlay-Card {
-  width: min(1160px, 94vw);
-  height: min(820px, 90vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
 }
 </style>

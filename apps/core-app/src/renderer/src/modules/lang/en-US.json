@@ -485,15 +485,15 @@
   "flatNavBar": {
     "main": "MAIN",
     "dashboard": "Dashboard",
-    "market": "Market",
+    "store": "Store",
     "plugin": "Plugin",
     "details": "Details",
     "intelligence": "Intelligence",
     "style": "Style",
     "setting": "Setting"
   },
-  "market": {
-    "title": "Plugin Market",
+  "store": {
+    "title": "Plugin Store",
     "subtitle": "Discover amazing plugins for your workflow",
     "searchPlaceholder": "Search plugins...",
     "sources": "sources",
@@ -509,9 +509,9 @@
     "officialBadge": "Official",
     "lastUpdated": "Last updated {time}",
     "cliGroupTitle": "Tuff CLI",
-    "cliGroupDesc": "Tuff CLI is detected on this machine. CLI market integration is under active development.",
+    "cliGroupDesc": "Tuff CLI is detected on this machine. CLI store integration is under active development.",
     "cliBetaTitle": "Beta Feature",
-    "cliBetaDesc": "The CLI market entry is now reserved. Installables and command integrations will arrive in upcoming releases.",
+    "cliBetaDesc": "The CLI store entry is now reserved. Installables and command integrations will arrive in upcoming releases.",
     "cliBetaTag": "In Development",
     "docsGroupTitle": "Platform Capability Docs",
     "docsGroupDesc": "Browse platform capabilities and developer references",
@@ -520,7 +520,7 @@
     "docsOpen": "Open Nexus Docs",
     "sourceEditor": {
       "title": "Source",
-      "subtitle": "Edit plugin market source.",
+      "subtitle": "Edit plugin store source.",
       "addSource": "Add source",
       "addDialogTitle": "Add source",
       "cancel": "Cancel",
@@ -577,8 +577,8 @@
       "information": "Information",
       "readmeError": "Failed to load README",
       "notFound": "Plugin Not Found",
-      "notFoundDesc": "Check the plugin ID or return to market",
-      "backToMarket": "Back to Market"
+      "notFoundDesc": "Check the plugin ID or return to store",
+      "backToStore": "Back to Store"
     },
     "error": {
       "loadFailed": "Failed to load official plugin list."
@@ -639,7 +639,7 @@
     "openFolder": "Open Folder",
     "emptyState": {
       "message": "Choose a plugin to view details",
-      "exploreMarket": "Explore Market"
+      "exploreStore": "Explore Store"
     },
     "actions": {
       "history": "History",
@@ -1194,10 +1194,11 @@
   "router": {
     "login": "Please login first!",
     "permission": "You don't have permission!",
-    "pluginMarket": "Plugin Market",
+    "pluginStore": "Plugin Store",
     "installedPlugins": "Installed Plugins",
-    "marketDocs": "Market Docs",
-    "marketDetail": "Market Detail",
+    "storeDocs": "Store Docs",
+    "storeCli": "CLI Beta",
+    "storeDetail": "Store Detail",
     "plugin": "Plugin",
     "downloads": "Downloads",
     "details": "Details",
@@ -1693,6 +1694,8 @@
       "forceAfterDesc": "Allow skipping idle checks after this elapsed time",
       "appIndexGroupTitle": "App Index Scheduling",
       "appIndexGroupDesc": "Configure startup backfill and periodic full sync",
+      "hideNoisySystemAppsTitle": "Hide Noisy System Apps",
+      "hideNoisySystemAppsDesc": "Hide less-used helper apps like Simulator and system Helper/Agent entries (only hidden from results, index data is kept)",
       "startupBackfillTitle": "Startup Backfill",
       "startupBackfillDesc": "Backfill the app list in the background after launch",
       "startupBackfillRetryMaxTitle": "Backfill Retry Limit",

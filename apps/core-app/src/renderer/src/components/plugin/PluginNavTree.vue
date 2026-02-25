@@ -60,7 +60,7 @@ function normalizeCategoryId(raw: unknown): PluginCategoryId {
 }
 
 function resolveCategoryLabel(categoryId: PluginCategoryId): string {
-  const key = `market.categories.${categoryId}`
+  const key = `store.categories.${categoryId}`
   const label = t(key)
   if (label !== key) return label
   return categoryId

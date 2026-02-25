@@ -62,17 +62,7 @@ function handleCancel(close: () => void): void {
 
 <template>
   <Teleport to="body">
-    <TxFlipOverlay
-      v-model="visible"
-      :source="source"
-      :duration="420"
-      :rotate-x="6"
-      :rotate-y="8"
-      :speed-boost="1.1"
-      transition-name="CoreBoxEditorOverlay-Mask"
-      mask-class="CoreBoxEditorOverlay-Mask"
-      card-class="CoreBoxEditorOverlay-Card"
-    >
+    <TxFlipOverlay v-model="visible" :source="source">
       <template #default="{ close }">
         <div class="CoreBoxEditorOverlay">
           <div class="CoreBoxEditorOverlay-Header">
@@ -152,47 +142,5 @@ function handleCancel(close: () => void): void {
   flex: 1;
   min-height: 0;
   padding: 16px;
-}
-</style>
-
-<style lang="scss">
-.CoreBoxEditorOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1850;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.CoreBoxEditorOverlay-Mask-enter-active,
-.CoreBoxEditorOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.CoreBoxEditorOverlay-Mask-enter-from,
-.CoreBoxEditorOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.CoreBoxEditorOverlay-Card {
-  width: min(1160px, 94vw);
-  height: min(820px, 90vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
 }
 </style>
