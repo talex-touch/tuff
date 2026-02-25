@@ -50,6 +50,8 @@ export interface DashboardPlugin {
   updatedAt: string
   versions?: DashboardPluginVersion[]
   latestVersion?: DashboardPluginVersion | null
+  hasPendingReview?: boolean
+  pendingReviewCount?: number
 }
 
 export interface DashboardPluginResponse {

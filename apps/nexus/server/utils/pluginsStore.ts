@@ -104,6 +104,8 @@ export interface DashboardPlugin {
   updatedAt: string
   latestVersionId?: string | null
   versions?: DashboardPluginVersion[]
+  hasPendingReview?: boolean
+  pendingReviewCount?: number
 }
 
 interface D1PluginRow {
@@ -160,7 +162,7 @@ interface PluginVisibilityOptions {
   viewerOrgIds?: string[]
   viewerIsAdmin?: boolean
   includeVersions?: boolean
-  forMarket?: boolean
+  forStore?: boolean
   statuses?: PluginStatus[]
 }
 
@@ -608,7 +610,7 @@ function versionIsVisible(
   const viewerIsAdmin = Boolean(options.viewerIsAdmin)
   const isOwner = options.viewerId === plugin.userId
 
-  if (options.forMarket)
+  if (options.forStore)
     return version.status === 'approved'
 
   if (!viewerIsAdmin && !isOwner && version.status !== 'approved')
@@ -650,11 +652,20 @@ function selectLatestVisibleVersion(
     })[0]
 }
 
+function resolvePendingReviewMeta(plugin: DashboardPlugin, versions: DashboardPluginVersion[]) {
+  const pendingVersionCount = versions.filter(version => version.status === 'pending').length
+  const hasPendingReview = plugin.status === 'pending' || pendingVersionCount > 0
+  return {
+    hasPendingReview,
+    pendingReviewCount: pendingVersionCount,
+  }
+}
+
 function pluginIsVisible(plugin: DashboardPlugin, options: PluginVisibilityOptions): boolean {
   if (options.statuses && options.statuses.length && !options.statuses.includes(plugin.status))
     return false
 
-  if (options.forMarket)
+  if (options.forStore)
     return plugin.status === 'approved'
 
   const viewerIsAdmin = Boolean(options.viewerIsAdmin)
@@ -851,11 +862,13 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
       const pluginVersions = byPlugin.get(plugin.id) ?? []
       const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
       const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
+      const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
 
       return {
         ...plugin,
         versions: filtered,
         latestVersionId: latest?.id ?? null,
+        ...pendingReviewMeta,
       }
     })
   }
@@ -892,11 +905,13 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
     const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
+    const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
 
     return {
       ...plugin,
       versions: filtered,
       latestVersionId: latest?.id ?? null,
+      ...pendingReviewMeta,
     }
   })
 }
@@ -931,11 +946,13 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
     const versions = (versionResults.results ?? []).map(mapPluginVersionRow)
     const filtered = versions.filter(version => versionIsVisible(version, plugin, options))
     const latest = selectLatestVisibleVersion(versions, plugin, options)
+    const pendingReviewMeta = resolvePendingReviewMeta(plugin, versions)
 
     return {
       ...plugin,
       versions: filtered,
       latestVersionId: latest?.id ?? null,
+      ...pendingReviewMeta,
     }
   }
 
@@ -964,11 +981,13 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
 
   const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
   const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
+  const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
 
   return {
     ...plugin,
     versions: filtered,
     latestVersionId: latest?.id ?? null,
+    ...pendingReviewMeta,
   }
 }
 

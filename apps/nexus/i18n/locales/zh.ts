@@ -5,7 +5,7 @@ export default {
     logout: '退出',
     dashboard: '控制台',
     pricing: '订阅方案',
-    market: '市场',
+    store: '商店',
     doc: '开发',
     developer: '开发者',
     download: '更新',
@@ -243,7 +243,7 @@ export default {
       finance: '金融',
     },
   },
-  market: {
+  store: {
     hero: {
       title: '发现精选插件',
       subtitle: '从精细整理的分类中检索，找到适合你工作流的插件。',
@@ -343,7 +343,7 @@ export default {
       greeting: '欢迎回来，{name}',
       intro: '这里汇总了你的环境、发布与插件状态。未来我们会在此提供自动化洞察与任务提醒。',
       docsCta: '查看文档',
-      marketplaceCta: '浏览插件',
+      storeCta: '浏览插件',
     },
     adminCredits: {
       title: 'AI 积分管理',
@@ -671,7 +671,7 @@ export default {
         title: '快捷入口',
         links: {
           gettingStarted: '入门指南',
-          marketplace: '插件市场',
+          store: '插件商店',
           developers: '开发者中心',
         },
       },
@@ -892,6 +892,7 @@ Tuff 可能随时更新本协议,继续提交表示接受变更。`,
         },
         pendingReviews: '待处理审核',
         pendingReviewsCount: '{count} 项待处理',
+        reviewingHint: '正在审核中',
         reviewPlugin: '插件审核',
         reviewVersion: '版本审核',
         viewDetails: '查看',
