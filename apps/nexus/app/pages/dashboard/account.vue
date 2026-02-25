@@ -577,12 +577,6 @@ function formatHistoryTime(value: string) {
       <TxFlipOverlay
         v-model="manageOverlayVisible"
         :source="manageOverlaySource"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="AccountManageOverlay-Mask"
-        mask-class="AccountManageOverlay-Mask"
-        card-class="AccountManageOverlay-Card"
       >
         <template #default="{ close }">
           <div class="AccountManageOverlay-Inner">
@@ -708,44 +702,5 @@ function formatHistoryTime(value: string) {
 
 .LoginHistoryTimeline :deep(.tx-timeline-item__content) {
   width: 100%;
-}
-</style>
-
-<style>
-.AccountManageOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.AccountManageOverlay-Mask-enter-active,
-.AccountManageOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.AccountManageOverlay-Mask-enter-from,
-.AccountManageOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.AccountManageOverlay-Card {
-  width: min(560px, 92vw);
-  min-height: 320px;
-  max-height: 82vh;
-  border-radius: 1rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  overflow: auto;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

@@ -354,12 +354,6 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
     <TxFlipOverlay
       v-model="visible"
       :source="props.source"
-      :duration="420"
-      :rotate-x="6"
-      :rotate-y="8"
-      transition-name="AssistantOverlay-Mask"
-      mask-class="AssistantOverlay-Mask"
-      card-class="AssistantOverlay-Card"
     >
       <template #header-display>
         <div class="assistant-dialog__title">
@@ -568,43 +562,5 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
 
 .assistant-dialog__send {
   min-width: 72px;
-}
-</style>
-
-<style>
-.AssistantOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.AssistantOverlay-Mask-enter-active,
-.AssistantOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.AssistantOverlay-Mask-enter-from,
-.AssistantOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.AssistantOverlay-Card {
-  width: min(860px, 92vw);
-  height: min(72vh, 720px);
-  border-radius: 1.1rem;
-  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

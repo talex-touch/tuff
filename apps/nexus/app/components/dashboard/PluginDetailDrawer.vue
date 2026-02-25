@@ -116,13 +116,6 @@ const visibleModel = computed({
     <TxFlipOverlay
       v-model="visibleModel"
       :source="source ?? null"
-      :duration="360"
-      :rotate-x="4"
-      :rotate-y="6"
-      :speed-boost="1.05"
-      transition-name="PluginDetailOverlay-Mask"
-      mask-class="PluginDetailOverlay-Mask"
-      card-class="PluginDetailOverlay-Card"
     >
       <template #header-display>
         <div v-if="plugin" class="PluginDetailOverlay-CustomHeader">
@@ -290,10 +283,6 @@ const visibleModel = computed({
 </template>
 
 <style scoped>
-:global(.PluginDetailOverlay-Card) {
-  max-height: calc(90dvh - 24px);
-}
-
 .PluginDetailOverlay-CustomHeader {
   display: flex;
   align-items: flex-start;

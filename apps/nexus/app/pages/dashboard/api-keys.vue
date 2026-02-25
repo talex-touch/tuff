@@ -393,14 +393,8 @@ const expiryOptions = [
       <TxFlipOverlay
         v-model="showCreateModal"
         :source="createOverlaySource"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
         :mask-closable="false"
         :prevent-accidental-close="true"
-        transition-name="ApiKeyOverlay-Mask"
-        mask-class="ApiKeyOverlay-Mask"
-        card-class="ApiKeyOverlay-Card"
         header-title="Create API Key"
         header-desc="Generate a new API key for CLI tools"
       >
@@ -648,62 +642,6 @@ const expiryOptions = [
 </style>
 
 <style>
-.ApiKeyOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.ApiKeyOverlay-Mask-enter-active,
-.ApiKeyOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.ApiKeyOverlay-Mask-enter-from,
-.ApiKeyOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.ApiKeyOverlay-Mask.is-close-guard-warning::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 62, 62, 0.26) 0%, rgba(255, 62, 62, 0.14) 42%, rgba(255, 62, 62, 0) 72%);
-  animation: ApiKeyOverlayMaskAlert 520ms ease-out;
-}
-
-.ApiKeyOverlay-Card {
-  width: min(520px, 92vw);
-  min-height: 320px;
-  max-height: 82vh;
-  border-radius: 1rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  overflow: auto;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  z-index: 1;
-}
-
-.ApiKeyOverlay-Card.is-close-guard-warning {
-  animation: ApiKeyOverlayCardAlert 760ms ease-out !important;
-}
-
-.ApiKeyOverlay-Card .TxFlipOverlay-Shell.is-close-guard-focus {
-  animation: ApiKeyOverlayFocusKick 420ms cubic-bezier(0.2, 0.72, 0.2, 1) !important;
-}
-
 .ApiKeyDeleteDialog {
   display: flex;
   flex-direction: column;
@@ -736,58 +674,5 @@ const expiryOptions = [
   display: flex;
   justify-content: center;
   gap: 10px;
-}
-
-@keyframes ApiKeyOverlayMaskAlert {
-  0% {
-    opacity: 0;
-  }
-
-  20% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes ApiKeyOverlayCardAlert {
-  0% {
-    filter: drop-shadow(0 0 0 rgba(255, 66, 66, 0));
-  }
-
-  24% {
-    filter:
-      drop-shadow(0 0 6px rgba(255, 96, 96, 0.96))
-      drop-shadow(0 0 24px rgba(255, 67, 67, 0.74))
-      drop-shadow(0 0 46px rgba(255, 46, 46, 0.56));
-  }
-
-  100% {
-    filter: drop-shadow(0 0 0 rgba(255, 66, 66, 0));
-  }
-}
-
-@keyframes ApiKeyOverlayFocusKick {
-  0% {
-    transform: scale(1);
-  }
-
-  28% {
-    transform: scale(1.05);
-  }
-
-  52% {
-    transform: scale(0.982);
-  }
-
-  72% {
-    transform: scale(1.018);
-  }
-
-  100% {
-    transform: scale(1);
-  }
 }
 </style>
