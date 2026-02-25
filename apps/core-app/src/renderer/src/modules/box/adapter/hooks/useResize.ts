@@ -19,6 +19,7 @@ const HEIGHT_SAFETY_PADDING = 10
 const HEADER_HEIGHT = 64
 const MIN_HEIGHT = 64
 const MAX_HEIGHT = 600
+const RESULT_LAYOUT_SETTLE_MS = 220
 
 const shouldLog = () => appSetting.searchEngine?.logsEnabled || appSetting.diagnostics?.verboseLogs
 
@@ -39,6 +40,34 @@ function getHeaderHeight(): number {
   return rect.height
 }
 
+function toPx(value: string | null | undefined): number {
+  if (!value) return 0
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function measureResultContentHeight(resultContent: HTMLElement): number {
+  const containerStyle = getComputedStyle(resultContent)
+  const paddingTop = toPx(containerStyle.paddingTop)
+  const paddingBottom = toPx(containerStyle.paddingBottom)
+
+  let visualBottom = paddingTop
+  const children = Array.from(resultContent.children) as HTMLElement[]
+  for (const child of children) {
+    const childStyle = getComputedStyle(child)
+    const marginBottom = toPx(childStyle.marginBottom)
+    const childBottom = child.offsetTop + child.offsetHeight + marginBottom
+    if (childBottom > visualBottom) {
+      visualBottom = childBottom
+    }
+  }
+
+  const visualHeight = Math.ceil(visualBottom + paddingBottom)
+  const scrollHeight = resultContent.scrollHeight
+  // Keep whichever is larger to avoid under-measure during transition states.
+  return Math.max(visualHeight, scrollHeight)
+}
+
 function calculateDesiredHeight(resultCount: number): number {
   const headerHeight = getHeaderHeight()
   if (resultCount === 0) return clampHeight(headerHeight)
@@ -57,7 +86,7 @@ function calculateDesiredHeight(resultCount: number): number {
   // can lock the next height to current viewport height and prevent shrinking.
   const resultContent = scrollRoot.querySelector('.CoreBoxRes-ScrollContent') as HTMLElement | null
   if (resultContent) {
-    const contentHeight = resultContent.scrollHeight
+    const contentHeight = measureResultContentHeight(resultContent)
     if (Number.isFinite(contentHeight) && contentHeight > 0) {
       return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
     }
@@ -99,6 +128,7 @@ export function useResize(options: UseResizeOptions): void {
   let lastPayload: CoreBoxLayoutUpdateRequest | null = null
   let rafId = 0
   let pendingSource: string | null = null
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
 
   function sendLayoutUpdate(source: string): void {
     const activationCount = activeActivations.value?.length ?? 0
@@ -147,10 +177,24 @@ export function useResize(options: UseResizeOptions): void {
     })
   }
 
+  function scheduleSettledLayoutUpdate(source: string): void {
+    if (settleTimer) {
+      clearTimeout(settleTimer)
+    }
+    settleTimer = setTimeout(() => {
+      settleTimer = null
+      scheduleLayoutUpdate(source)
+    }, RESULT_LAYOUT_SETTLE_MS)
+  }
+
   onBeforeUnmount(() => {
     if (rafId) {
       cancelAnimationFrame(rafId)
       rafId = 0
+    }
+    if (settleTimer) {
+      clearTimeout(settleTimer)
+      settleTimer = null
     }
 
     window.removeEventListener('corebox:shown', handleCoreBoxShown)
@@ -179,6 +223,7 @@ export function useResize(options: UseResizeOptions): void {
     (newResults, oldResults) => {
       if (newResults === oldResults) return
       scheduleLayoutUpdate('results')
+      scheduleSettledLayoutUpdate('results:settled')
     },
     { deep: true, flush: 'post' }
   )
