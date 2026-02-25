@@ -64,7 +64,6 @@ export function useVisibility(options: UseVisibilityOptions) {
   function onHide(): void {
     boxOptions.lastHidden = Date.now()
     wasTriggeredByShortcut.value = false
-    deactivateAllProviders().catch(() => {})
   }
 
   function checkAutoClear(lastHiddenOverride?: number): void {
