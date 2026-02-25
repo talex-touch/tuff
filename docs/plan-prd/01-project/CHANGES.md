@@ -66,6 +66,46 @@
 - `apps/nexus/app/pages/docs/[...slug].vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### FlipOverlay 全量内置参数收敛（去手动动画/样式透传）
+
+**变更类型**: 组件用法统一 / 样式收敛
+
+**描述**: 在不新增 Core/Nexus 包装层的前提下，批量将业务侧 `TxFlipOverlay` 切换为组件内置默认行为，移除重复透传的动画与样式参数（`duration/rotate/speed/transition-name/mask-class/card-class`），保留必要业务特例（如 `closable=false`、`mask-closable=false`、`prevent-accidental-close=true`）。
+
+**主要变更**:
+1. **动画参数统一**：业务页不再手动传 `:duration/:rotate-x/:rotate-y/:speed-boost`，统一使用 `TxFlipOverlay` 内置默认动画。
+2. **样式入口收敛**：业务页不再依赖 `transition-name/mask-class/card-class` 覆盖默认表现，统一使用组件内置 mask/card 风格。
+3. **特例保留**：仅保留交互语义特例配置（如禁用右上角 close、防误关闭），避免破坏关键流程。
+4. **冗余常量清理**：删除调用侧遗留 `FLIP_* / ISSUE_FLIP_* / ADD_DIALOG_FLIP_*` 常量，减少重复配置面。
+5. **动态宽度场景内移**：`AssetCreateOverlay` 的宽窄切换从 `card-class` 下沉到内容容器类，避免对外部 card class 的依赖。
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 修复: Assets 列表状态悬浮提示审核中
 
 **变更类型**: 交互细节优化 / Bug 修复
@@ -132,12 +172,14 @@
 3. **审核弹窗 FlipOverlay 化**：`ReviewModalOverlay` 内部容器迁移为 `TxFlipOverlay`，新增 `source` 入参并接入 source-aware 动画。
 4. **source 链路补齐**：`assets.vue` 新增 `reviewOverlaySource` 状态，打开/关闭时同步维护触发源引用。
 5. **头部通用化**：审核弹窗改用 `TxFlipOverlay` 默认 close 区域，并通过 `header-display` 复用 `PluginMetaHeader`，统一头部呈现风格。
-6. **引用链去歧义**：`assets.vue` 审核组件标签更名为 `ReviewOverlayDialog`，并将 `ReviewModal.vue` 收敛为对 `ReviewModalOverlay.vue` 的转发，避免自动导入命名冲突导致旧弹窗被误命中。
+6. **引用链去歧义**：`assets.vue` 审核组件标签更名为 `ReviewOverlayDialog`，并删除 `ReviewModal.vue` 旧入口，仅保留 `ReviewModalOverlay.vue`，避免自动导入命名冲突导致旧弹窗被误命中。
+7. **底部取消按钮收敛**：审核弹窗移除底部“Cancel（关闭）”，统一由右上角 close 关闭弹层；拒绝流程中的次级按钮改为“Back/返回”仅用于返回上一步。
+8. **高度策略收敛**：审核弹窗由固定高改为 `max-height` 约束，并将上限收敛到 `min(68dvh, 560px)`，减少视觉压迫感。
+9. **防误关闭开关收敛**：审核弹窗改为使用 `preventAccidentalClose=true`，统一拦截遮罩点击关闭并使用组件内置防误关交互。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/assets.vue`
 - `apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
-- `apps/nexus/app/components/dashboard/ReviewModal.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### 修复: Assets 发布流程 License 步骤勾选控件缺失
@@ -212,6 +254,7 @@
 7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
 8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
 9. **Plugin 选择直达表单**：在创建发布物流程中，点击 `Plugin` 类型后直接进入 `plugin_form`，移除中间提示页，减少一步跳转与额外尺寸切换。
+10. **高度测量时序修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并为门控期 refresh 引入“排队补刷”机制，避免在 `TxFlipOverlay` 开场缩放动画阶段采集到偏小高度，且不丢失后续高度更新。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/assets.vue`
