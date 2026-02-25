@@ -13,8 +13,10 @@ import { extractTpexMetadata } from './tpex'
 
 const PLUGINS_KEY = 'dashboard:plugins'
 const PLUGIN_VERSIONS_KEY = 'dashboard:pluginVersions'
+const PLUGIN_TIMELINE_KEY = 'dashboard:pluginTimeline'
 const PLUGINS_TABLE = 'dashboard_plugins'
 const PLUGIN_VERSIONS_TABLE = 'dashboard_plugin_versions'
+const PLUGIN_TIMELINE_TABLE = 'dashboard_plugin_timeline'
 
 const MAX_PLUGINS_PER_USER = 10
 const SUBMISSION_COOLDOWN_MS = 5 * 60 * 1000
@@ -55,6 +57,7 @@ export type PluginChannel = 'SNAPSHOT' | 'BETA' | 'RELEASE'
 export type PluginStatus = 'draft' | 'pending' | 'approved' | 'rejected'
 export type PluginVersionStatus = 'pending' | 'approved' | 'rejected'
 export type PluginArtifactType = 'plugin' | 'layout' | 'theme'
+export type PluginTimelineActorRole = 'owner' | 'admin' | 'system'
 
 export interface DashboardPluginAuthor {
   name: string
@@ -78,8 +81,23 @@ export interface DashboardPluginVersion {
   changelog?: string | null
   status: PluginVersionStatus
   reviewedAt?: string | null
+  rejectReason?: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface PluginTimelineEvent {
+  id: string
+  pluginId: string
+  versionId?: string | null
+  eventType: 'plugin.created' | 'plugin.status.changed' | 'version.created' | 'version.status.changed' | 'version.reedited'
+  actorId?: string | null
+  actorRole: PluginTimelineActorRole
+  fromStatus?: string | null
+  toStatus?: string | null
+  reason?: string | null
+  meta?: Record<string, unknown> | null
+  createdAt: string
 }
 
 export interface DashboardPlugin {
@@ -152,8 +170,36 @@ interface D1PluginVersionRow {
   notes: string | null
   status: string | null
   reviewed_at: string | null
+  reject_reason: string | null
   created_at: string
   updated_at: string
+}
+
+interface D1PluginTimelineRow {
+  id: string
+  plugin_id: string
+  version_id: string | null
+  event_type: PluginTimelineEvent['eventType']
+  actor_id: string | null
+  actor_role: PluginTimelineActorRole
+  from_status: string | null
+  to_status: string | null
+  reason: string | null
+  meta: string | null
+  created_at: string
+}
+
+interface AddTimelineEventInput {
+  pluginId: string
+  versionId?: string | null
+  eventType: PluginTimelineEvent['eventType']
+  actorId?: string | null
+  actorRole?: PluginTimelineActorRole
+  fromStatus?: string | null
+  toStatus?: string | null
+  reason?: string | null
+  meta?: Record<string, unknown> | null
+  createdAt?: string
 }
 
 interface PluginVisibilityOptions {
@@ -196,6 +242,15 @@ interface PublishVersionInput {
   canModerate?: boolean
   homepage?: string | null
   iconFile?: File
+}
+
+interface ReeditVersionInput {
+  pluginId: string
+  versionId: string
+  packageFile: File
+  changelog: string
+  updatedBy: string
+  canModerate?: boolean
 }
 
 function sanitizeSerializable(value: unknown): unknown {
@@ -316,8 +371,25 @@ async function ensurePluginSchema(db: D1Database) {
       notes TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       reviewed_at TEXT,
+      reject_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+  `).run()
+
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${PLUGIN_TIMELINE_TABLE} (
+      id TEXT PRIMARY KEY,
+      plugin_id TEXT NOT NULL,
+      version_id TEXT,
+      event_type TEXT NOT NULL,
+      actor_id TEXT,
+      actor_role TEXT NOT NULL,
+      from_status TEXT,
+      to_status TEXT,
+      reason TEXT,
+      meta TEXT,
+      created_at TEXT NOT NULL
     );
   `).run()
 
@@ -369,6 +441,10 @@ async function ensurePluginSchema(db: D1Database) {
   await addVersionColumnIfMissing('notes', 'notes TEXT')
   await addVersionColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'pending\'')
   await addVersionColumnIfMissing('reviewed_at', 'reviewed_at TEXT')
+  await addVersionColumnIfMissing('reject_reason', 'reject_reason TEXT')
+
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_plugin_created ON ${PLUGIN_TIMELINE_TABLE}(plugin_id, created_at DESC);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_version_created ON ${PLUGIN_TIMELINE_TABLE}(version_id, created_at DESC);`).run()
 
   schemaInitialized = true
 }
@@ -476,9 +552,26 @@ function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
     changelog: row.notes,
     status: (row.status as PluginVersionStatus) || 'pending',
     reviewedAt: row.reviewed_at,
+    rejectReason: row.reject_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
+}
+
+function mapPluginTimelineRow(row: D1PluginTimelineRow): PluginTimelineEvent {
+  return {
+    id: row.id,
+    pluginId: row.plugin_id,
+    versionId: row.version_id ?? null,
+    eventType: row.event_type,
+    actorId: row.actor_id ?? null,
+    actorRole: row.actor_role,
+    fromStatus: row.from_status ?? null,
+    toStatus: row.to_status ?? null,
+    reason: row.reason ?? null,
+    meta: parseJsonObject<Record<string, unknown>>(row.meta),
+    createdAt: row.created_at,
+  }
 }
 
 function sanitizeBadges(badges?: string[]): string[] {
@@ -699,11 +792,87 @@ async function readStoredPluginVersions(): Promise<DashboardPluginVersion[]> {
   return versions.map(version => sanitizeVersion({
     ...version,
     status: (version.status ?? 'pending') as PluginVersionStatus,
+    rejectReason: version.rejectReason ?? null,
   }))
 }
 
 async function writeStoredPluginVersions(versions: DashboardPluginVersion[]) {
   await writeCollection(PLUGIN_VERSIONS_KEY, versions.map(sanitizeVersion))
+}
+
+async function readStoredPluginTimeline(): Promise<PluginTimelineEvent[]> {
+  const events = await readCollection<PluginTimelineEvent>(PLUGIN_TIMELINE_KEY)
+  return events
+    .map(event => ({
+      ...event,
+      actorRole: event.actorRole ?? 'system',
+      meta: sanitizeManifest(event.meta ?? undefined),
+    }))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+async function writeStoredPluginTimeline(events: PluginTimelineEvent[]) {
+  const normalized = events.map(event => ({
+    ...event,
+    actorRole: event.actorRole ?? 'system',
+    meta: sanitizeManifest(event.meta ?? undefined),
+  }))
+  await writeCollection(PLUGIN_TIMELINE_KEY, normalized)
+}
+
+async function appendPluginTimelineEvent(event: H3Event, input: AddTimelineEventInput): Promise<PluginTimelineEvent> {
+  const createdAt = input.createdAt ?? new Date().toISOString()
+  const record: PluginTimelineEvent = {
+    id: randomUUID(),
+    pluginId: input.pluginId,
+    versionId: input.versionId ?? null,
+    eventType: input.eventType,
+    actorId: input.actorId ?? null,
+    actorRole: input.actorRole ?? 'system',
+    fromStatus: input.fromStatus ?? null,
+    toStatus: input.toStatus ?? null,
+    reason: input.reason?.trim() || null,
+    meta: sanitizeManifest(input.meta ?? undefined),
+    createdAt,
+  }
+
+  const db = getD1Database(event)
+  if (db) {
+    await ensurePluginSchema(db)
+    await db.prepare(`
+      INSERT INTO ${PLUGIN_TIMELINE_TABLE} (
+        id,
+        plugin_id,
+        version_id,
+        event_type,
+        actor_id,
+        actor_role,
+        from_status,
+        to_status,
+        reason,
+        meta,
+        created_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);
+    `).bind(
+      record.id,
+      record.pluginId,
+      record.versionId ?? null,
+      record.eventType,
+      record.actorId ?? null,
+      record.actorRole,
+      record.fromStatus ?? null,
+      record.toStatus ?? null,
+      record.reason ?? null,
+      record.meta ? JSON.stringify(record.meta) : null,
+      record.createdAt,
+    ).run()
+    return record
+  }
+
+  const events = await readStoredPluginTimeline()
+  events.unshift(record)
+  await writeStoredPluginTimeline(events)
+  return record
 }
 
 async function countUserPluginsInDb(db: D1Database, userId: string) {
@@ -1104,12 +1273,37 @@ export async function createPlugin(event: H3Event, input: CreatePluginInput & { 
       plugin.artifactType,
     ).run()
 
+    await appendPluginTimelineEvent(event, {
+      pluginId: plugin.id,
+      eventType: 'plugin.created',
+      actorId: plugin.userId,
+      actorRole: 'owner',
+      meta: {
+        slug: plugin.slug,
+        artifactType: plugin.artifactType,
+      },
+      createdAt: plugin.createdAt,
+    })
+
     return plugin
   }
 
   const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
   plugins.unshift(plugin)
   await writeCollection(PLUGINS_KEY, plugins)
+
+  await appendPluginTimelineEvent(event, {
+    pluginId: plugin.id,
+    eventType: 'plugin.created',
+    actorId: plugin.userId,
+    actorRole: 'owner',
+    meta: {
+      slug: plugin.slug,
+      artifactType: plugin.artifactType,
+    },
+    createdAt: plugin.createdAt,
+  })
+
   return plugin
 }
 
@@ -1285,6 +1479,11 @@ export async function deletePlugin(event: H3Event, id: string) {
     `).bind(id).run()
 
     await db.prepare(`
+      DELETE FROM ${PLUGIN_TIMELINE_TABLE}
+      WHERE plugin_id = ?1;
+    `).bind(id).run()
+
+    await db.prepare(`
       DELETE FROM ${PLUGINS_TABLE}
       WHERE id = ?1;
     `).bind(id).run()
@@ -1302,6 +1501,8 @@ export async function deletePlugin(event: H3Event, id: string) {
     }
 
     await writeStoredPluginVersions(remainingVersions)
+    const timeline = await readStoredPluginTimeline()
+    await writeStoredPluginTimeline(timeline.filter(item => item.pluginId !== id))
 
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const pluginToDelete = plugins.find(item => item.id === id)
@@ -1316,7 +1517,16 @@ export async function deletePlugin(event: H3Event, id: string) {
   return plugin
 }
 
-export async function setPluginStatus(event: H3Event, id: string, status: PluginStatus) {
+export async function setPluginStatus(
+  event: H3Event,
+  id: string,
+  status: PluginStatus,
+  options: {
+    actorId?: string | null
+    actorRole?: PluginTimelineActorRole
+    reason?: string | null
+  } = {},
+) {
   const plugin = await getPluginById(event, id)
 
   if (!plugin)
@@ -1352,6 +1562,17 @@ export async function setPluginStatus(event: H3Event, id: string, status: Plugin
     await writeCollection(PLUGINS_KEY, plugins)
   }
 
+  await appendPluginTimelineEvent(event, {
+    pluginId: id,
+    eventType: 'plugin.status.changed',
+    actorId: options.actorId ?? null,
+    actorRole: options.actorRole ?? 'system',
+    fromStatus: plugin.status,
+    toStatus: status,
+    reason: options.reason ?? null,
+    createdAt: now,
+  })
+
   return {
     ...plugin,
     status,
@@ -1359,7 +1580,17 @@ export async function setPluginStatus(event: H3Event, id: string, status: Plugin
   }
 }
 
-export async function setPluginVersionStatus(event: H3Event, pluginId: string, versionId: string, status: PluginVersionStatus) {
+export async function setPluginVersionStatus(
+  event: H3Event,
+  pluginId: string,
+  versionId: string,
+  status: PluginVersionStatus,
+  options: {
+    actorId?: string | null
+    actorRole?: PluginTimelineActorRole
+    reason?: string | null
+  } = {},
+) {
   const plugin = await getPluginById(event, pluginId, { includeVersions: true, viewerIsAdmin: true })
 
   if (!plugin)
@@ -1375,15 +1606,16 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
 
   const now = new Date().toISOString()
   const reviewedAt = status === 'approved' ? now : null
+  const rejectReason = status === 'rejected' ? (options.reason?.trim() || null) : null
   const db = getD1Database(event)
 
   if (db) {
     await ensurePluginSchema(db)
     await db.prepare(`
       UPDATE ${PLUGIN_VERSIONS_TABLE}
-      SET status = ?1, reviewed_at = ?2, updated_at = ?3
-      WHERE id = ?4;
-    `).bind(status, reviewedAt, now, versionId).run()
+      SET status = ?1, reviewed_at = ?2, reject_reason = ?3, updated_at = ?4
+      WHERE id = ?5;
+    `).bind(status, reviewedAt, rejectReason, now, versionId).run()
   }
   else {
     const versions = await readStoredPluginVersions()
@@ -1397,6 +1629,7 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
       ...existing,
       status,
       reviewedAt,
+      rejectReason,
       updatedAt: now,
     }
     await writeStoredPluginVersions(versions)
@@ -1430,6 +1663,7 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
           ...version,
           status,
           reviewedAt,
+          rejectReason,
           updatedAt: now,
         }
       }
@@ -1449,10 +1683,27 @@ export async function setPluginVersionStatus(event: H3Event, pluginId: string, v
     }
   }
 
+  await appendPluginTimelineEvent(event, {
+    pluginId,
+    versionId,
+    eventType: 'version.status.changed',
+    actorId: options.actorId ?? null,
+    actorRole: options.actorRole ?? 'system',
+    fromStatus: version.status,
+    toStatus: status,
+    reason: rejectReason,
+    meta: {
+      version: version.version,
+      channel: version.channel,
+    },
+    createdAt: now,
+  })
+
   return {
     ...version,
     status,
     reviewedAt,
+    rejectReason,
     updatedAt: now,
   }
 }
@@ -1577,6 +1828,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     changelog: input.changelog,
     status,
     reviewedAt,
+    rejectReason: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -1613,9 +1865,10 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         notes,
         status,
         reviewed_at,
+        reject_reason,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19);
     `).bind(
       version.id,
       version.pluginId,
@@ -1633,6 +1886,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       version.changelog ?? null,
       version.status,
       version.reviewedAt ?? null,
+      version.rejectReason ?? null,
       version.createdAt,
       version.updatedAt,
     ).run()
@@ -1688,17 +1942,251 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     }
   }
 
+  await appendPluginTimelineEvent(event, {
+    pluginId: plugin.id,
+    versionId: version.id,
+    eventType: 'version.created',
+    actorId: input.createdBy,
+    actorRole: canModerate ? 'admin' : 'owner',
+    toStatus: version.status,
+    meta: {
+      version: version.version,
+      channel: version.channel,
+    },
+    createdAt: version.createdAt,
+  })
+
   if (!canModerate && plugin.status === 'draft')
-    await setPluginStatus(event, plugin.id, 'pending')
+    await setPluginStatus(event, plugin.id, 'pending', {
+      actorId: input.createdBy,
+      actorRole: 'owner',
+    })
   else if (canModerate && plugin.status !== 'approved')
-    await setPluginStatus(event, plugin.id, 'approved')
+    await setPluginStatus(event, plugin.id, 'approved', {
+      actorId: input.createdBy,
+      actorRole: 'admin',
+    })
 
   return version
+}
+
+export async function reeditPluginVersion(event: H3Event, input: ReeditVersionInput) {
+  const plugin = await getPluginById(event, input.pluginId, {
+    includeVersions: true,
+    viewerId: input.updatedBy,
+    viewerIsAdmin: Boolean(input.canModerate),
+  })
+
+  if (!plugin)
+    throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
+
+  const targetVersion = (plugin.versions ?? []).find(item => item.id === input.versionId)
+  if (!targetVersion)
+    throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
+
+  const canModerate = Boolean(input.canModerate)
+  const isOwner = plugin.userId === input.updatedBy
+  if (!isOwner && !canModerate) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'You cannot re-edit this version.',
+    })
+  }
+
+  if (targetVersion.status !== 'rejected')
+    throw createError({ statusCode: 400, statusMessage: 'Only rejected versions can be re-edited.' })
+
+  const nextChangelog = input.changelog.trim()
+  if (!nextChangelog)
+    throw createError({ statusCode: 400, statusMessage: 'Changelog is required.' })
+
+  const packageArrayBuffer = await input.packageFile.arrayBuffer()
+  const packageBuffer = Buffer.from(packageArrayBuffer)
+  const signature = await sha256Hex(packageBuffer)
+  const metadata = await extractTpexMetadata(packageBuffer)
+
+  let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
+  let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null
+
+  if (!iconKey || !iconUrl) {
+    if (metadata.iconBuffer && metadata.iconFileName && metadata.iconMimeType) {
+      const iconResult = await uploadImageFromBuffer(
+        event,
+        metadata.iconBuffer,
+        metadata.iconFileName,
+        metadata.iconMimeType,
+      )
+      iconKey = iconResult.key
+      iconUrl = iconResult.url
+      await updatePluginIcon(event, plugin.id, iconKey, iconUrl)
+    }
+    else {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Plugin icon is required. Please include an icon file in your package.',
+      })
+    }
+  }
+
+  const packageResult = await uploadPluginPackage(event, input.packageFile, packageArrayBuffer)
+  const now = new Date().toISOString()
+
+  const updatedVersion: DashboardPluginVersion = sanitizeVersion({
+    ...targetVersion,
+    signature,
+    packageKey: packageResult.key,
+    packageUrl: packageResult.url,
+    packageSize: packageResult.size,
+    iconKey,
+    iconUrl,
+    readmeMarkdown: metadata.readmeMarkdown ?? null,
+    manifest: metadata.manifest ?? null,
+    changelog: nextChangelog,
+    status: 'pending',
+    reviewedAt: null,
+    rejectReason: null,
+    updatedAt: now,
+  })
+
+  const db = getD1Database(event)
+  if (db) {
+    await ensurePluginSchema(db)
+    await db.prepare(`
+      UPDATE ${PLUGIN_VERSIONS_TABLE}
+      SET
+        signature = ?1,
+        package_key = ?2,
+        package_url = ?3,
+        package_size = ?4,
+        icon_key = ?5,
+        icon_url = ?6,
+        readme_markdown = ?7,
+        manifest = ?8,
+        notes = ?9,
+        status = ?10,
+        reviewed_at = NULL,
+        reject_reason = NULL,
+        updated_at = ?11
+      WHERE id = ?12;
+    `).bind(
+      updatedVersion.signature,
+      updatedVersion.packageKey,
+      updatedVersion.packageUrl,
+      updatedVersion.packageSize,
+      updatedVersion.iconKey,
+      updatedVersion.iconUrl,
+      updatedVersion.readmeMarkdown ?? null,
+      updatedVersion.manifest ? JSON.stringify(updatedVersion.manifest) : null,
+      updatedVersion.changelog ?? null,
+      updatedVersion.status,
+      updatedVersion.updatedAt,
+      updatedVersion.id,
+    ).run()
+
+    const refreshed = await getPluginById(event, plugin.id, {
+      includeVersions: true,
+      viewerIsAdmin: true,
+    })
+    if (refreshed) {
+      const latest = selectLatestVisibleVersion(refreshed.versions ?? [], refreshed, {
+        viewerIsAdmin: true,
+      })
+      await db.prepare(`
+        UPDATE ${PLUGINS_TABLE}
+        SET latest_version_id = ?1, updated_at = ?2
+        WHERE id = ?3;
+      `).bind(
+        latest?.id ?? null,
+        now,
+        plugin.id,
+      ).run()
+    }
+  }
+  else {
+    const versions = await readStoredPluginVersions()
+    const index = versions.findIndex(item => item.id === updatedVersion.id)
+    if (index === -1)
+      throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
+    versions[index] = updatedVersion
+    await writeStoredPluginVersions(versions)
+
+    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const pluginIndex = plugins.findIndex(item => item.id === plugin.id)
+    if (pluginIndex !== -1) {
+      const existing = plugins[pluginIndex]
+      if (existing) {
+        const refreshed = await getPluginById(event, plugin.id, {
+          includeVersions: true,
+          viewerIsAdmin: true,
+        })
+        const latest = selectLatestVisibleVersion(refreshed?.versions ?? [], refreshed ?? plugin, {
+          viewerIsAdmin: true,
+        })
+        plugins[pluginIndex] = {
+          ...existing,
+          latestVersionId: latest?.id ?? existing.latestVersionId ?? null,
+          updatedAt: now,
+        }
+        await writeCollection(PLUGINS_KEY, plugins)
+      }
+    }
+  }
+
+  await deletePluginPackage(event, targetVersion.packageKey)
+  if (targetVersion.iconKey && targetVersion.iconKey !== updatedVersion.iconKey && targetVersion.iconKey !== plugin.iconKey)
+    await deleteImage(event, targetVersion.iconKey)
+
+  await appendPluginTimelineEvent(event, {
+    pluginId: plugin.id,
+    versionId: targetVersion.id,
+    eventType: 'version.reedited',
+    actorId: input.updatedBy,
+    actorRole: canModerate ? 'admin' : 'owner',
+    fromStatus: 'rejected',
+    toStatus: 'pending',
+    meta: {
+      version: targetVersion.version,
+      channel: targetVersion.channel,
+    },
+    createdAt: now,
+  })
+
+  if (!canModerate && plugin.status === 'rejected') {
+    await setPluginStatus(event, plugin.id, 'pending', {
+      actorId: input.updatedBy,
+      actorRole: 'owner',
+    })
+  }
+  else if (canModerate && plugin.status !== 'approved') {
+    await setPluginStatus(event, plugin.id, 'approved', {
+      actorId: input.updatedBy,
+      actorRole: 'admin',
+    })
+  }
+
+  return updatedVersion
 }
 
 export async function listPluginVersions(event: H3Event | undefined, pluginId: string, options: PluginVisibilityOptions = {}) {
   const plugin = await getPluginById(event, pluginId, { includeVersions: true, ...options })
   return plugin?.versions ?? []
+}
+
+export async function listPluginTimeline(event: H3Event | undefined, pluginId: string): Promise<PluginTimelineEvent[]> {
+  const db = getD1Database(event)
+  if (db) {
+    await ensurePluginSchema(db)
+    const rows = await db.prepare(`
+      SELECT *
+      FROM ${PLUGIN_TIMELINE_TABLE}
+      WHERE plugin_id = ?1
+      ORDER BY datetime(created_at) DESC;
+    `).bind(pluginId).all<D1PluginTimelineRow>()
+    return (rows.results ?? []).map(mapPluginTimelineRow)
+  }
+
+  const events = await readStoredPluginTimeline()
+  return events.filter(item => item.pluginId === pluginId)
 }
 
 export async function deletePluginVersion(event: H3Event, pluginId: string, versionId: string, options: { bypassOwnerCheck?: boolean } = {}) {

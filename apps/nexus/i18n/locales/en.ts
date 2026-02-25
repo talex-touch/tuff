@@ -785,6 +785,7 @@ export default {
           changelog: 'Changelog',
           package: 'Plugin Package (.tpex tar, ≤30 MB)',
           submit: 'Submit for Review',
+          reeditSubmit: 'Re-submit for Review',
         },
         channels: {
           RELEASE: {
@@ -806,6 +807,12 @@ export default {
             message: 'Once published, the version cannot be deleted or modified. Please ensure all information is correct before submitting.',
             understand: 'I Understand',
             cancel: 'Cancel Publishing',
+          },
+          reedit: {
+            title: '⚠️ This Will Re-enter Review',
+            message: 'Re-editing will overwrite the current package and submit the version for review again. Confirm before proceeding.',
+            understand: 'Continue Re-submit',
+            cancel: 'Back to Edit',
           },
         },
         license: {
@@ -857,6 +864,8 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           reject: 'Reject',
         },
         publishVersion: 'New version',
+        reeditVersion: 'Re-edit',
+        rejectedReason: 'Rejection reason',
         editMetadata: 'Edit metadata',
         delete: 'Delete plugin',
         confirmDeleteVersion: 'Delete version {version}?',
@@ -880,10 +889,26 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           homepage: 'Homepage',
         },
         noVersions: 'No versions published yet.',
+        timelineTitle: 'Timeline',
+        timelineLoading: 'Loading timeline…',
+        timelineEmpty: 'No timeline records yet.',
+        timelineActors: {
+          owner: 'Publisher',
+          admin: 'Administrator',
+          system: 'System',
+        },
+        timelineEvents: {
+          pluginCreated: 'Created this asset',
+          pluginStatusChanged: 'Asset status changed: {from} → {to}',
+          versionCreated: 'Created version v{version}',
+          versionStatusChanged: 'Version v{version} status: {from} → {to}',
+          versionReedited: 'Version v{version} was re-edited and re-submitted',
+        },
         errors: {
           createFailed: 'Failed to create plugin',
           invalidCategory: 'Please choose a category from the list.',
           missingPlugin: 'Select a plugin before publishing a version.',
+          missingVersion: 'Select a rejected version before re-editing.',
           missingIdentifier: 'Provide a unique plugin identifier.',
           invalidIdentifierFormat: 'Use at least two dot-separated segments (e.g. alpha.beta.plugin).',
           restrictedIdentifier: 'Identifier or name uses reserved terms. Mark it as official to continue.',
