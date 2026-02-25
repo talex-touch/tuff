@@ -25,7 +25,7 @@
 
 1. domain sdk 收口已覆盖高收益域：
    - `update` / `intelligence` / `settings` / `permission`
-   - `agents-market` / `agents`
+   - `agents-store` / `agents`
 2. renderer 层已有对应 hooks，页面逐步迁移到 SDK 调用。
 3. plugin sdk 增加统一订阅释放约束，降低重复注册与泄漏风险。
 4. main handler 已抽象 safe handler 模板，响应结构更一致。
@@ -48,7 +48,7 @@
   - `packages/utils/transport/sdk/domains/intelligence.ts`
   - `packages/utils/transport/sdk/domains/settings.ts`
   - `packages/utils/transport/sdk/domains/permission.ts`
-  - `packages/utils/transport/sdk/domains/agents-market.ts`
+  - `packages/utils/transport/sdk/domains/agents-store.ts`
   - `packages/utils/transport/sdk/domains/agents.ts`
 - 导出聚合：
   - `packages/utils/transport/sdk/domains/index.ts`
@@ -70,7 +70,7 @@
   - `packages/utils/renderer/hooks/use-intelligence-sdk.ts`
   - `packages/utils/renderer/hooks/use-settings-sdk.ts`
   - `packages/utils/renderer/hooks/use-permission-sdk.ts`
-  - `packages/utils/renderer/hooks/use-agent-market-sdk.ts`
+  - `packages/utils/renderer/hooks/use-agent-store-sdk.ts`
   - `packages/utils/renderer/hooks/use-agents-sdk.ts`
 - hooks 导出：
   - `packages/utils/renderer/hooks/index.ts`
@@ -110,7 +110,7 @@
   - `packages/utils/transport/events/index.ts` 新增 `AppEvents.system.openPromptsFolder`
   - `packages/utils/transport/sdk/domains/app.ts` 新增 `openPromptsFolder()`
 - hooks 导出 hard-cut：
-  - `packages/utils/renderer/hooks/index.ts` 移除 deprecated 兼容导出 `use-agent-market`、`use-permission`
+  - `packages/utils/renderer/hooks/index.ts` 移除 deprecated 兼容导出 `use-agent-store`、`use-permission`
   - 新代码只能通过 `useAgentMarketSdk`、`usePermissionSdk` 使用对应能力
 - Update 兼容壳质量修复：
   - `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
@@ -193,7 +193,7 @@
 
 ```bash
 pnpm -C "apps/core-app" exec eslint "src/renderer/src/components/intelligence/agents/AgentDetail.vue" "src/renderer/src/views/base/intelligence/IntelligenceAgentsPage.vue" "src/main/modules/ai/agents/agent-channels.ts" "src/renderer/src/modules/lang/en-US.json" "src/renderer/src/modules/lang/zh-CN.json"
-pnpm -C "packages/utils" exec eslint "transport/events/index.ts" "transport/events/types/agents.ts" "transport/sdk/domains/agents.ts" "transport/sdk/domains/agents-market.ts" "transport/sdk/domains/intelligence.ts" "transport/sdk/domains/permission.ts" "transport/sdk/domains/settings.ts" "transport/sdk/domains/update.ts" "transport/sdk/domains/index.ts" "renderer/hooks/use-agents-sdk.ts" "renderer/hooks/use-agent-market-sdk.ts" "renderer/hooks/use-intelligence-sdk.ts" "renderer/hooks/use-permission-sdk.ts" "renderer/hooks/use-settings-sdk.ts" "renderer/hooks/use-update-sdk.ts" "renderer/hooks/index.ts" "__tests__/transport-domain-sdks.test.ts"
+pnpm -C "packages/utils" exec eslint "transport/events/index.ts" "transport/events/types/agents.ts" "transport/sdk/domains/agents.ts" "transport/sdk/domains/agents-store.ts" "transport/sdk/domains/intelligence.ts" "transport/sdk/domains/permission.ts" "transport/sdk/domains/settings.ts" "transport/sdk/domains/update.ts" "transport/sdk/domains/index.ts" "renderer/hooks/use-agents-sdk.ts" "renderer/hooks/use-agent-store-sdk.ts" "renderer/hooks/use-intelligence-sdk.ts" "renderer/hooks/use-permission-sdk.ts" "renderer/hooks/use-settings-sdk.ts" "renderer/hooks/use-update-sdk.ts" "renderer/hooks/index.ts" "__tests__/transport-domain-sdks.test.ts"
 ```
 
 结果：无错误；JSON 文件在当前 ESLint 配置下属于“忽略文件”提示，不影响本次代码改动正确性。
@@ -226,7 +226,7 @@ pnpm -C "apps/core-app" exec vitest run "src/main/channel/common.test.ts" "src/m
 
 1. 少量页面/模块仍有 legacy channel 直连存量，迁移过程中可能出现遗漏。
 2. 本轮已删除 `app:open-prompts-folder` legacy 分支，任何仍依赖该 raw 事件的调用会直接失效。
-3. `packages/utils/renderer/hooks/index.ts` 已移除 deprecated 导出（`use-agent-market`、`use-permission`），外部若仍依赖旧导出将出现编译错误。
+3. `packages/utils/renderer/hooks/index.ts` 已移除 deprecated 导出（`use-agent-store`、`use-permission`），外部若仍依赖旧导出将出现编译错误。
 4. push 与轮询并存期间，存在“状态已完成但结果包丢失”的降级分支（已做用户提示）。
 5. 跨端（plugin / renderer / main）替换节奏不同，短期需要额外回归。
 

@@ -171,7 +171,7 @@ Toast (renderer):
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
 - `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
 - `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
-- `apps/core-app/src/renderer/src/composables/market/usePluginUpdates.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginUpdates.ts`
 - `apps/core-app/src/renderer/src/stores/plugin.ts`
 - `apps/core-app/src/renderer/src/views/box/DivisionBoxHeader.vue`
 - `apps/core-app/src/renderer/src/views/test/LoginTest.vue`
@@ -199,7 +199,7 @@ Toast (renderer):
 
 Mention / dialog (renderer):
 - `apps/core-app/src/renderer/src/modules/mention/dialog-mention.ts`
-- `apps/core-app/src/renderer/src/composables/market/useMarketInstall.ts`
+- `apps/core-app/src/renderer/src/composables/store/useMarketInstall.ts`
 - `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
 - `apps/core-app/src/renderer/src/components/plugin/action/mention/PluginApplyInstall.vue`
 - `apps/core-app/src/renderer/src/components/plugin/PluginView.vue`

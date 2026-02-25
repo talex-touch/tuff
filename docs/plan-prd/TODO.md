@@ -85,6 +85,11 @@
   - Turnstile + Passkey step-up flow
 - [x] **更新系统增强**
   - reusable update tasks + 下载管理增强
+- [x] **发布链路收敛（官网 + CLI）**
+  - `build-and-release` 成为单一桌面发版主线（失败不创建 Release）
+  - 发布资产与 manifest 自动同步 Nexus release
+  - CLI 四包（`tuff-cli-core`/`tuffcli`/`unplugin-export-plugin`/`tuff-cli`）自动发布到 npm（稳定版 `latest`，预发布 `next`）
+  - 官网部署改由 Cloudflare Pages 平台侧 Git 自动部署（仓库不再维护 `nexus-deploy.yml`）
 - [x] **原生能力集成**
   - tuff-native workspace 包 + 构建接入
   - 本地系统 OCR provider
@@ -102,7 +107,7 @@
 - [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
 - [ ] Nexus 首页内容整改与占位移除（`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md`）
-- [ ] Release Pipeline：OIDC + RSA + notes/assets 同步（`plan/planprd-release-pipeline.md`）
+- [ ] Release Pipeline（剩余项）：OIDC + RSA 签名信任链增强与 GA 发布治理（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
 - [ ] OmniPanel Feature Hub（安装插件后自动装载首个 Feature、Feature 执行链路、选中文本上下文注入）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
@@ -132,7 +137,7 @@
 - `05-archive/TUFF-TRANSPORT-PRD.md` - TuffTransport (已实现) ← 已归档
 - `05-archive/SEARCH-DSL-PRD.md` - 搜索 DSL (已实现) ← 已归档
 - `05-archive/NEXUS-TEAM-INVITE-PRD.md` - 团队邀请 (已落地) ← 已归档
-- `05-archive/plugin-market-provider-frontend-plan.md` - 插件市场多源 (已落地) ← 已归档
+- `05-archive/plugin-store-provider-frontend-plan.md` - 插件市场多源 (已落地) ← 已归档
 - `05-archive/intelligent-recommendation-system-prd.md` - 智能推荐 (已落地) ← 已归档
 - `05-archive/direct-preview-calculation-prd.md` - 直接预览计算 (已落地) ← 已归档
 
@@ -246,14 +251,14 @@
 ---
 
 ### 2. 插件市场多源支持 🟡 进行中
-**来源**: `plan-prd/03-features/plugin/plugin-market-provider-frontend-plan.md`
+**来源**: `plan-prd/03-features/plugin/plugin-store-provider-frontend-plan.md`
 **工期**: 5.5 天
 
 - [x] 类型与默认源 (0.5d)
 - [x] Provider Registry & Storage (1d)
 - [x] Provider 实现 - 官方 TpexApiProvider (1d)
 - [x] Provider 实现 - NexusStoreProvider (1d)
-- [x] UI 集成 - Market 页面 + Source Editor (1d)
+- [x] UI 集成 - Store 页面 + Source Editor (1d)
 - [x] 扩展 Provider - NPM (npm-package-provider.ts) ✅ (2025-12-10)
 - [x] 扩展 Provider - GitHub/Gitee (repository-provider.ts) ✅ (2025-12-11)
 - [x] NPM Provider 完整实现 ✅ (2025-12-11)
@@ -605,6 +610,9 @@
   - [x] useAgentMarket composable
 
 #### Phase 3: 高级功能 (v2.7.0) - 10天
+- [x] 一次切换：`intelligence:agent:*` 命名空间全量替换（Core IPC + Nexus API）
+- [x] Prompt Registry：统一 `record + binding` schema（Core SQLite / Nexus D1）
+- [x] 旧入口下线：`/api/admin/intelligence-lab/*` 返回 `410`（引导至 `/api/admin/intelligence-agent/*`）
 - [ ] **Day 1-3**: WorkflowAgent + 编辑器（WorkflowAgent 已落地，编辑器未完成）
 - [ ] **Day 4-6**: 记忆系统 + 上下文管理（MemoryStore/ContextManager 已落地）
 - [ ] **Day 7-8**: 用户自定义代理

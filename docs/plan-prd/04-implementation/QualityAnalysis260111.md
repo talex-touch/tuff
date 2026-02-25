@@ -74,7 +74,7 @@
 ### 4.3 Core-app 首批迁移（环境判断）
 
 - `apps/core-app/src/preload/index.ts`
-- `apps/core-app/src/renderer/src/views/base/Market.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
 - `apps/core-app/src/renderer/src/views/base/MarketDetail.vue`
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useClipboard.ts`
 - `apps/core-app/src/renderer/src/modules/layout/useSecondaryNavigation.ts`

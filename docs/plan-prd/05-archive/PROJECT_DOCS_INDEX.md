@@ -13,7 +13,7 @@
 | `intelligent-recommendation-system-prd.md` | `03-features/search/` | RecommendationEngine 已上线 | 2025-12 |
 | `direct-preview-calculation-prd.md` | `04-implementation/performance/` | 表达式+单位+汇率+时间计算已落地 | 2025-12 |
 | `widget-dynamic-loading-plan.md` | `03-features/plugin/` | Loader+Compiler+Manager 核心完成 | 2025-12 |
-| `plugin-market-provider-frontend-plan.md` | `03-features/plugin/` | TpexApi+Nexus+NPM+GitHub Provider 已落地 | 2025-12 |
+| `plugin-store-provider-frontend-plan.md` | `03-features/plugin/` | TpexApi+Nexus+NPM+GitHub Provider 已落地 | 2025-12 |
 
 ---
 

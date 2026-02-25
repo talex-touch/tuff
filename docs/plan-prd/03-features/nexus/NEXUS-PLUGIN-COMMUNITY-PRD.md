@@ -45,7 +45,7 @@
 
 ### 市场端（公开）
 1) 获取插件评分汇总  
-`GET /api/market/plugins/:slug/rating`
+`GET /api/store/plugins/:slug/rating`
 
 **响应**:
 ```json
@@ -56,7 +56,7 @@
 ```
 
 2) 获取插件评论列表  
-`GET /api/market/plugins/:slug/reviews?limit=20&offset=0`
+`GET /api/store/plugins/:slug/reviews?limit=20&offset=0`
 
 **响应**:
 ```json
@@ -82,7 +82,7 @@
 ```
 
 3) 提交/更新评论  
-`POST /api/market/plugins/:slug/reviews`
+`POST /api/store/plugins/:slug/reviews`
 
 **请求**:
 ```json
@@ -103,16 +103,16 @@
 
 ### 管理端（审核）
 1) 获取待审评论  
-`GET /api/admin/market/reviews/pending`
+`GET /api/admin/store/reviews/pending`
 
 2) 更新评论状态  
-`PATCH /api/admin/market/reviews/:id/status`  
+`PATCH /api/admin/store/reviews/:id/status`  
 请求体: `{ "status": "approved" | "rejected" }`
 
 ## 前端结构
 
 ### 页面
-- `apps/nexus/app/pages/market.vue`  
+- `apps/nexus/app/pages/store.vue`  
   - 评分摘要卡片（平均分 + 总评价数）
   - 评论列表（最新优先）
   - 评论提交表单（评分 + 标题 + 内容）
@@ -131,7 +131,7 @@
 
 ## 关键落点
 - `apps/nexus/server/utils/pluginReviewStore.ts`
-- `apps/nexus/server/api/market/plugins/[slug]/reviews.*.ts`
-- `apps/nexus/server/api/admin/market/reviews/*`
-- `apps/nexus/app/pages/market.vue`
-- `apps/nexus/app/types/marketplace.ts`
+- `apps/nexus/server/api/store/plugins/[slug]/reviews.*.ts`
+- `apps/nexus/server/api/admin/store/reviews/*`
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/app/types/store.ts`

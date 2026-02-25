@@ -2,7 +2,7 @@
 
 ## 1. 背景
 
-- 现有 Market 只消费 GitHub manifest，UI 虽列出多个来源但纯摆设，体验像扯淡的假货市场。
+- 现有 Store 只消费 GitHub manifest，UI 虽列出多个来源但纯摆设，体验像扯淡的假货市场。
 - 业务方确认：首版仅需前端完成 Provider Registry，不依赖主进程或服务端；后续再看是否下沉。
 - 为避免类型散落，所有 Provider/Plugin DTO 统一沉淀在 `packages/utils`，供 renderer 与插件共享。
 - 源配置只需轻量持久化，直接落在浏览器 `localStorage`，无需触发 StorageModule/IPC。
@@ -10,14 +10,14 @@
 ## 2. 目标与原则
 
 1. **前端自洽**：所有 Provider 注册、实例化、数据抓取在 renderer 内完成，Vue 页面直接消费。
-2. **轻量持久化**：使用 `localStorage['talex.market.sources']` 保存源配置，提供迁移/默认值逻辑。
-3. **可扩展类型**：`packages/utils/market/` 增补 Provider/Plugin 类型、配置 Schema，确保后续模块可复用。
+2. **轻量持久化**：使用 `localStorage['talex.store.sources']` 保存源配置，提供迁移/默认值逻辑。
+3. **可扩展类型**：`packages/utils/store/` 增补 Provider/Plugin 类型、配置 Schema，确保后续模块可复用。
 4. **KISS + YAGNI**：只覆盖列表展示、搜索过滤、源管理、安装所需 metadata，不提前实现后端联调能力。
 5. **健壮容错**：单个 Provider 失败不拖垮市场页，UI 给出 per-provider 错误提示。
 
 ## 3. 用户场景
 
-- **普通用户**：在 Market 页面浏览/搜索插件，选择来源（官方 Nexus、GitHub/Gitee 仓库、NPM 包等），单击安装。
+- **普通用户**：在 Store 页面浏览/搜索插件，选择来源（官方 Nexus、GitHub/Gitee 仓库、NPM 包等），单击安装。
 - **进阶用户**：打开“Source”弹窗，新增自定义源（输入名称、类型、URL），调整启用顺序并保存。
 - **开发者调试**：通过仓库/自建 Nexus 源接入本地 mock，验证插件 manifest，无需重启应用。
 
@@ -33,7 +33,7 @@
 
 ### 4.2 Provider Factory + Registry（前端）
 - `useMarketProviders.ts`（renderer composable）维护 `Map<providerId, ProviderInstance>`。
-- Factory 根据 `definition.type` 返回对应实现（直接写在 renderer `modules/market/providers/*`）。
+- Factory 根据 `definition.type` 返回对应实现（直接写在 renderer `modules/store/providers/*`）。
 - Registry 提供 API：`getDefinitions()`, `saveDefinitions()`, `getActiveProviders()`, `refreshInstances()`.
 
 ### 4.3 数据获取与聚合
@@ -57,10 +57,10 @@
 
 | 路径 | 说明 |
 | --- | --- |
-| `packages/utils/market/types.ts` | `MarketProviderType`, `MarketProviderDefinition`, `MarketPlugin`, `MarketInstallInstruction` 等核心类型 |
-| `packages/utils/market/constants.ts` | 默认 Source 列表、localStorage key、schema 版本 |
-| `apps/core-app/src/renderer/src/modules/market/providers/*` | 各 Provider 具体实现 |
-| `apps/core-app/src/renderer/src/composables/market/useMarketProviders.ts` | Registry/Factory + localStorage 读写 |
+| `packages/utils/store/types.ts` | `MarketProviderType`, `MarketProviderDefinition`, `MarketPlugin`, `MarketInstallInstruction` 等核心类型 |
+| `packages/utils/store/constants.ts` | 默认 Source 列表、localStorage key、schema 版本 |
+| `apps/core-app/src/renderer/src/modules/store/providers/*` | 各 Provider 具体实现 |
+| `apps/core-app/src/renderer/src/composables/store/useMarketProviders.ts` | Registry/Factory + localStorage 读写 |
 
 类型示例：
 ```ts
@@ -97,10 +97,10 @@ export interface MarketPlugin {
       this.setAutoSave(true)
     }
   }
-  export const marketSourcesStorage = createStorageProxy('storage:market-sources', () => new MarketSourcesStorage())
+  export const marketSourcesStorage = createStorageProxy('storage:store-sources', () => new MarketSourcesStorage())
   ```
-  这样 Source Editor、Market 列表、其他模块都共享同一份全局 reactive state，并且写入直接经过 StorageModule，自动广播更新。
-- **主 key**：`StorageList.MARKET_SOURCES`（落地 `market-sources.json`）。
+  这样 Source Editor、Store 列表、其他模块都共享同一份全局 reactive state，并且写入直接经过 StorageModule，自动广播更新。
+- **主 key**：`StorageList.MARKET_SOURCES`（落地 `store-sources.json`）。
 - **格式**：`{ version: 1, sources: MarketProviderDefinition[] }`，在 storage 层做 schema 校验、新版本迁移、默认源注入。
 - **读流程**：渲染进程通过 `storage:get` 即时读取缓存，TouchStorage 初始化时自动 `sendSync`，无须手动 parse。
 - **写流程**：任何对 `marketSourcesStorage.data` 的修改都会触发 debounced `storage:save`，并由 StorageModule 广播 `storage:update`，所有窗口同步。
@@ -120,12 +120,12 @@ export interface MarketPlugin {
 
 3. **状态同步**  
    - 通过 Pinia store `useMarketSourceStore`（或现有 composable state）暴露源列表/加载态。  
-   - Source Editor 修改 → store 更新 → Market 列表 reactive 刷新。
+   - Source Editor 修改 → store 更新 → Store 列表 reactive 刷新。
 
 ## 8. 核心交互流程
 
 ### 8.1 市场加载
-1. Market 页面挂载 → `useMarketProviders.load()` → lokal definitions ready。  
+1. Store 页面挂载 → `useMarketProviders.load()` → lokal definitions ready。  
 2. 调 `MarketDataService.fetchPlugins()` → 并发 provider 请求。  
 3. 更新 UI：列表 + 顶部来源数量 + 错误提示（某源失败）。  
 4. 用户搜索：更新 searchKey，触发 `fetchPlugins({keyword})` 或本地过滤。
@@ -134,7 +134,7 @@ export interface MarketPlugin {
 1. 打开 Source Editor → 调 `useMarketProviders.listDefinitions()`.  
 2. 拖拽/开关/新增/删除 → 暂存于本地状态。  
 3. 点击保存 → `useMarketProviders.save(defs)` → localStorage & store 更新。  
-4. 自动刷新 Market 列表（force=true）。
+4. 自动刷新 Store 列表（force=true）。
 
 ### 8.3 插件安装
 1. 用户点击安装 → `MarketPlugin.install` 传给 `useMarketInstall`.  
@@ -144,7 +144,7 @@ export interface MarketPlugin {
 ## 9. 实施步骤与里程碑
 
 1. **类型与默认源**（0.5d）  
-   - 在 `packages/utils/market/` 新增类型、默认配置、版本常量。  
+   - 在 `packages/utils/store/` 新增类型、默认配置、版本常量。  
    - 提供 helper `getDefaultMarketSources()`.
 
 2. **Provider Registry & LocalStorage**（1d）  
@@ -157,7 +157,7 @@ export interface MarketPlugin {
    - `MarketDataService` 完成聚合。
 
 4. **UI 集成**（1d）  
-   - Market 页面切换到新 service。  
+   - Store 页面切换到新 service。  
    - Source Editor 接入 definitions、排序、保存。  
    - 列表展示 per-provider 状态。
 
@@ -166,7 +166,7 @@ export interface MarketPlugin {
    - 完善安装 instruction。
 
 6. **验收 & 文档**（0.5d）  
-   - 更新 README/内置帮助说明 Market 源配置。  
+   - 更新 README/内置帮助说明 Store 源配置。  
    - 补充使用指南截图。
 
 ## 10. 风险与待解决事项
@@ -190,22 +190,22 @@ export interface MarketPlugin {
 | NexusStoreProvider | ✅ | Nexus 市场集成 |
 | NPM Provider | ✅ | `npm-package-provider.ts` |
 | Repository Provider | ✅ | GitHub/Gitee 支持 |
-| UI 集成 | ✅ | Market 页面 + Source Editor |
+| UI 集成 | ✅ | Store 页面 + Source Editor |
 | 账号登录联动 | ✅ | 浏览器登录回调 |
 
 ### 📁 相关文件
 
 **主进程**:
-- `apps/core-app/src/main/service/plugin-market.service.ts` - 统一搜索服务
+- `apps/core-app/src/main/service/plugin-store.service.ts` - 统一搜索服务
 
 **工具包**:
-- `packages/utils/plugin/providers/market-client.ts` - PluginMarketClient
+- `packages/utils/plugin/providers/store-client.ts` - PluginMarketClient
 - `packages/utils/plugin/providers/tpex-provider.ts` - TPEX API
 - `packages/utils/plugin/providers/npm-provider.ts` - NPM Registry
 
 **渲染进程**:
-- `apps/core-app/src/renderer/src/modules/market/providers/` - Provider 实现
-- `apps/core-app/src/renderer/src/views/market/` - 市场页面
+- `apps/core-app/src/renderer/src/modules/store/providers/` - Provider 实现
+- `apps/core-app/src/renderer/src/views/store/` - 市场页面
 
 ### 🟡 待完成
 

@@ -78,6 +78,13 @@
     - `apps/core-app/src/main/modules/download/` - reusable update tasks
   - **状态**：下载管理增强 + 更新任务复用
 
+- **发布链路收敛（官网 + CLI）**（2026-02，已落地）
+  - **代码**
+    - `.github/workflows/build-and-release.yml` - 单一桌面发版主线 + Nexus 同步
+    - `.github/workflows/package-tuff-cli-publish.yml` - CLI 四包自动发布到 npm
+    - `apps/nexus/server/api/releases/*`、`apps/nexus/server/utils/auth.ts` - release scope 粒度化与兼容层
+  - **状态**：GitHub Release / Nexus Release / npm CLI 发布三链路自动化闭环；官网部署由 Cloudflare Pages 平台侧 Git 自动部署
+
 - **插件权限中心**（Phase 1-4 已落地）
   - **代码**
     - `apps/core-app/src/main/modules/permission/`
@@ -169,6 +176,8 @@
      - WorkflowAgent 基础执行（workflow.run/plan）
      - 记忆系统基础实现（MemoryStore + ContextManager）
      - Intelligence 管理 UI（Capabilities/Channels/AuditLogs/Header 组件）
+     - Agent 命名空间一次切换（`intelligence:agent:*`）与 Core/Nexus 路由同步上线
+     - Prompt Registry（registry + binding）schema 对齐并接入默认提示词迁移
    - **缺口**
      - Workflow 编辑器、用户自定义代理、协作与测试
 

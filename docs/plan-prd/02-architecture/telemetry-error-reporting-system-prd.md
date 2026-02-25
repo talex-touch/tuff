@@ -263,7 +263,7 @@ interface BehaviorEvent {
     item_selected?: { providerId: string, position: number, dwellTime: number }
     
     // 插件事件
-    plugin_installed?: { pluginId: string, source: 'market' | 'local' }
+    plugin_installed?: { pluginId: string, source: 'store' | 'local' }
     plugin_activated?: { pluginId: string, featureId: string }
     
     // 设置事件

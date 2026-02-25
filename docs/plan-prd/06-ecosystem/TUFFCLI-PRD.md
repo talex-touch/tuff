@@ -169,4 +169,4 @@ export default defineConfig({
 ## 相关文档
 
 - [API Key 管理 (Dashboard)](../../apps/nexus/app/pages/dashboard/api-keys.vue)
-- [插件市场 API](../03-features/plugin/plugin-market-provider-frontend-plan.md)
+- [插件市场 API](../03-features/plugin/plugin-store-provider-frontend-plan.md)
