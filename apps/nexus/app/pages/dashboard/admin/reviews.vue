@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
-import { useMarketFormatters } from '~/composables/useMarketFormatters'
+import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 
 definePageMeta({
@@ -16,7 +16,7 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
-const { formatDate } = useMarketFormatters()
+const { formatDate } = useStoreFormatters()
 
 // Admin check - redirect if not admin
 const isAdmin = computed(() => user.value?.role === 'admin')
@@ -84,7 +84,7 @@ async function loadPendingReviews(options: { reset?: boolean } = {}) {
     pagination.offset = 0
 
   try {
-    const response = await $fetch<PendingReviewResponse>('/api/admin/market/reviews/pending', {
+    const response = await $fetch<PendingReviewResponse>('/api/admin/store/reviews/pending', {
       query: {
         limit: pagination.limit,
         offset,
@@ -125,7 +125,7 @@ async function updateReviewStatus(review: PendingReview, status: 'approved' | 'r
   actionError.value = null
 
   try {
-    await $fetch(`/api/admin/market/reviews/${review.id}/status`, {
+    await $fetch(`/api/admin/store/reviews/${review.id}/status`, {
       method: 'PATCH',
       body: { status },
     })
@@ -229,7 +229,7 @@ onMounted(() => {
 
           <div class="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-black/50 dark:text-white/50">
             <div class="flex items-center gap-2">
-              <span>{{ review.author?.name || t('market.detail.reviews.anonymous', 'Anonymous') }}</span>
+              <span>{{ review.author?.name || t('store.detail.reviews.anonymous', 'Anonymous') }}</span>
               <span>•</span>
               <span>{{ formatDate(review.createdAt) }}</span>
             </div>

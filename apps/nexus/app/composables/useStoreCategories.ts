@@ -1,15 +1,15 @@
-import type { FilterCategory } from '~/types/marketplace'
+import type { FilterCategory } from '~/types/store'
 import { computed } from 'vue'
 import { PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
 
-export function useMarketCategories() {
+export function useStoreCategories() {
   const { t } = useI18n()
 
   const categoryOptions = computed(() => [
     {
       id: 'all' as const,
       icon: 'i-carbon-view-all',
-      label: t('market.filters.all'),
+      label: t('store.filters.all'),
     },
     ...PLUGIN_CATEGORIES.map(category => ({
       ...category,

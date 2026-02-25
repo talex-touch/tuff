@@ -1,8 +1,8 @@
 import { createError } from 'h3'
 import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
-function buildMarketDownloadUrl(slug: string, version: string): string {
-  return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+function buildStoreDownloadUrl(slug: string, version: string): string {
+  return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
 }
 
 export default defineEventHandler(async (event) => {
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: true,
-    forMarket: true,
+    forStore: true,
   })
 
   if (!plugin)
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
     id: v.id,
     version: v.version,
     channel: v.channel,
-    packageUrl: buildMarketDownloadUrl(plugin.slug, v.version),
+    packageUrl: buildStoreDownloadUrl(plugin.slug, v.version),
     packageSize: v.packageSize,
     changelog: v.changelog,
     createdAt: v.createdAt,

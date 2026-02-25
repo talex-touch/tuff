@@ -121,6 +121,8 @@ const SECTION_ORDER: Record<string, string[]> = {
   '/docs/dev/intelligence': [
     '/docs/dev/intelligence/index',
     '/docs/dev/intelligence/configuration',
+    '/docs/dev/intelligence/langchain-agent',
+    '/docs/dev/intelligence/schema-migration',
     '/docs/dev/intelligence/capabilities',
     '/docs/dev/intelligence/troubleshooting',
   ],
@@ -169,7 +171,7 @@ const SECTION_ORDER: Record<string, string[]> = {
   '/docs/guide/features': [
     '/docs/guide/features/workspace',
     '/docs/guide/features/plugin-ecosystem',
-    '/docs/guide/features/marketplace',
+    '/docs/guide/features/store',
     '/docs/guide/features/preview',
   ],
   '/docs/guide/scenes': [
@@ -180,6 +182,7 @@ const SECTION_ORDER: Record<string, string[]> = {
   '/docs/guide/tips': [
     '/docs/guide/tips/index',
     '/docs/guide/tips/intelligence-workflow',
+    '/docs/guide/tips/intelligence-agent-playbook',
     '/docs/guide/tips/intelligence-prompts',
     '/docs/guide/tips/automation',
     '/docs/guide/tips/productivity',

@@ -4,8 +4,10 @@ import { randomUUID } from 'node:crypto'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 
-const PLUGIN_REVIEWS_TABLE = 'market_plugin_reviews'
-const PLUGIN_REVIEWS_KEY = 'market:pluginReviews'
+const PLUGIN_REVIEWS_TABLE = 'store_plugin_reviews'
+const LEGACY_PLUGIN_REVIEWS_TABLE = 'market_plugin_reviews'
+const PLUGIN_REVIEWS_KEY = 'store:pluginReviews'
+const LEGACY_PLUGIN_REVIEWS_KEY = ['market', 'pluginReviews'].join(':')
 
 let reviewSchemaInitialized = false
 
@@ -159,13 +161,24 @@ async function ensurePluginReviewSchema(db: D1Database): Promise<void> {
     ON ${PLUGIN_REVIEWS_TABLE}(user_id);
   `).run()
 
+  await migrateLegacyPluginReviewsTable(db)
   reviewSchemaInitialized = true
 }
 
 async function readStoredReviews(): Promise<StoredPluginReview[]> {
   const storage = useStorage()
-  const items = await storage.getItem<StoredPluginReview[]>(PLUGIN_REVIEWS_KEY)
-  return items ?? []
+  const items = await storage.getItem<StoredPluginReview[] | null>(PLUGIN_REVIEWS_KEY)
+  if (Array.isArray(items))
+    return items
+
+  const legacyItems = await storage.getItem<StoredPluginReview[] | null>(LEGACY_PLUGIN_REVIEWS_KEY)
+  if (Array.isArray(legacyItems) && legacyItems.length > 0) {
+    await storage.setItem(PLUGIN_REVIEWS_KEY, legacyItems)
+    console.info(`[pluginReviewStore] migrated ${legacyItems.length} review items from ${LEGACY_PLUGIN_REVIEWS_KEY} to ${PLUGIN_REVIEWS_KEY}`)
+    return legacyItems
+  }
+
+  return legacyItems ?? []
 }
 
 async function writeStoredReviews(items: StoredPluginReview[]): Promise<void> {
@@ -175,6 +188,63 @@ async function writeStoredReviews(items: StoredPluginReview[]): Promise<void> {
 
 function resolveStatuses(options: PluginReviewListOptions): PluginReviewStatus[] {
   return options.statuses && options.statuses.length ? options.statuses : ['approved']
+}
+
+async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1;
+  `).bind(tableName).first<{ name: string }>()
+  return Boolean(row?.name)
+}
+
+async function countRows(db: D1Database, tableName: string): Promise<number> {
+  const row = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName};`).first<{ count: number }>()
+  return Number(row?.count ?? 0)
+}
+
+async function migrateLegacyPluginReviewsTable(db: D1Database): Promise<void> {
+  const hasLegacyTable = await tableExists(db, LEGACY_PLUGIN_REVIEWS_TABLE)
+  if (!hasLegacyTable)
+    return
+
+  const currentCount = await countRows(db, PLUGIN_REVIEWS_TABLE)
+  if (currentCount > 0)
+    return
+
+  const legacyCount = await countRows(db, LEGACY_PLUGIN_REVIEWS_TABLE)
+  if (legacyCount <= 0)
+    return
+
+  await db.prepare(`
+    INSERT OR IGNORE INTO ${PLUGIN_REVIEWS_TABLE} (
+      id,
+      plugin_id,
+      user_id,
+      author_name,
+      author_avatar,
+      rating,
+      title,
+      content,
+      status,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      plugin_id,
+      user_id,
+      author_name,
+      author_avatar,
+      rating,
+      title,
+      content,
+      status,
+      created_at,
+      updated_at
+    FROM ${LEGACY_PLUGIN_REVIEWS_TABLE};
+  `).run()
+
+  console.info(`[pluginReviewStore] migrated ${legacyCount} review rows from ${LEGACY_PLUGIN_REVIEWS_TABLE} to ${PLUGIN_REVIEWS_TABLE}`)
 }
 
 export async function listPluginReviews(

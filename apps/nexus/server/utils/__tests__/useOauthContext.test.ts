@@ -67,7 +67,7 @@ describe('useOauthContext', () => {
     expect(sanitizeRedirect('/dashboard/account', '/dashboard')).toBe('/dashboard/account')
     expect(sanitizeRedirect('/?callbackUrl=https://tuff.tagzxia.com/sign-in?oauth=1&error=OAuthSignin', '/dashboard')).toBe('/')
     expect(sanitizeRedirect('/sign-in?oauth=1&provider=linuxdo', '/dashboard')).toBe('/dashboard')
-    expect(sanitizeRedirect('https://tuff.tagzxia.com/market?callbackUrl=%2Fsign-in&error=OAuthSignin', '/dashboard')).toBe('/market')
+    expect(sanitizeRedirect('https://tuff.tagzxia.com/store?callbackUrl=%2Fsign-in&error=OAuthSignin', '/dashboard')).toBe('/store')
     expect(sanitizeRedirect('https://evil.com', '/dashboard')).toBe('/dashboard')
     expect(sanitizeRedirect('//evil.com', '/dashboard')).toBe('/dashboard')
     expect(sanitizeRedirect('', '/dashboard')).toBe('/dashboard')

@@ -1,24 +1,27 @@
-import { createError, setHeader } from 'h3'
+import { createError } from 'h3'
+import { getPluginRatingSummary } from '../../../../utils/pluginRatingStore'
 import { getPluginBySlug } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const slug = event.context.params?.slug
 
-  if (!slug)
+  if (!slug) {
     throw createError({ statusCode: 400, statusMessage: 'Plugin slug is required.' })
+  }
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: false,
-    forMarket: true,
+    forStore: true,
   })
 
-  if (!plugin)
+  if (!plugin) {
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
+  }
 
-  const readme = plugin.readmeMarkdown || ''
+  const rating = await getPluginRatingSummary(event, plugin.id)
 
-  setHeader(event, 'Content-Type', 'text/markdown; charset=utf-8')
-  setHeader(event, 'Cache-Control', 'public, max-age=300')
-
-  return readme
+  return {
+    slug: plugin.slug,
+    rating,
+  }
 })

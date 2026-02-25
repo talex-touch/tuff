@@ -8,8 +8,8 @@ const layout = computed(() => meta.value.layout)
 const title = computed(() => {
   if (layout.value === 'docs')
     return 'Docs'
-  if (layout.value === 'marketplace')
-    return 'Market'
+  if (layout.value === 'store')
+    return 'Store'
   if (layout.value === 'dashboard')
     return 'Dashboard'
   if (layout.value === 'license')

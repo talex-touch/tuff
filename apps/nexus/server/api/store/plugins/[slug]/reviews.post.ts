@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
   const title = body?.title?.trim() || null
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: false,
-    forMarket: true,
+    forStore: true,
   })
 
   if (!plugin) {

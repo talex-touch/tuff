@@ -197,17 +197,17 @@
 | `meta-overlay:action:register` | `IpcManager.registerTransportHandlers -> metaOverlayManager.registerPluginAction` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `meta-overlay:action:unregister` | `IpcManager.registerTransportHandlers -> metaOverlayManager.unregisterPluginAction(s)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 
-## A8. Market
+## A8. Store
 
 | 事件名 | 处理方法（函数级） | 文件 |
 | --- | --- | --- |
-| `market:check-updates` | `PluginModule.start -> triggerUpdateCheck` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:search` | `PluginModule.start -> searchMarket` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:get-plugin` | `PluginModule.start -> getMarketPlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:http-request` | `PluginModule.start -> performMarketHttpRequest` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:featured` | `PluginModule.start -> featured` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:npm-list` | `PluginModule.start -> npmList` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| `market:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:check-updates` | `PluginModule.start -> triggerUpdateCheck` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:search` | `PluginModule.start -> searchMarket` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:get-plugin` | `PluginModule.start -> getMarketPlugin` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:http-request` | `PluginModule.start -> performMarketHttpRequest` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:featured` | `PluginModule.start -> featured` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:npm-list` | `PluginModule.start -> npmList` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| `store:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` | `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
 
 ## A9. Permission
 
@@ -398,14 +398,14 @@
 | `agents:stats` | `registerAgentChannels -> agentManager.getStats` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 | `agents:tools:list` | `registerAgentChannels -> agentManager.getTools` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 | `agents:tools:get` | `registerAgentChannels -> agentManager.getTool` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:search` | `registerAgentChannels -> agentMarket.search` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:get` | `registerAgentChannels -> agentMarket.get` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:featured` | `registerAgentChannels -> agentMarket.featured` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:installed` | `registerAgentChannels -> agentMarket.installed` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:categories` | `registerAgentChannels -> agentMarket.categories` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:install` | `registerAgentChannels -> agentMarket.install` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:uninstall` | `registerAgentChannels -> agentMarket.uninstall` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| `agents:market:check-updates` | `registerAgentChannels -> agentMarket.checkUpdates` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:search` | `registerAgentChannels -> agentMarket.search` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:get` | `registerAgentChannels -> agentMarket.get` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:featured` | `registerAgentChannels -> agentMarket.featured` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:installed` | `registerAgentChannels -> agentMarket.installed` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:categories` | `registerAgentChannels -> agentMarket.categories` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:install` | `registerAgentChannels -> agentMarket.install` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:uninstall` | `registerAgentChannels -> agentMarket.uninstall` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| `agents:store:check-updates` | `registerAgentChannels -> agentMarket.checkUpdates` | `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 
 ## A17. Transport
 

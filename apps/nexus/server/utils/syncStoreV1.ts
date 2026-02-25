@@ -1022,7 +1022,7 @@ function resolveCatalogCategory(
       return { key: 'settings', label: '应用设置' }
     }
     if (
-      /(openers|market|agent-market|everything|file-index|app-index|device-idle|search-engine)/.test(
+      /(openers|store|agent-store|everything|file-index|app-index|device-idle|search-engine)/.test(
         normalizedQualified
       )
     ) {
