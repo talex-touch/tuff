@@ -3,8 +3,12 @@ import type { H3Event } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
 
-const PLUGIN_RATINGS_TABLE = 'market_plugin_ratings'
-const PLUGIN_RATINGS_KEY = 'market:pluginRatings'
+const PLUGIN_RATINGS_TABLE = 'store_plugin_ratings'
+const LEGACY_PLUGIN_RATINGS_TABLE = 'market_plugin_ratings'
+const PLUGIN_RATINGS_KEY = 'store:pluginRatings'
+const LEGACY_PLUGIN_RATINGS_KEY = ['market', 'pluginRatings'].join(':')
+
+let ratingSchemaInitialized = false
 
 interface StoredPluginRating {
   pluginId: string
@@ -25,6 +29,9 @@ function getD1Database(event: H3Event): D1Database | null {
 }
 
 async function ensurePluginRatingSchema(db: D1Database): Promise<void> {
+  if (ratingSchemaInitialized)
+    return
+
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS ${PLUGIN_RATINGS_TABLE} (
       plugin_id TEXT NOT NULL,
@@ -40,12 +47,70 @@ async function ensurePluginRatingSchema(db: D1Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_${PLUGIN_RATINGS_TABLE}_plugin_id
     ON ${PLUGIN_RATINGS_TABLE}(plugin_id);
   `).run()
+
+  await migrateLegacyPluginRatingsTable(db)
+  ratingSchemaInitialized = true
+}
+
+async function tableExists(db: D1Database, tableName: string): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?1;
+  `).bind(tableName).first<{ name: string }>()
+  return Boolean(row?.name)
+}
+
+async function countRows(db: D1Database, tableName: string): Promise<number> {
+  const row = await db.prepare(`SELECT COUNT(*) as count FROM ${tableName};`).first<{ count: number }>()
+  return Number(row?.count ?? 0)
+}
+
+async function migrateLegacyPluginRatingsTable(db: D1Database): Promise<void> {
+  const hasLegacyTable = await tableExists(db, LEGACY_PLUGIN_RATINGS_TABLE)
+  if (!hasLegacyTable)
+    return
+
+  const currentCount = await countRows(db, PLUGIN_RATINGS_TABLE)
+  if (currentCount > 0)
+    return
+
+  const legacyCount = await countRows(db, LEGACY_PLUGIN_RATINGS_TABLE)
+  if (legacyCount <= 0)
+    return
+
+  await db.prepare(`
+    INSERT OR IGNORE INTO ${PLUGIN_RATINGS_TABLE} (
+      plugin_id,
+      user_id,
+      rating,
+      created_at,
+      updated_at
+    )
+    SELECT
+      plugin_id,
+      user_id,
+      rating,
+      created_at,
+      updated_at
+    FROM ${LEGACY_PLUGIN_RATINGS_TABLE};
+  `).run()
+
+  console.info(`[pluginRatingStore] migrated ${legacyCount} rating rows from ${LEGACY_PLUGIN_RATINGS_TABLE} to ${PLUGIN_RATINGS_TABLE}`)
 }
 
 async function readStoredRatings(): Promise<StoredPluginRating[]> {
   const storage = useStorage()
-  const items = await storage.getItem<StoredPluginRating[]>(PLUGIN_RATINGS_KEY)
-  return items ?? []
+  const items = await storage.getItem<StoredPluginRating[] | null>(PLUGIN_RATINGS_KEY)
+  if (Array.isArray(items))
+    return items
+
+  const legacyItems = await storage.getItem<StoredPluginRating[] | null>(LEGACY_PLUGIN_RATINGS_KEY)
+  if (Array.isArray(legacyItems) && legacyItems.length > 0) {
+    await storage.setItem(PLUGIN_RATINGS_KEY, legacyItems)
+    console.info(`[pluginRatingStore] migrated ${legacyItems.length} rating items from ${LEGACY_PLUGIN_RATINGS_KEY} to ${PLUGIN_RATINGS_KEY}`)
+    return legacyItems
+  }
+
+  return legacyItems ?? []
 }
 
 async function writeStoredRatings(items: StoredPluginRating[]): Promise<void> {

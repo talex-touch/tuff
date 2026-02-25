@@ -80,11 +80,11 @@ function goHome() {
         </NuxtLink>
         <span class="hidden h-1 w-1 rounded-full bg-black/20 dark:bg-white/20 sm:block" />
         <NuxtLink
-          to="/market"
+          to="/store"
           class="inline-flex items-center gap-1.5 transition-colors hover:text-black dark:hover:text-white"
         >
           <span class="i-carbon-application" />
-          Marketplace
+          Store
         </NuxtLink>
         <span class="hidden h-1 w-1 rounded-full bg-black/20 dark:bg-white/20 sm:block" />
         <a

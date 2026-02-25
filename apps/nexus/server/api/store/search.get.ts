@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
 
   const plugins = await listPlugins(event, {
     includeVersions: true,
-    forMarket: true,
+    forStore: true,
   })
 
   let filtered = plugins

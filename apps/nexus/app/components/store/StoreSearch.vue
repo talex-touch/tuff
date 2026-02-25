@@ -12,7 +12,7 @@ const categoryOptions = computed(() => [
   {
     id: 'all' as const,
     icon: 'i-carbon-view-all',
-    label: t('market.filters.all'),
+    label: t('store.filters.all'),
   },
   ...PLUGIN_CATEGORIES.map(category => ({
     ...category,
@@ -26,8 +26,8 @@ const categoryOptions = computed(() => [
     <div class="max-w-xl w-full flex flex-col items-center self-center">
       <SearchInput
         v-model="value"
-        :placeholder="t('market.search.placeholder')"
-        :aria-label="t('market.search.label')"
+        :placeholder="t('store.search.placeholder')"
+        :aria-label="t('store.search.label')"
         class="w-full"
       />
       <p class="self-end pr-4 text-xs text-black/40 dark:text-light/60">

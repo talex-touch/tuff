@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function useMarketFormatters() {
+export function useStoreFormatters() {
   const { t, locale } = useI18n()
 
   const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
@@ -22,7 +22,7 @@ export function useMarketFormatters() {
 
   function formatPackageSize(bytes?: number) {
     if (!bytes || Number.isNaN(bytes))
-      return t('market.detail.sizeUnknown', 'Size unknown')
+      return t('store.detail.sizeUnknown', 'Size unknown')
     if (bytes >= 1024 * 1024)
       return `${(bytes / 1024 / 1024).toFixed(2)} MB`
     return `${(bytes / 1024).toFixed(1)} KB`

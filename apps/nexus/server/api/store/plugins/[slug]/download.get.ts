@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: true,
-    forMarket: true,
+    forStore: true,
   })
 
   if (!plugin)
@@ -60,8 +60,8 @@ export default defineEventHandler(async (event) => {
   // region debug [H1]
   await dbgLog(
     'H1',
-    'nexus/server/api/market/plugins/[slug]/download.get.ts',
-    'market plugin download requested',
+    'nexus/server/api/store/plugins/[slug]/download.get.ts',
+    'store plugin download requested',
     {
       slug,
       requestedVersion: version ?? null,

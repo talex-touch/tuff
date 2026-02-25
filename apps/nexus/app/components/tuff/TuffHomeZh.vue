@@ -14,7 +14,7 @@ const essentials = [
     badge: '市场 · 扩展',
     title: '精选扩展市场',
     copy: '签名发布、版本托管与分阶段上线，确保团队始终放心使用。',
-    link: { to: '/marketplace', label: '浏览市场' },
+    link: { to: '/store', label: '浏览市场' },
   },
   {
     badge: '开源',
@@ -115,7 +115,7 @@ useHead({
               加入等候名单
             </NuxtLink>
             <NuxtLink
-              to="/marketplace"
+              to="/store"
               class="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             >
               <span class="i-carbon-catalog text-base" />

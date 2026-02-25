@@ -23,12 +23,12 @@ export const pageSearchItems: PageSearchItem[] = [
     searchTokens: ['guide', 'tutorial', '入门', '教程', '上手'],
   },
   {
-    id: 'page-market',
-    titleKey: 'nav.market',
-    descriptionKey: 'market.hero.subtitle',
-    path: '/market',
+    id: 'page-store',
+    titleKey: 'nav.store',
+    descriptionKey: 'store.hero.subtitle',
+    path: '/store',
     icon: 'i-carbon-store',
-    searchTokens: ['market', 'plugin', '插件', 'marketplace'],
+    searchTokens: ['store', 'plugin', '插件', 'plugin-store'],
   },
   {
     id: 'page-updates',

@@ -24,7 +24,7 @@ This page maps the plugin system: loading pipeline, providers/adapters, widget p
 | File Provider | file path plugins | `apps/core-app/src/main/modules/plugin/providers/file-provider.ts` |
 | GitHub Provider | GitHub source | `apps/core-app/src/main/modules/plugin/providers/github-provider.ts` |
 | NPM Provider | NPM install | `apps/core-app/src/main/modules/plugin/providers/npm-provider.ts` |
-| TPEX Provider | internal/market source | `apps/core-app/src/main/modules/plugin/providers/tpex-provider.ts` |
+| TPEX Provider | internal/store source | `apps/core-app/src/main/modules/plugin/providers/tpex-provider.ts` |
 | Registry | provider registry | `apps/core-app/src/main/modules/plugin/providers/registry.ts` |
 
 ## 4. Adapters

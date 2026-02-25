@@ -2,22 +2,23 @@ import type { DashboardPluginVersion } from '../../../utils/pluginsStore'
 import { createError } from 'h3'
 import { getPluginBySlug } from '../../../utils/pluginsStore'
 
-function buildMarketDownloadUrl(slug: string, version: string): string {
-  return `/api/market/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+function buildStoreDownloadUrl(slug: string, version: string): string {
+  return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
 }
 
 /**
- * Clean version object for market API response
+ * Clean version object for store API response
  */
-function cleanVersionForMarket(slug: string, version: DashboardPluginVersion) {
+function cleanVersionForStore(slug: string, version: DashboardPluginVersion) {
   return {
     id: version.id,
     pluginId: version.pluginId,
     channel: version.channel,
     version: version.version,
     signature: version.signature,
-    packageUrl: buildMarketDownloadUrl(slug, version.version),
+    packageUrl: buildStoreDownloadUrl(slug, version.version),
     packageSize: version.packageSize,
+    readmeMarkdown: version.readmeMarkdown ?? null,
     manifest: version.manifest,
     changelog: version.changelog,
     status: version.status,
@@ -34,7 +35,7 @@ export default defineEventHandler(async (event) => {
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: true,
-    forMarket: true,
+    forStore: true,
   })
 
   if (!plugin)
@@ -58,10 +59,11 @@ export default defineEventHandler(async (event) => {
       iconUrl: plugin.iconUrl,
       createdAt: plugin.createdAt,
       updatedAt: plugin.updatedAt,
-      latestVersion: latest ? cleanVersionForMarket(plugin.slug, latest) : null,
-      versions: versions.map(version => cleanVersionForMarket(plugin.slug, version)),
+      readmeMarkdown: plugin.readmeMarkdown ?? null,
+      latestVersion: latest ? cleanVersionForStore(plugin.slug, latest) : null,
+      versions: versions.map(version => cleanVersionForStore(plugin.slug, version)),
       // Use relative path for readme URL
-      readmeUrl: plugin.readmeMarkdown ? `/api/market/plugins/${plugin.slug}/readme` : null,
+      readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
     },
   }
 })

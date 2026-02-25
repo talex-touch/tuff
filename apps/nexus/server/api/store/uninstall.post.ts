@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   if (!body?.slug)
     return { success: false, message: 'Plugin slug is required.' }
 
-  const plugin = await getPluginBySlug(event, body.slug, { forMarket: true })
+  const plugin = await getPluginBySlug(event, body.slug, { forStore: true })
 
   if (!plugin)
     return { success: false, message: 'Plugin not found.' }

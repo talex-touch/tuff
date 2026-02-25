@@ -91,17 +91,17 @@
 | `onAction()` | `notification:push:action` | `NotificationModule.handleAction -> transport.broadcast` |
 | `onInboxUpdated()` | `notification:push:inbox-updated` | `NotificationModule.handleInbox* -> transport.broadcast` |
 
-## B5. Market SDK（`packages/utils/transport/sdk/domains/market.ts`）
+## B5. Store SDK（`packages/utils/transport/sdk/domains/store.ts`）
 
 | SDK 方法 | 事件名 | 主处理器（函数级） |
 | --- | --- | --- |
-| `checkUpdates()` | `market:check-updates` | `PluginModule.start -> triggerUpdateCheck` |
-| `search()` | `market:search` | `PluginModule.start -> searchMarket` |
-| `getPlugin()` | `market:get-plugin` | `PluginModule.start -> getMarketPlugin` |
-| `httpRequest()` | `market:http-request` | `PluginModule.start -> performMarketHttpRequest` |
-| `featured()` | `market:featured` | `PluginModule.start -> featured` |
-| `npmList()` | `market:npm-list` | `PluginModule.start -> npmList` |
-| `onUpdatesAvailable()` | `market:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` |
+| `checkUpdates()` | `store:check-updates` | `PluginModule.start -> triggerUpdateCheck` |
+| `search()` | `store:search` | `PluginModule.start -> searchMarket` |
+| `getPlugin()` | `store:get-plugin` | `PluginModule.start -> getMarketPlugin` |
+| `httpRequest()` | `store:http-request` | `PluginModule.start -> performMarketHttpRequest` |
+| `featured()` | `store:featured` | `PluginModule.start -> featured` |
+| `npmList()` | `store:npm-list` | `PluginModule.start -> npmList` |
+| `onUpdatesAvailable()` | `store:updates-available` | `startUpdateScheduler.onUpdatesFound -> transport.broadcast` |
 
 ## B6. Plugin SDK（`packages/utils/transport/sdk/domains/plugin.ts`）
 

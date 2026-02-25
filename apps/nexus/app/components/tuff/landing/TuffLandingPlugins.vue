@@ -60,7 +60,7 @@ function handleCardClick(card: Record<string, unknown>, _index: number) {
   if (!id)
     return
   router.push({
-    path: '/market',
+    path: '/store',
     query: {
       query: id,
     },
@@ -70,7 +70,7 @@ function handleCardClick(card: Record<string, unknown>, _index: number) {
 
 <template>
   <TuffLandingSection
-    id="market"
+    id="store"
     :sticky="plugins.eyebrow"
     :title="plugins.headline"
     :subtitle="plugins.subheadline"

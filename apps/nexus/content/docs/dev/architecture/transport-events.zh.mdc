@@ -34,7 +34,7 @@
 | Platform | `packages/utils/transport/events/types/platform.ts` |
 | Permission | `packages/utils/transport/events/types/permission.ts` |
 | Notification | `packages/utils/transport/events/types/notification.ts` |
-| Market | `packages/utils/transport/events/types/market.ts` |
+| Store | `packages/utils/transport/events/types/store.ts` |
 | Sentry | `packages/utils/transport/events/types/sentry.ts` |
 | Agents | `packages/utils/transport/events/types/agents.ts` |
 | Flow | `packages/utils/transport/events/types/flow.ts` |

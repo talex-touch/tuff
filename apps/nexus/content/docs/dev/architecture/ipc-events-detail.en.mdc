@@ -265,21 +265,21 @@ Implementation: `packages/utils/transport/event/builder.ts`
 - `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
 - `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useKeyboard.ts`
 
-## 8. Market Events
+## 8. Store Events
 
 **Main handler**: `apps/core-app/src/main/modules/plugin/plugin-module.ts`
 
 | Event Key | Event Name | Main handler / emitter |
 | --- | --- | --- |
-| MarketEvents.api.checkUpdates | `market:check-updates` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.api.search | `market:search` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.api.getPlugin | `market:get-plugin` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.api.httpRequest | `market:http-request` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.api.featured | `market:featured` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.api.npmList | `market:npm-list` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
-| MarketEvents.push.updatesAvailable | `market:updates-available` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.checkUpdates | `store:check-updates` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.search | `store:search` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.getPlugin | `store:get-plugin` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.httpRequest | `store:http-request` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.featured | `store:featured` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.api.npmList | `store:npm-list` | on: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
+| StoreEvents.push.updatesAvailable | `store:updates-available` | broadcast: `apps/core-app/src/main/modules/plugin/plugin-module.ts` |
 
-**SDK usage**: `packages/utils/transport/sdk/domains/market.ts`
+**SDK usage**: `packages/utils/transport/sdk/domains/store.ts`
 
 ## 9. Permission Events
 
@@ -548,14 +548,14 @@ Implementation: `packages/utils/transport/event/builder.ts`
 | AgentsEvents.api.stats | `agents:stats` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 | AgentsEvents.api.tools.list | `agents:tools:list` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 | AgentsEvents.api.tools.get | `agents:tools:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.search | `agents:market:search` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.get | `agents:market:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.featured | `agents:market:featured` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.installed | `agents:market:installed` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.categories | `agents:market:categories` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.install | `agents:market:install` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.uninstall | `agents:market:uninstall` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
-| AgentsEvents.market.checkUpdates | `agents:market:check-updates` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.search | `agents:store:search` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.get | `agents:store:get` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.featured | `agents:store:featured` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.installed | `agents:store:installed` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.categories | `agents:store:categories` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.install | `agents:store:install` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.uninstall | `agents:store:uninstall` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
+| AgentsEvents.store.checkUpdates | `agents:store:check-updates` | on: `apps/core-app/src/main/modules/ai/agents/agent-channels.ts` |
 
 **Renderer usage (examples)**:
 - `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceAgentsPage.vue`

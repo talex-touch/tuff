@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="hidden md:flex items-center gap-8 text-white/60">
-        <a href="#" class="nav-link hover:text-white transition-colors">Market</a>
+        <a href="#" class="nav-link hover:text-white transition-colors">Store</a>
         <a href="#" class="nav-link hover:text-white transition-colors">Docs</a>
         <a href="#" class="nav-link hover:text-white transition-colors">Updates</a>
         <a href="#" class="nav-link hover:text-white transition-colors">Pricing</a>

@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: false,
-    forMarket: true,
+    forStore: true,
   })
 
   if (!plugin) {
