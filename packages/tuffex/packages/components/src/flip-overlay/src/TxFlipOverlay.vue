@@ -72,7 +72,8 @@ function applySharedGlobalMaskState(): void {
   const visibleEntries = getVisibleOverlayStackEntries()
   const bounds = resolveVisibleStackBounds(visibleEntries)
 
-  if (!bounds || !bounds.topEntry.globalMask) {
+  // Single overlay keeps its local mask behavior for backward-compatible visuals/transitions.
+  if (!bounds || visibleEntries.length <= 1 || !bounds.topEntry.globalMask) {
     removeSharedGlobalMaskElement()
     return
   }
@@ -82,12 +83,6 @@ function applySharedGlobalMaskState(): void {
     return
 
   maskElement.className = 'TxFlipOverlay-GlobalMask'
-  const maskClassTokens = bounds.topEntry.maskClass
-    .split(/\s+/)
-    .map(token => token.trim())
-    .filter(Boolean)
-  maskClassTokens.forEach(token => maskElement.classList.add(token))
-
   maskElement.style.zIndex = String(Math.max(0, bounds.minZIndex - 1))
   maskElement.style.opacity = '1'
 }
@@ -287,10 +282,19 @@ const stackMeta = computed(() => {
 
 const maskClassName = computed(() => {
   const classes = ['TxFlipOverlay-Mask']
+  if (props.maskClass) {
+    const customMaskClasses = props.maskClass
+      .split(/\s+/)
+      .map(token => token.trim())
+      .filter(Boolean)
+    classes.push(...customMaskClasses)
+  }
   if (!stackMeta.value.isMaskOwner)
     classes.push('is-stack-underlay-mask')
   if (blockedCloseWarning.value)
     classes.push('is-close-guard-warning')
+  if (props.maskClass)
+    classes.push(props.maskClass)
   return classes
 })
 
@@ -341,10 +345,8 @@ const maskStyle = computed(() => {
     pointerEvents: stackMeta.value.isMaskOwner ? 'auto' : 'none',
   }
 
-  if (stackMeta.value.isMaskOwner && stackMeta.value.stackSize > 1)
-    style.opacity = 1
-
-  if (!stackMeta.value.isMaskOwner) {
+  const usesSharedStackMask = props.globalMask && stackMeta.value.stackSize > 1
+  if (usesSharedStackMask || !stackMeta.value.isMaskOwner) {
     style.background = 'transparent'
     style.backdropFilter = 'none'
     style.WebkitBackdropFilter = 'none'
@@ -1047,6 +1049,10 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
 <template>
   <Transition :name="transitionName" :css="useMaskCssTransition">
     <div v-if="visible" :class="maskClassName" :style="maskStyle" @click="handleMaskClick">
+      <div
+        v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
+        class="TxFlipOverlay-GlobalMask"
+      />
       <div ref="cardRef" :class="cardClassName" @click.stop>
         <TxBaseSurface
           class="TxFlipOverlay-Surface"
