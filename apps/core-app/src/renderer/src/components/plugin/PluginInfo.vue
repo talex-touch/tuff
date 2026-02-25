@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import PluginFab from '~/components/plugin/PluginFab.vue'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
 import TvTabs from '~/components/tabs/vertical/TvTabs.vue'
@@ -64,6 +65,10 @@ const issueFabRef = ref<HTMLElement | null>(null)
 const showIssuesOverlay = ref(false)
 const issuesOverlayExpanded = ref(false)
 const issuesOverlayAnimating = ref(false)
+
+function handleIssueFabSourceChange(source: HTMLElement | null): void {
+  issueFabRef.value = source
+}
 
 function openIssuesOverlay(): void {
   if (!hasIssues.value) return
@@ -265,6 +270,8 @@ async function handlePrimaryAction(): Promise<void> {
     loadingStates.value.toggle = false
   }
 }
+
+console.log(props)
 </script>
 
 <template>
@@ -429,21 +436,13 @@ async function handlePrimaryAction(): Promise<void> {
       </div>
     </div>
 
-    <button
+    <PluginFab
       v-if="hasIssues"
-      ref="issueFabRef"
-      type="button"
-      class="PluginInfo-IssueFab"
-      :class="{
-        'is-warning': issueSeverity === 'warning',
-        'is-error': issueSeverity === 'error'
-      }"
+      :severity="issueSeverity === 'error' ? 'error' : 'warning'"
       :title="t('plugin.tabs.issues')"
-      :aria-label="t('plugin.tabs.issues')"
+      @source-change="handleIssueFabSourceChange"
       @click="openIssuesOverlay"
-    >
-      <span class="PluginInfo-IssueFabSymbol">?</span>
-    </button>
+    />
 
     <Teleport to="body">
       <TxFlipOverlay
@@ -501,7 +500,6 @@ async function handlePrimaryAction(): Promise<void> {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 14px;
@@ -559,89 +557,8 @@ async function handlePrimaryAction(): Promise<void> {
   }
 }
 
-.PluginInfo-IssueFab {
-  --fab-accent: rgba(250, 204, 21, 0.42);
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  border: 1px solid var(--fab-accent);
-  background: linear-gradient(180deg, rgba(40, 43, 50, 0.94), rgba(22, 24, 30, 0.96));
-  color: #fff;
-  cursor: pointer;
-  z-index: 24;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(255, 255, 255, 0.05);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -8px;
-    border-radius: inherit;
-    pointer-events: none;
-  }
-
-  &:hover {
-    transform: translateY(-2px) scale(1.03);
-  }
-
-  &:active {
-    transform: scale(0.96);
-  }
-
-  &.is-warning {
-    --fab-accent: rgba(250, 204, 21, 0.45);
-
-    &::before {
-      background: radial-gradient(
-        circle,
-        rgba(250, 204, 21, 0.2) 0%,
-        rgba(250, 204, 21, 0.08) 52%,
-        rgba(250, 204, 21, 0) 74%
-      );
-      animation: pluginIssueWarningPulse 2.4s ease-in-out infinite;
-    }
-  }
-
-  &.is-error {
-    --fab-accent: rgba(248, 113, 113, 0.9);
-    box-shadow:
-      0 10px 28px rgba(127, 29, 29, 0.6),
-      0 0 0 1px rgba(248, 113, 113, 0.44),
-      0 0 18px rgba(239, 68, 68, 0.62);
-
-    &::before {
-      background: radial-gradient(
-        circle,
-        rgba(239, 68, 68, 0.5) 0%,
-        rgba(239, 68, 68, 0.2) 55%,
-        rgba(239, 68, 68, 0) 76%
-      );
-      animation: pluginIssueErrorPulse 1.55s cubic-bezier(0.35, 0, 0.22, 1) infinite;
-    }
-  }
-}
-
 .animate-spin {
   animation: spin 1s linear infinite;
-}
-
-.PluginInfo-IssueFabSymbol {
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
 }
 
 :global(.PluginInfo-IssuesMask) {
@@ -731,32 +648,6 @@ async function handlePrimaryAction(): Promise<void> {
   50% {
     border-width: 2px;
     filter: blur(2px);
-  }
-}
-
-@keyframes pluginIssueWarningPulse {
-  0%,
-  100% {
-    transform: scale(0.92);
-    opacity: 0.45;
-  }
-
-  50% {
-    transform: scale(1.1);
-    opacity: 0.85;
-  }
-}
-
-@keyframes pluginIssueErrorPulse {
-  0%,
-  100% {
-    transform: scale(0.88);
-    opacity: 0.56;
-  }
-
-  50% {
-    transform: scale(1.16);
-    opacity: 1;
   }
 }
 </style>
