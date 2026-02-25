@@ -378,11 +378,31 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
     this.touchPlugin.dev = devConfig
   }
 
+  private resolveDevResourceUrl(resourcePath: string): string | null {
+    try {
+      return new URL(resourcePath, this.devConfig.address).toString()
+    } catch {
+      return null
+    }
+  }
+
   async load(): Promise<TouchPlugin> {
     let pluginInfo: PluginManifest
+    const remoteManifestUrl = this.resolveDevResourceUrl('manifest.json')
+
+    if (!remoteManifestUrl) {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: `Invalid dev.address in manifest.json: "${this.devConfig.address}". Falling back to local plugin assets.`,
+        source: 'dev-mode',
+        code: 'DEV_ADDRESS_INVALID',
+        suggestion: 'Set dev.address to a valid absolute URL (e.g. http://127.0.0.1:5173).',
+        timestamp: Date.now()
+      })
+      return this.touchPlugin
+    }
 
     try {
-      const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
       this.touchPlugin.logger.debug(`[Dev] Fetching remote manifest from ${remoteManifestUrl}`)
       const response = await axios.get<PluginManifest>(remoteManifestUrl, {
         timeout: 2000,
@@ -407,7 +427,6 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
       })
     } catch (error) {
       const err = error as Error
-      const remoteManifestUrl = new URL('manifest.json', this.devConfig.address).toString()
       this.touchPlugin.issues.push({
         type: 'error',
         message: `Failed to fetch remote manifest from ${remoteManifestUrl}: ${err.message}. In dev-source mode, this is a fatal error.`,
@@ -428,7 +447,11 @@ class DevPluginLoader extends BasePluginLoader implements IPluginLoader {
 
     // Load README from dev server
     try {
-      const remoteReadmeUrl = new URL('README.md', this.devConfig.address).toString()
+      const remoteReadmeUrl = this.resolveDevResourceUrl('README.md')
+      if (!remoteReadmeUrl) {
+        this.touchPlugin.readme = ''
+        return this.touchPlugin
+      }
       this.touchPlugin.logger.debug(`[Dev] Fetching remote README from ${remoteReadmeUrl}`)
       const response = await axios.get(remoteReadmeUrl, {
         timeout: 2000,
@@ -466,10 +489,20 @@ export function createPluginLoader(pluginName: string, pluginPath: string): IPlu
   }
 
   const devConfig = localPluginInfo.dev || { enable: false, address: '', source: false }
-
-  if (devConfig.enable) {
-    return new DevPluginLoader(pluginName, pluginPath, devConfig)
-  } else {
+  const devAddress = typeof devConfig.address === 'string' ? devConfig.address.trim() : ''
+  const shouldUseDevSource = devConfig.enable === true && devConfig.source === true && !!devAddress
+  if (!shouldUseDevSource) {
     return new LocalPluginLoader(pluginName, pluginPath)
   }
+
+  try {
+    const parsed = new URL(devAddress)
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return new LocalPluginLoader(pluginName, pluginPath)
+    }
+  } catch {
+    return new LocalPluginLoader(pluginName, pluginPath)
+  }
+
+  return new DevPluginLoader(pluginName, pluginPath, { ...devConfig, address: devAddress })
 }

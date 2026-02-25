@@ -4,6 +4,21 @@
 
 ## 2026-02-25
 
+### Dev 插件加载判定修复（避免 `dev.source=false` 误走远程 URL）
+
+**变更类型**: Bug 修复 / 插件加载稳定性
+
+**描述**: 修复通过系统动作安装本地目录插件后，`manifest.dev.source=false` 仍被误判为远程 Dev Loader，进而在 `dev.address` 为空时触发 `TypeError: Invalid URL` 的问题。
+
+**主要变更**:
+1. **Loader 选择收敛**：仅当 `dev.enable=true` 且 `dev.source=true` 且 `dev.address` 为合法 `http(s)` URL 时，才使用 `DevPluginLoader`。
+2. **异常兜底修复**：`DevPluginLoader` 在 dev 地址非法时直接记录 issue 并返回，避免在 `catch` 中二次构造 URL 导致 fatal。
+3. **行为一致性**：与插件运行/视图加载链路中的 `dev.source` 语义保持一致（`source=false` 默认走本地资源）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### CoreBox 推荐态展开高度修复（避免窗口尺寸“锁高”）
 
 **变更类型**: Bug 修复 / 交互稳定性
