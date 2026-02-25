@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "quick.actions",
+      "id": "quick-actions",
       "name": "系统快捷动作",
       "desc": "高频安全动作与设置入口",
       "icon": {

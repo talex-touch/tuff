@@ -23,6 +23,7 @@ import { createClient } from '@libsql/client'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { generatePermissionIssue } from '@talex-touch/utils/permission'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -73,6 +74,7 @@ const pluginModuleLog = createLogger('PluginSystem')
 const devWatcherLog = pluginLog.child('DevWatcher')
 const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
+const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
 
 function resolveWidgetFeaturePath(plugin: TouchPlugin, widgetPath: string): string | null {
   const trimmed = widgetPath.trim()
@@ -201,6 +203,52 @@ interface IndexCommunicatePayload {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function syncPermissionMissingIssue(plugin: ITouchPlugin): boolean {
+  if (!plugin.declaredPermissions) return false
+
+  const permissionModule = getPermissionModule()
+  if (!permissionModule) return false
+
+  const declared = {
+    required: [...(plugin.declaredPermissions.required || [])],
+    optional: [...(plugin.declaredPermissions.optional || [])]
+  }
+  const status = permissionModule
+    .getStore()
+    .getPluginPermissionStatus(plugin.name, plugin.sdkapi, declared)
+  const computedIssue = generatePermissionIssue(status)
+  const nextPermissionIssue =
+    computedIssue?.code === PERMISSION_MISSING_ISSUE_CODE
+      ? {
+          type: computedIssue.type,
+          message: computedIssue.message,
+          source: 'manifest.json',
+          code: computedIssue.code,
+          suggestion: computedIssue.suggestion,
+          meta: {
+            required: declared.required,
+            optional: declared.optional,
+            enforcePermissions: status.enforcePermissions
+          },
+          timestamp: Date.now()
+        }
+      : null
+
+  const previousIssue = plugin.issues.find((issue) => issue.code === PERMISSION_MISSING_ISSUE_CODE)
+  const shouldUpdateIssue =
+    Boolean(previousIssue) !== Boolean(nextPermissionIssue) ||
+    (previousIssue?.message ?? '') !== (nextPermissionIssue?.message ?? '') ||
+    (previousIssue?.suggestion ?? '') !== (nextPermissionIssue?.suggestion ?? '')
+
+  if (!shouldUpdateIssue) return false
+
+  const retainedIssues = plugin.issues.filter(
+    (issue) => issue.code !== PERMISSION_MISSING_ISSUE_CODE
+  )
+  plugin.issues = nextPermissionIssue ? [...retainedIssues, nextPermissionIssue] : retainedIssues
+  return true
 }
 
 /**
@@ -838,6 +886,7 @@ function createPluginModuleInternal(
         localProvider.trackFile(path.resolve(currentPluginPath, 'README.md'))
         plugins.set(pluginName, touchPlugin)
         syncPluginDeclaredPermissions(touchPlugin)
+        syncPermissionMissingIssue(touchPlugin)
         devWatcherInstance.addPlugin(touchPlugin)
 
         logDebug(
@@ -1047,6 +1096,8 @@ function createPluginModuleInternal(
   }
 
   ;(managerInstance as IPluginManagerWithInternals).__installQueue = installQueue
+  ;(managerInstance as IPluginManagerWithInternals).pendingPermissionPlugins =
+    pendingPermissionPlugins
 
   const devWatcherInstance: DevPluginWatcher = new DevPluginWatcher(managerInstance)
   managerInstance.devWatcher = devWatcherInstance
@@ -1342,6 +1393,15 @@ export class PluginModule extends BaseModule {
       const pluginId = event.pluginId
       const manager = this.pluginManager
       if (!manager) return
+
+      const plugin = manager.getPluginByName(pluginId)
+      if (plugin && plugin instanceof TouchPlugin && syncPermissionMissingIssue(plugin)) {
+        this.transport?.broadcast(PluginEvents.push.stateChanged, {
+          type: 'updated',
+          name: plugin.name,
+          changes: plugin.toJSONObject()
+        })
+      }
 
       // Check if this plugin is pending permission
       const pendingPlugins = (manager as IPluginManagerWithInternals).pendingPermissionPlugins
