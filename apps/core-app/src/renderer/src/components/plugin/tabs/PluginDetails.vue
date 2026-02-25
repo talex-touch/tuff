@@ -69,11 +69,6 @@ const shortcuts = ref<ShortcutWithStatus[]>([])
 const manifestDialogVisible = ref(false)
 const manifestDialogSource = ref<HTMLElement | null>(null)
 
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.08
-
 const hasDevChanges = computed(() => {
   const original = originalDevSettings.value
   if (!original) return false
@@ -466,13 +461,6 @@ function openManifestDialog(event: MouseEvent): void {
       <TxFlipOverlay
         v-model="manifestDialogVisible"
         :source="manifestDialogSource"
-        :duration="FLIP_DURATION"
-        :rotate-x="FLIP_ROTATE_X"
-        :rotate-y="FLIP_ROTATE_Y"
-        :speed-boost="FLIP_SPEED_BOOST"
-        transition-name="PluginManifest-Mask"
-        mask-class="PluginManifest-Mask"
-        card-class="PluginManifest-Card"
         :header-title="t('plugin.details.manifestJson')"
         :header-desc="t('plugin.details.manifestJsonDesc')"
       >
@@ -598,35 +586,5 @@ function openManifestDialog(event: MouseEvent): void {
 .PluginManifest-Editor {
   height: 100%;
   min-height: 0;
-}
-
-:global(.PluginManifest-Mask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.45);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.PluginManifest-Mask-enter-active),
-:global(.PluginManifest-Mask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.PluginManifest-Mask-enter-from),
-:global(.PluginManifest-Mask-leave-to) {
-  opacity: 0;
-}
-
-:global(.PluginManifest-Card) {
-  width: min(980px, 94vw);
-  height: min(760px, 90vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 </style>

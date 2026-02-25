@@ -12,7 +12,7 @@ import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { PluginProviderType } from '@talex-touch/utils/plugin/providers'
 import compressing from 'compressing'
 import fse from 'fs-extra'
-import { getEnabledApiSources } from '../../../service/market-api.service'
+import { getEnabledApiSources } from '../../../service/store-api.service'
 import { createProviderLogger } from './logger'
 import { downloadToTempFile } from './utils'
 
@@ -259,7 +259,7 @@ export class TpexPluginProvider implements PluginProvider {
     })
 
     // Fetch plugin details from API
-    const detailUrl = `${this.apiBase}/api/market/plugins/${slug}`
+    const detailUrl = `${this.apiBase}/api/store/plugins/${slug}`
     this.log.debug('Fetching plugin details', { meta: { url: detailUrl } })
     // region debug [H3]
     await dbgLog(

@@ -68,45 +68,48 @@ const routes: RouteRecordRaw[] = [
     redirect: '/setting'
   },
   {
-    path: '/market',
-    name: '$I18n:router.pluginMarket',
-    component: withRouteComponentPerf('/market', () => import('../views/base/Market.vue')),
+    path: '/store',
+    name: '$I18n:router.pluginStore',
+    component: withRouteComponentPerf('/store', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
       keepAlive: true
     }
   },
   {
-    path: '/market/installed',
+    path: '/store/installed',
     name: '$I18n:router.installedPlugins',
-    component: withRouteComponentPerf(
-      '/market/installed',
-      () => import('../views/base/Market.vue')
-    ),
+    component: withRouteComponentPerf('/store/installed', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
       keepAlive: true
     }
   },
   {
-    path: '/market/docs',
-    name: '$I18n:router.marketDocs',
-    component: withRouteComponentPerf('/market/docs', () => import('../views/base/Market.vue')),
+    path: '/store/docs',
+    name: '$I18n:router.storeDocs',
+    component: withRouteComponentPerf('/store/docs', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
       keepAlive: true
     }
   },
   {
-    path: '/market/:id',
-    name: '$I18n:router.marketDetail',
-    component: withRouteComponentPerf(
-      '/market/:id',
-      () => import('../views/base/MarketDetail.vue')
-    ),
+    path: '/store/cli',
+    name: '$I18n:router.storeCli',
+    component: withRouteComponentPerf('/store/cli', () => import('../views/base/Store.vue')),
     meta: {
       index: 2,
-      parentRoute: '/market'
+      keepAlive: true
+    }
+  },
+  {
+    path: '/store/:id',
+    name: '$I18n:router.storeDetail',
+    component: withRouteComponentPerf('/store/:id', () => import('../views/base/Store.vue')),
+    meta: {
+      index: 2,
+      parentRoute: '/store'
     }
   },
   {

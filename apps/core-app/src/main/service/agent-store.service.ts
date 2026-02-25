@@ -1,0 +1,593 @@
+/**
+ * Agent Store Service
+ *
+ * Provides APIs for browsing, searching and managing agents from external sources.
+ */
+
+import { StorageList, type AgentCapability, type AgentDescriptor } from '@talex-touch/utils'
+import {
+  getConfig,
+  getMainConfig,
+  isMainStorageReady,
+  saveConfig,
+  saveMainConfig
+} from '../modules/storage'
+import { createLogger } from '../utils/logger'
+
+const log = createLogger('AgentStore')
+const LEGACY_AGENT_STORE_KEY = 'agent-market.json'
+
+/**
+ * Store agent metadata
+ */
+export interface StoreAgentInfo {
+  id: string
+  name: string
+  description: string
+  version: string
+  author: string
+  category:
+    | 'productivity'
+    | 'file-management'
+    | 'data-processing'
+    | 'search'
+    | 'automation'
+    | 'development'
+    | 'custom'
+  capabilities: string[]
+  tags: string[]
+  downloads: number
+  rating: number
+  ratingCount: number
+  source: 'official' | 'community' | 'local'
+  isInstalled: boolean
+  installedVersion?: string
+  hasUpdate?: boolean
+  createdAt: number
+  updatedAt: number
+  icon?: string
+  homepage?: string
+  repository?: string
+}
+
+/**
+ * Agent search options
+ */
+export interface AgentSearchOptions {
+  keyword?: string
+  category?: StoreAgentInfo['category']
+  source?: StoreAgentInfo['source']
+  tags?: string[]
+  sortBy?: 'downloads' | 'rating' | 'updated' | 'name'
+  sortOrder?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
+
+/**
+ * Agent search result
+ */
+export interface AgentSearchResult {
+  agents: StoreAgentInfo[]
+  total: number
+  hasMore: boolean
+}
+
+/**
+ * Agent install options
+ */
+export interface AgentInstallOptions {
+  agentId: string
+  version?: string
+  force?: boolean
+}
+
+/**
+ * Agent install result
+ */
+export interface AgentInstallResult {
+  success: boolean
+  agentId: string
+  version: string
+  message?: string
+  error?: string
+}
+
+interface AgentStoreState {
+  installed: Record<string, string>
+}
+
+function isAgentStoreState(value: unknown): value is AgentStoreState {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const state = value as Partial<AgentStoreState>
+  return Boolean(state.installed && typeof state.installed === 'object')
+}
+
+// Built-in agents catalog
+const BUILTIN_AGENTS: StoreAgentInfo[] = [
+  {
+    id: 'builtin.file-agent',
+    name: 'File Agent',
+    description: '智能文件管理助手，支持文件搜索、批量重命名、自动整理和重复检测',
+    version: '1.0.0',
+    author: 'Tuff Team',
+    category: 'file-management',
+    capabilities: ['file.search', 'file.organize', 'file.rename', 'file.duplicate'],
+    tags: ['file', 'organize', 'rename', 'duplicate'],
+    downloads: 0,
+    rating: 5,
+    ratingCount: 0,
+    source: 'official',
+    isInstalled: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    icon: 'i-carbon-folder'
+  },
+  {
+    id: 'builtin.search-agent',
+    name: 'Search Agent',
+    description: '智能搜索增强助手，提供语义搜索、搜索建议和结果排序优化',
+    version: '1.0.0',
+    author: 'Tuff Team',
+    category: 'search',
+    capabilities: ['search.smart', 'search.semantic', 'search.suggest', 'search.rank'],
+    tags: ['search', 'semantic', 'suggest'],
+    downloads: 0,
+    rating: 5,
+    ratingCount: 0,
+    source: 'official',
+    isInstalled: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    icon: 'i-carbon-search'
+  },
+  {
+    id: 'builtin.data-agent',
+    name: 'Data Agent',
+    description: '数据处理助手，支持数据提取、格式转换、清洗和分析',
+    version: '1.0.0',
+    author: 'Tuff Team',
+    category: 'data-processing',
+    capabilities: ['data.extract', 'data.transform', 'data.format', 'data.clean', 'data.analyze'],
+    tags: ['data', 'transform', 'json', 'csv', 'yaml'],
+    downloads: 0,
+    rating: 5,
+    ratingCount: 0,
+    source: 'official',
+    isInstalled: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    icon: 'i-carbon-data-base'
+  }
+]
+
+// Featured/recommended agents for the store
+const FEATURED_AGENTS: StoreAgentInfo[] = [
+  {
+    id: 'community.workflow-agent',
+    name: 'Workflow Agent',
+    description: '工作流自动化助手，支持创建和执行复杂的自动化任务流程',
+    version: '0.1.0',
+    author: 'Community',
+    category: 'automation',
+    capabilities: ['workflow.create', 'workflow.execute', 'workflow.schedule'],
+    tags: ['workflow', 'automation', 'schedule'],
+    downloads: 150,
+    rating: 4.5,
+    ratingCount: 12,
+    source: 'community',
+    isInstalled: false,
+    createdAt: Date.now() - 30 * 24 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
+    icon: 'i-carbon-flow'
+  },
+  {
+    id: 'community.code-agent',
+    name: 'Code Agent',
+    description: '代码辅助助手，支持代码分析、重构建议和文档生成',
+    version: '0.2.0',
+    author: 'Community',
+    category: 'development',
+    capabilities: ['code.analyze', 'code.refactor', 'code.document'],
+    tags: ['code', 'development', 'refactor'],
+    downloads: 89,
+    rating: 4.2,
+    ratingCount: 8,
+    source: 'community',
+    isInstalled: false,
+    createdAt: Date.now() - 45 * 24 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 14 * 24 * 60 * 60 * 1000,
+    icon: 'i-carbon-code'
+  },
+  {
+    id: 'community.translator-agent',
+    name: 'Translator Agent',
+    description: '智能翻译助手，支持多语言翻译、术语管理和翻译记忆',
+    version: '0.1.5',
+    author: 'Community',
+    category: 'productivity',
+    capabilities: ['translate.text', 'translate.document', 'translate.batch'],
+    tags: ['translate', 'language', 'i18n'],
+    downloads: 234,
+    rating: 4.7,
+    ratingCount: 23,
+    source: 'community',
+    isInstalled: false,
+    createdAt: Date.now() - 60 * 24 * 60 * 60 * 1000,
+    updatedAt: Date.now() - 3 * 24 * 60 * 60 * 1000,
+    icon: 'i-carbon-translate'
+  }
+]
+
+const BUILTIN_AGENT_IDS = new Set(BUILTIN_AGENTS.map((agent) => agent.id))
+const BUILTIN_AGENT_VERSION_MAP = new Map(BUILTIN_AGENTS.map((agent) => [agent.id, agent.version]))
+
+/**
+ * Agent Store Service
+ */
+class AgentStoreService {
+  private installedAgentIds = new Set<string>(BUILTIN_AGENT_IDS)
+  private installedAgentVersions = new Map<string, string>(BUILTIN_AGENT_VERSION_MAP)
+  private storageLoaded = false
+  private pendingPersist = false
+
+  private migrateLegacyAgentStoreIfNeeded(): void {
+    const currentRaw = getConfig(StorageList.AGENT_STORE)
+    if (isAgentStoreState(currentRaw)) {
+      return
+    }
+
+    const legacyRaw = getConfig(LEGACY_AGENT_STORE_KEY)
+    if (!isAgentStoreState(legacyRaw)) {
+      return
+    }
+
+    saveConfig(StorageList.AGENT_STORE, legacyRaw, false, true)
+    log.info('Migrated legacy agent store key', {
+      meta: {
+        from: LEGACY_AGENT_STORE_KEY,
+        to: StorageList.AGENT_STORE,
+        installedCount: Object.keys(legacyRaw.installed).length
+      }
+    })
+  }
+
+  private ensureStorageLoaded(): void {
+    if (this.storageLoaded) return
+    if (!isMainStorageReady()) return
+
+    this.migrateLegacyAgentStoreIfNeeded()
+
+    try {
+      const state = getMainConfig(StorageList.AGENT_STORE) as AgentStoreState | undefined
+      const installed = state?.installed ?? {}
+      for (const [agentId, version] of Object.entries(installed)) {
+        if (!agentId) continue
+        this.installedAgentIds.add(agentId)
+        if (typeof version === 'string' && version.length > 0) {
+          this.installedAgentVersions.set(agentId, version)
+        }
+      }
+    } catch (error) {
+      log.warn('Failed to load agent store state', { error })
+    }
+
+    this.storageLoaded = true
+    if (this.pendingPersist) {
+      this.persistInstalledState()
+    }
+  }
+
+  private persistInstalledState(): void {
+    if (!isMainStorageReady()) {
+      this.pendingPersist = true
+      return
+    }
+
+    const installed: Record<string, string> = {}
+    for (const [agentId, version] of this.installedAgentVersions.entries()) {
+      if (!this.installedAgentIds.has(agentId)) continue
+      if (BUILTIN_AGENT_IDS.has(agentId)) continue
+      installed[agentId] = version
+    }
+
+    try {
+      saveMainConfig(StorageList.AGENT_STORE, { installed })
+      this.pendingPersist = false
+    } catch (error) {
+      log.warn('Failed to save agent store state', { error })
+    }
+  }
+
+  private resolveInstalledVersion(agent: StoreAgentInfo): string | undefined {
+    const stored = this.installedAgentVersions.get(agent.id)
+    if (stored) return stored
+    if (BUILTIN_AGENT_IDS.has(agent.id)) return agent.version
+    return undefined
+  }
+
+  private applyInstallMeta(agent: StoreAgentInfo): StoreAgentInfo {
+    const isInstalled = this.installedAgentIds.has(agent.id)
+    const installedVersion = isInstalled ? this.resolveInstalledVersion(agent) : undefined
+    const hasUpdate = Boolean(isInstalled && installedVersion && installedVersion !== agent.version)
+    return {
+      ...agent,
+      isInstalled,
+      installedVersion,
+      hasUpdate
+    }
+  }
+
+  /**
+   * Search agents in the store
+   */
+  async searchAgents(options: AgentSearchOptions = {}): Promise<AgentSearchResult> {
+    const {
+      keyword,
+      category,
+      source,
+      tags,
+      sortBy = 'downloads',
+      sortOrder = 'desc',
+      limit = 20,
+      offset = 0
+    } = options
+
+    log.debug(`Searching agents: ${JSON.stringify(options)}`)
+    this.ensureStorageLoaded()
+
+    // Combine all agents
+    let agents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+
+    // Update installed status
+    agents = agents.map((a) => this.applyInstallMeta(a))
+
+    // Filter by keyword
+    if (keyword) {
+      const lowerKeyword = keyword.toLowerCase()
+      agents = agents.filter(
+        (a) =>
+          a.name.toLowerCase().includes(lowerKeyword) ||
+          a.description.toLowerCase().includes(lowerKeyword) ||
+          a.tags.some((t) => t.toLowerCase().includes(lowerKeyword))
+      )
+    }
+
+    // Filter by category
+    if (category) {
+      agents = agents.filter((a) => a.category === category)
+    }
+
+    // Filter by source
+    if (source) {
+      agents = agents.filter((a) => a.source === source)
+    }
+
+    // Filter by tags
+    if (tags && tags.length > 0) {
+      agents = agents.filter((a) => tags.some((t) => a.tags.includes(t)))
+    }
+
+    // Sort
+    agents.sort((a, b) => {
+      let comparison = 0
+      switch (sortBy) {
+        case 'downloads':
+          comparison = a.downloads - b.downloads
+          break
+        case 'rating':
+          comparison = a.rating - b.rating
+          break
+        case 'updated':
+          comparison = a.updatedAt - b.updatedAt
+          break
+        case 'name':
+          comparison = a.name.localeCompare(b.name)
+          break
+      }
+      return sortOrder === 'desc' ? -comparison : comparison
+    })
+
+    const total = agents.length
+    const paginated = agents.slice(offset, offset + limit)
+
+    return {
+      agents: paginated,
+      total,
+      hasMore: offset + limit < total
+    }
+  }
+
+  /**
+   * Get agent details by ID
+   */
+  async getAgentDetails(agentId: string): Promise<StoreAgentInfo | null> {
+    this.ensureStorageLoaded()
+    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+    const agent = allAgents.find((a) => a.id === agentId)
+
+    if (agent) {
+      return this.applyInstallMeta(agent)
+    }
+
+    return null
+  }
+
+  /**
+   * Get featured/recommended agents
+   */
+  async getFeaturedAgents(): Promise<StoreAgentInfo[]> {
+    this.ensureStorageLoaded()
+    return FEATURED_AGENTS.map((a) => this.applyInstallMeta(a))
+  }
+
+  /**
+   * Get installed agents
+   */
+  async getInstalledAgents(): Promise<StoreAgentInfo[]> {
+    this.ensureStorageLoaded()
+    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+    return allAgents
+      .filter((a) => this.installedAgentIds.has(a.id))
+      .map((a) => this.applyInstallMeta(a))
+  }
+
+  /**
+   * Get available categories
+   */
+  getCategories(): { id: string; name: string; count: number }[] {
+    const allAgents = [...BUILTIN_AGENTS, ...FEATURED_AGENTS]
+    const categoryMap = new Map<string, number>()
+
+    for (const agent of allAgents) {
+      const count = categoryMap.get(agent.category) || 0
+      categoryMap.set(agent.category, count + 1)
+    }
+
+    const categoryNames: Record<string, string> = {
+      productivity: '生产力',
+      'file-management': '文件管理',
+      'data-processing': '数据处理',
+      search: '搜索',
+      automation: '自动化',
+      development: '开发',
+      custom: '自定义'
+    }
+
+    return Array.from(categoryMap.entries()).map(([id, count]) => ({
+      id,
+      name: categoryNames[id] || id,
+      count
+    }))
+  }
+
+  /**
+   * Install an agent (placeholder for future implementation)
+   */
+  async installAgent(options: AgentInstallOptions): Promise<AgentInstallResult> {
+    const { agentId, version, force } = options
+
+    log.info(`Installing agent: ${agentId}@${version || 'latest'}`)
+    this.ensureStorageLoaded()
+
+    // Check if agent exists
+    const agent = await this.getAgentDetails(agentId)
+    if (!agent) {
+      return {
+        success: false,
+        agentId,
+        version: version || 'unknown',
+        error: `Agent ${agentId} not found`
+      }
+    }
+
+    // Check if already installed
+    if (this.installedAgentIds.has(agentId) && !force) {
+      return {
+        success: false,
+        agentId,
+        version: agent.version,
+        error: 'Agent already installed'
+      }
+    }
+
+    const targetVersion = version || agent.version
+
+    // For now, just mark as installed and persist state
+    this.installedAgentIds.add(agentId)
+    this.installedAgentVersions.set(agentId, targetVersion)
+    this.persistInstalledState()
+
+    return {
+      success: true,
+      agentId,
+      version: targetVersion,
+      message: `Agent ${agent.name} installed successfully`
+    }
+  }
+
+  /**
+   * Uninstall an agent
+   */
+  async uninstallAgent(agentId: string): Promise<AgentInstallResult> {
+    log.info(`Uninstalling agent: ${agentId}`)
+    this.ensureStorageLoaded()
+
+    // Check if it's a builtin agent
+    if (agentId.startsWith('builtin.')) {
+      return {
+        success: false,
+        agentId,
+        version: 'unknown',
+        error: 'Cannot uninstall builtin agents'
+      }
+    }
+
+    if (!this.installedAgentIds.has(agentId)) {
+      return {
+        success: false,
+        agentId,
+        version: 'unknown',
+        error: 'Agent not installed'
+      }
+    }
+
+    const installedVersion = this.installedAgentVersions.get(agentId) ?? 'unknown'
+
+    // Remove and persist
+    this.installedAgentIds.delete(agentId)
+    this.installedAgentVersions.delete(agentId)
+    this.persistInstalledState()
+
+    return {
+      success: true,
+      agentId,
+      version: installedVersion,
+      message: 'Agent uninstalled successfully'
+    }
+  }
+
+  /**
+   * Check for agent updates
+   */
+  async checkUpdates(): Promise<StoreAgentInfo[]> {
+    this.ensureStorageLoaded()
+    // For now, no updates available
+    return []
+  }
+
+  /**
+   * Convert StoreAgentInfo to AgentDescriptor format
+   */
+  toDescriptor(agent: StoreAgentInfo): AgentDescriptor {
+    const resolveCapabilityType = (capabilityId: string): AgentCapability['type'] => {
+      const lowered = capabilityId.toLowerCase()
+      if (lowered.includes('workflow')) return 'workflow'
+      if (lowered.includes('chat')) return 'chat'
+      if (lowered.includes('search') || lowered.includes('query')) return 'query'
+      return 'action'
+    }
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      description: agent.description,
+      version: agent.version,
+      category: agent.category as AgentDescriptor['category'],
+      enabled: agent.isInstalled,
+      capabilities: agent.capabilities.map((c) => ({
+        id: c,
+        type: resolveCapabilityType(c),
+        name: c,
+        description: ''
+      })),
+      tools: [],
+      config: {}
+    }
+  }
+}
+
+// Singleton instance
+export const agentStoreService = new AgentStoreService()

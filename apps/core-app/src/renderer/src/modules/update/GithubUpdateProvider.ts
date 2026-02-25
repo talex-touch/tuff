@@ -14,7 +14,7 @@ import {
   type UpdateReleaseManifest
 } from '@talex-touch/utils'
 import axios from 'axios'
-import { compareVersions } from '~/composables/market/useVersionCompare'
+import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getBuildInfo } from '~/utils/build-info'
 import { UpdateProvider } from './UpdateProvider'
 

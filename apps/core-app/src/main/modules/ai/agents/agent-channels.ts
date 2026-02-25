@@ -6,8 +6,8 @@
 
 import type { AgentDescriptor, AgentResult, AgentTool } from '@talex-touch/utils'
 import type {
-  AgentsMarketInstallRequest,
-  AgentsMarketSearchRequest
+  AgentsStoreInstallRequest,
+  AgentsStoreSearchRequest
 } from '@talex-touch/utils/transport/events/types'
 import {
   AgentsEvents,
@@ -15,7 +15,7 @@ import {
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
 import { genTouchApp } from '../../../core'
-import { agentMarketService } from '../../../service/agent-market.service'
+import { agentStoreService } from '../../../service/agent-store.service'
 import { createLogger } from '../../../utils/logger'
 import { agentManager } from './agent-manager'
 
@@ -146,53 +146,53 @@ export function registerAgentChannels(): () => void {
   )
 
   // ============================================================================
-  // Agent Market
+  // Agent Store
   // ============================================================================
 
-  // Search agents in market
+  // Search agents in store
   cleanups.push(
-    transport.on(AgentsEvents.market.search, async (payload) => {
-      const options: AgentsMarketSearchRequest = payload ?? {}
-      return agentMarketService.searchAgents(options)
+    transport.on(AgentsEvents.store.search, async (payload) => {
+      const options: AgentsStoreSearchRequest = payload ?? {}
+      return agentStoreService.searchAgents(options)
     })
   )
 
   // Get agent details
   cleanups.push(
-    transport.on(AgentsEvents.market.get, async (payload) => {
+    transport.on(AgentsEvents.store.get, async (payload) => {
       const agentId = payload?.agentId
       if (!agentId) {
         return null
       }
-      return agentMarketService.getAgentDetails(agentId)
+      return agentStoreService.getAgentDetails(agentId)
     })
   )
 
   // Get featured agents
   cleanups.push(
-    transport.on(AgentsEvents.market.featured, async () => {
-      return agentMarketService.getFeaturedAgents()
+    transport.on(AgentsEvents.store.featured, async () => {
+      return agentStoreService.getFeaturedAgents()
     })
   )
 
   // Get installed agents
   cleanups.push(
-    transport.on(AgentsEvents.market.installed, async () => {
-      return agentMarketService.getInstalledAgents()
+    transport.on(AgentsEvents.store.installed, async () => {
+      return agentStoreService.getInstalledAgents()
     })
   )
 
   // Get categories
   cleanups.push(
-    transport.on(AgentsEvents.market.categories, async () => {
-      return agentMarketService.getCategories()
+    transport.on(AgentsEvents.store.categories, async () => {
+      return agentStoreService.getCategories()
     })
   )
 
   // Install agent
   cleanups.push(
-    transport.on(AgentsEvents.market.install, async (payload) => {
-      const options: AgentsMarketInstallRequest | undefined = payload
+    transport.on(AgentsEvents.store.install, async (payload) => {
+      const options: AgentsStoreInstallRequest | undefined = payload
       if (!options?.agentId) {
         return {
           success: false,
@@ -201,13 +201,13 @@ export function registerAgentChannels(): () => void {
           error: 'agentId is required'
         }
       }
-      return agentMarketService.installAgent(options)
+      return agentStoreService.installAgent(options)
     })
   )
 
   // Uninstall agent
   cleanups.push(
-    transport.on(AgentsEvents.market.uninstall, async (payload) => {
+    transport.on(AgentsEvents.store.uninstall, async (payload) => {
       const agentId = payload?.agentId
       if (!agentId) {
         return {
@@ -217,14 +217,14 @@ export function registerAgentChannels(): () => void {
           error: 'agentId is required'
         }
       }
-      return agentMarketService.uninstallAgent(agentId)
+      return agentStoreService.uninstallAgent(agentId)
     })
   )
 
   // Check for updates
   cleanups.push(
-    transport.on(AgentsEvents.market.checkUpdates, async () => {
-      return agentMarketService.checkUpdates()
+    transport.on(AgentsEvents.store.checkUpdates, async () => {
+      return agentStoreService.checkUpdates()
     })
   )
 

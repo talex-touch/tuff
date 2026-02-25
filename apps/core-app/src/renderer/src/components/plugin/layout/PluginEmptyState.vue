@@ -18,9 +18,9 @@ const { t } = useI18n()
       <p class="text-[var(--tx-text-color-regular)] opacity-80 mb-6">
         {{ t('plugin.emptyState.message') }}
       </p>
-      <TxButton variant="flat" class="cta-button text-sm" @click="() => $router.push('/market')">
+      <TxButton variant="flat" class="cta-button text-sm" @click="() => $router.push('/store')">
         <i class="i-ri-store-line" />
-        {{ t('plugin.emptyState.exploreMarket') }}
+        {{ t('plugin.emptyState.exploreStore') }}
       </TxButton>
     </div>
   </div>

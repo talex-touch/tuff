@@ -2,10 +2,10 @@ import type { PresetExportData } from '@talex-touch/utils'
 import { validatePresetData } from '@talex-touch/utils'
 import { toast } from 'vue-sonner'
 import { computed, ref } from 'vue'
-import { compareVersions } from '~/composables/market/useVersionCompare'
+import { compareVersions } from '~/composables/store/useVersionCompare'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
-import { marketHttpRequest } from '~/modules/market/market-http-client'
-import { requestNexusWithAuth } from '~/modules/market/nexus-auth-client'
+import { storeHttpRequest } from '~/modules/store/store-http-client'
+import { requestNexusWithAuth } from '~/modules/store/nexus-auth-client'
 import { getBuildInfo } from '~/utils/build-info'
 import { usePresetExport } from '../usePresetExport'
 
@@ -87,7 +87,7 @@ export function useRemotePresets() {
 
   async function requestWithAuth<T>(path: string): Promise<T | null> {
     const response = await requestNexusWithAuth(
-      marketHttpRequest<T>,
+      storeHttpRequest<T>,
       {
         url: `${baseUrl}${path}`,
         method: 'GET',

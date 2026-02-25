@@ -39,19 +39,19 @@ const transportDisposers: Array<() => void> = []
 
 function getTranslator(): (key: string, params?: Record<string, unknown>) => string {
   const { t } = useI18nText((key: string, params?: Record<string, unknown>) => {
-    if (key === 'market.installation.confirmTitle') {
+    if (key === 'store.installation.confirmTitle') {
       return '是否安装插件？'
     }
-    if (key === 'market.installation.confirmMessage') {
+    if (key === 'store.installation.confirmMessage') {
       return `插件 “${params?.name ?? ''}” 来自非官方来源，确认继续安装？`
     }
-    if (key === 'market.installation.confirmInstall') {
+    if (key === 'store.installation.confirmInstall') {
       return '继续安装'
     }
-    if (key === 'market.installation.confirmReject') {
+    if (key === 'store.installation.confirmReject') {
       return '取消'
     }
-    if (key === 'market.installation.beforeExitPrompt') {
+    if (key === 'store.installation.beforeExitPrompt') {
       return '仍有插件安装进行中，确认要退出吗？'
     }
     return key
@@ -116,11 +116,11 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
   let decisionMade = false
 
   await forTouchTip(
-    t('market.installation.confirmTitle'),
-    t('market.installation.confirmMessage', { name }),
+    t('store.installation.confirmTitle'),
+    t('store.installation.confirmMessage', { name }),
     [
       {
-        content: t('market.installation.confirmInstall'),
+        content: t('store.installation.confirmInstall'),
         type: 'success',
         onClick: async () => {
           decisionMade = true
@@ -129,7 +129,7 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
         }
       },
       {
-        content: t('market.installation.confirmReject'),
+        content: t('store.installation.confirmReject'),
         type: 'warning',
         onClick: async () => {
           decisionMade = true
@@ -148,7 +148,7 @@ async function handleConfirm(request: PluginInstallConfirmRequest): Promise<void
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
   if (activeTaskCount.value === 0) return
   const t = getTranslator()
-  const message = t('market.installation.beforeExitPrompt')
+  const message = t('store.installation.beforeExitPrompt')
   event.preventDefault()
   event.returnValue = message
 }

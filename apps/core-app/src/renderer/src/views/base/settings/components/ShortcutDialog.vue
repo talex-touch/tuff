@@ -52,26 +52,11 @@ watch(visible, (value) => {
   if (!value) return
   resetCopyState()
 })
-
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.1
 </script>
 
 <template>
   <Teleport to="body">
-    <TxFlipOverlay
-      v-model="visible"
-      :source="source"
-      :duration="FLIP_DURATION"
-      :rotate-x="FLIP_ROTATE_X"
-      :rotate-y="FLIP_ROTATE_Y"
-      :speed-boost="FLIP_SPEED_BOOST"
-      transition-name="ShortcutDialog-Mask"
-      mask-class="ShortcutDialog-Mask"
-      card-class="ShortcutDialog-Card"
-    >
+    <TxFlipOverlay v-model="visible" :source="source">
       <template #default="{ close }">
         <div class="ShortcutDialog">
           <div class="ShortcutDialog-Header">
@@ -146,37 +131,6 @@ const FLIP_SPEED_BOOST = 1.1
 </template>
 
 <style scoped>
-:global(.ShortcutDialog-Mask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.ShortcutDialog-Mask-enter-active),
-:global(.ShortcutDialog-Mask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.ShortcutDialog-Mask-enter-from),
-:global(.ShortcutDialog-Mask-leave-to) {
-  opacity: 0;
-}
-
-:global(.ShortcutDialog-Card) {
-  width: min(980px, 92vw);
-  height: min(720px, 86vh);
-  border-radius: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
-  overflow: hidden;
-}
-
 .ShortcutDialog {
   display: flex;
   flex-direction: column;

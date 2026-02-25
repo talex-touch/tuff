@@ -61,23 +61,23 @@ const currentInstallProgress = computed(() => {
 const currentInstallLabel = computed(() => {
   switch (currentInstallStage.value) {
     case 'queued':
-      return t('market.installation.status.queued')
+      return t('store.installation.status.queued')
     case 'downloading':
-      return t('market.installation.status.downloading')
+      return t('store.installation.status.downloading')
     case 'awaiting-confirmation':
-      return t('market.installation.status.awaitingConfirm')
+      return t('store.installation.status.awaitingConfirm')
     case 'installing':
-      return t('market.installation.status.installing')
+      return t('store.installation.status.installing')
     case 'completed':
-      return t('market.installation.status.completed')
+      return t('store.installation.status.completed')
     case 'failed':
-      return t('market.installation.status.failed')
+      return t('store.installation.status.failed')
     case 'cancelled':
-      return t('market.installation.status.cancelled')
+      return t('store.installation.status.cancelled')
     default:
       return installState.installing
-        ? t('market.installation.status.installing')
-        : t('market.install')
+        ? t('store.installation.status.installing')
+        : t('store.install')
   }
 })
 

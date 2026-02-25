@@ -441,9 +441,6 @@ watch(
       <TxFlipOverlay
         v-model="detailsVisible"
         :source="detailsSource"
-        transition-name="PluginStorageDetails-Mask"
-        mask-class="PluginStorageDetails-Mask"
-        card-class="PluginStorageDetails-Card"
         :header-title="t('plugin.storage.details.title')"
         :header-desc="
           t('plugin.storage.details.description', {
@@ -736,36 +733,6 @@ watch(
   min-height: 420px;
   overflow: hidden;
   background: var(--tx-bg-color-overlay);
-}
-
-:global(.PluginStorageDetails-Mask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.45);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.PluginStorageDetails-Mask-enter-active),
-:global(.PluginStorageDetails-Mask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.PluginStorageDetails-Mask-enter-from),
-:global(.PluginStorageDetails-Mask-leave-to) {
-  opacity: 0;
-}
-
-:global(.PluginStorageDetails-Card) {
-  width: min(1120px, 95vw);
-  max-height: min(820px, 92vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
 .animate-spin {

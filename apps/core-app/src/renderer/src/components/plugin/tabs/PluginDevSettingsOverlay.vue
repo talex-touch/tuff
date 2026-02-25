@@ -39,11 +39,6 @@ const visible = computed({
   set: (value: boolean) => emit('update:modelValue', value)
 })
 
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.08
-
 const devSettings = reactive<DevSettingsForm>({
   enable: false,
   address: '',
@@ -195,13 +190,6 @@ async function saveDevSettings(): Promise<void> {
   <TxFlipOverlay
     v-model="visible"
     :source="source"
-    :duration="FLIP_DURATION"
-    :rotate-x="FLIP_ROTATE_X"
-    :rotate-y="FLIP_ROTATE_Y"
-    :speed-boost="FLIP_SPEED_BOOST"
-    transition-name="PluginDevSettings-Mask"
-    mask-class="PluginDevSettings-Mask"
-    card-class="PluginDevSettings-Card"
     :header-title="t('plugin.details.devSettings')"
     :header-desc="t('plugin.details.devSettingsDesc')"
   >
@@ -285,36 +273,6 @@ async function saveDevSettings(): Promise<void> {
 .PluginDevSettings-Body {
   padding: 14px 0 18px;
   overflow-y: auto;
-}
-
-:global(.PluginDevSettings-Mask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.45);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.PluginDevSettings-Mask-enter-active),
-:global(.PluginDevSettings-Mask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.PluginDevSettings-Mask-enter-from),
-:global(.PluginDevSettings-Mask-leave-to) {
-  opacity: 0;
-}
-
-:global(.PluginDevSettings-Card) {
-  width: min(860px, 92vw);
-  max-height: min(740px, 90vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
 .animate-spin {

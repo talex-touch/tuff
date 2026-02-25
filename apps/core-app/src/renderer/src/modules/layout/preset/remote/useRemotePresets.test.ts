@@ -28,15 +28,15 @@ async function loadTarget() {
     getAuthBaseUrl: () => 'https://nexus.example'
   }))
 
-  vi.doMock('~/modules/market/market-http-client', () => ({
-    marketHttpRequest: vi.fn()
+  vi.doMock('~/modules/store/store-http-client', () => ({
+    storeHttpRequest: vi.fn()
   }))
 
-  vi.doMock('~/modules/market/nexus-auth-client', () => ({
+  vi.doMock('~/modules/store/nexus-auth-client', () => ({
     requestNexusWithAuth: state.requestNexusWithAuth
   }))
 
-  vi.doMock('~/composables/market/useVersionCompare', () => ({
+  vi.doMock('~/composables/store/useVersionCompare', () => ({
     compareVersions: state.compareVersions
   }))
 

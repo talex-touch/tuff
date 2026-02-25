@@ -10,11 +10,6 @@ const { t } = useI18n()
 const { isLoggedIn } = useAuth()
 const { taskStats, tasksByStatus, currentDownloadSpeed, formatSpeed } = useDownloadCenter()
 
-const FLIP_DURATION = 420
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.1
-
 const downloadDialogVisible = ref(false)
 const downloadDialogSource = ref<HTMLElement | null>(null)
 
@@ -124,13 +119,6 @@ function handleClick(event: MouseEvent): void {
     <TxFlipOverlay
       v-model="downloadDialogVisible"
       :source="downloadDialogSource"
-      :duration="FLIP_DURATION"
-      :rotate-x="FLIP_ROTATE_X"
-      :rotate-y="FLIP_ROTATE_Y"
-      :speed-boost="FLIP_SPEED_BOOST"
-      transition-name="DownloadDialog-Mask"
-      mask-class="DownloadDialog-Mask"
-      card-class="DownloadDialog-Card"
       :header-title="t('download.title')"
       :header-desc="summaryLabel"
     >
@@ -255,47 +243,5 @@ function handleClick(event: MouseEvent): void {
   to {
     transform: translate(0, calc(100% + var(--h)));
   }
-}
-</style>
-
-<style lang="scss">
-.DownloadDialog-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.DownloadDialog-Mask-enter-active,
-.DownloadDialog-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.DownloadDialog-Mask-enter-from,
-.DownloadDialog-Mask-leave-to {
-  opacity: 0;
-}
-
-.DownloadDialog-Card {
-  width: min(1120px, 92vw);
-  height: min(820px, 86vh);
-  border-radius: 1.25rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
 }
 </style>

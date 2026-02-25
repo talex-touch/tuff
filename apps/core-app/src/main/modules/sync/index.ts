@@ -57,7 +57,7 @@ const SYNC_STORAGE_KEYS = [
   StorageList.APP_SETTING,
   StorageList.OPENERS,
   StorageList.IntelligenceConfig,
-  StorageList.MARKET_SOURCES,
+  StorageList.STORE_SOURCES,
   'intelligence/prompt-library',
   'division-box/preferences'
 ]
