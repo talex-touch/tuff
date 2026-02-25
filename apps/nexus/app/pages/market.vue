@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SharedPluginDetail } from '@talex-touch/utils/renderer/shared/plugin-detail'
 import type {
   FilterCategory,
   MarketplacePluginDetail,
@@ -9,15 +10,16 @@ import type {
   MarketplacePluginReviewSubmitResponse,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
-import { SharedPluginDetailContent } from '@talex-touch/utils/renderer/shared/components'
-import type { SharedPluginDetail } from '@talex-touch/utils/renderer/shared/plugin-detail'
+import { TxButton, TxFlipOverlay, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import {
+  SharedPluginDetailHeader,
+  SharedPluginDetailReadme,
+  SharedPluginDetailVersions,
+} from '@talex-touch/utils/renderer/shared/components'
 import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'
-import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
-import Modal from '~/components/ui/Modal.vue'
 import Tag from '~/components/ui/Tag.vue'
 import { useMarketCategories } from '~/composables/useMarketCategories'
 import { useMarketFormatters } from '~/composables/useMarketFormatters'
@@ -61,8 +63,10 @@ watch(searchQuery, (value) => {
 
 const selectedSlug = ref<string | null>(null)
 const selectedPlugin = ref<MarketplacePluginDetail | null>(null)
+const detailOverlaySource = ref<HTMLElement | null>(null)
 const detailPending = ref(false)
 const detailError = ref<string | null>(null)
+const detailTab = ref<'overview' | 'versions' | 'reviews'>('overview')
 const reviews = ref<MarketplacePluginReview[]>([])
 const reviewsPending = ref(false)
 const reviewsError = ref<string | null>(null)
@@ -87,7 +91,9 @@ const {
   data: pluginsPayload,
   pending: pluginsPending,
 } = await useAsyncData('market-plugins', () =>
-  $fetch<{ plugins: MarketplacePluginSummary[] }>('/api/market/plugins'))
+  $fetch<{ plugins: MarketplacePluginSummary[] }>('/api/market/plugins', {
+    query: { compact: 1 },
+  }))
 
 const { resolveCategoryLabel, matchesCategory } = useMarketCategories()
 const { formatDate, formatInstalls, formatPackageSize } = useMarketFormatters()
@@ -103,7 +109,8 @@ const ratingValue = computed(() => Math.round(ratingSummary.value?.average ?? 0)
 
 const sharedDetail = computed<SharedPluginDetail | null>(() => {
   const plugin = selectedPlugin.value
-  if (!plugin) return null
+  if (!plugin)
+    return null
 
   return {
     id: plugin.id,
@@ -128,7 +135,8 @@ const sharedDetail = computed<SharedPluginDetail | null>(() => {
 })
 
 const installsText = computed(() => {
-  if (!selectedPlugin.value) return ''
+  if (!selectedPlugin.value)
+    return ''
   return t('dashboard.plugins.stats.installs', { count: formatInstalls(selectedPlugin.value.installs) })
 })
 
@@ -159,21 +167,17 @@ function resolveStarClass(value: number, rating: number) {
     : 'i-carbon-star text-black/30 dark:text-light/30'
 }
 
-function setReviewRating(value: number) {
-  reviewForm.rating = value
-}
-
 async function loadPluginCommunity(slug: string) {
   reviewsPending.value = true
   reviewsError.value = null
   try {
     const [reviewsResponse, ratingResponse] = await Promise.all([
       $fetch<MarketplacePluginReviewListResponse>(`/api/market/plugins/${slug}/reviews`, {
-      query: {
-        limit: reviewsMeta.limit,
-        offset: 0,
-      },
-    }),
+        query: {
+          limit: reviewsMeta.limit,
+          offset: 0,
+        },
+      }),
       $fetch<MarketplacePluginRatingResponse>(`/api/market/plugins/${slug}/rating`),
     ])
     reviews.value = reviewsResponse.reviews ?? []
@@ -271,16 +275,18 @@ async function submitReview() {
   }
 }
 
-async function openPluginDetail(plugin: MarketplacePluginSummary) {
+async function openPluginDetail(plugin: MarketplacePluginSummary, source: HTMLElement | null = null) {
   selectedSlug.value = plugin.slug
+  detailOverlaySource.value = source
   selectedPlugin.value = null
   detailPending.value = true
   detailError.value = null
+  detailTab.value = 'overview'
   resetReviewState()
   try {
     const response = await $fetch<{ plugin: MarketplacePluginDetail }>(`/api/market/plugins/${plugin.slug}`)
     selectedPlugin.value = response.plugin
-    await loadPluginCommunity(plugin.slug)
+    void loadPluginCommunity(plugin.slug)
   }
   catch (error: unknown) {
     detailError.value = error instanceof Error ? error.message : t('market.detail.error', 'Unable to load plugin details.')
@@ -292,8 +298,10 @@ async function openPluginDetail(plugin: MarketplacePluginSummary) {
 
 function closePluginDetail() {
   selectedSlug.value = null
+  detailOverlaySource.value = null
   selectedPlugin.value = null
   detailError.value = null
+  detailTab.value = 'overview'
   resetReviewState()
 }
 
@@ -394,201 +402,345 @@ useSeoMeta({
         />
       </div>
     </div>
-    <Modal
+    <TxFlipOverlay
       :model-value="Boolean(selectedSlug)"
-      width="860px"
+      :source="detailOverlaySource"
+      transition-name="MarketDetailOverlay-Mask"
+      mask-class="MarketDetailOverlay-Mask"
+      card-class="MarketDetailOverlay-Card"
+      :header-title="t('market.detail.title', 'Plugin Details')"
+      :header-desc="selectedPlugin?.name || ''"
       @update:model-value="(v) => {
         if (!v)
           closePluginDetail()
       }"
-      @close="closePluginDetail"
     >
-      <template #header>
-        <div class="flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-black dark:text-light">
-              {{ t('market.detail.title', 'Plugin Details') }}
-            </h2>
-            <p class="text-xs text-black/50 dark:text-light/60">
-              {{ selectedPlugin?.name || '' }}
-            </p>
-          </div>
-          <FlatButton @click="closePluginDetail">
-            <span class="i-carbon-close text-lg" aria-hidden="true" />
-          </FlatButton>
-        </div>
-      </template>
-      <div v-if="detailPending" class="flex items-center justify-center gap-3 py-16 text-sm text-black/70 dark:text-light/70">
-        <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
-        <span>{{ t('market.detail.loading') }}</span>
-      </div>
-      <div v-else-if="detailError" class="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-        {{ detailError }}
-      </div>
-      <div v-else-if="selectedPlugin" class="space-y-6">
-        <SharedPluginDetailContent
-          v-if="sharedDetail"
-          :detail="sharedDetail"
-          :show-meta="false"
-          :readme-title="t('market.detail.readme')"
-          :empty-readme-text="t('market.detail.noReadme')"
-          :versions-title="t('market.detail.versions')"
-          :empty-versions-text="t('market.detail.noVersions')"
-          :official-label="t('market.badges.official')"
-          :installs-text="installsText"
-          :version-text="versionText"
-          :updated-text="updatedText"
-          :format-date="formatDate"
-          :format-number="formatInstalls"
-          :format-size="formatPackageSize"
-        />
-
-        <section>
-          <h3 class="text-sm text-black/70 font-semibold tracking-wide uppercase dark:text-light/70">
-            {{ t('market.detail.reviews.title') }}
-          </h3>
-          <div class="mt-3 grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                  <div class="flex items-center gap-1">
-                    <span
-                      v-for="value in 5"
-                      :key="`summary-${value}`"
-                      :class="resolveStarClass(value, ratingValue)"
-                      class="text-base"
-                    />
-                  </div>
-                  <span class="text-lg text-black font-semibold dark:text-light">
-                    {{ ratingAverageText }}
+      <template #default>
+        <div class="MarketDetailOverlay-Inner">
+          <div class="MarketDetailOverlay-Body">
+            <div v-if="detailPending" class="flex items-center justify-center gap-3 py-16 text-sm text-black/70 dark:text-light/70">
+              <span class="i-carbon-circle-dash animate-spin text-base" aria-hidden="true" />
+              <span>{{ t('market.detail.loading') }}</span>
+            </div>
+            <div v-else-if="detailError" class="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+              {{ detailError }}
+            </div>
+            <div v-else-if="selectedPlugin && sharedDetail" class="MarketDetailPlugin">
+              <header class="MarketDetailPlugin-Header">
+                <span class="MarketDetailPlugin-Icon">
+                  <img
+                    v-if="sharedDetail.iconUrl"
+                    :src="sharedDetail.iconUrl"
+                    :alt="`${sharedDetail.name} icon`"
+                    class="h-full w-full object-cover"
+                  >
+                  <span v-else class="text-xl font-semibold">
+                    {{ sharedDetail.name.charAt(0) }}
                   </span>
-                  <span class="text-xs text-black/50 dark:text-light/60">
-                    {{ t('market.detail.reviews.count', { count: ratingCount }) }}
-                  </span>
+                </span>
+                <div class="min-w-0 flex-1">
+                  <SharedPluginDetailHeader
+                    :detail="sharedDetail"
+                    :official-label="t('market.badges.official')"
+                    :installs-text="installsText"
+                    :version-text="versionText"
+                    :updated-text="updatedText"
+                    :format-date="formatDate"
+                    :format-number="formatInstalls"
+                  />
                 </div>
-                <Tag :label="t('market.detail.reviews.tag')" size="sm" icon="i-carbon-chat" />
-              </div>
-              <p class="mt-2 text-xs text-black/50 dark:text-light/60">
-                {{ t('market.detail.reviews.helper') }}
-              </p>
-            </div>
+              </header>
 
-            <div class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80">
-              <h4 class="text-sm text-black font-semibold dark:text-light">
-                {{ t('market.detail.reviews.writeTitle') }}
-              </h4>
-              <div v-if="!isLoaded" class="mt-3 text-xs text-black/60 dark:text-light/60">
-                {{ t('market.detail.reviews.authLoading', 'Checking sign-in status...') }}
-              </div>
-              <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
-                <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
-                <TxButton size="small" @click="handleSignIn">
-                  {{ t('market.detail.reviews.signInAction', 'Sign in') }}
-                </TxButton>
-              </div>
-              <div v-else class="mt-3 space-y-3">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-xs text-black/60 dark:text-light/60">
-                    {{ t('market.detail.reviews.ratingLabel') }}
-                  </span>
-                  <TxRating v-model="reviewForm.rating" :max-stars="5" />
-                  <span class="text-xs text-black/50 dark:text-light/60">
-                    {{ reviewForm.rating || '-' }}
-                  </span>
-                </div>
-                <Input
-                  v-model="reviewForm.title"
-                  :placeholder="t('market.detail.reviews.titlePlaceholder')"
-                />
-                <Input
-                  v-model="reviewForm.content"
-                  type="textarea"
-                  :rows="4"
-                  :placeholder="t('market.detail.reviews.contentPlaceholder')"
-                />
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                  <p class="text-xs text-black/50 dark:text-light/60">
-                    {{ t('market.detail.reviews.submitHint') }}
-                  </p>
-                  <TxButton size="small" :disabled="reviewSubmitting" @click="submitReview">
-                    <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
-                    {{ t('market.detail.reviews.submit') }}
-                  </TxButton>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-5 space-y-3">
-            <div v-if="reviewsPending" class="flex items-center gap-2 text-sm text-black/60 dark:text-light/60">
-              <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
-              <span>{{ t('market.detail.reviews.loading') }}</span>
-            </div>
-            <div v-else-if="reviewsError" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
-              {{ reviewsError }}
-            </div>
-            <p v-else-if="!reviews.length" class="text-sm text-black/60 dark:text-light/60">
-              {{ t('market.detail.reviews.empty') }}
-            </p>
-            <div v-else class="space-y-4">
-            <article
-              v-for="review in reviews"
-              :key="review.id"
-              class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="flex items-center gap-3">
-                  <span class="size-9 flex items-center justify-center overflow-hidden rounded-full bg-dark/10 text-black font-semibold dark:bg-light/10 dark:text-light">
-                    <img
-                      v-if="review.author?.avatarUrl"
-                      :src="review.author.avatarUrl"
-                      :alt="review.author?.name || t('market.detail.reviews.anonymous')"
-                      class="h-full w-full object-cover"
-                    >
-                    <span v-else>{{ review.author?.name?.charAt(0) || '?' }}</span>
-                  </span>
-                  <div>
-                    <p class="text-sm text-black font-semibold dark:text-light">
-                      {{ review.author?.name || t('market.detail.reviews.anonymous') }}
-                    </p>
-                    <div class="flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-light/60">
-                      <div class="flex items-center gap-1">
-                        <span
-                          v-for="value in 5"
-                          :key="`${review.id}-${value}`"
-                          :class="resolveStarClass(value, review.rating)"
-                          class="text-xs"
+              <section class="MarketDetailPlugin-Content">
+                <TxTabs
+                  v-model="detailTab"
+                  placement="top"
+                  borderless
+                  :content-padding="0"
+                  :content-scrollable="false"
+                  indicator-variant="pill"
+                >
+                  <TxTabItem name="overview" icon-class="i-carbon-document">
+                    <template #name>
+                      {{ t('market.detail.tabs.overview', 'Overview') }}
+                    </template>
+                    <div class="space-y-4 py-1">
+                      <div class="rounded-2xl border border-primary/10 bg-white/85 p-5">
+                        <SharedPluginDetailReadme
+                          :readme="sharedDetail.readme"
+                          :title="t('market.detail.readme')"
+                          :empty-text="t('market.detail.noReadme')"
                         />
                       </div>
-                      <span>{{ formatDate(review.createdAt) }}</span>
                     </div>
-                  </div>
-                </div>
-                <StatusBadge
-                  v-if="review.status && review.status !== 'approved'"
-                  :text="t(`market.detail.reviews.status.${review.status}`)"
-                  :status="review.status === 'pending' ? 'warning' : 'danger'"
-                  size="sm"
-                />
-              </div>
-              <div class="mt-3 space-y-1">
-                <p v-if="review.title" class="text-sm text-black font-semibold dark:text-light">
-                  {{ review.title }}
-                </p>
-                <p class="text-sm text-black/70 leading-relaxed dark:text-light/70">
-                  {{ review.content }}
-                </p>
-              </div>
-            </article>
-            <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
-              <TxButton size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
-                {{ t('market.detail.reviews.loadMore', 'Load more') }}
-              </TxButton>
+                  </TxTabItem>
+
+                  <TxTabItem name="versions" icon-class="i-carbon-data-table">
+                    <template #name>
+                      {{ t('market.detail.tabs.versions', 'Versions') }}
+                    </template>
+                    <div class="space-y-4 py-1">
+                      <div class="rounded-2xl border border-primary/10 bg-white/85 p-5">
+                        <SharedPluginDetailVersions
+                          :versions="sharedDetail.versions"
+                          :title="t('market.detail.versions')"
+                          :empty-text="t('market.detail.noVersions')"
+                          :download-text="t('market.detail.download')"
+                          :format-date="formatDate"
+                          :format-size="formatPackageSize"
+                        />
+                      </div>
+                    </div>
+                  </TxTabItem>
+
+                  <TxTabItem name="reviews" icon-class="i-carbon-chat">
+                    <template #name>
+                      {{ t('market.detail.tabs.reviews', 'Reviews') }}
+                    </template>
+                    <section class="space-y-4 py-1">
+                      <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80">
+                          <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                              <div class="flex items-center gap-1">
+                                <span
+                                  v-for="value in 5"
+                                  :key="`summary-${value}`"
+                                  :class="resolveStarClass(value, ratingValue)"
+                                  class="text-base"
+                                />
+                              </div>
+                              <span class="text-lg text-black font-semibold dark:text-light">
+                                {{ ratingAverageText }}
+                              </span>
+                              <span class="text-xs text-black/50 dark:text-light/60">
+                                {{ t('market.detail.reviews.count', { count: ratingCount }) }}
+                              </span>
+                            </div>
+                            <Tag :label="t('market.detail.reviews.tag')" size="sm" icon="i-carbon-chat" />
+                          </div>
+                          <p class="mt-2 text-xs text-black/50 dark:text-light/60">
+                            {{ t('market.detail.reviews.helper') }}
+                          </p>
+                        </div>
+
+                        <div class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80">
+                          <h4 class="text-sm text-black font-semibold dark:text-light">
+                            {{ t('market.detail.reviews.writeTitle') }}
+                          </h4>
+                          <div v-if="!isLoaded" class="mt-3 text-xs text-black/60 dark:text-light/60">
+                            {{ t('market.detail.reviews.authLoading', 'Checking sign-in status...') }}
+                          </div>
+                          <div v-else-if="!isLoggedIn" class="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-black/60 dark:text-light/60">
+                            <span>{{ t('market.detail.reviews.signInHint', 'Sign in to submit your review.') }}</span>
+                            <TxButton size="small" @click="handleSignIn">
+                              {{ t('market.detail.reviews.signInAction', 'Sign in') }}
+                            </TxButton>
+                          </div>
+                          <div v-else class="mt-3 space-y-3">
+                            <div class="flex flex-wrap items-center gap-2">
+                              <span class="text-xs text-black/60 dark:text-light/60">
+                                {{ t('market.detail.reviews.ratingLabel') }}
+                              </span>
+                              <TxRating v-model="reviewForm.rating" :max-stars="5" />
+                              <span class="text-xs text-black/50 dark:text-light/60">
+                                {{ reviewForm.rating || '-' }}
+                              </span>
+                            </div>
+                            <Input
+                              v-model="reviewForm.title"
+                              :placeholder="t('market.detail.reviews.titlePlaceholder')"
+                            />
+                            <Input
+                              v-model="reviewForm.content"
+                              type="textarea"
+                              :rows="4"
+                              :placeholder="t('market.detail.reviews.contentPlaceholder')"
+                            />
+                            <div class="flex flex-wrap items-center justify-between gap-3">
+                              <p class="text-xs text-black/50 dark:text-light/60">
+                                {{ t('market.detail.reviews.submitHint') }}
+                              </p>
+                              <TxButton size="small" :disabled="reviewSubmitting" @click="submitReview">
+                                <span v-if="reviewSubmitting" class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                                {{ t('market.detail.reviews.submit') }}
+                              </TxButton>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="space-y-3">
+                        <div v-if="reviewsPending" class="flex items-center gap-2 text-sm text-black/60 dark:text-light/60">
+                          <span class="i-carbon-circle-dash animate-spin text-sm" aria-hidden="true" />
+                          <span>{{ t('market.detail.reviews.loading') }}</span>
+                        </div>
+                        <div v-else-if="reviewsError" class="rounded-xl bg-red-50 p-4 text-sm text-red-600 dark:bg-red-500/10 dark:text-red-200">
+                          {{ reviewsError }}
+                        </div>
+                        <p v-else-if="!reviews.length" class="text-sm text-black/60 dark:text-light/60">
+                          {{ t('market.detail.reviews.empty') }}
+                        </p>
+                        <div v-else class="space-y-4">
+                          <article
+                            v-for="review in reviews"
+                            :key="review.id"
+                            class="rounded-2xl border border-primary/10 bg-white/80 p-4 text-sm text-black/70 dark:border-light/20 dark:bg-dark/70 dark:text-light/80"
+                          >
+                            <div class="flex flex-wrap items-start justify-between gap-3">
+                              <div class="flex items-center gap-3">
+                                <span class="size-9 flex items-center justify-center overflow-hidden rounded-full bg-dark/10 text-black font-semibold dark:bg-light/10 dark:text-light">
+                                  <img
+                                    v-if="review.author?.avatarUrl"
+                                    :src="review.author.avatarUrl"
+                                    :alt="review.author?.name || t('market.detail.reviews.anonymous')"
+                                    class="h-full w-full object-cover"
+                                  >
+                                  <span v-else>{{ review.author?.name?.charAt(0) || '?' }}</span>
+                                </span>
+                                <div>
+                                  <p class="text-sm text-black font-semibold dark:text-light">
+                                    {{ review.author?.name || t('market.detail.reviews.anonymous') }}
+                                  </p>
+                                  <div class="flex flex-wrap items-center gap-2 text-xs text-black/50 dark:text-light/60">
+                                    <div class="flex items-center gap-1">
+                                      <span
+                                        v-for="value in 5"
+                                        :key="`${review.id}-${value}`"
+                                        :class="resolveStarClass(value, review.rating)"
+                                        class="text-xs"
+                                      />
+                                    </div>
+                                    <span>{{ formatDate(review.createdAt) }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <StatusBadge
+                                v-if="review.status && review.status !== 'approved'"
+                                :text="t(`market.detail.reviews.status.${review.status}`)"
+                                :status="review.status === 'pending' ? 'warning' : 'danger'"
+                                size="sm"
+                              />
+                            </div>
+                            <div class="mt-3 space-y-1">
+                              <p v-if="review.title" class="text-sm text-black font-semibold dark:text-light">
+                                {{ review.title }}
+                              </p>
+                              <p class="text-sm text-black/70 leading-relaxed dark:text-light/70">
+                                {{ review.content }}
+                              </p>
+                            </div>
+                          </article>
+                          <div v-if="canLoadMoreReviews" class="flex justify-center pt-2">
+                            <TxButton size="small" :loading="reviewsLoadingMore" @click="loadMoreReviews">
+                              {{ t('market.detail.reviews.loadMore', 'Load more') }}
+                            </TxButton>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </TxTabItem>
+                </TxTabs>
+              </section>
             </div>
           </div>
-          </div>
-        </section>
-      </div>
-    </Modal>
+        </div>
+      </template>
+    </TxFlipOverlay>
   </section>
 </template>
+
+<style lang="scss">
+.MarketDetailOverlay-Mask {
+  background: rgba(6, 8, 16, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.MarketDetailOverlay-Mask-enter-active,
+.MarketDetailOverlay-Mask-leave-active {
+  transition: opacity 220ms ease;
+}
+
+.MarketDetailOverlay-Mask-enter-from,
+.MarketDetailOverlay-Mask-leave-to {
+  opacity: 0;
+}
+
+.MarketDetailOverlay-Card {
+  width: min(1180px, 96vw);
+  max-height: 80vh;
+  border-radius: 1.5rem;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.MarketDetailOverlay-Inner {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+}
+
+.MarketDetailOverlay-Body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1.2rem clamp(1rem, 3vw, 1.6rem) 1.5rem;
+}
+
+.MarketDetailPlugin {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.MarketDetailPlugin-Header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  border: 1px solid rgba(64, 96, 255, 0.18);
+  border-radius: 1rem;
+  padding: 1rem;
+  background: linear-gradient(160deg, rgba(122, 96, 255, 0.14), rgba(18, 22, 34, 0.02));
+}
+
+.MarketDetailPlugin-Icon {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(90, 102, 150, 0.2);
+  background: rgba(12, 18, 36, 0.06);
+}
+
+.MarketDetailPlugin-Content {
+  border: 1px solid rgba(64, 96, 255, 0.12);
+  border-radius: 1rem;
+  padding: 0.5rem 0.8rem 0.8rem;
+  background: rgba(10, 14, 24, 0.02);
+}
+
+@media (max-width: 720px) {
+  .MarketDetailPlugin-Header {
+    padding: 0.85rem;
+  }
+
+  .MarketDetailPlugin-Icon {
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 0.7rem;
+  }
+}
+
+@media (max-width: 720px) {
+  .MarketDetailOverlay-Card {
+    width: min(98vw, 98vw);
+    max-height: 94vh;
+    border-radius: 1rem;
+  }
+}
+</style>
