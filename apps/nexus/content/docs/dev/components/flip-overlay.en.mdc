@@ -26,10 +26,14 @@ code: |
 
   <template>
     <TxButton ref="triggerRef" @click="open = true">Open Overlay</TxButton>
-    <TxFlipOverlay v-model="open" :source="triggerRef?.$el">
+    <TxFlipOverlay
+      v-model="open"
+      :source="triggerRef?.$el"
+      header-title="Detail View"
+      header-desc="Built-in header supports title, description, and default round close button"
+    >
       <template #default="{ close }">
         <div style="padding: 32px;">
-          <h3 style="margin: 0 0 8px;">Detail View</h3>
           <p style="margin: 0 0 16px;">Content flips in from the trigger.</p>
           <TxButton size="sm" @click="close">Close</TxButton>
         </div>
@@ -43,8 +47,20 @@ code: |
 
 - `source` defines the animation origin; pass an `HTMLElement` or `DOMRect`.
 - Use `rotateX` / `rotateY` with `perspective` to control the 3D feel.
+- Header render priority:
+  1. `#header` fully overrides the built-in header.
+  2. Without `#header`, set `header=false` to hide header.
+  3. Without `#header` and with `header=true`, built-in header can be customized by `#header-display` / `#header-actions` / `#header-close`.
+- `closable=false` hides the entire close area (including `#header-close`).
+- The card uses a built-in `surface` background layer (`TxBaseSurface`) by default; tune it with `surface` / `surfaceColor` / `surfaceOpacity`.
+- `globalMask` controls the full-screen visual mask layer and is enabled by default.
+- Use `border` to switch card border style (`solid` / `dashed` / `none`, and `dash` works as an alias of `dashed`).
 - `randomTilt` adds subtle variation to each open.
-- Set `maskClosable=false` to close only via the slot `close()`.
+- Set `maskClosable=false` to disable closing on mask click.
+- When multiple overlays are open, backdrop rendering is unified into a single shared global mask layer positioned below all overlay cards; only the top overlay keeps the interactive click layer, and underlays remain non-interactive without covering lower card edges.
+- Stack displacement is enabled automatically only when adjacent overlays have similar size (`|delta| <= max(8px, previousSize * 5%)` for both width and height).
+- Layered displacement is capped at depth 3 (`-18/-36/-54px` with `0.95/0.90/0.85` scale), and deeper layers progressively fade (`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`).
+- Set `preventAccidentalClose=true` to enable safety mode: mask click is blocked, page-exit attempts (refresh/close) are intercepted, and blocked attempts flash a red warning glow around the card.
 - Coordinate UI changes with `open/opened/close/closed` events.
 
 ## API
@@ -65,8 +81,20 @@ code: |
 | `easeOut` | `string` | `'back.out(1.25)'` | Open easing |
 | `easeIn` | `string` | `'back.in(1)'` | Close easing |
 | `maskClosable` | `boolean` | `true` | Click mask to close |
+| `preventAccidentalClose` | `boolean` | `false` | Accidental-close protection (block mask close + intercept page exit + red warning glow) |
+| `globalMask` | `boolean` | `true` | Whether to render the global visual mask layer |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | Built-in card surface mode |
+| `surfaceColor` | `string` | `''` | Surface base color (theme overlay color by default) |
+| `surfaceOpacity` | `number` | `0.96` | Surface opacity (mask mode) |
+| `header` | `boolean` | `true` | Enable built-in header when no `#header` slot is provided |
+| `headerTitle` | `string` | `''` | Built-in header title |
+| `headerDesc` | `string` | `''` | Built-in header description |
+| `closable` | `boolean` | `true` | Show built-in round close button |
+| `closeAriaLabel` | `string` | `'Close'` | Built-in close button aria-label |
 | `maskClass` | `string` | `''` | Mask class |
 | `cardClass` | `string` | `''` | Card class |
+| `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | Card border style (`dash` aliases `dashed`) |
+| `scrollable` | `boolean` | `true` | Whether body area scrolls internally |
 
 ### Events
 
@@ -83,4 +111,8 @@ code: |
 
 | Slot | Params | Description |
 |------|--------|-------------|
-| `default` | `{ close, expanded, animating }` | Overlay content |
+| `default` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Overlay body content |
+| `header` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Full custom header (overrides built-in header system) |
+| `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom built-in title/description area |
+| `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom area left of close button |
+| `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom close area (hidden when `closable=false`) |
