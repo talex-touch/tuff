@@ -7,6 +7,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
+import Switch from '~/components/ui/Switch.vue'
 
 interface Props {
   isOpen: boolean
@@ -214,13 +215,6 @@ function setupFormObserver() {
   formResizeObserver.observe(formContentRef.value)
 }
 
-function handleOverlayClose(close?: () => void) {
-  if (close)
-    close()
-  else
-    emit('close')
-}
-
 watch(step, () => {
   scheduleLayoutMeasure()
 })
@@ -263,8 +257,10 @@ onBeforeUnmount(() => {
       transition-name="VersionOverlay-Mask"
       mask-class="VersionOverlay-Mask"
       card-class="VersionOverlay-Card"
+      :header-title="t('dashboard.sections.plugins.publishVersion')"
+      :header-desc="pluginName"
     >
-      <template #default="overlaySlot">
+      <template #default>
         <TxAutoSizer
           :width="true"
           :height="true"
@@ -273,20 +269,6 @@ onBeforeUnmount(() => {
           outer-class="VersionOverlay-SizerOuter"
         >
           <div class="VersionOverlay-Panel">
-            <div class="VersionOverlay-Header">
-              <div>
-                <h2 class="text-xl font-semibold text-black dark:text-white">
-                  {{ t('dashboard.sections.plugins.publishVersion') }}
-                </h2>
-                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ pluginName }}
-                </p>
-              </div>
-              <FlatButton @click="handleOverlayClose(overlaySlot?.close)">
-                <span class="i-carbon-close text-lg" />
-              </FlatButton>
-            </div>
-
             <div class="VersionOverlay-Stepper">
               <template v-for="(stepLabel, i) in ['Form', 'Review', 'License']" :key="stepLabel">
                 <div class="flex items-center gap-2">
@@ -467,25 +449,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .VersionOverlay-Panel {
-  width: min(760px, 94vw);
-  min-height: 320px;
-  max-height: min(90vh, 880px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 1.2rem;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color-overlay);
-  overflow: hidden;
-  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
-}
-
-.VersionOverlay-Header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .VersionOverlay-Stepper {
@@ -564,10 +532,6 @@ onBeforeUnmount(() => {
     width: min(96vw, 760px);
   }
 
-  .VersionOverlay-Header {
-    padding: 14px 14px 10px;
-  }
-
   .VersionOverlay-Stepper {
     justify-content: flex-start;
     overflow-x: auto;
@@ -610,6 +574,12 @@ onBeforeUnmount(() => {
 }
 
 .VersionOverlay-Card {
+  width: min(760px, 94vw);
+  min-height: 320px;
+  max-height: min(90vh, 880px);
+  border-radius: 1.2rem;
+  box-shadow: 0 22px 56px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
   position: fixed;
   left: 50%;
   top: 50%;

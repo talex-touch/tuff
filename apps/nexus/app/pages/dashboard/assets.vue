@@ -1,24 +1,20 @@
 <script setup lang="ts">
 import type { FileUploaderFile } from '@talex-touch/tuffex'
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
-import type { PendingReviewItem } from '~/components/dashboard/PendingReviewSection.vue'
-import type { ReviewItem } from '~/components/dashboard/ReviewModal.vue'
+import PluginMetadataOverlay from '~/components/dashboard/PluginMetadataOverlay.vue'
+import type { ReviewItem } from '~/components/dashboard/ReviewModalOverlay.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
 import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
-import PendingReviewSection from '~/components/dashboard/PendingReviewSection.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
-import PluginListItem from '~/components/dashboard/PluginListItem.vue'
-import ReviewModal from '~/components/dashboard/ReviewModal.vue'
-import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
-import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
-import Input from '~/components/ui/Input.vue'
-import Switch from '~/components/ui/Switch.vue'
+import ReviewOverlayDialog from '~/components/dashboard/ReviewModalOverlay.vue'
+import { TxButton, TxTooltip } from '@talex-touch/tuffex'
 import VersionDrawer from '~/components/VersionDrawer.vue'
 import { useDashboardPluginsData } from '~/composables/useDashboardData'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
+
+type PendingReviewItem = ReviewItem
 
 interface VersionFormState {
   pluginId: string
@@ -83,9 +79,19 @@ const currentUserId = computed(() => user.value?.id ?? null)
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const numberFormatter = computed(() => new Intl.NumberFormat(localeTag.value))
 const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { dateStyle: 'medium' }))
+const isZh = computed(() => locale.value.startsWith('zh'))
 
 function formatInstalls(count: number) {
   return numberFormatter.value.format(count)
+}
+
+function formatDate(value?: string | null) {
+  if (!value)
+    return '—'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime()))
+    return value
+  return dateFormatter.value.format(parsed)
 }
 
 const pluginCategoryOptions = computed(() =>
@@ -101,6 +107,43 @@ const pluginCategoryLabels = computed<Record<string, string>>(() =>
 
 function resolvePluginCategory(category: string) {
   return pluginCategoryLabels.value[category] ?? category
+}
+
+function resolveArtifactTypeLabel(type: DashboardPlugin['artifactType']) {
+  const artifactType = type ?? 'plugin'
+  return t(`dashboard.sections.plugins.form.artifactTypes.${artifactType}`, artifactType)
+}
+
+function resolvePluginStatusClass(status: DashboardPlugin['status']) {
+  if (status === 'approved')
+    return 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-300'
+  if (status === 'pending')
+    return 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'
+  if (status === 'rejected')
+    return 'bg-rose-500/12 text-rose-600 dark:bg-rose-500/20 dark:text-rose-300'
+  return 'bg-black/8 text-black/60 dark:bg-white/10 dark:text-white/60'
+}
+
+function hasPluginPendingReview(plugin: DashboardPlugin) {
+  if (plugin.hasPendingReview)
+    return true
+  if ((plugin.pendingReviewCount ?? 0) > 0)
+    return true
+  if (plugin.status === 'pending')
+    return true
+  if (pluginsWithPendingReview.value.has(plugin.id))
+    return true
+  return plugin.versions?.some(version => version.status === 'pending') ?? false
+}
+
+function resolveChannelClass(channel?: DashboardPluginVersion['channel']) {
+  if (channel === 'RELEASE')
+    return 'bg-primary/12 text-primary'
+  if (channel === 'BETA')
+    return 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/20 dark:text-amber-300'
+  if (channel === 'SNAPSHOT')
+    return 'bg-black/8 text-black/60 dark:bg-white/10 dark:text-white/60'
+  return 'bg-black/8 text-black/55 dark:bg-white/10 dark:text-white/55'
 }
 
 const PLUGIN_IDENTIFIER_PATTERN = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)+$/
@@ -201,6 +244,7 @@ function createPluginFormState(): PluginFormState {
 
 const pluginForm = reactive(createPluginFormState())
 const showPluginForm = ref(false)
+const pluginFormOverlaySource = ref<HTMLElement | null>(null)
 const showAssetCreateOverlay = ref(false)
 const assetCreateOverlaySource = ref<HTMLElement | null>(null)
 const pluginFormMode = ref<'create' | 'edit'>('create')
@@ -225,12 +269,47 @@ const pluginPackageFileName = ref<string | null>(null)
 const pluginIconFiles = ref<FileUploaderFile[]>([])
 const pluginPackageFiles = ref<FileUploaderFile[]>([])
 
+const pluginFormVisibleModel = computed({
+  get: () => showPluginForm.value,
+  set: (nextVisible) => {
+    if (!nextVisible)
+      closePluginForm()
+    else
+      showPluginForm.value = true
+  },
+})
+
 // New UI state for refactored plugin list
 const selectedPlugin = ref<DashboardPlugin | null>(null)
 const showDetailDrawer = ref(false)
+const detailOverlaySource = ref<HTMLElement | null>(null)
 const showReviewModal = ref(false)
 const reviewItem = ref<ReviewItem | null>(null)
+const reviewOverlaySource = ref<HTMLElement | null>(null)
 const reviewLoading = ref(false)
+
+function resolvePendingReviewUpdatedAt(item: PendingReviewItem) {
+  if (item.type === 'version' && item.version)
+    return item.version.updatedAt ?? item.version.createdAt
+  return item.plugin.updatedAt
+}
+
+function resolvePendingReviewTimestamp(item: PendingReviewItem) {
+  const parsed = new Date(resolvePendingReviewUpdatedAt(item)).getTime()
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+function resolvePendingReviewKey(item: PendingReviewItem) {
+  if (item.type === 'version' && item.version)
+    return `version-${item.version.id}`
+  return `plugin-${item.plugin.id}`
+}
+
+function resolvePendingReviewType(item: PendingReviewItem) {
+  return item.type === 'plugin'
+    ? t('dashboard.sections.plugins.reviewPlugin')
+    : t('dashboard.sections.plugins.reviewVersion')
+}
 
 // Computed: pending review items for admin
 const pendingReviewItems = computed<PendingReviewItem[]>(() => {
@@ -250,8 +329,12 @@ const pendingReviewItems = computed<PendingReviewItem[]>(() => {
       .forEach(v => items.push({ type: 'version', plugin: p, version: v }))
   })
 
-  return items
+  return items.sort((a, b) => resolvePendingReviewTimestamp(b) - resolvePendingReviewTimestamp(a))
 })
+
+const pluginsWithPendingReview = computed(() =>
+  new Set(pendingReviewItems.value.map(item => item.plugin.id)),
+)
 
 // Computed: my plugins (owned by current user)
 const myPlugins = computed(() =>
@@ -269,24 +352,32 @@ const pluginsLoadErrorMessage = computed(() => {
   return error instanceof Error ? error.message : t('dashboard.sections.plugins.errors.unknown')
 })
 
-function openPluginDetail(plugin: DashboardPlugin) {
+function openPluginDetail(plugin: DashboardPlugin, event?: MouseEvent) {
   selectedPlugin.value = plugin
+  detailOverlaySource.value = event?.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : null
   showDetailDrawer.value = true
 }
 
 function closePluginDetail() {
   showDetailDrawer.value = false
   selectedPlugin.value = null
+  detailOverlaySource.value = null
 }
 
-function openReviewModal(item: PendingReviewItem) {
+function openReviewModal(item: PendingReviewItem, event?: MouseEvent) {
   reviewItem.value = item as ReviewItem
+  reviewOverlaySource.value = event?.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : null
   showReviewModal.value = true
 }
 
 function closeReviewModal() {
   showReviewModal.value = false
   reviewItem.value = null
+  reviewOverlaySource.value = null
 }
 
 async function handleReviewApprove(item: ReviewItem) {
@@ -321,8 +412,10 @@ async function handleReviewReject(item: ReviewItem, _reason: string) {
   }
 }
 
-function handleDetailEdit(plugin: DashboardPlugin) {
-  closePluginDetail()
+function handleDetailEdit(plugin: DashboardPlugin, event?: MouseEvent) {
+  pluginFormOverlaySource.value = event?.currentTarget instanceof HTMLElement
+    ? event.currentTarget
+    : detailOverlaySource.value
   openEditPluginForm(plugin)
 }
 
@@ -520,7 +613,17 @@ function openEditPluginForm(plugin: DashboardPlugin) {
   })
   editingPluginInstalls.value = plugin.installs
   editingPluginHasIcon.value = Boolean(plugin.iconUrl)
+  if (!pluginFormOverlaySource.value)
+    pluginFormOverlaySource.value = detailOverlaySource.value
   showPluginForm.value = true
+}
+
+function handlePluginIconFilesUpdate(files: FileUploaderFile[]) {
+  pluginIconFiles.value = files
+}
+
+function handlePluginPackageFilesUpdate(files: FileUploaderFile[]) {
+  pluginPackageFiles.value = files
 }
 
 function handlePluginIconChange(files: FileUploaderFile[]) {
@@ -640,6 +743,7 @@ function rejectVersion(plugin: DashboardPlugin, version: DashboardPluginVersion)
 
 function closePluginForm() {
   showPluginForm.value = false
+  pluginFormOverlaySource.value = null
   resetPluginForm()
 }
 
@@ -859,26 +963,115 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-3">
-      <NuxtLink
-        to="/market"
-        class="inline-flex items-center gap-2 rounded-full border border-black/10 px-4 py-2 text-sm font-medium text-black/70 transition hover:border-black/20 hover:text-black dark:border-white/10 dark:text-white/70 dark:hover:border-white/20 dark:hover:text-white"
-      >
-        <span class="i-carbon-explore" />
-        {{ t('dashboard.sections.plugins.cta') }}
-      </NuxtLink>
-      <TxButton type="primary" size="small" @click="openCreatePluginForm($event)">
-        <span class="i-carbon-add" />
-        {{ t('dashboard.sections.plugins.addButton') }}
-      </TxButton>
-    </div>
-
     <!-- Admin: Pending Reviews -->
-    <PendingReviewSection
-      v-if="isAdmin"
-      :items="pendingReviewItems"
-      @review="openReviewModal"
-    />
+    <div v-if="isAdmin" class="apple-card-lg p-6">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+        <div>
+          <h3 class="apple-section-title">
+            {{ t('dashboard.sections.plugins.pendingReviews') }}
+            <span class="ml-1 text-black/40 dark:text-white/40">({{ pendingReviewItems.length }})</span>
+          </h3>
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+            {{ isZh ? '在表格里处理待审核发布物，点击 Review 打开审核弹窗。' : 'Handle pending submissions in-table and open the review overlay from each row.' }}
+          </p>
+        </div>
+      </div>
+
+      <div v-if="pendingReviewItems.length" class="overflow-x-auto rounded-2xl border border-black/[0.04] dark:border-white/[0.06]">
+        <table class="w-full min-w-[860px]">
+          <thead class="bg-black/[0.03] dark:bg-white/[0.03]">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                {{ isZh ? '发布物' : 'Asset' }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                {{ isZh ? '审核类型' : 'Review Type' }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                {{ isZh ? '提交信息' : 'Submission' }}
+              </th>
+              <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                {{ isZh ? '更新时间' : 'Updated' }}
+              </th>
+              <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                {{ isZh ? '操作' : 'Actions' }}
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+            <tr
+              v-for="item in pendingReviewItems"
+              :key="resolvePendingReviewKey(item)"
+              class="cursor-pointer transition hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"
+              @click="openReviewModal(item, $event)"
+            >
+              <td class="px-4 py-3">
+                <div class="flex items-center gap-3">
+                  <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
+                    <img
+                      v-if="item.plugin.iconUrl"
+                      :src="item.plugin.iconUrl"
+                      :alt="item.plugin.name"
+                      class="size-full object-cover"
+                    >
+                    <span v-else class="text-sm font-semibold text-black/50 dark:text-white/50">
+                      {{ item.plugin.name.charAt(0).toUpperCase() }}
+                    </span>
+                  </div>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-medium text-black dark:text-white">
+                      {{ item.plugin.name }}
+                    </p>
+                    <p class="line-clamp-1 text-xs text-black/50 dark:text-white/50">
+                      {{ item.plugin.summary || item.plugin.slug }}
+                    </p>
+                  </div>
+                </div>
+              </td>
+              <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
+                <p>{{ resolvePendingReviewType(item) }}</p>
+                <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
+                  {{ resolvePluginCategory(item.plugin.category) }}
+                </p>
+              </td>
+              <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
+                <template v-if="item.type === 'version' && item.version">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="resolveChannelClass(item.version.channel)">
+                      {{ `v${item.version.version}` }}
+                    </span>
+                    <span class="inline-flex rounded-full bg-black/8 px-2 py-1 text-xs font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                      {{ item.version.channel }}
+                    </span>
+                  </div>
+                </template>
+                <template v-else>
+                  <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium" :class="resolvePluginStatusClass(item.plugin.status)">
+                    {{ t(`dashboard.sections.plugins.statuses.${item.plugin.status}`) }}
+                  </span>
+                </template>
+              </td>
+              <td class="px-4 py-3 text-sm text-black/55 dark:text-white/55">
+                {{ formatDate(resolvePendingReviewUpdatedAt(item)) }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <TxButton
+                  variant="secondary"
+                  size="mini"
+                  native-type="button"
+                  @click.stop="openReviewModal(item, $event)"
+                >
+                  {{ t('dashboard.sections.plugins.viewDetails') }}
+                </TxButton>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-else class="py-6 text-center text-sm text-black/45 dark:text-white/45">
+        {{ t('dashboard.sections.reviews.empty', 'No pending reviews yet.') }}
+      </div>
+    </div>
 
     <!-- Error Messages -->
     <div v-if="pluginActionError || versionActionError" class="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-500/30 dark:bg-rose-500/10">
@@ -892,227 +1085,54 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 
     <!-- My Plugins Section -->
     <div class="apple-card-lg p-6">
-      <div class="mb-4 flex items-center justify-between">
-        <h3 class="apple-section-title">
-          {{ t('dashboard.sections.plugins.myPlugins') }}
-          <span class="ml-1 text-black/40 dark:text-white/40">({{ myPlugins.length }})</span>
-        </h3>
-      </div>
-
-      <form
-        v-if="showPluginForm"
-        class="mt-4 space-y-4"
-        @submit.prevent="submitPluginForm"
-      >
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
-            {{ t('dashboard.sections.plugins.form.identifier') }}
-            <Input
-              v-model="pluginForm.slug"
-              :disabled="pluginFormMode === 'edit'"
-              placeholder="com.example.plugin"
-              required
-            />
-            <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
-              {{ t('dashboard.sections.plugins.form.identifierHelp') }}
-            </span>
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.form.name') }}
-            <Input v-model="pluginForm.name" required />
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.form.category') }}
-            <TuffSelect v-model="pluginForm.category" class="w-full">
-              <TuffSelectItem
-                v-for="category in pluginCategoryOptions"
-                :key="category.id"
-                :value="category.id"
-                :label="category.label"
-              />
-            </TuffSelect>
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
-            {{ t('dashboard.sections.plugins.form.summary') }}
-            <Input v-model="pluginForm.summary" type="textarea" :rows="3" required />
-          </label>
-          <div class="flex flex-col gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            <span>{{ t('dashboard.sections.plugins.form.icon') }}</span>
-            <div class="flex items-center gap-3">
-              <div class="flex size-16 items-center justify-center overflow-hidden rounded-2xl border border-primary/15 bg-dark/5 text-lg font-semibold text-black dark:border-light/20 dark:bg-light/5 dark:text-light">
-                <img
-                  v-if="pluginForm.iconPreviewUrl"
-                  :src="pluginForm.iconPreviewUrl"
-                  alt="Plugin icon preview"
-                  class="h-full w-full object-cover"
-                >
-                <span v-else>{{ pluginForm.name ? pluginForm.name.charAt(0).toUpperCase() : '∗' }}</span>
-              </div>
-              <div class="flex flex-col gap-2 text-[11px] font-medium normal-case text-black/60 dark:text-light/60">
-                <label class="flex items-center gap-2">
-                  <TxFileUploader
-                    v-model="pluginIconFiles"
-                    :multiple="false"
-                    :max="1"
-                    accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
-                    :button-text="t('dashboard.sections.plugins.form.icon')"
-                    :drop-text="t('dashboard.sections.plugins.form.iconHelp')"
-                    :hint-text="t('dashboard.sections.plugins.form.iconHelp')"
-                    @change="handlePluginIconChange"
-                  />
-                </label>
-                <FlatButton
-                  v-if="pluginFormMode === 'edit' && (pluginForm.iconPreviewUrl || editingPluginHasIcon)"
-                  class="text-[11px] font-semibold uppercase tracking-wide"
-                  @click="removePluginIconPreview"
-                >
-                  <span class="i-carbon-trash-can text-xs" />
-                  {{ t('dashboard.sections.plugins.form.iconRemove') }}
-                </FlatButton>
-                <p class="max-w-xs leading-relaxed">
-                  {{ t('dashboard.sections.plugins.form.iconHelp') }}
-                </p>
-              </div>
-            </div>
-          </div>
-          <label
-            v-if="pluginFormMode === 'create'"
-            class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2"
-          >
-            {{ t('dashboard.sections.plugins.form.packageUpload') }}
-            <TxFileUploader
-              v-model="pluginPackageFiles"
-              :multiple="false"
-              :max="1"
-              accept=".tpex"
-              :button-text="t('dashboard.sections.plugins.form.packageUpload')"
-              :drop-text="t('dashboard.sections.plugins.packageAwaiting')"
-              :hint-text="t('dashboard.sections.plugins.form.packageHelp')"
-              @change="handlePluginPackageChange"
-            />
-            <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
-              {{ t('dashboard.sections.plugins.form.packageHelp') }}
-            </span>
-            <span
-              v-if="pluginPackageFileName"
-              class="text-[11px] font-medium normal-case text-black/60 dark:text-light/60"
-            >
-              {{ pluginPackageFileName }}
-            </span>
-          </label>
-          <div
-            v-if="pluginFormMode === 'create'"
-            class="md:col-span-2 rounded-2xl border border-primary/10 bg-dark/5 p-4 text-xs text-black/70 dark:border-light/20 dark:bg-light/10 dark:text-light/70"
-          >
-            <p class="font-semibold uppercase tracking-wide">
-              {{ t('dashboard.sections.plugins.manifestPreview') }}
-            </p>
-            <p class="mt-1 text-[11px]">
-              {{ t('dashboard.sections.plugins.readmePreviewServer') }}
-            </p>
-            <p v-if="pluginPackageLoading" class="mt-2 text-[11px]">
-              {{ t('dashboard.sections.plugins.previewLoading') }}
-            </p>
-            <p v-else-if="pluginPackageError" class="mt-2 text-[11px] text-red-500">
-              {{ pluginPackageError }}
-            </p>
-            <template v-else>
-              <div v-if="pluginManifestPreview" class="mt-3 space-y-2 text-[11px] leading-relaxed">
-                <p v-if="pluginManifestPreview.id">
-                  <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.id') }}:</span>
-                  {{ pluginManifestPreview.id }}
-                </p>
-                <p v-if="pluginManifestPreview.name">
-                  <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.name') }}:</span>
-                  {{ pluginManifestPreview.name }}
-                </p>
-                <p v-if="pluginManifestPreview.version">
-                  <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.version') }}:</span>
-                  {{ pluginManifestPreview.version }}
-                </p>
-                <p v-if="pluginManifestPreview.description">
-                  <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.description') }}:</span>
-                  {{ pluginManifestPreview.description }}
-                </p>
-                <p v-if="pluginManifestPreview.homepage">
-                  <span class="font-semibold">{{ t('dashboard.sections.plugins.previewFields.homepage') }}:</span>
-                  {{ pluginManifestPreview.homepage }}
-                </p>
-                <details class="group rounded-lg border border-primary/10 bg-white/50 p-2 text-black dark:border-light/20 dark:bg-dark/40 dark:text-light">
-                  <summary class="cursor-pointer select-none text-[11px] font-semibold uppercase tracking-wide text-black/70 transition group-open:text-black dark:text-light/70 dark:group-open:text-light">
-                    {{ t('dashboard.sections.plugins.manifestRaw') }}
-                  </summary>
-                  <pre class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-black/5 p-2 font-mono text-[10px] text-black dark:bg-white/10 dark:text-light">
-                    {{ JSON.stringify(pluginManifestPreview, null, 2) }}
-                  </pre>
-                </details>
-              </div>
-              <p v-else-if="pluginPackageFileName" class="mt-3 text-[11px]">
-                {{ t('dashboard.sections.plugins.noManifest') }}
-              </p>
-              <p v-else class="mt-3 text-[11px] text-black/50 dark:text-light/60">
-                {{ t('dashboard.sections.plugins.packageAwaiting') }}
-              </p>
-              <div class="mt-4 border-t border-primary/10 pt-3 dark:border-light/20">
-                <p class="font-semibold uppercase tracking-wide">
-                  {{ t('dashboard.sections.plugins.readmePreview') }}
-                </p>
-                <div v-if="pluginReadmePreview" class="prose prose-sm mt-2 max-w-none dark:prose-invert">
-                  <MDC :value="pluginReadmePreview" />
-                </div>
-                <p v-else-if="pluginPackageFileName" class="mt-2 text-[11px]">
-                  {{ t('dashboard.sections.plugins.noReadme') }}
-                </p>
-                <p v-else class="mt-2 text-[11px] text-black/50 dark:text-light/60">
-                  {{ t('dashboard.sections.plugins.packageAwaiting') }}
-                </p>
-              </div>
-            </template>
-          </div>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60">
-            {{ t('dashboard.sections.plugins.form.homepage') }}
-            <Input v-model="pluginForm.homepage" placeholder="https://github.com/..." />
-          </label>
-          <div
-            v-if="pluginFormMode === 'edit'"
-            class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60"
-          >
-            {{ t('dashboard.sections.plugins.form.installCount') }}
-            <div class="rounded-xl border border-primary/15 bg-white/70 px-3 py-2 text-sm text-black dark:border-light/20 dark:bg-dark/40 dark:text-light">
-              {{ formatInstalls(editingPluginInstalls ?? 0) }}
-            </div>
-          </div>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
-            {{ t('dashboard.sections.plugins.form.badges') }}
-            <Input v-model="pluginForm.badges" placeholder="featured, stable" />
-          </label>
-          <label
-            v-if="isAdmin"
-            class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60"
-          >
-            <Switch v-model="pluginForm.isOfficial" />
-            {{ t('dashboard.sections.plugins.form.isOfficial') }}
-          </label>
-          <label class="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-black/60 dark:text-light/60 md:col-span-2">
-            {{ t('dashboard.sections.plugins.form.readme') }}
-            <Input v-model="pluginForm.readme" type="textarea" :rows="8" required />
-            <span class="text-[11px] font-medium normal-case text-black/40 dark:text-light/50">
-              {{ t('dashboard.sections.plugins.form.readmeHelp') }}
-            </span>
-          </label>
-        </div>
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <p
-            v-if="pluginFormError"
-            class="text-xs text-red-500"
-          >
-            {{ pluginFormError }}
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-black/[0.04] pb-4 dark:border-white/[0.06]">
+        <div>
+          <h3 class="apple-section-title">
+            {{ t('dashboard.sections.plugins.myPlugins') }}
+            <span class="ml-1 text-black/40 dark:text-white/40">({{ myPlugins.length }})</span>
+          </h3>
+          <p class="mt-1 text-xs text-black/45 dark:text-white/45">
+            {{ isZh ? '统一管理发布物元数据、版本与审核状态。' : 'Manage asset metadata, versions, and review states in one table.' }}
           </p>
-          <TxButton native-type="submit" :loading="pluginSaving">
-            {{ pluginFormMode === 'create' ? t('dashboard.sections.plugins.createSubmit') : t('dashboard.sections.plugins.updateSubmit') }}
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <TxButton variant="secondary" size="small" :loading="pluginsPending" @click="refreshPlugins()">
+            <span class="i-carbon-renew text-sm" />
+            {{ t('common.refresh', '刷新') }}
+          </TxButton>
+          <TxButton type="primary" size="small" @click="openCreatePluginForm($event)">
+            <span class="i-carbon-add text-sm" />
+            {{ t('dashboard.sections.plugins.addButton') }}
           </TxButton>
         </div>
-      </form>
+      </div>
+
+      <PluginMetadataOverlay
+        v-model="pluginFormVisibleModel"
+        :source="pluginFormOverlaySource"
+        :mode="pluginFormMode"
+        :form-state="pluginForm"
+        :category-options="pluginCategoryOptions"
+        :is-admin="isAdmin"
+        :editing-plugin-install-text="formatInstalls(editingPluginInstalls ?? 0)"
+        :editing-plugin-has-icon="editingPluginHasIcon"
+        :plugin-package-loading="pluginPackageLoading"
+        :plugin-package-error="pluginPackageError"
+        :plugin-manifest-preview="pluginManifestPreview"
+        :plugin-readme-preview="pluginReadmePreview"
+        :plugin-package-file-name="pluginPackageFileName"
+        :plugin-icon-files="pluginIconFiles"
+        :plugin-package-files="pluginPackageFiles"
+        :saving="pluginSaving"
+        :error="pluginFormError"
+        :plugin-name-fallback="selectedPlugin?.name || null"
+        @update:plugin-icon-files="handlePluginIconFilesUpdate"
+        @update:plugin-package-files="handlePluginPackageFilesUpdate"
+        @icon-change="handlePluginIconChange"
+        @package-change="handlePluginPackageChange"
+        @remove-icon="removePluginIconPreview"
+        @submit="submitPluginForm"
+      />
 
       <!-- Plugin List -->
       <div v-if="pluginsInitialLoading" class="space-y-3 py-6 text-sm text-black/50 dark:text-white/50">
@@ -1147,13 +1167,132 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
           <TxSpinner :size="14" />
           {{ t('common.refresh', '刷新') }}...
         </div>
-        <PluginListItem
-          v-for="plugin in myPlugins"
-          :key="plugin.id"
-          :plugin="plugin"
-          :category-label="resolvePluginCategory(plugin.category)"
-          @click="openPluginDetail"
-        />
+        <div class="overflow-x-auto rounded-2xl border border-black/[0.04] dark:border-white/[0.06]">
+          <table class="w-full min-w-[980px]">
+            <thead class="bg-black/[0.03] dark:bg-white/[0.03]">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '发布物' : 'Asset' }}
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '类型 / 分类' : 'Type / Category' }}
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '状态' : 'Status' }}
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '最新版本' : 'Latest Version' }}
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '安装量' : 'Installs' }}
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '更新时间' : 'Updated' }}
+                </th>
+                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wide text-black/55 dark:text-white/55">
+                  {{ isZh ? '操作' : 'Actions' }}
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
+              <tr
+                v-for="plugin in myPlugins"
+                :key="plugin.id"
+                class="cursor-pointer transition hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"
+                @click="openPluginDetail(plugin, $event)"
+              >
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-3">
+                    <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
+                      <img
+                        v-if="plugin.iconUrl"
+                        :src="plugin.iconUrl"
+                        :alt="plugin.name"
+                        class="size-full object-cover"
+                      >
+                      <span v-else class="text-sm font-semibold text-black/50 dark:text-white/50">
+                        {{ plugin.name.charAt(0).toUpperCase() }}
+                      </span>
+                    </div>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <p class="truncate text-sm font-medium text-black dark:text-white">
+                          {{ plugin.name }}
+                        </p>
+                        <span
+                          v-if="plugin.isOfficial"
+                          class="i-carbon-certificate shrink-0 text-amber-500"
+                          :title="t('dashboard.sections.plugins.officialBadge')"
+                        />
+                      </div>
+                      <p class="line-clamp-1 text-xs text-black/50 dark:text-white/50">
+                        {{ plugin.summary || plugin.slug }}
+                      </p>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
+                  <p>{{ resolveArtifactTypeLabel(plugin.artifactType) }}</p>
+                  <p class="mt-0.5 text-xs text-black/45 dark:text-white/45">
+                    {{ resolvePluginCategory(plugin.category) }}
+                  </p>
+                </td>
+                <td class="px-4 py-3">
+                  <TxTooltip
+                    :content="t('dashboard.sections.plugins.reviewingHint')"
+                    :disabled="!hasPluginPendingReview(plugin)"
+                    :open-delay="0"
+                    :close-delay="0"
+                    :anchor="{ placement: 'top', showArrow: true }"
+                  >
+                    <span
+                      class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                      :class="resolvePluginStatusClass(plugin.status)"
+                      :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
+                    >
+                      {{ t(`dashboard.sections.plugins.statuses.${plugin.status}`) }}
+                    </span>
+                  </TxTooltip>
+                </td>
+                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
+                  <TxTooltip
+                    v-if="plugin.latestVersion"
+                    :content="t('dashboard.sections.plugins.reviewingHint')"
+                    :disabled="!hasPluginPendingReview(plugin)"
+                    :open-delay="0"
+                    :close-delay="0"
+                    :anchor="{ placement: 'top', showArrow: true }"
+                  >
+                    <span
+                      class="inline-flex rounded-full px-2 py-1 text-xs font-medium"
+                      :class="resolveChannelClass(plugin.latestVersion.channel)"
+                      :title="hasPluginPendingReview(plugin) ? t('dashboard.sections.plugins.reviewingHint') : undefined"
+                    >
+                      {{ `v${plugin.latestVersion.version}` }}
+                    </span>
+                  </TxTooltip>
+                  <span v-else class="text-xs text-black/35 dark:text-white/35">—</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
+                  {{ formatInstalls(plugin.installs) }}
+                </td>
+                <td class="px-4 py-3 text-sm text-black/55 dark:text-white/55">
+                  {{ formatDate(plugin.updatedAt) }}
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <TxButton
+                    variant="secondary"
+                    size="mini"
+                    native-type="button"
+                    @click.stop="openPluginDetail(plugin, $event)"
+                  >
+                    {{ isZh ? '详情' : 'Details' }}
+                  </TxButton>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1179,6 +1318,7 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
 
     <PluginDetailDrawer
       :is-open="showDetailDrawer"
+      :source="detailOverlaySource"
       :plugin="selectedPlugin"
       :category-label="selectedPlugin ? resolvePluginCategory(selectedPlugin.category) : ''"
       :is-owner="selectedPlugin ? isPluginOwner(selectedPlugin) : false"
@@ -1193,8 +1333,9 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
       @delete-version="handleDetailDeleteVersion"
     />
 
-    <ReviewModal
+    <ReviewOverlayDialog
       :is-open="showReviewModal"
+      :source="reviewOverlaySource"
       :item="reviewItem"
       :category-label="reviewItem?.plugin ? resolvePluginCategory(reviewItem.plugin.category) : ''"
       :loading="reviewLoading"

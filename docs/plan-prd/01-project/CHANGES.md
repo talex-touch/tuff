@@ -4,6 +4,223 @@
 
 ## 2026-02-25
 
+### Store 命名硬切换（CoreApp + Nexus + Utils）
+
+**变更类型**: Breaking Change / 协议与路由统一 / 数据迁移
+
+**描述**: 插件与 Agent 的 `market` 体系执行无兼容硬切换为 `store`。`packages/utils`、`apps/core-app`、`apps/nexus` 的事件、SDK、路由、API 与页面路径统一改名；CoreApp 插件商店详情在市场页改为 `TxFlipOverlay` 展示。旧 `market` 命名仅保留在一次性迁移来源常量（历史表名/KV key）中用于数据复制，迁移后仅读写 `store` 命名。
+
+**主要变更**:
+1. **协议域统一**：插件与 Agent 事件域统一改为 `store` 命名（旧 `market` 命名空间已移除）。
+2. **路由与页面统一**：CoreApp 与 Nexus 统一 `/store*`，移除 `/market*`。
+3. **CoreApp 交互改造**：`/store` 详情改为 `TxFlipOverlay`，支持 source-aware FLIP；`/store/installed` 维持原展示方式。
+4. **Nexus API 硬切换**：插件与审核接口统一切换到 `/api/store/*` 与 `/api/admin/store/reviews/*`。
+5. **一次性数据迁移**：评分/评论表与 KV key 从 legacy `market` 命名迁移到 `store` 命名，仅在新命名无数据且旧命名有数据时执行复制（幂等）。
+6. **文档全量同步**：`docs` 与 `apps/nexus/content` 的产品域术语、事件与路径完成 `market -> store` 全量替换（保留第三方固定链接语义）。
+
+**修改文件（核心）**:
+- `packages/utils/store/*`
+- `packages/utils/transport/events/types/store.ts`
+- `packages/utils/transport/sdk/domains/store.ts`
+- `packages/utils/transport/sdk/domains/agents-store.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreDetailOverlay.vue`
+- `apps/core-app/src/main/service/store-api.service.ts`
+- `apps/core-app/src/main/service/agent-store.service.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/app/layouts/store.vue`
+- `apps/nexus/server/api/store/*`
+- `apps/nexus/server/api/admin/store/reviews/*`
+- `apps/nexus/server/utils/pluginRatingStore.ts`
+- `apps/nexus/server/utils/pluginReviewStore.ts`
+
+### FlipOverlay 关闭按钮内置化（业务页收敛）
+
+**变更类型**: 交互一致性优化 / 组件用法收敛
+
+**描述**: 清理业务页面中 `TxFlipOverlay` 场景的手写 close 按钮，统一回收为组件内置 close 入口，并将部分弹层标题/说明迁移到内置 header 配置，降低调用侧重复实现。
+
+**主要变更**:
+1. **关闭入口统一**：移除多个 overlay 里的手写 `CloseBtn`/`i-carbon-close` 按钮，改为 `TxFlipOverlay` 内置 close。
+2. **header 配置收敛**：在可复用场景切换为 `header-title/header-desc/header-actions`，减少调用侧自管头部结构。
+3. **复杂头部保留策略**：对仍需保留业务操作区（如刷新、筛选、步骤导航）的弹层，仅去除手写 close，保持原交互不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-agent.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复: Assets 列表状态悬浮提示审核中
+
+**变更类型**: 交互细节优化 / Bug 修复
+
+**描述**: 在 Dashboard Assets「我的发布物」表格中，当发布物存在待审核项（插件本身待审核或任一版本待审核）时，状态徽标悬浮提示“正在审核中”，避免仅显示“已通过”造成误解。
+
+**主要变更**:
+1. **待审核判定补齐**：新增 `hasPluginPendingReview`，并由后端透出 `hasPendingReview/pendingReviewCount`，统一判定插件与版本层面的 pending 状态。
+2. **状态悬浮提示**：状态徽标与最新版本徽标均改为 `TxTooltip` 提示，在命中待审核项时 hover 显示“正在审核中”。
+3. **i18n 文案补齐**：新增 `dashboard.sections.plugins.reviewingHint` 中英文文案。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence Agent 一次切换（LangGraph + Prompt Registry）
+
+**变更类型**: 架构切换 / Breaking API / 配置治理
+
+**描述**: Intelligence 编排统一切换到 `agent` 命名空间，Core IPC 与 Nexus Admin API 同步改为 `intelligence-agent` 路径；Prompt 从 capability 内嵌模板迁移到独立 Prompt Registry（record + binding）并在 Core(SQLite) / Nexus(D1) 对齐 schema。旧 `intelligence-lab` 路由统一返回 `410`。
+
+**主要变更**:
+1. **Core IPC 命名收敛**：新增并启用 `intelligence:agent:session:{start,heartbeat,pause,recoverable,resume,cancel,get-state,stream,history,trace}` 与 `tool:approve`/`session:trace:export`。
+2. **Nexus API 切换**：新增 `/api/admin/intelligence-agent/*`，页面调用全部切换；旧 `/api/admin/intelligence-lab/*` 入口停用。
+3. **Prompt Registry 落库**：Core `aisdk-config` 增加 `promptRegistry/promptBindings`；Nexus D1 新增 `intelligence_prompt_registry` 与 `intelligence_prompt_bindings` 表，并提供解析能力。
+4. **审批与风险门控**：保持 `high/critical` 必审；V1 工具集移除高风险写工具示例，仅保留读为主 + 低风险偏好写。
+5. **Trace 契约升级**：会话流事件 `contractVersion` 升级到 `3`，统一 session 维度查询链路。
+6. **收口补齐（1+2）**：`/api/admin/intelligence-agent/orchestrator/{plan,execute,reflect}` 统一下线为 `410`（引导到 `/session/stream`）；Dashboard 管理页路由与导航语义统一为 `/dashboard/admin/intelligence-agent`，旧 `/dashboard/admin/intelligence-lab` 页面同样返回 `410`（不再跳转）。
+
+### TxFlipOverlay 多实例叠层升级（单层 Mask + 稳态位移）
+
+**变更类型**: 组件能力增强 / 交互一致性优化
+
+**描述**: `TxFlipOverlay` 新增多实例堆叠行为：连续打开多个 overlay 时使用单例全局遮罩层（位于所有卡片下方）+ 顶层交互层；尺寸匹配时自动触发旧层上移收缩；超出 3 层后按层级渐隐直至隐藏。新增 Nexus 独立测试页用于手工验证叠层表现。
+
+**主要变更**:
+1. **单层遮罩策略**：引入组件内部 stack registry + 单例全局遮罩层，遮罩始终下沉到所有 overlay 卡片层之下；仅顶层保留可交互点击层，下层交互层禁用交互，不再遮挡下层卡片露边。
+2. **尺寸匹配叠层判定**：相邻层宽高分别满足 `|delta| <= max(8px, 上一层尺寸 * 5%)` 时，触发稳态叠层位移。
+3. **递进位移与缩放**：匹配链路下层按深度应用 `-18/-36/-54px` 位移与 `0.95/0.90/0.85` 缩放，形成“旧层收缩、新层展开”效果。
+4. **超层渐隐收敛**：深度超过 3 层后按透明度表递减（`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`），最旧层自动隐藏。
+5. **测试与验证页补齐**：新增 flip-overlay 多实例单测覆盖 mask owner、尺寸匹配/不匹配、超层隐藏和 body lock 计数；新增 `/test/flip-overlay-stack` 页面用于可视化回归验证。
+6. **文档同步**：同步 Tuffex/Nexus 中英文组件文档，补充多实例叠层规则与判定标准说明。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `apps/nexus/app/pages/test/flip-overlay-stack.vue`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Assets Review 改为表格入口并使用 FlipOverlay 弹窗
+
+**变更类型**: 交互优化 / 审核流可视化
+
+**描述**: 将 Dashboard Assets 页顶部的待审核卡片列表改为表格结构，审核入口收敛为行内 `Review` 按钮；点击后由 `TxFlipOverlay` 从触发源位置展开审核弹窗，替换原普通 Modal 形态。
+
+**主要变更**:
+1. **待审核区域表格化**：`pendingReviewItems` 以时间倒序渲染到 table，按发布物、审核类型、提交信息、更新时间、操作展示。
+2. **行内触发审核**：表格行和 `Review` 按钮均可触发审核，保留管理员待审处理路径不变。
+3. **审核弹窗 FlipOverlay 化**：`ReviewModalOverlay` 内部容器迁移为 `TxFlipOverlay`，新增 `source` 入参并接入 source-aware 动画。
+4. **source 链路补齐**：`assets.vue` 新增 `reviewOverlaySource` 状态，打开/关闭时同步维护触发源引用。
+5. **头部通用化**：审核弹窗改用 `TxFlipOverlay` 默认 close 区域，并通过 `header-display` 复用 `PluginMetaHeader`，统一头部呈现风格。
+6. **引用链去歧义**：`assets.vue` 审核组件标签更名为 `ReviewOverlayDialog`，并将 `ReviewModal.vue` 收敛为对 `ReviewModalOverlay.vue` 的转发，避免自动导入命名冲突导致旧弹窗被误命中。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `apps/nexus/app/components/dashboard/ReviewModal.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 修复: Assets 发布流程 License 步骤勾选控件缺失
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 Dashboard Assets 页面发布版本弹层在 License 步骤中勾选控件未渲染的问题，恢复“同意协议”勾选交互与提交流程可见性。
+
+**主要变更**:
+1. **补齐组件导入**：在 `VersionDrawer` 中补充 `Switch` 组件导入，解决 `Failed to resolve component: Switch` 运行时告警。
+2. **恢复协议确认交互**：License 步骤重新显示勾选控件，用户可明确勾选后再提交审核。
+
+**修改文件**:
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Store 插件详情改为 Header + Content + TxTabs
+
+**变更类型**: 交互优化 / 信息架构调整
+
+**描述**: 调整 Nexus `store` 页面插件详情展示结构。详情弹层由单列内容重构为 `Header + Content` 双区块，内容区接入 `TxTabs` 分页，降低信息堆叠感并提升浏览路径清晰度。
+
+**主要变更**:
+1. **结构拆分**：详情区拆分为插件头部信息（Header）和内容区（Content），头部集中展示图标、名称、官方标识、版本与安装量信息。
+2. **Tabs 接入**：内容区引入 `TxTabs`，新增 `Overview / Versions / Reviews` 三个页签。
+3. **内容复用**：复用 shared 组件 `SharedPluginDetailHeader`、`SharedPluginDetailReadme`、`SharedPluginDetailVersions`，避免重复实现。
+4. **评论逻辑保留**：原有评论加载、分页、提交与登录态校验逻辑整体迁移到 `Reviews` Tab，行为不变。
+5. **多语言补齐**：新增 `store.detail.tabs.*` 中英文文案键。
+
+**修改文件**:
+- `apps/nexus/app/pages/store.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### API Key 权限树与 FlipOverlay 防误关闭增强
+
+**变更类型**: 交互优化 / 组件能力增强
+
+**描述**: 优化 Dashboard API Key 创建弹层中的权限选择体验，权限从平铺列表升级为分组树状结构（无一键全选入口）；同时为 `TxFlipOverlay` 新增语义化“防误关闭”配置，支持遮罩点击拦截、页面退出拦截与误关闭红光警示，并在 API Key 场景启用。
+
+**主要变更**:
+1. **权限结构重构**：`api-keys` 页面将权限改为 `Plugins / Account / Releases` 分组树，子节点独立勾选，去除“快速全选”路径，保留最小授权思路。
+2. **语义化防误关闭开关**：`TxFlipOverlay` 新增 `preventAccidentalClose`，开启后自动拦截遮罩点击关闭与页面退出（刷新/关闭）行为。
+3. **误关闭即时反馈**：当触发被拦截的关闭动作时，overlay 卡片外围触发红色警示光效，提醒用户当前操作被保护。
+4. **API Key 场景落地**：创建 API Key 弹层启用 `:prevent-accidental-close=\"true\"`，避免填写过程中误关闭导致信息丢失。
+5. **测试与文档同步**：新增 flip-overlay 相关单测，并同步更新 Tuffex 与 Nexus 组件文档说明。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Dashboard Assets 页面梳理（表格化 + 内置操作 + FlipOverlay）
+
+**变更类型**: 交互优化 / 信息架构调整
+
+**描述**: 参考 Dashboard「更新与要闻」页的管理结构，重排 Assets（发布物）页列表区域。将核心操作按钮收敛到列表卡片头部，新增显式刷新入口，并将详情展开从 Drawer 切换为 FlipOverlay，降低上下文跳转感。
+
+**主要变更**:
+1. **列表区重构为 table**：`myPlugins` 展示从卡片列表改为表格，增加类型/分类、状态、版本、安装量、更新时间等列。
+2. **按钮收敛进列表区**：将「创建发布物 / 刷新」统一放入发布物 table 卡片头部，并移除「探索市场」入口，减少页面主标题区噪音。
+3. **新增刷新按钮**：在列表头部增加刷新入口并复用既有 `refreshPlugins()` 数据刷新链路。
+4. **详情容器迁移**：`PluginDetailDrawer` 内部容器由 `Drawer` 改为 `TxFlipOverlay`，支持由点击源位置翻转展开。
+5. **编辑入口弹窗化**：详情里的“编辑信息”改为独立 `TxFlipOverlay` 弹窗承载表单，展开时保持详情层不关闭；弹窗 source 绑定到点击的「Edit metadata」按钮。
+6. **头部展示组件化**：抽离统一 `PluginMetaHeader`，并通过 `TxFlipOverlay` 的 `header` 插槽承载自定义头部（含关闭按钮），确保展示一致且可复用。
+7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
+8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetaHeader.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/assets/create/AssetPluginFormStep.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core App 新建插件改为二级弹窗（非全屏）
 
 **变更类型**: 交互优化 / 可用性改进
@@ -17,6 +234,248 @@
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### TxFlipOverlay 头部系统增强与全仓迁移
+
+**变更类型**: 组件能力升级 / 交互一致性修复
+
+**描述**: `TxFlipOverlay` 新增统一头部体系（默认圆形 close、分区插槽、可关闭开关），并对 Nexus/Core App 主要 overlay 调用完成迁移，消除双关闭按钮与部分场景交互不一致问题。
+
+**主要变更**:
+1. **头部 API 升级**：新增 `header/headerTitle/headerDesc/closable/closeAriaLabel`，保留 `maskClosable` 语义并延续 `scrollable` 默认内部滚动。
+2. **插槽体系增强**：支持 `header`（全量覆盖）、`header-display`、`header-actions`、`header-close`，并统一向插槽暴露 `close/expanded/animating/closable/headerTitle/headerDesc`。
+3. **默认关闭按钮标准化**：内置右上角圆形 close，支持 hover/active/focus-visible 与可配置 `aria-label`。
+4. **滚动语义统一**：overlay 卡片改为 `header + body` 列布局，body 内部滚动，避免仅靠 `max-height` 导致内容不可滚动。
+5. **弹层高度与页面滚动收敛**：FlipOverlay 卡片最大高度统一收敛到 `90dvh`（基于原参数缩减 10%），并在 overlay 打开时锁定 `body` 背景滚动，关闭后自动恢复。
+6. **调用点迁移**：对保留自定义关闭按钮的业务 overlay 显式设置 `:closable=\"false\"`，避免双 close；官网 store 与 app store 场景同步适配新 header 能力。
+7. **文档与 Demo 同步**：组件文档、Nexus 中英文文档与 demo 全面更新新 props/slots 与优先级说明。
+8. **组件测试补齐**：新增 flip-overlay 测试，覆盖默认 header、插槽优先级、`closable=false`、close 事件链与滚动行为。
+9. **视觉内置化迁移**：`TxFlipOverlay` 卡片默认内置 `surface + border`（`surface` 可配置 `pure/mask/blur/glass/refraction`，默认 `mask`），并新增 `globalMask`（默认启用）控制全局遮罩；Nexus/Core App overlay 调用侧移除外部背景/边框样式，统一由组件内部控制。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
+- `apps/nexus/app/pages/dashboard/updates.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `packages/tuffex/docs/components/flip-overlay.md`
+- `apps/nexus/content/docs/dev/components/flip-overlay.zh.mdc`
+- `apps/nexus/content/docs/dev/components/flip-overlay.en.mdc`
+- `apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 系统噪音 App 过滤（单开关）
+
+**变更类型**: 搜索体验优化 / 设置项新增
+
+**描述**: 针对 CoreBox 应用搜索中的系统噪音项（如 `DiscHelper`、`OSDUIHelper`、`TMHelperAgent`、`Simulator` 等）新增“仅搜索结果过滤”能力。采用代码内置规则，不改扫描入库；系统设置新增单开关（默认开启），可一键回退到原行为。
+
+**主要变更**:
+1. **固定规则过滤器**：新增 `app-noise-filter.ts`，内置 Simulator、CoreServices Helper/Agent、开发辅助入口等判定规则，并加入主应用保护名单。
+2. **搜索阶段按开关过滤**：`app-provider` 在 `onSearch` 返回阶段执行过滤，开关关闭即完全回退；新增 debug 日志输出过滤数量与规则命中分布。
+3. **设置模型扩展**：`AppIndexSettings` 增加 `hideNoisySystemApps`，默认 `true`，并在主进程做旧配置缺省补齐，保持向后兼容。
+4. **设置页单开关落地**：在“通用配置”中新增“过滤系统噪音应用”开关（仅高级设置可见），沿用既有加载/保存流程。
+5. **测试补齐**：新增噪音判定单测，覆盖典型命中、误杀保护与边界输入。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-noise-filter.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-noise-filter.test.ts`
+- `packages/utils/transport/events/types/app-index.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 发布链路收敛（Build 主线 + Nexus 同步 + CLI 四包自动发布）
+
+**变更类型**: CI/CD 重构 / 发布治理
+
+**描述**: 收敛桌面与 CLI 发布链路。桌面发版统一由 `build-and-release` 承担；Nexus release 与 updates 支持 API Key 细粒度权限；CLI 四包版本变更后自动发布 npm 并同步 Nexus 更新公告。官网部署由 Cloudflare Pages 平台侧 Git 自动部署，仓库不再维护独立 deploy workflow。
+
+**主要变更**:
+1. **桌面发版主线统一**：`build-and-release` 成为唯一 tag 发布入口；构建失败不再创建 Release。
+2. **发布资产规范化**：自动生成并随 Release 上传 `tuff-release-manifest.json`（含核心资产 `sha256/platform/arch`）。
+3. **Nexus release 自动同步**：tag 发布后自动创建/更新 Nexus release、链接 GitHub 资产并发布。
+4. **权限模型粒度化**：release API 改为 `release:write/release:assets/release:publish`，并保留 `release:sync` 兼容映射；updates 新增 `release:news` API Key 通道。
+5. **release 资产幂等写入**：按 `releaseId + platform + arch` upsert，避免重复同步产生多条资产记录。
+6. **发布态防空资产**：release 发布前必须至少存在一个可下载资产，否则拒绝发布。
+7. **CLI 四包自动发布**：新增 workflow 按顺序发布 `@talex-touch/tuff-cli-core` → `@talex-touch/tuffcli` → `@talex-touch/unplugin-export-plugin` → `@talex-touch/tuff-cli`；稳定版走 `latest`，预发布走 `next`。
+8. **官网部署策略调整**：改为 Cloudflare Pages 平台侧 Git 自动部署，移除仓库内 `nexus-deploy.yml`。
+9. **Legacy workflow 降级**：`release-core/release-renderer/release-extensions` 仅保留手动触发（归档/调试用途）。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `.github/workflows/release-core.yml`
+- `.github/workflows/release-renderer.yml`
+- `.github/workflows/release-extensions.yml`
+- `.github/workflows/package-tuff-cli-publish.yml`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/utils/releasesStore.ts`
+- `apps/nexus/server/api/releases/index.post.ts`
+- `apps/nexus/server/api/releases/[tag].patch.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.post.ts`
+- `apps/nexus/server/api/releases/[tag]/link-github.post.ts`
+- `apps/nexus/server/api/releases/[tag]/publish.post.ts`
+- `apps/nexus/server/api/dashboard/updates.post.ts`
+- `apps/nexus/server/api/dashboard/api-keys.post.ts`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `.github/workflows/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+
+### `tuff-native` OCR 显式加载修复（多 target 误载防回归）
+
+**变更类型**: Bug 修复 / 原生模块加载稳定性
+
+**描述**: 修复 `@talex-touch/tuff-native` 在多 `.node` target 场景下可能误加载到 `tuff_native_everything.node` 的问题，导致 `vision.ocr` 路径缺失 `getNativeOcrSupport/recognizeImageText` 并报 `native-module-not-loaded`。现在改为按入口显式加载目标模块，并增加导出契约校验。
+
+**主要变更**:
+1. **统一原生加载器**：新增 `native-loader.js`，显式加载 `build/Release/<module>.node`，并支持 `expectedExports` 校验。
+2. **OCR 入口固定 target**：`index.js` 仅加载 `tuff_native_ocr.node`，并校验 `getNativeOcrSupport/recognizeImageText`。
+3. **Everything 入口保持隔离**：`everything.js` 仅加载 `tuff_native_everything.node`，并校验 `search/query/getVersion`。
+4. **错误可诊断性增强**：导出缺失时报 `ERR_NATIVE_EXPORT_MISMATCH`，错误信息包含缺失导出与实际导出列表。
+5. **包清单收敛**：`package.json` `files` 增加 `native-loader.js`，移除未使用依赖 `node-gyp-build`。
+
+**修改文件**:
+- `packages/tuff-native/native-loader.js`
+- `packages/tuff-native/index.js`
+- `packages/tuff-native/everything.js`
+- `packages/tuff-native/package.json`
+- `pnpm-lock.yaml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Quick Actions 常用项直推 + 高危动作二次确认
+
+**变更类型**: 交互优化 / 安全增强
+
+**描述**: 调整 `touch-quick-actions` 的默认行为，空查询时直接推送常用动作（含重启、关机）；同时为高风险动作引入二次确认，降低误触系统级操作风险。
+
+**主要变更**:
+1. **常用项直推**：`onFeatureTriggered` 在空查询场景不再按分组头渲染，直接推送常用动作列表（优先 `restart/shutdown/lock-screen/mute-toggle/focus-settings`）。
+2. **动作补齐**：Windows/macOS 快捷动作新增 `重启` 与 `关机`。
+3. **二次确认**：`restart` / `shutdown` 增加双弹窗确认（两次“确定”后才执行命令）；取消时返回 `操作已取消`。
+4. **测试覆盖**：补充 quick-actions 用例，验证常用项包含重启/关机、空查询直推行为及高危动作二次确认。
+
+**修改文件**:
+- `plugins/touch-quick-actions/index.js`
+- `packages/test/src/plugins/quick-actions.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Plugin Feature ID 规范收敛（统一 `-`，拒绝 `.`）
+
+**变更类型**: 规范收敛 / 插件生态一致性
+
+**描述**: 明确并落实官方插件 `feature.id` 命名规范：仅允许字母、数字、下划线与连字符（`[A-Za-z0-9_-]`），不再使用点号分段（`.`）。此次将官方插件清单与脚本引用统一迁移为连字符写法，避免被运行时校验拒绝后出现“功能数 0 / 无法添加 Feature”的问题。
+
+**主要变更**:
+1. **清单统一**：官方插件 `manifest.json` 中的点号 `feature.id` 全部改为连字符形式（如 `system.actions` → `system-actions`）。
+2. **脚本同步**：插件 Prelude 中按 `featureId` 分支的逻辑同步更新到新 ID，避免触发路径失联。
+3. **测试同步**：`system-actions` 相关测试用例改用连字符 ID，保持行为断言一致。
+
+**修改文件**:
+- `plugins/touch-*/manifest.json`（含 browser/code-snippets/intelligence/snipaste/system/text/window/workspace 系列）
+- `plugins/touch-code-snippets/index.js`
+- `plugins/touch-text-snippets/index.js`
+- `plugins/touch-intelligence/index.js`
+- `packages/test/src/plugins/system-actions.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Widget 编译缓存命中修复（避免旧代码复用）
+
+**变更类型**: Bug 修复 / 插件运行时稳定性
+
+**描述**: 修复生产插件在 widget 路径不变时可能复用旧编译缓存的问题。此前缓存预热阶段仅按 `filePath/mtime` 判定，未强制比对 source hash，导致“同路径新内容”场景仍可能命中旧 `.cjs` 缓存，引发线上行为与源码不一致（如持续报旧行号错误）。
+
+**主要变更**:
+1. **预热阶段补齐 hash**：`WidgetManager.registerWidget` 在非 dev 模式下先加载一次 widget source，拿到 `hash` 后再尝试命中 compiled cache。
+2. **避免重复加载**：若已预加载 source，则后续编译流程复用该结果，不再二次读取同一 widget 文件。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### WidgetRegistry 渲染补丁修复（Proxy 读取语义对齐）
+
+**变更类型**: Bug 修复 / 渲染稳定性
+
+**描述**: 修复 widget 渲染补丁在合并 `setupState` 时使用 `target[key]` 直接解引用的问题。该实现会绕过 getter 的标准 receiver 语义，在跨上下文 Proxy 场景下可能触发 `TypeError: Illegal invocation`。
+
+**主要变更**:
+1. **Proxy 读取改为 Reflect**：`renderWithSetupState` 的 `get` trap 统一改为 `Reflect.get(..., receiver)`，保持原生属性访问语义。
+2. **补齐 has trap**：新增 `has` trap，确保 `setupState` 字段参与 `in` 检测，减少模板编译产物的上下文判定偏差。
+3. **开发态定位增强**：新增 widget 运行时代码片段缓存与错误行回溯日志，渲染报错时可直接输出 `<anonymous>:line:col` 对应代码片段，缩短定位路径。
+4. **沙箱方法绑定修复**：`createSandboxWindow/createSandboxDocument` 的 Proxy `get` 对函数成员统一返回 `bind(target)` 后的方法，修复 `window.addEventListener/removeEventListener` 等调用在沙箱上下文触发的 `Illegal invocation`。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/plugin/widget-registry.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### PluginInfo 问题按钮修复（TxButton 适配 + Warning 波纹）
+
+**变更类型**: Bug 修复 / 交互反馈优化
+
+**描述**: 修复插件详情页右下角“问题”按钮在迁移到 `TxButton` 后的两个问题：按钮使用了不受支持的 `variant="icon"`，以及翻转弹层锚点 `source` 引用到了组件实例而非 `HTMLElement`。同时将 `warning` 态视觉升级为“从按钮中心向整个 PluginInfo 传递”的波纹扩散，并将 FAB 抽离为独立组件。
+
+**主要变更**:
+1. **TxButton 规范化**：将问题按钮改为 `variant="flat"` 并根据问题级别映射 `type`（warning/error），移除非法 variant 用法。
+2. **Overlay 锚点修复**：由 `PluginFab` 通过 `source-change` 事件回传按钮锚点元素，确保 `TxFlipOverlay.source` 始终为 `HTMLElement`。
+3. **组件抽离 + 波纹升级**：新增独立组件 `PluginFab`（结构：`TxButton + Waving`），并实现从按钮中心向整个 `PluginInfo` 容器扩散的双层延迟波纹；`error` 态继续保留高强度发光提示。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginFab.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Store 展示一致性修复（官网 + Core App）
+
+**变更类型**: Bug 修复 / 数据契约对齐
+
+**描述**: 修复官网与 Core App 插件 Store 的多处展示不一致问题，重点解决详情 README 空白、安装状态误判、路由与标签页脱钩、以及更新检查重复触发。
+
+**主要变更**:
+1. **官网详情 README 对齐**：`/api/store/plugins/[slug]` 补充 `readmeMarkdown`（插件级 + 版本级），修复详情页 README 数据缺失。
+2. **官网详情首屏优化**：详情主数据与社区数据（评分/评论）解耦，打开详情后先渲染主体，再异步加载社区模块。
+3. **App 安装状态匹配增强**：安装状态识别从“仅插件名”扩展为“providerId + pluginId + name 多键匹配”，并透出 `installSource` 给渲染层用于精确对齐官方插件标识。
+4. **Store 路由同步**：`tabs` 与路由双向同步，补齐 `/store/cli` 路由，避免刷新或前进后退后视图状态错位。
+5. **更新检查去重**：移除重复的 `StoreEvents.api.checkUpdates` 注册，避免单次调用触发两次检查。
+6. **安装来源状态保持**：`plugin store` 在增量推送覆盖时保留 `installSource`，并在 Store Grid 侧补齐 `providerId + pluginId` 复合键匹配，修复同名/同 ID 跨源状态串联与闪回误判。
+7. **列表接口轻量化（兼容）**：`/api/store/plugins` 新增 `compact=1` 精简返回模式（移除列表态 `versions` 与版本大字段），并同步官网页面与 Core App/TPEX Provider 默认走轻量请求，降低列表首屏 payload。
+8. **官网详情 Flip 动画与滚动体验**：官网 `store` 详情弹层切换为 `TxFlipOverlay`，从卡片源触发 FLIP 开合；同时增强 `TxFlipOverlay` 通用滚动容器（默认 `scrollable`），修复“仅 max-height 限高但内容不可滚动”的交互问题。
+
+**修改文件**:
+- `apps/nexus/server/api/store/plugins/[slug].get.ts`
+- `apps/nexus/app/pages/store.vue`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/renderer/src/composables/store/usePluginVersionStatus.ts`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketGridView.vue`
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Dev 插件加载判定修复（避免 `dev.source=false` 误走远程 URL）
@@ -97,6 +556,26 @@
 - `apps/nexus/README.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### touch-translation 列表可读性与键盘导航优化（右侧默认焦点）
+
+**变更类型**: 交互优化 / 可用性增强
+
+**描述**: 优化翻译面板左右列表的焦点模型与结果卡片可读性。默认焦点切到右侧结果列表，支持键盘上下选择、回车复制；并新增左右列表焦点切换快捷键（`Meta/Ctrl + ←/→`）。
+
+**主要变更**:
+1. **焦点与选择模型**：新增 `providers/history` 双焦点区，默认焦点为右侧 `providers`。
+2. **键盘交互**：支持 `ArrowUp/ArrowDown` 在当前焦点列表中移动选择；`Enter` 在右侧复制当前选中结果（成功复制译文，失败复制错误摘要）；在左侧触发历史项回填。
+3. **焦点切换快捷键**：支持 `Meta/Ctrl + ArrowLeft` 切到左侧历史，`Meta/Ctrl + ArrowRight` 切回右侧结果。
+4. **结果卡片可读性优化**：右侧卡片支持选中态高亮、状态徽标统一（翻译中/已完成/失败），并增加长错误摘要折叠（查看详情/收起详情）。
+5. **布局稳定性优化**：右侧结果区与左侧历史区都改为限高内部滚动，避免长错误文本撑坏整体布局；修复复制按钮在长文本场景下易被挤压的问题。
+6. **Widget 沙箱兼容修复**：移除对 `window.addEventListener` 的直接依赖，改为监听 `core-box:key-event`；同时对 `payload/history` 做 plain 数据归一化，并去除高风险 deep watch / 链式数组操作，规避 Proxy 跨上下文导致的 `Illegal invocation`。
+7. **Provider 字段读取容错**：历史结果写入前统一走 `normalizeProviders` 安全读取（带 try/catch），避免跨上下文 payload getter 在 watch 回调内直接解引用导致渲染期 `Illegal invocation`。
+8. **Payload 链路防崩溃**：`normalizeWidgetPayload` 与 `item.render.custom.data` 读取统一改为安全访问（try/catch），即使上游注入的是跨上下文 Proxy 也不再直接抛出渲染错误。
+
+**修改文件**:
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-24
 
 ### TuffCLI 设备授权状态回传增强（拒绝原因/IP 明细/标签页关闭感知）
@@ -142,18 +621,18 @@
 - `apps/core-app/src/main/modules/clipboard.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
-### Nexus Market 页面 `process is not defined` 修复（收敛 renderer 导入范围）
+### Nexus Store 页面 `process is not defined` 修复（收敛 renderer 导入范围）
 
 **变更类型**: 运行时修复 / 前端稳定性
 
-**描述**: 修复 `https://tuff.tagzxia.com/market` 在客户端初始化时偶发进入 Nuxt 500（`process is not defined`）的问题。根因是页面从 `@talex-touch/utils/renderer` 的 barrel 导入组件，导致无关模块被一并打包，最终把依赖 `process.platform` 的 Node 侧常量带入浏览器运行时。
+**描述**: 修复 `https://tuff.tagzxia.com/store` 在客户端初始化时偶发进入 Nuxt 500（`process is not defined`）的问题。根因是页面从 `@talex-touch/utils/renderer` 的 barrel 导入组件，导致无关模块被一并打包，最终把依赖 `process.platform` 的 Node 侧常量带入浏览器运行时。
 
 **主要变更**:
-1. **按需深路径导入**：`market.vue` 改为直接从 `@talex-touch/utils/renderer/shared/*` 导入 `SharedPluginDetailContent` 和类型，避免触发 renderer 总入口的全量 re-export 链。
+1. **按需深路径导入**：`store.vue` 改为直接从 `@talex-touch/utils/renderer/shared/*` 导入 `SharedPluginDetailContent` 和类型，避免触发 renderer 总入口的全量 re-export 链。
 2. **隔离 Node-only 代码影响面**：减少客户端 bundle 中对 `file-scan`/`file-parser` 相关模块的意外引入，避免浏览器侧访问 `process.*`。
 
 **修改文件**:
-- `apps/nexus/app/pages/market.vue`
+- `apps/nexus/app/pages/store.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### touch-translation Prelude 打包修复（移除 `process is not defined`）
@@ -856,7 +1335,7 @@
 - `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
 - `packages/utils/__tests__/permission-status.test.ts`
 
-### Core-app Market 新增 Tuff CLI Beta 页签联动
+### Core-app Store 新增 Tuff CLI Beta 页签联动
 
 **变更类型**: 新功能 / 市场联动（Beta）
 
@@ -865,15 +1344,15 @@
 **主要变更**:
 1. **安装检测接入**：平台能力列表查询时动态探测 `tuff --version`（含 Windows 候选命令），并引入 TTL 缓存降低探测频率。
 2. **能力映射收敛**：检测通过后动态注入 `platform.tuff-cli` Beta 能力，供渲染层统一读取。
-3. **市场页签联动**：`Market` 页按能力结果动态展示 `CLI` 页签，且在能力不可用时自动回退到 `market` 页签。
+3. **市场页签联动**：`Store` 页按能力结果动态展示 `CLI` 页签，且在能力不可用时自动回退到 `store` 页签。
 4. **Beta 占位页**：新增 `MarketCliBeta` 视图，展示“Beta Feature / 开发中”提示，明确当前交付状态。
 5. **i18n 补齐**：补充中英文市场 CLI 文案键，保证多语言一致。
 
 **修改文件**:
 - `apps/core-app/src/main/channel/common.ts`
-- `apps/core-app/src/renderer/src/views/base/Market.vue`
-- `apps/core-app/src/renderer/src/components/market/MarketHeader.vue`
-- `apps/core-app/src/renderer/src/views/base/market/MarketCliBeta.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketCliBeta.vue`
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
 
@@ -933,11 +1412,11 @@
 - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
 
-### Core-app Source Market Editor 滚动修复
+### Core-app Source Store Editor 滚动修复
 
 **变更类型**: Bug 修复 / 交互可用性
 
-**描述**: 修复 Source Market Editor 在来源项较多时无法滚动的问题，避免底部来源项被裁切后不可见。
+**描述**: 修复 Source Store Editor 在来源项较多时无法滚动的问题，避免底部来源项被裁切后不可见。
 
 **主要变更**:
 1. **弹窗结构重写**：将 Source Editor 从绝对定位面板重构为 `TxFlipOverlay` 弹窗，统一使用 body 级遮罩和卡片容器，消除父级布局裁剪影响。
@@ -954,13 +1433,13 @@
 12. **表单组件统一**：新增来源二级弹窗内部输入控件统一替换为 tuffex `TxInput` / `TxSelect` / `TxSelectItem`，移除原生 `select` 与旧输入组件。
 
 **修改文件**:
-- `apps/core-app/src/renderer/src/views/base/market/MarketSourceEditor.vue`
-- `apps/core-app/src/renderer/src/views/base/Market.vue`
-- `apps/core-app/src/renderer/src/components/market/MarketHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/components/store/MarketHeader.vue`
 - `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
 - `apps/core-app/src/renderer/src/modules/lang/en-US.json`
-- `apps/core-app/src/renderer/src/modules/storage/market-sources.ts`
-- `packages/utils/market/constants.ts`
+- `apps/core-app/src/renderer/src/modules/storage/store-sources.ts`
+- `packages/utils/store/constants.ts`
 
 ### Core App 工具设置下拉框返显修复
 
@@ -1371,8 +1850,8 @@
 - `apps/core-app/src/renderer/src/modules/auth/account-channel.ts`
 - `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
 - `apps/core-app/src/renderer/src/modules/auth/device-attest.ts`
-- `apps/core-app/src/renderer/src/modules/market/auth-token-service.ts`
-- `apps/core-app/src/renderer/src/modules/market/nexus-auth-client.ts`
+- `apps/core-app/src/renderer/src/modules/store/auth-token-service.ts`
+- `apps/core-app/src/renderer/src/modules/store/nexus-auth-client.ts`
 
 ### Core-app 同步迁移到主进程
 
@@ -1869,7 +2348,7 @@
 
 **修改文件**:
 - `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
-- `apps/core-app/src/renderer/src/views/base/market/MarketSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue`
 - `apps/core-app/src/renderer/src/components/tree/FileTree.vue`
 - `apps/core-app/src/renderer/src/modules/storage/theme-style.ts`
 - `apps/core-app/src/preload/index.ts`
@@ -1909,7 +2388,7 @@
 - `apps/core-app/src/renderer/src/modules/hooks/useAppLifecycle.ts`
 - `apps/core-app/src/renderer/src/modules/hooks/useLanguageSettings.ts`
 - `apps/core-app/src/renderer/src/modules/hooks/useUpdate.ts`
-- `apps/core-app/src/renderer/src/modules/market/providers/nexus-store-provider.ts`
+- `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts`
 - `apps/core-app/src/renderer/src/modules/update/UpdateProviderManager.ts`
 - `apps/core-app/src/renderer/src/views/base/application/AppList.vue`
 - `apps/core-app/src/renderer/src/views/base/application/ApplicationIndex.vue`

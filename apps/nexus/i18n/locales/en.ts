@@ -5,7 +5,7 @@ export default {
     logout: 'Log out',
     dashboard: 'Dashboard',
     pricing: 'Pricing',
-    market: 'Market',
+    store: 'Store',
     doc: 'Developer',
     developer: 'Developer',
     download: 'Updates',
@@ -243,7 +243,7 @@ export default {
       finance: 'Finance',
     },
   },
-  market: {
+  store: {
     hero: {
       title: 'Discover verified plugins',
       subtitle: 'Browse curated categories and install trusted plugins for your workspace.',
@@ -344,7 +344,7 @@ export default {
       intro:
         'This space gathers your environments, releases, and plugin status. Automated insights and reminders will appear here soon.',
       docsCta: 'View docs',
-      marketplaceCta: 'Explore plugins',
+      storeCta: 'Explore plugins',
     },
     adminCredits: {
       title: 'AI Credits Admin',
@@ -672,7 +672,7 @@ export default {
         title: 'Shortcuts',
         links: {
           gettingStarted: 'Getting started',
-          marketplace: 'Plugins marketplace',
+          store: 'Plugins store',
           developers: 'Developer hub',
         },
       },
@@ -706,7 +706,7 @@ export default {
       plugins: {
         title: 'Assets',
         subtitle: 'Manage plugins, layout presets, and other publishable assets from one place.',
-        cta: 'Explore market',
+        cta: 'Explore store',
         loading: 'Loading assets…',
         empty: 'No assets yet. Publish your first asset to see it here.',
         officialBadge: 'Official',
@@ -750,7 +750,7 @@ export default {
           packageUpload: 'Plugin package (.tpex)',
           packageHelp: 'Upload a .tpex archive to prefill manifest details. This file is only stored after you submit.',
           readme: 'README',
-          readmeHelp: 'Supports Markdown. Displayed on the marketplace plugin detail page.',
+          readmeHelp: 'Supports Markdown. Displayed on the store plugin detail page.',
           uploadPackage: 'Upload Package',
           manualInput: 'Manual Input',
           autoPublishHint: 'Version {version} will be automatically published after plugin creation.',
@@ -893,6 +893,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
         },
         pendingReviews: 'Pending Reviews',
         pendingReviewsCount: '{count} items pending',
+        reviewingHint: 'Under review',
         reviewPlugin: 'Plugin review',
         reviewVersion: 'Version review',
         viewDetails: 'Review',
