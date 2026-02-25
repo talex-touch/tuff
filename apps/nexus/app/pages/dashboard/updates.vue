@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
-import Input from '~/components/ui/Input.vue'
+import { computed, ref } from 'vue'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCardItem, TxSkeleton, TxSpinner, TxTag } from '@talex-touch/tuffex'
 import { useDashboardUpdatesData } from '~/composables/useDashboardData'
 import { useToast } from '~/composables/useToast'
 
@@ -24,9 +22,11 @@ interface DashboardUpdate {
   link: string
 }
 
-interface DashboardUpdateSettings {
-  syncBaseUrl: string | null
-}
+type UpdateTypeFilter = DashboardUpdate['type'] | 'all'
+type UpdateScopeFilter = DashboardUpdate['scope'] | 'all'
+type UpdateChannelFilter = 'RELEASE' | 'BETA' | 'SNAPSHOT' | 'all'
+type UpdateSourceFilter = 'all' | 'auto' | 'manual'
+type UpdateDateRangeFilter = 'all' | '7d' | '30d' | '90d'
 
 definePageMeta({
   pageTransition: {
@@ -40,48 +40,147 @@ defineI18nRoute(false)
 const { t, locale } = useI18n()
 const { user } = useAuthUser()
 const toast = useToast()
-const requestUrl = useRequestURL()
 
 const { updates, pending: updatesPending, refresh: refreshUpdates } = useDashboardUpdatesData()
-const { data: settingsData, pending: settingsPending } = await useAsyncData(
-  'dashboard-update-settings',
-  () => $fetch<{ settings: DashboardUpdateSettings }>('/api/dashboard/updates/settings'),
-)
 
 const localeTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const dateFormatter = computed(() => new Intl.DateTimeFormat(localeTag.value, { dateStyle: 'medium' }))
+const isZh = computed(() => locale.value.startsWith('zh'))
+const UPDATE_RELEASE_TAG_COLOR = 'var(--tx-color-primary)'
+const UPDATE_KEYWORD_TAG_COLOR = 'var(--tx-text-color-secondary)'
 
-const syncBaseUrl = ref('')
-const syncSaving = ref(false)
-const syncError = ref<string | null>(null)
-const syncGuideVisible = ref(false)
-const syncGuideSource = ref<HTMLElement | null>(null)
-const syncGuideTriggerRef = ref<HTMLElement | null>(null)
+const searchKeyword = ref('')
+const selectedType = ref<UpdateTypeFilter>('all')
+const selectedScope = ref<UpdateScopeFilter>('all')
+const selectedChannel = ref<UpdateChannelFilter>('all')
+const selectedSource = ref<UpdateSourceFilter>('all')
+const selectedDateRange = ref<UpdateDateRangeFilter>('all')
 
-watch(
-  () => settingsData.value?.settings,
-  (settings) => {
-    if (settings)
-      syncBaseUrl.value = settings.syncBaseUrl ?? ''
-  },
-  { immediate: true },
-)
+const isAdmin = computed(() => user.value?.role === 'admin')
 
-const resolvedSyncBaseUrl = computed(() => syncBaseUrl.value || requestUrl.origin)
+const typeOptions = computed(() => [
+  { value: 'all', label: isZh.value ? '全部类型' : 'All types' },
+  { value: 'release', label: t('dashboard.sections.updates.typeRelease', 'Release') },
+  { value: 'news', label: t('dashboard.sections.updates.typeNews', 'News') },
+  { value: 'announcement', label: t('dashboard.sections.updates.typeAnnouncement', 'Announcement') },
+  { value: 'config', label: t('dashboard.sections.updates.typeConfig', 'Config') },
+  { value: 'data', label: t('dashboard.sections.updates.typeData', 'Data') },
+])
 
-const releaseSyncExample = computed(() => {
-  const baseUrl = resolvedSyncBaseUrl.value
-  return [
-    `curl -X POST \"${baseUrl}/api/releases\" \\`,
-    '  -H \"Authorization: Bearer $NEXUS_API_KEY\" \\',
-    '  -H \"Content-Type: application/json\" \\',
-    '  -d \'{"tag":"v1.2.3","name":"Tuff v1.2.3","version":"1.2.3","channel":"RELEASE","notes":{"zh":"...","en":"..."},"status":"published"}\'',
-  ].join('\n')
+const scopeOptions = computed(() => [
+  { value: 'all', label: isZh.value ? '全部范围' : 'All scopes' },
+  { value: 'web', label: isZh.value ? '官网' : 'Web' },
+  { value: 'system', label: t('dashboard.sections.updates.scopeSystem', 'System') },
+  { value: 'both', label: t('dashboard.sections.updates.scopeBoth', 'Web + System') },
+])
+
+const channelOptions = computed(() => [
+  { value: 'all', label: isZh.value ? '全部渠道' : 'All channels' },
+  { value: 'RELEASE', label: 'RELEASE' },
+  { value: 'BETA', label: 'BETA' },
+  { value: 'SNAPSHOT', label: 'SNAPSHOT' },
+])
+
+const sourceOptions = computed(() => [
+  { value: 'all', label: isZh.value ? '全部来源' : 'All sources' },
+  { value: 'auto', label: isZh.value ? '自动发布' : 'Auto (release sync)' },
+  { value: 'manual', label: isZh.value ? '手动发布' : 'Manual' },
+])
+
+const dateRangeOptions = computed(() => [
+  { value: 'all', label: isZh.value ? '全部时间' : 'All time' },
+  { value: '7d', label: isZh.value ? '近 7 天' : 'Last 7 days' },
+  { value: '30d', label: isZh.value ? '近 30 天' : 'Last 30 days' },
+  { value: '90d', label: isZh.value ? '近 90 天' : 'Last 90 days' },
+])
+
+const hasActiveFilters = computed(() => {
+  return searchKeyword.value.trim().length > 0
+    || selectedType.value !== 'all'
+    || selectedScope.value !== 'all'
+    || selectedChannel.value !== 'all'
+    || selectedSource.value !== 'all'
+    || selectedDateRange.value !== 'all'
 })
 
-function openSyncGuide() {
-  syncGuideSource.value = syncGuideTriggerRef.value
-  syncGuideVisible.value = true
+const filteredUpdates = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+
+  return updates.value.filter((update) => {
+    if (selectedType.value !== 'all' && update.type !== selectedType.value)
+      return false
+
+    if (selectedScope.value !== 'all' && update.scope !== selectedScope.value)
+      return false
+
+    if (selectedChannel.value !== 'all') {
+      const channels = (update.channels || []).map(channel => channel.toUpperCase())
+      if (channels.length > 0 && !channels.includes(selectedChannel.value))
+        return false
+    }
+
+    const autoGenerated = isAutoGenerated(update)
+    if (selectedSource.value === 'auto' && !autoGenerated)
+      return false
+    if (selectedSource.value === 'manual' && autoGenerated)
+      return false
+
+    if (!matchesDateRange(update.timestamp, selectedDateRange.value))
+      return false
+
+    if (!keyword)
+      return true
+
+    const title = resolveLocalizedText(update.title).toLowerCase()
+    const summary = resolveLocalizedText(update.summary).toLowerCase()
+    const releaseTag = (update.releaseTag || '').toLowerCase()
+    const tags = (update.tags || []).join(' ').toLowerCase()
+    const channels = (update.channels || []).join(' ').toLowerCase()
+
+    return title.includes(keyword)
+      || summary.includes(keyword)
+      || releaseTag.includes(keyword)
+      || tags.includes(keyword)
+      || channels.includes(keyword)
+  })
+})
+
+function clearFilters() {
+  searchKeyword.value = ''
+  selectedType.value = 'all'
+  selectedScope.value = 'all'
+  selectedChannel.value = 'all'
+  selectedSource.value = 'all'
+  selectedDateRange.value = 'all'
+}
+
+function matchesDateRange(timestamp: string, range: UpdateDateRangeFilter): boolean {
+  if (range === 'all')
+    return true
+
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime()))
+    return true
+
+  const now = Date.now()
+  const elapsed = now - date.getTime()
+  const day = 24 * 60 * 60 * 1000
+
+  if (range === '7d')
+    return elapsed <= 7 * day
+  if (range === '30d')
+    return elapsed <= 30 * day
+  return elapsed <= 90 * day
+}
+
+function isAutoGenerated(update: DashboardUpdate): boolean {
+  return update.type === 'release' || Boolean(update.releaseTag)
+}
+
+function sourceLabel(update: DashboardUpdate): string {
+  return isAutoGenerated(update)
+    ? (isZh.value ? '自动' : 'Auto')
+    : (isZh.value ? '手动' : 'Manual')
 }
 
 function formatDate(value?: string) {
@@ -92,12 +191,6 @@ function formatDate(value?: string) {
     return value
   return dateFormatter.value.format(parsed)
 }
-
-const isAdmin = computed(() => {
-  return user.value?.role === 'admin'
-})
-
-const isZh = computed(() => locale.value.startsWith('zh'))
 
 function resolveLocalizedText(text: LocalizedText) {
   if (isZh.value)
@@ -117,27 +210,66 @@ function updateTypeLabel(update: DashboardUpdate) {
   return t('dashboard.sections.updates.typeNews', '要闻')
 }
 
-async function saveSyncSettings() {
-  syncSaving.value = true
-  syncError.value = null
-  try {
-    const response = await $fetch<{ settings: DashboardUpdateSettings }>('/api/dashboard/updates/settings', {
-      method: 'PATCH',
-      body: {
-        syncBaseUrl: syncBaseUrl.value || null,
-      },
-    })
-    syncBaseUrl.value = response.settings.syncBaseUrl ?? ''
-    toast.success(t('dashboard.sections.updates.sync.saved', '同步设置已保存'))
-  }
-  catch (error: any) {
-    const message = error?.data?.statusMessage || error?.message || t('dashboard.sections.updates.sync.saveFailed', '保存失败')
-    syncError.value = message
-    toast.warning(message)
-  }
-  finally {
-    syncSaving.value = false
-  }
+function updateScopeLabel(scope: DashboardUpdate['scope']) {
+  if (scope === 'system')
+    return t('dashboard.sections.updates.scopeSystem', '系统')
+  if (scope === 'both')
+    return t('dashboard.sections.updates.scopeBoth', '官网+系统')
+  return isZh.value ? '官网' : 'Web'
+}
+
+function resolveTypeIcon(type: DashboardUpdate['type']) {
+  if (type === 'release')
+    return 'i-carbon-version-major'
+  if (type === 'announcement')
+    return 'i-carbon-bullhorn'
+  if (type === 'config')
+    return 'i-carbon-settings'
+  if (type === 'data')
+    return 'i-carbon-data-table'
+  return 'i-carbon-notification'
+}
+
+function updateTypeTagColor(type: DashboardUpdate['type']) {
+  if (type === 'release')
+    return 'var(--tx-color-primary)'
+  if (type === 'announcement')
+    return 'var(--tx-color-warning)'
+  if (type === 'config')
+    return 'var(--tx-color-success)'
+  if (type === 'data')
+    return 'var(--tx-color-primary)'
+  return 'var(--tx-text-color-secondary)'
+}
+
+function updateScopeTagColor(scope: DashboardUpdate['scope']) {
+  if (scope === 'both')
+    return 'var(--tx-color-primary)'
+  if (scope === 'system')
+    return 'var(--tx-color-warning)'
+  return 'var(--tx-text-color-secondary)'
+}
+
+function updateSourceTagColor(update: DashboardUpdate) {
+  return isAutoGenerated(update) ? 'var(--tx-color-success)' : 'var(--tx-text-color-secondary)'
+}
+
+function updateChannelTagColor(channel: string) {
+  const normalized = channel.toUpperCase()
+  if (normalized === 'RELEASE')
+    return 'var(--tx-color-primary)'
+  if (normalized === 'BETA')
+    return 'var(--tx-color-warning)'
+  if (normalized === 'SNAPSHOT')
+    return 'var(--tx-color-danger)'
+  return 'var(--tx-text-color-secondary)'
+}
+
+function openUpdateLink(link?: string) {
+  if (!link)
+    return
+  if (import.meta.client)
+    window.open(link, '_blank', 'noopener')
 }
 
 const drawerOpen = ref(false)
@@ -160,7 +292,6 @@ async function onSaved() {
   await refreshUpdates()
 }
 
-// Delete confirmation
 const deleteConfirmVisible = ref(false)
 const pendingDeleteUpdate = ref<DashboardUpdate | null>(null)
 
@@ -172,16 +303,21 @@ function deleteUpdateItem(update: DashboardUpdate) {
 async function confirmDeleteUpdate(): Promise<boolean> {
   if (!pendingDeleteUpdate.value)
     return true
+
   try {
-    await $fetch(`/api/dashboard/updates/${pendingDeleteUpdate.value.id}`, { method: 'DELETE' as unknown as 'PATCH' })
+    await $fetch(`/api/dashboard/updates/${pendingDeleteUpdate.value.id}`, {
+      method: 'DELETE' as unknown as 'PATCH',
+    })
     await refreshUpdates()
   }
   catch (error: unknown) {
-    console.error('Failed to delete update:', error)
+    const message = (error as any)?.data?.statusMessage || (error as any)?.message || (isZh.value ? '删除失败' : 'Delete failed')
+    toast.warning(message)
   }
   finally {
     pendingDeleteUpdate.value = null
   }
+
   return true
 }
 
@@ -203,67 +339,7 @@ function closeDeleteConfirm() {
     </div>
 
     <section class="apple-card-lg p-5">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h3 class="text-sm font-semibold text-black dark:text-white">
-            {{ t('dashboard.sections.updates.sync.title') }}
-          </h3>
-          <p class="mt-1 text-xs text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.sync.subtitle') }}
-          </p>
-        </div>
-        <div class="flex items-center gap-2">
-          <span ref="syncGuideTriggerRef" class="inline-flex">
-            <TxButton
-              circle
-              size="mini"
-              variant="ghost"
-              icon="i-carbon-help"
-              native-type="button"
-              :aria-label="t('dashboard.sections.updates.sync.guideTrigger', '配置说明')"
-              :title="t('dashboard.sections.updates.sync.guideTrigger', '配置说明')"
-              class="text-black/50 hover:text-primary dark:text-white/50"
-              @click="openSyncGuide"
-            />
-          </span>
-          <NuxtLink
-            to="/dashboard/api-keys"
-            class="text-xs text-primary no-underline hover:text-primary/80"
-          >
-            {{ t('dashboard.sections.updates.sync.apiKeyHint') }}
-          </NuxtLink>
-        </div>
-      </div>
-
-      <div class="mt-4 space-y-3">
-        <div>
-          <label class="text-xs font-medium text-black/50 dark:text-white/50">
-            {{ t('dashboard.sections.updates.sync.baseUrlLabel') }}
-          </label>
-          <Input
-            v-model="syncBaseUrl"
-            type="text"
-            class="mt-2"
-            :placeholder="t('dashboard.sections.updates.sync.baseUrlPlaceholder')"
-          />
-        </div>
-
-        <div class="flex flex-wrap items-center gap-3">
-          <TxButton size="small" :disabled="syncSaving || settingsPending" @click="saveSyncSettings">
-            <TxSpinner v-if="syncSaving" :size="14" />
-            <span class="ml-2">
-              {{ t('dashboard.sections.updates.sync.save') }}
-            </span>
-          </TxButton>
-          <span v-if="syncError" class="text-xs text-rose-500">
-            {{ syncError }}
-          </span>
-        </div>
-</div>
-    </section>
-
-    <section class="apple-card-lg p-5">
-      <div class="flex flex-wrap items-center justify-between gap-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 class="text-base font-semibold text-black dark:text-white">
             {{ t('dashboard.sections.updates.listTitle', '更新与要闻') }}
@@ -272,15 +348,106 @@ function closeDeleteConfirm() {
             {{ t('dashboard.sections.updates.listSubtitle', '统一管理要闻与版本更新。') }}
           </p>
         </div>
+
         <div class="flex flex-wrap items-center gap-2">
-          <TxButton v-if="isAdmin" icon="i-carbon-add" size="small" @click="openCreate">
+          <TxButton
+            variant="secondary"
+            size="small"
+            icon="i-carbon-launch"
+            native-type="button"
+            @click="openUpdateLink('https://docs.tuff.chat/changelog')"
+          >
+            {{ isZh ? 'Changelog 文档' : 'Changelog' }}
+          </TxButton>
+          <TxButton v-if="isAdmin" variant="primary" icon="i-carbon-add" size="small" native-type="button" @click="openCreate">
             {{ t('dashboard.sections.updates.addButton') }}
           </TxButton>
-          <FlatButton
-            icon="i-carbon-news"
-            to="https://docs.tuff.chat/changelog"
-            target="_blank"
-          />
+        </div>
+      </div>
+
+      <div class="UpdateFilters mt-4">
+        <div class="UpdateFilters-Grid">
+          <div class="UpdateFilters-Field UpdateFilters-Field--search">
+            <label class="UpdateFilters-Label">{{ isZh ? '搜索' : 'Search' }}</label>
+            <TuffInput
+              v-model="searchKeyword"
+              type="text"
+              clearable
+              :placeholder="isZh ? '标题 / 摘要 / 标签 / 版本号' : 'Title / summary / tags / release tag'"
+            />
+          </div>
+
+          <div class="UpdateFilters-Field">
+            <label class="UpdateFilters-Label">{{ isZh ? '类型' : 'Type' }}</label>
+            <TuffSelect v-model="selectedType">
+              <TuffSelectItem
+                v-for="option in typeOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </TuffSelect>
+          </div>
+
+          <div class="UpdateFilters-Field">
+            <label class="UpdateFilters-Label">{{ isZh ? '渠道' : 'Channel' }}</label>
+            <TuffSelect v-model="selectedChannel">
+              <TuffSelectItem
+                v-for="option in channelOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </TuffSelect>
+          </div>
+
+          <div class="UpdateFilters-Field">
+            <label class="UpdateFilters-Label">{{ isZh ? '范围' : 'Scope' }}</label>
+            <TuffSelect v-model="selectedScope">
+              <TuffSelectItem
+                v-for="option in scopeOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </TuffSelect>
+          </div>
+
+          <div class="UpdateFilters-Field">
+            <label class="UpdateFilters-Label">{{ isZh ? '来源' : 'Source' }}</label>
+            <TuffSelect v-model="selectedSource">
+              <TuffSelectItem
+                v-for="option in sourceOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </TuffSelect>
+          </div>
+
+          <div class="UpdateFilters-Field">
+            <label class="UpdateFilters-Label">{{ isZh ? '时间' : 'Date range' }}</label>
+            <TuffSelect v-model="selectedDateRange">
+              <TuffSelectItem
+                v-for="option in dateRangeOptions"
+                :key="option.value"
+                :value="option.value"
+                :label="option.label"
+              />
+            </TuffSelect>
+          </div>
+        </div>
+
+        <div class="UpdateFilters-Actions">
+          <TxButton
+            variant="ghost"
+            size="small"
+            native-type="button"
+            :disabled="!hasActiveFilters"
+            @click="clearFilters"
+          >
+            {{ isZh ? '清空筛选' : 'Clear filters' }}
+          </TxButton>
         </div>
       </div>
 
@@ -303,64 +470,115 @@ function closeDeleteConfirm() {
         {{ t('dashboard.sections.updates.empty') }}
       </div>
 
-      <ul v-else class="mt-5 space-y-3">
-        <li
-          v-for="update in updates"
+      <div
+        v-else-if="!filteredUpdates.length"
+        class="mt-4 rounded-2xl border border-dashed border-black/[0.08] py-8 text-center text-sm text-black/40 dark:border-white/[0.08] dark:text-white/40"
+      >
+        {{ isZh ? '没有匹配结果，请调整筛选条件。' : 'No results. Try adjusting the filters.' }}
+      </div>
+
+      <div v-else class="UpdateList mt-5">
+        <TxCardItem
+          v-for="update in filteredUpdates"
           :key="update.id"
-          class="group relative rounded-2xl bg-black/[0.02] p-4 transition-all duration-200 hover:bg-black/[0.04] dark:bg-white/[0.02] dark:hover:bg-white/[0.04]"
+          class="UpdateList-Card"
+          :title="resolveLocalizedText(update.title)"
+          :icon-class="resolveTypeIcon(update.type)"
+          :clickable="Boolean(update.link)"
+          @click="openUpdateLink(update.link)"
         >
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="text-xs text-black/40 dark:text-white/40">
-                  {{ formatDate(update.timestamp) }}
-                </span>
-                <span
-                  class="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                  :class="update.type === 'release'
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-black/[0.05] text-black/60 dark:bg-white/[0.08] dark:text-white/60'"
-                >
-                  {{ updateTypeLabel(update) }}
-                </span>
-                <span
-                  v-if="update.scope && update.scope !== 'web'"
-                  class="rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/[0.08] dark:text-white/60"
-                >
-                  {{ update.scope === 'system'
-                    ? t('dashboard.sections.updates.scopeSystem', '系统')
-                    : t('dashboard.sections.updates.scopeBoth', '官网+系统') }}
-                </span>
-                <span
-                  v-for="tag in update.tags.slice(0, 2)"
-                  :key="tag"
-                  class="rounded-md bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/[0.08] dark:text-white/60"
-                >
-                  {{ tag }}
-                </span>
-              </div>
-              <a
-                :href="update.link"
-                target="_blank"
-                rel="noopener"
-                class="mt-1.5 block text-sm font-medium text-black transition hover:text-primary dark:text-white"
+          <template #subtitle>
+            <div class="UpdateList-Meta">
+              <span class="UpdateList-Date">{{ formatDate(update.timestamp) }}</span>
+              <TxTag class="UpdateList-Tag" size="sm" :label="updateTypeLabel(update)" :color="updateTypeTagColor(update.type)" />
+              <TxTag
+                v-if="update.scope !== 'web'"
+                class="UpdateList-Tag"
+                size="sm"
+                :label="updateScopeLabel(update.scope)"
+                :color="updateScopeTagColor(update.scope)"
+              />
+              <TxTag class="UpdateList-Tag" size="sm" :label="sourceLabel(update)" :color="updateSourceTagColor(update)" />
+              <TxTag
+                v-if="update.releaseTag"
+                class="UpdateList-Tag"
+                size="sm"
+                :label="update.releaseTag"
+                :color="UPDATE_RELEASE_TAG_COLOR"
+              />
+            </div>
+          </template>
+
+          <template #description>
+            <p class="UpdateList-Summary line-clamp-2">
+              {{ resolveLocalizedText(update.summary) }}
+            </p>
+            <div v-if="update.channels.length || update.tags.length" class="UpdateList-Tags">
+              <TxTag
+                v-for="channel in update.channels.slice(0, 3)"
+                :key="`${update.id}-channel-${channel}`"
+                class="UpdateList-Tag"
+                size="sm"
+                :label="channel"
+                :color="updateChannelTagColor(channel)"
+              />
+              <TxTag
+                v-for="tag in update.tags.slice(0, 3)"
+                :key="`${update.id}-tag-${tag}`"
+                class="UpdateList-Tag"
+                size="sm"
+                :label="`#${tag}`"
+                :color="UPDATE_KEYWORD_TAG_COLOR"
+              />
+            </div>
+          </template>
+
+          <template #right>
+            <div class="UpdateList-Actions">
+              <TxButton
+                v-if="update.link"
+                variant="bare"
+                circle
+                size="mini"
+                native-type="button"
+                :title="isZh ? '打开链接' : 'Open link'"
+                @click.stop="openUpdateLink(update.link)"
               >
-                {{ resolveLocalizedText(update.title) }}
-              </a>
-              <p class="mt-1 line-clamp-2 text-sm text-black/50 dark:text-white/50">
-                {{ resolveLocalizedText(update.summary) }}
-              </p>
+                <span class="i-carbon-launch text-sm" />
+              </TxButton>
+              <TxButton
+                v-if="isAdmin && update.type !== 'release'"
+                variant="bare"
+                circle
+                size="mini"
+                native-type="button"
+                :title="t('dashboard.sections.updates.editButton')"
+                @click.stop="openEdit(update)"
+              >
+                <span class="i-carbon-edit text-sm" />
+              </TxButton>
+              <TxButton
+                v-if="isAdmin && update.type !== 'release'"
+                variant="bare"
+                circle
+                size="mini"
+                native-type="button"
+                :title="t('dashboard.sections.updates.delete', 'Delete')"
+                @click.stop="deleteUpdateItem(update)"
+              >
+                <span class="i-carbon-trash-can text-sm" />
+              </TxButton>
             </div>
-            <div
-              v-if="isAdmin && update.type !== 'release'"
-              class="flex shrink-0 items-center gap-1 opacity-0 transition group-hover:opacity-100"
-            >
-              <FlatButton icon="i-carbon-edit" @click="openEdit(update)" />
-              <FlatButton icon="i-carbon-trash-can" @click="deleteUpdateItem(update)" />
-            </div>
-          </div>
-        </li>
-      </ul>
+          </template>
+        </TxCardItem>
+      </div>
+
+      <div
+        v-if="!updatesPending && updates.length"
+        class="UpdateList-Footer mt-4 text-xs text-black/40 dark:text-white/40"
+      >
+        {{ isZh ? `共 ${updates.length} 条，当前 ${filteredUpdates.length} 条` : `Total ${updates.length}, showing ${filteredUpdates.length}` }}
+      </div>
     </section>
 
     <DashboardUpdateFormDrawer
@@ -370,85 +588,6 @@ function closeDeleteConfirm() {
       @close="drawerOpen = false"
       @saved="onSaved"
     />
-
-    <Teleport to="body">
-      <TxFlipOverlay
-        v-model="syncGuideVisible"
-        :source="syncGuideSource"
-        :duration="420"
-        :rotate-x="6"
-        :rotate-y="8"
-        transition-name="UpdatesGuideOverlay-Mask"
-        mask-class="UpdatesGuideOverlay-Mask"
-        card-class="UpdatesGuideOverlay-Card"
-      >
-        <template #default="{ close }">
-          <div class="UpdatesGuideOverlay-Inner">
-            <div class="UpdatesGuideOverlay-Header">
-              <div class="space-y-1">
-                <h2 class="UpdatesGuideOverlay-Title">
-                  {{ t('dashboard.sections.updates.sync.guideTitle', '更新/要闻同步说明') }}
-                </h2>
-                <p class="UpdatesGuideOverlay-Desc">
-                  {{ t('dashboard.sections.updates.sync.guideSubtitle', '如何配置同步入口、示例与工作机制。') }}
-                </p>
-              </div>
-              <TxButton variant="secondary" size="small" native-type="button" @click="close?.()">
-                {{ t('dashboard.sections.updates.sync.guideClose', '关闭') }}
-              </TxButton>
-            </div>
-
-            <div class="UpdatesGuideOverlay-Body">
-              <section class="UpdatesGuideOverlay-Section">
-                <h3 class="UpdatesGuideOverlay-SectionTitle">
-                  {{ t('dashboard.sections.updates.sync.guidePurposeTitle', '有什么用') }}
-                </h3>
-                <ul class="UpdatesGuideOverlay-List">
-                  <li class="UpdatesGuideOverlay-ListItem">
-                    <span class="i-carbon-checkmark text-primary text-sm" />
-                    <span>{{ t('dashboard.sections.updates.sync.guidePurposeItem1', '在发布流水线里自动写入更新与要闻。') }}</span>
-                  </li>
-                  <li class="UpdatesGuideOverlay-ListItem">
-                    <span class="i-carbon-checkmark text-primary text-sm" />
-                    <span>{{ t('dashboard.sections.updates.sync.guidePurposeItem2', '保持更新与下载页面内容一致。') }}</span>
-                  </li>
-                </ul>
-              </section>
-
-              <section class="UpdatesGuideOverlay-Section">
-                <h3 class="UpdatesGuideOverlay-SectionTitle">
-                  {{ t('dashboard.sections.updates.sync.guideConfigTitle', '如何配置') }}
-                </h3>
-                <ol class="UpdatesGuideOverlay-List UpdatesGuideOverlay-List--ordered">
-                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep1', '在“同步设置”填写服务器地址（留空默认当前域名）。') }}</li>
-                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep2', '到 API Keys 创建密钥，保存为 CI 的 `NEXUS_API_KEY`。') }}</li>
-                  <li>{{ t('dashboard.sections.updates.sync.guideConfigStep3', '在流水线中调用发布接口提交数据（release/news）。') }}</li>
-                </ol>
-              </section>
-
-              <section class="UpdatesGuideOverlay-Section">
-                <h3 class="UpdatesGuideOverlay-SectionTitle">
-                  {{ t('dashboard.sections.updates.sync.guideExampleTitle', '示例') }}
-                </h3>
-                <p class="UpdatesGuideOverlay-Hint">
-                  {{ t('dashboard.sections.updates.sync.guideExampleHint', '示例使用发布接口（/api/releases）。') }}
-                </p>
-                <pre class="UpdatesGuideOverlay-Code">{{ releaseSyncExample }}</pre>
-              </section>
-
-              <section class="UpdatesGuideOverlay-Section">
-                <h3 class="UpdatesGuideOverlay-SectionTitle">
-                  {{ t('dashboard.sections.updates.sync.guidePrincipleTitle', '作用原理') }}
-                </h3>
-                <p class="UpdatesGuideOverlay-Text">
-                  {{ t('dashboard.sections.updates.sync.guidePrincipleDesc', 'CI 请求携带 API Key → 服务端校验 → 写入 D1/存储 → 前端拉取并展示。') }}
-                </p>
-              </section>
-            </div>
-          </div>
-        </template>
-      </TxFlipOverlay>
-    </Teleport>
 
     <TxBottomDialog
       v-if="deleteConfirmVisible"
@@ -464,132 +603,93 @@ function closeDeleteConfirm() {
 </template>
 
 <style scoped>
-.UpdatesGuideOverlay-Inner {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  height: 100%;
-  padding: 20px;
+.UpdateFilters {
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 100%, transparent);
+  padding-top: 14px;
 }
 
-.UpdatesGuideOverlay-Header {
+.UpdateFilters-Grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.UpdateFilters-Field {
+  min-width: 0;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.UpdateFilters-Field--search {
+  grid-column: 1 / -1;
+}
+
+.UpdateFilters-Field > * {
+  min-width: 0;
+}
+
+.UpdateFilters-Label {
+  font-size: 12px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 88%, transparent);
+}
+
+.UpdateFilters-Actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.UpdateList {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.UpdatesGuideOverlay-Title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
+.UpdateList-Card {
+  min-height: 112px;
 }
 
-.UpdatesGuideOverlay-Desc {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-}
-
-.UpdatesGuideOverlay-Body {
+.UpdateList-Meta {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
-.UpdatesGuideOverlay-Section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.UpdatesGuideOverlay-SectionTitle {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--tx-text-color-secondary);
-}
-
-.UpdatesGuideOverlay-List {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.UpdatesGuideOverlay-List--ordered {
-  display: grid;
-  gap: 8px;
-  padding-left: 18px;
-  list-style: decimal;
-}
-
-.UpdatesGuideOverlay-ListItem {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.UpdatesGuideOverlay-Hint {
+.UpdateList-Date {
   font-size: 12px;
-  color: var(--tx-text-color-secondary);
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 90%, transparent);
+  margin-right: 2px;
 }
 
-.UpdatesGuideOverlay-Code {
-  white-space: pre-wrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  font-size: 11px;
-  line-height: 1.5;
-  padding: 12px;
-  border-radius: 12px;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: color-mix(in srgb, var(--tx-bg-color-secondary, #f5f5f5) 80%, transparent);
-  color: var(--tx-text-color-secondary);
+.UpdateList-Summary {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, rgba(150, 150, 150, 1)) 94%, transparent);
 }
 
-.UpdatesGuideOverlay-Text {
-  line-height: 1.6;
+.UpdateList-Tags {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-</style>
 
-<style>
-.UpdatesGuideOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1900;
-  background: rgba(12, 12, 16, 0.4);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+.UpdateList-Tag {
+  letter-spacing: 0;
+}
+
+.UpdateList-Actions {
   display: flex;
   align-items: center;
-  justify-content: center;
-  perspective: 1200px;
+  gap: 2px;
 }
 
-.UpdatesGuideOverlay-Mask-enter-active,
-.UpdatesGuideOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.UpdatesGuideOverlay-Mask-enter-from,
-.UpdatesGuideOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.UpdatesGuideOverlay-Card {
-  width: min(640px, 92vw);
-  min-height: 360px;
-  max-height: 82vh;
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
-  overflow: auto;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
+.UpdateList-Footer {
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, rgba(120, 120, 120, 0.24)) 100%, transparent);
+  padding-top: 10px;
 }
 </style>
