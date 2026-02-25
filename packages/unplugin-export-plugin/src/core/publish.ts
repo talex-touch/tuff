@@ -20,7 +20,7 @@ interface PackageInfo {
 }
 
 function getDefaultApiUrl(): string {
-  return `${getTuffBaseUrl()}/api/market/plugins/publish`
+  return `${getTuffBaseUrl()}/api/store/plugins/publish`
 }
 
 async function calculateSha256(filePath: string): Promise<string> {
@@ -100,7 +100,7 @@ export async function login(): Promise<void> {
     console.log('Usage: tuff login <token>')
     console.log('')
     console.log('Get your token from the Tuff Nexus dashboard:')
-    console.log('  https://tuff.talex.link/dashboard')
+    console.log('  https://tuff.tagzxia.com/dashboard')
     console.log('')
     console.log('Or set the TUFF_AUTH_TOKEN environment variable.')
     return
