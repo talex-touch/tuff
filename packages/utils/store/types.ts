@@ -1,13 +1,13 @@
 import type { StorageList } from '../common/storage/constants'
 
-export type MarketProviderType = 'repository' | 'nexusStore' | 'npmPackage' | 'tpexApi'
+export type StoreProviderType = 'repository' | 'nexusStore' | 'npmPackage' | 'tpexApi'
 
-export type MarketProviderTrustLevel = 'official' | 'verified' | 'unverified'
+export type StoreProviderTrustLevel = 'official' | 'verified' | 'unverified'
 
-export interface MarketProviderDefinition {
+export interface StoreProviderDefinition {
   id: string
   name: string
-  type: MarketProviderType
+  type: StoreProviderType
   /**
    * Base URL or identifier for the provider.
    * Individual provider implementations can interpret this differently.
@@ -20,7 +20,7 @@ export interface MarketProviderDefinition {
   description?: string
   enabled: boolean
   priority: number
-  trustLevel?: MarketProviderTrustLevel
+  trustLevel?: StoreProviderTrustLevel
   tags?: string[]
   /**
    * Whether this provider should be treated as read-only (no install)
@@ -36,15 +36,15 @@ export interface MarketProviderDefinition {
   outdated?: boolean
 }
 
-export interface MarketSourcesPayload {
+export interface StoreSourcesPayload {
   /**
    * Schema version, used for migrations.
    */
   version: number
-  sources: MarketProviderDefinition[]
+  sources: StoreProviderDefinition[]
 }
 
-export type MarketInstallInstruction
+export type StoreInstallInstruction
   = | {
     type: 'url'
     url: string
@@ -64,7 +64,7 @@ export type MarketInstallInstruction
     sparse?: boolean
   }
 
-export interface MarketPlugin {
+export interface StorePlugin {
   id: string
   name: string
   version?: string
@@ -84,32 +84,32 @@ export interface MarketPlugin {
   readmeUrl?: string
   homepage?: string
   downloadUrl?: string
-  install?: MarketInstallInstruction
+  install?: StoreInstallInstruction
   providerId: string
   providerName: string
-  providerType: MarketProviderType
-  providerTrustLevel: MarketProviderTrustLevel
+  providerType: StoreProviderType
+  providerTrustLevel: StoreProviderTrustLevel
   trusted: boolean
   official?: boolean
   timestamp?: number | string
 }
 
-export interface MarketProviderResultMeta {
+export interface StoreProviderResultMeta {
   providerId: string
   providerName: string
-  providerType: MarketProviderType
+  providerType: StoreProviderType
   success: boolean
   error?: string
   fetchedAt: number
   itemCount: number
 }
 
-export interface MarketProviderListOptions {
+export interface StoreProviderListOptions {
   keyword?: string
   force?: boolean
 }
 
-export interface MarketHttpRequestOptions {
+export interface StoreHttpRequestOptions {
   url: string
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   headers?: Record<string, string>
@@ -119,7 +119,7 @@ export interface MarketHttpRequestOptions {
   responseType?: 'json' | 'text' | 'arraybuffer'
 }
 
-export interface MarketHttpResponse<T = unknown> {
+export interface StoreHttpResponse<T = unknown> {
   status: number
   statusText: string
   headers: Record<string, string>
@@ -127,7 +127,7 @@ export interface MarketHttpResponse<T = unknown> {
   url: string
 }
 
-export interface MarketSourcesStorageInfo {
+export interface StoreSourcesStorageInfo {
   storageKey: StorageList
   version: number
 }

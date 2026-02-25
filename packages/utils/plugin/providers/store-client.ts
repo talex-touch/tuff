@@ -6,7 +6,7 @@ import { PluginProviderType } from './types'
 
 export type PluginSourceType = 'tpex' | 'npm' | 'all'
 
-export interface MarketPluginInfo {
+export interface StorePluginInfo {
   id: string
   name: string
   slug: string
@@ -24,7 +24,7 @@ export interface MarketPluginInfo {
   raw: TpexPluginInfo | NpmPackageInfo
 }
 
-export interface MarketSearchOptions {
+export interface StoreSearchOptions {
   keyword?: string
   source?: PluginSourceType
   category?: string
@@ -32,8 +32,8 @@ export interface MarketSearchOptions {
   offset?: number
 }
 
-export interface MarketSearchResult {
-  plugins: MarketPluginInfo[]
+export interface StoreSearchResult {
+  plugins: StorePluginInfo[]
   total: number
   sources: {
     tpex: number
@@ -41,7 +41,7 @@ export interface MarketSearchResult {
   }
 }
 
-function normalizeTpexPlugin(plugin: TpexPluginInfo): MarketPluginInfo {
+function normalizeTpexPlugin(plugin: TpexPluginInfo): StorePluginInfo {
   return {
     id: plugin.id,
     name: plugin.name,
@@ -60,7 +60,7 @@ function normalizeTpexPlugin(plugin: TpexPluginInfo): MarketPluginInfo {
   }
 }
 
-function normalizeNpmPlugin(pkg: NpmPackageInfo): MarketPluginInfo {
+function normalizeNpmPlugin(pkg: NpmPackageInfo): StorePluginInfo {
   const authorName = typeof pkg.author === 'string'
     ? pkg.author
     : pkg.author?.name ?? 'Unknown'
@@ -84,7 +84,7 @@ function normalizeNpmPlugin(pkg: NpmPackageInfo): MarketPluginInfo {
 /**
  * Unified plugin market client supporting multiple sources
  */
-export class PluginMarketClient {
+export class PluginStoreClient {
   private tpexProvider: TpexProvider
   private npmProvider: NpmProvider
 
@@ -99,9 +99,9 @@ export class PluginMarketClient {
   /**
    * Search plugins from all sources
    */
-  async search(options: MarketSearchOptions = {}): Promise<MarketSearchResult> {
+  async search(options: StoreSearchOptions = {}): Promise<StoreSearchResult> {
     const { keyword, source = 'all', limit = 50, offset = 0 } = options
-    const results: MarketPluginInfo[] = []
+    const results: StorePluginInfo[] = []
     let tpexCount = 0
     let npmCount = 0
 
@@ -116,7 +116,7 @@ export class PluginMarketClient {
         tpexCount = normalized.length
       }
       catch (error) {
-        console.warn('[MarketClient] TPEX search failed:', error)
+        console.warn('[StoreClient] TPEX search failed:', error)
       }
     }
 
@@ -128,7 +128,7 @@ export class PluginMarketClient {
         npmCount = normalized.length
       }
       catch (error) {
-        console.warn('[MarketClient] NPM search failed:', error)
+        console.warn('[StoreClient] NPM search failed:', error)
       }
     }
 
@@ -153,7 +153,7 @@ export class PluginMarketClient {
   /**
    * Get plugin details by identifier
    */
-  async getPlugin(identifier: string, source?: PluginSourceType): Promise<MarketPluginInfo | null> {
+  async getPlugin(identifier: string, source?: PluginSourceType): Promise<StorePluginInfo | null> {
     if (source === 'tpex' || (!source && !identifier.includes('/'))) {
       try {
         const plugin = await this.tpexProvider.getPlugin(identifier)
@@ -182,7 +182,7 @@ export class PluginMarketClient {
   /**
    * Get install source string for a plugin
    */
-  getInstallSource(plugin: MarketPluginInfo): string {
+  getInstallSource(plugin: StorePluginInfo): string {
     if (plugin.source === 'tpex') {
       return `tpex:${plugin.slug}`
     }
@@ -192,7 +192,7 @@ export class PluginMarketClient {
   /**
    * Get provider type for a plugin
    */
-  getProviderType(plugin: MarketPluginInfo): PluginProviderType {
+  getProviderType(plugin: StorePluginInfo): PluginProviderType {
     return plugin.source === 'tpex'
       ? PluginProviderType.TPEX
       : PluginProviderType.NPM
@@ -201,7 +201,7 @@ export class PluginMarketClient {
   /**
    * List all plugins from official source (TPEX)
    */
-  async listOfficialPlugins(): Promise<MarketPluginInfo[]> {
+  async listOfficialPlugins(): Promise<StorePluginInfo[]> {
     const plugins = await this.tpexProvider.listPlugins()
     return plugins.map(normalizeTpexPlugin)
   }
@@ -209,10 +209,10 @@ export class PluginMarketClient {
   /**
    * List all plugins from npm
    */
-  async listNpmPlugins(): Promise<MarketPluginInfo[]> {
+  async listNpmPlugins(): Promise<StorePluginInfo[]> {
     const plugins = await this.npmProvider.listPlugins()
     return plugins.map(normalizeNpmPlugin)
   }
 }
 
-export const defaultMarketClient = new PluginMarketClient()
+export const defaultStoreClient = new PluginStoreClient()

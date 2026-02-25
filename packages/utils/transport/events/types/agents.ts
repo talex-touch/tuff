@@ -85,7 +85,7 @@ export type AgentsToolsGetResponse = AgentTool | null
 
 export type AgentsStatsResponse = unknown
 
-export type AgentMarketCategory =
+export type AgentStoreCategory =
   | 'productivity'
   | 'file-management'
   | 'data-processing'
@@ -94,21 +94,21 @@ export type AgentMarketCategory =
   | 'development'
   | 'custom'
 
-export type AgentMarketSource = 'official' | 'community' | 'local'
+export type AgentStoreSource = 'official' | 'community' | 'local'
 
-export interface AgentsMarketInfo {
+export interface AgentsStoreInfo {
   id: string
   name: string
   description: string
   version: string
   author: string
-  category: AgentMarketCategory
+  category: AgentStoreCategory
   capabilities: string[]
   tags: string[]
   downloads: number
   rating: number
   ratingCount: number
-  source: AgentMarketSource
+  source: AgentStoreSource
   isInstalled: boolean
   installedVersion?: string
   hasUpdate?: boolean
@@ -119,10 +119,10 @@ export interface AgentsMarketInfo {
   repository?: string
 }
 
-export interface AgentsMarketSearchRequest {
+export interface AgentsStoreSearchRequest {
   keyword?: string
-  category?: AgentMarketCategory
-  source?: AgentMarketSource
+  category?: AgentStoreCategory
+  source?: AgentStoreSource
   tags?: string[]
   sortBy?: 'downloads' | 'rating' | 'updated' | 'name'
   sortOrder?: 'asc' | 'desc'
@@ -130,37 +130,37 @@ export interface AgentsMarketSearchRequest {
   offset?: number
 }
 
-export interface AgentsMarketSearchResponse {
-  agents: AgentsMarketInfo[]
+export interface AgentsStoreSearchResponse {
+  agents: AgentsStoreInfo[]
   total: number
   hasMore: boolean
 }
 
-export interface AgentsMarketGetRequest {
+export interface AgentsStoreGetRequest {
   agentId: string
 }
 
-export type AgentsMarketGetResponse = AgentsMarketInfo | null
+export type AgentsStoreGetResponse = AgentsStoreInfo | null
 
-export type AgentsMarketFeaturedResponse = AgentsMarketInfo[]
+export type AgentsStoreFeaturedResponse = AgentsStoreInfo[]
 
-export type AgentsMarketInstalledResponse = AgentsMarketInfo[]
+export type AgentsStoreInstalledResponse = AgentsStoreInfo[]
 
-export interface AgentsMarketCategoryItem {
-  id: AgentMarketCategory
+export interface AgentsStoreCategoryItem {
+  id: AgentStoreCategory
   name: string
   count: number
 }
 
-export type AgentsMarketCategoriesResponse = AgentsMarketCategoryItem[]
+export type AgentsStoreCategoriesResponse = AgentsStoreCategoryItem[]
 
-export interface AgentsMarketInstallRequest {
+export interface AgentsStoreInstallRequest {
   agentId: string
   version?: string
   force?: boolean
 }
 
-export interface AgentsMarketInstallResponse {
+export interface AgentsStoreInstallResponse {
   success: boolean
   agentId: string
   version: string
@@ -168,10 +168,10 @@ export interface AgentsMarketInstallResponse {
   error?: string
 }
 
-export interface AgentsMarketUninstallRequest {
+export interface AgentsStoreUninstallRequest {
   agentId: string
 }
 
-export type AgentsMarketUninstallResponse = AgentsMarketInstallResponse
+export type AgentsStoreUninstallResponse = AgentsStoreInstallResponse
 
-export type AgentsMarketCheckUpdatesResponse = AgentsMarketInfo[]
+export type AgentsStoreCheckUpdatesResponse = AgentsStoreInfo[]

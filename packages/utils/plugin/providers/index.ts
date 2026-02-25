@@ -1,4 +1,4 @@
-export * from './market-client'
+export * from './store-client'
 export * from './npm-provider'
 export * from './registry'
 export * from './tpex-provider'

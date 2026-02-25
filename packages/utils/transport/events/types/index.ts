@@ -36,8 +36,8 @@ export * from './file-index'
 // Flow domain types
 export * from './flow'
 
-// Market domain types
-export * from './market'
+// Store domain types
+export * from './store'
 
 // MetaOverlay domain types
 export * from './meta-overlay'

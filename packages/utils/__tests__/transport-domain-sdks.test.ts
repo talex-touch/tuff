@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AgentsEvents, AppEvents, PermissionEvents, UpdateEvents } from '../transport/events'
-import { createAgentMarketSdk } from '../transport/sdk/domains/agents-market'
+import { createAgentStoreSdk } from '../transport/sdk/domains/agents-store'
 import { createAppSdk } from '../transport/sdk/domains/app'
 import { createAgentsSdk } from '../transport/sdk/domains/agents'
 import { createIntelligenceSdk } from '../transport/sdk/domains/intelligence'
@@ -91,7 +91,7 @@ describe('transport domain sdk mappings', () => {
 
   it('agent market sdk maps market event names through typed events', async () => {
     const transport = createTransportMock()
-    const sdk = createAgentMarketSdk(transport as any)
+    const sdk = createAgentStoreSdk(transport as any)
 
     await sdk.searchAgents({ keyword: 'workflow' })
     await sdk.installAgent('community.workflow-agent', '1.0.0')
@@ -99,15 +99,15 @@ describe('transport domain sdk mappings', () => {
 
     expect(transport.send).toHaveBeenNthCalledWith(
       1,
-      AgentsEvents.market.search,
+      AgentsEvents.store.search,
       { keyword: 'workflow' },
     )
     expect(transport.send).toHaveBeenNthCalledWith(
       2,
-      AgentsEvents.market.install,
+      AgentsEvents.store.install,
       { agentId: 'community.workflow-agent', version: '1.0.0' },
     )
-    expect(transport.send).toHaveBeenNthCalledWith(3, AgentsEvents.market.checkUpdates)
+    expect(transport.send).toHaveBeenNthCalledWith(3, AgentsEvents.store.checkUpdates)
   })
 
   it('agents sdk maps api list/execute-immediate/update-priority events', async () => {

@@ -1,27 +1,27 @@
 import type {
-  MarketProviderDefinition,
-  MarketProviderTrustLevel,
-  MarketSourcesPayload,
-  MarketSourcesStorageInfo,
+  StoreProviderDefinition,
+  StoreProviderTrustLevel,
+  StoreSourcesPayload,
+  StoreSourcesStorageInfo,
 } from './types'
 import { StorageList } from '../common/storage/constants'
 import { NEXUS_BASE_URL } from '../env'
 
-export const MARKET_SOURCES_STORAGE_KEY = StorageList.MARKET_SOURCES
-export const MARKET_SOURCES_STORAGE_VERSION = 1
+export const STORE_SOURCES_STORAGE_KEY = StorageList.STORE_SOURCES
+export const STORE_SOURCES_STORAGE_VERSION = 1
 
 function defineProvider(
-  provider: Omit<MarketProviderDefinition, 'trustLevel'> & {
-    trustLevel?: MarketProviderTrustLevel
+  provider: Omit<StoreProviderDefinition, 'trustLevel'> & {
+    trustLevel?: StoreProviderTrustLevel
   },
-): MarketProviderDefinition {
+): StoreProviderDefinition {
   return {
     trustLevel: provider.trustLevel ?? 'unverified',
     ...provider,
   }
 }
 
-export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
+export const DEFAULT_STORE_PROVIDERS: StoreProviderDefinition[] = [
   defineProvider({
     id: 'tuff-nexus',
     name: 'Tuff Nexus',
@@ -35,7 +35,7 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
     outdated: false,
     readOnly: true,
     config: {
-      apiUrl: `${NEXUS_BASE_URL}/api/market/plugins`,
+      apiUrl: `${NEXUS_BASE_URL}/api/store/plugins`,
     },
   }),
   defineProvider({
@@ -100,18 +100,18 @@ export const DEFAULT_MARKET_PROVIDERS: MarketProviderDefinition[] = [
   }),
 ]
 
-export const MARKET_SOURCES_STORAGE_INFO: MarketSourcesStorageInfo = {
-  storageKey: MARKET_SOURCES_STORAGE_KEY,
-  version: MARKET_SOURCES_STORAGE_VERSION,
+export const STORE_SOURCES_STORAGE_INFO: StoreSourcesStorageInfo = {
+  storageKey: STORE_SOURCES_STORAGE_KEY,
+  version: STORE_SOURCES_STORAGE_VERSION,
 }
 
-export function createDefaultMarketSourcesPayload(): MarketSourcesPayload {
+export function createDefaultStoreSourcesPayload(): StoreSourcesPayload {
   const clone = typeof structuredClone === 'function'
-    ? structuredClone(DEFAULT_MARKET_PROVIDERS)
-    : JSON.parse(JSON.stringify(DEFAULT_MARKET_PROVIDERS))
+    ? structuredClone(DEFAULT_STORE_PROVIDERS)
+    : JSON.parse(JSON.stringify(DEFAULT_STORE_PROVIDERS))
 
   return {
-    version: MARKET_SOURCES_STORAGE_VERSION,
+    version: STORE_SOURCES_STORAGE_VERSION,
     sources: clone,
   }
 }

@@ -4,31 +4,31 @@ import type {
   AgentInstallResult,
   AgentSearchOptions,
   AgentSearchResult,
-  MarketAgentInfo,
-} from '../../transport/sdk/domains/agents-market'
+  StoreAgentInfo,
+} from '../../transport/sdk/domains/agents-store'
 import { ref } from 'vue'
-import { useAgentMarketSdk } from './use-agent-market-sdk'
+import { useAgentStoreSdk } from './use-agent-store-sdk'
 
 export type {
   AgentCategory,
   AgentInstallResult,
   AgentSearchOptions,
   AgentSearchResult,
-  MarketAgentInfo,
+  StoreAgentInfo,
 }
 
-interface AgentMarketComposable {
+interface AgentStoreComposable {
   // Search and browse
   searchAgents: (options?: AgentSearchOptions) => Promise<AgentSearchResult>
-  getAgentDetails: (agentId: string) => Promise<MarketAgentInfo | null>
-  getFeaturedAgents: () => Promise<MarketAgentInfo[]>
-  getInstalledAgents: () => Promise<MarketAgentInfo[]>
+  getAgentDetails: (agentId: string) => Promise<StoreAgentInfo | null>
+  getFeaturedAgents: () => Promise<StoreAgentInfo[]>
+  getInstalledAgents: () => Promise<StoreAgentInfo[]>
   getCategories: () => Promise<AgentCategory[]>
 
   // Install/Uninstall
   installAgent: (agentId: string, version?: string) => Promise<AgentInstallResult>
   uninstallAgent: (agentId: string) => Promise<AgentInstallResult>
-  checkUpdates: () => Promise<MarketAgentInfo[]>
+  checkUpdates: () => Promise<StoreAgentInfo[]>
 
   // State
   isLoading: Ref<boolean>
@@ -43,7 +43,7 @@ interface AgentMarketComposable {
  *
  * @example
  * ```ts
- * const { searchAgents, installAgent, isLoading } = useAgentMarket()
+ * const { searchAgents, installAgent, isLoading } = useAgentStore()
  *
  * // Search agents
  * const result = await searchAgents({ keyword: 'file', category: 'productivity' })
@@ -53,12 +53,12 @@ interface AgentMarketComposable {
  * ```
  */
 /**
- * @deprecated 请优先使用 useAgentMarketSdk() 直接调用 typed domain SDK，该 hook 仅保留兼容壳。
+ * @deprecated 请优先使用 useAgentStoreSdk() 直接调用 typed domain SDK，该 hook 仅保留兼容壳。
  */
-export function useAgentMarket(): AgentMarketComposable {
+export function useAgentStore(): AgentStoreComposable {
   const isLoading = ref(false)
   const lastError = ref<string | null>(null)
-  const agentMarketSdk = useAgentMarketSdk()
+  const agentStoreSdk = useAgentStoreSdk()
 
   async function withLoading<T>(fn: () => Promise<T>): Promise<T> {
     isLoading.value = true
@@ -77,28 +77,28 @@ export function useAgentMarket(): AgentMarketComposable {
 
   return {
     searchAgents: (options?: AgentSearchOptions) =>
-      withLoading(() => agentMarketSdk.searchAgents(options)),
+      withLoading(() => agentStoreSdk.searchAgents(options)),
 
     getAgentDetails: (agentId: string) =>
-      withLoading(() => agentMarketSdk.getAgentDetails(agentId)),
+      withLoading(() => agentStoreSdk.getAgentDetails(agentId)),
 
     getFeaturedAgents: () =>
-      withLoading(() => agentMarketSdk.getFeaturedAgents()),
+      withLoading(() => agentStoreSdk.getFeaturedAgents()),
 
     getInstalledAgents: () =>
-      withLoading(() => agentMarketSdk.getInstalledAgents()),
+      withLoading(() => agentStoreSdk.getInstalledAgents()),
 
     getCategories: () =>
-      withLoading(() => agentMarketSdk.getCategories()),
+      withLoading(() => agentStoreSdk.getCategories()),
 
     installAgent: (agentId: string, version?: string) =>
-      withLoading(() => agentMarketSdk.installAgent(agentId, version)),
+      withLoading(() => agentStoreSdk.installAgent(agentId, version)),
 
     uninstallAgent: (agentId: string) =>
-      withLoading(() => agentMarketSdk.uninstallAgent(agentId)),
+      withLoading(() => agentStoreSdk.uninstallAgent(agentId)),
 
     checkUpdates: () =>
-      withLoading(() => agentMarketSdk.checkUpdates()),
+      withLoading(() => agentStoreSdk.checkUpdates()),
 
     isLoading,
     lastError,
