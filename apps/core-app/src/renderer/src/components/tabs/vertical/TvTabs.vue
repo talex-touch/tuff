@@ -23,6 +23,13 @@ export default defineComponent({
     const slotWrapper = ref<HTMLElement | null>(null)
     const headerWrapper = ref<HTMLElement | null>(null)
     const indicator = ref<HTMLElement | null>(null)
+    const isFillValue = (value: unknown): boolean =>
+      value === true || value === '' || value === 'true'
+
+    const resolveTabFill = (node: VNode | null | undefined): boolean => {
+      if (!node?.props) return false
+      return isFillValue((node.props as Record<string, unknown>).fill)
+    }
 
     // 合格的组件名称
     const qualifiedName = ['TvTabItem', 'TvTabItemGroup']
@@ -224,11 +231,15 @@ export default defineComponent({
       const getSelectSlotContent = (): VNode => {
         // 获取当前激活的内容
         let activeContent: VNodeChild | VNodeChild[] | SlotObject | null = null
+        let activeTabNode: VNode | null = null
         const currentActiveKey = Object.keys(activeNodes).find((key) => activeNodes[key])
 
         if (currentActiveKey) {
           const activeIndex = Number.parseInt(currentActiveKey) - 1
           const activeChild = children[activeIndex]
+          if (activeChild) {
+            activeTabNode = activeChild
+          }
 
           if (activeChild && activeChild.children) {
             if (
@@ -254,13 +265,16 @@ export default defineComponent({
           } else if (typeof lastActive.value.children === 'object') {
             activeContent = lastActive.value.children as SlotObject
           }
+          activeTabNode = lastActive.value
         }
+
+        const isFillSlot = resolveTabFill(activeTabNode)
 
         return h(
           'div',
           {
             ref: slotWrapper,
-            class: 'TTabs-SelectSlot animated'
+            class: ['TTabs-SelectSlot', 'animated', { 'is-fill-slot': isFillSlot }]
           },
           activeContent ||
             h(
@@ -412,6 +426,18 @@ export default defineComponent({
   flex: 1;
   padding: 1.5rem;
   box-sizing: border-box;
+}
+
+.TTabs-SelectSlot.is-fill-slot {
+  align-items: stretch;
+  min-height: 0;
+}
+
+.TTabs-SelectSlot.is-fill-slot > * {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  align-self: stretch;
 }
 
 .TvTabs-Main :deep(.tx-scroll__content) {

@@ -8,11 +8,14 @@ catalog:
   '@auth/core': ^0.34.1
   '@floating-ui/vue': ^1.1.9
   '@iconify-json/cib': ^1.2.3
+  '@langchain/core': ^0.3.80
+  '@langchain/openai': ^0.3.17
   '@lobehub/icons': ^2.43.1
   '@sentry/nuxt': ^10.20.0
   '@sidebase/nuxt-auth': ^0.9.4
   fighting-design: 0.25.1
   gsap: ^3.12.5
+  jsqr: ^1.4.0
   jszip: ^3.10.1
   markdown-it: ^14.1.0
   mermaid: ^11.12.2
@@ -21,6 +24,7 @@ catalog:
   nodemailer: ^7.0.13
   ogl: ^1.0.11
   openapi-typescript: 6.7.5
+  qrcode: ^1.5.4
   react: ^19.2.1
   react-dom: ^19.2.1
   sass: ^1.89.2
@@ -70,3 +74,5 @@ catalogs:
   icons:
     '@iconify-json/carbon': ^1.2.10
     '@iconify-json/twemoji': ^1.2.2
+  conflicts_conflicts_frontend_h3_5_18_h3_5_27:
+    vue: ^3.5.27

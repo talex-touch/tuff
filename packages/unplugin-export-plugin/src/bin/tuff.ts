@@ -29,6 +29,7 @@ import {
   printHeader,
   printInfo,
   printList,
+  printWarning,
   styled,
 } from '../cli/prompts'
 import { ensureCliDeviceInfo } from '../cli/device'
@@ -214,7 +215,17 @@ async function startDeviceAuth(): Promise<{
 async function pollDeviceAuth(
   deviceCode: string,
   intervalSeconds: number,
-): Promise<{ status: 'approved' | 'expired' | 'cancelled' | 'timeout'; token?: string }> {
+): Promise<{
+  status: 'approved' | 'expired' | 'cancelled' | 'timeout' | 'rejected' | 'browser_closed'
+  token?: string
+  grantType?: 'short' | 'long'
+  ttlSeconds?: number
+  refreshable?: boolean
+  reason?: string
+  message?: string | null
+  requestIp?: string | null
+  currentIp?: string | null
+}> {
   const baseUrl = getTuffBaseUrl()
   const intervalMs = Math.max(1000, intervalSeconds * 1000)
   const startAt = Date.now()
@@ -235,10 +246,26 @@ async function pollDeviceAuth(
         })
         if (!res.ok)
           return
-        const data = await res.json() as { status?: string, appToken?: string }
+        const data = await res.json() as {
+          status?: string
+          appToken?: string
+          grantType?: 'short' | 'long'
+          ttlSeconds?: number
+          refreshable?: boolean
+          reason?: string
+          message?: string | null
+          requestIp?: string | null
+          currentIp?: string | null
+        }
         if (data?.status === 'approved' && data.appToken) {
           clearInterval(timer)
-          resolve({ status: 'approved', token: data.appToken })
+          resolve({
+            status: 'approved',
+            token: data.appToken,
+            grantType: data.grantType,
+            ttlSeconds: data.ttlSeconds,
+            refreshable: data.refreshable,
+          })
         }
         else if (data?.status === 'expired') {
           clearInterval(timer)
@@ -248,12 +275,42 @@ async function pollDeviceAuth(
           clearInterval(timer)
           resolve({ status: 'cancelled' })
         }
+        else if (data?.status === 'rejected') {
+          clearInterval(timer)
+          resolve({
+            status: 'rejected',
+            reason: data.reason,
+            message: data.message,
+            requestIp: data.requestIp,
+            currentIp: data.currentIp,
+          })
+        }
+        else if (data?.status === 'browser_closed') {
+          clearInterval(timer)
+          resolve({ status: 'browser_closed' })
+        }
       }
       catch {
         // Ignore transient errors
       }
     }, intervalMs)
   })
+}
+
+async function abortDeviceAuth(deviceCode: string): Promise<void> {
+  const baseUrl = getTuffBaseUrl()
+  try {
+    await fetch(`${baseUrl}/api/app-auth/device/abort`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ deviceCode }),
+    })
+  }
+  catch {
+    // Ignore
+  }
 }
 
 async function loadPublishModule() {
@@ -524,37 +581,93 @@ async function ensureAuthenticated(): Promise<boolean> {
     return true
   }
 
-  printInfo(t('onboarding.oauthPreparing'))
-  try {
-    const auth = await startDeviceAuth()
-    openBrowser(auth.authorizeUrl)
-    printInfo(t('onboarding.oauthOpenHint', { url: auth.authorizeUrl }))
-    printInfo(t('onboarding.oauthWaiting'))
-    const result = await pollDeviceAuth(auth.deviceCode, auth.intervalSeconds || 3)
-    if (result.status !== 'approved' || !result.token) {
-      if (result.status === 'cancelled') {
-        printInfo(t('onboarding.oauthCancelled'))
+  while (true) {
+    printInfo(t('onboarding.oauthPreparing'))
+    try {
+      const auth = await startDeviceAuth()
+      openBrowser(auth.authorizeUrl)
+      printInfo(t('onboarding.oauthOpenHint', { url: auth.authorizeUrl }))
+      printInfo(t('onboarding.oauthWaiting'))
+
+      while (true) {
+        const result = await pollDeviceAuth(auth.deviceCode, auth.intervalSeconds || 3)
+        if (result.status === 'browser_closed') {
+          printWarning(t('onboarding.oauthTabClosed'))
+          const action = await askSelect(t('onboarding.oauthTabClosedPrompt'), [
+            { label: t('onboarding.oauthTabClosedReopen'), value: 'reopen' },
+            { label: t('onboarding.oauthTabClosedClose'), value: 'close' },
+          ])
+          if (action === 'reopen') {
+            openBrowser(auth.authorizeUrl)
+            printInfo(t('onboarding.oauthReopened', { url: auth.authorizeUrl }))
+            continue
+          }
+          await abortDeviceAuth(auth.deviceCode)
+          printInfo(t('onboarding.oauthClosedByUser'))
+          return false
+        }
+
+        if (result.status === 'rejected') {
+          printWarning(t('onboarding.oauthRejected'))
+          if (result.reason === 'ip_mismatch') {
+            printWarning(t('onboarding.oauthRejectedReasonIpMismatch', {
+              requestIp: result.requestIp || '-',
+              currentIp: result.currentIp || '-',
+            }))
+          }
+          else {
+            printWarning(t('onboarding.oauthRejectedReasonGeneric', {
+              reason: result.message || result.reason || 'unknown',
+            }))
+          }
+          const retry = await askConfirm(t('onboarding.oauthRetryConfirm'), true)
+          if (!retry)
+            return false
+          printInfo(t('onboarding.oauthRetrying'))
+          break
+        }
+
+        if (result.status !== 'approved' || !result.token) {
+          if (result.status === 'cancelled') {
+            printInfo(t('onboarding.oauthCancelled'))
+          }
+          else if (result.status === 'expired') {
+            printInfo(t('onboarding.oauthExpired'))
+          }
+          else {
+            printInfo(t('onboarding.oauthTimeout'))
+          }
+          return false
+        }
+
+        const device = await ensureCliDeviceInfo()
+        await saveAuthToken(result.token, {
+          baseUrl,
+          deviceId: device.deviceId,
+          deviceName: device.deviceName,
+          devicePlatform: device.devicePlatform,
+        })
+        printInfo(t('onboarding.tokenWarning'))
+        if (result.grantType === 'short') {
+          printWarning(t('onboarding.authModeShortHint', {
+            duration: formatDuration(result.ttlSeconds),
+          }))
+          printWarning(t('onboarding.authRefreshDeniedShort'))
+        }
+        else if (result.grantType === 'long') {
+          printInfo(t('onboarding.authModeLongHint', {
+            duration: formatDuration(result.ttlSeconds),
+          }))
+        }
+        printInfo(t('onboarding.loginSuccess'))
+        return true
       }
-      else {
-        printInfo(t('onboarding.oauthTimeout'))
-      }
+    }
+    catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      printInfo(t('onboarding.oauthFailed', { error: message }))
       return false
     }
-    const device = await ensureCliDeviceInfo()
-    await saveAuthToken(result.token, {
-      baseUrl,
-      deviceId: device.deviceId,
-      deviceName: device.deviceName,
-      devicePlatform: device.devicePlatform,
-    })
-    printInfo(t('onboarding.tokenWarning'))
-    printInfo(t('onboarding.loginSuccess'))
-    return true
-  }
-  catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    printInfo(t('onboarding.oauthFailed', { error: message }))
-    return false
   }
 }
 
@@ -614,6 +727,18 @@ function formatTimestamp(value?: string | null): string {
   if (Number.isNaN(parsed.getTime()))
     return value
   return parsed.toLocaleString()
+}
+
+function formatDuration(seconds?: number): string {
+  if (!seconds || !Number.isFinite(seconds) || seconds <= 0)
+    return '-'
+  if (seconds % (60 * 60 * 24) === 0)
+    return `${Math.floor(seconds / (60 * 60 * 24))}d`
+  if (seconds % (60 * 60) === 0)
+    return `${Math.floor(seconds / (60 * 60))}h`
+  if (seconds % 60 === 0)
+    return `${Math.floor(seconds / 60)}m`
+  return `${seconds}s`
 }
 
 async function showAccountSummary(): Promise<void> {

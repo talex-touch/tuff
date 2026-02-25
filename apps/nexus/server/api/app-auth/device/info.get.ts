@@ -28,7 +28,9 @@ export default defineEventHandler(async (event) => {
   const policy = await evaluateDeviceAuthLongTermPolicy(event, userId, request.deviceId)
   const requestIp = request.requestIp
   const currentIp = readRequestIp(event)
-  const ipMismatch = Boolean(requestIp && currentIp && requestIp !== currentIp)
+  const ipMismatch = request.status === 'rejected'
+    ? request.rejectReason === 'ip_mismatch'
+    : Boolean(requestIp && currentIp && requestIp !== currentIp)
 
   return {
     status: request.status,
@@ -39,5 +41,9 @@ export default defineEventHandler(async (event) => {
     longTermAllowed: policy.allowLongTerm,
     longTermReason: policy.reason,
     ipMismatch,
+    rejectReason: request.rejectReason ?? null,
+    rejectMessage: request.rejectMessage ?? null,
+    requestIp: request.rejectRequestIp ?? requestIp ?? null,
+    currentIp: request.rejectCurrentIp ?? currentIp ?? null,
   }
 })

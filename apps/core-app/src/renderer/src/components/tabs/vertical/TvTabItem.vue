@@ -22,6 +22,10 @@ const props = defineProps({
   disabled: {
     type: Boolean,
     default: false
+  },
+  fill: {
+    type: Boolean,
+    default: false
   }
 })
 

@@ -20,6 +20,7 @@ interface AppTokenPayload {
   sub: string
   deviceId?: string
   dv?: number
+  gt?: 'short' | 'long'
   iat: number
   exp: number
   iss: string
@@ -160,6 +161,7 @@ export async function createAppToken(
   options?: {
     deviceId?: string | null
     ttlSeconds?: number
+    grantType?: 'short' | 'long'
     deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null }
   }
 ): Promise<string> {
@@ -183,6 +185,7 @@ export async function createAppToken(
     sub: userId,
     deviceId: deviceId ?? undefined,
     dv: deviceTokenVersion ?? undefined,
+    gt: options?.grantType,
     iat: now,
     exp: now + ttlSeconds,
     iss: APP_TOKEN_ISSUER,
@@ -243,6 +246,8 @@ function verifyAppToken(token: string): AppTokenPayload | null {
 export interface AuthContext {
   userId: string
   deviceId?: string | null
+  authSource: 'session' | 'app'
+  tokenGrantType?: 'short' | 'long' | null
 }
 
 async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload): Promise<AuthContext> {
@@ -261,7 +266,12 @@ async function resolveAppTokenContext(event: H3Event, payload: AppTokenPayload):
     }
   }
 
-  return { userId: payload.sub, deviceId: payload.deviceId ?? null }
+  return {
+    userId: payload.sub,
+    deviceId: payload.deviceId ?? null,
+    authSource: 'app',
+    tokenGrantType: payload.gt ?? null,
+  }
 }
 
 export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
@@ -315,7 +325,11 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
 
   logSessionDebug('resolved', event, { userId: user.id, via: directUserId ? 'id' : 'email' })
   await ensureDeviceForRequest(event, user.id)
-  return { userId: user.id }
+  return {
+    userId: user.id,
+    authSource: 'session',
+    tokenGrantType: null,
+  }
 }
 
 /**

@@ -13,16 +13,30 @@ function resolveErrorMessage(error: unknown, fallback: string) {
  * This allows the desktop app to authenticate using browser session or app bearer token.
  */
 export default defineEventHandler(async (event) => {
-  const { userId, deviceId } = await requireAuth(event)
+  const { userId, deviceId, authSource, tokenGrantType } = await requireAuth(event)
+
+  if (authSource === 'app' && tokenGrantType === 'short') {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Short-term app token cannot be refreshed. Please sign in again.',
+    })
+  }
+
+  const refreshTokenOptions = authSource === 'app'
+    ? { ttlSeconds: 60 * 60 * 24, grantType: 'short' as const }
+    : {}
 
   let appToken: string | null = null
 
   try {
     if (deviceId !== undefined) {
-      appToken = await createAppToken(event, userId, { deviceId })
+      appToken = await createAppToken(event, userId, {
+        deviceId,
+        ...refreshTokenOptions,
+      })
     }
     else {
-      appToken = await createAppToken(event, userId)
+      appToken = await createAppToken(event, userId, refreshTokenOptions)
     }
   }
   catch {
@@ -30,7 +44,10 @@ export default defineEventHandler(async (event) => {
 
   if (!appToken) {
     try {
-      appToken = await createAppToken(event, userId, { deviceId: null })
+      appToken = await createAppToken(event, userId, {
+        deviceId: null,
+        ...refreshTokenOptions,
+      })
     }
     catch (fallbackError) {
       const detail = resolveErrorMessage(fallbackError, 'Failed to create app sign-in token.')

@@ -330,7 +330,7 @@ defineExpose({
 
 <template>
   <TxCard
-    class="PluginLogs-Wrapper w-full min-h-0 h-full flex flex-col flex-grow p-1!"
+    class="PluginLogs-Wrapper w-full min-h-0 h-full flex flex-col flex-grow p-1! self-stretch"
     variant="solid"
   >
     <section class="plugin-logs-terminal">
@@ -515,6 +515,27 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+.PluginLogs-Wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  align-self: stretch;
+  background: #0b0d10;
+  gap: 0;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.PluginLogs-Wrapper :deep(.tx-card__body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .plugin-logs-toolbar {
   display: flex;
   align-items: center;
@@ -544,15 +565,23 @@ defineExpose({
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 17, 20, 0.85);
-  color: rgba(226, 232, 240, 0.85);
+  color: var(--tx-text-color-secondary);
   cursor: pointer;
   transition: all 0.18s ease;
+}
+
+.toolbar-icon.variant-bare {
+  color: var(--tx-text-color-secondary);
 }
 
 .toolbar-icon:hover:not(:disabled) {
   border-color: rgba(226, 232, 240, 0.28);
   background: rgba(28, 30, 34, 0.9);
-  color: rgba(226, 232, 240, 0.95);
+  color: var(--tx-text-color-primary);
+}
+
+.toolbar-icon.variant-bare:hover:not(:disabled) {
+  color: var(--tx-text-color-primary);
 }
 
 .toolbar-icon:disabled {
@@ -670,14 +699,23 @@ defineExpose({
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 17, 20, 0.85);
-  color: rgba(226, 232, 240, 0.88);
+  color: var(--tx-text-color-secondary);
   cursor: pointer;
   transition: all 0.18s ease;
+}
+
+.terminal-icon.variant-bare {
+  color: var(--tx-text-color-secondary);
 }
 
 .terminal-icon:hover:not(:disabled) {
   border-color: rgba(226, 232, 240, 0.32);
   background: rgba(28, 30, 34, 0.92);
+  color: var(--tx-text-color-primary);
+}
+
+.terminal-icon.variant-bare:hover:not(:disabled) {
+  color: var(--tx-text-color-primary);
 }
 
 .terminal-icon:disabled {
@@ -691,6 +729,11 @@ defineExpose({
 
 .terminal-icon-live {
   border-color: rgba(34, 197, 94, 0.28);
+  color: var(--tx-color-success);
+}
+
+.terminal-icon-live.variant-bare {
+  color: var(--tx-color-success);
 }
 
 .terminal-icon-live.active {
@@ -700,6 +743,11 @@ defineExpose({
 .terminal-icon-live.paused {
   border-color: rgba(250, 204, 21, 0.32);
   background: rgba(250, 204, 21, 0.12);
+  color: var(--tx-color-warning);
+}
+
+.terminal-icon-live.paused.variant-bare {
+  color: var(--tx-color-warning);
 }
 
 .terminal-icon-new {

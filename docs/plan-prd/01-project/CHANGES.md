@@ -2,7 +2,97 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-25
+
+### Nexus 首管理员初始化提权（ADMINSECRET + 首用户校验）
+
+**变更类型**: 安全增强 / 认证流程改进
+
+**描述**: 新增“首管理员初始化”流程：当系统检测到尚无管理员账号时，登录用户会被引导到管理员初始化页面，输入 `ADMINSECRET` 后完成提权。提权严格限制为“首个活跃用户”且使用原子条件更新，避免并发下重复提权。
+
+**主要变更**:
+1. **后端状态与提权 API**：新增 `GET /api/auth/admin-bootstrap/status` 与 `POST /api/auth/admin-bootstrap/promote`。
+2. **首用户原子校验**：新增 `getAdminBootstrapState` 与 `promoteFirstUserToAdmin`，仅当“无管理员 + 当前用户为首个活跃用户”时允许提权。
+3. **运行时配置**：新增 server-only 配置 `ADMINSECRET`（同时兼容 `ADMIN_SECRET`）。
+4. **登录后强制引导**：当用户已登录且系统无管理员时，前端全局路由自动跳转 `/auth/admin-bootstrap`。
+5. **初始化页面**：新增管理员认证页面，支持状态提示、secret 提交、成功后自动返回目标页面。
+6. **测试覆盖**：补充首管理员初始化状态与提权接口单测（成功、secret 错误、非首用户、已有管理员）。
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/status.get.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/promote.post.ts`
+- `apps/nexus/server/api/user/me.get.ts`
+- `apps/nexus/server/api/auth/me.get.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/pages/auth/admin-bootstrap.vue`
+- `apps/nexus/app/composables/useCurrentUserApi.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/__tests__/status.get.test.ts`
+- `apps/nexus/server/api/auth/admin-bootstrap/__tests__/promote.post.test.ts`
+- `apps/nexus/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-24
+
+### TuffCLI 设备授权状态回传增强（拒绝原因/IP 明细/标签页关闭感知）
+
+**变更类型**: 认证体验修复 / 设备授权链路增强
+
+**描述**: 修复设备码授权链路中“浏览器侧已拒绝但 CLI 仅超时”的盲区，并补齐授权页手动关闭的可观测性。CLI 现在可感知 Nexus 拒绝态、展示 IP 不一致明细，并在授权页关闭时提示“重新打开 or 关闭本次授权”。
+
+**主要变更**:
+1. **拒绝态显式回传**：Nexus 在 IP 不一致时将设备授权标记为 `rejected`，并记录拒绝原因与 IP 上下文；CLI 轮询到拒绝后会在终端提示并询问是否重试。
+2. **IP 明细可见**：当拒绝原因为 `ip_mismatch` 时，CLI 展示“申请 IP / 当前访问 IP”。
+3. **授权页可见性跟踪**：新增 `/api/app-auth/device/presence`，授权页上报 `opened/heartbeat/closed`；CLI 检测到标签页关闭后，提示“重新打开授权页 / 关闭本次授权”。
+4. **授权中止接口**：新增 `/api/app-auth/device/abort`，CLI 选择关闭本次授权时可主动中止请求。
+5. **短期/长期提示与刷新约束**：设备码成功后 CLI 提示当前授权类型与时长（短期 24h / 长期 30d）；短期授权明确不可刷新，`/api/auth/sign-in-token` 仅允许长期 app token 刷新。
+
+**修改文件**:
+- `packages/unplugin-export-plugin/src/bin/tuff.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/zh.ts`
+- `packages/unplugin-export-plugin/src/cli/i18n/locales/en.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/auth.ts`
+- `apps/nexus/server/api/app-auth/device/approve.post.ts`
+- `apps/nexus/server/api/app-auth/device/poll.get.ts`
+- `apps/nexus/server/api/app-auth/device/info.get.ts`
+- `apps/nexus/server/api/app-auth/device/presence.post.ts`
+- `apps/nexus/server/api/app-auth/device/abort.post.ts`
+- `apps/nexus/server/api/auth/sign-in-token.post.ts`
+- `apps/nexus/app/pages/device-auth.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 复制文件无输入时不触发搜索修复（剪贴板 files 判重补全）
+
+**变更类型**: Bug 修复 / 搜索触发稳定性
+
+**描述**: 修复 CoreBox 在“仅复制文件、输入框为空”场景下偶发不触发搜索的问题。根因是主进程剪贴板快路径判重仅使用 `formats + text`，会漏检“文件列表变化但文本不变”的更新。
+
+**主要变更**:
+1. **快路径判重补全 files 维度**：在剪贴板含文件格式时，将文件列表签名纳入 quick hash，避免误判“无变化”。
+2. **避免重复读取**：将快路径读取到的文件列表在本轮检查中复用，减少重复 `readClipboardFiles()` 调用。
+3. **行为保持最小改动**：仅调整主进程 clipboard 变更检测，不修改 CoreBox 查询协议与 provider 处理逻辑。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Market 页面 `process is not defined` 修复（收敛 renderer 导入范围）
+
+**变更类型**: 运行时修复 / 前端稳定性
+
+**描述**: 修复 `https://tuff.tagzxia.com/market` 在客户端初始化时偶发进入 Nuxt 500（`process is not defined`）的问题。根因是页面从 `@talex-touch/utils/renderer` 的 barrel 导入组件，导致无关模块被一并打包，最终把依赖 `process.platform` 的 Node 侧常量带入浏览器运行时。
+
+**主要变更**:
+1. **按需深路径导入**：`market.vue` 改为直接从 `@talex-touch/utils/renderer/shared/*` 导入 `SharedPluginDetailContent` 和类型，避免触发 renderer 总入口的全量 re-export 链。
+2. **隔离 Node-only 代码影响面**：减少客户端 bundle 中对 `file-scan`/`file-parser` 相关模块的意外引入，避免浏览器侧访问 `process.*`。
+
+**修改文件**:
+- `apps/nexus/app/pages/market.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
 
 ### touch-translation Prelude 打包修复（移除 `process is not defined`）
 

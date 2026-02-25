@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { TxButton, TxSpinner } from '@talex-touch/tuffex'
+import { hasNavigator } from '@talex-touch/utils/env'
 import { fetchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 
 definePageMeta({
@@ -26,6 +27,7 @@ const longTermOptionEnabled = computed(() => longTermAvailable.value && longTerm
 const reauthRequired = computed(() => grantType.value === 'long' && longTermOptionEnabled.value)
 const reauthReady = computed(() => route.query.reauth === '1')
 const authParam = computed(() => route.query.auth === 'long')
+let presenceHeartbeatTimer: ReturnType<typeof setInterval> | null = null
 
 const code = computed(() => {
   const query = route.query
@@ -62,6 +64,8 @@ function requestCloseTab(): void {
   if (autoCloseRequested.value)
     return
   autoCloseRequested.value = true
+  stopPresenceHeartbeat()
+  void reportPresence('closed', true)
   setTimeout(() => {
     try {
       window.open('', '_self')
@@ -71,6 +75,52 @@ function requestCloseTab(): void {
       window.close()
     }
   }, 400)
+}
+
+function stopPresenceHeartbeat(): void {
+  if (!presenceHeartbeatTimer)
+    return
+  clearInterval(presenceHeartbeatTimer)
+  presenceHeartbeatTimer = null
+}
+
+async function reportPresence(state: 'opened' | 'heartbeat' | 'closed', keepalive = false): Promise<void> {
+  if (import.meta.server || !code.value)
+    return
+  const payload = JSON.stringify({
+    code: code.value,
+    state,
+  })
+  try {
+    if (keepalive && hasNavigator() && typeof navigator.sendBeacon === 'function') {
+      const sent = navigator.sendBeacon('/api/app-auth/device/presence', new Blob([payload], { type: 'application/json' }))
+      if (sent)
+        return
+    }
+    await fetch('/api/app-auth/device/presence', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: payload,
+      keepalive,
+    })
+  }
+  catch {
+    // Ignore presence errors
+  }
+}
+
+async function startPresenceHeartbeat(): Promise<void> {
+  await reportPresence('opened')
+  stopPresenceHeartbeat()
+  presenceHeartbeatTimer = setInterval(() => {
+    void reportPresence('heartbeat')
+  }, 5000)
+}
+
+function handleBeforeUnload(): void {
+  void reportPresence('closed', true)
 }
 
 async function ensureSession(): Promise<boolean> {
@@ -115,6 +165,10 @@ async function loadInfo() {
       longTermAllowed?: boolean
       longTermReason?: string | null
       ipMismatch?: boolean
+      rejectReason?: string | null
+      rejectMessage?: string | null
+      requestIp?: string | null
+      currentIp?: string | null
     }>('/api/app-auth/device/info', {
       query: { code: code.value },
     })
@@ -131,6 +185,16 @@ async function loadInfo() {
     if (info?.status === 'approved') {
       state.value = 'approved'
       requestCloseTab()
+      return
+    }
+    if (info?.status === 'rejected') {
+      state.value = 'error'
+      if (info?.rejectReason === 'ip_mismatch') {
+        errorMessage.value = t('auth.deviceAuthIpMismatch', '授权来源 IP 与设备 IP 不一致，已拒绝。')
+      }
+      else {
+        errorMessage.value = info?.rejectMessage || t('auth.authFailed', '授权失败')
+      }
       return
     }
     if (info?.ipMismatch) {
@@ -197,8 +261,10 @@ async function cancel() {
 }
 
 onMounted(async () => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
   const ok = await ensureSession()
   if (ok) {
+    await startPresenceHeartbeat()
     if (authParam.value)
       grantType.value = 'long'
     await Promise.all([loadInfo(), loadProfile()])
@@ -208,10 +274,18 @@ onMounted(async () => {
 watch(
   () => status.value,
   async (value) => {
-    if (value === 'authenticated')
+    if (value === 'authenticated') {
+      await startPresenceHeartbeat()
       await Promise.all([loadInfo(), loadProfile()])
+    }
   },
 )
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  stopPresenceHeartbeat()
+  void reportPresence('closed', true)
+})
 </script>
 
 <template>
