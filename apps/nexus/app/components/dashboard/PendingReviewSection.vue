@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
+import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 
 export interface PendingReviewItem {
   type: 'plugin' | 'version'
@@ -26,6 +27,12 @@ const isExpanded = ref(!props.collapsed)
 
 function toggleExpand() {
   isExpanded.value = !isExpanded.value
+}
+
+function resolveReviewText(item: PendingReviewItem) {
+  return item.type === 'plugin'
+    ? t('dashboard.sections.plugins.reviewPlugin')
+    : t('dashboard.sections.plugins.reviewVersion')
 }
 </script>
 
@@ -67,36 +74,24 @@ function toggleExpand() {
       <div v-if="isExpanded" class="border-t border-amber-200/50 p-4 dark:border-amber-500/20">
         <div class="space-y-2">
           <TxButton v-for="item in items" :key="item.type === 'version' ? `v-${item.version?.id}` : `p-${item.plugin.id}`" variant="bare" block native-type="button" class="group flex w-full items-center gap-3 rounded-xl bg-white/80 text-left transition hover:bg-white dark:bg-white/5 dark:hover:bg-white/10" @click="emit('review', item)">
-            <!-- Icon -->
-            <div class="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/5 bg-black/5 dark:border-white/10 dark:bg-white/10">
-              <img
-                v-if="item.plugin.iconUrl"
-                :src="item.plugin.iconUrl"
-                :alt="item.plugin.name"
-                class="size-full object-cover"
-              >
-              <span v-else class="text-sm font-semibold text-black/60 dark:text-white/60">
-                {{ item.plugin.name.charAt(0).toUpperCase() }}
-              </span>
-            </div>
-
-            <!-- Info -->
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="truncate text-sm font-medium text-black dark:text-white">
-                  {{ item.plugin.name }}
-                </span>
+            <TxPluginMetaHeader
+              class="PendingReviewSection-MetaHeader min-w-0 flex-1"
+              :title="item.plugin.name"
+              :description="resolveReviewText(item)"
+              :meta-items="[item.plugin.slug]"
+              :icon-url="item.plugin.iconUrl"
+              :icon-alt="item.plugin.name"
+              :official="false"
+            >
+              <template #title-extra>
                 <span
                   v-if="item.type === 'version' && item.version"
                   class="shrink-0 rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60"
                 >
                   v{{ item.version.version }}
                 </span>
-              </div>
-              <p class="text-xs text-black/50 dark:text-white/50">
-                {{ item.type === 'plugin' ? t('dashboard.sections.plugins.reviewPlugin') : t('dashboard.sections.plugins.reviewVersion') }}
-              </p>
-            </div>
+              </template>
+            </TxPluginMetaHeader>
 
             <!-- Action -->
             <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700 transition group-hover:bg-amber-200 dark:bg-amber-500/20 dark:text-amber-300 dark:group-hover:bg-amber-500/30">
@@ -109,3 +104,35 @@ function toggleExpand() {
     </Transition>
   </div>
 </template>
+
+<style scoped>
+:deep(.PendingReviewSection-MetaHeader.TxPluginMetaHeader) {
+  align-items: center;
+  gap: 10px;
+}
+
+:deep(.PendingReviewSection-MetaHeader .TxPluginMetaHeader-Icon) {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+:deep(.PendingReviewSection-MetaHeader .TxPluginMetaHeader-Title) {
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+:deep(.PendingReviewSection-MetaHeader .TxPluginMetaHeader-Description) {
+  margin-top: 2px;
+  font-size: 0.75rem;
+}
+
+:deep(.PendingReviewSection-MetaHeader .TxPluginMetaHeader-MetaRow) {
+  margin-top: 4px;
+  font-size: 0.6875rem;
+}
+
+:deep(.PendingReviewSection-MetaHeader .TxPluginMetaHeader-Badges) {
+  display: none;
+}
+</style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DashboardPlugin as Plugin, DashboardPluginVersion as PluginVersion } from '~/types/dashboard-plugin'
+import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
 
 interface Props {
@@ -47,34 +48,23 @@ function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
 
 <template>
   <TxButton variant="bare" block native-type="button" class="group flex w-full items-center gap-4 rounded-2xl bg-white/60 text-left transition-all duration-200 hover:bg-white hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5 dark:hover:bg-white/8" @click="emit('click', plugin)">
-    <!-- Icon -->
-    <div class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
-      <img
-        v-if="plugin.iconUrl"
-        :src="plugin.iconUrl"
-        :alt="plugin.name"
-        class="size-full object-cover"
-      >
-      <span v-else class="text-lg font-semibold text-black/50 dark:text-white/50">
-        {{ plugin.name.charAt(0).toUpperCase() }}
-      </span>
-    </div>
-
-    <!-- Info -->
     <div class="min-w-0 flex-1">
-      <div class="flex items-center gap-2">
-        <h4 class="truncate text-sm font-medium text-black dark:text-white">
-          {{ plugin.name }}
-        </h4>
-        <span
-          v-if="plugin.isOfficial"
-          class="i-carbon-certificate shrink-0 text-sm text-amber-500"
-          :title="t('dashboard.sections.plugins.officialBadge')"
-        />
-      </div>
-      <p class="truncate text-xs text-black/40 dark:text-white/40">
-        {{ plugin.summary || plugin.slug }}
-      </p>
+      <TxPluginMetaHeader
+        class="PluginListItem-MetaHeader"
+        :title="plugin.name"
+        :description="plugin.summary || plugin.slug"
+        :icon-url="plugin.iconUrl"
+        :icon-alt="plugin.name"
+        :official="false"
+      >
+        <template #title-extra>
+          <span
+            v-if="plugin.isOfficial"
+            class="PluginListItem-OfficialMark i-carbon-certificate shrink-0 text-sm"
+            :title="t('dashboard.sections.plugins.officialBadge')"
+          />
+        </template>
+      </TxPluginMetaHeader>
     </div>
 
     <!-- Status -->
@@ -106,3 +96,35 @@ function resolveArtifactTypeLabel(type: Plugin['artifactType']) {
     </div>
   </TxButton>
 </template>
+
+<style scoped>
+:deep(.PluginListItem-MetaHeader.TxPluginMetaHeader) {
+  align-items: center;
+  gap: 12px;
+}
+
+:deep(.PluginListItem-MetaHeader .TxPluginMetaHeader-Icon) {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+
+:deep(.PluginListItem-MetaHeader .TxPluginMetaHeader-Title) {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+:deep(.PluginListItem-MetaHeader .TxPluginMetaHeader-Description) {
+  margin-top: 2px;
+  font-size: 0.75rem;
+}
+
+:deep(.PluginListItem-MetaHeader .TxPluginMetaHeader-MetaRow),
+:deep(.PluginListItem-MetaHeader .TxPluginMetaHeader-Badges) {
+  display: none;
+}
+
+.PluginListItem-OfficialMark {
+  color: color-mix(in srgb, var(--tx-color-warning, #f59e0b) 88%, transparent);
+}
+</style>

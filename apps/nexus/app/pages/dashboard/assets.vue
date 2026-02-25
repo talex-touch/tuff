@@ -5,6 +5,7 @@ import PluginMetadataOverlay from '~/components/dashboard/PluginMetadataOverlay.
 import type { ReviewItem } from '~/components/dashboard/ReviewModalOverlay.vue'
 import type { VersionFormData } from '~/components/VersionDrawer.vue'
 import type { DashboardPlugin, DashboardPluginVersion, PluginChannel } from '~/types/dashboard-plugin'
+import { TxPluginMetaHeader } from '@talex-touch/tuff-business'
 import { computed, ref } from 'vue'
 import AssetCreateOverlay from '~/components/assets/create/AssetCreateOverlay.vue'
 import PluginDetailDrawer from '~/components/dashboard/PluginDetailDrawer.vue'
@@ -1006,27 +1007,22 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
               @click="openReviewModal(item, $event)"
             >
               <td class="px-4 py-3">
-                <div class="flex items-center gap-3">
-                  <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
-                    <img
-                      v-if="item.plugin.iconUrl"
-                      :src="item.plugin.iconUrl"
-                      :alt="item.plugin.name"
-                      class="size-full object-cover"
-                    >
-                    <span v-else class="text-sm font-semibold text-black/50 dark:text-white/50">
-                      {{ item.plugin.name.charAt(0).toUpperCase() }}
-                    </span>
-                  </div>
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-medium text-black dark:text-white">
-                      {{ item.plugin.name }}
-                    </p>
-                    <p class="line-clamp-1 text-xs text-black/50 dark:text-white/50">
-                      {{ item.plugin.summary || item.plugin.slug }}
-                    </p>
-                  </div>
-                </div>
+                <TxPluginMetaHeader
+                  class="DashboardAssetMetaHeader"
+                  :title="item.plugin.name"
+                  :description="item.plugin.summary || item.plugin.slug"
+                  :icon-url="item.plugin.iconUrl"
+                  :icon-alt="item.plugin.name"
+                  :official="false"
+                >
+                  <template #title-extra>
+                    <span
+                      v-if="item.plugin.isOfficial"
+                      class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
+                      :title="t('dashboard.sections.plugins.officialBadge')"
+                    />
+                  </template>
+                </TxPluginMetaHeader>
               </td>
               <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
                 <p>{{ resolvePendingReviewType(item) }}</p>
@@ -1202,34 +1198,22 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
                 @click="openPluginDetail(plugin, $event)"
               >
                 <td class="px-4 py-3">
-                  <div class="flex items-center gap-3">
-                    <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/[0.04] bg-black/[0.03] dark:border-white/[0.06] dark:bg-white/[0.06]">
-                      <img
-                        v-if="plugin.iconUrl"
-                        :src="plugin.iconUrl"
-                        :alt="plugin.name"
-                        class="size-full object-cover"
-                      >
-                      <span v-else class="text-sm font-semibold text-black/50 dark:text-white/50">
-                        {{ plugin.name.charAt(0).toUpperCase() }}
-                      </span>
-                    </div>
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        <p class="truncate text-sm font-medium text-black dark:text-white">
-                          {{ plugin.name }}
-                        </p>
-                        <span
-                          v-if="plugin.isOfficial"
-                          class="i-carbon-certificate shrink-0 text-amber-500"
-                          :title="t('dashboard.sections.plugins.officialBadge')"
-                        />
-                      </div>
-                      <p class="line-clamp-1 text-xs text-black/50 dark:text-white/50">
-                        {{ plugin.summary || plugin.slug }}
-                      </p>
-                    </div>
-                  </div>
+                  <TxPluginMetaHeader
+                    class="DashboardAssetMetaHeader"
+                    :title="plugin.name"
+                    :description="plugin.summary || plugin.slug"
+                    :icon-url="plugin.iconUrl"
+                    :icon-alt="plugin.name"
+                    :official="false"
+                  >
+                    <template #title-extra>
+                      <span
+                        v-if="plugin.isOfficial"
+                        class="DashboardAssetMetaHeader-OfficialMark i-carbon-certificate shrink-0 text-sm"
+                        :title="t('dashboard.sections.plugins.officialBadge')"
+                      />
+                    </template>
+                  </TxPluginMetaHeader>
                 </td>
                 <td class="px-4 py-3 text-sm text-black/65 dark:text-white/65">
                   <p>{{ resolveArtifactTypeLabel(plugin.artifactType) }}</p>
@@ -1357,3 +1341,35 @@ async function deletePluginVersion(plugin: DashboardPlugin, version: DashboardPl
     />
   </section>
 </template>
+
+<style scoped>
+:deep(.DashboardAssetMetaHeader.TxPluginMetaHeader) {
+  align-items: center;
+  gap: 10px;
+}
+
+:deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Icon) {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+}
+
+:deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Title) {
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+:deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Description) {
+  margin-top: 2px;
+  font-size: 0.75rem;
+}
+
+:deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-MetaRow),
+:deep(.DashboardAssetMetaHeader .TxPluginMetaHeader-Badges) {
+  display: none;
+}
+
+.DashboardAssetMetaHeader-OfficialMark {
+  color: color-mix(in srgb, var(--tx-color-warning, #f59e0b) 88%, transparent);
+}
+</style>
