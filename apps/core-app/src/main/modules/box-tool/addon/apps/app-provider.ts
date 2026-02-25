@@ -60,6 +60,7 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner } from './app-scanner'
+import { matchNoisySystemAppRule } from './app-noise-filter'
 import { formatLog, LogStyle } from './app-utils'
 import { processSearchResults } from './search-processing-service'
 import type { ScannedAppInfo } from './app-types'
@@ -240,6 +241,7 @@ const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
 const STARTUP_BACKFILL_INITIAL_DELAY_MS = 15_000
 
 export interface AppIndexSettings {
+  hideNoisySystemApps: boolean
   startupBackfillEnabled: boolean
   startupBackfillRetryMax: number
   startupBackfillRetryBaseMs: number
@@ -250,6 +252,7 @@ export interface AppIndexSettings {
 }
 
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
+  hideNoisySystemApps: true,
   startupBackfillEnabled: true,
   startupBackfillRetryMax: 5,
   startupBackfillRetryBaseMs: 5000,
@@ -355,6 +358,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     return {
+      hideNoisySystemApps:
+        typeof data.hideNoisySystemApps === 'boolean'
+          ? data.hideNoisySystemApps
+          : DEFAULT_APP_INDEX_SETTINGS.hideNoisySystemApps,
       startupBackfillEnabled:
         typeof data.startupBackfillEnabled === 'boolean'
           ? data.startupBackfillEnabled
@@ -1625,10 +1632,37 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const appsWithExtensions = await this.fetchExtensionsForFiles(files)
+    const filteredAppsWithExtensions =
+      this.isMac && this.appIndexSettings.hideNoisySystemApps
+        ? (() => {
+            const ruleCounts: Record<string, number> = {}
+            const filtered = appsWithExtensions.filter((app) => {
+              const rule = matchNoisySystemAppRule({
+                path: app.path,
+                bundleId: app.extensions.bundleId,
+                name: app.displayName || app.name
+              })
+              if (!rule) {
+                return true
+              }
+              ruleCounts[rule] = (ruleCounts[rule] ?? 0) + 1
+              return false
+            })
+            const filteredCount = appsWithExtensions.length - filtered.length
+            if (filteredCount > 0) {
+              appProviderLog.debug('Filtered noisy system apps from search candidates', {
+                query: rawText,
+                filteredCount,
+                ruleCounts
+              })
+            }
+            return filtered
+          })()
+        : appsWithExtensions
     const isFuzzySearch = !preciseMatchedItemIds || preciseMatchedItemIds.size === 0
 
     const processedResults = await processSearchResults(
-      appsWithExtensions,
+      filteredAppsWithExtensions,
       query,
       isFuzzySearch,
       this.aliases

@@ -1,4 +1,5 @@
 export interface AppIndexSettings {
+  hideNoisySystemApps: boolean
   startupBackfillEnabled: boolean
   startupBackfillRetryMax: number
   startupBackfillRetryBaseMs: number
