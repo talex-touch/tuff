@@ -1,17 +1,13 @@
 'use strict'
 
 const process = require('node:process')
-const loadNative = require('node-gyp-build')
+const { loadNativeBinding } = require('./native-loader')
 
-let nativeBinding = null
-let loadError = null
-
-try {
-  nativeBinding = loadNative(__dirname)
-}
-catch (error) {
-  loadError = error
-}
+const { nativeBinding, loadError } = loadNativeBinding({
+  baseDir: __dirname,
+  moduleName: 'tuff_native_ocr',
+  expectedExports: ['getNativeOcrSupport', 'recognizeImageText'],
+})
 
 const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_OCR'
 
@@ -47,7 +43,11 @@ async function recognizeImageText(options) {
   }
 
   if (!nativeBinding || typeof nativeBinding.recognizeImageText !== 'function') {
-    const error = new Error('Native OCR module is unavailable')
+    const error = new Error(
+      loadError instanceof Error
+        ? `Native OCR module is unavailable: ${loadError.message}`
+        : 'Native OCR module is unavailable'
+    )
     error.code = 'ERR_OCR_ENGINE_UNAVAILABLE'
     throw error
   }

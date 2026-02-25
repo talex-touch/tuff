@@ -25,6 +25,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "native-loader.js",
     "binding.gyp",
     "native/src",
     "build/Release/*.node",
@@ -39,8 +40,7 @@
     "check:everything": "node scripts/everything-selfcheck.js"
   },
   "dependencies": {
-    "node-addon-api": "^7.1.1",
-    "node-gyp-build": "^4.8.4"
+    "node-addon-api": "^7.1.1"
   },
   "devDependencies": {
     "node-gyp": "^11.5.0"
