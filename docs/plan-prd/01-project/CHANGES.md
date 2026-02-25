@@ -11,7 +11,7 @@
 **描述**: 新增“首管理员初始化”流程：当系统检测到尚无管理员账号时，登录用户会被引导到管理员初始化页面，输入 `ADMINSECRET` 后完成提权。提权严格限制为“首个活跃用户”且使用原子条件更新，避免并发下重复提权。
 
 **主要变更**:
-1. **后端状态与提权 API**：新增 `GET /api/auth/admin-bootstrap/status` 与 `POST /api/auth/admin-bootstrap/promote`。
+1. **后端状态与提权 API**：新增 `GET /api/admin-bootstrap/status` 与 `POST /api/admin-bootstrap/promote`（避开 `/api/auth/[...]` catch-all 冲突）。
 2. **首用户原子校验**：新增 `getAdminBootstrapState` 与 `promoteFirstUserToAdmin`，仅当“无管理员 + 当前用户为首个活跃用户”时允许提权。
 3. **运行时配置**：新增 server-only 配置 `ADMINSECRET`（同时兼容 `ADMIN_SECRET`）。
 4. **登录后强制引导**：当用户已登录且系统无管理员时，前端全局路由自动跳转 `/auth/admin-bootstrap`。
