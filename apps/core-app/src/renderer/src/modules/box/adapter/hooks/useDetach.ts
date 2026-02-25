@@ -36,6 +36,10 @@ function buildUrl(item: TuffItem, query: string): string {
   return `tuff://detached?${params.toString()}`
 }
 
+function isDetachedConfigUrl(url: string): boolean {
+  return url.startsWith('tuff://detached')
+}
+
 function resolveIcon(item: TuffItem): string | undefined {
   const icon = item.render?.basic?.icon
   if (!icon) return undefined
@@ -69,9 +73,10 @@ export function useDetach(options: UseDetachOptions) {
     try {
       const interaction = item.meta?.interaction
       const showInput = interaction?.type !== 'widget'
+      const url = buildUrl(item, searchVal.value)
 
       const config = {
-        url: buildUrl(item, searchVal.value),
+        url,
         title: item.render?.basic?.title || 'Detached Item',
         icon: resolveIcon(item),
         size: 'medium' as const,
@@ -81,6 +86,22 @@ export function useDetach(options: UseDetachOptions) {
       }
       const response = await transport.send(DivisionBoxEvents.open, config)
       if (response?.success) {
+        const sessionId = response.data?.sessionId
+        if (sessionId && isDetachedConfigUrl(url)) {
+          const detachedPayload = {
+            item: JSON.parse(JSON.stringify(item)) as TuffItem,
+            query: searchVal.value
+          }
+          await transport
+            .send(DivisionBoxEvents.updateState, {
+              sessionId,
+              key: 'detachedPayload',
+              value: detachedPayload
+            })
+            .catch((error) => {
+              console.warn('[useDetach] Failed to persist detached payload:', error)
+            })
+        }
         toast.success(t('corebox.detached', '已分离到独立窗口'))
       } else {
         throw new Error(response?.error?.message || 'Failed')

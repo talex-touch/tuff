@@ -27,6 +27,13 @@ const RESOURCE_LIMITS = {
   MAX_CACHED_SESSIONS: 5
 }
 
+function shouldAttachUIView(config: DivisionBoxConfig): boolean {
+  if (!config.url) {
+    return false
+  }
+  return !config.url.startsWith('tuff://detached')
+}
+
 /**
  * DivisionBoxManager - Singleton class for managing all DivisionBox sessions
  *
@@ -219,7 +226,7 @@ export class DivisionBoxManager {
       await session.createWindow()
 
       // Attach UI view with plugin URL if provided
-      if (validatedConfig.url) {
+      if (shouldAttachUIView(validatedConfig)) {
         // Get plugin reference if pluginId is provided
         const { pluginModule } = await import('../plugin/plugin-module')
         const plugin = validatedConfig.pluginId
@@ -229,6 +236,8 @@ export class DivisionBoxManager {
           : undefined
 
         await session.attachUIView(validatedConfig.url, plugin)
+      } else {
+        await session.setState(DivisionBoxState.ACTIVE)
       }
     } catch (error) {
       // Clean up on error

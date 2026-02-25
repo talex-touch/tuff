@@ -50,6 +50,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 type ClipboardItem = NonNullable<IClipboardOptions['last']>
 
+interface DetachedDivisionConfig {
+  itemId?: string
+  sourceId?: string
+  query?: string
+}
+
+interface DetachedDivisionPayload {
+  item: TuffItem
+  query?: string
+}
+
+function parseDetachedDivisionConfig(url: string | undefined): DetachedDivisionConfig | null {
+  if (!url || !url.startsWith('tuff://detached')) {
+    return null
+  }
+  try {
+    const parsed = new URL(url)
+    return {
+      itemId: parsed.searchParams.get('itemId') || undefined,
+      sourceId: parsed.searchParams.get('source') || undefined,
+      query: parsed.searchParams.get('query') || undefined
+    }
+  } catch {
+    return null
+  }
+}
+
 export function useSearch(
   boxOptions: IBoxOptions,
   clipboardOptions?: IClipboardOptions
@@ -60,6 +87,82 @@ export function useSearch(
     if (!shouldLog()) return
     devLog(...args)
   }
+
+  const getDetachedDivisionConfig = (): DetachedDivisionConfig | null =>
+    parseDetachedDivisionConfig(windowState.divisionBox?.config?.url)
+
+  const isDetachedDivisionMode = (): boolean => isDivisionBoxMode() && !!getDetachedDivisionConfig()
+
+  const isDetachedItemMatch = (item: TuffItem): boolean => {
+    const config = getDetachedDivisionConfig()
+    if (!config?.itemId) return true
+    if (item.id !== config.itemId) return false
+    if (config.sourceId && item.source?.id !== config.sourceId) return false
+    return true
+  }
+
+  const filterDetachedItems = (items: TuffItem[]): TuffItem[] => {
+    if (!isDetachedDivisionMode()) return items
+    return items.filter(isDetachedItemMatch)
+  }
+
+  const applyDetachedPayload = (payload: DetachedDivisionPayload): void => {
+    searchResults.value = [payload.item]
+    searchResult.value = {
+      items: [payload.item],
+      query: { text: payload.query ?? '', inputs: [] },
+      duration: 0,
+      sources: []
+    }
+    currentSearchId.value = null
+    activeActivations.value = null
+    loading.value = false
+    recommendationPending.value = false
+    boxOptions.layout = undefined
+    boxOptions.focus = 0
+    window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
+  }
+
+  const tryLoadDetachedPayload = async (sessionId: string): Promise<boolean> => {
+    const response = await transport.send(DivisionBoxEvents.getState, {
+      sessionId,
+      key: 'detachedPayload'
+    })
+
+    if (!response?.success || !response.data || typeof response.data !== 'object') {
+      return false
+    }
+
+    const payload = response.data as Partial<DetachedDivisionPayload>
+    if (!payload.item || typeof payload.item !== 'object') {
+      return false
+    }
+
+    applyDetachedPayload({
+      item: payload.item as TuffItem,
+      query: typeof payload.query === 'string' ? payload.query : undefined
+    })
+    return true
+  }
+
+  const hydrateDetachedPayload = async (sessionId: string): Promise<boolean> => {
+    const maxAttempts = 6
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const loaded = await tryLoadDetachedPayload(sessionId)
+        if (loaded) {
+          return true
+        }
+      } catch {
+        // ignore and retry
+      }
+      await new Promise<void>((resolve) => {
+        window.setTimeout(() => resolve(), 80)
+      })
+    }
+    return false
+  }
+
   const searchVal = ref('')
   const select = ref(-1)
 
@@ -79,7 +182,7 @@ export function useSearch(
     })
 
     const result = Array.from(itemsMap.values())
-    return result
+    return filterDetachedItems(result)
   })
 
   const searchResult = ref<TuffSearchResult | null>(null)
@@ -302,9 +405,12 @@ export function useSearch(
   }
 
   const applyRecommendationResult = (initialResult: TuffSearchResult): void => {
+    const filteredItems = filterDetachedItems(initialResult.items)
     currentSearchId.value = initialResult.sessionId || null
-    searchResult.value = initialResult
-    searchResults.value = initialResult.items
+    searchResult.value = isDetachedDivisionMode()
+      ? { ...initialResult, items: filteredItems }
+      : initialResult
+    searchResults.value = filteredItems
     boxOptions.layout = initialResult.containerLayout
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
@@ -345,7 +451,7 @@ export function useSearch(
 
     recommendationPending.value = false
 
-    if (isDivisionBoxMode()) {
+    if (isDivisionBoxMode() && !isDetachedDivisionMode()) {
       const query: TuffQuery = { text: searchVal.value, inputs }
       broadcastDivisionBoxInput(query)
       return
@@ -539,7 +645,10 @@ export function useSearch(
       }
 
       currentSearchId.value = initialResult.sessionId || null
-      searchResult.value = initialResult
+      const filteredItems = filterDetachedItems(initialResult.items)
+      searchResult.value = isDetachedDivisionMode()
+        ? { ...initialResult, items: filteredItems }
+        : initialResult
 
       activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
@@ -551,7 +660,7 @@ export function useSearch(
         }
       }
 
-      searchResults.value = initialResult.items
+      searchResults.value = filteredItems
       if (currentSearchId.value) {
         const pendingUpdates = pendingSearchUpdatesById.get(currentSearchId.value)
         if (pendingUpdates && pendingUpdates.length > 0) {
@@ -800,12 +909,13 @@ export function useSearch(
   const activeItem = computed(() => res.value[boxOptions.focus])
 
   transport.on(CoreBoxEvents.search.update, (data) => {
-    const itemCount = data.items?.length ?? 0
+    const filteredItems = filterDetachedItems(data.items ?? [])
+    const itemCount = filteredItems.length
     if (!data.searchId) return
     if (!currentSearchId.value) {
       if (itemCount > 0) {
         const queued = pendingSearchUpdatesById.get(data.searchId) ?? []
-        pendingSearchUpdatesById.set(data.searchId, [...queued, ...data.items])
+        pendingSearchUpdatesById.set(data.searchId, [...queued, ...filteredItems])
         logDebug('[useSearch] Queued search update (no active session):', {
           sessionId: data.searchId,
           itemCount,
@@ -827,7 +937,7 @@ export function useSearch(
       return
     }
     // Skip empty updates to avoid unnecessary re-renders
-    if (!data.items || data.items.length === 0) {
+    if (filteredItems.length === 0) {
       logDebug('[useSearch] Ignoring empty search update:', { sessionId: data.searchId })
       return
     }
@@ -836,7 +946,7 @@ export function useSearch(
       itemCount,
       currentTotal: searchResults.value.length
     })
-    searchResults.value = [...searchResults.value, ...data.items]
+    searchResults.value = [...searchResults.value, ...filteredItems]
   })
 
   transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
@@ -850,15 +960,31 @@ export function useSearch(
       activeActivations.value = toActivations(providers as ActivationState | IProviderActivate[])
     })
 
-    handleSearch()
+    const divisionSessionId = windowState.divisionBox?.sessionId
+    if (isDetachedDivisionMode() && divisionSessionId) {
+      void hydrateDetachedPayload(divisionSessionId).then((loaded) => {
+        if (loaded) return
 
-    const handleCoreBoxShown = () => {
-      if (!searchVal.value && !activeActivations.value?.length) {
-        handleSearchImmediate()
-      }
+        const fallbackQuery = getDetachedDivisionConfig()?.query
+        if (fallbackQuery) {
+          searchVal.value = fallbackQuery
+          return
+        }
+        void handleSearchImmediate()
+      })
+    } else {
+      handleSearch()
     }
 
-    window.addEventListener('corebox:shown', handleCoreBoxShown)
+    if (!isDivisionBoxMode()) {
+      const handleCoreBoxShown = () => {
+        if (!searchVal.value && !activeActivations.value?.length) {
+          handleSearchImmediate()
+        }
+      }
+
+      window.addEventListener('corebox:shown', handleCoreBoxShown)
+    }
   })
 
   transport.on(CoreBoxEvents.search.end, (payload) => {
