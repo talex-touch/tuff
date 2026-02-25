@@ -43,6 +43,10 @@ interface FileStatusMap {
   [filename: string]: FileStatus
 }
 
+type IssueDeltaEmitter = {
+  emitIssueDelta?: (plugin: ITouchPlugin) => boolean
+}
+
 export class DevServerHealthMonitor {
   private monitors: Map<string, string> = new Map()
   private lastFileStatus: Map<string, FileStatusMap> = new Map()
@@ -55,6 +59,11 @@ export class DevServerHealthMonitor {
   private readonly MAX_RETRIES = 2 // 重试次数
 
   constructor(private manager: IPluginManager) {}
+
+  private syncIssueDelta(plugin: ITouchPlugin): void {
+    const maybeEmitter = this.manager as IPluginManager & IssueDeltaEmitter
+    maybeEmitter.emitIssueDelta?.(plugin)
+  }
 
   /**
    * 启动监控指定插件的 Dev Server
@@ -119,11 +128,13 @@ export class DevServerHealthMonitor {
       plugin.status = PluginStatus.ENABLED
       // 清除断连警告
       plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      this.syncIssueDelta(plugin)
       plugin.logger.info('Successfully reconnected to Dev Server')
       return true
     } else {
       plugin.status = PluginStatus.DEV_DISCONNECTED
       this.upsertDevDisconnectIssue(plugin, result)
+      this.syncIssueDelta(plugin)
       const errorSuffix = result.error ? `: ${result.error}` : ''
       plugin.logger.error(`Failed to reconnect to Dev Server${errorSuffix}`)
       return false
@@ -242,6 +253,7 @@ export class DevServerHealthMonitor {
     if (plugin.status === PluginStatus.DEV_DISCONNECTED) {
       plugin.status = PluginStatus.ENABLED
       plugin.issues = plugin.issues.filter((issue) => issue.code !== 'DEV_SERVER_DISCONNECTED')
+      this.syncIssueDelta(plugin)
       plugin.logger.info('Dev Server connection restored')
 
       // Notify view windows about reconnection
@@ -272,6 +284,7 @@ export class DevServerHealthMonitor {
       plugin.status = PluginStatus.DEV_DISCONNECTED
 
       this.upsertDevDisconnectIssue(plugin, result)
+      this.syncIssueDelta(plugin)
       const errorSuffix = result.error ? ` (${result.error})` : ''
       plugin.logger.warn(`Dev Server disconnected${errorSuffix}`)
 

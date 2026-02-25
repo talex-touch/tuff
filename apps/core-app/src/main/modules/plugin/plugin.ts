@@ -108,6 +108,12 @@ const disallowedArrays = [
 ]
 
 const pluginSystemLog = createLogger('PluginSystem').child('Plugin')
+const TRANSIENT_ISSUE_CODES = new Set([
+  'RUNTIME_ERROR',
+  'AUTO_DISABLED_EXCESSIVE_ERRORS',
+  'LIFECYCLE_SCRIPT_FAILED'
+])
+
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
 }
@@ -662,7 +668,13 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.LOADING
     this.logger.info('[Lifecycle] enable start')
 
-    this.issues.length = 0
+    this.issues = this.issues.filter((issue) => {
+      if (issue.code && TRANSIENT_ISSUE_CODES.has(issue.code)) {
+        return false
+      }
+
+      return !(issue.source && issue.source.startsWith('runtime:'))
+    })
     this._runtimeStats.errorCount = 0
     this._runtimeStats.errorTimestamps = []
 
