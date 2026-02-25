@@ -44,7 +44,7 @@
    - 为 `ModuleManager` 的 created/init/start/stop/destroy 增加统一 try/catch 与失败回滚策略  
    - 输出结构化错误日志，确保模块失败不破坏全局状态
 2. **拆分超长函数以降低复杂度**  
-   - 将 `PluginModule.start` 按功能域拆分（market / storage / window / widget / dev-server 等）  
+   - 将 `PluginModule.start` 按功能域拆分（store / storage / window / widget / dev-server 等）  
    - 将 `useKeyboard` 拆分为键位路由 + UI-mode 转发 + 箭头导航 + ESC 流程处理
 3. **提高核心业务测试覆盖**  
    - 为主进程模块（模块管理、插件启停、IPC handler）补充最小单元测试  

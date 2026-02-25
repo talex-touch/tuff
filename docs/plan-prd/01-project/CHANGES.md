@@ -106,6 +106,37 @@
 - `apps/nexus/app/pages/docs/[...slug].vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### FlipOverlay 第二轮全量清理（移除遗留死样式）
+
+**变更类型**: 组件用法统一 / 样式债务清理
+
+**描述**: 在第一轮参数收敛后，继续对 CoreApp + Nexus 全量 `TxFlipOverlay` 使用点做二次扫描，移除已无调用入口的 `*-Mask/*-Card` 与 `TxFlipOverlay-*` 覆盖样式，统一回归组件内置样式与动画。
+
+**主要变更**:
+1. **死样式清理**：删除历史透传类名对应样式（如 `UserProfileOverlay-* / ProviderOverlay-* / StoreDetailOverlay-*` 等）。
+2. **覆盖项归零**：清理 `:global(.XxxOverlay-Card .TxFlipOverlay-Header/Close/Actions)` 这类对内置结构的外部覆盖。
+3. **范围补齐**：补齐第一轮未覆盖文件（`StoreSourceEditor`、`StoreHeader`、`PluginStorage`、`PluginDevSettingsOverlay`、`FlatDownload` 等）。
+4. **保留策略不变**：仅保留业务语义开关（如 `closable=false`、`mask-closable=false`、`prevent-accidental-close=true`），不新增 wrapper。
+
+**修改文件（节选）**:
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/store.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 修复: Assets 列表状态悬浮提示审核中
 
 **变更类型**: 交互细节优化 / Bug 修复
@@ -254,7 +285,7 @@
 7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
 8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
 9. **Plugin 选择直达表单**：在创建发布物流程中，点击 `Plugin` 类型后直接进入 `plugin_form`，移除中间提示页，减少一步跳转与额外尺寸切换。
-10. **高度测量时序修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并为门控期 refresh 引入“排队补刷”机制，避免在 `TxFlipOverlay` 开场缩放动画阶段采集到偏小高度，且不丢失后续高度更新。
+10. **高度测量与宽度抖动修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并将 refresh 调度收敛为“pending 队列 + 条件满足自动 flush + opened 后双 RAF 补刷”，避免门控期丢刷新；同时将子表单 `layout-change` 统一路由到排队刷新入口。补齐 `sizerRef.refresh` 未就绪场景：未就绪时不清空 pending，待 ref 就绪后自动补刷。为收敛视觉抖动，`TxFlipOverlay` 外层滚动关闭（仅保留内部滚动容器），并给创建弹窗容器补上宽度过渡，避免步骤切换时宽度硬跳。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/assets.vue`

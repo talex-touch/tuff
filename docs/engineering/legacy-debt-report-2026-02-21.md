@@ -77,8 +77,8 @@
   - `apps/core-app/src/main/modules/box-tool/search-engine/search-logger.ts:114`
 - Search Gatherer 层策略 fallback legacy controller：  
   - `apps/core-app/src/main/modules/box-tool/search-engine/search-gather.ts:126`
-- Nexus Market 同时兼容 legacy manifest / URL：  
-  - `apps/core-app/src/renderer/src/modules/market/providers/nexus-store-provider.ts:70`
+- Nexus Store 同时兼容 legacy manifest / URL：  
+  - `apps/core-app/src/renderer/src/modules/store/providers/nexus-store-provider.ts:70`
 - Device Attest secure store 失败 → legacy seed fallback：  
   - `apps/core-app/src/renderer/src/modules/auth/device-attest.ts:50`
 - Cloud Sync baseUrl 选择链含 deprecated 字段：  

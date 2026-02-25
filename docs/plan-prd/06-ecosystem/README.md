@@ -62,6 +62,6 @@ export default defineConfig({
 
 ## 相关文档
 
-- [插件市场多源计划](../03-features/plugin/plugin-market-provider-frontend-plan.md)
+- [插件市场多源计划](../03-features/plugin/plugin-store-provider-frontend-plan.md)
 - [Widget 动态加载](../03-features/plugin/widget-dynamic-loading-plan.md)
 - [权限中心](../03-features/plugin/permission-center-prd.md)

@@ -126,27 +126,27 @@
   - intelligence.unlimited
   - layoutSection.layouts.flat
   - layoutSection.layouts.simple
-  - market.detailDialog.backToMarket
-  - market.detailDialog.download
-  - market.detailDialog.notFound
-  - market.detailDialog.notFoundDesc
-  - market.detailDialog.viewDocs
-  - market.installing
-  - market.lastUpdated
-  - market.officialBadge
-  - market.subtitle
-  - market.tags.all
-  - market.tags.enhancement
-  - market.tags.feature
-  - market.tags.productivity
-  - market.tags.tools
-  - market.tags.ui
-  - market.tags.ux
-  - market.title
-  - market.updates.checkFailed
-  - market.updates.checking
-  - market.updates.noUpdates
-  - market.upgradeAvailable
+  - store.detailDialog.backToMarket
+  - store.detailDialog.download
+  - store.detailDialog.notFound
+  - store.detailDialog.notFoundDesc
+  - store.detailDialog.viewDocs
+  - store.installing
+  - store.lastUpdated
+  - store.officialBadge
+  - store.subtitle
+  - store.tags.all
+  - store.tags.enhancement
+  - store.tags.feature
+  - store.tags.productivity
+  - store.tags.tools
+  - store.tags.ui
+  - store.tags.ux
+  - store.title
+  - store.updates.checkFailed
+  - store.updates.checking
+  - store.updates.noUpdates
+  - store.upgradeAvailable
   - notifications.downloadFailedBody
   - notifications.updateAvailableBody
   - notifications.updateReadyBody

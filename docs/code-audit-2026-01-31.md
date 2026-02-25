@@ -13,7 +13,7 @@
 
 2) **远端 README 渲染未消毒**  
    - `marked.parse` 后直接 `v-html` 输出，来源若可控则存在 XSS 风险。  
-   - 位置：`apps/core-app/src/renderer/src/composables/market/useMarketReadme.ts:24`, `apps/core-app/src/renderer/src/composables/market/useMarketReadme.ts:28`, `apps/core-app/src/renderer/src/views/base/MarketDetail.vue:211`
+   - 位置：`apps/core-app/src/renderer/src/composables/store/useMarketReadme.ts:24`, `apps/core-app/src/renderer/src/composables/store/useMarketReadme.ts:28`, `apps/core-app/src/renderer/src/views/base/MarketDetail.vue:211`
 
 ### Medium / 完整性与行为风险
 1) **多处 `v-html` 直接渲染消息或名称**  
@@ -22,7 +22,7 @@
      - `apps/core-app/src/renderer/src/components/render/BoxItem.vue:188`  
      - `apps/core-app/src/renderer/src/views/base/application/AppList.vue:81`  
      - `apps/core-app/src/renderer/src/views/base/application/AppList.vue:136`  
-     - `apps/core-app/src/renderer/src/views/base/market/MarketSourceEditor.vue:117`  
+     - `apps/core-app/src/renderer/src/views/base/store/MarketSourceEditor.vue:117`  
      - `apps/core-app/src/renderer/src/views/box/MainBoxHeader.vue:70`  
      - `apps/core-app/src/renderer/src/components/base/dialog/TDialogMention.vue:208`  
      - `apps/core-app/src/renderer/src/components/base/dialog/TouchTip.vue:196`  
@@ -36,8 +36,8 @@
      - `apps/core-app/src/renderer/src/components/intelligence/IntelligenceCapabilities.vue:21`  
      - `apps/core-app/src/renderer/src/components/intelligence/IntelligencePrompts.vue:17`
 
-3) **Agent Marketplace 安装/卸载未实现**  
-   - 位置：`apps/core-app/src/main/service/agent-market.service.ts:391`, `apps/core-app/src/main/service/agent-market.service.ts:428`
+3) **Agent Store 安装/卸载未实现**  
+   - 位置：`apps/core-app/src/main/service/agent-store.service.ts:391`, `apps/core-app/src/main/service/agent-store.service.ts:428`
 
 4) **插件核心 API 未实现**  
    - 位置：`apps/core-app/src/renderer/src/modules/channel/plugin-core/index.ts:2`
@@ -87,7 +87,7 @@
 
 ## 建议补充点（面向落地）
 1) **统一 HTML 消毒策略**：对所有 `v-html` 渲染路径进行输入可信度分级与消毒（尤其更新日志/README/插件/搜索结果）。  
-2) **Market/Agent/Intelligence 未落地功能**：制定里程碑或明确降级策略（展示占位 vs 功能隐藏）。  
+2) **Store/Agent/Intelligence 未落地功能**：制定里程碑或明确降级策略（展示占位 vs 功能隐藏）。  
 3) **AI 能力门控**：前端基于 provider capability 进行动态 UI 开关，避免触发 not implemented。  
 4) **搜索索引刷新策略**：明确刷新触发时机与缓存失效规则，避免陈旧结果。  
 5) **迁移限制说明**：在文档或 UI 中标注 SQLite 的迁移限制与当前降级行为。  
@@ -95,6 +95,6 @@
 
 ## 需要确认的问题
 - 更新日志与市场 README 的来源是否可信？是否存在第三方注入路径。  
-- Agent Marketplace 是否计划对外开放？安装/卸载逻辑是否已排期。  
+- Agent Store 是否计划对外开放？安装/卸载逻辑是否已排期。  
 - AI 能力是否允许部分 provider 不实现？若允许，UI 是否已完整做能力门控。
 

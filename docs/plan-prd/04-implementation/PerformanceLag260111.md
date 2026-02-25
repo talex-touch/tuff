@@ -5,7 +5,7 @@
 - FileProvider reconciliation / Updating modified files -> `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
 - UsageSummaryService / TimeStatsAggregator -> `apps/core-app/src/main/modules/box-tool/search-engine/usage-summary-service.ts` / `apps/core-app/src/main/modules/box-tool/search-engine/time-stats-aggregator.ts`
 - AppScanner / AppProvider mdls scan -> `apps/core-app/src/main/modules/box-tool/addon/apps/app-scanner.ts` / `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
-- MarketApiService Checking for plugin updates -> `apps/core-app/src/main/service/market-api.service.ts`
+- MarketApiService Checking for plugin updates -> `apps/core-app/src/main/service/store-api.service.ts`
 - sentry:get-config slow -> `apps/core-app/src/main/modules/sentry/sentry-service.ts`
 - storage:app:save channel.send.slow -> `packages/utils/renderer/storage/base-storage.ts` / `apps/core-app/src/main/modules/storage/index.ts`
 

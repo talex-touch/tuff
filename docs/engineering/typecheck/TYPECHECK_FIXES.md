@@ -62,7 +62,7 @@
 | 2026-02-21 | `apps/nexus/app/pages/dashboard/storage.vue` | TS2322 | 按钮 size 统一为 mini。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `apps/nexus/app/pages/dashboard/updates.vue` | TS2322 | DELETE 方法显式断言以通过类型校验。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `apps/nexus/app/pages/docs/[...slug].vue` | TS2322/TS18048 | 明确 analytics 选项类型并 guard 末节点。 | `pnpm -C "apps/nexus" run typecheck` | done |
-| 2026-02-21 | `apps/nexus/app/pages/market.vue` | TS2339 | 抽出 handleSignIn，避免模板直接调用 navigateTo。 | `pnpm -C "apps/nexus" run typecheck` | done |
+| 2026-02-21 | `apps/nexus/app/pages/store.vue` | TS2339 | 抽出 handleSignIn，避免模板直接调用 navigateTo。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `apps/nexus/app/pages/verify-waiting.vue` | TS2769 | i18n 参数顺序调整，匹配签名。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `apps/nexus/server/api/admin/intelligence/chat.ts` | TS2322 | history 构建改为 push + splice，保证类型一致。 | `pnpm -C "apps/nexus" run typecheck` | done |
 | 2026-02-21 | `apps/nexus/server/api/admin/users/[id]/status.patch.ts` | TS2345 | status 归一化并断言为允许值。 | `pnpm -C "apps/nexus" run typecheck` | done |

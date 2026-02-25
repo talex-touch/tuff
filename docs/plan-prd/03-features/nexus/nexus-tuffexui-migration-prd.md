@@ -1,7 +1,7 @@
 # Nexus TuffexUI 统一迁移 PRD（精简版）
 
 ## 背景
-Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本高且样式重复，计划用 TuffexUI 统一高频组件体系。
+Dashboard 与 Store 存在多套基础组件和弹层实现，维护成本高且样式重复，计划用 TuffexUI 统一高频组件体系。
 
 ## 目标
 - 统一基础组件与弹层体系，降低重复维护成本
@@ -12,7 +12,7 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
 - 试点页面
   - [`apps/nexus/app/pages/dashboard/plugins.vue`](apps/nexus/app/pages/dashboard/plugins.vue)
   - [`apps/nexus/app/pages/dashboard/updates.vue`](apps/nexus/app/pages/dashboard/updates.vue)
-  - [`apps/nexus/app/pages/market.vue`](apps/nexus/app/pages/market.vue)
+  - [`apps/nexus/app/pages/store.vue`](apps/nexus/app/pages/store.vue)
 - 覆盖组件：按钮、输入/搜索、抽屉、模态、开关；Toast/标签/徽章/状态保持 Nexus 实现
 - 兼容策略：按钮/输入/Drawer/Modal/Switch 以 Tuffex 为参考基准，其余保持 Nexus 视觉
 
@@ -39,7 +39,7 @@ Dashboard 与 Marketplace 存在多套基础组件和弹层实现，维护成本
 1) 接入层（插件 + 样式）
 2) 建立封装层（Button/Input/Drawer/Modal/Toast/Tag/Switch）
 3) 迁移 Dashboard（plugins + updates）
-4) 迁移 Marketplace（market）
+4) 迁移 Store（store）
 5) Token 对齐（颜色/圆角/阴影）
 6) 回归验证（交互/焦点/滚动锁定/遮罩/性能）
 

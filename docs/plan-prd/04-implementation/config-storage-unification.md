@@ -19,7 +19,7 @@
 | APP_INDEX_SETTINGS | `config/app-index-settings.json` | JSON | 应用索引 | 本地 | 低 | 机器相关 |
 | DEVICE_IDLE_SETTINGS | `config/device-idle-settings.json` | JSON | 设备空闲 | 本地 | 低 | 机器相关 |
 | IntelligenceConfig | `config/aisdk-config` | JSON | AI SDK 配置 | 本地 | 中 | 敏感 |
-| MARKET_SOURCES | `config/market-sources.json` | JSON | 插件市场源 | 待评估 | 低 | |
+| MARKET_SOURCES | `config/store-sources.json` | JSON | 插件市场源 | 待评估 | 低 | |
 | THEME_STYLE | `config/theme-style.ini` | JSON | 主题样式 | 待评估 | 中 | |
 | SEARCH_ENGINE_LOGS_ENABLED | `config/search-engine-logs-enabled` | JSON | 搜索日志 | 本地 | 低 | |
 | EVERYTHING_SETTINGS | `config/everything-settings.json` | JSON | Everything | 本地 | 低 | Windows 专用 |
@@ -70,7 +70,7 @@
 | APP_INDEX_SETTINGS | Local-only | SQLite | App Provider | 机器相关 |
 | DEVICE_IDLE_SETTINGS | Local-only | SQLite | Core App | 机器相关 |
 | IntelligenceConfig | Local-only | SQLite | AI SDK | 敏感配置 |
-| MARKET_SOURCES | TBD | SQLite + JSON(sync payload) | Market | 需确认是否同步 |
+| MARKET_SOURCES | TBD | SQLite + JSON(sync payload) | Store | 需确认是否同步 |
 | THEME_STYLE | Sync-needed | JSON(sync payload) + SQLite cache | Core App | 主题偏好 |
 | SEARCH_ENGINE_LOGS_ENABLED | Local-only | SQLite | Search Engine | |
 | EVERYTHING_SETTINGS | Local-only | SQLite | Windows Provider | |
