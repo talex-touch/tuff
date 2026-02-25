@@ -45,7 +45,7 @@ describe('txFlipOverlay', () => {
     })
 
     await nextTick()
-    expect(document.body.querySelector('.TxFlipOverlay-GlobalMask')).toBeTruthy()
+    expect(wrapper.find('.TxFlipOverlay-GlobalMask').exists()).toBe(true)
     expect(wrapper.find('.TxFlipOverlay-Surface').exists()).toBe(true)
   })
 
@@ -61,6 +61,7 @@ describe('txFlipOverlay', () => {
     })
 
     await nextTick()
+    expect(wrapper.find('.TxFlipOverlay-GlobalMask').exists()).toBe(false)
     expect(document.body.querySelector('.TxFlipOverlay-GlobalMask')).toBeNull()
     expect(wrapper.find('.TxFlipOverlay-Surface').exists()).toBe(true)
   })
