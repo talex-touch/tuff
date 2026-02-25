@@ -30,6 +30,33 @@ export default defineEventHandler(async (event) => {
     return { status: 'cancelled' }
   }
 
+  if (request.status === 'rejected') {
+    return {
+      status: 'rejected',
+      reason: request.rejectReason ?? 'unknown',
+      message: request.rejectMessage ?? null,
+      requestIp: request.rejectRequestIp ?? request.requestIp ?? null,
+      currentIp: request.rejectCurrentIp ?? null,
+      rejectedAt: request.rejectedAt ?? null,
+      expiresAt: request.expiresAt,
+    }
+  }
+
+  if (request.status === 'pending') {
+    if (request.browserState === 'closed') {
+      return {
+        status: 'browser_closed',
+        browserClosedAt: request.browserClosedAt ?? null,
+        expiresAt: request.expiresAt,
+      }
+    }
+    return {
+      status: 'pending',
+      browserState: request.browserState ?? 'unknown',
+      expiresAt: request.expiresAt,
+    }
+  }
+
   if (request.status !== 'approved' || !request.userId) {
     return { status: 'pending', expiresAt: request.expiresAt }
   }
@@ -39,6 +66,7 @@ export default defineEventHandler(async (event) => {
   const appToken = await createAppToken(event, request.userId, {
     deviceId: request.deviceId,
     ttlSeconds,
+    grantType: request.grantType,
     deviceMeta: {
       deviceName: request.deviceName ?? null,
       platform: request.devicePlatform ?? null,
@@ -53,5 +81,11 @@ export default defineEventHandler(async (event) => {
     clientType,
   })
   await deleteDeviceAuthRequest(event, deviceCode)
-  return { status: 'approved', appToken }
+  return {
+    status: 'approved',
+    appToken,
+    grantType: request.grantType,
+    ttlSeconds,
+    refreshable: request.grantType === 'long',
+  }
 })

@@ -159,6 +159,9 @@ export default defineNuxtConfig({
       storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
     },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
+    adminBootstrap: {
+      secret: process.env.ADMINSECRET || process.env.ADMIN_SECRET,
+    },
     adminControl: {
       breakglassEnabled: process.env.ADMIN_BREAKGLASS_ENABLED !== 'false',
       controlPlaneProtectedEnabled: process.env.ADMIN_CONTROL_PLANE_PROTECTED_ENABLED !== 'false',

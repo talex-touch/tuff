@@ -20,6 +20,7 @@ const { locale, setLocale } = useI18n()
 const { syncLocaleChanges, getSavedLocale } = useUserLocale()
 const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
 const { status, getSession } = useAuth()
+const { user, pending: authUserPending } = useAuthUser()
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
 const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
@@ -146,6 +147,10 @@ function parseUrlLike(value: string) {
 
 function isAuthIntermediatePath(pathname: string) {
   return pathname.startsWith('/sign-in') || pathname.startsWith('/api/auth/signin')
+}
+
+function isAdminBootstrapPath(pathname: string) {
+  return pathname.startsWith('/auth/admin-bootstrap')
 }
 
 function safeDecodeUriComponent(value: string) {
@@ -383,6 +388,29 @@ watchEffect(() => {
     query: {
       lang: langTag.value,
       redirect_url: redirectTarget.value,
+    },
+  })
+})
+
+watchEffect(() => {
+  if (import.meta.server)
+    return
+  if (status.value !== 'authenticated')
+    return
+  if (authUserPending.value)
+    return
+  if (isAdminBootstrapPath(route.path))
+    return
+
+  const bootstrap = user.value?.adminBootstrap
+  if (!bootstrap?.required)
+    return
+
+  router.replace({
+    path: '/auth/admin-bootstrap',
+    query: {
+      lang: langTag.value,
+      redirect_url: sanitizeRedirect(route.fullPath, '/dashboard'),
     },
   })
 })

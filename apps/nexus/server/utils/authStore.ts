@@ -134,6 +134,14 @@ async function ensureAuthSchema(db: D1Database) {
       request_ip TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       grant_type TEXT NOT NULL DEFAULT 'short',
+      reject_reason TEXT,
+      reject_message TEXT,
+      reject_request_ip TEXT,
+      reject_current_ip TEXT,
+      rejected_at TEXT,
+      browser_state TEXT NOT NULL DEFAULT 'unknown',
+      browser_seen_at TEXT,
+      browser_closed_at TEXT,
       user_id TEXT,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
@@ -242,6 +250,14 @@ async function ensureAuthSchema(db: D1Database) {
   await addDeviceAuthColumnIfMissing('cancelled_at', 'cancelled_at TEXT')
   await addDeviceAuthColumnIfMissing('client_type', 'client_type TEXT')
   await addDeviceAuthColumnIfMissing('request_ip', 'request_ip TEXT')
+  await addDeviceAuthColumnIfMissing('reject_reason', 'reject_reason TEXT')
+  await addDeviceAuthColumnIfMissing('reject_message', 'reject_message TEXT')
+  await addDeviceAuthColumnIfMissing('reject_request_ip', 'reject_request_ip TEXT')
+  await addDeviceAuthColumnIfMissing('reject_current_ip', 'reject_current_ip TEXT')
+  await addDeviceAuthColumnIfMissing('rejected_at', 'rejected_at TEXT')
+  await addDeviceAuthColumnIfMissing('browser_state', "browser_state TEXT NOT NULL DEFAULT 'unknown'")
+  await addDeviceAuthColumnIfMissing('browser_seen_at', 'browser_seen_at TEXT')
+  await addDeviceAuthColumnIfMissing('browser_closed_at', 'browser_closed_at TEXT')
 
   await db.prepare(`
     UPDATE ${USERS_TABLE}
@@ -377,6 +393,11 @@ export interface DeviceAuthLongTermPolicy {
   locationTrusted: boolean
   reason: 'device' | 'location' | 'unknown' | null
 }
+
+export type DeviceAuthStatus = 'pending' | 'approved' | 'cancelled' | 'rejected'
+export type DeviceAuthGrantType = 'short' | 'long'
+export type DeviceAuthRejectReason = 'ip_mismatch' | 'permission_denied' | 'unknown'
+export type DeviceAuthBrowserState = 'unknown' | 'opened' | 'closed'
 
 function toNullableNumber(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
@@ -614,6 +635,92 @@ export async function setUserRole(event: H3Event, userId: string, role: string):
   return getUserById(event, userId)
 }
 
+export interface AdminBootstrapState {
+  adminCount: number
+  adminExists: boolean
+  firstUserId: string | null
+  isFirstUser: boolean
+  requiresBootstrap: boolean
+}
+
+function toSafeInteger(value: unknown): number {
+  const parsed = Number(value ?? 0)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function hasMutationChanges(result: any): boolean {
+  const changes = toSafeInteger(result?.meta?.changes ?? result?.changes ?? 0)
+  return changes > 0
+}
+
+export async function getAdminBootstrapState(event: H3Event, userId?: string | null): Promise<AdminBootstrapState> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  const row = await db.prepare(`
+    WITH admin_count AS (
+      SELECT COUNT(*) AS total
+      FROM ${USERS_TABLE}
+      WHERE status = 'active' AND LOWER(role) = 'admin'
+    ),
+    first_user AS (
+      SELECT id
+      FROM ${USERS_TABLE}
+      WHERE status = 'active'
+      ORDER BY created_at ASC, id ASC
+      LIMIT 1
+    )
+    SELECT
+      (SELECT total FROM admin_count) AS admin_count,
+      (SELECT id FROM first_user) AS first_user_id;
+  `).first<{ admin_count?: number | string, first_user_id?: string | null }>()
+
+  const adminCount = toSafeInteger(row?.admin_count)
+  const firstUserId = typeof row?.first_user_id === 'string' ? row.first_user_id : null
+  const normalizedUserId = typeof userId === 'string' ? userId.trim() : ''
+  const isFirstUser = Boolean(firstUserId && normalizedUserId && firstUserId === normalizedUserId)
+  const adminExists = adminCount > 0
+
+  return {
+    adminCount,
+    adminExists,
+    firstUserId,
+    isFirstUser,
+    requiresBootstrap: !adminExists,
+  }
+}
+
+export async function promoteFirstUserToAdmin(event: H3Event, userId: string): Promise<boolean> {
+  const normalizedUserId = userId.trim()
+  if (!normalizedUserId)
+    return false
+
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  const result = await db.prepare(`
+    UPDATE ${USERS_TABLE}
+    SET role = 'admin'
+    WHERE id = ?1
+      AND status = 'active'
+      AND LOWER(role) != 'admin'
+      AND id = (
+        SELECT id
+        FROM ${USERS_TABLE}
+        WHERE status = 'active'
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ${USERS_TABLE}
+        WHERE status = 'active' AND LOWER(role) = 'admin'
+      );
+  `).bind(normalizedUserId).run()
+
+  return hasMutationChanges(result)
+}
+
 export async function setUserStatus(event: H3Event, userId: string, status: UserStatus): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -686,15 +793,54 @@ export interface DeviceAuthRequest {
   deviceId: string
   deviceName?: string | null
   devicePlatform?: string | null
-  status: 'pending' | 'approved' | 'cancelled'
-  grantType: 'short' | 'long'
+  status: DeviceAuthStatus
+  grantType: DeviceAuthGrantType
   clientType?: AuthClientType | null
   requestIp?: string | null
+  rejectReason?: DeviceAuthRejectReason | null
+  rejectMessage?: string | null
+  rejectRequestIp?: string | null
+  rejectCurrentIp?: string | null
+  rejectedAt?: string | null
+  browserState?: DeviceAuthBrowserState
+  browserSeenAt?: string | null
+  browserClosedAt?: string | null
   userId?: string | null
   createdAt: string
   expiresAt: string
   approvedAt?: string | null
   cancelledAt?: string | null
+}
+
+function normalizeDeviceAuthStatus(value: unknown): DeviceAuthStatus {
+  if (typeof value !== 'string')
+    return 'pending'
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'pending' || normalized === 'approved' || normalized === 'cancelled' || normalized === 'rejected')
+    return normalized
+  return 'pending'
+}
+
+function normalizeDeviceAuthGrantType(value: unknown): DeviceAuthGrantType {
+  return value === 'long' ? 'long' : 'short'
+}
+
+function normalizeDeviceAuthRejectReason(value: unknown): DeviceAuthRejectReason | null {
+  if (typeof value !== 'string')
+    return null
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'ip_mismatch' || normalized === 'permission_denied' || normalized === 'unknown')
+    return normalized
+  return null
+}
+
+function normalizeDeviceAuthBrowserState(value: unknown): DeviceAuthBrowserState {
+  if (typeof value !== 'string')
+    return 'unknown'
+  const normalized = value.trim().toLowerCase()
+  if (normalized === 'opened' || normalized === 'closed' || normalized === 'unknown')
+    return normalized
+  return 'unknown'
 }
 
 function mapDeviceAuthRow(row: Record<string, any>): DeviceAuthRequest {
@@ -704,10 +850,18 @@ function mapDeviceAuthRow(row: Record<string, any>): DeviceAuthRequest {
     deviceId: row.device_id as string,
     deviceName: (row.device_name as string | null) ?? null,
     devicePlatform: (row.device_platform as string | null) ?? null,
-    status: (row.status as 'pending' | 'approved' | 'cancelled') ?? 'pending',
-    grantType: (row.grant_type as 'short' | 'long') ?? 'short',
+    status: normalizeDeviceAuthStatus(row.status),
+    grantType: normalizeDeviceAuthGrantType(row.grant_type),
     clientType: normalizeClientType(row.client_type),
     requestIp: row.request_ip ?? null,
+    rejectReason: normalizeDeviceAuthRejectReason(row.reject_reason),
+    rejectMessage: row.reject_message ?? null,
+    rejectRequestIp: row.reject_request_ip ?? null,
+    rejectCurrentIp: row.reject_current_ip ?? null,
+    rejectedAt: row.rejected_at ?? null,
+    browserState: normalizeDeviceAuthBrowserState(row.browser_state),
+    browserSeenAt: row.browser_seen_at ?? null,
+    browserClosedAt: row.browser_closed_at ?? null,
     userId: (row.user_id as string | null) ?? null,
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
@@ -749,12 +903,20 @@ export async function createDeviceAuthRequest(
       request_ip,
       status,
       grant_type,
+      reject_reason,
+      reject_message,
+      reject_request_ip,
+      reject_current_ip,
+      rejected_at,
+      browser_state,
+      browser_seen_at,
+      browser_closed_at,
       user_id,
       created_at,
       expires_at,
       approved_at,
       cancelled_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     deviceCode,
     userCode,
@@ -765,6 +927,14 @@ export async function createDeviceAuthRequest(
     getRequestIp(event),
     'pending',
     'short',
+    null,
+    null,
+    null,
+    null,
+    null,
+    'unknown',
+    null,
+    null,
     null,
     now,
     expiresAt,
@@ -782,6 +952,14 @@ export async function createDeviceAuthRequest(
     grantType: 'short',
     clientType: payload.clientType ?? null,
     requestIp: getRequestIp(event),
+    rejectReason: null,
+    rejectMessage: null,
+    rejectRequestIp: null,
+    rejectCurrentIp: null,
+    rejectedAt: null,
+    browserState: 'unknown',
+    browserSeenAt: null,
+    browserClosedAt: null,
     userId: null,
     createdAt: now,
     expiresAt,
@@ -831,10 +1009,22 @@ export async function approveDeviceAuthRequest(
   const approvedAt = new Date().toISOString()
   await db.prepare(`
     UPDATE ${DEVICE_AUTH_TABLE}
-    SET status = ?, user_id = ?, approved_at = ?, grant_type = ?, cancelled_at = NULL
+    SET status = ?, user_id = ?, approved_at = ?, grant_type = ?, cancelled_at = NULL,
+        reject_reason = NULL, reject_message = NULL, reject_request_ip = NULL, reject_current_ip = NULL, rejected_at = NULL
     WHERE user_code = ?
   `).bind('approved', userId, approvedAt, grantType, userCode).run()
-  return { ...request, status: 'approved', userId, approvedAt, grantType }
+  return {
+    ...request,
+    status: 'approved',
+    userId,
+    approvedAt,
+    grantType,
+    rejectReason: null,
+    rejectMessage: null,
+    rejectRequestIp: null,
+    rejectCurrentIp: null,
+    rejectedAt: null,
+  }
 }
 
 export async function deleteDeviceAuthRequest(event: H3Event, deviceCode: string): Promise<void> {
@@ -861,6 +1051,105 @@ export async function cancelDeviceAuthRequest(event: H3Event, userCode: string):
     WHERE user_code = ?
   `).bind('cancelled', cancelledAt, userCode).run()
   return { ...request, status: 'cancelled', cancelledAt }
+}
+
+export async function cancelDeviceAuthRequestByDeviceCode(event: H3Event, deviceCode: string): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE device_code = ? LIMIT 1
+  `).bind(deviceCode).first()
+  if (!row)
+    return null
+  const request = mapDeviceAuthRow(row as Record<string, any>)
+  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return null
+  const cancelledAt = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET status = ?, cancelled_at = ?
+    WHERE device_code = ?
+  `).bind('cancelled', cancelledAt, deviceCode).run()
+  return { ...request, status: 'cancelled', cancelledAt }
+}
+
+export async function rejectDeviceAuthRequest(
+  event: H3Event,
+  userCode: string,
+  payload: {
+    reason: DeviceAuthRejectReason
+    message?: string | null
+    requestIp?: string | null
+    currentIp?: string | null
+  },
+): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
+  `).bind(userCode).first()
+  if (!row)
+    return null
+  const request = mapDeviceAuthRow(row as Record<string, any>)
+  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return null
+  const rejectedAt = new Date().toISOString()
+  await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET status = ?, reject_reason = ?, reject_message = ?, reject_request_ip = ?, reject_current_ip = ?, rejected_at = ?
+    WHERE user_code = ?
+  `).bind(
+    'rejected',
+    payload.reason,
+    payload.message ?? null,
+    payload.requestIp ?? null,
+    payload.currentIp ?? null,
+    rejectedAt,
+    userCode,
+  ).run()
+  return {
+    ...request,
+    status: 'rejected',
+    rejectReason: payload.reason,
+    rejectMessage: payload.message ?? null,
+    rejectRequestIp: payload.requestIp ?? null,
+    rejectCurrentIp: payload.currentIp ?? null,
+    rejectedAt,
+  }
+}
+
+export async function updateDeviceAuthBrowserState(
+  event: H3Event,
+  userCode: string,
+  state: 'opened' | 'heartbeat' | 'closed',
+): Promise<DeviceAuthRequest | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const row = await db.prepare(`
+    SELECT * FROM ${DEVICE_AUTH_TABLE} WHERE user_code = ? LIMIT 1
+  `).bind(userCode).first()
+  if (!row)
+    return null
+  const request = mapDeviceAuthRow(row as Record<string, any>)
+  if (request.status !== 'pending' || isExpiredAt(request.expiresAt))
+    return request
+
+  const now = new Date().toISOString()
+  if (state === 'closed') {
+    await db.prepare(`
+      UPDATE ${DEVICE_AUTH_TABLE}
+      SET browser_state = ?, browser_seen_at = ?, browser_closed_at = ?
+      WHERE user_code = ?
+    `).bind('closed', now, now, userCode).run()
+    return { ...request, browserState: 'closed', browserSeenAt: now, browserClosedAt: now }
+  }
+
+  await db.prepare(`
+    UPDATE ${DEVICE_AUTH_TABLE}
+    SET browser_state = ?, browser_seen_at = ?, browser_closed_at = NULL
+    WHERE user_code = ?
+  `).bind('opened', now, userCode).run()
+  return { ...request, browserState: 'opened', browserSeenAt: now, browserClosedAt: null }
 }
 
 export function isDeviceAuthExpired(request: DeviceAuthRequest): boolean {

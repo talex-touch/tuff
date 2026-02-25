@@ -9,8 +9,8 @@ import type {
   MarketplacePluginReviewSubmitResponse,
   MarketplacePluginSummary,
 } from '~/types/marketplace'
-import { SharedPluginDetailContent } from '@talex-touch/utils/renderer'
-import type { SharedPluginDetail } from '@talex-touch/utils/renderer'
+import { SharedPluginDetailContent } from '@talex-touch/utils/renderer/shared/components'
+import type { SharedPluginDetail } from '@talex-touch/utils/renderer/shared/plugin-detail'
 import { computed, reactive, ref, watch } from 'vue'
 import MarketItem from '~/components/market/MarketItem.vue'
 import MarketSearch from '~/components/market/MarketSearch.vue'

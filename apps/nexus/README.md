@@ -39,6 +39,7 @@ Required in production:
 - `AUTH_ORIGIN` (public base URL; required by Passkeys)
 - `APP_AUTH_JWT_SECRET` (recommended, >= 16 chars; avoids ephemeral JWT secret)
 - `NUXT_INTELLIGENCE_ENCRYPT_KEY` (recommended, encrypts AI provider API keys)
+- `ADMINSECRET` (required if you enable first-user admin bootstrap flow)
 
 Auth providers (optional):
 - `GITHUB_CLIENT_ID`

@@ -1,6 +1,6 @@
 import { createError, readBody } from 'h3'
 import { requireSessionAuth } from '../../../utils/auth'
-import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, getDeviceAuthByUserCode, isDeviceAuthExpired, readRequestIp } from '../../../utils/authStore'
+import { approveDeviceAuthRequest, evaluateDeviceAuthLongTermPolicy, getDeviceAuthByUserCode, isDeviceAuthExpired, readRequestIp, rejectDeviceAuthRequest } from '../../../utils/authStore'
 
 interface ApproveBody {
   code?: string
@@ -26,10 +26,22 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Device authorization expired',
     })
   }
+  if (request.status !== 'pending') {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Device authorization already processed',
+    })
+  }
 
   const requestIp = request.requestIp
   const currentIp = readRequestIp(event)
   if (requestIp && currentIp && requestIp !== currentIp) {
+    await rejectDeviceAuthRequest(event, code, {
+      reason: 'ip_mismatch',
+      message: 'Device authorization IP mismatch',
+      requestIp,
+      currentIp,
+    })
     throw createError({
       statusCode: 403,
       statusMessage: 'Device authorization IP mismatch',

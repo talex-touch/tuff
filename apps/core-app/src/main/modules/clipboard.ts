@@ -1660,10 +1660,28 @@ export class ClipboardModule extends BaseModule {
 
       // Fast-path change detection: Skip processing if nothing changed
       const formatsKey = formats.sort().join(',')
+      const hasFileFormats = includesAny(formats, FILE_URL_FORMATS)
+      let prefetchedFiles: string[] | null = null
+      const buildQuickHash = (): string => {
+        const quickText = clipboard.readText().substring(0, 100)
+        if (!hasFileFormats) {
+          return `${formatsKey}:${quickText}`
+        }
+
+        prefetchedFiles = helper.readClipboardFiles()
+        const filesHash = crypto.createHash('sha1')
+        for (const filePath of prefetchedFiles) {
+          filesHash.update(filePath)
+          filesHash.update('\n')
+        }
+        const filesSignature = `${prefetchedFiles.length}:${filesHash.digest('hex')}`
+
+        return `${formatsKey}:${quickText}:${filesSignature}`
+      }
+
       if (helper.lastFormats.length > 0 && helper.lastFormats.sort().join(',') === formatsKey) {
         // Formats haven't changed, do a quick sanity check on text/files
-        const quickText = clipboard.readText()
-        const quickHash = `${formatsKey}:${quickText.substring(0, 100)}`
+        const quickHash = buildQuickHash()
 
         if (helper.lastChangeHash === quickHash) {
           // Nothing changed, skip processing
@@ -1673,7 +1691,7 @@ export class ClipboardModule extends BaseModule {
       } else {
         // Formats changed, update and continue
         helper.lastFormats = formats
-        helper.lastChangeHash = `${formatsKey}:${clipboard.readText().substring(0, 100)}`
+        helper.lastChangeHash = buildQuickHash()
       }
 
       const metaEntries: ClipboardMetaEntry[] = [{ key: 'formats', value: formats }]
@@ -1692,8 +1710,8 @@ export class ClipboardModule extends BaseModule {
 
       // Priority: FILES (with image) > IMAGE > FILES (no image) > TEXT
       // Check for files first to handle video files with thumbnails correctly
-      if (includesAny(formats, FILE_URL_FORMATS)) {
-        const files = helper.readClipboardFiles()
+      if (hasFileFormats) {
+        const files = prefetchedFiles ?? helper.readClipboardFiles()
         if (helper.didFilesChange(files)) {
           const serialized = JSON.stringify(files)
           let thumbnail: string | undefined

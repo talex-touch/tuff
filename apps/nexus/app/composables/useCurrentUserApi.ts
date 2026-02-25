@@ -17,6 +17,12 @@ export interface CurrentUserProfile {
   hasPassword?: boolean
   linkedProviders?: string[]
   linkedAccounts?: LinkedProviderAccount[]
+  adminBootstrap?: {
+    enabled: boolean
+    required: boolean
+    canPromote: boolean
+    isFirstUser: boolean
+  }
 }
 
 interface CurrentUserProfilePatch {
