@@ -709,6 +709,9 @@ importers:
 
   packages/test:
     dependencies:
+      '@talex-touch/tuff-native':
+        specifier: workspace:^
+        version: link:../tuff-native
       '@talex-touch/utils':
         specifier: workspace:^1.0.0
         version: link:../utils
@@ -805,9 +808,6 @@ importers:
       node-addon-api:
         specifier: ^7.1.1
         version: 7.1.1
-      node-gyp-build:
-        specifier: ^4.8.4
-        version: 4.8.4
     devDependencies:
       node-gyp:
         specifier: ^11.5.0

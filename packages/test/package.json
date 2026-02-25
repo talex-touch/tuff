@@ -14,6 +14,7 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@talex-touch/tuff-native": "workspace:^",
     "@talex-touch/utils": "workspace:^1.0.0",
     "ts-node": "^10.9.2",
     "vitest": "^3.2.4"

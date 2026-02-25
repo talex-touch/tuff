@@ -1,16 +1,12 @@
 'use strict'
 
-const path = require('node:path')
+const { loadNativeBinding } = require('./native-loader')
 
-let nativeBinding = null
-let loadError = null
-
-try {
-  nativeBinding = require(path.join(__dirname, 'build/Release/tuff_native_everything.node'))
-}
-catch (error) {
-  loadError = error
-}
+const { nativeBinding, loadError } = loadNativeBinding({
+  baseDir: __dirname,
+  moduleName: 'tuff_native_everything',
+  expectedExports: ['search', 'query', 'getVersion'],
+})
 
 function createUnavailableError() {
   const error = new Error(
