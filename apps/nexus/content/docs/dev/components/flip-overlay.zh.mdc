@@ -26,10 +26,14 @@ code: |
 
   <template>
     <TxButton ref="triggerRef" @click="open = true">打开 Overlay</TxButton>
-    <TxFlipOverlay v-model="open" :source="triggerRef?.$el">
+    <TxFlipOverlay
+      v-model="open"
+      :source="triggerRef?.$el"
+      header-title="详情视图"
+      header-desc="内置头部支持标题、副标题与默认圆形关闭按钮"
+    >
       <template #default="{ close }">
         <div style="padding: 32px;">
-          <h3 style="margin: 0 0 8px;">详情视图</h3>
           <p style="margin: 0 0 16px;">内容从触发源翻转展开。</p>
           <TxButton size="sm" @click="close">关闭</TxButton>
         </div>
@@ -43,8 +47,20 @@ code: |
 
 - `source` 决定动画起点，可传 `HTMLElement` 或 `DOMRect`。
 - `rotateX` / `rotateY` 与 `perspective` 控制 3D 质感。
+- Header 渲染优先级：
+  1. 提供 `#header` 时，完全覆盖内置 header。
+  2. 未提供 `#header` 且 `header=false` 时，不渲染 header。
+  3. 未提供 `#header` 且 `header=true` 时，使用内置 header（支持 `#header-display` / `#header-actions` / `#header-close`）。
+- `closable=false` 会完全隐藏右上角 close 区（`#header-close` 也不会渲染）。
+- 卡片默认内置 `surface` 背景层（基于 `TxBaseSurface`），可通过 `surface` / `surfaceColor` / `surfaceOpacity` 调整。
+- `globalMask` 控制全局遮罩层，默认开启。
+- `border` 控制边框样式（`solid` / `dashed` / `none`，`dash` 等价于 `dashed`）。
 - `randomTilt` 可为每次打开添加轻微随机偏移。
-- `maskClosable=false` 时只能通过 slot 的 `close()` 关闭。
+- `maskClosable=false` 时遮罩点击不会关闭，可通过 `close()` 控制关闭。
+- 连续打开多个 overlay 时，背景遮罩由单例全局层统一渲染并下沉到所有卡片下方；仅顶层保留可交互点击层，下层交互层不可交互且不会遮挡下层卡片露边。
+- 叠层位移仅在相邻层尺寸接近时自动启用（宽高分别满足 `|delta| <= max(8px, 上一层尺寸 * 5%)`）。
+- 位移叠层最多强化 3 层（`-18/-36/-54px` + `0.95/0.90/0.85` 缩放），超过 3 层后按层级渐隐（`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`）。
+- `preventAccidentalClose=true` 可开启防误关闭模式：遮罩点击不关闭、监听页面退出（刷新/关闭）并拦截，误操作时卡片周围会出现红色警示光。
 - 通过 `open/opened/close/closed` 事件联动外围 UI。
 
 ## API
@@ -65,8 +81,20 @@ code: |
 | `easeOut` | `string` | `'back.out(1.25)'` | 打开动画缓动 |
 | `easeIn` | `string` | `'back.in(1)'` | 关闭动画缓动 |
 | `maskClosable` | `boolean` | `true` | 点击遮罩关闭 |
+| `preventAccidentalClose` | `boolean` | `false` | 防误关闭（阻止遮罩关闭 + 页面退出拦截 + 红光警示） |
+| `globalMask` | `boolean` | `true` | 是否渲染全局遮罩层 |
+| `surface` | `'pure' \| 'mask' \| 'blur' \| 'glass' \| 'refraction'` | `'refraction'` | 内置卡片背景模式 |
+| `surfaceColor` | `string` | `''` | 内置背景基础色（默认跟随主题） |
+| `surfaceOpacity` | `number` | `0.96` | 内置背景透明度（mask 模式） |
+| `header` | `boolean` | `true` | 是否启用内置 header（未使用 `#header` 时生效） |
+| `headerTitle` | `string` | `''` | 内置 header 标题 |
+| `headerDesc` | `string` | `''` | 内置 header 描述 |
+| `closable` | `boolean` | `true` | 是否显示内置右上角关闭按钮 |
+| `closeAriaLabel` | `string` | `'Close'` | 关闭按钮无障碍文案 |
 | `maskClass` | `string` | `''` | 遮罩 class |
 | `cardClass` | `string` | `''` | 卡片 class |
+| `border` | `'solid' \| 'dashed' \| 'dash' \| 'none'` | `'solid'` | 卡片边框样式（`dash` 等价于 `dashed`） |
+| `scrollable` | `boolean` | `true` | 内容区是否内部滚动 |
 
 ### Events
 
@@ -83,4 +111,8 @@ code: |
 
 | 插槽 | 参数 | 说明 |
 |------|------|------|
-| `default` | `{ close, expanded, animating }` | Overlay 内容 |
+| `default` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Overlay 内容区 |
+| `header` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 全量自定义 header（会覆盖内置 header 体系） |
+| `header-display` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义标题/描述区 |
+| `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭按钮左侧操作区 |
+| `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭区域（`closable=false` 时不渲染） |
