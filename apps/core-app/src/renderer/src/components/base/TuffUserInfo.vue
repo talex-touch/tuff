@@ -7,7 +7,7 @@ import { toast } from 'vue-sonner'
 import UserProfileEditor from '~/components/base/UserProfileEditor.vue'
 import { getAuthBaseUrl } from '~/modules/auth/auth-env'
 import { useAuth } from '~/modules/auth/useAuth'
-import { fetchNexusWithAuth } from '~/modules/market/nexus-auth-client'
+import { fetchNexusWithAuth } from '~/modules/store/nexus-auth-client'
 
 const { t } = useI18n()
 const {
@@ -336,15 +336,10 @@ watch(isLoggedIn, (loggedIn) => {
       transition-name="UserProfileOverlay-Mask"
       mask-class="UserProfileOverlay-Mask"
       card-class="UserProfileOverlay-Card"
+      :header-title="t('userProfile.title', 'Account')"
     >
-      <template #default="{ close }">
+      <template #default>
         <div class="UserProfileOverlay">
-          <div class="UserProfileOverlay-Header">
-            <div class="UserProfileOverlay-Title">{{ t('userProfile.title', 'Account') }}</div>
-            <TxButton variant="flat" size="sm" class="UserProfileOverlay-CloseBtn" @click="close">
-              <i class="i-ri-close-line" />
-            </TxButton>
-          </div>
           <TxTabs
             v-model="profileTab"
             class="UserProfileOverlay-Tabs"
@@ -712,24 +707,6 @@ watch(isLoggedIn, (loggedIn) => {
   min-height: 0;
 }
 
-.UserProfileOverlay-Header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--tx-border-color-light);
-}
-
-.UserProfileOverlay-Title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--tx-text-color-primary);
-}
-
-.UserProfileOverlay-CloseBtn {
-  flex: 0 0 auto;
-}
-
 .UserProfileOverlay-Tabs {
   flex: 1;
   min-height: 0;
@@ -1031,8 +1008,6 @@ watch(isLoggedIn, (loggedIn) => {
 .UserProfileOverlay-Card {
   width: min(940px, 92vw);
   height: min(760px, 88vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1.2rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
   overflow: hidden;

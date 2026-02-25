@@ -1840,8 +1840,6 @@ function formatEndpointCandidates(list?: string[]) {
   width: min(560px, 92vw);
   min-height: 400px;
   max-height: 85vh;
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 1rem;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;

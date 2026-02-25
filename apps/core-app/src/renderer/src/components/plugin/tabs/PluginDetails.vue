@@ -473,19 +473,11 @@ function openManifestDialog(event: MouseEvent): void {
         transition-name="PluginManifest-Mask"
         mask-class="PluginManifest-Mask"
         card-class="PluginManifest-Card"
+        :header-title="t('plugin.details.manifestJson')"
+        :header-desc="t('plugin.details.manifestJsonDesc')"
       >
-        <template #default="{ close }">
+        <template #default>
           <div class="PluginManifest-Panel">
-            <header class="PluginManifest-Header">
-              <div class="PluginManifest-TitleWrap">
-                <h3>{{ t('plugin.details.manifestJson') }}</h3>
-                <p>{{ t('plugin.details.manifestJsonDesc') }}</p>
-              </div>
-              <TxButton variant="flat" class="PluginManifest-CloseBtn" @click="close">
-                <i class="i-ri-close-line" />
-              </TxButton>
-            </header>
-
             <div class="PluginManifest-EditorWrap">
               <TxCodeEditor
                 :model-value="manifestJsonText || t('plugin.details.manifestJsonEmpty')"
@@ -590,47 +582,11 @@ function openManifestDialog(event: MouseEvent): void {
 }
 
 .PluginManifest-Panel {
-  width: min(980px, 94vw);
-  height: min(760px, 90vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1.25rem;
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.PluginManifest-Header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--tx-border-color-light);
-  gap: 12px;
-}
-
-.PluginManifest-TitleWrap {
-  h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--tx-text-color-primary);
-  }
-
-  p {
-    margin: 6px 0 0;
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--tx-text-color-secondary);
-  }
-}
-
-.PluginManifest-CloseBtn :deep(.tx-button) {
-  min-width: 36px;
-  width: 36px;
-  height: 36px;
-  padding: 0;
 }
 
 .PluginManifest-EditorWrap {
@@ -668,9 +624,9 @@ function openManifestDialog(event: MouseEvent): void {
 }
 
 :global(.PluginManifest-Card) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  overflow: visible;
+  width: min(980px, 94vw);
+  height: min(760px, 90vh);
+  border-radius: 1.25rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 </style>

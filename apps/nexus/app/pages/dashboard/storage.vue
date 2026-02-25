@@ -688,28 +688,16 @@ watch(showDetailsOverlay, (open) => {
         transition-name="StorageDetailOverlay-Mask"
         mask-class="StorageDetailOverlay-Mask"
         card-class="StorageDetailOverlay-Card"
+        :header-title="t('dashboard.storage.syncDetailTitle', '同步内容明细')"
+        :header-desc="t('dashboard.storage.syncDetailDesc', '仅展示分类与元信息，不展示业务明文。')"
       >
-        <template #default="overlaySlot">
+        <template #header-actions>
+          <TxButton variant="flat" size="small" :loading="detailsLoading" @click="refreshSyncDetails">
+            {{ t('common.refresh', '刷新') }}
+          </TxButton>
+        </template>
+        <template #default>
           <div class="StorageDetailOverlay-Inner">
-            <div class="StorageDetailOverlay-Header">
-              <div class="space-y-1">
-                <h2 class="StorageDetailOverlay-Title">
-                  {{ t('dashboard.storage.syncDetailTitle', '同步内容明细') }}
-                </h2>
-                <p class="StorageDetailOverlay-Desc">
-                  {{ t('dashboard.storage.syncDetailDesc', '仅展示分类与元信息，不展示业务明文。') }}
-                </p>
-              </div>
-              <div class="StorageDetailOverlay-Actions">
-                <TxButton variant="flat" size="small" :loading="detailsLoading" @click="refreshSyncDetails">
-                  {{ t('common.refresh', '刷新') }}
-                </TxButton>
-                <TxButton variant="secondary" size="small" @click="overlaySlot?.close?.()">
-                  {{ t('common.close', '关闭') }}
-                </TxButton>
-              </div>
-            </div>
-
             <div v-if="detailsLoading" class="StorageDetailOverlay-State">
               {{ t('dashboard.storage.syncDetailLoading', '正在加载同步明细...') }}
             </div>
@@ -1270,30 +1258,6 @@ watch(showDetailsOverlay, (open) => {
   padding: 18px;
 }
 
-.StorageDetailOverlay-Header {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.StorageDetailOverlay-Title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--tx-text-color-primary);
-}
-
-.StorageDetailOverlay-Desc {
-  font-size: 13px;
-  color: var(--tx-text-color-secondary);
-}
-
-.StorageDetailOverlay-Actions {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
 .StorageDetailOverlay-State {
   padding: 14px;
   border-radius: 12px;
@@ -1488,8 +1452,6 @@ watch(showDetailsOverlay, (open) => {
   min-height: 380px;
   max-height: 84vh;
   border-radius: 16px;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color-overlay);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
   overflow: auto;
   position: fixed;

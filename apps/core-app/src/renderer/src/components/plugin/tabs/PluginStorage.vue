@@ -444,26 +444,16 @@ watch(
         transition-name="PluginStorageDetails-Mask"
         mask-class="PluginStorageDetails-Mask"
         card-class="PluginStorageDetails-Card"
+        :header-title="t('plugin.storage.details.title')"
+        :header-desc="
+          t('plugin.storage.details.description', {
+            files: storageStats.fileCount || 0,
+            directories: storageStats.dirCount || 0
+          })
+        "
       >
-        <template #default="{ close }">
+        <template #default>
           <div class="PluginStorageDetails-Panel">
-            <header class="PluginStorageDetails-Header">
-              <div class="PluginStorageDetails-TitleWrap">
-                <h3>{{ t('plugin.storage.details.title') }}</h3>
-                <p>
-                  {{
-                    t('plugin.storage.details.description', {
-                      files: storageStats.fileCount || 0,
-                      directories: storageStats.dirCount || 0
-                    })
-                  }}
-                </p>
-              </div>
-              <TxButton variant="flat" class="PluginStorageDetails-CloseBtn" @click="close">
-                <i class="i-ri-close-line" />
-              </TxButton>
-            </header>
-
             <div class="PluginStorageDetails-Body">
               <div class="PluginStorage-Card flex-1 min-h-0 overflow-hidden flex flex-col">
                 <div class="PluginStorage-CardHeader flex items-center justify-between">
@@ -652,8 +642,6 @@ watch(
 
 <style lang="scss" scoped>
 .PluginStorage-Card {
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 16px;
   padding: 24px;
 }
@@ -726,47 +714,11 @@ watch(
 }
 
 .PluginStorageDetails-Panel {
-  width: min(1120px, 95vw);
-  max-height: min(820px, 92vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1.25rem;
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.PluginStorageDetails-Header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--tx-border-color-light);
-  gap: 12px;
-}
-
-.PluginStorageDetails-TitleWrap {
-  h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--tx-text-color-primary);
-  }
-
-  p {
-    margin: 6px 0 0;
-    font-size: 13px;
-    color: var(--tx-text-color-secondary);
-    line-height: 1.5;
-  }
-}
-
-.PluginStorageDetails-CloseBtn :deep(.tx-button) {
-  min-width: 36px;
-  width: 36px;
-  height: 36px;
-  padding: 0;
 }
 
 .PluginStorageDetails-Body {
@@ -810,10 +762,10 @@ watch(
 }
 
 :global(.PluginStorageDetails-Card) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  overflow: visible;
+  width: min(1120px, 95vw);
+  max-height: min(820px, 92vh);
+  border-radius: 1.25rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
 .animate-spin {

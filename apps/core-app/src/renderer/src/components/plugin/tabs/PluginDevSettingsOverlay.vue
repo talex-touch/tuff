@@ -202,19 +202,11 @@ async function saveDevSettings(): Promise<void> {
     transition-name="PluginDevSettings-Mask"
     mask-class="PluginDevSettings-Mask"
     card-class="PluginDevSettings-Card"
+    :header-title="t('plugin.details.devSettings')"
+    :header-desc="t('plugin.details.devSettingsDesc')"
   >
-    <template #default="{ close }">
+    <template #default>
       <div class="PluginDevSettings-Panel">
-        <header class="PluginDevSettings-Header">
-          <div class="PluginDevSettings-TitleWrap">
-            <h3>{{ t('plugin.details.devSettings') }}</h3>
-            <p>{{ t('plugin.details.devSettingsDesc') }}</p>
-          </div>
-          <TxButton variant="flat" class="PluginDevSettings-CloseBtn" @click="close">
-            <i class="i-ri-close-line" />
-          </TxButton>
-        </header>
-
         <div class="PluginDevSettings-Body">
           <TuffBlockSlot
             :title="t('plugin.details.save')"
@@ -283,47 +275,11 @@ async function saveDevSettings(): Promise<void> {
 
 <style lang="scss" scoped>
 .PluginDevSettings-Panel {
-  width: min(860px, 92vw);
-  max-height: min(740px, 90vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1.25rem;
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.PluginDevSettings-Header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid var(--tx-border-color-light);
-  gap: 12px;
-}
-
-.PluginDevSettings-TitleWrap {
-  h3 {
-    margin: 0;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--tx-text-color-primary);
-  }
-
-  p {
-    margin: 6px 0 0;
-    font-size: 13px;
-    color: var(--tx-text-color-secondary);
-    line-height: 1.5;
-  }
-}
-
-.PluginDevSettings-CloseBtn :deep(.tx-button) {
-  min-width: 36px;
-  width: 36px;
-  height: 36px;
-  padding: 0;
 }
 
 .PluginDevSettings-Body {
@@ -355,10 +311,10 @@ async function saveDevSettings(): Promise<void> {
 }
 
 :global(.PluginDevSettings-Card) {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  overflow: visible;
+  width: min(860px, 92vw);
+  max-height: min(740px, 90vh);
+  border-radius: 1.25rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
 }
 
 .animate-spin {

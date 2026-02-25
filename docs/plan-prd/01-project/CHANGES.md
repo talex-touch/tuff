@@ -211,6 +211,7 @@
 6. **头部展示组件化**：抽离统一 `PluginMetaHeader`，并通过 `TxFlipOverlay` 的 `header` 插槽承载自定义头部（含关闭按钮），确保展示一致且可复用。
 7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
 8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
+9. **Plugin 选择直达表单**：在创建发布物流程中，点击 `Plugin` 类型后直接进入 `plugin_form`，移除中间提示页，减少一步跳转与额外尺寸切换。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/assets.vue`
@@ -2209,6 +2210,43 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-02-25
+
+### 审计: TxFlipOverlay 关闭按钮二轮排查总结
+
+**变更类型**: 文档/审计记录
+
+**审计范围**:
+- `apps/core-app`
+- `apps/nexus/app`
+- 聚焦 `TxFlipOverlay` 使用点，排查是否仍存在“重复自写右上角 close”与内置 close 冲突
+
+**审计结论**:
+- 二轮复核未发现新的生产级冲突点。
+- 当前命中的 `@click="close"` 主要为流程型“取消/关闭当前步骤”按钮，不属于重复右上角关闭。
+- `:closable="false"` 的场景为设计特例（由业务内容自身控制关闭），未发现无关闭路径问题。
+
+**保留项（业务可接受）**:
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/account.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/team.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/dashboard/api-keys.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+
+**测试/演示页例外（不纳入生产问题）**:
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/pages/test/flip-overlay-stack.vue`
+- `/Users/talexdreamsoul/Workspace/Projects/talex-touch/apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue`
+
+**后续建议**:
+- 若后续需要执行“零手写 close”规范，可在不影响流程可用性的前提下，统一保留内置 close 并移除非必要 `Cancel/Close` 按钮。
 
 ---
 

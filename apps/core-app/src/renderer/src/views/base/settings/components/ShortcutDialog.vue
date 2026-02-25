@@ -172,8 +172,6 @@ const FLIP_SPEED_BOOST = 1.1
 :global(.ShortcutDialog-Card) {
   width: min(980px, 92vw);
   height: min(720px, 86vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
   border-radius: 24px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   overflow: hidden;

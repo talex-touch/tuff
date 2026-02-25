@@ -457,18 +457,10 @@ console.log(props)
         transition-name="PluginInfo-IssuesMask"
         mask-class="PluginInfo-IssuesMask"
         card-class="PluginInfo-IssuesCard"
+        :header-title="t('plugin.tabs.issues')"
       >
-        <template #default="{ close }">
+        <template #default>
           <div class="PluginInfo-IssuesDialog">
-            <button
-              type="button"
-              class="PluginInfo-IssuesClose"
-              :title="t('common.close')"
-              :aria-label="t('common.close')"
-              @click="close"
-            >
-              <i class="i-ri-close-line" />
-            </button>
             <PluginIssues :plugin="plugin" />
           </div>
         </template>
@@ -591,8 +583,6 @@ console.log(props)
   width: min(700px, 92vw);
   height: min(560px, 82vh);
   border-radius: 1rem;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color-overlay);
   box-shadow: 0 26px 60px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   transform-origin: 50% 50%;
@@ -609,33 +599,6 @@ console.log(props)
 .PluginInfo-IssuesDialog :deep(.p-4) {
   padding-top: 24px;
   padding-right: 56px;
-}
-
-.PluginInfo-IssuesClose {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 30px;
-  height: 30px;
-  border: none;
-  border-radius: 999px;
-  color: var(--tx-text-color-secondary);
-  background: var(--tx-fill-color-light);
-  z-index: 4;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    color 0.2s ease,
-    background-color 0.2s ease,
-    transform 0.2s ease;
-
-  &:hover {
-    color: var(--tx-text-color-primary);
-    background: var(--tx-fill-color);
-    transform: scale(1.05);
-  }
 }
 
 @keyframes spin {

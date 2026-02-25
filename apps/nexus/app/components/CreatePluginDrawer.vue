@@ -4,7 +4,6 @@ import type { TpexExtractedManifest } from '@talex-touch/utils/plugin/providers'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { TxButton } from '@talex-touch/tuffex'
-import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
@@ -337,13 +336,6 @@ function setupFormObserver() {
   formResizeObserver.observe(formContentRef.value)
 }
 
-function handleOverlayClose(close?: () => void) {
-  if (close)
-    close()
-  else
-    emit('close')
-}
-
 watch(inputMode, () => {
   scheduleLayoutMeasure()
 })
@@ -392,8 +384,10 @@ function onSubmit() {
       transition-name="CreatePluginOverlay-Mask"
       mask-class="CreatePluginOverlay-Mask"
       card-class="CreatePluginOverlay-Card"
+      :header-title="t('dashboard.sections.plugins.addButton')"
+      :header-desc="t('dashboard.sections.plugins.manageSubtitle')"
     >
-      <template #default="overlaySlot">
+      <template #default>
         <TxAutoSizer
           :width="true"
           :height="true"
@@ -402,20 +396,6 @@ function onSubmit() {
           outer-class="CreatePluginOverlay-SizerOuter"
         >
           <div class="CreatePluginOverlay-Panel">
-            <div class="CreatePluginOverlay-Header">
-              <div>
-                <h2 class="text-xl font-semibold text-black dark:text-white">
-                  {{ t('dashboard.sections.plugins.addButton') }}
-                </h2>
-                <p class="mt-1 text-xs text-black/40 dark:text-white/40">
-                  {{ t('dashboard.sections.plugins.manageSubtitle') }}
-                </p>
-              </div>
-              <FlatButton @click="handleOverlayClose(overlaySlot?.close)">
-                <span class="i-carbon-close text-lg" />
-              </FlatButton>
-            </div>
-
             <div class="CreatePluginOverlay-Mode">
               <button
                 type="button"
@@ -636,25 +616,11 @@ function onSubmit() {
 
 <style scoped>
 .CreatePluginOverlay-Panel {
-  width: min(900px, 94vw);
-  min-height: 360px;
-  max-height: min(90vh, 920px);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  border-radius: 1.2rem;
-  border: 1px solid var(--tx-border-color-lighter);
-  background: var(--tx-bg-color-overlay);
-  overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-}
-
-.CreatePluginOverlay-Header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid var(--tx-border-color-lighter);
 }
 
 .CreatePluginOverlay-Mode {
@@ -740,10 +706,6 @@ function onSubmit() {
     min-height: 320px;
   }
 
-  .CreatePluginOverlay-Header {
-    padding: 14px 14px 10px;
-  }
-
   .CreatePluginOverlay-Mode {
     margin: 10px 12px 0;
   }
@@ -780,6 +742,12 @@ function onSubmit() {
 }
 
 .CreatePluginOverlay-Card {
+  width: min(900px, 94vw);
+  min-height: 360px;
+  max-height: min(90vh, 920px);
+  border-radius: 1.2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
   position: fixed;
   left: 50%;
   top: 50%;
