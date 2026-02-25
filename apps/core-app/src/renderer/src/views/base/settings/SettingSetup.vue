@@ -5,7 +5,9 @@
   Allows users to configure permissions, auto-start, and tray visibility
 -->
 <script setup lang="ts" name="SettingSetup">
+import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex'
+import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { TrayEvents } from '@talex-touch/utils/transport/events'
@@ -28,12 +30,14 @@ import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const settingsSdk = useSettingsSdk()
 const { startupInfo } = useStartupInfo()
 
 const platform = computed(() => startupInfo.value?.platform || process.platform)
 const isMacOS = computed(() => platform.value === 'darwin')
 const isWindows = computed(() => platform.value === 'win32')
 const isLinux = computed(() => platform.value === 'linux')
+const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
 type SystemPermissionStatus = 'granted' | 'denied' | 'notDetermined' | 'unsupported'
 
@@ -71,9 +75,11 @@ const settings = ref({
   hideDock: false,
   startSilent: false,
   omniAutoMountFeature: false,
+  hideNoisySystemApps: true,
   runAsAdmin: false,
   customDesktop: false
 })
+const appIndexSettings = ref<AppIndexSettings | null>(null)
 
 const isLoading = ref(false)
 
@@ -224,6 +230,19 @@ async function loadSettings(): Promise<void> {
   settings.value.omniAutoMountFeature = Boolean(
     appSetting.omniPanel?.autoMountFirstFeatureOnPluginInstall
   )
+
+  await loadAppIndexSettings()
+}
+
+async function loadAppIndexSettings(): Promise<void> {
+  try {
+    const loaded = await settingsSdk.appIndex.getSettings()
+    appIndexSettings.value = loaded
+    settings.value.hideNoisySystemApps = loaded.hideNoisySystemApps
+  } catch (error) {
+    settings.value.hideNoisySystemApps = true
+    console.error('[SettingSetup] Failed to load app index settings:', error)
+  }
 }
 
 async function requestPermission(type: string): Promise<void> {
@@ -322,6 +341,20 @@ async function updateCustomDesktop(value: boolean): Promise<void> {
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update customDesktop:', error)
+    toast.error(t('setupPermissions.updateFailed'))
+  }
+}
+
+async function updateHideNoisySystemApps(value: boolean): Promise<void> {
+  settings.value.hideNoisySystemApps = value
+  try {
+    const updated = await settingsSdk.appIndex.updateSettings({ hideNoisySystemApps: value })
+    appIndexSettings.value = updated
+    settings.value.hideNoisySystemApps = updated.hideNoisySystemApps
+    toast.success(t('common.success'))
+  } catch (error) {
+    settings.value.hideNoisySystemApps = appIndexSettings.value?.hideNoisySystemApps ?? true
+    console.error('[SettingSetup] Failed to update hideNoisySystemApps:', error)
     toast.error(t('setupPermissions.updateFailed'))
   }
 }
@@ -502,6 +535,16 @@ function getStatusIconClass(status: string): string {
       default-icon="i-carbon-data-share"
       active-icon="i-carbon-data-share"
       @update:model-value="updateOmniAutoMountFeature"
+    />
+
+    <TuffBlockSwitch
+      v-if="showAdvancedSettings"
+      v-model="settings.hideNoisySystemApps"
+      :title="t('settings.setup.hideNoisySystemApps')"
+      :description="t('settings.setup.hideNoisySystemAppsDesc')"
+      default-icon="i-carbon-filter"
+      active-icon="i-carbon-filter"
+      @update:model-value="updateHideNoisySystemApps"
     />
 
     <TuffBlockSwitch

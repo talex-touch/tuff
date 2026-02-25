@@ -2153,6 +2153,8 @@
       "startSilentDesc": "Launch application without showing window, run in background only",
       "omniAutoMountFeature": "Auto-mount OmniPanel feature after install",
       "omniAutoMountFeatureDesc": "When enabled, the first executable feature from a newly installed plugin is added to OmniPanel automatically.",
+      "hideNoisySystemApps": "Hide Noisy System Apps",
+      "hideNoisySystemAppsDesc": "Hide less-used helper apps like Simulator and system Helper/Agent entries (only hidden from results, index data is kept)",
       "runAsAdmin": "Run with administrator privileges",
       "runAsAdminDesc": "Run elevated on Windows to unlock system-level tasks.",
       "customDesktop": "Use custom desktop shell",

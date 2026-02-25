@@ -2145,6 +2145,8 @@
       "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
       "omniAutoMountFeature": "安装后自动装载 OmniPanel Feature",
       "omniAutoMountFeatureDesc": "启用后，插件安装成功会自动把首个可执行 Feature 加入 OmniPanel。",
+      "hideNoisySystemApps": "过滤系统噪音应用",
+      "hideNoisySystemAppsDesc": "隐藏 Simulator / 系统 Helper/Agent 等不常用辅助应用（仅隐藏结果，不删除索引）",
       "runAsAdmin": "使用管理员权限运行",
       "runAsAdminDesc": "以管理员权限启动应用，启用系统级功能。",
       "customDesktop": "使用自定义桌面",

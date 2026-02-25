@@ -53,6 +53,7 @@ const DEFAULT_DEVICE_IDLE_SETTINGS: DeviceIdleSettings = {
 }
 
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
+  hideNoisySystemApps: true,
   startupBackfillEnabled: true,
   startupBackfillRetryMax: 5,
   startupBackfillRetryBaseMs: 5000,
@@ -71,6 +72,7 @@ interface DeviceIdleForm {
 }
 
 interface AppIndexForm {
+  hideNoisySystemApps: boolean
   startupBackfillEnabled: boolean
   startupBackfillRetryMax: number
   startupBackfillRetryBaseSeconds: number
@@ -93,6 +95,7 @@ const deviceIdleForm = ref<DeviceIdleForm>({
 const appIndexSettings = ref<AppIndexSettings | null>(null)
 const appIndexSaving = ref(false)
 const appIndexForm = ref<AppIndexForm>({
+  hideNoisySystemApps: DEFAULT_APP_INDEX_SETTINGS.hideNoisySystemApps,
   startupBackfillEnabled: DEFAULT_APP_INDEX_SETTINGS.startupBackfillEnabled,
   startupBackfillRetryMax: DEFAULT_APP_INDEX_SETTINGS.startupBackfillRetryMax,
   startupBackfillRetryBaseSeconds: Math.round(
@@ -150,6 +153,7 @@ function toDeviceIdleForm(settings: DeviceIdleSettings): DeviceIdleForm {
 
 function toAppIndexForm(settings: AppIndexSettings): AppIndexForm {
   return {
+    hideNoisySystemApps: settings.hideNoisySystemApps,
     startupBackfillEnabled: settings.startupBackfillEnabled,
     startupBackfillRetryMax: settings.startupBackfillRetryMax,
     startupBackfillRetryBaseSeconds: Math.round(settings.startupBackfillRetryBaseMs / 1000),
@@ -245,6 +249,7 @@ async function saveAppIndexSettings() {
     )
 
     const payload: AppIndexSettings = {
+      hideNoisySystemApps: !!form.hideNoisySystemApps,
       startupBackfillEnabled: !!form.startupBackfillEnabled,
       startupBackfillRetryMax: retryMax,
       startupBackfillRetryBaseMs: retryBaseMs,
