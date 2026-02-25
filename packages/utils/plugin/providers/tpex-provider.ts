@@ -183,7 +183,7 @@ export class TpexProvider implements PluginProvider {
 
     const { slug, version } = parsed
 
-    const detailRes = await fetch(`${this.apiBase}/api/market/plugins/${slug}`)
+    const detailRes = await fetch(`${this.apiBase}/api/store/plugins/${slug}`)
     if (!detailRes.ok) {
       if (detailRes.status === 404) {
         throw new Error(`Plugin not found: ${slug}`)
@@ -255,7 +255,10 @@ export class TpexProvider implements PluginProvider {
    * List all available plugins from TPEX registry
    */
   async listPlugins(): Promise<TpexPluginInfo[]> {
-    const res = await fetch(`${this.apiBase}/api/market/plugins`)
+    const listUrl = new URL(`${this.apiBase}/api/store/plugins`)
+    listUrl.searchParams.set('compact', '1')
+
+    const res = await fetch(listUrl.toString())
     if (!res.ok) {
       throw new Error(`Failed to fetch plugin list: ${res.statusText}`)
     }
@@ -268,7 +271,7 @@ export class TpexProvider implements PluginProvider {
    * Get plugin details by slug
    */
   async getPlugin(slug: string): Promise<TpexDetailResponse['plugin'] | null> {
-    const res = await fetch(`${this.apiBase}/api/market/plugins/${slug}`)
+    const res = await fetch(`${this.apiBase}/api/store/plugins/${slug}`)
     if (!res.ok) {
       if (res.status === 404)
         return null

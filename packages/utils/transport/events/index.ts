@@ -30,18 +30,18 @@ import type {
   AgentsGetRequest,
   AgentsGetResponse,
   AgentsListResponse,
-  AgentsMarketCategoriesResponse,
-  AgentsMarketCheckUpdatesResponse,
-  AgentsMarketFeaturedResponse,
-  AgentsMarketGetRequest,
-  AgentsMarketGetResponse,
-  AgentsMarketInstallRequest,
-  AgentsMarketInstallResponse,
-  AgentsMarketInstalledResponse,
-  AgentsMarketSearchRequest,
-  AgentsMarketSearchResponse,
-  AgentsMarketUninstallRequest,
-  AgentsMarketUninstallResponse,
+  AgentsStoreCategoriesResponse,
+  AgentsStoreCheckUpdatesResponse,
+  AgentsStoreFeaturedResponse,
+  AgentsStoreGetRequest,
+  AgentsStoreGetResponse,
+  AgentsStoreInstallRequest,
+  AgentsStoreInstallResponse,
+  AgentsStoreInstalledResponse,
+  AgentsStoreSearchRequest,
+  AgentsStoreSearchResponse,
+  AgentsStoreUninstallRequest,
+  AgentsStoreUninstallResponse,
   AgentsStatsResponse,
   AgentsTaskCancelledPayload,
   AgentsTaskCompletedPayload,
@@ -280,18 +280,18 @@ import type {
   FlowUnregisterTargetsRequest,
 } from './types/flow'
 import type {
-  MarketCheckUpdatesResponse,
-  MarketGetPluginRequest,
-  MarketGetPluginResponse,
-  MarketHttpRequest,
-  MarketHttpRequestResponse,
-  MarketSearchRequest,
-  MarketSearchResponse,
-  MarketUpdatesAvailablePayload,
-} from './types/market'
+  StoreCheckUpdatesResponse,
+  StoreGetPluginRequest,
+  StoreGetPluginResponse,
+  StoreHttpRequest,
+  StoreHttpRequestResponse,
+  StoreSearchRequest,
+  StoreSearchResponse,
+  StoreUpdatesAvailablePayload,
+} from './types/store'
 
 // ============================================================================
-// Market Events
+// Store Events
 // ============================================================================
 
 import type {
@@ -2179,19 +2179,19 @@ export const PluginEvents = {
   },
 } as const
 
-export const MarketEvents = {
+export const StoreEvents = {
   api: {
-    checkUpdates: defineRawEvent<void, MarketCheckUpdatesResponse>('market:check-updates'),
-    search: defineRawEvent<MarketSearchRequest, MarketSearchResponse>('market:search'),
-    getPlugin: defineRawEvent<MarketGetPluginRequest, MarketGetPluginResponse>('market:get-plugin'),
-    httpRequest: defineRawEvent<MarketHttpRequest, MarketHttpRequestResponse>('market:http-request'),
+    checkUpdates: defineRawEvent<void, StoreCheckUpdatesResponse>('store:check-updates'),
+    search: defineRawEvent<StoreSearchRequest, StoreSearchResponse>('store:search'),
+    getPlugin: defineRawEvent<StoreGetPluginRequest, StoreGetPluginResponse>('store:get-plugin'),
+    httpRequest: defineRawEvent<StoreHttpRequest, StoreHttpRequestResponse>('store:http-request'),
 
-    featured: defineRawEvent<unknown, unknown>('market:featured'),
-    npmList: defineRawEvent<void, unknown>('market:npm-list'),
+    featured: defineRawEvent<unknown, unknown>('store:featured'),
+    npmList: defineRawEvent<void, unknown>('store:npm-list'),
   },
 
   push: {
-    updatesAvailable: defineRawEvent<MarketUpdatesAvailablePayload, void>('market:updates-available'),
+    updatesAvailable: defineRawEvent<StoreUpdatesAvailablePayload, void>('store:updates-available'),
   },
 } as const
 
@@ -2343,46 +2343,46 @@ export const AgentsEvents = {
     taskCancelled: defineRawEvent<AgentsTaskCancelledPayload, void>('agents:task-cancelled'),
   },
 
-  market: {
+  store: {
     search: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('search')
-      .define<AgentsMarketSearchRequest | void, AgentsMarketSearchResponse>(),
+      .define<AgentsStoreSearchRequest | void, AgentsStoreSearchResponse>(),
 
     get: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('get')
-      .define<AgentsMarketGetRequest, AgentsMarketGetResponse>(),
+      .define<AgentsStoreGetRequest, AgentsStoreGetResponse>(),
 
     featured: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('featured')
-      .define<void, AgentsMarketFeaturedResponse>(),
+      .define<void, AgentsStoreFeaturedResponse>(),
 
     installed: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('installed')
-      .define<void, AgentsMarketInstalledResponse>(),
+      .define<void, AgentsStoreInstalledResponse>(),
 
     categories: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('categories')
-      .define<void, AgentsMarketCategoriesResponse>(),
+      .define<void, AgentsStoreCategoriesResponse>(),
 
     install: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('install')
-      .define<AgentsMarketInstallRequest, AgentsMarketInstallResponse>(),
+      .define<AgentsStoreInstallRequest, AgentsStoreInstallResponse>(),
 
     uninstall: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('uninstall')
-      .define<AgentsMarketUninstallRequest, AgentsMarketUninstallResponse>(),
+      .define<AgentsStoreUninstallRequest, AgentsStoreUninstallResponse>(),
 
     checkUpdates: defineEvent('agents')
-      .module('market')
+      .module('store')
       .event('check-updates')
-      .define<void, AgentsMarketCheckUpdatesResponse>(),
+      .define<void, AgentsStoreCheckUpdatesResponse>(),
   },
 } as const
 
@@ -2671,7 +2671,7 @@ export const TuffEvents = {
   coreBox: CoreBoxEvents,
   storage: StorageEvents,
   plugin: PluginEvents,
-  market: MarketEvents,
+  store: StoreEvents,
   notification: NotificationEvents,
   permission: PermissionEvents,
   platform: PlatformEvents,
