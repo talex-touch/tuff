@@ -166,6 +166,7 @@ async function handleOpenPluginFolder(): Promise<void> {
       transition-name="PluginDrawer-Mask"
       mask-class="PluginDrawer-Mask"
       card-class="PluginDrawer-Card"
+      :closable="false"
     >
       <template #default="{ close }">
         <div class="PluginDrawer">
@@ -211,17 +212,19 @@ async function handleOpenPluginFolder(): Promise<void> {
 }
 
 :global(.PluginDrawer-Mask) {
-  background: rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(6px);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 :global(.PluginDrawer-Card) {
-  width: 100vw;
-  height: 100vh;
-  max-width: 100vw;
-  max-height: 100vh;
+  width: min(1060px, 92vw);
+  height: min(760px, 86vh);
+  min-height: 520px;
   background: var(--tx-bg-color-page);
-  border-radius: 0;
+  border-radius: 18px;
+  border: 1px solid var(--tx-border-color-lighter);
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
