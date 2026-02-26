@@ -1,0 +1,77 @@
+# Intelligence 统一 Schema 与迁移方案
+
+本页定义 provider/capability/prompts 的统一配置模型，并给出从 Core-App + Nexus 零散配置迁移到统一 Schema 的路径。
+
+## 为什么要统一
+
+当前存在多份配置来源：
+
+- Core-App 主配置：`StorageList.IntelligenceConfig`（providers/capabilities/globalConfig）
+- Core-App Prompt 库：`intelligence/prompt-library`（renderer 侧 custom prompts）
+- Core-App DB 适配：`intelligence/providers`、`intelligence/capabilities`、`intelligence/prompts`
+- Nexus D1：`intelligence_providers`、`intelligence_settings`（及 runtime 审计）
+
+结果是字段语义接近但不完全等价，迁移/排障成本高。
+
+## 统一 Schema（建议 v1）
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceUnifiedConfigV1 {
+    schemaVersion: 1
+    updatedAt: number
+    providers: IntelligenceProviderPersisted[]
+    capabilities: Record<string, IntelligenceCapabilityConfig>
+    prompts: PromptTemplate[]
+    globalConfig: IntelligenceGlobalConfig
+    governance: {
+      defaultTimeoutMs: number
+      fallbackPolicy: 'next-available' | 'fail-fast' | 'round-robin'
+      approvalEnabled: boolean
+      auditEnabled: boolean
+    }
+  }
+
+  interface IntelligenceProviderPersisted extends Omit<IntelligenceProviderConfig, 'apiKey'> {
+    auth?: {
+      mode: 'secret-ref' | 'token-ref' | 'none'
+      secretRef?: string
+    }
+  }
+---
+:::
+
+> 说明：`apiKey` 不应以明文持久化在统一配置对象中，运行时按 `secretRef` 解密注入。
+
+## 数据安全约束
+
+- SQLite 作为本地 SoT；JSON 仅用于同步载荷，且必须加密（`payload_enc` / `payload_ref`）。
+- `deviceId` 只作为设备标识，不参与密钥材料。
+- provider 凭据必须走系统安全存储（safeStorage/Keychain/Credential Locker/libsecret）。
+
+## 迁移映射（核心字段）
+
+| 来源 | 字段 | 目标 |
+| --- | --- | --- |
+| Core-App `providers[]` | `id/type/name/enabled/baseUrl/models/defaultModel` | `providers[]` 同名字段 |
+| Core-App `providers[].apiKey` | 明文/临时注入值 | `providers[].auth.secretRef` |
+| Core-App `capabilities` | `providers/promptTemplate` | `capabilities` |
+| Core-App prompt library | `customPrompts[]` | `prompts[]`（追加并去重） |
+| Nexus `intelligence_settings` | `default_strategy/enable_audit/...` | `globalConfig + governance` |
+
+## 建议迁移流程
+
+1. **读取阶段**：采集 Core-App/Nexus 现有配置快照（只读）。
+2. **归一化阶段**：统一 providerId、capabilityId、prompt id，修复默认值。
+3. **安全重写阶段**：将凭据字段转换为 `secretRef`，清理明文残留。
+4. **写入阶段**：写入 unified config（带 `schemaVersion`）并保留回滚快照。
+5. **双读灰度阶段**：运行时优先读新 schema，回退读旧 schema（只读）。
+6. **收敛阶段**：完成兼容窗口后移除旧写入入口。
+
+## 迁移验收
+
+- 单用户迁移后 provider/capability/prompt 数量一致。
+- 同一 capability 在迁移前后 provider 选择结果一致（允许仅排序差异）。
+- 无任何 API Key 明文残留在 JSON、日志或同步载荷。
+- Nexus/Core-App UI 对同一配置显示一致。

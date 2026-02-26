@@ -52,16 +52,46 @@ const testError = ref('')
 const testResult = ref('')
 const isTesting = ref(false)
 
+function isNexusManagedProvider(provider: IntelligenceProviderConfig): boolean {
+  if (provider.id === 'tuff-nexus-default') {
+    return true
+  }
+  const origin = provider.metadata?.origin
+  return typeof origin === 'string' && origin === 'tuff-nexus'
+}
+
+const requiresApiKey = computed(() => {
+  if (props.modelValue.type === 'local') {
+    return false
+  }
+  return !isNexusManagedProvider(props.modelValue)
+})
+
+const apiKeyDescription = computed(() => {
+  if (apiKeyError.value) {
+    return apiKeyError.value
+  }
+  if (!requiresApiKey.value) {
+    return t('settings.intelligence.nexusManagedApiKeyHint')
+  }
+  return t('intelligence.config.api.apiKeyRequired')
+})
+
 const canTest = computed(() => {
-  const hasApiKey = localApiKey.value.trim().length > 0
   const isNotLocal = props.modelValue.type !== 'local'
-  return hasApiKey && isNotLocal
+  if (!isNotLocal) {
+    return false
+  }
+  if (!requiresApiKey.value) {
+    return true
+  }
+  return localApiKey.value.trim().length > 0
 })
 
 function validateApiKey(value: string): boolean {
   apiKeyError.value = ''
 
-  if (props.modelValue.type !== 'local' && !value.trim()) {
+  if (requiresApiKey.value && !value.trim()) {
     apiKeyError.value = t('intelligence.config.api.apiKeyRequired')
     return false
   }
@@ -106,7 +136,7 @@ async function handleTest() {
       type: props.modelValue.type,
       name: props.modelValue.name,
       enabled: true, // 测试时强制启用
-      apiKey: localApiKey.value.trim(),
+      apiKey: localApiKey.value.trim() || undefined,
       baseUrl: localBaseUrl.value.trim() || undefined,
       models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
       defaultModel: props.modelValue.defaultModel || undefined,
@@ -197,7 +227,7 @@ async function fetchAvailableModels(provider: IntelligenceProviderConfig) {
     <TuffBlockInput
       v-model="localApiKey"
       :title="t('intelligence.config.api.apiKey')"
-      :description="apiKeyError || t('intelligence.config.api.apiKeyRequired')"
+      :description="apiKeyDescription"
       :placeholder="t('intelligence.config.api.apiKeyPlaceholder')"
       default-icon="i-carbon-password"
       active-icon="i-carbon-password"

@@ -1,6 +1,8 @@
 import type {
   IntelligenceAuditLog,
   IntelligenceCapabilityConfig,
+  IntelligencePromptBinding,
+  IntelligencePromptRecord,
   IntelligenceProviderConfig,
   PromptTemplate,
 } from '@talex-touch/utils/types/intelligence'
@@ -94,12 +96,20 @@ export interface TuffIntelligenceStorageAdapter {
   savePrompt: (prompt: PromptTemplate) => Promise<void>
   listPrompts: () => Promise<PromptTemplate[]>
   deletePrompt: (id: string) => Promise<void>
+  savePromptRecord?: (prompt: IntelligencePromptRecord) => Promise<void>
+  listPromptRegistry?: () => Promise<IntelligencePromptRecord[]>
+  deletePromptRecord?: (id: string, version?: string) => Promise<void>
+  savePromptBinding?: (binding: IntelligencePromptBinding) => Promise<void>
+  listPromptBindings?: () => Promise<IntelligencePromptBinding[]>
+  deletePromptBinding?: (capabilityId: string, providerId?: string) => Promise<void>
 }
 
 export interface TuffIntelligenceConfig {
   providers: TuffProviderRegistryEntry[]
   capabilities: TuffCapabilityBinding[]
   prompts: PromptTemplate[]
+  promptRegistry?: IntelligencePromptRecord[]
+  promptBindings?: IntelligencePromptBinding[]
   quota?: Record<string, TuffQuota>
   enableAudit?: boolean
   enableUsage?: boolean

@@ -246,8 +246,8 @@ const pluginLifecycle = {
 
         const requestId = crypto.randomUUID()
         plugin.feature.clearItems()
-        plugin.feature.pushItems([buildPendingItem(item.meta?.featureId || 'intelligence.ask', prompt, requestId)])
-        void dispatchPrompt(item.meta?.featureId || 'intelligence.ask', prompt, requestId)
+        plugin.feature.pushItems([buildPendingItem(item.meta?.featureId || 'intelligence-ask', prompt, requestId)])
+        void dispatchPrompt(item.meta?.featureId || 'intelligence-ask', prompt, requestId)
         return { externalAction: true }
       }
     }

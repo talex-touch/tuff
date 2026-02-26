@@ -4,9 +4,9 @@ import type {
   IntelligenceMessage,
   IntelligenceProviderConfig,
   TuffIntelligenceApprovalTicket,
-  TuffIntelligenceSession,
+  TuffIntelligenceAgentSession,
+  TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceStateSnapshot,
-  TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn,
   ModuleInitContext,
   ModuleKey
@@ -19,6 +19,7 @@ import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
+import { getAuthToken } from '../auth'
 import { capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
@@ -45,6 +46,7 @@ import { IntelligenceProviderManager } from './runtime/provider-manager'
 import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 
 const intelligenceLog = createLogger('Intelligence')
+const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 
 type IntelligenceInvokePayload = {
   capabilityId: string
@@ -102,6 +104,11 @@ type IntelligenceSessionStartPayload = {
   objective?: string
   context?: Record<string, unknown>
   metadata?: Record<string, unknown>
+  autoRunGraph?: boolean
+  maxSteps?: number
+  toolBudget?: number
+  continueOnError?: boolean
+  reflectNotes?: string
 }
 
 type IntelligenceSessionResumePayload = { sessionId: string }
@@ -109,6 +116,21 @@ type IntelligenceSessionResumePayload = { sessionId: string }
 type IntelligenceSessionCancelPayload = { sessionId: string; reason?: string }
 
 type IntelligenceSessionStatePayload = { sessionId: string }
+
+type IntelligenceSessionHeartbeatPayload = {
+  sessionId: string
+}
+
+type IntelligenceSessionPausePayload = {
+  sessionId: string
+  reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
+  note?: string
+}
+
+type IntelligenceSessionHistoryPayload = {
+  limit?: number
+  status?: TuffIntelligenceAgentSession['status']
+}
 
 type IntelligenceOrchestratorPlanPayload = {
   sessionId: string
@@ -163,14 +185,45 @@ type IntelligenceToolApprovePayload = {
 
 type IntelligenceTraceQueryPayload = {
   sessionId: string
+  fromSeq?: number
   limit?: number
-  level?: TuffIntelligenceTraceEvent['level']
-  type?: TuffIntelligenceTraceEvent['type']
+  level?: TuffIntelligenceAgentTraceEvent['level']
+  type?: TuffIntelligenceAgentTraceEvent['type']
 }
 
 type IntelligenceTraceExportPayload = {
   sessionId: string
   format?: 'json' | 'jsonl'
+}
+
+function toNexusApiKey(token: string | null): string | undefined {
+  if (!token) return undefined
+  const trimmed = token.trim()
+  if (!trimmed) return undefined
+  return trimmed.replace(/^Bearer\s+/i, '')
+}
+
+function normalizeProviderForRuntime(
+  provider: IntelligenceProviderConfig
+): IntelligenceProviderConfig {
+  const origin = provider.metadata?.origin
+  const isNexusProvider = provider.id === TUFF_NEXUS_PROVIDER_ID || origin === 'tuff-nexus'
+  if (!isNexusProvider) {
+    return provider
+  }
+
+  const authToken = toNexusApiKey(getAuthToken())
+  return {
+    ...provider,
+    enabled: true,
+    apiKey: authToken || provider.apiKey || 'guest',
+    metadata: {
+      ...(provider.metadata || {}),
+      origin: 'tuff-nexus',
+      tokenInjected: Boolean(authToken),
+      tokenMode: authToken ? 'auth' : 'guest'
+    }
+  }
 }
 
 const intelligenceInvokeEvent = defineRawEvent<
@@ -233,32 +286,44 @@ const intelligenceGetCurrentUsageEvent = defineRawEvent<QuotaLookupPayload, ApiR
 )
 const intelligenceSessionStartEvent = defineRawEvent<
   IntelligenceSessionStartPayload,
-  ApiResponse<TuffIntelligenceSession>
->('intelligence:session:start')
+  ApiResponse<TuffIntelligenceAgentSession>
+>('intelligence:agent:session:start')
+const intelligenceSessionHeartbeatEvent = defineRawEvent<
+  IntelligenceSessionHeartbeatPayload,
+  ApiResponse<{ sessionId: string; heartbeatAt: string }>
+>('intelligence:agent:session:heartbeat')
+const intelligenceSessionPauseEvent = defineRawEvent<
+  IntelligenceSessionPausePayload,
+  ApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:pause')
+const intelligenceSessionRecoverableEvent = defineRawEvent<
+  void,
+  ApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:recoverable')
 const intelligenceSessionResumeEvent = defineRawEvent<
   IntelligenceSessionResumePayload,
-  ApiResponse<TuffIntelligenceSession | null>
->('intelligence:session:resume')
+  ApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:resume')
 const intelligenceSessionCancelEvent = defineRawEvent<
   IntelligenceSessionCancelPayload,
   ApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:session:cancel')
+>('intelligence:agent:session:cancel')
 const intelligenceSessionGetStateEvent = defineRawEvent<
   IntelligenceSessionStatePayload,
   ApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:session:get-state')
+>('intelligence:agent:session:get-state')
 const intelligenceOrchestratorPlanEvent = defineRawEvent<
   IntelligenceOrchestratorPlanPayload,
   ApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:plan')
+>('intelligence:agent:plan')
 const intelligenceOrchestratorExecuteEvent = defineRawEvent<
   IntelligenceOrchestratorExecutePayload,
   ApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:execute')
+>('intelligence:agent:execute')
 const intelligenceOrchestratorReflectEvent = defineRawEvent<
   IntelligenceOrchestratorReflectPayload,
   ApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:reflect')
+>('intelligence:agent:reflect')
 const intelligenceToolCallEvent = defineRawEvent<
   IntelligenceToolCallPayload,
   ApiResponse<{
@@ -266,29 +331,33 @@ const intelligenceToolCallEvent = defineRawEvent<
     output?: unknown
     error?: string
     approvalTicket?: TuffIntelligenceApprovalTicket
-    traceEvent: TuffIntelligenceTraceEvent
+    traceEvent: TuffIntelligenceAgentTraceEvent
   }>
->('intelligence:tool:call')
+>('intelligence:agent:tool:call')
 const intelligenceToolResultEvent = defineRawEvent<
   IntelligenceToolResultPayload,
   ApiResponse<{ accepted: boolean }>
->('intelligence:tool:result')
+>('intelligence:agent:tool:result')
 const intelligenceToolApproveEvent = defineRawEvent<
   IntelligenceToolApprovePayload,
   ApiResponse<TuffIntelligenceApprovalTicket | null>
->('intelligence:tool:approve')
-const intelligenceTraceStreamEvent = defineRawEvent<
+>('intelligence:agent:tool:approve')
+const intelligenceSessionStreamEvent = defineRawEvent<
   IntelligenceTraceQueryPayload,
-  ApiResponse<TuffIntelligenceTraceEvent[]>
->('intelligence:trace:stream')
-const intelligenceTraceQueryEvent = defineRawEvent<
+  ApiResponse<TuffIntelligenceAgentTraceEvent[]>
+>('intelligence:agent:session:stream')
+const intelligenceSessionHistoryEvent = defineRawEvent<
+  IntelligenceSessionHistoryPayload | undefined,
+  ApiResponse<TuffIntelligenceAgentSession[]>
+>('intelligence:agent:session:history')
+const intelligenceSessionTraceEvent = defineRawEvent<
   IntelligenceTraceQueryPayload,
-  ApiResponse<TuffIntelligenceTraceEvent[]>
->('intelligence:trace:query')
-const intelligenceTraceExportEvent = defineRawEvent<
+  ApiResponse<TuffIntelligenceAgentTraceEvent[]>
+>('intelligence:agent:session:trace')
+const intelligenceSessionTraceExportEvent = defineRawEvent<
   IntelligenceTraceExportPayload,
   ApiResponse<{ format: 'json' | 'jsonl'; content: string }>
->('intelligence:trace:export')
+>('intelligence:agent:session:trace:export')
 
 /**
  * Intelligence Module - Manages AI capabilities and providers.
@@ -903,7 +972,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data
+      const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
       ensureIntelligenceConfigLoaded()
       intelligenceLog.info(`Testing provider: ${provider.id}`)
       const result = await tuffIntelligence.testProvider(provider)
@@ -992,7 +1061,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         throw new Error('Missing provider payload')
       }
 
-      const { provider } = data
+      const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
       ensureIntelligenceConfigLoaded()
       intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
 
@@ -1058,7 +1127,68 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid session start payload')
         }
-        return tuffIntelligenceRuntime.startSession(data ?? {})
+        const payload = (data ?? {}) as IntelligenceSessionStartPayload
+        const session = await tuffIntelligenceRuntime.startSession(payload)
+        const shouldAutoRun = payload.autoRunGraph === true && typeof payload.objective === 'string'
+        if (!shouldAutoRun) {
+          return session
+        }
+
+        await tuffIntelligenceRuntime.runAgentGraph({
+          sessionId: session.id,
+          objective: payload.objective!.trim(),
+          context: payload.context,
+          metadata: payload.metadata,
+          maxSteps: payload.maxSteps,
+          toolBudget: payload.toolBudget,
+          continueOnError: payload.continueOnError,
+          reflectNotes: payload.reflectNotes
+        })
+
+        const snapshot = await tuffIntelligenceRuntime.getSessionState(session.id)
+        if (!snapshot) {
+          return session
+        }
+
+        return {
+          ...session,
+          status: snapshot.status,
+          currentTurnId: snapshot.currentTurn?.id ?? session.currentTurnId,
+          updatedAt: snapshot.updatedAt
+        }
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionHeartbeatEvent,
+      'Heartbeat intelligence session',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.heartbeatSession(data.sessionId)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionPauseEvent,
+      'Pause intelligence session',
+      'intelligence.basic',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.pauseSession(data)
+      }
+    )
+
+    registerProtectedSafe(
+      intelligenceSessionRecoverableEvent,
+      'Get recoverable intelligence session',
+      'intelligence.basic',
+      async () => {
+        return tuffIntelligenceRuntime.getRecoverableSession()
       }
     )
 
@@ -1170,23 +1300,39 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(intelligenceTraceStreamEvent, 'Stream intelligence trace', async (data) => {
-      if (!data?.sessionId) {
-        throw new Error('sessionId is required')
+    registerSafe(
+      intelligenceSessionStreamEvent,
+      'Stream intelligence session trace',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.queryTrace(data)
       }
-      return tuffIntelligenceRuntime.queryTrace(data)
-    })
+    )
 
-    registerSafe(intelligenceTraceQueryEvent, 'Query intelligence trace', async (data) => {
-      if (!data?.sessionId) {
-        throw new Error('sessionId is required')
+    registerSafe(
+      intelligenceSessionHistoryEvent,
+      'Query intelligence session history',
+      async (data) => {
+        return tuffIntelligenceRuntime.getSessionHistory(data ?? {})
       }
-      return tuffIntelligenceRuntime.queryTrace(data)
-    })
+    )
+
+    registerSafe(
+      intelligenceSessionTraceEvent,
+      'Query intelligence session trace',
+      async (data) => {
+        if (!data?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+        return tuffIntelligenceRuntime.queryTrace(data)
+      }
+    )
 
     registerProtectedSafe(
-      intelligenceTraceExportEvent,
-      'Export intelligence trace',
+      intelligenceSessionTraceExportEvent,
+      'Export intelligence session trace',
       'intelligence.admin',
       async (data) => {
         if (!data?.sessionId) {

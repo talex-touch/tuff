@@ -3,16 +3,20 @@ import type {
   TuffIntelligenceApprovalTicket,
 } from '@talex-touch/utils'
 import type { H3Event } from 'h3'
+import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { IntelligenceProviderType } from '@talex-touch/utils'
 import { getCookie, setCookie } from 'h3'
 import { getUserById, updateUserProfile } from './authStore'
 import { getCreditSummary } from './creditsStore'
-import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from './intelligenceModels'
+import { resolveProviderBaseUrl } from './intelligenceModels'
 import {
   createAudit,
   getProviderApiKey,
   getSettings,
   listProviders,
+  resolveCapabilityPromptTemplate as resolvePromptTemplateFromRegistry,
+  savePromptBinding,
+  savePromptRecord,
   type IntelligenceProviderRecord,
 } from './intelligenceStore'
 import {
@@ -44,6 +48,7 @@ export interface IntelligenceLabAction {
   capabilityId?: string
   input?: Record<string, unknown>
   riskLevel?: TuffIntelligenceApprovalTicket['riskLevel']
+  continueOnError?: boolean
 }
 
 export interface IntelligenceLabExecutionResult {
@@ -126,7 +131,7 @@ export interface IntelligenceLabRuntimeMetrics {
 }
 
 export interface IntelligenceLabStreamEvent {
-  contractVersion?: 2
+  contractVersion?: 3
   engine?: 'intelligence'
   runId?: string
   seq?: number
@@ -207,15 +212,17 @@ const OPENAI_COMPATIBLE_TYPES = new Set([
   IntelligenceProviderType.SILICONFLOW,
   IntelligenceProviderType.CUSTOM,
 ])
+const OPENAI_CHAT_SUFFIXES = ['/chat/completions', '/completions']
+const OPENAI_VERSION_SUFFIXES = ['/v1', '/api/v1', '/openai/v1', '/api/openai/v1']
 const PLANNER_MAX_ACTIONS = 8
 const DEFAULT_TIMEOUT_MS = 45_000
+const DEFAULT_PROVIDER_RETRY_COUNT = 1
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000
-const STREAM_CONTRACT_VERSION = 2
+const STREAM_CONTRACT_VERSION = 3
 const STREAM_ENGINE = 'intelligence'
 const TOOL_ECHO = 'intelligence.echo'
 const TOOL_TIME_NOW = 'intelligence.time.now'
 const TOOL_CONTEXT_MERGE = 'intelligence.context.merge'
-const TOOL_DELETE_MOCK = 'intelligence.delete.mock'
 const TOOL_NEXUS_ACCOUNT_SNAPSHOT_GET = 'intelligence.nexus.account.snapshot.get'
 const TOOL_NEXUS_CREDITS_SUMMARY_GET = 'intelligence.nexus.credits.summary.get'
 const TOOL_NEXUS_SUBSCRIPTION_STATUS_GET = 'intelligence.nexus.subscription.status.get'
@@ -225,7 +232,6 @@ const SUPPORTED_TOOL_IDS = [
   TOOL_ECHO,
   TOOL_TIME_NOW,
   TOOL_CONTEXT_MERGE,
-  TOOL_DELETE_MOCK,
   TOOL_NEXUS_ACCOUNT_SNAPSHOT_GET,
   TOOL_NEXUS_CREDITS_SUMMARY_GET,
   TOOL_NEXUS_SUBSCRIPTION_STATUS_GET,
@@ -233,9 +239,93 @@ const SUPPORTED_TOOL_IDS = [
   TOOL_NEXUS_THEME_SET,
 ] as const
 const SUPPORTED_CAPABILITY_IDS = ['text.chat', 'content.extract'] as const
+const AGENT_PROMPT_CAPABILITY = {
+  intent: 'agent.intent',
+  narrative: 'agent.narrative',
+  runtimeCommentary: 'agent.runtime.commentary',
+  plan: 'agent.plan',
+  executeBootstrap: 'agent.execute.bootstrap',
+  execute: 'agent.execute',
+  reflect: 'agent.reflect',
+  finalize: 'agent.finalize',
+  followup: 'agent.followup',
+} as const
+const AGENT_PROMPT_DEFAULT_VERSION = '1.0.0'
+const promptBootstrapCache = new Set<string>()
+const RETRYABLE_HTTP_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
+const RETRYABLE_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'EPIPE',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET',
+  'UND_ERR_RESPONSE_STATUS_CODE',
+])
+const RETRYABLE_ERROR_PATTERNS = [
+  /timeout/i,
+  /timed\s*out/i,
+  /rate\s*limit/i,
+  /too\s*many\s*requests/i,
+  /temporar/i,
+  /service\s*unavailable/i,
+  /overloaded/i,
+  /connection\s*reset/i,
+  /network\s*error/i,
+]
 
 function now(): number {
   return Date.now()
+}
+
+async function resolveAgentPromptInstruction(
+  event: H3Event,
+  userId: string,
+  capabilityId: string,
+  fallback: string,
+): Promise<string> {
+  const normalizedFallback = fallback.trim()
+  try {
+    const template = await resolvePromptTemplateFromRegistry(event, userId, capabilityId)
+    if (typeof template === 'string' && template.trim()) {
+      return template.trim()
+    }
+  } catch {
+    // ignore prompt registry resolve errors and fallback to defaults
+  }
+
+  const bootstrapKey = `${userId}:${capabilityId}`
+  if (!promptBootstrapCache.has(bootstrapKey) && normalizedFallback) {
+    promptBootstrapCache.add(bootstrapKey)
+    const promptId = `${capabilityId}.default`
+    const nowTs = Date.now()
+    void savePromptRecord(event, userId, {
+      id: promptId,
+      version: AGENT_PROMPT_DEFAULT_VERSION,
+      template: normalizedFallback,
+      name: `${capabilityId} default prompt`,
+      scope: 'capability',
+      status: 'active',
+      capabilityId,
+      channel: 'stable',
+      createdAt: nowTs,
+      updatedAt: nowTs,
+    }).catch(() => {
+      promptBootstrapCache.delete(bootstrapKey)
+    })
+    void savePromptBinding(event, userId, {
+      capabilityId,
+      promptId,
+      promptVersion: AGENT_PROMPT_DEFAULT_VERSION,
+      channel: 'stable',
+    }).catch(() => {
+      promptBootstrapCache.delete(bootstrapKey)
+    })
+  }
+
+  return fallback
 }
 
 function createId(prefix: string): string {
@@ -323,6 +413,50 @@ function extractText(value: unknown): string {
   return ''
 }
 
+function toLangChainMessages(messages: IntelligenceMessage[]): BaseMessage[] {
+  return messages.map((message) => {
+    if (message.role === 'system') {
+      return new SystemMessage(message.content)
+    }
+    if (message.role === 'assistant') {
+      return new AIMessage(message.content)
+    }
+    return new HumanMessage(message.content)
+  })
+}
+
+function trimBaseUrl(value: string): string {
+  return value.replace(/\/+$/, '')
+}
+
+function stripOpenAiEndpointSuffix(value: string): string {
+  const trimmed = trimBaseUrl(value)
+  const lower = trimmed.toLowerCase()
+  for (const suffix of OPENAI_CHAT_SUFFIXES) {
+    if (lower.endsWith(suffix)) {
+      return trimBaseUrl(trimmed.slice(0, -suffix.length))
+    }
+  }
+  return trimmed
+}
+
+function normalizeOpenAiCompatibleBaseUrl(baseUrl: string): string {
+  const trimmed = stripOpenAiEndpointSuffix(baseUrl)
+  const lower = trimmed.toLowerCase()
+  if (OPENAI_VERSION_SUFFIXES.some(suffix => lower.endsWith(suffix))) {
+    return trimmed
+  }
+  return `${trimmed}/v1`
+}
+
+function normalizeAnthropicBaseUrl(baseUrl: string): string {
+  const trimmed = trimBaseUrl(baseUrl)
+  if (trimmed.toLowerCase().endsWith('/v1')) {
+    return trimmed.slice(0, -3)
+  }
+  return trimmed
+}
+
 function sanitizeJsonContent(raw: string): string {
   const trimmed = raw.trim()
   if (!trimmed.startsWith('```'))
@@ -346,6 +480,40 @@ function createRequestError(
   if (meta.responseSnippet)
     error.responseSnippet = meta.responseSnippet
   return error
+}
+
+function tryResolveHttpStatus(error: Error): number | null {
+  const detail = error as unknown as Record<string, unknown>
+  const directStatus = detail.status
+  if (typeof directStatus === 'number' && Number.isFinite(directStatus))
+    return directStatus
+
+  const nestedResponse = asRecord(detail.response)
+  if (typeof nestedResponse.status === 'number' && Number.isFinite(nestedResponse.status))
+    return nestedResponse.status as number
+
+  const cause = asRecord(detail.cause)
+  if (typeof cause.status === 'number' && Number.isFinite(cause.status))
+    return cause.status as number
+
+  return null
+}
+
+export function isRetryableInvokeError(error: Error): boolean {
+  const status = tryResolveHttpStatus(error)
+  if (status !== null && RETRYABLE_HTTP_STATUS_CODES.has(status)) {
+    return true
+  }
+
+  const detail = error as unknown as Record<string, unknown>
+  const cause = asRecord(detail.cause)
+  const codeValue = String(detail.code ?? cause.code ?? '').trim().toUpperCase()
+  if (codeValue && RETRYABLE_ERROR_CODES.has(codeValue)) {
+    return true
+  }
+
+  const message = String(error.message || '')
+  return RETRYABLE_ERROR_PATTERNS.some(pattern => pattern.test(message))
 }
 
 function extractStatusBlockLines(raw: string): string[] {
@@ -382,6 +550,7 @@ function parsePlannedActions(raw: string): IntelligenceLabAction[] {
         = typeCandidate === 'tool' || typeCandidate === 'agent' ? typeCandidate : 'capability'
       const title = String(row.title || `Step ${index + 1}`).trim()
       const riskLevel = normalizeRiskLevel(row.riskLevel)
+      const continueOnError = row.continueOnError === true
       const input = asRecord(row.input)
 
       if (type === 'tool') {
@@ -395,6 +564,7 @@ function parsePlannedActions(raw: string): IntelligenceLabAction[] {
           toolId,
           input,
           riskLevel,
+          continueOnError,
         }
       }
 
@@ -467,6 +637,38 @@ function requiresApproval(level: TuffIntelligenceApprovalTicket['riskLevel']): b
   return level === 'high' || level === 'critical'
 }
 
+const READ_ONLY_TOOL_HINTS = [
+  'get',
+  'list',
+  'read',
+  'fetch',
+  'query',
+  'summary',
+  'snapshot',
+  'status',
+  'overview',
+]
+
+export function isReadOnlyTool(toolId: string): boolean {
+  const normalized = toolId.toLowerCase()
+  return READ_ONLY_TOOL_HINTS.some(hint => normalized.includes(hint))
+}
+
+export function shouldContinueOnActionFailure(
+  action: IntelligenceLabAction,
+  globalContinueOnError: boolean,
+): boolean {
+  if (globalContinueOnError)
+    return true
+  if (action.continueOnError !== true)
+    return false
+  if (action.type !== 'tool' || !action.toolId)
+    return false
+
+  const risk = resolveRiskLevel(action.toolId, action.riskLevel ?? 'medium')
+  return risk === 'low' && isReadOnlyTool(action.toolId)
+}
+
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return await Promise.race([
     promise,
@@ -508,7 +710,7 @@ async function resolveProviderCandidates(
       continue
     }
 
-    const timeoutMs = Math.max(5_000, options.timeoutMs ?? provider.timeout ?? DEFAULT_TIMEOUT_MS)
+    const timeoutMs = Math.max(DEFAULT_TIMEOUT_MS, options.timeoutMs ?? provider.timeout ?? DEFAULT_TIMEOUT_MS)
     const apiKey = provider.type === IntelligenceProviderType.LOCAL
       ? null
       : await getProviderApiKey(event, userId, provider.id)
@@ -536,172 +738,115 @@ async function invokeOpenAiCompatibleChat(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
 ): Promise<InvokeModelResult> {
-  const baseUrl = resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-  const endpoints = buildOpenAiCompatBaseUrls(baseUrl).map(url => `${url}/chat/completions`)
   const traceId = createId('trace')
   const startedAt = now()
-  let lastError: Error | null = null
-  const attemptErrors: Array<{
-    endpoint: string
-    status?: number
-    responseSnippet?: string
-    message: string
-  }> = []
+  const baseUrl = normalizeOpenAiCompatibleBaseUrl(
+    resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
+  )
+  const endpoint = `${baseUrl}/chat/completions`
 
-  for (const endpoint of endpoints) {
-    try {
-      const response = await withTimeout(
-        fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${context.apiKey}`,
-          },
-          body: JSON.stringify({
-            model: context.model,
-            messages,
-            temperature: 0.2,
-            stream: false,
-          }),
-        }),
-        context.timeoutMs,
-        `Request timeout after ${context.timeoutMs}ms`,
-      )
-      const responseText = await response.text()
-      if (!response.ok) {
-        throw createRequestError(
-          `OpenAI-compatible API returned ${response.status}: ${responseText.slice(0, 240)}`,
-          {
-            endpoint,
-            status: response.status,
-            responseSnippet: responseText.slice(0, 400),
-          },
-        )
-      }
+  try {
+    const { ChatOpenAI } = await import('@langchain/openai') as { ChatOpenAI: any }
 
-      let data: { choices?: Array<{ message?: Record<string, unknown> }> }
-      try {
-        data = JSON.parse(responseText) as { choices?: Array<{ message?: Record<string, unknown> }> }
-      } catch {
-        throw createRequestError('OpenAI-compatible API returned invalid JSON.', {
-          endpoint,
-          status: response.status,
-          responseSnippet: responseText.slice(0, 400),
-        })
-      }
-      const message = data.choices?.[0]?.message
-      const content = extractText(message).trim()
-      if (!content) {
-        throw createRequestError('Provider returned empty content.', {
-          endpoint,
-          status: response.status,
-          responseSnippet: responseText.slice(0, 400),
-        })
-      }
+    const runner = new ChatOpenAI({
+      apiKey: context.apiKey || 'tuff-local-key',
+      model: context.model,
+      temperature: 0.2,
+      timeout: context.timeoutMs,
+      configuration: { baseURL: baseUrl },
+    })
 
-      return {
-        content,
-        model: context.model,
-        traceId,
+    const response = await withTimeout(
+      runner.invoke(toLangChainMessages(messages)),
+      context.timeoutMs,
+      `Request timeout after ${context.timeoutMs}ms`,
+    )
+
+    const content = extractText(asRecord(response).content).trim()
+    if (!content) {
+      throw createRequestError('Provider returned empty content.', {
         endpoint,
-        status: response.status,
-        latency: now() - startedAt,
-      }
-    } catch (error) {
-      const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
-      const detail = normalized as unknown as Record<string, unknown>
-      attemptErrors.push({
-        endpoint: typeof detail.endpoint === 'string' ? detail.endpoint : endpoint,
-        status: typeof detail.status === 'number' ? detail.status : undefined,
-        responseSnippet: typeof detail.responseSnippet === 'string' ? detail.responseSnippet : undefined,
-        message: normalized.message,
+        status: 502,
+        responseSnippet: JSON.stringify(asRecord(response)).slice(0, 400),
       })
-      lastError = normalized
     }
-  }
 
-  if (lastError && typeof lastError === 'object') {
-    const errorDetail = lastError as unknown as Record<string, unknown>
-    errorDetail.endpoints = endpoints
-    if (attemptErrors.length) {
-      errorDetail.attemptErrors = attemptErrors
+    return {
+      content,
+      model: context.model,
+      traceId,
+      endpoint: `langchain:${context.provider.type}:chat`,
+      status: 200,
+      latency: now() - startedAt,
     }
+  } catch (error) {
+    const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
+    const detail = normalized as unknown as Record<string, unknown>
+    if (typeof detail.endpoint !== 'string') {
+      detail.endpoint = endpoint
+    }
+    throw normalized
   }
-  throw lastError ?? new Error('Failed to call OpenAI-compatible endpoint.')
 }
 
 async function invokeAnthropicChat(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
 ): Promise<InvokeModelResult> {
-  const baseUrl = resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-  const endpoint = `${baseUrl}/messages`
   const traceId = createId('trace')
   const startedAt = now()
-  const systemMessages = messages.filter(message => message.role === 'system').map(message => message.content)
-  const requestMessages = messages
-    .filter(message => message.role !== 'system')
-    .map(message => ({
-      role: message.role === 'assistant' ? 'assistant' : 'user',
-      content: message.content,
-    }))
+  const endpoint = `${normalizeAnthropicBaseUrl(
+    resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
+  )}/messages`
 
-  const response = await withTimeout(
-    fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': context.apiKey || '',
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: context.model,
-        max_tokens: 1200,
-        messages: requestMessages,
-        system: systemMessages.join('\n'),
-      }),
-    }),
-    context.timeoutMs,
-    `Request timeout after ${context.timeoutMs}ms`,
-  )
-  const responseText = await response.text()
-  if (!response.ok) {
-    throw createRequestError(
-      `Anthropic API returned ${response.status}: ${responseText.slice(0, 240)}`,
-      {
-        endpoint,
-        status: response.status,
-        responseSnippet: responseText.slice(0, 400),
-      },
-    )
-  }
-
-  let payload: { content?: Array<{ text?: string }> }
   try {
-    payload = JSON.parse(responseText) as { content?: Array<{ text?: string }> }
-  } catch {
-    throw createRequestError('Anthropic API returned invalid JSON.', {
-      endpoint,
-      status: response.status,
-      responseSnippet: responseText.slice(0, 400),
-    })
-  }
-  const content = payload.content?.map(item => item.text || '').join('\n').trim()
-  if (!content) {
-    throw createRequestError('Anthropic returned empty content.', {
-      endpoint,
-      status: response.status,
-      responseSnippet: responseText.slice(0, 400),
-    })
-  }
+    const { ChatAnthropic } = await import('@langchain/anthropic') as { ChatAnthropic: any }
 
-  return {
-    content,
-    model: context.model,
-    traceId,
-    endpoint,
-    status: response.status,
-    latency: now() - startedAt,
+    const runner = new ChatAnthropic({
+      anthropicApiKey: context.apiKey || '',
+      model: context.model,
+      maxTokens: 1200,
+      timeout: context.timeoutMs,
+      anthropicApiUrl: normalizeAnthropicBaseUrl(
+        resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
+      ),
+      clientOptions: {
+        baseURL: normalizeAnthropicBaseUrl(
+          resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
+        ),
+      },
+    })
+
+    const response = await withTimeout(
+      runner.invoke(toLangChainMessages(messages)),
+      context.timeoutMs,
+      `Request timeout after ${context.timeoutMs}ms`,
+    )
+
+    const content = extractText(asRecord(response).content).trim()
+    if (!content) {
+      throw createRequestError('Anthropic returned empty content.', {
+        endpoint,
+        status: 502,
+        responseSnippet: JSON.stringify(asRecord(response)).slice(0, 400),
+      })
+    }
+
+    return {
+      content,
+      model: context.model,
+      traceId,
+      endpoint: 'langchain:anthropic:chat',
+      status: 200,
+      latency: now() - startedAt,
+    }
+  } catch (error) {
+    const normalized = error instanceof Error ? error : new Error('Unknown provider error.')
+    const detail = normalized as unknown as Record<string, unknown>
+    if (typeof detail.endpoint !== 'string') {
+      detail.endpoint = endpoint
+    }
+    throw normalized
   }
 }
 
@@ -709,63 +854,7 @@ async function invokeLocalChat(
   context: ResolvedProviderContext,
   messages: IntelligenceMessage[],
 ): Promise<InvokeModelResult> {
-  const baseUrl = resolveProviderBaseUrl(context.provider.type, context.provider.baseUrl)
-  const endpoint = `${baseUrl}/api/chat`
-  const traceId = createId('trace')
-  const startedAt = now()
-  const response = await withTimeout(
-    fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: context.model,
-        stream: false,
-        messages,
-      }),
-    }),
-    context.timeoutMs,
-    `Request timeout after ${context.timeoutMs}ms`,
-  )
-  const responseText = await response.text()
-  if (!response.ok) {
-    throw createRequestError(
-      `Local provider returned ${response.status}: ${responseText.slice(0, 240)}`,
-      {
-        endpoint,
-        status: response.status,
-        responseSnippet: responseText.slice(0, 400),
-      },
-    )
-  }
-  let payload: { message?: { content?: string }; response?: string }
-  try {
-    payload = JSON.parse(responseText) as { message?: { content?: string }; response?: string }
-  } catch {
-    throw createRequestError('Local provider returned invalid JSON.', {
-      endpoint,
-      status: response.status,
-      responseSnippet: responseText.slice(0, 400),
-    })
-  }
-  const content = (payload.message?.content || payload.response || '').trim()
-  if (!content) {
-    throw createRequestError('Local provider returned empty content.', {
-      endpoint,
-      status: response.status,
-      responseSnippet: responseText.slice(0, 400),
-    })
-  }
-
-  return {
-    content,
-    model: context.model,
-    traceId,
-    endpoint,
-    status: response.status,
-    latency: now() - startedAt,
-  }
+  return await invokeOpenAiCompatibleChat(context, messages)
 }
 
 async function invokeModel(
@@ -796,73 +885,99 @@ async function invokeModel(
   for (let index = 0; index < contexts.length; index++) {
     const context = contexts[index]!
     attemptedProviders.push(context.provider.id)
-    try {
-      const result = await invokeWithResolvedContext(context, payload.messages)
-      if (settings.enableAudit) {
-        await createAudit(event, {
-          userId,
-          providerId: context.provider.id,
-          providerType: context.provider.type,
-          model: result.model,
-          endpoint: result.endpoint,
-          status: result.status ?? 200,
-          latency: result.latency,
-          success: true,
-          traceId: result.traceId,
-          metadata: {
-            source: payload.source || 'intelligence-lab',
-            stage: payload.stage || 'invoke',
-            sessionId: payload.sessionId,
-            attempt: index + 1,
-            fallbackCount,
-            retryCount,
-          },
-        })
+    let providerLastError: Error | null = null
+    const maxAttempts = DEFAULT_PROVIDER_RETRY_COUNT + 1
+
+    for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex++) {
+      const providerAttempt = attemptIndex + 1
+      try {
+        const result = await invokeWithResolvedContext(context, payload.messages)
+        if (settings.enableAudit) {
+          await createAudit(event, {
+            userId,
+            providerId: context.provider.id,
+            providerType: context.provider.type,
+            model: result.model,
+            endpoint: result.endpoint,
+            status: result.status ?? 200,
+            latency: result.latency,
+            success: true,
+            traceId: result.traceId,
+            metadata: {
+              source: payload.source || 'intelligence-agent',
+              stage: payload.stage || 'invoke',
+              sessionId: payload.sessionId,
+              attempt: index + 1,
+              providerAttempt,
+              fallbackCount,
+              retryCount,
+            },
+          })
+        }
+        return {
+          result,
+          context,
+          fallbackCount,
+          retryCount,
+          attemptedProviders,
+          errors,
+        }
+      } catch (error) {
+        const normalizedError = error instanceof Error ? error : new Error(String(error))
+        const detail = normalizedError as unknown as Record<string, unknown>
+        const retryable = isRetryableInvokeError(normalizedError)
+        const hasRetryBudget = attemptIndex < maxAttempts - 1
+        const willRetry = retryable && hasRetryBudget
+
+        detail.attempt = index + 1
+        detail.providerAttempt = providerAttempt
+        detail.fallbackCandidate = index < contexts.length - 1
+        detail.stage = payload.stage || 'invoke'
+        detail.retryable = retryable
+        detail.willRetry = willRetry
+
+        providerLastError = normalizedError
+
+        if (settings.enableAudit) {
+          await createAudit(event, {
+            userId,
+            providerId: context.provider.id,
+            providerType: context.provider.type,
+            model: context.model,
+            endpoint: null,
+            status: 500,
+            latency: context.timeoutMs,
+            success: false,
+            errorMessage: normalizedError.message,
+            traceId: createId('trace'),
+            metadata: {
+              source: payload.source || 'intelligence-agent',
+              stage: payload.stage || 'invoke',
+              sessionId: payload.sessionId,
+              attempt: index + 1,
+              providerAttempt,
+              fallbackCandidate: index < contexts.length - 1,
+              retryable,
+              willRetry,
+            },
+          })
+        }
+
+        if (willRetry) {
+          retryCount += 1
+          continue
+        }
+        break
       }
-      return {
-        result,
-        context,
-        fallbackCount,
-        retryCount,
-        attemptedProviders,
-        errors,
-      }
-    } catch (error) {
-      const normalizedError = error instanceof Error ? error : new Error(String(error))
-      const detail = normalizedError as unknown as Record<string, unknown>
-      detail.attempt = index + 1
-      detail.fallbackCandidate = index < contexts.length - 1
-      detail.stage = payload.stage || 'invoke'
-      lastError = normalizedError
-      retryCount += 1
+    }
+
+    if (providerLastError) {
+      lastError = providerLastError
       errors.push({
         providerId: context.provider.id,
         providerName: context.provider.name,
-        message: normalizedError.message,
+        message: providerLastError.message,
       })
-
-      if (settings.enableAudit) {
-        await createAudit(event, {
-          userId,
-          providerId: context.provider.id,
-          providerType: context.provider.type,
-          model: context.model,
-          endpoint: null,
-          status: 500,
-          latency: context.timeoutMs,
-          success: false,
-          errorMessage: normalizedError.message,
-          traceId: createId('trace'),
-          metadata: {
-            source: payload.source || 'intelligence-lab',
-            stage: payload.stage || 'invoke',
-            sessionId: payload.sessionId,
-            attempt: index + 1,
-            fallbackCandidate: index < contexts.length - 1,
-          },
-        })
-      }
-
       if (index < contexts.length - 1) {
         fallbackCount += 1
       }
@@ -870,6 +985,68 @@ async function invokeModel(
   }
 
   throw lastError ?? new Error('Failed to call all available intelligence providers.')
+}
+
+export async function probeIntelligenceLabProvider(
+  event: H3Event,
+  userId: string,
+  payload: {
+    providerId: string
+    model?: string
+    prompt?: string
+    timeoutMs?: number
+  },
+): Promise<{
+  success: boolean
+  providerId: string
+  providerName: string
+  providerType: string
+  model: string
+  output: string
+  latency: number
+  endpoint: string
+  traceId: string
+  fallbackCount: number
+  retryCount: number
+  attemptedProviders: string[]
+  message: string
+}> {
+  const prompt = typeof payload.prompt === 'string' && payload.prompt.trim()
+    ? payload.prompt.trim()
+    : 'Reply with "pong" and one short sentence describing your model capability.'
+  const invocation = await invokeModel(event, userId, {
+    providerId: payload.providerId,
+    model: payload.model?.trim() || undefined,
+    timeoutMs: payload.timeoutMs,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a Tuff Intelligence provider probe assistant. Keep the output concise.',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    source: 'intelligence-provider-probe',
+    stage: 'provider-probe',
+  })
+
+  return {
+    success: true,
+    providerId: invocation.context.provider.id,
+    providerName: invocation.context.provider.name,
+    providerType: invocation.context.provider.type,
+    model: invocation.result.model,
+    output: invocation.result.content,
+    latency: invocation.result.latency,
+    endpoint: invocation.result.endpoint,
+    traceId: invocation.result.traceId,
+    fallbackCount: invocation.fallbackCount,
+    retryCount: invocation.retryCount,
+    attemptedProviders: invocation.attemptedProviders,
+    message: 'Probe completed.',
+  }
 }
 
 async function invokeWithResolvedContext(
@@ -938,9 +1115,15 @@ async function analyzeIntentWithModel(
   rawModelOutput: string | null
 }> {
   const objective = payload.objective.trim()
+  const intentInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.intent,
+    'You are TuffIntelligence intent analyst.'
+  )
 
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence intent analyst.',
+    intentInstruction,
     'Return full reasoning in plain text only.',
     'Output multiple lines, each line is a status log.',
     'Include explicit lines such as:',
@@ -973,7 +1156,7 @@ async function analyzeIntentWithModel(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: promptMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'intent-analysis',
       sessionId: payload.sessionId,
     })
@@ -1026,8 +1209,15 @@ async function explainActionNarrativesWithModel(
     }
   }
 
+  const narrativeInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.narrative,
+    'You are TuffIntelligence action explainer.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence action explainer.',
+    narrativeInstruction,
     'Return plain text only.',
     'Output requirement: one line per action, in the same order.',
     'Each line is a one-sentence narrative describing why the action/tool is selected.',
@@ -1063,7 +1253,7 @@ async function explainActionNarrativesWithModel(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: promptMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'action-narratives',
       sessionId: payload.sessionId,
     })
@@ -1109,8 +1299,15 @@ async function summarizeActionResultWithModel(
   message: string
   rawModelOutput: string | null
 }> {
+  const runtimeCommentaryInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.runtimeCommentary,
+    'You are TuffIntelligence runtime commentator.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence runtime commentator.',
+    runtimeCommentaryInstruction,
     'Return plain text only.',
     'You may output multiple lines.',
     'Do not limit length.',
@@ -1142,7 +1339,7 @@ async function summarizeActionResultWithModel(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: promptMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'action-result-commentary',
       sessionId: payload.sessionId,
     })
@@ -1264,12 +1461,6 @@ async function executeTool(
       return { now: new Date().toISOString(), timestamp: now() }
     case TOOL_CONTEXT_MERGE:
       return { merged: input }
-    case TOOL_DELETE_MOCK:
-      return {
-        accepted: false,
-        reason: 'delete operation requires explicit approval',
-        target: input,
-      }
     case TOOL_NEXUS_CREDITS_SUMMARY_GET: {
       const { event, userId } = requireToolExecutionContext(context, toolId)
       const summary = await getCreditSummary(event, userId)
@@ -1529,12 +1720,20 @@ export async function planIntelligenceLab(
   if (!objective)
     throw new Error('Objective is required.')
 
+  const plannerInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.plan,
+    'You are TuffIntelligence planner.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence planner.',
+    plannerInstruction,
     'Return JSON array only.',
     `Allowed tools: ${SUPPORTED_TOOL_IDS.join(', ')}`,
     `Allowed capabilities: ${SUPPORTED_CAPABILITY_IDS.join(', ')}`,
-    'Action schema: {"title":"...", "type":"tool|agent|capability", "toolId":"...", "agentId":"...", "capabilityId":"...", "input":{}, "riskLevel":"low|medium|high|critical"}',
+    'Action schema: {"title":"...", "type":"tool|agent|capability", "toolId":"...", "agentId":"...", "capabilityId":"...", "input":{}, "riskLevel":"low|medium|high|critical", "continueOnError":false}',
+    'continueOnError is allowed only for low-risk read-only tool actions.',
     'Tool input hints: intelligence.nexus.account.snapshot.get({}), intelligence.nexus.credits.summary.get({}), intelligence.nexus.subscription.status.get({}), intelligence.nexus.language.set({"locale":"en|zh"}), intelligence.nexus.theme.set({"theme":"auto|dark|light"})',
   ], { sessionId: payload.sessionId })
 
@@ -1561,7 +1760,7 @@ export async function planIntelligenceLab(
     model: payload.model,
     timeoutMs: payload.timeoutMs,
     messages: plannerMessages,
-    source: 'intelligence-lab',
+    source: 'intelligence-agent',
     stage: 'planner',
   })
   const rawModelOutput = result.content
@@ -1644,11 +1843,18 @@ export async function executeIntelligenceLab(
     throw new Error('Actions are required.')
 
   const executionResults: IntelligenceLabExecutionResult[] = []
-  const shouldContinue = Boolean(payload.continueOnError)
+  const globalContinueOnError = Boolean(payload.continueOnError)
   let firstInvocation: InvokeModelWithFallbackResult
   try {
+    const bootstrapInstruction = await resolveAgentPromptInstruction(
+      event,
+      userId,
+      AGENT_PROMPT_CAPABILITY.executeBootstrap,
+      'You are TuffIntelligence executor bootstrap. Reply with "ready".'
+    )
+
     const bootstrapPrompt = await buildSystemPrompt(event, userId, [
-      'You are TuffIntelligence executor bootstrap. Reply with "ready".',
+      bootstrapInstruction,
     ], { sessionId: payload.sessionId })
 
     firstInvocation = await invokeModel(event, userId, {
@@ -1665,7 +1871,7 @@ export async function executeIntelligenceLab(
           content: objective,
         },
       ],
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'executor-bootstrap',
     })
   } catch (error) {
@@ -1693,6 +1899,8 @@ export async function executeIntelligenceLab(
   }
 
   for (const action of payload.actions) {
+    const continueOnActionFailure = shouldContinueOnActionFailure(action, globalContinueOnError)
+
     if (hooks?.shouldPause) {
       const pauseResult = await hooks.shouldPause({
         index: executionResults.length,
@@ -1732,7 +1940,7 @@ export async function executeIntelligenceLab(
           status: 'failed',
           error: 'toolId is required for tool action.',
         })
-        if (!shouldContinue)
+        if (!continueOnActionFailure)
           break
         continue
       }
@@ -1741,11 +1949,11 @@ export async function executeIntelligenceLab(
       if (requiresApproval(risk)) {
         const approvalTicket: TuffIntelligenceApprovalTicket = {
           id: createId('approval'),
-          sessionId: 'intelligence-lab',
+          sessionId: payload.sessionId || 'intelligence-agent',
           actionId: action.id,
           toolId,
           riskLevel: risk,
-          reason: `Tool "${toolId}" requires approval in intelligence lab.`,
+          reason: `Tool "${toolId}" requires approval in intelligence agent.`,
           status: 'pending',
           requestedAt: now(),
           metadata: {
@@ -1785,7 +1993,7 @@ export async function executeIntelligenceLab(
           status: 'failed',
           error: error instanceof Error ? error.message : String(error),
         })
-        if (!shouldContinue)
+        if (!continueOnActionFailure)
           break
       }
       continue
@@ -1794,11 +2002,18 @@ export async function executeIntelligenceLab(
     const capabilityId = action.type === 'capability'
       ? String(action.capabilityId || 'text.chat')
       : 'text.chat'
+    const defaultExecutionInstruction = action.type === 'agent'
+      ? 'You are TuffIntelligence executor acting as a specialist agent. Return concise JSON.'
+      : `You are TuffIntelligence executor for capability "${capabilityId}". Return concise JSON.`
+    const executionInstruction = await resolveAgentPromptInstruction(
+      event,
+      userId,
+      AGENT_PROMPT_CAPABILITY.execute,
+      defaultExecutionInstruction
+    )
 
     const executionPrompt = await buildSystemPrompt(event, userId, [
-      action.type === 'agent'
-        ? 'You are TuffIntelligence executor acting as a specialist agent. Return concise JSON.'
-        : `You are TuffIntelligence executor for capability "${capabilityId}". Return concise JSON.`,
+      executionInstruction,
     ], { sessionId: payload.sessionId })
 
     const executionMessages: IntelligenceMessage[] = [
@@ -1821,7 +2036,7 @@ export async function executeIntelligenceLab(
         model: firstInvocation.result.model,
         timeoutMs: payload.timeoutMs,
         messages: executionMessages,
-        source: 'intelligence-lab',
+        source: 'intelligence-agent',
         stage: action.type === 'agent' ? 'agent' : 'capability',
       })
       await pushResult({
@@ -1891,8 +2106,15 @@ export async function reflectIntelligenceLab(
   if (!objective)
     throw new Error('Objective is required.')
 
+  const reflectInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.reflect,
+    'You are TuffIntelligence reviewer. Summarize wins, failures, risks, and next actions in markdown.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence reviewer. Summarize wins, failures, risks, and next actions in markdown.',
+    reflectInstruction,
   ], { sessionId: payload.sessionId })
 
   const reflectionMessages: IntelligenceMessage[] = [
@@ -1917,7 +2139,7 @@ export async function reflectIntelligenceLab(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: reflectionMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'reflection',
     })
     const rawModelOutput = result.content
@@ -2060,7 +2282,7 @@ function buildToolFailureDistribution(
   }
   return distribution
 }
-async function buildFinalAssistantReplyWithModel(
+export async function buildFinalAssistantReplyWithModel(
   event: H3Event,
   userId: string,
   payload: {
@@ -2089,8 +2311,15 @@ async function buildFinalAssistantReplyWithModel(
   rawModelOutput: string | null
   streamed: boolean
 }> {
+  const finalizeInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.finalize,
+    'You are TuffIntelligence final responder.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence final responder.',
+    finalizeInstruction,
     'Return plain text only.',
     'Do not include markdown fences or role labels.',
     'Use the same language as the user objective.',
@@ -2121,7 +2350,7 @@ async function buildFinalAssistantReplyWithModel(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: promptMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'final-assistant-reply',
       sessionId: payload.sessionId,
     })
@@ -2177,8 +2406,15 @@ export async function generateIntelligenceLabFollowUp(
     throw new Error('Objective is required.')
   }
 
+  const followupInstruction = await resolveAgentPromptInstruction(
+    event,
+    userId,
+    AGENT_PROMPT_CAPABILITY.followup,
+    'You are TuffIntelligence follow-up planner.'
+  )
+
   const systemPrompt = await buildSystemPrompt(event, userId, [
-    'You are TuffIntelligence follow-up planner.',
+    followupInstruction,
     'Return JSON only with shape:',
     '{"summary":"...","nextActions":["..."],"revisitInHours":24}',
     'Keep nextActions length between 2 and 5.',
@@ -2205,7 +2441,7 @@ export async function generateIntelligenceLabFollowUp(
       model: payload.model,
       timeoutMs: payload.timeoutMs,
       messages: promptMessages,
-      source: 'intelligence-lab',
+      source: 'intelligence-agent',
       stage: 'followup',
       sessionId: payload.sessionId,
     })
@@ -2458,10 +2694,10 @@ export async function orchestrateIntelligenceLabStream(
         status: 500,
         latency: metrics.durationMs,
         success: false,
-        errorMessage: `intelligence-lab-runtime model_failed:${stage}`,
+        errorMessage: `intelligence-agent-runtime model_failed:${stage}`,
         traceId: activeTraceId || null,
         metadata: {
-          source: 'intelligence-lab-runtime',
+          source: 'intelligence-agent-runtime',
           sessionId,
           status: metrics.status,
           stage,
@@ -2610,10 +2846,10 @@ export async function orchestrateIntelligenceLabStream(
         status: 206,
         latency: metrics.durationMs,
         success: false,
-        errorMessage: 'intelligence-lab-runtime paused_disconnect',
+        errorMessage: 'intelligence-agent-runtime paused_disconnect',
         traceId: activeTraceId || null,
         metadata: {
-          source: 'intelligence-lab-runtime',
+          source: 'intelligence-agent-runtime',
           sessionId,
           status: metrics.status,
           totalActions: metrics.totalActions,
@@ -2856,7 +3092,6 @@ export async function orchestrateIntelligenceLabStream(
           providerId: plan.providerId,
           model: plan.model,
           timeoutMs: payload.timeoutMs,
-          continueOnError: true,
           sessionId,
         },
         {
@@ -3216,10 +3451,10 @@ export async function orchestrateIntelligenceLabStream(
       status: status === 'completed' ? 200 : status === 'waiting_approval' ? 202 : 500,
       latency: metrics.durationMs,
       success: status === 'completed',
-      errorMessage: status === 'failed' ? 'intelligence-lab-runtime failed' : null,
+      errorMessage: status === 'failed' ? 'intelligence-agent-runtime failed' : null,
       traceId: activeTraceId || null,
       metadata: {
-        source: 'intelligence-lab-runtime',
+        source: 'intelligence-agent-runtime',
         sessionId,
         status,
         totalActions: metrics.totalActions,
@@ -3379,6 +3614,7 @@ export function sanitizeLabActions(payload: unknown): IntelligenceLabAction[] {
         capabilityId: typeof row.capabilityId === 'string' ? row.capabilityId : undefined,
         input,
         riskLevel,
+        continueOnError: row.continueOnError === true,
       } satisfies IntelligenceLabAction
     })
     .filter((action) => {

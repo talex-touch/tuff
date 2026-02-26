@@ -1,5 +1,7 @@
 import type {
   IntelligenceCapabilityRoutingConfig,
+  IntelligencePromptBinding,
+  IntelligencePromptRecord,
   IntelligenceSDKPersistedConfig,
   IntelligenceProviderConfig
 } from '@talex-touch/utils'
@@ -29,6 +31,7 @@ const SUPPORTED_PROVIDER_TYPES = new Set([
 ])
 const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
 const INTELLIGENCE_DEFAULT_VERSION = 2
+const DEFAULT_PROMPT_VERSION = '1.0.0'
 
 export const INTERNAL_SYSTEM_OCR_PROVIDER_ID = 'local-system-ocr'
 
@@ -58,6 +61,199 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
 }
 
+function buildCapabilityPromptId(capabilityId: string): string {
+  return `capability.${capabilityId}.default`
+}
+
+function normalizePromptBindingCapability(
+  capabilityId: string,
+  binding: IntelligencePromptBinding
+): IntelligencePromptBinding {
+  const { capabilityId: _ignored, ...rest } = binding
+  return {
+    capabilityId,
+    ...rest
+  }
+}
+
+function upsertPromptBinding(
+  list: IntelligencePromptBinding[],
+  binding: IntelligencePromptBinding
+): boolean {
+  const idx = list.findIndex(
+    (item) =>
+      item.capabilityId === binding.capabilityId &&
+      (item.providerId ?? null) === (binding.providerId ?? null)
+  )
+  if (idx >= 0) {
+    const current = list[idx]!
+    const next = {
+      ...current,
+      ...binding
+    }
+    if (JSON.stringify(current) !== JSON.stringify(next)) {
+      list[idx] = next
+      return true
+    }
+    return false
+  }
+  list.push(binding)
+  return true
+}
+
+function upsertPromptRecord(
+  list: IntelligencePromptRecord[],
+  record: IntelligencePromptRecord
+): boolean {
+  const idx = list.findIndex(
+    (item) =>
+      item.id === record.id &&
+      item.version === record.version &&
+      (item.providerId ?? null) === (record.providerId ?? null)
+  )
+  if (idx >= 0) {
+    const current = list[idx]!
+    const next = {
+      ...current,
+      ...record
+    }
+    if (JSON.stringify(current) !== JSON.stringify(next)) {
+      list[idx] = next
+      return true
+    }
+    return false
+  }
+  list.push(record)
+  return true
+}
+
+function syncPromptSchema(config: IntelligenceSDKPersistedConfig): boolean {
+  let changed = false
+  const capabilities = config.capabilities ?? {}
+  const promptRegistry = Array.isArray(config.promptRegistry) ? [...config.promptRegistry] : []
+  const promptBindings = Array.isArray(config.promptBindings) ? [...config.promptBindings] : []
+  const nowTs = Date.now()
+
+  for (const [capabilityId, capabilityConfig] of Object.entries(capabilities)) {
+    const promptTemplate =
+      typeof capabilityConfig.promptTemplate === 'string'
+        ? capabilityConfig.promptTemplate.trim()
+        : ''
+
+    const candidateBinding = capabilityConfig.promptBinding
+      ? normalizePromptBindingCapability(capabilityId, capabilityConfig.promptBinding)
+      : promptBindings.find((item) => item.capabilityId === capabilityId)
+
+    if (!promptTemplate) {
+      if (candidateBinding && !capabilityConfig.promptBinding) {
+        capabilityConfig.promptBinding = candidateBinding
+        changed = true
+      }
+      continue
+    }
+
+    const binding: IntelligencePromptBinding = candidateBinding ?? {
+      capabilityId,
+      promptId: buildCapabilityPromptId(capabilityId),
+      promptVersion: DEFAULT_PROMPT_VERSION,
+      channel: 'stable'
+    }
+
+    if (!binding.promptVersion) {
+      binding.promptVersion = DEFAULT_PROMPT_VERSION
+      changed = true
+    }
+
+    if (upsertPromptBinding(promptBindings, binding)) {
+      changed = true
+    }
+
+    if (!capabilityConfig.promptBinding) {
+      capabilityConfig.promptBinding = binding
+      changed = true
+    }
+
+    const record: IntelligencePromptRecord = {
+      id: binding.promptId,
+      version: binding.promptVersion || DEFAULT_PROMPT_VERSION,
+      name: `${capabilityId} prompt`,
+      template: promptTemplate,
+      scope: 'capability',
+      status: 'active',
+      capabilityId,
+      providerId: binding.providerId,
+      channel: binding.channel ?? 'stable',
+      updatedAt: nowTs
+    }
+    if (upsertPromptRecord(promptRegistry, record)) {
+      changed = true
+    }
+  }
+
+  if (!Array.isArray(config.promptRegistry)) {
+    changed = true
+  }
+  if (!Array.isArray(config.promptBindings)) {
+    changed = true
+  }
+
+  config.promptRegistry = promptRegistry
+  config.promptBindings = promptBindings
+  return changed
+}
+
+function resolvePromptRecord(
+  registry: IntelligencePromptRecord[],
+  binding: IntelligencePromptBinding
+): IntelligencePromptRecord | undefined {
+  const candidates = registry.filter((item) => {
+    if (item.id !== binding.promptId) return false
+    if (item.status !== 'active') return false
+    if (binding.providerId && item.providerId && item.providerId !== binding.providerId) {
+      return false
+    }
+    return true
+  })
+
+  if (candidates.length <= 0) {
+    return undefined
+  }
+
+  if (binding.promptVersion) {
+    return candidates.find((item) => item.version === binding.promptVersion)
+  }
+
+  return [...candidates].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+}
+
+function resolveCapabilityPromptTemplate(
+  config: IntelligenceSDKPersistedConfig | undefined,
+  capabilityId: string
+): string | undefined {
+  if (!config) {
+    return undefined
+  }
+
+  const capability = config.capabilities?.[capabilityId]
+  const promptRegistry = config.promptRegistry ?? []
+  const bindings: IntelligencePromptBinding[] = []
+  if (capability?.promptBinding) {
+    bindings.push(normalizePromptBindingCapability(capabilityId, capability.promptBinding))
+  }
+  bindings.push(
+    ...(config.promptBindings ?? []).filter((item) => item.capabilityId === capabilityId)
+  )
+
+  for (const binding of bindings) {
+    const record = resolvePromptRecord(promptRegistry, binding)
+    if (record?.template) {
+      return record.template
+    }
+  }
+
+  return capability?.promptTemplate
+}
+
 function toNexusApiKey(token: string | null): string | undefined {
   if (!token) return undefined
   const trimmed = token.trim()
@@ -66,7 +262,7 @@ function toNexusApiKey(token: string | null): string | undefined {
 }
 
 function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
-  return {
+  const config: IntelligenceSDKPersistedConfig = {
     providers: cloneValue(DEFAULT_PROVIDERS),
     globalConfig: {
       defaultStrategy: DEFAULT_GLOBAL_CONFIG.defaultStrategy,
@@ -75,8 +271,12 @@ function createDefaultPersistedConfig(): IntelligenceSDKPersistedConfig {
       cacheExpiration: DEFAULT_GLOBAL_CONFIG.cacheExpiration
     },
     capabilities: cloneValue(DEFAULT_CAPABILITIES),
+    promptRegistry: [],
+    promptBindings: [],
     version: INTELLIGENCE_DEFAULT_VERSION
   }
+  syncPromptSchema(config)
+  return config
 }
 
 function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): boolean {
@@ -137,6 +337,10 @@ function patchStoredConfigDefaults(config: IntelligenceSDKPersistedConfig): bool
       priority: 1,
       enabled: true
     })
+    changed = true
+  }
+
+  if (syncPromptSchema(config)) {
     changed = true
   }
 
@@ -213,7 +417,9 @@ export function ensureIntelligenceConfigLoaded(_force?: boolean): void {
     enableAudit: stored.globalConfig?.enableAudit ?? true,
     enableCache: stored.globalConfig?.enableCache ?? false,
     cacheExpiration: stored.globalConfig?.cacheExpiration,
-    capabilities: stored.capabilities ?? {}
+    capabilities: stored.capabilities ?? {},
+    promptRegistry: stored.promptRegistry ?? [],
+    promptBindings: stored.promptBindings ?? []
   })
 }
 
@@ -239,15 +445,14 @@ export function getCapabilityOptions(capabilityId: string): {
     modelPreference: enabledBindings
       .flatMap((binding) => binding.models ?? [])
       .filter((model): model is string => Boolean(model)),
-    promptTemplate: config.promptTemplate
+    promptTemplate: resolveCapabilityPromptTemplate(stored, capabilityId)
   }
 }
 
 export function getCapabilityPrompt(capabilityId: string): string | undefined {
   // 实时从 storage 读取
   const stored = getLatestConfig()
-  const capabilityMap = stored?.capabilities ?? {}
-  return capabilityMap[capabilityId]?.promptTemplate
+  return resolveCapabilityPromptTemplate(stored, capabilityId)
 }
 
 export function listCapabilities(): IntelligenceCapabilityRoutingConfig[] {

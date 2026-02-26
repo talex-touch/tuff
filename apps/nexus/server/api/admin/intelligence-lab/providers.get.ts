@@ -1,7 +1,6 @@
-import { requireAdmin } from '../../../utils/auth'
-import { listIntelligenceLabProviders } from '../../../utils/tuffIntelligenceLabService'
-
-export default defineEventHandler(async (event) => {
-  const { userId } = await requireAdmin(event)
-  return await listIntelligenceLabProviders(event, userId)
+export default defineEventHandler(() => {
+  throw createError({
+    statusCode: 410,
+    statusMessage: 'Deprecated intelligence-lab endpoint. Use /api/admin/intelligence-agent/* instead.'
+  })
 })

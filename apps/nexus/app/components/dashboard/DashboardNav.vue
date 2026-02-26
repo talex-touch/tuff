@@ -33,7 +33,7 @@ const sectionPaths: Record<string, string> = {
   assets: '/dashboard/assets',
   plugins: '/dashboard/assets',
   intelligence: '/dashboard/admin/intelligence',
-  'intelligence-lab': '/dashboard/admin/intelligence-lab',
+  'intelligence-agent': '/dashboard/admin/intelligence-agent',
   risk: '/dashboard/admin/risk',
   users: '/dashboard/admin/users',
   subscriptions: '/dashboard/admin/subscriptions',
@@ -124,7 +124,7 @@ const adminMenuItems = computed(() => {
       icon: 'i-carbon-notification',
     },
     {
-      id: 'intelligence-lab',
+      id: 'intelligence-agent',
       label: t('dashboard.sections.menu.intelligenceLab', 'Intelligence Lab'),
       icon: 'i-carbon-beaker',
     },
@@ -213,8 +213,8 @@ const activeSection = computed(() => {
     return 'watermark'
   if (route.path.startsWith('/dashboard/admin/credits'))
     return 'adminCredits'
-  if (route.path.startsWith('/dashboard/admin/intelligence-lab'))
-    return 'intelligence-lab'
+  if (route.path.startsWith('/dashboard/admin/intelligence-agent'))
+    return 'intelligence-agent'
   if (route.path.startsWith('/dashboard/admin/intelligence'))
     return 'intelligence'
   if (route.path.startsWith('/dashboard/admin/risk'))

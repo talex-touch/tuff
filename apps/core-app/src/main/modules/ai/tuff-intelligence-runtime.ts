@@ -1,4 +1,6 @@
 import type {
+  TuffIntelligenceAgentSession,
+  TuffIntelligenceAgentTraceEvent,
   IntelligenceInvokeOptions,
   TuffIntelligenceActionGraph,
   TuffIntelligenceActionNode,
@@ -9,7 +11,7 @@ import type {
   TuffIntelligenceTurn
 } from '@talex-touch/utils'
 import type { ToolExecutionContext } from './agents/tool-registry'
-import { eq } from 'drizzle-orm'
+import { eq, like } from 'drizzle-orm'
 import { config } from '../../db/schema'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
@@ -70,6 +72,11 @@ interface StartSessionPayload {
   objective?: string
   context?: Record<string, unknown>
   metadata?: Record<string, unknown>
+  autoRunGraph?: boolean
+  maxSteps?: number
+  toolBudget?: number
+  continueOnError?: boolean
+  reflectNotes?: string
 }
 
 interface PlanPayload {
@@ -99,11 +106,23 @@ interface CancelSessionPayload {
   reason?: string
 }
 
+interface PauseSessionPayload {
+  sessionId: string
+  reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
+  note?: string
+}
+
 interface QueryTracePayload {
   sessionId: string
+  fromSeq?: number
   limit?: number
   level?: TuffIntelligenceTraceEvent['level']
   type?: TuffIntelligenceTraceEvent['type']
+}
+
+interface SessionHistoryPayload {
+  limit?: number
+  status?: SessionStatus
 }
 
 interface ExportTracePayload {
@@ -130,8 +149,8 @@ interface ApproveToolPayload {
 
 const runtimeLog = createLogger('Intelligence').child('TuffRuntime')
 const STORAGE_PREFIX = 'intelligence/runtime/session/'
-const DEFAULT_TOOL_TIMEOUT_MS = 15_000
-const DEFAULT_TOOL_RETRY = 2
+const DEFAULT_TOOL_TIMEOUT_MS = 45_000
+const DEFAULT_TOOL_RETRY = 1
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -261,6 +280,102 @@ export class TuffIntelligenceRuntime {
     })
     await this.persistSession(stored)
     return stored.session
+  }
+
+  async runAgentGraph(payload: {
+    sessionId?: string
+    objective: string
+    context?: Record<string, unknown>
+    metadata?: Record<string, unknown>
+    maxSteps?: number
+    toolBudget?: number
+    continueOnError?: boolean
+    reflectNotes?: string
+  }): Promise<TuffIntelligenceStateSnapshot | null> {
+    const objective = String(payload.objective || '').trim()
+    if (!objective) {
+      throw new Error('objective is required')
+    }
+
+    const { runCoreIntelligenceAgentGraph } = await import('./intelligence-agent-graph-runner')
+    return await runCoreIntelligenceAgentGraph(this, {
+      ...payload,
+      objective
+    })
+  }
+
+  async heartbeatSession(sessionId: string): Promise<{ sessionId: string; heartbeatAt: string }> {
+    const stored = await this.requireSession(sessionId)
+    const heartbeatAt = new Date().toISOString()
+
+    stored.session.updatedAt = now()
+    stored.session.metadata = {
+      ...(stored.session.metadata ?? {}),
+      heartbeatAt
+    }
+
+    this.pushTrace(stored, {
+      type: 'state.snapshot',
+      level: 'debug',
+      message: `Session ${sessionId} heartbeat`,
+      payload: { heartbeatAt }
+    })
+
+    await this.persistSession(stored)
+    return {
+      sessionId,
+      heartbeatAt
+    }
+  }
+
+  async pauseSession(payload: PauseSessionPayload): Promise<TuffIntelligenceAgentSession | null> {
+    const stored = await this.loadSession(payload.sessionId)
+    if (!stored) return null
+
+    const turn = this.getCurrentTurn(stored)
+    const pauseReason = payload.reason ?? 'manual_pause'
+    const timestamp = now()
+
+    if (turn && !isSessionTerminal(turn.status)) {
+      turn.status = 'paused_disconnect'
+      turn.metadata = {
+        ...(turn.metadata ?? {}),
+        pauseReason,
+        pauseNote: payload.note
+      }
+    }
+
+    stored.session.status = 'paused_disconnect'
+    stored.session.pauseReason = pauseReason
+    stored.session.resumeHint = payload.note
+    stored.session.updatedAt = timestamp
+
+    this.pushTrace(stored, {
+      type: 'session.paused',
+      level: 'warn',
+      message: `Session ${payload.sessionId} paused`,
+      payload: {
+        reason: pauseReason,
+        note: payload.note
+      }
+    })
+
+    await this.persistSession(stored)
+    return stored.session
+  }
+
+  async getRecoverableSession(): Promise<TuffIntelligenceAgentSession | null> {
+    const history = await this.getSessionHistory({
+      limit: 50
+    })
+    return (
+      history.find(
+        (session) =>
+          session.status === 'paused_disconnect' ||
+          session.status === 'waiting_approval' ||
+          session.status === 'resuming'
+      ) ?? null
+    )
   }
 
   async resumeSession(sessionId: string): Promise<TuffIntelligenceSession | null> {
@@ -668,11 +783,49 @@ export class TuffIntelligenceRuntime {
     return ticket
   }
 
-  async queryTrace(payload: QueryTracePayload): Promise<TuffIntelligenceTraceEvent[]> {
+  async getSessionHistory(
+    payload: SessionHistoryPayload = {}
+  ): Promise<TuffIntelligenceAgentSession[]> {
+    const limit = Math.min(Math.max(payload.limit ?? 20, 1), 200)
+    const sessionsMap = new Map<string, TuffIntelligenceAgentSession>()
+
+    for (const stored of this.sessions.values()) {
+      sessionsMap.set(stored.session.id, stored.session)
+    }
+
+    const db = databaseModule.getDb()
+    const rows = await db
+      .select({ key: config.key, value: config.value })
+      .from(config)
+      .where(like(config.key, `${STORAGE_PREFIX}%`))
+      .limit(500)
+
+    for (const row of rows) {
+      const parsed = safeParseJson<StoredRuntimeSession | null>(row.value, null)
+      if (!parsed?.session?.id) {
+        continue
+      }
+      sessionsMap.set(parsed.session.id, parsed.session)
+    }
+
+    let sessions = Array.from(sessionsMap.values())
+    if (payload.status) {
+      sessions = sessions.filter((session) => session.status === payload.status)
+    }
+    sessions.sort((a, b) => b.updatedAt - a.updatedAt)
+
+    return sessions.slice(0, limit)
+  }
+
+  async queryTrace(payload: QueryTracePayload): Promise<TuffIntelligenceAgentTraceEvent[]> {
     const stored = await this.loadSession(payload.sessionId)
     if (!stored) return []
 
     let trace = [...stored.trace]
+    if (typeof payload.fromSeq === 'number' && Number.isFinite(payload.fromSeq)) {
+      const fromSeq = Math.max(1, Math.floor(payload.fromSeq))
+      trace = trace.slice(fromSeq - 1)
+    }
     if (payload.level) {
       trace = trace.filter((event) => event.level === payload.level)
     }
@@ -680,7 +833,10 @@ export class TuffIntelligenceRuntime {
       trace = trace.filter((event) => event.type === payload.type)
     }
     const limit = Math.max(1, payload.limit ?? 200)
-    return trace.slice(-limit)
+    return trace.slice(-limit).map((event) => ({
+      ...event,
+      contractVersion: 3
+    }))
   }
 
   async exportTrace(

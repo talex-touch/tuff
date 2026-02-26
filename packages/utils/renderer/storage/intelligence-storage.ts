@@ -17,10 +17,54 @@ import { createStorageDataProxy, createStorageProxy, TouchStorage } from './base
 export { IntelligenceProviderType }
 export type { IntelligenceGlobalConfig, IntelligenceProviderConfig }
 
+function buildPromptSchemaFromCapabilities(
+  capabilities: Record<string, { promptTemplate?: string }>
+) {
+  const promptRegistry: NonNullable<IntelligenceStorageData['promptRegistry']> = []
+  const promptBindings: NonNullable<IntelligenceStorageData['promptBindings']> = []
+  const nowTs = Date.now()
+
+  for (const [capabilityId, capabilityConfig] of Object.entries(capabilities || {})) {
+    const promptTemplate = typeof capabilityConfig?.promptTemplate === 'string'
+      ? capabilityConfig.promptTemplate.trim()
+      : ''
+    if (!promptTemplate) {
+      continue
+    }
+    const promptId = `capability.${capabilityId}.default`
+    promptBindings.push({
+      capabilityId,
+      promptId,
+      promptVersion: '1.0.0',
+      channel: 'stable',
+    })
+    promptRegistry.push({
+      id: promptId,
+      version: '1.0.0',
+      template: promptTemplate,
+      scope: 'capability',
+      status: 'active',
+      capabilityId,
+      channel: 'stable',
+      createdAt: nowTs,
+      updatedAt: nowTs,
+    })
+  }
+
+  return {
+    promptRegistry,
+    promptBindings,
+  }
+}
+
+const defaultPromptSchema = buildPromptSchemaFromCapabilities(DEFAULT_CAPABILITIES)
+
 const defaultIntelligenceData: IntelligenceStorageData = {
   providers: [...DEFAULT_PROVIDERS],
   globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
   capabilities: { ...DEFAULT_CAPABILITIES },
+  promptRegistry: defaultPromptSchema.promptRegistry,
+  promptBindings: defaultPromptSchema.promptBindings,
   version: 2,
 }
 
@@ -178,6 +222,8 @@ export async function migrateIntelligenceSettings(): Promise<void> {
       providers: migratedProviders,
       globalConfig: migratedGlobalConfig,
       capabilities: { ...DEFAULT_CAPABILITIES },
+      promptRegistry: defaultPromptSchema.promptRegistry,
+      promptBindings: defaultPromptSchema.promptBindings,
       version: 2,
     })
 
@@ -186,6 +232,16 @@ export async function migrateIntelligenceSettings(): Promise<void> {
     intelligenceStorageLog.info(`Migration to v2 complete, capabilities count: ${Object.keys(DEFAULT_CAPABILITIES).length}`)
   }
   else {
+    if (!Array.isArray(currentData.promptRegistry) || !Array.isArray(currentData.promptBindings)) {
+      const promptSchema = buildPromptSchemaFromCapabilities(currentData.capabilities || DEFAULT_CAPABILITIES)
+      intelligenceStorage.applyData({
+        ...currentData,
+        promptRegistry: promptSchema.promptRegistry,
+        promptBindings: promptSchema.promptBindings,
+        version: currentData.version || 2,
+      })
+      await intelligenceStorage.saveToRemote({ force: true })
+    }
     intelligenceStorageLog.info(`No migration needed, current version: ${currentData.version}`)
   }
 
@@ -200,6 +256,8 @@ export async function resetIntelligenceConfig(): Promise<void> {
     providers: [...DEFAULT_PROVIDERS],
     globalConfig: { ...DEFAULT_GLOBAL_CONFIG },
     capabilities: { ...DEFAULT_CAPABILITIES },
+    promptRegistry: defaultPromptSchema.promptRegistry,
+    promptBindings: defaultPromptSchema.promptBindings,
     version: 2,
   })
 

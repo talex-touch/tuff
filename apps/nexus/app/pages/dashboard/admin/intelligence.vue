@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxFlipOverlay, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxCheckbox, TxPagination, TxPopperDialog, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 definePageMeta({
   pageTransition: {
@@ -169,6 +170,7 @@ const userUsageResult = ref<UsageResult | null>(null)
 const ipBans = ref<IpBan[]>([])
 const ipBanLoading = ref(false)
 const ipBanError = ref<string | null>(null)
+const ipBanFeatureAvailable = ref(true)
 const ipBanStepUpToken = ref('')
 const ipBanForm = reactive({
   ip: '',
@@ -205,6 +207,12 @@ function ipBanAuthHeaders() {
   return {
     'X-Login-Token': token,
   }
+}
+
+function isFeatureNotFoundError(error: any): boolean {
+  const statusCode = error?.data?.statusCode
+  const message = String(error?.data?.statusMessage || error?.data?.message || error?.message || '').toLowerCase()
+  return statusCode === 404 && message.includes('feature not found')
 }
 
 // ── Fetch data ──
@@ -297,6 +305,8 @@ async function fetchUserUsage() {
 }
 
 async function fetchIpBans() {
+  if (!ipBanFeatureAvailable.value)
+    return
   ipBanLoading.value = true
   ipBanError.value = null
   try {
@@ -304,6 +314,12 @@ async function fetchIpBans() {
     ipBans.value = data.bans || []
   }
   catch (e: any) {
+    if (isFeatureNotFoundError(e)) {
+      ipBanFeatureAvailable.value = false
+      ipBans.value = []
+      ipBanError.value = null
+      return
+    }
     ipBanError.value = e.data?.message || 'Failed to load IP bans'
   }
   finally {
@@ -312,6 +328,8 @@ async function fetchIpBans() {
 }
 
 async function addIpBan() {
+  if (!ipBanFeatureAvailable.value)
+    return
   const ip = ipBanForm.ip.trim()
   if (!ip)
     return
@@ -331,6 +349,12 @@ async function addIpBan() {
     await fetchIpBans()
   }
   catch (e: any) {
+    if (isFeatureNotFoundError(e)) {
+      ipBanFeatureAvailable.value = false
+      ipBans.value = []
+      ipBanError.value = null
+      return
+    }
     ipBanError.value = e.data?.message || 'Failed to add IP ban'
   }
   finally {
@@ -339,6 +363,8 @@ async function addIpBan() {
 }
 
 async function toggleIpBan(ban: IpBan) {
+  if (!ipBanFeatureAvailable.value)
+    return
   ipBanLoading.value = true
   ipBanError.value = null
   try {
@@ -350,6 +376,12 @@ async function toggleIpBan(ban: IpBan) {
     await fetchIpBans()
   }
   catch (e: any) {
+    if (isFeatureNotFoundError(e)) {
+      ipBanFeatureAvailable.value = false
+      ipBans.value = []
+      ipBanError.value = null
+      return
+    }
     ipBanError.value = e.data?.message || 'Failed to update IP ban'
   }
   finally {
@@ -358,6 +390,8 @@ async function toggleIpBan(ban: IpBan) {
 }
 
 async function removeIpBan(ban: IpBan) {
+  if (!ipBanFeatureAvailable.value)
+    return
   ipBanLoading.value = true
   ipBanError.value = null
   try {
@@ -368,6 +402,12 @@ async function removeIpBan(ban: IpBan) {
     await fetchIpBans()
   }
   catch (e: any) {
+    if (isFeatureNotFoundError(e)) {
+      ipBanFeatureAvailable.value = false
+      ipBans.value = []
+      ipBanError.value = null
+      return
+    }
     ipBanError.value = e.data?.message || 'Failed to remove IP ban'
   }
   finally {
@@ -614,24 +654,141 @@ async function toggleProvider(provider: Provider) {
   }
 }
 
-// ── Test connection ──
-const testingId = ref<string | null>(null)
-const testResult = ref<{ providerId: string; success: boolean; message: string; models: string[] } | null>(null)
+// ── Provider probe overlay ──
+interface ProviderProbeResult {
+  success: boolean
+  providerId: string
+  providerName: string
+  providerType: string
+  model: string
+  output: string
+  latency: number
+  endpoint: string
+  traceId: string
+  fallbackCount: number
+  retryCount: number
+  attemptedProviders: string[]
+  message: string
+  error?: {
+    message: string
+    endpoint: string | null
+    status: number | null
+    responseSnippet: string | null
+    baseUrl: string | null
+  }
+}
 
-async function testConnection(provider: Provider) {
-  testingId.value = provider.id
-  testResult.value = null
+const showProbeOverlay = ref(false)
+const probeOverlaySource = ref<HTMLElement | null>(null)
+const probeProvider = ref<Provider | null>(null)
+const probeLoading = ref(false)
+const probePrompt = ref('')
+const probeModel = ref('')
+const probeResult = ref<ProviderProbeResult | null>(null)
+
+function isHtmlLikeResponse(status: number, contentType: string, data: unknown): boolean {
+  if (status >= 400)
+    return false
+  const normalizedType = contentType.toLowerCase()
+  if (normalizedType.includes('text/html'))
+    return true
+  if (typeof data === 'string') {
+    const trimmed = data.trim().toLowerCase()
+    if (trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html'))
+      return true
+  }
+  return false
+}
+
+async function postJsonStrict<T>(
+  url: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const response = await $fetch.raw<T | string>(url, {
+    method: 'POST',
+    body,
+    ignoreResponseError: true,
+  })
+  const status = response.status
+  const contentType = response.headers.get('content-type') || ''
+  const data = response._data
+
+  if (isHtmlLikeResponse(status, contentType, data)) {
+    throw new Error(`Endpoint returned HTML: ${url}`)
+  }
+
+  if (status >= 400) {
+    const error = new Error((data as any)?.statusMessage || (data as any)?.message || `Request failed with status ${status}`)
+    ;(error as any).data = data
+    ;(error as any).statusCode = status
+    throw error
+  }
+
+  return data as T
+}
+
+const probeModelOptions = computed(() => {
+  const provider = probeProvider.value
+  if (!provider)
+    return []
+  const modelSet = new Set<string>()
+  if (provider.defaultModel?.trim())
+    modelSet.add(provider.defaultModel.trim())
+  for (const model of provider.models || []) {
+    if (model?.trim())
+      modelSet.add(model.trim())
+  }
+  if (probeResult.value?.model?.trim())
+    modelSet.add(probeResult.value.model.trim())
+  return Array.from(modelSet)
+})
+
+function openProbeOverlay(provider: Provider, event?: MouseEvent) {
+  probeProvider.value = provider
+  probeModel.value = provider.defaultModel || provider.models[0] || ''
+  probePrompt.value = t('dashboard.sections.intelligence.providers.probe.defaultPrompt')
+  probeResult.value = null
+  probeOverlaySource.value = (event?.currentTarget as HTMLElement) ?? null
+  showProbeOverlay.value = true
+}
+
+async function runProviderProbe() {
+  if (!probeProvider.value)
+    return
+  probeLoading.value = true
+  probeResult.value = null
   try {
-    const data = await $fetch<{ success: boolean, message: string, models: string[], latency: number }>(`/api/dashboard/intelligence/providers/${provider.id}/test`, {
-      method: 'POST',
-    })
-    testResult.value = { ...data, providerId: provider.id }
+    const requestBody: Record<string, unknown> = {
+      model: probeModel.value.trim() || undefined,
+      prompt: probePrompt.value.trim() || undefined,
+    }
+    const providerId = probeProvider.value.id
+    const result = await postJsonStrict<ProviderProbeResult>(
+      `/api/dashboard/intelligence/providers/${providerId}/probe`,
+      requestBody,
+    )
+    probeResult.value = result
   }
   catch (e: any) {
-    testResult.value = { providerId: provider.id, success: false, message: e.data?.message || 'Test failed', models: [] }
+    probeResult.value = {
+      success: false,
+      providerId: probeProvider.value.id,
+      providerName: probeProvider.value.name,
+      providerType: probeProvider.value.type,
+      model: probeModel.value.trim() || probeProvider.value.defaultModel || probeProvider.value.models[0] || '',
+      output: '',
+      latency: 0,
+      endpoint: '',
+      traceId: '',
+      fallbackCount: 0,
+      retryCount: 0,
+      attemptedProviders: [probeProvider.value.id],
+      message: e.data?.message || 'Probe failed',
+      error: e.data?.error,
+    }
   }
   finally {
-    testingId.value = null
+    probeLoading.value = false
   }
 }
 
@@ -641,7 +798,7 @@ const fetchingFormModels = ref(false)
 async function fetchFormModels() {
   fetchingFormModels.value = true
   try {
-    const body: Record<string, string> = {}
+    const body: Record<string, unknown> = {}
     if (form.apiKey.trim())
       body.apiKey = form.apiKey.trim()
     if (form.baseUrl.trim())
@@ -650,10 +807,10 @@ async function fetchFormModels() {
     let models: string[] = []
 
     if (formMode.value === 'edit' && editingId.value) {
-      const data = await $fetch<{ success: boolean, models: string[] }>(`/api/dashboard/intelligence/providers/${editingId.value}/test`, {
-        method: 'POST',
+      const data = await postJsonStrict<{ success: boolean, models: string[] }>(
+        `/api/dashboard/intelligence/providers/${editingId.value}/test`,
         body,
-      })
+      )
       models = data.models || []
     }
     else {
@@ -830,7 +987,7 @@ function formatEndpointCandidates(list?: string[]) {
         </template>
 
         <div class="space-y-6">
-          <section class="apple-card-lg space-y-4 p-6">
+          <section v-if="ipBanFeatureAvailable" class="apple-card-lg space-y-4 p-6">
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h2 class="apple-heading-sm">
@@ -940,7 +1097,7 @@ function formatEndpointCandidates(list?: string[]) {
             </div>
           </section>
 
-          <section class="apple-card-lg space-y-4 p-6">
+          <section v-if="ipBanFeatureAvailable" class="apple-card-lg space-y-4 p-6">
             <div class="flex items-center justify-between gap-4">
               <div>
                 <h3 class="apple-heading-sm">
@@ -1097,6 +1254,12 @@ function formatEndpointCandidates(list?: string[]) {
               {{ t('dashboard.sections.intelligence.overview.ipBans.empty') }}
             </div>
           </section>
+
+          <section v-if="!ipBanFeatureAvailable" class="apple-card-lg p-6">
+            <div class="rounded-xl bg-black/[0.02] px-4 py-3 text-xs text-black/45 dark:bg-white/[0.03] dark:text-white/45">
+              {{ t('dashboard.sections.intelligence.overview.ipBans.unavailable') }}
+            </div>
+          </section>
         </div>
       </TxTabItem>
 
@@ -1173,12 +1336,10 @@ function formatEndpointCandidates(list?: string[]) {
               <TxButton
                 variant="secondary"
                 size="mini"
-                :disabled="testingId === provider.id"
                 class="rounded-lg"
-                @click="testConnection(provider)"
+                @click="openProbeOverlay(provider, $event)"
               >
-                <span v-if="testingId === provider.id" class="i-carbon-renew animate-spin text-base" />
-                <span v-else class="i-carbon-connection-signal text-base" />
+                <span class="i-carbon-connection-signal text-base" />
                 <span class="ml-1 text-[11px]">
                   {{ t('dashboard.sections.intelligence.providers.testConnection') }}
                 </span>
@@ -1205,15 +1366,6 @@ function formatEndpointCandidates(list?: string[]) {
                 <span class="i-carbon-trash-can text-base" />
               </TxButton>
             </div>
-          </div>
-
-          <!-- Test result -->
-          <div
-            v-if="testResult && testResult.providerId === provider.id && testResult.message && testingId === null && pendingDeleteId !== provider.id"
-            class="mt-3 rounded-xl px-3 py-2 text-xs"
-            :class="testResult.success ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-red-500/10 text-red-500'"
-          >
-            {{ testResult.message }}
           </div>
         </div>
       </div>
@@ -1616,10 +1768,10 @@ function formatEndpointCandidates(list?: string[]) {
     </TxTabs>
 
     <!-- Create / Edit Overlay -->
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="showFormOverlay"
-        :source="formOverlaySource"
+        :reference="formOverlaySource"
+        size="lg"
       >
         <template #default="{ close }">
           <div class="ProviderOverlay-Inner">
@@ -1760,8 +1912,148 @@ function formatEndpointCandidates(list?: string[]) {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
+
+    <!-- Provider Probe Overlay -->
+    <FlipDialog
+        v-model="showProbeOverlay"
+        :reference="probeOverlaySource"
+        size="lg"
+      >
+        <template #default="{ close }">
+          <div class="ProviderOverlay-Inner">
+            <div class="space-y-1">
+              <h2 class="ProviderOverlay-Title">
+                {{ t('dashboard.sections.intelligence.providers.probe.title') }}
+              </h2>
+              <p class="text-xs text-black/45 dark:text-white/45">
+                {{ t('dashboard.sections.intelligence.providers.probe.subtitle', { name: probeProvider?.name || '-' }) }}
+              </p>
+            </div>
+
+            <div class="ProviderOverlay-Body space-y-4">
+              <div v-if="probeProvider" class="grid gap-3 rounded-xl bg-black/[0.02] p-3 text-xs dark:bg-white/[0.03] sm:grid-cols-2">
+                <div>
+                  <p class="text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.intelligence.providers.probe.provider') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ probeProvider.name }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-black/40 dark:text-white/40">
+                    {{ t('dashboard.sections.intelligence.providers.probe.type') }}
+                  </p>
+                  <p class="mt-1 font-medium text-black dark:text-white">
+                    {{ providerTypeLabel(probeProvider.type) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('dashboard.sections.intelligence.providers.probe.model') }}
+                </label>
+                <TuffSelect v-if="probeModelOptions.length" v-model="probeModel" class="w-full">
+                  <TuffSelectItem value="" :label="t('dashboard.sections.intelligence.providers.probe.modelAuto')" />
+                  <TuffSelectItem
+                    v-for="model in probeModelOptions"
+                    :key="model"
+                    :value="model"
+                    :label="model"
+                  />
+                </TuffSelect>
+                <TuffInput
+                  v-else
+                  v-model="probeModel"
+                  :placeholder="t('dashboard.sections.intelligence.providers.probe.modelPlaceholder')"
+                  class="w-full"
+                />
+                <p class="text-[11px] text-black/35 dark:text-white/35">
+                  {{ t('dashboard.sections.intelligence.providers.probe.modelHint') }}
+                </p>
+              </div>
+
+              <div class="space-y-2">
+                <label class="text-xs text-black/60 dark:text-white/60">
+                  {{ t('dashboard.sections.intelligence.providers.probe.prompt') }}
+                </label>
+                <textarea
+                  v-model="probePrompt"
+                  :placeholder="t('dashboard.sections.intelligence.providers.probe.promptPlaceholder')"
+                  rows="4"
+                  class="w-full rounded-xl border border-black/[0.08] bg-black/[0.02] px-3 py-2 text-sm text-black outline-none transition focus:border-primary dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-white"
+                />
+              </div>
+
+              <div
+                v-if="probeResult"
+                class="space-y-3 rounded-2xl border px-4 py-3"
+                :class="probeResult.success
+                  ? 'border-green-500/20 bg-green-500/10'
+                  : 'border-red-500/20 bg-red-500/10'"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-sm font-medium" :class="probeResult.success ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-300'">
+                    {{ probeResult.message || (probeResult.success ? 'Probe completed.' : 'Probe failed.') }}
+                  </p>
+                  <p v-if="probeResult.latency" class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.sections.intelligence.providers.probe.latency') }} {{ probeResult.latency }}ms
+                  </p>
+                </div>
+
+                <div class="grid gap-2 text-xs text-black/60 dark:text-white/60 sm:grid-cols-2">
+                  <p>
+                    <span class="text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.providers.probe.model') }}:</span>
+                    {{ probeResult.model || '-' }}
+                  </p>
+                  <p>
+                    <span class="text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.providers.probe.endpoint') }}:</span>
+                    {{ probeResult.endpoint || '-' }}
+                  </p>
+                  <p>
+                    <span class="text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.providers.probe.traceId') }}:</span>
+                    {{ probeResult.traceId || '-' }}
+                  </p>
+                  <p>
+                    <span class="text-black/40 dark:text-white/40">{{ t('dashboard.sections.intelligence.providers.probe.retry') }}:</span>
+                    {{ probeResult.retryCount }}
+                  </p>
+                </div>
+
+                <div v-if="probeResult.output" class="space-y-1">
+                  <p class="text-xs text-black/45 dark:text-white/45">
+                    {{ t('dashboard.sections.intelligence.providers.probe.response') }}
+                  </p>
+                  <pre class="ProviderProbe-ResultText">{{ probeResult.output }}</pre>
+                </div>
+
+                <div v-if="probeResult.error?.responseSnippet" class="space-y-1">
+                  <p class="text-xs text-red-500">
+                    {{ t('dashboard.sections.intelligence.providers.probe.errorSnippet') }}
+                  </p>
+                  <pre class="ProviderProbe-ErrorText">{{ probeResult.error.responseSnippet }}</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="ProviderOverlay-Actions">
+              <TxButton variant="secondary" size="small" @click="close">
+                {{ t('dashboard.sections.intelligence.form.cancel') }}
+              </TxButton>
+              <TxButton
+                variant="primary"
+                size="small"
+                :disabled="probeLoading || !probeProvider"
+                @click="runProviderProbe"
+              >
+                {{ probeLoading ? t('dashboard.sections.intelligence.providers.probe.running') : t('dashboard.sections.intelligence.providers.probe.run') }}
+              </TxButton>
+            </div>
+          </div>
+        </template>
+      </FlipDialog>
 
     <!-- Delete Confirm -->
     <TxPopperDialog
@@ -1803,6 +2095,44 @@ function formatEndpointCandidates(list?: string[]) {
 
 :root.dark .ProviderOverlay-Actions {
   border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.ProviderProbe-ResultText {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.72);
+}
+
+.ProviderProbe-ErrorText {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 10px;
+  background: rgba(220, 38, 38, 0.08);
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #dc2626;
+}
+
+:root.dark .ProviderProbe-ResultText {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+:root.dark .ProviderProbe-ErrorText {
+  background: rgba(248, 113, 113, 0.12);
+  color: rgba(252, 165, 165, 0.95);
 }
 </style>
 

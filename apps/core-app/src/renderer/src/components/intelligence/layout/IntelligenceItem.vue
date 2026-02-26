@@ -21,6 +21,7 @@ interface IntelligenceProviderConfig {
   type: string
   name: string
   enabled: boolean
+  metadata?: Record<string, unknown>
   apiKey?: string
   baseUrl?: string
   models?: string[]
@@ -42,6 +43,14 @@ const props = defineProps<{
 const { t } = useI18n()
 const localEnabled = ref(props.provider.enabled)
 
+function isNexusManagedProvider(provider: IntelligenceProviderConfig): boolean {
+  if (provider.id === 'tuff-nexus-default') {
+    return true
+  }
+  const origin = provider.metadata?.origin
+  return typeof origin === 'string' && origin === 'tuff-nexus'
+}
+
 // Watch for external changes to provider.enabled
 watch(
   () => props.provider.enabled,
@@ -55,7 +64,11 @@ const hasConfigError = computed(() => {
   if (!props.provider.enabled) return false
 
   // Check for missing API key (except for local models)
-  if (props.provider.type !== IntelligenceProviderType.LOCAL && !props.provider.apiKey) {
+  if (
+    props.provider.type !== IntelligenceProviderType.LOCAL &&
+    !isNexusManagedProvider(props.provider) &&
+    !props.provider.apiKey
+  ) {
     return true
   }
 

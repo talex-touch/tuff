@@ -1,0 +1,77 @@
+# Intelligence Unified Schema & Migration
+
+This page defines a unified model for providers/capabilities/prompts and the migration path from scattered Core-App + Nexus settings.
+
+## Why Unify
+
+Current settings are split across multiple stores:
+
+- Core-App main config: `StorageList.IntelligenceConfig` (providers/capabilities/globalConfig)
+- Core-App prompt library: `intelligence/prompt-library` (renderer custom prompts)
+- Core-App DB adapter keys: `intelligence/providers`, `intelligence/capabilities`, `intelligence/prompts`
+- Nexus D1 tables: `intelligence_providers`, `intelligence_settings` (plus runtime audits)
+
+This causes field drift, duplicated migration logic, and inconsistent runtime behavior.
+
+## Unified Schema (proposed v1)
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  interface IntelligenceUnifiedConfigV1 {
+    schemaVersion: 1
+    updatedAt: number
+    providers: IntelligenceProviderPersisted[]
+    capabilities: Record<string, IntelligenceCapabilityConfig>
+    prompts: PromptTemplate[]
+    globalConfig: IntelligenceGlobalConfig
+    governance: {
+      defaultTimeoutMs: number
+      fallbackPolicy: 'next-available' | 'fail-fast' | 'round-robin'
+      approvalEnabled: boolean
+      auditEnabled: boolean
+    }
+  }
+
+  interface IntelligenceProviderPersisted extends Omit<IntelligenceProviderConfig, 'apiKey'> {
+    auth?: {
+      mode: 'secret-ref' | 'token-ref' | 'none'
+      secretRef?: string
+    }
+  }
+---
+:::
+
+> Note: `apiKey` must not be persisted as plaintext in unified config. Runtime injects decrypted secrets via `secretRef`.
+
+## Security Constraints
+
+- SQLite is the local SoT; JSON is sync payload only and must be encrypted (`payload_enc` / `payload_ref`).
+- `deviceId` is identifier-only and cannot be used as key material.
+- Provider credentials must live in system secure storage.
+
+## Field Mapping
+
+| Source | Field | Target |
+| --- | --- | --- |
+| Core-App `providers[]` | `id/type/name/enabled/baseUrl/models/defaultModel` | `providers[]` same fields |
+| Core-App `providers[].apiKey` | plaintext / transient token | `providers[].auth.secretRef` |
+| Core-App `capabilities` | `providers/promptTemplate` | `capabilities` |
+| Core-App prompt library | `customPrompts[]` | `prompts[]` (append + dedupe) |
+| Nexus `intelligence_settings` | `default_strategy/enable_audit/...` | `globalConfig + governance` |
+
+## Recommended Migration Flow
+
+1. **Read**: snapshot Core-App/Nexus config in read-only mode.
+2. **Normalize**: align provider IDs, capability IDs, prompt IDs, and defaults.
+3. **Secure Rewrite**: convert credential fields to `secretRef` and clean plaintext residues.
+4. **Write**: persist unified config with `schemaVersion` and rollback snapshot.
+5. **Dual-Read Rollout**: prefer new schema, fallback to old schema read-only.
+6. **Converge**: remove old write paths after compatibility window.
+
+## Validation Criteria
+
+- Provider/capability/prompt counts remain consistent post-migration.
+- Capability routing result parity before/after migration (ordering differences allowed).
+- No plaintext API key remains in JSON, logs, or sync payload.
+- Nexus and Core-App render the same effective configuration.
