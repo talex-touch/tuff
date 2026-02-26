@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay, TxPopperDialog } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPopperDialog } from '@talex-touch/tuffex'
 import type { TxSelectValue } from '@talex-touch/tuffex'
 import { defineComponent, h, inject } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 definePageMeta({
   layout: 'dashboard',
@@ -389,14 +390,16 @@ const expiryOptions = [
       </TxButton>
     </div>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="showCreateModal"
-        :source="createOverlaySource"
+        :reference="createOverlaySource"
+        size="md"
         :mask-closable="false"
         :prevent-accidental-close="true"
-        header-title="Create API Key"
-        header-desc="Generate a new API key for CLI tools"
+        :header-title="t('dashboard.sections.apiKeys.overlay.title')"
+        :header-desc="t('dashboard.sections.apiKeys.overlay.description')"
+        :close-aria-label="t('dashboard.sections.apiKeys.actions.close')"
+        mask-class="ApiKeyOverlay-Mask"
       >
         <template #default="{ close }">
           <div class="ApiKeyOverlay-Inner">
@@ -499,8 +502,7 @@ const expiryOptions = [
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
 
     <!-- Delete Confirmation Dialog -->
     <TxPopperDialog
@@ -638,6 +640,92 @@ const expiryOptions = [
   margin: 4px 4px 0;
   font-size: 12px;
   color: color-mix(in srgb, #ef4444 75%, var(--tx-text-color-secondary));
+}
+
+:global(.ApiKeyOverlay-Mask) {
+  cursor: not-allowed;
+}
+
+:global(.ApiKeyOverlay-Mask.is-close-guard-warning::after) {
+  animation: api-key-overlay-mask-warning 560ms ease-out;
+}
+
+@keyframes api-key-overlay-mask-warning {
+  0% {
+    opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0) 0%, rgba(255, 66, 66, 0) 72%);
+  }
+
+  22% {
+    opacity: 1;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0.08) 0%, rgba(255, 66, 66, 0.04) 42%, rgba(255, 66, 66, 0) 72%);
+  }
+
+  52% {
+    opacity: 0.55;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0.06) 0%, rgba(255, 66, 66, 0.03) 42%, rgba(255, 66, 66, 0) 72%);
+  }
+
+  100% {
+    opacity: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0) 0%, rgba(255, 66, 66, 0) 72%);
+  }
+}
+
+:global(.ApiKeyOverlay-Mask + .FlipDialog-Card .TxFlipOverlay-Shell.is-close-guard-focus) {
+  animation: none;
+}
+
+:global(.ApiKeyOverlay-Mask + .FlipDialog-Card.is-close-guard-warning) {
+  animation:
+    api-key-overlay-close-guard-warning 980ms ease-out,
+    api-key-overlay-card-focus 420ms cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+
+@keyframes api-key-overlay-close-guard-warning {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(255, 79, 79, 0));
+  }
+
+  18% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 96, 96, 0.2))
+      drop-shadow(0 0 22px rgba(255, 64, 64, 0.14))
+      drop-shadow(0 0 42px rgba(255, 47, 47, 0.1));
+  }
+
+  52% {
+    filter:
+      drop-shadow(0 0 6px rgba(255, 96, 96, 0.12))
+      drop-shadow(0 0 22px rgba(255, 64, 64, 0.09))
+      drop-shadow(0 0 42px rgba(255, 47, 47, 0.06));
+  }
+
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 79, 79, 0));
+  }
+}
+
+@keyframes api-key-overlay-card-focus {
+  0% {
+    scale: 1;
+  }
+
+  28% {
+    scale: 1.04;
+  }
+
+  52% {
+    scale: 0.988;
+  }
+
+  72% {
+    scale: 1.015;
+  }
+
+  100% {
+    scale: 1;
+  }
 }
 </style>
 
