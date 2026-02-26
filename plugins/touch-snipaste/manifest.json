@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "snipaste.quick",
+      "id": "snipaste-quick",
       "name": "Snipaste",
       "desc": "截图 / 贴图 / 取色",
       "icon": {

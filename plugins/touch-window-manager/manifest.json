@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "window.app",
+      "id": "window-app",
       "name": "窗口管理",
       "desc": "管理桌面应用窗口（Windows/macOS）",
       "icon": {

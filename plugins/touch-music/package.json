@@ -2,7 +2,7 @@
   "name": "@talex-touch/touch-music-plugin",
   "type": "module",
   "version": "0.0.0",
-  "private": false,
+  "private": true,
   "scripts": {
     "music:dev": "vite",
     "build": "vite build",

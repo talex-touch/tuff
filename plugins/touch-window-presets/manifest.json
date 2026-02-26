@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "window.presets",
+      "id": "window-presets",
       "name": "窗口预设",
       "desc": "一键布局窗口组合",
       "icon": {

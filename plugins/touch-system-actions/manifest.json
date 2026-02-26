@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "system.actions",
+      "id": "system-actions",
       "name": "系统操作",
       "desc": "全量系统动作入口",
       "icon": {

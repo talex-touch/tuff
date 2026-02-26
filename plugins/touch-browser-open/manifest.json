@@ -21,7 +21,7 @@
   },
   "features": [
     {
-      "id": "browser.open",
+      "id": "browser-open",
       "name": "浏览器打开",
       "desc": "快速用默认或指定浏览器打开 URL",
       "icon": {

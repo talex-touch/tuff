@@ -196,7 +196,7 @@ const pluginLifecycle = {
       await ensureSnippetsFile()
       const keyword = normalizeText(getQueryText(query))
 
-      if (featureId === 'text-snippets.manage') {
+      if (featureId === 'text-snippets-manage') {
         const snippets = await loadSnippets(featureId)
         const items = [
           buildInfoItem({
@@ -231,7 +231,7 @@ const pluginLifecycle = {
         return true
       }
 
-      if (featureId === 'text-snippets.search') {
+      if (featureId === 'text-snippets-search') {
         const snippets = await loadSnippets(featureId)
         const matched = snippets.filter(snippet => matchSnippet(snippet, keyword))
         const items = []
