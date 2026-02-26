@@ -1,8 +1,9 @@
 <script setup lang="ts" name="StoreHeader">
 import type { StoreProviderResultMeta } from '@talex-touch/utils/store'
-import { TxButton, TxFlipOverlay, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
+import { TxButton, TxRadio, TxRadioGroup } from '@talex-touch/tuffex'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatCompletion from '~/components/base/input/FlatCompletion.vue'
 import TLabelSelect from '~/components/base/select/TLabelSelect.vue'
 import TLabelSelectItem from '~/components/base/select/TLabelSelectItem.vue'
@@ -127,50 +128,49 @@ const tabs = defineModel<'store' | 'installed' | 'docs' | 'cli'>('tabs', { defau
   </div>
 
   <!-- Error Details Drawer -->
-  <Teleport to="body">
-    <TxFlipOverlay
-      v-model="showErrorDrawer"
-      :source="errorDrawerSource"
-      :header-title="t('store.errorDetails')"
-    >
-      <template #default>
-        <div class="error-drawer">
-          <div class="error-drawer-content">
-            <div v-if="providerDetails?.length" class="provider-list">
-              <div
-                v-for="provider in providerDetails"
-                :key="provider.providerId"
-                class="provider-item"
-                :class="{ 'is-error': !provider.success }"
-              >
-                <div class="provider-header">
-                  <span class="provider-name">{{ provider.providerName }}</span>
-                  <span class="provider-type">{{ provider.providerType }}</span>
-                </div>
-                <div class="provider-status-row">
-                  <span v-if="provider.success" class="status-badge success">
-                    <i class="i-ri-check-line" />
-                    {{ t('store.statusSuccess') }}
-                  </span>
-                  <span v-else class="status-badge error">
-                    <i class="i-ri-close-line" />
-                    {{ t('store.statusFailed') }}
-                  </span>
-                  <span class="item-count">{{ provider.itemCount }} {{ t('store.plugins') }}</span>
-                </div>
-                <div v-if="!provider.success && provider.error" class="error-message">
-                  <code>{{ provider.error }}</code>
-                </div>
+  <FlipDialog
+    v-model="showErrorDrawer"
+    :reference="errorDrawerSource"
+    :header-title="t('store.errorDetails')"
+    size="lg"
+  >
+    <template #default>
+      <div class="error-drawer">
+        <div class="error-drawer-content">
+          <div v-if="providerDetails?.length" class="provider-list">
+            <div
+              v-for="provider in providerDetails"
+              :key="provider.providerId"
+              class="provider-item"
+              :class="{ 'is-error': !provider.success }"
+            >
+              <div class="provider-header">
+                <span class="provider-name">{{ provider.providerName }}</span>
+                <span class="provider-type">{{ provider.providerType }}</span>
+              </div>
+              <div class="provider-status-row">
+                <span v-if="provider.success" class="status-badge success">
+                  <i class="i-ri-check-line" />
+                  {{ t('store.statusSuccess') }}
+                </span>
+                <span v-else class="status-badge error">
+                  <i class="i-ri-close-line" />
+                  {{ t('store.statusFailed') }}
+                </span>
+                <span class="item-count">{{ provider.itemCount }} {{ t('store.plugins') }}</span>
+              </div>
+              <div v-if="!provider.success && provider.error" class="error-message">
+                <code>{{ provider.error }}</code>
               </div>
             </div>
-            <div v-else class="empty-state">
-              {{ t('store.noProviderData') }}
-            </div>
+          </div>
+          <div v-else class="empty-state">
+            {{ t('store.noProviderData') }}
           </div>
         </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style scoped lang="scss">

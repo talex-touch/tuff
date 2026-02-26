@@ -1,9 +1,10 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import { reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
@@ -187,11 +188,12 @@ async function saveDevSettings(): Promise<void> {
 </script>
 
 <template>
-  <TxFlipOverlay
+  <FlipDialog
     v-model="visible"
-    :source="source"
+    :reference="source"
     :header-title="t('plugin.details.devSettings')"
     :header-desc="t('plugin.details.devSettingsDesc')"
+    size="lg"
   >
     <template #default>
       <div class="PluginDevSettings-Panel">
@@ -258,7 +260,7 @@ async function saveDevSettings(): Promise<void> {
         </div>
       </div>
     </template>
-  </TxFlipOverlay>
+  </FlipDialog>
 </template>
 
 <style lang="scss" scoped>

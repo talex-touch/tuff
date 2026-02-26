@@ -181,7 +181,7 @@ const props = withDefaults(defineProps<FlipOverlayProps>(), {
   cardClass: '',
   globalMask: true,
   border: 'solid',
-  surface: 'refraction',
+  surface: 'mask',
   surfaceColor: '',
   surfaceOpacity: 0.96,
   header: true,
@@ -436,7 +436,7 @@ function triggerBlockedCloseWarning(): void {
   blockedCloseWarning.value = false
   if (hasWindow())
     void cardRef.value?.offsetWidth
-  blockedCloseWarning.value = true
+    blockedCloseWarning.value = true
 
   blockedCloseTimer = setTimeout(() => {
     blockedCloseWarning.value = false
@@ -1053,7 +1053,7 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
         v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
         class="TxFlipOverlay-GlobalMask"
       />
-      <div ref="cardRef" :class="cardClassName" @click.stop>
+      <div ref="cardRef" :class="cardClassName" :style="props.cardStyle" @click.stop>
         <TxBaseSurface
           class="TxFlipOverlay-Surface"
           preset="card"
@@ -1148,7 +1148,7 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
 
   22% {
     opacity: 1;
-    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0.22) 0%, rgba(255, 66, 66, 0.12) 42%, rgba(255, 66, 66, 0) 72%);
+    background: radial-gradient(circle at 50% 50%, rgba(255, 66, 66, 0.022) 0%, rgba(255, 66, 66, 0.012) 42%, rgba(255, 66, 66, 0) 72%);
   }
 
   100% {
@@ -1236,9 +1236,9 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
 
   18% {
     filter:
-      drop-shadow(0 0 6px rgba(255, 96, 96, 0.98))
-      drop-shadow(0 0 22px rgba(255, 64, 64, 0.72))
-      drop-shadow(0 0 42px rgba(255, 47, 47, 0.5));
+      drop-shadow(0 0 6px rgba(255, 96, 96, 0.098))
+      drop-shadow(0 0 22px rgba(255, 64, 64, 0.072))
+      drop-shadow(0 0 42px rgba(255, 47, 47, 0.05));
   }
 
   100% {

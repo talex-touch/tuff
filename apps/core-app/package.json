@@ -40,6 +40,7 @@
     "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@langchain/anthropic": "^0.3.29",
     "@langchain/core": "^0.3.80",
+    "@langchain/langgraph": "^0.2.25",
     "@langchain/openai": "^0.3.17",
     "@libsql/client": "^0.15.15",
     "@sentry/electron": "^7.6.0",

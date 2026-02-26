@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import type { StoreProviderType } from '@talex-touch/utils/store'
-import {
-  TuffSwitch,
-  TxButton,
-  TxFlipOverlay,
-  TxInput,
-  TxSelect,
-  TxSelectItem
-} from '@talex-touch/tuffex'
+import { TuffSwitch, TxButton, TxInput, TxSelect, TxSelectItem } from '@talex-touch/tuffex'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { vDraggable } from 'vue-draggable-plus'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import { appSetting } from '~/modules/channel/storage'
 import { storeSourcesStorage } from '~/modules/storage/store-sources'
@@ -193,172 +187,167 @@ watch(
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
-      v-model="visible"
-      :source="source"
-      :header-title="t('store.sourceEditor.title')"
-      :header-desc="t('store.sourceEditor.subtitle')"
-    >
-      <template #header-actions>
-        <TxButton variant="flat" size="sm" @click="openCreateDialog($event)">
-          <div class="i-carbon-add" />
-          <span>{{ t('store.sourceEditor.addSource') }}</span>
-        </TxButton>
-      </template>
-      <template #default>
-        <div class="StoreSourceEditor">
-          <div class="StoreSourceEditor-Container">
-            <TouchScroll native no-padding class="StoreSourceEditor-Scroller">
-              <TransitionGroup
-                v-draggable="[sources, draggableOptions]"
-                name="source-flip"
-                tag="div"
-                class="StoreSourceEditor-Content"
-              >
-                <div
-                  v-for="item in sortableSources"
-                  :key="item.id"
-                  :class="{ 'is-disabled': item.enabled === false }"
-                  class="StoreSourceEditor-Content-Item Item"
-                >
-                  <div class="handle" />
-                  <div class="GhostTitle">{{ item.name }}</div>
-
-                  <div class="Item-Container">
-                    <div class="Item-Title">
-                      {{ item.name }}<span class="adapter">({{ item.type }})</span>
-                      <span v-if="item.readOnly" class="readonly-badge">
-                        {{ t('store.sourceEditor.readonlyBadge') }}
-                      </span>
-                    </div>
-                    <div class="Item-Desc">
-                      {{ item.url }}
-                    </div>
-                  </div>
-                  <div class="Item-Actions">
-                    <TuffSwitch
-                      :model-value="item.enabled !== false"
-                      size="small"
-                      @change="toggleSource(item.id)"
-                    />
-                    <div
-                      :class="{ disabled: sources.length === 1 || item.readOnly }"
-                      class="transition-cubic action-btn"
-                      @click="deleteSource(item.id)"
-                    >
-                      <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
-                      <div v-else class="i-carbon-carbon-for-salesforce" />
-                    </div>
-                  </div>
-                </div>
-              </TransitionGroup>
-
-              <div v-if="hiddenOutdatedCount > 0" class="StoreSourceEditor-Hint">
-                {{
-                  t('store.sourceEditor.outdatedHiddenHint', {
-                    count: hiddenOutdatedCount
-                  })
-                }}
-              </div>
-
+  <FlipDialog
+    v-model="visible"
+    :reference="source"
+    :header-title="t('store.sourceEditor.title')"
+    :header-desc="t('store.sourceEditor.subtitle')"
+    size="lg"
+  >
+    <template #header-actions>
+      <TxButton variant="flat" size="sm" @click="openCreateDialog($event)">
+        <div class="i-carbon-add" />
+        <span>{{ t('store.sourceEditor.addSource') }}</span>
+      </TxButton>
+    </template>
+    <template #default>
+      <div class="StoreSourceEditor">
+        <div class="StoreSourceEditor-Container">
+          <TouchScroll native no-padding class="StoreSourceEditor-Scroller">
+            <TransitionGroup
+              v-draggable="[sources, draggableOptions]"
+              name="source-flip"
+              tag="div"
+              class="StoreSourceEditor-Content"
+            >
               <div
-                v-if="visibleOutdatedSources.length > 0"
-                class="StoreSourceEditor-OutdatedSection"
+                v-for="item in sortableSources"
+                :key="item.id"
+                :class="{ 'is-disabled': item.enabled === false }"
+                class="StoreSourceEditor-Content-Item Item"
               >
-                <div class="StoreSourceEditor-SectionTitle">
-                  {{ t('store.sourceEditor.outdatedSection') }}
-                </div>
-                <div
-                  v-for="item in visibleOutdatedSources"
-                  :key="item.id"
-                  :class="{ 'is-disabled': item.enabled === false }"
-                  class="StoreSourceEditor-Content-Item Item is-outdated-item"
-                >
-                  <div class="handle disabled" />
-                  <div class="Item-Container">
-                    <div class="Item-Title">
-                      {{ item.name }}<span class="adapter">({{ item.type }})</span>
-                      <span v-if="item.readOnly" class="readonly-badge">
-                        {{ t('store.sourceEditor.readonlyBadge') }}
-                      </span>
-                      <span class="outdated-badge">{{
-                        t('store.sourceEditor.outdatedBadge')
-                      }}</span>
-                    </div>
-                    <div class="Item-Desc">
-                      {{ item.url }}
-                    </div>
+                <div class="handle" />
+                <div class="GhostTitle">{{ item.name }}</div>
+
+                <div class="Item-Container">
+                  <div class="Item-Title">
+                    {{ item.name }}<span class="adapter">({{ item.type }})</span>
+                    <span v-if="item.readOnly" class="readonly-badge">
+                      {{ t('store.sourceEditor.readonlyBadge') }}
+                    </span>
                   </div>
-                  <div class="Item-Actions">
-                    <TuffSwitch
-                      :model-value="item.enabled !== false"
-                      size="small"
-                      @change="toggleSource(item.id)"
-                    />
-                    <div
-                      :class="{ disabled: sources.length === 1 || item.readOnly }"
-                      class="transition-cubic action-btn"
-                      @click="deleteSource(item.id)"
-                    >
-                      <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
-                      <div v-else class="i-carbon-carbon-for-salesforce" />
-                    </div>
+                  <div class="Item-Desc">
+                    {{ item.url }}
+                  </div>
+                </div>
+                <div class="Item-Actions">
+                  <TuffSwitch
+                    :model-value="item.enabled !== false"
+                    size="small"
+                    @change="toggleSource(item.id)"
+                  />
+                  <div
+                    :class="{ disabled: sources.length === 1 || item.readOnly }"
+                    class="transition-cubic action-btn"
+                    @click="deleteSource(item.id)"
+                  >
+                    <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
+                    <div v-else class="i-carbon-carbon-for-salesforce" />
                   </div>
                 </div>
               </div>
-            </TouchScroll>
-          </div>
-        </div>
-      </template>
-    </TxFlipOverlay>
+            </TransitionGroup>
 
-    <TxFlipOverlay
-      v-model="showCreateDialog"
-      :source="createDialogSource"
-      :header-title="t('store.sourceEditor.addDialogTitle')"
-    >
-      <template #default>
-        <div class="StoreSourceEditor-AddDialog">
-          <div class="CreateRow">
-            <TxInput
-              v-model="newSource.name"
-              class="CreateNameInput"
-              clearable
-              :placeholder="t('store.sourceEditor.namePlaceholder')"
-            />
-            <TxSelect v-model="newSource.type" class="CreateTypeSelect" eager>
-              <TxSelectItem
-                v-for="option in providerTypeOptions"
-                :key="option.value"
-                :value="option.value"
+            <div v-if="hiddenOutdatedCount > 0" class="StoreSourceEditor-Hint">
+              {{
+                t('store.sourceEditor.outdatedHiddenHint', {
+                  count: hiddenOutdatedCount
+                })
+              }}
+            </div>
+
+            <div v-if="visibleOutdatedSources.length > 0" class="StoreSourceEditor-OutdatedSection">
+              <div class="StoreSourceEditor-SectionTitle">
+                {{ t('store.sourceEditor.outdatedSection') }}
+              </div>
+              <div
+                v-for="item in visibleOutdatedSources"
+                :key="item.id"
+                :class="{ 'is-disabled': item.enabled === false }"
+                class="StoreSourceEditor-Content-Item Item is-outdated-item"
               >
-                {{ option.label }}
-              </TxSelectItem>
-            </TxSelect>
-          </div>
-
-          <div class="CreateRow mt-2">
-            <TxInput
-              v-model="newSource.url"
-              class="CreateUrlInput"
-              clearable
-              :placeholder="t('store.sourceEditor.urlPlaceholder')"
-            />
-          </div>
-
-          <div class="CreateActions">
-            <TxButton variant="flat" size="sm" @click="closeCreateDialog(true)">
-              {{ t('store.sourceEditor.cancel') }}
-            </TxButton>
-            <TxButton variant="flat" size="sm" type="primary" @click="handleAdd()">
-              {{ t('store.sourceEditor.add') }}
-            </TxButton>
-          </div>
+                <div class="handle disabled" />
+                <div class="Item-Container">
+                  <div class="Item-Title">
+                    {{ item.name }}<span class="adapter">({{ item.type }})</span>
+                    <span v-if="item.readOnly" class="readonly-badge">
+                      {{ t('store.sourceEditor.readonlyBadge') }}
+                    </span>
+                    <span class="outdated-badge">{{ t('store.sourceEditor.outdatedBadge') }}</span>
+                  </div>
+                  <div class="Item-Desc">
+                    {{ item.url }}
+                  </div>
+                </div>
+                <div class="Item-Actions">
+                  <TuffSwitch
+                    :model-value="item.enabled !== false"
+                    size="small"
+                    @change="toggleSource(item.id)"
+                  />
+                  <div
+                    :class="{ disabled: sources.length === 1 || item.readOnly }"
+                    class="transition-cubic action-btn"
+                    @click="deleteSource(item.id)"
+                  >
+                    <div v-if="sources.length !== 1 && !item.readOnly" class="i-carbon-close" />
+                    <div v-else class="i-carbon-carbon-for-salesforce" />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TouchScroll>
         </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+      </div>
+    </template>
+  </FlipDialog>
+
+  <FlipDialog
+    v-model="showCreateDialog"
+    :reference="createDialogSource"
+    :header-title="t('store.sourceEditor.addDialogTitle')"
+    size="lg"
+  >
+    <template #default>
+      <div class="StoreSourceEditor-AddDialog">
+        <div class="CreateRow">
+          <TxInput
+            v-model="newSource.name"
+            class="CreateNameInput"
+            clearable
+            :placeholder="t('store.sourceEditor.namePlaceholder')"
+          />
+          <TxSelect v-model="newSource.type" class="CreateTypeSelect" eager>
+            <TxSelectItem
+              v-for="option in providerTypeOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </TxSelectItem>
+          </TxSelect>
+        </div>
+
+        <div class="CreateRow mt-2">
+          <TxInput
+            v-model="newSource.url"
+            class="CreateUrlInput"
+            clearable
+            :placeholder="t('store.sourceEditor.urlPlaceholder')"
+          />
+        </div>
+
+        <div class="CreateActions">
+          <TxButton variant="flat" size="sm" @click="closeCreateDialog(true)">
+            {{ t('store.sourceEditor.cancel') }}
+          </TxButton>
+          <TxButton variant="flat" size="sm" type="primary" @click="handleAdd()">
+            {{ t('store.sourceEditor.add') }}
+          </TxButton>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style scoped lang="scss">

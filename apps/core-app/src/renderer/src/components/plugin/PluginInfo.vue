@@ -1,6 +1,6 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
-import { TxBottomDialog, TxFlipOverlay, TxSplitButton } from '@talex-touch/tuffex'
+import { TxBottomDialog, TxSplitButton } from '@talex-touch/tuffex'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginFab from '~/components/plugin/PluginFab.vue'
 import StatusIcon from '~/components/base/StatusIcon.vue'
 import TvTabItem from '~/components/tabs/vertical/TvTabItem.vue'
@@ -439,21 +440,20 @@ console.log(props)
       @click="openIssuesOverlay"
     />
 
-    <Teleport to="body">
-      <TxFlipOverlay
-        v-model="showIssuesOverlay"
-        v-model:expanded="issuesOverlayExpanded"
-        v-model:animating="issuesOverlayAnimating"
-        :source="issueFabRef"
-        :header-title="t('plugin.tabs.issues')"
-      >
-        <template #default>
-          <div class="PluginInfo-IssuesDialog">
-            <PluginIssues :plugin="plugin" />
-          </div>
-        </template>
-      </TxFlipOverlay>
-    </Teleport>
+    <FlipDialog
+      v-model="showIssuesOverlay"
+      v-model:expanded="issuesOverlayExpanded"
+      v-model:animating="issuesOverlayAnimating"
+      :reference="issueFabRef"
+      :header-title="t('plugin.tabs.issues')"
+      size="lg"
+    >
+      <template #default>
+        <div class="PluginInfo-IssuesDialog">
+          <PluginIssues :plugin="plugin" />
+        </div>
+      </template>
+    </FlipDialog>
 
     <TxBottomDialog
       v-if="uninstallConfirmVisible"

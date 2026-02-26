@@ -1,9 +1,9 @@
 <script lang="ts" name="Store" setup>
 import type { StorePluginListItem } from '~/composables/store/useStoreData'
-import { TxFlipOverlay } from '@talex-touch/tuffex'
 import { usePlatformSdk } from '@talex-touch/utils/renderer'
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import StoreGridView from '~/components/store/StoreGridView.vue'
 import StoreHeader from '~/components/store/StoreHeader.vue'
 import StoreInstallButton from '~/components/store/StoreInstallButton.vue'
@@ -273,40 +273,39 @@ onMounted(() => {
 
   <StoreSourceEditor v-model="sourceEditorShow" :source="sourceEditorSource" />
 
-  <Teleport to="body">
-    <TxFlipOverlay
-      v-model="detailVisible"
-      :source="detailOverlaySource"
-      @closed="closePluginDetail"
-    >
-      <template #header-display>
-        <StorePluginMetaHeader v-if="activeDetailPlugin" :plugin="activeDetailPlugin" />
-        <div v-else class="StoreDetailOverlay-HeaderPlaceholder">
-          <p class="StoreDetailOverlay-HeaderTitle">
-            {{ selectedPluginId || 'Plugin Details' }}
-          </p>
-        </div>
-      </template>
-      <template #header-actions>
-        <StoreInstallButton
-          v-if="activeDetailPlugin"
-          :plugin-name="activeDetailPlugin.name"
-          :is-installed="activeDetailPluginStatus.isInstalled"
-          :has-upgrade="activeDetailPluginStatus.hasUpgrade"
-          :installed-version="activeDetailPluginStatus.installedVersion"
-          :store-version="activeDetailPluginStatus.storeVersion"
-          :install-task="activeDetailInstallTask"
-          :mini="false"
-          @install="onInstallActiveDetail"
-        />
-      </template>
-      <StoreDetailOverlay
-        :plugin-id="selectedPluginId"
-        :provider-id="selectedProviderId"
-        @close="closePluginDetail"
+  <FlipDialog
+    v-model="detailVisible"
+    :reference="detailOverlaySource"
+    size="lg"
+    @closed="closePluginDetail"
+  >
+    <template #header-display>
+      <StorePluginMetaHeader v-if="activeDetailPlugin" :plugin="activeDetailPlugin" />
+      <div v-else class="StoreDetailOverlay-HeaderPlaceholder">
+        <p class="StoreDetailOverlay-HeaderTitle">
+          {{ selectedPluginId || 'Plugin Details' }}
+        </p>
+      </div>
+    </template>
+    <template #header-actions>
+      <StoreInstallButton
+        v-if="activeDetailPlugin"
+        :plugin-name="activeDetailPlugin.name"
+        :is-installed="activeDetailPluginStatus.isInstalled"
+        :has-upgrade="activeDetailPluginStatus.hasUpgrade"
+        :installed-version="activeDetailPluginStatus.installedVersion"
+        :store-version="activeDetailPluginStatus.storeVersion"
+        :install-task="activeDetailInstallTask"
+        :mini="false"
+        @install="onInstallActiveDetail"
       />
-    </TxFlipOverlay>
-  </Teleport>
+    </template>
+    <StoreDetailOverlay
+      :plugin-id="selectedPluginId"
+      :provider-id="selectedProviderId"
+      @close="closePluginDetail"
+    />
+  </FlipDialog>
 </template>
 
 <style lang="scss" scoped>
