@@ -4,9 +4,9 @@ import type {
   IntelligenceMessage,
   IntelligenceProviderConfig,
   TuffIntelligenceApprovalTicket,
-  TuffIntelligenceSession,
+  TuffIntelligenceAgentSession,
   TuffIntelligenceStateSnapshot,
-  TuffIntelligenceTraceEvent,
+  TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceTurn,
 } from '../../../types/intelligence'
 import type { ITuffTransport } from '../../types'
@@ -98,44 +98,49 @@ export interface IntelligenceChatRequest {
   metadata?: Record<string, unknown>
 }
 
-export interface IntelligenceSessionStartPayload {
+export interface IntelligenceAgentSessionStartPayload {
   sessionId?: string
   objective?: string
   context?: Record<string, unknown>
   metadata?: Record<string, unknown>
+  autoRunGraph?: boolean
+  maxSteps?: number
+  toolBudget?: number
+  continueOnError?: boolean
+  reflectNotes?: string
 }
 
-export interface IntelligenceSessionResumePayload {
+export interface IntelligenceAgentSessionResumePayload {
   sessionId: string
 }
 
-export interface IntelligenceSessionCancelPayload {
+export interface IntelligenceAgentSessionCancelPayload {
   sessionId: string
   reason?: string
 }
 
-export interface IntelligenceSessionStatePayload {
+export interface IntelligenceAgentSessionStatePayload {
   sessionId: string
 }
 
-export interface IntelligenceSessionHeartbeatPayload {
+export interface IntelligenceAgentSessionHeartbeatPayload {
   sessionId: string
 }
 
-export interface IntelligenceSessionPausePayload {
+export interface IntelligenceAgentSessionPausePayload {
   sessionId: string
   reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
   note?: string
 }
 
-export interface IntelligenceOrchestratorPlanPayload {
+export interface IntelligenceAgentPlanPayload {
   sessionId: string
   objective: string
   context?: Record<string, unknown>
   metadata?: Record<string, unknown>
 }
 
-export interface IntelligenceOrchestratorExecutePayload {
+export interface IntelligenceAgentExecutePayload {
   sessionId: string
   turnId?: string
   maxSteps?: number
@@ -144,13 +149,13 @@ export interface IntelligenceOrchestratorExecutePayload {
   metadata?: Record<string, unknown>
 }
 
-export interface IntelligenceOrchestratorReflectPayload {
+export interface IntelligenceAgentReflectPayload {
   sessionId: string
   turnId: string
   notes?: string
 }
 
-export interface IntelligenceToolCallPayload {
+export interface IntelligenceAgentToolCallPayload {
   sessionId: string
   turnId?: string
   actionId?: string
@@ -162,7 +167,7 @@ export interface IntelligenceToolCallPayload {
   metadata?: Record<string, unknown>
 }
 
-export interface IntelligenceToolResultPayload {
+export interface IntelligenceAgentToolResultPayload {
   sessionId: string
   turnId?: string
   toolId: string
@@ -172,22 +177,27 @@ export interface IntelligenceToolResultPayload {
   metadata?: Record<string, unknown>
 }
 
-export interface IntelligenceToolApprovePayload {
+export interface IntelligenceAgentToolApprovePayload {
   ticketId: string
   approved: boolean
   approvedBy?: string
   reason?: string
 }
 
-export interface IntelligenceTraceQueryPayload {
+export interface IntelligenceAgentTraceQueryPayload {
   sessionId: string
   fromSeq?: number
   limit?: number
-  level?: TuffIntelligenceTraceEvent['level']
-  type?: TuffIntelligenceTraceEvent['type']
+  level?: TuffIntelligenceAgentTraceEvent['level']
+  type?: TuffIntelligenceAgentTraceEvent['type']
 }
 
-export interface IntelligenceTraceExportPayload {
+export interface IntelligenceAgentSessionHistoryPayload {
+  limit?: number
+  status?: TuffIntelligenceAgentSession['status']
+}
+
+export interface IntelligenceAgentTraceExportPayload {
   sessionId: string
   format?: 'json' | 'jsonl'
 }
@@ -232,31 +242,32 @@ export interface IntelligenceSdk {
     callerType?: IntelligenceQuotaConfig['callerType']
   }) => Promise<IntelligenceCurrentUsage>
 
-  sessionStart: (payload?: IntelligenceSessionStartPayload) => Promise<TuffIntelligenceSession>
-  sessionHeartbeat: (payload: IntelligenceSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
-  sessionPause: (payload: IntelligenceSessionPausePayload) => Promise<unknown>
-  sessionRecoverable: () => Promise<unknown>
-  sessionResume: (payload: IntelligenceSessionResumePayload) => Promise<TuffIntelligenceSession | null>
-  sessionCancel: (payload: IntelligenceSessionCancelPayload) => Promise<TuffIntelligenceStateSnapshot | null>
-  sessionGetState: (payload: IntelligenceSessionStatePayload) => Promise<TuffIntelligenceStateSnapshot | null>
+  agentSessionStart: (payload?: IntelligenceAgentSessionStartPayload) => Promise<TuffIntelligenceAgentSession>
+  agentSessionHeartbeat: (payload: IntelligenceAgentSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
+  agentSessionPause: (payload: IntelligenceAgentSessionPausePayload) => Promise<TuffIntelligenceAgentSession | null>
+  agentSessionRecoverable: () => Promise<TuffIntelligenceAgentSession | null>
+  agentSessionResume: (payload: IntelligenceAgentSessionResumePayload) => Promise<TuffIntelligenceAgentSession | null>
+  agentSessionCancel: (payload: IntelligenceAgentSessionCancelPayload) => Promise<TuffIntelligenceStateSnapshot | null>
+  agentSessionGetState: (payload: IntelligenceAgentSessionStatePayload) => Promise<TuffIntelligenceStateSnapshot | null>
 
-  orchestratorPlan: (payload: IntelligenceOrchestratorPlanPayload) => Promise<TuffIntelligenceTurn>
-  orchestratorExecute: (payload: IntelligenceOrchestratorExecutePayload) => Promise<TuffIntelligenceTurn>
-  orchestratorReflect: (payload: IntelligenceOrchestratorReflectPayload) => Promise<TuffIntelligenceTurn>
+  agentPlan: (payload: IntelligenceAgentPlanPayload) => Promise<TuffIntelligenceTurn>
+  agentExecute: (payload: IntelligenceAgentExecutePayload) => Promise<TuffIntelligenceTurn>
+  agentReflect: (payload: IntelligenceAgentReflectPayload) => Promise<TuffIntelligenceTurn>
 
-  toolCall: (payload: IntelligenceToolCallPayload) => Promise<{
+  agentToolCall: (payload: IntelligenceAgentToolCallPayload) => Promise<{
     success: boolean
     output?: unknown
     error?: string
     approvalTicket?: TuffIntelligenceApprovalTicket
-    traceEvent: TuffIntelligenceTraceEvent
+    traceEvent: TuffIntelligenceAgentTraceEvent
   }>
-  toolResult: (payload: IntelligenceToolResultPayload) => Promise<{ accepted: boolean }>
-  toolApprove: (payload: IntelligenceToolApprovePayload) => Promise<TuffIntelligenceApprovalTicket | null>
+  agentToolResult: (payload: IntelligenceAgentToolResultPayload) => Promise<{ accepted: boolean }>
+  agentToolApprove: (payload: IntelligenceAgentToolApprovePayload) => Promise<TuffIntelligenceApprovalTicket | null>
 
-  traceStream: (payload: IntelligenceTraceQueryPayload) => Promise<TuffIntelligenceTraceEvent[]>
-  traceQuery: (payload: IntelligenceTraceQueryPayload) => Promise<TuffIntelligenceTraceEvent[]>
-  traceExport: (payload: IntelligenceTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
+  agentSessionStream: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
+  agentSessionHistory: (payload?: IntelligenceAgentSessionHistoryPayload) => Promise<TuffIntelligenceAgentSession[]>
+  agentSessionTrace: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
+  agentSessionTraceExport: (payload: IntelligenceAgentTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
 }
 
 export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'>
@@ -355,90 +366,95 @@ const intelligenceGetCurrentUsageEvent = defineRawEvent<
 >('intelligence:get-current-usage')
 
 const intelligenceSessionStartEvent = defineRawEvent<
-  IntelligenceSessionStartPayload,
-  IntelligenceApiResponse<TuffIntelligenceSession>
->('intelligence:session:start')
+  IntelligenceAgentSessionStartPayload,
+  IntelligenceApiResponse<TuffIntelligenceAgentSession>
+>('intelligence:agent:session:start')
 
 const intelligenceSessionHeartbeatEvent = defineRawEvent<
-  IntelligenceSessionHeartbeatPayload,
+  IntelligenceAgentSessionHeartbeatPayload,
   IntelligenceApiResponse<{ sessionId: string, heartbeatAt: string }>
->('intelligence:session:heartbeat')
+>('intelligence:agent:session:heartbeat')
 
 const intelligenceSessionPauseEvent = defineRawEvent<
-  IntelligenceSessionPausePayload,
-  IntelligenceApiResponse<unknown>
->('intelligence:session:pause')
+  IntelligenceAgentSessionPausePayload,
+  IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:pause')
 
 const intelligenceSessionRecoverableEvent = defineRawEvent<
   void,
-  IntelligenceApiResponse<unknown>
->('intelligence:session:recoverable')
+  IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:recoverable')
 
 const intelligenceSessionResumeEvent = defineRawEvent<
-  IntelligenceSessionResumePayload,
-  IntelligenceApiResponse<TuffIntelligenceSession | null>
->('intelligence:session:resume')
+  IntelligenceAgentSessionResumePayload,
+  IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+>('intelligence:agent:session:resume')
 
 const intelligenceSessionCancelEvent = defineRawEvent<
-  IntelligenceSessionCancelPayload,
+  IntelligenceAgentSessionCancelPayload,
   IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:session:cancel')
+>('intelligence:agent:session:cancel')
 
 const intelligenceSessionGetStateEvent = defineRawEvent<
-  IntelligenceSessionStatePayload,
+  IntelligenceAgentSessionStatePayload,
   IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
->('intelligence:session:get-state')
+>('intelligence:agent:session:get-state')
 
 const intelligenceOrchestratorPlanEvent = defineRawEvent<
-  IntelligenceOrchestratorPlanPayload,
+  IntelligenceAgentPlanPayload,
   IntelligenceApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:plan')
+>('intelligence:agent:plan')
 
 const intelligenceOrchestratorExecuteEvent = defineRawEvent<
-  IntelligenceOrchestratorExecutePayload,
+  IntelligenceAgentExecutePayload,
   IntelligenceApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:execute')
+>('intelligence:agent:execute')
 
 const intelligenceOrchestratorReflectEvent = defineRawEvent<
-  IntelligenceOrchestratorReflectPayload,
+  IntelligenceAgentReflectPayload,
   IntelligenceApiResponse<TuffIntelligenceTurn>
->('intelligence:orchestrator:reflect')
+>('intelligence:agent:reflect')
 
 const intelligenceToolCallEvent = defineRawEvent<
-  IntelligenceToolCallPayload,
+  IntelligenceAgentToolCallPayload,
   IntelligenceApiResponse<{
     success: boolean
     output?: unknown
     error?: string
     approvalTicket?: TuffIntelligenceApprovalTicket
-    traceEvent: TuffIntelligenceTraceEvent
+    traceEvent: TuffIntelligenceAgentTraceEvent
   }>
->('intelligence:tool:call')
+>('intelligence:agent:tool:call')
 
 const intelligenceToolResultEvent = defineRawEvent<
-  IntelligenceToolResultPayload,
+  IntelligenceAgentToolResultPayload,
   IntelligenceApiResponse<{ accepted: boolean }>
->('intelligence:tool:result')
+>('intelligence:agent:tool:result')
 
 const intelligenceToolApproveEvent = defineRawEvent<
-  IntelligenceToolApprovePayload,
+  IntelligenceAgentToolApprovePayload,
   IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
->('intelligence:tool:approve')
+>('intelligence:agent:tool:approve')
 
-const intelligenceTraceStreamEvent = defineRawEvent<
-  IntelligenceTraceQueryPayload,
-  IntelligenceApiResponse<TuffIntelligenceTraceEvent[]>
->('intelligence:trace:stream')
+const intelligenceSessionStreamEvent = defineRawEvent<
+  IntelligenceAgentTraceQueryPayload,
+  IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+>('intelligence:agent:session:stream')
 
-const intelligenceTraceQueryEvent = defineRawEvent<
-  IntelligenceTraceQueryPayload,
-  IntelligenceApiResponse<TuffIntelligenceTraceEvent[]>
->('intelligence:trace:query')
+const intelligenceSessionHistoryEvent = defineRawEvent<
+  IntelligenceAgentSessionHistoryPayload | undefined,
+  IntelligenceApiResponse<TuffIntelligenceAgentSession[]>
+>('intelligence:agent:session:history')
 
-const intelligenceTraceExportEvent = defineRawEvent<
-  IntelligenceTraceExportPayload,
+const intelligenceSessionTraceEvent = defineRawEvent<
+  IntelligenceAgentTraceQueryPayload,
+  IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+>('intelligence:agent:session:trace')
+
+const intelligenceSessionTraceExportEvent = defineRawEvent<
+  IntelligenceAgentTraceExportPayload,
   IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
->('intelligence:trace:export')
+>('intelligence:agent:session:trace:export')
 
 function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
   if (!response?.ok) {
@@ -533,83 +549,88 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       return assertApiResponse(response, 'Failed to get current usage')
     },
 
-    async sessionStart(payload = {}) {
+    async agentSessionStart(payload = {}) {
       const response = await transport.send(intelligenceSessionStartEvent, payload)
       return assertApiResponse(response, 'Failed to start intelligence session')
     },
 
-    async sessionHeartbeat(payload) {
+    async agentSessionHeartbeat(payload) {
       const response = await transport.send(intelligenceSessionHeartbeatEvent, payload)
       return assertApiResponse(response, 'Failed to send intelligence heartbeat')
     },
 
-    async sessionPause(payload) {
+    async agentSessionPause(payload) {
       const response = await transport.send(intelligenceSessionPauseEvent, payload)
       return assertApiResponse(response, 'Failed to pause intelligence session')
     },
 
-    async sessionRecoverable() {
+    async agentSessionRecoverable() {
       const response = await transport.send(intelligenceSessionRecoverableEvent)
       return assertApiResponse(response, 'Failed to fetch recoverable intelligence session')
     },
 
-    async sessionResume(payload) {
+    async agentSessionResume(payload) {
       const response = await transport.send(intelligenceSessionResumeEvent, payload)
       return assertApiResponse(response, 'Failed to resume intelligence session')
     },
 
-    async sessionCancel(payload) {
+    async agentSessionCancel(payload) {
       const response = await transport.send(intelligenceSessionCancelEvent, payload)
       return assertApiResponse(response, 'Failed to cancel intelligence session')
     },
 
-    async sessionGetState(payload) {
+    async agentSessionGetState(payload) {
       const response = await transport.send(intelligenceSessionGetStateEvent, payload)
       return assertApiResponse(response, 'Failed to get intelligence session state')
     },
 
-    async orchestratorPlan(payload) {
+    async agentPlan(payload) {
       const response = await transport.send(intelligenceOrchestratorPlanEvent, payload)
       return assertApiResponse(response, 'Failed to create intelligence plan')
     },
 
-    async orchestratorExecute(payload) {
+    async agentExecute(payload) {
       const response = await transport.send(intelligenceOrchestratorExecuteEvent, payload)
       return assertApiResponse(response, 'Failed to execute intelligence plan')
     },
 
-    async orchestratorReflect(payload) {
+    async agentReflect(payload) {
       const response = await transport.send(intelligenceOrchestratorReflectEvent, payload)
       return assertApiResponse(response, 'Failed to reflect intelligence result')
     },
 
-    async toolCall(payload) {
+    async agentToolCall(payload) {
       const response = await transport.send(intelligenceToolCallEvent, payload)
       return assertApiResponse(response, 'Failed to call intelligence tool')
     },
 
-    async toolResult(payload) {
+    async agentToolResult(payload) {
       const response = await transport.send(intelligenceToolResultEvent, payload)
       return assertApiResponse(response, 'Failed to report intelligence tool result')
     },
 
-    async toolApprove(payload) {
+    async agentToolApprove(payload) {
       const response = await transport.send(intelligenceToolApproveEvent, payload)
       return assertApiResponse(response, 'Failed to approve intelligence tool')
     },
 
-    async traceStream(payload) {
-      const response = await transport.send(intelligenceTraceStreamEvent, payload)
+    async agentSessionStream(payload) {
+      const response = await transport.send(intelligenceSessionStreamEvent, payload)
       return assertApiResponse(response, 'Failed to stream intelligence trace')
     },
 
-    async traceQuery(payload) {
-      const response = await transport.send(intelligenceTraceQueryEvent, payload)
+    async agentSessionHistory(payload = {}) {
+      const response = await transport.send(intelligenceSessionHistoryEvent, payload)
+      return assertApiResponse(response, 'Failed to query intelligence session history')
+    },
+
+    async agentSessionTrace(payload) {
+      const response = await transport.send(intelligenceSessionTraceEvent, payload)
       return assertApiResponse(response, 'Failed to query intelligence trace')
     },
 
-    async traceExport(payload) {
-      const response = await transport.send(intelligenceTraceExportEvent, payload)
+    async agentSessionTraceExport(payload) {
+      const response = await transport.send(intelligenceSessionTraceExportEvent, payload)
       return assertApiResponse(response, 'Failed to export intelligence trace')
     },
   }

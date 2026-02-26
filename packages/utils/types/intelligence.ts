@@ -1122,6 +1122,104 @@ export interface PromptTemplate {
   updatedAt?: number
 }
 
+export type IntelligencePromptScope = 'global' | 'capability' | 'provider'
+
+export type IntelligencePromptStatus = 'active' | 'deprecated'
+
+export interface IntelligencePromptRecord {
+  id: string
+  version: string
+  template: string
+  name?: string
+  description?: string
+  variablesSchema?: PromptVariable[]
+  scope: IntelligencePromptScope
+  status: IntelligencePromptStatus
+  capabilityId?: string
+  providerId?: string
+  channel?: 'stable' | 'latest'
+  tags?: string[]
+  metadata?: Record<string, any>
+  createdAt?: number
+  updatedAt?: number
+}
+
+export interface IntelligencePromptBinding {
+  capabilityId: string
+  promptId: string
+  promptVersion?: string
+  channel?: 'stable' | 'latest'
+  providerId?: string
+  metadata?: Record<string, any>
+}
+
+export interface IntelligencePromptRegistryQuery {
+  scope?: IntelligencePromptScope
+  capabilityId?: string
+  providerId?: string
+  status?: IntelligencePromptStatus
+  limit?: number
+}
+
+export interface IntelligencePromptBindingQuery {
+  capabilityId?: string
+}
+
+export interface IntelligencePromptRegistryUpsertPayload {
+  record: IntelligencePromptRecord
+}
+
+export interface IntelligencePromptRegistryDeletePayload {
+  id: string
+  version?: string
+}
+
+export interface IntelligencePromptBindingUpsertPayload {
+  binding: IntelligencePromptBinding
+}
+
+export interface IntelligencePromptBindingDeletePayload {
+  capabilityId: string
+  providerId?: string
+}
+
+export interface IntelligencePromptRegistryListResponse {
+  prompts: IntelligencePromptRecord[]
+}
+
+export interface IntelligencePromptBindingListResponse {
+  bindings: IntelligencePromptBinding[]
+}
+
+export const TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION = 1 as const
+
+export interface IntelligenceProviderSyncRecord {
+  id: string
+  type: string
+  name: string
+  enabled: boolean
+  hasApiKey: boolean
+  baseUrl: string | null
+  models: string[]
+  defaultModel: string | null
+  instructions: string | null
+  timeout: number
+  priority: number
+  rateLimit: Record<string, number> | null
+  capabilities: string[] | null
+  metadata: Record<string, unknown> | null
+  updatedAt: string
+}
+
+export interface IntelligenceProviderSyncPayload {
+  schemaVersion: typeof TUFF_INTELLIGENCE_PROVIDER_SYNC_SCHEMA_VERSION
+  source: 'nexus'
+  exportedAt: string
+  providers: IntelligenceProviderSyncRecord[]
+}
+
+export const TUFF_INTELLIGENCE_AGENT_TRACE_CONTRACT_VERSION = 3 as const
+
 export interface PromptStep {
   id: string
   name: string
@@ -1215,6 +1313,7 @@ export type TuffIntelligenceSessionStatus
     | 'planned'
     | 'executing'
     | 'reflecting'
+    | 'finalizing'
     | 'waiting_approval'
     | 'paused_disconnect'
     | 'resuming'
@@ -1226,7 +1325,7 @@ export type TuffIntelligenceActionStatus = 'pending' | 'running' | 'completed' |
 
 export interface TuffIntelligenceActionNode {
   id: string
-  type: 'intent' | 'plan' | 'tool' | 'agent' | 'capability' | 'reflect' | 'result'
+  type: 'intent' | 'plan' | 'tool' | 'agent' | 'capability' | 'reflect' | 'finalize' | 'result'
   title: string
   status: TuffIntelligenceActionStatus
   capabilityId?: string
@@ -1331,6 +1430,22 @@ export interface TuffIntelligenceStateSnapshot {
   updatedAt: number
 }
 
+export interface TuffIntelligenceAgentSession extends TuffIntelligenceSession {}
+
+export interface TuffIntelligenceAgentAction extends TuffIntelligenceActionNode {}
+
+export interface TuffIntelligenceAgentPlan {
+  sessionId: string
+  turnId: string
+  objective: string
+  actions: TuffIntelligenceAgentAction[]
+  metadata?: Record<string, any>
+}
+
+export interface TuffIntelligenceAgentTraceEvent extends TuffIntelligenceTraceEvent {
+  contractVersion?: 3
+}
+
 // ============================================================================
 // Agent System
 // ============================================================================
@@ -1417,6 +1532,10 @@ export interface IntelligenceSDKConfig {
   cacheExpiration?: number
   /** Capability routing configurations. */
   capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>
+  /** Prompt registry records. */
+  promptRegistry?: IntelligencePromptRecord[]
+  /** Capability prompt bindings. */
+  promptBindings?: IntelligencePromptBinding[]
 }
 
 /**
@@ -1491,6 +1610,8 @@ export interface IntelligenceCapabilityRoutingConfig {
   providers: IntelligenceCapabilityProviderBinding[]
   /** Prompt template. */
   promptTemplate?: string
+  /** Prompt binding reference. */
+  promptBinding?: IntelligencePromptBinding
   /** Test resource directory. */
   testResourceDir?: string
   /** Additional metadata. */
@@ -1512,6 +1633,10 @@ export interface IntelligenceSDKPersistedConfig {
   }
   /** Capability configurations. */
   capabilities?: Record<string, IntelligenceCapabilityRoutingConfig>
+  /** Prompt registry records. */
+  promptRegistry?: IntelligencePromptRecord[]
+  /** Capability prompt bindings. */
+  promptBindings?: IntelligencePromptBinding[]
   /** Configuration version. */
   version: number
 }
@@ -1651,6 +1776,8 @@ export interface IntelligenceCapabilityConfig {
   providers: IntelligenceCapabilityProviderBinding[]
   /** Prompt template. */
   promptTemplate?: string
+  /** Prompt binding reference. */
+  promptBinding?: IntelligencePromptBinding
   /** Test resource directory. */
   testResourceDir?: string
   /** Additional metadata. */
@@ -1667,6 +1794,10 @@ export interface IntelligenceStorageData {
   globalConfig: IntelligenceGlobalConfig
   /** Capability configurations. */
   capabilities: Record<string, IntelligenceCapabilityConfig>
+  /** Prompt registry records. */
+  promptRegistry?: IntelligencePromptRecord[]
+  /** Capability prompt bindings. */
+  promptBindings?: IntelligencePromptBinding[]
   /** Data version. */
   version: number
 }

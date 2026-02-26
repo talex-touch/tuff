@@ -33,6 +33,8 @@ import type {
   IntelligenceKeywordsExtractPayload,
   IntelligenceKeywordsExtractResult,
   IntelligenceMessage,
+  IntelligencePromptBinding,
+  IntelligencePromptRecord,
   IntelligenceProviderAdapter,
   IntelligenceProviderConfig,
   IntelligenceProviderManagerAdapter,
@@ -275,7 +277,9 @@ export class TuffIntelligenceSDK {
     enableAudit: true,
     enableCache: false,
     enableQuota: true,
-    capabilities: {}
+    capabilities: {},
+    promptRegistry: [],
+    promptBindings: []
   }
 
   private cache = new Map<
@@ -304,6 +308,14 @@ export class TuffIntelligenceSDK {
         ...this.config.capabilities,
         ...config.capabilities
       }
+    }
+
+    if (config.promptRegistry) {
+      nextConfig.promptRegistry = [...config.promptRegistry]
+    }
+
+    if (config.promptBindings) {
+      nextConfig.promptBindings = [...config.promptBindings]
     }
 
     if (config.defaultStrategy) {
@@ -485,6 +497,72 @@ export class TuffIntelligenceSDK {
     }
   }
 
+  private resolvePromptRecord(
+    binding: IntelligencePromptBinding
+  ): IntelligencePromptRecord | undefined {
+    const registry = this.config.promptRegistry ?? []
+    const candidates = registry.filter((item) => {
+      if (item.id !== binding.promptId) return false
+      if (item.status !== 'active') return false
+      if (binding.providerId && item.providerId && item.providerId !== binding.providerId) {
+        return false
+      }
+      return true
+    })
+
+    if (candidates.length <= 0) {
+      return undefined
+    }
+
+    if (binding.promptVersion) {
+      return candidates.find((item) => item.version === binding.promptVersion)
+    }
+
+    return [...candidates].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0]
+  }
+
+  private normalizePromptBindingCapability(
+    capabilityId: string,
+    binding: IntelligencePromptBinding
+  ): IntelligencePromptBinding {
+    const { capabilityId: _ignored, ...rest } = binding
+    return {
+      capabilityId,
+      ...rest
+    }
+  }
+
+  private resolvePromptTemplateByBinding(
+    capabilityId: string,
+    metadataBinding?: IntelligencePromptBinding
+  ): string | undefined {
+    const capabilityRouting = this.config.capabilities?.[capabilityId]
+    const orderedBindings: IntelligencePromptBinding[] = []
+
+    if (metadataBinding?.promptId) {
+      orderedBindings.push(this.normalizePromptBindingCapability(capabilityId, metadataBinding))
+    }
+    if (capabilityRouting?.promptBinding?.promptId) {
+      orderedBindings.push(
+        this.normalizePromptBindingCapability(capabilityId, capabilityRouting.promptBinding)
+      )
+    }
+    for (const binding of this.config.promptBindings ?? []) {
+      if (binding.capabilityId === capabilityId) {
+        orderedBindings.push(binding)
+      }
+    }
+
+    for (const binding of orderedBindings) {
+      const record = this.resolvePromptRecord(binding)
+      if (record?.template) {
+        return record.template
+      }
+    }
+
+    return capabilityRouting?.promptTemplate
+  }
+
   private prepareRuntimeOptions(
     capabilityId: string,
     options: IntelligenceInvokeOptions
@@ -530,8 +608,12 @@ export class TuffIntelligenceSDK {
       }
     }
 
+    const metadataPromptBinding = options.metadata?.promptBinding as
+      | IntelligencePromptBinding
+      | undefined
     const promptTemplate =
-      (options.metadata?.promptTemplate as string | undefined) ?? capabilityRouting?.promptTemplate
+      (options.metadata?.promptTemplate as string | undefined) ??
+      this.resolvePromptTemplateByBinding(capabilityId, metadataPromptBinding)
     const promptVariables = options.metadata?.promptVariables as Record<string, unknown> | undefined
 
     return {

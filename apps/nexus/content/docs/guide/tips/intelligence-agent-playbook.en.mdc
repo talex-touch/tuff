@@ -1,0 +1,43 @@
+# Intelligence Agent Playbook
+
+This playbook targets power users and operators who want Tuff Intelligence to run repeatable multi-step execution flows, not one-off chats.
+
+## When to Use Agent Mode
+
+- The task is multi-step (analyze → execute → validate).
+- Tool calls are required (account, credits, settings, plugin actions).
+- Risk approval is needed for destructive or sensitive operations.
+- You need replayable traces for quality review.
+
+## Standard Operating Flow
+
+1. **Define objective** in one sentence.
+2. **Set constraints** for provider/model/tool scope.
+3. **Review plan** (planner action list) before execution.
+4. **Approve risky actions** before they run.
+5. **Run reflection** and add follow-up actions when needed.
+
+## Provider & Prompt Practices
+
+- Configure at least two providers for core capabilities (`text.chat`, `content.extract`) with fallback.
+- Keep prompts as reusable templates bound to capabilities.
+- Version prompts that change frequently (date or semantic version in title).
+
+## Recommended Templates
+
+- **Ops Triage**: intent analysis → account/credits snapshot → risk list → next actions.
+- **Content Pipeline**: input text → structured extraction → quality check → publish draft.
+- **Dev Collaboration**: task decomposition → tool execution → failure convergence → rollback hints.
+
+## Common Pitfalls
+
+- Single provider only: rate limits/timeouts break the full run.
+- No approval gate for risky tools: increases accidental damage probability.
+- Prompt not capability-bound: behavior drifts across entry points.
+
+## Pre-Launch Checklist
+
+- Fallback provider is configured and tested.
+- High-risk tools are approval-gated.
+- Critical prompts are versioned and rollback-ready.
+- Trace logs can pinpoint action/tool/provider.

@@ -4,12 +4,15 @@
 
 ## 阅读顺序
 1. 《智能工作流》：搭建跨插件任务链。
-2. 《智能提示词》：用清晰、稳定的输入提升结果质量。
-3. 《自动化控制》：掌握 CoreBox 指令与快捷键。
-4. 《效率面板》：组合 Widget、同步和模板。
-5. 《FAQ》：常见问题快速定位。
+2. 《Agent 实战手册》：把“计划-执行-反思”跑通并可复盘。
+3. 《智能提示词》：用清晰、稳定的输入提升结果质量。
+4. 《自动化控制》：掌握 CoreBox 指令与快捷键。
+5. 《效率面板》：组合 Widget、同步和模板。
+6. 《FAQ》：常见问题快速定位。
 
 ## 统一技巧
 - 尽量通过 CoreBox 搜索命令，一次击键直达动作。
 - 用 Workflow 模板取代人工操作，配合诊断面板实时排查。
 - 所有高级设置都支持 Workspace 级别的差异化策略。
+- 若你在调试模型行为，优先从 LangChain trace 与 session trace 对照定位，而不是直接比对 provider 原始响应。
+- 在 `/dashboard/admin/intelligence-agent` 使用 Prompt Registry 面板统一维护 prompt record + capability binding，避免 capability 内联 prompt 漂移。

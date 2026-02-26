@@ -1,0 +1,62 @@
+# LangChain Agent Orchestration Plan
+
+This page describes the **LangChain/LangGraph Agent migration plan** for Tuff Intelligence, replacing scattered hand-written orchestration in Core-App and Nexus.
+
+## Goals
+
+- Standardize the `Plan → Execute → Reflect` lifecycle.
+- Reuse one tool-call / approval / tracing contract across Core-App and Nexus Lab.
+- Make provider routing, prompt injection, fallback, and audit behavior graph-driven and testable.
+
+## Current Gaps
+
+- Core-App already has `intelligence-sdk.ts` and `packages/tuff-intelligence/src/graph.ts`, but agent flow is not fully unified under one graph runtime.
+- Nexus `tuffIntelligenceLabService.ts` still carries stage-specific orchestration logic (planner / executor / reflector / follow-up).
+- Prompt/provider/capability settings are persisted in multiple places, causing behavior drift between runtimes.
+
+## Target Architecture
+
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    UI["Core-App / Nexus UI"] --> API["Intelligence SDK API"]
+    API --> ORCH["LangGraph Orchestrator"]
+    ORCH --> PLAN["Planner Node"]
+    PLAN --> EXEC["Executor Node"]
+    EXEC --> TOOL["Tool Router + Approval Gate"]
+    TOOL --> EXEC
+    EXEC --> REFL["Reflector Node"]
+    REFL --> FINAL["Final Response Node"]
+    ORCH --> STORE["Unified Config + Audit Store"]
+---
+:::
+
+## Proposed Node Responsibilities
+
+- `Planner Node`: compiles user objective into an action graph (risk level + dependency edges).
+- `Executor Node`: runs capability/tool/sub-agent actions with unified retry + fallback.
+- `Approval Gate Node`: emits `approval_ticket` for risky tools and pauses the session.
+- `Reflector Node`: evaluates output quality and triggers follow-up actions when needed.
+- `Finalizer Node`: emits final response and runtime metrics.
+
+## Mapping to Existing Code
+
+- Orchestration core: `packages/tuff-intelligence/src/graph.ts`
+- LangChain bridge: `packages/tuff-intelligence/src/langchain-bridge.ts`
+- Core-App runtime: `apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- Nexus Lab runtime: `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+## Minimal Rollout Path
+
+1. Extract Nexus planner/executor/reflector into reusable `TuffGraphStep`s with API compatibility kept.
+2. Unify tool approval contract around `TuffIntelligenceApprovalTicket`.
+3. Move provider routing + prompt injection into explicit graph nodes.
+4. Run dual-path tracing in gray rollout, then switch primary path after parity.
+
+## Acceptance Criteria
+
+- Same objective yields equivalent action graph/provider routing in Core-App and Nexus.
+- High-risk tools always go through approval queue.
+- Planner/Executor/Reflector steps produce replayable trace events.
+- Critical scenarios pass: fallback, pause/resume, approval approve/reject, stream reconnect.

@@ -4,6 +4,39 @@
 
 ## 2026-02-26
 
+### Tuff Intelligence Planner 超时与重试策略收口
+
+**变更类型**: 运行稳定性修复 / Agent 执行策略细化
+
+**描述**: 修复 Lab 实测中 planner 在 30s 超时直接失败且无有效重试的问题。统一将 Agent provider 调用超时下限收敛为 45s，并补齐“仅可重试错误”的单 provider 重试一次策略，避免短超时抖动导致编排链路提前中断。
+
+**主要变更**:
+1. Provider 调用超时下限统一为 `45_000ms`（即使 provider 配置为 30s，也会在 agent 调用链中按 45s 执行）。
+2. 调用失败新增 retryable 判定（timeout/429/5xx/网络瞬断等），命中后同 provider 自动重试 1 次。
+3. `retryCount` 指标改为“实际触发重试次数”，并在审计 metadata 中记录 `providerAttempt/retryable/willRetry`。
+
+**修改文件**:
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/server/utils/__tests__/intelligence-agent-policy.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Legacy SyncStore 下线（移除遗留明文同步实现）
+
+**变更类型**: P0 风险收口 / 架构清理
+
+**描述**: 下线 `apps/nexus/server/utils/syncStore.ts`，移除遗留 `/api/sync/*` 时代的明文 `value_json` 同步实现，避免后续新功能误接入旧存储路径。当前同步能力继续仅保留 `/api/v1/sync/*` 主链路。
+
+**主要变更**:
+1. 删除 `apps/nexus/server/utils/syncStore.ts`（legacy 明文同步实现）。
+2. 同步更新风险待办描述，明确 `syncStore.ts` 已清理，后续仅剩 `authStore.ts` 中历史 `value_json` 写入兼容清理。
+3. 清理 `mergeUsers` 对 `sync_items` 的 `value_json` 明文写入 SQL，改为仅通过时间优先规则做冲突删除 + `user_id` 迁移，不再显式写 `value_json`。
+
+**修改文件**:
+- `apps/nexus/server/utils/syncStore.ts`（删除）
+- `apps/nexus/server/utils/authStore.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### FlipDialog 透传属性失效修复（遮罩误关根因）
 
 **变更类型**: P1 行为修复 / 组件封装稳定性修复
@@ -66,6 +99,7 @@
 3. **交互提示补充**：遮罩区域增加 `not-allowed` 光标，明确“当前不可通过遮罩关闭”。
 4. **danger 阴影慢淡出**：局部 warning glow 动画时长从 `720ms` 拉长到 `980ms`，并新增中段衰减关键帧（`52%`）让淡出更平缓。
 5. **整卡弹动替代内层弹动**：禁用 API Key 场景下内层 `TxFlipOverlay-Shell` 的 focus 动画，改为在 `FlipDialog-Card` 上做整卡 scale 弹动，反馈更整体。
+6. **关闭入口回归内置**：移除 API Key 页面手写 close 按钮，改为使用 `FlipDialog/TxFlipOverlay` 内置 header close，并透传 `headerTitle/headerDesc/closeAriaLabel`。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/api-keys.vue`

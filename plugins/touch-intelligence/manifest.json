@@ -21,7 +21,7 @@
   },
   "features": [
     {
-      "id": "intelligence.ask",
+      "id": "intelligence-ask",
       "name": "智能问答",
       "desc": "输入问题后直接调用 AI 回答",
       "icon": {

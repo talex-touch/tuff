@@ -3,11 +3,6 @@ import { readFile } from 'node:fs/promises'
 import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
-  IntelligenceStreamChunk,
-  IntelligenceUsageInfo,
-  IntelligenceChatPayload,
-  IntelligenceEmbeddingPayload,
-  IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
 } from '@talex-touch/utils'
@@ -18,126 +13,15 @@ import {
   type NativeOcrBlock
 } from '@talex-touch/tuff-native'
 import { enterPerfContext } from '../../../utils/perf-context'
-import { IntelligenceProvider } from '../runtime/base-provider'
+import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
-export class LocalProvider extends IntelligenceProvider {
+export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   readonly type = IntelligenceProviderType.LOCAL
 
-  private get baseUrl(): string {
-    if (!this.config.baseUrl) {
-      throw new Error('[LocalProvider] baseUrl is required')
-    }
-    return this.config.baseUrl
-  }
-
-  async chat(
-    payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
-  ): Promise<IntelligenceInvokeResult<string>> {
-    const startTime = Date.now()
-    const traceId = this.generateTraceId()
-
-    const response = await fetch(`${this.baseUrl}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: options.modelPreference?.[0] || this.config.defaultModel,
-        messages: payload.messages
-      }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
-    })
-
-    if (!response.ok) {
-      throw new Error(`Local provider error: ${response.status} ${response.statusText}`)
-    }
-
-    const data = await this.parseJsonResponse<{
-      result?: string
-      usage?: IntelligenceUsageInfo
-      model?: string
-    }>(response, { endpoint: '/chat' })
-    const latency = Date.now() - startTime
-
-    const usage: IntelligenceUsageInfo = data.usage || {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0
-    }
-
-    return {
-      result: data.result || '',
-      usage,
-      model: data.model || options.modelPreference?.[0] || 'local',
-      latency,
-      traceId,
-      provider: this.type
-    }
-  }
-
-  async *chatStream(
-    payload: IntelligenceChatPayload,
-    options: IntelligenceInvokeOptions
-  ): AsyncGenerator<IntelligenceStreamChunk> {
-    const result = await this.chat(payload, options)
-    yield {
-      delta: result.result ?? '',
-      done: true,
-      usage: result.usage
-    }
-  }
-
-  async embedding(
-    payload: IntelligenceEmbeddingPayload,
-    options: IntelligenceInvokeOptions
-  ): Promise<IntelligenceInvokeResult<number[]>> {
-    const startTime = Date.now()
-    const traceId = this.generateTraceId()
-
-    const response = await fetch(`${this.baseUrl}/embedding`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: payload.model || this.config.defaultModel,
-        input: payload.text
-      }),
-      signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
-    })
-
-    if (!response.ok) {
-      throw new Error(`Local provider embedding error: ${response.status} ${response.statusText}`)
-    }
-
-    const data = await this.parseJsonResponse<{
-      embedding?: number[]
-      usage?: IntelligenceUsageInfo
-      model?: string
-    }>(response, { endpoint: '/embedding' })
-    const latency = Date.now() - startTime
-
-    return {
-      result: data.embedding || [],
-      usage: data.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      model: data.model || payload.model || 'local',
-      latency,
-      traceId,
-      provider: this.type
-    }
-  }
-
-  async translate(
-    payload: IntelligenceTranslatePayload,
-    options: IntelligenceInvokeOptions
-  ): Promise<IntelligenceInvokeResult<string>> {
-    return this.chat(
-      {
-        messages: [
-          { role: 'system', content: `Translate text to ${payload.targetLang}` },
-          { role: 'user', content: payload.text }
-        ]
-      },
-      options
-    )
-  }
+  protected readonly defaultBaseUrl = 'http://localhost:11434'
+  protected readonly defaultChatModel = 'llama3.1'
+  protected readonly defaultEmbeddingModel = 'nomic-embed-text'
+  protected readonly requireApiKey = false
 
   async visionOcr(
     payload: IntelligenceVisionOcrPayload,

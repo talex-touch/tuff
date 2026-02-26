@@ -1,0 +1,62 @@
+# LangChain Agent 自动编排方案
+
+本页给出 Tuff Intelligence 的 **LangChain/LangGraph Agent 化落地方案**，用于替代当前分散在 Core-App 与 Nexus 的手写编排逻辑。
+
+## 目标
+
+- 统一 `Plan → Execute → Reflect` 生命周期，减少重复 orchestration 代码。
+- 复用同一套工具调用/审批/追踪协议，打通 Core-App 与 Nexus Lab。
+- 让 provider 选择、prompt 注入、fallback 与审计在图节点内可观测、可测试。
+
+## 当前痛点（现状梳理）
+
+- Core-App 已有 `intelligence-sdk.ts` 与 `packages/tuff-intelligence/src/graph.ts`，但 Agent 流程未完全收敛到统一 graph runtime。
+- Nexus `tuffIntelligenceLabService.ts` 仍维护较多手写阶段逻辑（planner / executor / reflector / follow-up）。
+- Prompt、provider、capability 配置在多处存储，导致同一能力在不同端行为不一致。
+
+## 目标架构
+
+:::TuffCodeBlock{lang="mermaid"}
+---
+code: |
+  flowchart LR
+    UI["Core-App / Nexus UI"] --> API["Intelligence SDK API"]
+    API --> ORCH["LangGraph Orchestrator"]
+    ORCH --> PLAN["Planner Node"]
+    PLAN --> EXEC["Executor Node"]
+    EXEC --> TOOL["Tool Router + Approval Gate"]
+    TOOL --> EXEC
+    EXEC --> REFL["Reflector Node"]
+    REFL --> FINAL["Final Response Node"]
+    ORCH --> STORE["Unified Config + Audit Store"]
+---
+:::
+
+## 节点职责（建议）
+
+- `Planner Node`：将用户 objective 编译为结构化 action graph（含风险级别与依赖边）。
+- `Executor Node`：执行 capability / tool / 子 agent，统一重试与 fallback。
+- `Approval Gate Node`：对高风险工具输出 `approval_ticket` 并暂停会话。
+- `Reflector Node`：汇总结果质量，必要时触发补充 action。
+- `Finalizer Node`：生成最终回复与运行指标（latency、fallbackCount、toolFailureDistribution）。
+
+## 与现有代码映射
+
+- 编排内核：`packages/tuff-intelligence/src/graph.ts`
+- LangChain bridge：`packages/tuff-intelligence/src/langchain-bridge.ts`
+- Core-App 运行时：`apps/core-app/src/main/modules/ai/intelligence-sdk.ts`
+- Nexus Lab 运行时：`apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+
+## 最小实施路径（建议）
+
+1. 提炼 Nexus planner/executor/reflector 为 `TuffGraphStep`，先保持现有接口不变。
+2. 将 tool 审批协议统一到 `TuffIntelligenceApprovalTicket`（复用现有类型）。
+3. 把 provider 选择与 prompt 注入前移为标准节点，移除分散的手写分支。
+4. 通过 trace event 保持新旧链路并跑一段灰度，达到 parity 后切主链路。
+
+## 验收标准
+
+- 同一 objective 在 Core-App/Nexus 的 action graph 与 provider 选择结果一致。
+- 高风险工具均进入审批队列，不允许绕过。
+- Planner/Executor/Reflector 节点具备可回放 trace（可用于故障复盘）。
+- 关键链路覆盖用例：fallback、pause/resume、approval approve/reject、stream reconnect。

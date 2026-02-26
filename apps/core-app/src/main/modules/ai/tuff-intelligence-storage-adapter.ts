@@ -7,6 +7,8 @@ import type {
 import type {
   IntelligenceAuditLog,
   IntelligenceCapabilityConfig,
+  IntelligencePromptBinding,
+  IntelligencePromptRecord,
   IntelligenceProviderConfig,
   PromptTemplate
 } from '@talex-touch/utils/types/intelligence'
@@ -22,7 +24,9 @@ import { intelligenceQuotaManager } from './intelligence-quota-manager'
 const CONFIG_KEYS = {
   providers: 'intelligence/providers',
   capabilities: 'intelligence/capabilities',
-  prompts: 'intelligence/prompts'
+  prompts: 'intelligence/prompts',
+  promptRegistry: 'intelligence/prompt-registry',
+  promptBindings: 'intelligence/prompt-bindings'
 } as const
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
@@ -190,13 +194,41 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
     const idx = list.findIndex((p) => p.id === prompt.id)
     if (idx >= 0) list[idx] = prompt
     else list.push(prompt)
-
     await upsertConfig(CONFIG_KEYS.prompts, list)
+
+    const version = prompt.version || '1.0.0'
+    await this.savePromptRecord({
+      id: prompt.id,
+      version,
+      name: prompt.name,
+      description: prompt.description,
+      template: prompt.template,
+      variablesSchema: prompt.variables,
+      scope: 'global',
+      status: 'active',
+      createdAt: prompt.createdAt,
+      updatedAt: prompt.updatedAt ?? Date.now()
+    })
   }
 
   async listPrompts(): Promise<PromptTemplate[]> {
     const raw = await readConfigValue(CONFIG_KEYS.prompts)
-    return parseJson<PromptTemplate[]>(raw, [])
+    const legacyPrompts = parseJson<PromptTemplate[]>(raw, [])
+    if (legacyPrompts.length > 0) {
+      return legacyPrompts
+    }
+
+    const records = await this.listPromptRegistry()
+    return records.map((record) => ({
+      id: record.id,
+      name: record.name ?? record.id,
+      description: record.description,
+      template: record.template,
+      variables: record.variablesSchema ?? [],
+      version: record.version,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt
+    }))
   }
 
   async deletePrompt(id: string): Promise<void> {
@@ -204,6 +236,70 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
     await upsertConfig(
       CONFIG_KEYS.prompts,
       list.filter((p) => p.id !== id)
+    )
+    await this.deletePromptRecord(id)
+  }
+
+  async savePromptRecord(prompt: IntelligencePromptRecord): Promise<void> {
+    const list = await this.listPromptRegistry()
+    const idx = list.findIndex((item) => item.id === prompt.id && item.version === prompt.version)
+    if (idx >= 0) list[idx] = prompt
+    else list.push(prompt)
+
+    await upsertConfig(CONFIG_KEYS.promptRegistry, list)
+  }
+
+  async listPromptRegistry(): Promise<IntelligencePromptRecord[]> {
+    const raw = await readConfigValue(CONFIG_KEYS.promptRegistry)
+    return parseJson<IntelligencePromptRecord[]>(raw, [])
+  }
+
+  async deletePromptRecord(id: string, version?: string): Promise<void> {
+    const list = await this.listPromptRegistry()
+    await upsertConfig(
+      CONFIG_KEYS.promptRegistry,
+      list.filter((item) => {
+        if (item.id !== id) {
+          return true
+        }
+        if (!version) {
+          return false
+        }
+        return item.version !== version
+      })
+    )
+  }
+
+  async savePromptBinding(binding: IntelligencePromptBinding): Promise<void> {
+    const list = await this.listPromptBindings()
+    const idx = list.findIndex(
+      (item) =>
+        item.capabilityId === binding.capabilityId &&
+        (item.providerId ?? null) === (binding.providerId ?? null)
+    )
+    if (idx >= 0) list[idx] = binding
+    else list.push(binding)
+    await upsertConfig(CONFIG_KEYS.promptBindings, list)
+  }
+
+  async listPromptBindings(): Promise<IntelligencePromptBinding[]> {
+    const raw = await readConfigValue(CONFIG_KEYS.promptBindings)
+    return parseJson<IntelligencePromptBinding[]>(raw, [])
+  }
+
+  async deletePromptBinding(capabilityId: string, providerId?: string): Promise<void> {
+    const list = await this.listPromptBindings()
+    await upsertConfig(
+      CONFIG_KEYS.promptBindings,
+      list.filter((item) => {
+        if (item.capabilityId !== capabilityId) {
+          return true
+        }
+        if (providerId !== undefined) {
+          return item.providerId !== providerId
+        }
+        return false
+      })
     )
   }
 }

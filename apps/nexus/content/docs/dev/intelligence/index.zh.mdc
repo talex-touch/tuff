@@ -7,6 +7,9 @@
 - **多 Provider 路由**（OpenAI / Anthropic / DeepSeek / SiliconFlow / Local / Custom）
 - **以 Capability 为中心的 API**（`text.chat`, `vision.ocr`, `embedding.generate`, `agent.run` 等）
 - **策略选择**（provider 选择 + fallback 链）
+- **LangChain 统一模型调用层**（Provider 侧不再直连 HTTP，统一通过 LangChain 访问模型）
+- **LangGraph Agent 状态机**（`session.start -> plan -> execute -> reflect -> finalize`）
+- **Prompt Registry 管理面**（`/api/admin/intelligence-agent/prompts*` + `/prompt-bindings*`）
 - **治理能力**
   - Provider / model 兼容性校验
   - API Key 快速失败与路由
@@ -28,5 +31,7 @@
 - API 参考：`/docs/dev/api/intelligence`
 - 架构说明：`/docs/dev/architecture/intelligence-system`
 - 配置指南：`/docs/dev/intelligence/configuration`
+- LangChain Agent 编排：`/docs/dev/intelligence/langchain-agent`
+- 统一 Schema 迁移：`/docs/dev/intelligence/schema-migration`
 - 能力与示例：`/docs/dev/intelligence/capabilities`
 - 排障指南：`/docs/dev/intelligence/troubleshooting`

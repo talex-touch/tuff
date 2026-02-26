@@ -7,6 +7,9 @@ This chapter explains the **Intelligence System** used by Tuff Core-App, and how
 - **Multi-provider routing** (OpenAI / Anthropic / DeepSeek / SiliconFlow / Local / Custom)
 - **Capability-based APIs** (`text.chat`, `vision.ocr`, `embedding.generate`, `agent.run`, ...)
 - **Strategies** (provider selection + fallback chain)
+- **LangChain unified model access layer** (provider execution no longer does direct HTTP calls)
+- **LangGraph agent state machine** (`session.start -> plan -> execute -> reflect -> finalize`)
+- **Prompt Registry admin surface** (`/api/admin/intelligence-agent/prompts*` + `/prompt-bindings*`)
 - **Governance**
   - Provider/model compatibility validation
   - API key fast-fail routing
@@ -28,5 +31,7 @@ This chapter explains the **Intelligence System** used by Tuff Core-App, and how
 - API reference: `/docs/dev/api/intelligence`
 - Architecture: `/docs/dev/architecture/intelligence-system`
 - Configuration: `/docs/dev/intelligence/configuration`
+- LangChain agent orchestration: `/docs/dev/intelligence/langchain-agent`
+- Unified schema migration: `/docs/dev/intelligence/schema-migration`
 - Capabilities & examples: `/docs/dev/intelligence/capabilities`
 - Troubleshooting: `/docs/dev/intelligence/troubleshooting`
