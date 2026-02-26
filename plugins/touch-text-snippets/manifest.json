@@ -21,7 +21,7 @@
   },
   "features": [
     {
-      "id": "text-snippets.search",
+      "id": "text-snippets-search",
       "name": "文本片段",
       "desc": "搜索并复制文本模板",
       "icon": {
@@ -45,7 +45,7 @@
       ]
     },
     {
-      "id": "text-snippets.manage",
+      "id": "text-snippets-manage",
       "name": "文本片段管理",
       "desc": "管理文本片段配置",
       "icon": {

@@ -21,7 +21,7 @@
   },
   "features": [
     {
-      "id": "code-snippets.search",
+      "id": "code-snippets-search",
       "name": "代码片段",
       "desc": "搜索并复制代码模板",
       "icon": {
@@ -45,7 +45,7 @@
       ]
     },
     {
-      "id": "code-snippets.manage",
+      "id": "code-snippets-manage",
       "name": "代码片段管理",
       "desc": "管理代码片段配置",
       "icon": {

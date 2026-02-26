@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "browser.bookmarks",
+      "id": "browser-bookmarks",
       "name": "浏览器收藏",
       "desc": "收藏网址与最近访问",
       "icon": {

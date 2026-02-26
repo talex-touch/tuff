@@ -21,7 +21,7 @@
   },
   "features": [
     {
-      "id": "workspace.scripts",
+      "id": "workspace-scripts",
       "name": "工作区脚本",
       "desc": "读取并执行工作区脚本",
       "icon": {

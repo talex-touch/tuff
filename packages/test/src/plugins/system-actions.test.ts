@@ -126,7 +126,7 @@ describe('system actions plugin', () => {
       globals,
     )
 
-    await pluginModule.onFeatureTriggered('system.actions', '')
+    await pluginModule.onFeatureTriggered('system-actions', '')
     expect(items.length).toBe(1)
     expect(items[0]?.title).toBe('缺少系统权限')
   })
@@ -140,7 +140,7 @@ describe('system actions plugin', () => {
       globals,
     )
 
-    await pluginModule.onFeatureTriggered('system.actions', '不存在的指令')
+    await pluginModule.onFeatureTriggered('system-actions', '不存在的指令')
     expect(items[0]?.title).toBe('没有匹配的系统操作')
   })
 
@@ -153,7 +153,7 @@ describe('system actions plugin', () => {
       globals,
     )
 
-    await pluginModule.onFeatureTriggered('system.actions', '关机')
+    await pluginModule.onFeatureTriggered('system-actions', '关机')
     expect(items.length).toBeGreaterThan(1)
     expect(items[0]?.title).toBe('电源操作')
   })

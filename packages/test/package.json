@@ -2,6 +2,7 @@
   "name": "test",
   "type": "module",
   "version": "1.0.0",
+  "private": true,
   "description": "",
   "author": "TalexDreamSoul",
   "license": "ISC",

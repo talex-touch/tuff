@@ -20,7 +20,7 @@
   },
   "features": [
     {
-      "id": "text-tools.convert",
+      "id": "text-tools-convert",
       "name": "文本工具",
       "desc": "Base64 / URL / JSON / Hash / 大小写",
       "icon": {
