@@ -79,7 +79,7 @@ async function fetchKeys() {
     keys.value = data.keys
   }
   catch (e: any) {
-    error.value = e.data?.message || 'Failed to load API keys'
+    error.value = e.data?.message || t('dashboard.sections.apiKeys.errors.load')
   }
   finally {
     loading.value = false
@@ -123,7 +123,7 @@ async function createKey() {
     await fetchKeys()
   }
   catch (e: any) {
-    error.value = e.data?.message || 'Failed to create API key'
+    error.value = e.data?.message || t('dashboard.sections.apiKeys.errors.create')
   }
   finally {
     creating.value = false
@@ -147,7 +147,7 @@ async function confirmDeleteKey(): Promise<boolean> {
     await fetchKeys()
   }
   catch (e: any) {
-    error.value = e.data?.message || 'Failed to delete API key'
+    error.value = e.data?.message || t('dashboard.sections.apiKeys.errors.delete')
   }
   finally {
     pendingDeleteKeyId.value = null
@@ -176,12 +176,12 @@ const DeleteConfirmDialog = defineComponent({
 
     return () => h('div', { class: 'ApiKeyDeleteDialog' }, [
       h('div', { class: 'ApiKeyDeleteDialog-Header' }, [
-        h('h2', { class: 'ApiKeyDeleteDialog-Title' }, 'Delete API Key'),
-        h('p', { class: 'ApiKeyDeleteDialog-Desc' }, 'Are you sure you want to delete this API key? This action cannot be undone.'),
+        h('h2', { class: 'ApiKeyDeleteDialog-Title' }, t('dashboard.sections.apiKeys.deleteDialog.title')),
+        h('p', { class: 'ApiKeyDeleteDialog-Desc' }, t('dashboard.sections.apiKeys.deleteDialog.description')),
       ]),
       h('div', { class: 'ApiKeyDeleteDialog-Actions' }, [
-        h(TxButton, { variant: 'secondary', size: 'small', 'native-type': 'button', onClick: handleCancel }, { default: () => 'Cancel' }),
-        h(TxButton, { variant: 'danger', size: 'small', 'native-type': 'button', onClick: handleDelete }, { default: () => 'Delete' }),
+        h(TxButton, { variant: 'secondary', size: 'small', 'native-type': 'button', onClick: handleCancel }, { default: () => t('dashboard.sections.apiKeys.cancel') }),
+        h(TxButton, { variant: 'danger', size: 'small', 'native-type': 'button', onClick: handleDelete }, { default: () => t('dashboard.sections.apiKeys.delete') }),
       ]),
     ])
   },
@@ -217,49 +217,87 @@ function isExpired(date: string | null): boolean {
   return new Date(date) < new Date()
 }
 
-const scopeTree: ApiKeyScopeGroup[] = [
+const scopeTree = computed<ApiKeyScopeGroup[]>(() => [
   {
     id: 'plugins',
-    label: 'Plugins',
-    description: 'Manage plugin registry visibility and publishing',
+    label: t('dashboard.sections.apiKeys.scopes.groups.plugins.label'),
+    description: t('dashboard.sections.apiKeys.scopes.groups.plugins.description'),
     children: [
-      { id: 'plugin:read', label: 'Read Plugins', description: 'View plugin information' },
-      { id: 'plugin:publish', label: 'Publish Plugins', description: 'Upload and publish plugins to the store', sensitive: true },
+      {
+        id: 'plugin:read',
+        label: t('dashboard.sections.apiKeys.scopes.items.pluginRead.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.pluginRead.description'),
+      },
+      {
+        id: 'plugin:publish',
+        label: t('dashboard.sections.apiKeys.scopes.items.pluginPublish.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.pluginPublish.description'),
+        sensitive: true,
+      },
     ],
   },
   {
     id: 'account',
-    label: 'Account',
-    description: 'Read account level profile information',
+    label: t('dashboard.sections.apiKeys.scopes.groups.account.label'),
+    description: t('dashboard.sections.apiKeys.scopes.groups.account.description'),
     children: [
-      { id: 'account:read', label: 'Read Account', description: 'View account information' },
+      {
+        id: 'account:read',
+        label: t('dashboard.sections.apiKeys.scopes.items.accountRead.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.accountRead.description'),
+      },
     ],
   },
   {
     id: 'releases',
-    label: 'Releases',
-    description: 'Manage release sync, metadata, publishing and assets',
+    label: t('dashboard.sections.apiKeys.scopes.groups.releases.label'),
+    description: t('dashboard.sections.apiKeys.scopes.groups.releases.description'),
     adminOnly: true,
     children: [
-      { id: 'release:sync', label: 'Sync Releases', description: 'Sync releases, assets, and publish status from CI', sensitive: true },
-      { id: 'release:write', label: 'Write Releases', description: 'Create or update release metadata', sensitive: true },
-      { id: 'release:publish', label: 'Publish Releases', description: 'Publish release notes and channels', sensitive: true },
-      { id: 'release:assets', label: 'Manage Release Assets', description: 'Upload or link release assets', sensitive: true },
-      { id: 'release:news', label: 'Sync Update News', description: 'Create dashboard updates/news records from CI', sensitive: true },
+      {
+        id: 'release:sync',
+        label: t('dashboard.sections.apiKeys.scopes.items.releaseSync.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releaseSync.description'),
+        sensitive: true,
+      },
+      {
+        id: 'release:write',
+        label: t('dashboard.sections.apiKeys.scopes.items.releaseWrite.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releaseWrite.description'),
+        sensitive: true,
+      },
+      {
+        id: 'release:publish',
+        label: t('dashboard.sections.apiKeys.scopes.items.releasePublish.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releasePublish.description'),
+        sensitive: true,
+      },
+      {
+        id: 'release:assets',
+        label: t('dashboard.sections.apiKeys.scopes.items.releaseAssets.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releaseAssets.description'),
+        sensitive: true,
+      },
+      {
+        id: 'release:news',
+        label: t('dashboard.sections.apiKeys.scopes.items.releaseNews.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.releaseNews.description'),
+        sensitive: true,
+      },
     ],
   },
-]
+])
 
-const availableScopeTree = computed(() => scopeTree.filter(group => !group.adminOnly || isAdmin.value))
+const availableScopeTree = computed(() => scopeTree.value.filter(group => !group.adminOnly || isAdmin.value))
 const selectedScopeCount = computed(() => newKeyScopes.value.length)
 
-const expiryOptions = [
-  { value: 'never', label: 'Never expires' },
-  { value: 30, label: '30 days' },
-  { value: 90, label: '90 days' },
-  { value: 180, label: '180 days' },
-  { value: 365, label: '1 year' },
-]
+const expiryOptions = computed(() => [
+  { value: 'never', label: t('dashboard.sections.apiKeys.expiry.never') },
+  { value: 30, label: t('dashboard.sections.apiKeys.expiry.days30') },
+  { value: 90, label: t('dashboard.sections.apiKeys.expiry.days90') },
+  { value: 180, label: t('dashboard.sections.apiKeys.expiry.days180') },
+  { value: 365, label: t('dashboard.sections.apiKeys.expiry.year1') },
+])
 </script>
 
 <template>
@@ -267,17 +305,17 @@ const expiryOptions = [
     <!-- Header -->
     <div>
       <h1 class="apple-heading-md">
-        API Keys
+        {{ t('dashboard.sections.apiKeys.title') }}
       </h1>
       <p class="mt-2 text-sm text-black/50 dark:text-white/50">
-        Manage API keys for CLI tools and integrations
+        {{ t('dashboard.sections.apiKeys.subtitle') }}
       </p>
     </div>
 
     <div v-if="keys.length > 0">
       <TxButton ref="createTriggerRef" variant="primary" @click="openCreateOverlay(createTriggerRef?.$el || null)">
         <span class="i-carbon-add text-base" />
-        Create Key
+        {{ t('dashboard.sections.apiKeys.actions.createKey') }}
       </TxButton>
     </div>
 
@@ -286,17 +324,17 @@ const expiryOptions = [
       <div class="flex items-start justify-between gap-4">
         <div class="flex-1">
           <p class="font-medium text-green-700 dark:text-green-400">
-            API Key Created: {{ newlyCreatedKey.name }}
+            {{ t('dashboard.sections.apiKeys.createdAlert.title', { name: newlyCreatedKey.name }) }}
           </p>
           <p class="mt-1 text-xs text-green-600/80 dark:text-green-400/80">
-            Copy your secret key now. It won't be shown again.
+            {{ t('dashboard.sections.apiKeys.createdAlert.description') }}
           </p>
           <div class="mt-3 flex items-center gap-2">
             <code class="flex-1 rounded bg-black/10 px-3 py-2 font-mono text-xs text-black dark:bg-white/10 dark:text-white">
               {{ newlyCreatedKey.secretKey }}
             </code>
             <TxButton size="small" variant="success" @click="copyKey">
-              {{ copied ? 'Copied!' : 'Copy' }}
+              {{ copied ? t('dashboard.sections.apiKeys.actions.copied') : t('dashboard.sections.apiKeys.actions.copy') }}
             </TxButton>
           </div>
         </div>
@@ -345,15 +383,15 @@ const expiryOptions = [
             <div class="flex items-center gap-2 text-xs text-black/40 dark:text-white/40">
               <code class="font-mono">{{ key.keyPrefix }}</code>
               <span>·</span>
-              <span>Created {{ formatDate(key.createdAt) }}</span>
+              <span>{{ t('dashboard.sections.apiKeys.meta.created', { date: formatDate(key.createdAt) }) }}</span>
               <template v-if="key.lastUsedAt">
                 <span>·</span>
-                <span>Last used {{ formatDate(key.lastUsedAt) }}</span>
+                <span>{{ t('dashboard.sections.apiKeys.meta.lastUsed', { date: formatDate(key.lastUsedAt) }) }}</span>
               </template>
               <template v-if="key.expiresAt">
                 <span>·</span>
                 <span :class="isExpired(key.expiresAt) ? 'text-red-500' : ''">
-                  {{ isExpired(key.expiresAt) ? 'Expired' : `Expires ${formatDate(key.expiresAt)}` }}
+                  {{ isExpired(key.expiresAt) ? t('dashboard.sections.apiKeys.meta.expired') : t('dashboard.sections.apiKeys.meta.expires', { date: formatDate(key.expiresAt) }) }}
                 </span>
               </template>
             </div>
@@ -380,13 +418,13 @@ const expiryOptions = [
         <span class="i-carbon-password text-2xl text-black/30 dark:text-white/30" />
       </div>
       <h3 class="font-medium text-black dark:text-white">
-        No API Keys
+        {{ t('dashboard.sections.apiKeys.empty.title') }}
       </h3>
       <p class="mt-1 text-sm text-black/50 dark:text-white/50">
-        Create an API key to use with tuffcli and other integrations
+        {{ t('dashboard.sections.apiKeys.empty.description') }}
       </p>
       <TxButton ref="emptyCreateTriggerRef" variant="primary" class="mt-4" @click="openCreateOverlay(emptyCreateTriggerRef?.$el || null)">
-        Create Your First Key
+        {{ t('dashboard.sections.apiKeys.empty.cta') }}
       </TxButton>
     </div>
 
@@ -406,19 +444,19 @@ const expiryOptions = [
             <div class="space-y-4">
               <div class="space-y-2">
                 <label class="text-xs text-black/60 dark:text-white/60">
-                  Key Name
+                  {{ t('dashboard.sections.apiKeys.form.nameLabel') }}
                 </label>
                 <TuffInput
                   v-model="newKeyName"
                   type="text"
-                  placeholder="e.g., My Laptop, CI/CD"
+                  :placeholder="t('dashboard.sections.apiKeys.form.namePlaceholder')"
                   class="w-full"
                 />
               </div>
 
               <div class="space-y-2">
                 <label class="text-xs text-black/60 dark:text-white/60">
-                  Permissions
+                  {{ t('dashboard.sections.apiKeys.form.permissionsLabel') }}
                 </label>
                 <div class="ApiKeyScopeTree">
                   <section
@@ -455,7 +493,7 @@ const expiryOptions = [
                               {{ scope.label }}
                             </p>
                             <span v-if="scope.sensitive" class="ApiKeyScopeTree-RiskTag">
-                              不建议
+                              {{ t('dashboard.sections.apiKeys.form.notRecommended') }}
                             </span>
                           </div>
                           <p
@@ -470,16 +508,16 @@ const expiryOptions = [
                   </section>
                 </div>
                 <p class="ApiKeyScopeTree-Count">
-                  Selected permissions: {{ selectedScopeCount }}
+                  {{ t('dashboard.sections.apiKeys.form.selectedCount', { count: selectedScopeCount }) }}
                 </p>
                 <p class="ApiKeyScopeTree-RiskHint">
-                  红色权限属于敏感操作，不建议分配给长期或共享 API Key。
+                  {{ t('dashboard.sections.apiKeys.form.riskHint') }}
                 </p>
               </div>
 
               <div class="space-y-2">
                 <label class="text-xs text-black/60 dark:text-white/60">
-                  Expiration
+                  {{ t('dashboard.sections.apiKeys.form.expirationLabel') }}
                 </label>
                 <TuffSelect v-model="newKeyExpiry" class="w-full">
                   <TuffSelectItem
@@ -494,10 +532,10 @@ const expiryOptions = [
 
             <div class="ApiKeyOverlay-Actions">
               <TxButton variant="secondary" size="small" @click="close">
-                Cancel
+                {{ t('dashboard.sections.apiKeys.cancel') }}
               </TxButton>
               <TxButton variant="primary" size="small" :disabled="!newKeyName.trim() || creating" @click="createKey">
-                {{ creating ? 'Creating...' : 'Create Key' }}
+                {{ creating ? t('dashboard.sections.apiKeys.actions.creating') : t('dashboard.sections.apiKeys.actions.createKey') }}
               </TxButton>
             </div>
           </div>

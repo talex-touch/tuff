@@ -3,7 +3,7 @@ import { requireAdminOrApiKey } from '../../utils/auth'
 import { createReleaseRevision, getReleaseByTag, updateRelease } from '../../utils/releasesStore'
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAdminOrApiKey(event, ['release:sync'])
+  const { userId } = await requireAdminOrApiKey(event, ['release:write'])
 
   const tag = event.context.params?.tag
 

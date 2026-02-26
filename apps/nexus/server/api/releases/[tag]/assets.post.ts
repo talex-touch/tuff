@@ -9,7 +9,7 @@ import { createReleaseAsset, getReleaseByTag } from '../../../utils/releasesStor
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
 export default defineEventHandler(async (event) => {
-  await requireAdminOrApiKey(event, ['release:sync'])
+  await requireAdminOrApiKey(event, ['release:assets'])
 
   const tag = event.context.params?.tag
 

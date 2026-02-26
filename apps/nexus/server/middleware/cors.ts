@@ -1,6 +1,6 @@
 /**
  * CORS middleware for API routes
- * Enables cross-origin requests for the market API endpoints
+ * Enables cross-origin requests for the store API endpoints
  */
 export default defineEventHandler((event) => {
   const path = event.path
