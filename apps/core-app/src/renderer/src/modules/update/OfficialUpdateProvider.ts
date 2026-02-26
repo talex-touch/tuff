@@ -93,7 +93,7 @@ interface NexusLatestResponse {
 export class OfficialUpdateProvider extends UpdateProvider {
   readonly name = 'Official Website'
   readonly type = UpdateProviderType.OFFICIAL
-  private readonly apiUrl = 'https://tuff.talex.link/api/releases'
+  private readonly apiUrl = 'https://tuff.tagzxia.com/api/releases'
   private readonly timeout = 10000
 
   // 检查是否可以处理该配置

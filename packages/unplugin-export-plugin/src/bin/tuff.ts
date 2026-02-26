@@ -50,7 +50,7 @@ _________  _   _  _____  _____
    |_|     \\___/ \\_|    \\_|    
 `
 
-const OFFICIAL_SITE_URL = 'https://tuff.talex.link'
+const OFFICIAL_SITE_URL = 'https://tuff.tagzxia.com'
 const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
 const DEFAULT_LOCAL_BASE_URL = 'http://localhost:3200'
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000

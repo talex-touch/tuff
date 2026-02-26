@@ -43,7 +43,7 @@ export default {
     loginOptionOauth: '浏览器 OAuth 授权',
     loginOptionExit: '退出',
     tokenPrompt: '请输入 Nexus Token:',
-    tokenHint: '在 https://tuff.talex.link/dashboard 获取',
+    tokenHint: '在 https://tuff.tagzxia.com/dashboard 获取',
     tokenInvalid: 'Token 不能为空',
     loginSuccess: '登录完成，已进入主菜单',
     tokenWarning: '请妥善保管 Token，避免泄露。',

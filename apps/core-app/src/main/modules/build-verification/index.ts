@@ -113,7 +113,7 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   private resolveApiBase(): string {
-    return process.env.TUFF_RELEASE_API_URL || 'https://tuff.talex.link/api/releases'
+    return process.env.TUFF_RELEASE_API_URL || 'https://tuff.tagzxia.com/api/releases'
   }
 
   private async fetchReleaseByTag(apiBase: string, tag: string): Promise<BuildReleaseInfo | null> {
