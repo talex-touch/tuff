@@ -1,18 +1,13 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { StorageStats } from '@talex-touch/utils/types/storage'
-import {
-  TxBottomDialog,
-  TxButton,
-  TxFlipOverlay,
-  TxProgressBar,
-  TxStatCard
-} from '@talex-touch/tuffex'
+import { TxBottomDialog, TxButton, TxProgressBar, TxStatCard } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
@@ -437,188 +432,183 @@ watch(
       </TuffBlockSlot>
     </TuffGroupBlock>
 
-    <Teleport to="body">
-      <TxFlipOverlay
-        v-model="detailsVisible"
-        :source="detailsSource"
-        :header-title="t('plugin.storage.details.title')"
-        :header-desc="
-          t('plugin.storage.details.description', {
-            files: storageStats.fileCount || 0,
-            directories: storageStats.dirCount || 0
-          })
-        "
-      >
-        <template #default>
-          <div class="PluginStorageDetails-Panel">
-            <div class="PluginStorageDetails-Body">
-              <div class="PluginStorage-Card flex-1 min-h-0 overflow-hidden flex flex-col">
-                <div class="PluginStorage-CardHeader flex items-center justify-between">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <i class="i-ri-folder-5-line text-xl text-[var(--tx-color-primary)]" />
-                    <h3 class="text-lg font-semibold text-[var(--tx-text-color-primary)]">
-                      {{ t('plugin.storage.title') }}
-                    </h3>
-                    <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
-                      {{ storagePath }}
-                    </span>
-                  </div>
-
-                  <div class="flex items-center gap-2">
-                    <TxButton
-                      size="small"
-                      type="primary"
-                      plain
-                      icon="i-ri-refresh-line"
-                      :loading="loading"
-                      @click="refreshData"
-                    >
-                      {{ t('plugin.storage.actions.refresh') }}
-                    </TxButton>
-                    <TxButton
-                      size="small"
-                      plain
-                      icon="i-ri-edit-line"
-                      :disabled="loading"
-                      @click="handleOpenInEditor"
-                    >
-                      {{ t('plugin.storage.actions.openInEditor') }}
-                    </TxButton>
-                    <TxButton
-                      size="small"
-                      plain
-                      icon="i-ri-folder-open-line"
-                      :disabled="loading"
-                      @click="handleOpenFolder"
-                    >
-                      {{ t('plugin.storage.actions.openFolder') }}
-                    </TxButton>
-                    <TxButton
-                      size="small"
-                      type="danger"
-                      plain
-                      icon="i-ri-delete-bin-2-line"
-                      :loading="clearing"
-                      :disabled="loading"
-                      @click="handleClearStorage"
-                    >
-                      {{ t('plugin.storage.actions.clearAll') }}
-                    </TxButton>
-                  </div>
+    <FlipDialog
+      v-model="detailsVisible"
+      :reference="detailsSource"
+      :header-title="t('plugin.storage.details.title')"
+      :header-desc="
+        t('plugin.storage.details.description', {
+          files: storageStats.fileCount || 0,
+          directories: storageStats.dirCount || 0
+        })
+      "
+      size="lg"
+    >
+      <template #default>
+        <div class="PluginStorageDetails-Panel">
+          <div class="PluginStorageDetails-Body">
+            <div class="PluginStorage-Card flex-1 min-h-0 overflow-hidden flex flex-col">
+              <div class="PluginStorage-CardHeader flex items-center justify-between">
+                <div class="flex items-center gap-2 min-w-0">
+                  <i class="i-ri-folder-5-line text-xl text-[var(--tx-color-primary)]" />
+                  <h3 class="text-lg font-semibold text-[var(--tx-text-color-primary)]">
+                    {{ t('plugin.storage.title') }}
+                  </h3>
+                  <span v-if="storagePath" class="PluginStorage-Path" :title="storagePathFull">
+                    {{ storagePath }}
+                  </span>
                 </div>
 
-                <div class="PluginStorageDetails-TableWrap mt-4 flex-1 min-h-0">
-                  <div
-                    v-if="loading"
-                    class="h-full flex items-center justify-center text-sm text-[var(--tx-text-color-secondary)]"
+                <div class="flex items-center gap-2">
+                  <TxButton
+                    size="small"
+                    type="primary"
+                    plain
+                    icon="i-ri-refresh-line"
+                    :loading="loading"
+                    @click="refreshData"
                   >
-                    <i class="i-ri-loader-4-line animate-spin mr-2" />
-                    {{ t('plugin.storage.loading') }}
-                  </div>
-
-                  <div
-                    v-else-if="entries.length === 0"
-                    class="PluginStorage-Empty h-full flex items-center justify-center border border-dashed border-[var(--tx-border-color-lighter)] rounded-2xl"
+                    {{ t('plugin.storage.actions.refresh') }}
+                  </TxButton>
+                  <TxButton
+                    size="small"
+                    plain
+                    icon="i-ri-edit-line"
+                    :disabled="loading"
+                    @click="handleOpenInEditor"
                   >
-                    <div class="flex flex-col items-center text-center px-6">
-                      <div class="PluginStorage-EmptyIcon">
-                        <i class="i-ri-inbox-archive-line" />
-                      </div>
-                      <div class="text-sm font-semibold text-[var(--tx-text-color-primary)]">
-                        {{ t('plugin.storage.empty.title') }}
-                      </div>
-                      <div class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
-                        {{ t('plugin.storage.empty.description') }}
-                      </div>
-                    </div>
-                  </div>
+                    {{ t('plugin.storage.actions.openInEditor') }}
+                  </TxButton>
+                  <TxButton
+                    size="small"
+                    plain
+                    icon="i-ri-folder-open-line"
+                    :disabled="loading"
+                    @click="handleOpenFolder"
+                  >
+                    {{ t('plugin.storage.actions.openFolder') }}
+                  </TxButton>
+                  <TxButton
+                    size="small"
+                    type="danger"
+                    plain
+                    icon="i-ri-delete-bin-2-line"
+                    :loading="clearing"
+                    :disabled="loading"
+                    @click="handleClearStorage"
+                  >
+                    {{ t('plugin.storage.actions.clearAll') }}
+                  </TxButton>
+                </div>
+              </div>
 
-                  <div v-else class="h-full flex flex-col overflow-hidden">
-                    <div class="PluginStorage-TableHeader">
-                      <div>{{ t('plugin.storage.table.name') }}</div>
-                      <div>{{ t('plugin.storage.table.type') }}</div>
-                      <div>{{ t('plugin.storage.table.size') }}</div>
-                      <div>{{ t('plugin.storage.table.lastModified') }}</div>
-                      <div class="text-right">{{ t('plugin.storage.table.actions') }}</div>
-                    </div>
-                    <TouchScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
-                      <div class="divide-y divide-[var(--tx-border-color-lighter)]">
-                        <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
-                          <div class="flex items-center gap-3 min-w-0">
-                            <i
-                              class="text-lg"
-                              :class="getEntryIcon(entry)"
-                              :style="{ color: getEntryColor(entry) }"
-                            />
-                            <div class="min-w-0">
-                              <div
-                                class="text-sm font-medium text-[var(--tx-text-color-primary)] truncate"
-                              >
-                                {{ entry.name }}
-                              </div>
-                              <div class="text-xs text-[var(--tx-text-color-secondary)] truncate">
-                                {{ entry.path }}
-                              </div>
-                            </div>
-                          </div>
-                          <div class="text-xs text-[var(--tx-text-color-secondary)]">
-                            {{ getEntryTypeLabel(entry) }}
-                          </div>
-                          <div class="text-xs text-[var(--tx-text-color-secondary)]">
-                            {{ entry.type === 'directory' ? '--' : formatSize(entry.size) }}
-                          </div>
-                          <div class="text-xs text-[var(--tx-text-color-secondary)]">
-                            {{ formatDate(entry.modified) }}
-                          </div>
-                          <div class="text-xs text-right text-[var(--tx-text-color-secondary)]">
-                            --
-                          </div>
-                        </div>
-                      </div>
-                    </TouchScroll>
-                  </div>
+              <div class="PluginStorageDetails-TableWrap mt-4 flex-1 min-h-0">
+                <div
+                  v-if="loading"
+                  class="h-full flex items-center justify-center text-sm text-[var(--tx-text-color-secondary)]"
+                >
+                  <i class="i-ri-loader-4-line animate-spin mr-2" />
+                  {{ t('plugin.storage.loading') }}
                 </div>
 
                 <div
-                  class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--tx-border-color-lighter)]"
+                  v-else-if="entries.length === 0"
+                  class="PluginStorage-Empty h-full flex items-center justify-center border border-dashed border-[var(--tx-border-color-lighter)] rounded-2xl"
                 >
-                  <div
-                    class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]"
-                  >
-                    <span class="flex items-center gap-1">
-                      <i
-                        class="i-ri-checkbox-circle-fill text-[var(--tx-color-success)] text-[10px]"
-                      />
-                      {{ t('plugin.storage.footer.serviceReady') }}
-                    </span>
-                    <span>{{ t('plugin.storage.footer.encoding') }}</span>
+                  <div class="flex flex-col items-center text-center px-6">
+                    <div class="PluginStorage-EmptyIcon">
+                      <i class="i-ri-inbox-archive-line" />
+                    </div>
+                    <div class="text-sm font-semibold text-[var(--tx-text-color-primary)]">
+                      {{ t('plugin.storage.empty.title') }}
+                    </div>
+                    <div class="text-xs text-[var(--tx-text-color-secondary)] mt-1">
+                      {{ t('plugin.storage.empty.description') }}
+                    </div>
                   </div>
-                  <div
-                    class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]"
-                  >
-                    <span>
-                      {{
-                        t('plugin.storage.footer.space', {
-                          percent: (storageStats.usagePercent || 0).toFixed(1),
-                          maxSize: formatSize(storageStats.maxSize)
-                        })
-                      }}
-                    </span>
-                    <TxProgressBar
-                      class="w-36"
-                      :percentage="storageStats.usagePercent"
-                      height="6px"
-                      indicator-effect="sparkle"
-                      hover-effect="glow"
+                </div>
+
+                <div v-else class="h-full flex flex-col overflow-hidden">
+                  <div class="PluginStorage-TableHeader">
+                    <div>{{ t('plugin.storage.table.name') }}</div>
+                    <div>{{ t('plugin.storage.table.type') }}</div>
+                    <div>{{ t('plugin.storage.table.size') }}</div>
+                    <div>{{ t('plugin.storage.table.lastModified') }}</div>
+                    <div class="text-right">{{ t('plugin.storage.table.actions') }}</div>
+                  </div>
+                  <TouchScroll no-padding class="flex-1" @scroll="emit('scroll', $event)">
+                    <div class="divide-y divide-[var(--tx-border-color-lighter)]">
+                      <div v-for="entry in entries" :key="entry.path" class="PluginStorage-Row">
+                        <div class="flex items-center gap-3 min-w-0">
+                          <i
+                            class="text-lg"
+                            :class="getEntryIcon(entry)"
+                            :style="{ color: getEntryColor(entry) }"
+                          />
+                          <div class="min-w-0">
+                            <div
+                              class="text-sm font-medium text-[var(--tx-text-color-primary)] truncate"
+                            >
+                              {{ entry.name }}
+                            </div>
+                            <div class="text-xs text-[var(--tx-text-color-secondary)] truncate">
+                              {{ entry.path }}
+                            </div>
+                          </div>
+                        </div>
+                        <div class="text-xs text-[var(--tx-text-color-secondary)]">
+                          {{ getEntryTypeLabel(entry) }}
+                        </div>
+                        <div class="text-xs text-[var(--tx-text-color-secondary)]">
+                          {{ entry.type === 'directory' ? '--' : formatSize(entry.size) }}
+                        </div>
+                        <div class="text-xs text-[var(--tx-text-color-secondary)]">
+                          {{ formatDate(entry.modified) }}
+                        </div>
+                        <div class="text-xs text-right text-[var(--tx-text-color-secondary)]">
+                          --
+                        </div>
+                      </div>
+                    </div>
+                  </TouchScroll>
+                </div>
+              </div>
+
+              <div
+                class="PluginStorage-Footer flex items-center justify-between mt-4 pt-3 border-t border-[var(--tx-border-color-lighter)]"
+              >
+                <div class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]">
+                  <span class="flex items-center gap-1">
+                    <i
+                      class="i-ri-checkbox-circle-fill text-[var(--tx-color-success)] text-[10px]"
                     />
-                  </div>
+                    {{ t('plugin.storage.footer.serviceReady') }}
+                  </span>
+                  <span>{{ t('plugin.storage.footer.encoding') }}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-[var(--tx-text-color-secondary)]">
+                  <span>
+                    {{
+                      t('plugin.storage.footer.space', {
+                        percent: (storageStats.usagePercent || 0).toFixed(1),
+                        maxSize: formatSize(storageStats.maxSize)
+                      })
+                    }}
+                  </span>
+                  <TxProgressBar
+                    class="w-36"
+                    :percentage="storageStats.usagePercent"
+                    height="6px"
+                    indicator-effect="sparkle"
+                    hover-effect="glow"
+                  />
                 </div>
               </div>
             </div>
           </div>
-        </template>
-      </TxFlipOverlay>
-    </Teleport>
+        </div>
+      </template>
+    </FlipDialog>
 
     <TxBottomDialog
       v-if="clearConfirmVisible"

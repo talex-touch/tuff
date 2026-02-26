@@ -1,9 +1,10 @@
 <script lang="ts" name="Plugin" setup>
 import type { ITouchPlugin } from '@talex-touch/utils'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import TouchScroll from '~/components/base/TouchScroll.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
@@ -150,15 +151,13 @@ async function handleOpenPluginFolder(): Promise<void> {
   </TuffAsideTemplate>
 
   <!-- New Plugin Drawer -->
-  <Teleport to="body">
-    <TxFlipOverlay v-model="drawerVisible" :source="drawerSource" :closable="false">
-      <template #default="{ close }">
-        <div class="PluginDrawer">
-          <PluginNew @close="close" />
-        </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+  <FlipDialog v-model="drawerVisible" :reference="drawerSource" :closable="false" size="lg">
+    <template #default="{ close }">
+      <div class="PluginDrawer">
+        <PluginNew @close="close" />
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style lang="scss" scoped>

@@ -4,9 +4,9 @@ import type { ComponentPublicInstance } from 'vue'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import { resolveI18nMessage } from '@talex-touch/utils/i18n'
-import { TxFlipOverlay, type TxFlipOverlayInstance } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { getCustomRenderer } from '~/modules/box/custom-render'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { devLog } from '~/utils/dev-log'
@@ -79,16 +79,12 @@ const reconnectLoading = ref(false)
 const canReconnect = computed(() => props.plugin?.status === EPluginStatus.DEV_DISCONNECTED)
 
 // Feature detail panel state
-const FLIP_DURATION = 480
-const FLIP_ROTATE_X = 6
-const FLIP_ROTATE_Y = 8
-const FLIP_SPEED_BOOST = 1.12
 const showDetail = ref(false)
 const isDetailExpanded = ref(false)
 const isDetailAnimating = ref(false)
 const selectedFeature = ref<PluginFeatureWithCommandsData | null>(null)
 const activeFeatureId = ref<string | null>(null)
-const detailOverlayRef = ref<TxFlipOverlayInstance | null>(null)
+const detailOverlayRef = ref<{ close: () => void } | null>(null)
 const detailSourceEl = ref<HTMLElement | null>(null)
 const detailTab = ref<'overview' | 'data' | 'interaction' | 'widget'>('overview')
 const previewWidgetId = ref<string | null>(null)
@@ -781,122 +777,66 @@ function handlePreviewRenderError(error: Error): void {
     <PluginFeatureEmptyState v-else />
 
     <!-- Feature Detail Card -->
-    <Teleport to="body">
-      <TxFlipOverlay
-        ref="detailOverlayRef"
-        v-model="showDetail"
-        v-model:expanded="isDetailExpanded"
-        v-model:animating="isDetailAnimating"
-        :source="detailSourceEl"
-        :duration="FLIP_DURATION"
-        :rotate-x="FLIP_ROTATE_X"
-        :rotate-y="FLIP_ROTATE_Y"
-        :speed-boost="FLIP_SPEED_BOOST"
-        transition-name="PluginFeature-DetailMask"
-        mask-class="PluginFeature-DetailMask"
-        card-class="PluginFeature-DetailCard"
-        @closed="handleDetailClosed"
-      >
-        <template #default="{ close }">
-          <PluginFeatureDetailCard
-            v-model:detail-tab="detailTab"
-            v-model:preview-widget-id="previewWidgetId"
-            v-model:preview-size-preset-value="previewSizePresetValue"
-            v-model:mock-payload-enabled="mockPayloadEnabled"
-            v-model:mock-payload-raw="mockPayloadRaw"
-            :feature="selectedFeature"
-            :widget-tab-enabled="isWidgetFeature(selectedFeature)"
-            :widget-status="resolveWidgetStatus(selectedFeature)"
-            :widget-source-display-path="resolveWidgetSourceDisplayPath(selectedFeature)"
-            :widget-source-file-path="resolveWidgetSourceFilePath(selectedFeature)"
-            :widget-source-url="resolveWidgetSourceUrl(selectedFeature)"
-            :widget-compiled-display-path="resolveWidgetCompiledDisplayPath(selectedFeature)"
-            :widget-compiled-path="resolveWidgetCompiledPath(selectedFeature)"
-            :widget-path-alias-note="widgetPathAliasNote"
-            :widget-preview-options="widgetPreviewOptions"
-            :preview-widget-ready="previewWidgetReady"
-            :preview-widget-registering="previewWidgetRegistering"
-            :preview-widget-render-error="previewWidgetRenderError"
-            :preview-widget-issues="previewWidgetIssues"
-            :preview-widget-status="previewWidgetStatus"
-            :preview-widget-hint="previewWidgetHint"
-            :preview-widget-item="previewWidgetItem"
-            :preview-frame-host-ref="setPreviewFrameHostRef"
-            :preview-frame-style="previewFrameStyle"
-            :preview-frame-resizing="previewFrameResizing"
-            :preview-frame-size-label="previewFrameSizeLabel"
-            :preview-size-options="previewSizeOptions"
-            :mock-payload-value="mockPayloadValue"
-            :mock-payload-error="mockPayloadError"
-            :is-operation-disabled="isOperationDisabled"
-            :is-dev-disconnected="isDevDisconnected"
-            :dev-disconnect-message="devDisconnectMessage"
-            :dev-disconnect-reason="devDisconnectReason"
-            :dev-disconnect-suggestion="devDisconnectSuggestion"
-            :can-reconnect="canReconnect"
-            :reconnect-loading="reconnectLoading"
-            :resolve-issue-message="resolveIssueMessage"
-            @close="close"
-            @copy="copyToClipboard"
-            @reveal="revealWidgetFile"
-            @reload-widget="reloadPreviewWidget"
-            @reload-all-widgets="reloadAllWidgets"
-            @reset-preview-frame-size="resetPreviewFrameSize"
-            @preview-resize-start="handlePreviewResizeStart"
-            @render-error="handlePreviewRenderError"
-            @reconnect="handleReconnect"
-          />
-        </template>
-      </TxFlipOverlay>
-    </Teleport>
+    <FlipDialog
+      ref="detailOverlayRef"
+      v-model="showDetail"
+      v-model:expanded="isDetailExpanded"
+      v-model:animating="isDetailAnimating"
+      :reference="detailSourceEl"
+      :closable="false"
+      size="lg"
+      @closed="handleDetailClosed"
+    >
+      <template #default="{ close }">
+        <PluginFeatureDetailCard
+          v-model:detail-tab="detailTab"
+          v-model:preview-widget-id="previewWidgetId"
+          v-model:preview-size-preset-value="previewSizePresetValue"
+          v-model:mock-payload-enabled="mockPayloadEnabled"
+          v-model:mock-payload-raw="mockPayloadRaw"
+          :feature="selectedFeature"
+          :widget-tab-enabled="isWidgetFeature(selectedFeature)"
+          :widget-status="resolveWidgetStatus(selectedFeature)"
+          :widget-source-display-path="resolveWidgetSourceDisplayPath(selectedFeature)"
+          :widget-source-file-path="resolveWidgetSourceFilePath(selectedFeature)"
+          :widget-source-url="resolveWidgetSourceUrl(selectedFeature)"
+          :widget-compiled-display-path="resolveWidgetCompiledDisplayPath(selectedFeature)"
+          :widget-compiled-path="resolveWidgetCompiledPath(selectedFeature)"
+          :widget-path-alias-note="widgetPathAliasNote"
+          :widget-preview-options="widgetPreviewOptions"
+          :preview-widget-ready="previewWidgetReady"
+          :preview-widget-registering="previewWidgetRegistering"
+          :preview-widget-render-error="previewWidgetRenderError"
+          :preview-widget-issues="previewWidgetIssues"
+          :preview-widget-status="previewWidgetStatus"
+          :preview-widget-hint="previewWidgetHint"
+          :preview-widget-item="previewWidgetItem"
+          :preview-frame-host-ref="setPreviewFrameHostRef"
+          :preview-frame-style="previewFrameStyle"
+          :preview-frame-resizing="previewFrameResizing"
+          :preview-frame-size-label="previewFrameSizeLabel"
+          :preview-size-options="previewSizeOptions"
+          :mock-payload-value="mockPayloadValue"
+          :mock-payload-error="mockPayloadError"
+          :is-operation-disabled="isOperationDisabled"
+          :is-dev-disconnected="isDevDisconnected"
+          :dev-disconnect-message="devDisconnectMessage"
+          :dev-disconnect-reason="devDisconnectReason"
+          :dev-disconnect-suggestion="devDisconnectSuggestion"
+          :can-reconnect="canReconnect"
+          :reconnect-loading="reconnectLoading"
+          :resolve-issue-message="resolveIssueMessage"
+          @close="close"
+          @copy="copyToClipboard"
+          @reveal="revealWidgetFile"
+          @reload-widget="reloadPreviewWidget"
+          @reload-all-widgets="reloadAllWidgets"
+          @reset-preview-frame-size="resetPreviewFrameSize"
+          @preview-resize-start="handlePreviewResizeStart"
+          @render-error="handlePreviewRenderError"
+          @reconnect="handleReconnect"
+        />
+      </template>
+    </FlipDialog>
   </div>
 </template>
-
-<style lang="scss" scoped>
-:global(.PluginFeature-DetailMask) {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-:global(.PluginFeature-DetailMask-enter-active),
-:global(.PluginFeature-DetailMask-leave-active) {
-  transition: opacity 200ms ease;
-}
-
-:global(.PluginFeature-DetailMask-enter-from),
-:global(.PluginFeature-DetailMask-leave-to) {
-  opacity: 0;
-}
-
-:global(.PluginFeature-DetailCard) {
-  width: min(980px, 92vw);
-  height: min(720px, 86vh);
-  background: var(--tx-bg-color-overlay);
-  border: 1px solid var(--tx-border-color-lighter);
-  border-radius: 1.5rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  opacity: 1;
-  transform: translate3d(0, 0, 0) scale(1);
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
-  transition:
-    box-shadow 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-</style>

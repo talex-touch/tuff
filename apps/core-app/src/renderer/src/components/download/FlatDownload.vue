@@ -1,7 +1,8 @@
 <script setup lang="ts" name="FlatDownload">
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { useAuth } from '~/modules/auth/useAuth'
 import { useDownloadCenter } from '~/modules/hooks/useDownloadCenter'
 import DownloadCenter from './DownloadCenter.vue'
@@ -115,22 +116,21 @@ function handleClick(event: MouseEvent): void {
     </div>
   </TxButton>
 
-  <Teleport to="body">
-    <TxFlipOverlay
-      v-model="downloadDialogVisible"
-      :source="downloadDialogSource"
-      :header-title="t('download.title')"
-      :header-desc="summaryLabel"
-    >
-      <template #default>
-        <div class="DownloadDialog">
-          <div class="DownloadDialog-Body">
-            <DownloadCenter />
-          </div>
+  <FlipDialog
+    v-model="downloadDialogVisible"
+    :reference="downloadDialogSource"
+    :header-title="t('download.title')"
+    :header-desc="summaryLabel"
+    size="lg"
+  >
+    <template #default>
+      <div class="DownloadDialog">
+        <div class="DownloadDialog-Body">
+          <DownloadCenter />
         </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style lang="scss" scoped>

@@ -276,6 +276,25 @@ describe('txFlipOverlay', () => {
     expect(noneWrapper.find('.TxFlipOverlay-Card').classes()).toContain('is-border-none')
   })
 
+  it('cardStyle 可透传到卡片节点', () => {
+    const wrapper = mount(TxFlipOverlay, {
+      props: {
+        modelValue: true,
+        cardStyle: {
+          width: '960px',
+          maxHeight: '70vh',
+        },
+      },
+      slots: {
+        default: '<div>content</div>',
+      },
+    })
+
+    const style = wrapper.find('.TxFlipOverlay-Card').attributes('style')
+    expect(style).toContain('width: 960px')
+    expect(style).toContain('max-height: 70vh')
+  })
+
   it('多实例连续打开时仅顶层保留 mask 交互与背景', async () => {
     const restoreCardSize = mockOverlayCardSize()
     try {

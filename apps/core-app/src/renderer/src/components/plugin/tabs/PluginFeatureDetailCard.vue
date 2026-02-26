@@ -239,7 +239,7 @@ function handleClose(): void {
         >
           <TxTabItem name="overview" activation>
             <template #name>{{ t('plugin.features.drawer.overview') }}</template>
-            <TouchScroll class="PluginFeature-TabScroll" native no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <TuffGroupBlock
                   class="PluginFeature-Overview"
@@ -313,7 +313,7 @@ function handleClose(): void {
 
           <TxTabItem name="data">
             <template #name>数据</template>
-            <TouchScroll class="PluginFeature-TabScroll" native no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock
@@ -369,7 +369,7 @@ function handleClose(): void {
 
           <TxTabItem v-if="feature?.interaction" name="interaction">
             <template #name>Interaction</template>
-            <TouchScroll class="PluginFeature-TabScroll" native no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock class="PluginFeature-Interaction" name="Interaction">
@@ -412,7 +412,7 @@ function handleClose(): void {
 
           <TxTabItem v-if="widgetTabEnabled" name="widget">
             <template #name>Widget</template>
-            <TouchScroll class="PluginFeature-TabScroll" native no-padding>
+            <TouchScroll class="PluginFeature-TabScroll" no-padding>
               <div class="PluginFeature-TabScrollContent">
                 <div class="space-y-4">
                   <TuffGroupBlock

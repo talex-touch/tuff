@@ -2,7 +2,395 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-26
+
+### FlipDialog 透传属性失效修复（遮罩误关根因）
+
+**变更类型**: P1 行为修复 / 组件封装稳定性修复
+
+**描述**: 系统性排查发现 `FlipDialog` 使用 `interface extends Omit<FlipOverlayProps, ...>` 的类型透传方案时，Vue SFC 编译后的 runtime props 仅保留显式声明字段，导致 `maskClosable/preventAccidentalClose/header/...` 等透传属性在运行时为 `undefined`。结果是业务层即使传入 `:prevent-accidental-close="true"`，实际未生效，遮罩点击仍按默认可关闭执行。
+
+**主要变更**:
+1. **透传策略调整**：`FlipDialog` 新增 `useAttrs()`，并通过 `v-bind="attrs"` 将未声明属性原样透传给 `TxFlipOverlay`。
+2. **移除伪默认值**：移除 `maskClosable/closable/scrollable` 在 `FlipDialog` 内的无效默认声明，避免制造“看似配置成功但运行时丢失”的假象。
+3. **双端一致修复**：同步修复 `apps/core-app` 与 `apps/nexus` 两套 `FlipDialog`，避免后续行为分叉。
+4. **问题场景恢复**：`dashboard/api-keys` 的 `:mask-closable="false" + :prevent-accidental-close="true"` 现在会真实生效，遮罩点击不再直接关闭。
+
+**修改文件**:
+- `apps/nexus/app/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreApp FlipDialog P0 尺寸收敛（去最大化观感）
+
+**变更类型**: UI 体验收敛 / 弹框规范治理 / 低风险样式与调用调整
+
+**描述**: 针对 CoreApp 弹框“默认偏大”问题执行 P0 收口：下调 `FlipDialog` 全局尺寸 token，并将业务详情类弹框的 `size="xl"` 收敛到 `size="lg"`；仅保留样式编辑器等重编辑场景继续使用 `xl`。
+
+**主要变更**:
+1. **全局尺寸下调**：`md/lg/xl` 宽度 token 调整为 `760/920/1040` 基线（保留移动端收敛与 `full` 能力）。
+2. **默认兜底宽度同步**：`FlipDialog` 卡片默认宽度 fallback 同步为新 `lg` 基线，减少样式变量失效时的“过大”回退。
+3. **业务场景收敛**：以下弹框从 `xl` 调整为 `lg`，统一观感并降低“最大化”感受：
+   - `TuffUserInfo`
+   - `IntelligenceAuditOverlay`
+   - `PluginDetails`
+   - `PluginFeatures`
+   - `PluginStorage`
+   - `Store`
+   - `ShortcutDialog`
+   - `StoreSourceEditor`
+4. **编辑器场景保留**：`CoreBoxEditorOverlay` / `MainLayoutEditorOverlay` / `RemotePresetOverlay` 继续使用 `xl`，用于高密度编辑内容。
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/dialog/flip-dialog.utils.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### API Key 弹窗遮罩误触反馈修复（局部增强）
+
+**变更类型**: 交互可用性修复 / 低风险样式调整
+
+**描述**: `dashboard/api-keys` 创建弹窗开启 `preventAccidentalClose` 后，因全局 warning 红光已大幅减弱，遮罩误触时反馈不够可感知。为避免影响其它 overlay，改为在 API Key 弹窗局部增强遮罩误触反馈。
+
+**主要变更**:
+1. **局部 mask 标识**：API Key 创建弹窗新增 `mask-class="ApiKeyOverlay-Mask"`，只对该弹窗生效。
+2. **误触可见性增强**：为 `ApiKeyOverlay-Mask` 增加更清晰的 warning 动画（遮罩红晕 + 卡片 glow），不改动全局 `TxFlipOverlay` warning 强度。
+3. **交互提示补充**：遮罩区域增加 `not-allowed` 光标，明确“当前不可通过遮罩关闭”。
+4. **danger 阴影慢淡出**：局部 warning glow 动画时长从 `720ms` 拉长到 `980ms`，并新增中段衰减关键帧（`52%`）让淡出更平缓。
+5. **整卡弹动替代内层弹动**：禁用 API Key 场景下内层 `TxFlipOverlay-Shell` 的 focus 动画，改为在 `FlipDialog-Card` 上做整卡 scale 弹动，反馈更整体。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Monorepo P0 稳定性收口（workspace 边界 + 包身份 + 根脚本）
+
+**变更类型**: 工程稳定性修复 / 构建链路收敛 / 低风险配置治理
+
+**描述**: 处理 workspace 误纳入构建产物目录导致的依赖解析波动（含 preload 模块加载异常场景）。本次将 `pnpm-workspace` 规则从宽匹配改为明确包目录 + 生成目录排除，并补齐缺失包身份信息（`name/private`）与根脚本契约，降低本地/CI 安装与运行时不确定性。
+
+**主要变更**:
+1. **workspace 边界收紧**：`apps/* + packages/* + plugins/*` 明确纳入，排除 `out/dist/.output/.nuxt/.vitepress/node_modules` 及 `apps/core-app/tuff/modules/plugins/**`。
+2. **包身份补齐**：`touch-translation` 补齐包名并设为私有；`core-app/test/tuff-business/touch-music` 显式 `private: true`，降低误发布风险。
+3. **根脚本收敛**：根 `lint/lint:fix` 统一为递归代码文件扫描命令，去掉对 `../../node_modules/eslint` 的硬路径耦合。
+4. **pnpm 基线声明**：根包补齐 `packageManager`，并统一已修改子包的 `packageManager` 为同一版本。
+
+**修改文件（核心）**:
+- `pnpm-workspace.yaml`
+- `package.json`
+- `apps/core-app/package.json`
+- `apps/nexus/package.json`
+- `packages/test/package.json`
+- `packages/tuff-business/package.json`
+- `plugins/touch-music/package.json`
+- `plugins/touch-translation/package.json`
+
+### Tuff Intelligence Agent 一次切换收口（1+2+3+4）
+
+**变更类型**: 架构收口 / Breaking 契约升级 / Lab 管理能力补齐
+
+**描述**: 按一次切换策略完成 `intelligence-agent` 主链路增强：Provider 路由契约收口、Nexus/Core schema 对齐、Prompt Registry 管理 API + Lab UI 落地、`session.start -> plan -> execute -> reflect -> finalize` LangGraph 状态机接管 stream 运行主线。
+
+**主要变更**:
+1. **Provider 路由契约收口**：前端移除 `:id.probe/:id.test` legacy fallback；legacy 点号路由与中间件兼容入口统一返回 `410`，仅保留标准斜杠路由 `:id/probe|test`。
+2. **共享 schema 对齐**：`packages/utils/types/intelligence.ts` 新增 Provider Sync DTO、Prompt Registry/Binding 管理 DTO、agent trace contract 常量，Nexus sync API 与 Core 渲染侧统一消费同一类型。
+3. **Prompt Registry 管理能力补齐**：新增 `/api/admin/intelligence-agent/prompts*` 与 `/prompt-bindings*`（GET/POST/DELETE），并在 `IntelligenceAgentWorkspace` 增加 Prompt Registry 管理弹窗（记录与绑定的增删改查）。
+4. **LangGraph 接管 stream 执行链**：新增 `intelligenceAgentGraphRunner`，将 `session/stream` 执行链切换为显式五阶段节点编排，保留审批门控、trace/checkpoint、pause/disconnect 和 metrics/audit 出口。
+5. **执行策略收口**：执行阶段默认 `fail-fast`；仅当 action 显式 `continueOnError=true` 且满足“低风险读工具”策略时允许继续执行。
+6. **Core 编排同构补齐**：Core 新增 `intelligence-agent-graph-runner`（LangGraph 五阶段节点），并在 `session:start` 增加 `autoRunGraph` 可选开关，支持按同构状态机一键运行 `plan -> execute -> reflect -> finalize`。
+
+**修改文件（核心）**:
+- `apps/nexus/server/utils/intelligenceAgentGraphRunner.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/session/stream.post.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/prompts.{get,post,delete}.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/prompt-bindings.{get,post,delete}.ts`
+- `apps/nexus/server/middleware/intelligence-route-compat.ts`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].{probe,test}.post.ts`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/sync.get.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `packages/utils/types/intelligence.ts`
+
+### Nexus i18n 去 Query 化与 Locale 编排层收敛
+
+**变更类型**: 稳定性修复 / 行为约束收口 / 兼容迁移
+
+**描述**: Nexus i18n 改为 `no_prefix + cookie + 账号偏好` 主流模式，移除前端 `?lang` 生成与依赖；新增统一 Locale Orchestrator 串行化 `setLocale`，解决登录/回调/路由切换期间语言随机回退英文的问题。服务端同步收口 locale 为 `en|zh|null`，并对 profile patch 入参加入校验与归一化。
+
+**主要变更**:
+1. **统一编排层**：新增 `useLocaleOrchestrator`，统一处理初始化、归一化、持久化、legacy `lang` 一次性兼容读取与 URL 清理、登录后 profile locale 同步。
+2. **前端去 query 化**：`app.vue`、`useSignIn`、`LanguageToggle`、`HeaderUserMenu`、`TheHeader`、`TuffLandingWaitlist`、`sign-up` 链路移除 `lang` 拼接/消费，不再在地址栏暴露语言参数。
+3. **OAuth 回调参数收敛**：`buildOauthCallbackUrl` 不再注入 `lang`，相关单测更新，避免认证链路再次污染 query。
+4. **服务端 locale 规范化**：新增 `server/utils/locale.ts`，`profile.patch` 三条接口仅接受 `en|zh|null`（兼容 `en-US/zh-CN` 自动归一化，非法值返回 400）。
+5. **authStore 一致性**：`createUser/updateUserProfile/mapUser` 写入与读取统一归一化 locale；`me` 系列接口统一输出规范 locale。
+6. **测试补齐**：新增 `server/utils/__tests__/locale.test.ts` 覆盖 locale 归一化与合法性判断。
+
+**修改文件（核心）**:
+- `apps/nexus/app/composables/useLocaleOrchestrator.ts`
+- `apps/nexus/app/app.vue`
+- `apps/nexus/app/composables/useSignIn.ts`
+- `apps/nexus/app/composables/useOauthContext.ts`
+- `apps/nexus/app/composables/useUserLocale.ts`
+- `apps/nexus/app/components/LanguageToggle.vue`
+- `apps/nexus/app/components/HeaderUserMenu.vue`
+- `apps/nexus/app/components/TheHeader.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingWaitlist.vue`
+- `apps/nexus/app/pages/sign-up/index.vue`
+- `apps/nexus/server/utils/locale.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/user/profile.patch.ts`
+- `apps/nexus/server/api/auth/profile.patch.ts`
+- `apps/nexus/server/api/v1/auth/profile.patch.ts`
+- `apps/nexus/server/api/user/me.get.ts`
+- `apps/nexus/server/api/auth/me.get.ts`
+- `apps/nexus/server/api/v1/auth/me.get.ts`
+- `apps/nexus/server/utils/__tests__/locale.test.ts`
+
+### API Key 弹窗 i18n 收敛与显式关闭按钮补齐
+
+**变更类型**: Dashboard 可用性修复 / 国际化完善
+
+**描述**: 修复 API Key 创建弹窗缺少显式关闭按钮的问题，并将页面与弹窗内文案全面接入 `apps/nexus` i18n（`en/zh`），避免中英文混杂与硬编码文本。
+
+**主要变更**:
+1. **显式关闭入口**：API Key 创建弹窗顶部新增独立 close 按钮（`TxButton`），不依赖遮罩点击关闭。
+2. **弹窗文案全量 i18n**：标题、副标题、表单字段、权限风险提示、按钮文本、创建中态文案全部改为 `t('dashboard.sections.apiKeys.*')`。
+3. **列表与状态文案 i18n**：页面标题、空态、创建成功提示、创建/最近使用/过期状态文案、复制按钮文案统一 i18n 化。
+4. **错误与确认文案 i18n**：加载/创建/删除失败错误文案与删除确认弹窗文案统一迁移到语言包。
+5. **权限树与过期选项 i18n**：`scopeTree` 与 `expiryOptions` 改为 computed + `t()` 生成，跟随语言切换实时更新。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/i18n/locales/en.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### TxFlipOverlay close warning 红色强度下调（再次减弱）
+
+**变更类型**: 交互视觉微调 / 低风险样式调整
+
+**描述**: `TxFlipOverlay` 的 close-guard warning 红色提示仍偏浓。保持原有动画节奏与范围不变，在上一版基础上继续将遮罩红晕与卡片 glow 的透明度再下调 80%，进一步降低视觉压迫感。
+
+**主要变更**:
+1. **遮罩红晕继续减弱**：`tx-flip-overlay-mask-warning` 的红色径向渐变 alpha 从 `0.11/0.06` 调整为 `0.022/0.012`（在上一版基础上再减 80%）。
+2. **卡片 glow 继续减弱**：`tx-flip-overlay-close-guard-warning` 的三层 red drop-shadow alpha 从 `0.49/0.36/0.25` 调整为 `0.098/0.072/0.05`（在上一版基础上再减 80%）。
+
+**修改文件**:
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Intelligence Providers 测试能力升级（详细弹窗 + 模型选择 + 响应展示）
+
+**变更类型**: 管理后台体验增强 / Provider 诊断能力补齐 / 低风险接口扩展
+
+**描述**: Nexus Intelligence 管理页将 providers 的“测试连接”从列表轻量提示升级为 `TxFlipOverlay` 详细测试弹窗，支持选择模型、输入测试 prompt，并展示模型返回文本、延迟、endpoint、trace 及错误片段。后端新增 provider probe 接口，复用 LangChain 调用链执行真实模型探测。
+
+**主要变更**:
+1. **前端测试交互升级**：`/dashboard/admin/intelligence` 的 provider 测试按钮改为打开详细测试弹窗，不再仅展示列表内 success/fail 提示。
+2. **可选模型测试**：弹窗支持从 provider 已配置模型中选择目标模型（可回退默认模型）。
+3. **响应细节可视化**：展示模型正文输出、latency、endpoint、traceId、retry 次数和错误响应片段。
+4. **后端 probe 能力新增**：新增 `/api/dashboard/intelligence/providers/:id/probe`，以 LangChain 调用 provider 并返回结构化诊断结果。
+5. **调用链复用**：`tuffIntelligenceLabService` 新增 `probeIntelligenceLabProvider` 导出，避免重复实现模型调用逻辑。
+6. **风险功能门控降级**：当 `/api/dashboard/intelligence/ip-bans` 在当前环境被 feature-gate 关闭（`404 Feature not found`）时，前端自动降级隐藏 IP 封禁面板，不再持续显示错误噪音。
+7. **路由命名修正**：补充 `providers/[id]/probe.post.ts` 与 `providers/[id]/test.post.ts`，确保前端调用的 `/providers/:id/probe` 与 `/providers/:id/test` 命中正确 API 路由（避免误落到页面 HTML 响应）。
+8. **前端调用硬切换**：Provider Probe 与编辑态模型拉取统一只调用 `/providers/:id/probe|test`，不再做 legacy 回退。
+9. **HTML 回包显式失败**：当错误路由返回 `200 + text/html`（非 API JSON）时，前端直接判定为错误，避免“表面 200 实际失败”的假成功场景。
+10. **服务端契约硬收口**：`intelligence-route-compat` 中间件对 legacy 点号路由直接返回 `410`，不再执行重定向兼容。
+
+**修改文件**:
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/server/api/dashboard/intelligence/providers/[id].probe.post.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### FlipDialog 统一落地（Nexus 业务 FlipOverlay 场景迁移）
+
+**变更类型**: 交互一致性优化 / 弹框体系收敛 / 中低风险页面改造
+
+**描述**: 延续 CoreApp 的 `FlipDialog` 方案，在 Nexus `app/pages + app/components` 的业务场景中完成 `TxFlipOverlay` 迁移。统一 reference 传递、遮罩行为、source 隐藏恢复与宽弹框尺寸约束（`md/lg/xl`），并移除页面级重复 `Teleport`。文档演示与测试页（`content/demos`、`pages/test`）保留 `TxFlipOverlay`，用于组件示例与堆叠行为验证。
+
+**主要变更**:
+1. **Nexus 统一组件新增**：新增 `apps/nexus/app/components/base/dialog/FlipDialog.vue` 与 `flip-dialog.utils.ts`，复用 `reference` 优先级、自动隐藏 source、宽弹框尺寸映射与移动端收敛规则。
+2. **业务页迁移完成**：Nexus 业务范围内历史 `TxFlipOverlay` 调用迁移到 `FlipDialog`，并统一 `source -> reference`。
+3. **页面结构收敛**：移除业务页中包裹 `TxFlipOverlay` 的 `Teleport to="body"`，统一由 `FlipDialog` 内部承载。
+4. **尺寸规范落地**：按场景设置 `size=md/lg/xl`，避免高瘦弹框和各页面自定义尺寸漂移。
+5. **保留边界明确**：`apps/nexus/app/pages/test/flip-overlay-stack.vue` 与 `apps/nexus/app/components/content/demos/FlipOverlayFlipOverlayDemo.vue` 继续使用 `TxFlipOverlay`，不纳入业务迁移闭环。
+
+**修改文件（核心）**:
+- `apps/nexus/app/components/base/dialog/FlipDialog.vue`
+- `apps/nexus/app/components/base/dialog/flip-dialog.utils.ts`
+- `apps/nexus/app/components/assets/create/AssetCreateOverlay.vue`
+- `apps/nexus/app/components/CreatePluginDrawer.vue`
+- `apps/nexus/app/components/dashboard/ReviewModalOverlay.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginMetadataOverlay.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/components/docs/DocsAssistantDialog.vue`
+- `apps/nexus/app/pages/dashboard/api-keys.vue`
+- `apps/nexus/app/pages/dashboard/storage.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence.vue`
+- `apps/nexus/app/pages/dashboard/account.vue`
+- `apps/nexus/app/pages/dashboard/team.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/pages/store.vue`
+
 ## 2026-02-25
+
+### FlipDialog 统一落地（CoreApp FlipOverlay 场景收敛）
+
+**变更类型**: 交互一致性优化 / 组件封装升级 / 页面调用收敛
+
+**描述**: 在渲染层新增 `FlipDialog` 统一封装，替代业务页直接使用 `TxFlipOverlay + Teleport` 的分散实现。新组件统一了 reference 输入方式、遮罩行为、source 隐藏策略与宽弹框尺寸规则，并完成现有 16 个 `TxFlipOverlay` 场景迁移。
+
+**主要变更**:
+1. **统一组件新增**：新增 `FlipDialog`，支持 `reference` 参数与 `#reference` 插槽，且 `reference` 参数优先级最高。
+2. **触发与可控打开**：`#reference` 默认点击自动打开（可通过 `referenceAutoOpen=false` 关闭），支持手动 `open/close/toggle`。
+3. **source 隐藏策略**：打开时自动隐藏 reference 元素（`opacity: 0 + pointer-events: none`），关闭时恢复；`DOMRect` 场景优先隐藏 reference 插槽元素。
+4. **尺寸体系统一**：新增 `size=md/lg/xl/full` 宽弹框规范，支持 `width/maxHeight/minHeight` 覆盖，移动端统一降维宽高策略。
+5. **基础能力补齐**：`TxFlipOverlay` 增加 `cardStyle` 能力并接入模板，以支持上层统一尺寸透传。
+6. **场景迁移完成**：以下 16 个场景完成 `TxFlipOverlay -> FlipDialog` 迁移，并移除页面级重复 `Teleport`：
+   - `StoreHeader`
+   - `IntelligenceAuditOverlay`
+   - `TuffUserInfo`
+   - `StoreSourceEditor`
+   - `PluginInfo`
+   - `PluginStorage`
+   - `PluginFeatures`
+   - `PluginDevSettingsOverlay`
+   - `PluginDetails`
+   - `RemotePresetOverlay`
+   - `CoreBoxEditorOverlay`
+   - `FlatDownload`
+   - `MainLayoutEditorOverlay`
+   - `Plugin`
+   - `ShortcutDialog`
+   - `Store`
+
+**修改文件（核心）**:
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.vue`
+- `apps/core-app/src/renderer/src/components/base/dialog/flip-dialog.utils.ts`
+- `apps/core-app/src/renderer/src/components/base/dialog/FlipDialog.test.ts`
+- `apps/core-app/src/renderer/src/components/store/StoreHeader.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/audit/IntelligenceAuditOverlay.vue`
+- `apps/core-app/src/renderer/src/components/base/TuffUserInfo.vue`
+- `apps/core-app/src/renderer/src/views/base/store/StoreSourceEditor.vue`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginStorage.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginFeatures.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDevSettingsOverlay.vue`
+- `apps/core-app/src/renderer/src/components/plugin/tabs/PluginDetails.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/RemotePresetOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/CoreBoxEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/components/download/FlatDownload.vue`
+- `apps/core-app/src/renderer/src/views/base/styles/editors/MainLayoutEditorOverlay.vue`
+- `apps/core-app/src/renderer/src/views/base/Plugin.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/components/ShortcutDialog.vue`
+- `apps/core-app/src/renderer/src/views/base/Store.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/src/types.ts`
+- `packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue`
+- `packages/tuffex/packages/components/src/flip-overlay/__tests__/flip-overlay.test.ts`
+
+### Intelligence Agent/Lab 页面收敛为共享工作台（Admin）
+
+**变更类型**: 联调支持 / 页面能力恢复 / 低风险前台改造
+
+**描述**: `intelligence-agent` 页面能力（会话流、历史回放、trace 详情、审批门控）抽取为共享工作台组件，`intelligence-agent` 与 `intelligence-lab` 两个路由统一复用，消除双维护。
+
+**主要变更**:
+1. **共享组件抽取**：新增 `IntelligenceAgentWorkspace`，承载完整 Agent 工作台交互。
+2. **双路由复用**：`/dashboard/admin/intelligence-agent` 与 `/dashboard/admin/intelligence-lab` 统一渲染共享组件。
+3. **能力对齐**：Lab 路由直接拥有 history/trace/approval 等完整能力，不再使用简化页。
+
+**修改文件**:
+- `apps/nexus/app/components/dashboard/intelligence/IntelligenceAgentWorkspace.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-agent.vue`
+- `apps/nexus/app/pages/dashboard/admin/intelligence-lab.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence 渠道同步（Nexus -> Core-App）与 Nexus LLM 优先链路
+
+**变更类型**: 配置治理 / 渠道同步 / 运行链路优化
+
+**描述**: 新增 Nexus 渠道同步接口，Core-App 渠道页支持一键拉取 Nexus providers 并合并本地配置；同时强化 `tuff-nexus` provider 的运行时 token 注入，确保 Core-App 在无手填 API Key 场景下优先可用 Nexus LLM。
+
+**主要变更**:
+1. **Nexus 同步接口**：新增 `/api/dashboard/intelligence/providers/sync`，输出标准化 provider schema（不回传明文 apiKey）。
+2. **Core-App 同步入口**：`IntelligenceChannelsPage` 新增“从 Nexus 同步”操作，支持拉取并合并 providers。
+3. **Nexus 优先保障**：同步后确保 `tuff-nexus-default` 保持启用与高优先级；无登录态时提示认证。
+4. **运行时注入**：Core 主进程在 `testProvider/fetchModels` 场景为 `tuff-nexus` 自动注入 auth token（缺省回退 guest），避免手填 API Key。
+5. **前端校验放宽**：`tuff-nexus` 渠道不再被前端 API Key 必填规则阻塞，配置错误提示更准确。
+
+**修改文件**:
+- `apps/nexus/server/api/dashboard/intelligence/providers/sync.get.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceChannelsPage.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/config/IntelligenceApiConfig.vue`
+- `apps/core-app/src/renderer/src/components/intelligence/layout/IntelligenceItem.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Assets 版本驳回重提（Re-edit）与审核时间线
+
+**变更类型**: 审核流能力补齐 / 交互优化 / 数据模型扩展
+
+**描述**: Dashboard Assets 支持对 `rejected` 版本进行 Re-edit 并重新提交审核；审核驳回原因可透传并持久化到版本记录。同时新增插件级“流程时间线”，管理员与发布者可查看插件与版本在审核链路中的关键状态演进。
+
+**主要变更**:
+1. **Re-edit 闭环**：在版本详情中为 `rejected` 版本新增 `Re-edit` 入口，复用 `VersionDrawer`（`create/reedit` 双模式），支持替换包与更新 changelog 后重新提审。
+2. **后端重提接口**：新增 `PATCH /api/dashboard/plugins/:id/versions/:versionId/reedit`，仅 owner/admin 可操作，且仅允许 `rejected` 版本重提；重提后版本状态置为 `pending`。
+3. **驳回原因落库**：版本状态接口支持 `reason` 入参；`rejected` 时写入 `reject_reason`，重新提审或通过时清空该字段。
+4. **时间线事件流**：新增插件审核时间线存储与查询，记录 `plugin.created / plugin.status.changed / version.created / version.status.changed / version.reedited` 事件，并在详情抽屉展示。
+5. **可见性控制**：时间线接口与前端展示仅对管理员与插件发布者开放。
+
+**修改文件**:
+- `apps/nexus/server/utils/pluginsStore.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/status.patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId].patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/versions/[versionId]/reedit.patch.ts`
+- `apps/nexus/server/api/dashboard/plugins/[id]/timeline.get.ts`
+- `apps/nexus/app/pages/dashboard/assets.vue`
+- `apps/nexus/app/components/VersionDrawer.vue`
+- `apps/nexus/app/components/dashboard/PluginDetailDrawer.vue`
+- `apps/nexus/app/types/dashboard-plugin.ts`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence 模型调用全量切到 LangChain（Core + Nexus）
+
+**变更类型**: Breaking Change / 架构收敛 / Provider 调用链重构
+
+**描述**: Core 与 Nexus 的 Intelligence 模型调用路径从 provider 直连 HTTP（`/chat/completions`、`/messages`、`/api/chat`）切换为 LangChain 统一入口。Core 侧 OpenAI/DeepSeek/Siliconflow/Anthropic/Local provider 统一使用 LangChain adapter；Nexus agent 调用层同步切换为 LangChain 模型实例调用，保留现有审批、trace、fallback、retry、session contract。
+
+**主要变更**:
+1. **Core Provider 收敛**：新增 OpenAI-compatible LangChain provider 基座，OpenAI/DeepSeek/Siliconflow/Local 统一继承；Anthropic provider 切到 `@langchain/anthropic`。
+2. **Nexus Agent 调用收敛**：`tuffIntelligenceLabService` 的 OpenAI-compatible / Anthropic / Local 模型调用改为 LangChain。
+3. **直连移除**：从核心模型执行路径移除 provider 直连 fetch 调用，改为 LangChain runtime 调用。
+4. **依赖补齐**：Core/Nexus 增加 `@langchain/anthropic`，Core 增加 `@langchain/openai` 显式依赖。
+
+**修改文件（核心）**:
+- `apps/core-app/src/main/modules/ai/providers/langchain-openai-compatible-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/openai-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/deepseek-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/siliconflow-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/anthropic-provider.ts`
+- `apps/core-app/src/main/modules/ai/providers/local-provider.ts`
+- `apps/nexus/server/utils/tuffIntelligenceLabService.ts`
+- `apps/core-app/package.json`
+- `apps/nexus/package.json`
 
 ### Store 命名硬切换（CoreApp + Nexus + Utils）
 
@@ -285,7 +673,7 @@
 7. **编辑弹窗组件化与尺寸统一**：将 metadata 编辑弹窗从 `assets.vue` 内联模板抽离为 `PluginMetadataOverlay` 组件，并将弹窗尺寸对齐编辑插件信息弹窗规格（宽度 `min(900px, 94vw)`）。
 8. **创建发布物流程防闪回**：`AssetCreateOverlay` 步骤切换改为“直接切 step + `settled` 后统一解锁并刷新”，移除切换期 `runWithAutoSizer` 包裹与定时解锁，避免中间态尺寸被回写；同步通过 `AssetPluginFormStep.suspendLayoutEmit` 抑制切换期布局回传，消除“先新后旧再新”的回弹链路。
 9. **Plugin 选择直达表单**：在创建发布物流程中，点击 `Plugin` 类型后直接进入 `plugin_form`，移除中间提示页，减少一步跳转与额外尺寸切换。
-10. **高度测量与宽度抖动修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并将 refresh 调度收敛为“pending 队列 + 条件满足自动 flush + opened 后双 RAF 补刷”，避免门控期丢刷新；同时将子表单 `layout-change` 统一路由到排队刷新入口。补齐 `sizerRef.refresh` 未就绪场景：未就绪时不清空 pending，待 ref 就绪后自动补刷。为收敛视觉抖动，`TxFlipOverlay` 外层滚动关闭（仅保留内部滚动容器），并给创建弹窗容器补上宽度过渡，避免步骤切换时宽度硬跳。
+10. **高度测量与宽度抖动修正**：新增 overlay 已展开门控（`@opened` 后才允许 `TxAutoSizer.refresh`），并将 refresh 调度重构为“单一队列（pending）+ 条件满足自动 flush + opened 后双 RAF 补刷”，避免门控期与 ref 未就绪场景丢刷新；子表单 `layout-change` 统一路由到队列入口。为收敛视觉抖动，`TxFlipOverlay` 外层滚动关闭（仅保留内部滚动容器），并给创建弹窗容器补上宽度过渡，避免步骤切换时宽度硬跳。
 
 **修改文件**:
 - `apps/nexus/app/pages/dashboard/assets.vue`
@@ -3214,7 +3602,7 @@
   - 个人资料页三页重构 (会话 36a89e8a, 98b2468a, ebd24d48)
   - 欢迎页面优化 (会话 432448fe, aab8db44)
   - 打卡页面重设计 (会话 6bbe5bda)
-  - 统计页面增强 (会话 73ab0bd6, 056e2013)  
+  - 统计页面增强 (会话 73ab0bd6, 056e2013)
   - 状态栏全局移除 (会话 09fe75f4, 63e55aba)
   - Geek 风格统一 (会话 5d448a55, 2554c9d6)
 
@@ -3289,7 +3677,7 @@
   - 搜索防抖(300ms)
   - 进度更新节流(1秒/任务)
   - 性能监控器(PerformanceMonitor)
-- **性能提升**: 
+- **性能提升**:
   - 500项列表渲染: 200ms → 20ms (10x)
   - 搜索响应: 150ms → 30ms (5x)
   - 数据库查询: 50-100ms → 5-10ms (5-10x)

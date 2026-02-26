@@ -1,11 +1,12 @@
 <script lang="ts" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ShortcutWarning, ShortcutWithStatus } from '~/modules/channel/main/shortcon'
-import { TxButton, TxCodeEditor, TxEmpty, TxFlipOverlay, TxTag } from '@talex-touch/tuffex'
+import { TxButton, TxCodeEditor, TxEmpty, TxTag } from '@talex-touch/tuffex'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { toast } from 'vue-sonner'
 import { onMounted, reactive, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import FlatKeyInput from '~/components/base/input/FlatKeyInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
 import TuffBlockLine from '~/components/tuff/TuffBlockLine.vue'
@@ -457,33 +458,32 @@ function openManifestDialog(event: MouseEvent): void {
       />
     </TuffGroupBlock>
 
-    <Teleport to="body">
-      <TxFlipOverlay
-        v-model="manifestDialogVisible"
-        :source="manifestDialogSource"
-        :header-title="t('plugin.details.manifestJson')"
-        :header-desc="t('plugin.details.manifestJsonDesc')"
-      >
-        <template #default>
-          <div class="PluginManifest-Panel">
-            <div class="PluginManifest-EditorWrap">
-              <TxCodeEditor
-                :model-value="manifestJsonText || t('plugin.details.manifestJsonEmpty')"
-                language="json"
-                :read-only="true"
-                :line-numbers="true"
-                :line-wrapping="true"
-                :lint="false"
-                :search="true"
-                :completion="false"
-                theme="auto"
-                class="PluginManifest-Editor"
-              />
-            </div>
+    <FlipDialog
+      v-model="manifestDialogVisible"
+      :reference="manifestDialogSource"
+      :header-title="t('plugin.details.manifestJson')"
+      :header-desc="t('plugin.details.manifestJsonDesc')"
+      size="lg"
+    >
+      <template #default>
+        <div class="PluginManifest-Panel">
+          <div class="PluginManifest-EditorWrap">
+            <TxCodeEditor
+              :model-value="manifestJsonText || t('plugin.details.manifestJsonEmpty')"
+              language="json"
+              :read-only="true"
+              :line-numbers="true"
+              :line-wrapping="true"
+              :lint="false"
+              :search="true"
+              :completion="false"
+              theme="auto"
+              class="PluginManifest-Editor"
+            />
           </div>
-        </template>
-      </TxFlipOverlay>
-    </Teleport>
+        </div>
+      </template>
+    </FlipDialog>
   </div>
 </template>
 

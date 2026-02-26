@@ -1,9 +1,10 @@
 <script setup lang="ts" name="RemotePresetOverlay">
 import type { RemotePresetSummary } from '~/modules/layout/preset/remote/useRemotePresets'
-import { TxButton, TxCard, TxFlipOverlay, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxCard, TxStatusBadge } from '@talex-touch/tuffex'
 import { toast } from 'vue-sonner'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { useRemotePresets } from '~/modules/layout'
 
 const props = defineProps<{
@@ -109,96 +110,94 @@ async function handleRefresh(): Promise<void> {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay v-model="visible" :source="props.source">
-      <template #default="{ close }">
-        <div class="RemotePresetOverlay">
-          <div class="RemotePresetOverlay-Header">
-            <div>
-              <h3 class="RemotePresetOverlay-Title">
-                {{ t('preset.remoteTitle', 'Nexus Presets (Beta)') }}
-              </h3>
-              <p class="RemotePresetOverlay-Subtitle">
-                {{ t('preset.remoteDesc', 'Preview and apply remote layout presets after login.') }}
-              </p>
-            </div>
-
-            <div class="RemotePresetOverlay-Actions">
-              <TxStatusBadge text="Beta" status="warning" size="sm" />
-              <TxButton variant="bare" size="sm" :loading="isFetching" @click="handleRefresh">
-                <span class="i-ri-refresh-line mr-1" />
-                {{ t('common.refresh', 'Refresh') }}
-              </TxButton>
-              <TxButton variant="bare" size="sm" @click="handleRollback">
-                <span class="i-ri-arrow-go-back-line mr-1" />
-                {{ t('preset.rollback', 'Undo Last Apply') }}
-              </TxButton>
-              <TxButton variant="flat" size="sm" @click="close">
-                {{ t('common.cancel', 'Cancel') }}
-              </TxButton>
-              <TxButton
-                variant="flat"
-                size="sm"
-                :disabled="!selectedItem"
-                :loading="isApplying"
-                @click="handleApply(close)"
-              >
-                {{ t('preset.remoteApply', 'Apply Nexus Beta') }}
-              </TxButton>
-            </div>
+  <FlipDialog v-model="visible" :reference="props.source" size="xl">
+    <template #default="{ close }">
+      <div class="RemotePresetOverlay">
+        <div class="RemotePresetOverlay-Header">
+          <div>
+            <h3 class="RemotePresetOverlay-Title">
+              {{ t('preset.remoteTitle', 'Nexus Presets (Beta)') }}
+            </h3>
+            <p class="RemotePresetOverlay-Subtitle">
+              {{ t('preset.remoteDesc', 'Preview and apply remote layout presets after login.') }}
+            </p>
           </div>
 
-          <div class="RemotePresetOverlay-Body">
-            <div v-if="sortedItems.length === 0" class="RemotePresetOverlay-Empty">
-              <span class="i-ri-inbox-archive-line" />
-              <p>{{ t('preset.noRemotePreset', 'No Nexus beta preset available') }}</p>
-            </div>
-
-            <div v-else class="RemotePresetOverlay-List">
-              <TxCard
-                v-for="item in sortedItems"
-                :key="item.id"
-                :clickable="true"
-                variant="solid"
-                background="mask"
-                :padding="12"
-                class="RemotePresetOverlay-Item"
-                :class="{ active: selectedPresetId === item.id }"
-                @click="selectedPresetId = item.id"
-              >
-                <div class="RemotePresetOverlay-ItemHeader">
-                  <p class="RemotePresetOverlay-ItemName">{{ item.name }}</p>
-                  <TxStatusBadge
-                    :text="item.channel.toUpperCase()"
-                    :status="item.channel === 'beta' ? 'warning' : 'success'"
-                    size="sm"
-                  />
-                </div>
-
-                <div class="RemotePresetOverlay-Preview">
-                  <img v-if="item.preview" :src="item.preview" :alt="item.name" />
-                  <div v-else class="RemotePresetOverlay-PreviewFallback">
-                    <span class="i-ri-image-line" />
-                    <span>{{ t('preset.previewUnavailable', 'No Preview') }}</span>
-                  </div>
-                </div>
-
-                <p class="RemotePresetOverlay-ItemDesc">
-                  {{ item.description || t('preset.noDescription', 'No description') }}
-                </p>
-                <p class="RemotePresetOverlay-ItemMeta">
-                  {{ t('preset.compat', 'Compatibility') }}: {{ formatCompat(item) }}
-                </p>
-                <p class="RemotePresetOverlay-ItemMeta">
-                  {{ t('preset.updatedAt', 'Updated') }}: {{ formatUpdatedAt(item.updatedAt) }}
-                </p>
-              </TxCard>
-            </div>
+          <div class="RemotePresetOverlay-Actions">
+            <TxStatusBadge text="Beta" status="warning" size="sm" />
+            <TxButton variant="bare" size="sm" :loading="isFetching" @click="handleRefresh">
+              <span class="i-ri-refresh-line mr-1" />
+              {{ t('common.refresh', 'Refresh') }}
+            </TxButton>
+            <TxButton variant="bare" size="sm" @click="handleRollback">
+              <span class="i-ri-arrow-go-back-line mr-1" />
+              {{ t('preset.rollback', 'Undo Last Apply') }}
+            </TxButton>
+            <TxButton variant="flat" size="sm" @click="close">
+              {{ t('common.cancel', 'Cancel') }}
+            </TxButton>
+            <TxButton
+              variant="flat"
+              size="sm"
+              :disabled="!selectedItem"
+              :loading="isApplying"
+              @click="handleApply(close)"
+            >
+              {{ t('preset.remoteApply', 'Apply Nexus Beta') }}
+            </TxButton>
           </div>
         </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+
+        <div class="RemotePresetOverlay-Body">
+          <div v-if="sortedItems.length === 0" class="RemotePresetOverlay-Empty">
+            <span class="i-ri-inbox-archive-line" />
+            <p>{{ t('preset.noRemotePreset', 'No Nexus beta preset available') }}</p>
+          </div>
+
+          <div v-else class="RemotePresetOverlay-List">
+            <TxCard
+              v-for="item in sortedItems"
+              :key="item.id"
+              :clickable="true"
+              variant="solid"
+              background="mask"
+              :padding="12"
+              class="RemotePresetOverlay-Item"
+              :class="{ active: selectedPresetId === item.id }"
+              @click="selectedPresetId = item.id"
+            >
+              <div class="RemotePresetOverlay-ItemHeader">
+                <p class="RemotePresetOverlay-ItemName">{{ item.name }}</p>
+                <TxStatusBadge
+                  :text="item.channel.toUpperCase()"
+                  :status="item.channel === 'beta' ? 'warning' : 'success'"
+                  size="sm"
+                />
+              </div>
+
+              <div class="RemotePresetOverlay-Preview">
+                <img v-if="item.preview" :src="item.preview" :alt="item.name" />
+                <div v-else class="RemotePresetOverlay-PreviewFallback">
+                  <span class="i-ri-image-line" />
+                  <span>{{ t('preset.previewUnavailable', 'No Preview') }}</span>
+                </div>
+              </div>
+
+              <p class="RemotePresetOverlay-ItemDesc">
+                {{ item.description || t('preset.noDescription', 'No description') }}
+              </p>
+              <p class="RemotePresetOverlay-ItemMeta">
+                {{ t('preset.compat', 'Compatibility') }}: {{ formatCompat(item) }}
+              </p>
+              <p class="RemotePresetOverlay-ItemMeta">
+                {{ t('preset.updatedAt', 'Updated') }}: {{ formatUpdatedAt(item.updatedAt) }}
+              </p>
+            </TxCard>
+          </div>
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style scoped lang="scss">

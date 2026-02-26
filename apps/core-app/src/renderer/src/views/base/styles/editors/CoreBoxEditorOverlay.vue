@@ -1,9 +1,10 @@
 <script setup lang="ts" name="CoreBoxEditorOverlay">
 import type { CanvasAreaOption, CanvasConfig } from './canvas-types'
-import { TxButton, TxFlipOverlay, TxStatusBadge } from '@talex-touch/tuffex'
+import { TxButton, TxStatusBadge } from '@talex-touch/tuffex'
 import { appSettingOriginData } from '@talex-touch/utils'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { appSetting } from '~/modules/channel/storage'
 import CanvasGridEditor from './CanvasGridEditor.vue'
 
@@ -61,45 +62,43 @@ function handleCancel(close: () => void): void {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay v-model="visible" :source="source">
-      <template #default="{ close }">
-        <div class="CoreBoxEditorOverlay">
-          <div class="CoreBoxEditorOverlay-Header">
-            <div class="CoreBoxEditorOverlay-TitleBlock">
-              <div class="CoreBoxEditorOverlay-Title">
-                {{ t('layoutSection.customizeCoreBox', 'Customize CoreBox') }}
-              </div>
-              <div class="CoreBoxEditorOverlay-Subtitle">
-                {{ t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style') }}
-              </div>
+  <FlipDialog v-model="visible" :reference="source" size="xl">
+    <template #default="{ close }">
+      <div class="CoreBoxEditorOverlay">
+        <div class="CoreBoxEditorOverlay-Header">
+          <div class="CoreBoxEditorOverlay-TitleBlock">
+            <div class="CoreBoxEditorOverlay-Title">
+              {{ t('layoutSection.customizeCoreBox', 'Customize CoreBox') }}
             </div>
-            <div class="CoreBoxEditorOverlay-Actions">
-              <TxStatusBadge text="Beta" status="warning" size="sm" />
-              <TxButton variant="flat" size="sm" @click="handleCancel(close)">
-                {{ t('common.cancel', 'Cancel') }}
-              </TxButton>
-              <TxButton variant="flat" size="sm" @click="handleSave(close)">
-                {{ t('common.confirm', 'Save') }}
-              </TxButton>
+            <div class="CoreBoxEditorOverlay-Subtitle">
+              {{ t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style') }}
             </div>
           </div>
-
-          <div class="CoreBoxEditorOverlay-Body">
-            <CanvasGridEditor
-              v-model="editingConfig"
-              :default-config="defaultConfig"
-              :areas="areaOptions"
-              :title="t('layoutSection.customizeCoreBox', 'Customize CoreBox')"
-              :description="
-                t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')
-              "
-            />
+          <div class="CoreBoxEditorOverlay-Actions">
+            <TxStatusBadge text="Beta" status="warning" size="sm" />
+            <TxButton variant="flat" size="sm" @click="handleCancel(close)">
+              {{ t('common.cancel', 'Cancel') }}
+            </TxButton>
+            <TxButton variant="flat" size="sm" @click="handleSave(close)">
+              {{ t('common.confirm', 'Save') }}
+            </TxButton>
           </div>
         </div>
-      </template>
-    </TxFlipOverlay>
-  </Teleport>
+
+        <div class="CoreBoxEditorOverlay-Body">
+          <CanvasGridEditor
+            v-model="editingConfig"
+            :default-config="defaultConfig"
+            :areas="areaOptions"
+            :title="t('layoutSection.customizeCoreBox', 'Customize CoreBox')"
+            :description="
+              t('layoutSection.customizeCoreBoxDesc', 'Adjust search box logo, input style')
+            "
+          />
+        </div>
+      </div>
+    </template>
+  </FlipDialog>
 </template>
 
 <style scoped lang="scss">

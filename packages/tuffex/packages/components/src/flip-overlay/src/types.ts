@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'vue'
+
 export interface FlipOverlayProps {
   modelValue?: boolean
   source?: HTMLElement | DOMRect | null
@@ -12,9 +14,22 @@ export interface FlipOverlayProps {
   easeOut?: string
   easeIn?: string
   maskClosable?: boolean
+  preventAccidentalClose?: boolean
   transitionName?: string
   maskClass?: string
   cardClass?: string
+  cardStyle?: CSSProperties
+  globalMask?: boolean
+  border?: 'solid' | 'dashed' | 'dash' | 'none'
+  surface?: 'pure' | 'mask' | 'blur' | 'glass' | 'refraction'
+  surfaceColor?: string
+  surfaceOpacity?: number
+  header?: boolean
+  headerTitle?: string
+  headerDesc?: string
+  closable?: boolean
+  closeAriaLabel?: string
+  scrollable?: boolean
   randomTilt?: boolean
   expanded?: boolean
   animating?: boolean
@@ -34,4 +49,7 @@ export interface FlipOverlaySlotProps {
   close: () => void
   expanded: boolean
   animating: boolean
+  closable: boolean
+  headerTitle?: string
+  headerDesc?: string
 }
