@@ -1416,6 +1416,48 @@ export interface MergeUserInput {
   metadata?: Record<string, any> | null
 }
 
+export async function mergeLegacySyncItemsForUsers(
+  db: D1Database,
+  sourceUserId: string,
+  targetUserId: string
+): Promise<void> {
+  if (!(await tableExists(db, 'sync_items'))) {
+    return
+  }
+
+  await db.prepare(`
+    DELETE FROM sync_items
+    WHERE user_id = ?1
+      AND EXISTS (
+        SELECT 1
+        FROM sync_items AS target
+        WHERE target.user_id = ?2
+          AND target.namespace = sync_items.namespace
+          AND target.key = sync_items.key
+          AND target.updated_at >= sync_items.updated_at
+      )
+  `).bind(sourceUserId, targetUserId).run()
+
+  await db.prepare(`
+    DELETE FROM sync_items
+    WHERE user_id = ?2
+      AND EXISTS (
+        SELECT 1
+        FROM sync_items AS source
+        WHERE source.user_id = ?1
+          AND source.namespace = sync_items.namespace
+          AND source.key = sync_items.key
+          AND source.updated_at > sync_items.updated_at
+      )
+  `).bind(sourceUserId, targetUserId).run()
+
+  await db.prepare(`
+    UPDATE sync_items
+    SET user_id = ?2
+    WHERE user_id = ?1
+  `).bind(sourceUserId, targetUserId).run()
+}
+
 export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise<void> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
@@ -1476,20 +1518,7 @@ export async function mergeUsers(event: H3Event, input: MergeUserInput): Promise
   await db.prepare(`DELETE FROM ${PASSWORD_RESET_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
   await db.prepare(`DELETE FROM ${WEBAUTHN_CHALLENGE_TABLE} WHERE user_id = ?`).bind(input.sourceUserId).run()
 
-  if (await tableExists(db, 'sync_items')) {
-    await db.prepare(`
-      INSERT INTO sync_items (user_id, namespace, key, value_json, updated_at, updated_by_device_id)
-      SELECT ?, namespace, key, value_json, updated_at, updated_by_device_id
-      FROM sync_items
-      WHERE user_id = ?
-      ON CONFLICT(user_id, namespace, key) DO UPDATE SET
-        value_json = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.value_json ELSE sync_items.value_json END,
-        updated_at = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.updated_at ELSE sync_items.updated_at END,
-        updated_by_device_id = CASE WHEN excluded.updated_at > sync_items.updated_at THEN excluded.updated_by_device_id ELSE sync_items.updated_by_device_id END
-    `).bind(input.targetUserId, input.sourceUserId).run()
-
-    await db.prepare(`DELETE FROM sync_items WHERE user_id = ?`).bind(input.sourceUserId).run()
-  }
+  await mergeLegacySyncItemsForUsers(db, input.sourceUserId, input.targetUserId)
 
   if (await tableExists(db, 'api_keys')) {
     await db.prepare(`

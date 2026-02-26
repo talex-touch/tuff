@@ -30,10 +30,15 @@
 1. 删除 `apps/nexus/server/utils/syncStore.ts`（legacy 明文同步实现）。
 2. 同步更新风险待办描述，明确 `syncStore.ts` 已清理，后续仅剩 `authStore.ts` 中历史 `value_json` 写入兼容清理。
 3. 清理 `mergeUsers` 对 `sync_items` 的 `value_json` 明文写入 SQL，改为仅通过时间优先规则做冲突删除 + `user_id` 迁移，不再显式写 `value_json`。
+4. 新增 CI 守卫工作流与检查脚本，禁止 `apps/nexus/server` 回归 `value_json` 关键字。
+5. 新增 `mergeLegacySyncItemsForUsers` 单测，覆盖 source/target 新旧时间戳冲突场景。
 
 **修改文件**:
 - `apps/nexus/server/utils/syncStore.ts`（删除）
 - `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/utils/__tests__/authStore.sync-items-merge.test.ts`
+- `scripts/check-no-legacy-sync-value-json.mjs`
+- `.github/workflows/sync-guard.yml`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
