@@ -1,0 +1,17 @@
+{
+  "name": "@talex-touch/tuff-business",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Business UI components for Talex Touch apps",
+  "author": "TalexDreamSoul",
+  "license": "MPL-2.0",
+  "main": "src/index.ts",
+  "module": "./src/index.ts",
+  "peerDependencies": {
+    "vue": "^3.5.27"
+  },
+  "dependencies": {
+    "@talex-touch/tuffex": "workspace:*"
+  }
+}
