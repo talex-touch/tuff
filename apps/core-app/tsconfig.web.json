@@ -13,6 +13,7 @@
       "~/utils/*": ["src/renderer/src/utils/*"],
       "~/types/*": ["src/renderer/src/types/*"],
       "~/modules/*": ["src/renderer/src/modules/*"],
+      "@talex-touch/tuff-business": ["../../packages/tuff-business/src/index.ts"],
       "@talex-touch/tuffex": ["../../packages/tuffex/packages/components/src/index.ts"],
       "@talex-touch/tuffex/style.css": ["../../packages/tuffex/packages/components/style/index.scss"],
       "@talex-touch/tuffex/utils": ["../../packages/tuffex/packages/utils/index.ts"]

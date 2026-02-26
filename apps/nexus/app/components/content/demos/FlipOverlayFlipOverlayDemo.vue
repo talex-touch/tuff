@@ -10,12 +10,14 @@ const labels = computed(() => (locale.value === 'zh'
   ? {
       open: '打开 Overlay',
       title: '详情视图',
+      desc: '头部支持标题、副标题和默认圆形关闭按钮。',
       body: '内容从触发源翻转展开，适合卡片详情或预览。',
       close: '关闭',
     }
   : {
       open: 'Open Overlay',
       title: 'Detail View',
+      desc: 'Header supports title, description, and default round close button.',
       body: 'The content flips in from the trigger, ideal for previews or detail views.',
       close: 'Close',
     }))
@@ -26,12 +28,14 @@ const labels = computed(() => (locale.value === 'zh'
     <TxButton ref="triggerRef" @click="open = true">
       {{ labels.open }}
     </TxButton>
-    <TxFlipOverlay v-model="open" :source="triggerEl">
+    <TxFlipOverlay
+      v-model="open"
+      :source="triggerEl"
+      :header-title="labels.title"
+      :header-desc="labels.desc"
+    >
       <template #default="{ close }">
         <div class="space-y-3 p-6">
-          <h3 class="text-lg font-semibold">
-            {{ labels.title }}
-          </h3>
           <p class="text-sm text-black/60 dark:text-white/60">
             {{ labels.body }}
           </p>

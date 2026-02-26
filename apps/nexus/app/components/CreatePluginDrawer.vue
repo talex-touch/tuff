@@ -7,6 +7,7 @@ import { TxButton } from '@talex-touch/tuffex'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
 import { isPluginCategoryId, PLUGIN_CATEGORIES } from '~/utils/plugin-categories'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface Props {
   isOpen: boolean
@@ -373,10 +374,10 @@ function onSubmit() {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visibleModel"
-      :source="props.source"
+      :reference="props.source"
+      size="lg"
       :header-title="t('dashboard.sections.plugins.addButton')"
       :header-desc="t('dashboard.sections.plugins.manageSubtitle')"
     >
@@ -603,8 +604,7 @@ function onSubmit() {
           </div>
         </TxAutoSizer>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>
 
 <style scoped>

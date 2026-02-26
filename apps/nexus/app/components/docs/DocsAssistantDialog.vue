@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { TxButton, TxFlipOverlay, TxMarkdownView, TxSearchInput, TxSpinner } from '@talex-touch/tuffex'
+import { TxButton, TxMarkdownView, TxSearchInput, TxSpinner } from '@talex-touch/tuffex'
 import { computed, nextTick, ref, watch } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface AssistantMessage {
   id: string
@@ -350,10 +351,10 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visible"
-      :source="props.source"
+      :reference="props.source"
+      size="md"
     >
       <template #header-display>
         <div class="assistant-dialog__title">
@@ -426,8 +427,7 @@ async function readStreamResponse(response: Response, target: AssistantMessage) 
           </div>
         </div>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>
 
 <style scoped>

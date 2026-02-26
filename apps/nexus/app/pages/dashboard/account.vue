@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxAutoSizer, TxCard, TxFlipOverlay, TxButton, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
+import { TxAutoSizer, TxCard, TxButton, TxTabItem, TxTabs, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, onMounted, ref, watch } from 'vue'
 import DashboardAccountProfilePlanCard from '~/components/dashboard/AccountProfilePlanCard.vue'
@@ -10,6 +10,7 @@ import {
   persistOauthContext,
   type OauthProvider,
 } from '~/composables/useOauthContext'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import { patchCurrentUserProfile } from '~/composables/useCurrentUserApi'
 import { base64UrlToBuffer, serializeCredential } from '~/utils/webauthn'
 
@@ -573,10 +574,10 @@ function formatHistoryTime(value: string) {
       </TxAutoSizer>
     </section>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="manageOverlayVisible"
-        :source="manageOverlaySource"
+        :reference="manageOverlaySource"
+        size="md"
       >
         <template #default="{ close }">
           <div class="AccountManageOverlay-Inner">
@@ -660,8 +661,7 @@ function formatHistoryTime(value: string) {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
   </div>
 </template>
 

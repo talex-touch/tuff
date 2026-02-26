@@ -1,14 +1,28 @@
 packages:
-  - 'packages/**'
-  - 'apps/**'
-  - 'plugins/**'
-  - '!app/core/extensions/**'
+  - 'packages/*'
+  - packages/tuffex/packages/components
+  - 'apps/*'
+  - 'plugins/*'
+  - '!apps/**/out/**'
+  - '!apps/**/dist/**'
+  - '!apps/**/.output/**'
+  - '!apps/**/.nuxt/**'
+  - '!apps/**/.vitepress/**'
+  - '!apps/**/node_modules/**'
+  - '!packages/**/dist/**'
+  - '!packages/**/.vitepress/**'
+  - '!packages/**/node_modules/**'
+  - '!plugins/**/dist/**'
+  - '!plugins/**/node_modules/**'
+  - '!apps/core-app/tuff/modules/plugins/**'
 
 catalog:
   '@auth/core': ^0.34.1
   '@floating-ui/vue': ^1.1.9
   '@iconify-json/cib': ^1.2.3
+  '@langchain/anthropic': ^0.3.29
   '@langchain/core': ^0.3.80
+  '@langchain/langgraph': ^0.2.25
   '@langchain/openai': ^0.3.17
   '@lobehub/icons': ^2.43.1
   '@sentry/nuxt': ^10.20.0
@@ -54,6 +68,8 @@ catalogs:
     vite: ^7.3.1
   conflicts_build_h7_0_6:
     vite: ^7.3.1
+  conflicts_conflicts_frontend_h3_5_18_h3_5_27:
+    vue: ^3.5.27
   conflicts_frontend_h3_5_18:
     vue: ^3.5.18
   dev:
@@ -74,5 +90,3 @@ catalogs:
   icons:
     '@iconify-json/carbon': ^1.2.10
     '@iconify-json/twemoji': ^1.2.2
-  conflicts_conflicts_frontend_h3_5_18_h3_5_27:
-    vue: ^3.5.27

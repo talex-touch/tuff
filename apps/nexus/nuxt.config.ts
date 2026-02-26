@@ -16,6 +16,7 @@ const isDev = process.env.NODE_ENV !== 'production'
 const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
+const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
 const tuffexSourceEntry = resolve(currentDir, '../../packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(currentDir, '../../packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/utils/index.ts')
@@ -193,7 +194,7 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: ['@talex-touch/tuffex', '@talex-touch/utils'],
+    transpile: ['@talex-touch/tuff-business', '@talex-touch/tuffex', '@talex-touch/utils'],
   },
 
   future: {
@@ -248,6 +249,7 @@ export default defineNuxtConfig({
     resolve: {
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
+        { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
         { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
         { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
@@ -267,6 +269,7 @@ export default defineNuxtConfig({
     tsConfig: {
       compilerOptions: {
         paths: {
+          '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
           '@talex-touch/tuffex': [tuffexSourceEntry],
           '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],

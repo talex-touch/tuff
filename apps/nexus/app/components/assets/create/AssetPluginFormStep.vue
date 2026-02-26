@@ -15,6 +15,7 @@ interface Props {
   error?: string | null
   isAdmin?: boolean
   maxScrollHeight?: number | null
+  suspendLayoutEmit?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -22,6 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
   error: null,
   isAdmin: false,
   maxScrollHeight: null,
+  suspendLayoutEmit: false,
 })
 
 const emit = defineEmits<{
@@ -321,6 +323,8 @@ function setupFormObserver() {
 }
 
 watch(scrollAreaHeight, () => {
+  if (props.suspendLayoutEmit)
+    return
   emit('layout-change')
 })
 

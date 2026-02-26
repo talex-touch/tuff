@@ -10,7 +10,8 @@ import type {
   StorePluginReviewSubmitResponse,
   StorePluginSummary,
 } from '~/types/store'
-import { TxButton, TxFlipOverlay, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TxButton, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import {
   SharedPluginDetailReadme,
   SharedPluginDetailVersions,
@@ -386,9 +387,10 @@ useSeoMeta({
         />
       </div>
     </div>
-    <TxFlipOverlay
+    <FlipDialog
       :model-value="Boolean(selectedSlug)"
-      :source="detailOverlaySource"
+      :reference="detailOverlaySource"
+      size="xl"
       @update:model-value="(v) => {
         if (!v)
           closePluginDetail()
@@ -615,7 +617,7 @@ useSeoMeta({
           </div>
         </div>
       </template>
-    </TxFlipOverlay>
+    </FlipDialog>
   </section>
 </template>
 

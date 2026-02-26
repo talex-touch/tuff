@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxFlipOverlay, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
+import { TuffInput, TuffSelect, TuffSelectItem, TxButton, TxPagination, TxSkeleton, TxSpinner, TxTabItem, TxTabs } from '@talex-touch/tuffex'
 import { computed, reactive, ref, watch } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 defineI18nRoute(false)
 
@@ -982,10 +983,10 @@ watch(() => creditTab.value, (value) => {
       </p>
     </template>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="createOverlayVisible"
-        :source="createTriggerRef?.$el || null"
+        :reference="createTriggerRef?.$el || null"
+        size="md"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1012,13 +1013,12 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="inviteOverlayVisible"
-        :source="inviteTriggerRef?.$el || null"
+        :reference="inviteTriggerRef?.$el || null"
+        size="md"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1053,13 +1053,12 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="joinOverlayVisible"
-        :source="joinTriggerRef?.$el || null"
+        :reference="joinTriggerRef?.$el || null"
+        size="md"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1107,13 +1106,12 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="disbandOverlayVisible"
-        :source="disbandTriggerRef?.$el || null"
+        :reference="disbandTriggerRef?.$el || null"
+        size="md"
       >
         <template #default="{ close }">
           <div class="TeamOverlay-Inner">
@@ -1134,8 +1132,7 @@ watch(() => creditTab.value, (value) => {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
   </div>
 </template>
 
