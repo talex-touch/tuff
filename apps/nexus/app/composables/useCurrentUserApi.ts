@@ -31,26 +31,32 @@ interface CurrentUserProfilePatch {
   locale?: string | null
 }
 
-type RequestLike = <T>(request: string, options?: any) => Promise<T>
+interface RequestOptions {
+  method?: string
+  body?: unknown
+  cache?: RequestCache
+  [key: string]: unknown
+}
+
+type RequestLike = (request: string, options?: RequestOptions) => Promise<unknown>
 
 const USER_ME_ENDPOINT = '/api/user/me'
 const USER_PROFILE_ENDPOINT = '/api/user/profile'
 
-function resolveRequest(): RequestLike {
-  return (import.meta.server ? useRequestFetch() : $fetch) as RequestLike
-}
-
 export async function fetchCurrentUserProfile(request?: RequestLike) {
-  const caller = request ?? resolveRequest()
-  return await caller<CurrentUserProfile | null>(USER_ME_ENDPOINT, {
-    cache: 'no-store',
-  })
+  const result = request
+    ? await request(USER_ME_ENDPOINT, { cache: 'no-store' })
+    : import.meta.server
+      ? await useRequestFetch()(USER_ME_ENDPOINT, { cache: 'no-store' })
+      : await $fetch(USER_ME_ENDPOINT, { cache: 'no-store' })
+  return result as CurrentUserProfile | null
 }
 
 export async function patchCurrentUserProfile(payload: CurrentUserProfilePatch, request?: RequestLike) {
-  const caller = request ?? resolveRequest()
-  return await caller<CurrentUserProfile | null>(USER_PROFILE_ENDPOINT, {
-    method: 'PATCH',
-    body: payload,
-  })
+  const result = request
+    ? await request(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
+    : import.meta.server
+      ? await useRequestFetch()(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
+      : await $fetch(USER_PROFILE_ENDPOINT, { method: 'PATCH', body: payload })
+  return result as CurrentUserProfile | null
 }

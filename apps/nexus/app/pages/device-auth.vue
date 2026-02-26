@@ -123,6 +123,10 @@ function handleBeforeUnload(): void {
   void reportPresence('closed', true)
 }
 
+function goHome(): void {
+  void navigateTo('/')
+}
+
 async function ensureSession(): Promise<boolean> {
   if (status.value === 'authenticated')
     return true
@@ -291,7 +295,7 @@ onUnmounted(() => {
 <template>
   <AuthVisualShell :loading="state === 'loading'">
     <template #header>
-      <AuthTopbar :back-label="t('auth.backToPrevious', '返回上一页')" @back="navigateTo('/')" />
+      <AuthTopbar :back-label="t('auth.backToPrevious', '返回上一页')" @back="goHome" />
     </template>
 
     <div class="mb-16 w-full max-w-md text-center">

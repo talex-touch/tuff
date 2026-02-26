@@ -10,9 +10,11 @@ import {
   reactive,
   ref,
   watch,
+  type Component,
   type VNode
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
+import { getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
 
 const props = withDefaults(
@@ -91,6 +93,17 @@ function handleVnodeUnmounted(_vnode: VNode): void {
   logLightLifecycle('unmounted')
 }
 
+function parseEvalLine(error: Error): { line: number; column: number } | null {
+  const stack = typeof error.stack === 'string' ? error.stack : ''
+  if (!stack) return null
+  const match = /<anonymous>:(\d+):(\d+)/.exec(stack)
+  if (!match) return null
+  const line = Number.parseInt(match[1], 10)
+  const column = Number.parseInt(match[2], 10)
+  if (!Number.isFinite(line) || !Number.isFinite(column)) return null
+  return { line, column }
+}
+
 watch(
   () => props.rendererId,
   () => {
@@ -140,6 +153,18 @@ onErrorCaptured((error) => {
   const resolved = error instanceof Error ? error : new Error(String(error))
   renderError.value = resolved
   if (isDev) {
+    const evalPosition = parseEvalLine(resolved)
+    if (evalPosition && props.rendererId) {
+      const snippet = getWidgetRuntimeSnippet(props.rendererId, evalPosition.line, 2)
+      if (snippet.length > 0) {
+        console.error('[WidgetFrame] eval snippet:', {
+          rendererId: props.rendererId,
+          line: evalPosition.line,
+          column: evalPosition.column,
+          snippet: snippet.map(({ line, text }) => `${line}: ${text}`)
+        })
+      }
+    }
     console.error('[WidgetFrame] render error:', resolved)
   }
   emits('render-error', resolved)
@@ -238,7 +263,7 @@ function mountShadowApp(): void {
   }
   const app = createApp({
     render: () =>
-      h(renderer.value as any, {
+      h(renderer.value as Component, {
         item: shadowProps.item,
         payload: shadowProps.payload,
         preview: shadowProps.preview,

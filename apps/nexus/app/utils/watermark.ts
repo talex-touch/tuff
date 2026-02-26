@@ -65,7 +65,7 @@ export function buildNoiseWatermarkDataUrl(options: NoiseWatermarkOptions): stri
     const cy = Math.floor(y / cell)
     for (let x = 0; x < size; x += 1) {
       const cx = Math.floor(x / cell)
-      const value = cellValues[cy * cells + cx]
+      const value = cellValues[cy * cells + cx] ?? base
       const idx = (y * size + x) * 4
       image.data[idx] = value
       image.data[idx + 1] = value

@@ -7,6 +7,8 @@ interface ResolveResult {
   record: null | {
     userId: string | null
     deviceId: string
+    sessionId?: string | null
+    shotId?: string | null
     trackedAt: number
     lastSeenAt: number
   }
@@ -15,9 +17,9 @@ interface ResolveResult {
 function toLuma(data: Uint8ClampedArray) {
   const luma = new Array<number>(data.length / 4)
   for (let i = 0; i < data.length; i += 4) {
-    const r = data[i]
-    const g = data[i + 1]
-    const b = data[i + 2]
+    const r = data[i] ?? 0
+    const g = data[i + 1] ?? 0
+    const b = data[i + 2] ?? 0
     luma[i / 4] = Math.round(0.299 * r + 0.587 * g + 0.114 * b)
   }
   return luma

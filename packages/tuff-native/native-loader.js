@@ -4,9 +4,9 @@ const path = require('node:path')
 
 function buildExportMismatchError(moduleName, expectedExports, binding) {
   const exported = binding && typeof binding === 'object' ? Object.keys(binding) : []
-  const missing = expectedExports.filter((name) => typeof binding?.[name] !== 'function')
+  const missing = expectedExports.filter(name => typeof binding?.[name] !== 'function')
   const error = new Error(
-    `Native module export mismatch (${moduleName}): missing [${missing.join(', ')}], actual [${exported.join(', ')}]`
+    `Native module export mismatch (${moduleName}): missing [${missing.join(', ')}], actual [${exported.join(', ')}]`,
   )
   error.code = 'ERR_NATIVE_EXPORT_MISMATCH'
   return error
@@ -29,7 +29,7 @@ function loadNativeBinding(options) {
     const binding = require(modulePath)
 
     if (expectedExports.length > 0) {
-      const missing = expectedExports.filter((name) => typeof binding?.[name] !== 'function')
+      const missing = expectedExports.filter(name => typeof binding?.[name] !== 'function')
       if (missing.length > 0) {
         return {
           nativeBinding: null,

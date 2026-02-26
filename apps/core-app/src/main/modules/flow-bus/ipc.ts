@@ -58,32 +58,60 @@ export class FlowBusIPC {
       return pluginModule.pluginManager?.plugins.get(pluginId)?.sdkapi
     }
 
-    const resolveActor = (context: HandlerContext, payload: any) => {
+    const toPayloadRecord = (payload: unknown): Record<string, unknown> | null => {
+      if (!payload || typeof payload !== 'object') {
+        return null
+      }
+      return payload as Record<string, unknown>
+    }
+
+    const resolveNestedSourcePluginId = (
+      payload: Record<string, unknown> | null
+    ): string | undefined => {
+      const nestedPayload = payload?.payload
+      if (!nestedPayload || typeof nestedPayload !== 'object') {
+        return undefined
+      }
+      const contextPayload = (nestedPayload as Record<string, unknown>).context
+      if (!contextPayload || typeof contextPayload !== 'object') {
+        return undefined
+      }
+      const sourcePluginId = (contextPayload as Record<string, unknown>).sourcePluginId
+      return typeof sourcePluginId === 'string' ? sourcePluginId : undefined
+    }
+
+    const resolveActor = (context: HandlerContext, payload: unknown) => {
+      const payloadRecord = toPayloadRecord(payload)
       const contextPluginId = context?.plugin?.name
       if (contextPluginId) {
+        const payloadSdkapi = payloadRecord?._sdkapi
         const sdkapi =
-          typeof payload?._sdkapi === 'number'
-            ? payload._sdkapi
-            : resolvePluginSdkapi(contextPluginId)
+          typeof payloadSdkapi === 'number' ? payloadSdkapi : resolvePluginSdkapi(contextPluginId)
         return { pluginId: contextPluginId, sdkapi }
       }
 
+      const payloadSenderId = payloadRecord?.senderId
       const actorPluginId =
-        payload?.actorPluginId ??
-        payload?.payload?.context?.sourcePluginId ??
-        (payload?.senderId && payload.senderId !== 'corebox' ? payload.senderId : undefined)
+        (typeof payloadRecord?.actorPluginId === 'string'
+          ? payloadRecord.actorPluginId
+          : undefined) ??
+        resolveNestedSourcePluginId(payloadRecord) ??
+        (typeof payloadSenderId === 'string' && payloadSenderId !== 'corebox'
+          ? payloadSenderId
+          : undefined)
 
       if (!actorPluginId || actorPluginId === 'corebox') {
         return {}
       }
 
+      const payloadSdkapi = payloadRecord?._sdkapi
       const sdkapi =
-        typeof payload?._sdkapi === 'number' ? payload._sdkapi : resolvePluginSdkapi(actorPluginId)
+        typeof payloadSdkapi === 'number' ? payloadSdkapi : resolvePluginSdkapi(actorPluginId)
 
       return { pluginId: actorPluginId, sdkapi }
     }
 
-    const enforce = (context: HandlerContext, eventName: string, payload?: any) => {
+    const enforce = (context: HandlerContext, eventName: string, payload?: unknown) => {
       const { pluginId, sdkapi } = resolveActor(context, payload)
       if (!pluginId) {
         return

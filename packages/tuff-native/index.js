@@ -46,7 +46,7 @@ async function recognizeImageText(options) {
     const error = new Error(
       loadError instanceof Error
         ? `Native OCR module is unavailable: ${loadError.message}`
-        : 'Native OCR module is unavailable'
+        : 'Native OCR module is unavailable',
     )
     error.code = 'ERR_OCR_ENGINE_UNAVAILABLE'
     throw error

@@ -1,7 +1,8 @@
 {
   "name": "@talex-touch/tuff",
   "type": "module",
-  "version": "2.4.7-beta.25",
+  "version": "2.4.7",
+  "packageManager": "pnpm@10.24.0",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
   "license": "MPL-2.0 license",
@@ -9,8 +10,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "lint": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec node ../../node_modules/eslint/bin/eslint.js --cache --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && pnpm intelligence:check",
-    "lint:fix": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec node ../../node_modules/eslint/bin/eslint.js --cache --fix --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && pnpm intelligence:check",
+    "lint": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && pnpm intelligence:check",
+    "lint:fix": "pnpm -r --filter \"./apps/*\" --filter \"./packages/*\" --filter \"./plugins/*\" exec eslint --cache --fix --no-warn-ignored \"**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}\" && pnpm intelligence:check",
     "lint:staged": "lint-staged",
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
@@ -92,10 +93,10 @@
       "workerd"
     ],
     "overrides": {
-      "@panva/hkdf": "1.0.2",
-      "@types/node": "24.1.0",
       "@nuxt/devtools": "catalog:build",
       "@nuxt/kit": "catalog:build",
+      "@panva/hkdf": "1.0.2",
+      "@types/node": "24.1.0",
       "nuxt": "catalog:build",
       "unplugin": "catalog:build",
       "vite": "7.3.1"

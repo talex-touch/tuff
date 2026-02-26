@@ -11,6 +11,7 @@ useWatermarkFingerprint()
 
 const hostRef = ref<HTMLDivElement | null>(null)
 const layerRefs = ref<HTMLDivElement[]>([])
+const defaultLayerStyle = { opacity: 1, blur: 0 }
 
 const LAYER_STYLES = [
   { opacity: 1, blur: 0 },
@@ -46,7 +47,7 @@ function createHost() {
   layerRefs.value = []
   WATERMARK_BANDS.forEach((band, index) => {
     const layer = document.createElement('div')
-    const layerStyle = LAYER_STYLES[index] ?? LAYER_STYLES[0]
+    const layerStyle = LAYER_STYLES[index] ?? defaultLayerStyle
     layer.className = 'wm-layer'
     layer.style.backgroundSize = `${band.tile}px ${band.tile}px`
     layer.style.backgroundPosition = '0 0'
@@ -73,10 +74,13 @@ function rebuildNoise(seed: number) {
   const seeds = deriveWatermarkSeeds(seed, WATERMARK_BANDS.length)
   WATERMARK_BANDS.forEach((band, index) => {
     const layer = layerRefs.value[index]
+    const layerSeed = seeds[index]
     if (!layer)
       return
+    if (typeof layerSeed !== 'number')
+      return
     const url = buildNoiseWatermarkDataUrl({
-      seed: seeds[index],
+      seed: layerSeed,
       size: band.size,
       cell: band.cell,
       amplitude: band.amplitude,
