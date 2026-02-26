@@ -77,13 +77,12 @@ export const API_PERMISSION_MAPPINGS: ApiPermissionMapping[] = [
   { pattern: 'shortcon:reg', permissions: ['system.shortcut'] },
 
   // Intelligence APIs
-  { pattern: 'intelligence:tool:approve', permissions: ['intelligence.admin'] },
-  { pattern: 'intelligence:trace:export', permissions: ['intelligence.admin'] },
-  { pattern: 'intelligence:tool:*', permissions: ['intelligence.agents'] },
-  { pattern: 'intelligence:orchestrator:execute', permissions: ['intelligence.agents'] },
-  { pattern: 'intelligence:orchestrator:*', permissions: ['intelligence.basic'] },
-  { pattern: 'intelligence:session:*', permissions: ['intelligence.basic'] },
-  { pattern: 'intelligence:trace:*', permissions: ['intelligence.basic'] },
+  { pattern: 'intelligence:agent:tool:approve', permissions: ['intelligence.admin'] },
+  { pattern: 'intelligence:agent:session:trace:export', permissions: ['intelligence.admin'] },
+  { pattern: 'intelligence:agent:tool:*', permissions: ['intelligence.agents'] },
+  { pattern: 'intelligence:agent:execute', permissions: ['intelligence.agents'] },
+  { pattern: 'intelligence:agent:*', permissions: ['intelligence.basic'] },
+  { pattern: 'intelligence:agent:session:*', permissions: ['intelligence.basic'] },
   { pattern: 'intelligence:*', permissions: ['intelligence.basic'] },
 
   // Storage APIs

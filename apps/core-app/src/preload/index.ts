@@ -11,7 +11,6 @@ import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents } from '@talex-touch/utils/transport'
 // import appIconAsset from '../../public/favicon.ico?asset'
 import { contextBridge, ipcRenderer } from 'electron'
-import appLogoAsset from '../../public/logo.png?asset'
 
 declare global {
   interface Window {
@@ -78,7 +77,7 @@ async function requestStartupInfo(): Promise<StartupInfo | undefined> {
   return undefined
 }
 
-const appLogo = resolveAssetSource(appLogoAsset)
+const appLogo = resolveAssetSource('/logo.png')
 // const appIcon = resolveAssetSource(appIconAsset)
 const startupInfoPromise = requestStartupInfo().then((info) => {
   if (info && typeof info.appUpdate === 'undefined') {

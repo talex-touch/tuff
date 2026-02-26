@@ -36,6 +36,8 @@ export class TrayManager extends BaseModule {
   name: ModuleKey = TrayManager.key
 
   private tray: Tray | null = null
+  private trayHealthCheckTimer: NodeJS.Timeout | null = null
+  private trayRecoveryAttempted = false
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -163,9 +165,6 @@ export class TrayManager extends BaseModule {
             }
           }
 
-          if (process.platform === 'darwin') {
-            this.tray.setTitle('tuff')
-          }
           const displaysPayload = {
             primary: formatDisplay(screen.getPrimaryDisplay()),
             all: screen.getAllDisplays().map((display) => formatDisplay(display))
@@ -202,13 +201,59 @@ export class TrayManager extends BaseModule {
       this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
+      this.scheduleTrayHealthCheck()
     } catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
       this.ensureDockVisibleWhenTrayUnavailable('tray-init-failed')
     }
   }
 
+  private hasUsableTray(): boolean {
+    if (!this.tray) return false
+    if (process.platform !== 'darwin') return true
+    try {
+      const bounds = this.tray.getBounds()
+      return bounds.width > 0 && bounds.height > 0
+    } catch (error) {
+      console.warn('[TrayManager] Failed to inspect tray bounds', { error })
+      return false
+    }
+  }
+
+  private scheduleTrayHealthCheck(): void {
+    if (process.platform !== 'darwin') return
+    if (this.trayHealthCheckTimer) {
+      clearTimeout(this.trayHealthCheckTimer)
+      this.trayHealthCheckTimer = null
+    }
+
+    this.trayHealthCheckTimer = setTimeout(() => {
+      this.trayHealthCheckTimer = null
+
+      if (this.hasUsableTray()) {
+        this.trayRecoveryAttempted = false
+        return
+      }
+
+      if (this.trayRecoveryAttempted) {
+        this.ensureDockVisibleWhenTrayUnavailable('tray-health-check-failed')
+        return
+      }
+
+      this.trayRecoveryAttempted = true
+      console.warn('[TrayManager] Tray bounds invalid, retrying tray initialization once')
+
+      this.destroyTray()
+      this.initializeTray()
+      this.updateDockVisibility()
+    }, 1200)
+  }
+
   private destroyTray(): void {
+    if (this.trayHealthCheckTimer) {
+      clearTimeout(this.trayHealthCheckTimer)
+      this.trayHealthCheckTimer = null
+    }
     if (this.tray) {
       if (process.env.TUFF_DEBUG_TRAY === '1') {
         console.log('[TrayManager] destroyTray called')
@@ -471,7 +516,7 @@ export class TrayManager extends BaseModule {
 
     const mainWindow = $app.window.window
     const hideDock = this.getHideDockConfig()
-    const trayAvailable = this.tray !== null
+    const trayAvailable = this.hasUsableTray()
 
     // Check if there are active DivisionBox sessions
     const hasDivisionBox = this.hasActiveDivisionBox()
@@ -534,6 +579,10 @@ export class TrayManager extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    if (this.trayHealthCheckTimer) {
+      clearTimeout(this.trayHealthCheckTimer)
+      this.trayHealthCheckTimer = null
+    }
     if (this.tray) {
       this.tray.destroy()
       this.tray = null

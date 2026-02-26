@@ -118,8 +118,8 @@ export class MainWindowProvider implements ISearchProvider<ProviderContext> {
       .setTitle(title)
       .setSubtitle(subtitle)
       .setIcon({
-        type: 'class',
-        value: 'ri:window-line'
+        type: 'url',
+        value: 'https://tuff.tagzxia.com/favicon.ico'
       })
       .setActions([
         {

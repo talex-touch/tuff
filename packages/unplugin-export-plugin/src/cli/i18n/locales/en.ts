@@ -43,7 +43,7 @@ export default {
     loginOptionOauth: 'Browser OAuth authorization',
     loginOptionExit: 'Exit',
     tokenPrompt: 'Enter Nexus token:',
-    tokenHint: 'Get it from https://tuff.talex.link/dashboard',
+    tokenHint: 'Get it from https://tuff.tagzxia.com/dashboard',
     tokenInvalid: 'Token cannot be empty',
     loginSuccess: 'Login complete. Entering main menu.',
     tokenWarning: 'Keep your token safe and do not share it.',
