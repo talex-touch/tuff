@@ -1,6 +1,6 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-02-19  
+> 更新时间：2026-02-26  
 > 适用范围：`apps/core-app`、`apps/nexus`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
@@ -27,7 +27,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 
 ### G3. 发布目标（可可信）
 - 发布链路完成 OIDC + RSA 官方构建验证；
-- Release notes 与 assets 自动同步 Nexus，结构统一为 `{ zh, en }`。
+- `build-and-release` 作为唯一桌面发版主线，Release notes 与 assets 自动同步 Nexus，结构统一为 `{ zh, en }`。
+- CLI 四包 npm 自动发布（稳定版 `latest`，预发布 `next`）且同步 Nexus 更新公告。
 
 ### G4. 产品目标（可闭环）
 - Flow / DivisionBox / Intelligence 的体验闭环完成（功能、权限、审计、文档、示例）。
@@ -71,6 +72,8 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 目标：清理 renderer 侧主要直连调用点。
 - 交付：
   - Settings / Permission / Intelligence 相关页面直连迁移；
+  - Intelligence Agent 命名空间一次切换（Core IPC + Nexus API 同步切换）；
+  - Prompt Registry（record + binding）落库并完成 capability 绑定迁移；
   - 增加迁移清单与剩余点位清单。
 - 质量闸门：
   - 新增迁移点无 raw event；
@@ -117,9 +120,10 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ### Week 7：发布链路闭环
 - 目标：OIDC + RSA + Nexus release 同步打通。
 - 交付：
-  - CI 到 Nexus 的 release/assets/notes 自动同步；
-  - build signature 生成与验签流程上线；
-  - 发布异常重试与告警机制。
+  - `build-and-release` 统一产物、生成 `tuff-release-manifest.json` 并同步 Nexus release/assets；
+  - CLI 四包自动发布与 Nexus updates 同步；
+  - 官网部署由 Cloudflare Pages 平台侧 Git 自动部署；
+  - build signature 生成与验签流程持续增强。
 - 质量闸门：
   - 预发布链路全程可复现；
   - notes/assets 字段结构校验通过。
@@ -133,6 +137,15 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 质量闸门：
   - 核心质量门禁稳定通过；
   - 无 P0/P1 未评估风险项。
+
+## 4.1 v2.4.7 GA 收口里程碑（发布推进）
+
+- **Gate A（已完成）**：版本基线对齐（root/core-app = `2.4.7`）。
+- **Gate B（已完成）**：发布链路收敛（`build-and-release` + Nexus release 同步 + CLI 四包 npm 自动发布）。
+- **Gate C（进行中）**：质量门禁清零（lint/typecheck 阻塞项收口）。
+- **Gate D（进行中）**：发布资产核对（release notes `{ zh, en }`、assets、signature、manifest）。
+- **Gate E（待执行）**：创建并推送 `v2.4.7` tag，完成 GitHub Release 与 Nexus 发布联动验收。
+- **执行入口**：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 
 ## 5. 里程碑验收标准（跨周）
 
