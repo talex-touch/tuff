@@ -14,19 +14,21 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - **`build-and-release.yml`** - Build and release workflow for Electron app
   - Builds the application for multiple platforms
   - Creates releases and uploads artifacts
+  - Generates `tuff-release-manifest.json` for updater validation
+  - Syncs Release metadata/assets to Nexus APIs (tag push only)
+  - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
 
 - **`release-core.yml`** - Core app release workflow (GitHub Releases)
-  - Builds core app per OS matrix
-  - Renames artifacts to core naming convention
-  - Generates `tuff-release-manifest.json` and uploads assets
+  - Legacy/manual workflow
+  - No longer participates in tag-driven release pipeline
 
 - **`release-renderer.yml`** - Renderer assets release workflow
-  - Builds renderer bundle
-  - Packages `tuff-renderer-<version>.zip` and uploads to Release
+  - Legacy/manual workflow
+  - No longer participates in tag-driven release pipeline
 
 - **`release-extensions.yml`** - Extensions bundle release workflow
-  - Packages `plugins/` as `tuff-extensions-<version>.zip`
-  - Uploads bundle to Release
+  - Legacy/manual workflow
+  - No longer participates in tag-driven release pipeline
 
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
@@ -72,6 +74,11 @@ This is a reusable workflow that can be called by other workflows to standardize
 - **`package-tuffex-publish.yml`** - Publish for `@talex-touch/tuffex`
   - Triggers on version changes in `packages/tuffex/package.json` (push to main)
   - Builds and publishes to npm
+
+- **`package-tuff-cli-publish.yml`** - Publish for CLI packages
+  - Publishes `@talex-touch/tuff-cli-core` → `@talex-touch/tuffcli` → `@talex-touch/unplugin-export-plugin` → `@talex-touch/tuff-cli`
+  - Uses `latest` for stable versions and `next` for prereleases
+  - Syncs publish summary to Nexus dashboard updates API
 
 - **`package-unplugin-ci.yml`** - CI for `@talex-touch/unplugin-export-plugin`
   - Triggers on changes to `packages/unplugin-export-plugin/**`

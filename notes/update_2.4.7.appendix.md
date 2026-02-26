@@ -1,0 +1,666 @@
+# Tuff v2.4.7 提交附录（2.4.6 -> 2.4.7）
+
+> 统计口径：以 `apps/core-app` 版本从 `2.4.6` 切换到 `2.4.7-beta.1` 的提交 `50c21752` 作为起点，范围为 `50c21752..HEAD`。
+> 过滤规则：仅统计 `first-parent` 主线，排除 merge 与 release bump 提交。
+
+## 总览
+
+- 非发版主线提交：`600`
+- 触达文件（提交维度累计）：`11370`
+- 触达文件（去重路径）：`4328`
+
+## 按主模块分布（Primary Module）
+
+| 模块 | 提交数 | 触达文件数（累计） |
+| --- | ---: | ---: |
+| Core App | 274 | 5068 |
+| Nexus | 121 | 3488 |
+| Tuffex | 63 | 1619 |
+| Other | 59 | 357 |
+| Docs | 28 | 295 |
+| Utils SDK | 27 | 318 |
+| CLI / Unplugin | 11 | 80 |
+| CI / Release Pipeline | 6 | 24 |
+| Plugins | 5 | 106 |
+| Scripts | 4 | 5 |
+| Native | 1 | 7 |
+| Test Suite | 1 | 3 |
+
+## 全量提交清单（按主模块分组）
+
+### Core App (274)
+
+- `6476b0d9` | 2026-02-26 | feat(core-app): unify flip dialog and refine overlay sizing
+- `705256fd` | 2026-02-26 | feat(core-app): migrate plugin market pipeline to store with flip overlay detail
+- `cd4342fa` | 2026-02-26 | ref(overlay): align flip overlay close behavior
+- `38dad21c` | 2026-02-25 | feat(core-app): use secondary modal for plugin creation
+- `746065eb` | 2026-02-25 | feat(core-box): add noisy system app filtering toggle
+- `6429e781` | 2026-02-25 | fix(plugin): sync issues by id with incremental events
+- `77041423` | 2026-02-25 | fix(plugin): extract plugin issue fab and improve warning wave
+- `acf62bbe` | 2026-02-25 | fix(core-app): handle detached division session flow
+- `6815bbc8` | 2026-02-25 | fix(core-box): keep providers active on hide until auto-clear
+- `0c40b68c` | 2026-02-25 | fix(core-box): stabilize recommendation resize measurement
+- `aa474fc2` | 2026-02-25 | fix(plugin): resolve quick-actions feature id and permission issue sync
+- `5921a130` | 2026-02-25 | fix(plugin): honor dev.source in loader selection
+- `7f6578c8` | 2026-02-25 | fix(core-box): resolve recommend height lock
+- `30e2f98a` | 2026-02-25 | feat(core-app): optimize polling mechanisms and enhance performance logging
+- `e20cc6cc` | 2026-02-25 | feat(auth): refactor OAuth flow to use fetch for token exchange and user info retrieval
+- `2d26b6ed` | 2026-02-24 | fix(Done.vue): adjust layout dimensions and remove unnecessary transform scaling
+- `6fe42472` | 2026-02-24 | feat(core-app): enhance onboarding experience with audio feedback and shortcut integration
+- `4320d11e` | 2026-02-24 | fix(beginner): localize onboarding flow and refine setup permissions
+- `fea28041` | 2026-02-24 | feat(core-app): enhance analytics reporting and language setup experience
+- `7ea4b72f` | 2026-02-24 | fix(core-app): harden ocr queue and startup perf resilience
+- `e00c9565` | 2026-02-24 | fix: resolve typecheck errors in market source editor and stat card
+- `a818329e` | 2026-02-24 | feat(omni-panel): implement feature hub and auto-mount flow
+- `6dd1147c` | 2026-02-24 | feat(core-app): add PluginDevSettingsOverlay component and enhance storage management features
+- `1e3da07c` | 2026-02-24 | fix(core-app): reduce widget feature issue noise
+- `2dd22fc4` | 2026-02-24 | fix(core-app): sanitize plugin manifest payload before transport
+- `8bb832cf` | 2026-02-24 | ref(core-app): unify battery policy across scheduling
+- `3c0d1771` | 2026-02-24 | fix(core-app): align window preference semantics
+- `6faa4a53` | 2026-02-24 | fix(core-app): refine clipboard auto paste and clear timing
+- `5c58b709` | 2026-02-24 | fix(core-app): make silent startup consistent in dev and prod
+- `18cc57a8` | 2026-02-24 | fix(core-app): gate low-battery clipboard polling settings
+- `a10278c3` | 2026-02-24 | fix(core-app): enforce declared plugin permissions
+- `459e3abe` | 2026-02-24 | fix(market): revamp source editor dialog behavior
+- `b6ee586f` | 2026-02-24 | fix(core-app): gate layout preset editor entries
+- `4ad8c8ee` | 2026-02-24 | feat(core-app): replace plugin issues tab with floating overlay
+- `5d211a35` | 2026-02-24 | fix(core-app): refine plugin details dev settings flow
+- `506af81c` | 2026-02-24 | feat(core-app): add market cli beta copy in en locale
+- `7a8f3977` | 2026-02-24 | fix(core-app): link about policy entries to nexus docs
+- `b4c64ba0` | 2026-02-23 | ref(core-app): unify window role protocol for omni panel
+- `30728a30` | 2026-02-23 | feat(core-app): add assistant experiment with voice wake and default ai
+- `40953e23` | 2026-02-23 | feat(settings): add advanced settings toggle for improved user experience
+- `0929c97d` | 2026-02-23 | fix(auth): improve sendMain binding in AuthModule for better channel handling
+- `19967463` | 2026-02-23 | feat(auth): integrate authentication module and enhance clipboard input resolution
+- `705aafbc` | 2026-02-22 | fix(sync): update plugin storage event handling and improve SyncModule initialization
+- `4ada9748` | 2026-02-22 | fix: correct URL handling in CoreBox UI recovery event and refine addPath type definitions
+- `c2bafef1` | 2026-02-22 | feat(audit-logger): optimize database write operations and enhance configuration handling
+- `252bfbf0` | 2026-02-22 | feat(plugin): enhance path management and system actions
+- `ca47ed95` | 2026-02-22 | feat(audit-logger): optimize log flushing and improve transport initialization
+- `3613de10` | 2026-02-22 | fix(plugin): improve transport initialization for webcontent
+- `84a95d05` | 2026-02-22 | feat(core): enhance widget handling and base64 validation
+- `87d6ce89` | 2026-02-21 | feat(plugin): implement experimental feature filtering and enhance UI components
+- `0d7f4e86` | 2026-02-21 | feat(core): enhance file processing and indexing capabilities
+- `ee2b6f4b` | 2026-02-21 | ref(core): enhance app provider and scanner functionality
+- `cd8c4b99` | 2026-02-20 | feat(core): optimize performance and enhance memory management
+- `b5fe815c` | 2026-02-20 | fix(core): update notification source and improve type safety in various modules
+- `de602f99` | 2026-02-20 | feat(core): unify Flow and DivisionBox permission handling; deprecate legacy sync endpoints
+- `801de1f0` | 2026-02-20 | feat(core): implement system update tables and enhance intelligence module
+- `0854b5bf` | 2026-02-13 | ref(CanvasGridEditor): update import path for useFlip utility
+- `12ea7bae` | 2026-02-13 | fix(file-provider): improve image resizing quality and update type annotations in tests
+- `41eb847e` | 2026-02-12 | ref(user-info): update team management logic and enhance user profile display
+- `350d2ce9` | 2026-02-12 | feat: update architecture documentation, enhance plugin validation, and improve error handling
+- `7d5b479d` | 2026-02-10 | feat(update): implement reusable update tasks and enhance download management
+- `da1b47a7` | 2026-02-09 | chore: update compatibility flags and versioning; implement record clearing in update repository
+- `f67095bb` | 2026-02-09 | chore: update compatibility date and flags; enhance macOS build script and improve heap size
+- `8f175add` | 2026-02-09 | fix: resolve mac snapshot build typecheck blockers
+- `e3074299` | 2026-02-09 | style(core-box): refine default result and input borders
+- `589ad29c` | 2026-02-09 | ref(core-auth): reuse remote profile request helpers
+- `ac3a8bfe` | 2026-02-06 | feat(core-app): [NEXUS-160] account token channel
+- `cc55fdde` | 2026-02-04 | feat: update dialog event structure and enhance layout styles
+- `344664ca` | 2026-02-04 | feat: implement layout presets and import or export functionality
+- `b590919a` | 2026-02-04 | feat: add LayoutPreview components and refactor layout structure
+- `67cf6e6f` | 2026-02-04 | feat: implement auto-paste functionality in clipboard management
+- `c21b0abf` | 2026-02-04 | feat: enhance network monitoring and diagnostics in DownloadCenterModule
+- `1386d5eb` | 2026-02-04 | build: [SPDC-070] update utils transpile
+- `1f3587a5` | 2026-02-04 | feat: [SPDC-060] use shared detail in core app
+- `248bb320` | 2026-02-03 | test: update mock implementation in startup-analytics tests to include default export
+- `662c6583` | 2026-02-03 | feat: add testing capabilities with Vitest and enhance analytics test setup
+- `c79ae2e5` | 2026-02-03 | feat: enhance StartupAnalytics payload with additional metadata for improved performance insights
+- `c03f2f14` | 2026-02-03 | test: add unit tests for ModuleManager lifecycle handling and StartupAnalytics metrics computation
+- `d34781e5` | 2026-02-03 | feat: refactor localization handling, implementing useI18nText for improved translation management
+- `ce6c8e87` | 2026-02-02 | fix: some lints err
+- `85e18797` | 2026-02-02 | update: [UPD-100] macOS 更新改为重启安装
+- `d512b071` | 2026-02-02 | update: [UPD-090] 移除 UpdateSystem 扩展包更新
+- `236d2a83` | 2026-02-02 | feat(update): [UPD-060] renderer override + extensions update
+- `cf539253` | 2026-02-02 | feat(update): [UPD-050] 收敛 UpdateService 更新入口
+- `40d368c7` | 2026-02-02 | chore(update): [UPD-040] 发布配置对齐到 GitHub Provider
+- `7c7661fe` | 2026-02-02 | feat(update): [UPD-020] 定义资产命名与 Manifest 规范
+- `36b26613` | 2026-02-02 | feat(update): [UPD-010] 统一更新源与渠道口径
+- `f3b62f4d` | 2026-02-01 | feat(plugin): enhance widget management and precompilation features
+- `cb29027b` | 2026-01-23 | feat: enable in-app account editing
+- `7c10ff6c` | 2026-01-23 | chore: sync workspace updates
+- `17e0a07b` | 2026-01-22 | update(core-app): sync core app changes
+- `bd7b61f3` | 2026-01-22 | ref(core-app): replace explicit any types in renderer
+- `1d988f57` | 2026-01-21 | fix: resolve renderer typecheck issues
+- `a16cc59b` | 2026-01-21 | docs(core-app): req-100 requirements maintenance
+- `70d6da36` | 2026-01-21 | docs(core-app): req-090 requirements review
+- `e29e57f5` | 2026-01-21 | docs(core-app): req-080 requirements master
+- `325b8c0b` | 2026-01-21 | docs(core-app): req-070 requirements sequence
+- `d08e0eb4` | 2026-01-21 | docs(core-app): req-060 requirements coverage
+- `6c3f53d2` | 2026-01-21 | docs(core-app): req-050 requirements grouping
+- `eb71a409` | 2026-01-21 | docs(core-app): req-040 requirements conflicts
+- `887526cd` | 2026-01-21 | docs(core-app): req-030 requirements extract
+- `ba327875` | 2026-01-21 | docs(core-app): req-020 requirements template
+- `decfb959` | 2026-01-21 | docs(core-app): req-010 requirements source index
+- `9a4110c8` | 2026-01-21 | docs(nexus): [NEXEX-040] set examples single source
+- `e326e4a2` | 2026-01-21 | fix(BMLA-070): Fix SearchLogger init lifecycle
+- `779e667a` | 2026-01-21 | chore(BMLA-060): Add SearchLogger lifecycle helper
+- `e9c0545c` | 2026-01-21 | chore(BMLA-030): Summarize config subscription timing
+- `505a3ca5` | 2026-01-21 | docs(script-bridge): [SCRIPT-080] test plan and docs
+- `76b885c2` | 2026-01-21 | docs(script-bridge): [SCRIPT-060] platform provider design and sample flows
+- `2d7f4f54` | 2026-01-21 | docs(script-bridge): [SCRIPT-050] native library integration strategy
+- `7c836265` | 2026-01-21 | docs(script-bridge): [SCRIPT-040] Python runtime strategy
+- `6bf7ed73` | 2026-01-21 | docs(script-bridge): [SCRIPT-020] capability matrix and fallback strategy definition
+- `40d1462c` | 2026-01-21 | docs(script-bridge): [SCRIPT-010] inventory existing patterns and constraints
+- `5ab804ea` | 2026-01-21 | docs(script-bridge): [SCRIPT-070] build and distribution integration
+- `ed942bc1` | 2026-01-21 | docs(script-bridge): [SCRIPT-030] Script/Native Bridge architecture and IPC contract
+- `80daaa4c` | 2026-01-21 | update(core-app): remove app list deprecated comment
+- `3127b99d` | 2026-01-21 | update(core-app): dedupe legacy sdk warnings
+- `05f5818b` | 2026-01-21 | update(core-app): remove divisionbox deprecated api
+- `dfa02d1c` | 2026-01-21 | update(core-app): remove trayholder reference
+- `8de54bcc` | 2026-01-21 | update(core-app): wrap deprecated plugin api
+- `820e76bb` | 2026-01-21 | update(core-app): remove widget legacy compile
+- `cbd8fd2f` | 2026-01-21 | update(core-app): record flowbus legacy removal
+- `12e880ff` | 2026-01-21 | feat(transport): [TPORT-030] main-process port management and lifecycle
+- `4d3d28ee` | 2026-01-21 | update(core-app): drop legacy plugin format
+- `25187c8f` | 2026-01-21 | update(core-app): drop legacy buffer support
+- `0610afcc` | 2026-01-21 | update(core-app): remove deprecated clipboard sync
+- `55905c4e` | 2026-01-21 | docs(core-app): add legacy scan review log
+- `6c55bfb4` | 2026-01-21 | docs(core-app): add legacy scan summary
+- `707c0c86` | 2026-01-21 | docs(core-app): add hidden compat paths
+- `26e96027` | 2026-01-21 | docs(core-app): classify legacy scan hits
+- `afb4e0f5` | 2026-01-21 | docs(core-app): add initial legacy scan hits
+- `dd6641ed` | 2026-01-21 | docs(core-app): define legacy scan criteria
+- `0f4cd429` | 2026-01-21 | ref(core,utils): route module ipc via transport
+- `f58cc2c0` | 2026-01-21 | fix(plugin): route channel traffic through transport
+- `1ee6b680` | 2026-01-20 | chore(core-app): fix permission/audit types
+- `ec345d6f` | 2026-01-20 | chore(core-app): lint/type adjustments
+- `4f1a7e0d` | 2026-01-20 | feat(storage): [CFG-080] pilot sqlite config sync
+- `d3d4c1a6` | 2026-01-19 | feat: Enhance perf monitoring, auth, and tuffex components
+- `fe31b427` | 2026-01-19 | feat(dependencies): update baseline-browser-mapping to version 2.9.15 and adjust related imports
+- `f86d4596` | 2026-01-19 | feat(agents): enhance agent management and integration features
+- `800f29ab` | 2026-01-18 | feat(temp-files): implement temporary file management service
+- `55b78a83` | 2026-01-18 | feat(payload): enhance payload formatting and preview functionality
+- `2473e8db` | 2026-01-18 | chore: fix lint-staged
+- `cef9eb15` | 2026-01-17 | feat(app): enhance main window management and logging capabilities
+- `c5d08015` | 2026-01-17 | feat(docs): enhance documentation structure and add references
+- `c1a25c4c` | 2026-01-17 | feat(transport): enhance transport event handling and integrate new features
+- `84d7d34b` | 2026-01-16 | fix(tabs): update blur effect height in TvTabs component
+- `a6c9acb1` | 2026-01-16 | feat(plugin): implement runtime statistics retrieval and enhance view cache management
+- `506e6948` | 2026-01-16 | feat(menu): enhance pointer visibility and routing integration in TouchMenu component
+- `50afbc08` | 2026-01-16 | fix(tabs): adjust minimum height for scroll content in TvTabs component
+- `12832868` | 2026-01-16 | feat(window-pool): enhance window pool management with shutdown handling
+- `b47a3a66` | 2026-01-14 | feat(plugin): enforce category requirement for plugins with sdkapi >= 260114
+- `00c39510` | 2026-01-14 | feat(app): integrate plugin selection into App component and enhance layout rendering
+- `fc9cbf48` | 2026-01-14 | fix(market): adjust padding in MarketGridView for improved layout
+- `56d96e9b` | 2026-01-14 | feat(config): enhance Electron Vite configuration and improve scroll component performance
+- `852d936f` | 2026-01-14 | feat(performance): enhance route transition handling and performance monitoring
+- `146c8d56` | 2026-01-13 | feat(performance): enhance URL handling and logging in CommonChannelModule
+- `8ef90d93` | 2026-01-12 | feat(env): integrate window and document checks across components
+- `5c272746` | 2026-01-11 | feat(icon): introduce TuffIcon component with enhanced icon handling
+- `52c2a04d` | 2026-01-11 | feat(file-index): enhance file indexing with battery management and rebuild confirmation
+- `b5f3c242` | 2026-01-11 | feat(workers): integrate new file processing workers and enhance app scanning
+- `c2a5a2e2` | 2026-01-11 | feat(polling): unify polling mechanisms across modules for improved performance
+- `8145e094` | 2026-01-11 | feat(performance): streamline log analysis and enhance IPC handling
+- `7c403fe0` | 2026-01-10 | feat(performance): optimize application startup and enhance clipboard handling
+- `4574916f` | 2026-01-09 | feat(channel): enhance IPC performance monitoring and error handling
+- `34d1a356` | 2026-01-08 | fix(core-box): refine window visibility checks and enhance resize handling
+- `f1cc4d7e` | 2026-01-07 | feat(core-box): implement layout update handling and transport integration
+- `156907ba` | 2026-01-07 | feat(channel): enhance URL handling and window management
+- `53a8c89b` | 2026-01-04 | feat(analytics): enhance telemetry reporting and analytics metrics
+- `6587eee4` | 2026-01-04 | feat(analytics): enhance analytics module with message handling and plugin version tracking
+- `8793232f` | 2026-01-04 | feat(analytics): add analytics module and integrate performance tracking
+- `7a057fea` | 2026-01-04 | feat: enhance MetaOverlay functionality with logging, preload path handling, and keyboard shortcuts
+- `1256c2f6` | 2026-01-03 | feat(meta-overlay): implement MetaOverlay functionality with IPC handlers and SDK integration
+- `f281430a` | 2026-01-03 | feat: refactor clipboard handling and improve recommendation logic to prevent duplicate pinned items
+- `891c5af3` | 2025-12-20 | feat(power): enhance battery monitoring and optimize polling
+- `caa8c0de` | 2025-12-20 | feat(power): add low battery mode to reduce animations
+- `e921ab1a` | 2025-12-20 | refactor(i18n): generalize TranslationMessages type to be more flexible
+- `1133df7c` | 2025-12-20 | chore(core-app): bump version to 2.4.7-beta.11
+- `79e9b569` | 2025-12-20 | fix(channel): increase default timeout to 60s
+- `2d922de6` | 2025-12-20 | feat(plugin): include sdkapi in getJs function for enhanced plugin configuration
+- `3afab1c4` | 2025-12-19 | feat(intelligence): add prompt template testing and refactor test UI
+- `896666d0` | 2025-12-19 | feat: implement Tuff Intelligence orchestration package with storage adapter
+- `349ff043` | 2025-12-18 | cd
+- `cbb026fb` | 2025-12-18 | fix(core-box): enhance window management and UI view integration
+- `1f0f5be8` | 2025-12-17 | feat(telemetry): introduce Nexus telemetry for usage analytics
+- `4f3ee4ba` | 2025-12-17 | fix(core-box): improve window visibility checks and enhance search result handling
+- `59b47868` | 2025-12-16 | fix(core-box): resolve race condition between initial search and end event
+- `21e354f2` | 2025-12-16 | fix(core-box): stabilize state management and resize logic
+- `7fa88fd2` | 2025-12-16 | feat(core): introduce WebContentsView cache for faster plugin UI loading
+- `17a9510b` | 2025-12-15 | refactor(core): introduce structured logger and performance instrumentation
+- `a0f0a1cb` | 2025-12-15 | feat(plugin): enhance permission system with session grants and auto-retry
+- `281f088f` | 2025-12-15 | feat(plugin): enhance permission flow and installation experience
+- `d422ceba` | 2025-12-15 | refactor(ui): use TuffIcon component in default preview
+- `bf5ff6e4` | 2025-12-15 | fix(box): prevent active item from being obscured by sticky footer
+- `7b83a7bd` | 2025-12-15 | feat(ui): refine layout and component interactions
+- `2d812d93` | 2025-12-15 | feat(platform): enforce required plugin permissions and refine UI/UX
+- `d994039d` | 2025-12-15 | feat(ui): adjust default window and box sizes
+- `0d560d5d` | 2025-12-15 | feat(search): integrate Everything for ultra-fast file search on Windows
+- `5f1e06bd` | 2025-12-15 | build(core-app): bump package version to 2.4.7-beta.10
+- `47f3d971` | 2025-12-15 | refactor(permission): update permission UI components and fix typing
+- `ed607be1` | 2025-12-15 | feat(market): add visual indicators for official plugins
+- `62f5a55c` | 2025-12-15 | feat(search): enhance recommendation engine and CoreBox UX
+- `418f442b` | 2025-12-14 | feat(plugin): add input support for webcontent views and enhance translation
+- `d7aa38f2` | 2025-12-14 | feat(plugin): enhance interaction model and dev experience
+- `c7716768` | 2025-12-13 | feat(core-box): enhance window positioning and search result highlighting
+- `6853ca2d` | 2025-12-13 | feat(core-box): enhance plugin interaction and system command search
+- `e35285aa` | 2025-12-13 | refactor(core): simplify corebox hooks and provider logic
+- `3d1a674a` | 2025-12-13 | feat(core): refine corebox behavior and developer experience
+- `8afa666b` | 2025-12-12 | feat(box): register core-box visibility IPC handlers for both MAIN and PLUGIN channel types
+- `420295df` | 2025-12-12 | feat(market): add providerId support for multi-source plugin identification and improve icon display
+- `4e0eb4db` | 2025-12-12 | feat(market): add Nexus API URL handling for plugin icons and downloads
+- `7ef64858` | 2025-12-12 | feat(plugins): add SHA-256 hashing fallback to WebCrypto in pluginsStore
+- `aa6dbf76` | 2025-12-12 | feat(search): preserve fuzzy match highlights for command matches and improve clipboard auto-paste logic
+- `96f26f84` | 2025-12-12 | feat(search): add fuzzy matching with highlighting support for plugin features
+- `5b46be70` | 2025-12-12 | feat(plugin): add priority and expectedDuration properties to PluginFeaturesAdapter
+- `8aa45893` | 2025-12-12 | feat(permission): add startup permission confirmation flow with UI integration
+- `03ccfd86` | 2025-12-12 | feat(permission): add comprehensive plugin permission management system with SDK version gating
+- `844043d9` | 2025-12-11 | fix(renderer): use pathToFileURL for cross-platform file URL generation
+- `cdc45d1f` | 2025-12-11 | refactor(box): enhance type safety and refactor core component logic
+- `5adeff16` | 2025-12-11 | feat(plugin): implement plugin upgrade flow with force update and active UI detection
+- `bb914364` | 2025-12-11 | feat(search): implement layered search architecture with fast and deferred provider execution
+- `1a35fa31` | 2025-12-11 | feat(plugin): add DevTools support and refactor market install UI with reusable button component
+- `56419c46` | 2025-12-11 | feat(plugin): enhance installation flow with signature verification and sequential provider loading
+- `5eccb6f0` | 2025-12-11 | feat(performance): optimize app startup and CoreBox performance with animation controls
+- `b05914c9` | 2025-12-10 | feat(market): improve source editor layout with flexible height and better overflow handling
+- `015382b6` | 2025-12-10 | docs(agents): standardize plugin architecture terminology with three-layer naming convention
+- `8523682f` | 2025-12-10 | feat(intelligence): add agent market service and data processing agent
+- `3a0855c7` | 2025-12-10 | feat(download): redesign download center UI with modern card-based layout
+- `49d89559` | 2025-12-10 | ``` feat(intelligence): add comprehensive audit logging and quota management system
+- `958736fe` | 2025-12-10 | feat(channel): add broadcast methods and improve async handler error handling
+- `3d138e72` | 2025-12-10 | fix(protocol): correct handler registration for dev environment
+- `1acda765` | 2025-12-09 | feat(ui): conditionally enable devtools based on silent start mode and add BoxItem sync channel
+- `a227170d` | 2025-12-09 | feat(ui): add multi-section grid navigation and flow transfer action
+- `c1034209` | 2025-12-09 | ``` feat(calculation): add mathjs-based advanced expression evaluation and unit conversion system
+- `40b2bf46` | 2025-12-09 | ``` feat(auth): add browser-based OAuth flow with tuff:// protocol callback and external auth token handling
+- `c6e55bc2` | 2025-12-09 | ``` feat(perf): add performance metrics tracking for UI view attachment in CoreBox and DivisionBox
+- `453c1aba` | 2025-12-09 | ``` feat(flow-bus): add native system share integration with platform-specific handlers
+- `d0b1c126` | 2025-12-09 | ``` feat(division-box): improve window lifecycle, UI visibility, and header integration
+- `8af9dfa9` | 2025-12-09 | feat(apps): disable file system event subscription on Windows to prevent permission errors
+- `5735276a` | 2025-12-09 | ``` fix(files): disable file indexing on Windows to prevent permission-related crashes
+- `fc60fc12` | 2025-12-09 | feat(division-box): refactor initialization timing and enhance history panel with keyboard navigation
+- `82bbdafa` | 2025-12-09 | feat(division-box): implement window pool and UI view transfer from CoreBox
+- `ed32d669` | 2025-12-09 | feat(download): add task priority update and removal with IPC channels
+- `f03ff406` | 2025-12-09 | feat(plugin): prevent duplicate UI view attachment for webcontent features on input change
+- `0f9209da` | 2025-12-09 | feat(ui): enhance UI mode with query passthrough and keyboard handling improvements
+- `ed248f06` | 2025-12-08 | feat(db): add pinned items table and implement pin/unpin functionality
+- `e4c6afd6` | 2025-12-08 | feat(ai): expand capability registry with comprehensive AI feature set
+- `961e7460` | 2025-12-08 | feat(ui): enhance box result animations with staggered transitions and overlap detection
+- `85ae9746` | 2025-12-08 | perf(search): optimize gather performance with adjusted timing parameters
+- `501ef8a3` | 2025-12-08 | chore: unify plugin performance SDK types and cleanup unused code
+- `8aca423a` | 2025-12-08 | chore(core-app): bump version to 2.4.7-beta.8
+- `31693491` | 2025-12-01 | chore(core-app): bump version to 2.4.7-beta.6
+- `84f5c706` | 2025-11-29 | refactor(market): simplify item card and improve shared element transition
+- `9a6884eb` | 2025-11-29 | refactor(ui): consolidate layout components and revamp market detail page
+- `d1a89cb0` | 2025-11-28 | feat(market): overhaul market UI/UX with detail page and animations
+- `e84c9acf` | 2025-11-27 | refactor(dialog): introduce dialog manager for centralized handling
+- `7dbccea8` | 2025-11-27 | feat(storage): implement subscription system and performance enhancements
+- `e500525d` | 2025-11-24 | chore(core-app): bump version to 2.4.7-beta.4
+- `dd88b2a2` | 2025-11-24 | refactor: improve code quality and address type-related issues
+- `483455eb` | 2025-11-24 | feat(box): refine search state lifecycle and plugin widget handling
+- `e0413230` | 2025-11-24 | feat(plugin): implement dynamic widget loading system
+- `a38b728d` | 2025-11-23 | feat(plugin): introduce feature and box SDKs for plugins
+- `e3a3dcb7` | 2025-11-23 | feat(icon): add support for URL-based icons
+- `817ab1ee` | 2025-11-23 | perf(files): optimize file icon handling with lazy loading and db concurrency
+- `0bb2a10b` | 2025-11-23 | chore(renderer): clean up codebase and fix minor type issues
+- `3a4696e1` | 2025-11-23 | feat(settings): enhance file index settings UI and interaction
+- `8abf9625` | 2025-11-23 | feat(storage): introduce cache invalidation and deep copy protection
+- `4a4bd868` | 2025-11-23 | feat(file-index): display indexing statistics in settings
+- `a8812d92` | 2025-11-23 | feat(core): introduce dynamic logger and enhance icon handling
+- `3069ae45` | 2025-11-23 | refactor(market): overhaul Market page with composables and components
+- `2887722f` | 2025-11-23 | refactor(renderer): clean up language hook and adjust layout style
+- `aeb16aa2` | 2025-11-23 | feat(renderer): improve style settings UI and enhance i18n
+- `a629dec6` | 2025-11-23 | refactor(renderer): overhaul theme and style selection UI
+- `3ae40da1` | 2025-11-23 | feat(renderer): integrate shared element transitions
+
+### Nexus (121)
+
+- `1064444c` | 2026-02-26 | fix(nexus): prevent accidental mask close in api key dialog
+- `02da84fb` | 2026-02-26 | feat(intelligence)!: switch to agent graph runtime and unified endpoints
+- `5efaf342` | 2026-02-26 | fix(nexus): stabilize i18n locale flow without lang query
+- `45ae90f7` | 2026-02-26 | feat(nexus): add rejected version re-edit and review timeline
+- `4c58c02f` | 2026-02-26 | ref(flipoverlay): remove legacy mask and card style overrides
+- `d1a220e4` | 2026-02-26 | docs(nexus): add store feature docs pages
+- `2b9ce669` | 2026-02-26 | feat(nexus): migrate marketplace routes apis to store with data migration
+- `693560ac` | 2026-02-26 | update(nexus): consolidate assets review overlay modal
+- `0170b415` | 2026-02-26 | feat(store): unify market plugin meta presentation
+- `5a29a6b4` | 2026-02-26 | feat(tuffex): stabilize flip overlay stacked layering
+- `6652439b` | 2026-02-26 | fix(nexus-assets): restore license switch and add review hover hint
+- `e42eae5a` | 2026-02-25 | feat(nexus): refactor market plugin detail with tabs
+- `9c9de3d6` | 2026-02-25 | update(nexus): optimize updates dashboard layout and tx tags
+- `6e09a8bc` | 2026-02-25 | fix(nexus): avoid auth catch-all conflict for admin bootstrap
+- `0d801af9` | 2026-02-25 | feat(nexus): implement admin bootstrap flow for first-time user elevation
+- `d334bbdf` | 2026-02-25 | feat(nexus): optimize email display in user menu and sign-in process
+- `28e2e0a4` | 2026-02-24 | fix(nexus): disable pwa navigate fallback on ssr routes
+- `d0a708cd` | 2026-02-24 | fix(nexus): reduce docs hydration mismatch
+- `bd52343c` | 2026-02-24 | fix(nexus): avoid number-flow SSR crash on docs page
+- `65f47e92` | 2026-02-23 | fix(nexus): harden oauth callback fallback handling
+- `08c85846` | 2026-02-23 | feat(core,nexus,utils): integrate omnipanel and sync workspace updates
+- `3b5a8b6a` | 2026-02-23 | fix(nexus): gate risk and watermark by env flags
+- `200daa18` | 2026-02-23 | ref(auth): streamline imports and enhance AuthModule initialization
+- `0ffc835d` | 2026-02-22 | feat(sync): implement cloud synchronization module and enhance clipboard management
+- `aa262bca` | 2026-02-22 | fix: enhance OAuth redirect handling to support same-origin absolute URLs
+- `4a4b28d7` | 2026-02-21 | feat(plugin): add experimental feature support and enhance feature serialization
+- `7fd2ba84` | 2026-02-21 | feat(recommendation): introduce RecommendSDK for custom recommendation providers
+- `fa88f2a4` | 2026-02-20 | feat(core): update dependencies and enhance renderer override functionality
+- `ab2c6f0e` | 2026-02-16 | feat(nexus): add CodeRenderer and DocApiTable components; update demo components for improved UI
+- `3d212367` | 2026-02-16 | feat(core): integrate MainWindowProvider and update tray icon handling; refactor select components
+- `85d876f5` | 2026-02-13 | feat(core,nexus): improve update/sync flow and refresh Nexus docs
+- `fb21e4e3` | 2026-02-13 | feat(landing): enhance HeroV2 component; update GlowText component
+- `8fbd3b03` | 2026-02-13 | feat(embedding): add EmbeddingService and improve search matching logging
+- `076ad452` | 2026-02-12 | ref(buttons): replace Button components with TxButton across various components
+- `085b9fba` | 2026-02-12 | feat(ai-workflow): add TuffAiWorkflowDemo comp with interactive workflow scenarios and step manage
+- `fcf4505b` | 2026-02-12 | ref(assets): replace divs with TxCard components and update styling
+- `c893e166` | 2026-02-12 | feat(assets): implement asset creation flow with type selection, plugin form, and enhanced UI
+- `bf87e09e` | 2026-02-10 | fix(nexus-auth): stabilize sign-in callback and oauth flow
+- `c715171a` | 2026-02-10 | fix: reduce nexus warnings and redact telemetry entities
+- `8c64c4e2` | 2026-02-09 | chore: update environment configuration for preview and adjust macOS build settings
+- `db695cce` | 2026-02-09 | ref(nexus-app): centralize current user api calls
+- `1bea54ce` | 2026-02-09 | fix(nexus-auth): split session and app auth guards
+- `b4b48549` | 2026-02-05 | feat(nexus): [NEXUS-REV-050] refine review states
+- `7c5ba31f` | 2026-02-05 | feat(nexus): [NEXUS-REV-040] gate review form by auth
+- `a6290aaa` | 2026-02-05 | feat(nexus): [NEXUS-REV-030] add review moderation list
+- `f5e890f1` | 2026-02-05 | feat(nexus): [NEXUS-REV-020] add review moderation entry
+- `4e85e409` | 2026-02-05 | feat(nexus): [NEXUS-REV-010] align review/rating responses
+- `fde31618` | 2026-02-07 | feat(nexus): update dependencies and enhance demo components
+- `8faee5f1` | 2026-02-07 | chore: merge codex/stash-pre-merge-local-changes into master
+- `25205469` | 2026-02-06 | docs(nexus): add cloud sync example
+- `04b51068` | 2026-02-06 | feat(nexus): enforce sync token and quota deltas
+- `0c6d8d64` | 2026-02-05 | test(nexus): add sync v1 store tests (NEXUS-130)
+- `5fc39168` | 2026-02-05 | fix(nexus): typecheck baseline (NEXUS-120)
+- `addce2cd` | 2026-02-05 | feat(nexus): sync v1 openapi + backend skeleton (NEXUS-110)
+- `53d4d328` | 2026-02-04 | chore(merge): merge auth email server fix
+- `fd50a3e7` | 2026-02-04 | ref: improve layout and styling of TuffLandingCommunity component
+- `5949a62a` | 2026-02-04 | feat: update TuffShowcase components to support video media types
+- `607026b4` | 2026-02-03 | feat: refactor TuffHome and landing components for improved structure and animations
+- `b1d60633` | 2026-02-03 | feat: add 'copied' text for extensibility in English and Chinese locales
+- `5e249f28` | 2026-02-03 | feat: enhance TuffLanding components with new SDK items
+- `0b8b75dd` | 2026-02-03 | feat: add theme-colors package and  new animations and layout adjustments
+- `dc6ad732` | 2026-02-03 | feat: integrate Logo component and enhance layout in AI demo components
+- `c1a5f68f` | 2026-02-03 | feat: add TuffLandingIntelligenceHeader and TuffLandingIntelligenceTitle components
+- `0e6a9b64` | 2026-02-02 | feat: implement AI demo components with chat, assist, and preview functionalities
+- `6c1a5d54` | 2026-02-02 | feat: add card click handling and improve carousel styling in TuffLanding and Market components
+- `d783ab02` | 2026-02-02 | feat: enhance AI Spotlight component with summary highlighting and improve styling in TuffHome
+- `f1beea88` | 2026-02-02 | feat: enhance type checking and component structure in core-app and nexus with new showcase features
+- `92d471c8` | 2026-02-02 | feat: update TuffLandingWaitlist component with sign-in routing and localization improvements
+- `b4768d24` | 2026-02-02 | chore: configure Node.js memory options and enhance Sentry integration in Nuxt config
+- `c0628a4f` | 2026-02-01 | feat(nexus): update button documentation with improved demo structure
+- `1fb9746a` | 2026-02-01 | feat(nexus): update styles and enhance documentation structure
+- `f783be7d` | 2026-02-01 | feat(nexus): update button component documentation with loading state examples
+- `01950bd1` | 2026-02-01 | feat(nexus): enhance configuration and documentation components
+- `ba9c3b72` | 2026-02-01 | feat(plugin): update widget management and enhance build verification
+- `01ee52f6` | 2026-01-30 | feat(nexus): update components and enhance documentation
+- `83d1ee37` | 2026-01-30 | feat(nexus): enhance documentation and layout components
+- `b76605f7` | 2026-01-29 | feat(nexus): add new documentation components and enhance existing layouts
+- `877e5930` | 2026-01-26 | ref(nexus): update DocsAsideCards styles and modify vue-sonner dependency
+- `fecbe703` | 2026-01-26 | feat(nexus-docs): refine docs hero, outline, and demo code window
+- `5d2f1712` | 2026-01-25 | ref(UpdateFormDrawer): streamline footer template structure for improved readability
+- `54634fea` | 2026-01-24 | feat: improve plugin logging and docs
+- `90905283` | 2026-01-23 | chore: sync workspace updates
+- `ea9f2056` | 2026-01-23 | chore: format nexus docs
+- `c21811fb` | 2026-01-21 | docs(nexus): [NEXEX-050] add examples nav
+- `9a977159` | 2026-01-21 | docs(transport): [TPORT-080] add MessagePort upgrade notes
+- `f1dc0659` | 2026-01-20 | feat(nexus,tuffex): add docs and components; update release signing support
+- `93a7fea5` | 2026-01-20 | chore(cli): [TUFFCLI-080] update help and docs
+- `3f51e4bc` | 2026-01-20 | feat: refresh core app ui and nexus docs
+- `1d7bdf50` | 2026-01-18 | feat(clipboard): enhance clipboard image handling and cleanup tasks
+- `8b0ced9d` | 2026-01-05 | feat(telemetry): integrate client ID tracking in telemetry events
+- `1ea00311` | 2026-01-05 | feat(telemetry): enhance telemetry features and performance metrics
+- `90235286` | 2025-12-20 | Okay, I need to help the user generate a commit message based on the provided git diff. Let me start by carefully reviewing the information given.
+- `b1e01942` | 2025-12-18 | feat(intelligence): introduce prompt management system
+- `1ea2c72f` | 2025-12-15 | feat: enhance plugin security and update web UI
+- `22e5d047` | 2025-12-14 | feat(platform): introduce team quotas, telemetry, and custom backgrounds
+- `b31b8c93` | 2025-12-14 | feat(platform): introduce advanced window, search, and team management features
+- `c79b134d` | 2025-12-13 | feat(ui): introduce @talex-touch/tuff-ui package
+- `f17ae563` | 2025-12-13 | feat(nexus): overhaul updates page UI and improve performance
+- `1da67f66` | 2025-12-13 | feat(release): implement end-to-end release publishing and update system
+- `bc56d262` | 2025-12-13 | feat: Implement release management API and composables
+- `864d6c04` | 2025-12-12 | feat(nexus): initialize icon column with empty string instead of NULL in plugin creation
+- `8c031709` | 2025-12-12 | feat(nexus): update production domain from quotawish.com to tagzxia.com and improve icon handling in plugin creation
+- `40ca594e` | 2025-12-11 | feat(nexus): expand plugin schema with additional metadata columns for backward compatibility
+- `68fe22c6` | 2025-12-11 | feat(nexus): add user_id, created_at, and updated_at columns to plugins table schema
+- `c6de0b91` | 2025-12-11 | fix(nexus): improve error handling and animation mode in plugin creation and carousel
+- `89a9f1ba` | 2025-12-11 | refactor(auth): remove sign-in and sign-up pages
+- `89ce200c` | 2025-12-11 | feat(auth): add sign-in and sign-up pages with locale detection and redirect support
+- `4b433a84` | 2025-12-11 | feat(ui): enhance grid animations and reorganize settings with improved styling
+- `b56a52e3` | 2025-12-10 | docs(api): add AccountSDK documentation and update Clerk keys to production
+- `2edd03b4` | 2025-12-10 | fix(nexus): update Sentry DSN and improve TouchAurora null safety checks
+- `be56e8e6` | 2025-12-10 | feat(nexus): add comprehensive error handling to plugin creation endpoint
+- `a8e49eed` | 2025-12-10 | feat(auth): add local auth server option for development mode
+- `ac424842` | 2025-12-10 | feat(ui): add clickable user profile links and account management sections
+- `c848b1e8` | 2025-12-10 | chore(nexus): rename Cloudflare Pages project from tuff-nexus to tuff
+- `c18f2387` | 2025-12-10 | fix(nexus): correct pages_build_output_dir path in wrangler.toml and update contents.sqlite
+- `49a2d8b8` | 2025-12-09 | ``` feat(deps): add mathjs dependency for advanced mathematical calculations
+- `75485bd6` | 2025-12-09 | docs(guide): add Quick Preview to onboarding path and enable auto-install-peers in .npmrc
+- `6ec9f27d` | 2025-12-09 | ``` docs(dev): add Plugin Context API documentation with global context objects reference
+- `037e673e` | 2025-12-09 | feat(market): implement plugin update checker and uninstall tracking
+- `03c07d54` | 2025-12-08 | feat(dashboard): refactor plugins page with new UI components and review workflow
+- `35bff722` | 2025-12-08 | feat(market): add TpexApi provider support and enhance plugin management
+
+### Tuffex (63)
+
+- `cda1769d` | 2026-02-26 | fix(tuffex): restore single-overlay mask behavior
+- `8a5b057a` | 2026-02-24 | feat(core-app): enforce login-gated nexus anonymous telemetry
+- `294f46f0` | 2026-02-19 | ref(nexus): streamline HeaderUserMenu and BaseSurface components; enhance refraction handling
+- `4b69cf0a` | 2026-02-18 | feat(nexus): add EdgeFadeMask component and demos; enhance DocsOutline and DocsSidebar
+- `b3f6c1ab` | 2026-02-17 | ref(nexus): enhance DocApiTable with default value handling and new tooltip features
+- `c54fca7e` | 2026-02-14 | feat(core): enhance development server configuration and add SQLite storage permissions
+- `b7475a52` | 2026-02-12 | ref(dashboard): streamline account management by removing unused OAuth logic and enhancing UI
+- `659922d7` | 2026-02-02 | feat: simplify Tuffex type definitions and enhance component imports
+- `85d9bacf` | 2026-02-02 | feat: enhance GlowText component with adaptive mode and new backdrop filter options
+- `ef153dc3` | 2026-01-26 | feat(tuffex): enhance documentation with new components and layout updates
+- `5e28d61b` | 2026-01-25 | chore(tuffex): bump version to 0.3.3
+- `e548bc0e` | 2026-01-25 | chore(tuffex): bump version to 0.3.2
+- `750a78dc` | 2026-01-25 | chore(tuffex): bump version to 0.3.1
+- `313988d6` | 2026-01-25 | chore: bump tuffex version to 0.3.0
+- `5519ddbd` | 2026-01-21 | docs: [TUFEX-070] update select component docs
+- `6404ef80` | 2026-01-21 | test: [TUFEX-060] add tree select, cascader, search select tests
+- `8b3d0b71` | 2026-01-21 | feat(TUFEX-030): align component types and api docs
+- `5a164b90` | 2026-01-16 | feat(market): streamline tab management and enhance transition effects
+- `0788e3de` | 2026-01-12 | fix(env): refine window checks across components
+- `c7979024` | 2026-01-02 | feat: add NavBar, Picker, Splitter, Stack, and TabBar components
+- `8ef5eb3d` | 2026-01-01 | feat(history): add radio demonstration components with improved styling and type definitions
+- `eb137ea5` | 2025-12-31 | feat(slider): enhance elastic tooltip functionality with new presets and properties
+- `eb3d9115` | 2025-12-31 | feat: add Fusion component with various demos and configurations
+- `f1e1851d` | 2025-12-28 | feat(context-menu, popover, tooltip): enhance positioning and styling with stable placement and improved animations
+- `210eac97` | 2025-12-28 | feat(tabs): add indicator variant and motion options to TabsProps
+- `3dd69c44` | 2025-12-27 | feat(demos): refactor radio demo components for improved styling and add playground demo
+- `c9ac0876` | 2025-12-27 | feat docs: add description of radio forms and indicators design
+- `cda106ca` | 2025-12-26 | feat(ui): Enhance glass morphing effects with dynamic scaling and improved styles
+- `49cf5234` | 2025-12-26 | feat(ui): Add glass morphing effects to radio controls and associated section
+- `8bca1164` | 2025-12-26 | feat(ui): add glass morphing effects to radio buttons and associated section
+- `015ba517` | 2025-12-26 | feat(ui): add glass morphing effect to radio buttons
+- `e67d81c7` | 2025-12-26 | feat(ui): Add modern glass morphing effects to radio buttons
+- `3a4e2265` | 2025-12-26 | feat(ui): Add glass, blur, and elastic effects to radio buttons
+- `d24e1ba9` | 2025-12-26 | feat(ui): add glass, blur, and elastic effects to radio buttons
+- `e44853bd` | 2025-12-26 | feat(ui): ui - add glass morphing for radio buttons (button component extension) | Add modern, clean glass morphing effect for radio buttons
+- `b281406f` | 2025-12-25 | feat: add segmented slider and text transformer components with demos
+- `e442b6c6` | 2025-12-25 | feat: add TxContextMenuItem component and integrate with context menu
+- `ec485d37` | 2025-12-25 | feat: add SearchSelect component with remote search functionality
+- `8fc39ae2` | 2025-12-24 | feat/ui: Add full-width reference support to popovers and selects
+- `14226da9` | 2025-12-24 | feat(components): Add new components to tuffex components
+- `c8dc1b89` | 2025-12-24 | feat: add searchable functionality to TxSelect component
+- `26410f9e` | 2025-12-24 | feat(velocity): Improved touch scroll functionality with better chainable scrolling
+- `c95b473b` | 2025-12-23 | feat{ui}: migrate tuffex-ui components to root package
+- `b8a94163` | 2025-12-23 | chore: migrate tuffex-ui components to root package
+- `95539a85` | 2025-12-23 | chore: migrate tuffex-ui components to root package
+- `3e369bf4` | 2025-12-23 | feat UI: improved spinner visibility handling and animations for enhanced user experience
+- `03c43041` | 2025-12-23 | feat(api): Add auto-completion for gradient blur in the editor
+- `c4ed3704` | 2025-12-23 | feat(doc): documentation update annotations: - `FastExurchase.md`: Added documentation for product styling and checkout flow - `Sizes.md`: Added documentation for size measurement standards and instructions
+- `58e0644f` | 2025-12-23 | feat(doc): TODO.md - Update todo.md scope(doc) description: - Update todo.md from 29 to 42 items - Add complex changes including list formatting, feature updates and new features footer: - This is a complex change requiring detailed formatting changes
+- `6301c838` | 2025-12-22 | feat: add Collapse, Pagination, Rating, Steps, and Timeline components
+- `9c53341b` | 2025-12-21 | feat: add chat components including TxChatList, TxChatMessage, and TxTypingIndicator
+- `afd751f6` | 2025-12-21 | feat(ui): Add interactive agents skeleton component
+- `131d3e24` | 2025-12-21 | feat(spinner): add fallback option and enhance spinner component styles
+- `3f437bea` | 2025-12-21 | fix: update checkbox component naming and styles for consistency
+- `640c2e20` | 2025-12-21 | feat: add comprehensive documentation and components for tuffex-ui components, improving accessibility and consistency
+- `c8ebdc33` | 2025-12-21 | feat(ui): add comprehensive documentation for tuffex-ui's UI components (tx-select, tx-select-dropdown, tx-select-item, dropdown-menu, tabs, toast)
+- `d0c4ccd8` | 2025-12-21 | feat(docs): several prominent new markdown files for documentation
+- `e753d802` | 2025-12-21 | feat(docs): Add new components documentation
+- `826483a9` | 2025-12-21 | feat: add gradient border component with customizable properties
+- `9003babb` | 2025-12-21 | feat: add TxPopperDialog and TxTouchTip components
+- `d5f42ff7` | 2025-12-20 | feat: add TuffEx UI components and docs
+- `20e77600` | 2025-12-15 | feat: add TxBlockSlot, TxBlockSwitch, and TxGroupBlock components with styles and types
+- `2c845de3` | 2025-12-13 | feat(core-box): improve window resizing and positioning
+
+### Other (59)
+
+- `4cde8b6a` | 2026-02-26 | ref: use TxIcon in TxPluginMetaHeader
+- `44c406d2` | 2026-02-24 | fix(nexus): stabilize oauth hkdf runtime on cloudflare
+- `2ca89692` | 2026-02-23 | fix(config): resolve LINUXDO_ISSUER binding conflict in wrangler.toml
+- `088bafcb` | 2026-02-21 | chore(config): clean up environment variables in wrangler.toml
+- `c10301a6` | 2026-02-21 | chore(config): update environment variables in wrangler.toml
+- `b2076174` | 2026-02-05 | chore(nexus): [NEXUS-REV-060] document regression steps
+- `808647a4` | 2026-02-06 | chore(issues): update NEXUS-140 status
+- `5483d446` | 2026-02-05 | docs(nexus): [NEXUS-100] observability and rollout
+- `9553d787` | 2026-02-05 | docs(nexus): [NEXUS-090] test and regression plan
+- `69fc4128` | 2026-02-05 | docs(nexus): [NEXUS-080] client integration and migration
+- `f03ff323` | 2026-02-05 | docs(nexus): [NEXUS-070] api and error code spec
+- `f05af40e` | 2026-02-05 | docs(nexus): [NEXUS-060] quota enforcement and client fallback
+- `b332520a` | 2026-02-05 | docs(nexus): [NEXUS-050] oauth oidc and sso extension
+- `7b65b876` | 2026-02-05 | docs(nexus): [NEXUS-040] sync protocol and conflict rules
+- `56ddd938` | 2026-02-04 | docs(nexus): [NEXUS-030] e2ee key hierarchy and recovery
+- `569d82ce` | 2026-02-04 | docs(nexus): [NEXUS-020] core data model design
+- `14576f54` | 2026-02-04 | docs(nexus): [NEXUS-010] data scope and sync strategy
+- `6f8740d4` | 2026-02-04 | docs: [SPDC-080] record regression steps
+- `bc000307` | 2026-02-04 | docs: [SPDC-010] map plugin detail fields
+- `17b5e9e8` | 2026-02-02 | feat: add chalk for enhanced logging in version sync script
+- `bbb5b291` | 2026-02-02 | chore: add tuff-cli and related packages to pnpm-lock.yaml
+- `46a46fea` | 2026-02-02 | chore: update release notes for v2.4.7-beta.12
+- `d3f842ab` | 2026-01-21 | docs(nexus): [NEXEX-060] add maintenance rules
+- `5cda5270` | 2026-01-21 | docs(nexus): [NEXEX-030] add examples index
+- `001a3f01` | 2026-01-21 | docs(nexus): [NEXEX-020] inventory examples and gaps
+- `5a96e78c` | 2026-01-21 | docs(nexus): [NEXEX-010] define examples scope and priorities
+- `a82189a0` | 2026-01-21 | test: [TUFEX-080] verify vitest split projects
+- `ba578a31` | 2026-01-21 | feat(transport): [TPORT-010] inventory existing streaming and high-frequency channels
+- `784fdfab` | 2026-01-21 | chore(TUFEX-050): update issue status
+- `2fb03e98` | 2026-01-21 | chore(TUFEX-040): update issue status
+- `21240917` | 2026-01-21 | chore(TUFEX-030): update issue status
+- `fd86ef16` | 2026-01-21 | docs(TUFEX-020): survey component patterns
+- `5888bd1e` | 2026-01-21 | chore(TUFEX-010): update issue status
+- `2d961473` | 2026-01-21 | docs(TUFEX-010): define component scope and boundaries
+- `d54ac184` | 2026-01-20 | docs: [CFG-060] draft requirements risk acceptance
+- `30d5c18b` | 2026-01-20 | docs: [CFG-050] define sync criteria and strategy
+- `3a049134` | 2026-01-20 | docs: [CFG-040] map call chain and consistency requirements
+- `cc6d3613` | 2026-01-20 | docs: [CFG-030] inventory SQLite config tables and write points
+- `0913044b` | 2026-01-20 | docs: [CFG-020] inventory main-process config storage and JSON paths
+- `aaf219e2` | 2026-01-20 | docs: [CFG-010] review existing decisions and open issues
+- `d567e8dc` | 2026-01-20 | chore(issues): Add bom to touchsdk csv
+- `9c25eeb7` | 2026-01-20 | chore(issues): [TSDK-060] record core:dev validation
+- `9c99e5cf` | 2026-01-20 | chore(examples): [TSDK-050] migrate to hooks
+- `8c422513` | 2026-01-20 | chore(issues): [TSDK-020] document hook style
+- `183b9d4c` | 2026-01-20 | chore(issues): [TSDK-010] add window globals audit
+- `eda84c46` | 2026-01-20 | chore(issues): [TSDK-030] update status
+- `f0a5ac61` | 2026-01-11 | feat(architecture): improve polling service integration and analytics configuration
+- `60f0346c` | 2025-12-11 | docs(search): add comprehensive layered search architecture design with performance optimization
+- `62ff4036` | 2025-12-10 | ``` feat(nexus): add admin-only view tracking to documentation pages and improve sidebar navigation
+- `5ee8f28a` | 2025-12-10 | build(nexus): correct pages_build_output_dir path
+- `a9b0f8e4` | 2025-12-10 | chore(nexus): remove wrangler.toml configuration file
+- `71894970` | 2025-12-10 | ``` docs(transport): add comprehensive TuffTransport API reference documentation
+- `70d02886` | 2025-12-09 | fix(deps): disable auto-install-peers to fix lockfile config mismatch
+- `efec6494` | 2025-12-09 | ``` docs(dev): remove outdated English and Chinese developer documentation
+- `5ca24197` | 2025-12-08 | chore(deps): update pnpm-lock.yaml
+- `1b8b1d5d` | 2025-11-29 | docs(dev): separate English developer documentation into dev-en
+- `8ffae302` | 2025-11-29 | feat(docs): implement new three-pillar documentation structure
+- `2cf28bc6` | 2025-11-29 | refactor(docs): remove legacy documentation for major restructure
+- `dd41465f` | 2025-11-29 | refactor(market, docs): decompose components and remove legacy docs site
+
+### Docs (28)
+
+- `48ae43ff` | 2026-02-26 | fix(sync): remove legacy sync store and add guard tests
+- `82632117` | 2026-02-26 | docs(store): migrate market terminology across project and archive docs
+- `369f2bbe` | 2026-02-24 | fix(config): disable admin breakglass features in wrangler.toml
+- `9c14de1b` | 2026-02-22 | docs: update README and TODO with SQLite retry mechanism details
+- `932a918f` | 2026-02-04 | docs: archive completed tasks from TODO list in engineering documentation
+- `9d5e3f9f` | 2026-02-04 | ref: remove SearchLogger lifecycle side effects from constructor
+- `be0aabcd` | 2026-02-04 | feat: implement ModuleManager lifecycle isolation and enhance Nexus startup telemetry reporting
+- `9edbfee6` | 2026-02-03 | chore: update ARCHIVE and todo documentation, remove TYPECHECK_FIXES file
+- `9dda5d93` | 2026-02-03 | fix: enhance security by blocking HTTP protocol in production for plugin loading
+- `5fc9b116` | 2026-02-03 | feat: update Tuff components for improved layout and styling
+- `b68ef31b` | 2026-02-02 | docs(update): [UPD-080] pre-release validation
+- `eab67cfc` | 2026-02-02 | docs(update): [UPD-070] regression checklist + script
+- `67e2794a` | 2026-01-22 | update: sync workspace changes
+- `b8799564` | 2026-01-21 | chore(BMLA-050): Define SearchLogger dependencies
+- `99a1f153` | 2026-01-21 | chore(BMLA-040): Select SearchLogger init strategy
+- `fa9fe018` | 2026-01-21 | chore(BMLA-020): Trace module load order
+- `f0fb926d` | 2026-01-21 | chore(BMLA-010): Trace SearchLogger init chain
+- `ef2255c8` | 2026-01-21 | docs: [TPORT-080] transport docs and validation
+- `02f77009` | 2026-01-20 | docs(cli): [TUFFCLI-010] define scope criteria
+- `692846f4` | 2026-01-20 | docs(cli): [TUFFCLI-020] add cli inventory
+- `9fba4928` | 2026-01-20 | docs(cfg): [CFG-070] progress doc details
+- `72517867` | 2026-01-20 | docs(cfg): [CFG-060] align permission docs
+- `52b28e0c` | 2026-01-20 | docs(cfg): [CFG-050] migration and rollback plan
+- `7629c797` | 2026-01-20 | docs(cfg): [CFG-040] storage adapter spec
+- `48770de6` | 2026-01-20 | docs(cfg): [CFG-030] source-of-truth rules
+- `36aa8839` | 2026-01-20 | docs(cfg): [CFG-020] storage classification matrix
+- `8f0d16b7` | 2026-01-20 | docs(cfg): [CFG-010] config storage inventory
+- `349ca14f` | 2026-01-17 | fix(docs): update documentation paths and enhance structure
+
+### Utils SDK (27)
+
+- `f636d167` | 2026-02-26 | feat(utils): hard cut market domain to store across events sdk hooks
+- `7690efeb` | 2026-02-22 | chore: bump version to 1.0.45 in utils package
+- `f5e60623` | 2026-02-06 | feat(utils): [NEXUS-150] cloud sync sdk wrapper
+- `5d94e8ed` | 2026-02-06 | feat(utils): add CloudSyncSDK
+- `63247235` | 2026-02-04 | feat: [SPDC-050] use shared detail in nexus
+- `388c1653` | 2026-02-04 | feat: [SPDC-040] add shared readme rendering
+- `6146b0da` | 2026-02-04 | feat: [SPDC-030] add shared plugin detail components
+- `3bc91a75` | 2026-02-04 | docs: [SPDC-020] define shared plugin detail model
+- `0ed2b35e` | 2026-01-23 | chore: add transport main entrypoints
+- `05de057f` | 2026-01-21 | test: [TPORT-080] validate transport checks
+- `cfa0ef33` | 2026-01-21 | feat: [TPORT-070] plugin port cleanup
+- `6c584f5e` | 2026-01-21 | feat: [TPORT-060] prefer port for high-frequency channels
+- `c8a45177` | 2026-01-21 | feat(transport): [TPORT-050] unify error handling and fallback strategy
+- `2c88f5ac` | 2026-01-21 | feat(transport): [TPORT-040] renderer port layer and upgrade API
+- `0fc0efac` | 2026-01-21 | feat(transport): [TPORT-020] design port upgrade protocol and event types
+- `76560335` | 2026-01-20 | feat(core,utils,plugins): add notification transport and plugin channel updates
+- `814aa813` | 2026-01-20 | chore(utils): lint/type adjustments
+- `d24b1ab8` | 2026-01-20 | feat(utils): [TSDK-040] guard touchsdk hook
+- `b5fa6540` | 2026-01-20 | feat(utils): [TSDK-030] migrate plugin sdk window access to hooks
+- `9e0aeb91` | 2026-01-17 | feat(transport): integrate tuff transport for enhanced plugin communication
+- `c49119b8` | 2026-01-17 | feat(monorepo): establish maintenance standards and enhance linting processes
+- `a8b28680` | 2026-01-11 | feat(logging): implement verbose logging configuration and caching for file reads
+- `e69fe3fc` | 2026-01-03 | feat: implement TuffTransport SDK with clipboard operations and event handling
+- `fe0ef3e3` | 2025-12-18 | chore(utils): bump version to 1.0.43
+- `f51f4421` | 2025-12-15 | feat: add clipboard events and types for TuffTransport
+- `6d12f9b8` | 2025-12-12 | docs(agents): document i18n message system, unified LogLevel, and expand package structure
+- `4cb3ca5c` | 2025-12-10 | ``` docs(transport): deprecate legacy Channel API and promote TuffTransport as recommended IPC system
+
+### CLI / Unplugin (11)
+
+- `16e14cb0` | 2026-02-26 | chore(cli): switch plugin publish endpoint to store api
+- `16e11f89` | 2026-02-22 | fix(unplugin): resolve cli prompt lint
+- `04a4eb34` | 2026-02-22 | fix: align Cloudflare Pages SSR output path and enhance CLI onboarding experience
+- `1e68ddc1` | 2026-01-20 | test(cli): [TUFFCLI-090] add cli tests
+- `73ce97ea` | 2026-01-20 | feat(cli): [TUFFCLI-070] finalize index bundling
+- `0c08809d` | 2026-01-20 | feat(cli): [TUFFCLI-030] unify config model
+- `a82bfafb` | 2026-01-20 | feat(cli): [TUFFCLI-060] align publish to tpex
+- `00724e55` | 2026-01-20 | feat(cli): [TUFFCLI-050] rework build pipeline
+- `9a232391` | 2026-01-20 | feat(cli): [TUFFCLI-040] add tuff dev command
+- `eb7d76fe` | 2025-12-15 | feat(unplugin-export-plugin): introduce interactive tuff CLI and enhance build process
+- `0553bb0c` | 2025-12-13 | feat: initialize unplugin-export-plugin with core functionality and build process
+
+### CI / Release Pipeline (6)
+
+- `fd182e58` | 2026-02-09 | chore: enhance release script to improve artifact handling for Windows, macOS, and Linux
+- `5faba2dd` | 2026-02-02 | feat(ci): [UPD-030] 搭建 GitHub Actions 三条发布流
+- `e2126ddc` | 2026-01-25 | chore(tuffex): add master branch support in tuffex ci and publish workflows
+- `e4fb7432` | 2026-01-25 | docs: update workflow documentation and clarify release process for tuffex
+- `2237d3ba` | 2025-12-20 | ci: improve windows artifact cleanup with powershell
+- `065c9a2c` | 2025-12-15 | ci(workflow): add modular CI workflows and improve type safety
+
+### Plugins (5)
+
+- `07fcc08b` | 2026-02-25 | feat(plugin): add dynamic quick-actions direct execute flow
+- `2735fb35` | 2026-02-22 | ref: replace Element Plus with Tuffex across the application
+- `7ff9db50` | 2025-12-22 | feat(trans): integrate tuff's translation intelligence into touch-translation plugin
+- `e85eb658` | 2025-12-15 | Refactor code structure for improved readability and maintainability
+- `2d175ee3` | 2025-12-12 | refactor(plugin): migrate to unified plugin.* API namespace and improve logging
+
+### Scripts (4)
+
+- `904a8cd9` | 2026-02-02 | chore: update AGENTS.md with commit message guidelines and enhance version sync script
+- `73932afe` | 2026-02-02 | fix: prevent recursive calls and enhance version sync script with improved command execution
+- `67925ae7` | 2026-02-02 | fix: improve error handling and logging in version synchronization script
+- `36de19f9` | 2026-02-02 | feat: enhance version synchronization script
+
+### Native (1)
+
+- `2fb46fc7` | 2026-02-25 | fix(tuff-native): explicit ocr addon loading and smoke tests
+
+### Test Suite (1)
+
+- `af8259e0` | 2026-01-21 | test: [TPORT-080] update utils tests
+

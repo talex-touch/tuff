@@ -581,7 +581,7 @@ jobs:
     name: Create Release
     needs: build-and-release
     runs-on: ubuntu-latest
-    if: always() && (needs.build-and-release.result == 'success' || needs.build-and-release.result == 'skipped' || needs.build-and-release.result == 'failure')
+    if: needs.build-and-release.result == 'success'
 
     steps:
       - name: Check Build Results
@@ -676,6 +676,9 @@ jobs:
 
       - name: Collect Release Assets
         id: release-files
+        env:
+          TAG: ${{ steps.release-info.outputs.tag }}
+          RELEASE_TYPE: ${{ steps.release-info.outputs.type }}
         run: |
           set -euo pipefail
 
@@ -710,6 +713,90 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
+          # Build release manifest for update pipeline
+          VERSION="${TAG#v}"
+          CHANNEL="RELEASE"
+          LOWER_VERSION=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
+          if [[ "$LOWER_VERSION" == *"snapshot"* ]]; then
+            CHANNEL="SNAPSHOT"
+          elif [[ "$LOWER_VERSION" == *"beta"* ]]; then
+            CHANNEL="BETA"
+          elif [ "${RELEASE_TYPE}" = "snapshot" ]; then
+            CHANNEL="SNAPSHOT"
+          fi
+
+          TAG="${TAG}" VERSION="${VERSION}" CHANNEL="${CHANNEL}" node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+          const crypto = require('crypto')
+
+          const releaseDir = path.resolve('release-assets')
+          const tag = process.env.TAG || ''
+          const version = process.env.VERSION || ''
+          const channel = process.env.CHANNEL || 'RELEASE'
+
+          const files = fs.readdirSync(releaseDir)
+            .filter((name) => {
+              if (name === 'tuff-release-manifest.json') return false
+              return /\.(exe|dmg|zip|AppImage|deb|snap)$/i.test(name)
+            })
+
+          function inferArch(fileName) {
+            const lower = fileName.toLowerCase()
+            if (lower.includes('universal')) return 'universal'
+            if (lower.includes('arm64') || lower.includes('aarch64')) return 'arm64'
+            if (lower.includes('x64') || lower.includes('amd64')) return 'x64'
+            return 'x64'
+          }
+
+          const artifacts = []
+          for (const file of files) {
+            const lower = file.toLowerCase()
+
+            let platform = null
+            if (lower.includes('windows') || lower.endsWith('.exe')) {
+              platform = 'win32'
+            } else if (lower.includes('macos') || lower.endsWith('.dmg') || lower.endsWith('.zip')) {
+              platform = 'darwin'
+            } else if (lower.includes('ubuntu') || lower.endsWith('.appimage') || lower.endsWith('.deb') || lower.endsWith('.snap')) {
+              platform = 'linux'
+            }
+
+            if (!platform) continue
+
+            const arch = inferArch(file)
+
+            const fullPath = path.join(releaseDir, file)
+            const content = fs.readFileSync(fullPath)
+            const sha256 = crypto.createHash('sha256').update(content).digest('hex')
+
+            artifacts.push({
+              component: 'core',
+              name: file,
+              platform,
+              arch,
+              sha256
+            })
+          }
+
+          const manifest = {
+            schemaVersion: 1,
+            release: {
+              version,
+              channel,
+              tag
+            },
+            artifacts
+          }
+
+          fs.writeFileSync(
+            path.join(releaseDir, 'tuff-release-manifest.json'),
+            JSON.stringify(manifest, null, 2)
+          )
+          NODE
+
+          OUTPUT_PATHS+=("release-assets/tuff-release-manifest.json")
+
           {
             echo "files<<EOF"
             for path in "${OUTPUT_PATHS[@]}"; do
@@ -719,6 +806,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
+        id: create-release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.release-info.outputs.tag }}
@@ -811,3 +899,275 @@ jobs:
             This bypasses Gatekeeper for that specific app instance.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sync-nexus-release:
+    name: Sync Nexus Release
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.create-release.result == 'success'
+    env:
+      NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
+      NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+      TAG: ${{ github.ref_name }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Validate Nexus sync credentials
+        run: |
+          if [ -z "${NEXUS_API_KEY}" ]; then
+            echo "NEXUS_API_KEY is required for release sync."
+            exit 1
+          fi
+
+      - name: Resolve release metadata
+        id: meta
+        run: |
+          VERSION="${TAG#v}"
+          CHANNEL="RELEASE"
+          LOWER_VERSION=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
+          if [[ "$LOWER_VERSION" == *"snapshot"* ]]; then
+            CHANNEL="SNAPSHOT"
+          elif [[ "$LOWER_VERSION" == *"beta"* ]]; then
+            CHANNEL="BETA"
+          fi
+          {
+            echo "version=$VERSION"
+            echo "channel=$CHANNEL"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Fetch GitHub release metadata
+        run: |
+          curl -sS \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" \
+            -o /tmp/github-release.json
+
+          jq -e '.id and (.assets | type == "array")' /tmp/github-release.json >/dev/null
+
+      - name: Resolve release notes payload
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.meta.outputs.version }}"
+          NOTES_BASE="notes/update_${VERSION}"
+
+          fallback_body=$(jq -r '.body // ""' /tmp/github-release.json)
+          fallback_body="${fallback_body//$'\r'/}"
+          if [ -z "${fallback_body//[[:space:]]/}" ]; then
+            fallback_body="Release ${TAG}"
+          fi
+
+          notes_zh="${fallback_body}"
+          notes_en="${fallback_body}"
+
+          if [ -f "${NOTES_BASE}.md" ]; then
+            shared_body=$(cat "${NOTES_BASE}.md")
+            notes_zh="${shared_body}"
+            notes_en="${shared_body}"
+          fi
+
+          if [ -f "${NOTES_BASE}.zh.md" ]; then
+            notes_zh=$(cat "${NOTES_BASE}.zh.md")
+          fi
+
+          if [ -f "${NOTES_BASE}.en.md" ]; then
+            notes_en=$(cat "${NOTES_BASE}.en.md")
+          fi
+
+          render_markdown() {
+            local content="$1"
+
+            if [ -z "${content//[[:space:]]/}" ]; then
+              echo ""
+              return
+            fi
+
+            local payload
+            payload=$(jq -nc \
+              --arg text "${content}" \
+              --arg context "${GITHUB_REPOSITORY}" \
+              '{text: $text, mode: "gfm", context: $context}')
+
+            curl -sS \
+              -X POST "https://api.github.com/markdown" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              -d "${payload}"
+          }
+
+          notes_html_zh=$(render_markdown "${notes_zh}")
+          if [ "${notes_en}" = "${notes_zh}" ]; then
+            notes_html_en="${notes_html_zh}"
+          else
+            notes_html_en=$(render_markdown "${notes_en}")
+          fi
+
+          notes_json=$(jq -nc --arg zh "${notes_zh}" --arg en "${notes_en}" '{zh: $zh, en: $en}')
+          notes_html_json=$(jq -nc --arg zh "${notes_html_zh}" --arg en "${notes_html_en}" '{zh: $zh, en: $en}')
+
+          printf '%s' "${notes_json}" > /tmp/nexus-release-notes.json
+          printf '%s' "${notes_html_json}" > /tmp/nexus-release-notes-html.json
+
+      - name: Upsert Nexus release metadata
+        run: |
+          notes_json=$(cat /tmp/nexus-release-notes.json)
+          notes_html_json=$(cat /tmp/nexus-release-notes-html.json)
+
+          create_payload=$(jq -n \
+            --arg tag "${TAG}" \
+            --arg name "Release ${TAG}" \
+            --arg channel "${{ steps.meta.outputs.channel }}" \
+            --arg version "${{ steps.meta.outputs.version }}" \
+            --argjson notes "${notes_json}" \
+            --argjson notesHtml "${notes_html_json}" \
+            '{
+              tag: $tag,
+              name: $name,
+              channel: $channel,
+              version: $version,
+              notes: $notes,
+              notesHtml: $notesHtml,
+              status: "draft"
+            }')
+
+          update_payload=$(jq -n \
+            --arg name "Release ${TAG}" \
+            --argjson notes "${notes_json}" \
+            --argjson notesHtml "${notes_html_json}" \
+            '{
+              name: $name,
+              notes: $notes,
+              notesHtml: $notesHtml
+            }')
+
+          http_code=$(curl -sS -o /tmp/nexus-release-create.json -w "%{http_code}" \
+            -X POST "${NEXUS_BASE_URL}/api/releases" \
+            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "${create_payload}")
+
+          if [ "${http_code}" = "400" ]; then
+            curl -sS -f \
+              -X PATCH "${NEXUS_BASE_URL}/api/releases/${TAG}" \
+              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "${update_payload}" \
+              -o /tmp/nexus-release-update.json
+          elif [ "${http_code}" -lt 200 ] || [ "${http_code}" -ge 300 ]; then
+            cat /tmp/nexus-release-create.json
+            exit 1
+          fi
+
+      - name: Link GitHub assets to Nexus release
+        run: |
+          set -euo pipefail
+
+          manifest_url=$(jq -r '.assets[] | select(.name=="tuff-release-manifest.json") | .browser_download_url' /tmp/github-release.json)
+          if [ -n "${manifest_url}" ] && [ "${manifest_url}" != "null" ]; then
+            curl -sS -f \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/octet-stream" \
+              "${manifest_url}" \
+              -o /tmp/tuff-release-manifest.json
+          else
+            echo '{"artifacts":[]}' >/tmp/tuff-release-manifest.json
+          fi
+
+          while IFS= read -r encoded; do
+            item=$(echo "${encoded}" | base64 -d)
+            name=$(echo "${item}" | jq -r '.name')
+            url=$(echo "${item}" | jq -r '.browser_download_url')
+            size=$(echo "${item}" | jq -r '.size')
+
+            if [[ "${name}" == "tuff-release-manifest.json" ]] || [[ "${name}" == latest*.yml ]] || [[ "${name}" == "builder-debug.yml" ]]; then
+              continue
+            fi
+
+            manifest_item=$(jq -c --arg file "${name}" '.artifacts[]? | select(.name==$file)' /tmp/tuff-release-manifest.json | head -n 1 || true)
+            platform=""
+            arch=""
+            sha256=""
+
+            if [ -n "${manifest_item}" ]; then
+              platform=$(echo "${manifest_item}" | jq -r '.platform // empty')
+              arch=$(echo "${manifest_item}" | jq -r '.arch // empty')
+              sha256=$(echo "${manifest_item}" | jq -r '.sha256 // empty')
+            fi
+
+            if [ -z "${platform}" ] || [ -z "${arch}" ]; then
+              lower_name=$(echo "${name}" | tr '[:upper:]' '[:lower:]')
+              if [[ "${lower_name}" == *"windows"* ]] || [[ "${lower_name}" == *.exe ]]; then
+                platform="win32"
+              elif [[ "${lower_name}" == *"macos"* ]] || [[ "${lower_name}" == *.dmg ]] || [[ "${lower_name}" == *.zip ]]; then
+                platform="darwin"
+              elif [[ "${lower_name}" == *"ubuntu"* ]] || [[ "${lower_name}" == *.appimage ]] || [[ "${lower_name}" == *.deb ]] || [[ "${lower_name}" == *.snap ]]; then
+                platform="linux"
+              fi
+
+              if [ -z "${platform}" ]; then
+                continue
+              fi
+
+              arch="x64"
+              if [[ "${lower_name}" == *"universal"* ]]; then
+                arch="universal"
+              elif [[ "${lower_name}" == *"arm64"* ]] || [[ "${lower_name}" == *"aarch64"* ]]; then
+                arch="arm64"
+              elif [[ "${lower_name}" == *"x64"* ]] || [[ "${lower_name}" == *"amd64"* ]]; then
+                arch="x64"
+              fi
+            fi
+
+            if [ -z "${sha256}" ] || [ "${sha256}" = "null" ]; then
+              payload=$(jq -n \
+                --arg platform "${platform}" \
+                --arg arch "${arch}" \
+                --arg filename "${name}" \
+                --arg downloadUrl "${url}" \
+                --argjson size "${size}" \
+                '{
+                  platform: $platform,
+                  arch: $arch,
+                  filename: $filename,
+                  downloadUrl: $downloadUrl,
+                  size: $size,
+                  sha256: null,
+                  contentType: "application/octet-stream"
+                }')
+            else
+              payload=$(jq -n \
+                --arg platform "${platform}" \
+                --arg arch "${arch}" \
+                --arg filename "${name}" \
+                --arg downloadUrl "${url}" \
+                --argjson size "${size}" \
+                --arg sha256 "${sha256}" \
+                '{
+                  platform: $platform,
+                  arch: $arch,
+                  filename: $filename,
+                  downloadUrl: $downloadUrl,
+                  size: $size,
+                  sha256: $sha256,
+                  contentType: "application/octet-stream"
+                }')
+            fi
+
+            curl -sS -f \
+              -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/link-github" \
+              -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "${payload}" \
+              -o /tmp/nexus-release-link.json
+          done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
+
+      - name: Publish Nexus release
+        run: |
+          curl -sS -f \
+            -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/publish" \
+            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+            -o /tmp/nexus-release-publish.json

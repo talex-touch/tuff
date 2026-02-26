@@ -6,6 +6,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { readCloudflareBindings } from './cloudflare'
+import { buildReleaseNotesPath } from './releaseNotesPath'
 import { saveUpdateAsset } from './updateAssetStorage'
 
 const UPDATES_KEY = 'dashboard:updates'
@@ -944,7 +945,7 @@ export async function upsertReleaseUpdate(event: H3Event, release: AppRelease): 
     timestamp: release.publishedAt ?? release.createdAt,
     summary,
     tags: [channelId],
-    link: `/updates?channel=${channelId}#${release.tag}`,
+    link: buildReleaseNotesPath(release.version),
   }
   const normalized = normalizeUpdateInput(input, { allowRelease: true })
 
