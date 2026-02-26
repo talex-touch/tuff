@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-02-19  
+> 更新时间：2026-02-26  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -95,3 +95,51 @@
 **待解决（未验收）**
 - 验证覆盖率过低：`verified` 仅 1/104。
 - 联调清单未闭环：入口/看板/双语一致性/新增项验证/扩展项核对/导航检索/lint/收口确认仍待执行。
+
+### 6.2 发布链路收敛（2026-02-25）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 桌面发版主线 | `build-and-release.yml` | 已统一 |
+| 失败构建创建 Release | 禁止 | 已收敛 |
+| Nexus Release 同步 | 自动（tag push） | 已上线 |
+| CLI 四包 npm 发布 | 自动（版本变化触发） | 已上线 |
+| Nexus 官网部署 | Cloudflare Pages 平台侧 Git 自动部署 | 已上线 |
+
+**质量约束落地**
+- 发布 workflow 必须幂等，重复执行不得产生重复 release 资产记录。
+- 预发布不得覆盖 npm 默认安装通道（`next` 与 `latest` 分离）。
+- 发布后需同步 Nexus 可观测入口（release 或 update news）。
+
+### 6.3 Intelligence Agent 一次切换（2026-02-25）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| Core IPC 命名空间 | `intelligence:agent:*` | 已切换 |
+| Nexus Admin API | `/api/admin/intelligence-agent/*` | 已切换 |
+| 旧入口 | `/api/admin/intelligence-lab/*` | 返回 `410` |
+| Prompt Schema | `promptRegistry + promptBindings` | Core/Nexus 对齐 |
+| Trace 合约版本 | `contractVersion = 3` | 已升级 |
+
+**质量约束落地**
+- 高频会话链路必须包含 `heartbeat/pause/recoverable/history/trace` 的显式 API。
+- Prompt 渲染来源必须优先走 registry binding，缺失时允许回退并记录可迁移默认值。
+- 高风险工具调用必须走审批票据，不得绕过 `high/critical` 审批门禁。
+
+### 6.4 v2.4.7 发版门禁跟踪（2026-02-26）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 版本基线 | `package.json` / `apps/core-app/package.json` = `2.4.7` | 已完成 |
+| 发布链路 | `build-and-release` + Nexus release + CLI npm 自动发布 | 已完成 |
+| 质量门禁 | lint/typecheck 仍有阻塞 | 进行中 |
+| 发布资产结构 | notes/notesHtml `{ zh, en }` | 待核对 |
+| tag 发布动作 | `v2.4.7` | 待执行 |
+
+**质量约束落地**
+- 发布前必须完成 Gate C（阻塞级 lint/typecheck 清零或豁免清单显式备案）。
+- 发布资产必须满足多语言结构约束（`notes`/`notesHtml` 仅 `zh|en`）。
+- 发布执行以 `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` 作为单一追踪入口，避免口径分叉。

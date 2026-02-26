@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-02-23
+> 更新时间: 2026-02-26
 
  ## PRD Index（以代码实现为准）
  
@@ -15,6 +15,7 @@
  ## 快速入口
 
  - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
+ - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
@@ -84,6 +85,13 @@
     - `.github/workflows/package-tuff-cli-publish.yml` - CLI 四包自动发布到 npm
     - `apps/nexus/server/api/releases/*`、`apps/nexus/server/utils/auth.ts` - release scope 粒度化与兼容层
   - **状态**：GitHub Release / Nexus Release / npm CLI 发布三链路自动化闭环；官网部署由 Cloudflare Pages 平台侧 Git 自动部署
+
+- **v2.4.7 发版推进**（2026-02，进行中）
+  - **入口**
+    - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+  - **状态**
+    - Gate A/B 完成（版本对齐 + 发布链路）
+    - Gate C~E 待完成（质量门禁、发布资产、tag 发布动作）
 
 - **插件权限中心**（Phase 1-4 已落地）
   - **代码**
@@ -175,9 +183,11 @@
    - **已完成**
      - WorkflowAgent 基础执行（workflow.run/plan）
      - 记忆系统基础实现（MemoryStore + ContextManager）
-     - Intelligence 管理 UI（Capabilities/Channels/AuditLogs/Header 组件）
-     - Agent 命名空间一次切换（`intelligence:agent:*`）与 Core/Nexus 路由同步上线
-     - Prompt Registry（registry + binding）schema 对齐并接入默认提示词迁移
+   - Intelligence 管理 UI（Capabilities/Channels/AuditLogs/Header 组件）
+   - Agent 命名空间一次切换（`intelligence:agent:*`）与 Core/Nexus 路由同步上线
+   - Prompt Registry（registry + binding）schema 对齐并接入默认提示词迁移
+   - Prompt Registry 管理 API 与 Lab 弹窗管理面（record + binding CRUD）
+   - LangGraph 五阶段状态机接管 `session/stream`（`session.start -> plan -> execute -> reflect -> finalize`）
    - **缺口**
      - Workflow 编辑器、用户自定义代理、协作与测试
 

@@ -28,6 +28,19 @@
 
 ---
 
+## 🚀 v2.4.7 发版推进（当前）
+
+> 单一入口：`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+
+- [x] `package.json` 与 `apps/core-app/package.json` 版本对齐为 `2.4.7`
+- [x] 文档入口同步（`README.md` / `TODO.md` / `CHANGES.md` / `docs/INDEX.md`）
+- [x] 发布链路确认：`build-and-release.yml` + Nexus release 自动同步 + CLI 四包 npm 自动发布
+- [ ] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
+- [ ] 发布资产核对：Nexus Release notes `{ zh, en }` + assets + signature + manifest 完整
+- [ ] 发布动作：创建并推送 `v2.4.7` tag，验证 GitHub Release 与 Nexus release 同步
+
+---
+
 ## 🧭 Plan 目录对照（2026-01）
 
 > 来源：`plan/` 目录。此处记录与实际落地的差距与后续待办。
@@ -617,6 +630,9 @@
 #### Phase 3: 高级功能 (v2.7.0) - 10天
 - [x] 一次切换：`intelligence:agent:*` 命名空间全量替换（Core IPC + Nexus API）
 - [x] Prompt Registry：统一 `record + binding` schema（Core SQLite / Nexus D1）
+- [x] Prompt Registry 管理面：Nexus `/api/admin/intelligence-agent/prompts*` + `/prompt-bindings*` 与 Lab 管理弹窗
+- [x] LangGraph 状态机接管 stream：`session.start -> plan -> execute -> reflect -> finalize`
+- [x] Provider 测试契约收口：`:id/probe|test` 为标准路由，legacy 点号路由返回废弃
 - [x] 旧入口下线：`/api/admin/intelligence-lab/*` 返回 `410`（引导至 `/api/admin/intelligence-agent/*`）
 - [ ] **Day 1-3**: WorkflowAgent + 编辑器（WorkflowAgent 已落地，编辑器未完成）
 - [ ] **Day 4-6**: 记忆系统 + 上下文管理（MemoryStore/ContextManager 已落地）
