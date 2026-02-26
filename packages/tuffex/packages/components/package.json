@@ -5,6 +5,9 @@
     "build": "vite build"
   },
   "license": "MIT",
+  "dependencies": {
+    "v-wave": "^3.0.4"
+  },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.3",
     "vite": "^7.3.1",

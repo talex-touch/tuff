@@ -107,7 +107,6 @@ const props = defineProps({
   }
 
   position: relative;
-  margin-bottom: 10px;
   padding: 4px 16px;
   display: flex;
 
