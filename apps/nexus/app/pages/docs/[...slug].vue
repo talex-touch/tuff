@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TxButton, TxFlipOverlay, TxLoadingState, TxTooltip } from '@talex-touch/tuffex'
+import { TxButton, TxLoadingState, TxTooltip } from '@talex-touch/tuffex'
 import { defineComponent, h, render } from 'vue'
 import { toast, Toaster } from 'vue-sonner'
 import DocHero from '~/components/docs/DocHero.vue'
@@ -8,6 +8,7 @@ import type {
   DocAnalyticsEvidenceSummary,
   DocAnalyticsResponse,
 } from '~/types/docs-engagement'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 definePageMeta({
   layout: 'docs',
@@ -1790,16 +1791,10 @@ watch(
                 </p>
               </div>
             </Teleport>
-            <Teleport to="body">
-              <TxFlipOverlay
+            <FlipDialog
                 v-model="docsAnalyticsConfigOpen"
-                :source="docsAnalyticsConfigTriggerEl"
-                :duration="360"
-                :rotate-x="8"
-                :rotate-y="6"
-                transition-name="docs-analytics-config-mask"
-                mask-class="docs-analytics-config-mask"
-                card-class="docs-analytics-config-card"
+                :reference="docsAnalyticsConfigTriggerEl"
+                size="md"
               >
                 <template #header-display>
                   <div class="docs-analytics-config__title-wrap">
@@ -1919,8 +1914,7 @@ watch(
                     </footer>
                   </section>
                 </template>
-              </TxFlipOverlay>
-            </Teleport>
+              </FlipDialog>
           </ClientOnly>
           <div
             v-if="isAdmin && docsAnalyticsVisible && docsAnalyticsFrame.ready"

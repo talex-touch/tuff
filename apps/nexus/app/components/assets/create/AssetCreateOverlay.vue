@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { PluginFormData } from '~/components/CreatePluginDrawer.vue'
 import type { AssetCreateType, AssetTypeOption } from './types'
-import { TxAutoSizer, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxAutoSizer } from '@talex-touch/tuffex'
 import { hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AssetBetaStep from './AssetBetaStep.vue'
 import AssetPluginFormStep from './AssetPluginFormStep.vue'
 import AssetStepCarousel from './AssetStepCarousel.vue'
 import AssetTypePickerStep from './AssetTypePickerStep.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface AutoSizerActionApi {
   refresh?: () => Promise<void> | void
@@ -32,7 +33,10 @@ const step = ref<'type' | 'detail' | 'plugin_form'>('type')
 const stepDirection = ref<1 | -1>(1)
 const maxBodyHeight = ref<number | null>(null)
 const isStepSwitching = ref(false)
+const isOverlayOpened = ref(false)
+const hasPendingLayoutRefresh = ref(false)
 let resizeHandler: (() => void) | null = null
+let refreshRafId: number | null = null
 
 function startStepSwitch() {
   isStepSwitching.value = true
@@ -40,6 +44,13 @@ function startStepSwitch() {
 
 function resetStepSwitchState() {
   isStepSwitching.value = false
+}
+
+function clearRefreshRaf() {
+  if (!hasWindow() || refreshRafId == null)
+    return
+  cancelAnimationFrame(refreshRafId)
+  refreshRafId = null
 }
 
 const typeOptions = computed<AssetTypeOption[]>(() => [
@@ -105,13 +116,6 @@ const currentStepKey = computed(() => {
   return `detail-${currentType.value ?? 'unknown'}`
 })
 
-const overlayCardClass = computed(() => {
-  const base = 'AssetCreateOverlay-Card'
-  if (step.value === 'plugin_form')
-    return `${base} is-wide`
-  return `${base} is-compact`
-})
-
 function handleSelectType(option: AssetTypeOption) {
   if (option.disabled) {
     return
@@ -134,19 +138,67 @@ function handleSubmitPlugin(data: PluginFormData) {
   emit('submit-plugin', data)
 }
 
-async function handleChildLayoutChange() {
-  if (isStepSwitching.value)
+async function flushLayoutRefresh() {
+  if (!hasPendingLayoutRefresh.value)
+    return
+
+  if (!isOverlayOpened.value || isStepSwitching.value)
     return
 
   const refresh = sizerRef.value?.refresh
-  if (refresh)
-    await refresh()
+  if (!refresh)
+    return
+
+  hasPendingLayoutRefresh.value = false
+  await refresh()
+
+  if (hasPendingLayoutRefresh.value)
+    await flushLayoutRefresh()
+}
+
+function requestLayoutRefresh(doubleRaf = false) {
+  hasPendingLayoutRefresh.value = true
+  const run = () => {
+    void flushLayoutRefresh()
+  }
+
+  if (!hasWindow()) {
+    nextTick(() => run())
+    return
+  }
+
+  clearRefreshRaf()
+  nextTick(() => {
+    if (!hasWindow()) {
+      run()
+      return
+    }
+    refreshRafId = requestAnimationFrame(() => {
+      if (doubleRaf) {
+        refreshRafId = requestAnimationFrame(() => {
+          refreshRafId = null
+          run()
+        })
+        return
+      }
+      refreshRafId = null
+      run()
+    })
+  })
 }
 
 function handleStepSettled() {
   if (isStepSwitching.value)
     isStepSwitching.value = false
-  void handleChildLayoutChange()
+  requestLayoutRefresh()
+}
+
+function handleOverlayOpened() {
+  isOverlayOpened.value = true
+  nextTick(() => {
+    updateMaxBodyHeight()
+    requestLayoutRefresh(true)
+  })
 }
 
 function resolveMaxBodyHeight() {
@@ -183,14 +235,18 @@ watch(
   () => visible.value,
   (opened) => {
     if (opened) {
+      isOverlayOpened.value = false
       resetStepSwitchState()
       nextTick(() => {
         updateMaxBodyHeight()
-        void handleChildLayoutChange()
+        requestLayoutRefresh()
       })
       return
     }
 
+    clearRefreshRaf()
+    isOverlayOpened.value = false
+    hasPendingLayoutRefresh.value = false
     resetStepSwitchState()
     step.value = 'type'
     currentType.value = null
@@ -199,8 +255,23 @@ watch(
 )
 
 watch(maxBodyHeight, () => {
-  void handleChildLayoutChange()
+  requestLayoutRefresh()
 })
+
+watch([isOverlayOpened, isStepSwitching, () => Boolean(sizerRef.value?.refresh)], ([opened, switching, ready]) => {
+  if (!opened || switching || !ready || !hasPendingLayoutRefresh.value)
+    return
+  void flushLayoutRefresh()
+})
+
+watch(
+  () => sizerRef.value?.refresh,
+  (refresh) => {
+    if (!refresh || !hasPendingLayoutRefresh.value)
+      return
+    void flushLayoutRefresh()
+  }
+)
 
 onMounted(() => {
   if (!hasWindow())
@@ -212,6 +283,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  clearRefreshRaf()
+  isOverlayOpened.value = false
+  hasPendingLayoutRefresh.value = false
   resetStepSwitchState()
   if (!hasWindow() || !resizeHandler)
     return
@@ -221,22 +295,17 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visible"
-      :source="props.source"
-      :duration="430"
-      :rotate-x="6"
-      :rotate-y="8"
-      :speed-boost="1.08"
-      transition-name="AssetCreateOverlay-Mask"
-      mask-class="AssetCreateOverlay-Mask"
-      :card-class="overlayCardClass"
+      :reference="props.source"
+      size="lg"
+      :scrollable="false"
       :header-title="t('dashboard.sections.plugins.assetCreate.title', 'Create Asset')"
       :header-desc="t('dashboard.sections.plugins.assetCreate.subtitle', 'Select a type first, then continue with the dedicated publishing flow.')"
+      @opened="handleOverlayOpened"
     >
       <template #default>
-        <div class="AssetCreateOverlay">
+        <div class="AssetCreateOverlay" :class="step === 'plugin_form' ? 'is-wide' : 'is-compact'">
             <TxAutoSizer
               ref="sizerRef"
               :width="false"
@@ -260,7 +329,7 @@ onBeforeUnmount(() => {
                   :error="props.pluginError"
                   :is-admin="props.isAdmin"
                   :suspend-layout-emit="isStepSwitching"
-                  @layout-change="handleChildLayoutChange"
+                  @layout-change="requestLayoutRefresh"
                   @submit="handleSubmitPlugin"
                 />
 
@@ -275,17 +344,23 @@ onBeforeUnmount(() => {
             </TxAutoSizer>
         </div>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>
 
 <style scoped>
 .AssetCreateOverlay {
-  width: 100%;
+  width: min(700px, 92vw);
+  max-width: 700px;
   height: auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.AssetCreateOverlay.is-wide {
+  width: min(940px, 94vw);
+  max-width: 940px;
 }
 
 :deep(.AssetCreateOverlay-SizerOuter) {
@@ -293,62 +368,5 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: center;
   overflow: hidden;
-}
-</style>
-
-<style>
-.AssetCreateOverlay-Mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(12, 12, 14, 0.42);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1850;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  perspective: 1200px;
-}
-
-.AssetCreateOverlay-Mask-enter-active,
-.AssetCreateOverlay-Mask-leave-active {
-  transition: opacity 200ms ease;
-}
-
-.AssetCreateOverlay-Mask-enter-from,
-.AssetCreateOverlay-Mask-leave-to {
-  opacity: 0;
-}
-
-.AssetCreateOverlay-Card {
-  min-height: 320px;
-  max-height: 90vh;
-  border-radius: 1.2rem;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  overflow: hidden;
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  display: flex;
-  flex-direction: column;
-  transform-origin: 50% 50%;
-  transform-style: preserve-3d;
-  backface-visibility: hidden;
-  will-change: transform;
-  transition: width 260ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.AssetCreateOverlay-Card.is-compact {
-  width: min(700px, 92vw);
-  max-width: 700px;
-}
-
-.AssetCreateOverlay-Card.is-wide {
-  width: min(940px, 94vw);
-  max-width: 940px;
-}
-
-.AssetCreateOverlay-Card.is-expanded {
-  transform: translate(-50%, -50%);
 }
 </style>

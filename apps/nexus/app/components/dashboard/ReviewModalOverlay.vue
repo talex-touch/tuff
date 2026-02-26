@@ -4,8 +4,9 @@ import type {
   PluginChannel,
   DashboardPluginVersion as PluginVersion,
 } from '~/types/dashboard-plugin'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 
 export interface ReviewItem {
@@ -109,10 +110,10 @@ const reviewHeaderPlugin = computed(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visibleModel"
-      :source="source ?? null"
+      :reference="source ?? null"
+      size="md"
       :prevent-accidental-close="true"
     >
       <template #header-display>
@@ -288,6 +289,5 @@ const reviewHeaderPlugin = computed(() => {
           </div>
         </div>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>

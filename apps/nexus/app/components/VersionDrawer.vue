@@ -8,6 +8,7 @@ import MDC from '@nuxtjs/mdc/runtime/components/MDC.vue'
 import FlatButton from '~/components/ui/FlatButton.vue'
 import Input from '~/components/ui/Input.vue'
 import Switch from '~/components/ui/Switch.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 interface Props {
   isOpen: boolean
@@ -287,10 +288,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visibleModel"
-      :source="props.source"
+      :reference="props.source"
+      size="md"
       :header-title="headerTitle"
       :header-desc="pluginName"
     >
@@ -478,8 +479,7 @@ onBeforeUnmount(() => {
           </div>
         </TxAutoSizer>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>
 
 <style scoped>

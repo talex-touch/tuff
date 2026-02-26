@@ -6,8 +6,9 @@ import type {
   DashboardPluginVersion as PluginVersion,
   VersionStatus,
 } from '~/types/dashboard-plugin'
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import FlatButton from '~/components/ui/FlatButton.vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginMetaHeader from '~/components/dashboard/PluginMetaHeader.vue'
 import StatusBadge from '~/components/ui/StatusBadge.vue'
 import Tag from '~/components/ui/Tag.vue'
@@ -164,10 +165,10 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
 </script>
 
 <template>
-  <Teleport to="body">
-    <TxFlipOverlay
+  <FlipDialog
       v-model="visibleModel"
-      :source="source ?? null"
+      :reference="source ?? null"
+      size="lg"
     >
       <template #header-display>
         <div v-if="plugin" class="PluginDetailOverlay-CustomHeader">
@@ -374,8 +375,7 @@ function resolveTimelineEventLabel(event: DashboardPluginTimelineEvent) {
           </div>
         </div>
       </template>
-    </TxFlipOverlay>
-  </Teleport>
+    </FlipDialog>
 </template>
 
 <style scoped>

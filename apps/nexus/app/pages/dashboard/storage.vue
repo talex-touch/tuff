@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { TxButton, TxFlipOverlay } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed, ref, watch } from 'vue'
+import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 
 definePageMeta({
   layout: 'dashboard',
@@ -678,10 +679,10 @@ watch(showDetailsOverlay, (open) => {
       </ul>
     </section>
 
-    <Teleport to="body">
-      <TxFlipOverlay
+    <FlipDialog
         v-model="showDetailsOverlay"
-        :source="detailsOverlaySource"
+        :reference="detailsOverlaySource"
+        size="lg"
         :header-title="t('dashboard.storage.syncDetailTitle', '同步内容明细')"
         :header-desc="t('dashboard.storage.syncDetailDesc', '仅展示分类与元信息，不展示业务明文。')"
       >
@@ -815,8 +816,7 @@ watch(showDetailsOverlay, (open) => {
             </div>
           </div>
         </template>
-      </TxFlipOverlay>
-    </Teleport>
+      </FlipDialog>
   </div>
 </template>
 
