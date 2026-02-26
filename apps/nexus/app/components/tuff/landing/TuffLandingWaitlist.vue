@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const router = useRouter()
 
 const pioneerBenefitKeys = ['early', 'shape', 'community'] as const
@@ -11,11 +11,9 @@ const pioneerBenefitIcons = {
   community: 'i-carbon-user-multiple',
 } as const
 
-const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const signInRoute = computed(() => ({
   path: '/sign-in',
   query: {
-    lang: langTag.value,
     redirect_url: '/updates?channel=beta',
   },
 }))

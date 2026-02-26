@@ -14,7 +14,7 @@ const route = useRoute()
 const { status } = useAuth()
 
 const scrolled = ref(false)
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 function handleScroll() {
   scrolled.value = window.scrollY > 0
@@ -30,7 +30,6 @@ const links = computed(() => [
   // { to: '/pricing', label: t('nav.pricing') },
 ])
 
-const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const fullPath = computed(() => route.fullPath || '/')
 const authRedirectTarget = computed(() => {
   return sanitizeRedirect(fullPath.value, '/dashboard')
@@ -39,7 +38,6 @@ const authRedirectTarget = computed(() => {
 const signInRoute = computed(() => ({
   path: '/sign-in',
   query: {
-    lang: langTag.value,
     redirect_url: authRedirectTarget.value,
   },
 }))
@@ -49,15 +47,8 @@ const isAuthenticated = computed(() => status.value === 'authenticated')
 const currentPath = computed(() => route.path || '/')
 const normalizedPath = computed(() => {
   const path = currentPath.value
-  const code = locale.value
-  if (!code)
-    return path
-  const prefix = `/${code}`
-  if (path === prefix || path === `${prefix}/`)
-    return '/'
-  if (path.startsWith(`${prefix}/`))
-    return path.slice(prefix.length) || '/'
-  return path
+  const trimmed = path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
 })
 
 const isDocs = computed(() => normalizedPath.value.startsWith('/docs'))

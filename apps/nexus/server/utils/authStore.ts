@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'
 import { generatePasswordSalt, hashPassword, verifyPassword } from './authCrypto'
+import { normalizeLocaleCode, type SupportedLocaleCode } from './locale'
 import { resolveRequestGeo } from './requestGeo'
 
 const USERS_TABLE = 'auth_users'
@@ -323,7 +324,7 @@ export interface AuthUser {
   emailVerified: string | null
   emailState: EmailState
   role: string
-  locale: string | null
+  locale: SupportedLocaleCode | null
   status: UserStatus
   mergedToUserId: string | null
   mergedAt: string | null
@@ -475,7 +476,7 @@ function mapUser(row: Record<string, any> | null): AuthUser | null {
     emailVerified: row.email_verified ?? null,
     emailState,
     role: row.role ?? 'user',
-    locale: row.locale ?? null,
+    locale: normalizeLocaleCode(row.locale ?? null),
     status: (row.status as UserStatus) || 'active',
     mergedToUserId: row.merged_to_user_id ?? null,
     mergedAt: row.merged_at ?? null,
@@ -546,6 +547,7 @@ export async function createUser(
   const status: UserStatus = data.status ?? 'active'
   const emailVerified = data.emailVerified ?? null
   const emailState: EmailState = data.emailState ?? (emailVerified ? 'verified' : 'unverified')
+  const locale = normalizeLocaleCode(data.locale ?? null)
   await db.prepare(`
     INSERT INTO ${USERS_TABLE} (id, email, name, image, email_verified, email_state, role, locale, status, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
@@ -556,7 +558,7 @@ export async function createUser(
     data.image ?? null,
     emailVerified,
     emailState,
-    data.locale ?? null,
+    locale,
     status,
     now
   ).run()
@@ -568,7 +570,7 @@ export async function createUser(
     emailVerified,
     emailState,
     role: 'user',
-    locale: data.locale ?? null,
+    locale,
     status,
     mergedToUserId: null,
     mergedAt: null,
@@ -618,13 +620,26 @@ export async function setUserEmail(event: H3Event, userId: string, email: string
 export async function updateUserProfile(event: H3Event, userId: string, payload: { name?: string | null, image?: string | null, locale?: string | null }): Promise<AuthUser | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
+  const hasName = Object.prototype.hasOwnProperty.call(payload, 'name')
+  const hasImage = Object.prototype.hasOwnProperty.call(payload, 'image')
+  const hasLocale = Object.prototype.hasOwnProperty.call(payload, 'locale')
+  const locale = hasLocale ? normalizeLocaleCode(payload.locale ?? null) : null
+
   await db.prepare(`
     UPDATE ${USERS_TABLE}
-    SET name = COALESCE(?, name),
-        image = COALESCE(?, image),
-        locale = COALESCE(?, locale)
+    SET name = CASE WHEN ? = 1 THEN ? ELSE name END,
+        image = CASE WHEN ? = 1 THEN ? ELSE image END,
+        locale = CASE WHEN ? = 1 THEN ? ELSE locale END
     WHERE id = ?
-  `).bind(payload.name ?? null, payload.image ?? null, payload.locale ?? null, userId).run()
+  `).bind(
+    hasName ? 1 : 0,
+    hasName ? payload.name ?? null : null,
+    hasImage ? 1 : 0,
+    hasImage ? payload.image ?? null : null,
+    hasLocale ? 1 : 0,
+    hasLocale ? locale : null,
+    userId,
+  ).run()
   return getUserById(event, userId)
 }
 

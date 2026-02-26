@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-02-25
+> 更新时间: 2026-02-26
 
 ---
 
@@ -83,6 +83,10 @@
 - [x] **Nexus OAuth 稳定化**
   - sign-in callback 修复 + session/app auth guard 拆分
   - Turnstile + Passkey step-up flow
+- [x] **Nexus i18n 稳定性整改（no_prefix + 去 `?lang`）**
+  - 前端移除 `lang` 参数生成/依赖，legacy `lang` 仅兼容读取并立即清理 URL
+  - 新增 `useLocaleOrchestrator` 串行化 `setLocale`，统一初始化来源优先级（profile/cookie/browser）
+  - 服务端 locale 入参/出参收敛为 `en|zh|null`，profile patch 非法值返回 400
 - [x] **更新系统增强**
   - reusable update tasks + 下载管理增强
 - [x] **发布链路收敛（官网 + CLI）**
@@ -111,6 +115,7 @@
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
 - [ ] OmniPanel Feature Hub（安装插件后自动装载首个 Feature、Feature 执行链路、选中文本上下文注入）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
+- [x] Nexus locale 历史数据回填 runbook（`docs/plan-prd/04-implementation/NexusLocaleBackfillRunbook-260226.md`）
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）

@@ -51,7 +51,6 @@ describe('useOauthContext', () => {
       flow: 'login',
       provider: 'github',
       redirect: '/dashboard',
-      lang: 'zh-CN',
     })
 
     const query = new URLSearchParams(url.split('?')[1])
@@ -60,7 +59,7 @@ describe('useOauthContext', () => {
     expect(query.get('flow')).toBe('login')
     expect(query.get('provider')).toBe('github')
     expect(query.get('redirect_url')).toBe('/dashboard')
-    expect(query.get('lang')).toBe('zh-CN')
+    expect(query.get('lang')).toBeNull()
   })
 
   it('sanitizeRedirect 只允许站内相对路径，并会清理 oauth 中间态参数', () => {

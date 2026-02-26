@@ -3,10 +3,8 @@ import { autoUpdate, offset, useFloating } from '@floating-ui/vue'
 import { computed } from 'vue'
 import Icon from './icon/Icon.vue'
 
-const { locale, setLocale, t } = useI18n()
-const route = useRoute()
-const router = useRouter()
-const { persistPreferredLocale } = useLocalePreference()
+const { locale, t } = useI18n()
+const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
 
 const nextLocale = computed(() => (locale.value === 'zh' ? 'en' : 'zh'))
 const ariaLabel = computed(() =>
@@ -15,20 +13,9 @@ const ariaLabel = computed(() =>
 const tooltipLabel = computed(() =>
   t(nextLocale.value === 'zh' ? 'ui.languageToggle.zhLabel' : 'ui.languageToggle.enLabel'),
 )
-async function toggleLocale(targetTag: string) {
-  const targetLocale = targetTag.startsWith('zh') ? 'zh' : 'en'
-  const rawPath = route.path || '/'
-  const normalizedPath = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
-
-  await setLocale(targetLocale)
-  persistPreferredLocale(targetLocale)
-
-  const query = { ...route.query, lang: targetTag }
-  await router.replace({
-    path: normalizedPath,
-    query,
-    hash: route.hash,
-  })
+async function toggleLocale(targetLocale: 'en' | 'zh') {
+  await setLocaleSerial(targetLocale, 'manual')
+  persistLocale(targetLocale, 'manual')
 }
 
 const _hover = ref(false)
@@ -50,10 +37,10 @@ const { floatingStyles } = useFloating(reference, floating, {
     <teleport to="body">
       <div ref="floating" :class="{ display: hover }" :style="floatingStyles" class="LanguageToggle-Floating absolute z-10" @mouseenter="_hover = true" @mouseleave="_hover = false">
         <ul class="LanguageToggle-List m-0 h-[100px] w-[120px] flex flex-col cursor-pointer list-none items-start gap-2 overflow-hidden rounded-2xl bg-white p-2 shadow-[0_2px_12px_rgba(0,0,0,0.1)] dark:bg-black dark:shadow-[0_2px_12px_rgba(255,255,255,0.1)]">
-          <li class="LanguageToggle-Item w-full flex items-center gap-2 rounded-lg p-2 hover:bg-black/5 hover:dark:bg-white/5" :class="{ 'LanguageToggle-Item--active !bg-black/10 !dark:bg-white/10': locale === 'en' }" @click="toggleLocale('en-US')">
+          <li class="LanguageToggle-Item w-full flex items-center gap-2 rounded-lg p-2 hover:bg-black/5 hover:dark:bg-white/5" :class="{ 'LanguageToggle-Item--active !bg-black/10 !dark:bg-white/10': locale === 'en' }" @click="toggleLocale('en')">
             <span>English</span>
           </li>
-          <li class="LanguageToggle-Item w-full flex items-center gap-2 rounded-lg p-2 hover:bg-black/5 hover:dark:bg-white/5" :class="{ 'LanguageToggle-Item--active !bg-black/10 !dark:bg-white/10': locale === 'zh' }" @click="toggleLocale('zh-CN')">
+          <li class="LanguageToggle-Item w-full flex items-center gap-2 rounded-lg p-2 hover:bg-black/5 hover:dark:bg-white/5" :class="{ 'LanguageToggle-Item--active !bg-black/10 !dark:bg-white/10': locale === 'zh' }" @click="toggleLocale('zh')">
             <span>中文</span>
           </li>
         </ul>

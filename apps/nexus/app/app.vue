@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from '#imports'
-import { computed, onMounted, ref, watch, watchEffect } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import GlobalSearch from '~/components/search/GlobalSearch.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import InvisibleWatermark from '~/components/watermark/InvisibleWatermark.vue'
@@ -15,10 +14,7 @@ const route = useRoute()
 const router = useRouter()
 const isProtectedRoute = computed(() => route.meta.requiresAuth === true)
 const { showInvisibleWatermark } = useWatermarkDisplayPolicy()
-
-const { locale, setLocale } = useI18n()
-const { syncLocaleChanges, getSavedLocale } = useUserLocale()
-const { getPreferredLocale, persistPreferredLocale } = useLocalePreference()
+const { initLocale, applyLegacyLangQueryOnce, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useAuth()
 const { user, pending: authUserPending } = useAuthUser()
 const sessionErrorCookie = useCookie<string | null>('nexus_auth_error')
@@ -26,101 +22,31 @@ const isAuthLoading = computed(() => status.value === 'loading')
 const isAuthenticated = computed(() => status.value === 'authenticated')
 const protectedSessionRecheckDone = ref(false)
 const protectedSessionRecheckRunning = ref(false)
-
-type SupportedLocale = 'en' | 'zh'
-
-function normalizeLocale(value?: string | null): SupportedLocale | null {
-  if (!value)
-    return null
-  const lower = value.toLowerCase()
-  if (lower.startsWith('zh'))
-    return 'zh'
-  if (lower.startsWith('en'))
-    return 'en'
-  return null
-}
-
-/**
- * Detect runtime language as fallback.
- * - server: Accept-Language request header
- * - client: navigator language
- */
-function detectRuntimeLocale(): SupportedLocale {
-  if (import.meta.server) {
-    const headers = useRequestHeaders(['accept-language'])
-    const acceptLanguage = headers['accept-language']
-    if (acceptLanguage) {
-      for (const item of acceptLanguage.split(',')) {
-        const normalized = normalizeLocale(item.split(';')[0]?.trim())
-        if (normalized)
-          return normalized
-      }
-    }
-    return 'en'
-  }
-
-  const browserLang = navigator.language || navigator.languages?.[0] || 'en'
-  return browserLang.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-}
-
-if (import.meta.server) {
-  const immediatePreference = getPreferredLocale() ?? detectRuntimeLocale()
-  if (immediatePreference && immediatePreference !== locale.value)
-    await setLocale(immediatePreference)
-}
-
-function bootstrapLocalePreference() {
-  const storedPreference = getPreferredLocale()
-  if (storedPreference && storedPreference !== locale.value) {
-    setLocale(storedPreference)
-    return
-  }
-
-  const savedLocale = normalizeLocale(getSavedLocale())
-  if (savedLocale && savedLocale !== locale.value) {
-    setLocale(savedLocale)
-    persistPreferredLocale(savedLocale)
-    return
-  }
-
-  const browserLocale = detectRuntimeLocale()
-  if (browserLocale !== locale.value)
-    setLocale(browserLocale)
-  persistPreferredLocale(browserLocale)
-}
-
-onMounted(() => {
-  bootstrapLocalePreference()
-  syncLocaleChanges()
+await initLocale({
+  isAuthenticated: status.value === 'authenticated',
+  profileLocale: user.value?.locale ?? null,
 })
 
-watch(locale, (newLocale, previousLocale) => {
-  const normalized = normalizeLocale(newLocale)
-  if (!normalized || normalized === previousLocale)
-    return
-  persistPreferredLocale(normalized)
-})
+watch(
+  () => route.fullPath,
+  () => {
+    void applyLegacyLangQueryOnce()
+  },
+  { immediate: true },
+)
 
-const langParam = computed(() => {
-  const raw = route.query.lang
-  if (!raw)
-    return null
-  return Array.isArray(raw) ? raw[0] : raw
-})
+watch(
+  () => [status.value, user.value?.id ?? null, user.value?.locale ?? null] as const,
+  ([currentStatus, userId, profileLocale]) => {
+    void syncFromProfileOnAuth({
+      status: currentStatus,
+      userId,
+      profileLocale,
+    })
+  },
+  { immediate: true },
+)
 
-const localeFromQuery = computed(() => {
-  const param = langParam.value
-  if (!param)
-    return null
-  const normalized = param.toLowerCase()
-  if (normalized.startsWith('zh'))
-    return 'zh'
-  if (normalized.startsWith('en'))
-    return 'en'
-  return null
-})
-
-const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const redirectTarget = computed(() => sanitizeRedirect(route.fullPath, '/dashboard'))
 
 function pickFirstQueryValue(value: unknown) {
@@ -241,9 +167,7 @@ const authFallbackRecoveryQuery = computed(() => {
   if (!parsed) {
     if (!routeError && !routeErrorDescription)
       return null
-    const fallbackQuery: Record<string, string> = {
-      lang: langTag.value,
-    }
+    const fallbackQuery: Record<string, string> = {}
     if (routeError)
       fallbackQuery.error = routeError
     if (routeErrorDescription)
@@ -259,15 +183,12 @@ const authFallbackRecoveryQuery = computed(() => {
   if (!hasOauthHints && !routeError && !routeErrorDescription)
     return null
 
-  const query: Record<string, string> = {
-    lang: langTag.value,
-  }
+  const query: Record<string, string> = {}
 
   const provider = parsed.searchParams.get('provider')
   const flow = parsed.searchParams.get('flow')
   const oauth = parsed.searchParams.get('oauth')
   const redirectRaw = parsed.searchParams.get('redirect_url')
-  const nestedLang = parsed.searchParams.get('lang')
 
   if (oauth === '1')
     query.oauth = '1'
@@ -279,9 +200,6 @@ const authFallbackRecoveryQuery = computed(() => {
   const redirectFallback = flow === 'bind' ? '/dashboard/account' : '/dashboard'
   if (redirectRaw)
     query.redirect_url = sanitizeRecoveredRedirect(redirectRaw, redirectFallback)
-
-  if (nestedLang)
-    query.lang = nestedLang
 
   const parsedError = parsed.searchParams.get('error')
   const parsedErrorDescription = parsed.searchParams.get('error_description')
@@ -304,17 +222,10 @@ watchEffect(() => {
   router.replace({
     path: '/sign-in',
     query: {
-      lang: langTag.value,
       redirect_url: redirectTarget.value,
       reason: 'reauth',
     },
   })
-})
-
-watchEffect(() => {
-  const next = localeFromQuery.value
-  if (next && next !== locale.value)
-    setLocale(next)
 })
 
 watchEffect(() => {
@@ -386,7 +297,6 @@ watchEffect(() => {
   router.replace({
     path: '/sign-in',
     query: {
-      lang: langTag.value,
       redirect_url: redirectTarget.value,
     },
   })
@@ -409,7 +319,6 @@ watchEffect(() => {
   router.replace({
     path: '/auth/admin-bootstrap',
     query: {
-      lang: langTag.value,
       redirect_url: sanitizeRedirect(route.fullPath, '/dashboard'),
     },
   })
