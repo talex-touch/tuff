@@ -1,0 +1,187 @@
+name: Tuff CLI Packages Publish
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'packages/tuff-cli/package.json'
+      - 'packages/tuff-cli-core/package.json'
+      - 'packages/tuffcli/package.json'
+      - 'packages/unplugin-export-plugin/package.json'
+      - '.github/workflows/package-tuff-cli-publish.yml'
+
+jobs:
+  publish:
+    name: Publish CLI Packages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
+      NEXUS_API_KEY: ${{ secrets.NEXUS_API_KEY }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish changed packages
+        id: publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "NPM_TOKEN is required."
+            exit 1
+          fi
+
+          declare -a PACKAGE_NAMES=(
+            "@talex-touch/tuff-cli-core"
+            "@talex-touch/tuffcli"
+            "@talex-touch/unplugin-export-plugin"
+            "@talex-touch/tuff-cli"
+          )
+
+          declare -A PACKAGE_PATHS=(
+            ["@talex-touch/tuff-cli-core"]="packages/tuff-cli-core/package.json"
+            ["@talex-touch/tuffcli"]="packages/tuffcli/package.json"
+            ["@talex-touch/unplugin-export-plugin"]="packages/unplugin-export-plugin/package.json"
+            ["@talex-touch/tuff-cli"]="packages/tuff-cli/package.json"
+          )
+
+          changed_json='[]'
+
+          get_version() {
+            local path="$1"
+            node -e "const fs=require('fs');const pkg=JSON.parse(fs.readFileSync('${path}','utf8'));console.log(pkg.version)"
+          }
+
+          previous_version() {
+            local sha="$1"
+            local path="$2"
+            if [ "${sha}" = "0000000000000000000000000000000000000000" ]; then
+              echo ""
+              return 0
+            fi
+            if ! git cat-file -e "${sha}^{commit}" >/dev/null 2>&1; then
+              echo ""
+              return 0
+            fi
+            git show "${sha}:${path}" 2>/dev/null | node -e "const fs=require('fs');const input=fs.readFileSync(0,'utf8');if(!input){process.exit(0)};const pkg=JSON.parse(input);console.log(pkg.version)" || true
+          }
+
+          for package in "${PACKAGE_NAMES[@]}"; do
+            pkg_path="${PACKAGE_PATHS[$package]}"
+            current_version=$(get_version "${pkg_path}")
+            prev_version=$(previous_version "${BEFORE_SHA}" "${pkg_path}")
+
+            if [ "${current_version}" != "${prev_version}" ]; then
+              changed_json=$(echo "${changed_json}" | jq --arg name "${package}" --arg version "${current_version}" '. + [{name:$name, version:$version}]')
+            fi
+          done
+
+          if [ "$(echo "${changed_json}" | jq 'length')" -eq 0 ]; then
+            echo "No CLI package version changes detected."
+            {
+              echo "published_count=0"
+              echo "published_payload=[]"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          published_json='[]'
+
+          for package in "${PACKAGE_NAMES[@]}"; do
+            entry=$(echo "${changed_json}" | jq -c --arg name "${package}" '.[] | select(.name==$name)' | head -n 1 || true)
+            if [ -z "${entry}" ]; then
+              continue
+            fi
+
+            version=$(echo "${entry}" | jq -r '.version')
+            dist_tag="latest"
+            if [[ "${version}" == *"-"* ]]; then
+              dist_tag="next"
+            fi
+
+            if npm view "${package}@${version}" version >/dev/null 2>&1; then
+              echo "Skip ${package}@${version}: already published."
+              continue
+            fi
+
+            echo "Building ${package}..."
+            pnpm --filter "${package}" run build
+
+            echo "Publishing ${package}@${version} with dist-tag ${dist_tag}..."
+            pnpm --filter "${package}" publish --access public --tag "${dist_tag}" --no-git-checks
+
+            published_json=$(echo "${published_json}" | jq --arg name "${package}" --arg version "${version}" --arg tag "${dist_tag}" '. + [{name:$name, version:$version, distTag:$tag}]')
+          done
+
+          published_count=$(echo "${published_json}" | jq 'length')
+          {
+            echo "published_count=${published_count}"
+            echo "published_payload<<EOF"
+            echo "${published_json}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Sync Nexus update news
+        if: steps.publish.outputs.published_count != '0'
+        run: |
+          if [ -z "${NEXUS_API_KEY}" ]; then
+            echo "NEXUS_API_KEY not configured; skip Nexus update sync."
+            exit 0
+          fi
+
+          published='${{ steps.publish.outputs.published_payload }}'
+          if [ -z "${published}" ] || [ "${published}" = "[]" ]; then
+            echo "No published packages to sync."
+            exit 0
+          fi
+
+          zh_summary=$(echo "${published}" | jq -r '[.[] | "\(.name)@\(.version) (\(.distTag))"] | join("、")')
+          en_summary=$(echo "${published}" | jq -r '[.[] | "\(.name)@\(.version) (\(.distTag))"] | join(", ")')
+          now_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          payload=$(jq -n \
+            --arg now "${now_iso}" \
+            --arg zhSummary "CLI 包发布：${zh_summary}" \
+            --arg enSummary "CLI packages published: ${en_summary}" \
+            '{
+              type: "announcement",
+              scope: "both",
+              channels: ["RELEASE"],
+              releaseTag: null,
+              title: { zh: "CLI 发布更新", en: "CLI Release Update" },
+              timestamp: $now,
+              summary: { zh: $zhSummary, en: $enSummary },
+              tags: ["cli", "npm"],
+              link: "https://www.npmjs.com/org/talex-touch"
+            }')
+
+          curl -sS -f \
+            -X POST "${NEXUS_BASE_URL}/api/dashboard/updates" \
+            -H "Authorization: Bearer ${NEXUS_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "${payload}" \
+            -o /tmp/nexus-cli-updates.json
