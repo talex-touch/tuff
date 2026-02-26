@@ -1,5 +1,6 @@
 import { requireAuth } from '../../utils/auth'
 import { ensureDeviceForRequest, getAdminBootstrapState, getUserById, listPasskeys } from '../../utils/authStore'
+import { normalizeLocaleCode } from '../../utils/locale'
 import { useRuntimeConfig } from '#imports'
 import type { H3Event } from 'h3'
 
@@ -28,7 +29,7 @@ export default defineEventHandler(async (event) => {
     name: user.name,
     image: user.image,
     role: user.role,
-    locale: user.locale,
+    locale: normalizeLocaleCode(user.locale),
     emailVerified: Boolean(user.emailVerified),
     emailState: user.emailState,
     isRestricted: user.emailState !== 'verified',

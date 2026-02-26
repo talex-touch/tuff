@@ -1,5 +1,6 @@
 import { requireAppAuth } from '../../../utils/auth'
 import { getUserById } from '../../../utils/authStore'
+import { normalizeLocaleCode } from '../../../utils/locale'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAppAuth(event)
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     name: user.name,
     image: user.image,
     role: user.role,
-    locale: user.locale,
+    locale: normalizeLocaleCode(user.locale),
     emailVerified: Boolean(user.emailVerified),
   }
 })

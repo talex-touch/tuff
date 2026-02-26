@@ -62,7 +62,10 @@ export function createD1Adapter(eventOrGetter: H3Event | (() => H3Event)) {
     },
     async updateUser(data: any) {
       const event = resolveEvent()
-      const updated = await updateUserProfile(event, data.id, { name: data.name ?? null, image: data.image ?? null })
+      const updated = await updateUserProfile(event, data.id, {
+        name: typeof data.name === 'string' ? data.name : undefined,
+        image: typeof data.image === 'string' ? data.image : undefined,
+      })
       return updated ? toAdapterUser(updated) : null
     },
     async linkAccount(account: any) {

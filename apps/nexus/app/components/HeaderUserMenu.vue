@@ -2,15 +2,13 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { hasWindow } from '@talex-touch/utils/env'
 import { useSubscriptionData } from '~/composables/useDashboardData'
-import { useLocalePreference } from '~/composables/useLocalePreference'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { useTheme } from '~/composables/useTheme'
 
 const { data: session, signOut } = useAuth()
-const { t, te, locale, setLocale } = useI18n()
+const { t, te, locale } = useI18n()
 const route = useRoute()
-const router = useRouter()
-const { persistPreferredLocale } = useLocalePreference()
+const { setLocaleSerial, persistLocale } = useLocaleOrchestrator()
 const { color, toggleDark } = useTheme()
 
 const { plan } = useSubscriptionData()
@@ -60,7 +58,6 @@ const creditsRemaining = computed(() => {
 })
 const creditsLabel = computed(() => new Intl.NumberFormat().format(creditsRemaining.value))
 
-const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
 const fullPath = computed(() => route.fullPath || '/')
 const authRedirectTarget = computed(() => {
   return sanitizeRedirect(fullPath.value, '/dashboard')
@@ -73,7 +70,6 @@ const normalizedPath = computed(() => {
 const isHome = computed(() => normalizedPath.value === '/')
 const afterSignOutUrl = computed(() => {
   const params = new URLSearchParams({
-    lang: langTag.value,
     redirect_url: authRedirectTarget.value,
   })
   return `/sign-in?${params.toString()}`
@@ -84,17 +80,8 @@ function tSafe(key: string, fallback: string) {
 }
 
 async function handleLocaleSelect(nextLocale: 'en' | 'zh') {
-  const rawPath = route.path || '/'
-  const normalizedPath = rawPath.replace(/^\/(en|zh)(?=\/|$)/i, '') || '/'
-  const nextLang = nextLocale === 'zh' ? 'zh-CN' : 'en-US'
-
-  await setLocale(nextLocale)
-  persistPreferredLocale(nextLocale)
-  await router.replace({
-    path: normalizedPath,
-    query: { ...route.query, lang: nextLang },
-    hash: route.hash,
-  })
+  await setLocaleSerial(nextLocale, 'manual')
+  persistLocale(nextLocale, 'manual')
   userMenuOpen.value = false
   languageMenuOpen.value = false
 }

@@ -129,7 +129,7 @@ async function waitForLinkedProvider(provider: OauthProvider, maxAttempts = 6, i
 }
 
 export function useSignIn() {
-  const { t, locale, setLocale } = useI18n()
+  const { t } = useI18n()
   const route = useRoute()
   const router = useRouter()
   const { signIn, signOut, status, getSession } = useAuth()
@@ -627,29 +627,10 @@ export function useSignIn() {
   const flowParam = computed(() => pickQueryValue('flow'))
   const providerParam = computed(() => pickQueryValue('provider'))
   const redirectParam = computed(() => pickQueryValue('redirect_url'))
-  const langParam = computed(() => pickQueryValue('lang'))
   const reasonParam = computed(() => pickQueryValue('reason'))
   const forceReauthParam = computed(() => pickQueryValue('force_reauth'))
   const oauthErrorParam = computed(() => pickQueryValue('error'))
   const oauthErrorDescriptionParam = computed(() => pickQueryValue('error_description'))
-
-  const localeFromQuery = computed(() => {
-    const param = langParam.value
-    if (!param)
-      return null
-    const normalized = param.toLowerCase()
-    if (normalized.startsWith('zh'))
-      return 'zh'
-    if (normalized.startsWith('en'))
-      return 'en'
-    return null
-  })
-
-  watchEffect(() => {
-    const next = localeFromQuery.value
-    if (next && next !== locale.value)
-      setLocale(next)
-  })
 
   watchEffect(() => {
     if (!canToast)
@@ -662,13 +643,7 @@ export function useSignIn() {
     notify('warning', t('auth.sessionExpired', '登录信息已失效，请重新登录。'))
   })
 
-  const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-  const forgotUrl = computed(() => {
-    const params = new URLSearchParams({
-      lang: langTag.value,
-    })
-    return `/forgot-password?${params.toString()}`
-  })
+  const forgotUrl = computed(() => '/forgot-password')
 
   const oauthRelayRequested = computed(() => directOauthRelayParam.value === '1')
   const isOauthErrorCallback = computed(() => Boolean(directOauthErrorParam.value) && Boolean(storedOauthContext.value))
@@ -985,7 +960,6 @@ export function useSignIn() {
       flow,
       provider,
       redirect: redirectTarget.value,
-      lang: langTag.value,
     })
 
     persistOauthContext({
@@ -1333,7 +1307,6 @@ export function useSignIn() {
         path: '/verify-waiting',
         query: {
           email: emailPreview.value,
-          lang: langTag.value,
         },
       })
     }

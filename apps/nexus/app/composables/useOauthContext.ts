@@ -15,7 +15,6 @@ interface BuildOauthCallbackInput {
   flow: AuthFlow
   provider: OauthProvider
   redirect: string
-  lang?: string | null
 }
 
 interface RequestOauthAuthorizationInput {
@@ -139,9 +138,6 @@ export function buildOauthCallbackUrl(input: BuildOauthCallbackInput) {
     provider: input.provider,
     redirect_url: redirect,
   })
-
-  if (input.lang)
-    params.set('lang', input.lang)
 
   return `/sign-in?${params.toString()}`
 }

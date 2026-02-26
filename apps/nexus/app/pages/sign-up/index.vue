@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watchEffect } from 'vue'
+import { computed, onMounted } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 
 definePageMeta({
@@ -8,7 +8,7 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t, locale, setLocale } = useI18n()
+const { t } = useI18n()
 const route = useRoute()
 
 const redirectTarget = computed(() => {
@@ -19,37 +19,8 @@ const redirectTarget = computed(() => {
   return '/dashboard'
 })
 
-const langParam = computed(() => {
-  const raw = route.query.lang
-  if (!raw)
-    return null
-  const value = Array.isArray(raw) ? raw[0] : raw
-  return value || null
-})
-
-const localeFromQuery = computed(() => {
-  const param = langParam.value
-  if (!param)
-    return null
-  const normalized = param.toLowerCase()
-  if (normalized.startsWith('zh'))
-    return 'zh'
-  if (normalized.startsWith('en'))
-    return 'en'
-  return null
-})
-
-watchEffect(() => {
-  const next = localeFromQuery.value
-  if (next && next !== locale.value)
-    setLocale(next)
-})
-
-const langTag = computed(() => (locale.value === 'zh' ? 'zh-CN' : 'en-US'))
-
 const redirectUrl = computed(() => {
   const params = new URLSearchParams({
-    lang: langTag.value,
     redirect_url: redirectTarget.value,
   })
   return `/sign-in?${params.toString()}`
