@@ -1,15 +1,14 @@
 name: Release Extensions Assets
 
 on:
+  # Legacy workflow: no longer used for tag-driven releases.
+  # Keep workflow_dispatch for manual archive/debug scenarios.
   workflow_dispatch:
     inputs:
       tag:
         description: Release tag (e.g. v2.4.7-beta.11)
         required: true
         type: string
-  push:
-    tags:
-      - 'v*.*.*'
 
 permissions:
   contents: write

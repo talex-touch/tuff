@@ -1,6 +1,8 @@
 name: Release Core Assets
 
 on:
+  # Legacy workflow: no longer used for tag-driven releases.
+  # Keep workflow_dispatch for manual archive/debug scenarios.
   workflow_dispatch:
     inputs:
       tag:
@@ -15,9 +17,6 @@ on:
           - snapshot
           - beta
           - release
-  push:
-    tags:
-      - 'v*.*.*'
 
 permissions:
   contents: write
