@@ -202,12 +202,20 @@ export class WidgetManager {
       )
     }
 
+    let preloadedSource: Awaited<ReturnType<typeof pluginWidgetLoader.loadWidget>> | undefined
+
     if (interactionPath) {
       const sourceHint: WidgetSourceHint = { widgetId }
       if (!isDev) {
-        const resolvedFilePath = resolveWidgetFilePath(plugin.pluginPath, interactionPath)
-        if (resolvedFilePath) {
-          sourceHint.filePath = resolvedFilePath
+        preloadedSource = await pluginWidgetLoader.loadWidget(plugin, feature)
+        if (preloadedSource) {
+          sourceHint.filePath = preloadedSource.filePath
+          sourceHint.hash = preloadedSource.hash
+        } else {
+          const resolvedFilePath = resolveWidgetFilePath(plugin.pluginPath, interactionPath)
+          if (resolvedFilePath) {
+            sourceHint.filePath = resolvedFilePath
+          }
         }
       }
 
@@ -251,7 +259,10 @@ export class WidgetManager {
       }
     }
 
-    const source = await pluginWidgetLoader.loadWidget(plugin, feature)
+    const source =
+      preloadedSource !== undefined
+        ? preloadedSource
+        : await pluginWidgetLoader.loadWidget(plugin, feature)
     if (!source) {
       if (isDev) {
         plugin.logger.warn(`[WidgetManager] Widget source missing for feature \"${feature.id}\"`)

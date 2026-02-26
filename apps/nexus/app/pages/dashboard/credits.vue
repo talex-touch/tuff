@@ -343,7 +343,7 @@ function handleGoAccount() {
         {{ t('dashboard.credits.boost.title', '认证提升额度') }}
       </p>
       <p class="mt-2 text-xs text-black/50 dark:text-white/50">
-        {{ t('dashboard.credits.boost.subtitle', '完成邮箱验证、绑定 OAuth 与 Passkey 后，个人额度提升至 {n}。', { n: formatNumber(boost?.boostedQuota ?? 0) }) }}
+        {{ t('dashboard.credits.boost.subtitle', { n: formatNumber(boost?.boostedQuota ?? 0) }) }}
       </p>
       <ul class="mt-3 space-y-1 text-xs text-black/40 dark:text-white/40">
         <li>
@@ -370,7 +370,7 @@ function handleGoAccount() {
           {{
             canClaimBoost
               ? t('dashboard.credits.boost.claim', '领取本月提升额度')
-              : t('dashboard.credits.boost.claimedHint', '下月自动 {n}', { n: formatNumber(boost?.boostedQuota ?? 0) })
+              : t('dashboard.credits.boost.claimedHint', { n: formatNumber(boost?.boostedQuota ?? 0) })
           }}
         </TxButton>
         <TxButton
@@ -663,7 +663,7 @@ function handleGoAccount() {
                   {{ t('dashboard.credits.models.subtitle', '当前账号可访问的模型与倍率') }}
                 </p>
               </div>
-              <TxButton size="small" variant="secondary" @click="refreshModels">
+              <TxButton size="small" variant="secondary" @click="() => { void refreshModels() }">
                 {{ t('common.refresh', '刷新') }}
               </TxButton>
             </div>

@@ -36,6 +36,7 @@ import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 import {
   BrowserWindow,
@@ -1384,11 +1385,11 @@ export class CommonChannelModule extends BaseModule {
 
   private createSafeOperationHandler(transport: NonNullable<CommonChannelModule['transport']>) {
     return <TReq, TExtra extends Record<string, unknown> = Record<string, never>>(
-      event: { toEventName: () => string },
+      event: TuffEvent<TReq, unknown> & { toEventName: () => string },
       handler: (payload: TReq, context: HandlerContext) => Promise<void | TExtra> | void | TExtra
     ) =>
       transport.on(
-        event as any,
+        event,
         safeOpHandler(handler, {
           onError: (error) => {
             log.warn(`[CommonChannel] Handler failed: ${event.toEventName()}`, {

@@ -15,6 +15,7 @@ import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { IntelligenceCapabilityType, IntelligenceProviderType } from '@talex-touch/utils'
 import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import { genTouchApp } from '../../core'
 import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
@@ -867,27 +868,27 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     }
 
-    const registerSafe = <TRes>(
-      event: { toEventName: () => string },
+    const registerSafe = <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => {
       transport.on(
-        event as any,
-        safeApiHandler<any, TRes>(handler, {
+        event,
+        safeApiHandler(handler, {
           onError: (error) => createErrorLogger(action)(error)
         })
       )
     }
 
-    const registerProtectedSafe = <TRes>(
-      event: { toEventName: () => string },
+    const registerProtectedSafe = <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => {
       transport.on(
-        event as any,
+        event,
         withPermissionSafeApi({ permissionId }, handler, {
           onError: (error) => createErrorLogger(action)(error)
         })
@@ -901,11 +902,11 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerInvokeChannels(
-    registerProtectedSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerProtectedSafe(
@@ -961,10 +962,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerCapabilityChannels(
-    registerSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerSafe(intelligenceTestProviderEvent, 'Provider test', async (data) => {
@@ -1076,10 +1077,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerStatsChannels(
-    registerSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerSafe(intelligenceGetAuditLogsEvent, 'Get audit logs', async (data) => {
@@ -1107,16 +1108,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerOrchestrationChannels(
-    registerProtectedSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerProtectedSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
       permissionId: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void,
-    registerSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerProtectedSafe(
@@ -1344,10 +1345,10 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerQuotaChannels(
-    registerSafe: <TRes>(
-      event: { toEventName: () => string },
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      handler: (payload: any, context: HandlerContext) => Promise<TRes> | TRes
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
     registerSafe(intelligenceGetQuotaEvent, 'Get quota', async (data) => {

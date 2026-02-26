@@ -126,7 +126,9 @@ describe('TouchPlugin.triggerFeature', () => {
         isDestroyed: () => false
       }
     }
-    vi.mocked(getCoreBoxWindow).mockReturnValue(coreBoxWindow as any)
+    vi.mocked(getCoreBoxWindow).mockReturnValue(
+      coreBoxWindow as unknown as ReturnType<typeof getCoreBoxWindow>
+    )
     vi.mocked(widgetManager.registerWidget).mockResolvedValue(null)
 
     const transport = {

@@ -423,7 +423,10 @@ function createNamespacedIndexedDB(pluginName?: string): IDBFactory {
   return new Proxy(indexedDB, {
     get(target, prop, receiver) {
       if (prop === 'open') {
-        return (name: string, version?: number) => target.open(`${prefix}${name}`, version as any)
+        return (name: string, version?: number) =>
+          typeof version === 'number'
+            ? target.open(`${prefix}${name}`, version)
+            : target.open(`${prefix}${name}`)
       }
       if (prop === 'deleteDatabase') {
         return (name: string) => target.deleteDatabase(`${prefix}${name}`)
@@ -730,7 +733,7 @@ function wrapRenderWithSetupState(component: Record<string, unknown>, debugLabel
       }
     }
 
-    return originalRender.apply(instance, args as unknown as any[])
+    return originalRender.apply(instance, args as unknown[])
   }
 
   component.__renderPatched = true

@@ -76,7 +76,13 @@ vi.mock('@sentry/electron/main', () => ({
   setContext: vi.fn(),
   setUser: vi.fn(),
   setTag: vi.fn(),
-  withScope: (callback: (scope: any) => void) =>
+  withScope: (
+    callback: (scope: {
+      setTag: ReturnType<typeof vi.fn>
+      setLevel: ReturnType<typeof vi.fn>
+      setContext: ReturnType<typeof vi.fn>
+    }) => void
+  ) =>
     callback({
       setTag: vi.fn(),
       setLevel: vi.fn(),
@@ -123,6 +129,26 @@ vi.mock('../ai/intelligence-sdk', () => ({
 
 import { ocrService } from './ocr-service'
 
+interface OcrServiceTestAccess {
+  runAgentJob: (jobId: number, job: Record<string, unknown>) => Promise<void>
+  updateClipboardMeta: (...args: unknown[]) => Promise<void>
+  normalizeSourceForAgent: (...args: unknown[]) => Promise<{ type: string; dataUrl: string }>
+  buildAgentPrompt: (...args: unknown[]) => string
+  persistAgentSuccess: (...args: unknown[]) => Promise<void>
+  deferJob: (...args: unknown[]) => Promise<void>
+  failJob: (...args: unknown[]) => Promise<void>
+  queueDisabledUntil: number | null
+  queueDisableReason: string | null
+  consecutiveFailureCount: number
+  recentFailureTimestamps: number[]
+  recordJobFailure: (reason: string) => Promise<void>
+  classifyRetryableAgentError: (error: Error) => string
+  upsertConfig: (...args: unknown[]) => Promise<void>
+  queueDisableStrike: number
+  lastQueueDisabledAt: number | null
+  disableQueue: (reason: string) => Promise<void>
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   ensureIntelligenceConfigLoadedMock.mockReset()
@@ -147,7 +173,7 @@ describe('OcrService runAgentJob local-first options', () => {
       provider: 'local'
     })
 
-    const service = ocrService as any
+    const service = ocrService as unknown as OcrServiceTestAccess
 
     vi.spyOn(service, 'updateClipboardMeta').mockResolvedValue(undefined)
     vi.spyOn(service, 'normalizeSourceForAgent').mockResolvedValue({
@@ -177,7 +203,7 @@ describe('OcrService runAgentJob local-first options', () => {
   })
 
   it('auto-disables queue after repeated failures and pushes inbox warning', async () => {
-    const service = ocrService as any
+    const service = ocrService as unknown as OcrServiceTestAccess
 
     vi.spyOn(service, 'upsertConfig').mockResolvedValue(undefined)
 
@@ -196,7 +222,7 @@ describe('OcrService runAgentJob local-first options', () => {
   })
 
   it('classifies fetch failure as retryable provider network issue', () => {
-    const service = ocrService as any
+    const service = ocrService as unknown as OcrServiceTestAccess
     const reason = service.classifyRetryableAgentError(new Error('fetch failed'))
     expect(reason).toBe('OCR provider network failure')
   })
@@ -204,7 +230,7 @@ describe('OcrService runAgentJob local-first options', () => {
   it('escalates cooldown window for repeated queue auto-disable', async () => {
     vi.useFakeTimers()
     try {
-      const service = ocrService as any
+      const service = ocrService as unknown as OcrServiceTestAccess
       vi.spyOn(service, 'upsertConfig').mockResolvedValue(undefined)
 
       service.queueDisabledUntil = null
@@ -215,12 +241,12 @@ describe('OcrService runAgentJob local-first options', () => {
       const firstNow = new Date('2026-02-24T00:00:00.000Z')
       vi.setSystemTime(firstNow)
       await service.disableQueue('No enabled providers available')
-      const firstCooldownMs = service.queueDisabledUntil - Date.now()
+      const firstCooldownMs = (service.queueDisabledUntil ?? Date.now()) - Date.now()
 
       service.queueDisabledUntil = Date.now() - 1
       vi.setSystemTime(new Date('2026-02-24T01:00:00.000Z'))
       await service.disableQueue('No enabled providers available')
-      const secondCooldownMs = service.queueDisabledUntil - Date.now()
+      const secondCooldownMs = (service.queueDisabledUntil ?? Date.now()) - Date.now()
 
       expect(secondCooldownMs).toBeGreaterThan(firstCooldownMs)
       expect(service.queueDisableStrike).toBe(2)

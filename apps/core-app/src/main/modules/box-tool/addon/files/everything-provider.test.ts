@@ -34,6 +34,20 @@ vi.mock('../../search-engine/search-logger', () => ({
 
 import { everythingProvider } from './everything-provider'
 
+interface MutableEverythingProvider {
+  backend: string
+  isAvailable: boolean
+  initializationError: Error | null
+  lastBackendError: string | null
+  sdkAddon: unknown
+  esPath: string | null
+  searchEverything: (query: string, maxResults: number) => Promise<unknown[]>
+  searchEverythingWithSdk: (query: string, maxResults: number) => Promise<unknown[]>
+  ensureCliFallback: () => Promise<boolean>
+  searchEverythingWithCli: (query: string, maxResults: number) => Promise<unknown[]>
+  tryInitializeCliBackend: () => Promise<boolean>
+}
+
 function buildResult(path: string) {
   return {
     path,
@@ -46,7 +60,7 @@ function buildResult(path: string) {
 }
 
 afterEach(() => {
-  const provider = everythingProvider as any
+  const provider = everythingProvider as unknown as MutableEverythingProvider
   provider.backend = 'unavailable'
   provider.isAvailable = false
   provider.initializationError = null
@@ -59,7 +73,7 @@ afterEach(() => {
 
 describe('everything-provider fallback chain', () => {
   it('falls back to CLI when SDK runtime search fails', async () => {
-    const provider = everythingProvider as any
+    const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'sdk-napi'
     provider.isAvailable = true
 
@@ -87,7 +101,7 @@ describe('everything-provider fallback chain', () => {
   })
 
   it('switches to unavailable when SDK fails and CLI fallback cannot initialize', async () => {
-    const provider = everythingProvider as any
+    const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'sdk-napi'
     provider.isAvailable = true
 

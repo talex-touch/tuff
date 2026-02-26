@@ -193,7 +193,7 @@ Device ID
 Session ID
 </p>
               <p class="mt-1 font-semibold">
-                {{ result.record.sessionId }}
+                {{ result.record.sessionId || '--' }}
               </p>
             </div>
             <div>
@@ -201,7 +201,7 @@ Session ID
 Shot ID
 </p>
               <p class="mt-1 font-semibold">
-                {{ result.record.shotId }}
+                {{ result.record.shotId || '--' }}
               </p>
             </div>
             <div>

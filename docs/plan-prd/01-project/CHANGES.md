@@ -4,6 +4,69 @@
 
 ## 2026-02-26
 
+### 移除 sync:guard lint 门禁脚本
+
+**变更类型**: 工程脚本清理 / 质量门禁调整
+
+**描述**: 根据当前开发流程，移除已不再使用的 `sync:guard` 门禁脚本与 lint 链路依赖，避免 `pnpm lint` 因缺失脚本报错中断。
+
+**主要变更**:
+1. 根 `package.json` 的 `lint` 与 `lint:fix` 移除 `pnpm sync:guard` 调用。
+2. 删除脚本文件 `scripts/check-no-legacy-sync-value-json.mjs`。
+3. 保留 `intelligence:check` 作为 lint 链路中的附加检查项。
+
+**修改文件**:
+- `package.json`
+- `scripts/check-no-legacy-sync-value-json.mjs`（删除）
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Release Notes 落地（Nexus Notes 页面 + GitHub 同步入库）
+
+**变更类型**: 发布能力增强 / 更新通道体验补齐
+
+**描述**: 新增版本化发布日志机制，约定 notes 路径为 `/notes/update_<version>`。Nexus release 更新项自动链接到 notes 页面；GitHub tag 发布后同步 Nexus release 时，会优先读取仓库 `notes/update_<version>.{zh,en}.md` 并写入 `notes/notesHtml`，实现“发布内容一次维护，多端统一展示”。
+
+**主要变更**:
+1. **Nexus Notes 路由**：新增 `/notes/[slug]` 页面与 `/api/notes/[slug]` 接口，按版本 slug 展示发布日志。
+2. **Release Update 链接收敛**：发布类 updates 的 `link` 从 `updates#tag` 改为 `/notes/update_<version>`。
+3. **GitHub → Nexus 同步增强**：`build-and-release` 在同步阶段优先读取 `notes/update_<version>.zh.md` / `.en.md`（或 `.md`）并渲染为 HTML 后写入 Nexus release。
+4. **首个版本日志落地**：新增 `notes/update_2.4.7.zh.md` 与 `notes/update_2.4.7.en.md`。
+5. **发布范围补齐**：`update_2.4.7` 内容按 `2.4.6 -> 2.4.7` 区间提交重新梳理，按 Intelligence/Release Pipeline/Nexus/Core-App/SDK/UI 六条主线归纳。
+6. **提交级细化**：新增区间规模统计（提交量/触达文件/热区）与代表提交附录，便于后续审计与回溯。
+
+**修改文件**:
+- `apps/nexus/server/utils/releaseNotesPath.ts`
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/server/api/notes/[slug].get.ts`
+- `apps/nexus/app/pages/notes/[slug].vue`
+- `.github/workflows/build-and-release.yml`
+- `notes/update_2.4.7.zh.md`
+- `notes/update_2.4.7.en.md`
+- `notes/update_2.4.7.appendix.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 发版推进：文档进展梳理 + 版本基线对齐
+
+**变更类型**: 发布推进 / 文档治理 / 版本管理
+
+**描述**: 梳理当前项目文档进展并建立 `v2.4.7` 发版单一入口清单，统一记录发布门禁（Gate A~E）和阻塞项；同时将根包与 core-app 版本从 `2.4.7-beta.25` 对齐到稳定版 `2.4.7`，用于后续 tag 发布。
+
+**主要变更**:
+1. 新增发版推进文档：`RELEASE-2.4.7-CHECKLIST-2026-02-26.md`，沉淀文档进展矩阵、Gate 状态、阻塞与执行顺序。
+2. 同步更新文档入口：`docs/INDEX.md`、`docs/plan-prd/README.md`、`docs/plan-prd/TODO.md` 增加发版推进入口与清单。
+3. 路线图与质量基线补充 `v2.4.7` 发版门禁跟踪，明确 Gate A/B/C 的当前状态与后续收口动作。
+4. 版本基线对齐：`package.json` 与 `apps/core-app/package.json` 统一为 `2.4.7`。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/README.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md`
+- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `package.json`
+- `apps/core-app/package.json`
+
 ### Tuff Intelligence Planner 超时与重试策略收口
 
 **变更类型**: 运行稳定性修复 / Agent 执行策略细化

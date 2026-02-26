@@ -19,8 +19,8 @@ const EmailProvider = (Email as any).default ?? Email
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
 interface OAuthTokenRequestContext {
   provider: { callbackUrl: string }
-  params: Record<string, unknown>
-  checks?: Record<string, unknown>
+  params: unknown
+  checks?: unknown
 }
 interface OAuthUserInfoRequestContext {
   tokens: Record<string, unknown>
@@ -261,31 +261,32 @@ function normalizeOauthTokenPayload(payload: Record<string, unknown>) {
 }
 
 function buildOauthTokenRequestBody(
-  params: Record<string, unknown>,
-  checks: Record<string, unknown> | undefined,
+  params: unknown,
+  checks: unknown,
   callbackUrl: string,
   clientId: string,
   clientSecret: string,
   includeRedirectUri: boolean,
 ) {
+  const paramsRecord = toRecord(params)
   const body = new URLSearchParams()
-  const code = typeof params.code === 'string' ? params.code : ''
+  const code = typeof paramsRecord.code === 'string' ? paramsRecord.code : ''
   if (code)
     body.set('code', code)
 
   const checksRecord = toRecord(checks)
-  const codeVerifierFromParams = typeof params.code_verifier === 'string' ? params.code_verifier : ''
+  const codeVerifierFromParams = typeof paramsRecord.code_verifier === 'string' ? paramsRecord.code_verifier : ''
   const codeVerifierFromChecks = typeof checksRecord.code_verifier === 'string' ? checksRecord.code_verifier : ''
   const codeVerifier = codeVerifierFromParams || codeVerifierFromChecks
   if (codeVerifier)
     body.set('code_verifier', codeVerifier)
 
-  const redirectUriFromParams = typeof params.redirect_uri === 'string' ? params.redirect_uri : ''
+  const redirectUriFromParams = typeof paramsRecord.redirect_uri === 'string' ? paramsRecord.redirect_uri : ''
   const redirectUri = redirectUriFromParams || callbackUrl
   if (includeRedirectUri && redirectUri)
     body.set('redirect_uri', redirectUri)
 
-  const grantType = typeof params.grant_type === 'string' ? params.grant_type : 'authorization_code'
+  const grantType = typeof paramsRecord.grant_type === 'string' ? paramsRecord.grant_type : 'authorization_code'
   body.set('grant_type', grantType)
   body.set('client_id', clientId)
   body.set('client_secret', clientSecret)
@@ -304,8 +305,8 @@ async function requestOauthTokenByFetch(input: {
   callbackUrl: string
   clientId: string
   clientSecret: string
-  params: Record<string, unknown>
-  checks?: Record<string, unknown>
+  params: unknown
+  checks?: unknown
   headers?: Record<string, string>
   providerName: string
   includeRedirectUri?: boolean
@@ -377,7 +378,7 @@ function getAuthOptions(): AuthOptions {
         password: { label: 'Password', type: 'password' },
         loginToken: { label: 'Login Token', type: 'text' }
       },
-      async authorize(credentials, req) {
+      async authorize(credentials: Record<string, unknown> | undefined, req: { headers?: Headers | AuthRequestHeaders } | Request | null) {
         const authEvent = createAuthEvent(resolveAuthHeaders(req))
         const email = credentials?.email?.toString().trim().toLowerCase() ?? ''
         const password = credentials?.password?.toString() ?? ''
@@ -566,7 +567,7 @@ function getAuthOptions(): AuthOptions {
     providers.push(EmailProvider({
       server: emailServer,
       from: emailFrom,
-      sendVerificationRequest: async ({ identifier, url }) => {
+      sendVerificationRequest: async ({ identifier, url }: { identifier: string, url: string }) => {
         await sendEmail({
           to: identifier,
           subject: 'Sign in to Tuff',

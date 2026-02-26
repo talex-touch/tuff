@@ -74,7 +74,7 @@ function buildPattern(seed: number, config: WatermarkBandConfig): PatternData {
     const cy = Math.floor(y / cell)
     for (let x = 0; x < size; x += 1) {
       const cx = Math.floor(x / cell)
-      data[y * size + x] = cellValues[cy * cells + cx]
+      data[y * size + x] = cellValues[cy * cells + cx] ?? 0
     }
   }
   return {
@@ -124,10 +124,15 @@ function computeCorrelation(luma: number[], width: number, height: number, patte
       if (ux < 0 || uy < 0 || ux >= width || uy >= height)
         continue
       const idx = row + x
-      const value = normalizeLuma(luma[idx])
+      const lumaValue = luma[idx]
+      if (typeof lumaValue !== 'number')
+        continue
+      const value = normalizeLuma(lumaValue)
       const px = wrapIndex(Math.floor(ux * scale + transform.offsetX), size)
       const py = wrapIndex(Math.floor(uy * scale + transform.offsetY), size)
       const patternValue = data[py * size + px]
+      if (typeof patternValue !== 'number')
+        continue
       sum += value * patternValue
       sumValue += value * value
       sumPattern += patternValue * patternValue
@@ -156,7 +161,10 @@ function computeBandScore(luma: number[], width: number, height: number, seed: n
 }
 
 export function computeFastScore(luma: number[], width: number, height: number, seed: number) {
-  const pattern = buildPattern(seed, WATERMARK_BANDS[0])
+  const primaryBand = WATERMARK_BANDS[0]
+  if (!primaryBand)
+    return -1
+  const pattern = buildPattern(seed, primaryBand)
   const fastScales = [1, 1.5, 2]
   let best = -1
   for (const scale of fastScales) {
@@ -178,7 +186,7 @@ export function computeFastScore(luma: number[], width: number, height: number, 
 export function computeWatermarkScore(luma: number[], width: number, height: number, seed: number) {
   const seeds = deriveWatermarkSeeds(seed, WATERMARK_BANDS.length)
   const bandScores = WATERMARK_BANDS.map((band, index) =>
-    computeBandScore(luma, width, height, seeds[index], band),
+    computeBandScore(luma, width, height, seeds[index] ?? seed, band),
   )
 
   const maxScore = Math.max(...bandScores.map(item => item.score))

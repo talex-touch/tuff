@@ -52,12 +52,12 @@ const filteredFeatures = computed(() => {
   })
 })
 
-function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): { type: any; value: string } {
+function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): { type: string; value: string } {
   if (!item.icon) {
     return { type: 'class', value: 'i-ri-apps-2-line' }
   }
   return {
-    type: item.icon.type as any,
+    type: item.icon.type,
     value: item.icon.value
   }
 }

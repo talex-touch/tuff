@@ -3,7 +3,8 @@
   "compilerOptions": {
     "types": [
       "./types/cloudflare-env",
-      "./types/sidebase-auth"
+      "./types/sidebase-auth",
+      "./types/qrcode"
     ]
   }
 }
