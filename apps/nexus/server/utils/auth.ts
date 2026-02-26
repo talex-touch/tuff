@@ -112,6 +112,35 @@ function parseBearerToken(event: H3Event): string | null {
   return value.trim()
 }
 
+const LEGACY_RELEASE_SCOPE = 'release:sync'
+const RELEASE_SCOPE_COMPAT = new Set([
+  'release:write',
+  'release:assets',
+  'release:publish',
+  'release:news',
+])
+
+function hasRequiredScope(scopes: string[], requiredScope: string): boolean {
+  if (scopes.includes(requiredScope)) {
+    return true
+  }
+
+  // Backward compatibility: legacy scope can access all release sub-scopes.
+  if (requiredScope.startsWith('release:') && scopes.includes(LEGACY_RELEASE_SCOPE)) {
+    return true
+  }
+
+  // Forward compatibility: granular release scopes also satisfy legacy scope checks.
+  if (
+    requiredScope === LEGACY_RELEASE_SCOPE
+    && scopes.some(scope => RELEASE_SCOPE_COMPAT.has(scope))
+  ) {
+    return true
+  }
+
+  return false
+}
+
 export async function requireApiKey(event: H3Event, requiredScopes: string[] = []) {
   const token = parseBearerToken(event)
   if (!token) {
@@ -130,7 +159,7 @@ export async function requireApiKey(event: H3Event, requiredScopes: string[] = [
   }
 
   if (requiredScopes.length > 0) {
-    const hasScopes = requiredScopes.every(scope => scopes.includes(scope))
+    const hasScopes = requiredScopes.every(scope => hasRequiredScope(scopes, scope))
     if (!hasScopes) {
       throw createError({ statusCode: 403, statusMessage: 'Insufficient API key scopes.' })
     }

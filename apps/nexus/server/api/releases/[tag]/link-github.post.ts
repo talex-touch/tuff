@@ -14,7 +14,7 @@ interface LinkGitHubAssetInput {
 }
 
 export default defineEventHandler(async (event) => {
-  await requireAdminOrApiKey(event, ['release:sync'])
+  await requireAdminOrApiKey(event, ['release:assets'])
 
   const tag = event.context.params?.tag
 

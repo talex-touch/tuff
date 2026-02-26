@@ -955,6 +955,58 @@ export async function createReleaseAsset(
   if (db) {
     await ensureReleasesSchema(db)
 
+    const existing = await db.prepare(`
+      SELECT *
+      FROM ${RELEASE_ASSETS_TABLE}
+      WHERE release_id = ?1 AND platform = ?2 AND arch = ?3
+      LIMIT 1;
+    `).bind(
+      asset.releaseId,
+      asset.platform,
+      asset.arch,
+    ).first<D1ReleaseAssetRow>()
+
+    if (existing) {
+      const existingAsset = mapAssetRow(existing)
+      const upsertedAsset: ReleaseAsset = {
+        ...existingAsset,
+        filename: asset.filename,
+        sourceType: asset.sourceType,
+        fileKey: asset.fileKey,
+        downloadUrl: asset.downloadUrl,
+        size: asset.size,
+        sha256: asset.sha256,
+        contentType: asset.contentType,
+        updatedAt: now,
+      }
+
+      await db.prepare(`
+        UPDATE ${RELEASE_ASSETS_TABLE}
+        SET
+          filename = ?1,
+          source_type = ?2,
+          file_key = ?3,
+          download_url = ?4,
+          size = ?5,
+          sha256 = ?6,
+          content_type = ?7,
+          updated_at = ?8
+        WHERE id = ?9;
+      `).bind(
+        upsertedAsset.filename,
+        upsertedAsset.sourceType,
+        upsertedAsset.fileKey,
+        upsertedAsset.downloadUrl,
+        upsertedAsset.size,
+        upsertedAsset.sha256,
+        upsertedAsset.contentType,
+        upsertedAsset.updatedAt,
+        upsertedAsset.id,
+      ).run()
+
+      return upsertedAsset
+    }
+
     await db.prepare(`
       INSERT INTO ${RELEASE_ASSETS_TABLE} (
         id, release_id, platform, arch, filename, source_type, file_key,
@@ -983,6 +1035,31 @@ export async function createReleaseAsset(
 
   // Memory fallback
   const assets = await readCollection<ReleaseAsset>(RELEASE_ASSETS_KEY)
+  const existingIndex = assets.findIndex(item =>
+    item.releaseId === asset.releaseId
+    && item.platform === asset.platform
+    && item.arch === asset.arch
+  )
+
+  if (existingIndex >= 0) {
+    const existing = assets[existingIndex]
+    if (existing) {
+      assets[existingIndex] = {
+        ...existing,
+        filename: asset.filename,
+        sourceType: asset.sourceType,
+        fileKey: asset.fileKey,
+        downloadUrl: asset.downloadUrl,
+        size: asset.size,
+        sha256: asset.sha256,
+        contentType: asset.contentType,
+        updatedAt: now,
+      }
+      await writeCollection(RELEASE_ASSETS_KEY, assets)
+      return assets[existingIndex] as ReleaseAsset
+    }
+  }
+
   assets.push(asset)
   await writeCollection(RELEASE_ASSETS_KEY, assets)
 

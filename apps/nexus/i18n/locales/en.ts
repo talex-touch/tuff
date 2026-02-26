@@ -703,6 +703,113 @@ export default {
         storage: 'Storage & Sync',
         privacy: 'Privacy',
       },
+      apiKeys: {
+        title: 'API Keys',
+        subtitle: 'Manage API keys for CLI tools and integrations.',
+        actions: {
+          createKey: 'Create Key',
+          copy: 'Copy',
+          copied: 'Copied!',
+          creating: 'Creating...',
+          close: 'Close',
+        },
+        cancel: 'Cancel',
+        delete: 'Delete',
+        createdAlert: {
+          title: 'API Key Created: {name}',
+          description: 'Copy your secret key now. It will not be shown again.',
+        },
+        meta: {
+          created: 'Created {date}',
+          lastUsed: 'Last used {date}',
+          expired: 'Expired',
+          expires: 'Expires {date}',
+        },
+        empty: {
+          title: 'No API Keys',
+          description: 'Create an API key to use with tuffcli and other integrations.',
+          cta: 'Create Your First Key',
+        },
+        overlay: {
+          title: 'Create API Key',
+          description: 'Generate a new API key for CLI tools',
+        },
+        form: {
+          nameLabel: 'Key Name',
+          namePlaceholder: 'e.g., My Laptop, CI/CD',
+          permissionsLabel: 'Permissions',
+          notRecommended: 'Not Recommended',
+          selectedCount: 'Selected permissions: {count}',
+          riskHint: 'Red permissions are sensitive and are not recommended for long-lived or shared API keys.',
+          expirationLabel: 'Expiration',
+        },
+        scopes: {
+          groups: {
+            plugins: {
+              label: 'Plugins',
+              description: 'Manage plugin registry visibility and publishing',
+            },
+            account: {
+              label: 'Account',
+              description: 'Read account level profile information',
+            },
+            releases: {
+              label: 'Releases',
+              description: 'Manage release sync, metadata, publishing and assets',
+            },
+          },
+          items: {
+            pluginRead: {
+              label: 'Read Plugins',
+              description: 'View plugin information',
+            },
+            pluginPublish: {
+              label: 'Publish Plugins',
+              description: 'Upload and publish plugins to the store',
+            },
+            accountRead: {
+              label: 'Read Account',
+              description: 'View account information',
+            },
+            releaseSync: {
+              label: 'Sync Releases',
+              description: 'Sync releases, assets, and publish status from CI',
+            },
+            releaseWrite: {
+              label: 'Write Releases',
+              description: 'Create or update release metadata',
+            },
+            releasePublish: {
+              label: 'Publish Releases',
+              description: 'Publish release notes and channels',
+            },
+            releaseAssets: {
+              label: 'Manage Release Assets',
+              description: 'Upload or link release assets',
+            },
+            releaseNews: {
+              label: 'Sync Update News',
+              description: 'Create dashboard updates/news records from CI',
+            },
+          },
+        },
+        expiry: {
+          never: 'Never expires',
+          days30: '30 days',
+          days90: '90 days',
+          days180: '180 days',
+          year1: '1 year',
+        },
+        errors: {
+          load: 'Failed to load API keys',
+          create: 'Failed to create API key',
+          delete: 'Failed to delete API key',
+        },
+        deleteDialog: {
+          title: 'Delete API Key',
+          description: 'Are you sure you want to delete this API key? This action cannot be undone.',
+        },
+      },
       plugins: {
         title: 'Assets',
         subtitle: 'Manage plugins, layout presets, and other publishable assets from one place.',
@@ -1329,6 +1436,7 @@ Tuff may update this agreement at any time. Continued submission indicates accep
             remove: 'Remove',
             empty: 'No IP bans yet',
             noReason: 'No reason',
+            unavailable: 'Risk control is disabled in this environment. IP ban panel is hidden.',
           },
         },
         providers: {
@@ -1346,6 +1454,27 @@ Tuff may update this agreement at any time. Continued submission indicates accep
           testing: 'Testing…',
           testSuccess: 'Connected successfully. Found {count} model(s)',
           testFailed: 'Connection failed',
+          probe: {
+            title: 'Provider Probe',
+            subtitle: 'Current provider: {name}',
+            provider: 'Provider',
+            type: 'Type',
+            model: 'Test Model',
+            modelAuto: 'Auto (default)',
+            modelPlaceholder: 'Enter model ID (optional)',
+            modelHint: 'Selected model is preferred. Leave empty to use provider default model.',
+            prompt: 'Probe Prompt',
+            promptPlaceholder: 'Enter a test prompt, e.g. return a greeting and model name.',
+            defaultPrompt: 'Reply with one short sentence and include your model name.',
+            run: 'Run Probe',
+            running: 'Probing…',
+            response: 'Model Response',
+            endpoint: 'Endpoint',
+            traceId: 'Trace ID',
+            latency: 'Latency',
+            retry: 'Retry Count',
+            errorSnippet: 'Error Snippet',
+          },
           delete: 'Delete',
           confirmDelete: 'Delete provider {name}? This cannot be undone.',
           deleteSuccess: 'Provider deleted',
