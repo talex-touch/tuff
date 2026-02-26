@@ -2777,6 +2777,43 @@
 
 ---
 
+## 2026-02-26
+
+### 修复: Translation Widget 键盘交互与错误展示稳定性
+
+**变更类型**: Bug 修复 / 交互优化
+
+**描述**: 优化 translation 插件的 widget 列表交互，移除高风险键盘监听方式，补齐焦点切换与快捷复制流程，避免运行时 `Illegal invocation` 风险并提升可用性。
+
+**主要变更**:
+1. **键盘事件接入调整**:
+   - 从直接 `window.addEventListener('keydown')` 切换为监听 `core-box:key-event`
+   - 按 `Meta/Ctrl + ←/→` 在历史列与翻译结果列切换焦点
+
+2. **列表导航与动作增强**:
+   - `↑/↓` 在当前焦点列循环移动选中项
+   - `Enter` 在结果列复制当前选中项，在历史列回填当前选中历史文本
+   - 默认焦点设为右侧结果列
+
+3. **数据与渲染稳定性**:
+   - 增加 payload/provider/history 归一化处理，避免运行时结构差异导致异常
+   - 错误信息支持折叠/展开，避免长错误文本撑坏布局
+   - 历史记录更新改为不可变更新路径，减少深层 watch 带来的副作用
+
+4. **插件版本同步**:
+   - `touch-translation` 版本升级至 `1.0.2`（manifest / package.json 同步）
+
+**修改文件**:
+- `plugins/touch-translation/widgets/translate-panel.vue`
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/package.json`
+
+**影响**:
+- Translation widget 键盘可达性与列表操作一致性提升
+- 降低跨上下文事件调用导致运行时异常的概率
+
+---
+
 ## 2026-02-25
 
 ### 审计: TxFlipOverlay 关闭按钮二轮排查总结

@@ -1,11 +1,14 @@
 {
+  "name": "@talex-touch/touch-translation-plugin",
+  "private": true,
   "type": "module",
-  "version": "1.0.0",
-  "packageManager": "pnpm@10.25.0",
+  "version": "1.0.2",
+  "packageManager": "pnpm@10.24.0",
   "scripts": {
     "build": "vite build && tuff builder",
     "dev": "vite --port 3733 --open",
     "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
     "typecheck": "vue-tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest",
