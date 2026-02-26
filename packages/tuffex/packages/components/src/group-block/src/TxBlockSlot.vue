@@ -104,15 +104,13 @@ const currentIcon = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
   padding: 4px 16px;
   width: 100%;
   height: 56px;
   user-select: none;
-  border-radius: 12px;
   box-sizing: border-box;
   --fake-color: var(--tx-fill-color-darker, #ebeef5);
-  --fake-radius: 12px;
+  --fake-radius: inherit;
   --fake-opacity: 0.5;
 
   &.disabled,
