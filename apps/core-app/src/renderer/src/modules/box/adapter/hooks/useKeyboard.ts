@@ -174,6 +174,11 @@ const ALT_FORWARD_KEYS = new Set(['Backspace', 'Delete', 'ArrowLeft', 'ArrowRigh
 const SYSTEM_KEYS = new Set(['Escape'])
 
 /**
+ * Text editing shortcuts that should stay in CoreBox input when input is visible.
+ */
+const INPUT_EDIT_SHORTCUT_KEYS = new Set(['a', 'c', 'v', 'x', 'z', 'y'])
+
+/**
  * Event name for triggering DivisionBox detach (Command+D)
  */
 const COREBOX_DETACH_EVENT = 'corebox:detach-item'
@@ -278,15 +283,17 @@ function convertTuffActionToMetaAction(tuffAction: TuffActionLike): MetaAction {
   }
 }
 
+function isInputEditingShortcut(event: KeyboardEvent): boolean {
+  if (!(event.metaKey || event.ctrlKey) || event.altKey) return false
+
+  return INPUT_EDIT_SHORTCUT_KEYS.has(event.key.toLowerCase())
+}
+
 /**
  * Determines if a keyboard event should be forwarded to the plugin UI view.
  *
- * Common shortcuts that should be forwarded:
- * - Cmd/Ctrl+A: Select all
- * - Cmd/Ctrl+C: Copy
- * - Cmd/Ctrl+X: Cut
- * - Cmd/Ctrl+Z: Undo
- * - Cmd/Ctrl+Shift+Z: Redo
+ * Common shortcuts that should be forwarded (when input is hidden):
+ * - Cmd/Ctrl+A/C/X/Z/Y
  * - Cmd/Ctrl+Backspace: Delete to line start
  * - Option/Alt+Backspace: Delete word backward
  * - Option/Alt+Delete: Delete word forward
@@ -316,10 +323,15 @@ function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
     return false
   }
 
+  // Keep input editing shortcuts in CoreBox input when the input is visible.
+  if (!inputHidden && isInputEditingShortcut(event)) {
+    return false
+  }
+
   // In input-hidden mode (UI mode), forward almost all keys except system keys
   if (inputHidden) {
     // Don't forward Cmd+V (handled separately for paste)
-    if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
       return false
     }
     return true
@@ -327,7 +339,7 @@ function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
 
   // Normal mode: forward specific keys
   // Forward all Cmd/Ctrl shortcuts except Cmd+V (handled separately for paste)
-  if ((event.metaKey || event.ctrlKey) && event.key !== 'v') {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() !== 'v') {
     return true
   }
   // Forward Alt/Option key combinations for word-level editing
@@ -464,7 +476,11 @@ export function useKeyboard(
       return
     }
 
-    if ((event.metaKey || event.ctrlKey) && event.key === 'v') {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') {
+      // In UI mode with visible input, keep native paste for CoreBox input.
+      if (uiMode && !inputHidden) {
+        return
+      }
       handlePaste({ overrideDismissed: true })
       event.preventDefault()
       return
