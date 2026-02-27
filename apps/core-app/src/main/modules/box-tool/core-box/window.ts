@@ -95,6 +95,7 @@ export class WindowManager {
   private uiViewThemeCssKey = new WeakMap<WebContentsView, string>()
   private attachedPlugin: TouchPlugin | null = null
   private attachedFeature: IPluginFeature | null = null
+  private detachingUIView = false
   private nativeThemeHandler: (() => void) | null = null
   private currentThemeIsDark = false
   private bundledThemeCss: string | null = null
@@ -641,7 +642,10 @@ export class WindowManager {
       window.window.setPosition(-1000000, -1000000)
     }
 
-    setTimeout(() => window.window.hide(), 100)
+    setTimeout(() => {
+      if (window.window.isDestroyed()) return
+      window.window.hide()
+    }, 100)
   }
 
   public expand(
@@ -1335,16 +1339,27 @@ export class WindowManager {
   }
 
   public detachUIView(): void {
+    if (this.detachingUIView) {
+      coreBoxWindowLog.debug('detachUIView skipped because detachment is already in progress')
+      return
+    }
+    this.detachingUIView = true
+
     // Reset permissions
     this.inputAllowed = false
     this.clipboardAllowedTypes = 0
 
-    if (this.nativeThemeHandler) {
-      nativeTheme.removeListener('updated', this.nativeThemeHandler)
-      this.nativeThemeHandler = null
-    }
+    try {
+      if (this.nativeThemeHandler) {
+        nativeTheme.removeListener('updated', this.nativeThemeHandler)
+        this.nativeThemeHandler = null
+      }
 
-    if (this.uiView) {
+      const view = this.uiView
+      if (!view) {
+        return
+      }
+
       // Handle plugin state transition before detaching
       if (this.attachedPlugin && pluginModule.pluginManager) {
         const plugin = this.attachedPlugin
@@ -1367,11 +1382,15 @@ export class WindowManager {
         }
       }
 
+      const webContents = view.webContents
+      const webContentsAlive = !!webContents && !webContents.isDestroyed()
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
-        this.uiView.webContents.closeDevTools()
+        if (webContentsAlive) {
+          webContents.closeDevTools()
+        }
         try {
-          currentWindow.window.contentView.removeChildView(this.uiView)
+          currentWindow.window.contentView.removeChildView(view)
         } catch (err) {
           coreBoxWindowLog.warn('Failed to remove child view', { error: err })
         }
@@ -1390,8 +1409,8 @@ export class WindowManager {
 
       if (!cacheEnabled || !this.attachedPlugin) {
         try {
-          if (!this.uiView.webContents.isDestroyed()) {
-            this.uiView.webContents.close()
+          if (webContentsAlive) {
+            webContents.close()
           }
         } catch (err) {
           coreBoxWindowLog.warn('Failed to close UI view', { error: err })
@@ -1404,6 +1423,8 @@ export class WindowManager {
       this.uiView = null
       this.attachedPlugin = null
       this.attachedFeature = null
+    } finally {
+      this.detachingUIView = false
     }
   }
 

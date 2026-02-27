@@ -13,6 +13,7 @@ import { getSentryService } from '../../../sentry'
 import { ContextProvider } from './context-provider'
 import { ItemRebuilder } from './item-rebuilder'
 import { enterPerfContext } from '../../../../utils/perf-context'
+import { createLogger } from '../../../../utils/logger'
 
 const DAY_MS = 86_400_000
 const TREND_HISTORY_DAYS = 30
@@ -24,6 +25,36 @@ const RECOMMENDATION_TELEMETRY_INTERVAL_MS = 10 * 60 * 1000
 const RECOMMENDATION_QUERY_BUDGET_MS = 50
 const RECOMMENDATION_PERF_PLUGIN = 'core'
 const PLUGIN_PROVIDER_TIMEOUT_MS = 200
+const recommendationLog = createLogger('RecommendationEngine')
+
+type LogMeta = Record<string, string | number | boolean | null | undefined>
+
+function toPrimitive(value: unknown): string | number | boolean | null | undefined {
+  if (value == null) return value
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+  return String(value)
+}
+
+function toErrorMeta(error: unknown): LogMeta {
+  if (error instanceof Error) {
+    const node = error as Error & { code?: unknown; cause?: unknown }
+    const cause =
+      node.cause && typeof node.cause === 'object'
+        ? (node.cause as { code?: unknown; rawCode?: unknown; message?: unknown })
+        : null
+    return {
+      name: node.name,
+      message: node.message,
+      code: toPrimitive(node.code),
+      causeCode: toPrimitive(cause?.code),
+      causeRawCode: toPrimitive(cause?.rawCode),
+      causeMessage: toPrimitive(cause?.message)
+    }
+  }
+  return { message: String(error) }
+}
 
 function toDayBucket(timestampMs: number): number {
   return Math.floor(timestampMs / DAY_MS)
@@ -92,7 +123,7 @@ export class RecommendationEngine {
       }
       await this.recommend({ forceRefresh: true })
     } catch (error) {
-      console.error('[RecommendationEngine] Background refresh failed', error)
+      recommendationLog.warn('Background refresh failed', { meta: toErrorMeta(error) })
     } finally {
       this.refreshInFlight = false
     }
@@ -108,7 +139,7 @@ export class RecommendationEngine {
         try {
           await this.reportRecommendationTelemetry()
         } catch (error) {
-          console.error('[RecommendationEngine] Telemetry report failed', error)
+          recommendationLog.warn('Telemetry report failed', { meta: toErrorMeta(error) })
         }
       },
       { interval: RECOMMENDATION_TELEMETRY_INTERVAL_MS, unit: 'milliseconds' }
@@ -126,13 +157,16 @@ export class RecommendationEngine {
     }
 
     void dbWriteScheduler
-      .schedule('analytics.plugin', () =>
-        withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
-          label: 'recommendation.perf'
-        })
+      .schedule(
+        'analytics.plugin',
+        () =>
+          withSqliteRetry(() => db.insert(schema.pluginAnalytics).values(payload), {
+            label: 'recommendation.perf'
+          }),
+        { droppable: true }
       )
       .catch((error) => {
-        console.error('[RecommendationEngine] Failed to record perf metrics', error)
+        recommendationLog.debug('Failed to record perf metrics', { meta: toErrorMeta(error) })
       })
   }
 
@@ -341,7 +375,7 @@ export class RecommendationEngine {
         await this.backfillTrendDay(day)
       }
     } catch (error) {
-      console.error('[RecommendationEngine] Trend backfill failed', error)
+      recommendationLog.warn('Trend backfill failed', { meta: toErrorMeta(error) })
     } finally {
       disposeTick()
     }
@@ -785,7 +819,7 @@ export class RecommendationEngine {
         }
       })
     } catch (error) {
-      console.error('[RecommendationEngine] Failed to get pinned items:', error)
+      recommendationLog.warn('Failed to get pinned items', { meta: toErrorMeta(error) })
       return []
     }
   }
@@ -823,7 +857,7 @@ export class RecommendationEngine {
 
       return items.slice(0, limit)
     } catch (error) {
-      console.error('[RecommendationEngine] Fallback recommendation failed:', error)
+      recommendationLog.warn('Fallback recommendation failed', { meta: toErrorMeta(error) })
       return []
     }
   }
@@ -1708,7 +1742,7 @@ export class RecommendationEngine {
       const items = JSON.parse(cached.recommendedItems)
       return { items: this.dedupeItems(items) }
     } catch (error) {
-      console.error('[RecommendationEngine] Failed to parse cached recommendations:', error)
+      recommendationLog.warn('Failed to parse cached recommendations', { meta: toErrorMeta(error) })
       return null
     }
   }

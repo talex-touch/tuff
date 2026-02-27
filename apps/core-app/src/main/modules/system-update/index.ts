@@ -1,11 +1,14 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import * as schema from '../../db/schema'
 import { AppPreviewChannel, resolveUpdateChannelLabel, splitUpdateTag } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffBaseUrl } from '@talex-touch/utils/env'
 import { eq, sql } from 'drizzle-orm'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
 import { fxRateProvider } from '../box-tool/addon/preview/providers'
 import { databaseModule } from '../database'
@@ -30,6 +33,35 @@ const SYSTEM_UPDATE_SLOW_BACKOFF_MS = 10 * 60 * 1000
 const SYSTEM_UPDATE_SLOW_BACKOFF_JITTER_MS = 2 * 60 * 1000
 const FX_RATE_DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
 const FETCH_TIMEOUT_MS = 10_000
+
+type LogMeta = Record<string, string | number | boolean | null | undefined>
+
+function toPrimitive(value: unknown): string | number | boolean | null | undefined {
+  if (value == null) return value
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value
+  }
+  return String(value)
+}
+
+function toErrorMeta(error: unknown): LogMeta {
+  if (error instanceof Error) {
+    const node = error as Error & { code?: unknown; cause?: unknown }
+    const cause =
+      node.cause && typeof node.cause === 'object'
+        ? (node.cause as { code?: unknown; rawCode?: unknown; message?: unknown })
+        : null
+    return {
+      name: node.name,
+      message: node.message,
+      code: toPrimitive(node.code),
+      causeCode: toPrimitive(cause?.code),
+      causeRawCode: toPrimitive(cause?.rawCode),
+      causeMessage: toPrimitive(cause?.message)
+    }
+  }
+  return { message: String(error) }
+}
 
 interface LocalizedText {
   zh?: string
@@ -104,6 +136,18 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     return Math.floor(Math.random() * Math.max(1, maxMs))
   }
 
+  private async scheduleWrite<T>(
+    label: string,
+    operation: () => Promise<T>,
+    options?: ScheduleOptions
+  ): Promise<T> {
+    return dbWriteScheduler.schedule(
+      `system-update.${label}`,
+      () => withSqliteRetry(operation, { label: `system-update.${label}` }),
+      options
+    )
+  }
+
   private scheduleRefreshPoll(initialDelayMs: number): void {
     if (this.pollingService.isRegistered(SYSTEM_UPDATE_POLL_ID)) {
       this.pollingService.unregister(SYSTEM_UPDATE_POLL_ID)
@@ -124,7 +168,12 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   private async runRefreshUpdates(trigger: 'startup' | 'poll'): Promise<void> {
     const startedAt = Date.now()
-    await this.refreshUpdates()
+    try {
+      await this.refreshUpdates()
+    } catch (error) {
+      log.warn('System update refresh failed', { meta: toErrorMeta(error) })
+      return
+    }
     const durationMs = Date.now() - startedAt
 
     if (trigger !== 'poll' || durationMs < SYSTEM_UPDATE_SLOW_THRESHOLD_MS) {
@@ -162,16 +211,17 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
   private async ensureState(): Promise<void> {
     if (!this.db) return
-    await this.db
-      .insert(schema.systemUpdateState)
-      .values({
-        id: SYSTEM_UPDATE_STATE_ID,
-        etag: null,
-        lastFetchedAt: 0,
-        lastProcessedId: null,
-        updatedAt: 0
-      })
-      .onConflictDoNothing()
+    await this.scheduleWrite('state.ensure', () =>
+      this.db!.insert(schema.systemUpdateState)
+        .values({
+          id: SYSTEM_UPDATE_STATE_ID,
+          etag: null,
+          lastFetchedAt: 0,
+          lastProcessedId: null,
+          updatedAt: 0
+        })
+        .onConflictDoNothing()
+    )
   }
 
   private async loadState() {
@@ -187,10 +237,11 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     patch: Partial<typeof schema.systemUpdateState.$inferInsert>
   ): Promise<void> {
     if (!this.db) return
-    await this.db
-      .update(schema.systemUpdateState)
-      .set({ ...patch, updatedAt: Date.now() })
-      .where(eq(schema.systemUpdateState.id, SYSTEM_UPDATE_STATE_ID))
+    await this.scheduleWrite('state.update', () =>
+      this.db!.update(schema.systemUpdateState)
+        .set({ ...patch, updatedAt: Date.now() })
+        .where(eq(schema.systemUpdateState.id, SYSTEM_UPDATE_STATE_ID))
+    )
   }
 
   private async refreshUpdates(): Promise<void> {
@@ -318,20 +369,21 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
     const serialized = JSON.stringify(value ?? null)
     const updatedAt = Date.parse(update.timestamp) || Date.now()
 
-    await this.db
-      .insert(schema.systemConfig)
-      .values({
-        key,
-        value: serialized,
-        updatedAt
-      })
-      .onConflictDoUpdate({
-        target: schema.systemConfig.key,
-        set: {
-          value: sql`excluded.value`,
-          updatedAt: sql`excluded.updated_at`
-        }
-      })
+    await this.scheduleWrite('config.upsert', () =>
+      this.db!.insert(schema.systemConfig)
+        .values({
+          key,
+          value: serialized,
+          updatedAt
+        })
+        .onConflictDoUpdate({
+          target: schema.systemConfig.key,
+          set: {
+            value: sql`excluded.value`,
+            updatedAt: sql`excluded.updated_at`
+          }
+        })
+    )
 
     touchEventBus.emit(
       TouchEvents.SYSTEM_CONFIG_UPDATED,
@@ -369,19 +421,20 @@ export class SystemUpdateModule extends BaseModule<TalexEvents> {
 
     if (rows.length === 0) return
 
-    await this.db
-      .insert(schema.fxRates)
-      .values(rows)
-      .onConflictDoUpdate({
-        target: [schema.fxRates.base, schema.fxRates.quote],
-        set: {
-          rate: sql`excluded.rate`,
-          updatedAt: sql`excluded.updated_at`,
-          source: sql`excluded.source`,
-          providerUpdatedAt: sql`excluded.provider_updated_at`,
-          fetchedAt: sql`excluded.fetched_at`
-        }
-      })
+    await this.scheduleWrite('fx-rates.upsert', () =>
+      this.db!.insert(schema.fxRates)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: [schema.fxRates.base, schema.fxRates.quote],
+          set: {
+            rate: sql`excluded.rate`,
+            updatedAt: sql`excluded.updated_at`,
+            source: sql`excluded.source`,
+            providerUpdatedAt: sql`excluded.provider_updated_at`,
+            fetchedAt: sql`excluded.fetched_at`
+          }
+        })
+    )
 
     fxRateProvider.applyExternalRates({
       base,

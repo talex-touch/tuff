@@ -547,8 +547,13 @@ export abstract class IntelligenceProvider implements IntelligenceProviderAdapte
           ? `${normalized.slice(0, 256)}...`
           : normalized || '<unreadable response>'
       const contentType = response.headers.get('content-type') || 'unknown'
+      const htmlHint =
+        contentType.toLowerCase().includes('text/html') ||
+        normalized.toLowerCase().includes('<!doctype html')
+          ? ' Check provider baseUrl: it may point to a docs/web page instead of an OpenAI-compatible API endpoint.'
+          : ''
       throw new Error(
-        `[${this.type}]${endpointHint} expected JSON but received ${contentType} (status ${response.status}). Body snippet: ${snippet}`
+        `[${this.type}]${endpointHint} expected JSON but received ${contentType} (status ${response.status}). Body snippet: ${snippet}${htmlHint}`
       )
     }
   }

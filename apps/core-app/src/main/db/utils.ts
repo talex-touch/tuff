@@ -1,6 +1,46 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import { and, eq, inArray, sql } from 'drizzle-orm'
+import { dbWriteScheduler } from './db-write-scheduler'
 import * as schema from './schema'
+import { withSqliteRetry } from './sqlite-retry'
+
+function sanitizeRecommendationCacheValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (typeof value === 'string') {
+    if (value.startsWith('data:image/') && value.length > 512) {
+      return ''
+    }
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeRecommendationCacheValue(item, seen))
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  if (seen.has(value)) {
+    return null
+  }
+  seen.add(value)
+
+  const record = value as Record<string, unknown>
+  const sanitized: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(record)) {
+    sanitized[key] = sanitizeRecommendationCacheValue(item, seen)
+  }
+
+  const icon = sanitized.icon
+  if (icon && typeof icon === 'object' && !Array.isArray(icon)) {
+    const iconRecord = icon as Record<string, unknown>
+    if (iconRecord.type === 'url' && iconRecord.value === '') {
+      delete sanitized.icon
+    }
+  }
+
+  return sanitized
+}
 
 function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
   return {
@@ -371,22 +411,35 @@ function createDbUtilsInternal(db: LibSQLDatabase<typeof schema>) {
     },
 
     async setRecommendationCache(cacheKey: string, items: unknown[], expiresAt: Date) {
-      return db
-        .insert(schema.recommendationCache)
-        .values({
-          cacheKey,
-          recommendedItems: JSON.stringify(items),
-          createdAt: new Date(),
-          expiresAt
-        })
-        .onConflictDoUpdate({
-          target: schema.recommendationCache.cacheKey,
-          set: {
-            recommendedItems: JSON.stringify(items),
-            createdAt: new Date(),
-            expiresAt
-          }
-        })
+      const sanitizedItems = sanitizeRecommendationCacheValue(items, new WeakSet()) as unknown[]
+      const recommendedItems = JSON.stringify(sanitizedItems)
+      const createdAt = new Date()
+
+      return dbWriteScheduler.schedule(
+        'recommendation.cache',
+        () =>
+          withSqliteRetry(
+            () =>
+              db
+                .insert(schema.recommendationCache)
+                .values({
+                  cacheKey,
+                  recommendedItems,
+                  createdAt,
+                  expiresAt
+                })
+                .onConflictDoUpdate({
+                  target: schema.recommendationCache.cacheKey,
+                  set: {
+                    recommendedItems,
+                    createdAt,
+                    expiresAt
+                  }
+                }),
+            { label: 'recommendation.cache' }
+          ),
+        { droppable: true }
+      )
     },
 
     async cleanExpiredRecommendationCache() {
