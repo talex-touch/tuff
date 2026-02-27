@@ -345,7 +345,14 @@ code: |
   ClipboardEvents.apply       // Apply item to active app
   ClipboardEvents.delete      // Delete history item
   ClipboardEvents.setFavorite // Toggle favorite status
+  ClipboardEvents.clearHistory // Clear history
+  ClipboardEvents.getImageUrl // Resolve original image URL
   ClipboardEvents.write       // Write to system clipboard
+  ClipboardEvents.read        // Read current clipboard snapshot
+  ClipboardEvents.readImage   // Read clipboard image
+  ClipboardEvents.readFiles   // Read clipboard file paths
+  ClipboardEvents.clear       // Clear current clipboard data
+  ClipboardEvents.copyAndPaste // Write and auto-paste
 ---
 :::
 
@@ -358,8 +365,9 @@ code: |
     ClipboardEvents.change,
     undefined,
     {
-      onData: ({ item, source }) => {
-        console.log(`New ${item.type} from ${source}:`, item.content)
+      onData: ({ latest, history }) => {
+        console.log('latest:', latest?.type, latest?.value)
+        console.log('history size:', history.length)
       }
     }
   )
@@ -373,12 +381,14 @@ code: |
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  const { history, total } = await transport.send(ClipboardEvents.getHistory, {
+  const { items, total } = await transport.send(ClipboardEvents.getHistory, {
     page: 1,
     pageSize: 20,
     type: 'text',
     keyword: 'search term'
   })
+
+  console.log(items[0]?.value, total)
 ---
 :::
 

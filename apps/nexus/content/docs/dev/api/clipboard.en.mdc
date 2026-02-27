@@ -8,7 +8,13 @@ The Clipboard SDK lets plugins access system clipboard features, including:
 - **Copy & paste**: write content to clipboard and auto-paste into the active app
 - **Automatic tags**: classify text content (URL, API Key, Token, account/password, email) for quick matching
 
-All operations are executed in the main process via IPC to avoid WebContents focus issues.
+All operations are executed in the main process via TuffTransport to avoid WebContents focus issues.
+
+## Communication Strategy (Transport First)
+
+- `useClipboard()` now uses `ClipboardEvents.*` as the primary transport domain (`getHistory`, `read`, `copyAndPaste`, etc.).
+- Clipboard SDK no longer relies on `clipboard:*` raw channel events as the main path.
+- Main process still keeps legacy handlers for backward compatibility, but new plugins should use SDK APIs only.
 
 ## Introduction
 
@@ -136,6 +142,20 @@ code: |
 :::
 
 **Returns**: `{ dataUrl: string, width: number, height: number } | null`
+
+**getHistoryImageUrl(id)**
+
+Resolve the original image URL (`tfile://`) for a history item to avoid large base64 payloads in plugin code.
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const url = await clipboard.getHistoryImageUrl(123)
+  if (url) {
+    console.log('original image:', url)
+  }
+---
+:::
 
 **readFiles()**
 
@@ -439,7 +459,7 @@ code: |
 
 ## Technical Notes
 
-- Clipboard read/write, history, and auto-paste are executed in the main process via IPC to avoid focus-related failures.
+- Clipboard read/write, history, and auto-paste are executed in the main process via TuffTransport to avoid focus-related failures.
 - History is persisted in the database; `meta`/`metadata` carry extra signals for technical filtering and matching.
 - Automatic tags are lightweight rule-based categories; raw sensitive values are never exposed.
 

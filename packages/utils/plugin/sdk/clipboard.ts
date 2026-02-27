@@ -1,9 +1,29 @@
-import type { PluginClipboardHistoryResponse, PluginClipboardItem, PluginClipboardSearchOptions, PluginClipboardSearchResponse } from './types'
+import type {
+  ClipboardActionResult,
+  ClipboardChangePayload,
+  ClipboardCopyAndPasteRequest,
+  ClipboardItem,
+  ClipboardQueryRequest,
+  ClipboardQueryResponse,
+  ClipboardReadImageResponse,
+  ClipboardReadResponse,
+} from '../../transport/events/types'
+import type {
+  PluginClipboardHistoryResponse,
+  PluginClipboardItem,
+  PluginClipboardSearchOptions,
+  PluginClipboardSearchResponse,
+} from './types'
+import { createPluginTuffTransport } from '../../transport'
+import { ClipboardEvents } from '../../transport/events'
+import { TuffInputType } from '../../transport/events/types'
 import { useChannel } from './channel'
 
 function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | null {
-  if (!item)
+  if (!item) {
     return item
+  }
+
   if (!item.meta && typeof item.metadata === 'string') {
     try {
       const parsed = JSON.parse(item.metadata)
@@ -13,7 +33,170 @@ function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | 
       return { ...item, meta: null }
     }
   }
+
   return item
+}
+
+function mapTransportItemType(type: TuffInputType): PluginClipboardItem['type'] {
+  if (type === TuffInputType.Image) {
+    return 'image'
+  }
+  if (type === TuffInputType.Files) {
+    return 'files'
+  }
+  return 'text'
+}
+
+function parseFileList(content?: string): string[] {
+  if (!content) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(content)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  }
+  catch {
+    return []
+  }
+}
+
+function toPluginClipboardItem(item: ClipboardItem | null): PluginClipboardItem | null {
+  if (!item) {
+    return null
+  }
+
+  const meta: Record<string, unknown> = {}
+  if (Array.isArray(item.tags) && item.tags.length > 0) {
+    meta.tags = item.tags
+  }
+
+  return normalizeItem({
+    id: item.id,
+    type: mapTransportItemType(item.type),
+    content: item.value ?? '',
+    rawContent: typeof item.html === 'string' ? item.html : null,
+    sourceApp: typeof item.source === 'string' ? item.source : null,
+    timestamp: item.createdAt,
+    isFavorite: item.isFavorite ?? null,
+    metadata: null,
+    meta: Object.keys(meta).length > 0 ? meta : null,
+  })
+}
+
+function toClipboardHistoryResponse(
+  response: ClipboardQueryResponse | null | undefined,
+): PluginClipboardHistoryResponse {
+  const history = Array.isArray(response?.items)
+    ? response.items
+      .map((item) => toPluginClipboardItem(item))
+      .filter((item): item is PluginClipboardItem => Boolean(item))
+    : []
+
+  const page = Number.isFinite(response?.page) ? Number(response?.page) : 1
+  const pageSize = Number.isFinite(response?.pageSize)
+    ? Number(response?.pageSize)
+    : Number.isFinite(response?.limit)
+      ? Number(response?.limit)
+      : 20
+
+  return {
+    history,
+    total: Number.isFinite(response?.total) ? Number(response?.total) : 0,
+    page,
+    pageSize,
+  }
+}
+
+function toClipboardQueryRequest(options: ClipboardHistoryOptions = {}): ClipboardQueryRequest {
+  const request: ClipboardQueryRequest = {
+    page: options.page,
+    pageSize: options.pageSize,
+    limit: options.pageSize,
+    keyword: options.keyword,
+    startTime: options.startTime,
+    endTime: options.endTime,
+    type: options.type ?? 'all',
+    isFavorite: options.isFavorite,
+    sourceApp: options.sourceApp,
+    sortOrder: options.sortOrder,
+  }
+
+  if (!options.type && options.isFavorite === true) {
+    request.type = 'favorite'
+  }
+
+  return request
+}
+
+function toClipboardActionRequest(
+  options: ClipboardApplyOptions | ClipboardCopyAndPasteOptions,
+): ClipboardCopyAndPasteRequest {
+  const request: ClipboardCopyAndPasteRequest = {}
+
+  if (typeof options.text === 'string') {
+    request.text = options.text
+  }
+  if (typeof options.html === 'string') {
+    request.html = options.html
+  }
+  if (typeof options.image === 'string') {
+    request.image = options.image
+  }
+  if (Array.isArray(options.files)) {
+    const files = options.files.filter((file): file is string => typeof file === 'string' && file.length > 0)
+    if (files.length > 0) {
+      request.files = files
+    }
+  }
+
+  if (Number.isFinite(options.delayMs)) {
+    request.delayMs = Number(options.delayMs)
+  }
+  if (typeof options.hideCoreBox === 'boolean') {
+    request.hideCoreBox = options.hideCoreBox
+  }
+
+  const legacyOptions = options as ClipboardApplyOptions
+  const item = legacyOptions.item
+  const itemType = legacyOptions.type ?? item?.type
+
+  if (itemType === 'image' && !request.image && typeof item?.content === 'string') {
+    request.image = item.content
+  }
+
+  if (itemType === 'text') {
+    if (!request.text && typeof item?.content === 'string') {
+      request.text = item.content
+    }
+    if (!request.html && typeof item?.rawContent === 'string') {
+      request.html = item.rawContent
+    }
+  }
+
+  if (itemType === 'files' && !request.files) {
+    const files = parseFileList(item?.content)
+    if (files.length > 0) {
+      request.files = files
+    }
+  }
+
+  return request
+}
+
+function toClipboardActionSuccess(result: ClipboardActionResult | null | undefined): boolean {
+  if (!result || typeof result !== 'object') {
+    return true
+  }
+
+  if (typeof result.success === 'boolean') {
+    return result.success
+  }
+
+  return true
 }
 
 export type ClipboardHistoryOptions = PluginClipboardSearchOptions
@@ -32,6 +215,7 @@ export interface ClipboardApplyOptions {
   text?: string
   html?: string | null
   files?: string[]
+  image?: string
   delayMs?: number
   hideCoreBox?: boolean
   type?: PluginClipboardItem['type']
@@ -44,24 +228,8 @@ export interface ClipboardWriteOptions {
   files?: string[]
 }
 
-export interface ClipboardReadResult {
-  text: string
-  html: string
-  hasImage: boolean
-  hasFiles: boolean
-  formats: string[]
-}
-
-export interface ClipboardImageResult {
-  dataUrl: string
-  width: number
-  height: number
-  /**
-   * Original image as a local streamable URL (Electron only).
-   * Returned when calling `readImage({ preview: false })`.
-   */
-  tfileUrl?: string
-}
+export type ClipboardReadResult = ClipboardReadResponse
+export type ClipboardImageResult = ClipboardReadImageResponse
 
 export interface ClipboardCopyAndPasteOptions {
   text?: string
@@ -86,106 +254,72 @@ export function useClipboardHistory() {
  * Unified Clipboard SDK for plugin renderer context.
  *
  * Provides:
- * - Basic clipboard operations (read/write) via IPC to main process
+ * - Basic clipboard operations (read/write) via transport to main process
  * - Clipboard history management
  * - Copy and paste to active application
- *
- * All operations go through IPC to avoid WebContents focus issues.
  *
  * @example
  * ```typescript
  * const clipboard = useClipboard()
  *
- * // === Basic Operations ===
  * await clipboard.writeText('Hello World')
  * const content = await clipboard.read()
- *
- * // === Copy and Paste ===
  * await clipboard.copyAndPaste({ text: 'Pasted content' })
- *
- * // === History Operations ===
- * const latest = await clipboard.history.getLatest()
- * const { history } = await clipboard.history.getHistory({ page: 1 })
- *
- * // === Listen to Changes ===
- * // Note: Plugin must call box.allowClipboard(types) first
- * const unsubscribe = clipboard.history.onDidChange((item) => {
- *   console.log('Clipboard changed:', item)
- * })
  * ```
  */
 export function useClipboard() {
   const channel = useChannel('[Plugin SDK] Clipboard channel requires plugin renderer context with $channel available.')
+  const transport = createPluginTuffTransport(channel as any)
 
   const history = {
     /**
-     * Gets the most recent clipboard item
+     * Gets the most recent clipboard item.
      */
     async getLatest(): Promise<PluginClipboardItem | null> {
-      const result = await channel.send('clipboard:get-latest')
-      return normalizeItem(result)
+      const result = await transport.send(ClipboardEvents.getLatest)
+      return toPluginClipboardItem(result)
     },
 
     /**
-     * Gets clipboard history with pagination
+     * Gets clipboard history with pagination and filters.
      */
     async getHistory(options: ClipboardHistoryOptions = {}): Promise<PluginClipboardHistoryResponse> {
-      const response = await channel.send('clipboard:get-history', options)
-      const items = Array.isArray(response?.history)
-        ? response.history.map((item: PluginClipboardItem) => normalizeItem(item) ?? item)
-        : []
-      return {
-        ...response,
-        history: items,
-      }
+      const response = await transport.send(ClipboardEvents.getHistory, toClipboardQueryRequest(options))
+      return toClipboardHistoryResponse(response)
     },
 
     /**
-     * Sets favorite status for a clipboard item
+     * Sets favorite status for a clipboard item.
      */
     async setFavorite(options: ClipboardFavoriteOptions): Promise<void> {
-      await channel.send('clipboard:set-favorite', options)
+      await transport.send(ClipboardEvents.setFavorite, options)
     },
 
     /**
-     * Deletes a clipboard item from history
+     * Deletes a clipboard item from history.
      */
     async deleteItem(options: ClipboardDeleteOptions): Promise<void> {
-      await channel.send('clipboard:delete-item', options)
+      await transport.send(ClipboardEvents.delete, options)
     },
 
     /**
-     * Clears all clipboard history
+     * Clears clipboard history.
      */
     async clearHistory(): Promise<void> {
-      await channel.send('clipboard:clear-history')
+      await transport.send(ClipboardEvents.clearHistory)
     },
 
     /**
-     * Search clipboard history with advanced filtering
-     *
-     * @example
-     * ```typescript
-     * // Search by keyword
-     * const result = await clipboard.history.searchHistory({ keyword: 'hello' })
-     *
-     * // Filter by type and time
-     * const recent = await clipboard.history.searchHistory({
-     *   type: 'text',
-     *   startTime: Date.now() - 24 * 60 * 60 * 1000
-     * })
-     * ```
+     * Search clipboard history with advanced filtering.
      */
     async searchHistory(options: ClipboardSearchOptions = {}): Promise<ClipboardSearchResponse> {
-      const response = await channel.send('clipboard:get-history', options)
-      const items = Array.isArray(response?.history)
-        ? response.history.map((item: PluginClipboardItem) => normalizeItem(item) ?? item)
-        : []
+      const response = await transport.send(ClipboardEvents.getHistory, toClipboardQueryRequest(options))
+      const historyResponse = toClipboardHistoryResponse(response)
       return {
-        items,
-        total: response?.total ?? 0,
-        page: response?.page ?? 1,
-        pageSize: response?.pageSize ?? 20,
+        items: historyResponse.history,
+        total: historyResponse.total,
+        page: historyResponse.page,
+        pageSize: historyResponse.pageSize,
       }
     },
 
@@ -193,56 +327,84 @@ export function useClipboard() {
      * Listen to clipboard changes.
      *
      * **Important**: Plugin must call `box.allowClipboard(types)` first to enable monitoring.
-     * Only changes matching the allowed types will be received.
-     *
-     * @example
-     * ```typescript
-     * import { ClipboardType } from '@talex-touch/utils/plugin/sdk'
-     *
-     * // Enable monitoring for text and images
-     * await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
-     *
-     * // Listen to changes
-     * const unsubscribe = clipboard.history.onDidChange((item) => {
-     *   console.log('New clipboard item:', item.type, item.content)
-     * })
-     *
-     * // Later: stop listening
-     * unsubscribe()
-     * ```
      */
     onDidChange(callback: (item: PluginClipboardItem) => void): () => void {
-      return channel.regChannel('core-box:clipboard-change', (event) => {
-        const data = event?.data
-        const item = (data && typeof data === 'object' && 'item' in data ? (data as { item: PluginClipboardItem }).item : data) as PluginClipboardItem
-        callback(normalizeItem(item) ?? item)
+      let streamController: { cancel: () => void } | null = null
+      let cancelled = false
+
+      void transport.stream(ClipboardEvents.change, undefined, {
+        onData(payload: ClipboardChangePayload) {
+          if (cancelled) {
+            return
+          }
+          const latest = toPluginClipboardItem(payload?.latest ?? null)
+          if (latest) {
+            callback(latest)
+          }
+        },
+        onError(error) {
+          if (!cancelled) {
+            console.warn('[Plugin SDK] Clipboard change stream error', error)
+          }
+        },
       })
+        .then((controller) => {
+          if (cancelled) {
+            controller.cancel()
+            return
+          }
+          streamController = controller
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            console.warn('[Plugin SDK] Failed to subscribe clipboard changes', error)
+          }
+        })
+
+      return () => {
+        cancelled = true
+        streamController?.cancel()
+      }
     },
 
     /**
-     * Apply a clipboard item to the active application (write + paste)
-     * @deprecated Use `clipboard.copyAndPaste()` instead
+     * Apply a clipboard item to the active application (write + paste).
+     * @deprecated Use `clipboard.copyAndPaste()` instead.
      */
     async applyToActiveApp(options: ClipboardApplyOptions = {}): Promise<boolean> {
-      const response = await channel.send('clipboard:apply-to-active-app', options)
-      if (typeof response === 'object' && response) {
-        return Boolean((response as { success?: boolean }).success)
+      const hasInlinePayload = typeof options.text === 'string'
+        || typeof options.html === 'string'
+        || typeof options.image === 'string'
+        || Array.isArray(options.files)
+        || typeof options.type === 'string'
+
+      if (!hasInlinePayload && Number.isFinite(options.item?.id)) {
+        await transport.send(ClipboardEvents.apply, {
+          id: Number(options.item?.id),
+          autoPaste: true,
+        })
+        return true
       }
-      return true
+
+      const response = await transport.send(
+        ClipboardEvents.copyAndPaste,
+        toClipboardActionRequest(options),
+      )
+      return toClipboardActionSuccess(response)
     },
   }
 
   return {
     /**
-     * Clipboard history operations
+     * Clipboard history operations.
      */
     history,
 
     /**
-     * Writes text to the system clipboard
+     * Writes text to the system clipboard.
      */
     async writeText(text: string): Promise<void> {
-      await channel.send('clipboard:write-text', { text })
+      await transport.send(ClipboardEvents.write, { text })
     },
 
     /**
@@ -250,77 +412,54 @@ export function useClipboard() {
      * Supports text, HTML, image (data URL), and files.
      */
     async write(options: ClipboardWriteOptions): Promise<void> {
-      await channel.send('clipboard:write', options)
+      await transport.send(ClipboardEvents.write, options)
     },
 
     /**
-     * Reads current clipboard content
+     * Reads current clipboard content.
      */
     async read(): Promise<ClipboardReadResult> {
-      return await channel.send('clipboard:read')
+      return await transport.send(ClipboardEvents.read)
     },
 
     /**
-     * Reads image from clipboard as data URL
+     * Reads image from clipboard as data URL.
      */
     async readImage(options?: { preview?: boolean }): Promise<ClipboardImageResult | null> {
-      return await channel.send('clipboard:read-image', { preview: options?.preview ?? true })
+      return await transport.send(ClipboardEvents.readImage, { preview: options?.preview ?? true })
     },
 
     /**
-     * Resolves the original image URL for a clipboard history item (streamable via tfile://).
-     *
-     * @remarks
-     * - This avoids transferring large base64 payloads over IPC.
-     * - Returns null if the item is not an image or original asset is not available.
+     * Resolves the original image URL for a clipboard history item.
      */
     async getHistoryImageUrl(id: number): Promise<string | null> {
-      const res = await channel.send('clipboard:get-image-url', { id })
-      if (res && typeof res === 'object' && 'url' in res && typeof (res as any).url === 'string') {
-        return (res as any).url as string
-      }
-      return null
+      const res = await transport.send(ClipboardEvents.getImageUrl, { id })
+      return typeof res?.url === 'string' ? res.url : null
     },
 
     /**
-     * Reads file paths from clipboard
+     * Reads file paths from clipboard.
      */
     async readFiles(): Promise<string[]> {
-      return await channel.send('clipboard:read-files')
+      return await transport.send(ClipboardEvents.readFiles)
     },
 
     /**
-     * Clears the system clipboard
+     * Clears the system clipboard.
      */
     async clear(): Promise<void> {
-      await channel.send('clipboard:clear')
+      await transport.send(ClipboardEvents.clear)
     },
 
     /**
      * Writes content to clipboard and simulates paste command to the active application.
-     * This is the recommended way to "paste" content from a plugin.
-     *
-     * @example
-     * ```typescript
-     * // Paste text
-     * await clipboard.copyAndPaste({ text: 'Hello' })
-     *
-     * // Paste with HTML formatting
-     * await clipboard.copyAndPaste({ text: 'Hello', html: '<b>Hello</b>' })
-     *
-     * // Paste image
-     * await clipboard.copyAndPaste({ image: 'data:image/png;base64,...' })
-     *
-     * // Paste files
-     * await clipboard.copyAndPaste({ files: ['/path/to/file.txt'] })
-     * ```
      */
     async copyAndPaste(options: ClipboardCopyAndPasteOptions): Promise<boolean> {
-      const response = await channel.send('clipboard:copy-and-paste', options)
-      if (typeof response === 'object' && response) {
-        return Boolean((response as { success?: boolean }).success)
-      }
-      return true
+      const response = await transport.send(
+        ClipboardEvents.copyAndPaste,
+        toClipboardActionRequest(options),
+      )
+      return toClipboardActionSuccess(response)
     },
   }
 }

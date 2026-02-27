@@ -35,7 +35,14 @@ export interface ClipboardChangePayload {
 export interface ClipboardQueryRequest {
   page?: number
   limit?: number
-  type?: 'all' | 'favorite' | 'text' | 'image'
+  pageSize?: number
+  keyword?: string
+  startTime?: number
+  endTime?: number
+  type?: 'all' | 'favorite' | 'text' | 'image' | 'files'
+  isFavorite?: boolean
+  sourceApp?: string
+  sortOrder?: 'asc' | 'desc'
 }
 
 /**
@@ -46,6 +53,7 @@ export interface ClipboardQueryResponse {
   total: number
   page: number
   limit: number
+  pageSize?: number
 }
 
 /**
@@ -75,6 +83,72 @@ export interface ClipboardSetFavoriteRequest {
  * Request to write content to the clipboard.
  */
 export interface ClipboardWriteRequest {
-  type: 'text' | 'html' | 'image'
-  value: string
+  type?: 'text' | 'html' | 'image'
+  value?: string
+  text?: string
+  html?: string
+  image?: string
+  files?: string[]
+}
+
+/**
+ * Current clipboard snapshot result.
+ */
+export interface ClipboardReadResponse {
+  text: string
+  html: string
+  hasImage: boolean
+  hasFiles: boolean
+  formats: string[]
+}
+
+/**
+ * Request payload for reading clipboard image.
+ */
+export interface ClipboardReadImageRequest {
+  preview?: boolean
+}
+
+/**
+ * Clipboard image read result.
+ */
+export interface ClipboardReadImageResponse {
+  dataUrl: string
+  width: number
+  height: number
+  tfileUrl?: string
+}
+
+/**
+ * Request payload for clipboard copy-and-paste operation.
+ */
+export interface ClipboardCopyAndPasteRequest {
+  text?: string
+  html?: string
+  image?: string
+  files?: string[]
+  delayMs?: number
+  hideCoreBox?: boolean
+}
+
+/**
+ * Common result shape for clipboard action operations.
+ */
+export interface ClipboardActionResult {
+  success: boolean
+  message?: string
+}
+
+/**
+ * Request payload for resolving clipboard image URL.
+ */
+export interface ClipboardGetImageUrlRequest {
+  id: number
+}
+
+/**
+ * Response payload for resolving clipboard image URL.
+ */
+export interface ClipboardGetImageUrlResponse {
+  url: string | null
 }

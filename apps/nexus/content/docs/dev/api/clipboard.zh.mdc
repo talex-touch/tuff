@@ -8,7 +8,13 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 - **复制粘贴**：将内容复制到剪贴板并自动粘贴到当前活动应用
 - **自动标签**：为文本内容打标签（URL、API Key、Token、账号/密码、邮箱），便于分类与匹配
 
-所有操作通过 IPC 在主进程执行，避免 WebContents 焦点问题导致的剪贴板操作失败。
+所有操作通过 TuffTransport 在主进程执行，避免 WebContents 焦点问题导致的剪贴板操作失败。
+
+## 通信策略（Transport First）
+
+- `useClipboard()` 已切换到 `ClipboardEvents.*` 事件域（如 `getHistory`、`read`、`copyAndPaste`）。
+- Clipboard SDK 不再依赖 `clipboard:*` raw channel 事件作为主通道。
+- 主进程仍保留 legacy 事件处理器用于兼容老调用方，建议新插件仅使用 SDK。
 
 ## 介绍
 
@@ -136,6 +142,20 @@ code: |
 :::
 
 **返回值**：`{ dataUrl: string, width: number, height: number } | null`
+
+**getHistoryImageUrl(id)**
+
+获取历史图片条目的原图地址（`tfile://`），适合避免在插件侧传输大体积 base64。
+
+:::TuffCodeBlock{lang="typescript"}
+---
+code: |
+  const url = await clipboard.getHistoryImageUrl(123)
+  if (url) {
+    console.log('original image:', url)
+  }
+---
+:::
 
 **readFiles()**
 
@@ -438,7 +458,7 @@ code: |
 
 ## 技术原理
 
-- 读写、历史记录与自动粘贴均在主进程执行，通过 IPC 返回结果，避免渲染进程焦点导致的剪贴板失败。
+- 读写、历史记录与自动粘贴均在主进程执行，通过 TuffTransport 返回结果，避免渲染进程焦点导致的剪贴板失败。
 - 历史记录落盘在数据库中，`meta`/`metadata` 承载附加信息并用于筛选与匹配。
 - 自动标签基于轻量规则匹配生成，只输出类别，不暴露原始敏感内容。
 

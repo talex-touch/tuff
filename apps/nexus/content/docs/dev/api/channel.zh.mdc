@@ -75,7 +75,7 @@ code: |
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  const result = await channel.send('clipboard:get-latest')
+  const result = await channel.send('my-plugin:ping', { ts: Date.now() })
 ---
 :::
 

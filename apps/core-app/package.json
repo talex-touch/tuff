@@ -82,6 +82,7 @@
     "yauzl": "^3.2.0"
   },
   "optionalDependencies": {
+    "@crosscopy/clipboard": "^0.3.6",
     "bufferutil": "^4.1.0",
     "uiohook-napi": "^1.5.4",
     "utf-8-validate": "^6.0.6"

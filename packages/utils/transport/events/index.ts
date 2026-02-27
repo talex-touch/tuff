@@ -124,12 +124,19 @@ import type {
 // ============================================================================
 
 import type {
+  ClipboardActionResult,
   ClipboardApplyRequest,
   ClipboardChangePayload,
+  ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
+  ClipboardGetImageUrlRequest,
+  ClipboardGetImageUrlResponse,
   ClipboardItem,
   ClipboardQueryRequest,
   ClipboardQueryResponse,
+  ClipboardReadImageRequest,
+  ClipboardReadImageResponse,
+  ClipboardReadResponse,
   ClipboardSetFavoriteRequest,
   ClipboardWriteRequest,
 } from './types/clipboard'
@@ -2600,6 +2607,24 @@ export const ClipboardEvents = {
     .define<ClipboardSetFavoriteRequest, void>(),
 
   /**
+   * Clear clipboard history cache entries.
+   * @since v0.9.0
+   */
+  clearHistory: defineEvent('clipboard')
+    .module('history')
+    .event('clear')
+    .define<void, void>(),
+
+  /**
+   * Resolve streamable URL for a clipboard image item.
+   * @since v0.9.0
+   */
+  getImageUrl: defineEvent('clipboard')
+    .module('history')
+    .event('image-url')
+    .define<ClipboardGetImageUrlRequest, ClipboardGetImageUrlResponse>(),
+
+  /**
    * Write content to system clipboard programmatically.
    * @since v0.9.0
    */
@@ -2607,6 +2632,51 @@ export const ClipboardEvents = {
     .module('action')
     .event('write')
     .define<ClipboardWriteRequest, void>(),
+
+  /**
+   * Read current clipboard snapshot.
+   * @since v0.9.0
+   */
+  read: defineEvent('clipboard')
+    .module('action')
+    .event('read')
+    .define<void, ClipboardReadResponse>(),
+
+  /**
+   * Read clipboard image and return preview/original URL.
+   * @since v0.9.0
+   */
+  readImage: defineEvent('clipboard')
+    .module('action')
+    .event('read-image')
+    .define<ClipboardReadImageRequest, ClipboardReadImageResponse | null>(),
+
+  /**
+   * Read clipboard file paths.
+   * @since v0.9.0
+   */
+  readFiles: defineEvent('clipboard')
+    .module('action')
+    .event('read-files')
+    .define<void, string[]>(),
+
+  /**
+   * Clear current clipboard data.
+   * @since v0.9.0
+   */
+  clear: defineEvent('clipboard')
+    .module('action')
+    .event('clear')
+    .define<void, void>(),
+
+  /**
+   * Write and auto-paste clipboard content to active app.
+   * @since v0.9.0
+   */
+  copyAndPaste: defineEvent('clipboard')
+    .module('action')
+    .event('copy-and-paste')
+    .define<ClipboardCopyAndPasteRequest, ClipboardActionResult>(),
 } as const
 
 // ============================================================================

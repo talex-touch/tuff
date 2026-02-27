@@ -4,6 +4,117 @@
 
 ## 2026-02-27
 
+### Clipboard SDK Transport-First 迁移（剪贴板 API 收敛）
+
+**变更类型**: 架构收敛 / SDK 迁移 / 文档同步
+
+**描述**: 将插件侧 `useClipboard()` 主通道迁移到 `ClipboardEvents.*`，减少对 `clipboard:*` raw channel 的依赖；同时补齐 transport clipboard 事件域与主进程 handler，覆盖读写、历史、清空、图片 URL、复制粘贴等能力。
+
+**主要变更**:
+1. 扩展 transport clipboard 类型定义与事件集合：新增 `clearHistory`、`getImageUrl`、`read`、`readImage`、`readFiles`、`clear`、`copyAndPaste` 等事件。
+2. `packages/utils/plugin/sdk/clipboard.ts` 改为 transport-first 实现，历史查询、变更订阅、读写与粘贴统一走 `ClipboardEvents.*`。
+3. 主进程 `ClipboardModule` 补齐新增 transport 事件处理，并增强 `ClipboardEvents.getHistory` 过滤能力（关键词、时间范围、来源应用、收藏、排序、files 类型）。
+4. 同步 Nexus 文档：更新 Clipboard/Transport API 示例与 Channel 文档示例，明确新插件应走 SDK/Transport 路径。
+
+**修改文件**:
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/nexus/content/docs/dev/api/clipboard.zh.mdc`
+- `apps/nexus/content/docs/dev/api/clipboard.en.mdc`
+- `apps/nexus/content/docs/dev/api/transport.zh.mdc`
+- `apps/nexus/content/docs/dev/api/transport.en.mdc`
+- `apps/nexus/content/docs/dev/api/channel.zh.mdc`
+- `apps/nexus/content/docs/dev/api/channel.en.mdc`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox 搜索卡顿收敛（Clipboard 轮询降压 + 零结果诊断节流）
+
+**变更类型**: 性能优化 / 搜索体验修复 / 日志降噪
+
+**描述**: 针对“搜索时偶发顿一下”的反馈，收敛两条高频热路径：其一是搜索零结果时每次都执行额外 `count(*)` 诊断查询并打 warning；其二是 native clipboard watcher 在 ESM/CJS 导出形态下可能接入失败。修复后保持 CoreBox 可见态高频轮询兜底，避免漏录，同时让 watcher 事件触发链路更稳定。
+
+**主要变更**:
+1. `Clipboard` 保持 CoreBox 可见态 `500ms` 轮询兜底，优先保障剪贴板变化不漏录。
+2. `Clipboard` native watcher 增加导出兼容解析（`mod.startWatch` + `mod.default.startWatch`），修复“模块存在但识别不到 startWatch”的接入失败场景。
+3. `SearchIndexService` 新增零结果诊断节流（按 provider，30s 窗口），避免每次 miss 都触发额外 `count(*)` 查询和 warning。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-index-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard History 插件迁移落地（插件可用化 + SDK legacy 桥接补齐）
+
+**变更类型**: 功能迁移 / 插件可用化 / 兼容性修复
+
+**描述**: 将 `clipboard-history` 插件迁入 monorepo 后，完成最小可运行适配：修复插件依赖配置、清理错误 prelude 逻辑，并补齐 Clipboard SDK 对应 legacy 通道桥接，确保图片场景和旧通道下的调用可用。
+
+**主要变更**:
+1. 修复运行目录插件：`apps/core-app/tuff/modules/plugins/clipboard-history/index.js` 从错误的 translation mock 切换为 `clipboard-history` feature 入口逻辑。
+2. 修复插件 `package.json` 中无效 `catalog:*` 占位，改为可解析的 `workspace:^` 与明确版本依赖，避免 workspace 安装/校验失败。
+3. 重写插件 `index.js` prelude：移除误植的 translation mock，仅保留 `clipboard-history` feature 的查询同步逻辑。
+4. 主进程 Clipboard 模块补齐 legacy 事件：
+   - `clipboard:get-latest`
+   - `clipboard:get-image-url`
+5. `packages/utils/plugin/sdk/clipboard.ts` 增加兼容兜底：
+   - `getLatest()` 在 legacy 事件缺失时回退到 `getHistory(page=1,pageSize=1)`
+   - `getHistoryImageUrl()` 事件异常时返回 `null`，避免插件侧直接抛错
+
+**修改文件**:
+- `apps/core-app/tuff/modules/plugins/clipboard-history/index.js`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 轮询漏录修复（快照签名 + 合并补跑 + 元数据落库兜底）
+
+**变更类型**: 稳定性修复 / 数据完整性修复 / 轮询策略优化
+
+**描述**: 针对日志中 `Clipboard check slow`、`Clipboard check failed`、`clipboard_history_meta FOREIGN KEY` 及 `SQLITE_BUSY` 相关问题，收敛剪贴板轮询路径中的“漏检 + 过长冷却 + 异步落库未兜底”三类风险，降低高频复制场景下的漏录概率与未处理 rejection 噪音。
+
+**主要变更**:
+1. 快速变更检测签名升级：由“格式 + 文本前 100 字符”改为“格式 + 文本长度/首尾摘要 + 文件签名 + 图片签名”，修复前缀相同文本与图片变更漏检。
+2. 预读取缓存收敛：在单次轮询中复用 text/files/image 读取结果，避免重复读取导致额外阻塞。
+3. 轮询执行改为 in-flight 合并补跑：检查进行中若收到新触发会标记 pending，当前轮次结束后立即补跑一轮，减少长任务期间的变化丢失。
+4. 慢检查冷却改为动态窗口（有上限）：避免固定 5s 冷却带来的大漏录窗口，同时保留慢路径退让能力。
+5. `clipboard_history_meta` 异步写入增加安全封装：统一 catch 队列丢弃/外键异常，避免未处理 rejection；外键场景降级为告警并跳过。
+6. 设置页默认轮询间隔从 5s 调整到 3s，并与主进程 fallback 保持一致。
+7. 新增 JS 原生监听尝试：优先加载 `@crosscopy/clipboard` 的 `startWatch` 作为变更触发器（触发即补跑且可绕过 cooldown），失败时自动降级为轮询；支持 `TUFF_CLIPBOARD_NATIVE_WATCH=0|false|off` 显式关闭。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/package.json`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingTools.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### macOS 托盘可见性收口（内置模板图标 + 启动策略兜底）
+
+**变更类型**: 运行稳定性修复 / macOS 托盘可见性增强
+
+**描述**: 针对 `startSilent + hideDock` 场景下“托盘不可见导致无入口”的问题，继续收敛托盘图标来源与激活策略。内置图标从 SVG data-url 方案切换为内置 PNG buffer（`nativeImage.createFromBuffer`），规避部分环境下 SVG 模板图标创建失败；同时补充托盘启动可观测日志与无入口恢复兜底，降低“Dock 隐藏但托盘未出现”的概率。
+
+**主要变更**:
+1. `TrayIconProvider` 内置 macOS 模板图标改为 PNG buffer 方案（`createFromBuffer`），默认优先使用并记录实际图标来源（built-in/file/empty）。
+2. 保留文件图标回退路径，并提供 `TUFF_TRAY_USE_FILE_ICON=1` 显式切回旧行为。
+3. `TrayManager.applyActivationPolicy` 新增配置推断：当 `hideDock=true` 或 `startSilent=true` 且未指定 `TUFF_TRAY_ACTIVATION` 时，自动设置为 `accessory`。
+4. macOS 在 `hideDock=true` 或 `startSilent=true` 默认启用托盘标题兜底（默认标题 `T`），确保即使图标渲染异常仍有可见入口；可通过 `TUFF_TRAY_TITLE_FALLBACK=0` 关闭，`TUFF_TRAY_TITLE` 自定义标题。
+5. `TrayManager` 新增托盘启动关键日志（图标来源、尺寸、title fallback 等），便于用户日志直观定位“托盘对象存在但不可见”的场景。
+6. 托盘可用性判断增加“安全入口模式”边界校验（`hideDock/startSilent` 下对异常 `bounds` 判定为不可用），避免 Tray 对象存在但仍不可见。
+7. `TrayManager` 增加托盘 bounds 快照日志（创建后 + 健康检查），补齐定位链路。
+8. 托盘不可用时恢复策略升级为切换 `regular` 激活策略并同时拉起 Dock 与主窗口，避免无入口死锁。
+9. 增加 text-only 标题兜底能力（`TUFF_TRAY_TEXT_ONLY=1` 显式启用），用于特定环境下的菜单栏可见性排查。
+10. 新增“本次会话 Dock 兜底锁定”：若托盘在创建后出现空 bounds 或边界异常，则该会话保持 Dock 可见，避免托盘间歇性失效导致入口丢失。
+11. Dock 兜底锁定触发后立即生效（无需等待后续窗口事件），减少“启动后瞬时无入口”窗口。
+12. 托盘健康检查延后到启动后约 2.6s，并将 Dock 兜底触发条件收敛为“重试后仍失败”，避免启动早期 bounds 抖动导致误判。
+13. macOS dev 模式在 `hideDock/startSilent` 时默认强制 `regular` 激活策略并保持 Dock 可见（可用 `TUFF_TRAY_DEV_FORCE_REGULAR=0` 关闭），优先保证开发可用入口稳定。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/tray/tray-icon-provider.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### CoreBox `Object has been destroyed` 闪退链路修复（窗口销毁竞态 + 插件事件降噪）
 
 **变更类型**: 稳定性修复 / 生命周期竞态治理 / 通道超时降噪
