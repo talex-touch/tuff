@@ -5,6 +5,7 @@ import type {
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse
 } from '../../../../shared/events/omni-panel'
+import type { ITuffIcon } from '@talex-touch/utils'
 import { CoreBoxOmniPanelKeys } from '@talex-touch/utils/i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
@@ -32,6 +33,8 @@ const loading = ref(false)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
 const features = ref<OmniPanelFeatureItemPayload[]>([])
+const fallbackIcon: ITuffIcon = { type: 'class', value: 'i-ri-apps-2-line' }
+const iconTypes = new Set<ITuffIcon['type']>(['emoji', 'url', 'file', 'class', 'builtin'])
 
 const displayText = computed(() => {
   if (hasSelection.value) return selectedText.value
@@ -52,13 +55,17 @@ const filteredFeatures = computed(() => {
   })
 })
 
-function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): { type: string; value: string } {
+function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): ITuffIcon {
   if (!item.icon) {
-    return { type: 'class', value: 'i-ri-apps-2-line' }
+    return fallbackIcon
   }
+  const iconType = iconTypes.has(item.icon.type as ITuffIcon['type'])
+    ? (item.icon.type as ITuffIcon['type'])
+    : 'class'
+  const iconValue = item.icon.value?.trim() || fallbackIcon.value
   return {
-    type: item.icon.type,
-    value: item.icon.value
+    type: iconType,
+    value: iconValue
   }
 }
 

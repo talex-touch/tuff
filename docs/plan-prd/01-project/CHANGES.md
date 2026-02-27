@@ -2779,6 +2779,53 @@
 
 ## 2026-02-26
 
+### 修复: CoreBox/推荐引擎/系统轮询稳定性与日志降噪
+
+**变更类型**: 稳定性修复
+
+**描述**: 修复了近期日志中高频出现的 DB 锁竞争、CoreBox 视图销毁竞态与错误日志放大问题。
+
+**主要修复**:
+1. **SQLite 写入竞争缓解**:
+   - `system-update` 相关写入（state/config/fx rates）统一接入 `dbWriteScheduler + withSqliteRetry`
+   - `recommendation_cache` 写入接入串行调度与重试，并允许在高压队列下按策略丢弃
+   - 推荐性能埋点写入改为 droppable，降低主业务路径写入冲突
+
+2. **推荐缓存大 payload 收敛**:
+   - 缓存落库前对 `data:image/...base64` 大字段进行裁剪
+   - 对失效 data-url icon 自动移除，避免把超大图标数据重复写入 DB 与错误日志
+
+3. **CoreBox 窗口竞态修复**:
+   - `detachUIView` 增加重入保护和 WebContents 存活检查
+   - `hide` 延时回调增加 `isDestroyed` 判定，避免 `Object has been destroyed`
+   - 规避 `closeDevTools` 空对象链路触发的异常
+
+4. **错误日志降噪与可诊断性增强**:
+   - RecommendationEngine 错误日志改为结构化精简 meta，避免输出超大异常对象
+   - OpenAI JSON 解析失败时补充 HTML 响应提示，明确指向 baseUrl 配置错误场景
+   - `system-update` 轮询内捕获刷新异常，避免 PollingService 持续放大错误堆栈
+
+5. **macOS ActiveApp 稳定性增强**:
+   - 增加并发中的解析复用（in-flight）
+   - 对 `EBADF` 增加一次短延迟重试，降低瞬时 spawn 句柄错误
+
+**修改文件**:
+- `apps/core-app/src/main/db/utils.ts`
+- `apps/core-app/src/main/modules/system-update/index.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/recommendation/recommendation-engine.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/ai/runtime/base-provider.ts`
+- `apps/core-app/src/main/modules/system/active-app.ts`
+
+**影响**:
+- 显著降低 `SQLITE_BUSY` 风险与错误日志体积
+- 提升 CoreBox UI 视图切换时的稳定性
+- 改善异常定位效率并减少重复噪声日志
+
+---
+
+## 2026-02-26
+
 ### 修复: Translation Widget 键盘交互与错误展示稳定性
 
 **变更类型**: Bug 修复 / 交互优化

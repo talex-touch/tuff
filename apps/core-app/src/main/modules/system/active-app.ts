@@ -7,6 +7,15 @@ import { createLogger } from '../../utils/logger'
 
 const execFileAsync = promisify(execFile)
 const activeAppLog = createLogger('ActiveApp')
+const MACOS_RESOLVE_RETRY_DELAY_MS = 80
+
+function isEbadfError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const node = error as { code?: unknown; message?: unknown }
+  return (
+    node.code === 'EBADF' || (typeof node.message === 'string' && node.message.includes('EBADF'))
+  )
+}
 
 // Platform type for consistency
 type Platform = 'macos' | 'windows' | 'linux'
@@ -29,6 +38,7 @@ class ActiveAppService {
   private cache: { info: ActiveAppInfo; expiresAt: number } | null = null
   private readonly cacheTTL = 3000
   private currentPlatform: Platform
+  private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -51,7 +61,7 @@ class ActiveAppService {
    * macOS-specific: Use a single AppleScript call to get all active application info.
    * Previously used 3+ separate osascript/shell invocations which could take 1-3s total.
    */
-  private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
+  private async resolveActiveWindowMacOSOnce(): Promise<Partial<ActiveAppInfo> | null> {
     try {
       const script = `
 tell application "System Events"
@@ -87,8 +97,45 @@ end tell`
         platform: 'macos'
       }
     } catch (error) {
-      activeAppLog.error('macOS resolution failed', { error })
-      return null
+      throw error
+    }
+  }
+
+  private async resolveActiveWindowMacOS(): Promise<Partial<ActiveAppInfo> | null> {
+    if (this.macosResolveInFlight) {
+      return this.macosResolveInFlight
+    }
+
+    const resolveTask = (async () => {
+      try {
+        return await this.resolveActiveWindowMacOSOnce()
+      } catch (firstError) {
+        if (!isEbadfError(firstError)) {
+          activeAppLog.error('macOS resolution failed', { error: firstError })
+          return null
+        }
+
+        activeAppLog.warn('macOS resolution hit EBADF, retrying once', {
+          meta: { delayMs: MACOS_RESOLVE_RETRY_DELAY_MS }
+        })
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, MACOS_RESOLVE_RETRY_DELAY_MS)
+        })
+
+        try {
+          return await this.resolveActiveWindowMacOSOnce()
+        } catch (retryError) {
+          activeAppLog.error('macOS resolution failed after EBADF retry', { error: retryError })
+          return null
+        }
+      }
+    })()
+
+    this.macosResolveInFlight = resolveTask
+    try {
+      return await resolveTask
+    } finally {
+      this.macosResolveInFlight = null
     }
   }
 
