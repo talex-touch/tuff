@@ -189,6 +189,12 @@ export class CoreBoxManager {
   }
 
   public exitUIMode(): void {
+    if ((globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true) {
+      this._isUIMode = false
+      this.currentFeature = null
+      return
+    }
+
     if (this._isUIMode) {
       this._isUIMode = false
       this.currentFeature = null

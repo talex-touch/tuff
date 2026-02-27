@@ -2,6 +2,48 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-27
+
+### CoreBox `Object has been destroyed` 闪退链路修复（窗口销毁竞态 + 插件事件降噪）
+
+**变更类型**: 稳定性修复 / 生命周期竞态治理 / 通道超时降噪
+
+**描述**: 针对日志中 `core-box:deactivate-providers -> closeDevTools -> Object has been destroyed` 的闪退链路，补齐窗口销毁态守卫；同时将不需要响应的插件通知改为广播，避免 `plugin:lifecycle:active`、`core-box:ui-resume`、`core-box:clipboard-meta-updated` 一类 60s 超时告警放大。
+
+**主要变更**:
+1. `WindowManager.hide` 增加销毁态检查与 `setPosition` 异常保护，避免定时器回调访问已销毁窗口。
+2. `WindowManager.detachUIView` 关闭 DevTools 前增加 `isDevToolsOpened`/异常保护，规避 `closeDevTools` 空引用竞态。
+3. CoreBox 的 `ui-resume`、`plugin:lifecycle:inactive`、`core-box:input-change`（UI转发链路）改为插件广播发送，减少无目标 view 时的请求超时。
+4. PluginManager 的 `lifecycle active/inactive` 通知改为广播，避免 UI 未附着时 `sendToPlugin` 进入 60s request timeout。
+5. OCR 的 `core-box:clipboard-meta-updated` 改为广播发送，降低插件 UI 关闭期间的无效请求告警。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 退出流程梳理与收口（避免重复退出与关窗竞态）
+
+**变更类型**: 生命周期一致性修复 / 退出链路稳定性治理
+
+**描述**: 针对退出阶段“`window-all-closed` / `before-quit` / CoreBox 布局更新”并发触发导致的竞态，统一退出态标记并移除重复强退路径，避免关窗过程中继续触发布局缩放和 UI 解绑逻辑。
+
+**主要变更**:
+1. `precore` 在 `before-quit` 与 `window-all-closed` 统一标记 `isQuitting`，并在 dev graceful shutdown 进行中跳过重复 `app.quit()`。
+2. `window-all-closed` 移除直接 `process.exit(0)`，改为依赖标准 `app.quit()` 链路，避免截断模块清理阶段。
+3. CoreBox 布局更新在应用退出/DevProcessManager 关停中直接跳过，避免退出阶段触发 `shrink/detach` 竞态。
+4. `CoreBoxManager.exitUIMode` 在应用退出态下快速短路，仅收敛状态，不再触发窗口操作。
+5. 修正 `WindowAllClosedEvent` 的事件名误配（`WILL_QUIT` -> `WINDOW_ALL_CLOSED`），确保事件语义一致。
+
+**修改文件**:
+- `apps/core-app/src/main/core/precore.ts`
+- `apps/core-app/src/main/core/eventbus/touch-event.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/index.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-26
 
 ### 移除 sync:guard lint 门禁脚本

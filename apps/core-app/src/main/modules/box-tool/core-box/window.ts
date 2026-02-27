@@ -629,6 +629,7 @@ export class WindowManager {
   public hide(): void {
     const window = this.current
     if (!window) return
+    if (window.window.isDestroyed()) return
 
     this.stopBoundsAnimation()
     const channel = this.touchApp.channel
@@ -639,7 +640,11 @@ export class WindowManager {
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_HIDDEN, new CoreBoxWindowHiddenEvent())
 
     if (process.platform !== 'darwin') {
-      window.window.setPosition(-1000000, -1000000)
+      try {
+        window.window.setPosition(-1000000, -1000000)
+      } catch (error) {
+        coreBoxWindowLog.warn('Failed to move window offscreen before hide', { error })
+      }
     }
 
     setTimeout(() => {
@@ -1087,13 +1092,11 @@ export class WindowManager {
               .catch(() => {})
           }
 
-          void transport
-            .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
-              source: 'cache',
-              featureId: feature?.id,
-              url: cached.url
-            })
-            .catch(() => {})
+          this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+            source: 'cache',
+            featureId: feature?.id,
+            url: cached.url
+          })
         }
 
         coreBoxWindowLog.info(`AttachUIView cache hit: ${plugin.name}`)
@@ -1315,25 +1318,21 @@ export class WindowManager {
           source: 'initial'
         })
 
-        void transport
-          .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
-            source: 'attach',
-            featureId: feature?.id,
-            url
-          })
-          .catch(() => {})
+        this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+          source: 'attach',
+          featureId: feature?.id,
+          url
+        })
       })
     }
 
     if (!query && plugin) {
       this.uiView.webContents.once('dom-ready', () => {
-        void transport
-          .sendToPlugin(plugin.name, coreBoxUiResumeEvent, {
-            source: 'attach',
-            featureId: feature?.id,
-            url
-          })
-          .catch(() => {})
+        this.broadcastPluginMessage(plugin.name, coreBoxUiResumeEvent.toEventName(), {
+          source: 'attach',
+          featureId: feature?.id,
+          url
+        })
       })
     }
   }
@@ -1372,13 +1371,11 @@ export class WindowManager {
         // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
         if (plugin.status === PluginStatus.ACTIVE) {
           plugin.status = PluginStatus.ENABLED
-          const channel = genTouchApp().channel
-          const keyManager =
-            (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-          const transport = getTuffTransportMain(channel, keyManager)
-          transport
-            .sendToPlugin(plugin.name, PluginEvents.lifecycleSignal.inactive, undefined)
-            .catch(() => {})
+          this.broadcastPluginMessage(
+            plugin.name,
+            PluginEvents.lifecycleSignal.inactive.toEventName(),
+            undefined
+          )
         }
       }
 
@@ -1387,7 +1384,13 @@ export class WindowManager {
       const currentWindow = this.current
       if (currentWindow && !currentWindow.window.isDestroyed()) {
         if (webContentsAlive) {
-          webContents.closeDevTools()
+          try {
+            if (webContents.isDevToolsOpened()) {
+              webContents.closeDevTools()
+            }
+          } catch (error) {
+            coreBoxWindowLog.warn('Failed to close UI view DevTools', { error })
+          }
         }
         try {
           currentWindow.window.contentView.removeChildView(view)
@@ -1441,12 +1444,20 @@ export class WindowManager {
    * @param data - Optional data payload
    */
   public sendChannelMessageToUIView(eventName: string, data?: unknown): void {
-    if (!this.attachedPlugin) {
+    if (!this.attachedPlugin || !this.uiView || this.detachingUIView) {
       return
     }
-    const transport = this.getTransport()
-    const event = defineRawEvent<unknown, unknown>(eventName)
-    void transport.sendToPlugin(this.attachedPlugin.name, event, data as unknown).catch(() => {})
+
+    const webContents = this.uiView.webContents
+    if (!webContents || webContents.isDestroyed()) {
+      return
+    }
+
+    this.broadcastPluginMessage(this.attachedPlugin.name, eventName, data)
+  }
+
+  private broadcastPluginMessage(pluginName: string, eventName: string, data?: unknown): void {
+    this.touchApp.channel.broadcastPlugin(pluginName, eventName, data)
   }
 
   public getUIView(): WebContentsView | undefined {

@@ -31,6 +31,13 @@ function broadcastBeforeQuit(): void {
   transport.broadcast(AppEvents.lifecycle.beforeQuit, undefined)
 }
 
+function markAppQuitting(reason: string): void {
+  const appInstance = globalThis.$app as { isQuitting?: boolean } | undefined
+  if (!appInstance || appInstance.isQuitting === true) return
+  appInstance.isQuitting = true
+  mainLog.debug('Marked app quitting state', { meta: { reason } })
+}
+
 export const innerRootPath = getRootPath()
 
 const logs = path.join(innerRootPath, 'logs')
@@ -120,20 +127,19 @@ if (!app.requestSingleInstanceLock()) {
 
 app.on('window-all-closed', () => {
   mainLog.info('All windows closed, preparing shutdown')
+  markAppQuitting('window-all-closed')
   touchEventBus.emit(TalexEvents.WINDOW_ALL_CLOSED, new WindowAllClosedEvent())
 
-  if (process.platform !== 'darwin') {
-    if (!app.isPackaged) {
-      mainLog.debug('Development mode: scheduling graceful shutdown')
-      setTimeout(() => {
-        app.quit()
-        process.exit(0)
-      }, 200)
-    } else {
-      app.quit()
-      process.exit(0)
-    }
+  if (process.platform === 'darwin') {
+    return
   }
+
+  if (!app.isPackaged && devProcessManager.isShuttingDownProcess()) {
+    mainLog.debug('Development mode: skip duplicate quit while graceful shutdown is running')
+    return
+  }
+
+  app.quit()
 })
 
 app.addListener('ready', (event, launchInfo) =>
@@ -141,6 +147,7 @@ app.addListener('ready', (event, launchInfo) =>
 )
 
 app.on('before-quit', (event) => {
+  markAppQuitting('before-quit')
   touchEventBus.emit(TalexEvents.BEFORE_APP_QUIT, new BeforeAppQuitEvent(event))
   broadcastBeforeQuit()
   mainLog.info('App quit requested')

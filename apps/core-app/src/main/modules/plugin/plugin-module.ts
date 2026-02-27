@@ -18,6 +18,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
 import type { PluginWithSource } from '../../service/store-api.service'
+import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
@@ -451,6 +452,7 @@ const INTERNAL_PLUGIN_NAMES = new Set<string>()
 function createPluginModuleInternal(
   pluginPath: string,
   transport: ITuffTransportMain,
+  channel: ITouchChannel,
   mainWindowId: number
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
@@ -682,9 +684,11 @@ function createPluginModuleInternal(
           `Deactivating plugin ${pluginTag(active)}: ${PluginStatus[previousPlugin.status]} → ENABLED`
         )
 
-        transport
-          .sendToPlugin(active, PluginEvents.lifecycleSignal.inactive, undefined)
-          .catch(() => {})
+        channel.broadcastPlugin(
+          active,
+          PluginEvents.lifecycleSignal.inactive.toEventName(),
+          undefined
+        )
 
         if (previousPlugin.status === PluginStatus.ACTIVE) {
           previousPlugin.status = PluginStatus.ENABLED
@@ -723,9 +727,11 @@ function createPluginModuleInternal(
       plugin.status = PluginStatus.ACTIVE
       active = pluginName
 
-      transport
-        .sendToPlugin(pluginName, PluginEvents.lifecycleSignal.active, undefined)
-        .catch(() => {})
+      channel.broadcastPlugin(
+        pluginName,
+        PluginEvents.lifecycleSignal.active.toEventName(),
+        undefined
+      )
     } else {
       // Clear active plugin if no name provided
       active = ''
@@ -1556,7 +1562,12 @@ export class PluginModule extends BaseModule {
 
     TouchPlugin.setTransport(this.transport)
 
-    this.pluginManager = createPluginModuleInternal(file.dirPath!, this.transport, mainWindowId)
+    this.pluginManager = createPluginModuleInternal(
+      file.dirPath!,
+      this.transport,
+      channel as ITouchChannel,
+      mainWindowId
+    )
     this.installQueue = (this.pluginManager as IPluginManagerWithInternals).__installQueue
     this.healthMonitor = new DevServerHealthMonitor(this.pluginManager)
     this.pluginManager.healthMonitor = this.healthMonitor

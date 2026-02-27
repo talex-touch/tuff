@@ -1309,15 +1309,10 @@ class OcrService {
     const activePlugin = windowManager.getAttachedPlugin()
     if (activePlugin?._uniqueChannelKey) {
       const channel = genTouchApp().channel
-      const keyManager =
-        (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-      const transport = getTuffTransportMain(channel, keyManager)
-      void transport
-        .sendToPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent, {
-          clipboardId,
-          patch
-        })
-        .catch(() => {})
+      channel.broadcastPlugin(activePlugin.name, coreBoxClipboardMetaUpdatedEvent.toEventName(), {
+        clipboardId,
+        patch
+      })
     }
   }
 
