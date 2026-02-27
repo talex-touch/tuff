@@ -201,6 +201,21 @@ export interface StreamContext<TChunk> {
    * Unique identifier for this stream.
    */
   readonly streamId: string
+
+  /**
+   * The WebContents that initiated this stream.
+   */
+  readonly sender?: ElectronWebContents
+
+  /**
+   * The event name for this stream.
+   */
+  readonly eventName?: string
+
+  /**
+   * Plugin context if this is a plugin stream request.
+   */
+  readonly plugin?: PluginSecurityContext
 }
 
 // ============================================================================

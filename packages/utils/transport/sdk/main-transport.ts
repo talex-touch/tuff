@@ -551,6 +551,15 @@ export class TuffMainTransport implements ITuffTransportMain {
           return streams.get(streamId)?.cancelled === true
         },
         streamId,
+        sender,
+        eventName,
+        plugin: data.plugin
+          ? {
+              name: data.plugin,
+              uniqueKey: data.header?.uniqueKey || '',
+              verified: Boolean(data.header?.uniqueKey),
+            }
+          : undefined,
       }
 
       const payload = rawPayload ? { ...rawPayload } : {}
