@@ -344,7 +344,14 @@ code: |
   ClipboardEvents.apply       // 应用到活动应用
   ClipboardEvents.delete      // 删除历史项
   ClipboardEvents.setFavorite // 切换收藏状态
+  ClipboardEvents.clearHistory // 清空历史
+  ClipboardEvents.getImageUrl // 获取历史图片原图地址
   ClipboardEvents.write       // 写入系统剪贴板
+  ClipboardEvents.read        // 读取当前剪贴板快照
+  ClipboardEvents.readImage   // 读取剪贴板图片
+  ClipboardEvents.readFiles   // 读取剪贴板文件
+  ClipboardEvents.clear       // 清空当前剪贴板
+  ClipboardEvents.copyAndPaste // 复制并粘贴
 ---
 :::
 
@@ -357,8 +364,9 @@ code: |
     ClipboardEvents.change,
     undefined,
     {
-      onData: ({ item, source }) => {
-        console.log(`新 ${item.type} 来自 ${source}:`, item.content)
+      onData: ({ latest, history }) => {
+        console.log('latest:', latest?.type, latest?.value)
+        console.log('history size:', history.length)
       }
     }
   )
@@ -372,12 +380,14 @@ code: |
 :::TuffCodeBlock{lang="ts"}
 ---
 code: |
-  const { history, total } = await transport.send(ClipboardEvents.getHistory, {
+  const { items, total } = await transport.send(ClipboardEvents.getHistory, {
     page: 1,
     pageSize: 20,
     type: 'text',
     keyword: '搜索关键词'
   })
+
+  console.log(items[0]?.value, total)
 ---
 :::
 

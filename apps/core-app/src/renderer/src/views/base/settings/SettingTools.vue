@@ -85,7 +85,7 @@ function ensureClipboardPollingSettings(): void {
       autoHide: true,
       autoClear: 300,
       clipboardPolling: {
-        interval: 5,
+        interval: 3,
         lowBatteryPolicy: {
           enable: true,
           interval: 10
@@ -122,7 +122,7 @@ function ensureClipboardPollingSettings(): void {
 
   if (!tools.clipboardPolling || typeof tools.clipboardPolling !== 'object') {
     tools.clipboardPolling = {
-      interval: 5,
+      interval: 3,
       lowBatteryPolicy: {
         enable: true,
         interval: 10
@@ -132,7 +132,7 @@ function ensureClipboardPollingSettings(): void {
   }
 
   const polling = tools.clipboardPolling
-  polling.interval = normalizeSelectNumber(polling.interval, CLIPBOARD_POLLING_INTERVAL_OPTIONS, 5)
+  polling.interval = normalizeSelectNumber(polling.interval, CLIPBOARD_POLLING_INTERVAL_OPTIONS, 3)
 
   if (!polling.lowBatteryPolicy || typeof polling.lowBatteryPolicy !== 'object') {
     polling.lowBatteryPolicy = {
