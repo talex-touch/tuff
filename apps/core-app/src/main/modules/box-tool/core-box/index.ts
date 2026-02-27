@@ -9,6 +9,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { genTouchApp } from '../../../core'
 import { createLogger } from '../../../utils/logger'
+import { devProcessManager } from '../../../utils/dev-process-manager'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
 import { getMainConfig } from '../../storage'
@@ -27,6 +28,9 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
 
 let lastScreenId: number | undefined
+
+const isAppQuitting = (): boolean =>
+  (globalThis.$app as { isQuitting?: boolean } | undefined)?.isQuitting === true
 
 export class CoreBoxModule extends BaseModule {
   static key: symbol = Symbol.for('CoreBox')
@@ -204,6 +208,13 @@ export class CoreBoxModule extends BaseModule {
 
   private applyLayoutUpdate(payload: CoreBoxLayoutUpdateRequest): void {
     const logEnabled = this.shouldLogLayout()
+    if (isAppQuitting() || devProcessManager.isShuttingDownProcess()) {
+      if (logEnabled) {
+        coreBoxLog.info('Layout update skipped (application is quitting)')
+      }
+      return
+    }
+
     if (coreBoxManager.isUIMode) {
       if (logEnabled) {
         coreBoxLog.info('Layout update skipped (UI mode active)', {

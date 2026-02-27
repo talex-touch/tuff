@@ -268,7 +268,7 @@ export class WindowAllClosedEvent implements ITouchEvent<TalexEvents> {
    * `will-quit` event, and in this case the `window-all-closed` event would not be
    * emitted.
    */
-  name: TalexEvents = TalexEvents.WILL_QUIT
+  name: TalexEvents = TalexEvents.WINDOW_ALL_CLOSED
 
   constructor() {}
 }
