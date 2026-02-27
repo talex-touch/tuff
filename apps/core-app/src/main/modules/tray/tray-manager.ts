@@ -9,7 +9,7 @@ import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { TrayEvents } from '@talex-touch/utils/transport/events'
-import { app, Tray, screen } from 'electron'
+import { app, Tray } from 'electron'
 import {
   TalexEvents,
   touchEventBus,
@@ -26,18 +26,12 @@ import { TrayStateManager } from './tray-state-manager'
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
-/**
- * Main tray manager
- *
- * Handles tray icon creation, interaction, and menu updates
- */
 export class TrayManager extends BaseModule {
   static key: symbol = Symbol.for('TrayManager')
   name: ModuleKey = TrayManager.key
 
   private tray: Tray | null = null
-  private trayHealthCheckTimer: NodeJS.Timeout | null = null
-  private trayRecoveryAttempted = false
+  private trayExperimentalEnabled = false
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
@@ -56,14 +50,12 @@ export class TrayManager extends BaseModule {
       this.transport = getTuffTransportMain($app.channel, keyManager)
     }
 
+    this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
+
     if (process.platform === 'darwin') {
       this.applyActivationPolicy()
     }
 
-    const shouldShowTray = this.shouldShowTray()
-    if (process.env.TUFF_DEBUG_TRAY === '1') {
-      console.log('[TrayManager] shouldShowTray', { shouldShowTray })
-    }
     this.registerWindowEvents()
     this.registerEventListeners()
     this.setupAutoStart()
@@ -74,193 +66,61 @@ export class TrayManager extends BaseModule {
       this.updateDockVisibility()
     }
 
-    if (shouldShowTray) {
+    if (!this.trayExperimentalEnabled) {
+      console.info('[TrayManager] Tray is experimental and disabled by default.')
+      return
+    }
+
+    if (this.shouldShowTray()) {
       this.initializeTray()
     }
   }
 
   private applyActivationPolicy(): void {
-    const policy = process.env.TUFF_TRAY_ACTIVATION
-    if (!policy) return
-    const normalized = policy.toLowerCase()
-    if (!['regular', 'accessory', 'prohibited'].includes(normalized)) {
-      console.warn('[TrayManager] Invalid activation policy', { policy })
-      return
-    }
+    const hideDock = this.getHideDockConfig()
+    const startSilent = this.getStartSilentConfig()
+    const shouldUseAccessory =
+      this.trayExperimentalEnabled &&
+      this.shouldShowTray() &&
+      !this.shouldForceRegularInDev() &&
+      (hideDock || startSilent)
+    const normalized: 'regular' | 'accessory' = shouldUseAccessory ? 'accessory' : 'regular'
+
     try {
-      app.setActivationPolicy(normalized as 'regular' | 'accessory' | 'prohibited')
-      console.log('[TrayManager] Activation policy updated', { policy: normalized })
+      app.setActivationPolicy(normalized)
+      console.info('[TrayManager] Activation policy updated', { policy: normalized })
     } catch (error) {
-      console.warn('[TrayManager] Failed to set activation policy', { policy, error })
+      console.warn('[TrayManager] Failed to set activation policy', { policy: normalized, error })
     }
   }
 
   private initializeTray(): void {
+    if (this.tray) return
+
     try {
-      const debugTray = process.env.TUFF_DEBUG_TRAY === '1'
       const icon = TrayIconProvider.getIcon()
-      const disableTemplate = process.env.TUFF_TRAY_NO_TEMPLATE === '1'
-
-      if (debugTray) {
-        console.log('[TrayManager] icon resolved', {
-          empty: icon.isEmpty(),
-          size: icon.getSize(),
-          path: TrayIconProvider.getIconPath(),
-          disableTemplate
-        })
-      }
-
       if (icon.isEmpty()) {
-        console.error('[TrayManager] Icon is empty, cannot create tray')
-        this.ensureDockVisibleWhenTrayUnavailable('tray-icon-empty')
+        console.warn('[TrayManager] Tray icon is empty, skip tray initialization')
         return
       }
 
       if (process.platform === 'darwin') {
-        icon.setTemplateImage(!disableTemplate)
+        icon.setTemplateImage(true)
       }
 
       this.tray = new Tray(icon)
-
-      if (debugTray) {
-        try {
-          const formatDisplay = (display?: Electron.Display | null) => {
-            if (!display) return undefined
-            return {
-              id: display.id,
-              bounds: { ...display.bounds },
-              workArea: { ...display.workArea },
-              size: { ...display.size },
-              workAreaSize: { ...display.workAreaSize },
-              scaleFactor: display.scaleFactor
-            }
-          }
-
-          const stringify = (payload: unknown) => {
-            try {
-              return JSON.stringify(payload)
-            } catch (error) {
-              return `__stringify_failed__:${String(error)}`
-            }
-          }
-
-          const logTrayBounds = (stage: string) => {
-            const tray = this.tray
-            if (!tray) {
-              console.log('[TrayManager] tray bounds', { stage, available: false })
-              return
-            }
-            try {
-              const bounds = tray.getBounds()
-              const display = screen.getDisplayMatching(bounds)
-              const payload = {
-                stage,
-                bounds,
-                display: formatDisplay(display),
-                destroyed: typeof tray.isDestroyed === 'function' ? tray.isDestroyed() : undefined
-              }
-              console.log('[TrayManager] tray bounds', stringify(payload))
-            } catch (boundsError) {
-              console.warn('[TrayManager] tray bounds failed', { stage, error: boundsError })
-            }
-          }
-
-          const displaysPayload = {
-            primary: formatDisplay(screen.getPrimaryDisplay()),
-            all: screen.getAllDisplays().map((display) => formatDisplay(display))
-          }
-          console.log('[TrayManager] tray displays', stringify(displaysPayload))
-          logTrayBounds('created')
-          setTimeout(() => logTrayBounds('after-1s'), 1000)
-          setTimeout(() => logTrayBounds('after-3s'), 3000)
-          setTimeout(() => logTrayBounds('after-6s'), 6000)
-        } catch (error) {
-          console.warn('[TrayManager] tray debug failed', error)
-        }
-      }
-
-      if (process.platform === 'darwin') {
-        icon.setTemplateImage(!disableTemplate)
-        this.tray.setImage(icon)
-        if (process.env.TUFF_TRAY_FORCE_HIGHLIGHT === '1') {
-          const tray = this.tray as Tray & {
-            setHighlightMode?: (mode: 'always' | 'never') => void
-          }
-          if (typeof tray.setHighlightMode !== 'function') {
-            console.warn('[TrayManager] setHighlightMode not supported')
-          } else {
-            try {
-              tray.setHighlightMode('always')
-            } catch (error) {
-              console.warn('[TrayManager] setHighlightMode failed', { error })
-            }
-          }
-        }
-      }
-
       this.tray.setToolTip('tuff')
       this.bindTrayEvents()
       this.updateMenu()
-      this.scheduleTrayHealthCheck()
     } catch (error) {
       console.error('[TrayManager] Failed to initialize tray:', error)
-      this.ensureDockVisibleWhenTrayUnavailable('tray-init-failed')
     }
-  }
-
-  private hasUsableTray(): boolean {
-    if (!this.tray) return false
-    if (process.platform !== 'darwin') return true
-    try {
-      const bounds = this.tray.getBounds()
-      return bounds.width > 0 && bounds.height > 0
-    } catch (error) {
-      console.warn('[TrayManager] Failed to inspect tray bounds', { error })
-      return false
-    }
-  }
-
-  private scheduleTrayHealthCheck(): void {
-    if (process.platform !== 'darwin') return
-    if (this.trayHealthCheckTimer) {
-      clearTimeout(this.trayHealthCheckTimer)
-      this.trayHealthCheckTimer = null
-    }
-
-    this.trayHealthCheckTimer = setTimeout(() => {
-      this.trayHealthCheckTimer = null
-
-      if (this.hasUsableTray()) {
-        this.trayRecoveryAttempted = false
-        return
-      }
-
-      if (this.trayRecoveryAttempted) {
-        this.ensureDockVisibleWhenTrayUnavailable('tray-health-check-failed')
-        return
-      }
-
-      this.trayRecoveryAttempted = true
-      console.warn('[TrayManager] Tray bounds invalid, retrying tray initialization once')
-
-      this.destroyTray()
-      this.initializeTray()
-      this.updateDockVisibility()
-    }, 1200)
   }
 
   private destroyTray(): void {
-    if (this.trayHealthCheckTimer) {
-      clearTimeout(this.trayHealthCheckTimer)
-      this.trayHealthCheckTimer = null
-    }
-    if (this.tray) {
-      if (process.env.TUFF_DEBUG_TRAY === '1') {
-        console.log('[TrayManager] destroyTray called')
-      }
-      this.tray.destroy()
-      this.tray = null
-    }
+    if (!this.tray) return
+    this.tray.destroy()
+    this.tray = null
   }
 
   private shouldShowTray(): boolean {
@@ -371,8 +231,10 @@ export class TrayManager extends BaseModule {
       const configData = $app.config.data as { window?: { closeToTray?: boolean } } | undefined
       const closeToTray = configData?.window?.closeToTray ?? true
       const isQuitting = $app.isQuitting || false
+      const canCloseToTray =
+        this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
 
-      if (closeToTray && !isQuitting) {
+      if (closeToTray && !isQuitting && canCloseToTray) {
         event.preventDefault()
         mainWindow.hide()
         touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
@@ -455,15 +317,32 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private ensureDockVisibleWhenTrayUnavailable(reason: string): void {
-    if (process.platform !== 'darwin') return
-    if (!this.getHideDockConfig()) return
-    if (this.tray) return
+  private getStartSilentConfig(): boolean {
+    try {
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
+      return appConfig?.window?.startSilent ?? false
+    } catch (error) {
+      console.error('[TrayManager] Failed to read startSilent config:', error)
+      return false
+    }
+  }
 
-    console.warn(
-      `[TrayManager] Tray unavailable while hideDock is enabled (${reason}), forcing Dock visible`
-    )
-    app.dock?.show()
+  private shouldForceRegularInDev(): boolean {
+    if (process.platform !== 'darwin') return false
+    if (app.isPackaged) return false
+    return this.getHideDockConfig() || this.getStartSilentConfig()
+  }
+
+  private isTrayExperimentalEnabled(): boolean {
+    try {
+      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
+      return appConfig?.setup?.experimentalTray === true
+    } catch (error) {
+      console.warn('[TrayManager] Failed to read experimental tray switch, fallback disabled', {
+        error
+      })
+      return false
+    }
   }
 
   /**
@@ -475,36 +354,15 @@ export class TrayManager extends BaseModule {
 
     try {
       const appIconPath = TrayIconProvider.getAppIconPath()
+      if (!appIconPath) return
 
-      // Validate icon path before attempting to load
-      if (!appIconPath) {
-        console.warn('[TrayManager] App icon path is empty, skipping Dock icon setup')
-        return
-      }
-
-      // Verify file existence
       const fs = require('fs-extra')
-      if (!fs.existsSync(appIconPath)) {
-        console.warn(`[TrayManager] App icon file does not exist: ${appIconPath}`)
-        return
-      }
+      if (!fs.existsSync(appIconPath)) return
+      if (!app.dock) return
 
-      if (!app.dock) {
-        console.warn('[TrayManager] app.dock is not available')
-        return
-      }
-
-      // Attempt to set Dock icon
-      try {
-        app.dock.setIcon(appIconPath)
-        console.log(`[TrayManager] Successfully set Dock icon: ${appIconPath}`)
-
-        // Set badge for dev version
-        if ($app.version === TalexTouch.AppVersion.DEV) {
-          app.dock.setBadge($app.version)
-        }
-      } catch (iconError) {
-        console.error(`[TrayManager] Failed to load icon from path: ${appIconPath}`, iconError)
+      app.dock.setIcon(appIconPath)
+      if ($app.version === TalexTouch.AppVersion.DEV) {
+        app.dock.setBadge($app.version)
       }
     } catch (error) {
       console.error('[TrayManager] Failed to setup Dock icon:', error)
@@ -516,29 +374,28 @@ export class TrayManager extends BaseModule {
 
     const mainWindow = $app.window.window
     const hideDock = this.getHideDockConfig()
-    const trayAvailable = this.hasUsableTray()
-
-    // Check if there are active DivisionBox sessions
     const hasDivisionBox = this.hasActiveDivisionBox()
+    const trayAvailable =
+      this.trayExperimentalEnabled && this.shouldShowTray() && this.tray !== null
 
-    if (hideDock && trayAvailable) {
-      // When hideDock is enabled, show dock if:
-      // 1. Main window is visible, OR
-      // 2. There are active DivisionBox windows
+    if (this.shouldForceRegularInDev() || !trayAvailable) {
+      app.setActivationPolicy('regular')
+      app.dock?.show()
+      return
+    }
+
+    if (hideDock) {
       if (mainWindow.isVisible() || hasDivisionBox) {
         app.dock?.show()
       } else {
         app.dock?.hide()
       }
-    } else {
-      // Always show dock when hideDock is disabled, or tray is unavailable.
-      app.dock?.show()
+      return
     }
+
+    app.dock?.show()
   }
 
-  /**
-   * Check if there are any active DivisionBox sessions
-   */
   private hasActiveDivisionBox(): boolean {
     try {
       const { DivisionBoxManager } = require('../division-box/manager')
@@ -553,20 +410,23 @@ export class TrayManager extends BaseModule {
     if (!this.transport) return
 
     this.transport.on(TrayEvents.show.get, () => {
-      return this.tray !== null
+      return this.trayExperimentalEnabled && this.tray !== null
     })
 
     this.transport.on(TrayEvents.show.set, (show) => {
-      if (process.env.TUFF_DEBUG_TRAY === '1') {
-        console.log('[TrayManager] TrayEvents.show.set', { show })
+      if (!this.trayExperimentalEnabled) {
+        console.warn('[TrayManager] Tray is experimental and currently disabled.')
+        return false
       }
+
       const shouldShow = show === true
-      if (shouldShow && !this.tray) {
+      if (shouldShow && !this.tray && this.shouldShowTray()) {
         this.initializeTray()
         this.updateMenu()
       } else if (!shouldShow && this.tray) {
         this.destroyTray()
       }
+      this.updateDockVisibility()
       return true
     })
 
@@ -579,14 +439,7 @@ export class TrayManager extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
-    if (this.trayHealthCheckTimer) {
-      clearTimeout(this.trayHealthCheckTimer)
-      this.trayHealthCheckTimer = null
-    }
-    if (this.tray) {
-      this.tray.destroy()
-      this.tray = null
-    }
+    this.destroyTray()
   }
 }
 
