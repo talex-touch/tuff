@@ -652,28 +652,36 @@ export class TuffMainTransport implements ITuffTransportMain {
    * Sends a message to a specific WebContents.
    */
   async sendTo<TReq, TRes>(
-    webContents: any,
+    webContents: WebContents | { webContents?: WebContents | null } | null | undefined,
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
   ): Promise<TRes> {
     assertTuffEvent(event, 'TuffMainTransport.sendTo')
 
     const eventName = event.toEventName()
+    const hostWebContents = (webContents as { webContents?: WebContents | null } | null | undefined)
+      ?.webContents
+    const directWebContents
+      = hostWebContents
+        ?? (typeof (webContents as WebContents | null | undefined)?.send === 'function'
+          ? (webContents as WebContents)
+          : null)
+    const targetWebContents = directWebContents
 
-    // Find the BrowserWindow that owns this WebContents
-    const { BrowserWindow } = await import('electron')
-    const windows = BrowserWindow.getAllWindows()
-    const targetWindow = windows.find(win => win.webContents === webContents)
+    if (
+      !targetWebContents
+      || typeof targetWebContents.send !== 'function'
+      || typeof targetWebContents.isDestroyed !== 'function'
+    ) {
+      throw new Error('[TuffTransport] Invalid target WebContents.')
+    }
 
-    if (!targetWindow) {
-      throw new Error(
-        '[TuffTransport] Cannot find BrowserWindow for WebContents. '
-        + 'Make sure the WebContents belongs to an existing BrowserWindow.',
-      )
+    if (targetWebContents.isDestroyed()) {
+      throw new Error('[TuffTransport] Target WebContents has been destroyed.')
     }
 
     if (isPortChannelEnabled(eventName)) {
-      const portLookup = resolvePortRecord(eventName, targetWindow.webContents, 'window')
+      const portLookup = resolvePortRecord(eventName, targetWebContents, 'window')
       if (portLookup) {
         const portSent = postPortMessage(portLookup, {
           channel: eventName,
@@ -687,7 +695,12 @@ export class TuffMainTransport implements ITuffTransportMain {
       }
     }
 
-    return this.channel.sendTo(targetWindow, ChannelType.MAIN, eventName, payload)
+    return this.channel.sendTo(
+      { webContents: targetWebContents } as Electron.BrowserWindow,
+      ChannelType.MAIN,
+      eventName,
+      payload,
+    )
   }
 
   /**

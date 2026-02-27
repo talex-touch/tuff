@@ -3,91 +3,14 @@
  * @module @talex-touch/utils/transport/events/types/meta-overlay
  */
 
-import type { TuffItem } from '../../../core-box/tuff/tuff-dsl'
-import type { ITuffIcon } from '../../../types/icon'
+import type { TuffItem, TuffQuickAction, TuffQuickActionRender } from '../../../core-box/tuff/tuff-dsl'
 
 // ============================================================================
 // MetaAction Types
 // ============================================================================
 
-/**
- * Simplified TuffRenderDSL for MetaOverlay actions.
- * Does not support widgets, only basic rendering.
- */
-export interface MetaActionRender {
-  /**
-   * Basic information
-   */
-  basic: {
-    /**
-     * Action title
-     */
-    title: string
-
-    /**
-     * Optional subtitle/description
-     */
-    subtitle?: string
-
-    /**
-     * Optional icon
-     */
-    icon?: ITuffIcon
-  }
-
-  /**
-   * Keyboard shortcut (optional)
-   * e.g., '⌘C', '⌘⇧F', '⌘⇧D'
-   */
-  shortcut?: string
-
-  /**
-   * Group title (optional)
-   * e.g., '列表', '操作'
-   */
-  group?: string
-
-  /**
-   * Whether action is disabled
-   */
-  disabled?: boolean
-
-  /**
-   * Whether this is a dangerous action (red color)
-   */
-  danger?: boolean
-}
-
-/**
- * Meta action definition
- */
-export interface MetaAction {
-  /**
-   * Unique action ID
-   */
-  id: string
-
-  /**
-   * Render configuration
-   */
-  render: MetaActionRender
-
-  /**
-   * Handler identifier
-   * - 'builtin': Built-in action (handled by main process)
-   * - 'item': Item-specific action (from item.actions)
-   * - plugin ID: Plugin-registered action
-   */
-  handler?: string
-
-  /**
-   * Priority for sorting (higher = top)
-   * - Built-in actions: 0
-   * - Item actions: 50
-   * - Plugin actions: 100
-   */
-  priority?: number
-}
+export type MetaActionRender = TuffQuickActionRender
+export type MetaAction = TuffQuickAction
 
 // ============================================================================
 // Request/Response Types
@@ -131,6 +54,12 @@ export interface MetaActionExecuteRequest {
    * Item ID context
    */
   itemId: string
+
+  /**
+   * Optional full item context payload.
+   * CoreBox currently sends it to avoid item lookup races in main process.
+   */
+  item?: TuffItem
 }
 
 /**
@@ -171,6 +100,12 @@ export interface MetaUnregisterActionsRequest {
    * Plugin ID
    */
   pluginId: string
+
+  /**
+   * Optional action ID.
+   * If omitted, unregister all actions for the plugin.
+   */
+  actionId?: string
 }
 
 /**

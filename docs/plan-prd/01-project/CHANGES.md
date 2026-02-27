@@ -4,6 +4,35 @@
 
 ## 2026-02-27
 
+### Meta+K Quick Actions 打开时强制最大展开
+
+**变更类型**: 交互一致性优化 / 新链路收敛
+
+**描述**: 在新的 Quick Actions 链路中，触发 `Meta+K` 后 CoreBox 可能保持当前高度，导致操作面板显示空间不足。现统一在 `MetaOverlayEvents.ui.show` 处理时先将 CoreBox 扩展到最大高度，再展示面板。
+
+**主要变更**:
+1. `MetaOverlayEvents.ui.show` 收到请求后先执行 `coreBoxManager.expand({ forceMax: true })`。
+2. 保持现有 action 注册/执行协议不变，仅调整展示前的窗口尺寸策略。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Meta+K Quick Actions 叠层可见性修复（WebContentsView 定向投递）
+
+**变更类型**: 稳定性修复 / 交互可见性修复
+
+**描述**: 修复 `Meta+K` 打开后仅出现透明层、无任何内容的故障。根因是主进程向 `WebContentsView.webContents` 发送事件时，`TuffMainTransport.sendTo` 实际回落到了 `BrowserWindow.webContents`，导致 MetaOverlay 渲染器收不到 `ui.show/ui.hide`。
+
+**主要变更**:
+1. `TuffMainTransport.sendTo` 改为以“传入目标 WebContents”为准发送，不再通过窗口查找回退。
+2. 保持现有 API 不变，兼容 `WebContents` 与带 `webContents` 字段的目标对象（如窗口/视图宿主）。
+3. `MetaOverlayManager` 现有 `sendTo(this.metaView.webContents, ...)` 链路可正确命中 MetaOverlay 进程，叠层内容恢复显示并可跟随 CoreBox。
+
+**修改文件**:
+- `packages/utils/transport/sdk/main-transport.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### CoreBox UI View 生命周期竞态修复（webContents 空指针防护）
 
 **变更类型**: 稳定性修复 / 崩溃防护

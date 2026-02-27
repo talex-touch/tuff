@@ -91,8 +91,16 @@ export class MetaOverlayManager {
    */
   public init(parentWindow: BrowserWindow): void {
     if (this.metaView) {
-      metaOverlayLog.warn('MetaOverlay already initialized')
-      return
+      const sameParent = this.parentWindow === parentWindow
+      const parentAlive = !!this.parentWindow && !this.parentWindow.isDestroyed()
+      const viewAlive = !this.metaView.webContents.isDestroyed()
+      if (sameParent && parentAlive && viewAlive) {
+        metaOverlayLog.warn('MetaOverlay already initialized')
+        return
+      }
+
+      metaOverlayLog.warn('MetaOverlay has stale instance, rebuilding')
+      this.destroy()
     }
 
     this.parentWindow = parentWindow
@@ -180,11 +188,36 @@ export class MetaOverlayManager {
     metaOverlayLog.info(`MetaOverlay initialized, loading: ${loadUrl}`)
   }
 
+  private ensureInitialized(): boolean {
+    if (
+      this.metaView &&
+      this.parentWindow &&
+      !this.metaView.webContents.isDestroyed() &&
+      !this.parentWindow.isDestroyed()
+    ) {
+      return true
+    }
+
+    const coreBoxWindow = getCoreBoxWindow()
+    if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+      this.init(coreBoxWindow.window)
+    }
+
+    return Boolean(
+      this.metaView &&
+      this.parentWindow &&
+      !this.metaView.webContents.isDestroyed() &&
+      !this.parentWindow.isDestroyed()
+    )
+  }
+
   public getView(): WebContentsView | null {
     return this.metaView
   }
 
   public ensureOnTop(): void {
+    if (!this.ensureInitialized()) return
+
     if (!this.metaView || !this.parentWindow) return
 
     try {
@@ -203,7 +236,7 @@ export class MetaOverlayManager {
    * @param request - The show request containing item and actions
    */
   public show(request: MetaShowRequest): void {
-    if (!this.metaView || !this.parentWindow) {
+    if (!this.ensureInitialized() || !this.metaView || !this.parentWindow) {
       metaOverlayLog.error('Cannot show MetaOverlay: not initialized')
       return
     }
@@ -276,17 +309,18 @@ export class MetaOverlayManager {
    * Hides MetaOverlay.
    */
   public hide(): void {
-    if (!this.metaView) return
+    if (!this.metaView || this.metaView.webContents.isDestroyed()) {
+      this.isVisible = false
+      return
+    }
 
     this.metaView.setVisible(false)
     this.isVisible = false
 
-    if (!this.metaView.webContents.isDestroyed()) {
-      const channel = genTouchApp().channel
-      const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
+    const channel = genTouchApp().channel
+    const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
-      tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
-    }
+    tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
 
     // Return focus to parent window
     if (this.parentWindow && !this.parentWindow.isDestroyed()) {
@@ -491,7 +525,7 @@ export class MetaOverlayManager {
    * Updates window bounds when parent window resizes.
    */
   public updateBounds(): void {
-    if (!this.metaView || !this.parentWindow) return
+    if (!this.metaView || !this.parentWindow || this.parentWindow.isDestroyed()) return
 
     const bounds = this.parentWindow.getBounds()
     this.metaView.setBounds({

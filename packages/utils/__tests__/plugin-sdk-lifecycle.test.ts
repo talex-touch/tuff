@@ -3,6 +3,7 @@ import { DivisionBoxEvents } from '../transport/events'
 import { createDivisionBoxSDK } from '../plugin/sdk/division-box'
 import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
 import { createMetaSDK } from '../plugin/sdk/meta-sdk'
+import { createQuickActionsSDK } from '../plugin/sdk/quick-actions-sdk'
 
 type Handler = (payload: unknown) => unknown
 
@@ -122,6 +123,52 @@ describe('plugin sdk lifecycle', () => {
       item: {
         id: 'item-2',
         title: { text: 'Item 2' },
+        source: { id: 'demo', name: 'Demo' },
+      },
+    })
+    expect(onExecute).toHaveBeenCalledTimes(1)
+  })
+
+  it('quick actions sdk clears execute listener after dispose', async () => {
+    const { channel, emit, listenerCount } = createMockChannel()
+    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+    const onExecute = vi.fn()
+
+    sdk.onActionExecute(onExecute)
+    sdk.registerAction({
+      id: 'quick-action-1',
+      render: {
+        basic: {
+          title: 'Quick Action',
+          subtitle: 'Run quick action',
+          icon: { type: 'class', value: 'i-ri-flashlight-line' },
+        },
+      },
+      priority: 1,
+    })
+
+    expect(listenerCount('meta-overlay:action-executed')).toBe(1)
+
+    await emit('meta-overlay:action-executed', {
+      pluginId: 'quick-plugin',
+      actionId: 'quick-action-1',
+      item: {
+        id: 'item-qa-1',
+        title: { text: 'Item QA 1' },
+        source: { id: 'demo', name: 'Demo' },
+      },
+    })
+    expect(onExecute).toHaveBeenCalledTimes(1)
+
+    sdk.dispose()
+    expect(listenerCount('meta-overlay:action-executed')).toBe(0)
+
+    await emit('meta-overlay:action-executed', {
+      pluginId: 'quick-plugin',
+      actionId: 'quick-action-1',
+      item: {
+        id: 'item-qa-2',
+        title: { text: 'Item QA 2' },
         source: { id: 'demo', name: 'Demo' },
       },
     })
