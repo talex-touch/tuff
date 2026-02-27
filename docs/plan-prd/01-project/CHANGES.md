@@ -44,6 +44,27 @@
 - `apps/core-app/src/main/modules/box-tool/core-box/manager.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### CoreBox 输入转发收敛（含 breaking 契约升级）
+
+**变更类型**: 架构收敛 / 事件契约升级（Breaking Change）
+
+**描述**: 将 CoreBox 输入转发链路从“分散组装 + 多点转发”收敛为统一入口 `input-forwarding`，并将 `core-box:input-change` 契约升级为强制完整载荷（`input/query/source` 必填）。该变更会影响任何仍发送不完整 payload 的调用方（需要补齐字段）。
+
+**主要变更**:
+1. 新增 `CoreBoxInputForwarding`，统一负责输入 payload 规范化与路由（UI attach 转发 + 激活 feature 转发）。
+2. `PluginFeaturesAdapter.handleActiveFeatureInput` 改为接收标准化 payload，移除分散字段推断。
+3. `CoreBoxInputChangeRequest` 升级为必填字段（`input`、`query`、`source`），作为统一输入事件契约。
+4. `DivisionBox` 到插件的输入同步链路补齐 `source` 字段，避免契约断层。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/input-forwarding.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/plugin/adapters/plugin-features-adapter.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `packages/utils/transport/events/types/core-box.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-26
 
 ### 移除 sync:guard lint 门禁脚本

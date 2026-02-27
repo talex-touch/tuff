@@ -11,6 +11,7 @@ import type {
 } from '@talex-touch/utils'
 import type { IFeatureCommand, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { MatchRange } from '@talex-touch/utils/search'
+import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import type { ProviderContext } from '../../box-tool/search-engine/types'
 import type { TouchPlugin } from '../plugin'
 import { TuffFactory, TuffInputType } from '@talex-touch/utils'
@@ -81,7 +82,8 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
   public readonly priority = 'fast' as const
   public readonly expectedDuration = 30
 
-  public async handleActiveFeatureInput(query: TuffQuery): Promise<boolean> {
+  public async handleActiveFeatureInput(payload: CoreBoxInputChangeRequest): Promise<boolean> {
+    const query = payload.query
     const activationState = searchEngineCore.getActivationState()
 
     const activeFeatureActivation = activationState?.find((a) => a.id === this.id)
@@ -109,7 +111,9 @@ export class PluginFeaturesAdapter implements ISearchProvider<ProviderContext> {
 
     const channel = genTouchApp().channel
     channel.broadcastPlugin(plugin.name, CoreBoxEvents.input.change.toEventName(), {
-      query
+      input: payload.input,
+      query,
+      source: payload.source
     })
 
     if (!hasContent) {

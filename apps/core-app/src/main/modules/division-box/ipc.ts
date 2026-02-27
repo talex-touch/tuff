@@ -469,7 +469,8 @@ export class DivisionBoxIPC {
           void transport
             .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
               input,
-              query
+              query,
+              source: 'renderer'
             })
             .catch(() => {})
         }

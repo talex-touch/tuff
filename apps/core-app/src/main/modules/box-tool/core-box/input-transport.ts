@@ -1,15 +1,8 @@
-import type { TuffQuery } from '@talex-touch/utils'
+import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import { ChannelType } from '@talex-touch/utils/channel'
 import { createLogger } from '../../../utils/logger'
-import pluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { coreBoxTransport } from './transport/core-box-transport'
-import { windowManager } from './window'
-
-export interface CoreBoxInputChange {
-  input?: string
-  query?: TuffQuery
-  source?: 'renderer' | 'initial' | 'ui-monitor'
-}
+import { coreBoxInputForwarding } from './input-forwarding'
 
 const coreBoxInputLog = createLogger('CoreBox').child('InputTransport')
 
@@ -24,7 +17,7 @@ class CoreBoxInputTransport {
   }
 
   public register(): void {
-    coreBoxTransport.register<CoreBoxInputChange>(
+    coreBoxTransport.register<CoreBoxInputChangeRequest>(
       ChannelType.MAIN,
       'core-box:input-change',
       (data) => {
@@ -33,34 +26,18 @@ class CoreBoxInputTransport {
     )
   }
 
-  private handleRendererInput(payload: CoreBoxInputChange): void {
-    const query = this.normalizeQuery(payload)
+  private handleRendererInput(payload: CoreBoxInputChangeRequest): void {
+    const normalized = coreBoxInputForwarding.normalize(payload)
 
     coreBoxInputLog.debug('Dispatching input change', {
       meta: {
-        text: query.text,
-        hasInputs: Boolean(query.inputs?.length)
+        source: normalized.source,
+        text: normalized.query.text,
+        hasInputs: Boolean(normalized.query.inputs?.length)
       }
     })
 
-    windowManager.forwardInputChange({
-      input: query.text,
-      query,
-      source: 'renderer'
-    })
-
-    pluginFeaturesAdapter.handleActiveFeatureInput(query)
-  }
-
-  private normalizeQuery(payload: CoreBoxInputChange): TuffQuery {
-    if (payload.query) {
-      return payload.query
-    }
-
-    return {
-      text: payload.input ?? '',
-      inputs: []
-    }
+    void coreBoxInputForwarding.forward(normalized)
   }
 }
 
