@@ -33,7 +33,11 @@ definePageMeta({
 const route = useRoute()
 const { locale } = useI18n()
 
-const slug = computed(() => String(route.params.slug ?? '').trim())
+const slug = computed(() => {
+  const rawSlug = (route.params as { slug?: string | string[] }).slug
+  const normalizedSlug = Array.isArray(rawSlug) ? rawSlug[0] : rawSlug
+  return String(normalizedSlug ?? '').trim()
+})
 const isZh = computed(() => locale.value.toLowerCase().startsWith('zh'))
 
 function resolveLocalizedText(content: LocalizedText | null | undefined): string {
