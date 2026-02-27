@@ -283,6 +283,58 @@ function convertTuffActionToMetaAction(tuffAction: TuffActionLike): MetaAction {
   }
 }
 
+function resolveQuickActionsItem(
+  results: TuffItem[],
+  focus: number,
+  activations: IProviderActivate[] | null
+): TuffItem | null {
+  const focused = results[focus]
+  if (focused) {
+    return focused
+  }
+
+  const featureItem = activations?.find((activation) => activation?.id === 'plugin-features')?.meta
+    ?.feature as TuffItem | undefined
+  if (featureItem && featureItem.id && featureItem.render?.basic?.title) {
+    return featureItem
+  }
+
+  const fallbackActivation = activations?.[0]
+  if (!fallbackActivation) {
+    return results[0] ?? null
+  }
+
+  const pluginName =
+    typeof fallbackActivation.meta?.pluginName === 'string'
+      ? fallbackActivation.meta.pluginName
+      : 'plugin'
+  const featureId =
+    typeof fallbackActivation.meta?.featureId === 'string'
+      ? fallbackActivation.meta.featureId
+      : 'active'
+
+  return {
+    id: `quick-actions/${pluginName}/${featureId}`,
+    source: {
+      type: 'plugin',
+      id: pluginName,
+      name: fallbackActivation.name || pluginName
+    },
+    kind: 'feature',
+    render: {
+      mode: 'default',
+      basic: {
+        title: fallbackActivation.name || 'Quick Actions',
+        subtitle: pluginName
+      }
+    },
+    meta: {
+      pluginName,
+      featureId
+    }
+  }
+}
+
 function isInputEditingShortcut(event: KeyboardEvent): boolean {
   if (!(event.metaKey || event.ctrlKey) || event.altKey) return false
 
@@ -438,7 +490,11 @@ export function useKeyboard(
       !event.shiftKey &&
       (event.key === 'k' || event.key === 'K')
     ) {
-      const currentItem = res.value[boxOptions.focus]
+      const currentItem = resolveQuickActionsItem(
+        res.value,
+        boxOptions.focus,
+        activeActivations.value
+      )
       if (!currentItem) {
         event.preventDefault()
         return

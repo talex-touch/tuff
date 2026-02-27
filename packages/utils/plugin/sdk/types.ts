@@ -246,6 +246,12 @@ export interface IPluginUtils {
   meta: import('./meta-sdk').MetaSDK
 
   /**
+   * Tuff Quick Actions SDK for registering global actions
+   * @see {@link QuickActionsSDK}
+   */
+  quickActions: import('./quick-actions-sdk').QuickActionsSDK
+
+  /**
    * Power SDK for low power status
    * @see {@link PowerSDK}
    */

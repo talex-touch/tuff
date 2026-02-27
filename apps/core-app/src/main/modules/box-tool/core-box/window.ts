@@ -275,6 +275,7 @@ export class WindowManager {
 
     window.window.addListener('closed', () => {
       this.windows = this.windows.filter((w) => w !== window)
+      metaOverlayManager.destroy()
       coreBoxWindowLog.debug('BoxWindow closed')
     })
 

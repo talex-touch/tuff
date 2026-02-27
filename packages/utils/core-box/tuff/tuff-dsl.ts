@@ -863,6 +863,33 @@ export interface TuffFooterHints {
   }
 }
 
+// ==================== Quick Actions（⌘K / Ctrl+K）====================
+
+/**
+ * Quick Action 渲染配置
+ */
+export interface TuffQuickActionRender {
+  basic: {
+    title: string
+    subtitle?: string
+    icon?: ITuffIcon
+  }
+  shortcut?: string
+  group?: string
+  disabled?: boolean
+  danger?: boolean
+}
+
+/**
+ * Quick Action 定义
+ */
+export interface TuffQuickAction {
+  id: string
+  render: TuffQuickActionRender
+  handler?: string
+  priority?: number
+}
+
 // ==================== 扩展元数据 ====================
 
 /**

@@ -31,7 +31,7 @@ import {
   createClipboardManager,
   createDivisionBoxSDK,
   createFeatureSDK,
-  createMetaSDK
+  createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
 
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
@@ -1612,16 +1612,21 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const pluginsAPI = this.createPluginsAPI(pluginName)
+    const divisionBoxSDK = createDivisionBoxSDK(channelBridge)
+    const boxSDK = createBoxSDK(boxChannel)
+    const featureSDK = createFeatureSDK(boxItems, channelBridge)
+    const quickActionsSDK = createQuickActionsSDK(channelBridge, this.name)
 
     // 新版 API: 统一使用 plugin.* 前缀
     const pluginAPI = {
       ...pluginInfo,
       storage,
-      feature: createFeatureSDK(boxItems, channelBridge),
+      feature: featureSDK,
       search: searchManager,
-      box: createBoxSDK(boxChannel),
-      divisionBox: createDivisionBoxSDK(channelBridge),
-      meta: createMetaSDK(channelBridge, this.name),
+      box: boxSDK,
+      divisionBox: divisionBoxSDK,
+      meta: quickActionsSDK,
+      quickActions: quickActionsSDK,
       power: powerSDK,
       recommend: recommendSDK
     }
@@ -1636,10 +1641,11 @@ export class TouchPlugin implements ITouchPlugin {
       clipboard: clipboardUtil,
       channel: channelBridge,
       touchChannel,
-      divisionBox: createDivisionBoxSDK(channelBridge),
-      box: createBoxSDK(boxChannel),
-      feature: createFeatureSDK(boxItems, channelBridge),
-      meta: createMetaSDK(channelBridge, this.name),
+      divisionBox: divisionBoxSDK,
+      box: boxSDK,
+      feature: featureSDK,
+      meta: quickActionsSDK,
+      quickActions: quickActionsSDK,
       power: powerSDK,
       recommend: recommendSDK,
       // 新的 BoxItemSDK API

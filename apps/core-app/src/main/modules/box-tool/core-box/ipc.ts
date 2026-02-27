@@ -457,6 +457,7 @@ export class IpcManager {
             itemActions: request.itemActions?.length ?? 0
           }
         })
+        coreBoxManager.expand({ forceMax: true })
         const pluginActions = metaOverlayManager.getPluginActions()
         request.pluginActions = pluginActions
         metaOverlayManager.show(request)
