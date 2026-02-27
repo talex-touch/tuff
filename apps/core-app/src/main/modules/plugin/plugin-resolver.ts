@@ -4,6 +4,7 @@ import path from 'node:path'
 import compressing from 'compressing'
 import fse from 'fs-extra'
 import { isSafePathSegment } from '@talex-touch/utils/common/utils/safe-path'
+import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
 import { checkDirWithCreate } from '../../utils/common-util'
 import { pluginModule } from './plugin-module'
 
@@ -35,6 +36,15 @@ export class PluginResolver {
 
   constructor(filePath: string) {
     this.filePath = filePath
+  }
+
+  private validateManifestSdkApi(manifest: IManifest): string | null {
+    const sdkapi = (manifest as { sdkapi?: unknown }).sdkapi
+    if (typeof sdkapi === 'number') {
+      return null
+    }
+    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
+    return `Plugin "${pluginName}" is outdated: missing required "sdkapi" in manifest.json. Required current sdkapi: ${CURRENT_SDK_VERSION}.`
   }
 
   private async uncompress(source: string, target: string): Promise<void> {
@@ -69,6 +79,10 @@ export class PluginResolver {
     options?: ResolverInstallOptions
   ): Promise<void> {
     console.log(`[PluginResolver] Installing plugin: ${manifest.name}`)
+    const sdkapiError = this.validateManifestSdkApi(manifest)
+    if (sdkapiError) {
+      return cb(sdkapiError, 'error')
+    }
     if (typeof manifest.name !== 'string' || !isSafePathSegment(manifest.name)) {
       return cb('invalid plugin name', 'error')
     }
@@ -164,6 +178,12 @@ export class PluginResolver {
 
       if (!manifest._files || !manifest._signature) {
         event.msg = ResolverStatus.INVALID_MANIFEST
+        return callback({ event, type: 'error' })
+      }
+
+      const sdkapiError = this.validateManifestSdkApi(manifest as IManifest)
+      if (sdkapiError) {
+        event.msg = sdkapiError
         return callback({ event, type: 'error' })
       }
 

@@ -138,8 +138,26 @@ abstract class BasePluginLoader {
     // SDK version compatibility check (with graceful fallback)
     const resolvedSdkapi = resolveSdkApiVersion(pluginInfo.sdkapi)
     this.touchPlugin.sdkapi = resolvedSdkapi
+
+    if (pluginInfo.sdkapi === undefined) {
+      this.touchPlugin.issues.push({
+        type: 'error',
+        message: `Plugin "${this.pluginName}" is outdated: missing required "sdkapi" in manifest.json.`,
+        source: 'manifest.json',
+        code: 'SDK_VERSION_MISSING',
+        suggestion: `Add "sdkapi": ${CURRENT_SDK_VERSION} to manifest.json and republish this plugin.`,
+        meta: {
+          declaredVersion: pluginInfo.sdkapi,
+          resolvedVersion: resolvedSdkapi,
+          currentVersion: CURRENT_SDK_VERSION,
+          enforcePermissions: false
+        },
+        timestamp: Date.now()
+      })
+    }
+
     const sdkCompat = checkSdkCompatibility(pluginInfo.sdkapi, this.pluginName)
-    if (sdkCompat.warning) {
+    if (sdkCompat.warning && pluginInfo.sdkapi !== undefined) {
       this.touchPlugin.issues.push({
         type: sdkCompat.compatible ? 'warning' : 'error',
         message: sdkCompat.warning,

@@ -10,6 +10,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { BrowserWindow, dialog, type MessageBoxOptions } from 'electron'
 import fse from 'fs-extra'
+import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
 import { ensureDefaultProvidersRegistered, installFromRegistry } from './providers'
 
 function createDialogRiskPrompt(): RiskPromptHandler {
@@ -96,6 +97,18 @@ export class PluginInstaller {
     this.riskPrompt = riskPrompt ?? createDialogRiskPrompt()
   }
 
+  private assertManifestSdkApi(manifest: IManifest | undefined): void {
+    if (!manifest) return
+    const sdkapi = (manifest as { sdkapi?: unknown }).sdkapi
+    if (typeof sdkapi === 'number') {
+      return
+    }
+    const pluginName = typeof manifest.name === 'string' ? manifest.name : 'unknown'
+    throw new Error(
+      `Plugin "${pluginName}" is outdated: missing required "sdkapi" in manifest.json. Required current sdkapi: ${CURRENT_SDK_VERSION}.`
+    )
+  }
+
   async install(
     request: PluginInstallRequest,
     options?: PluginInstallOptions
@@ -137,6 +150,7 @@ export class PluginInstaller {
     const manifest = providerResult.manifest
       ? providerResult.manifest
       : (await this.previewManifest(providerResult.filePath!))?.manifest
+    this.assertManifestSdkApi(manifest)
 
     if (options?.onDownloadProgress) {
       try {

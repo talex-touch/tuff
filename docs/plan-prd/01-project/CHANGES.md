@@ -4,6 +4,62 @@
 
 ## 2026-02-27
 
+### 插件安装门禁升级（无 sdkapi 视为过时插件并拒绝安装）
+
+**变更类型**: 安装门禁 / 兼容策略收紧
+
+**描述**: 对未声明 `manifest.sdkapi` 的插件，不再兼容安装。安装预检、安装解析与加载阶段统一改为硬拒绝，避免旧插件绕过 capability 认证基线。
+
+**主要变更**:
+1. `PluginInstaller.prepareInstall` 增加 `sdkapi` 强校验：缺失即抛错并中止安装流程。
+2. `PluginResolver.resolve/install` 增加 `sdkapi` 强校验：缺失即返回 error，不进入安装落盘。
+3. `plugin-loaders` 将缺失 `sdkapi` 从 warning 升级为 error（`SDK_VERSION_MISSING`），与安装门禁一致。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/plugin/plugin-installer.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-resolver.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 插件能力认证基线升级（sdkapi 260228 + Clipboard/OCR 不支持修复）
+
+**变更类型**: 安全加固 / 权限认证收敛 / 能力降级修复
+
+**描述**: 新增 `sdkapi 260228` 作为插件能力认证基线。权限中间件改为优先使用已加载插件声明的 `sdkapi` 做鉴权，避免通过 payload 伪造降级绕过；Clipboard transport 全链路补齐插件调用鉴权；当 Clipboard 或 Intelligence（如 `vision.ocr`）能力不支持时，返回可识别的稳定错误标识，便于插件侧兜底。
+
+**主要变更**:
+1. `packages/utils/plugin/sdk-version.ts` 新增 `SdkApi.V260228`，并将 `CURRENT_SDK_VERSION` 升级为 `260228`，补充 `CAPABILITY_AUTH_MIN_VERSION` 常量。
+2. `channel-guard` 权限中间件改为优先读取已加载插件声明 `sdkapi`；`sdkapi >= 260228` 时若 payload 与声明不一致，拒绝调用（`SDKAPI_MISMATCH`）。
+3. Clipboard SDK 的写类/查询类请求统一注入 `_sdkapi`；主进程 `ClipboardEvents.*` 全量 handler 增加插件权限校验（读/写分级）。
+4. `ClipboardEvents.change` 流式订阅上下文补齐插件信息，支持流式权限校验。
+5. Clipboard 权限拒绝统一映射为 `CLIPBOARD_CAPABILITY_UNAVAILABLE`；Intelligence invoke/test 对“不支持能力”错误统一映射为 `INTELLIGENCE_CAPABILITY_UNSUPPORTED`（覆盖 native OCR 不支持场景）。
+
+**修改文件**:
+- `packages/utils/plugin/sdk-version.ts`
+- `packages/utils/plugin/sdk/clipboard.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/types.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `apps/core-app/src/main/modules/permission/channel-guard.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 即时监听可靠性修复（startWatch 导出兼容）
+
+**变更类型**: 稳定性修复 / 剪贴板监听可靠性
+
+**描述**: 针对 `Clipboard native watcher module has no startWatch API` 告警导致 watcher 未生效的问题，补齐 `@crosscopy/clipboard` 在不同构建导出形态下（含 `default`、`module.exports` 及嵌套）的解析兜底，确保能稳定获取 `startWatch` 并即时触发检测。
+
+**主要变更**:
+1. `ClipboardModule.resolveClipboardWatcherModule` 从单一导出判定改为多候选解析（`mod` / `mod.default` / `mod['module.exports']` 及其嵌套），兼容 ESM/CJS 打包差异。
+2. 保持 CoreBox 可见态高频轮询兜底（`500ms`）不变，确保 watcher 异常时仍不漏录。
+3. watcher 不可解析时输出导出键诊断信息，便于快速定位运行时导出形态。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Clipboard SDK Transport-First 迁移（剪贴板 API 收敛）
 
 **变更类型**: 架构收敛 / SDK 迁移 / 文档同步
