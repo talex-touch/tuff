@@ -4,6 +4,56 @@
 
 ## 2026-02-27
 
+### CoreBox 搜索排序修复（取消 app 硬置顶，启用匹配优先 + 使用频次提升）
+
+**变更类型**: 搜索体验修复 / 排序策略优化
+
+**描述**: 修复 `app` 与 `feature` 共存时 `app` 因 kind 权重过高被强制置顶的问题。排序改为“匹配分主导 + 使用频次/时效补充 + 类型软偏置”，并对 `feature/command` 的频次学习信号做适度增强，确保高匹配和高使用项能稳定前置。
+
+**主要变更**:
+1. `tuff-sorter` 评分模型从“kind 强主导”改为“match 主导 + usage/recency + kind 软偏置”。
+2. 降低类型权重对最终排序的影响，消除 `app` 对 `feature` 的结构性压制。
+3. 为 `feature/command` 增加频次权重系数，提升常用功能的自动前置能力。
+4. 收敛 `tag/path/description` 来源的伪高亮加分，避免别名命中通过 fallback 高亮压过真实标题命中（如 `cleaner` 场景）。
+5. 新增 `tuff-sorter` 单测，覆盖“强匹配 feature 前置”“高频 feature 前置”“明显强匹配仍优先”“别名伪高亮不越级”回归场景。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/sort/tuff-sorter.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Clipboard 历史检索补齐 OCR 元数据命中
+
+**变更类型**: 检索能力修复 / 行为一致性增强
+
+**描述**: 修复 Clipboard 历史 `keyword` 查询只匹配 `content` 的问题，统一扩展为同时匹配 `content`、`rawContent` 与 `metadata`，使 OCR 写入的 `ocr_text / ocr_excerpt / ocr_keywords` 能被关键词检索命中。
+
+**主要变更**:
+1. `ClipboardEvents.getHistory` 查询条件由单字段 `content LIKE` 扩展为多字段 OR 匹配。
+2. legacy `clipboard:get-history` 查询路径同步扩展同样条件，避免新旧通道行为不一致。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Tray 改为实验特性（默认关闭）
+
+**变更类型**: 稳定性修复 / 开发体验优化
+
+**描述**: 针对 macOS 环境中“托盘对象创建成功但菜单栏不可见”的系统级可见性问题，当前版本将 Tray 收敛为实验特性，默认关闭，避免影响主流程入口。当前阶段暂无稳定修复方案，统一通过 Dock 作为默认入口。
+
+**主要变更**:
+1. Tray 新增实验开关：`setup.experimentalTray`（默认 `false`），需显式开启。
+2. Tray 默认不初始化，移除原有健康检查重试与大量调试输出，保留基础生命周期与菜单更新逻辑。
+3. 在 Tray 未启用时，macOS 强制 `regular` 激活策略并保持 Dock 可见，确保入口稳定。
+4. 运行时 `TrayEvents.show.set` 在实验开关关闭时直接拒绝，并返回明确告警。
+5. 文档明确已知问题：托盘可见性缺陷暂未稳定解决，当前阶段不默认开启。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/tray/tray-icon-provider.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 插件安装门禁升级（无 sdkapi 视为过时插件并拒绝安装）
 
 **变更类型**: 安装门禁 / 兼容策略收紧
