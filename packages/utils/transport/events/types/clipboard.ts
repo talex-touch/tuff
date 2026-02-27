@@ -7,6 +7,13 @@
 import type { TuffInputType } from './core-box'
 
 /**
+ * Optional sdkapi marker attached by plugin SDK.
+ */
+export interface ClipboardSdkApiPayload {
+  _sdkapi?: number
+}
+
+/**
  * Represents a single item in the clipboard history.
  */
 export interface ClipboardItem {
@@ -32,7 +39,7 @@ export interface ClipboardChangePayload {
 /**
  * Request to query clipboard history.
  */
-export interface ClipboardQueryRequest {
+export interface ClipboardQueryRequest extends ClipboardSdkApiPayload {
   page?: number
   limit?: number
   pageSize?: number
@@ -59,7 +66,7 @@ export interface ClipboardQueryResponse {
 /**
  * Request to apply a clipboard item.
  */
-export interface ClipboardApplyRequest {
+export interface ClipboardApplyRequest extends ClipboardSdkApiPayload {
   id: number
   autoPaste?: boolean
 }
@@ -67,14 +74,14 @@ export interface ClipboardApplyRequest {
 /**
  * Request to delete a clipboard item.
  */
-export interface ClipboardDeleteRequest {
+export interface ClipboardDeleteRequest extends ClipboardSdkApiPayload {
   id: number
 }
 
 /**
  * Request to set favorite status of a clipboard item.
  */
-export interface ClipboardSetFavoriteRequest {
+export interface ClipboardSetFavoriteRequest extends ClipboardSdkApiPayload {
   id: number
   isFavorite: boolean
 }
@@ -82,7 +89,7 @@ export interface ClipboardSetFavoriteRequest {
 /**
  * Request to write content to the clipboard.
  */
-export interface ClipboardWriteRequest {
+export interface ClipboardWriteRequest extends ClipboardSdkApiPayload {
   type?: 'text' | 'html' | 'image'
   value?: string
   text?: string
@@ -105,7 +112,7 @@ export interface ClipboardReadResponse {
 /**
  * Request payload for reading clipboard image.
  */
-export interface ClipboardReadImageRequest {
+export interface ClipboardReadImageRequest extends ClipboardSdkApiPayload {
   preview?: boolean
 }
 
@@ -122,7 +129,7 @@ export interface ClipboardReadImageResponse {
 /**
  * Request payload for clipboard copy-and-paste operation.
  */
-export interface ClipboardCopyAndPasteRequest {
+export interface ClipboardCopyAndPasteRequest extends ClipboardSdkApiPayload {
   text?: string
   html?: string
   image?: string
@@ -142,7 +149,7 @@ export interface ClipboardActionResult {
 /**
  * Request payload for resolving clipboard image URL.
  */
-export interface ClipboardGetImageUrlRequest {
+export interface ClipboardGetImageUrlRequest extends ClipboardSdkApiPayload {
   id: number
 }
 

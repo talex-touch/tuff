@@ -18,6 +18,22 @@ import { createPluginTuffTransport } from '../../transport'
 import { ClipboardEvents } from '../../transport/events'
 import { TuffInputType } from '../../transport/events/types'
 import { useChannel } from './channel'
+import { tryGetPluginSdkApi } from './plugin-info'
+
+function resolveSdkApi(): number | undefined {
+  return tryGetPluginSdkApi()
+}
+
+function withSdkApiPayload<T extends object>(payload: T): T & { _sdkapi?: number } {
+  const sdkapi = resolveSdkApi()
+  if (typeof sdkapi !== 'number') {
+    return payload as T & { _sdkapi?: number }
+  }
+  return {
+    ...(payload as object),
+    _sdkapi: sdkapi,
+  } as T & { _sdkapi?: number }
+}
 
 function normalizeItem(item: PluginClipboardItem | null): PluginClipboardItem | null {
   if (!item) {
@@ -92,8 +108,8 @@ function toClipboardHistoryResponse(
 ): PluginClipboardHistoryResponse {
   const history = Array.isArray(response?.items)
     ? response.items
-      .map((item) => toPluginClipboardItem(item))
-      .filter((item): item is PluginClipboardItem => Boolean(item))
+        .map(item => toPluginClipboardItem(item))
+        .filter((item): item is PluginClipboardItem => Boolean(item))
     : []
 
   const page = Number.isFinite(response?.page) ? Number(response?.page) : 1
@@ -284,7 +300,10 @@ export function useClipboard() {
      * Gets clipboard history with pagination and filters.
      */
     async getHistory(options: ClipboardHistoryOptions = {}): Promise<PluginClipboardHistoryResponse> {
-      const response = await transport.send(ClipboardEvents.getHistory, toClipboardQueryRequest(options))
+      const response = await transport.send(
+        ClipboardEvents.getHistory,
+        withSdkApiPayload(toClipboardQueryRequest(options)),
+      )
       return toClipboardHistoryResponse(response)
     },
 
@@ -292,14 +311,14 @@ export function useClipboard() {
      * Sets favorite status for a clipboard item.
      */
     async setFavorite(options: ClipboardFavoriteOptions): Promise<void> {
-      await transport.send(ClipboardEvents.setFavorite, options)
+      await transport.send(ClipboardEvents.setFavorite, withSdkApiPayload(options))
     },
 
     /**
      * Deletes a clipboard item from history.
      */
     async deleteItem(options: ClipboardDeleteOptions): Promise<void> {
-      await transport.send(ClipboardEvents.delete, options)
+      await transport.send(ClipboardEvents.delete, withSdkApiPayload(options))
     },
 
     /**
@@ -313,7 +332,10 @@ export function useClipboard() {
      * Search clipboard history with advanced filtering.
      */
     async searchHistory(options: ClipboardSearchOptions = {}): Promise<ClipboardSearchResponse> {
-      const response = await transport.send(ClipboardEvents.getHistory, toClipboardQueryRequest(options))
+      const response = await transport.send(
+        ClipboardEvents.getHistory,
+        withSdkApiPayload(toClipboardQueryRequest(options)),
+      )
       const historyResponse = toClipboardHistoryResponse(response)
       return {
         items: historyResponse.history,
@@ -382,13 +404,14 @@ export function useClipboard() {
         await transport.send(ClipboardEvents.apply, {
           id: Number(options.item?.id),
           autoPaste: true,
+          _sdkapi: resolveSdkApi(),
         })
         return true
       }
 
       const response = await transport.send(
         ClipboardEvents.copyAndPaste,
-        toClipboardActionRequest(options),
+        withSdkApiPayload(toClipboardActionRequest(options)),
       )
       return toClipboardActionSuccess(response)
     },
@@ -404,7 +427,7 @@ export function useClipboard() {
      * Writes text to the system clipboard.
      */
     async writeText(text: string): Promise<void> {
-      await transport.send(ClipboardEvents.write, { text })
+      await transport.send(ClipboardEvents.write, withSdkApiPayload({ text }))
     },
 
     /**
@@ -412,7 +435,7 @@ export function useClipboard() {
      * Supports text, HTML, image (data URL), and files.
      */
     async write(options: ClipboardWriteOptions): Promise<void> {
-      await transport.send(ClipboardEvents.write, options)
+      await transport.send(ClipboardEvents.write, withSdkApiPayload(options))
     },
 
     /**
@@ -426,14 +449,17 @@ export function useClipboard() {
      * Reads image from clipboard as data URL.
      */
     async readImage(options?: { preview?: boolean }): Promise<ClipboardImageResult | null> {
-      return await transport.send(ClipboardEvents.readImage, { preview: options?.preview ?? true })
+      return await transport.send(
+        ClipboardEvents.readImage,
+        withSdkApiPayload({ preview: options?.preview ?? true }),
+      )
     },
 
     /**
      * Resolves the original image URL for a clipboard history item.
      */
     async getHistoryImageUrl(id: number): Promise<string | null> {
-      const res = await transport.send(ClipboardEvents.getImageUrl, { id })
+      const res = await transport.send(ClipboardEvents.getImageUrl, withSdkApiPayload({ id }))
       return typeof res?.url === 'string' ? res.url : null
     },
 
@@ -457,7 +483,7 @@ export function useClipboard() {
     async copyAndPaste(options: ClipboardCopyAndPasteOptions): Promise<boolean> {
       const response = await transport.send(
         ClipboardEvents.copyAndPaste,
-        toClipboardActionRequest(options),
+        withSdkApiPayload(toClipboardActionRequest(options)),
       )
       return toClipboardActionSuccess(response)
     },

@@ -10,6 +10,7 @@ import type { SdkApiVersion } from './index'
  * - >= 260121: `tfileScope` is required when requesting tfile access
  * - >= 260215: plugin sqlite sdk is available
  * - >= 260225: OmniPanel declarative transfer is available
+ * - >= 260228: plugin capability auth baseline is enabled
  */
 export enum SdkApi {
   /**
@@ -32,6 +33,10 @@ export enum SdkApi {
    * 2026-02-25: add OmniPanel declarative transfer support.
    */
   V260225 = 260225,
+  /**
+   * 2026-02-28: capability auth baseline for plugin calls.
+   */
+  V260228 = 260228,
 }
 
 /**
@@ -39,6 +44,7 @@ export enum SdkApi {
  * Used to gracefully fallback for unknown/invalid sdkapi values.
  */
 export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
+  SdkApi.V260228,
   SdkApi.V260225,
   SdkApi.V260215,
   SdkApi.V260121,
@@ -50,7 +56,7 @@ export const SUPPORTED_SDK_VERSIONS: readonly SdkApiVersion[] = [
  * Current SDK API version.
  * Updated when breaking changes are introduced to plugin APIs.
  */
-export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260225
+export const CURRENT_SDK_VERSION: SdkApiVersion = SdkApi.V260228
 
 /**
  * Minimum SDK version required for permission enforcement.
@@ -72,6 +78,11 @@ export const TFILE_SCOPE_REQUIRED_MIN_VERSION: SdkApiVersion = SdkApi.V260121
  * Minimum SDK version required for OmniPanel declarative transfer.
  */
 export const OMNI_TRANSFER_DECLARATIVE_MIN_VERSION: SdkApiVersion = SdkApi.V260225
+
+/**
+ * Minimum SDK version required for capability-level auth baseline.
+ */
+export const CAPABILITY_AUTH_MIN_VERSION: SdkApiVersion = SdkApi.V260228
 
 /**
  * SDK version compatibility result

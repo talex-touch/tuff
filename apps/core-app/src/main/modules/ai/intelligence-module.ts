@@ -227,6 +227,23 @@ function normalizeProviderForRuntime(
   }
 }
 
+function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): Error {
+  const baseError = error instanceof Error ? error : new Error(String(error))
+  const message = baseError.message || ''
+  const capabilityUnsupported = /capability not supported|is unsupported/i.test(message)
+  if (!capabilityUnsupported) {
+    return baseError
+  }
+
+  const normalized = new Error(
+    `[INTELLIGENCE_CAPABILITY_UNSUPPORTED:${capabilityId}] ${message}`
+  ) as Error & { code?: string; capabilityId?: string; cause?: unknown }
+  normalized.code = 'INTELLIGENCE_CAPABILITY_UNSUPPORTED'
+  normalized.capabilityId = capabilityId
+  normalized.cause = error
+  return normalized
+}
+
 const intelligenceInvokeEvent = defineRawEvent<
   IntelligenceInvokePayload,
   ApiResponse<IntelligenceInvokeResult<unknown>>
@@ -921,7 +938,12 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         const { capabilityId, payload, options } = data
         ensureIntelligenceConfigLoaded()
         intelligenceLog.info(`Invoking capability: ${capabilityId}`)
-        const result = await tuffIntelligence.invoke(capabilityId, payload, options)
+        let result: IntelligenceInvokeResult<unknown>
+        try {
+          result = await tuffIntelligence.invoke(capabilityId, payload, options)
+        } catch (error) {
+          throw normalizeCapabilityInvokeError(capabilityId, error)
+        }
         intelligenceLog.success(
           `Capability ${capabilityId} completed via ${result.provider} (${result.model})`
         )
@@ -1038,15 +1060,20 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       intelligenceLog.info(`Testing capability: ${capabilityId}`)
       const payload = await tester.generateTestPayload({ providerId, userInput, ...rest })
 
-      const result = await tuffIntelligence.invoke(capabilityId, payload, {
-        modelPreference: model ? [model] : options.modelPreference,
-        allowedProviderIds,
-        metadata: {
-          promptTemplate,
-          promptVariables,
-          caller: 'system'
-        }
-      })
+      let result: IntelligenceInvokeResult<unknown>
+      try {
+        result = await tuffIntelligence.invoke(capabilityId, payload, {
+          modelPreference: model ? [model] : options.modelPreference,
+          allowedProviderIds,
+          metadata: {
+            promptTemplate,
+            promptVariables,
+            caller: 'system'
+          }
+        })
+      } catch (error) {
+        throw normalizeCapabilityInvokeError(capabilityId, error)
+      }
 
       const formattedResult = tester.formatTestResult(result)
 
