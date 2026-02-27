@@ -1,8 +1,8 @@
 import type { AppSetting, TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
-import type { CoreBoxInputChange } from './input-transport'
 import * as fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -191,13 +191,13 @@ export class WindowManager {
   /**
    * Send input change to UI view if allowed
    */
-  public forwardInputChange(payload: CoreBoxInputChange & { query: TuffQuery }): void {
+  public forwardInputChange(payload: CoreBoxInputChangeRequest): void {
     if (!this.inputAllowed || !this.attachedPlugin) return
 
     this.sendChannelMessageToUIView('core-box:input-change', {
-      input: payload.input ?? payload.query.text,
+      input: payload.input,
       query: payload.query,
-      source: payload.source ?? 'ui-monitor'
+      source: payload.source
     })
   }
 

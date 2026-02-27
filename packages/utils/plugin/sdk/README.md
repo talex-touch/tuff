@@ -259,6 +259,8 @@ export default {
 - `core-box:set-input-visibility` - 设置输入框可见性（主进程 → 渲染进程）
 - `core-box:request-input-value` - 请求输入值（主进程 → 渲染进程）
 
+> Breaking change（2026-02-27）：`core-box:input-change` 事件载荷统一为 `{ input, query, source }` 必填结构。
+
 ### 架构优势
 
 1. **统一的 API 风格** - 所有 SDK 使用相同的工厂函数模式

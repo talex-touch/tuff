@@ -404,9 +404,9 @@ export interface ClearInputResponse {
  * Input change payload from renderer.
  */
 export interface CoreBoxInputChangeRequest {
-  input?: string
-  query?: TuffQuery
-  source?: 'renderer' | 'initial' | 'ui-monitor'
+  input: string
+  query: TuffQuery
+  source: 'renderer' | 'initial' | 'ui-monitor'
 }
 
 /**
