@@ -2,25 +2,46 @@ import type { TuffQuery } from '@talex-touch/utils/core-box'
 import type { ISortMiddleware, TuffItem } from '../types'
 import { calculateFrequencyScore } from '../usage-utils'
 
-const DEFAULT_WEIGHTS: Record<string, number> = {
-  app: 100,
-  feature: 5,
-  command: 5,
-  plugin: 3,
-  file: 2,
-  url: 1,
-  text: 1,
+const DEFAULT_KIND_BIAS: Record<string, number> = {
+  app: 12,
+  feature: 12,
+  command: 11,
+  plugin: 8,
+  file: 6,
+  url: 4,
+  text: 4,
   preview: 10000
 }
 
-function getWeight(item: TuffItem): number {
-  const kind = item.kind || 'unknown'
-  const baseWeight = DEFAULT_WEIGHTS[kind] || 0
+const MATCH_SCORE_MULTIPLIER = 20_000
+const FREQUENCY_SCORE_MULTIPLIER = 120_000
+const RECENCY_SCORE_MULTIPLIER = 500
+const KIND_SCORE_MULTIPLIER = 300
 
-  // Feature manifest priority can boost ranking above the default kind weight.
-  // This allows high-priority features (e.g., intelligence) to rank above apps.
+function getKindBias(item: TuffItem): number {
+  const kind = item.kind || 'unknown'
+  const baseBias = DEFAULT_KIND_BIAS[kind] || 0
+
+  // Feature manifest priority remains effective, but only as a soft bias.
   const metaPriority = Number(item.meta?.priority) || 0
-  return baseWeight + metaPriority
+  return baseBias + metaPriority
+}
+
+function getFrequencyWeightFactor(item: TuffItem): number {
+  if (item.kind === 'feature') {
+    return 1.35
+  }
+
+  if (item.kind === 'command') {
+    return 1.2
+  }
+
+  return 1
+}
+
+function getMatchSource(item: TuffItem): string | null {
+  const source = item.meta?.extension?.source
+  return typeof source === 'string' && source ? source : null
 }
 
 /**
@@ -37,6 +58,8 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
   const title = item.render.basic?.title
   const titleLower = title?.toLowerCase() || ''
   const titleLength = titleLower.length
+  const hasDirectTitleMatch = titleLower.includes(normalizedKey)
+  const matchSource = getMatchSource(item)
   const rawTokens = item.meta?.extension?.searchTokens
   const searchTokens = Array.isArray(rawTokens)
     ? rawTokens.filter((t): t is string => typeof t === 'string' && Boolean(t))
@@ -95,12 +118,26 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 
     // 2. Beginning match reward
     if (start === 0) {
-      score += 300 // 开头匹配，大幅加分
+      const isInitialsMatch = matchSource === 'initials'
+      if (titleLower.startsWith(normalizedKey)) {
+        score += 300 // 标题真实开头匹配，大幅加分
+      } else if (isInitialsMatch) {
+        score += 140 // 缩写命中给适度奖励，避免被别名伪高亮压制
+      }
     }
 
     // 3. Continuity/relevance reward (compared to search term length)
-    if (matchLength === normalizedKey.length) {
+    if (hasDirectTitleMatch && matchLength === normalizedKey.length) {
       score += 200
+    }
+
+    // Non-title sources (tag/path/description) may use fallback highlight ranges.
+    // Prevent synthetic ranges from outranking direct title matches.
+    if (
+      !hasDirectTitleMatch &&
+      (matchSource === 'tag' || matchSource === 'path' || matchSource === 'description')
+    ) {
+      return Math.min(Math.round(score), 280)
     }
 
     return Math.round(score)
@@ -116,7 +153,7 @@ function calculateMatchScore(item: TuffItem, searchKey?: string): number {
 
 export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   const matchScore = calculateMatchScore(item, searchKey)
-  const weight = getWeight(item)
+  const kindBias = getKindBias(item)
   const recency = item.scoring?.recency || 0
 
   // 使用增强的频率计算（从 meta.usageStats 读取）
@@ -142,18 +179,17 @@ export function calculateSortScore(item: TuffItem, searchKey?: string): number {
   }
 
   // Scoring formula:
-  // - weight: Base priority by item type (app > feature > file)
-  // - matchScore: How well the search query matches the item
-  // - recency: How recently the item was used
-  // - frequency: How often the user executes this item (with time decay)
-  //
-  // Key insight: frequency should have significant impact to allow
-  // frequently-used commands to rank higher than occasionally-matched files.
-  // A user who searches "hello" and always picks "翻译" should see it ranked higher
-  // than a file named "Hello.txt" they never open.
-  //
-  // Frequency weight increased from 5000 to 8000 to give more weight to frequently used items
-  const finalScore = weight * 1000000 + matchScore * 10000 + recency * 100 + frequency * 8000
+  // 1) matchScore 主导排序，避免按 kind 强制置顶；
+  // 2) frequency/recency 作为行为学习信号；
+  // 3) kindBias 与 manifest priority 仅作为软偏置；
+  // 4) feature/command 频次权重略高，提升常用功能的自学习效果；
+  // 5) 频次使用 log 增长，避免超高历史次数压过明显更高的匹配分。
+  const frequencyWeighted = Math.log1p(Math.max(0, frequency)) * getFrequencyWeightFactor(item)
+  const finalScore =
+    matchScore * MATCH_SCORE_MULTIPLIER +
+    frequencyWeighted * FREQUENCY_SCORE_MULTIPLIER +
+    recency * RECENCY_SCORE_MULTIPLIER +
+    kindBias * KIND_SCORE_MULTIPLIER
 
   return finalScore
 }
