@@ -100,6 +100,9 @@ const unsubscribeKey = plugin.feature.onKeyEvent((event) => {
 - **ArrowUp / ArrowDown** - 上下导航
 - **Meta/Ctrl + 任意键** - 快捷键组合（Cmd+V 除外，用于粘贴）
 
+当 CoreBox 输入框可见时，编辑类快捷键会保留给输入框，不再转发：
+- **Meta/Ctrl + A/C/V/X/Z/Y** - 输入框编辑（全选/复制/粘贴/剪切/撤销/重做）
+
 > **注意**：`ArrowLeft` 和 `ArrowRight` 不会被转发，因为它们用于输入框中的文本编辑。如果需要左右导航，请使用 `Meta/Ctrl + ArrowLeft/ArrowRight`。
 
 ```typescript
