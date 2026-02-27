@@ -4,6 +4,21 @@
 
 ## 2026-02-27
 
+### CoreBox UI View 生命周期竞态修复（webContents 空指针防护）
+
+**变更类型**: 稳定性修复 / 崩溃防护
+
+**描述**: 修复 CoreBox 在 show/focus 异步回调与 UI View detach/销毁并发时，访问 `this.uiView.webContents.isDestroyed()` 触发 `TypeError` 的问题。该异常会被 `DevProcessManager` 识别为 uncaught exception 并触发开发进程退出。
+
+**主要变更**:
+1. 在 `WindowManager` 新增 `getAliveUIViewWebContents()`，统一做 `uiView`/`webContents` 存活检查。
+2. `show()` 的延时 focus、`Cmd/Ctrl+R` 的 UI reload、缓存 view 恢复、`sendToUIView`、键盘转发、插件 DevTools 打开等路径统一改为通过安全检查访问 `webContents`。
+3. 保持现有行为不变，仅在 `webContents` 不可用时短路返回，避免空指针导致主进程崩溃。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### CoreBox 搜索排序修复（取消 app 硬置顶，启用匹配优先 + 使用频次提升）
 
 **变更类型**: 搜索体验修复 / 排序策略优化
@@ -3054,6 +3069,44 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-02-27
+
+### 新增: Tuff Quick Actions SDK（兼容 MetaSDK）
+
+**变更类型**: 接口增强 / 开发者体验优化
+
+**描述**: 基于 TuffDSL 扩展了 Quick Actions 动作类型，并新增 `QuickActionsSDK`，用于统一插件在 `⌘K / Ctrl+K` 动作层注册与清理动作；保留 `MetaSDK` 作为兼容别名。
+
+**主要变更**:
+1. **TuffDSL 扩展**:
+   - 新增 `TuffQuickActionRender` 与 `TuffQuickAction` 类型定义。
+   - MetaOverlay 事件类型复用 TuffDSL 动作结构，避免重复定义。
+
+2. **SDK 新增与兼容**:
+   - 新增 `packages/utils/plugin/sdk/quick-actions-sdk.ts`（`createQuickActionsSDK`）。
+   - `meta-sdk.ts` 改为兼容层，内部转发到 `QuickActionsSDK`。
+   - SDK 索引新增导出 `quick-actions-sdk`。
+
+3. **插件运行时 API 接入**:
+   - 插件上下文新增 `quickActions`（同时保留 `meta`）。
+   - `meta` 与 `quickActions` 复用同一 SDK 实例，避免重复监听与重复注册风险。
+
+4. **类型与测试同步**:
+   - `MetaUnregisterActionsRequest` 增加可选 `actionId`，与现有主进程处理对齐。
+   - 增加 Quick Actions 生命周期测试，覆盖监听释放行为。
+
+**修改文件**:
+- `packages/utils/core-box/tuff/tuff-dsl.ts`
+- `packages/utils/transport/events/types/meta-overlay.ts`
+- `packages/utils/plugin/sdk/quick-actions-sdk.ts`
+- `packages/utils/plugin/sdk/meta-sdk.ts`
+- `packages/utils/plugin/sdk/index.ts`
+- `packages/utils/plugin/sdk/types.ts`
+- `packages/utils/__tests__/plugin-sdk-lifecycle.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
 
 ---
 

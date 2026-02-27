@@ -255,8 +255,9 @@ export class WindowManager {
           return
         }
         wasVisibleBeforeReload = window.window.isVisible()
-        if (this.uiView && !this.uiView.webContents.isDestroyed()) {
-          this.uiView.webContents.reload()
+        const uiWebContents = this.getAliveUIViewWebContents()
+        if (uiWebContents) {
+          uiWebContents.reload()
         }
       }
     })
@@ -619,8 +620,9 @@ export class WindowManager {
     setTimeout(() => {
       if (window.window.isDestroyed()) return
       window.window.focus()
-      if (coreBoxManager.isUIMode && this.uiView && !this.uiView.webContents.isDestroyed()) {
-        this.uiView.webContents.focus()
+      const uiWebContents = this.getAliveUIViewWebContents()
+      if (coreBoxManager.isUIMode && uiWebContents) {
+        uiWebContents.focus()
         this.uiViewFocused = true
       }
     }, 100)
@@ -1076,9 +1078,10 @@ export class WindowManager {
           height: Math.max(0, bounds.height - 60)
         })
 
-        if (!this.uiView.webContents.isDestroyed()) {
+        const uiWebContents = this.getAliveUIViewWebContents()
+        if (uiWebContents) {
           this.applyThemeToUIView(this.uiView)
-          this.uiView.webContents.focus()
+          uiWebContents.focus()
 
           if (query) {
             const normalizedQuery: TuffQuery =
@@ -1432,9 +1435,18 @@ export class WindowManager {
   }
 
   public sendToUIView(channel: string, ...args: unknown[]): void {
-    if (this.uiView) {
-      this.uiView.webContents.postMessage(channel, args)
+    const webContents = this.getAliveUIViewWebContents()
+    if (webContents) {
+      webContents.postMessage(channel, args)
     }
+  }
+
+  private getAliveUIViewWebContents() {
+    const webContents = this.uiView?.webContents
+    if (!webContents || webContents.isDestroyed()) {
+      return null
+    }
+    return webContents
   }
 
   /**
@@ -1448,8 +1460,8 @@ export class WindowManager {
       return
     }
 
-    const webContents = this.uiView.webContents
-    if (!webContents || webContents.isDestroyed()) {
+    const webContents = this.getAliveUIViewWebContents()
+    if (!webContents) {
       return
     }
 
@@ -1603,6 +1615,12 @@ export class WindowManager {
       return
     }
 
+    const webContents = this.getAliveUIViewWebContents()
+    if (!webContents) {
+      coreBoxWindowLog.debug('Cannot forward key event: UI view webContents is unavailable')
+      return
+    }
+
     const modifiers = this.buildKeyModifiers(event)
     const keyCode = this.mapKeyToElectronKeyCode(event.key)
 
@@ -1610,21 +1628,21 @@ export class WindowManager {
       meta: { keyCode, modifiers: modifiers.join(',') }
     })
 
-    this.uiView.webContents.sendInputEvent({
+    webContents.sendInputEvent({
       type: 'keyDown',
       keyCode,
       modifiers
     })
 
     if (event.key.length === 1) {
-      this.uiView.webContents.sendInputEvent({
+      webContents.sendInputEvent({
         type: 'char',
         keyCode: event.key,
         modifiers
       })
     }
 
-    this.uiView.webContents.sendInputEvent({
+    webContents.sendInputEvent({
       type: 'keyUp',
       keyCode,
       modifiers
@@ -1699,8 +1717,9 @@ export class WindowManager {
       return false
     }
 
-    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
-      this.uiView.webContents.openDevTools({ mode: 'detach' })
+    const uiWebContents = this.getAliveUIViewWebContents()
+    if (uiWebContents) {
+      uiWebContents.openDevTools({ mode: 'detach' })
       return true
     }
 
