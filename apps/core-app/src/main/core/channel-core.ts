@@ -1,7 +1,6 @@
 import type {
   ChannelCallback,
   IChannelData,
-  ITouchChannel,
   RawChannelSyncData,
   RawStandardChannelData,
   StandardChannelData
@@ -51,7 +50,7 @@ const toRecord = (value: unknown): Record<string, unknown> => {
   return {}
 }
 
-class TouchChannel implements ITouchChannel {
+class TouchChannel {
   channelMap: Map<ChannelType, Map<string, ChannelCallback[]>> = new Map()
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
@@ -771,9 +770,9 @@ class TouchChannel implements ITouchChannel {
   }
 }
 
-let touchChannel: ITouchChannel | null = null
+let touchChannel: TouchChannel | null = null
 
-export function genTouchChannel(app?: TalexTouch.TouchApp): ITouchChannel {
+export function genTouchChannel(app?: TalexTouch.TouchApp): TouchChannel {
   if (app && !touchChannel) touchChannel = new TouchChannel(app)
 
   return touchChannel!
