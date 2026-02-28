@@ -25,6 +25,7 @@ const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
 const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
 const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
+const AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS = 6_000
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 type AuthStateListener = (state: AuthState) => void
@@ -62,6 +63,7 @@ let requestRendererValue: (<T>(eventName: string) => Promise<T | null>) | null =
 let authToken: string | null = null
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
+let authStartupRefreshTimer: NodeJS.Timeout | null = null
 
 const authGetStateEvent = defineRawEvent<void, AuthState>('auth:get-state')
 const authLoginEvent = defineRawEvent<{ mode?: 'sign-in' | 'sign-up' }, { initiated: boolean }>(
@@ -103,6 +105,46 @@ function cloneAuthState(): AuthState {
     user: authState.user ? { ...authState.user } : null,
     sessionId: authState.sessionId
   }
+}
+
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[unserializable]'
+  }
+}
+
+function getCachedAuthUser(): AuthUser | null {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  ensureAuthSettings(appSettings)
+
+  const raw = (appSettings.auth as { cachedUser?: unknown }).cachedUser
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+
+  const candidate = raw as Partial<AuthUser>
+  if (typeof candidate.id !== 'string' || typeof candidate.email !== 'string') {
+    return null
+  }
+
+  return toAuthUserProfile(candidate as AuthUser)
+}
+
+function setCachedAuthUser(user: AuthUser | null): void {
+  const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
+  ensureAuthSettings(appSettings)
+
+  const authSettings = appSettings.auth as { cachedUser?: unknown }
+  const nextCachedUser = user ? toAuthUserProfile(user) : null
+
+  if (safeJsonStringify(authSettings.cachedUser ?? null) === safeJsonStringify(nextCachedUser)) {
+    return
+  }
+
+  authSettings.cachedUser = nextCachedUser
+  saveMainConfig(StorageList.APP_SETTING, appSettings)
 }
 
 function notifyAuthStateChanged(): void {
@@ -230,6 +272,7 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
   authState.isSignedIn = Boolean(nextUser)
   authState.user = nextUser
   authState.sessionId = sessionId ?? null
+  setCachedAuthUser(nextUser)
   notifyAuthStateChanged()
 }
 
@@ -354,7 +397,15 @@ function ensureDeviceProfile(): { deviceId: string; deviceName: string; devicePl
   return { deviceId, deviceName, devicePlatform }
 }
 
-async function fetchRemoteUser(token: string, signal?: AbortSignal): Promise<AuthUser | null> {
+type FetchRemoteUserResult =
+  | { kind: 'success'; user: AuthUser }
+  | { kind: 'unauthorized' }
+  | { kind: 'unavailable' }
+
+async function fetchRemoteUser(
+  token: string,
+  signal?: AbortSignal
+): Promise<FetchRemoteUserResult> {
   try {
     const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
     const response = await fetch(url, {
@@ -362,16 +413,19 @@ async function fetchRemoteUser(token: string, signal?: AbortSignal): Promise<Aut
       signal
     })
     if (!response.ok) {
-      return null
+      if (response.status === 401 || response.status === 403) {
+        return { kind: 'unauthorized' }
+      }
+      return { kind: 'unavailable' }
     }
     const data = (await response.json()) as AuthUser
-    return toAuthUserProfile(data)
+    return { kind: 'success', user: toAuthUserProfile(data) }
   } catch {
-    return null
+    return { kind: 'unavailable' }
   }
 }
 
-async function fetchRemoteUserWithTimeout(token: string): Promise<AuthUser | null> {
+async function fetchRemoteUserWithTimeout(token: string): Promise<FetchRemoteUserResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), AUTH_PROFILE_REQUEST_TIMEOUT_MS)
   try {
@@ -379,6 +433,38 @@ async function fetchRemoteUserWithTimeout(token: string): Promise<AuthUser | nul
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function refreshAuthStateFromRemote(): Promise<void> {
+  if (!authToken) {
+    updateAuthState(null)
+    return
+  }
+
+  const remoteResult = await fetchRemoteUserWithTimeout(authToken)
+  if (remoteResult.kind === 'success') {
+    updateAuthState(remoteResult.user, authState.sessionId)
+    return
+  }
+
+  if (remoteResult.kind === 'unauthorized') {
+    await clearAuthToken()
+    updateAuthState(null)
+    return
+  }
+
+  authLog.info('Remote auth profile unavailable, keeping local cached auth state')
+}
+
+function scheduleAuthStartupRefresh(delayMs = AUTH_PROFILE_STARTUP_REFRESH_DELAY_MS): void {
+  if (authStartupRefreshTimer) {
+    clearTimeout(authStartupRefreshTimer)
+  }
+
+  authStartupRefreshTimer = setTimeout(() => {
+    authStartupRefreshTimer = null
+    void refreshAuthStateFromRemote()
+  }, delayMs)
 }
 
 async function patchRemoteUserProfile(
@@ -422,13 +508,11 @@ async function initializeAuthState(): Promise<void> {
     updateAuthState(null)
     return
   }
-  const remoteUser = await fetchRemoteUserWithTimeout(authToken)
-  if (remoteUser) {
-    updateAuthState(remoteUser, authState.sessionId)
-    return
+  const cachedUser = getCachedAuthUser()
+  if (cachedUser) {
+    updateAuthState(cachedUser, authState.sessionId)
   }
-  await clearAuthToken()
-  updateAuthState(null)
+  scheduleAuthStartupRefresh()
 }
 
 async function openLoginPage(mode: 'sign-in' | 'sign-up' = 'sign-in'): Promise<void> {
@@ -457,9 +541,27 @@ async function handleExternalAuthCallback(token: string, appToken?: string): Pro
     return false
   }
   await setAuthToken(resolvedToken)
-  const remoteUser = await fetchRemoteUser(resolvedToken)
-  updateAuthState(remoteUser, authState.sessionId)
-  return Boolean(remoteUser)
+  const remoteResult = await fetchRemoteUserWithTimeout(resolvedToken)
+  if (remoteResult.kind === 'success') {
+    updateAuthState(remoteResult.user, authState.sessionId)
+    return true
+  }
+  if (remoteResult.kind === 'unauthorized') {
+    await clearAuthToken()
+    updateAuthState(null)
+    return false
+  }
+
+  const cachedUser = getCachedAuthUser()
+  if (cachedUser) {
+    updateAuthState(cachedUser, authState.sessionId)
+    scheduleAuthStartupRefresh(2_000)
+    return true
+  }
+
+  updateAuthState(null)
+  scheduleAuthStartupRefresh(2_000)
+  return true
 }
 
 function normalizeHeaders(headers: Headers): Record<string, string> {
@@ -828,6 +930,10 @@ export class AuthModule extends BaseModule<TalexEvents> {
   }
 
   onDestroy(): MaybePromise<void> {
+    if (authStartupRefreshTimer) {
+      clearTimeout(authStartupRefreshTimer)
+      authStartupRefreshTimer = null
+    }
     for (const dispose of this.transportDisposers) {
       try {
         dispose()

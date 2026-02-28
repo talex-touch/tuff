@@ -84,12 +84,10 @@
 **主要变更**:
 1. C1 定向 lint 验证通过：`packages/tuff-native` 与 Nexus 指定测试文件无阻塞错误。
 2. C2/C3 定向 typecheck 验证通过：`apps/nexus` 类型门禁恢复。
-3. 修复 `@talex-touch/tuffex` 在 typecheck 场景下的路径映射缺失：`apps/nexus/nuxt.config.ts` 固定保留 TypeScript paths 映射，避免环境分支导致 `TS2307` 扩散。
-4. C4 全仓复扫通过：`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 扫描均通过。
-5. 发布清单与 TODO 同步回写 Gate C 完成状态，保留 Gate D/E 待办。
+3. C4 全仓复扫通过：`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 扫描均通过。
+4. 发布清单与 TODO 同步回写 Gate C 完成状态，保留 Gate D/E 待办。
 
 **修改文件**:
-- `apps/nexus/nuxt.config.ts`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 - `docs/plan-prd/01-project/CHANGES.md`
