@@ -4,6 +4,22 @@
 
 ## 2026-02-28
 
+### 修复 Windows Release 误发布裸 EXE（避免 ICU 启动失败）
+
+**变更类型**: 发布链路修复 / Windows 安装包可靠性
+
+**描述**: 修复 `build-and-release` 在收集发布资产时递归匹配所有 `.exe` 导致 `win-unpacked/tuff.exe` 被误发布的问题。用户下载裸 EXE 后缺少 `resources/icudtl.dat` 等运行时文件，会触发 ICU 初始化失败并无法启动。现统一只发布 `*-setup.exe` 安装包，并显式排除 `win-unpacked` 与 `__uninstaller-*.exe`。
+
+**主要变更**:
+1. Release 资产列表改为仅展示 Windows `*-setup.exe`，避免误导下载。
+2. 资产收集规则从“所有 `.exe`”收敛为“仅 `*-setup.exe` + 其他平台产物”。
+3. 新增守卫校验：若未收集到 `*-setup.exe`，工作流直接失败，阻止错误资产发布。
+4. Nexus 资产同步阶段新增过滤：非 `*-setup.exe` 的 Windows `.exe` 不再写入发布记录，保持下载入口一致。
+
+**修改文件**:
+- `.github/workflows/build-and-release.yml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 清理失效/过期 CI 工作流（Sync Guard / Legacy Release / opencode）
 
 **变更类型**: 工程脚本清理 / CI 噪音收敛
