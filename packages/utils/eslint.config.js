@@ -23,6 +23,18 @@ module.exports = antfu(
       'node/prefer-global/buffer': 'off',
       'node/prefer-global/process': 'off',
       'no-console': 'off',
+      'no-restricted-imports': ['error', {
+        paths: [
+          {
+            name: '@talex-touch/utils/channel',
+            message: 'Legacy channel API is restricted. Use @talex-touch/utils/transport or local legacy wrappers.'
+          },
+          {
+            name: 'packages/utils/channel',
+            message: 'Legacy channel API is restricted. Use @talex-touch/utils/transport or local legacy wrappers.'
+          },
+        ],
+      }],
       'no-useless-return': 'off',
       'perfectionist/sort-exports': 'off',
       'perfectionist/sort-imports': 'off',
