@@ -1,4 +1,4 @@
-import { DataCode } from '../channel'
+import { DataCode } from './legacy'
 
 type PluginChannelPreludeOptions = {
   uniqueKey: string

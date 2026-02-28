@@ -1,4 +1,4 @@
-import type { ITouchClientChannel } from '../channel'
+import type { ITouchClientChannel } from '../transport/legacy'
 import type { ITuffTransport } from '../transport'
 import type { ITouchSDK } from './sdk/index'
 import { getLogger } from '../common/logger'
