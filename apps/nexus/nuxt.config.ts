@@ -286,13 +286,9 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
+          '@talex-touch/tuffex': [tuffexSourceEntry],
+          '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
-          ...(useWorkspaceSource
-            ? {
-                '@talex-touch/tuffex': [tuffexSourceEntry],
-                '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
-              }
-            : {}),
         },
       },
     },

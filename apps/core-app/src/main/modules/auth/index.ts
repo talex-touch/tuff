@@ -24,6 +24,7 @@ const AUTH_TOKEN_KEY = 'auth.token'
 const MACHINE_SEED_SECURE_KEY = 'sync.machine-seed.v1'
 const MACHINE_CODE_VERSION = 'mc_v1'
 const STEP_UP_TOKEN_TTL_MS = 10 * 60 * 1000
+const AUTH_PROFILE_REQUEST_TIMEOUT_MS = 4_000
 const LOCAL_AUTH_BASE_URL = 'http://localhost:3200'
 
 type AuthStateListener = (state: AuthState) => void
@@ -353,11 +354,12 @@ function ensureDeviceProfile(): { deviceId: string; deviceName: string; devicePl
   return { deviceId, deviceName, devicePlatform }
 }
 
-async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
+async function fetchRemoteUser(token: string, signal?: AbortSignal): Promise<AuthUser | null> {
   try {
     const url = new URL('/api/v1/auth/me', resolveAuthBaseUrl()).toString()
     const response = await fetch(url, {
-      headers: { Authorization: normalizeBearerToken(token) }
+      headers: { Authorization: normalizeBearerToken(token) },
+      signal
     })
     if (!response.ok) {
       return null
@@ -366,6 +368,16 @@ async function fetchRemoteUser(token: string): Promise<AuthUser | null> {
     return toAuthUserProfile(data)
   } catch {
     return null
+  }
+}
+
+async function fetchRemoteUserWithTimeout(token: string): Promise<AuthUser | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), AUTH_PROFILE_REQUEST_TIMEOUT_MS)
+  try {
+    return await fetchRemoteUser(token, controller.signal)
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -410,7 +422,7 @@ async function initializeAuthState(): Promise<void> {
     updateAuthState(null)
     return
   }
-  const remoteUser = await fetchRemoteUser(authToken)
+  const remoteUser = await fetchRemoteUserWithTimeout(authToken)
   if (remoteUser) {
     updateAuthState(remoteUser, authState.sessionId)
     return
