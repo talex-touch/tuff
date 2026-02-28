@@ -218,6 +218,7 @@
   - [x] 第二批：`plugin/sdk/types.ts` 与 `plugin/sdk/channel.ts` 改为依赖 SDK 内部最小 channel 类型，移除对 `ITouchClientChannel/StandardChannelData` 的直接类型依赖。
   - [x] 第三批：`core/module-manager`、`touch-app`、`build-verification`、`plugin-module` 改为本地最小 channel 壳类型或 `unknown` 透传，继续收窄主进程对 legacy channel 类型的直接引用面。
   - [x] 第四批：`transport/sdk/main-transport.ts` 改为本地 legacy 常量与最小 `LegacyMainChannel` 接口，移除内部对 `ITouchChannel/ChannelType/DataCode` 的直接类型依赖。
+  - [x] 第五批：`core/channel-core.ts` 移除对 `ITouchChannel` 接口声明的直接类型依赖，`genTouchChannel` 改为返回本地实现类型，保持运行行为不变。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
