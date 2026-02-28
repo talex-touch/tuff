@@ -18,7 +18,6 @@ import {
   omniPanelFeatureListEvent,
   omniPanelFeatureRefreshEvent,
   omniPanelFeatureReorderEvent,
-  omniPanelFeatureToggleEvent,
   omniPanelHideEvent
 } from '../../../../shared/events/omni-panel'
 
@@ -116,19 +115,6 @@ async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> 
   }
 }
 
-async function toggleFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
-  try {
-    await transport.send(omniPanelFeatureToggleEvent, {
-      id: item.id,
-      enabled: !item.enabled
-    })
-    item.enabled = !item.enabled
-  } catch (error) {
-    console.error('[OmniPanel] Failed to toggle feature:', error)
-    toast.error(t('corebox.omniPanel.toggleFailed', '更新 Feature 状态失败。'))
-  }
-}
-
 async function reorderFeature(
   item: OmniPanelFeatureItemPayload,
   direction: 'up' | 'down'
@@ -217,7 +203,7 @@ onBeforeUnmount(() => {
       <div v-for="(item, index) in filteredFeatures" :key="item.id" class="OmniPanel__actionRow">
         <button
           class="OmniPanel__action"
-          :disabled="!item.enabled || !!executingId || item.unavailable"
+          :disabled="!!executingId || item.unavailable"
           @click="executeFeature(item)"
         >
           <span class="OmniPanel__actionIcon">
@@ -234,16 +220,10 @@ onBeforeUnmount(() => {
           </span>
           <span class="OmniPanel__actionMeta">
             <span v-if="executingId === item.id" class="OmniPanel__executing">...</span>
-            <span v-else>{{
-              item.enabled ? t('common.enabled', '已启用') : t('common.disabled', '已停用')
-            }}</span>
           </span>
         </button>
 
         <div class="OmniPanel__controls">
-          <button class="OmniPanel__controlBtn" @click="toggleFeature(item)">
-            {{ item.enabled ? t('common.disable', '停用') : t('common.enable', '启用') }}
-          </button>
           <button
             class="OmniPanel__controlBtn"
             :disabled="index === 0"

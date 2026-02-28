@@ -15,7 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { safeStorage, shell } from 'electron'
 import { BaseModule } from '../abstract-base-module'
-import { getMainConfig, saveMainConfig } from '../storage'
+import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 const authLog = getLogger('auth')
 
@@ -61,6 +61,7 @@ let transport: ITuffTransportMain | null = null
 let requestRendererValue: (<T>(eventName: string) => Promise<T | null>) | null = null
 
 let authToken: string | null = null
+let authUseSecureStorage = false
 let stepUpToken: string | null = null
 let stepUpTokenExpiresAt = 0
 let authStartupRefreshTimer: NodeJS.Timeout | null = null
@@ -277,14 +278,25 @@ function updateAuthState(nextUser: AuthUser | null, sessionId?: string | null): 
 }
 
 async function loadAuthToken(): Promise<void> {
+  authUseSecureStorage = isAuthTokenSecureStorageEnabled()
+
+  if (!authUseSecureStorage) {
+    authToken = null
+    await setSecureValue(AUTH_TOKEN_KEY, null)
+    return
+  }
+
   authToken = await getSecureValue(AUTH_TOKEN_KEY)
   if (!safeStorage.isEncryptionAvailable()) {
-    authLog.warn('Secure storage unavailable; auth token will not be persisted')
+    authLog.warn('Secure storage unavailable; auth token will only remain in memory')
   }
 }
 
 async function setAuthToken(nextToken: string): Promise<void> {
   authToken = nextToken
+  if (!authUseSecureStorage) {
+    return
+  }
   await setSecureValue(AUTH_TOKEN_KEY, nextToken)
 }
 
@@ -310,9 +322,56 @@ function ensureAuthSettings(appSettings: AppSetting): void {
     appSettings.auth = {
       deviceId: '',
       deviceName: '',
-      devicePlatform: ''
+      devicePlatform: '',
+      useSecureStorage: false,
+      secureStorageReminderShown: false
     }
+    return
   }
+
+  const authSettings = appSettings.auth as {
+    useSecureStorage?: unknown
+    secureStorageReminderShown?: unknown
+  }
+
+  if (typeof authSettings.useSecureStorage !== 'boolean') {
+    authSettings.useSecureStorage = false
+  }
+  if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
+    authSettings.secureStorageReminderShown = false
+  }
+}
+
+function isAuthTokenSecureStorageEnabled(appSettings?: AppSetting): boolean {
+  const resolvedSettings = appSettings ?? (getMainConfig(StorageList.APP_SETTING) as AppSetting)
+  ensureAuthSettings(resolvedSettings)
+  const authSettings = resolvedSettings.auth as { useSecureStorage?: unknown }
+  return authSettings.useSecureStorage === true
+}
+
+async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): Promise<void> {
+  const nextEnabled = isAuthTokenSecureStorageEnabled(nextAppSetting)
+  if (nextEnabled === authUseSecureStorage) {
+    return
+  }
+
+  authUseSecureStorage = nextEnabled
+  if (!authUseSecureStorage) {
+    await setSecureValue(AUTH_TOKEN_KEY, null)
+    authLog.info('Auth secure storage disabled by user preference; using session-only token mode')
+    return
+  }
+
+  if (!authToken) {
+    return
+  }
+
+  const persisted = await setSecureValue(AUTH_TOKEN_KEY, authToken)
+  if (!persisted) {
+    authLog.warn('Secure storage unavailable; token cannot be persisted yet')
+    return
+  }
+  authLog.info('Auth secure storage enabled by user preference')
 }
 
 function ensureSyncSettings(appSettings: AppSetting): void {
@@ -804,6 +863,7 @@ export class AuthModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('AuthModule')
   name: ModuleKey = AuthModule.key
   private transportDisposers: Array<() => void> = []
+  private appSettingUnsubscribe: (() => void) | null = null
 
   constructor() {
     super(AuthModule.key)
@@ -922,6 +982,12 @@ export class AuthModule extends BaseModule<TalexEvents> {
       })
     )
 
+    if (!this.appSettingUnsubscribe) {
+      this.appSettingUnsubscribe = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
+        void handleAuthStoragePreferenceChanged(data as AppSetting)
+      })
+    }
+
     void (async () => {
       await loadAuthToken()
       ensureDeviceProfile()
@@ -933,6 +999,10 @@ export class AuthModule extends BaseModule<TalexEvents> {
     if (authStartupRefreshTimer) {
       clearTimeout(authStartupRefreshTimer)
       authStartupRefreshTimer = null
+    }
+    if (this.appSettingUnsubscribe) {
+      this.appSettingUnsubscribe()
+      this.appSettingUnsubscribe = null
     }
     for (const dispose of this.transportDisposers) {
       try {

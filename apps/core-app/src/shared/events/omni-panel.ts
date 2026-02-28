@@ -8,19 +8,37 @@ export interface OmniPanelShowRequest {
   /**
    * Source for diagnostics (shortcut, mouse-long-press, command).
    */
-  source?: string
+  source?: OmniPanelContextSource | string
 }
+
+export type OmniPanelContextSource =
+  | 'shortcut'
+  | 'mouse-long-press'
+  | 'manual'
+  | 'command'
+  | 'unknown'
 
 export interface OmniPanelContextPayload {
   text: string
   hasSelection: boolean
-  source: string
+  source: OmniPanelContextSource
+  sourceRaw?: string
   capturedAt: number
 }
 
 export type OmniPanelFeatureSource = 'builtin' | 'plugin'
 export type OmniPanelTransferTarget = 'corebox' | 'plugin' | 'system'
 export type OmniPanelFeatureInputType = 'text' | 'image' | 'files' | 'html'
+export type OmniPanelFeatureUnavailableCode =
+  | 'PLUGIN_NOT_FOUND'
+  | 'PLUGIN_UNAVAILABLE'
+  | 'FEATURE_NOT_FOUND'
+  | 'FEATURE_NOT_EXECUTABLE'
+
+export interface OmniPanelFeatureUnavailableReason {
+  code: OmniPanelFeatureUnavailableCode
+  message: string
+}
 
 export interface OmniPanelFeatureIconPayload {
   type: string
@@ -43,6 +61,7 @@ export interface OmniPanelFeatureItemPayload {
   autoMounted?: boolean
   declarationMode?: 'declared' | 'fallback'
   unavailable?: boolean
+  unavailableReason?: OmniPanelFeatureUnavailableReason
   updatedAt: number
   createdAt: number
 }
@@ -52,6 +71,9 @@ export interface OmniPanelFeatureListResponse {
   updatedAt: number
 }
 
+/**
+ * @deprecated Kept for compatibility with legacy clients.
+ */
 export interface OmniPanelFeatureToggleRequest {
   id: string
   enabled: boolean
@@ -65,17 +87,47 @@ export interface OmniPanelFeatureReorderRequest {
 export interface OmniPanelFeatureExecuteRequest {
   id: string
   contextText?: string
-  source?: string
+  source?: OmniPanelContextSource | string
+  context?: {
+    text?: string
+    hasSelection?: boolean
+  }
 }
+
+export type OmniPanelFeatureExecuteErrorCode =
+  | 'INVALID_PAYLOAD'
+  | 'INVALID_FEATURE'
+  | 'FEATURE_NOT_FOUND'
+  | 'FEATURE_UNAVAILABLE'
+  | 'SELECTION_REQUIRED'
+  | 'COREBOX_UNAVAILABLE'
+  | 'COREBOX_TRANSFER_FAILED'
+  | 'SYSTEM_TARGET_NOT_IMPLEMENTED'
+  | 'PLUGIN_NOT_FOUND'
+  | 'FEATURE_EXECUTION_FAILED'
+  | 'UNKNOWN_BUILTIN'
+  | 'INTERNAL_ERROR'
 
 export interface OmniPanelFeatureExecuteResponse {
   success: boolean
   error?: string
-  code?: string
+  code?: OmniPanelFeatureExecuteErrorCode
 }
 
+export type OmniPanelFeatureRefreshReason =
+  | 'init'
+  | 'toggle'
+  | 'legacy-toggle'
+  | 'reorder'
+  | 'plugin-install'
+  | 'plugin-change'
+  | 'show'
+  | 'execute'
+  | 'context-updated'
+  | 'sync'
+
 export interface OmniPanelFeatureRefreshPayload {
-  reason: 'init' | 'toggle' | 'reorder' | 'plugin-install' | 'sync'
+  reason: OmniPanelFeatureRefreshReason
   updatedAt: number
 }
 
@@ -97,6 +149,10 @@ export const omniPanelFeatureListEvent = defineRawEvent<void, OmniPanelFeatureLi
   'omni-panel:feature:list'
 )
 
+/**
+ * @deprecated Kept only for legacy compatibility. OmniPanel no longer exposes
+ * explicit enable/disable interaction in renderer workflow.
+ */
 export const omniPanelFeatureToggleEvent = defineRawEvent<OmniPanelFeatureToggleRequest, void>(
   'omni-panel:feature:toggle'
 )

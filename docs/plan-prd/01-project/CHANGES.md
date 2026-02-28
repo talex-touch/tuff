@@ -2,7 +2,83 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-01
+
+### OmniPanel 去除 Feature 显式启停展示（默认可执行）
+
+**变更类型**: 交互收敛 / 执行策略调整
+
+**描述**: OmniPanel 面板内移除 Feature 的“启用/停用”显式展示与切换入口；执行链路不再受 `enabled` 状态阻断，避免历史配置中停用项导致可见但不可执行。
+
+**主要变更**:
+1. 渲染层移除 Feature 启停按钮与状态文案，只保留执行与排序操作。
+2. 主进程执行分发移除 `FEATURE_DISABLED` 门控，统一按可用性（插件存在、feature 可执行）判定。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-28
+
+### 启动拉取策略优化：Auth 缓存优先 + Sentry Dev 传输降噪
+
+**变更类型**: 启动性能优化 / 开发体验治理 / 兼容性修复
+
+**描述**: 针对“前端加载慢 + 启动期网络链路竞争 + Node 22 deprecation 噪声”，调整启动阶段策略：`Auth` 先用本地缓存恢复态，再延后远端刷新，并将登录凭证系统加密存储改为用户可选（默认会话模式、仅提醒）；`Sentry` 在开发态切换到 Node transport 并移除 ElectronNet/ElectronBreadcrumbs 默认集成，避免 `DEP0169` 与 `console-message` 相关噪声干扰排查。
+
+**主要变更**:
+1. `AuthModule` 启动流程改为缓存优先，远端用户信息刷新延后执行，并增加请求超时与不可用分支兜底。
+2. 登录回调链路在远端暂时不可达时不立即破坏本地会话，优先复用缓存用户并重试刷新。
+3. `SentryService` 在开发态切换 `makeNodeTransport`，并过滤 `ElectronNet`/`ElectronBreadcrumbs` 集成以规避 `DEP0169` 与旧 console-message 监听告警。
+4. `DivisionBoxModule` 在缺失模块上下文事件总线时回退全局 `touchEventBus`，保持 deferred 初始化行为一致。
+5. `AppProvider` 的“开发态”判定扩展到 dev-server 运行态（不仅 `is.dev`），确保启动期 backfill / mdls 重任务在该场景也被延后。
+6. `Auth` 登录凭证持久化改为用户显式开启：默认仅内存会话，不访问系统密钥链；用户开启后再写入/读取安全存储，并在首次会话登录时给出提醒。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/auth/index.ts`
+- `apps/core-app/src/main/modules/sentry/sentry-service.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingUser.vue`
+- `packages/utils/common/storage/entity/app-settings.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 迁移壳收口（第一批）：弱化 channel 直依赖
+
+**变更类型**: 架构收敛 / 兼容壳层减耦
+
+**描述**: 继续推进 `channel -> transport` 收口，先清理一批高频模块的直接类型耦合：主进程插件日志服务改为显式接收 transport，plugin/renderer SDK 改为最小 channel 接口，减少对 `@talex-touch/utils/channel` 的扩散引用。
+
+**主要变更**:
+1. `PluginLogModule.setupIpcHandlers` 改为接收 `getTuffTransportMain(...)` 结果，服务层不再声明 `ITouchChannel` 依赖。
+2. 新增 `PluginChannelClient` 最小接口，`box-sdk` / `power` / `performance` 切换为该接口类型。
+3. `renderer/touch-sdk` 改为本地 `TouchClientChannelLike`，避免直接引用 legacy channel 类型。
+
+**修改文件**:
+- `apps/core-app/src/main/service/plugin-log.service.ts`
+- `packages/utils/plugin/sdk/channel-client.ts`
+- `packages/utils/plugin/sdk/box-sdk.ts`
+- `packages/utils/plugin/sdk/power.ts`
+- `packages/utils/plugin/sdk/performance.ts`
+- `packages/utils/renderer/touch-sdk/index.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel Module 取消 Env 门控（默认参与加载）
+
+**变更类型**: 架构行为调整 / 模块加载策略收敛
+
+**描述**: 移除 `OmniPanelModule` 对 `TUFF_ENABLE_OMNIPANEL_EXPERIMENT` 的声明式 env 依赖，模块改为默认参与主进程加载链路，不再需要通过环境变量显式开启。
+
+**主要变更**:
+1. `OmniPanelModule` 构造器移除第三个 `env` 参数，保持与常规模块一致的默认加载行为。
+2. 保留现有快捷键、鼠标长按与 Feature Hub 逻辑，不引入额外行为分叉。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
 
 ### 启动阶段卡顿治理（前端首屏加载竞争缓解）
 

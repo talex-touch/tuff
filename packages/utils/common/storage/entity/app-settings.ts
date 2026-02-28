@@ -149,6 +149,8 @@ const _appSettingOriginData = {
     deviceId: '',
     deviceName: '',
     devicePlatform: '',
+    useSecureStorage: false,
+    secureStorageReminderShown: false,
   },
   dev: {
     autoCloseDev: true,

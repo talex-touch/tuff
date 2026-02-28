@@ -10,13 +10,17 @@ import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type {
+  OmniPanelContextSource,
   OmniPanelContextPayload,
+  OmniPanelFeatureExecuteErrorCode,
   OmniPanelFeatureIconPayload,
   OmniPanelFeatureInputType,
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse,
+  OmniPanelFeatureRefreshReason,
   OmniPanelFeatureRefreshPayload,
   OmniPanelFeatureSource,
+  OmniPanelFeatureUnavailableReason,
   OmniPanelFeatureToggleRequest,
   OmniPanelFeatureExecuteRequest,
   OmniPanelFeatureExecuteResponse,
@@ -64,10 +68,33 @@ const LONG_PRESS_MS = 600
 const LONG_PRESS_MOVE_THRESHOLD = 6
 const OMNI_PANEL_SHORTCUT_ID = 'core.omniPanel.toggle'
 const OMNI_PANEL_MOUSE_TRIGGER_ID = 'core.omniPanel.mouseLongPress'
-const OMNI_PANEL_EXPERIMENT_ENV_KEY = 'TUFF_ENABLE_OMNIPANEL_EXPERIMENT'
 const OMNI_PANEL_SETTING_KEY = StorageList.APP_SETTING
 
 const OMNI_INPUT_TYPES = ['text', 'image', 'files', 'html'] as const
+const OMNI_SOURCE_VALUES: OmniPanelContextSource[] = [
+  'shortcut',
+  'mouse-long-press',
+  'manual',
+  'command',
+  'unknown'
+]
+const COPY_COMMAND_TIMEOUT_MS = 900
+const COPY_RESULT_POLL_DELAY_MS = 120
+
+const EXECUTE_ERROR_MESSAGES: Record<OmniPanelFeatureExecuteErrorCode, string> = {
+  INVALID_PAYLOAD: 'Invalid execute payload',
+  INVALID_FEATURE: 'Invalid feature id',
+  FEATURE_NOT_FOUND: 'Feature not found',
+  FEATURE_UNAVAILABLE: 'Feature is unavailable',
+  SELECTION_REQUIRED: 'Selected text is required',
+  COREBOX_UNAVAILABLE: 'CoreBox window is unavailable',
+  COREBOX_TRANSFER_FAILED: 'Failed to transfer context to CoreBox',
+  SYSTEM_TARGET_NOT_IMPLEMENTED: 'System transfer target is not implemented yet',
+  PLUGIN_NOT_FOUND: 'Plugin not found',
+  FEATURE_EXECUTION_FAILED: 'Failed to execute feature',
+  UNKNOWN_BUILTIN: 'Unknown builtin feature',
+  INTERNAL_ERROR: 'Internal error'
+}
 
 const BUILTIN_FEATURE_DEFINITIONS = [
   {
@@ -161,6 +188,14 @@ interface ClipboardSnapshot {
   }>
 }
 
+interface ExecutePayloadValidationResult {
+  ok: boolean
+  id?: string
+  source?: OmniPanelContextSource
+  contextText?: string
+  response?: OmniPanelFeatureExecuteResponse
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -191,6 +226,38 @@ function normalizeIcon(value: unknown): OmniPanelFeatureIconPayload | null {
   return {
     type: iconType,
     value: iconValue
+  }
+}
+
+function normalizeContextSource(value: unknown): {
+  source: OmniPanelContextSource
+  sourceRaw?: string
+} {
+  if (typeof value !== 'string') {
+    return { source: 'manual' }
+  }
+
+  const raw = value.trim()
+  if (!raw) {
+    return { source: 'manual' }
+  }
+
+  if (OMNI_SOURCE_VALUES.includes(raw as OmniPanelContextSource)) {
+    return { source: raw as OmniPanelContextSource }
+  }
+
+  return {
+    source: 'unknown',
+    sourceRaw: raw
+  }
+}
+
+function makeUnavailableReason(
+  reason: OmniPanelFeatureUnavailableReason
+): OmniPanelFeatureUnavailableReason {
+  return {
+    code: reason.code,
+    message: reason.message
   }
 }
 
@@ -230,10 +297,10 @@ class OmniPanelModule extends BaseModule {
     source: 'manual',
     capturedAt: Date.now()
   }
-  private handlingInstallEvent = false
+  private handlingInstallEventPlugins = new Set<string>()
 
   constructor() {
-    super(OmniPanelModule.key, { create: false }, OMNI_PANEL_EXPERIMENT_ENV_KEY)
+    super(OmniPanelModule.key, { create: false })
   }
 
   async onInit(_ctx: ModuleInitContext<TalexEvents>): Promise<void> {
@@ -253,8 +320,10 @@ class OmniPanelModule extends BaseModule {
 
     this.registerTransportHandlers()
     this.registerInstallCompletedListener()
+    this.registerPluginChangeRefreshListener()
     this.registerShortcut(settings.enableShortcut)
     this.registerMouseLongPressTrigger(settings.enableMouseLongPress)
+    this.notifyFeatureRefresh('init')
 
     omniPanelLog.info('Module initialized', {
       meta: {
@@ -515,7 +584,6 @@ class OmniPanelModule extends BaseModule {
 
   private registerInstallCompletedListener(): void {
     const handler = (event: unknown) => {
-      if (this.handlingInstallEvent) return
       const payload = isRecord(event) ? event : {}
       const pluginName =
         typeof payload.pluginName === 'string' && payload.pluginName.trim()
@@ -527,6 +595,16 @@ class OmniPanelModule extends BaseModule {
     touchEventBus.on(MainEvents.PLUGIN_INSTALL_COMPLETED, handler)
     this.eventDisposers.push(() => {
       touchEventBus.off(MainEvents.PLUGIN_INSTALL_COMPLETED, handler)
+    })
+  }
+
+  private registerPluginChangeRefreshListener(): void {
+    const handler = () => {
+      this.notifyFeatureRefresh('plugin-change')
+    }
+    touchEventBus.on(MainEvents.PLUGIN_STORAGE_UPDATED, handler)
+    this.eventDisposers.push(() => {
+      touchEventBus.off(MainEvents.PLUGIN_STORAGE_UPDATED, handler)
     })
   }
 
@@ -547,7 +625,7 @@ class OmniPanelModule extends BaseModule {
         return this.buildFeatureListResponse()
       }),
       this.transport.on(omniPanelFeatureToggleEvent, async (payload) => {
-        this.toggleFeature(payload)
+        this.toggleFeature(payload, 'legacy-toggle')
       }),
       this.transport.on(omniPanelFeatureReorderEvent, async (payload) => {
         this.reorderFeature(payload)
@@ -600,7 +678,7 @@ class OmniPanelModule extends BaseModule {
 
   private async show(options?: OmniPanelShowRequest): Promise<void> {
     const targetWindow = await this.ensureWindow()
-    const source = options?.source || 'manual'
+    const normalizedSource = normalizeContextSource(options?.source)
     let text = ''
 
     if (options?.captureSelection !== false) {
@@ -611,8 +689,8 @@ class OmniPanelModule extends BaseModule {
     targetWindow.window.show()
     targetWindow.window.focus()
     this.isVisible = true
-    await this.pushContext(text, source)
-    this.notifyFeatureRefresh('sync')
+    await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw)
+    this.notifyFeatureRefresh('show')
   }
 
   private hide(): void {
@@ -649,7 +727,11 @@ class OmniPanelModule extends BaseModule {
     }
   }
 
-  private async pushContext(text: string, source: string): Promise<void> {
+  private async pushContext(
+    text: string,
+    source: OmniPanelContextSource,
+    sourceRaw?: string
+  ): Promise<void> {
     if (!this.transport) return
     if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
 
@@ -657,11 +739,13 @@ class OmniPanelModule extends BaseModule {
       text,
       hasSelection: text.trim().length > 0,
       source,
+      sourceRaw,
       capturedAt: Date.now()
     }
     this.lastContext = payload
 
     await this.transport.sendTo(this.panelWindow.window.webContents, omniPanelContextEvent, payload)
+    this.notifyFeatureRefresh('context-updated')
   }
 
   private buildFeatureListResponse(): OmniPanelFeatureListResponse {
@@ -686,18 +770,44 @@ class OmniPanelModule extends BaseModule {
         title: builtin?.title ?? item.title,
         subtitle: builtin?.subtitle ?? item.subtitle,
         icon: builtin?.icon ?? item.icon,
-        unavailable: false
+        unavailable: false,
+        unavailableReason: undefined
       }
     }
 
     const plugin = this.getPluginInstance(item.pluginName)
     if (!plugin) {
-      return { ...item, unavailable: true }
+      return {
+        ...item,
+        unavailable: true,
+        unavailableReason: makeUnavailableReason({
+          code: 'PLUGIN_NOT_FOUND',
+          message: `Plugin "${item.pluginName || 'unknown'}" is not loaded`
+        })
+      }
     }
 
     const feature = item.featureId ? plugin.getFeature(item.featureId) : null
-    if (!feature || !this.isFeatureExecutable(plugin, feature)) {
-      return { ...item, unavailable: true }
+    if (!feature) {
+      return {
+        ...item,
+        unavailable: true,
+        unavailableReason: makeUnavailableReason({
+          code: 'FEATURE_NOT_FOUND',
+          message: `Feature "${item.featureId || 'unknown'}" is not available`
+        })
+      }
+    }
+
+    if (!this.isFeatureExecutable(plugin, feature)) {
+      return {
+        ...item,
+        unavailable: true,
+        unavailableReason: makeUnavailableReason({
+          code: 'FEATURE_NOT_EXECUTABLE',
+          message: `Feature "${item.featureId || feature.id}" is not executable`
+        })
+      }
     }
 
     const declared = this.resolveDeclaredTransfer(plugin, feature)
@@ -713,11 +823,15 @@ class OmniPanelModule extends BaseModule {
         normalizeInputTypes(feature.acceptedInputTypes) ?? item.acceptedInputTypes,
       sdkapi: plugin.sdkapi,
       declarationMode: declared ? 'declared' : item.declarationMode,
-      unavailable: false
+      unavailable: false,
+      unavailableReason: undefined
     }
   }
 
-  private toggleFeature(payload: OmniPanelFeatureToggleRequest): void {
+  private toggleFeature(
+    payload: OmniPanelFeatureToggleRequest,
+    reason: OmniPanelFeatureRefreshReason = 'toggle'
+  ): void {
     if (!payload || typeof payload.id !== 'string') return
     const target = this.featureRegistry.find((item) => item.id === payload.id)
     if (!target) return
@@ -727,7 +841,7 @@ class OmniPanelModule extends BaseModule {
     target.updatedAt = Date.now()
     this.registryUpdatedAt = Date.now()
     this.persistFeatureRegistry()
-    this.notifyFeatureRefresh('toggle')
+    this.notifyFeatureRefresh(reason)
   }
 
   private reorderFeature(payload: OmniPanelFeatureReorderRequest): void {
@@ -758,61 +872,121 @@ class OmniPanelModule extends BaseModule {
   private async executeFeature(
     payload: OmniPanelFeatureExecuteRequest
   ): Promise<OmniPanelFeatureExecuteResponse> {
-    if (!payload || typeof payload.id !== 'string' || !payload.id.trim()) {
-      return { success: false, code: 'INVALID_FEATURE', error: 'Invalid feature id' }
+    const validated = this.validateExecutePayload(payload)
+    if (!validated.ok) {
+      return validated.response || this.buildExecuteError('INVALID_PAYLOAD')
     }
 
-    const item = this.featureRegistry.find((feature) => feature.id === payload.id)
+    const item = this.featureRegistry.find((feature) => feature.id === validated.id)
     if (!item) {
-      return { success: false, code: 'FEATURE_NOT_FOUND', error: 'Feature not found' }
+      return this.buildExecuteError('FEATURE_NOT_FOUND')
     }
 
-    if (!item.enabled) {
-      return { success: false, code: 'FEATURE_DISABLED', error: 'Feature is disabled' }
+    const resolvedItem = this.resolveFeatureItemPayload(item)
+    if (resolvedItem.unavailable) {
+      return this.buildExecuteError(
+        'FEATURE_UNAVAILABLE',
+        resolvedItem.unavailableReason?.message || EXECUTE_ERROR_MESSAGES.FEATURE_UNAVAILABLE
+      )
     }
 
-    const contextText =
-      typeof payload.contextText === 'string' ? payload.contextText : this.lastContext.text
-    const source =
-      typeof payload.source === 'string' && payload.source.trim()
-        ? payload.source
-        : this.lastContext.source
+    const contextText = validated.contextText ?? this.lastContext.text
+    const source = validated.source ?? this.lastContext.source
 
     let result: OmniPanelFeatureExecuteResponse
-    if (item.source === 'builtin') {
+    if (resolvedItem.source === 'builtin') {
       result = await this.executeBuiltinFeature(item.id, contextText, source)
-    } else if (item.target === 'corebox') {
+    } else if (resolvedItem.target === 'corebox') {
       result = await this.executeCoreBoxTransfer(contextText)
-    } else if (item.target === 'system') {
-      result = {
-        success: false,
-        code: 'SYSTEM_TARGET_NOT_IMPLEMENTED',
-        error: 'System transfer target is not implemented yet'
-      }
+    } else if (resolvedItem.target === 'system') {
+      result = this.buildExecuteError('SYSTEM_TARGET_NOT_IMPLEMENTED')
     } else {
-      result = await this.executePluginFeature(item, contextText)
+      result = await this.executePluginFeature(item, contextText, source)
     }
 
     if (result.success) {
       this.hide()
+      this.notifyFeatureRefresh('execute')
     }
     return result
+  }
+
+  private validateExecutePayload(
+    payload: OmniPanelFeatureExecuteRequest
+  ): ExecutePayloadValidationResult {
+    if (!isRecord(payload)) {
+      return {
+        ok: false,
+        response: this.buildExecuteError('INVALID_PAYLOAD')
+      }
+    }
+
+    const id = typeof payload.id === 'string' ? payload.id.trim() : ''
+    if (!id) {
+      return {
+        ok: false,
+        response: this.buildExecuteError('INVALID_FEATURE')
+      }
+    }
+
+    if (payload.context !== undefined && !isRecord(payload.context)) {
+      return {
+        ok: false,
+        response: this.buildExecuteError('INVALID_PAYLOAD', 'Invalid execute context payload')
+      }
+    }
+
+    if (payload.context?.text !== undefined && typeof payload.context.text !== 'string') {
+      return {
+        ok: false,
+        response: this.buildExecuteError('INVALID_PAYLOAD', 'Invalid context text')
+      }
+    }
+
+    if (payload.source !== undefined && typeof payload.source !== 'string') {
+      return {
+        ok: false,
+        response: this.buildExecuteError('INVALID_PAYLOAD', 'Invalid source payload')
+      }
+    }
+
+    const source = normalizeContextSource(payload.source).source
+    const contextText =
+      typeof payload.context?.text === 'string'
+        ? payload.context.text
+        : typeof payload.contextText === 'string'
+          ? payload.contextText
+          : undefined
+
+    return {
+      ok: true,
+      id,
+      source,
+      contextText
+    }
+  }
+
+  private buildExecuteError(
+    code: OmniPanelFeatureExecuteErrorCode,
+    error?: string
+  ): OmniPanelFeatureExecuteResponse {
+    return {
+      success: false,
+      code,
+      error: error || EXECUTE_ERROR_MESSAGES[code]
+    }
   }
 
   private async executeBuiltinFeature(
     featureId: string,
     contextText: string,
-    _source: string
+    _source: OmniPanelContextSource
   ): Promise<OmniPanelFeatureExecuteResponse> {
     const text = contextText.trim()
 
     if (featureId === 'builtin.translate') {
       if (!text) {
-        return {
-          success: false,
-          code: 'SELECTION_REQUIRED',
-          error: 'No selected text to translate'
-        }
+        return this.buildExecuteError('SELECTION_REQUIRED')
       }
       const url = `https://translate.google.com/?sl=auto&tl=zh-CN&text=${encodeURIComponent(text)}&op=translate`
       await shell.openExternal(url)
@@ -821,7 +995,7 @@ class OmniPanelModule extends BaseModule {
 
     if (featureId === 'builtin.search') {
       if (!text) {
-        return { success: false, code: 'SELECTION_REQUIRED', error: 'No selected text to search' }
+        return this.buildExecuteError('SELECTION_REQUIRED')
       }
       const url = `https://www.google.com/search?q=${encodeURIComponent(text)}`
       await shell.openExternal(url)
@@ -830,7 +1004,7 @@ class OmniPanelModule extends BaseModule {
 
     if (featureId === 'builtin.copy') {
       if (!text) {
-        return { success: false, code: 'SELECTION_REQUIRED', error: 'No selected text to copy' }
+        return this.buildExecuteError('SELECTION_REQUIRED')
       }
       clipboard.writeText(text)
       return { success: true }
@@ -840,7 +1014,7 @@ class OmniPanelModule extends BaseModule {
       return await this.executeCoreBoxTransfer(text)
     }
 
-    return { success: false, code: 'UNKNOWN_BUILTIN', error: 'Unknown builtin feature' }
+    return this.buildExecuteError('UNKNOWN_BUILTIN')
   }
 
   private async executeCoreBoxTransfer(
@@ -848,7 +1022,7 @@ class OmniPanelModule extends BaseModule {
   ): Promise<OmniPanelFeatureExecuteResponse> {
     const coreBoxWindow = getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.window.isDestroyed() || !this.transport) {
-      return { success: false, code: 'COREBOX_UNAVAILABLE', error: 'CoreBox window is unavailable' }
+      return this.buildExecuteError('COREBOX_UNAVAILABLE')
     }
 
     try {
@@ -860,45 +1034,45 @@ class OmniPanelModule extends BaseModule {
       }
       return { success: true }
     } catch (error) {
-      return {
-        success: false,
-        code: 'COREBOX_TRANSFER_FAILED',
-        error: error instanceof Error ? error.message : 'Failed to open CoreBox'
-      }
+      return this.buildExecuteError(
+        'COREBOX_TRANSFER_FAILED',
+        error instanceof Error ? error.message : EXECUTE_ERROR_MESSAGES.COREBOX_TRANSFER_FAILED
+      )
     }
   }
 
   private async executePluginFeature(
     item: OmniPanelFeatureRegistryItem,
-    contextText: string
+    contextText: string,
+    source: OmniPanelContextSource
   ): Promise<OmniPanelFeatureExecuteResponse> {
     const plugin = this.getPluginInstance(item.pluginName)
     if (!plugin) {
-      return { success: false, code: 'PLUGIN_NOT_FOUND', error: 'Plugin not found' }
+      return this.buildExecuteError('PLUGIN_NOT_FOUND')
     }
 
     const feature = item.featureId ? plugin.getFeature(item.featureId) : null
     if (!feature || !this.isFeatureExecutable(plugin, feature)) {
-      return { success: false, code: 'FEATURE_NOT_FOUND', error: 'Feature not found in plugin' }
+      return this.buildExecuteError('FEATURE_NOT_FOUND')
     }
 
-    const query = this.buildFeatureQuery(contextText, item, feature)
+    const query = this.buildFeatureQuery(contextText, item, feature, source)
     try {
       await plugin.triggerFeature(feature, query)
       return { success: true }
     } catch (error) {
-      return {
-        success: false,
-        code: 'FEATURE_EXECUTION_FAILED',
-        error: error instanceof Error ? error.message : 'Failed to execute feature'
-      }
+      return this.buildExecuteError(
+        'FEATURE_EXECUTION_FAILED',
+        error instanceof Error ? error.message : EXECUTE_ERROR_MESSAGES.FEATURE_EXECUTION_FAILED
+      )
     }
   }
 
   private buildFeatureQuery(
     contextText: string,
     item: OmniPanelFeatureRegistryItem,
-    feature: IPluginFeature
+    feature: IPluginFeature,
+    source: OmniPanelContextSource
   ): string | TuffQuery {
     const text = contextText.trim()
     const acceptsText =
@@ -918,7 +1092,7 @@ class OmniPanelModule extends BaseModule {
           type: TuffInputType.Text,
           content: text,
           metadata: {
-            source: 'omni-panel',
+            source: `omni-panel:${source}`,
             featureId: item.id
           }
         }
@@ -929,8 +1103,10 @@ class OmniPanelModule extends BaseModule {
 
   private notifyFeatureRefresh(reason: OmniPanelFeatureRefreshPayload['reason']): void {
     if (!this.transport) return
+    const wireReason: OmniPanelFeatureRefreshPayload['reason'] =
+      reason === 'legacy-toggle' ? 'toggle' : reason
     this.transport.broadcast(omniPanelFeatureRefreshEvent, {
-      reason,
+      reason: wireReason,
       updatedAt: this.registryUpdatedAt
     })
   }
@@ -964,8 +1140,12 @@ class OmniPanelModule extends BaseModule {
     const settings = this.getSettingsSnapshot()
     if (!settings.autoMountFirstFeatureOnPluginInstall) return
 
-    if (this.handlingInstallEvent) return
-    this.handlingInstallEvent = true
+    if (this.handlingInstallEventPlugins.has(pluginName)) {
+      omniPanelLog.debug('Skip auto-mount, install lock exists', { meta: { pluginName } })
+      return
+    }
+
+    this.handlingInstallEventPlugins.add(pluginName)
     try {
       const plugin = this.getPluginInstance(pluginName)
       if (!plugin) {
@@ -1031,6 +1211,24 @@ class OmniPanelModule extends BaseModule {
         updatedAt: now
       }
 
+      if (
+        current &&
+        current.target === nextItem.target &&
+        current.title === nextItem.title &&
+        current.subtitle === nextItem.subtitle &&
+        current.pluginName === nextItem.pluginName &&
+        current.featureId === nextItem.featureId &&
+        current.declarationMode === nextItem.declarationMode
+      ) {
+        omniPanelLog.debug('Skip auto-mount, duplicated feature payload', {
+          meta: {
+            pluginName: plugin.name,
+            featureId: pickedFeature.id
+          }
+        })
+        return
+      }
+
       if (current) {
         const index = this.featureRegistry.findIndex((item) => item.id === id)
         this.featureRegistry[index] = nextItem
@@ -1056,7 +1254,7 @@ class OmniPanelModule extends BaseModule {
         }
       })
     } finally {
-      this.handlingInstallEvent = false
+      this.handlingInstallEventPlugins.delete(pluginName)
     }
   }
 
@@ -1069,15 +1267,36 @@ class OmniPanelModule extends BaseModule {
     }
 
     const clipboardSnapshot = this.snapshotClipboard()
+    const start = Date.now()
     try {
-      await this.simulateCopyCommand()
-      await this.delay(120)
-      return clipboard.readText().trim()
+      await this.withTimeout(this.simulateCopyCommand(), COPY_COMMAND_TIMEOUT_MS, 'copy-command')
+      await this.delay(COPY_RESULT_POLL_DELAY_MS)
+      const text = clipboard.readText().trim()
+      if (!text) {
+        omniPanelLog.debug('No selected text captured after copy command', {
+          meta: {
+            platform: process.platform
+          }
+        })
+      }
+      return text
     } catch (error) {
-      omniPanelLog.warn('Failed to capture selected text', { error })
+      omniPanelLog.warn('Failed to capture selected text, fallback to empty context', {
+        error,
+        meta: {
+          platform: process.platform
+        }
+      })
       return ''
     } finally {
-      this.restoreClipboard(clipboardSnapshot)
+      if (!this.restoreClipboard(clipboardSnapshot)) {
+        omniPanelLog.warn('Clipboard snapshot restore failed after capture')
+      }
+      omniPanelLog.debug('Selection capture completed', {
+        meta: {
+          costMs: Date.now() - start
+        }
+      })
     }
   }
 
@@ -1123,14 +1342,16 @@ class OmniPanelModule extends BaseModule {
     return { items }
   }
 
-  private restoreClipboard(snapshot: ClipboardSnapshot): void {
+  private restoreClipboard(snapshot: ClipboardSnapshot): boolean {
     try {
       clipboard.clear()
       for (const item of snapshot.items) {
         clipboard.writeBuffer(item.format, item.data)
       }
+      return true
     } catch (error) {
       omniPanelLog.warn('Failed to restore clipboard snapshot', { error })
+      return false
     }
   }
 
@@ -1255,6 +1476,22 @@ class OmniPanelModule extends BaseModule {
     await new Promise<void>((resolve) => {
       setTimeout(resolve, ms)
     })
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    let timeoutId: NodeJS.Timeout | null = null
+    try {
+      const timeoutPromise = new Promise<T>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error(`${label} timeout after ${timeoutMs}ms`))
+        }, timeoutMs)
+      })
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
   }
 }
 

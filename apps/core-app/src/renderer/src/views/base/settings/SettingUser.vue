@@ -39,7 +39,28 @@ function ensureSecuritySettings() {
   }
 }
 
+function ensureAuthSettings() {
+  if (!appSetting.auth) {
+    appSetting.auth = {
+      deviceId: '',
+      deviceName: '',
+      devicePlatform: '',
+      useSecureStorage: false,
+      secureStorageReminderShown: false
+    }
+    return
+  }
+
+  if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
+    appSetting.auth.useSecureStorage = false
+  }
+  if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
+    appSetting.auth.secureStorageReminderShown = false
+  }
+}
+
 ensureSecuritySettings()
+ensureAuthSettings()
 
 const displayName = computed(() => getDisplayName())
 const displayEmail = computed(() => getPrimaryEmail())
@@ -117,6 +138,30 @@ const syncRuntimeDescription = computed(() => {
     parts.push(`错误：${errorCode}`)
   }
   return parts.join(' · ')
+})
+
+const secureStorageEnabled = computed({
+  get: () => Boolean(appSetting.auth?.useSecureStorage),
+  set: (val: boolean) => {
+    ensureAuthSettings()
+    const enabled = Boolean(val)
+    appSetting.auth.useSecureStorage = enabled
+    if (enabled) {
+      toast.success('已启用系统安全存储（推荐）')
+      return
+    }
+    toast.info('已切换为会话模式：登录凭证仅在本次运行有效')
+  }
+})
+
+const secureStorageDescription = computed(() => {
+  if (secureStorageEnabled.value) {
+    return '登录凭证将写入系统安全存储（Keychain/safeStorage）。'
+  }
+  if (isLoggedIn.value) {
+    return '当前为会话模式：凭证不持久化，重启后需要重新登录。'
+  }
+  return '未启用系统安全存储：登录后仅保持当前会话。'
 })
 
 const canTriggerManualSync = computed(
@@ -247,6 +292,14 @@ async function handleSyncNow() {
       :description="syncToggleDescription"
       default-icon="i-carbon-cloud-satellite-config"
       active-icon="i-carbon-cloud-satellite"
+    />
+
+    <TuffBlockSwitch
+      v-model="secureStorageEnabled"
+      :title="t('settingUser.secureStorageTitle', '系统安全存储（登录凭证）')"
+      :description="secureStorageDescription"
+      default-icon="i-carbon-locked"
+      active-icon="i-carbon-locked"
     />
 
     <TuffBlockSlot

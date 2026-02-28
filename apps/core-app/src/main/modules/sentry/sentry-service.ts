@@ -12,6 +12,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import * as Sentry from '@sentry/electron/main'
+import { makeNodeTransport } from '@sentry/node'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getEnvOrDefault, getTelemetryApiBase, normalizeBaseUrl } from '@talex-touch/utils/env'
@@ -43,6 +44,7 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
 // Sentry DSN
 const SENTRY_DSN =
   'https://f8019096132f03a7a66c879a53462a67@o4508024637620224.ingest.us.sentry.io/4510196503871488'
+const DEV_DISABLED_SENTRY_INTEGRATIONS = new Set(['ElectronNet', 'ElectronBreadcrumbs'])
 
 export interface SentryConfig {
   enabled: boolean
@@ -568,6 +570,7 @@ export class SentryServiceModule extends BaseModule {
     }
 
     try {
+      const isDevelopmentRuntime = !app.isPackaged || process.env.NODE_ENV === 'development'
       Sentry.init({
         dsn: SENTRY_DSN,
         environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
@@ -588,7 +591,17 @@ export class SentryServiceModule extends BaseModule {
         // Before breadcrumb hook
         beforeBreadcrumb(breadcrumb) {
           return breadcrumb
-        }
+        },
+        ...(isDevelopmentRuntime
+          ? {
+              transport: makeNodeTransport,
+              integrations(defaultIntegrations) {
+                return defaultIntegrations.filter(
+                  (integration) => !DEV_DISABLED_SENTRY_INTEGRATIONS.has(integration.name)
+                )
+              }
+            }
+          : {})
         // Error handling is done by Sentry automatically
       })
 

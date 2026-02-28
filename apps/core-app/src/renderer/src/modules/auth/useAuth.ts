@@ -185,6 +185,37 @@ const isAuthenticated = computed(() => authState.isSignedIn)
 const user = computed(() => authState.user)
 const isLoggedIn = computed(() => authState.isSignedIn)
 
+function ensureAuthPreferenceSettings(): void {
+  if (!appSetting.auth) {
+    appSetting.auth = {
+      deviceId: '',
+      deviceName: '',
+      devicePlatform: '',
+      useSecureStorage: false,
+      secureStorageReminderShown: false
+    }
+    return
+  }
+  if (typeof appSetting.auth.useSecureStorage !== 'boolean') {
+    appSetting.auth.useSecureStorage = false
+  }
+  if (typeof appSetting.auth.secureStorageReminderShown !== 'boolean') {
+    appSetting.auth.secureStorageReminderShown = false
+  }
+}
+
+function remindSecureStoragePreferenceOnce(): void {
+  ensureAuthPreferenceSettings()
+  if (appSetting.auth.useSecureStorage) {
+    return
+  }
+  if (appSetting.auth.secureStorageReminderShown) {
+    return
+  }
+  appSetting.auth.secureStorageReminderShown = true
+  toast.info('当前登录凭证为会话模式。可在“用户设置”中启用系统安全存储。')
+}
+
 function syncSentryUser(nextUser: AuthUser | null): void {
   void (async () => {
     try {
@@ -222,6 +253,7 @@ function applyAuthState(nextState: AuthState): void {
   syncSentryUser(authState.user)
 
   if (authState.isSignedIn && !wasSignedIn) {
+    remindSecureStoragePreferenceOnce()
     void runSyncBootstrap().catch(() => {
       // ignore sync bootstrap failure
     })
