@@ -15,6 +15,7 @@
 2. `TouchPlugin.__getInjections__` 改为使用安全 `userAgent` 解析，并在主窗口已销毁时回退到稳定值。
 3. 新增 `usePluginInjections`，统一包装注入构建异常处理，避免调用侧直接崩溃。
 4. CoreBox / DivisionBox / Plugin Module 的注入入口统一切换到 `usePluginInjections`，并复用 `useAliveWebContents` 做视图可用性判断。
+5. 扩展到 MetaOverlay / ViewCache / DevServerMonitor / DivisionBox StateSync，统一复用 `useAliveTarget/useAliveWebContents` 处理窗口与视图销毁态，减少重复判定分支。
 
 **修改文件**:
 - `apps/core-app/src/main/hooks/use-electron-guard.ts`
@@ -22,7 +23,11 @@
 - `apps/core-app/src/main/modules/plugin/plugin.ts`
 - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
 - `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/view-cache.ts`
 - `apps/core-app/src/main/modules/division-box/session.ts`
+- `apps/core-app/src/main/modules/division-box/state-sync.ts`
+- `apps/core-app/src/main/modules/plugin/dev-server-monitor.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Legacy Channel 2.4.8 P0（Phase A/B/C/D）首轮收口

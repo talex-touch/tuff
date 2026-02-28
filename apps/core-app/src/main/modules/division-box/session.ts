@@ -19,7 +19,9 @@ import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelud
 import { app, WebContentsView } from 'electron'
 import fse from 'fs-extra'
 import { genTouchApp } from '../../core'
+import { useAliveWebContents } from '../../hooks/use-electron-guard'
 import { pluginModule } from '../plugin/plugin-module'
+import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
 
@@ -336,7 +338,7 @@ export class DivisionBoxSession {
       this.detachUIView()
     }
 
-    const injections = plugin?.__getInjections__()
+    const injections = usePluginInjections(plugin, 'division-box:attachUIView')
     let preloadPath = injections?._.preload
 
     // Create dynamic preload for plugin channel if available
@@ -580,25 +582,25 @@ export class DivisionBoxSession {
    * Opens DevTools for the UI view
    */
   openDevTools(): void {
-    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
-      this.uiView.webContents.openDevTools({ mode: 'detach' })
-    }
+    const webContents = useAliveWebContents(this.uiView)
+    if (!webContents) return
+    webContents.openDevTools({ mode: 'detach' })
   }
 
   /**
    * Closes DevTools for the UI view
    */
   closeDevTools(): void {
-    if (this.uiView && !this.uiView.webContents.isDestroyed()) {
-      this.uiView.webContents.closeDevTools()
-    }
+    const webContents = useAliveWebContents(this.uiView)
+    if (!webContents) return
+    webContents.closeDevTools()
   }
 
   /**
    * Checks if DevTools is open
    */
   isDevToolsOpen(): boolean {
-    return this.uiView?.webContents.isDevToolsOpened() ?? false
+    return useAliveWebContents(this.uiView)?.isDevToolsOpened() ?? false
   }
 
   /**

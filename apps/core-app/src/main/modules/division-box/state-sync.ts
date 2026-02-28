@@ -8,6 +8,7 @@
 import type { StateChangeEvent } from '@talex-touch/utils'
 import { DivisionBoxErrorCode } from '@talex-touch/utils'
 import { BrowserWindow } from 'electron'
+import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { errorLogger } from './error-logger'
 
 /**
@@ -84,9 +85,10 @@ export class StateSyncManager {
       async () => {
         // Send to all target windows
         for (const window of targetWindows) {
-          if (!window.isDestroyed()) {
-            window.webContents.send('division-box:state-changed', event)
-          }
+          const aliveWindow = useAliveTarget(window)
+          const webContents = useAliveWebContents(aliveWindow)
+          if (!aliveWindow || !webContents) continue
+          webContents.send('division-box:state-changed', event)
         }
       },
       {
@@ -125,9 +127,10 @@ export class StateSyncManager {
       async () => {
         // Send to all target windows
         for (const window of targetWindows) {
-          if (!window.isDestroyed()) {
-            window.webContents.send('division-box:session-destroyed', sessionId)
-          }
+          const aliveWindow = useAliveTarget(window)
+          const webContents = useAliveWebContents(aliveWindow)
+          if (!aliveWindow || !webContents) continue
+          webContents.send('division-box:session-destroyed', sessionId)
         }
       },
       {

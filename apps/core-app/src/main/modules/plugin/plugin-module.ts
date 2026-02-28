@@ -46,6 +46,7 @@ import {
 import { TouchWindow } from '../../core/touch-window'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { createDbUtils } from '../../db/utils'
+import { useAliveTarget, useAliveWebContents } from '../../hooks/use-electron-guard'
 import { fileWatchService } from '../../service/file-watch.service'
 import {
   reportPluginUninstall,
@@ -70,6 +71,7 @@ import { widgetManager } from './widget/widget-manager'
 
 import { createPluginLoader } from './plugin-loaders'
 import { LocalPluginProvider } from './providers/local-provider'
+import { usePluginInjections } from './runtime/plugin-injections'
 import { pluginRuntimeTracker } from './runtime/plugin-runtime-tracker'
 
 const pluginLog = getLogger('plugin-system')
@@ -1747,7 +1749,10 @@ export class PluginModule extends BaseModule {
             return { error: 'No file or url provided!' }
           }
 
-          const obj = touchPlugin.__getInjections__()
+          const obj = usePluginInjections(touchPlugin, 'plugin-module:window:new')
+          if (!obj) {
+            return { error: 'Failed to build plugin injections' }
+          }
           await webContents.insertCSS(obj.styles)
           await webContents.executeJavaScript(obj.js)
 
@@ -1786,23 +1791,24 @@ export class PluginModule extends BaseModule {
           }
 
           const win = touchPlugin._windows.get(id)
-          if (!win || win.window.isDestroyed()) {
+          const browserWindow = useAliveTarget(win?.window)
+          if (!win || !browserWindow) {
             return { error: 'Window not found' }
           }
 
           if (payload?.visible === undefined) {
-            if (win.window.isVisible()) {
-              win.window.hide()
+            if (browserWindow.isVisible()) {
+              browserWindow.hide()
             } else {
-              win.window.show()
+              browserWindow.show()
             }
           } else if (payload.visible) {
-            win.window.show()
+            browserWindow.show()
           } else {
-            win.window.hide()
+            browserWindow.hide()
           }
 
-          return { visible: win.window.isVisible() }
+          return { visible: browserWindow.isVisible() }
         }
       ),
 
@@ -1829,7 +1835,8 @@ export class PluginModule extends BaseModule {
           }
 
           const win = touchPlugin._windows.get(id)
-          if (!win || win.window.isDestroyed()) {
+          const browserWindow = useAliveTarget(win?.window)
+          if (!win || !browserWindow) {
             return { error: 'Window not found' }
           }
 
@@ -1857,7 +1864,7 @@ export class PluginModule extends BaseModule {
           }
 
           const windowResult = applyProps(
-            win.window as unknown as Record<string, unknown>,
+            browserWindow as unknown as Record<string, unknown>,
             property.window
           )
           if (!windowResult.success) {
@@ -1865,7 +1872,7 @@ export class PluginModule extends BaseModule {
           }
 
           const webContentsResult = applyProps(
-            win.window.webContents as unknown as Record<string, unknown>,
+            browserWindow.webContents as unknown as Record<string, unknown>,
             property.webContents
           )
           if (!webContentsResult.success) {
@@ -3271,22 +3278,19 @@ export class PluginModule extends BaseModule {
           const webContentsList: Electron.WebContents[] = []
 
           const getViewWebContents = (view: unknown): Electron.WebContents | null => {
-            const webContents = isRecord(view) ? view.webContents : undefined
-            if (!webContents) return null
-            if (typeof (webContents as { isDestroyed?: unknown }).isDestroyed !== 'function')
-              return null
-            return webContents as Electron.WebContents
+            if (!isRecord(view)) return null
+            return useAliveWebContents(view as { webContents?: Electron.WebContents | null })
           }
 
           for (const win of plugin._windows.values()) {
-            if (!win.window.isDestroyed()) {
-              webContentsList.push(win.window.webContents)
-            }
+            const webContents = useAliveWebContents(win.window)
+            if (!webContents) continue
+            webContentsList.push(webContents)
           }
 
           for (const view of cachedViews) {
             const webContents = getViewWebContents(view)
-            if (!webContents || webContents.isDestroyed()) continue
+            if (!webContents) continue
             webContentsList.push(webContents)
           }
 
@@ -3300,7 +3304,7 @@ export class PluginModule extends BaseModule {
               if (attached?.name !== name) continue
               const view = session.getUIView()
               const webContents = getViewWebContents(view)
-              if (!webContents || webContents.isDestroyed()) continue
+              if (!webContents) continue
               divisionBoxViewCount += 1
               webContentsList.push(webContents)
             }
@@ -3310,7 +3314,7 @@ export class PluginModule extends BaseModule {
 
           const webContentsMap = new Map<number, Electron.WebContents>()
           for (const webContents of webContentsList) {
-            if (webContents.isDestroyed()) continue
+            if (!useAliveTarget(webContents)) continue
             webContentsMap.set(webContents.id, webContents)
           }
 
