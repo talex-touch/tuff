@@ -4,7 +4,7 @@
  * Provides a unified API for plugins to control the CoreBox window behavior,
  * including visibility, size, input field control, and input value access.
  */
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
+import type { PluginChannelClient } from './channel-client'
 import { ensureRendererChannel } from './channel'
 
 /**
@@ -227,7 +227,7 @@ export interface BoxSDK {
  *
  * @internal
  */
-export function createBoxSDK(channel: ITouchClientChannel): BoxSDK {
+export function createBoxSDK(channel: PluginChannelClient): BoxSDK {
   return {
     hide(): void {
       channel.send('core-box:hide').catch((error: any) => {

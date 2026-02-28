@@ -1,4 +1,3 @@
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import type { ITuffTransport, TuffEvent } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
@@ -24,9 +23,14 @@ const legacyPluginDevToolsEvent = defineRawEvent<string, void>('plugin:open-devt
 const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
 const legacyModuleFolderEvent = defineRawEvent<{ name?: string }, void>('module:folder')
 
+export interface TouchClientChannelLike {
+  regChannel: (eventName: string, callback: (data: any) => void) => () => void
+  send: (eventName: string, arg?: any) => Promise<any>
+}
+
 export interface TouchSDKOptions {
   transport?: ITuffTransport
-  channel?: ITouchClientChannel
+  channel?: TouchClientChannelLike
 }
 
 export interface FolderOpenOptions {
@@ -72,7 +76,7 @@ export interface TempFileDeleteResult {
 
 export class TouchSDK {
   private transport: ITuffTransport | null
-  private channel: ITouchClientChannel | null
+  private channel: TouchClientChannelLike | null
 
   constructor(options: TouchSDKOptions) {
     this.transport = options.transport ?? null
@@ -204,7 +208,7 @@ export class TouchSDK {
   /**
    * Raw channel access for advanced usage
    */
-  get rawChannel(): ITouchClientChannel {
+  get rawChannel(): TouchClientChannelLike {
     if (!this.channel) {
       throw new Error('[TouchSDK] Channel not initialized.')
     }

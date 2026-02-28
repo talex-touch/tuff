@@ -1,5 +1,4 @@
 import type { ModuleKey } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 import type { WebContents } from 'electron'
 import type { PluginLogAppendEvent } from '../core/eventbus/touch-event'
@@ -182,11 +181,8 @@ export class PluginLogModule extends BaseModule {
     })
   }
 
-  public setupIpcHandlers(channel: ITouchChannel): void {
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    this.transport = getTuffTransportMain(channel, keyManager)
-    const transport = this.transport
+  public setupIpcHandlers(transport: ReturnType<typeof getTuffTransportMain>): void {
+    this.transport = transport
     const toErrorMessage = (error: unknown) =>
       error instanceof Error ? error.message : String(error)
 
@@ -384,7 +380,9 @@ export class PluginLogModule extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    this.setupIpcHandlers($app.channel)
+    const keyManager =
+      ($app.channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? $app.channel
+    this.setupIpcHandlers(getTuffTransportMain($app.channel, keyManager))
     this.listenToLogEvents()
   }
 

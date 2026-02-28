@@ -213,6 +213,8 @@
   - [x] `actorPluginId` 缺失时不误判为插件调用（移除 `payload.pluginId` 回退，仅接受 `actorPluginId`/nested source）。
 - [ ] **P1** 大文件拆分与职责收敛：`file-provider.ts`（box-tool addon）、`plugin-module.ts`、`search-core.ts` 按 SRP 拆分模块，降低单文件风险与变更冲突面。
 - [ ] **P2** 迁移壳收口：移除 `channel` 兼容层，清理 `@deprecated` 通道 API，统一走 `transport`（`packages/utils/channel`、`packages/utils/transport`、相关 hooks）。
+  - [x] 第一批：`PluginLogModule` IPC 注册入口改为显式传入 transport，移除服务层对 `ITouchChannel` 类型的直接依赖。
+  - [x] 第一批：plugin/renderer SDK 高频模块（`box-sdk`、`power`、`performance`、`renderer/touch-sdk`）切换到最小 channel 接口，减少对 `@talex-touch/utils/channel` 的直接类型耦合。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
