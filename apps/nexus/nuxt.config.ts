@@ -14,6 +14,7 @@ loadEnv({ path: `.env.${process.env.NODE_ENV ?? 'development'}.local`, override:
 
 const isDev = process.env.NODE_ENV !== 'production'
 const useCloudflareDev = isDev && (process.env.NUXT_USE_CLOUDFLARE_DEV === 'true' || process.env.NITRO_PRESET === 'cloudflare-pages')
+const useWorkspaceSource = isDev
 const currentDir = dirname(fileURLToPath(import.meta.url))
 const workspaceRoot = resolve(currentDir, '../..')
 const tuffBusinessSourceEntry = resolve(currentDir, '../../packages/tuff-business/src/index.ts')
@@ -194,7 +195,11 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: ['@talex-touch/tuff-business', '@talex-touch/tuffex', '@talex-touch/utils'],
+    transpile: [
+      '@talex-touch/tuff-business',
+      '@talex-touch/utils',
+      ...(useWorkspaceSource ? ['@talex-touch/tuffex'] : []),
+    ],
   },
 
   future: {
@@ -250,9 +255,13 @@ export default defineNuxtConfig({
       alias: [
         { find: /^@panva\/hkdf$/, replacement: hkdfCompatEntry },
         { find: /^@talex-touch\/tuff-business$/, replacement: tuffBusinessSourceEntry },
-        { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
-        { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
         { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
+        ...(useWorkspaceSource
+          ? [
+              { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
+              { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
+            ]
+          : []),
       ],
     },
     server: {
@@ -270,9 +279,13 @@ export default defineNuxtConfig({
       compilerOptions: {
         paths: {
           '@talex-touch/tuff-business': [tuffBusinessSourceEntry],
-          '@talex-touch/tuffex': [tuffexSourceEntry],
-          '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
           '@talex-touch/tuffex/utils': [tuffexUtilsEntry],
+          ...(useWorkspaceSource
+            ? {
+                '@talex-touch/tuffex': [tuffexSourceEntry],
+                '@talex-touch/tuffex/style.css': [tuffexStyleEntry],
+              }
+            : {}),
         },
       },
     },
