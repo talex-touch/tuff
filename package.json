@@ -1,7 +1,7 @@
 {
   "name": "@talex-touch/tuff",
   "type": "module",
-  "version": "2.4.7",
+  "version": "2.4.8-beta.1",
   "packageManager": "pnpm@10.24.0",
   "description": "A strong adaptation more platform all-tool program.",
   "author": "TalexDreamSoul <TalexDreamSoul@Gmail.com>",
