@@ -456,7 +456,10 @@ export class TouchApp implements TalexTouch.TouchApp {
     this.window = new TouchWindow(_windowOptions)
     this.registerMainWindowBoundsPersistence()
     this.channel = genTouchChannel(this)
-    this.moduleManager = new ModuleManager(this, this.channel)
+    this.moduleManager = new ModuleManager(this, this.channel, {
+      eventBus: touchEventBus,
+      beforeQuitEventName: TalexEvents.BEFORE_APP_QUIT
+    })
     this.config = new TouchConfig(this)
 
     // Disable Ctrl+R / Cmd+R reload in production

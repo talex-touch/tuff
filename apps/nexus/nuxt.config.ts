@@ -162,6 +162,11 @@ export default defineNuxtConfig({
       historyRetentionDays: Number(process.env.EXCHANGE_RATE_HISTORY_RETENTION_DAYS || 0),
       storeRateRows: process.env.EXCHANGE_RATE_STORE_RATE_ROWS !== 'false',
     },
+    releaseDownload: {
+      secret: process.env.RELEASE_DOWNLOAD_SIGNING_SECRET || authSecret,
+      signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
+      allowUnsignedFallback: process.env.RELEASE_DOWNLOAD_ALLOW_UNSIGNED_FALLBACK !== 'false',
+    },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     adminBootstrap: {
       secret: process.env.ADMINSECRET || process.env.ADMIN_SECRET,

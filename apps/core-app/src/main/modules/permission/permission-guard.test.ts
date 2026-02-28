@@ -70,4 +70,17 @@ describe('permissionGuardPerformance', () => {
 
     expect(result.allowed).toBe(true)
   })
+
+  it('requires both window.create and storage.shared for division-box flow trigger', async () => {
+    const pluginId = 'flow-plugin'
+    await store.grant(pluginId, 'window.create', 'user')
+
+    const denied = guard.check(pluginId, 'division-box:flow:trigger', SDK_VERSION)
+    expect(denied.allowed).toBe(false)
+    expect(denied.permissionId).toBe('storage.shared')
+
+    await store.grant(pluginId, 'storage.shared', 'user')
+    const allowed = guard.check(pluginId, 'division-box:flow:trigger', SDK_VERSION)
+    expect(allowed.allowed).toBe(true)
+  })
 })

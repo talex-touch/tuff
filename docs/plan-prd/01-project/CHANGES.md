@@ -4,6 +4,76 @@
 
 ## 2026-02-28
 
+### 启动阶段卡顿治理（前端首屏加载竞争缓解）
+
+**变更类型**: 性能优化 / 启动时序治理 / 主线程阻塞缓解
+
+**描述**: 针对开发环境启动日志中出现的前端加载慢与事件循环 lag，收敛启动阶段重任务执行时机：补齐模块事件上下文、延后 DivisionBox 预热窗口、推迟 AppProvider 的 dev 启动扫描，并对 Storage 落盘做内容级去重，降低主线程竞争。
+
+**主要变更**:
+1. `TouchApp` 创建 `ModuleManager` 时注入 `touchEventBus` 与 `BEFORE_APP_QUIT`，恢复模块 `start` 阶段事件上下文。
+2. `DivisionBoxModule` 在预热窗口池前等待主渲染器完成加载，避免与主窗口 dev server 首次编译并发竞争。
+3. `AppProvider` 在 dev 模式下将 startup backfill / mdls 初扫延后到 45s，并在主渲染器加载中继续延后重任务。
+4. `StorageModule` 增加 `persistedContent` 去重缓存，跳过重复内容写入；`persistConfig` 改为异步 `ensureFile`，减少同步 IO 阻塞。
+5. `Intelligence` 配置加载增加 runtime 签名去重，避免同配置重复应用导致 provider 重复注册。
+
+**修改文件**:
+- `apps/core-app/src/main/core/touch-app.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/storage/index.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### MetaOverlay 启动高度与 CoreBox 一次性同步（Meta+K）
+
+**变更类型**: 交互稳定性修复 / CoreBox 视图一致性
+
+**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。新增一次延迟高度同步，确保 MetaOverlay 启动阶段与 CoreBox 窗口高度对齐，减少首帧裁切与视觉跳变。
+
+**主要变更**:
+1. `MetaOverlayManager.show` 在初次设定 bounds 后，追加一次延迟高度同步调度。
+2. 新增 `heightSyncTimer` 生命周期管理，避免重复调度导致的多余更新。
+3. `destroy` 阶段清理同步定时器，避免悬挂定时任务。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 风险治理流程固化（P0）与技术债里程碑落地（不执行大文件拆分）
+
+**变更类型**: 文档治理 / 发布门禁收敛 / 风险管理
+
+**描述**: 将风险登记从“记录型文档”升级为“发布门禁输入”，补齐 Owner、目标日期、缓解与回滚策略、证据字段，并将 Gate E 与风险状态绑定；同时基于深度技术债报告落地 TD-M1~M3 里程碑。本轮明确“大文件拆分先不执行”，仅保留边界与测试基线规划。
+
+**主要变更**:
+1. `RISK-REGISTER` 新增 GA 风险模板与 Gate 判定规则（P0 未收口禁止 Gate E）。
+2. 风险表补齐 Owner/目标日期/回滚策略/状态；同步更新同步链路与 auth 迁移状态。
+3. `TODO` 的 P0 风险治理与技术债落地条目改为已完成，并记录“本轮不拆分大文件”决策。
+4. 发布清单补充风险门禁规则，Gate E 显式依赖 `P0=0`。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 Gate C 质量门禁拆解（C1~C4）
+
+**变更类型**: 发布治理 / 质量门禁执行计划
+
+**描述**: 将 Gate C 从“阻塞描述”细化为可执行批次（C1~C4），明确按文件分组、建议负责人、验收命令与推进顺序，避免发布前质量收口无 owner、无节奏。
+
+**主要变更**:
+1. 发布清单新增 Gate C 批次表（C1 lint 阻断清零、C2 watermark 类型收口、C3 auth/device 类型收口、C4 全量复扫）。
+2. TODO 的 `v2.4.7 发版推进` 同步增加 C1~C4 子任务，便于追踪 Gate C 实际进度。
+3. 发布清单更新时间更新为 2026-02-28，并保留风险门禁与 Gate E 绑定规则。
+
+**修改文件**:
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Workspace 依赖统一（P0~P5）与 Catalog 冲突收敛
 
 **变更类型**: 工程治理 / 依赖一致性 / 前端运行时收敛
@@ -161,6 +231,68 @@
 - `.github/workflows/release-extensions.yml`（删除）
 - `.github/workflows/opencode.yml`（删除）
 - `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Auth 敏感配置迁移到安全存储（localStorage -> safeStorage）
+
+**变更类型**: 安全加固 / 渲染层敏感数据治理
+
+**描述**: 收敛渲染端历史明文配置风险。登录初始化阶段新增一次性迁移逻辑，将 legacy `localStorage` 中的鉴权敏感项写入主进程 `safeStorage` 通道并清理旧键，避免长期明文驻留。
+
+**主要变更**:
+1. `auth-env.ts` 新增 `get/setAuthSensitiveValue`，统一通过 `AppEvents.system.getSecureValue/setSecureValue` 读写敏感字段。
+2. 新增 `migrateLegacyAuthEnvToSecureStorage()`，首次启动自动迁移并删除 legacy 键。
+3. `useAuth.initializeAuth()` 前置执行迁移，保证后续登录流程读取到安全存储数据。
+4. 补齐 `auth-env.test.ts`，覆盖迁移与清理行为。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.ts`
+- `apps/core-app/src/renderer/src/modules/auth/useAuth.ts`
+- `apps/core-app/src/renderer/src/modules/auth/auth-env.test.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Flow -> DivisionBox 权限回归补齐（结构化错误 + 前端提示）
+
+**变更类型**: 稳定性修复 / 权限反馈一致性
+
+**描述**: 针对 Flow 触发 DivisionBox 的权限拒绝场景，补齐“主进程结构化错误返回 + 渲染层定向提示”链路，避免仅凭字符串错误导致提示不稳定。
+
+**主要变更**:
+1. `flow-bus/ipc.ts` 统一 `FlowEvents.dispatch` 异常出口，返回 `{ success: false, error }` 结构并透出 `code/permissionId`。
+2. `FlowDispatchResponse.error` 类型扩展为可携带 `code`、`permissionId`、`showRequest`，减少前后端语义漂移。
+3. `useDetach.ts` 针对 `PERMISSION_DENIED` 给出必需权限提示，其余失败路径保持既有错误提示策略。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useDetach.ts`
+- `packages/utils/transport/events/types/flow.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus Release 下载链路签名化（Signed URL + TTL + fallback）
+
+**变更类型**: 发布链路增强 / 下载安全治理
+
+**描述**: Release API 默认下发带签名的下载地址，下载端点校验签名并支持 TTL；在迁移阶段可通过配置控制 unsigned fallback，兼顾存量链接兼容。
+
+**主要变更**:
+1. 新增 `releaseDownloadSignature` 工具，封装签名 URL 生成、解析与校验逻辑。
+2. `releaseSignature` 增加 `attachSignatureUrls(...)`，为 release 资产附加 signed `downloadUrl`，并保留 `fallbackDownloadUrl`。
+3. `releases/latest|index|[tag]|[tag]/assets` API 统一接入签名 URL 输出。
+4. `releases/[tag]/download/[platform]/[arch]` 支持签名校验、外链 302 跳转与 unsigned fallback 开关。
+5. `nuxt.config.ts` 新增 `releaseDownload.secret/signedTtlSeconds/allowUnsignedFallback` 运行时配置。
+
+**修改文件**:
+- `apps/nexus/server/utils/releaseDownloadSignature.ts`
+- `apps/nexus/server/utils/releaseSignature.ts`
+- `apps/nexus/server/api/releases/latest.get.ts`
+- `apps/nexus/server/api/releases/index.get.ts`
+- `apps/nexus/server/api/releases/[tag].get.ts`
+- `apps/nexus/server/api/releases/[tag]/assets.get.ts`
+- `apps/nexus/server/api/releases/[tag]/download/[platform]/[arch].get.ts`
+- `apps/nexus/nuxt.config.ts`
+- `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ## 2026-02-27

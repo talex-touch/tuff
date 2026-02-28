@@ -60,6 +60,24 @@ function resolveActorPluginId(payload: FlowPayload | null): string | undefined {
   return item.source.id
 }
 
+function getFlowPermissionMessage(
+  error: { message?: string; code?: string; permissionId?: string } | undefined,
+  t: ReturnType<typeof useI18n>['t']
+): string | null {
+  if (!error) {
+    return null
+  }
+  const code = typeof error.code === 'string' ? error.code : ''
+  if (code !== 'PERMISSION_DENIED') {
+    return null
+  }
+  const permissionId = typeof error.permissionId === 'string' ? error.permissionId : ''
+  if (!permissionId) {
+    return t('systemPermission.requiredPermission', { permission: 'storage.shared' })
+  }
+  return t('systemPermission.requiredPermission', { permission: permissionId })
+}
+
 export function useDetach(options: UseDetachOptions) {
   const { searchVal, res, boxOptions, isUIMode, activeActivations, deactivateProvider } = options
   const { t } = useI18n()
@@ -168,6 +186,11 @@ export function useDetach(options: UseDetachOptions) {
       if (response?.success) {
         toast.success(t('corebox.flowSent', '已发送到目标插件'))
       } else {
+        const permissionMessage = getFlowPermissionMessage(response?.error, t)
+        if (permissionMessage) {
+          toast.warning(permissionMessage)
+          return
+        }
         throw new Error(response?.error?.message || 'Flow failed')
       }
     } catch (error) {

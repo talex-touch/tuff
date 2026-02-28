@@ -34,7 +34,7 @@ import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
 
-import { app, shell } from 'electron'
+import { app, BrowserWindow, shell } from 'electron'
 import {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
@@ -239,6 +239,8 @@ const FULL_SYNC_LAST_RUN_CONFIG_KEY = 'app_provider_last_full_sync'
 const DELETION_GRACE_PERIOD_MS = 3 * 60 * 1000 // 3 minutes grace period
 const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
 const STARTUP_BACKFILL_INITIAL_DELAY_MS = 15_000
+const STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS = 30_000
+const STARTUP_HEAVY_TASK_WAIT_RENDERER_TIMEOUT_MS = 30_000
 
 export interface AppIndexSettings {
   hideNoisySystemApps: boolean
@@ -482,13 +484,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.startupBackfillStarted) return
     this.startupBackfillStarted = true
 
-    logApp(
-      `Scheduling startup backfill (deferred ${Math.round(STARTUP_BACKFILL_INITIAL_DELAY_MS / 1000)}s)`,
-      LogStyle.info
-    )
+    const delayMs = is.dev
+      ? STARTUP_BACKFILL_INITIAL_DELAY_MS + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
+      : STARTUP_BACKFILL_INITIAL_DELAY_MS
+    logApp(`Scheduling startup backfill (deferred ${Math.round(delayMs / 1000)}s)`, LogStyle.info)
     setTimeout(() => {
       void this._runStartupBackfillWithRetry()
-    }, STARTUP_BACKFILL_INITIAL_DELAY_MS)
+    }, delayMs)
   }
 
   private async _runStartupBackfillWithRetry(): Promise<void> {
@@ -536,6 +538,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _shouldRunStartupBackfill(): Promise<{ allowed: boolean; reason?: string }> {
     if (!this.dbUtils || !this.searchIndex) {
       return { allowed: false, reason: 'missing-context' }
+    }
+
+    if (is.dev && this.isMainRendererLoading()) {
+      return { allowed: false, reason: 'renderer-loading' }
     }
 
     if (appTaskGate.isActive()) {
@@ -1812,6 +1818,63 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return false
   }
 
+  private getMainWindow(): BrowserWindow | null {
+    const primary = ($app as { window?: { window?: BrowserWindow } }).window?.window
+    if (primary && !primary.isDestroyed()) {
+      return primary
+    }
+
+    const fallback = BrowserWindow.getAllWindows()[0]
+    if (!fallback || fallback.isDestroyed()) {
+      return null
+    }
+    return fallback
+  }
+
+  private isMainRendererLoading(): boolean {
+    const win = this.getMainWindow()
+    if (!win) return false
+    const webContents = win.webContents
+    if (!webContents || webContents.isDestroyed()) return false
+    return webContents.isLoadingMainFrame()
+  }
+
+  private async waitForMainRendererReady(timeoutMs = STARTUP_HEAVY_TASK_WAIT_RENDERER_TIMEOUT_MS) {
+    const win = this.getMainWindow()
+    if (!win) return
+
+    const webContents = win.webContents
+    if (!webContents || webContents.isDestroyed()) return
+    if (!webContents.isLoadingMainFrame()) return
+
+    logApp('Main renderer is loading, postpone heavy app scan tasks', LogStyle.info)
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let timeout: NodeJS.Timeout | null = setTimeout(() => {
+        timeout = null
+        finish()
+      }, timeoutMs)
+
+      const finish = (): void => {
+        if (settled) return
+        settled = true
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        webContents.removeListener('did-finish-load', finish)
+        webContents.removeListener('did-fail-load', finish)
+        webContents.removeListener('render-process-gone', finish)
+        resolve()
+      }
+
+      webContents.once('did-finish-load', finish)
+      webContents.once('did-fail-load', finish)
+      webContents.once('render-process-gone', finish)
+    })
+  }
+
   private _scheduleMdlsUpdateScan(): void {
     if (process.platform !== 'darwin') {
       logApp('Not on macOS, skipping mdls scan scheduling', LogStyle.info)
@@ -1819,12 +1882,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (is.dev) {
-      logApp('Deferring dev mode mdls scan by 15s to avoid startup contention', LogStyle.info)
+      const delayMs = 15_000 + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
+      logApp(
+        `Deferring dev mode mdls scan by ${Math.round(delayMs / 1000)}s to avoid startup contention`,
+        LogStyle.info
+      )
       setTimeout(() => {
-        this._runMdlsUpdateScan().then(() => {
+        void this.waitForMainRendererReady().then(async () => {
+          await this._runMdlsUpdateScan()
           logApp('Dev mode mdls scan complete', LogStyle.success)
         })
-      }, 15_000)
+      }, delayMs)
     }
 
     logApp('Registering mdls update polling service (10 min interval)', LogStyle.info)
@@ -1839,6 +1907,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await this._runMdlsUpdateScan()
         } else if (is.dev && !lastScanTimestamp) {
           logApp('First scan in dev mode', LogStyle.info)
+          await this.waitForMainRendererReady()
           await this._runMdlsUpdateScan()
         } else {
           appProviderLog.debug(

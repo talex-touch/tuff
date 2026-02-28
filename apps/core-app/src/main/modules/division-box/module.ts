@@ -8,6 +8,7 @@
 import type { MaybePromise, ModuleKey, ModuleStartContext } from '@talex-touch/utils'
 import type { DivisionBoxIPC } from './ipc'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { BrowserWindow } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 import { TalexEvents } from '../../core/eventbus/touch-event'
@@ -16,6 +17,7 @@ import { initializeDivisionBoxIPC } from './ipc'
 import { windowPool } from './window-pool'
 
 const LOG_PREFIX = '[DivisionBox]'
+const MAIN_RENDERER_READY_TIMEOUT_MS = 30_000
 
 /**
  * DivisionBoxModule
@@ -58,6 +60,47 @@ export class DivisionBoxModule extends BaseModule {
     console.log(LOG_PREFIX, '✓ Module initialized')
   }
 
+  private async waitForMainRendererReady(): Promise<void> {
+    const mainWindow = ($app as { window?: { window?: BrowserWindow } }).window?.window
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return
+    }
+
+    const webContents = mainWindow.webContents
+    if (!webContents || webContents.isDestroyed()) {
+      return
+    }
+
+    if (!webContents.isLoadingMainFrame()) {
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      let settled = false
+      let timeout: NodeJS.Timeout | null = setTimeout(() => {
+        timeout = null
+        finish()
+      }, MAIN_RENDERER_READY_TIMEOUT_MS)
+
+      const finish = (): void => {
+        if (settled) return
+        settled = true
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        webContents.removeListener('did-finish-load', finish)
+        webContents.removeListener('did-fail-load', finish)
+        webContents.removeListener('render-process-gone', finish)
+        resolve()
+      }
+
+      webContents.once('did-finish-load', finish)
+      webContents.once('did-fail-load', finish)
+      webContents.once('render-process-gone', finish)
+    })
+  }
+
   /**
    * Starts the DivisionBox module after all modules are loaded
    *
@@ -66,7 +109,7 @@ export class DivisionBoxModule extends BaseModule {
   start(ctx: ModuleStartContext<TalexEvents>): void {
     const schedulePoolInit = (): void => {
       setTimeout(() => {
-        void windowPool.initialize()
+        void this.waitForMainRendererReady().then(() => windowPool.initialize())
       }, 0)
     }
 
