@@ -6,7 +6,6 @@
  */
 
 import type { MaybePromise, NativeShareOptions } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
 import {
@@ -57,12 +56,15 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
    * Initializes the Flow Bus module
    */
   async onInit(): Promise<void> {
-    const channel: ITouchChannel = $app.channel
+    const channel = $app.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel, keyManager)
 
     // Initialize IPC handlers
-    this.ipc = initializeFlowBusIPC(channel)
+    this.ipc = initializeFlowBusIPC(transport)
 
-    this.registerTransportHandlers(channel)
+    this.registerTransportHandlers(transport)
 
     // Register native share targets
     this.registerNativeShareTargets()
@@ -73,11 +75,7 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
     console.log('[FlowBusModule] Module initialized')
   }
 
-  private registerTransportHandlers(channel: ITouchChannel): void {
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const tx = getTuffTransportMain(channel, keyManager)
-
+  private registerTransportHandlers(tx: ReturnType<typeof getTuffTransportMain>): void {
     const enforce = (context: HandlerContext, apiName: string, sdkapi?: number) => {
       const pluginId = context?.plugin?.name
       if (!pluginId) {

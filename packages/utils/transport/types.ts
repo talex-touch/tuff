@@ -306,6 +306,18 @@ export interface HandlerContext {
   plugin?: PluginSecurityContext
 }
 
+export interface MainInvokeContext {
+  /**
+   * Optional sender override for in-process invocation.
+   */
+  sender?: ElectronWebContents
+
+  /**
+   * Optional plugin context for in-process invocation.
+   */
+  plugin?: PluginSecurityContext
+}
+
 // ============================================================================
 // Plugin Security
 // ============================================================================
@@ -519,6 +531,22 @@ export interface ITuffTransportMain {
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
     handler: (payload: TReq, context: StreamContext<TChunk>) => void | Promise<void>,
   ) => () => void
+
+  /**
+   * Invokes handlers in the main process directly without IPC roundtrip.
+   *
+   * @typeParam TReq - Request payload type
+   * @typeParam TRes - Response payload type
+   * @param event - The TuffEvent to invoke
+   * @param payload - Request payload
+   * @param context - Optional invocation context
+   * @returns Promise resolving to the last handler response
+   */
+  invoke: <TReq, TRes>(
+    event: TuffEvent<TReq, TRes>,
+    payload: TReq,
+    context?: MainInvokeContext,
+  ) => Promise<TRes>
 
   /**
    * Sends a message to a specific window.

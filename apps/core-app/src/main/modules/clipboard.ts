@@ -1,5 +1,4 @@
 import type { AppSetting, MaybePromise, ModuleKey } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type {
   ClipboardActionResult,
   ClipboardApplyRequest,
@@ -9,6 +8,7 @@ import type {
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
   ClipboardItem,
+  ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
   ClipboardQueryResponse,
   ClipboardReadImageRequest,
@@ -36,8 +36,7 @@ import { promisify } from 'node:util'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { ClipboardEvents } from '@talex-touch/utils/transport/events'
+import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm'
@@ -63,45 +62,6 @@ import { getMainConfig, isMainStorageReady, subscribeMainConfig } from './storag
 import { activeAppService } from './system/active-app'
 
 const clipboardLog = createLogger('Clipboard')
-const coreBoxClipboardChangeEvent = defineRawEvent<{ item: IClipboardItem }, void>(
-  'core-box:clipboard-change'
-)
-const clipboardLegacyGetHistoryEvent = defineRawEvent<
-  ClipboardLegacyHistoryRequest,
-  ClipboardLegacyHistoryResponse
->('clipboard:get-history')
-const clipboardLegacyGetLatestEvent = defineRawEvent<void, IClipboardItem | null>(
-  'clipboard:get-latest'
-)
-const clipboardLegacyGetImageUrlEvent = defineRawEvent<{ id: number }, { url: string | null }>(
-  'clipboard:get-image-url'
-)
-const clipboardLegacySetFavoriteEvent = defineRawEvent<{ id: number; isFavorite: boolean }, void>(
-  'clipboard:set-favorite'
-)
-const clipboardLegacyDeleteItemEvent = defineRawEvent<{ id: number }, void>('clipboard:delete-item')
-const clipboardLegacyClearHistoryEvent = defineRawEvent<void, void>('clipboard:clear-history')
-const clipboardLegacyApplyToActiveAppEvent = defineRawEvent<
-  ClipboardApplyPayload,
-  { success: boolean; message?: string }
->('clipboard:apply-to-active-app')
-const clipboardLegacyWriteTextEvent = defineRawEvent<{ text: string }, void>('clipboard:write-text')
-const clipboardLegacyWriteEvent = defineRawEvent<ClipboardWritePayload, void>('clipboard:write')
-const clipboardLegacyReadEvent = defineRawEvent<void, ClipboardReadResponse>('clipboard:read')
-const clipboardLegacyReadImageEvent = defineRawEvent<
-  { preview?: boolean },
-  ClipboardReadImageResponse | null
->('clipboard:read-image')
-const clipboardLegacyReadFilesEvent = defineRawEvent<void, string[]>('clipboard:read-files')
-const clipboardLegacyClearEvent = defineRawEvent<void, void>('clipboard:clear')
-const clipboardLegacyCopyAndPasteEvent = defineRawEvent<
-  ClipboardCopyAndPastePayload,
-  { success: boolean; message?: string }
->('clipboard:copy-and-paste')
-const clipboardLegacyQueryEvent = defineRawEvent<ClipboardMetaQueryRequest, IClipboardItem[]>(
-  'clipboard:query'
-)
-const clipboardLegacyNewItemEvent = defineRawEvent<IClipboardItem, void>('clipboard:new-item')
 const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
 const CLIPBOARD_VISIBLE_POLL_INTERVAL_MS = 500
 const CLIPBOARD_DEFAULT_POLL_INTERVAL_MS = 3000
@@ -146,42 +106,11 @@ interface ClipboardMetaEntry {
   value: unknown
 }
 
-interface ClipboardMetaQueryRequest {
-  source?: string
-  category?: string
-  metaFilter?: { key: string; value?: unknown }
-  limit?: number
-}
-
-interface ClipboardLegacyHistoryRequest {
-  page?: number
-  pageSize?: number
-  keyword?: string
-  startTime?: number
-  endTime?: number
-  type?: 'text' | 'image' | 'files'
-  isFavorite?: boolean
-  sourceApp?: string
-  sortOrder?: 'asc' | 'desc'
-}
-
-interface ClipboardLegacyHistoryResponse {
-  history: IClipboardItem[]
-  total: number
-  page: number
-  pageSize: number
-}
-
 interface ClipboardWritePayload {
   text?: string
   html?: string
   image?: string
   files?: string[]
-}
-
-interface ClipboardCopyAndPastePayload extends ClipboardWritePayload {
-  delayMs?: number
-  hideCoreBox?: boolean
 }
 
 type ClipboardPollingIntervalOption = 1 | 3 | 5 | 10 | 15 | -1
@@ -1802,14 +1731,6 @@ export class ClipboardModule extends BaseModule {
     this.updateMemoryCache(persisted)
     this.notifyTransportChange()
 
-    for (const win of windowManager.windows) {
-      if (!win.window.isDestroyed()) {
-        if (this.transport) {
-          void this.transport.sendTo(win.window.webContents, clipboardLegacyNewItemEvent, persisted)
-        }
-      }
-    }
-
     return persisted
   }
 
@@ -2138,25 +2059,13 @@ export class ClipboardModule extends BaseModule {
       this.updateMemoryCache(persisted)
       this.notifyTransportChange()
 
-      for (const win of windowManager.windows) {
-        if (!win.window.isDestroyed()) {
-          if (this.transport) {
-            void this.transport.sendTo(
-              win.window.webContents,
-              clipboardLegacyNewItemEvent,
-              persisted
-            )
-          }
-        }
-      }
-
       const activePlugin = windowManager.getAttachedPlugin()
       if (
         activePlugin?._uniqueChannelKey &&
         windowManager.shouldForwardClipboardChange(persisted.type)
       ) {
         this.transport
-          ?.sendToPlugin(activePlugin.name, coreBoxClipboardChangeEvent, { item: persisted })
+          ?.sendToPlugin(activePlugin.name, CoreBoxEvents.clipboard.change, { item: persisted })
           .catch(() => {})
           .catch((error) => {
             clipboardLog.warn('Failed to notify plugin UI view about clipboard change', { error })
@@ -2259,7 +2168,7 @@ export class ClipboardModule extends BaseModule {
   }
 
   private registerTransportHandlers(): void {
-    const channel = genTouchApp().channel as ITouchChannel
+    const channel = genTouchApp().channel
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.transport = getTuffTransportMain(channel, keyManager)
@@ -2722,333 +2631,8 @@ export class ClipboardModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      this.transport.on(
-        clipboardLegacyGetHistoryEvent,
-        async (payload: ClipboardLegacyHistoryRequest = {}) => {
-          if (!this.db) {
-            return { history: [], total: 0, page: 1, pageSize: PAGE_SIZE }
-          }
-
-          const {
-            page = 1,
-            pageSize: requestedPageSize,
-            keyword,
-            startTime,
-            endTime,
-            type: itemType,
-            isFavorite,
-            sourceApp,
-            sortOrder = 'desc'
-          } = payload ?? {}
-
-          const pageSize = requestedPageSize
-            ? Math.min(Math.max(requestedPageSize, 1), 100)
-            : PAGE_SIZE
-          const offset = (page - 1) * pageSize
-
-          const conditions: SQL<unknown>[] = []
-
-          if (keyword && typeof keyword === 'string' && keyword.trim().length > 0) {
-            const keywordPattern = `%${keyword.trim()}%`
-            const keywordCondition = or(
-              sql`${clipboardHistory.content} LIKE ${keywordPattern}`,
-              sql`COALESCE(${clipboardHistory.rawContent}, '') LIKE ${keywordPattern}`,
-              sql`COALESCE(${clipboardHistory.metadata}, '') LIKE ${keywordPattern}`
-            )
-            if (keywordCondition) {
-              conditions.push(keywordCondition)
-            }
-          }
-
-          if (startTime && typeof startTime === 'number') {
-            conditions.push(sql`${clipboardHistory.timestamp} >= ${new Date(startTime)}`)
-          }
-
-          if (endTime && typeof endTime === 'number') {
-            conditions.push(sql`${clipboardHistory.timestamp} <= ${new Date(endTime)}`)
-          }
-
-          if (itemType && ['text', 'image', 'files'].includes(itemType)) {
-            conditions.push(eq(clipboardHistory.type, itemType))
-          }
-
-          if (isFavorite !== undefined && typeof isFavorite === 'boolean') {
-            conditions.push(eq(clipboardHistory.isFavorite, isFavorite))
-          }
-
-          if (sourceApp && typeof sourceApp === 'string') {
-            conditions.push(eq(clipboardHistory.sourceApp, sourceApp))
-          }
-
-          const whereClause = conditions.length > 0 ? and(...conditions) : undefined
-          const orderClause =
-            sortOrder === 'asc' ? clipboardHistory.timestamp : desc(clipboardHistory.timestamp)
-
-          const historyRows = await this.db
-            .select()
-            .from(clipboardHistory)
-            .where(whereClause)
-            .orderBy(orderClause)
-            .limit(pageSize)
-            .offset(offset)
-
-          const history = await this.hydrateWithMeta(historyRows)
-          const normalized = history.map((item) => this.toClientItem(item) ?? item)
-
-          const totalResult = await this.db
-            .select({ count: sql<number>`count(*)` })
-            .from(clipboardHistory)
-            .where(whereClause)
-
-          const total = totalResult[0]?.count ?? 0
-
-          return { history: normalized, total, page, pageSize }
-        }
-      )
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyGetLatestEvent, async () => {
-        const cached = this.getLatestItem()
-        if (cached) {
-          return this.toClientItem(cached) ?? cached
-        }
-
-        if (!this.db) {
-          return null
-        }
-
-        const rows = await this.db
-          .select()
-          .from(clipboardHistory)
-          .orderBy(desc(clipboardHistory.timestamp))
-          .limit(1)
-
-        if (!rows.length) {
-          return null
-        }
-
-        const [hydrated] = await this.hydrateWithMeta(rows)
-        const item = (hydrated as IClipboardItem) ?? null
-        if (!item) {
-          return null
-        }
-
-        return this.toClientItem(item) ?? item
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyGetImageUrlEvent, async (payload) => {
-        const id = Number(payload?.id)
-        if (!Number.isFinite(id)) {
-          return { url: null }
-        }
-
-        const item = await this.getItemById(id)
-        if (!item || item.type !== 'image') {
-          return { url: null }
-        }
-
-        const normalized = this.toClientItem(item) ?? item
-        const meta = normalized.meta
-        if (meta && typeof meta === 'object') {
-          const imageUrl = (meta as Record<string, unknown>).image_original_url
-          if (typeof imageUrl === 'string' && imageUrl.trim().length > 0) {
-            return { url: imageUrl.trim() }
-          }
-        }
-
-        const content = typeof normalized.content === 'string' ? normalized.content : ''
-        if (content.startsWith('tfile://')) {
-          return { url: content }
-        }
-
-        return { url: null }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacySetFavoriteEvent, async (payload) => {
-        const { id, isFavorite } = payload ?? {}
-        if (!this.db || typeof id !== 'number') return
-        await this.db
-          .update(clipboardHistory)
-          .set({ isFavorite })
-          .where(eq(clipboardHistory.id, id))
-        const cached = this.memoryCache.find((item) => item.id === id)
-        if (cached) {
-          cached.isFavorite = isFavorite
-          this.notifyTransportChange()
-        }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyDeleteItemEvent, async (payload) => {
-        const { id } = payload ?? {}
-        if (!this.db || typeof id !== 'number') return
-        try {
-          const [row] = await this.db
-            .select()
-            .from(clipboardHistory)
-            .where(eq(clipboardHistory.id, id))
-            .limit(1)
-          const item = row as unknown as IClipboardItem | undefined
-          if (
-            item?.type === 'image' &&
-            typeof item.content === 'string' &&
-            isLikelyLocalPath(item.content)
-          ) {
-            void tempFileService.deleteFile(item.content)
-          }
-        } catch (error) {
-          clipboardLog.warn('Failed to delete clipboard image file for removed item', { error })
-        }
-
-        await this.db.delete(clipboardHistory).where(eq(clipboardHistory.id, id))
-        this.memoryCache = this.memoryCache.filter((item) => item.id !== id)
-        this.notifyTransportChange()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyClearHistoryEvent, async () => {
-        const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
-        try {
-          const rows = await this.db!.select()
-            .from(clipboardHistory)
-            .where(gt(clipboardHistory.timestamp, oneHourAgo))
-          for (const row of rows) {
-            const item = row as unknown as IClipboardItem
-            if (
-              item?.type === 'image' &&
-              typeof item.content === 'string' &&
-              isLikelyLocalPath(item.content)
-            ) {
-              void tempFileService.deleteFile(item.content)
-            }
-          }
-        } catch (error) {
-          clipboardLog.warn('Failed to cleanup clipboard image files for clear-history', { error })
-        }
-
-        await this.db!.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
-        this.memoryCache = []
-        this.notifyTransportChange()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyApplyToActiveAppEvent, async (payload) => {
-        try {
-          await this.applyToActiveApp((payload ?? {}) as ClipboardApplyPayload)
-          return { success: true }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return { success: false, message }
-        }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyWriteTextEvent, async (payload) => {
-        const text = typeof payload?.text === 'string' ? payload.text : ''
-        await writePayload({ text })
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyWriteEvent, async (payload) => {
-        await writePayload(payload ?? {})
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyReadEvent, async () => {
-        const formats = clipboard.availableFormats()
-        const text = clipboard.readText()
-        const html = clipboard.readHTML()
-        const image = clipboard.readImage()
-        const hasImage = !image.isEmpty()
-        const files = this.clipboardHelper?.readClipboardFiles() ?? []
-        const hasFiles = files.length > 0
-        return { text, html, hasImage, hasFiles, formats }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyReadImageEvent, async (payload) => {
-        const image = clipboard.readImage()
-        if (image.isEmpty()) {
-          return null
-        }
-        const size = image.getSize()
-        const preview = Boolean(payload?.preview)
-        const previewDataUrl = image.resize({ width: 256 }).toDataURL()
-        if (preview) {
-          return {
-            dataUrl: previewDataUrl,
-            width: size.width,
-            height: size.height
-          }
-        }
-
-        const stored = await tempFileService.createFile({
-          namespace: CLIPBOARD_LIVE_IMAGE_NAMESPACE,
-          ext: 'png',
-          buffer: image.toPNG(),
-          prefix: 'clipboard-read'
-        })
-        return {
-          dataUrl: previewDataUrl,
-          width: size.width,
-          height: size.height,
-          tfileUrl: toTfileUrl(stored.path)
-        }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyReadFilesEvent, async () => {
-        return this.clipboardHelper?.readClipboardFiles() ?? []
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyClearEvent, async () => {
-        clipboard.clear()
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyCopyAndPasteEvent, async (payload) => {
-        try {
-          const { text, html, image, files, delayMs, hideCoreBox } = payload ?? {}
-          let applyPayload: ClipboardApplyPayload
-          if (image) {
-            applyPayload = {
-              type: 'image',
-              item: { type: 'image', content: image },
-              hideCoreBox,
-              delayMs
-            }
-          } else if (files && files.length > 0) {
-            applyPayload = { type: 'files', files, hideCoreBox, delayMs }
-          } else {
-            applyPayload = { type: 'text', text: text ?? '', html, hideCoreBox, delayMs }
-          }
-          await this.applyToActiveApp(applyPayload)
-          return { success: true }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return { success: false, message }
-        }
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(clipboardLegacyQueryEvent, async (payload) => {
+      this.transport.on(ClipboardEvents.queryMeta, async (payload, context) => {
+        this.enforceClipboardPermission(context.plugin?.name, 'clipboard:read', payload)
         return await this.queryHistoryByMeta(payload ?? {})
       })
     )

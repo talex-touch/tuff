@@ -1,4 +1,5 @@
 import type { Ref } from 'vue'
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -29,17 +30,12 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   const coreboxShowHistoryEvent = defineRawEvent<void, void>('corebox:show-history')
   const coreboxHideHistoryEvent = defineRawEvent<void, void>('corebox:hide-history')
   const coreboxCopyPreviewEvent = defineRawEvent<{ value?: string }, void>('corebox:copy-preview')
-  const clipboardQueryEvent = defineRawEvent<
-    { category?: string; limit?: number },
-    { data?: CalculationHistoryEntry[] } | CalculationHistoryEntry[]
-  >('clipboard:query')
-  const clipboardNewItemEvent = defineRawEvent<CalculationHistoryEntry, void>('clipboard:new-item')
-  const clipboardWriteTextEvent = defineRawEvent<{ text: string }, void>('clipboard:write-text')
 
   const activeIndex = ref(-1)
   const visible = ref(false)
   const loading = ref(false)
   const items = ref<CalculationHistoryEntry[]>([])
+  let clipboardChangeStream: { cancel: () => void } | null = null
 
   function ensureSelection(preferStart = false): void {
     if (!visible.value || !items.value.length) {
@@ -73,12 +69,12 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const response = await transport.send(clipboardQueryEvent, {
+      const response = await transport.send(ClipboardEvents.queryMeta, {
         category: 'preview',
         limit: 20
       })
       devLog('[usePreviewHistory] Query response:', response)
-      items.value = Array.isArray(response) ? response : (response?.data ?? [])
+      items.value = Array.isArray(response) ? (response as CalculationHistoryEntry[]) : []
       devLog('[usePreviewHistory] Loaded items:', items.value.length)
       ensureSelection()
     } catch (error) {
@@ -180,22 +176,25 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
   const unregCopy = transport.on(coreboxCopyPreviewEvent, async (payload) => {
     if (!payload?.value) return
     try {
-      await transport.send(clipboardWriteTextEvent, { text: payload.value })
+      await transport.send(ClipboardEvents.write, { text: payload.value })
       toast.success('结果已复制')
     } catch {
       toast.error('复制失败')
     }
   })
 
-  const unregNewItem = transport.on(clipboardNewItemEvent, (data) => {
-    if (!data?.meta?.category) return
-    if (data.meta.category === 'preview') {
-      devLog('[usePreviewHistory] New preview item detected, refreshing if visible')
-      if (visible.value) {
-        void load()
+  void transport
+    .stream(ClipboardEvents.change, undefined, {
+      onData: () => {
+        if (visible.value) {
+          void load()
+        }
       }
-    }
-  })
+    })
+    .then((controller) => {
+      clipboardChangeStream = controller
+    })
+    .catch(() => {})
 
   // Window event listeners for show/hide history (from keyboard shortcuts and PreviewResultCard)
   function handleShowHistoryEvent(): void {
@@ -218,7 +217,8 @@ export function usePreviewHistory(options: UsePreviewHistoryOptions) {
     unregShow()
     unregHide()
     unregCopy()
-    unregNewItem()
+    clipboardChangeStream?.cancel()
+    clipboardChangeStream = null
     window.removeEventListener('mousedown', handleMouseDown)
     window.removeEventListener('keydown', handleKeydown, true)
     window.removeEventListener('corebox:show-calculation-history', handleShowHistoryEvent)

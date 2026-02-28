@@ -115,6 +115,7 @@ export type {
 
   // Contexts
   HandlerContext,
+  MainInvokeContext,
   IPluginTuffTransport,
   // Transport interfaces
   ITuffTransport,

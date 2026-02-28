@@ -1,10 +1,10 @@
 import type { TouchApp } from '../../../../core/touch-app'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../../../core'
 
 type Handler<TPayload> = (payload: TPayload) => void | TPayload
+type TransportScope = 'main' | 'plugin'
 
 const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
@@ -38,22 +38,22 @@ export class CoreBoxTransport {
   /**
    * Registers a channel handler for the specified event.
    *
-   * @param channelType - The channel type (MAIN or PLUGIN)
+   * @param scope - The transport scope (main/plugin)
    * @param event - The event name to listen for
    * @param handler - The callback function to handle incoming payloads
    */
   public register<TPayload>(
-    channelType: ChannelType,
+    scope: TransportScope,
     event: string,
     handler: Handler<TPayload>
   ): () => void {
     const rawEvent = defineRawEvent<TPayload, unknown>(event)
     return this.tuffTransport.on(rawEvent, (payload, context) => {
       const isPlugin = Boolean(context.plugin)
-      if (channelType === ChannelType.MAIN && isPlugin) {
+      if (scope === 'main' && isPlugin) {
         return
       }
-      if (channelType === ChannelType.PLUGIN && !isPlugin) {
+      if (scope === 'plugin' && !isPlugin) {
         return
       }
       return handler(payload as TPayload)

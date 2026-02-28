@@ -1,4 +1,3 @@
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { FSWatcher } from 'chokidar'
@@ -170,7 +169,7 @@ export class WidgetManager {
 
   private get transport() {
     const app = genTouchApp()
-    const channel: ITouchChannel = app.channel
+    const channel = app.channel
     const keyManager = resolveKeyManager(channel as { keyManager?: unknown })
     return getTuffTransportMain(channel, keyManager)
   }

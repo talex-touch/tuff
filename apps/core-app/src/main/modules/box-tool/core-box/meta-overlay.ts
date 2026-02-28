@@ -19,6 +19,7 @@ import process from 'node:process'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { ClipboardEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
@@ -52,7 +53,6 @@ const coreBoxTogglePinEvent = defineRawEvent<
   },
   void
 >('core-box:toggle-pin')
-const clipboardWriteTextEvent = defineRawEvent<{ text: string }, void>('clipboard:write-text')
 const shellShowItemInFolderEvent = defineRawEvent<{ path: string }, void>(
   'shell:show-item-in-folder'
 )
@@ -495,7 +495,7 @@ export class MetaOverlayManager {
       case 'copy-title': {
         const title = item.render?.basic?.title
         if (title) {
-          void transport.sendTo(coreBoxWindow.window.webContents, clipboardWriteTextEvent, {
+          void transport.sendTo(coreBoxWindow.window.webContents, ClipboardEvents.write, {
             text: title
           })
         }

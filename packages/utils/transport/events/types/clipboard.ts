@@ -64,6 +64,32 @@ export interface ClipboardQueryResponse {
 }
 
 /**
+ * Raw clipboard history item with metadata for internal query scenarios.
+ */
+export interface ClipboardMetaHistoryItem {
+  id?: number
+  type: 'text' | 'image' | 'files'
+  content: string
+  thumbnail?: string | null
+  rawContent?: string | null
+  sourceApp?: string | null
+  timestamp?: string | number | Date | null
+  isFavorite?: boolean | null
+  metadata?: string | null
+  meta?: Record<string, unknown> | null
+}
+
+/**
+ * Query clipboard history by metadata fields.
+ */
+export interface ClipboardMetaQueryRequest {
+  source?: string
+  category?: string
+  metaFilter?: { key: string; value?: unknown }
+  limit?: number
+}
+
+/**
  * Request to apply a clipboard item.
  */
 export interface ClipboardApplyRequest extends ClipboardSdkApiPayload {

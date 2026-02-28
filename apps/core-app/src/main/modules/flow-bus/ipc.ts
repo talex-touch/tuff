@@ -4,11 +4,10 @@
  * Registers IPC handlers for Flow operations.
  */
 
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import {
   FlowEvents,
-  getTuffTransportMain,
-  type HandlerContext
+  type HandlerContext,
+  type ITuffTransportMain
 } from '@talex-touch/utils/transport/main'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
@@ -23,13 +22,12 @@ import { flowTargetRegistry } from './target-registry'
  * Manages IPC communication for Flow operations.
  */
 export class FlowBusIPC {
-  private channel: ITouchChannel
   private unregisterFunctions: Array<() => void> = []
   private transportDisposers: Array<() => void> = []
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private transport: ITuffTransportMain | null = null
 
-  constructor(channel: ITouchChannel) {
-    this.channel = channel
+  constructor(transport: ITuffTransportMain) {
+    this.transport = transport
   }
 
   /**
@@ -48,10 +46,11 @@ export class FlowBusIPC {
   }
 
   private registerTransportHandlers(): void {
-    const channel = this.channel as ITouchChannel & { keyManager?: unknown }
-    const transport = getTuffTransportMain(channel, channel.keyManager ?? channel)
+    if (!this.transport) {
+      return
+    }
 
-    this.transport = transport
+    const transport = this.transport
 
     const resolvePluginSdkapi = (pluginId?: string): number | undefined => {
       if (!pluginId) return undefined
@@ -285,8 +284,8 @@ export class FlowBusIPC {
 /**
  * Initializes Flow Bus IPC
  */
-export function initializeFlowBusIPC(channel: ITouchChannel): FlowBusIPC {
-  const ipc = new FlowBusIPC(channel)
+export function initializeFlowBusIPC(transport: ITuffTransportMain): FlowBusIPC {
+  const ipc = new FlowBusIPC(transport)
   ipc.registerHandlers()
   return ipc
 }

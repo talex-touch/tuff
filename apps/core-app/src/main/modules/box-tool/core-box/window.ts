@@ -11,7 +11,6 @@ import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
@@ -28,9 +27,11 @@ import {
 } from '../../../core/eventbus/touch-event'
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
+import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { pluginModule } from '../../plugin/plugin-module'
+import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
 import { getMainConfig } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import { coreBoxManager } from './manager'
@@ -239,8 +240,7 @@ export class WindowManager {
     }, 200)
 
     window.window.webContents.on('dom-ready', () => {
-      const channel = this.touchApp.channel
-      channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
+      this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
         id: window.window.webContents.id,
         show: window.window.isVisible()
       })
@@ -264,8 +264,7 @@ export class WindowManager {
 
     window.window.webContents.on('did-finish-load', () => {
       if (wasVisibleBeforeReload) {
-        const channel = this.touchApp.channel
-        channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
+        this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
           id: window.window.webContents.id,
           show: true
         })
@@ -604,8 +603,7 @@ export class WindowManager {
       window.window.showInactive()
     }
 
-    const channel = this.touchApp.channel
-    channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
+    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: true
     })
@@ -635,8 +633,7 @@ export class WindowManager {
     if (window.window.isDestroyed()) return
 
     this.stopBoundsAnimation()
-    const channel = this.touchApp.channel
-    channel.broadcastTo(window.window, ChannelType.MAIN, coreBoxTriggerEvent.toEventName(), {
+    this.getTransport().broadcastToWindow(window.window.id, coreBoxTriggerEvent, {
       id: window.window.webContents.id,
       show: false
     })
@@ -1119,7 +1116,7 @@ export class WindowManager {
       }
     }
 
-    const injections = plugin?.__getInjections__()
+    const injections = usePluginInjections(plugin, 'core-box:attachUIView')
 
     // Create dynamic preload script to inject window.$plugin and window.$channel before page scripts execute
     let preloadPath = injections?._.preload
@@ -1443,11 +1440,7 @@ export class WindowManager {
   }
 
   private getAliveUIViewWebContents() {
-    const webContents = this.uiView?.webContents
-    if (!webContents || webContents.isDestroyed()) {
-      return null
-    }
-    return webContents
+    return useAliveWebContents(this.uiView)
   }
 
   /**

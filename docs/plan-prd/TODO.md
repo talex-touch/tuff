@@ -193,6 +193,10 @@
 - [x] **P0** 旧同步链路明文存储彻底收口：`/api/sync/*` 旧链路保持禁用；`syncStore.ts` 已下线，`authStore.ts` 已移除 `value_json` 明文写入路径，确保只剩 `/api/v1/sync/*` 写入主链路（`apps/nexus/server/utils/authStore.ts`）。
 - [ ] **P0** 深度技术债与兼容性清单落地：以报告为基线明确 Owner/里程碑，并推进收口计划（`docs/engineering/legacy-debt-report-2026-02-21.md`）。
 - [ ] **P0** Legacy Channel 清理（2.4.8）：按 P0 范围统一到 TuffTransport，收口 CoreBox/Clipboard/Flow/DivisionBox/Plugin 主链路（`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md`）。
+  - [x] Phase A：CoreBox 输入/键盘/窗口触发链路移除 `ChannelType` 依赖，窗口触发广播改为 `transport.broadcastToWindow`。
+  - [x] Phase B：Clipboard legacy 事件（`clipboardLegacy*`）发送/接收链路已下线；统一收敛到 `ClipboardEvents`，并补齐 `ClipboardEvents.queryMeta` 内部查询事件。
+  - [x] Phase C：DivisionBox / FlowBus IPC 构造改为注入 `ITuffTransportMain`，删除 `ITouchChannel` 依赖与 keyManager 推断。
+  - [x] Phase D：Plugin 主链路移除 raw `channelMap` 访问，新增 `transport.invoke(...)` 本地派发能力承接 reply 语义。
 - [ ] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 中 auth token / deviceId / device name 从 `localStorage` 迁移到主进程 `safeStorage` 通道，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/main/channel/common.ts`）。
 - [ ] **P1** CoreBox BoxItem 同步回包超时：`box-item:sync-response` 在渲染端未挂载或阻塞时 60s 超时，需改为 fire-and-forget 或增加 ready gating（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`）。
 - [ ] **P1** 更新下载链路迁移 Signed URL：从 GitHub 直链迁移至 R2/S3 Signed URL（302 + TTL，可配置），保留本地 fallback（后续云存储接入项）。

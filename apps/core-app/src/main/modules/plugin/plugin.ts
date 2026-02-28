@@ -1,9 +1,5 @@
 import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
-import type {
-  ITouchChannel,
-  ITouchClientChannel,
-  StandardChannelData
-} from '@talex-touch/utils/channel'
+import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
@@ -22,7 +18,6 @@ import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -49,6 +44,7 @@ import {
   touchEventBus
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
+import { useSafeUserAgent } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 import { getJs, getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
@@ -65,6 +61,7 @@ import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
+import type { PluginInjections } from './runtime/plugin-injections'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
 
@@ -113,6 +110,9 @@ const TRANSIENT_ISSUE_CODES = new Set([
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
   'LIFECYCLE_SCRIPT_FAILED'
 ])
+const LEGACY_CHANNEL_MAIN = 'main' as StandardChannelData['header']['type']
+const LEGACY_CHANNEL_PLUGIN = 'plugin' as StandardChannelData['header']['type']
+const LEGACY_CHANNEL_SUCCESS = 200 as StandardChannelData['code']
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
@@ -1161,7 +1161,7 @@ export class TouchPlugin implements ITouchPlugin {
   getFeatureUtil() {
     const pluginName = this.name
     const appInstance = genTouchApp()
-    const channel = appInstance.channel as ITouchChannel
+    const channel = appInstance.channel
     const transport = this.resolveTransport()
     const mainWindowId = appInstance.window.window.id
 
@@ -1180,7 +1180,7 @@ export class TouchPlugin implements ITouchPlugin {
         }
 
         const pluginContextName = context?.plugin?.name
-        const headerType = pluginContextName ? ChannelType.PLUGIN : ChannelType.MAIN
+        const headerType = pluginContextName ? LEGACY_CHANNEL_PLUGIN : LEGACY_CHANNEL_MAIN
         let replied = false
         let replyData: unknown
         const event: StandardChannelData = {
@@ -1190,7 +1190,7 @@ export class TouchPlugin implements ITouchPlugin {
             type: headerType,
             plugin: pluginContextName
           },
-          code: DataCode.SUCCESS,
+          code: LEGACY_CHANNEL_SUCCESS,
           data: payload as unknown,
           plugin: pluginContextName,
           reply: (_code, data) => {
@@ -1213,48 +1213,18 @@ export class TouchPlugin implements ITouchPlugin {
         onTransport(eventName, (context) => !context?.plugin, handler),
       onRenderer: (eventName, handler) =>
         onTransport(eventName, (context) => context?.plugin?.name === pluginName, handler),
-      raw: channel
+      raw: channel as IPluginChannelBridge['raw']
     }
 
     const touchChannel = {
       send: async (eventName: string, payload?: unknown) => {
-        const rawChannel = channel as unknown as {
-          channelMap?: Map<ChannelType, Map<string, Array<(data: StandardChannelData) => unknown>>>
-        }
-        const handlers =
-          rawChannel.channelMap?.get(ChannelType.PLUGIN)?.get(eventName) ??
-          rawChannel.channelMap?.get(ChannelType.MAIN)?.get(eventName)
-
-        if (!handlers || handlers.length === 0) {
-          throw new Error(`[Plugin API] No handler registered for "${eventName}"`)
-        }
-
-        let replied = false
-        let replyPayload: unknown
-        const data: StandardChannelData = {
-          name: eventName,
-          header: {
-            status: 'request',
-            type: ChannelType.PLUGIN,
-            uniqueKey: this._uniqueChannelKey,
-            plugin: pluginName
-          },
-          code: DataCode.SUCCESS,
-          data: payload as unknown,
-          plugin: pluginName,
-          reply: (_code, response) => {
-            replied = true
-            replyPayload = response
+        return transport.invoke(defineRawEvent(eventName), payload, {
+          plugin: {
+            name: pluginName,
+            uniqueKey: this._uniqueChannelKey ?? '',
+            verified: Boolean(this._uniqueChannelKey)
           }
-        }
-
-        let lastResult: unknown
-        for (const handler of handlers) {
-          const result = handler(data)
-          lastResult = result instanceof Promise ? await result : result
-        }
-
-        return replied ? replyPayload : lastResult
+        })
       }
     }
 
@@ -1700,20 +1670,22 @@ export class TouchPlugin implements ITouchPlugin {
     return dev ? this.dev && this.dev.address : path.resolve(this.pluginPath, 'index.html')
   }
 
-  __getInjections__() {
+  __getInjections__(): PluginInjections {
     const indexPath = this.__index__()
     const preload = this.__preload__()
 
-    const app = $app
+    const touchApp = $app
 
     const _path = {
-      relative: path.relative(app.rootPath, this.pluginPath),
-      root: app.rootPath,
-      app: app.app?.getAppPath?.(),
+      relative: path.relative(touchApp.rootPath, this.pluginPath),
+      root: touchApp.rootPath,
+      app: touchApp.app?.getAppPath?.(),
       plugin: this.pluginPath
     }
 
-    const mainWin = app.window.window
+    const pluginUa = `TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
+    const mainUserAgent = useSafeUserAgent(touchApp.window?.window) ?? app.userAgentFallback ?? ''
+    const userAgent = mainUserAgent ? `${mainUserAgent} ${pluginUa}` : pluginUa
 
     return {
       _: {
@@ -1727,7 +1699,7 @@ export class TouchPlugin implements ITouchPlugin {
         webpreferences: 'contextIsolation=false',
         // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
         websecurity: 'false',
-        useragent: `${mainWin.webContents.userAgent} TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
+        useragent: userAgent
         // partition: `persist:touch/${this.name}`,
       },
       styles: `${getStyles()}`,

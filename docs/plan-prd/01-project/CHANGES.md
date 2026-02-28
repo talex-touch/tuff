@@ -4,6 +4,63 @@
 
 ## 2026-02-28
 
+### Plugin Injection 生命周期防护（`Object has been destroyed` 竞态修复）
+
+**变更类型**: 稳定性修复 / 生命周期守卫抽取
+
+**描述**: 修复插件注入链路在窗口或 `webContents` 已销毁时触发 `TypeError: Object has been destroyed` 的竞态问题。将注入构建与 Electron 销毁态判断抽取为复用 hooks，统一在 CoreBox / DivisionBox / Plugin Window 链路接入，避免未处理异常放大为主进程错误。
+
+**主要变更**:
+1. 新增 `use-electron-guard` hooks，统一封装 `isDestroyed()` 守卫与 `userAgent` 安全读取。
+2. `TouchPlugin.__getInjections__` 改为使用安全 `userAgent` 解析，并在主窗口已销毁时回退到稳定值。
+3. 新增 `usePluginInjections`，统一包装注入构建异常处理，避免调用侧直接崩溃。
+4. CoreBox / DivisionBox / Plugin Module 的注入入口统一切换到 `usePluginInjections`，并复用 `useAliveWebContents` 做视图可用性判断。
+
+**修改文件**:
+- `apps/core-app/src/main/hooks/use-electron-guard.ts`
+- `apps/core-app/src/main/modules/plugin/runtime/plugin-injections.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-module.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/session.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Legacy Channel 2.4.8 P0（Phase A/B/C/D）首轮收口
+
+**变更类型**: 架构收敛 / 传输层统一 / 兼容语义迁移
+
+**描述**: 按 `LegacyChannelCleanup-2408` 的 P0 范围完成首轮收口：CoreBox 触发链路移除 `ChannelType` 过滤参数；Clipboard legacy 事件发送/接收路径下线并统一到 `ClipboardEvents`；DivisionBox/FlowBus IPC 构造改为直接注入 `ITuffTransportMain`；Plugin 主链路移除对 raw `channelMap` 的读取，并通过 `transport.invoke(...)` 保留本地 reply 语义。
+
+**主要变更**:
+1. CoreBox `CoreBoxTransport` 改为 `scope: 'main' | 'plugin'` 过滤，输入/键盘注册链路不再依赖 `ChannelType`。
+2. CoreBox `window.ts` 触发广播统一改为 `transport.broadcastToWindow(...)`。
+3. DivisionBox / FlowBus IPC 改为 transport 注入，模块初始化阶段统一构建并传入 transport 实例。
+4. Plugin 主链路移除 `channelMap` 访问，新增 `ITuffTransportMain.invoke(...)` + `TuffMainTransport.invoke(...)` 以支持主进程内事件派发与 reply 语义。
+5. Clipboard legacy handler（`clipboardLegacy*`）下线，新增 `ClipboardEvents.queryMeta` 承接内部 `clipboard:query` 查询能力；CoreBox MetaOverlay 与预览历史模块改用 `ClipboardEvents.write/queryMeta/change`。
+6. WidgetManager / Clipboard 注册入口去除 `ITouchChannel` 类型依赖。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/transport/core-box-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/input-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/key-transport.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/module.ts`
+- `apps/core-app/src/main/modules/flow-bus/ipc.ts`
+- `apps/core-app/src/main/modules/flow-bus/module.ts`
+- `apps/core-app/src/main/modules/plugin/plugin.ts`
+- `apps/core-app/src/main/modules/plugin/widget/widget-manager.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/usePreviewHistory.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/clipboard.ts`
+- `packages/utils/transport/types.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `packages/utils/transport/index.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### 修复 Windows Release 误发布裸 EXE（避免 ICU 启动失败）
 
 **变更类型**: 发布链路修复 / Windows 安装包可靠性
