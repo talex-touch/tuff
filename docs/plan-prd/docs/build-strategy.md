@@ -44,14 +44,13 @@ pnpm -F @talex-touch/core-app run build:release:linux
 | `BUILD_TYPE` | `release/snapshot` |
 | `BUILD_ARCH` | `arm64/x64`（mac 默认为 arm64） |
 | `APP_VERSION` | （可选）覆盖打包版本号，`build-target` 会把 `SNAPSHOT-*` 注入给 `electron-builder` |
-| `SKIP_TYPECHECK` | `true` 时跳过 `npm run typecheck` |
 | `SKIP_INSTALL_APP_DEPS` | `true` 时跳过 `electron-builder install-app-deps` |
 
 ## 4. 流程细节
 
 1. `build-target.js` 会：
    - 检测 beta 版本，自动转成 `SNAPSHOT-x.y.z-n` 并通过 `--config.extraMetadata.version` 注入 electron-builder，无需修改任何 package。
-   - 清空 `dist/`，设置 `BUILD_*` 环境变量，执行 `npm run build`（或 `electron-vite build`）。
+   - 清空 `dist/`，设置 `BUILD_*` 环境变量，执行 `npm run build`（包含 typecheck + electron-vite build）。
    - 校验 `out/` 是否存在 `main/preload/renderer`。
    - 调用 `scripts/ensure-platform-modules.js` 把 libsql 平台二进制同步到 `apps/core-app/node_modules`。
    - 运行 `electron-builder install-app-deps`（可通过 `SKIP_INSTALL_APP_DEPS` 跳过）。

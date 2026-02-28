@@ -436,10 +436,7 @@ function build() {
   }
 
   console.log('Running application build (npm run build)...');
-  // Skip typecheck in snapshot/release builds if SKIP_TYPECHECK is set
-  const buildCmd = process.env.SKIP_TYPECHECK === 'true'
-    ? 'electron-vite build'
-    : 'npm run build';
+  const buildCmd = 'npm run build';
 
   try {
     console.time('build-target:app-build');
