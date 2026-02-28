@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { templateRef } from '@vueuse/core'
-import { Motion } from 'motion-v'
 import { createNoise3D } from 'simplex-noise'
 import { onMounted, onUnmounted } from 'vue'
 
@@ -44,7 +43,6 @@ const center = ref<[number, number]>([0, 0])
 const ctx = shallowRef<CanvasRenderingContext2D | null>(null)
 
 const canvasRef = templateRef<HTMLCanvasElement | null>('canvasRef')
-const containerRef = templateRef<HTMLElement | null>('containerRef')
 
 const particleCache: any = {
   x: 0,
@@ -242,18 +240,25 @@ onUnmounted(() => {
 
 <template>
   <div class="relative h-full w-full" :class="[props.containerClass]">
-    <Motion
-      ref="containerRef"
-      as="div"
-      :initial="{ opacity: 0 }"
-      :animate="{ opacity: 1 }"
-      class="absolute inset-0 z-0 size-full flex items-center justify-center bg-transparent"
+    <div
+      class="vortex-fade-in absolute inset-0 z-0 size-full flex items-center justify-center bg-transparent"
     >
       <canvas ref="canvasRef" />
-    </Motion>
+    </div>
 
     <div class="relative z-10" :class="[props.class]">
       <slot />
     </div>
   </div>
 </template>
+
+<style scoped>
+.vortex-fade-in {
+  animation: vortex-fade-in 360ms ease-out;
+}
+
+@keyframes vortex-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+</style>

@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Motion } from 'motion-v'
-
 interface Props {
   index: number
 }
@@ -9,23 +7,28 @@ defineProps<Props>()
 </script>
 
 <template>
-  <Motion
-    as="div"
-    :initial="{
-      opacity: 0,
-      y: 20,
-    }"
-    :animate="{
-      opacity: 1,
-      y: 0,
-      transition: {
-        duration: 0.5,
-        delay: 0.2 * index,
-        ease: 'easeOut',
-      },
-    }"
-    class="rounded-3xl last:pr-[5%] md:last:pr-[33%]"
+  <div
+    class="apple-carousel-item rounded-3xl last:pr-[5%] md:last:pr-[33%]"
+    :style="{ '--item-delay': `${0.2 * index}s` }"
   >
     <slot />
-  </Motion>
+  </div>
 </template>
+
+<style scoped>
+.apple-carousel-item {
+  animation: apple-carousel-enter 0.5s ease-out both;
+  animation-delay: var(--item-delay, 0s);
+}
+
+@keyframes apple-carousel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>

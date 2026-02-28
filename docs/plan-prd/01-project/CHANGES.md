@@ -4,6 +4,31 @@
 
 ## 2026-02-28
 
+### Workspace 依赖统一（P0~P5）与 Catalog 冲突收敛
+
+**变更类型**: 工程治理 / 依赖一致性 / 前端运行时收敛
+
+**描述**: 完成 workspace 依赖统一升级（P0~P5 范围），清理 `pnpm-workspace.yaml` 中历史 `conflicts_*` catalog 分组，并移除 `@lobehub/icons`、`react/react-dom`、`motion-v` 的直接依赖入口，统一到纯 Vue 动画实现，避免 catalog 冲突和跨栈依赖漂移。
+
+**主要变更**:
+1. Catalog 全量升级到统一基线（default/build/dev/frontend/icons），并移除 `conflicts_*` 分组。
+2. Nexus 侧移除 `motion-v` 与 React 直接依赖，相关 UI 动画改为 CSS 过渡/关键帧实现。
+3. 补齐 `electron-builder-squirrel-windows` 以收敛 Electron Builder peer 提示。
+4. 根 `pnpm.peerDependencyRules` 增加统一规则（`ignoreMissing` + `allowedVersions`）以减少跨生态弱约束噪音。
+
+**修改文件**:
+- `pnpm-workspace.yaml`
+- `pnpm-lock.yaml`
+- `package.json`
+- `apps/nexus/package.json`
+- `apps/core-app/package.json`
+- `apps/nexus/app/components/tuff/VortexBackground.vue`
+- `apps/nexus/app/components/tuff/carousel/apple/AppleCard.vue`
+- `apps/nexus/app/components/tuff/carousel/apple/AppleCarouselItem.vue`
+- `apps/nexus/app/components/tuff/landing/TuffLandingAuroraBar.vue`
+- `plugins/touch-translation/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Plugin Injection 生命周期防护（`Object has been destroyed` 竞态修复）
 
 **变更类型**: 稳定性修复 / 生命周期守卫抽取
@@ -63,6 +88,42 @@
 - `packages/utils/transport/types.ts`
 - `packages/utils/transport/sdk/main-transport.ts`
 - `packages/utils/transport/index.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox BoxItem 同步回包超时修复（改为 fire-and-forget）
+
+**变更类型**: 稳定性修复 / IPC 交互语义收敛
+
+**描述**: 修复 `box-item:sync-response` 在渲染端未挂载或主线程阻塞时可能触发 60s 回包超时的问题。主进程从“请求-应答”发送改为 fire-and-forget 广播，移除不必要的回包等待，避免日志噪音和超时堆积。
+
+**主要变更**:
+1. `BoxItemManager.emitToRenderer` 从 `transport.sendToWindow(...)` 切换为 `transport.broadcastToWindow(...)`。
+2. 事件泛型约束收敛为 `TuffEvent<TReq, void>`，明确该链路仅做单向通知。
+3. 同步 TODO 风险项状态，标记该 P1 问题已完成。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Flow ↔ DivisionBox 权限 actor 解析收敛（corebox 免检 + sdkapi 优先级）
+
+**变更类型**: 稳定性修复 / 权限判定一致性
+
+**描述**: 收敛 DivisionBox 侧 Flow 入口的调用方识别策略，避免 `actorPluginId` 缺失或 `corebox` 来源时误判为插件调用，并补齐最小回归用例覆盖 `_sdkapi` 优先级与双权限校验行为。
+
+**主要变更**:
+1. `DivisionBoxIPC` 抽出 `resolveDivisionBoxPermissionActor`，统一 `context.plugin -> actorPluginId -> nested sourcePluginId` 解析顺序。
+2. `actorPluginId = corebox` 或 actor 缺失时直接返回空 actor，不再回退 `payload.pluginId`，避免误触发插件权限校验。
+3. `_sdkapi` 优先级明确为“payload 覆盖插件声明 sdkapi”，并通过单测固化。
+4. 新增权限最小用例：`division-box:flow:trigger` 缺任一 `window.create` / `storage.shared` 均拒绝，双权限齐备后放行。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/division-box/ipc.ts`
+- `apps/core-app/src/main/modules/division-box/permission-actor.ts`
+- `apps/core-app/src/main/modules/division-box/ipc.actor.test.ts`
+- `apps/core-app/src/main/modules/permission/permission-guard.test.ts`
 - `docs/plan-prd/TODO.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
