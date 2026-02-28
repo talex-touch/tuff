@@ -209,10 +209,14 @@
      - `apps/core-app/src/main/modules/omni-panel/`
      - `apps/core-app/src/renderer/src/views/omni-panel/`
      - `apps/core-app/src/main/modules/plugin/plugin-module.ts`
-   - **缺口**
-     - 通用设置新增“安装插件后自动装载首个 Feature 到 OmniPanel”
-     - OmniPanel 从固定快捷动作升级为可执行插件 Feature
-     - 选中文本上下文注入（自动翻译等高频场景）
+   - **已完成（2026-03-01）**
+     - 模块加载去除实验性 env 门控，OmniPanel 默认参与主进程初始化。
+     - 面板移除 Feature 启停显示与切换入口，执行链不再受 `enabled` 阻断。
+     - 主进程执行链补齐结构化错误码、refresh reason 扩展、plugin unavailable reason 透传。
+     - 渲染层完成键盘交互（↑/↓/Enter/Cmd/Ctrl+F/Esc）与执行中态收敛。
+     - 视图拆分为 Header/Context/SearchBar/ActionItem/ActionList，过滤逻辑纯函数化并补测试。
+   - **剩余缺口**
+     - 端到端真实窗口烟雾用例（依赖 Electron UI 运行时）需要在 CI 环境补充。
 
  - **SDK 统一 Hard-Cut 剩余**（批次 E~F）
    - **参考**：`docs/engineering/reports/sdk-unification-progress-2026-02-08.md`

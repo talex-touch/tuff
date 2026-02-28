@@ -140,7 +140,8 @@
 - [ ] Release Pipeline（剩余项）：OIDC + RSA 签名信任链增强与 GA 发布治理（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
-- [ ] OmniPanel Feature Hub（安装插件后自动装载首个 Feature、Feature 执行链路、选中文本上下文注入）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
+- [x] OmniPanel Feature Hub 主链路收敛（默认加载、执行链错误码/刷新原因统一、键盘交互、组件拆分、过滤纯函数与主渲单测补齐）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
+- [ ] OmniPanel 真实窗口 e2e 烟雾场景接入 CI（显示 -> 执行 builtin -> 关闭）
 - [x] Nexus locale 历史数据回填 runbook（`docs/plan-prd/04-implementation/NexusLocaleBackfillRunbook-260226.md`）
 
 ### ❓ 需人工确认

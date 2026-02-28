@@ -19,6 +19,26 @@
 - `apps/core-app/src/main/modules/omni-panel/index.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### OmniPanel 40 点推进（Wave-1~Wave-4 首批落地）
+
+**变更类型**: 功能完善 / 可测试性提升 / 协议收敛
+
+**描述**: 面向 OmniPanel 40 点推进计划，完成首批核心能力收敛：渲染层组件拆分、键盘交互、过滤纯函数、主进程调度与自动装载稳定性测试，并建立后续台账与汇总文档基础。
+
+**主要变更**:
+1. 渲染层拆分为 `OmniPanelHeader/ContextCard/SearchBar/ActionItem/ActionList`，主容器聚焦流程编排。
+2. 新增交互能力：`↑/↓` 聚焦、`Enter` 执行、`Cmd/Ctrl+F` 聚焦搜索、`Esc` 关闭并恢复焦点。
+3. 过滤逻辑抽为 `filterOmniPanelFeatures` 纯函数；焦点/导航抽为 `interaction` 工具并补单测。
+4. 主进程导出 `OmniPanelModule` 以便单测覆盖：registry 初始化、执行分发、自动装载优先级与去重、最小 smoke。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/*`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.test.ts`
+
 ## 2026-02-28
 
 ### 启动拉取策略优化：Auth 缓存优先 + Sentry Dev 传输降噪
