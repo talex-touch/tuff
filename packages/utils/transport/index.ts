@@ -47,6 +47,10 @@ export type {
   /**
    * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
    */
+  RawChannelSyncData,
+  /**
+   * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
+   */
   RawStandardChannelData,
   /**
    * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
