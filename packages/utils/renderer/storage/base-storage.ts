@@ -1,5 +1,5 @@
 import type { UnwrapNestedRefs, WatchHandle } from 'vue'
-import type { ITouchClientChannel } from '../../channel'
+import type { ITouchClientChannel } from '../../transport/legacy'
 import type { ITuffTransport } from '../../transport'
 import type {
   StorageGetVersionedResponse,

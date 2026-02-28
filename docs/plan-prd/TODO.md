@@ -229,6 +229,7 @@
   - [x] 第十三批：`main/core/channel-core.ts` 改为本地 legacy channel 类型与常量，移除主进程核心通道实现对 `@talex-touch/utils/channel` 的直接依赖。
   - [x] 第十四批：`apps/core-app` 与 `packages/utils` eslint 配置新增 `no-restricted-imports`，禁止新代码再次直接 import `@talex-touch/utils/channel`，防止回归。
   - [x] 第十五批：Widget 处理链（script/vue/tsx processor + widget-registry）补齐 `@talex-touch/utils/transport/legacy` 允许与映射，保持旧 `utils/channel` 兼容同时引导新路径。
+  - [x] 第十六批：`transport/prelude`、`plugin/preload`、`renderer/storage/base-storage` 改为依赖 `transport/legacy`，继续收敛 `utils` 内部对 `channel` 模块的直接耦合。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
