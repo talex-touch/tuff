@@ -1,16 +1,8 @@
-import type {
-  ChannelCallback,
-  IChannelData,
-  RawChannelSyncData,
-  RawStandardChannelData,
-  StandardChannelData
-} from '@talex-touch/utils/channel'
 import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
 import { Buffer } from 'node:buffer'
 import { performance } from 'node:perf_hooks'
 import { structuredStrictStringify } from '@talex-touch/utils'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { ipcMain } from 'electron'
 import { WindowManager } from '../modules/box-tool/core-box/window'
@@ -19,6 +11,49 @@ import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 
 const CHANNEL_DEFAULT_TIMEOUT = 60_000
+const ChannelType = {
+  MAIN: 'main',
+  PLUGIN: 'plugin'
+} as const
+const DataCode = {
+  SUCCESS: 200,
+  NETWORK_ERROR: 500,
+  ERROR: 100
+} as const
+
+type ChannelType = (typeof ChannelType)[keyof typeof ChannelType]
+type DataCode = (typeof DataCode)[keyof typeof DataCode]
+type IChannelData = unknown
+type ChannelCallback = (data: StandardChannelData) => unknown
+
+interface RawChannelSyncData {
+  timeStamp: number
+  timeout: number
+  id: string
+}
+
+interface RawChannelHeaderData {
+  status: 'reply' | 'request'
+  type: ChannelType
+  _originData?: unknown
+  uniqueKey?: string
+  event?: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
+  plugin?: string
+}
+
+interface RawStandardChannelData {
+  name: string
+  header: RawChannelHeaderData
+  sync?: RawChannelSyncData
+  code: DataCode
+  data?: IChannelData
+  plugin?: string
+}
+
+interface StandardChannelData extends RawStandardChannelData {
+  reply: (code: DataCode, data: unknown) => void
+}
+
 let perfReportListenerRegistered = false
 const channelLog = getLogger('channel-core')
 

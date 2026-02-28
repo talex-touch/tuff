@@ -226,6 +226,7 @@
   - [x] 第十批：`renderer/modules/channel/channel-core.ts` 改为本地 legacy channel 类型与常量，移除对 `ITouchClientChannel/ChannelType/DataCode` 的直接依赖。
   - [x] 第十一批：`renderer/modules/plugin/widget-registry.ts` 将 `@talex-touch/utils/channel` 兼容模块注入改为复用 `transport/legacy` 导出，继续收敛 direct import。
   - [x] 第十二批：`renderer/env.d.ts` 与 `packages/utils/plugin/sdk/channel.ts` 补齐最小窗口通道类型，消除 `$transport/$channel` 的隐式全局类型耦合并恢复 web typecheck。
+  - [x] 第十三批：`main/core/channel-core.ts` 改为本地 legacy channel 类型与常量，移除主进程核心通道实现对 `@talex-touch/utils/channel` 的直接依赖。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
