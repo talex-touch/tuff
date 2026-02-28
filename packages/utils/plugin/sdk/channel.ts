@@ -1,12 +1,15 @@
-import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type { ITuffTransport } from '@talex-touch/utils/transport'
+import type { PluginChannelClient, PluginStandardChannelData } from './channel-client'
 import type { IPluginRendererChannel, PluginChannelHandler } from './types'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import { hasWindow } from '@talex-touch/utils/env'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genChannel } from '../channel'
 
-const ensureClientChannel = (): ITouchClientChannel => genChannel()
+const PLUGIN_CHANNEL_TYPE = 'plugin' as const
+const DATA_CODE_SUCCESS = 200
+
+const ensureClientChannel = (): PluginChannelClient =>
+  genChannel() as unknown as PluginChannelClient
 function resolvePluginName(): string | undefined {
   if (!hasWindow()) {
     return undefined
@@ -14,22 +17,30 @@ function resolvePluginName(): string | undefined {
 
   return (window as { $plugin?: { name?: string } } | undefined)?.$plugin?.name
 }
-function buildStandardChannelEvent(eventName: string, payload: unknown, pluginName: string | undefined, reply: (code: DataCode, data: unknown) => void): StandardChannelData {
+function buildStandardChannelEvent(
+  eventName: string,
+  payload: unknown,
+  pluginName: string | undefined,
+  reply: (code: number, data: unknown) => void
+): PluginStandardChannelData {
   return {
     name: eventName,
     header: {
       status: 'request',
-      type: ChannelType.PLUGIN,
+      type: PLUGIN_CHANNEL_TYPE,
       plugin: pluginName,
     },
-    code: DataCode.SUCCESS,
+    code: DATA_CODE_SUCCESS,
     data: payload,
     plugin: pluginName,
     reply,
   }
 }
-function createTransportClientChannel(transport: ITuffTransport, fallback: ITouchClientChannel | null): ITouchClientChannel {
-  const handlerMap = new Map<string, Map<(data: StandardChannelData) => any, () => void>>()
+function createTransportClientChannel(
+  transport: ITuffTransport,
+  fallback: PluginChannelClient | null
+): PluginChannelClient {
+  const handlerMap = new Map<string, Map<(data: PluginStandardChannelData) => any, () => void>>()
 
   return {
     regChannel: (eventName, callback) => {
@@ -87,26 +98,27 @@ function resolveRendererTransport(): ITuffTransport | null {
 
 const DEFAULT_CHANNEL_ERROR = '[Plugin SDK] Channel not available. Make sure this code runs inside a plugin renderer context.'
 
-let cachedWindowChannel: ITouchClientChannel | null = null
-let cachedTransportChannel: ITouchClientChannel | null = null
+let cachedWindowChannel: PluginChannelClient | null = null
+let cachedTransportChannel: PluginChannelClient | null = null
 
 /**
  * Ensures that the renderer-side plugin channel (window.$channel) exists and returns it.
  *
  * @param errorMessage - Optional custom error message when the channel is unavailable
  */
-export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): ITouchClientChannel {
+export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): PluginChannelClient {
   const globalWindow = hasWindow() ? window : undefined
   const transport = globalWindow?.$transport ?? null
   if (transport) {
     if (!cachedTransportChannel) {
-      const fallback = globalWindow?.$channel ?? cachedWindowChannel ?? null
+      const fallback =
+        (globalWindow?.$channel as PluginChannelClient | undefined) ?? cachedWindowChannel ?? null
       cachedTransportChannel = createTransportClientChannel(transport, fallback)
     }
     return cachedTransportChannel
   }
 
-  const channel = globalWindow?.$channel ?? cachedWindowChannel
+  const channel = (globalWindow?.$channel as PluginChannelClient | undefined) ?? cachedWindowChannel
 
   if (!channel) {
     throw new Error(errorMessage)
@@ -119,7 +131,7 @@ export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): ITo
 /**
  * Convenience hook for accessing window.$channel in plugin renderers.
  */
-export function useChannel(errorMessage?: string): ITouchClientChannel {
+export function useChannel(errorMessage?: string): PluginChannelClient {
   return ensureRendererChannel(errorMessage)
 }
 
@@ -187,11 +199,4 @@ export function usePluginRendererChannel(): IPluginRendererChannel {
   }
 
   return cachedRendererChannel
-}
-
-declare global {
-  interface Window {
-    $channel: ITouchClientChannel
-    $transport?: ITuffTransport
-  }
 }
