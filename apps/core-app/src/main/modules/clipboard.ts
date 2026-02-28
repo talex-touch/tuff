@@ -2345,7 +2345,15 @@ export class ClipboardModule extends BaseModule {
           const conditions: SQL<unknown>[] = []
 
           if (keyword && typeof keyword === 'string' && keyword.trim().length > 0) {
-            conditions.push(sql`${clipboardHistory.content} LIKE ${`%${keyword.trim()}%`}`)
+            const keywordPattern = `%${keyword.trim()}%`
+            const keywordCondition = or(
+              sql`${clipboardHistory.content} LIKE ${keywordPattern}`,
+              sql`COALESCE(${clipboardHistory.rawContent}, '') LIKE ${keywordPattern}`,
+              sql`COALESCE(${clipboardHistory.metadata}, '') LIKE ${keywordPattern}`
+            )
+            if (keywordCondition) {
+              conditions.push(keywordCondition)
+            }
           }
 
           if (startTime && typeof startTime === 'number') {
@@ -2741,7 +2749,15 @@ export class ClipboardModule extends BaseModule {
           const conditions: SQL<unknown>[] = []
 
           if (keyword && typeof keyword === 'string' && keyword.trim().length > 0) {
-            conditions.push(sql`${clipboardHistory.content} LIKE ${`%${keyword.trim()}%`}`)
+            const keywordPattern = `%${keyword.trim()}%`
+            const keywordCondition = or(
+              sql`${clipboardHistory.content} LIKE ${keywordPattern}`,
+              sql`COALESCE(${clipboardHistory.rawContent}, '') LIKE ${keywordPattern}`,
+              sql`COALESCE(${clipboardHistory.metadata}, '') LIKE ${keywordPattern}`
+            )
+            if (keywordCondition) {
+              conditions.push(keywordCondition)
+            }
           }
 
           if (startTime && typeof startTime === 'number') {

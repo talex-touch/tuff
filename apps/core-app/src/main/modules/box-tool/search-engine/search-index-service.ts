@@ -13,6 +13,7 @@ const WORD_SPLIT_REGEX = /[\s\-_]+/g
 const PATH_SPLIT_REGEX = /[\\/]+/
 const NGRAM_PREFIX = 'ng:'
 const NGRAM_MIN_WORD_LENGTH = 3
+const ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS = 30_000
 
 /**
  * Generate character n-grams for a word.
@@ -75,6 +76,7 @@ export class SearchIndexService {
   private pinyinModule: typeof import('pinyin-pro') | null = null
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
   private readonly directMode: boolean
+  private readonly zeroResultDiagnosticAt = new Map<string, number>()
 
   /** AIMD adaptive batch scheduler for indexItems — persists across calls. */
   private readonly indexBatchScheduler = new AdaptiveBatchScheduler({
@@ -248,7 +250,7 @@ export class SearchIndexService {
     const results = rows.map((row) => ({ itemId: row.item_id, score: row.score }))
     searchLogger.indexSearchComplete(results.length, performance.now() - start)
 
-    if (results.length === 0) {
+    if (results.length === 0 && this.shouldEmitZeroResultDiagnostic(providerId)) {
       // Diagnostic: check if FTS5 table has any data at all for this provider
       const totalRows = await this.db.all<{ cnt: number }>(
         sql`SELECT count(*) as cnt FROM search_index WHERE provider = ${providerId}`
@@ -264,6 +266,16 @@ export class SearchIndexService {
       ).toFixed(0)}ms`
     )
     return results
+  }
+
+  private shouldEmitZeroResultDiagnostic(providerId: string): boolean {
+    const now = Date.now()
+    const lastAt = this.zeroResultDiagnosticAt.get(providerId) ?? 0
+    if (now - lastAt < ZERO_RESULT_DIAGNOSTIC_THROTTLE_MS) {
+      return false
+    }
+    this.zeroResultDiagnosticAt.set(providerId, now)
+    return true
   }
 
   /**
