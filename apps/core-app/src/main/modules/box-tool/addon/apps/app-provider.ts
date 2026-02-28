@@ -295,6 +295,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     logApp('Initializing AppProvider service', LogStyle.info)
   }
 
+  private isDevelopmentRuntime(): boolean {
+    if (is.dev) return true
+    if (process.env.NODE_ENV === 'development') return true
+    if (process.env.BUILD_TYPE === 'development') return true
+
+    const rendererUrl = process.env.ELECTRON_RENDERER_URL ?? process.env.VITE_DEV_SERVER_URL ?? ''
+    return /^(https?):\/\/(127\.0\.0\.1|localhost)(:\d+)?/i.test(rendererUrl)
+  }
+
   async onLoad(context: ProviderContext): Promise<void> {
     const loadStart = startTiming()
     logApp('Loading AppProvider service...', LogStyle.process)
@@ -484,7 +493,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (this.startupBackfillStarted) return
     this.startupBackfillStarted = true
 
-    const delayMs = is.dev
+    const isDevelopmentRuntime = this.isDevelopmentRuntime()
+    const delayMs = isDevelopmentRuntime
       ? STARTUP_BACKFILL_INITIAL_DELAY_MS + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
       : STARTUP_BACKFILL_INITIAL_DELAY_MS
     logApp(`Scheduling startup backfill (deferred ${Math.round(delayMs / 1000)}s)`, LogStyle.info)
@@ -540,7 +550,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return { allowed: false, reason: 'missing-context' }
     }
 
-    if (is.dev && this.isMainRendererLoading()) {
+    if (this.isDevelopmentRuntime() && this.isMainRendererLoading()) {
       return { allowed: false, reason: 'renderer-loading' }
     }
 
@@ -1881,7 +1891,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    if (is.dev) {
+    const isDevelopmentRuntime = this.isDevelopmentRuntime()
+
+    if (isDevelopmentRuntime) {
       const delayMs = 15_000 + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
       logApp(
         `Deferring dev mode mdls scan by ${Math.round(delayMs / 1000)}s to avoid startup contention`,
@@ -1902,10 +1914,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         const lastScanTimestamp = (await this._getLastScanTime()) || 0
         const now = Date.now()
 
-        if (!is.dev && now - lastScanTimestamp > 60 * 60 * 1000) {
+        if (!isDevelopmentRuntime && now - lastScanTimestamp > 60 * 60 * 1000) {
           logApp('Over 1 hour since last scan, starting mdls scan', LogStyle.info)
           await this._runMdlsUpdateScan()
-        } else if (is.dev && !lastScanTimestamp) {
+        } else if (isDevelopmentRuntime && !lastScanTimestamp) {
           logApp('First scan in dev mode', LogStyle.info)
           await this.waitForMainRendererReady()
           await this._runMdlsUpdateScan()
