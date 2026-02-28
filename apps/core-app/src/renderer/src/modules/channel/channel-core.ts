@@ -1,12 +1,4 @@
-import type {
-  ITouchClientChannel,
-  RawChannelSyncData,
-  RawStandardChannelData,
-  StandardChannelData
-} from '@talex-touch/utils/channel'
-
 import type { IpcRendererEvent } from 'electron'
-import { ChannelType, DataCode } from '@talex-touch/utils/channel'
 import {
   findCloneIssue,
   isCloneError,
@@ -21,8 +13,48 @@ const CHANNEL_DEFAULT_TIMEOUT = 60_000
 const CHANNEL_SENDSYNC_WARN_MS = 80
 const CHANNEL_SEND_WARN_MS = 500
 const CHANNEL_SEND_ERROR_MS = 2_000
+const LEGACY_CHANNEL_MAIN = 'main' as const
+const DATA_CODE_SUCCESS = 200
+const DATA_CODE_NETWORK_ERROR = 500
+const DATA_CODE_ERROR = 100
 
-class TouchChannel implements ITouchClientChannel {
+type LegacyDataCode = number
+type LegacyChannelType = typeof LEGACY_CHANNEL_MAIN | 'plugin'
+
+interface RawChannelSyncData {
+  timeStamp: number
+  timeout: number
+  id: string
+}
+
+interface RawChannelHeaderData {
+  status: 'reply' | 'request'
+  type: LegacyChannelType
+  _originData?: unknown
+  event?: IpcRendererEvent
+}
+
+interface RawStandardChannelData {
+  name: string
+  header: RawChannelHeaderData
+  sync?: RawChannelSyncData
+  code: LegacyDataCode
+  data?: unknown
+  plugin?: string
+}
+
+interface StandardChannelData extends RawStandardChannelData {
+  reply: (code: LegacyDataCode, data: unknown) => void
+}
+
+interface TouchClientChannelLike {
+  regChannel: (eventName: string, callback: (data: StandardChannelData) => void) => () => void
+  unRegChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => boolean
+  send: (eventName: string, arg?: unknown) => Promise<unknown>
+  sendSync: (eventName: string, arg?: unknown) => unknown
+}
+
+class TouchChannel implements TouchClientChannelLike {
   channelMap: Map<string, ((data: StandardChannelData) => unknown)[]> = new Map()
 
   pendingMap: Map<string, (data: RawStandardChannelData) => void> = new Map()
@@ -39,7 +71,7 @@ class TouchChannel implements ITouchClientChannel {
         return {
           header: {
             status: header.status || 'request',
-            type: ChannelType.MAIN,
+            type: LEGACY_CHANNEL_MAIN,
             _originData: arg,
             event: e || undefined
           },
@@ -73,7 +105,7 @@ class TouchChannel implements ITouchClientChannel {
     this.channelMap.get(rawData.name)?.forEach((func) => {
       let replySent = false
       const handInData: StandardChannelData & { replySent?: boolean } = {
-        reply: (code: DataCode, data: unknown) => {
+        reply: (code: LegacyDataCode, data: unknown) => {
           if (replySent) return
           replySent = true
           e.sender.send(
@@ -90,25 +122,25 @@ class TouchChannel implements ITouchClientChannel {
         res
           .then((data) => {
             if (!replySent) {
-              handInData.reply(DataCode.SUCCESS, data)
+              handInData.reply(DATA_CODE_SUCCESS, data)
             }
           })
           .catch((err) => {
             if (!replySent) {
-              handInData.reply(DataCode.ERROR, err)
+              handInData.reply(DATA_CODE_ERROR, err)
             }
           })
         return
       }
 
       if (!replySent) {
-        handInData.reply(DataCode.SUCCESS, res)
+        handInData.reply(DATA_CODE_SUCCESS, res)
       }
     })
   }
 
   __parse_sender(
-    code: DataCode,
+    code: LegacyDataCode,
     rawData: RawStandardChannelData,
     data: unknown,
     sync?: RawChannelSyncData
@@ -164,7 +196,7 @@ class TouchChannel implements ITouchClientChannel {
     const stack = new Error().stack
 
     const data = {
-      code: DataCode.SUCCESS,
+      code: DATA_CODE_SUCCESS,
       data: arg,
       sync: {
         timeStamp: new Date().getTime(),
@@ -174,7 +206,7 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN
+        type: LEGACY_CHANNEL_MAIN
       }
     } as RawStandardChannelData
 
@@ -263,7 +295,7 @@ class TouchChannel implements ITouchClientChannel {
           })
         }
 
-        if (res.code === DataCode.ERROR) {
+        if (res.code === DATA_CODE_ERROR || res.code === DATA_CODE_NETWORK_ERROR) {
           console.warn(`[Channel][send][errorReply] \"${eventName}\" replied with ERROR`, {
             payloadPreview: this.formatPayloadPreview(arg),
             replyPreview: this.formatPayloadPreview(res.data),
@@ -291,12 +323,12 @@ class TouchChannel implements ITouchClientChannel {
 
   sendSync(eventName: string, arg?: unknown): unknown {
     const data = {
-      code: DataCode.SUCCESS,
+      code: DATA_CODE_SUCCESS,
       data: arg,
       name: eventName,
       header: {
         status: 'request',
-        type: ChannelType.MAIN
+        type: LEGACY_CHANNEL_MAIN
       }
     } as RawStandardChannelData
 
@@ -359,4 +391,4 @@ class TouchChannel implements ITouchClientChannel {
   }
 }
 
-export const touchChannel: ITouchClientChannel = (window.$channel = new TouchChannel())
+export const touchChannel: TouchClientChannelLike = (window.$channel = new TouchChannel())
