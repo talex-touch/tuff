@@ -665,7 +665,7 @@ jobs:
       - name: List Available Artifacts
         run: |
           echo "Available artifacts:"
-          find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" \) | sort
+          find artifacts -type f \( -name "*-setup.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" \) ! -path "*/win-unpacked/*" ! -name "__uninstaller-*.exe" | sort
           find artifacts -type d -name "*.app" -path "*/mac-*/*" | sort
           echo "Total files:"
           find artifacts -type f | wc -l
@@ -682,11 +682,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Collect files (including zip files with .app)
-          mapfile -t FILES < <(find artifacts -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" -o -name "latest*.yml" -o -name "builder-debug.yml" \) | sort)
+          # Collect files (exclude raw win-unpacked executables to avoid broken standalone EXE release)
+          mapfile -t FILES < <(
+            find artifacts -type f \
+              \( -name "*-setup.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.snap" -o -name "*.deb" -o -name "*.zip" -o -name "latest*.yml" -o -name "builder-debug.yml" \) \
+              ! -path "*/win-unpacked/*" \
+              ! -name "__uninstaller-*.exe" \
+              | sort
+          )
 
           if [ "${#FILES[@]}" -eq 0 ]; then
             echo "No release files found in artifacts/"
+            exit 1
+          fi
+
+          WINDOWS_INSTALLER_COUNT=$(printf "%s\n" "${FILES[@]}" | grep -Ec -- '-setup\.exe$' || true)
+          if [ "${WINDOWS_INSTALLER_COUNT}" -eq 0 ]; then
+            echo "No Windows installer (*-setup.exe) found. Refusing to publish raw executable."
+            echo "Detected exe files:"
+            find artifacts -type f -name "*.exe" | sort || true
             exit 1
           fi
 
@@ -1084,6 +1098,11 @@ jobs:
             size=$(echo "${item}" | jq -r '.size')
 
             if [[ "${name}" == "tuff-release-manifest.json" ]] || [[ "${name}" == latest*.yml ]] || [[ "${name}" == "builder-debug.yml" ]]; then
+              continue
+            fi
+
+            if [[ "${name}" == *.exe ]] && [[ "${name}" != *-setup.exe ]]; then
+              echo "Skip non-installer Windows executable: ${name}"
               continue
             fi
 
