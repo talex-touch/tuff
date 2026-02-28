@@ -82,6 +82,23 @@ export default tseslint.config(
   {
     files: ['src/**/*.{ts,mts,tsx,vue,js,mjs,cjs}'],
     rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@talex-touch/utils/channel',
+              message:
+                'Legacy channel API is restricted. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+            },
+            {
+              name: 'packages/utils/channel',
+              message:
+                'Legacy channel API is restricted. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+            }
+          ]
+        }
+      ],
       'no-restricted-syntax': [
         'error',
         {
