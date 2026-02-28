@@ -1,5 +1,4 @@
 import type { CloudSyncSDK, SyncItemInput, SyncItemOutput } from '@talex-touch/utils'
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import { hasWindow } from '@talex-touch/utils/env'
 import { storages } from '@talex-touch/utils/renderer'
 
@@ -26,6 +25,10 @@ interface PluginStorageSyncItemPayload {
   fileName: string
   qualifiedName: string
   content: unknown
+}
+
+type RendererChannelLike = {
+  send: (eventName: string, arg?: unknown) => Promise<unknown>
 }
 
 function toBase64(value: Uint8Array): string {
@@ -70,7 +73,7 @@ async function sha256Hex(value: string): Promise<string> {
     .join('')
 }
 
-function getRendererChannel(): ITouchClientChannel | null {
+function getRendererChannel(): RendererChannelLike | null {
   if (!hasWindow() || !window.$channel) {
     return null
   }

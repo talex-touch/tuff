@@ -29,7 +29,7 @@ export {
    * @deprecated Use `TuffTransportErrorCode` instead. Will be removed in v3.0.0.
    */
   DataCode,
-} from '../channel'
+} from './legacy'
 
 // ============================================================================
 // Event Types
@@ -52,7 +52,7 @@ export type {
    * @deprecated Use TuffTransport types instead. Will be removed in v3.0.0.
    */
   StandardChannelData,
-} from '../channel'
+} from './legacy'
 
 // ============================================================================
 // Predefined Events (by domain)
