@@ -1,13 +1,13 @@
 import type { WidgetRegistrationPayload } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import * as TalexUtils from '@talex-touch/utils'
-import * as TalexUtilsChannel from '@talex-touch/utils/channel'
 import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
 import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
 import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { tryUseChannel } from '@talex-touch/utils/renderer'
+import * as TalexUtilsTransportLegacy from '@talex-touch/utils/transport/legacy'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import * as TalexUtilsTypes from '@talex-touch/utils/types'
@@ -618,7 +618,7 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
   '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
-  '@talex-touch/utils/channel': TalexUtilsChannel,
+  '@talex-touch/utils/channel': TalexUtilsTransportLegacy,
   '@talex-touch/utils/common': TalexUtilsCommon,
   '@talex-touch/utils/types': TalexUtilsTypes
 }

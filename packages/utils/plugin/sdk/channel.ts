@@ -7,6 +7,10 @@ import { genChannel } from '../channel'
 
 const PLUGIN_CHANNEL_TYPE = 'plugin' as const
 const DATA_CODE_SUCCESS = 200
+type RendererWindowLike = Window & {
+  $transport?: ITuffTransport
+  $channel?: PluginChannelClient
+}
 
 const ensureClientChannel = (): PluginChannelClient =>
   genChannel() as unknown as PluginChannelClient
@@ -92,7 +96,7 @@ function createTransportClientChannel(
   }
 }
 function resolveRendererTransport(): ITuffTransport | null {
-  const globalWindow = hasWindow() ? window : undefined
+  const globalWindow = hasWindow() ? (window as RendererWindowLike) : undefined
   return globalWindow?.$transport ?? null
 }
 
@@ -107,7 +111,7 @@ let cachedTransportChannel: PluginChannelClient | null = null
  * @param errorMessage - Optional custom error message when the channel is unavailable
  */
 export function ensureRendererChannel(errorMessage = DEFAULT_CHANNEL_ERROR): PluginChannelClient {
-  const globalWindow = hasWindow() ? window : undefined
+  const globalWindow = hasWindow() ? (window as RendererWindowLike) : undefined
   const transport = globalWindow?.$transport ?? null
   if (transport) {
     if (!cachedTransportChannel) {
