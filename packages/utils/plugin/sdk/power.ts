@@ -1,5 +1,5 @@
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import type { BatteryStatusPayload, FileIndexBatteryStatus } from '../../transport/events'
+import type { PluginChannelClient } from './channel-client'
 import { AppEvents } from '../../transport/events'
 import { createPluginTuffTransport } from '../../transport/sdk/plugin-transport'
 import { ensureRendererChannel } from './channel'
@@ -81,7 +81,7 @@ export interface PowerSDK {
   ) => () => void
 }
 
-export function createPowerSDK(channel: ITouchClientChannel): PowerSDK {
+export function createPowerSDK(channel: PluginChannelClient): PowerSDK {
   const transport = createPluginTuffTransport(channel)
 
   const getStatus = async (options: { threshold?: number } = {}): Promise<LowPowerStatus> => {

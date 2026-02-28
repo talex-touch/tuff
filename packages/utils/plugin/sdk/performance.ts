@@ -4,8 +4,8 @@
  * Provides APIs for plugins to access their own performance metrics
  * and storage statistics.
  */
-import type { ITouchClientChannel } from '@talex-touch/utils/channel'
 import type { StorageStats } from '../../types/storage'
+import type { PluginChannelClient } from './channel-client'
 import { ensureRendererChannel } from './channel'
 
 /**
@@ -99,7 +99,7 @@ export interface PerformanceSDK {
  *
  * @internal
  */
-export function createPerformanceSDK(channel: ITouchClientChannel): PerformanceSDK {
+export function createPerformanceSDK(channel: PluginChannelClient): PerformanceSDK {
   return {
     async getStorageStats(): Promise<StorageStats> {
       try {
