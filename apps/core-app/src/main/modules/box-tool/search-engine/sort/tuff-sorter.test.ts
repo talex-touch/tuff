@@ -2,6 +2,8 @@ import type { TuffItem, TuffQuery } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
 import { tuffSorter } from './tuff-sorter'
 
+type UsageStats = NonNullable<NonNullable<TuffItem['meta']>['usageStats']>
+
 function createItem(input: {
   id: string
   kind: string
@@ -10,14 +12,7 @@ function createItem(input: {
   searchTokens?: string[]
   matchResult?: Array<{ start: number; end: number }>
   matchSource?: string
-  usageStats?: {
-    executeCount: number
-    searchCount: number
-    cancelCount?: number
-    lastExecuted?: string | null
-    lastSearched?: string | null
-    lastCancelled?: string | null
-  }
+  usageStats?: UsageStats
 }): TuffItem {
   return {
     id: input.id,
@@ -45,6 +40,8 @@ function createItem(input: {
 }
 
 describe('tuff-sorter ranking strategy', () => {
+  const signal = new AbortController().signal
+
   it('匹配更强的 feature 不应被 app 类型强制压制', () => {
     const appItem = createItem({
       id: 'app-photo-booth',
@@ -61,7 +58,7 @@ describe('tuff-sorter ranking strategy', () => {
       searchTokens: ['clipboard', 'clipboard-history']
     })
 
-    const sorted = tuffSorter.sort([appItem, featureItem], { text: 'clipbo' } as TuffQuery)
+    const sorted = tuffSorter.sort([appItem, featureItem], { text: 'clipbo' } as TuffQuery, signal)
     expect(sorted[0]?.id).toBe('feature-clipboard-history')
   })
 
@@ -90,7 +87,11 @@ describe('tuff-sorter ranking strategy', () => {
       }
     })
 
-    const sorted = tuffSorter.sort([appItem, featureItem], { text: 'clipboard' } as TuffQuery)
+    const sorted = tuffSorter.sort(
+      [appItem, featureItem],
+      { text: 'clipboard' } as TuffQuery,
+      signal
+    )
     expect(sorted[0]?.id).toBe('feature-clipboard-history')
   })
 
@@ -118,7 +119,11 @@ describe('tuff-sorter ranking strategy', () => {
       }
     })
 
-    const sorted = tuffSorter.sort([featureItem, appItem], { text: 'clipboard' } as TuffQuery)
+    const sorted = tuffSorter.sort(
+      [featureItem, appItem],
+      { text: 'clipboard' } as TuffQuery,
+      signal
+    )
     expect(sorted[0]?.id).toBe('app-clipboard')
   })
 
@@ -141,9 +146,13 @@ describe('tuff-sorter ranking strategy', () => {
       matchResult: [{ start: 4, end: 11 }]
     })
 
-    const sorted = tuffSorter.sort([aliasMatchedItem, directTitleMatchedItem], {
-      text: 'cleaner'
-    } as TuffQuery)
+    const sorted = tuffSorter.sort(
+      [aliasMatchedItem, directTitleMatchedItem],
+      {
+        text: 'cleaner'
+      } as TuffQuery,
+      signal
+    )
     expect(sorted[0]?.id).toBe('app-cleaner')
   })
 })
