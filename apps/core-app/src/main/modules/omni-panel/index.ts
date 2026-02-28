@@ -273,7 +273,7 @@ function toFeatureIcon(feature: IPluginFeature): OmniPanelFeatureIconPayload | n
   }
 }
 
-class OmniPanelModule extends BaseModule {
+export class OmniPanelModule extends BaseModule {
   static key: symbol = Symbol.for('OmniPanel')
   name: ModuleKey = OmniPanelModule.key
 
