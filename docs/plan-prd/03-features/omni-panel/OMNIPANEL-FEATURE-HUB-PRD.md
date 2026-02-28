@@ -1,7 +1,7 @@
 # OmniPanel Feature Hub PRD（260223）
 
-> 状态：规划中（未实现）  
-> 更新时间：2026-02-23  
+> 状态：进行中（Wave-1~Wave-4 已落地，Wave-5 文档台账推进中）  
+> 更新时间：2026-03-01  
 > 适用范围：`apps/core-app` / `packages/utils`
 
 ---
@@ -155,19 +155,19 @@ interface OmniPanelFeatureItem {
 ## 6. 验收标准（Acceptance Criteria）
 
 ### 功能验收
-- [ ] 通用设置开关可见、可持久化、重启后生效。
-- [ ] 开关开启时，安装插件后首个 Feature 自动出现在 OmniPanel。
-- [ ] OmniPanel 可执行 builtin + plugin Feature。
-- [ ] 选中文本可作为输入透传到 Feature（含翻译场景）。
+- [x] 通用设置开关可见、可持久化、重启后生效。
+- [x] 开关开启时，安装插件后首个 Feature 自动出现在 OmniPanel。
+- [x] OmniPanel 可执行 builtin + plugin Feature。
+- [x] 选中文本可作为输入透传到 Feature（含翻译场景）。
 
 ### 质量验收
-- [ ] `typecheck:node` / `typecheck:web` 通过。
-- [ ] OmniPanel 相关新增单测覆盖：注册、去重、执行分发、无选中文本降级。
-- [ ] 执行失败有统一错误提示，不出现 silent failure。
+- [x] `typecheck:node` / `typecheck:web` 通过。
+- [x] OmniPanel 相关新增单测覆盖：注册、去重、执行分发、无选中文本降级。
+- [x] 执行失败有统一错误提示，不出现 silent failure。
 
 ### 文档验收
-- [ ] `README.md` / `TODO.md` / `docs/INDEX.md` 已同步 OmniPanel 条目。
-- [ ] 本文档与实现范围一致，无过期描述。
+- [x] `README.md` / `TODO.md` / `docs/INDEX.md` 已同步 OmniPanel 条目。
+- [x] 本文档与实现范围一致，无过期描述。
 
 ---
 
