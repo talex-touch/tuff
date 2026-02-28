@@ -13,7 +13,6 @@ import type { TouchPlugin } from '../plugin/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, WebContentsView } from 'electron'
@@ -24,6 +23,8 @@ import { pluginModule } from '../plugin/plugin-module'
 import { usePluginInjections } from '../plugin/runtime/plugin-injections'
 
 const coreBoxTriggerEvent = defineRawEvent<{ [key: string]: unknown }, void>('core-box:trigger')
+type LegacyMainChannelType = Parameters<ReturnType<typeof genTouchApp>['channel']['broadcastTo']>[1]
+const LEGACY_CHANNEL_MAIN = 'main' as LegacyMainChannelType
 
 /**
  * Type for state change listener callback
@@ -255,7 +256,7 @@ export class DivisionBoxSession {
       const channel = genTouchApp().channel
       channel.broadcastTo(
         this.touchWindow.window,
-        ChannelType.MAIN,
+        LEGACY_CHANNEL_MAIN,
         coreBoxTriggerEvent.toEventName(),
         {
           type: 'division-box',
@@ -471,7 +472,7 @@ export class DivisionBoxSession {
     const channel = genTouchApp().channel
     channel.broadcastTo(
       this.touchWindow.window,
-      ChannelType.MAIN,
+      LEGACY_CHANNEL_MAIN,
       coreBoxTriggerEvent.toEventName(),
       {
         type: 'division-box',

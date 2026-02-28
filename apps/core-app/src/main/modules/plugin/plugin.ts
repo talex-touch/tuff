@@ -1,5 +1,4 @@
 import type { ITuffIcon, TuffQuery } from '@talex-touch/utils'
-import type { ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
 import type { TuffItem } from '@talex-touch/utils/core-box'
 import type { ITouchEvent } from '@talex-touch/utils/eventbus'
 import type {
@@ -13,6 +12,10 @@ import type {
   PluginMeta
 } from '@talex-touch/utils/plugin'
 import type { IPluginChannelBridge } from '@talex-touch/utils/plugin/sdk'
+import type {
+  PluginChannelClient,
+  PluginStandardChannelData
+} from '@talex-touch/utils/plugin/sdk/channel-client'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
 import { randomUUID } from 'node:crypto'
@@ -110,9 +113,9 @@ const TRANSIENT_ISSUE_CODES = new Set([
   'AUTO_DISABLED_EXCESSIVE_ERRORS',
   'LIFECYCLE_SCRIPT_FAILED'
 ])
-const LEGACY_CHANNEL_MAIN = 'main' as StandardChannelData['header']['type']
-const LEGACY_CHANNEL_PLUGIN = 'plugin' as StandardChannelData['header']['type']
-const LEGACY_CHANNEL_SUCCESS = 200 as StandardChannelData['code']
+const LEGACY_CHANNEL_MAIN = 'main' as PluginStandardChannelData['header']['type']
+const LEGACY_CHANNEL_PLUGIN = 'plugin' as PluginStandardChannelData['header']['type']
+const LEGACY_CHANNEL_SUCCESS = 200 as PluginStandardChannelData['code']
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
@@ -1172,7 +1175,7 @@ export class TouchPlugin implements ITouchPlugin {
     const onTransport = (
       eventName: string,
       shouldHandle: (context: { plugin?: { name?: string } } | undefined) => boolean,
-      handler: (event: StandardChannelData) => unknown
+      handler: (event: PluginStandardChannelData) => unknown
     ): (() => void) => {
       return transport.on(defineRawEvent(eventName), async (payload, context) => {
         if (!shouldHandle(context)) {
@@ -1183,7 +1186,7 @@ export class TouchPlugin implements ITouchPlugin {
         const headerType = pluginContextName ? LEGACY_CHANNEL_PLUGIN : LEGACY_CHANNEL_MAIN
         let replied = false
         let replyData: unknown
-        const event: StandardChannelData = {
+        const event: PluginStandardChannelData = {
           name: eventName,
           header: {
             status: 'request',
@@ -1228,10 +1231,10 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
-    type BoxChannelHandler = (data: StandardChannelData) => unknown
+    type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
     const boxChannelHandlers = new Map<string, Map<BoxChannelHandler, () => void>>()
 
-    const boxChannel: ITouchClientChannel = {
+    const boxChannel: PluginChannelClient = {
       regChannel: (eventName, callback) => {
         const dispose = channelBridge.onMain(eventName, callback)
         let handlers = boxChannelHandlers.get(eventName)
