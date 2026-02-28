@@ -17,6 +17,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Release not found.' })
 
   return {
-    release: attachSignatureUrls(release),
+    release: attachSignatureUrls(release, event),
   }
 })

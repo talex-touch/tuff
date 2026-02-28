@@ -67,10 +67,12 @@ const metaOverlayFlowTransferEvent = defineRawEvent<{ item: TuffItem }, void>(
  */
 export class MetaOverlayManager {
   private static instance: MetaOverlayManager
+  private static readonly HEIGHT_SYNC_DELAY_MS = 220
   private metaView: WebContentsView | null = null
   private parentWindow: BrowserWindow | null = null
   private isVisible = false
   private pluginActions: Map<string, MetaAction[]> = new Map()
+  private heightSyncTimer: NodeJS.Timeout | null = null
 
   private getAliveMetaWebContents(): Electron.WebContents | null {
     return useAliveWebContents(this.metaView)
@@ -299,6 +301,7 @@ export class MetaOverlayManager {
       // Show the view
       this.metaView.setVisible(true)
       this.isVisible = true
+      this.scheduleHeightSync()
       const afterVisible = this.metaView.getVisible()
 
       metaOverlayLog.debug(
@@ -319,10 +322,31 @@ export class MetaOverlayManager {
     waitForContent()
   }
 
+  private scheduleHeightSync(): void {
+    this.clearHeightSyncTimer()
+
+    this.heightSyncTimer = setTimeout(() => {
+      this.heightSyncTimer = null
+      if (!this.isVisible) {
+        return
+      }
+      this.updateBounds()
+    }, MetaOverlayManager.HEIGHT_SYNC_DELAY_MS)
+  }
+
+  private clearHeightSyncTimer(): void {
+    if (!this.heightSyncTimer) {
+      return
+    }
+    clearTimeout(this.heightSyncTimer)
+    this.heightSyncTimer = null
+  }
+
   /**
    * Hides MetaOverlay.
    */
   public hide(): void {
+    this.clearHeightSyncTimer()
     const metaWebContents = this.getAliveMetaWebContents()
     if (!this.metaView || !metaWebContents) {
       this.isVisible = false
@@ -556,6 +580,8 @@ export class MetaOverlayManager {
    * Destroys MetaOverlay and cleans up resources.
    */
   public destroy(): void {
+    this.clearHeightSyncTimer()
+
     if (this.metaView) {
       const metaWebContents = this.getAliveMetaWebContents()
       if (metaWebContents) {

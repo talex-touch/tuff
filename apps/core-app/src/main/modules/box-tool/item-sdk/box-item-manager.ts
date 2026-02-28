@@ -435,16 +435,14 @@ export class BoxItemManager {
    * @param channel - channel 名称
    * @param data - 事件数据
    */
-  private emitToRenderer<TReq, TRes = void>(event: TuffEvent<TReq, TRes>, data: TReq): void {
+  private emitToRenderer<TReq>(event: TuffEvent<TReq, void>, data: TReq): void {
     const coreBoxWindow = this.getCoreBoxWindow()
     if (!coreBoxWindow || coreBoxWindow.isDestroyed()) {
       this.logWarn('CoreBox window not available, cannot emit event')
       return
     }
 
-    this.transport.sendToWindow(coreBoxWindow.id, event, data).catch((error) => {
-      this.logWarn(`Failed to send ${event.toEventName()} event:`, error)
-    })
+    this.transport.broadcastToWindow(coreBoxWindow.id, event, data)
   }
 
   /**

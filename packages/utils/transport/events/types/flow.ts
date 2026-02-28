@@ -19,7 +19,12 @@ export interface FlowDispatchRequest {
 export interface FlowDispatchResponse {
   success: boolean
   data?: FlowDispatchResult
-  error?: { message: string }
+  error?: {
+    message: string
+    code?: string
+    permissionId?: string
+    showRequest?: boolean
+  }
 }
 
 export interface FlowGetTargetsRequest {

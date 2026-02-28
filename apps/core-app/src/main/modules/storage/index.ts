@@ -122,6 +122,7 @@ export class StorageModule extends BaseModule {
   private frequencyMonitor = new StorageFrequencyMonitor()
   private subscribers = new Map<string, Set<(data: object) => void>>()
   private hotConfigs = new Set<string>([StorageList.APP_SETTING, StorageList.OPENERS])
+  private persistedContent = new Map<string, string>()
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()
@@ -190,6 +191,7 @@ export class StorageModule extends BaseModule {
     await this.pollingService.stop()
     this.lruManager.stopCleanup()
     this.cache.clear()
+    this.persistedContent.clear()
     this.pluginConfigs.clear()
     for (const stream of Array.from(this.updateStreams)) {
       if (!stream.isCancelled()) {
@@ -451,7 +453,10 @@ export class StorageModule extends BaseModule {
               if (!cachedSerialized) {
                 this.cache.setSerialized(key, configData)
               }
-              fse.writeFileSync(filePath, configData, 'utf-8')
+              if (this.persistedContent.get(key) !== configData) {
+                fse.writeFileSync(filePath, configData, 'utf-8')
+                this.persistedContent.set(key, configData)
+              }
             }
           } catch (error) {
             storageLog.error(`Failed to persist ${key} synchronously`, { error })
@@ -527,6 +532,15 @@ export class StorageModule extends BaseModule {
 
     // Use setWithVersion for initial load (version 1, not dirty)
     this.cache.setWithVersion(name, file, 1, serialized)
+    if (serialized !== undefined) {
+      this.persistedContent.set(name, serialized)
+    } else {
+      try {
+        this.persistedContent.set(name, JSON.stringify(file))
+      } catch {
+        this.persistedContent.delete(name)
+      }
+    }
     if (normalizedResult.changed) {
       this.cache.markDirty(name)
     }
@@ -590,6 +604,15 @@ export class StorageModule extends BaseModule {
     }
 
     this.cache.set(name, file, true, serialized)
+    if (serialized !== undefined) {
+      this.persistedContent.set(name, serialized)
+    } else {
+      try {
+        this.persistedContent.set(name, JSON.stringify(file))
+      } catch {
+        this.persistedContent.delete(name)
+      }
+    }
     if (!normalizedResult.changed) {
       this.cache.clearDirty(name)
     }
@@ -647,6 +670,7 @@ export class StorageModule extends BaseModule {
 
       if (clear) {
         this.cache.evict(name)
+        this.persistedContent.delete(name)
         return { success: true, version: 0 }
       }
 
@@ -754,6 +778,10 @@ export class StorageModule extends BaseModule {
     if (!cachedSerialized) {
       this.cache.setSerialized(name, configData)
     }
+    const lastPersisted = this.persistedContent.get(name)
+    if (lastPersisted === configData) {
+      return
+    }
     const p = path.join(this.filePath, name)
 
     const disposePersist = enterPerfContext(`Storage.persist:${name}`, {
@@ -761,8 +789,9 @@ export class StorageModule extends BaseModule {
     })
     const persistStart = performance.now()
     try {
-      fse.ensureFileSync(p)
+      await fse.ensureFile(p)
       await fse.writeFile(p, configData, 'utf-8')
+      this.persistedContent.set(name, configData)
     } finally {
       const duration = performance.now() - persistStart
       if (duration > 200) {

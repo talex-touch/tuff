@@ -45,6 +45,10 @@
 - [x] 文档入口同步（`README.md` / `TODO.md` / `CHANGES.md` / `docs/INDEX.md`）
 - [x] 发布链路确认：`build-and-release.yml` + Nexus release 自动同步 + CLI 四包 npm 自动发布
 - [ ] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
+  - [ ] C1：修复 `packages/tuff-native` 4 个 lint error + `apps/nexus` 1 个 `import/first`（见 `RELEASE-2.4.7-CHECKLIST` 的 Gate C 批次表）
+  - [ ] C2：修复 `apps/nexus` watermark 相关 TS 错误（组件/composable/server utils/pages）
+  - [ ] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
+  - [ ] C4：执行全量复扫并回写 Gate C 结论（通过/豁免）
 - [ ] 发布资产核对：Nexus Release notes `{ zh, en }` + assets + signature + manifest 完整
 - [ ] 发布动作：创建并推送 `v2.4.7` tag，验证 GitHub Release 与 Nexus release 同步
 
@@ -185,28 +189,28 @@
 
 ## 🔴 P0 紧急任务
 
-- [ ] P0 风险点登记与收口（`01-project/RISK-REGISTER-2026-02.md`）
+- [x] P0 风险点登记与收口（`01-project/RISK-REGISTER-2026-02.md`）
 
 ## 🧯 v2.4.8 风险清理清单（来自风险复核）
 
-- [ ] **P0** 风险登记收口流程固化：形成发布前风险清单模板 + Owner/缓解策略闭环机制，确保每次 GA 可复用（`docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`）。
+- [x] **P0** 风险登记收口流程固化：已落地 GA 风险模板（Owner/目标日期/缓解策略/回滚策略/证据）与 Gate 判定规则（P0 未收口禁止 Gate E）（`docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`）。
 - [x] **P0** 旧同步链路明文存储彻底收口：`/api/sync/*` 旧链路保持禁用；`syncStore.ts` 已下线，`authStore.ts` 已移除 `value_json` 明文写入路径，确保只剩 `/api/v1/sync/*` 写入主链路（`apps/nexus/server/utils/authStore.ts`）。
-- [ ] **P0** 深度技术债与兼容性清单落地：以报告为基线明确 Owner/里程碑，并推进收口计划（`docs/engineering/legacy-debt-report-2026-02-21.md`）。
-- [ ] **P0** Legacy Channel 清理（2.4.8）：按 P0 范围统一到 TuffTransport，收口 CoreBox/Clipboard/Flow/DivisionBox/Plugin 主链路（`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md`）。
+- [x] **P0** 深度技术债与兼容性清单落地：已基于报告补齐 Owner/里程碑/交付物（TD-M1~M3）；本轮不执行大文件拆分，仅保留前置边界与测试基线规划（`docs/plan-prd/01-project/RISK-REGISTER-2026-02.md`、`docs/engineering/legacy-debt-report-2026-02-21.md`）。
+- [x] **P0** Legacy Channel 清理（2.4.8）：按 P0 范围统一到 TuffTransport，收口 CoreBox/Clipboard/Flow/DivisionBox/Plugin 主链路（`docs/plan-prd/04-implementation/LegacyChannelCleanup-2408.md`）。
   - [x] Phase A：CoreBox 输入/键盘/窗口触发链路移除 `ChannelType` 依赖，窗口触发广播改为 `transport.broadcastToWindow`。
   - [x] Phase B：Clipboard legacy 事件（`clipboardLegacy*`）发送/接收链路已下线；统一收敛到 `ClipboardEvents`，并补齐 `ClipboardEvents.queryMeta` 内部查询事件。
   - [x] Phase C：DivisionBox / FlowBus IPC 构造改为注入 `ITuffTransportMain`，删除 `ITouchChannel` 依赖与 keyManager 推断。
   - [x] Phase D：Plugin 主链路移除 raw `channelMap` 访问，新增 `transport.invoke(...)` 本地派发能力承接 reply 语义。
-- [ ] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 中 auth token / deviceId / device name 从 `localStorage` 迁移到主进程 `safeStorage` 通道，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/main/channel/common.ts`）。
-- [ ] **P1** CoreBox BoxItem 同步回包超时：`box-item:sync-response` 在渲染端未挂载或阻塞时 60s 超时，需改为 fire-and-forget 或增加 ready gating（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`）。
-- [ ] **P1** 更新下载链路迁移 Signed URL：从 GitHub 直链迁移至 R2/S3 Signed URL（302 + TTL，可配置），保留本地 fallback（后续云存储接入项）。
-- [ ] **P1** Flow ↔ DivisionBox 权限入口回归标准化：沉淀回归清单与最小用例集，保证 actor/sdkapi/权限提示一致性。
-  - [ ] 插件来源 Flow -> DivisionBox 未授权时拦截并提示。
-  - [ ] 插件来源 Flow -> DivisionBox 授权后正常触发。
-  - [ ] corebox 来源 Flow 不触发插件权限校验。
-  - [ ] `division-box:flow:trigger` 缺 `window.create` 或 `storage.shared` 任一权限即拒绝。
-  - [ ] payload `_sdkapi` 覆盖插件 sdkapi，权限判定一致。
-  - [ ] `actorPluginId` 缺失时不误判为插件调用。
+- [x] **P1** 渲染端敏感信息迁移安全存储：`auth-env.ts` 增加 legacy `localStorage` -> 主进程 `safeStorage` 迁移，登录初始化阶段自动清理历史明文键，仅保留短期会话态（`apps/core-app/src/renderer/src/modules/auth/auth-env.ts`、`apps/core-app/src/renderer/src/modules/auth/useAuth.ts`）。
+- [x] **P1** CoreBox BoxItem 同步回包超时：`box-item:sync-response` 在渲染端未挂载或阻塞时 60s 超时，已改为 fire-and-forget（`broadcastToWindow`）消除回包等待（`apps/core-app/src/main/modules/box-tool/item-sdk/box-item-manager.ts`）。
+- [x] **P1** 更新下载链路迁移 Signed URL：Nexus release API 统一下发带签名下载 URL（302 + TTL 可配置），下载口支持签名校验与无签名 fallback 开关（`apps/nexus/server/utils/releaseDownloadSignature.ts`、`apps/nexus/server/api/releases/[tag]/download/[platform]/[arch].get.ts`）。
+- [x] **P1** Flow ↔ DivisionBox 权限入口回归标准化：沉淀回归清单与最小用例集，保证 actor/sdkapi/权限提示一致性。
+  - [x] 插件来源 Flow -> DivisionBox 未授权时拦截并提示（Flow dispatch 返回结构化权限错误，UI 侧提示必需权限）。
+  - [x] 插件来源 Flow -> DivisionBox 授权后正常触发（权限通过时保留原有 flow sent 成功路径）。
+  - [x] corebox 来源 Flow 不触发插件权限校验（`resolveDivisionBoxPermissionActor` 对 `actorPluginId=corebox` 返回空 actor）。
+  - [x] `division-box:flow:trigger` 缺 `window.create` 或 `storage.shared` 任一权限即拒绝（`permission-guard.test.ts` 新增最小用例）。
+  - [x] payload `_sdkapi` 覆盖插件 sdkapi，权限判定一致（`ipc.actor.test.ts` 覆盖上下文/载荷优先级）。
+  - [x] `actorPluginId` 缺失时不误判为插件调用（移除 `payload.pluginId` 回退，仅接受 `actorPluginId`/nested source）。
 - [ ] **P1** 大文件拆分与职责收敛：`file-provider.ts`（box-tool addon）、`plugin-module.ts`、`search-core.ts` 按 SRP 拆分模块，降低单文件风险与变更冲突面。
 - [ ] **P2** 迁移壳收口：移除 `channel` 兼容层，清理 `@deprecated` 通道 API，统一走 `transport`（`packages/utils/channel`、`packages/utils/transport`、相关 hooks）。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。

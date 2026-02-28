@@ -50,6 +50,8 @@ const INTERNAL_SYSTEM_OCR_PROVIDER: IntelligenceProviderConfig = {
   }
 }
 
+let lastAppliedRuntimeConfigSignature: string | null = null
+
 function normalizeStrategyId(value?: string) {
   if (!value) return undefined
   if (value === 'priority') return 'rule-based-default'
@@ -59,6 +61,14 @@ function normalizeStrategyId(value?: string) {
 
 function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
+}
+
+function safeJsonStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return '[unserializable]'
+  }
 }
 
 function buildCapabilityPromptId(capabilityId: string): string {
@@ -362,7 +372,7 @@ function getLatestConfig(): IntelligenceSDKPersistedConfig | undefined {
   return stored
 }
 
-export function ensureIntelligenceConfigLoaded(_force?: boolean): void {
+export function ensureIntelligenceConfigLoaded(force = false): void {
   // 每次都实时从 storage 读取最新配置
   const stored = getLatestConfig()
 
@@ -411,7 +421,7 @@ export function ensureIntelligenceConfigLoaded(_force?: boolean): void {
     providers.unshift({ ...INTERNAL_SYSTEM_OCR_PROVIDER })
   }
 
-  tuffIntelligence.updateConfig({
+  const nextRuntimeConfig = {
     providers,
     defaultStrategy: normalizedStrategy,
     enableAudit: stored.globalConfig?.enableAudit ?? true,
@@ -420,7 +430,15 @@ export function ensureIntelligenceConfigLoaded(_force?: boolean): void {
     capabilities: stored.capabilities ?? {},
     promptRegistry: stored.promptRegistry ?? [],
     promptBindings: stored.promptBindings ?? []
-  })
+  }
+
+  const signature = safeJsonStringify(nextRuntimeConfig)
+  if (!force && signature === lastAppliedRuntimeConfigSignature) {
+    return
+  }
+
+  lastAppliedRuntimeConfigSignature = signature
+  tuffIntelligence.updateConfig(nextRuntimeConfig)
 }
 
 export function getCapabilityOptions(capabilityId: string): {

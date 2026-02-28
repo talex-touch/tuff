@@ -19,6 +19,6 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    release: attachSignatureUrls(release),
+    release: attachSignatureUrls(release, event),
   }
 })

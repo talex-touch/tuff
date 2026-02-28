@@ -1,6 +1,11 @@
 import type { AssetArch, AssetPlatform, ReleaseAsset } from '../../../../../utils/releasesStore'
 import { Buffer } from 'node:buffer'
-import { createError, send, setResponseHeader } from 'h3'
+import { createError, send, sendRedirect, setResponseHeader } from 'h3'
+import {
+  isUnsignedFallbackAllowed,
+  parseReleaseDownloadQuerySignature,
+  verifyReleaseDownloadSignature
+} from '../../../../../utils/releaseDownloadSignature'
 import { requireReleaseAsset } from '../../../../../utils/releaseAssetStorage'
 import { getReleaseByTag, incrementDownloadCount } from '../../../../../utils/releasesStore'
 
@@ -25,10 +30,29 @@ export default defineEventHandler(async (event) => {
   if (!asset)
     throw createError({ statusCode: 404, statusMessage: 'Asset not found for this platform/arch.' })
 
+  const signedQuery = parseReleaseDownloadQuerySignature(event)
+  const allowUnsignedFallback = isUnsignedFallbackAllowed(event)
+  if (signedQuery) {
+    const verification = verifyReleaseDownloadSignature(event, {
+      tag,
+      platform,
+      arch,
+      signature: signedQuery
+    })
+    if (!verification.valid && !allowUnsignedFallback) {
+      throw createError({ statusCode: 403, statusMessage: 'Download signature is invalid or expired.' })
+    }
+  } else if (!allowUnsignedFallback) {
+    throw createError({ statusCode: 403, statusMessage: 'Signed download URL is required.' })
+  }
+
   // Increment download count
   await incrementDownloadCount(event, asset.id)
 
   if (!asset.fileKey) {
+    if (asset.downloadUrl.startsWith('https://') || asset.downloadUrl.startsWith('http://')) {
+      return sendRedirect(event, asset.downloadUrl, 302)
+    }
     throw createError({ statusCode: 404, statusMessage: 'Asset file is not available.' })
   }
 

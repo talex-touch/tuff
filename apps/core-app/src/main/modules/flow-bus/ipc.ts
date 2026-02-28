@@ -122,23 +122,63 @@ export class FlowBusIPC {
       perm.enforcePermission(pluginId, eventName, sdkapi)
     }
 
-    const toErrorMessage = (error: unknown) =>
-      error instanceof Error ? error.message : 'Unknown error'
+    const toFlowError = (
+      error: unknown
+    ): {
+      message: string
+      code?: string
+      permissionId?: string
+      showRequest?: boolean
+    } => {
+      const fallback = {
+        message: error instanceof Error ? error.message : 'Unknown error'
+      }
+      if (!error || typeof error !== 'object') {
+        return fallback
+      }
+
+      const candidate = error as {
+        message?: unknown
+        code?: unknown
+        permissionId?: unknown
+        showRequest?: unknown
+      }
+      return {
+        message: typeof candidate.message === 'string' ? candidate.message : fallback.message,
+        code: typeof candidate.code === 'string' ? candidate.code : undefined,
+        permissionId:
+          typeof candidate.permissionId === 'string' ? candidate.permissionId : undefined,
+        showRequest: typeof candidate.showRequest === 'boolean' ? candidate.showRequest : undefined
+      }
+    }
 
     this.transportDisposers.push(
       transport.on(FlowEvents.dispatch, async (payload, context) => {
-        enforce(context, 'flow:bus:dispatch', payload)
-        const senderId = payload.senderId ?? context?.plugin?.name
-        if (!senderId) {
-          return { success: false, error: { message: 'senderId is required' } }
-        }
-        return await flowBus
-          .dispatch(senderId, payload.payload, payload.options)
-          .then((result) => ({ success: result.state !== 'FAILED', data: result }))
-          .catch((error) => ({
+        try {
+          enforce(context, 'flow:bus:dispatch', payload)
+          const senderId = payload.senderId ?? context?.plugin?.name
+          if (!senderId) {
+            return { success: false, error: { message: 'senderId is required' } }
+          }
+
+          const result = await flowBus.dispatch(senderId, payload.payload, payload.options)
+          if (result.state === 'FAILED') {
+            return {
+              success: false,
+              error: {
+                message: result.error?.message || 'Flow dispatch failed',
+                code: result.error?.code
+              },
+              data: result
+            }
+          }
+          return { success: true, data: result }
+        } catch (error) {
+          return {
             success: false,
-            error: { message: toErrorMessage(error) }
-          }))
+            error: toFlowError(error)
+          }
+        }
       })
     )
 
