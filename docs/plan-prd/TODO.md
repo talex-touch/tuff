@@ -44,11 +44,11 @@
 - [x] `package.json` 与 `apps/core-app/package.json` 版本对齐为 `2.4.7`
 - [x] 文档入口同步（`README.md` / `TODO.md` / `CHANGES.md` / `docs/INDEX.md`）
 - [x] 发布链路确认：`build-and-release.yml` + Nexus release 自动同步 + CLI 四包 npm 自动发布
-- [ ] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
-  - [ ] C1：修复 `packages/tuff-native` 4 个 lint error + `apps/nexus` 1 个 `import/first`（见 `RELEASE-2.4.7-CHECKLIST` 的 Gate C 批次表）
-  - [ ] C2：修复 `apps/nexus` watermark 相关 TS 错误（组件/composable/server utils/pages）
-  - [ ] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
-  - [ ] C4：执行全量复扫并回写 Gate C 结论（通过/豁免）
+- [x] 质量门禁清零：`apps/nexus` typecheck 与 `packages/tuff-native`/`apps/nexus` lint error 归零
+  - [x] C1：修复 `packages/tuff-native` 4 个 lint error + `apps/nexus` 1 个 `import/first`（见 `RELEASE-2.4.7-CHECKLIST` 的 Gate C 批次表）
+  - [x] C2：修复 `apps/nexus` watermark 相关 TS 错误（组件/composable/server utils/pages）
+  - [x] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
+  - [x] C4：执行全量复扫并回写 Gate C 结论（`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 已通过）
 - [ ] 发布资产核对：Nexus Release notes `{ zh, en }` + assets + signature + manifest 完整
 - [ ] 发布动作：创建并推送 `v2.4.7` tag，验证 GitHub Release 与 Nexus release 同步
 

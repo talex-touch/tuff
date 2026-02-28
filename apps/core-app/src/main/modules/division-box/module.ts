@@ -11,7 +11,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { BrowserWindow } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
-import { TalexEvents } from '../../core/eventbus/touch-event'
+import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import { initializeDivisionBoxIPC } from './ipc'
 import { windowPool } from './window-pool'
@@ -113,11 +113,10 @@ export class DivisionBoxModule extends BaseModule {
       }, 0)
     }
 
-    const events = ctx.events
-    if (!events) {
-      schedulePoolInit()
-      console.warn(LOG_PREFIX, 'Event bus missing, window pool scheduled immediately')
-      return
+    const fallbackEvents: NonNullable<ModuleStartContext<TalexEvents>['events']> = touchEventBus
+    const events = ctx.events ?? fallbackEvents
+    if (!ctx.events) {
+      console.warn(LOG_PREFIX, 'Event bus missing in module context, falling back to global bus')
     }
 
     const handleAllModulesLoaded = () => {

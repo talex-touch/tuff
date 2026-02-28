@@ -20,7 +20,7 @@
 | --- | --- | --- | --- |
 | Gate A: 版本基线 | 根包与 core-app 版本一致且为稳定版 | ✅ Done | `package.json` 与 `apps/core-app/package.json` 已对齐 `2.4.7`。 |
 | Gate B: 发布链路 | `build-and-release.yml`、Nexus release 同步、CLI npm 自动发布链路可用 | ✅ Done | 发布主线已收敛，Cloudflare Pages 使用平台侧 Git 部署。 |
-| Gate C: 质量门禁 | lint/typecheck 通过或阻塞项明确可豁免 | ⚠️ Open | 参考 `docs/reports/quality-scan-2026-02-26.md`，当前仍有 lint/typecheck 阻塞项。 |
+| Gate C: 质量门禁 | lint/typecheck 通过或阻塞项明确可豁免 | ✅ Done | C1~C4 已完成：`packages/tuff-native`/`apps/nexus` lint 通过，全仓 typecheck + eslint 复扫通过。 |
 | Gate D: 发布资产 | release notes（`zh/en`）与资产清单完备 | 🟡 In Progress | 需在 Nexus release 创建时补齐 notes、assets、签名信息。 |
 | Gate E: 发布动作 | 创建并推送 `v2.4.7` tag，触发 CI 发布 | ⏸ Pending | 需在 Gate C/D 通过后执行；且必须满足风险门禁（`P0=0`）。 |
 
@@ -32,18 +32,16 @@
 
 ## 3. 当前阻塞（必须处理）
 
-1. `apps/nexus` 存在 TypeScript 错误（`pnpm -r --if-present --no-bail run typecheck` 未通过）。
-2. 全仓 lint 存在 error（`packages/tuff-native` + `apps/nexus`）。
-3. 发布前需确认 Nexus Release notes 结构为 `{ zh, en }` 且与 `v2.4.7` tag 对齐。
+1. 发布前需确认 Nexus Release notes 结构为 `{ zh, en }` 且与 `v2.4.7` tag 对齐。
 
 ## 3.1 Gate C 执行拆解（按批次推进）
 
 | 批次 | 任务 | 范围 | 负责人（建议） | 验收命令 | 状态 |
 | --- | --- | --- | --- | --- | --- |
-| C1 | 清零阻断 lint error | `packages/tuff-native/index.js`、`packages/tuff-native/native-loader.js`、`apps/nexus/server/utils/__tests__/intelligence-agent-graph-runner.test.ts` | Tuff Native + Nexus Backend | `pnpm -C "packages/tuff-native" exec eslint "index.js" "native-loader.js"`；`pnpm -C "apps/nexus" exec eslint "server/utils/__tests__/intelligence-agent-graph-runner.test.ts"` | Open |
-| C2 | 清零 watermark 类型错误 | `apps/nexus` 下 watermark 相关 8 个文件（组件/composable/server utils/pages） | Nexus FE + Nexus Backend | `pnpm -C "apps/nexus" run typecheck` | Open |
-| C3 | 清零 auth/device 类型错误 | `apps/nexus/server/api/auth/[...].ts`、`apps/nexus/app/pages/device-auth.vue`、`apps/nexus/app/plugins/watermark-risk.client.ts`、`apps/nexus/app/composables/useCurrentUserApi.ts` | Nexus Backend | `pnpm -C "apps/nexus" run typecheck` | Open |
-| C4 | 复扫并固化 Gate C 结果 | 全仓 lint/typecheck（按发布口径） | Release Owner | `pnpm -r --if-present --no-bail run typecheck`；`pnpm -r --no-bail --filter "./apps/*" --filter "./packages/*" --filter "./plugins/*" exec eslint --cache --no-warn-ignored "**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}"` | Open |
+| C1 | 清零阻断 lint error | `packages/tuff-native/index.js`、`packages/tuff-native/native-loader.js`、`apps/nexus/server/utils/__tests__/intelligence-agent-graph-runner.test.ts` | Tuff Native + Nexus Backend | `pnpm -C "packages/tuff-native" exec eslint "index.js" "native-loader.js"`；`pnpm -C "apps/nexus" exec eslint "server/utils/__tests__/intelligence-agent-graph-runner.test.ts"` | Done |
+| C2 | 清零 watermark 类型错误 | `apps/nexus` 下 watermark 相关 8 个文件（组件/composable/server utils/pages） | Nexus FE + Nexus Backend | `pnpm -C "apps/nexus" run typecheck` | Done |
+| C3 | 清零 auth/device 类型错误 | `apps/nexus/server/api/auth/[...].ts`、`apps/nexus/app/pages/device-auth.vue`、`apps/nexus/app/plugins/watermark-risk.client.ts`、`apps/nexus/app/composables/useCurrentUserApi.ts` | Nexus Backend | `pnpm -C "apps/nexus" run typecheck` | Done |
+| C4 | 复扫并固化 Gate C 结果 | 全仓 lint/typecheck（按发布口径） | Release Owner | `pnpm -r --if-present --no-bail run typecheck`；`pnpm -r --no-bail --filter "./apps/*" --filter "./packages/*" --filter "./plugins/*" exec eslint --cache --no-warn-ignored "**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}"` | Done |
 
 > 备注：根据 `docs/reports/quality-scan-2026-02-26.md`，当前 Gate C 阻断主要集中在 `apps/nexus`（36 个 TS error）与 `packages/tuff-native`（4 个 lint error）+ `apps/nexus` 1 个 lint error。
 
