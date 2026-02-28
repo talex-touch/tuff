@@ -18,7 +18,6 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import type { FSWatcher } from 'chokidar'
 import type { PluginWithSource } from '../../service/store-api.service'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
@@ -81,6 +80,9 @@ const WIDGET_ROOT_DIR = 'widgets'
 const WIDGET_ALLOWED_EXTENSIONS = new Set(['.vue', '.tsx', '.jsx', '.ts', '.js'])
 const PERMISSION_MISSING_ISSUE_CODE = 'PERMISSION_MISSING'
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
+type PluginLifecycleChannel = {
+  broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
+}
 
 function resolveWidgetFeaturePath(plugin: TouchPlugin, widgetPath: string): string | null {
   const trimmed = widgetPath.trim()
@@ -454,7 +456,7 @@ const INTERNAL_PLUGIN_NAMES = new Set<string>()
 function createPluginModuleInternal(
   pluginPath: string,
   transport: ITuffTransportMain,
-  channel: ITouchChannel,
+  channel: PluginLifecycleChannel,
   mainWindowId: number
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
@@ -1567,7 +1569,7 @@ export class PluginModule extends BaseModule {
     this.pluginManager = createPluginModuleInternal(
       file.dirPath!,
       this.transport,
-      channel as ITouchChannel,
+      channel as PluginLifecycleChannel,
       mainWindowId
     )
     this.installQueue = (this.pluginManager as IPluginManagerWithInternals).__installQueue

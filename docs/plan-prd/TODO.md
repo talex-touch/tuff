@@ -216,6 +216,8 @@
   - [x] 第一批：`PluginLogModule` IPC 注册入口改为显式传入 transport，移除服务层对 `ITouchChannel` 类型的直接依赖。
   - [x] 第一批：plugin/renderer SDK 高频模块（`box-sdk`、`power`、`performance`、`renderer/touch-sdk`）切换到最小 channel 接口，减少对 `@talex-touch/utils/channel` 的直接类型耦合。
   - [x] 第二批：`plugin/sdk/types.ts` 与 `plugin/sdk/channel.ts` 改为依赖 SDK 内部最小 channel 类型，移除对 `ITouchClientChannel/StandardChannelData` 的直接类型依赖。
+  - [x] 第三批：`core/module-manager`、`touch-app`、`build-verification`、`plugin-module` 改为本地最小 channel 壳类型或 `unknown` 透传，继续收窄主进程对 legacy channel 类型的直接引用面。
+  - [x] 第四批：`transport/sdk/main-transport.ts` 改为本地 legacy 常量与最小 `LegacyMainChannel` 接口，移除内部对 `ITouchChannel/ChannelType/DataCode` 的直接类型依赖。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 

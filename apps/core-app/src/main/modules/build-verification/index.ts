@@ -1,5 +1,4 @@
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
@@ -268,7 +267,10 @@ export class BuildVerificationModule extends BaseModule {
   }
 
   private pushVerificationStatus(window: BrowserWindow): void {
-    const channel = $app.channel as ITouchChannel
+    const channel = ($app as { channel?: unknown } | null | undefined)?.channel
+    if (!channel) {
+      return
+    }
     const keyManager =
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     const transport = getTuffTransportMain(channel, keyManager)

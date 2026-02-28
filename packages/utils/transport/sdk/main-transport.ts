@@ -4,7 +4,6 @@
  */
 
 import type { IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
-import type { ITouchChannel } from '../../channel'
 import type { TuffEvent } from '../event/types'
 import type { TransportPortConfirmPayload, TransportPortEnvelope, TransportPortScope, TransportPortUpgradeResponse } from '../events'
 import type {
@@ -16,13 +15,36 @@ import type {
 } from '../types'
 import { randomUUID } from 'node:crypto'
 import * as electron from 'electron'
-import { ChannelType, DataCode } from '../../channel'
 import { assertTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
 import { STREAM_SUFFIXES } from './constants'
 import { isPortChannelEnabled } from './port-policy'
 
 const { ipcMain, MessageChannelMain } = electron
+const LEGACY_CHANNEL = {
+  MAIN: 'main',
+  PLUGIN: 'plugin',
+} as const
+const LEGACY_SUCCESS_CODE = 200
+type LegacyChannelType = (typeof LEGACY_CHANNEL)[keyof typeof LEGACY_CHANNEL]
+type LegacyChannelCallback = (data: any) => unknown
+type LegacyMainChannel = {
+  regChannel: (type: LegacyChannelType, eventName: string, callback: LegacyChannelCallback) => () => void
+  sendTo: (
+    win: Electron.BrowserWindow,
+    type: LegacyChannelType,
+    eventName: string,
+    arg: unknown,
+  ) => Promise<any>
+  sendPlugin: (pluginName: string, eventName: string, arg?: unknown) => Promise<any>
+  broadcast: (type: LegacyChannelType, eventName: string, arg?: unknown) => void
+  broadcastTo: (
+    win: Electron.BrowserWindow,
+    type: LegacyChannelType,
+    eventName: string,
+    arg?: unknown,
+  ) => void
+}
 
 type InvokeHandler<TReq, TRes> = (
   payload: TReq,
@@ -416,7 +438,7 @@ function registerPortHandlers(transport: TuffMainTransport): void {
  */
 export class TuffMainTransport implements ITuffTransportMain {
   constructor(
-    private channel: ITouchChannel,
+    private channel: LegacyMainChannel,
     public readonly keyManager: PluginKeyManager,
   ) {
     registerPortHandlers(this)
@@ -471,8 +493,12 @@ export class TuffMainTransport implements ITuffTransportMain {
       return baseHandler(payload, context)
     }
 
-    const unregisterMain = this.channel.regChannel(ChannelType.MAIN, eventName, channelHandler)
-    const unregisterPlugin = this.channel.regChannel(ChannelType.PLUGIN, eventName, channelHandler)
+    const unregisterMain = this.channel.regChannel(LEGACY_CHANNEL.MAIN, eventName, channelHandler)
+    const unregisterPlugin = this.channel.regChannel(
+      LEGACY_CHANNEL.PLUGIN,
+      eventName,
+      channelHandler,
+    )
     const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler)
     const unregisterLocal = registerLocalHandler(eventName, localHandler)
 
@@ -530,10 +556,10 @@ export class TuffMainTransport implements ITuffTransportMain {
       const sendToSender = (name: string, payload: any) => {
         try {
           sender.send('@main-process-message', {
-            code: DataCode.SUCCESS,
+            code: LEGACY_SUCCESS_CODE,
             data: payload,
             name,
-            header: { status: 'request', type: ChannelType.MAIN },
+            header: { status: 'request', type: LEGACY_CHANNEL.MAIN },
           })
         }
         catch {
@@ -630,10 +656,26 @@ export class TuffMainTransport implements ITuffTransportMain {
       streams.delete(streamId)
     }
 
-    const startCleanupMain = this.channel.regChannel(ChannelType.MAIN, startEventName, startHandler)
-    const cancelCleanupMain = this.channel.regChannel(ChannelType.MAIN, cancelEventName, cancelHandler)
-    const startCleanupPlugin = this.channel.regChannel(ChannelType.PLUGIN, startEventName, startHandler)
-    const cancelCleanupPlugin = this.channel.regChannel(ChannelType.PLUGIN, cancelEventName, cancelHandler)
+    const startCleanupMain = this.channel.regChannel(
+      LEGACY_CHANNEL.MAIN,
+      startEventName,
+      startHandler,
+    )
+    const cancelCleanupMain = this.channel.regChannel(
+      LEGACY_CHANNEL.MAIN,
+      cancelEventName,
+      cancelHandler,
+    )
+    const startCleanupPlugin = this.channel.regChannel(
+      LEGACY_CHANNEL.PLUGIN,
+      startEventName,
+      startHandler,
+    )
+    const cancelCleanupPlugin = this.channel.regChannel(
+      LEGACY_CHANNEL.PLUGIN,
+      cancelEventName,
+      cancelHandler,
+    )
 
     return () => {
       startCleanupMain()
@@ -704,7 +746,7 @@ export class TuffMainTransport implements ITuffTransportMain {
         }
       }
     }
-    return this.channel.sendTo(win, ChannelType.MAIN, eventName, payload)
+    return this.channel.sendTo(win, LEGACY_CHANNEL.MAIN, eventName, payload)
   }
 
   /**
@@ -722,7 +764,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     if (!win) {
       throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
     }
-    this.channel.broadcastTo(win, ChannelType.MAIN, eventName, payload)
+    this.channel.broadcastTo(win, LEGACY_CHANNEL.MAIN, eventName, payload)
   }
 
   /**
@@ -774,7 +816,7 @@ export class TuffMainTransport implements ITuffTransportMain {
 
     return this.channel.sendTo(
       { webContents: targetWebContents } as Electron.BrowserWindow,
-      ChannelType.MAIN,
+      LEGACY_CHANNEL.MAIN,
       eventName,
       payload,
     )
@@ -804,6 +846,6 @@ export class TuffMainTransport implements ITuffTransportMain {
     assertTuffEvent(event, 'TuffMainTransport.broadcast')
 
     const eventName = event.toEventName()
-    this.channel.broadcast(ChannelType.MAIN, eventName, payload)
+    this.channel.broadcast(LEGACY_CHANNEL.MAIN, eventName, payload)
   }
 }
