@@ -10,6 +10,7 @@ import type { TransportPortConfirmPayload, TransportPortEnvelope, TransportPortS
 import type {
   HandlerContext,
   ITuffTransportMain,
+  MainInvokeContext,
   PluginKeyManager,
   StreamContext,
 } from '../types'
@@ -30,6 +31,8 @@ type InvokeHandler<TReq, TRes> = (
 
 const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>()
 const invokeDisposers = new Map<string, () => void>()
+type LocalHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
+const localHandlers = new Map<string, Set<LocalHandler>>()
 
 function registerInvokeHandler<TReq, TRes>(
   eventName: string,
@@ -70,6 +73,44 @@ function registerInvokeHandler<TReq, TRes>(
       invokeDisposers.delete(eventName)
     }
   }
+}
+
+function registerLocalHandler(eventName: string, handler: LocalHandler): () => void {
+  let handlers = localHandlers.get(eventName)
+  if (!handlers) {
+    handlers = new Set()
+    localHandlers.set(eventName, handlers)
+  }
+  handlers.add(handler)
+
+  return () => {
+    const current = localHandlers.get(eventName)
+    if (!current) {
+      return
+    }
+    current.delete(handler)
+    if (current.size === 0) {
+      localHandlers.delete(eventName)
+    }
+  }
+}
+
+function resolveDefaultSender(): WebContents | undefined {
+  const focused = electron.BrowserWindow.getFocusedWindow()?.webContents
+  if (focused && !focused.isDestroyed()) {
+    return focused
+  }
+
+  for (const win of electron.BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      const wc = win.webContents
+      if (wc && !wc.isDestroyed()) {
+        return wc
+      }
+    }
+  }
+
+  return undefined
 }
 
 interface PortRecord {
@@ -403,6 +444,9 @@ export class TuffMainTransport implements ITuffTransportMain {
       }
     }
 
+    const localHandler: LocalHandler = (payload, context) =>
+      baseHandler(payload as TReq, context)
+
     const channelHandler = async (data: any) => {
       const context: HandlerContext = {
         sender: data.header?.event?.sender as any,
@@ -430,11 +474,13 @@ export class TuffMainTransport implements ITuffTransportMain {
     const unregisterMain = this.channel.regChannel(ChannelType.MAIN, eventName, channelHandler)
     const unregisterPlugin = this.channel.regChannel(ChannelType.PLUGIN, eventName, channelHandler)
     const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler)
+    const unregisterLocal = registerLocalHandler(eventName, localHandler)
 
     return () => {
       unregisterMain()
       unregisterPlugin()
       unregisterInvoke()
+      unregisterLocal()
     }
   }
 
@@ -595,6 +641,37 @@ export class TuffMainTransport implements ITuffTransportMain {
       startCleanupPlugin()
       cancelCleanupPlugin()
     }
+  }
+
+  async invoke<TReq, TRes>(
+    event: TuffEvent<TReq, TRes>,
+    payload: TReq,
+    context: MainInvokeContext = {},
+  ): Promise<TRes> {
+    assertTuffEvent(event, 'TuffMainTransport.invoke')
+
+    const eventName = event.toEventName()
+    const handlers = localHandlers.get(eventName)
+    if (!handlers || handlers.size === 0) {
+      throw new Error(`[TuffTransport] No handler registered for "${eventName}"`)
+    }
+
+    const sender = context.sender ?? resolveDefaultSender()
+    if (!sender) {
+      throw new Error(`[TuffTransport] Cannot resolve sender for "${eventName}"`)
+    }
+
+    const handlerContext: HandlerContext = {
+      sender,
+      eventName,
+      plugin: context.plugin,
+    }
+
+    let result: unknown
+    for (const handler of handlers) {
+      result = await handler(payload as unknown, handlerContext)
+    }
+    return result as TRes
   }
 
   /**

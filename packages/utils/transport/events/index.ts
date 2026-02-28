@@ -132,6 +132,8 @@ import type {
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
   ClipboardItem,
+  ClipboardMetaHistoryItem,
+  ClipboardMetaQueryRequest,
   ClipboardQueryRequest,
   ClipboardQueryResponse,
   ClipboardReadImageRequest,
@@ -1695,6 +1697,11 @@ export const CoreBoxEvents = {
      * Allow clipboard monitoring for specific types.
      */
     allow: defineRawEvent<AllowClipboardRequest, AllowClipboardResponse>('core-box:allow-clipboard'),
+
+    /**
+     * Notify plugin UI that clipboard content changed while monitoring is enabled.
+     */
+    change: defineRawEvent<{ item: ClipboardMetaHistoryItem }, void>('core-box:clipboard-change'),
   },
 
   /**
@@ -2569,6 +2576,16 @@ export const ClipboardEvents = {
     .define<ClipboardQueryRequest, ClipboardQueryResponse>({
       batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
     }),
+
+  /**
+   * Query clipboard history by metadata fields.
+   *
+   * @remarks
+   * Uses legacy-compatible event name for internal migration compatibility.
+   */
+  queryMeta: defineRawEvent<ClipboardMetaQueryRequest, ClipboardMetaHistoryItem[]>(
+    'clipboard:query',
+  ),
 
   /**
    * Get the most recent clipboard item.

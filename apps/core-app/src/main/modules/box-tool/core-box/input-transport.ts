@@ -1,5 +1,4 @@
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
-import { ChannelType } from '@talex-touch/utils/channel'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxTransport } from './transport/core-box-transport'
 import { coreBoxInputForwarding } from './input-forwarding'
@@ -18,7 +17,7 @@ class CoreBoxInputTransport {
 
   public register(): void {
     coreBoxTransport.register<CoreBoxInputChangeRequest>(
-      ChannelType.MAIN,
+      'main',
       'core-box:input-change',
       (data) => {
         this.handleRendererInput(data)

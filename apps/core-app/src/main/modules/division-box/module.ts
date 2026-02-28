@@ -6,8 +6,8 @@
  */
 
 import type { MaybePromise, ModuleKey, ModuleStartContext } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import type { DivisionBoxIPC } from './ipc'
+import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
 import { TalexEvents } from '../../core/eventbus/touch-event'
@@ -43,11 +43,13 @@ export class DivisionBoxModule extends BaseModule {
    * - Registers command provider with CoreBox search engine
    */
   async onInit(): Promise<void> {
-    // Get the channel from the app
-    const channel: ITouchChannel = $app.channel
+    const channel = $app.channel
+    const keyManager =
+      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
+    const transport = getTuffTransportMain(channel, keyManager)
 
     // Initialize IPC handlers
-    this.ipc = initializeDivisionBoxIPC(channel)
+    this.ipc = initializeDivisionBoxIPC(transport)
 
     // Register DivisionBox command provider with search engine
     const commandProvider = createDivisionBoxCommandProvider()

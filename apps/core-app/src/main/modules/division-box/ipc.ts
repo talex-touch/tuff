@@ -11,13 +11,9 @@ import type {
   SessionInfo,
   StateChangeEvent
 } from '@talex-touch/utils'
-import type { ITouchChannel } from '@talex-touch/utils/channel'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
-import {
-  DivisionBoxEvents,
-  getTuffTransportMain,
-  type HandlerContext
-} from '@talex-touch/utils/transport/main'
+import { DivisionBoxEvents, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
@@ -128,17 +124,16 @@ function createErrorResponse(error: DivisionBoxError | Error | string): IPCRespo
  */
 export class DivisionBoxIPC {
   private manager: DivisionBoxManager
-  private channel: ITouchChannel
   private transportDisposers: Array<() => void> = []
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private transport: ITuffTransportMain | null = null
 
   /**
    * Creates a new DivisionBoxIPC instance
    *
-   * @param channel - Touch channel for IPC communication
+   * @param transport - Main transport for IPC communication
    */
-  constructor(channel: ITouchChannel) {
-    this.channel = channel
+  constructor(transport: ITuffTransportMain) {
+    this.transport = transport
     this.manager = DivisionBoxManager.getInstance()
   }
 
@@ -159,12 +154,9 @@ export class DivisionBoxIPC {
   }
 
   private registerTransportHandlers(): void {
-    if (this.transport) {
+    if (!this.transport) {
       return
     }
-
-    const channel = this.channel as ITouchChannel & { keyManager?: unknown }
-    this.transport = getTuffTransportMain(channel, channel.keyManager ?? channel)
 
     const transport = this.transport
 
@@ -543,11 +535,11 @@ export class DivisionBoxIPC {
 /**
  * Initializes the DivisionBox IPC system
  *
- * @param channel - Touch channel for IPC communication
+ * @param transport - Main transport for IPC communication
  * @returns DivisionBoxIPC instance
  */
-export function initializeDivisionBoxIPC(channel: ITouchChannel): DivisionBoxIPC {
-  const ipc = new DivisionBoxIPC(channel)
+export function initializeDivisionBoxIPC(transport: ITuffTransportMain): DivisionBoxIPC {
+  const ipc = new DivisionBoxIPC(transport)
   ipc.registerHandlers()
   return ipc
 }
