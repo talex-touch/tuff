@@ -64,8 +64,9 @@ Cloudflare Pages runtime (optional unless you force Pages in non-prod):
 - `RELEASE_SIGNATURE_PUBLIC_KEY` / `UPDATE_SIGNATURE_PUBLIC_KEY` (can also be Cloudflare bindings)
 
 Observability & feature toggles (optional):
-- `SENTRY_AUTH_TOKEN` (source maps upload)
+- `SENTRY_AUTH_TOKEN` (source maps upload; requires `NUXT_ENABLE_SENTRY_SOURCEMAPS=true`)
 - `NUXT_DISABLE_SENTRY`
+- `NUXT_ENABLE_SENTRY_SOURCEMAPS` (`true/1/on/yes` to enable Sentry source maps upload during build)
 - `NUXT_DISABLE_PWA`
 - `NUXT_PUBLIC_WATERMARK_ENABLED` (`true/1/on/yes` to enable watermark system)
 - `NUXT_PUBLIC_RISK_CONTROL_ENABLED` (`true/1/on/yes` to enable risk control entrypoints)
