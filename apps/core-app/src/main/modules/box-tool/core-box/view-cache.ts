@@ -2,6 +2,7 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { WebContentsView } from 'electron'
 import type { TouchPlugin } from '../../plugin/plugin'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('ViewCache')
@@ -81,10 +82,7 @@ export class ViewCacheManager {
   }
 
   private getWebContents(view: WebContentsView | null | undefined): Electron.WebContents | null {
-    const webContents = view?.webContents
-    if (!webContents) return null
-    if (typeof webContents.isDestroyed !== 'function') return null
-    return webContents
+    return useAliveWebContents(view)
   }
 
   private isCachedAlive(cached: CachedView | null | undefined): boolean {
@@ -95,7 +93,7 @@ export class ViewCacheManager {
 
     if (webContents.id !== cached.webContentsId) return false
 
-    return !webContents.isDestroyed()
+    return true
   }
 
   private attachLifecycle(key: string, webContents: Electron.WebContents): () => void {
@@ -128,7 +126,7 @@ export class ViewCacheManager {
     }
 
     const webContents = this.getWebContents(cached.view)
-    if (options.close && webContents && !webContents.isDestroyed()) {
+    if (options.close && webContents) {
       try {
         webContents.close()
       } catch {

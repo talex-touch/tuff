@@ -24,6 +24,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { app, WebContentsView } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
 import { genTouchApp } from '../../../core'
+import { useAliveTarget, useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
 import { getCoreBoxWindow } from './window'
 
@@ -71,6 +72,14 @@ export class MetaOverlayManager {
   private isVisible = false
   private pluginActions: Map<string, MetaAction[]> = new Map()
 
+  private getAliveMetaWebContents(): Electron.WebContents | null {
+    return useAliveWebContents(this.metaView)
+  }
+
+  private getAliveParentWindow(): BrowserWindow | null {
+    return useAliveTarget(this.parentWindow)
+  }
+
   /**
    * Gets the singleton instance of MetaOverlayManager.
    *
@@ -92,8 +101,8 @@ export class MetaOverlayManager {
   public init(parentWindow: BrowserWindow): void {
     if (this.metaView) {
       const sameParent = this.parentWindow === parentWindow
-      const parentAlive = !!this.parentWindow && !this.parentWindow.isDestroyed()
-      const viewAlive = !this.metaView.webContents.isDestroyed()
+      const parentAlive = !!this.getAliveParentWindow()
+      const viewAlive = !!this.getAliveMetaWebContents()
       if (sameParent && parentAlive && viewAlive) {
         metaOverlayLog.warn('MetaOverlay already initialized')
         return
@@ -192,22 +201,23 @@ export class MetaOverlayManager {
     if (
       this.metaView &&
       this.parentWindow &&
-      !this.metaView.webContents.isDestroyed() &&
-      !this.parentWindow.isDestroyed()
+      this.getAliveMetaWebContents() &&
+      this.getAliveParentWindow()
     ) {
       return true
     }
 
     const coreBoxWindow = getCoreBoxWindow()
-    if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
-      this.init(coreBoxWindow.window)
+    const coreBoxParentWindow = useAliveTarget(coreBoxWindow?.window ?? null)
+    if (coreBoxParentWindow) {
+      this.init(coreBoxParentWindow)
     }
 
     return Boolean(
       this.metaView &&
       this.parentWindow &&
-      !this.metaView.webContents.isDestroyed() &&
-      !this.parentWindow.isDestroyed()
+      this.getAliveMetaWebContents() &&
+      this.getAliveParentWindow()
     )
   }
 
@@ -261,44 +271,48 @@ export class MetaOverlayManager {
 
     // Wait for content to be loaded before showing
     const waitForContent = () => {
-      if (this.metaView && !this.metaView.webContents.isDestroyed()) {
-        // Check if content is loaded
-        const isLoading = this.metaView.webContents.isLoading()
-        if (isLoading) {
-          metaOverlayLog.debug('MetaOverlay still loading, waiting...')
-          setTimeout(waitForContent, 50)
-          return
-        }
-
-        const channel = genTouchApp().channel
-        const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
-
-        tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.show, {
-          item: request.item,
-          builtinActions: request.builtinActions,
-          itemActions: request.itemActions,
-          pluginActions: request.pluginActions
-        }).catch(() => {})
-
-        metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
-
-        // Show the view
-        this.metaView.setVisible(true)
-        this.isVisible = true
-        const afterVisible = this.metaView.getVisible()
-
-        metaOverlayLog.debug(
-          `MetaOverlay shown with ${allActions.length} actions, visible: ${afterVisible}, bounds: ${bounds.width}x${bounds.height}, loading: ${this.metaView.webContents.isLoading()}`
-        )
-
-        // Focus after a short delay to ensure DOM is ready
-        setTimeout(() => {
-          if (this.metaView && !this.metaView.webContents.isDestroyed()) {
-            this.metaView.webContents.focus()
-            metaOverlayLog.debug('MetaOverlay focused')
-          }
-        }, 100)
+      const metaWebContents = this.getAliveMetaWebContents()
+      if (!this.metaView || !metaWebContents) {
+        return
       }
+
+      // Check if content is loaded
+      const isLoading = metaWebContents.isLoading()
+      if (isLoading) {
+        metaOverlayLog.debug('MetaOverlay still loading, waiting...')
+        setTimeout(waitForContent, 50)
+        return
+      }
+
+      const channel = genTouchApp().channel
+      const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
+
+      tx.sendTo(metaWebContents, MetaOverlayEvents.ui.show, {
+        item: request.item,
+        builtinActions: request.builtinActions,
+        itemActions: request.itemActions,
+        pluginActions: request.pluginActions
+      }).catch(() => {})
+
+      metaOverlayLog.debug('Sent show message to MetaOverlay renderer')
+
+      // Show the view
+      this.metaView.setVisible(true)
+      this.isVisible = true
+      const afterVisible = this.metaView.getVisible()
+
+      metaOverlayLog.debug(
+        `MetaOverlay shown with ${allActions.length} actions, visible: ${afterVisible}, bounds: ${bounds.width}x${bounds.height}, loading: ${metaWebContents.isLoading()}`
+      )
+
+      // Focus after a short delay to ensure DOM is ready
+      setTimeout(() => {
+        const focusTarget = this.getAliveMetaWebContents()
+        if (focusTarget) {
+          focusTarget.focus()
+          metaOverlayLog.debug('MetaOverlay focused')
+        }
+      }, 100)
     }
 
     // Start waiting for content
@@ -309,7 +323,8 @@ export class MetaOverlayManager {
    * Hides MetaOverlay.
    */
   public hide(): void {
-    if (!this.metaView || this.metaView.webContents.isDestroyed()) {
+    const metaWebContents = this.getAliveMetaWebContents()
+    if (!this.metaView || !metaWebContents) {
       this.isVisible = false
       return
     }
@@ -320,12 +335,10 @@ export class MetaOverlayManager {
     const channel = genTouchApp().channel
     const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
 
-    tx.sendTo(this.metaView.webContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
+    tx.sendTo(metaWebContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
 
     // Return focus to parent window
-    if (this.parentWindow && !this.parentWindow.isDestroyed()) {
-      this.parentWindow.webContents.focus()
-    }
+    useAliveWebContents(this.getAliveParentWindow())?.focus()
 
     metaOverlayLog.debug('MetaOverlay hidden')
   }
@@ -447,11 +460,12 @@ export class MetaOverlayManager {
     } else if (handler === 'item') {
       // Item action - broadcast to renderer to handle
       const coreBoxWindow = getCoreBoxWindow()
-      if (coreBoxWindow && !coreBoxWindow.window.isDestroyed()) {
+      const coreBoxWebContents = useAliveWebContents(coreBoxWindow?.window ?? null)
+      if (coreBoxWindow && coreBoxWebContents) {
         const channel = touchApp.channel
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
-          .sendTo(coreBoxWindow.window.webContents, metaOverlayItemActionEvent, {
+          .sendTo(coreBoxWebContents, metaOverlayItemActionEvent, {
             actionId,
             item
           })
@@ -476,7 +490,8 @@ export class MetaOverlayManager {
     touchApp: TouchApp
   ): Promise<void> {
     const coreBoxWindow = getCoreBoxWindow()
-    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
+    const coreBoxWebContents = useAliveWebContents(coreBoxWindow?.window ?? null)
+    if (!coreBoxWindow || !coreBoxWebContents) {
       return
     }
 
@@ -485,7 +500,7 @@ export class MetaOverlayManager {
 
     switch (actionId) {
       case 'toggle-pin': {
-        void transport.sendTo(coreBoxWindow.window.webContents, coreBoxTogglePinEvent, {
+        void transport.sendTo(coreBoxWebContents, coreBoxTogglePinEvent, {
           sourceId: item.source.id,
           itemId: item.id,
           sourceType: item.source.type
@@ -495,7 +510,7 @@ export class MetaOverlayManager {
       case 'copy-title': {
         const title = item.render?.basic?.title
         if (title) {
-          void transport.sendTo(coreBoxWindow.window.webContents, ClipboardEvents.write, {
+          void transport.sendTo(coreBoxWebContents, ClipboardEvents.write, {
             text: title
           })
         }
@@ -504,14 +519,14 @@ export class MetaOverlayManager {
       case 'reveal-in-finder': {
         const filePath = item.meta?.app?.path ?? item.meta?.file?.path
         if (filePath) {
-          void transport.sendTo(coreBoxWindow.window.webContents, shellShowItemInFolderEvent, {
+          void transport.sendTo(coreBoxWebContents, shellShowItemInFolderEvent, {
             path: filePath
           })
         }
         break
       }
       case 'flow-transfer': {
-        void transport.sendTo(coreBoxWindow.window.webContents, metaOverlayFlowTransferEvent, {
+        void transport.sendTo(coreBoxWebContents, metaOverlayFlowTransferEvent, {
           item
         })
         break
@@ -525,9 +540,10 @@ export class MetaOverlayManager {
    * Updates window bounds when parent window resizes.
    */
   public updateBounds(): void {
-    if (!this.metaView || !this.parentWindow || this.parentWindow.isDestroyed()) return
+    const parentWindow = this.getAliveParentWindow()
+    if (!this.metaView || !parentWindow) return
 
-    const bounds = this.parentWindow.getBounds()
+    const bounds = parentWindow.getBounds()
     this.metaView.setBounds({
       x: 0,
       y: 0,
@@ -541,12 +557,14 @@ export class MetaOverlayManager {
    */
   public destroy(): void {
     if (this.metaView) {
-      if (!this.metaView.webContents.isDestroyed()) {
-        this.metaView.webContents.close()
+      const metaWebContents = this.getAliveMetaWebContents()
+      if (metaWebContents) {
+        metaWebContents.close()
       }
-      if (this.parentWindow && !this.parentWindow.isDestroyed()) {
+      const parentWindow = this.getAliveParentWindow()
+      if (parentWindow) {
         try {
-          this.parentWindow.contentView.removeChildView(this.metaView)
+          parentWindow.contentView.removeChildView(this.metaView)
         } catch (error) {
           metaOverlayLog.warn('Failed to remove MetaOverlay view', { error })
         }

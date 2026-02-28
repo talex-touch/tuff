@@ -7,6 +7,7 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { DevServerKeys, i18nMsg } from '@talex-touch/utils/i18n'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import axios from 'axios'
+import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { createLogger } from '../../utils/logger'
 
 type PluginWindowInfo = {
@@ -333,9 +334,11 @@ export class DevServerHealthMonitor {
       windows.forEach((windowInfo, id: number) => {
         try {
           const win = windowInfo?.window
-          if (win && !win.isDestroyed() && win.webContents) {
+          const aliveWindow = useAliveTarget(win)
+          const webContents = aliveWindow?.webContents
+          if (aliveWindow && webContents) {
             // Send IPC message to trigger in-view UI notification (i18n format)
-            win.webContents.send('tuff:dev-server-disconnected', {
+            webContents.send('tuff:dev-server-disconnected', {
               pluginName: plugin.name,
               title: i18nMsg(DevServerKeys.DISCONNECTED),
               message: i18nMsg(DevServerKeys.CONNECTION_LOST),
@@ -361,8 +364,10 @@ export class DevServerHealthMonitor {
       windows.forEach((windowInfo, id: number) => {
         try {
           const win = windowInfo?.window
-          if (win && !win.isDestroyed() && win.webContents) {
-            win.webContents.send('tuff:dev-server-reconnected', {
+          const aliveWindow = useAliveTarget(win)
+          const webContents = aliveWindow?.webContents
+          if (aliveWindow && webContents) {
+            webContents.send('tuff:dev-server-reconnected', {
               pluginName: plugin.name,
               title: i18nMsg(DevServerKeys.RECONNECTED),
               message: i18nMsg(DevServerKeys.CONNECTION_RESTORED),
