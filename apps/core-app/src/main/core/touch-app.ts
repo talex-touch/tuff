@@ -1,4 +1,3 @@
-import type { ITouchChannel } from '@talex-touch/utils/channel'
 import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
@@ -25,6 +24,8 @@ import { innerRootPath } from './precore'
 import { TouchConfig } from './touch-config'
 import { TouchWindow } from './touch-window'
 
+type TouchChannelInstance = ReturnType<typeof genTouchChannel>
+
 interface RendererOverrideState {
   version: string
   path: string
@@ -50,7 +51,7 @@ export class TouchApp implements TalexTouch.TouchApp {
 
   moduleManager: TalexTouch.IModuleManager<TalexEvents>
 
-  channel: ITouchChannel
+  channel: TouchChannelInstance
 
   public isQuitting = false
 

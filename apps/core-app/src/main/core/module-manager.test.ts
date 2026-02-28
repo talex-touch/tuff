@@ -3,7 +3,6 @@ import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { TalexTouch } from '@talex-touch/utils'
 import type { ModuleCreateContext, ModuleKey } from '@talex-touch/utils/types/modules'
-import type { ITouchChannel } from 'packages/utils/channel'
 import type { TalexEvents } from './eventbus/touch-event'
 import { ModuleManager } from './module-manager'
 import { BaseModule } from '../modules/abstract-base-module'
@@ -18,7 +17,7 @@ vi.mock('../modules/sentry/sentry-service', () => ({
 const createManager = () => {
   const modulesRoot = path.join(os.tmpdir(), `module-manager-test-${Date.now()}`)
   const app = { rootPath: modulesRoot } as TalexTouch.TouchApp
-  const channel = {} as ITouchChannel
+  const channel = {}
   return new ModuleManager(app, channel, { modulesRoot })
 }
 

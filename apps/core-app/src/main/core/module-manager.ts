@@ -13,7 +13,6 @@ import type {
   ResolvedModuleFileConfig
 } from '@talex-touch/utils/types/modules'
 import type { Buffer } from 'node:buffer'
-import type { ITouchChannel } from 'packages/utils/channel'
 import type { ITouchEventBus } from 'packages/utils/eventbus'
 import type { TalexEvents } from './eventbus/touch-event'
 import * as fs from 'node:fs/promises'
@@ -172,7 +171,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    * The application-level communication channel, exposed to individual modules via their context.
    * Modules can use this channel for inter-process communication (IPC) or other application-internal event passing.
    */
-  public readonly touchChannel: ITouchChannel
+  public readonly touchChannel: unknown
 
   /**
    * A read-only reference to the main application instance.
@@ -207,7 +206,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    */
   constructor(
     app: TalexTouch.TouchApp,
-    touchChannel: ITouchChannel,
+    touchChannel: unknown,
     options?: {
       eventBus?: ITouchEventBus<TalexEvents>
       beforeQuitEventName?: TalexEvents.BEFORE_APP_QUIT
