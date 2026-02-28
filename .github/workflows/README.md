@@ -18,20 +18,14 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Syncs Release metadata/assets to Nexus APIs (tag push only)
   - Notes sync priority (tag push): `notes/update_<version>.zh.md` + `notes/update_<version>.en.md` → `notes/update_<version>.md` → GitHub release body fallback
 
-- **`release-core.yml`** - Core app release workflow (GitHub Releases)
-  - Legacy/manual workflow
-  - No longer participates in tag-driven release pipeline
-
-- **`release-renderer.yml`** - Renderer assets release workflow
-  - Legacy/manual workflow
-  - No longer participates in tag-driven release pipeline
-
-- **`release-extensions.yml`** - Extensions bundle release workflow
-  - Legacy/manual workflow
-  - No longer participates in tag-driven release pipeline
-
 - **`pr-flags.yml`** - PR flag management
   - Adds/removes labels based on PR content
+
+- **`release-drafter.yml`** - Release draft automation
+  - Updates the release draft on `main` pushes / merged PRs
+
+- **`readme-contributors.yml`** - Contributors list automation
+  - Updates README contributors list on `master` pushes
 
 ### Package CI Workflows
 

@@ -2,6 +2,28 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-02-28
+
+### 清理失效/过期 CI 工作流（Sync Guard / Legacy Release / opencode）
+
+**变更类型**: 工程脚本清理 / CI 噪音收敛
+
+**描述**: 移除已失效或已不再参与当前发布链路的 GitHub Actions 工作流，避免重复门禁与“脚本已删除但仍被 CI 调用”的必失败噪音；当前发布仍以 `build-and-release.yml`（tag 驱动）为唯一主链路。
+
+**主要变更**:
+1. 删除 `Sync Guard` 工作流：原流程依赖的 `scripts/check-no-legacy-sync-value-json.mjs` 已移除，导致 CI 必失败。
+2. 删除 legacy/manual 的 release 工作流：`release-core/release-renderer/release-extensions`。
+3. 删除 `opencode` 评论触发工作流（依赖外部 secret，且当前维护价值较低）。
+
+**修改文件**:
+- `.github/workflows/sync-guard.yml`（删除）
+- `.github/workflows/release-core.yml`（删除）
+- `.github/workflows/release-renderer.yml`（删除）
+- `.github/workflows/release-extensions.yml`（删除）
+- `.github/workflows/opencode.yml`（删除）
+- `.github/workflows/README.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-02-27
 
 ### Meta+K Quick Actions 打开时强制最大展开
