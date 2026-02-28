@@ -125,6 +125,10 @@ export class WindowManager {
     return getTuffTransportMain(channel, keyManager)
   }
 
+  private syncMetaOverlayBounds(): void {
+    metaOverlayManager.updateBounds()
+  }
+
   public static getInstance(): WindowManager {
     if (!WindowManager.instance) {
       WindowManager.instance = new WindowManager()
@@ -316,8 +320,7 @@ export class WindowManager {
         coreBoxWindowLog.warn('Failed to update UI view bounds on resize', { error })
       }
 
-      // Update MetaOverlay bounds
-      metaOverlayManager.updateBounds()
+      this.syncMetaOverlayBounds()
     })
 
     // Initialize MetaOverlay (persistent mode)
@@ -453,6 +456,7 @@ export class WindowManager {
           browserWindow.setBounds(nextBounds, false)
           // Track the last set bounds for accurate start position on next animation
           this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
+          this.syncMetaOverlayBounds()
         } catch (error) {
           coreBoxWindowLog.warn('Failed to animate window bounds', { error })
           this.pollingService.unregister(taskId)
@@ -471,6 +475,7 @@ export class WindowManager {
           try {
             browserWindow.setBounds(target, false)
             this.lastSetBounds = { height: target.height, y: target.y }
+            this.syncMetaOverlayBounds()
             if (typeof options.minHeight === 'number') {
               browserWindow.setMinimumSize(720, options.minHeight)
             }
@@ -688,6 +693,7 @@ export class WindowManager {
         try {
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
+          this.syncMetaOverlayBounds()
           currentWindow.window.setMinimumSize(720, height)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
@@ -735,6 +741,7 @@ export class WindowManager {
           currentWindow.window.setMinimumSize(720, COREBOX_MIN_HEIGHT)
           currentWindow.window.setBounds(bounds, false)
           this.lastSetBounds = { height: bounds.height, y: bounds.y }
+          this.syncMetaOverlayBounds()
           const [, minHeightAfter] = currentWindow.window.getMinimumSize()
           const finalBounds = currentWindow.window.getBounds()
           const shrinkMeta = {
@@ -797,6 +804,7 @@ export class WindowManager {
         currentWindow.window.setMinimumSize(720, safeHeight)
         currentWindow.window.setBounds(bounds, false)
         this.lastSetBounds = { height: bounds.height, y: bounds.y }
+        this.syncMetaOverlayBounds()
         const [, minHeightAfter] = currentWindow.window.getMinimumSize()
         const finalBounds = currentWindow.window.getBounds()
         const setHeightMeta = {
