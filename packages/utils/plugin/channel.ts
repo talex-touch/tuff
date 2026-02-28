@@ -4,11 +4,11 @@ import type {
   RawChannelSyncData,
   RawStandardChannelData,
   StandardChannelData,
-} from '../channel'
+} from '../transport/legacy'
 import {
   ChannelType,
   DataCode,
-} from '../channel'
+} from '../transport/legacy'
 import { getLogger } from '../common/logger'
 import { findCloneIssue, isCloneError, summarizeClonePayload } from '../common/utils/clone-diagnostics'
 import { formatPayloadPreview } from '../common/utils/payload-preview'
