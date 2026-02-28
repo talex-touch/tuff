@@ -27,6 +27,7 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/plugin',
   '@talex-touch/utils/plugin/sdk',
   '@talex-touch/utils/core-box',
+  '@talex-touch/utils/transport/legacy',
   '@talex-touch/utils/channel',
   '@talex-touch/utils/common',
   '@talex-touch/utils/types'
