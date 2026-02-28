@@ -4,14 +4,16 @@
  * @version 1.0.0
  */
 
-import type { ITouchChannel, ITouchClientChannel, StandardChannelData } from '@talex-touch/utils/channel'
+import type { PluginChannelClient, PluginStandardChannelData } from './channel-client'
 import type { IPluginFeature } from '../index'
 import path from 'node:path'
 
 /**
  * Handler signature for plugin channel events.
  */
-export type PluginChannelHandler = (event: StandardChannelData) => any
+export type PluginChannelHandler = (event: PluginStandardChannelData) => any
+
+export type PluginMainChannelRaw = unknown
 
 /**
  * Bridge exposed to plugin backends for channel-based communication.
@@ -50,7 +52,7 @@ export interface IPluginChannelBridge {
   /**
    * Access to the underlying channel implementation for advanced scenarios.
    */
-  readonly raw: ITouchChannel
+  readonly raw: PluginMainChannelRaw
 }
 
 /**
@@ -82,7 +84,7 @@ export interface IPluginRendererChannel {
   /**
    * Provides access to the raw client channel.
    */
-  readonly raw: ITouchClientChannel
+  readonly raw: PluginChannelClient
 }
 
 /**
