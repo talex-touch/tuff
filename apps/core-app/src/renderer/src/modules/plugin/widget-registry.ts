@@ -606,6 +606,7 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/plugin',
   '@talex-touch/utils/plugin/sdk',
   '@talex-touch/utils/core-box',
+  '@talex-touch/utils/transport/legacy',
   '@talex-touch/utils/channel',
   '@talex-touch/utils/common',
   '@talex-touch/utils/types'
@@ -618,6 +619,7 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@talex-touch/utils/plugin': TalexUtilsPlugin,
   '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
+  '@talex-touch/utils/transport/legacy': TalexUtilsTransportLegacy,
   '@talex-touch/utils/channel': TalexUtilsTransportLegacy,
   '@talex-touch/utils/common': TalexUtilsCommon,
   '@talex-touch/utils/types': TalexUtilsTypes
