@@ -24,7 +24,9 @@ const tuffexUtilsEntry = resolve(currentDir, '../../packages/tuffex/packages/uti
 const hkdfCompatEntry = resolve(workspaceRoot, 'node_modules/@panva/hkdf/dist/node/cjs/index.js')
 const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
 const disableSentry = process.env.NUXT_DISABLE_SENTRY === 'true'
-const enableSentrySourceMaps = Boolean(sentryAuthToken) && !disableSentry
+const enableSentrySourceMaps = Boolean(sentryAuthToken)
+  && !disableSentry
+  && isEnvFlagEnabled(process.env.NUXT_ENABLE_SENTRY_SOURCEMAPS)
 const disableNitroMinify = process.env.NUXT_DISABLE_NITRO_MINIFY === 'true'
 const disableSsr = process.env.NUXT_DISABLE_SSR === 'true'
 const disablePrerender = process.env.NUXT_DISABLE_PRERENDER === 'true'
@@ -329,6 +331,7 @@ export default defineNuxtConfig({
           org: 'QuotaWish',
           project: 'tuff-nexus',
           authToken: sentryAuthToken,
+          telemetry: false,
         }
       : {
           enabled: false,
