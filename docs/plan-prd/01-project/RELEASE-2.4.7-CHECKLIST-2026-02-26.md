@@ -43,12 +43,10 @@
 | C3 | 清零 auth/device 类型错误 | `apps/nexus/server/api/auth/[...].ts`、`apps/nexus/app/pages/device-auth.vue`、`apps/nexus/app/plugins/watermark-risk.client.ts`、`apps/nexus/app/composables/useCurrentUserApi.ts` | Nexus Backend | `pnpm -C "apps/nexus" run typecheck` | Done |
 | C4 | 复扫并固化 Gate C 结果 | 全仓 lint/typecheck（按发布口径） | Release Owner | `pnpm -r --if-present --no-bail run typecheck`；`pnpm -r --no-bail --filter "./apps/*" --filter "./packages/*" --filter "./plugins/*" exec eslint --cache --no-warn-ignored "**/*.{js,jsx,ts,tsx,vue,mjs,cjs,cts,mts}"` | Done |
 
-> 备注：根据 `docs/reports/quality-scan-2026-02-26.md`，当前 Gate C 阻断主要集中在 `apps/nexus`（36 个 TS error）与 `packages/tuff-native`（4 个 lint error）+ `apps/nexus` 1 个 lint error。
+> 备注：`docs/reports/quality-scan-2026-02-26.md` 为历史快照，最新口径以本清单 Gate C 复扫结果为准。
 
 ## 4. 建议执行顺序（最小可行）
 
-1. 先做 C1（最快清零 lint 阻断），避免后续扫描噪音。
-2. 并行推进 C2 + C3，按模块归口修复 `apps/nexus` 类型错误。
-3. 执行 C4 复扫并回填 Gate C 结论（通过或豁免清单）。
-4. Gate C 关闭后推进 Gate D（assets/notes/signature/manifest）。
-5. Gate D 关闭且风险门禁通过后执行 Gate E（tag 发布）。
+1. 推进 Gate D（assets/notes/signature/manifest）。
+2. Gate D 关闭且风险门禁通过后执行 Gate E（tag 发布）。
+3. 发布后回写 `CHANGES.md` 与 `TODO.md`，关闭 v2.4.7 清单。
