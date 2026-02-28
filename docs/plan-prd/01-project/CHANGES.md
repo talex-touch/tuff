@@ -29,15 +29,16 @@
 
 **变更类型**: 交互稳定性修复 / CoreBox 视图一致性
 
-**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。将一次延迟高度同步收敛到“面板已显示后”执行，并补齐可见态守卫与定时器清理，确保启动阶段高度对齐且无残留回调。
+**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。除 MetaOverlay 侧一次延迟同步外，新增 CoreBox 主窗口高度变更时的主动同步，确保启动与动画阶段高度持续对齐。
 
 **主要变更**:
 1. `MetaOverlayManager.show` 在 `setVisible(true)` 后调度一次延迟高度同步，避免过早同步。
-2. 延迟同步增加可见态守卫，仅在面板可见时执行与 CoreBox 的高度对齐。
+2. `WindowManager` 在 CoreBox 各类高度变更路径（动画/直接 setBounds）统一触发 `MetaOverlay` bounds 同步。
 3. `hide/destroy` 阶段统一清理同步定时器，避免悬挂定时任务。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/window.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### 风险治理流程固化（P0）与技术债里程碑落地（不执行大文件拆分）
@@ -72,6 +73,23 @@
 **修改文件**:
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 - `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### v2.4.7 Gate C 质量门禁收口（C1~C4 全部通过）
+
+**变更类型**: 发布治理 / 质量门禁闭环
+
+**描述**: 按 Gate C 批次执行并完成 C1~C4 校验，`apps/nexus` 与 `packages/tuff-native` 的 lint/typecheck 阻塞项已收口，全仓复扫通过，Gate C 状态更新为 Done。
+
+**主要变更**:
+1. C1 定向 lint 验证通过：`packages/tuff-native` 与 Nexus 指定测试文件无阻塞错误。
+2. C2/C3 定向 typecheck 验证通过：`apps/nexus` 类型门禁恢复。
+3. C4 全仓复扫通过：`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 扫描均通过。
+4. 发布清单与 TODO 同步回写 Gate C 完成状态，保留 Gate D/E 待办。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Workspace 依赖统一（P0~P5）与 Catalog 冲突收敛
