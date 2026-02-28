@@ -29,12 +29,12 @@
 
 **变更类型**: 交互稳定性修复 / CoreBox 视图一致性
 
-**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。新增一次延迟高度同步，确保 MetaOverlay 启动阶段与 CoreBox 窗口高度对齐，减少首帧裁切与视觉跳变。
+**描述**: 修复 Meta+K 打开 MetaOverlay 时与 CoreBox 扩窗动画存在的高度竞态。将一次延迟高度同步收敛到“面板已显示后”执行，并补齐可见态守卫与定时器清理，确保启动阶段高度对齐且无残留回调。
 
 **主要变更**:
-1. `MetaOverlayManager.show` 在初次设定 bounds 后，追加一次延迟高度同步调度。
-2. 新增 `heightSyncTimer` 生命周期管理，避免重复调度导致的多余更新。
-3. `destroy` 阶段清理同步定时器，避免悬挂定时任务。
+1. `MetaOverlayManager.show` 在 `setVisible(true)` 后调度一次延迟高度同步，避免过早同步。
+2. 延迟同步增加可见态守卫，仅在面板可见时执行与 CoreBox 的高度对齐。
+3. `hide/destroy` 阶段统一清理同步定时器，避免悬挂定时任务。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
