@@ -5,13 +5,11 @@ import type {
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse
 } from '../../../../shared/events/omni-panel'
-import type { ITuffIcon } from '@talex-touch/utils'
 import { CoreBoxOmniPanelKeys } from '@talex-touch/utils/i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
-import TuffIcon from '~/components/base/TuffIcon.vue'
 import {
   omniPanelContextEvent,
   omniPanelFeatureExecuteEvent,
@@ -20,6 +18,12 @@ import {
   omniPanelFeatureReorderEvent,
   omniPanelHideEvent
 } from '../../../../shared/events/omni-panel'
+import OmniPanelActionList from './components/OmniPanelActionList.vue'
+import OmniPanelContextCard from './components/OmniPanelContextCard.vue'
+import OmniPanelHeader from './components/OmniPanelHeader.vue'
+import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
+import { filterOmniPanelFeatures } from './filter-features'
+import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -32,8 +36,17 @@ const loading = ref(false)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
 const features = ref<OmniPanelFeatureItemPayload[]>([])
-const fallbackIcon: ITuffIcon = { type: 'class', value: 'i-ri-apps-2-line' }
-const iconTypes = new Set<ITuffIcon['type']>(['emoji', 'url', 'file', 'class', 'builtin'])
+const focusedIndex = ref(-1)
+const searchBarRef = ref<InstanceType<typeof OmniPanelSearchBar> | null>(null)
+let previousFocusedElement: HTMLElement | null = null
+
+const executeCodeMessageMap: Record<string, string> = {
+  FEATURE_UNAVAILABLE: 'corebox.omniPanel.featureUnavailable',
+  SELECTION_REQUIRED: 'corebox.omniPanel.selectionRequired',
+  COREBOX_UNAVAILABLE: 'corebox.omniPanel.coreboxUnavailable',
+  FEATURE_EXECUTION_FAILED: 'corebox.omniPanel.executeFailed',
+  INTERNAL_ERROR: 'corebox.omniPanel.executeFailed'
+}
 
 const displayText = computed(() => {
   if (hasSelection.value) return selectedText.value
@@ -44,32 +57,20 @@ const displayText = computed(() => {
 })
 
 const filteredFeatures = computed(() => {
-  const keyword = searchKeyword.value.trim().toLowerCase()
-  if (!keyword) return features.value
-  return features.value.filter((item) => {
-    const title = item.title.toLowerCase()
-    const subtitle = item.subtitle.toLowerCase()
-    const pluginName = (item.pluginName || '').toLowerCase()
-    return title.includes(keyword) || subtitle.includes(keyword) || pluginName.includes(keyword)
-  })
+  return filterOmniPanelFeatures(features.value, searchKeyword.value)
 })
 
-function resolveFeatureIcon(item: OmniPanelFeatureItemPayload): ITuffIcon {
-  if (!item.icon) {
-    return fallbackIcon
-  }
-  const iconType = iconTypes.has(item.icon.type as ITuffIcon['type'])
-    ? (item.icon.type as ITuffIcon['type'])
-    : 'class'
-  const iconValue = item.icon.value?.trim() || fallbackIcon.value
-  return {
-    type: iconType,
-    value: iconValue
-  }
-}
+watch(
+  () => filteredFeatures.value.length,
+  (length) => {
+    focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, length)
+  },
+  { immediate: true }
+)
 
 async function closePanel(): Promise<void> {
   await transport.send(omniPanelHideEvent)
+  previousFocusedElement?.focus?.()
 }
 
 async function loadFeatures(): Promise<void> {
@@ -78,6 +79,7 @@ async function loadFeatures(): Promise<void> {
     const response = await transport.send(omniPanelFeatureListEvent)
     const payload = response as OmniPanelFeatureListResponse
     features.value = Array.isArray(payload?.features) ? payload.features : []
+    focusedIndex.value = ensureValidFocusIndex(focusedIndex.value, features.value.length)
   } catch (error) {
     console.error('[OmniPanel] Failed to load features:', error)
     toast.error(t('corebox.omniPanel.loadFailed', '加载 OmniPanel Feature 失败，请稍后重试。'))
@@ -86,11 +88,22 @@ async function loadFeatures(): Promise<void> {
   }
 }
 
+function resolveExecuteErrorMessage(response?: OmniPanelFeatureExecuteResponse): string {
+  const fallback = t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。')
+  if (!response) return fallback
+  if (response.error) return response.error
+  if (response.code && executeCodeMessageMap[response.code]) {
+    return t(executeCodeMessageMap[response.code], fallback)
+  }
+  return fallback
+}
+
 async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> {
   if (executingId.value) return
   if (item.unavailable) {
     toast.error(
-      t('corebox.omniPanel.featureUnavailable', '该 Feature 当前不可用，请检查插件状态。')
+      item.unavailableReason?.message ||
+        t('corebox.omniPanel.featureUnavailable', '该 Feature 当前不可用，请检查插件状态。')
     )
     return
   }
@@ -100,12 +113,15 @@ async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> 
     const response = (await transport.send(omniPanelFeatureExecuteEvent, {
       id: item.id,
       contextText: selectedText.value,
-      source: source.value
+      source: source.value,
+      context: {
+        text: selectedText.value,
+        hasSelection: hasSelection.value
+      }
     })) as OmniPanelFeatureExecuteResponse
 
     if (!response?.success) {
-      const fallback = t('corebox.omniPanel.executeFailed', '执行失败，请稍后重试。')
-      toast.error(response?.error || fallback)
+      toast.error(resolveExecuteErrorMessage(response))
     }
   } catch (error) {
     console.error('[OmniPanel] Failed to execute feature:', error)
@@ -138,10 +154,54 @@ function handleContext(payload: OmniPanelContextPayload): void {
   capturedAt.value = payload.capturedAt
 }
 
+function focusSearchBar(): void {
+  searchBarRef.value?.focusInput()
+}
+
+function moveFocus(direction: 'up' | 'down'): void {
+  focusedIndex.value = resolveNextFocusIndex(
+    focusedIndex.value,
+    direction,
+    filteredFeatures.value.length
+  )
+}
+
+async function executeFocusedFeature(): Promise<void> {
+  const focused = resolveFocusedItem(filteredFeatures.value, focusedIndex.value)
+  if (!focused) return
+  await executeFeature(focused)
+}
+
 async function handleKeydown(event: KeyboardEvent): Promise<void> {
-  if (event.key === 'Escape') {
+  const key = event.key
+
+  if ((event.metaKey || event.ctrlKey) && key.toLowerCase() === 'f') {
+    event.preventDefault()
+    focusSearchBar()
+    return
+  }
+
+  if (key === 'Escape') {
     event.preventDefault()
     await closePanel()
+    return
+  }
+
+  if (key === 'ArrowDown') {
+    event.preventDefault()
+    moveFocus('down')
+    return
+  }
+
+  if (key === 'ArrowUp') {
+    event.preventDefault()
+    moveFocus('up')
+    return
+  }
+
+  if (key === 'Enter') {
+    event.preventDefault()
+    await executeFocusedFeature()
   }
 }
 
@@ -154,8 +214,11 @@ const disposeFeatureRefresh = transport.on(omniPanelFeatureRefreshEvent, async (
 })
 
 onMounted(async () => {
+  previousFocusedElement =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
   window.addEventListener('keydown', handleKeydown)
   await loadFeatures()
+  focusSearchBar()
 })
 
 onBeforeUnmount(() => {
@@ -167,31 +230,21 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="OmniPanel">
-    <div class="OmniPanel__header">
-      <div class="OmniPanel__titleBlock">
-        <p class="OmniPanel__eyebrow">OmniPanel</p>
-        <h1 class="OmniPanel__title">{{ t(CoreBoxOmniPanelKeys.TITLE, '全景面板') }}</h1>
-      </div>
-      <button class="OmniPanel__close" @click="closePanel">
-        <TuffIcon :icon="{ type: 'class', value: 'i-ri-close-line' }" :size="18" />
-      </button>
-    </div>
+    <OmniPanelHeader @close="closePanel" />
 
-    <div class="OmniPanel__context">
-      <div class="OmniPanel__contextMeta">
-        <span>{{ t(CoreBoxOmniPanelKeys.SOURCE, '来源') }}: {{ source }}</span>
-        <span v-if="capturedAt">{{ new Date(capturedAt).toLocaleTimeString() }}</span>
-      </div>
-      <p class="OmniPanel__contextText">{{ displayText }}</p>
-    </div>
+    <OmniPanelContextCard
+      :text="selectedText"
+      :source="source"
+      :captured-at="capturedAt"
+      :has-selection="hasSelection"
+      :fallback-text="displayText"
+    />
 
-    <div class="OmniPanel__search">
-      <input
-        v-model="searchKeyword"
-        type="text"
-        :placeholder="t('corebox.omniPanel.searchPlaceholder', '搜索 OmniPanel Feature')"
-      />
-    </div>
+    <OmniPanelSearchBar
+      ref="searchBarRef"
+      v-model="searchKeyword"
+      :placeholder="t('corebox.omniPanel.searchPlaceholder', '搜索 OmniPanel Feature')"
+    />
 
     <div v-if="loading" class="OmniPanel__state">
       {{ t('corebox.omniPanel.loading', '正在加载 Feature...') }}
@@ -199,48 +252,15 @@ onBeforeUnmount(() => {
     <div v-else-if="filteredFeatures.length === 0" class="OmniPanel__state">
       {{ t('corebox.omniPanel.empty', '当前没有可用 Feature') }}
     </div>
-    <div v-else class="OmniPanel__actions">
-      <div v-for="(item, index) in filteredFeatures" :key="item.id" class="OmniPanel__actionRow">
-        <button
-          class="OmniPanel__action"
-          :disabled="!!executingId || item.unavailable"
-          @click="executeFeature(item)"
-        >
-          <span class="OmniPanel__actionIcon">
-            <TuffIcon :icon="resolveFeatureIcon(item)" :size="18" />
-          </span>
-          <span class="OmniPanel__actionContent">
-            <span class="OmniPanel__actionTitle">
-              {{ item.title }}
-              <small v-if="item.source === 'plugin'" class="OmniPanel__pluginTag">
-                {{ item.pluginName }}
-              </small>
-            </span>
-            <span class="OmniPanel__actionSubtitle">{{ item.subtitle }}</span>
-          </span>
-          <span class="OmniPanel__actionMeta">
-            <span v-if="executingId === item.id" class="OmniPanel__executing">...</span>
-          </span>
-        </button>
-
-        <div class="OmniPanel__controls">
-          <button
-            class="OmniPanel__controlBtn"
-            :disabled="index === 0"
-            @click="reorderFeature(item, 'up')"
-          >
-            ↑
-          </button>
-          <button
-            class="OmniPanel__controlBtn"
-            :disabled="index === filteredFeatures.length - 1"
-            @click="reorderFeature(item, 'down')"
-          >
-            ↓
-          </button>
-        </div>
-      </div>
-    </div>
+    <OmniPanelActionList
+      v-else
+      :items="filteredFeatures"
+      :focused-index="focusedIndex"
+      :executing-id="executingId"
+      @focus="(index) => (focusedIndex = index)"
+      @execute="executeFeature"
+      @reorder="reorderFeature"
+    />
   </div>
 </template>
 
@@ -260,185 +280,11 @@ onBeforeUnmount(() => {
   gap: 16px;
 }
 
-.OmniPanel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.OmniPanel__eyebrow {
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(199, 210, 254, 0.75);
-}
-
-.OmniPanel__title {
-  margin: 6px 0 0;
-  font-size: 24px;
-  line-height: 1.2;
-  font-weight: 650;
-}
-
-.OmniPanel__close {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.5);
-  color: #cbd5e1;
-  cursor: pointer;
-}
-
-.OmniPanel__context {
-  border: 1px solid rgba(129, 140, 248, 0.35);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.6);
-  padding: 14px 16px;
-}
-
-.OmniPanel__contextMeta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  color: rgba(165, 180, 252, 0.85);
-}
-
-.OmniPanel__contextText {
-  margin: 10px 0 0;
-  color: #e2e8f0;
-  line-height: 1.6;
-  font-size: 14px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 120px;
-  overflow: auto;
-}
-
-.OmniPanel__search input {
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.6);
-  color: #e2e8f0;
-  font-size: 13px;
-  padding: 10px 12px;
-}
-
 .OmniPanel__state {
   border: 1px dashed rgba(129, 140, 248, 0.35);
   border-radius: 12px;
   padding: 14px 16px;
   font-size: 13px;
   color: rgba(191, 219, 254, 0.92);
-}
-
-.OmniPanel__actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.OmniPanel__actionRow {
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.52);
-  overflow: hidden;
-}
-
-.OmniPanel__action {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  text-align: left;
-  padding: 12px;
-  color: inherit;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-
-.OmniPanel__action:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.OmniPanel__actionIcon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12px;
-  background: rgba(30, 41, 59, 0.85);
-  color: #a5b4fc;
-}
-
-.OmniPanel__actionContent {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
-.OmniPanel__actionTitle {
-  font-size: 14px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.OmniPanel__pluginTag {
-  font-size: 11px;
-  color: rgba(148, 163, 184, 0.9);
-}
-
-.OmniPanel__actionSubtitle {
-  font-size: 12px;
-  color: rgba(148, 163, 184, 0.92);
-}
-
-.OmniPanel__actionMeta {
-  font-size: 12px;
-  color: rgba(191, 219, 254, 0.92);
-}
-
-.OmniPanel__controls {
-  display: flex;
-  gap: 6px;
-  padding: 0 12px 12px;
-}
-
-.OmniPanel__controlBtn {
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(15, 23, 42, 0.6);
-  color: #cbd5e1;
-  font-size: 12px;
-  line-height: 1;
-  padding: 7px 10px;
-  cursor: pointer;
-}
-
-.OmniPanel__controlBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.OmniPanel__executing {
-  animation: blink 1.2s infinite;
-}
-
-@keyframes blink {
-  0%,
-  100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 </style>
