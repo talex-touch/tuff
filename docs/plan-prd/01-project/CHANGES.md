@@ -45,7 +45,7 @@
 
 **变更类型**: 启动性能优化 / 开发体验治理 / 兼容性修复
 
-**描述**: 针对“前端加载慢 + 启动期网络链路竞争 + Node 22 deprecation 噪声”，调整启动阶段策略：`Auth` 先用本地缓存恢复态，再延后远端刷新，并将登录凭证系统加密存储改为用户可选（默认会话模式、仅提醒）；`Sentry` 在开发态切换到 Node transport 并移除 ElectronNet/ElectronBreadcrumbs 默认集成，避免 `DEP0169` 与 `console-message` 相关噪声干扰排查。
+**描述**: 针对“前端加载慢 + 启动期网络链路竞争 + Node 22 deprecation 噪声”，调整启动阶段策略：`Auth` 先用本地缓存恢复态，再延后远端刷新，并将登录凭证系统加密存储改为用户可选（默认开启长期安全存储，用户可手动关闭）；`Sentry` 在开发态切换到 Node transport 并移除 ElectronNet/ElectronBreadcrumbs 默认集成，避免 `DEP0169` 与 `console-message` 相关噪声干扰排查。
 
 **主要变更**:
 1. `AuthModule` 启动流程改为缓存优先，远端用户信息刷新延后执行，并增加请求超时与不可用分支兜底。
@@ -53,7 +53,7 @@
 3. `SentryService` 在开发态切换 `makeNodeTransport`，并过滤 `ElectronNet`/`ElectronBreadcrumbs` 集成以规避 `DEP0169` 与旧 console-message 监听告警。
 4. `DivisionBoxModule` 在缺失模块上下文事件总线时回退全局 `touchEventBus`，保持 deferred 初始化行为一致。
 5. `AppProvider` 的“开发态”判定扩展到 dev-server 运行态（不仅 `is.dev`），确保启动期 backfill / mdls 重任务在该场景也被延后。
-6. `Auth` 登录凭证持久化改为用户显式开启：默认仅内存会话，不访问系统密钥链；用户开启后再写入/读取安全存储，并在首次会话登录时给出提醒。
+6. `Auth` 登录凭证持久化改为用户可选：默认开启系统安全存储（长期保存）；用户关闭后退回会话模式，并在首次会话登录时给出提醒。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/auth/index.ts`

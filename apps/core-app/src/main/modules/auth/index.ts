@@ -323,7 +323,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
       deviceId: '',
       deviceName: '',
       devicePlatform: '',
-      useSecureStorage: false,
+      useSecureStorage: true,
       secureStorageReminderShown: false
     }
     return
@@ -335,7 +335,7 @@ function ensureAuthSettings(appSettings: AppSetting): void {
   }
 
   if (typeof authSettings.useSecureStorage !== 'boolean') {
-    authSettings.useSecureStorage = false
+    authSettings.useSecureStorage = true
   }
   if (typeof authSettings.secureStorageReminderShown !== 'boolean') {
     authSettings.secureStorageReminderShown = false
