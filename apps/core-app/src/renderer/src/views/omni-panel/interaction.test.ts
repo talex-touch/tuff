@@ -23,6 +23,15 @@ describe('omni-panel interaction utils', () => {
     expect(resolveNextFocusIndex(-1, 'down', 3)).toBe(0)
     expect(resolveNextFocusIndex(0, 'up', 3)).toBe(2)
     expect(resolveNextFocusIndex(2, 'down', 3)).toBe(0)
+    expect(resolveNextFocusIndex(0, 'right', 3)).toBe(1)
+    expect(resolveNextFocusIndex(0, 'left', 3)).toBe(2)
+  })
+
+  it('moves focus index correctly for grid navigation', () => {
+    expect(resolveNextFocusIndex(0, 'down', 5, 2)).toBe(2)
+    expect(resolveNextFocusIndex(3, 'down', 5, 2)).toBe(1)
+    expect(resolveNextFocusIndex(1, 'up', 5, 2)).toBe(3)
+    expect(resolveNextFocusIndex(4, 'up', 5, 2)).toBe(2)
   })
 
   it('ensures focus index validity after filtering', () => {

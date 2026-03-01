@@ -27,6 +27,7 @@ import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from
 
 const { t } = useI18n()
 const transport = useTuffTransport()
+const ACTION_GRID_COLUMNS = 2
 
 const selectedText = ref('')
 const hasSelection = ref(false)
@@ -158,11 +159,12 @@ function focusSearchBar(): void {
   searchBarRef.value?.focusInput()
 }
 
-function moveFocus(direction: 'up' | 'down'): void {
+function moveFocus(direction: 'up' | 'down' | 'left' | 'right'): void {
   focusedIndex.value = resolveNextFocusIndex(
     focusedIndex.value,
     direction,
-    filteredFeatures.value.length
+    filteredFeatures.value.length,
+    ACTION_GRID_COLUMNS
   )
 }
 
@@ -196,6 +198,18 @@ async function handleKeydown(event: KeyboardEvent): Promise<void> {
   if (key === 'ArrowUp') {
     event.preventDefault()
     moveFocus('up')
+    return
+  }
+
+  if (key === 'ArrowRight') {
+    event.preventDefault()
+    moveFocus('right')
+    return
+  }
+
+  if (key === 'ArrowLeft') {
+    event.preventDefault()
+    moveFocus('left')
     return
   }
 

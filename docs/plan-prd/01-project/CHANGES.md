@@ -4,6 +4,41 @@
 
 ## 2026-03-01
 
+### OmniPanel 窗口进一步收敛（更小体积 + 失焦自动隐藏）
+
+**变更类型**: 交互优化 / 窗口行为调整
+
+**描述**: OmniPanel 再次收敛为更小窗口体积，并移除对 macOS 红绿灯样式/位置的控制；同时新增失焦自动隐藏，强化临时面板的使用预期。
+
+**主要变更**:
+1. `OmniPanelWindowOption` 尺寸下调为 `460x320`，最小尺寸调整为 `380x260`。
+2. 移除 OmniPanel 的 `titleBarStyle/trafficLightPosition/titleBarOverlay` 配置，不再主动控制红绿灯。
+3. OmniPanel 窗口新增 `blur` 事件处理，失去焦点后自动隐藏。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel Grid 展示与快捷键按住触发收敛
+
+**变更类型**: 交互优化 / 触发行为修正
+
+**描述**: OmniPanel 的 Feature 区域从 list 改为双列 grid 展示；同时快捷键触发改为“按住达到阈值再触发”，避免短按或松手瞬间误触。
+
+**主要变更**:
+1. Feature 列表改为 grid 布局，并补齐 `←/→` 导航，`↑/↓` 按列跳行。
+2. 主进程新增快捷键按住阈值判定（500ms），支持按住触发与松手回调兼容窗口。
+3. 短按未达到阈值不触发 OmniPanel，保持鼠标右键长按路径不变。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/interaction.test.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### OmniPanel 紧凑化样式与窗口策略收敛
 
 **变更类型**: 交互优化 / 视觉一致性 / 窗口行为调整
@@ -3539,6 +3574,47 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-03-01
+
+### 修复: CoreBox Action 链路与插件 DevTools 事件断链
+
+**变更类型**: Bug 修复
+
+**描述**: 修复了 CoreBox MetaOverlay 内置动作在主渲染链路上的事件断链问题，并补齐插件 DevTools 的 legacy 事件处理器。
+
+**主要修复**:
+1. **MetaOverlay 内置动作统一下发**:
+   - 将 `toggle-pin / copy-title / reveal-in-finder / flow-transfer` 统一改为 `meta-overlay:item-action` 下发到 renderer 执行
+   - 修复 `core-box:toggle-pin` 等仅发送无消费导致的动作失效
+
+2. **Renderer Action 执行通道补齐**:
+   - `useActionPanel` 新增对 `meta-overlay:item-action` 的监听
+   - 复用现有 action 执行逻辑，确保 pin/copy/reveal/flow 与 ActionPanel 行为一致
+
+3. **插件 DevTools legacy 事件补齐**:
+   - 在 `CommonChannel` 新增 `plugin:open-devtools` 处理器并返回打开结果
+   - 同步补齐 `plugin:explorer` 与 `reload-plugin` legacy 处理器
+   - 前端打开 DevTools 时改为校验返回值，失败时明确提示
+
+4. **Clipboard 清空语义与 SDK 反馈一致性修复**:
+   - 修复 `ClipboardEvents.clearHistory` 仅清理最近 1 小时记录的问题，改为复用 `cleanupHistory({ type: 'all' })` 全量清理
+   - `TouchSDK.openPluginDevTools` 改为校验 `plugin:open-devtools` 返回值，失败时抛出明确错误，避免 SDK 调用侧静默失败
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useActionPanel.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/components/plugin/PluginInfo.vue`
+- `apps/core-app/src/main/modules/clipboard.ts`
+- `packages/utils/renderer/touch-sdk/index.ts`
+
+**影响**:
+- CoreBox 快捷动作执行链路恢复可用
+- 插件 DevTools 打开失败从“静默失败”改为“可感知失败”
+- 插件侧“清空历史”语义与文案、SDK 注释保持一致（真正全量清空）
 
 ---
 
