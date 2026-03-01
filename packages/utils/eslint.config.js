@@ -59,6 +59,15 @@ module.exports = antfu(
     },
   },
   {
+    files: ['**/*.{ts,tsx,mts,cts,vue}'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "Literal[value='@talex-touch/utils/channel']",
+        message: 'Legacy channel entry has been removed. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+      }],
+    },
+  },
+  {
     files: ['plugin/channel.ts'],
     rules: {
       'no-eval': 'off',

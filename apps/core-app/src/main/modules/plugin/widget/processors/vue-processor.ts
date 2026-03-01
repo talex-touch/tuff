@@ -7,7 +7,6 @@ import type {
 } from '../widget-processor'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { transform } from 'esbuild'
-import { warnLegacyWidgetChannelImport } from './legacy-channel-warning'
 import { pushWidgetFeatureIssue } from '../widget-issue'
 
 /**
@@ -21,7 +20,6 @@ const ALLOWED_PACKAGES = [
   '@talex-touch/utils/plugin/sdk',
   '@talex-touch/utils/core-box',
   '@talex-touch/utils/transport/legacy',
-  '@talex-touch/utils/channel',
   '@talex-touch/utils/common',
   '@talex-touch/utils/types'
 ] as const
@@ -136,8 +134,6 @@ export class WidgetVueProcessor implements IWidgetProcessor {
 
       return null
     }
-
-    warnLegacyWidgetChannelImport(validation, context, 'WidgetVueProcessor')
 
     try {
       // Step 2: Parse Vue SFC

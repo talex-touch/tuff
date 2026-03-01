@@ -235,6 +235,8 @@
   - [x] 第十八批：`@talex-touch/utils` 根导出改为转发 `transport/legacy`，并同步 Widget API 文档从 `utils/channel` 指引迁移到 `utils/transport/legacy`。
   - [x] 第十九批：Widget 编译器（script/vue/tsx）在检测到 `@talex-touch/utils/channel` 依赖时追加兼容告警并给出迁移提示，保持兼容同时推动迁移。
   - [x] 第二十批：`transport/legacy` 提升为 legacy 类型定义源头，`channel/index.ts` 改为纯转发兼容壳，进一步收敛兼容层依赖方向。
+  - [x] 第二十一批：Widget 沙箱白名单与运行时模块映射移除 `@talex-touch/utils/channel`，禁止新 Widget 继续依赖已下线路径。
+  - [x] 第二十二批：移除 `packages/utils/channel` 兼容入口文件；`apps/core-app` 与 `packages/utils` 增加字符串级 lint 拦截，防止回归写入旧路径常量。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
