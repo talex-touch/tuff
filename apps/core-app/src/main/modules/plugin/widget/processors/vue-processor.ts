@@ -7,6 +7,7 @@ import type {
 } from '../widget-processor'
 import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc'
 import { transform } from 'esbuild'
+import { warnLegacyWidgetChannelImport } from './legacy-channel-warning'
 import { pushWidgetFeatureIssue } from '../widget-issue'
 
 /**
@@ -135,6 +136,8 @@ export class WidgetVueProcessor implements IWidgetProcessor {
 
       return null
     }
+
+    warnLegacyWidgetChannelImport(validation, context, 'WidgetVueProcessor')
 
     try {
       // Step 2: Parse Vue SFC
