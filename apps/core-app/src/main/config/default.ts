@@ -159,23 +159,16 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} OmniPanel`,
   frame: false,
-  minWidth: 420,
-  minHeight: 300,
-  width: 500,
-  height: 380,
+  minWidth: 380,
+  minHeight: 260,
+  width: 460,
+  height: 320,
   movable: true,
   resizable: false,
   skipTaskbar: true,
   autoHideMenuBar: true,
   show: false,
   transparent: true,
-  titleBarStyle: 'hidden',
-  trafficLightPosition: { x: 18, y: 22 },
-  titleBarOverlay: {
-    color: 'rgba(0,0,0,0)',
-    height: 54,
-    symbolColor: 'white'
-  },
   webPreferences: {
     preload: path.join(__dirname, '..', 'preload', 'index.js'),
     webSecurity: false,

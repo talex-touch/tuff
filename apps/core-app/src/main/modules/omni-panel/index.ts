@@ -66,6 +66,8 @@ const execFileAsync = promisify(execFile)
 const requireFromCurrentModule = createRequire(import.meta.url)
 const LONG_PRESS_MS = 600
 const LONG_PRESS_MOVE_THRESHOLD = 6
+const SHORTCUT_HOLD_MS = 500
+const SHORTCUT_RELEASE_GRACE_MS = 220
 const OMNI_PANEL_SHORTCUT_ID = 'core.omniPanel.toggle'
 const OMNI_PANEL_MOUSE_TRIGGER_ID = 'core.omniPanel.mouseLongPress'
 const OMNI_PANEL_SETTING_KEY = StorageList.APP_SETTING
@@ -131,15 +133,26 @@ const BUILTIN_FEATURE_MAP: Map<string, (typeof BUILTIN_FEATURE_DEFINITIONS)[numb
   BUILTIN_FEATURE_DEFINITIONS.map((item) => [item.id, item] as const)
 )
 
-interface MouseHookEvent {
+interface InputHookEvent {
   button?: number
   x?: number
   y?: number
+  keycode?: number
 }
 
-interface MouseHookApi {
-  on: (event: string, callback: (event: MouseHookEvent) => void) => void
-  off?: (event: string, callback: (event: MouseHookEvent) => void) => void
+interface InputHookKeyMap {
+  P: number
+  Shift: number
+  ShiftRight: number
+  Ctrl: number
+  CtrlRight: number
+  Meta: number
+  MetaRight: number
+}
+
+interface InputHookApi {
+  on: (event: string, callback: (event: InputHookEvent) => void) => void
+  off?: (event: string, callback: (event: InputHookEvent) => void) => void
   start: () => void
   stop: () => void
   removeAllListeners?: (event?: string) => void
@@ -282,12 +295,23 @@ export class OmniPanelModule extends BaseModule {
   private eventDisposers: Array<() => void> = []
   private panelWindow: TouchWindow | null = null
   private isVisible = false
-  private mouseHook: MouseHookApi | null = null
+  private inputHook: InputHookApi | null = null
+  private inputHookKeys: InputHookKeyMap | null = null
+  private mouseLongPressEnabled = false
+  private shortcutHoldEnabled = false
   private mouseDownPosition: { x: number; y: number } | null = null
   private longPressTimer: NodeJS.Timeout | null = null
+  private shortcutHoldTimer: NodeJS.Timeout | null = null
+  private shortcutArmExpiryTimer: NodeJS.Timeout | null = null
+  private pressedShortcutKeys = new Set<number>()
+  private shortcutComboActive = false
+  private shortcutComboStartedAt: number | null = null
+  private shortcutComboReleasedAt = 0
+  private shortcutLastHoldDurationMs = 0
+  private shortcutTriggerArmed = false
   private mouseHandlers: Array<{
     event: string
-    callback: (event: MouseHookEvent) => void
+    callback: (event: InputHookEvent) => void
   }> = []
   private featureRegistry: OmniPanelFeatureRegistryItem[] = []
   private registryUpdatedAt = Date.now()
@@ -334,7 +358,10 @@ export class OmniPanelModule extends BaseModule {
 
   onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): MaybePromise<void> {
     this.clearLongPressTimer()
-    this.cleanupMouseLongPressHook()
+    this.clearShortcutHoldTimer()
+    this.clearShortcutArmExpiryTimer()
+    this.resetShortcutHoldState()
+    this.cleanupInputHook()
 
     for (const dispose of this.transportDisposers) {
       try {
@@ -550,17 +577,21 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private registerShortcut(enabled: boolean): void {
+    this.shortcutHoldEnabled = enabled
+    this.syncInputHookState()
     shortcutModule.registerMainShortcut(
       OMNI_PANEL_SHORTCUT_ID,
       'CommandOrControl+Shift+P',
       () => {
-        void this.toggle({ captureSelection: true, source: 'shortcut' })
+        this.handleShortcutPressed()
       },
       { enabled }
     )
   }
 
   private registerMouseLongPressTrigger(enabled: boolean): void {
+    this.mouseLongPressEnabled = enabled
+    this.syncInputHookState()
     shortcutModule.registerMainTrigger(
       OMNI_PANEL_MOUSE_TRIGGER_ID,
       ShortcutTriggerKind.MOUSE_RIGHT_LONG_PRESS,
@@ -574,12 +605,67 @@ export class OmniPanelModule extends BaseModule {
   }
 
   private applyMouseLongPressSetting(enabled: boolean): void {
-    if (enabled) {
-      this.setupMouseLongPressHook()
+    this.mouseLongPressEnabled = enabled
+    if (!enabled) {
+      this.clearLongPressTimer()
+      this.mouseDownPosition = null
+    }
+    this.syncInputHookState()
+  }
+
+  private handleShortcutPressed(): void {
+    if (!this.shortcutHoldEnabled) return
+
+    if (!this.inputHookKeys) {
+      void this.toggle({ captureSelection: true, source: 'shortcut' })
       return
     }
-    this.clearLongPressTimer()
-    this.cleanupMouseLongPressHook()
+
+    const now = Date.now()
+    if (this.shortcutComboActive) {
+      this.shortcutTriggerArmed = true
+      const elapsed =
+        this.shortcutComboStartedAt !== null ? now - this.shortcutComboStartedAt : SHORTCUT_HOLD_MS
+      if (elapsed >= SHORTCUT_HOLD_MS) {
+        this.triggerArmedShortcut()
+      }
+      return
+    }
+
+    const releasedRecently =
+      this.shortcutComboReleasedAt > 0 &&
+      now - this.shortcutComboReleasedAt <= SHORTCUT_RELEASE_GRACE_MS
+    if (releasedRecently && this.shortcutLastHoldDurationMs >= SHORTCUT_HOLD_MS) {
+      this.shortcutTriggerArmed = true
+      this.triggerArmedShortcut()
+      return
+    }
+
+    this.shortcutTriggerArmed = true
+    this.clearShortcutArmExpiryTimer()
+    this.shortcutArmExpiryTimer = setTimeout(() => {
+      this.shortcutTriggerArmed = false
+      this.clearShortcutArmExpiryTimer()
+    }, SHORTCUT_RELEASE_GRACE_MS)
+  }
+
+  private triggerArmedShortcut(): void {
+    if (!this.shortcutTriggerArmed) return
+    this.shortcutTriggerArmed = false
+    this.clearShortcutArmExpiryTimer()
+    void this.toggle({ captureSelection: true, source: 'shortcut' })
+  }
+
+  private syncInputHookState(): void {
+    if (!this.mouseLongPressEnabled && !this.shortcutHoldEnabled) {
+      this.clearLongPressTimer()
+      this.clearShortcutHoldTimer()
+      this.clearShortcutArmExpiryTimer()
+      this.resetShortcutHoldState()
+      this.cleanupInputHook()
+      return
+    }
+    this.setupInputHook()
   }
 
   private registerInstallCompletedListener(): void {
@@ -651,6 +737,11 @@ export class OmniPanelModule extends BaseModule {
     })
     window.window.on('show', () => {
       this.isVisible = true
+    })
+    window.window.on('blur', () => {
+      if (!this.panelWindow || this.panelWindow.window.isDestroyed()) return
+      if (!this.panelWindow.window.isVisible()) return
+      this.hide()
     })
 
     if (app.isPackaged) {
@@ -1379,13 +1470,14 @@ export class OmniPanelModule extends BaseModule {
     throw new Error(`Unsupported platform: ${process.platform}`)
   }
 
-  private setupMouseLongPressHook(): void {
-    if (this.mouseHook) {
+  private setupInputHook(): void {
+    if (this.inputHook) {
       return
     }
     try {
       const hookModule = requireFromCurrentModule('uiohook-napi') as {
-        uIOhook?: MouseHookApi
+        uIOhook?: InputHookApi
+        UiohookKey?: Partial<InputHookKeyMap>
       }
       const hook = hookModule?.uIOhook
       if (!hook) {
@@ -1393,7 +1485,23 @@ export class OmniPanelModule extends BaseModule {
         return
       }
 
-      const onMouseDown = (event: MouseHookEvent) => {
+      const hookKeys = hookModule?.UiohookKey
+      if (
+        hookKeys?.P !== undefined &&
+        hookKeys?.Shift !== undefined &&
+        hookKeys?.ShiftRight !== undefined &&
+        hookKeys?.Ctrl !== undefined &&
+        hookKeys?.CtrlRight !== undefined &&
+        hookKeys?.Meta !== undefined &&
+        hookKeys?.MetaRight !== undefined
+      ) {
+        this.inputHookKeys = hookKeys as InputHookKeyMap
+      } else {
+        this.inputHookKeys = null
+      }
+
+      const onMouseDown = (event: InputHookEvent) => {
+        if (!this.mouseLongPressEnabled) return
         if (!this.isRightMouseButton(event)) return
         const x = typeof event.x === 'number' ? event.x : 0
         const y = typeof event.y === 'number' ? event.y : 0
@@ -1406,13 +1514,15 @@ export class OmniPanelModule extends BaseModule {
         }, LONG_PRESS_MS)
       }
 
-      const onMouseUp = (event: MouseHookEvent) => {
+      const onMouseUp = (event: InputHookEvent) => {
+        if (!this.mouseLongPressEnabled) return
         if (!this.isRightMouseButton(event)) return
         this.clearLongPressTimer()
         this.mouseDownPosition = null
       }
 
-      const onMouseMove = (event: MouseHookEvent) => {
+      const onMouseMove = (event: InputHookEvent) => {
+        if (!this.mouseLongPressEnabled) return
         if (!this.mouseDownPosition || !this.longPressTimer) return
         const x = typeof event.x === 'number' ? event.x : this.mouseDownPosition.x
         const y = typeof event.y === 'number' ? event.y : this.mouseDownPosition.y
@@ -1424,44 +1534,121 @@ export class OmniPanelModule extends BaseModule {
         }
       }
 
+      const onKeyDown = (event: InputHookEvent) => {
+        this.handleGlobalKeyDown(event)
+      }
+
+      const onKeyUp = (event: InputHookEvent) => {
+        this.handleGlobalKeyUp(event)
+      }
+
       hook.on('mousedown', onMouseDown)
       hook.on('mouseup', onMouseUp)
       hook.on('mousemove', onMouseMove)
+      hook.on('keydown', onKeyDown)
+      hook.on('keyup', onKeyUp)
       hook.start()
 
-      this.mouseHook = hook
+      this.inputHook = hook
       this.mouseHandlers = [
         { event: 'mousedown', callback: onMouseDown },
         { event: 'mouseup', callback: onMouseUp },
-        { event: 'mousemove', callback: onMouseMove }
+        { event: 'mousemove', callback: onMouseMove },
+        { event: 'keydown', callback: onKeyDown },
+        { event: 'keyup', callback: onKeyUp }
       ]
-      omniPanelLog.info('Global mouse long-press hook enabled')
+      omniPanelLog.info('Global input hook enabled', {
+        meta: {
+          mouseLongPressEnabled: this.mouseLongPressEnabled,
+          shortcutHoldTrackingReady: Boolean(this.inputHookKeys)
+        }
+      })
     } catch (error) {
-      omniPanelLog.warn('uiohook-napi unavailable, mouse long-press disabled', { error })
+      this.inputHookKeys = null
+      omniPanelLog.warn('uiohook-napi unavailable, global input hook disabled', { error })
     }
   }
 
-  private cleanupMouseLongPressHook(): void {
-    if (!this.mouseHook) return
+  private cleanupInputHook(): void {
+    if (!this.inputHook) return
 
     try {
       for (const handler of this.mouseHandlers) {
-        if (typeof this.mouseHook.off === 'function') {
-          this.mouseHook.off(handler.event, handler.callback)
-        } else if (typeof this.mouseHook.removeAllListeners === 'function') {
-          this.mouseHook.removeAllListeners(handler.event)
+        if (typeof this.inputHook.off === 'function') {
+          this.inputHook.off(handler.event, handler.callback)
+        } else if (typeof this.inputHook.removeAllListeners === 'function') {
+          this.inputHook.removeAllListeners(handler.event)
         }
       }
-      this.mouseHook.stop()
+      this.inputHook.stop()
     } catch (error) {
-      omniPanelLog.warn('Failed to cleanup mouse hook', { error })
+      omniPanelLog.warn('Failed to cleanup input hook', { error })
     } finally {
-      this.mouseHook = null
+      this.inputHook = null
+      this.inputHookKeys = null
       this.mouseHandlers = []
     }
   }
 
-  private isRightMouseButton(event: MouseHookEvent): boolean {
+  private handleGlobalKeyDown(event: InputHookEvent): void {
+    if (!this.shortcutHoldEnabled || !this.inputHookKeys) return
+
+    const keycode = Number(event.keycode)
+    if (!Number.isFinite(keycode)) return
+    this.pressedShortcutKeys.add(keycode)
+
+    if (this.shortcutComboActive || !this.isShortcutComboPressed()) return
+
+    this.shortcutComboActive = true
+    this.shortcutComboStartedAt = Date.now()
+    this.shortcutComboReleasedAt = 0
+    this.shortcutLastHoldDurationMs = 0
+    this.clearShortcutHoldTimer()
+    this.shortcutHoldTimer = setTimeout(() => {
+      if (!this.shortcutComboActive || !this.isShortcutComboPressed()) return
+      if (this.shortcutTriggerArmed) {
+        this.triggerArmedShortcut()
+      }
+    }, SHORTCUT_HOLD_MS)
+  }
+
+  private handleGlobalKeyUp(event: InputHookEvent): void {
+    if (!this.shortcutHoldEnabled || !this.inputHookKeys) return
+
+    const keycode = Number(event.keycode)
+    if (Number.isFinite(keycode)) {
+      this.pressedShortcutKeys.delete(keycode)
+    }
+
+    if (!this.shortcutComboActive || this.isShortcutComboPressed()) return
+
+    const now = Date.now()
+    this.shortcutLastHoldDurationMs =
+      this.shortcutComboStartedAt !== null ? now - this.shortcutComboStartedAt : 0
+    this.shortcutComboReleasedAt = now
+    this.shortcutComboActive = false
+    this.shortcutComboStartedAt = null
+    this.shortcutTriggerArmed = false
+    this.clearShortcutArmExpiryTimer()
+    this.clearShortcutHoldTimer()
+  }
+
+  private isShortcutComboPressed(): boolean {
+    const keys = this.inputHookKeys
+    if (!keys) return false
+
+    const hasPrimary = this.pressedShortcutKeys.has(keys.P)
+    const hasShift =
+      this.pressedShortcutKeys.has(keys.Shift) || this.pressedShortcutKeys.has(keys.ShiftRight)
+    const hasCommandOrCtrl =
+      this.pressedShortcutKeys.has(keys.Ctrl) ||
+      this.pressedShortcutKeys.has(keys.CtrlRight) ||
+      this.pressedShortcutKeys.has(keys.Meta) ||
+      this.pressedShortcutKeys.has(keys.MetaRight)
+    return hasPrimary && hasShift && hasCommandOrCtrl
+  }
+
+  private isRightMouseButton(event: InputHookEvent): boolean {
     const button = Number(event.button)
     return button === 2 || button === 3
   }
@@ -1470,6 +1657,28 @@ export class OmniPanelModule extends BaseModule {
     if (!this.longPressTimer) return
     clearTimeout(this.longPressTimer)
     this.longPressTimer = null
+  }
+
+  private clearShortcutHoldTimer(): void {
+    if (!this.shortcutHoldTimer) return
+    clearTimeout(this.shortcutHoldTimer)
+    this.shortcutHoldTimer = null
+  }
+
+  private clearShortcutArmExpiryTimer(): void {
+    if (!this.shortcutArmExpiryTimer) return
+    clearTimeout(this.shortcutArmExpiryTimer)
+    this.shortcutArmExpiryTimer = null
+  }
+
+  private resetShortcutHoldState(): void {
+    this.pressedShortcutKeys.clear()
+    this.shortcutComboActive = false
+    this.shortcutComboStartedAt = null
+    this.shortcutComboReleasedAt = 0
+    this.shortcutLastHoldDurationMs = 0
+    this.shortcutTriggerArmed = false
+    this.clearShortcutArmExpiryTimer()
   }
 
   private async delay(ms: number): Promise<void> {
