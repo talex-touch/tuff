@@ -2114,17 +2114,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       // Detect system locale change — if the user switched language, mdls will
       // return new displayNames so we must force a full re-scan.
+      // Also force full scan on first run (lastLocale is null) to ensure correct
+      // localized names override any English fallbacks from initial plist parsing.
       const currentLocale = app.getLocale()
       const lastLocale = await this._getLastMdlsLocale()
       const localeChanged = lastLocale !== null && lastLocale !== currentLocale
+      const isFirstMdlsScan = lastLocale === null
 
       let appsNeedingMdls: typeof scannedApps
       let appsWithDisplayName: typeof scannedApps
 
-      if (localeChanged) {
-        // Locale changed: force full mdls scan for all apps
+      if (localeChanged || isFirstMdlsScan) {
+        // Locale changed or first scan: force full mdls scan for all apps
         logApp(
-          `System locale changed (${chalk.yellow(lastLocale)} → ${chalk.green(currentLocale)}), forcing full mdls rescan`,
+          isFirstMdlsScan
+            ? `First mdls scan (locale: ${chalk.green(currentLocale)}), scanning all apps`
+            : `System locale changed (${chalk.yellow(lastLocale)} → ${chalk.green(currentLocale)}), forcing full mdls rescan`,
           LogStyle.info
         )
         appsNeedingMdls = scannedApps

@@ -28,7 +28,7 @@ const resolvedText = computed(() => {
 <template>
   <section class="OmniPanelContextCard">
     <div class="OmniPanelContextCard__meta">
-      <TxTag size="sm" color="rgba(99, 102, 241, 0.24)">
+      <TxTag size="sm" color="var(--tx-fill-color)">
         {{ t(CoreBoxOmniPanelKeys.SOURCE, '来源') }}: {{ source }}
       </TxTag>
       <span v-if="capturedAt">{{ new Date(capturedAt).toLocaleTimeString() }}</span>
@@ -39,28 +39,28 @@ const resolvedText = computed(() => {
 
 <style scoped lang="scss">
 .OmniPanelContextCard {
-  border: 1px solid rgba(129, 140, 248, 0.35);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.6);
-  padding: 14px 16px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 10px;
+  background: var(--tx-fill-color-light);
+  padding: 10px 12px;
 }
 
 .OmniPanelContextCard__meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
-  color: rgba(165, 180, 252, 0.85);
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
 }
 
 .OmniPanelContextCard__text {
-  margin: 10px 0 0;
-  color: #e2e8f0;
-  line-height: 1.6;
-  font-size: 14px;
+  margin: 8px 0 0;
+  color: var(--tx-text-color-primary);
+  line-height: 1.5;
+  font-size: 13px;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 120px;
+  max-height: 84px;
   overflow: auto;
 }
 </style>

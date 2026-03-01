@@ -60,7 +60,7 @@ const isExecuting = computed(() => props.executingId === props.item.id)
       <span class="OmniPanelActionItem__content">
         <span class="OmniPanelActionItem__title">
           {{ item.title }}
-          <TxTag v-if="item.source === 'plugin'" size="sm" color="rgba(148, 163, 184, 0.3)">
+          <TxTag v-if="item.source === 'plugin'" size="sm" color="var(--tx-fill-color)">
             {{ item.pluginName }}
           </TxTag>
         </span>
@@ -85,14 +85,14 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 
 <style scoped lang="scss">
 .OmniPanelActionItem {
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(15, 23, 42, 0.52);
+  border-radius: 10px;
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color-light);
   overflow: hidden;
 
   &.is-focused {
-    border-color: rgba(129, 140, 248, 0.7);
-    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.45) inset;
+    border-color: var(--tx-color-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--tx-color-primary) 40%, transparent) inset;
   }
 }
 
@@ -101,20 +101,20 @@ const isExecuting = computed(() => props.executingId === props.item.id)
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: 12px;
+  padding: 8px 10px;
   color: inherit;
 }
 
 .OmniPanelActionItem__icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
-  background: rgba(30, 41, 59, 0.85);
-  color: #a5b4fc;
+  margin-right: 10px;
+  background: var(--tx-fill-color);
+  color: var(--tx-color-primary);
 }
 
 .OmniPanelActionItem__content {
@@ -125,32 +125,33 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 }
 
 .OmniPanelActionItem__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  color: var(--tx-text-color-primary);
 }
 
 .OmniPanelActionItem__subtitle {
-  font-size: 12px;
-  color: rgba(148, 163, 184, 0.92);
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
 }
 
 .OmniPanelActionItem__reason {
   font-size: 11px;
-  color: rgba(250, 204, 21, 0.9);
+  color: color-mix(in srgb, var(--tx-color-warning, #f59e0b) 82%, var(--tx-text-color-primary) 18%);
 }
 
 .OmniPanelActionItem__meta {
-  font-size: 12px;
-  color: rgba(191, 219, 254, 0.92);
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
 }
 
 .OmniPanelActionItem__controls {
   display: flex;
   gap: 6px;
-  padding: 0 12px 12px;
+  padding: 0 10px 8px;
 }
 
 .OmniPanelActionItem__executing {

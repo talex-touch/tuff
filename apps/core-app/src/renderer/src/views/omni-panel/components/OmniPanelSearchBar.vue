@@ -44,11 +44,15 @@ defineExpose({
 .OmniPanelSearchBar {
   :deep(.tx-input) {
     width: 100%;
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    border-radius: 10px;
-    background: rgba(15, 23, 42, 0.6);
-    color: #e2e8f0;
+    border: 1px solid var(--tx-border-color);
+    border-radius: 8px;
+    background: var(--tx-fill-color-light);
+    color: var(--tx-text-color-primary);
     font-size: 13px;
+  }
+
+  :deep(.tx-input__wrapper) {
+    background: transparent;
   }
 }
 </style>

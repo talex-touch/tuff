@@ -4,6 +4,40 @@
 
 ## 2026-03-01
 
+### OmniPanel 紧凑化样式与窗口策略收敛
+
+**变更类型**: 交互优化 / 视觉一致性 / 窗口行为调整
+
+**描述**: OmniPanel 调整为更紧凑的窗口与布局密度，统一改用主题变量渲染，减少硬编码深色样式；同时收敛窗口行为为固定尺寸+隐藏任务栏，强化“临时面板”使用语义。
+
+**主要变更**:
+1. `OmniPanelWindowOption` 调整为更小尺寸、不可缩放、`skipTaskbar=true`，匹配快速调用场景。
+2. 渲染层主容器与子组件（Header/Context/Search/Action）统一采用 `tx` 主题变量，降低主题割裂。
+3. Action 列表增加最大高度与滚动，避免大量 Feature 撑高窗口。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionItem.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelContextCard.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelHeader.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelSearchBar.vue`
+
+### macOS App 名称扫描补强（首扫与本地化 plist 解析）
+
+**变更类型**: 稳定性优化 / 本地化体验修复
+
+**描述**: AppProvider 在 macOS 场景新增“首次 mdls 扫描全量触发”策略，并将本地化 `InfoPlist.strings` 读取切换为 `simple-plist` 解析，提升首轮应用名称本地化命中率并降低格式兼容问题。
+
+**主要变更**:
+1. 启动阶段当 `lastLocale` 为空时视为首次 mdls 扫描，强制全量扫描，避免首轮英文回退名称长期残留。
+2. `darwin` 扫描器读取 `InfoPlist.strings` 改用 `simple-plist`，兼容二进制/文本 plist。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/apps/darwin.ts`
+
 ### OmniPanel 去除 Feature 显式启停展示（默认可执行）
 
 **变更类型**: 交互收敛 / 执行策略调整

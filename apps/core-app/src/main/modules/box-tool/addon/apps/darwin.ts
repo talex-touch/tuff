@@ -4,6 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createRetrier } from '@talex-touch/utils'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons')
@@ -116,6 +117,16 @@ function getValueFromPlist(content: string, key: string): string | null {
   return match ? match[1] : null
 }
 
+// Promisified wrapper for simple-plist readFile (callback-based)
+function readPlistAsync(filePath: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    readPlist(filePath, (err: Error | null, data: unknown) => {
+      if (err) reject(err)
+      else resolve((data ?? {}) as Record<string, unknown>)
+    })
+  })
+}
+
 // Helper to get localized display name from .lproj directories
 async function getLocalizedDisplayName(appPath: string): Promise<string | null> {
   const resourcesPath = path.join(appPath, 'Contents', 'Resources')
@@ -142,18 +153,17 @@ async function getLocalizedDisplayName(appPath: string): Promise<string | null> 
 
       const stringsPath = path.join(resourcesPath, lproj, 'InfoPlist.strings')
       try {
-        const content = await fs.readFile(stringsPath, 'utf-8')
+        // Use simple-plist to handle both binary and text plist formats
+        const data = await readPlistAsync(stringsPath)
 
-        // Parse strings file format: "CFBundleDisplayName" = "微信";
-        // or CFBundleName
-        const displayNameMatch = content.match(/"?CFBundleDisplayName"?\s*=\s*"([^"]+)"/)
-        if (displayNameMatch?.[1]) {
-          return displayNameMatch[1]
+        const displayName = data.CFBundleDisplayName
+        if (typeof displayName === 'string' && displayName) {
+          return displayName
         }
 
-        const bundleNameMatch = content.match(/"?CFBundleName"?\s*=\s*"([^"]+)"/)
-        if (bundleNameMatch?.[1]) {
-          return bundleNameMatch[1]
+        const bundleName = data.CFBundleName
+        if (typeof bundleName === 'string' && bundleName) {
+          return bundleName
         }
       } catch {
         // File doesn't exist or can't be read, continue to next
