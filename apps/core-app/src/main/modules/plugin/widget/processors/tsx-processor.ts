@@ -14,6 +14,7 @@ import type {
 } from '../widget-processor'
 import path from 'node:path'
 import { transform } from 'esbuild'
+import { warnLegacyWidgetChannelImport } from './legacy-channel-warning'
 import { pushWidgetFeatureIssue } from '../widget-issue'
 
 /**
@@ -120,6 +121,8 @@ export class WidgetTsxProcessor implements IWidgetProcessor {
 
       return null
     }
+
+    warnLegacyWidgetChannelImport(validation, context, 'WidgetTsxProcessor')
 
     try {
       // Step 2: Determine loader based on extension

@@ -233,6 +233,7 @@
   - [x] 第十六批：`transport/prelude`、`plugin/preload`、`renderer/storage/base-storage` 改为依赖 `transport/legacy`，继续收敛 `utils` 内部对 `channel` 模块的直接耦合。
   - [x] 第十七批：`plugin/channel.ts` 切换到 `transport/legacy`（补齐 `RawChannelSyncData` 透传导出），进一步缩小 `plugin` 运行时对 `channel` 的直接依赖面。
   - [x] 第十八批：`@talex-touch/utils` 根导出改为转发 `transport/legacy`，并同步 Widget API 文档从 `utils/channel` 指引迁移到 `utils/transport/legacy`。
+  - [x] 第十九批：Widget 编译器（script/vue/tsx）在检测到 `@talex-touch/utils/channel` 依赖时追加兼容告警并给出迁移提示，保持兼容同时推动迁移。
 - [ ] **P1** Nexus 支付多渠道接入：基于 billing provider 抽象接入 Stripe/Paddle/支付宝等，并补齐回调与订阅状态同步。
 - [x] **P2** 依赖版本漂移收敛：已在当前版本完成工具链+运行时统一，不纳入 2.4.8。
 
