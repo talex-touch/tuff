@@ -19,7 +19,7 @@ const legacyTempFileDeleteEvent = defineRawEvent<TempFileDeleteOptions, TempFile
   'temp-file:delete',
 )
 const legacyPluginFolderEvent = defineRawEvent<string, void>('plugin:explorer')
-const legacyPluginDevToolsEvent = defineRawEvent<string, void>('plugin:open-devtools')
+const legacyPluginDevToolsEvent = defineRawEvent<string, boolean>('plugin:open-devtools')
 const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
 const legacyModuleFolderEvent = defineRawEvent<{ name?: string }, void>('module:folder')
 
@@ -173,7 +173,10 @@ export class TouchSDK {
    * @returns Promise that resolves when DevTools is opened
    */
   async openPluginDevTools(pluginName: string): Promise<void> {
-    return this.sendEvent(legacyPluginDevToolsEvent, pluginName)
+    const opened = await this.sendEvent(legacyPluginDevToolsEvent, pluginName)
+    if (!opened) {
+      throw new Error(`[TouchSDK] Failed to open plugin DevTools: ${pluginName}`)
+    }
   }
 
   /**
