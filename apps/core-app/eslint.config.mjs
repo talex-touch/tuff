@@ -102,6 +102,11 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
+          selector: "Literal[value='@talex-touch/utils/channel']",
+          message:
+            'Legacy channel entry has been removed. Use @talex-touch/utils/transport or @talex-touch/utils/transport/legacy.'
+        },
+        {
           selector: "UnaryExpression[operator='typeof'][argument.name='window']",
           message: 'Use hasWindow() from @talex-touch/utils/env instead of typeof window.'
         },
