@@ -26,31 +26,32 @@ const { t } = useI18n()
 <style scoped lang="scss">
 .OmniPanelHeader {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
 }
 
 .OmniPanelHeader__eyebrow {
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(199, 210, 254, 0.75);
+  color: var(--tx-text-color-secondary);
 }
 
 .OmniPanelHeader__title {
-  margin: 6px 0 0;
-  font-size: 24px;
+  margin: 2px 0 0;
+  font-size: 16px;
   line-height: 1.2;
-  font-weight: 650;
+  font-weight: 600;
+  color: var(--tx-text-color-primary);
 }
 
 .OmniPanelHeader__close {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(15, 23, 42, 0.5);
-  color: #cbd5e1;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--tx-border-color);
+  background: var(--tx-fill-color);
+  color: var(--tx-text-color-secondary);
 }
 </style>

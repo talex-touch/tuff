@@ -268,23 +268,20 @@ onBeforeUnmount(() => {
 .OmniPanel {
   width: 100%;
   min-height: 100vh;
-  padding: 22px;
-  color: #eef2ff;
-  background:
-    radial-gradient(circle at 100% -20%, rgba(76, 139, 245, 0.3), transparent 45%),
-    radial-gradient(circle at -10% 120%, rgba(45, 212, 191, 0.16), transparent 36%),
-    linear-gradient(160deg, #111827 0%, #0b1220 100%);
-  font-family: 'SF Pro Display', 'PingFang SC', sans-serif;
+  padding: 12px;
+  color: var(--tx-text-color-primary);
+  background: var(--tx-bg-color);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
 }
 
 .OmniPanel__state {
-  border: 1px dashed rgba(129, 140, 248, 0.35);
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 13px;
-  color: rgba(191, 219, 254, 0.92);
+  border: 1px dashed color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
+  background: var(--tx-fill-color-light);
 }
 </style>

@@ -37,6 +37,9 @@ const emit = defineEmits<{
 .OmniPanelActionList {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 </style>
