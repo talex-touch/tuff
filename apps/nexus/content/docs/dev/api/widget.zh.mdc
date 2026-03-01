@@ -118,7 +118,7 @@ Widgets 运行在受控环境，仅允许以下包：
 - `@talex-touch/utils/plugin`
 - `@talex-touch/utils/plugin/sdk`
 - `@talex-touch/utils/core-box`
-- `@talex-touch/utils/channel`
+- `@talex-touch/utils/transport/legacy`（兼容层，建议优先使用 `@talex-touch/utils/transport`）
 - `@talex-touch/utils/common`
 - `@talex-touch/utils/types`
 
