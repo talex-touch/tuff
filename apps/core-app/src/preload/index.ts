@@ -1,7 +1,5 @@
 import type { LoadingEvent, LoadingMode, PreloadAPI } from '@talex-touch/utils/preload'
 import type { StartupInfo } from '../shared/types/startup-info'
-import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { electronAPI } from '@electron-toolkit/preload'
 import { hasWindow } from '@talex-touch/utils/env'
 import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
@@ -9,7 +7,7 @@ import { isCoreBox, isMainWindow, useArgMapper } from '@talex-touch/utils/render
 import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
 import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
 import { AppEvents } from '@talex-touch/utils/transport'
-// import appIconAsset from '../../public/favicon.ico?asset'
+import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
 
 declare global {
@@ -18,39 +16,6 @@ declare global {
     /** MetaOverlay mode flag - set by preload based on URL hash or command line args */
     $isMetaOverlay?: boolean
   }
-}
-
-function resolveAssetSource(asset: string): string {
-  if (!asset) return asset
-
-  if (/^(?:https?:\/\/|file:|data:)/.test(asset)) {
-    return asset
-  }
-
-  if (path.isAbsolute(asset)) {
-    return pathToFileURL(asset).toString()
-  }
-
-  if (asset.startsWith('/')) {
-    if (window.location.protocol === 'file:') {
-      const publicDir = process.env.PUBLIC
-      if (publicDir) {
-        return pathToFileURL(path.join(publicDir, asset.slice(1))).toString()
-      }
-      return `file://${asset}`
-    }
-
-    return asset
-  }
-
-  if (window.location.protocol === 'file:') {
-    const publicDir = process.env.PUBLIC
-    if (publicDir) {
-      return pathToFileURL(path.join(publicDir, asset)).toString()
-    }
-  }
-
-  return asset
 }
 
 interface StartupHandshakePayload {
@@ -77,7 +42,7 @@ async function requestStartupInfo(): Promise<StartupInfo | undefined> {
   return undefined
 }
 
-const appLogo = resolveAssetSource('/logo.png')
+const appLogoMarkup = appLogoSvgRaw
 // const appIcon = resolveAssetSource(appIconAsset)
 const startupInfoPromise = requestStartupInfo().then((info) => {
   if (info && typeof info.appUpdate === 'undefined') {
@@ -218,12 +183,17 @@ function useLoading(options: LoadingOptions) {
   height: clamp(168px, 23vw, 220px);
 }
 .${className}__brand-logo {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 30px rgba(117, 245, 255, 0.22));
+  animation: ${className}__brand-logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
+}
+.${className}__brand-logo > svg {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  filter: drop-shadow(0 0 30px rgba(117, 245, 255, 0.22));
-  animation: ${className}__brand-logo__animation 2.8s infinite cubic-bezier(0.22, 1, 0.36, 1);
 }
 .${className}__progress {
   width: min(320px, 80vw);
@@ -350,7 +320,7 @@ function useLoading(options: LoadingOptions) {
   container.className = className
   container.innerHTML = `
     <div class="${className}__brand" aria-hidden="true">
-      <img class="${className}__brand-logo" src="${appLogo}" alt="" />
+      <div class="${className}__brand-logo" aria-hidden="true">${appLogoMarkup}</div>
     </div>
     <div class="${className}__progress" role="progressbar"></div>
     <div class="${className}__message">Initializing Talex Touch...</div>
