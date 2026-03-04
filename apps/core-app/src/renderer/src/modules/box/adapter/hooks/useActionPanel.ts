@@ -21,6 +21,9 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   const openActionPanelEvent = defineRawEvent<{ item?: TuffItem }, void>(
     'corebox:open-action-panel'
   )
+  const metaOverlayItemActionEvent = defineRawEvent<{ actionId: string; item: TuffItem }, void>(
+    'meta-overlay:item-action'
+  )
 
   const visible = ref(false)
   const item = ref<TuffItem | null>(null)
@@ -61,11 +64,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     }
   }
 
-  async function handleAction(actionId: string): Promise<void> {
-    const targetItem = item.value
-    if (!targetItem) return
-    close()
-
+  async function executeAction(actionId: string, targetItem: TuffItem): Promise<void> {
     switch (actionId) {
       case 'toggle-pin':
         await togglePin(targetItem)
@@ -87,12 +86,27 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
       case 'flow-transfer':
         if (openFlowSelector) openFlowSelector(targetItem)
         break
+      default:
+        devLog('[useActionPanel] Unsupported action from MetaOverlay:', actionId, targetItem.id)
+        toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+        break
     }
+  }
+
+  async function handleAction(actionId: string): Promise<void> {
+    const targetItem = item.value
+    if (!targetItem) return
+    close()
+    await executeAction(actionId, targetItem)
   }
 
   // Channel listener for action panel
   const unregOpen = transport.on(openActionPanelEvent, (data) => {
     if (data?.item) open(data.item)
+  })
+  const unregMetaOverlayAction = transport.on(metaOverlayItemActionEvent, (data) => {
+    if (!data?.item || !data.actionId) return
+    void executeAction(data.actionId, data.item)
   })
 
   // Window event listener for ⌘K - opens ActionPanel
@@ -111,6 +125,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   onBeforeUnmount(() => {
     unregOpen()
+    unregMetaOverlayAction()
     window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 

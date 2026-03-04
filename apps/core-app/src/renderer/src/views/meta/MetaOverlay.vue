@@ -193,14 +193,11 @@ function normalizeShortcut(shortcut: string): string {
 }
 
 async function handleActionExecute(action: MetaAction) {
-  if (!item.value) return
-
   try {
-    // Include item in request for main process to use
     const payload: MetaActionExecuteRequest & { item?: TuffItem } = {
       actionId: action.id,
-      itemId: item.value.id,
-      item: item.value
+      itemId: item.value?.id ?? '',
+      item: item.value ?? undefined
     }
     await transport.send(MetaOverlayEvents.action.execute, payload)
   } catch (error) {
