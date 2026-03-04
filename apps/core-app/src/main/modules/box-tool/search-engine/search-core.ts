@@ -1807,7 +1807,12 @@ export class SearchEngineCore
     instance.searchIndexService.preloadPinyin()
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.usageStatsCache = new UsageStatsCache(10000, 15 * 60 * 1000) // 15 minutes TTL
-    instance.usageStatsQueue = new UsageStatsQueue(db, 100) // 100ms flush interval
+    instance.usageStatsQueue = new UsageStatsQueue(db, {
+      searchFlushIntervalMs: 30 * 60 * 1000,
+      actionFlushIntervalMs: 10 * 60 * 1000,
+      searchFlushEventThreshold: 2000,
+      actionFlushEventThreshold: 300
+    })
     searchEngineLog.debug('Initializing RecommendationEngine')
     instance.recommendationEngine = new RecommendationEngine(instance.dbUtils)
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)

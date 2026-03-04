@@ -2,7 +2,165 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-04
+
+### Nexus 官网同步：性能落地公告与文档入口
+
+**变更类型**: 官网内容同步 / 发布可见性增强
+
+**描述**: 将本轮 Core App 的数据库写压治理与统计降频优化同步到 Nexus 官网。新增中英文性能落地文档，并在公开更新流注入一条官方公告，确保用户可在 `/updates` 第一时间看到性能升级说明并跳转详情。
+
+**主要变更**:
+1. `/api/updates` 数据源新增官方公告注入（中英文标题与摘要），并按 `id` 去重，避免与后台写入数据冲突。
+2. 公告类型设为 `announcement`，覆盖 `RELEASE/BETA/SNAPSHOT`，默认对 web/system 双端可见。
+3. 新增 release 文档页 `performance-persistence`（zh/en），完整说明 stats/analytics 降频、OCR 写压治理、调度器观测等策略。
+4. `release` 文档索引与 Docs 侧边栏新增“性能落地（2026-03）”入口，保证站内可检索与可导航。
+5. 新增幂等同步接口 `POST /api/dashboard/updates/sync-official`，可将官方公告 upsert 到 D1（或内存存储），返回 inserted/updated 计数用于运维确认。
+
+**修改文件**:
+- `apps/nexus/server/utils/dashboardStore.ts`
+- `apps/nexus/content/docs/dev/release/performance-persistence.zh.md`
+- `apps/nexus/content/docs/dev/release/performance-persistence.en.md`
+- `apps/nexus/content/docs/dev/release/index.zh.md`
+- `apps/nexus/content/docs/dev/release/index.en.md`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/server/api/dashboard/updates/sync-official.post.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-02
+
+### MetaOverlay（MetaK）动作执行链路修复
+
+**变更类型**: 缺陷修复 / 交互可用性恢复
+
+**描述**: 修复 MetaOverlay（MetaK）中点击动作“无响应”的回归问题。内建动作恢复为主进程直接执行，避免依赖 renderer 转发链路造成执行失败；同时增强 item 上下文兜底，减少请求载荷不完整导致的全链路中断。
+
+**主要变更**:
+1. 内建动作（固定/复制/定位/流转）恢复由主进程直接分发执行。
+2. MetaOverlay 执行动作时支持使用当前面板缓存的 item 上下文兜底。
+3. `meta-overlay:action.execute` IPC 不再因 `item` 缺失立即抛错，交由 manager 统一处理。
+4. MetaOverlay renderer 发送执行请求时不再因本地 `item` 为空直接短路。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
+- `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts`
+- `apps/core-app/src/renderer/src/views/meta/MetaOverlay.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### 文件系统动作“加入文件索引”补索引修复（复制文件场景）
+
+**变更类型**: 缺陷修复 / 索引链路补偿
+
+**描述**: 修复“复制文件后触发加入文件索引但搜索仍不可见”的场景。当目标文件所在目录已在 watch roots 内时，原逻辑会直接返回 `exists`，未触发该文件的补索引。现已在 `exists` 分支补充增量索引入队。
+
+**主要变更**:
+1. `addWatchPath` 在 `exists` 返回前，对“文件目标”执行 `enqueueIncrementalUpdate(path, 'add')`。
+2. 新增关键日志，标记“命中已监听路径但已触发增量补索引”。
+3. 新增“新增 watchPath 后的文件目标”补索引入队，降低首次可搜索延迟。
+4. `SystemActionsProvider` 的 `file-index` 动作改为传递原始候选路径（文件保持文件路径），避免被提前降级成目录路径导致单文件补索引分支失效。
+5. `file-index` 动作增加 start/result 日志，便于排查是否命中 `added/exists/invalid` 分支。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Search Stats/Analytics 落盘节流与队列分层
+
+**变更类型**: 性能优化 / 数据落盘策略收敛 / SQLite 竞争缓解
+
+**描述**: 针对启动与高频检索阶段的 SQLite 写竞争，收敛 `usage-stats` 与 `analytics` 的持久化频率：低价值高频 `search` 统计转为内存聚合+低频批量落盘，执行类行为单独队列保障可靠性，同时提升 analytics 快照最小落盘间隔，降低写放大与锁竞争。
+
+**主要变更**:
+1. `UsageStatsQueue` 升级为分层内存聚合：`search` 与 `action(execute/cancel)` 分离计时与阈值触发。
+2. `search` 队列默认 30 分钟批量落盘，`action` 队列默认 10 分钟批量落盘，并支持事件阈值提前触发。
+3. 引入基于 `dbWriteScheduler` 队列深度的 `search` 采样背压，写压高时自动降采样。
+4. `usage-stats.search.flush` 采用可丢弃策略；`usage-stats.action.flush` 保持不可丢弃并在失败时回灌内存队列。
+5. `analytics` 快照最小落盘间隔调整为：`15m=10分钟`、`1h=20分钟`、`24h=60分钟`。
+6. `query-completions.record` 接入 `dbWriteScheduler + withSqliteRetry`，执行路径统一串行写队列，减少 direct write 抢锁。
+7. `analytics report queue` 的插入/重试标记/删除/清理统一走写调度器，保持数据库写入策略一致。
+8. OCR 队列在写压高时跳过 `ocr.jobs.start` 中间态落库，仅保留成功/失败/重试等最终状态写入，并在终态写入时补齐 attempts。
+9. `ocr:last-dispatch` 配置写入新增队列深度门控与 30 秒最小落盘间隔，高压下自动跳过非关键状态写入。
+10. `ocr:last-queued` 配置写入同样启用队列深度门控与 30 秒最小落盘间隔，进一步减少入队阶段的非关键写入。
+11. `ocr:last-success` 配置写入启用同级门控（队列深度 + 30 秒最小间隔 + droppable），降低高频成功场景下的附加写压力。
+12. `ocr:last-failure` 仅在任务状态首次转为 `failed` 时落盘，避免失败风暴下重复覆盖写入。
+13. `ocr:queue-disabled` 配置增加“语义签名”去重，重复状态（仅时间戳变化）不再重复落库。
+14. `ocr.config` 的 `last-*` 与 `queue-disabled` 落盘策略收敛为统一策略表，减少分散硬编码与后续维护成本。
+15. OCR 配置策略抽取为 `ocr-config-policy` 独立模块，`ocr-service` 仅消费策略解析结果，进一步降低服务文件复杂度。
+16. `ocr.config` 的语义签名计算逻辑下沉到 `ocr-config-policy`，`ocr-service` 仅保留写入编排职责。
+17. `ocr.config` 的“是否跳过落盘”判定也下沉到 `ocr-config-policy`，服务层仅传入运行态上下文（队列深度/上次落盘时间）。
+18. `ocr.config` 写入 label 按 key 细分（如 `ocr.config.last-dispatch`），提升队列/日志观测粒度。
+19. `dbWriteScheduler` 新增按 label 的轻量聚合监控，并按分钟输出 TopN（含 enqueued/executed/failed/dropped/avgWait/maxWait），便于压测期定位写压热点。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/usage-stats-queue.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `apps/core-app/src/main/modules/analytics/storage/db-store.ts`
+- `apps/core-app/src/main/modules/box-tool/search-engine/query-completion-service.ts`
+- `apps/core-app/src/main/modules/analytics/report-queue-store.ts`
+- `apps/core-app/src/main/db/db-write-scheduler.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-config-policy.ts`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 搜索增强（Fuse + 拼音）与底部选中文本提示收敛
+
+**变更类型**: 功能增强 / 交互收敛
+
+**描述**: OmniPanel 搜索切换为 `Fuse.js` 模糊检索并补齐拼音能力（全拼/首字母）；同时移除“复制内容大卡片”的主展示路径，改为底部统一提示“已选中 xxx”。
+
+**主要变更**:
+1. `filterOmniPanelFeatures` 接入 `Fuse.js`，支持英文模糊匹配（如 `serch` -> `search`）。
+2. 标题、副标题、插件名补齐拼音 token（全拼 + 首字母），支持拼音检索。
+3. 面板底部固定提示选中文本摘要，未选中时显示 `已选中 0 字符`。
+4. 补充 OmniPanel 过滤单测，覆盖拼音与英文模糊检索场景。
+
+**修改文件**:
+- `apps/core-app/package.json`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/filter-features.test.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### OmniPanel 窗口宽度继续收窄（保持三列网格）
+
+**变更类型**: 交互优化 / 视觉密度调整
+
+**描述**: 进一步收窄 OmniPanel 浮层宽度，减少遮挡；保持“一排最多三个”网格展示与键盘导航列数不变。
+
+**主要变更**:
+1. `OmniPanelWindowOption.width` 从 `460` 调整为 `400`。
+2. `OmniPanelWindowOption.minWidth` 从 `380` 调整为 `340`。
+3. Grid 列数仍保持 3 列，不改变 Feature 排布与交互路径。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-01
+
+### OmniPanel 浮层化与方形 Grid 卡片
+
+**变更类型**: 交互优化 / 窗口行为调整 / UI 收敛
+
+**描述**: OmniPanel 对齐 CoreBox 的浮层窗口语义，展示时不再抢焦点；同时移除头部关闭按钮，Feature 卡片改为方形 Grid 形态。
+
+**主要变更**:
+1. OmniPanel 窗口切换为 `panel` 类型，并设置 `alwaysOnTop(floating)` 与 `visibleOnAllWorkspaces`。
+2. 唤起时改用 `showInactive()`，避免干扰当前活跃窗口；保持失焦自动隐藏。
+3. Header 移除关闭按钮，仅保留标题信息。
+4. Action 区升级为三列 Grid，卡片统一 `1:1` 方形样式并改为“图标居中 + 底部标题”。
+5. 移除面板顶部标题块，区块间补充分割线（divider）提高视觉层次。
+
+**修改文件**:
+- `apps/core-app/src/main/config/default.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/renderer/src/views/omni-panel/OmniPanel.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelHeader.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionItem.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelActionList.vue`
+- `apps/core-app/src/renderer/src/views/omni-panel/components/OmniPanelContextCard.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
 
 ### OmniPanel 窗口进一步收敛（更小体积 + 失焦自动隐藏）
 

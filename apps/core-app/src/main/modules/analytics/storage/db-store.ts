@@ -17,9 +17,9 @@ const QUEUE_PRESSURE_LOG_THROTTLE_MS = 60_000
 const SNAPSHOT_MIN_PERSIST_INTERVAL_MS: Record<AnalyticsWindowType, number> = {
   '1m': 0,
   '5m': 0,
-  '15m': 2 * 60_000,
-  '1h': 5 * 60_000,
-  '24h': 15 * 60_000
+  '15m': 10 * 60_000,
+  '1h': 20 * 60_000,
+  '24h': 60 * 60_000
 }
 const log = createLogger('AnalyticsStore')
 

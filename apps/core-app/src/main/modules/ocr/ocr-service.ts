@@ -17,6 +17,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { and, desc, eq, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm'
 import { genTouchApp } from '../../core'
+import type { ScheduleOptions } from '../../db/db-write-scheduler'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import {
   clipboardHistory,
@@ -36,6 +37,14 @@ import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { windowManager } from '../box-tool/core-box/window'
 import { databaseModule } from '../database'
 import { notificationModule } from '../notification'
+import {
+  OCR_START_WRITE_SKIP_QUEUE_DEPTH,
+  computeOcrConfigPersistSignature,
+  getOcrConfigWriteLabel,
+  resolveOcrConfigPersistOptions,
+  shouldSkipOcrConfigPersist,
+  type OcrConfigPersistOptions
+} from './ocr-config-policy'
 
 export interface ClipboardOcrPayload {
   clipboardId: number
@@ -163,6 +172,8 @@ class OcrService {
   private lastQueueDisabledAt: number | null = null
   private consecutiveFailureCount = 0
   private recentFailureTimestamps: number[] = []
+  private configLastPersistAt = new Map<string, number>()
+  private configLastPersistSignature = new Map<string, string>()
   private clipboardMetaListener:
     | ((clipboardId: number, patch: Record<string, unknown>) => void)
     | null = null
@@ -186,8 +197,12 @@ class OcrService {
     this.initialized = true
   }
 
-  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  private async withDbWrite<T>(
+    label: string,
+    operation: () => Promise<T>,
+    options?: ScheduleOptions
+  ): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
   }
 
   private registerChannels(): void {
@@ -723,17 +738,21 @@ class OcrService {
 
         const attemptCount = (job.attempts ?? 0) + 1
 
-        await this.withDbWrite('ocr.jobs.start', () =>
-          this.db!.update(ocrJobs)
-            .set({
-              status: 'processing',
-              attempts: attemptCount,
-              startedAt: new Date(),
-              lastError: null,
-              nextRetryAt: null
-            })
-            .where(eq(ocrJobs.id, job.id!))
-        )
+        const skipStartWrite =
+          dbWriteScheduler.getStats().queued >= OCR_START_WRITE_SKIP_QUEUE_DEPTH
+        if (!skipStartWrite) {
+          await this.withDbWrite('ocr.jobs.start', () =>
+            this.db!.update(ocrJobs)
+              .set({
+                status: 'processing',
+                attempts: attemptCount,
+                startedAt: new Date(),
+                lastError: null,
+                nextRetryAt: null
+              })
+              .where(eq(ocrJobs.id, job.id!))
+          )
+        }
 
         job.attempts = attemptCount
 
@@ -760,7 +779,7 @@ class OcrService {
 
   private async runAgentJob(jobId: number, job: typeof ocrJobs.$inferSelect): Promise<void> {
     if (!job.meta) {
-      await this.failJob(jobId, 'Missing job metadata')
+      await this.failJob(jobId, 'Missing job metadata', undefined, job.attempts ?? 0)
       return
     }
 
@@ -768,7 +787,7 @@ class OcrService {
     try {
       parsed = JSON.parse(job.meta)
     } catch (error) {
-      await this.failJob(jobId, 'Invalid job metadata JSON', error)
+      await this.failJob(jobId, 'Invalid job metadata JSON', error, job.attempts ?? 0)
       return
     }
 
@@ -823,7 +842,12 @@ class OcrService {
         await this.deferJob(job, retryReason)
         return
       }
-      await this.failJob(jobId, error instanceof Error ? error.message : String(error), error)
+      await this.failJob(
+        jobId,
+        error instanceof Error ? error.message : String(error),
+        error,
+        job.attempts ?? 0
+      )
     }
   }
 
@@ -854,7 +878,7 @@ class OcrService {
 
     // 检查是否已达到最大重试次数
     if (currentAttempts >= MAX_ATTEMPTS) {
-      await this.failJob(job.id, `Max attempts reached: ${reason}`)
+      await this.failJob(job.id, `Max attempts reached: ${reason}`, undefined, currentAttempts)
       return
     }
 
@@ -864,6 +888,7 @@ class OcrService {
     await this.withDbWrite('ocr.jobs.retry', () =>
       this.db!.update(ocrJobs)
         .set({
+          attempts: currentAttempts,
           status: 'pending',
           lastError: reason,
           nextRetryAt,
@@ -982,7 +1007,12 @@ class OcrService {
 
         await tx
           .update(ocrJobs)
-          .set({ status: 'completed', finishedAt: new Date(), lastError: null })
+          .set({
+            attempts: job.attempts ?? 0,
+            status: 'completed',
+            finishedAt: new Date(),
+            lastError: null
+          })
           .where(eq(ocrJobs.id, jobId))
       })
     )
@@ -1192,7 +1222,12 @@ class OcrService {
     )
   }
 
-  private async failJob(jobId: number, reason: string, details?: unknown): Promise<void> {
+  private async failJob(
+    jobId: number,
+    reason: string,
+    details?: unknown,
+    attemptsOverride?: number
+  ): Promise<void> {
     if (!this.db) return
 
     const jobs = await this.db.select().from(ocrJobs).where(eq(ocrJobs.id, jobId)).limit(1)
@@ -1200,7 +1235,7 @@ class OcrService {
     if (jobs.length === 0) return
 
     const job = jobs[0]
-    const attempts = job.attempts ?? 0
+    const attempts = attemptsOverride ?? job.attempts ?? 0
     const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'pending'
     const retryDelaySeconds = status === 'pending' ? getRetryDelaySeconds(reason) : null
     const nextRetryAt = retryDelaySeconds ? new Date(Date.now() + retryDelaySeconds * 1000) : null
@@ -1208,6 +1243,7 @@ class OcrService {
     await this.withDbWrite('ocr.jobs.fail', () =>
       this.db!.update(ocrJobs)
         .set({
+          attempts,
           status,
           lastError: reason,
           nextRetryAt,
@@ -1226,7 +1262,7 @@ class OcrService {
         ocr_next_retry_at: nextRetryAt ? nextRetryAt.toISOString() : null
       })
 
-      if (status === 'failed') {
+      if (status === 'failed' && job.status !== 'failed') {
         await this.upsertConfig('ocr:last-failure', {
           jobId,
           clipboardId: job.clipboardId,
@@ -1316,17 +1352,46 @@ class OcrService {
     }
   }
 
-  private async upsertConfig(key: string, value: unknown): Promise<void> {
+  private async upsertConfig(
+    key: string,
+    value: unknown,
+    options?: OcrConfigPersistOptions
+  ): Promise<void> {
     if (!this.db) return
+    const effectiveOptions = resolveOcrConfigPersistOptions(key, options)
+    const persistSignature = computeOcrConfigPersistSignature(key, value)
+    if (effectiveOptions?.skipIfUnchanged) {
+      const lastSignature = this.configLastPersistSignature.get(key)
+      if (lastSignature === persistSignature) {
+        return
+      }
+    }
+    if (
+      shouldSkipOcrConfigPersist(effectiveOptions, {
+        queued: dbWriteScheduler.getStats().queued,
+        lastPersistAt: this.configLastPersistAt.get(key)
+      })
+    ) {
+      return
+    }
+
     const serialized = JSON.stringify(value ?? null)
-    await this.withDbWrite('ocr.config', () =>
-      this.db!.insert(config)
-        .values({ key, value: serialized })
-        .onConflictDoUpdate({
-          target: config.key,
-          set: { value: serialized }
-        })
+    const writeLabel = getOcrConfigWriteLabel(key)
+    await this.withDbWrite(
+      writeLabel,
+      () =>
+        this.db!.insert(config)
+          .values({ key, value: serialized })
+          .onConflictDoUpdate({
+            target: config.key,
+            set: { value: serialized }
+          }),
+      effectiveOptions?.droppable === undefined
+        ? undefined
+        : { droppable: effectiveOptions.droppable }
     )
+    this.configLastPersistAt.set(key, Date.now())
+    this.configLastPersistSignature.set(key, persistSignature)
   }
 }
 

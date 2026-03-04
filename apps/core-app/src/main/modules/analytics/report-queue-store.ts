@@ -1,7 +1,9 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import { asc, eq, gte, lt, sql } from 'drizzle-orm'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import * as dbSchema from '../../db/schema'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 
 export interface ReportQueueItem {
   id: number
@@ -15,6 +17,10 @@ export interface ReportQueueItem {
 
 export class ReportQueueStore {
   constructor(private db: LibSQLDatabase<typeof schema>) {}
+
+  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  }
 
   async list(cutoff?: number): Promise<ReportQueueItem[]> {
     const query = this.db
@@ -50,35 +56,41 @@ export class ReportQueueStore {
     payload: Record<string, unknown>
     createdAt: number
   }): Promise<void> {
-    await this.db.insert(dbSchema.analyticsReportQueue).values({
-      endpoint: entry.endpoint,
-      payload: JSON.stringify(entry.payload),
-      createdAt: entry.createdAt,
-      retryCount: 0
-    })
+    await this.withDbWrite('analytics.report-queue.insert', () =>
+      this.db.insert(dbSchema.analyticsReportQueue).values({
+        endpoint: entry.endpoint,
+        payload: JSON.stringify(entry.payload),
+        createdAt: entry.createdAt,
+        retryCount: 0
+      })
+    )
   }
 
   async markAttempt(id: number, error?: string): Promise<void> {
-    await this.db
-      .update(dbSchema.analyticsReportQueue)
-      .set({
-        retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
-        lastAttemptAt: Date.now(),
-        lastError: error ?? null
-      })
-      .where(eq(dbSchema.analyticsReportQueue.id, id))
+    await this.withDbWrite('analytics.report-queue.mark-attempt', () =>
+      this.db
+        .update(dbSchema.analyticsReportQueue)
+        .set({
+          retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
+          lastAttemptAt: Date.now(),
+          lastError: error ?? null
+        })
+        .where(eq(dbSchema.analyticsReportQueue.id, id))
+    )
   }
 
   async remove(id: number): Promise<void> {
-    await this.db
-      .delete(dbSchema.analyticsReportQueue)
-      .where(eq(dbSchema.analyticsReportQueue.id, id))
+    await this.withDbWrite('analytics.report-queue.remove', () =>
+      this.db.delete(dbSchema.analyticsReportQueue).where(eq(dbSchema.analyticsReportQueue.id, id))
+    )
   }
 
   async prune(cutoff: number): Promise<void> {
-    await this.db
-      .delete(dbSchema.analyticsReportQueue)
-      .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff))
+    await this.withDbWrite('analytics.report-queue.prune', () =>
+      this.db
+        .delete(dbSchema.analyticsReportQueue)
+        .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff))
+    )
   }
 }
 
