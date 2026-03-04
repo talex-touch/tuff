@@ -241,6 +241,8 @@ const DELETION_MIN_MISS_COUNT = 2 // Must be missing for at least 2 scans
 const STARTUP_BACKFILL_INITIAL_DELAY_MS = 15_000
 const STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS = 30_000
 const STARTUP_HEAVY_TASK_WAIT_RENDERER_TIMEOUT_MS = 30_000
+const STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
+const STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS = 6 * 60 * 60 * 1000
 
 export interface AppIndexSettings {
   hideNoisySystemApps: boolean
@@ -527,6 +529,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
       }
 
+      if (readiness.reason === 'recent-backfill') {
+        logApp(
+          'Startup backfill skipped: recently completed in this dev environment',
+          LogStyle.info
+        )
+        return
+      }
+
       if (attempt >= maxRetries) {
         logApp('Startup backfill stopped after retries', LogStyle.warning, {
           reason: readiness.reason
@@ -548,6 +558,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private async _shouldRunStartupBackfill(): Promise<{ allowed: boolean; reason?: string }> {
     if (!this.dbUtils || !this.searchIndex) {
       return { allowed: false, reason: 'missing-context' }
+    }
+
+    if (this.isDevelopmentRuntime()) {
+      const lastBackfillTime = await this._getLastBackfillTime()
+      if (
+        lastBackfillTime &&
+        Date.now() - lastBackfillTime < STARTUP_BACKFILL_MIN_INTERVAL_DEV_MS
+      ) {
+        return { allowed: false, reason: 'recent-backfill' }
+      }
     }
 
     if (this.isDevelopmentRuntime() && this.isMainRendererLoading()) {
@@ -1900,10 +1920,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         LogStyle.info
       )
       setTimeout(() => {
-        void this.waitForMainRendererReady().then(async () => {
+        void (async () => {
+          const lastScanTimestamp = (await this._getLastScanTime()) || 0
+          if (
+            lastScanTimestamp &&
+            Date.now() - lastScanTimestamp < STARTUP_MDLS_SCAN_MIN_INTERVAL_DEV_MS
+          ) {
+            logApp('Skipping dev mode mdls scan: completed recently', LogStyle.info)
+            return
+          }
+
+          await this.waitForMainRendererReady()
           await this._runMdlsUpdateScan()
           logApp('Dev mode mdls scan complete', LogStyle.success)
-        })
+        })()
       }, delayMs)
     }
 
@@ -1994,6 +2024,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   private async _setLastBackfillTime(timestamp: number): Promise<void> {
     await this._setConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY, timestamp)
+  }
+
+  private async _getLastBackfillTime(): Promise<number | null> {
+    return this._getConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY)
   }
 
   private async _getLastFullSyncTime(): Promise<number | null> {

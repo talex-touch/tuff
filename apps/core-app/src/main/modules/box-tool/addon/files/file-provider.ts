@@ -1286,14 +1286,32 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       return { success: false, status: 'invalid', reason: 'path-not-found' }
     }
 
+    const isFileTarget = stats.isFile()
     const watchPath = stats.isDirectory() ? resolved : path.dirname(resolved)
 
     if (this.isWithinWatchRoots(watchPath)) {
+      if (isFileTarget) {
+        this.logInfo('File index addPath hit existing watch root; enqueue incremental add', {
+          path: resolved,
+          watchPath
+        })
+        this.enqueueIncrementalUpdate(resolved, 'add')
+      }
       return { success: true, status: 'exists', path: watchPath }
     }
 
     const normalized = this.normalizePath(watchPath)
     if (this.normalizedWatchPaths.includes(normalized)) {
+      if (isFileTarget) {
+        this.logInfo(
+          'File index addPath hit existing normalized watch path; enqueue incremental add',
+          {
+            path: resolved,
+            watchPath
+          }
+        )
+        this.enqueueIncrementalUpdate(resolved, 'add')
+      }
       return { success: true, status: 'exists', path: watchPath }
     }
 
@@ -1325,6 +1343,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       void this.startIndexing('manual').catch((error) => {
         this.logWarn('Manual indexing failed after adding watch path', error)
       })
+    }
+
+    if (isFileTarget) {
+      this.logInfo('File index addPath added watch path and enqueued incremental add', {
+        path: resolved,
+        watchPath
+      })
+      this.enqueueIncrementalUpdate(resolved, 'add')
     }
 
     return { success: true, status: 'added', path: watchPath }
