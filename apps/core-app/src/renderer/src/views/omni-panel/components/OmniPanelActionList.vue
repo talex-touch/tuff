@@ -10,7 +10,6 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'execute', item: OmniPanelFeatureItemPayload): void
-  (event: 'reorder', item: OmniPanelFeatureItemPayload, direction: 'up' | 'down'): void
   (event: 'focus', index: number): void
 }>()
 </script>
@@ -23,11 +22,8 @@ const emit = defineEmits<{
       :item="item"
       :index="index"
       :focused="focusedIndex === index"
-      :is-first="index === 0"
-      :is-last="index === items.length - 1"
       :executing-id="executingId"
       @execute="emit('execute', $event)"
-      @reorder="(target, direction) => emit('reorder', target, direction)"
       @focus="emit('focus', $event)"
     />
   </div>
@@ -36,9 +32,9 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .OmniPanelActionList {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  max-height: 180px;
+  max-height: 188px;
   overflow-y: auto;
   padding-right: 2px;
   align-content: start;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { OmniPanelFeatureItemPayload } from '../../../../../shared/events/omni-panel'
 import type { ITuffIcon } from '@talex-touch/utils'
-import { TxButton, TxTag } from '@talex-touch/tuffex'
+import { TxButton } from '@talex-touch/tuffex'
 import { computed } from 'vue'
 import TuffIcon from '~/components/base/TuffIcon.vue'
 
@@ -9,14 +9,11 @@ const props = defineProps<{
   item: OmniPanelFeatureItemPayload
   index: number
   focused: boolean
-  isFirst: boolean
-  isLast: boolean
   executingId: string | null
 }>()
 
 const emit = defineEmits<{
   (event: 'execute', item: OmniPanelFeatureItemPayload): void
-  (event: 'reorder', item: OmniPanelFeatureItemPayload, direction: 'up' | 'down'): void
   (event: 'focus', index: number): void
 }>()
 
@@ -54,37 +51,20 @@ const isExecuting = computed(() => props.executingId === props.item.id)
       :disabled="disabled"
       @click="emit('execute', item)"
     >
-      <span class="OmniPanelActionItem__icon">
-        <TuffIcon :icon="icon" :size="18" />
-      </span>
-      <span class="OmniPanelActionItem__content">
-        <span class="OmniPanelActionItem__title">
-          {{ item.title }}
-          <TxTag v-if="item.source === 'plugin'" size="sm" color="var(--tx-fill-color)">
-            {{ item.pluginName }}
-          </TxTag>
-        </span>
-        <span class="OmniPanelActionItem__subtitle">{{ item.subtitle }}</span>
-        <span v-if="item.unavailableReason" class="OmniPanelActionItem__reason">
-          {{ item.unavailableReason.message }}
+      <span class="OmniPanelActionItem__body">
+        <span class="OmniPanelActionItem__icon">
+          <TuffIcon :icon="icon" :size="24" />
         </span>
       </span>
-      <span class="OmniPanelActionItem__meta">
-        <span v-if="isExecuting" class="OmniPanelActionItem__executing">...</span>
-      </span>
+      <span class="OmniPanelActionItem__title">{{ item.title }}</span>
     </TxButton>
-
-    <div class="OmniPanelActionItem__controls">
-      <TxButton variant="flat" :disabled="isFirst" @click="emit('reorder', item, 'up')">↑</TxButton>
-      <TxButton variant="flat" :disabled="isLast" @click="emit('reorder', item, 'down')"
-        >↓</TxButton
-      >
-    </div>
+    <span v-if="isExecuting" class="OmniPanelActionItem__executing">...</span>
   </div>
 </template>
 
 <style scoped lang="scss">
 .OmniPanelActionItem {
+  position: relative;
   border-radius: 10px;
   border: 1px solid var(--tx-border-color);
   background: var(--tx-fill-color-light);
@@ -98,63 +78,56 @@ const isExecuting = computed(() => props.executingId === props.item.id)
 
 .OmniPanelActionItem__action {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  aspect-ratio: 1 / 1;
   width: 100%;
-  text-align: left;
-  padding: 8px 10px;
+  text-align: center;
+  padding: 0;
   color: inherit;
 }
 
-.OmniPanelActionItem__icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+.OmniPanelActionItem__body {
+  flex: 1;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 10px;
+  padding: 8px 8px 6px;
+}
+
+.OmniPanelActionItem__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--tx-fill-color);
   color: var(--tx-color-primary);
 }
 
-.OmniPanelActionItem__content {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-}
-
 .OmniPanelActionItem__title {
-  font-size: 13px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 8px 9px;
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color) 76%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 82%, transparent);
+  font-size: 12px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   color: var(--tx-text-color-primary);
-}
-
-.OmniPanelActionItem__subtitle {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
-}
-
-.OmniPanelActionItem__reason {
-  font-size: 11px;
-  color: color-mix(in srgb, var(--tx-color-warning, #f59e0b) 82%, var(--tx-text-color-primary) 18%);
-}
-
-.OmniPanelActionItem__meta {
-  font-size: 11px;
-  color: var(--tx-text-color-secondary);
-}
-
-.OmniPanelActionItem__controls {
-  display: flex;
-  gap: 6px;
-  padding: 0 10px 8px;
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .OmniPanelActionItem__executing {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
   animation: blink 1.2s infinite;
 }
 
