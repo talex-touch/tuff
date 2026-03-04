@@ -39,7 +39,7 @@ import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { TuffInputType } from '@talex-touch/utils/transport/events/types'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { and, desc, eq, gt, inArray, lt, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm'
 import { clipboard, nativeImage, powerMonitor } from 'electron'
 import { genTouchApp } from '../core'
 import { TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
@@ -2400,35 +2400,7 @@ export class ClipboardModule extends BaseModule {
           if (!this.db) {
             return
           }
-
-          const oneHourAgo = new Date(Date.now() - CACHE_MAX_AGE_MS)
-          try {
-            const rows = await this.db
-              .select()
-              .from(clipboardHistory)
-              .where(gt(clipboardHistory.timestamp, oneHourAgo))
-            for (const row of rows) {
-              const item = row as unknown as IClipboardItem
-              if (
-                item?.type === 'image' &&
-                typeof item.content === 'string' &&
-                isLikelyLocalPath(item.content)
-              ) {
-                void tempFileService.deleteFile(item.content)
-              }
-            }
-          } catch (error) {
-            clipboardLog.warn(
-              'Failed to cleanup clipboard image files for transport clear-history',
-              {
-                error
-              }
-            )
-          }
-
-          await this.db.delete(clipboardHistory).where(gt(clipboardHistory.timestamp, oneHourAgo))
-          this.memoryCache = []
-          this.notifyTransportChange()
+          await this.cleanupHistory({ type: 'all' })
         }
       )
     )
