@@ -129,6 +129,7 @@ const SECTION_ORDER: Record<string, string[]> = {
   '/docs/dev/release': [
     '/docs/dev/release/index',
     '/docs/dev/release/publish',
+    '/docs/dev/release/performance-persistence',
     '/docs/dev/release/migration',
   ],
   '/docs/dev/tools': [

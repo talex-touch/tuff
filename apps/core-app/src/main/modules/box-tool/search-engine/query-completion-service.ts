@@ -45,42 +45,51 @@ export class QueryCompletionService {
     const db = this.dbUtils.getDb()
     const prefix = this.normalizePrefix(query)
     const queryLength = query.length
+    const label = 'query-completions.record'
 
     try {
-      const existing = await db
-        .select()
-        .from(schema.queryCompletions)
-        .where(
-          sql`${schema.queryCompletions.prefix} = ${prefix}
-              AND ${schema.queryCompletions.sourceId} = ${item.source.id}
-              AND ${schema.queryCompletions.itemId} = ${item.id}`
+      await dbWriteScheduler.schedule(label, () =>
+        withSqliteRetry(
+          async () => {
+            const existing = await db
+              .select()
+              .from(schema.queryCompletions)
+              .where(
+                sql`${schema.queryCompletions.prefix} = ${prefix}
+                      AND ${schema.queryCompletions.sourceId} = ${item.source.id}
+                      AND ${schema.queryCompletions.itemId} = ${item.id}`
+              )
+              .get()
+
+            if (existing) {
+              const newCount = existing.completionCount + 1
+              const newAvgLength =
+                (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
+
+              await db
+                .update(schema.queryCompletions)
+                .set({
+                  completionCount: newCount,
+                  lastCompleted: new Date(),
+                  avgQueryLength: newAvgLength
+                })
+                .where(sql`id = ${existing.id}`)
+              return
+            }
+
+            await db.insert(schema.queryCompletions).values({
+              prefix,
+              sourceId: item.source.id,
+              itemId: item.id,
+              completionCount: 1,
+              lastCompleted: new Date(),
+              avgQueryLength: queryLength,
+              createdAt: new Date()
+            })
+          },
+          { label }
         )
-        .get()
-
-      if (existing) {
-        const newCount = existing.completionCount + 1
-        const newAvgLength =
-          (existing.avgQueryLength * existing.completionCount + queryLength) / newCount
-
-        await db
-          .update(schema.queryCompletions)
-          .set({
-            completionCount: newCount,
-            lastCompleted: new Date(),
-            avgQueryLength: newAvgLength
-          })
-          .where(sql`id = ${existing.id}`)
-      } else {
-        await db.insert(schema.queryCompletions).values({
-          prefix,
-          sourceId: item.source.id,
-          itemId: item.id,
-          completionCount: 1,
-          lastCompleted: new Date(),
-          avgQueryLength: queryLength,
-          createdAt: new Date()
-        })
-      }
+      )
 
       const duration = performance.now() - start
       this.stats.totalRecorded++

@@ -357,6 +357,66 @@ export interface NormalizedUpdateInput {
   link: string
 }
 
+const OFFICIAL_PERFORMANCE_UPDATE_ID = 'official-core-app-performance-2026-03'
+const OFFICIAL_PERFORMANCE_UPDATE_TIMESTAMP = '2026-03-04T06:00:00.000Z'
+const OFFICIAL_PERFORMANCE_DOC_LINK = '/docs/dev/release/performance-persistence'
+
+const OFFICIAL_UPDATES: DashboardUpdate[] = [
+  {
+    id: OFFICIAL_PERFORMANCE_UPDATE_ID,
+    type: 'announcement',
+    scope: 'both',
+    channels: ['RELEASE', 'BETA', 'SNAPSHOT'],
+    releaseTag: null,
+    title: {
+      zh: '核心性能落地：数据库写压与统计采样治理',
+      en: 'Core performance rollout: DB write pressure & stats sampling control',
+    },
+    timestamp: OFFICIAL_PERFORMANCE_UPDATE_TIMESTAMP,
+    summary: {
+      zh: '已上线写队列治理、OCR 高频写入降噪、stats/analytics 分层聚合与低频落盘策略，显著降低 SQLite 锁竞争与写放大。',
+      en: 'Shipped write-queue control, OCR write-noise reduction, and tiered stats/analytics persistence to reduce SQLite lock contention and write amplification.',
+    },
+    tags: ['performance', 'sqlite', 'analytics', 'ocr'],
+    link: OFFICIAL_PERFORMANCE_DOC_LINK,
+    payloadKey: null,
+    payloadSha256: null,
+    payloadContentType: null,
+    payloadVersion: null,
+    payloadSize: null,
+    payloadUrl: null,
+    createdAt: OFFICIAL_PERFORMANCE_UPDATE_TIMESTAMP,
+    updatedAt: OFFICIAL_PERFORMANCE_UPDATE_TIMESTAMP,
+  },
+]
+
+function normalizeStringArray(values: string[]) {
+  return [...values].map(value => value.trim()).filter(Boolean).sort()
+}
+
+function isSameLocalizedText(a: LocalizedText, b: LocalizedText) {
+  return a.zh === b.zh && a.en === b.en
+}
+
+function isSameUpdateContent(a: DashboardUpdate, b: DashboardUpdate) {
+  return (
+    a.type === b.type
+    && a.scope === b.scope
+    && a.releaseTag === b.releaseTag
+    && a.timestamp === b.timestamp
+    && a.link === b.link
+    && isSameLocalizedText(a.title, b.title)
+    && isSameLocalizedText(a.summary, b.summary)
+    && normalizeStringArray(a.channels).join('|') === normalizeStringArray(b.channels).join('|')
+    && normalizeStringArray(a.tags).join('|') === normalizeStringArray(b.tags).join('|')
+    && (a.payloadKey ?? null) === (b.payloadKey ?? null)
+    && (a.payloadSha256 ?? null) === (b.payloadSha256 ?? null)
+    && (a.payloadContentType ?? null) === (b.payloadContentType ?? null)
+    && (a.payloadVersion ?? null) === (b.payloadVersion ?? null)
+    && (a.payloadSize ?? null) === (b.payloadSize ?? null)
+  )
+}
+
 function validIsoDate(value: string) {
   const date = new Date(value)
   return !Number.isNaN(date.getTime())
@@ -477,6 +537,25 @@ function normalizeStoredUpdate(update: Partial<DashboardUpdate>): DashboardUpdat
   }
 }
 
+function mergeOfficialUpdates(updates: DashboardUpdate[]): DashboardUpdate[] {
+  const merged = [...updates]
+  const knownIds = new Set(merged.map(update => update.id))
+
+  for (const officialUpdate of OFFICIAL_UPDATES) {
+    if (knownIds.has(officialUpdate.id))
+      continue
+    merged.push(officialUpdate)
+  }
+
+  return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
+async function listStoredUpdatesInMemory(): Promise<DashboardUpdate[]> {
+  const updates = await readCollection<DashboardUpdate>(UPDATES_KEY)
+  const normalized = updates.map(update => normalizeStoredUpdate(update))
+  return normalized.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+}
+
 function matchScope(update: DashboardUpdate, scope?: UpdateScope): boolean {
   if (!scope)
     return true
@@ -542,14 +621,13 @@ export async function listUpdates(
     `).all<D1UpdateRow>()
 
     const mapped = (results ?? []).map(mapUpdateRow)
-    return applyUpdateFilters(mapped, options)
+    const merged = mergeOfficialUpdates(mapped)
+    return applyUpdateFilters(merged, options)
   }
 
-  const updates = await readCollection<DashboardUpdate>(UPDATES_KEY)
-  const normalized = updates.map(update => normalizeStoredUpdate(update))
-  const filtered = applyUpdateFilters(normalized, options)
-
-  return filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  const memoryUpdates = await listStoredUpdatesInMemory()
+  const merged = mergeOfficialUpdates(memoryUpdates)
+  return applyUpdateFilters(merged, options)
 }
 
 export async function getUpdateById(event: H3Event | undefined, id: string) {
@@ -581,12 +659,16 @@ export async function getUpdateById(event: H3Event | undefined, id: string) {
       WHERE id = ?1;
     `).bind(id).first<D1UpdateRow>()
 
-    return row ? mapUpdateRow(row) : null
+    if (row)
+      return mapUpdateRow(row)
+    return OFFICIAL_UPDATES.find(update => update.id === id) ?? null
   }
 
   const updates = await readCollection<DashboardUpdate>(UPDATES_KEY)
   const match = updates.find(update => update.id === id)
-  return match ? normalizeStoredUpdate(match) : null
+  if (match)
+    return normalizeStoredUpdate(match)
+  return OFFICIAL_UPDATES.find(update => update.id === id) ?? null
 }
 
 export async function createUpdate(
@@ -657,7 +739,7 @@ export async function createUpdate(
     return update
   }
 
-  const updates = await listUpdates()
+  const updates = await listStoredUpdatesInMemory()
   updates.unshift(update)
   await writeCollection(UPDATES_KEY, updates)
   return update
@@ -756,7 +838,7 @@ export async function updateUpdate(
     return updated
   }
 
-  const updates = await listUpdates()
+  const updates = await listStoredUpdatesInMemory()
   const index = updates.findIndex(update => update.id === id)
 
   if (index === -1)
@@ -830,7 +912,7 @@ export async function deleteUpdate(event: H3Event, id: string, options: { allowR
     return
   }
 
-  const updates = await listUpdates()
+  const updates = await listStoredUpdatesInMemory()
   const existing = updates.find(update => update.id === id)
   if (existing?.type === 'release' && !options.allowRelease)
     throw createError({ statusCode: 403, statusMessage: 'Release updates are managed automatically.' })
@@ -840,6 +922,201 @@ export async function deleteUpdate(event: H3Event, id: string, options: { allowR
     throw createError({ statusCode: 404, statusMessage: 'Update not found.' })
 
   await writeCollection(UPDATES_KEY, nextUpdates)
+}
+
+export interface OfficialUpdatesSyncResult {
+  total: number
+  inserted: number
+  updated: number
+  updates: DashboardUpdate[]
+}
+
+export async function syncOfficialUpdates(event: H3Event): Promise<OfficialUpdatesSyncResult> {
+  const db = getD1Database(event)
+  let inserted = 0
+  let updated = 0
+  const synced: DashboardUpdate[] = []
+
+  if (db) {
+    await ensureDashboardSchema(db)
+
+    for (const officialUpdate of OFFICIAL_UPDATES) {
+      const existingRow = await db.prepare(`
+        SELECT
+          id,
+          type,
+          scope,
+          channels,
+          release_tag,
+          title,
+          timestamp,
+          summary,
+          tags,
+          link,
+          payload_key,
+          payload_sha256,
+          payload_content_type,
+          payload_version,
+          payload_size,
+          created_at,
+          updated_at
+        FROM ${UPDATES_TABLE}
+        WHERE id = ?1;
+      `).bind(officialUpdate.id).first<D1UpdateRow>()
+
+      if (!existingRow) {
+        await db.prepare(`
+          INSERT INTO ${UPDATES_TABLE} (
+            id,
+            type,
+            scope,
+            channels,
+            release_tag,
+            title,
+            timestamp,
+            summary,
+            tags,
+            link,
+            payload_key,
+            payload_sha256,
+            payload_content_type,
+            payload_version,
+            payload_size,
+            created_at,
+            updated_at
+          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17);
+        `).bind(
+          officialUpdate.id,
+          officialUpdate.type,
+          officialUpdate.scope,
+          JSON.stringify(officialUpdate.channels),
+          officialUpdate.releaseTag,
+          serializeLocalizedText(officialUpdate.title),
+          officialUpdate.timestamp,
+          serializeLocalizedText(officialUpdate.summary),
+          JSON.stringify(officialUpdate.tags),
+          officialUpdate.link,
+          officialUpdate.payloadKey ?? null,
+          officialUpdate.payloadSha256 ?? null,
+          officialUpdate.payloadContentType ?? null,
+          officialUpdate.payloadVersion ?? null,
+          officialUpdate.payloadSize ?? null,
+          officialUpdate.createdAt,
+          officialUpdate.updatedAt,
+        ).run()
+
+        inserted += 1
+        synced.push(officialUpdate)
+        continue
+      }
+
+      const existing = mapUpdateRow(existingRow)
+      if (isSameUpdateContent(existing, officialUpdate)) {
+        synced.push(existing)
+        continue
+      }
+
+      const nextUpdatedAt = new Date().toISOString()
+      const nextUpdate: DashboardUpdate = {
+        ...officialUpdate,
+        createdAt: existing.createdAt,
+        updatedAt: nextUpdatedAt,
+      }
+
+      await db.prepare(`
+        UPDATE ${UPDATES_TABLE}
+        SET
+          type = ?1,
+          scope = ?2,
+          channels = ?3,
+          release_tag = ?4,
+          title = ?5,
+          timestamp = ?6,
+          summary = ?7,
+          tags = ?8,
+          link = ?9,
+          payload_key = ?10,
+          payload_sha256 = ?11,
+          payload_content_type = ?12,
+          payload_version = ?13,
+          payload_size = ?14,
+          updated_at = ?15
+        WHERE id = ?16;
+      `).bind(
+        nextUpdate.type,
+        nextUpdate.scope,
+        JSON.stringify(nextUpdate.channels),
+        nextUpdate.releaseTag,
+        serializeLocalizedText(nextUpdate.title),
+        nextUpdate.timestamp,
+        serializeLocalizedText(nextUpdate.summary),
+        JSON.stringify(nextUpdate.tags),
+        nextUpdate.link,
+        nextUpdate.payloadKey ?? null,
+        nextUpdate.payloadSha256 ?? null,
+        nextUpdate.payloadContentType ?? null,
+        nextUpdate.payloadVersion ?? null,
+        nextUpdate.payloadSize ?? null,
+        nextUpdate.updatedAt,
+        nextUpdate.id,
+      ).run()
+
+      updated += 1
+      synced.push(nextUpdate)
+    }
+
+    return {
+      total: OFFICIAL_UPDATES.length,
+      inserted,
+      updated,
+      updates: synced,
+    }
+  }
+
+  const memoryUpdates = await listStoredUpdatesInMemory()
+  let changed = false
+
+  for (const officialUpdate of OFFICIAL_UPDATES) {
+    const index = memoryUpdates.findIndex(update => update.id === officialUpdate.id)
+    if (index === -1) {
+      memoryUpdates.unshift(officialUpdate)
+      inserted += 1
+      changed = true
+      synced.push(officialUpdate)
+      continue
+    }
+
+    const existing = memoryUpdates[index]
+    if (!existing)
+      continue
+
+    if (isSameUpdateContent(existing, officialUpdate)) {
+      synced.push(existing)
+      continue
+    }
+
+    const nextUpdate: DashboardUpdate = {
+      ...officialUpdate,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    }
+    memoryUpdates[index] = nextUpdate
+    updated += 1
+    changed = true
+    synced.push(nextUpdate)
+  }
+
+  if (changed) {
+    memoryUpdates.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    await writeCollection(UPDATES_KEY, memoryUpdates)
+  }
+
+  return {
+    total: OFFICIAL_UPDATES.length,
+    inserted,
+    updated,
+    updates: synced,
+  }
 }
 
 export interface DashboardUpdateSettings {
