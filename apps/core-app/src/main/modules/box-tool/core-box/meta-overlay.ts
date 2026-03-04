@@ -61,6 +61,13 @@ const metaOverlayFlowTransferEvent = defineRawEvent<{ item: TuffItem }, void>(
   'meta-overlay:flow-transfer'
 )
 
+const BUILTIN_ACTION_IDS = new Set([
+  'toggle-pin',
+  'copy-title',
+  'reveal-in-finder',
+  'flow-transfer'
+])
+
 /**
  * Manages the MetaOverlay WebContentsView in persistent mode.
  * The view is created with the CoreBox window and shown/hidden as needed.
@@ -71,6 +78,7 @@ export class MetaOverlayManager {
   private metaView: WebContentsView | null = null
   private parentWindow: BrowserWindow | null = null
   private isVisible = false
+  private currentItem: TuffItem | null = null
   private pluginActions: Map<string, MetaAction[]> = new Map()
   private heightSyncTimer: NodeJS.Timeout | null = null
 
@@ -259,6 +267,7 @@ export class MetaOverlayManager {
       ...(request.itemActions || []),
       ...request.builtinActions
     ].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
+    this.currentItem = request.item
 
     // Update bounds
     const bounds = this.parentWindow.getBounds()
@@ -350,11 +359,13 @@ export class MetaOverlayManager {
     const metaWebContents = this.getAliveMetaWebContents()
     if (!this.metaView || !metaWebContents) {
       this.isVisible = false
+      this.currentItem = null
       return
     }
 
     this.metaView.setVisible(false)
     this.isVisible = false
+    this.currentItem = null
 
     const channel = genTouchApp().channel
     const tx = getTuffTransportMain(channel, resolveKeyManager(channel))
@@ -439,7 +450,7 @@ export class MetaOverlayManager {
    * @param actionId - The action ID to execute
    * @param item - The item context for the action
    */
-  public async executeAction(actionId: string, item: TuffItem): Promise<void> {
+  public async executeAction(actionId: string, item?: TuffItem): Promise<void> {
     // Find the action
     let action: MetaAction | undefined
     let pluginId: string | undefined
@@ -458,8 +469,15 @@ export class MetaOverlayManager {
 
     // If not found in plugin actions, determine handler type
     if (!action) {
-      handler = actionId.startsWith('item-action-') ? 'item' : 'builtin'
+      handler = BUILTIN_ACTION_IDS.has(actionId) ? 'builtin' : 'item'
       metaOverlayLog.debug(`Executing ${handler} action ${actionId}`)
+    }
+
+    const targetItem = item ?? this.currentItem
+    if (!targetItem) {
+      metaOverlayLog.warn(`Cannot execute action ${actionId}: missing item context`)
+      this.hide()
+      return
     }
 
     const touchApp = genTouchApp()
@@ -472,7 +490,7 @@ export class MetaOverlayManager {
       void transport
         .sendToPlugin(pluginId, metaOverlayActionExecutedEvent, {
           actionId,
-          item,
+          item: targetItem,
           pluginId
         })
         .catch((error) => {
@@ -480,7 +498,7 @@ export class MetaOverlayManager {
         })
     } else if (handler === 'builtin') {
       // Built-in action - handle in main process
-      await this.handleBuiltinAction(actionId, item, touchApp)
+      await this.handleBuiltinAction(actionId, targetItem, touchApp)
     } else if (handler === 'item') {
       // Item action - broadcast to renderer to handle
       const coreBoxWindow = getCoreBoxWindow()
@@ -491,7 +509,7 @@ export class MetaOverlayManager {
         void transport
           .sendTo(coreBoxWebContents, metaOverlayItemActionEvent, {
             actionId,
-            item
+            item: targetItem
           })
           .catch(() => {})
       }
@@ -599,6 +617,7 @@ export class MetaOverlayManager {
     }
 
     this.pluginActions.clear()
+    this.currentItem = null
     this.parentWindow = null
     this.isVisible = false
 
