@@ -130,8 +130,11 @@ async function handleOpenDevTools(): Promise<void> {
 
   loadingStates.value.openDevTools = true
   try {
-    const openDevTools = defineRawEvent<string, void>('plugin:open-devtools')
-    await transport.send(openDevTools, props.plugin.name)
+    const openDevTools = defineRawEvent<string, boolean>('plugin:open-devtools')
+    const opened = await transport.send(openDevTools, props.plugin.name)
+    if (!opened) {
+      throw new Error(`Failed to open DevTools for plugin: ${props.plugin.name}`)
+    }
   } catch (error) {
     console.error('Failed to open plugin DevTools:', error)
     toast.error(t('plugin.actions.openDevToolsFailed'))

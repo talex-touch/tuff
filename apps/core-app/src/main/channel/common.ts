@@ -55,9 +55,11 @@ import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
+import { windowManager } from '../modules/box-tool/core-box/window'
 import { buildVerificationModule } from '../modules/build-verification'
 import { clipboardModule } from '../modules/clipboard'
 import { databaseModule } from '../modules/database'
+import { pluginModule } from '../modules/plugin/plugin-module'
 import { createDbUtils } from '../db/utils'
 import {
   platformCapabilityRegistry,
@@ -140,6 +142,9 @@ const legacyCommonCwdEvent = defineRawEvent<void, string>('common:cwd')
 const legacyCommonGetPathEvent = defineRawEvent<{ name: string }, string | null>('common:get-path')
 const legacyFolderOpenEvent = defineRawEvent<{ path: string }, void>('folder:open')
 const legacyModuleFolderEvent = defineRawEvent<{ name: string }, void>('module:folder')
+const legacyPluginFolderEvent = defineRawEvent<string, void>('plugin:explorer')
+const legacyPluginDevToolsEvent = defineRawEvent<string, boolean>('plugin:open-devtools')
+const legacyPluginReloadEvent = defineRawEvent<{ name: string }, void>('reload-plugin')
 const legacyExecuteCmdEvent = defineRawEvent<
   { command: string },
   { success: boolean; error?: string }
@@ -1261,6 +1266,33 @@ export class CommonChannelModule extends BaseModule {
             `[Channel] Open path [${modulePath}] with module folder @${payload?.name ?? 'defaults'}`
           )
         }
+      }),
+      transport.on(legacyPluginFolderEvent, (pluginName) => {
+        if (!pluginName) return
+        const plugin = pluginModule.pluginManager?.getPluginByName(pluginName)
+        if (!plugin) {
+          log.warn(`[CommonChannel] Plugin not found when opening folder: ${pluginName}`)
+          return
+        }
+        shell.openPath(plugin.pluginPath)
+      }),
+      transport.on(legacyPluginDevToolsEvent, (pluginName) => {
+        if (!pluginName) return false
+        const opened = windowManager.openPluginDevTools(pluginName)
+        if (!opened) {
+          log.warn(`[CommonChannel] Failed to open plugin DevTools: ${pluginName}`)
+        }
+        return opened
+      }),
+      transport.on(legacyPluginReloadEvent, async (payload) => {
+        const pluginName = payload?.name
+        if (!pluginName) return
+        const manager = pluginModule.pluginManager
+        if (!manager) {
+          log.warn('[CommonChannel] Plugin manager unavailable for reload-plugin')
+          return
+        }
+        await manager.reloadPlugin(pluginName)
       }),
       transport.on(legacyExecuteCmdEvent, async (payload) => {
         if (payload?.command) {
