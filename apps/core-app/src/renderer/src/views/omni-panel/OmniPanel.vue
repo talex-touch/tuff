@@ -5,7 +5,6 @@ import type {
   OmniPanelFeatureItemPayload,
   OmniPanelFeatureListResponse
 } from '../../../../shared/events/omni-panel'
-import { CoreBoxOmniPanelKeys } from '@talex-touch/utils/i18n'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
@@ -15,24 +14,20 @@ import {
   omniPanelFeatureExecuteEvent,
   omniPanelFeatureListEvent,
   omniPanelFeatureRefreshEvent,
-  omniPanelFeatureReorderEvent,
   omniPanelHideEvent
 } from '../../../../shared/events/omni-panel'
 import OmniPanelActionList from './components/OmniPanelActionList.vue'
-import OmniPanelContextCard from './components/OmniPanelContextCard.vue'
-import OmniPanelHeader from './components/OmniPanelHeader.vue'
 import OmniPanelSearchBar from './components/OmniPanelSearchBar.vue'
 import { filterOmniPanelFeatures } from './filter-features'
 import { ensureValidFocusIndex, resolveFocusedItem, resolveNextFocusIndex } from './interaction'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
-const ACTION_GRID_COLUMNS = 2
+const ACTION_GRID_COLUMNS = 3
 
 const selectedText = ref('')
 const hasSelection = ref(false)
 const source = ref('manual')
-const capturedAt = ref<number | null>(null)
 const loading = ref(false)
 const executingId = ref<string | null>(null)
 const searchKeyword = ref('')
@@ -49,12 +44,18 @@ const executeCodeMessageMap: Record<string, string> = {
   INTERNAL_ERROR: 'corebox.omniPanel.executeFailed'
 }
 
-const displayText = computed(() => {
-  if (hasSelection.value) return selectedText.value
-  return t(
-    CoreBoxOmniPanelKeys.EMPTY_SELECTION,
-    '当前没有捕获到选中文本。先在任意应用中选中文本，再触发全景面板。'
-  )
+const footerHint = computed(() => {
+  if (!hasSelection.value) {
+    return '已选中 0 字符'
+  }
+
+  const trimmed = selectedText.value.replace(/\s+/g, ' ').trim()
+  if (!trimmed) {
+    return '已选中 0 字符'
+  }
+
+  const preview = trimmed.length > 24 ? `${trimmed.slice(0, 24)}...` : trimmed
+  return `已选中 ${preview}`
 })
 
 const filteredFeatures = computed(() => {
@@ -132,27 +133,10 @@ async function executeFeature(item: OmniPanelFeatureItemPayload): Promise<void> 
   }
 }
 
-async function reorderFeature(
-  item: OmniPanelFeatureItemPayload,
-  direction: 'up' | 'down'
-): Promise<void> {
-  try {
-    await transport.send(omniPanelFeatureReorderEvent, {
-      id: item.id,
-      direction
-    })
-    await loadFeatures()
-  } catch (error) {
-    console.error('[OmniPanel] Failed to reorder feature:', error)
-    toast.error(t('corebox.omniPanel.reorderFailed', 'Feature 排序更新失败。'))
-  }
-}
-
 function handleContext(payload: OmniPanelContextPayload): void {
   selectedText.value = payload.text || ''
   hasSelection.value = payload.hasSelection
   source.value = payload.source || 'manual'
-  capturedAt.value = payload.capturedAt
 }
 
 function focusSearchBar(): void {
@@ -244,21 +228,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="OmniPanel">
-    <OmniPanelHeader @close="closePanel" />
-
-    <OmniPanelContextCard
-      :text="selectedText"
-      :source="source"
-      :captured-at="capturedAt"
-      :has-selection="hasSelection"
-      :fallback-text="displayText"
-    />
-
     <OmniPanelSearchBar
       ref="searchBarRef"
       v-model="searchKeyword"
       :placeholder="t('corebox.omniPanel.searchPlaceholder', '搜索 OmniPanel Feature')"
     />
+
+    <div class="OmniPanel__divider" />
 
     <div v-if="loading" class="OmniPanel__state">
       {{ t('corebox.omniPanel.loading', '正在加载 Feature...') }}
@@ -273,8 +249,10 @@ onBeforeUnmount(() => {
       :executing-id="executingId"
       @focus="(index) => (focusedIndex = index)"
       @execute="executeFeature"
-      @reorder="reorderFeature"
     />
+
+    <div class="OmniPanel__divider" />
+    <p class="OmniPanel__hint">{{ footerHint }}</p>
   </div>
 </template>
 
@@ -297,5 +275,21 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: var(--tx-text-color-secondary);
   background: var(--tx-fill-color-light);
+}
+
+.OmniPanel__divider {
+  width: 100%;
+  height: 1px;
+  background: color-mix(in srgb, var(--tx-border-color) 76%, transparent);
+}
+
+.OmniPanel__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
