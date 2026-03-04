@@ -339,7 +339,13 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           break
         }
         case 'file-index': {
-          await fileProvider.addWatchPath(meta.path)
+          systemActionsLog.info('System action file-index start', {
+            meta: { path: meta.path }
+          })
+          const result = await fileProvider.addWatchPath(meta.path)
+          systemActionsLog.info('System action file-index result', {
+            meta: { path: meta.path, ...result }
+          })
           break
         }
       }
@@ -422,13 +428,11 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
       }
     }
 
-    const isDirectory = stats.isDirectory()
-    const watchPath = isDirectory ? candidate : path.dirname(candidate)
     return {
       type: 'file-index',
-      path: watchPath,
-      displayName: buildDisplayName(isDirectory ? watchPath : candidate),
-      displayPath: isDirectory ? watchPath : candidate
+      path: candidate,
+      displayName: buildDisplayName(candidate),
+      displayPath: candidate
     }
   }
 
