@@ -97,6 +97,7 @@
       "@nuxt/kit": "catalog:build",
       "@panva/hkdf": "1.0.2",
       "@types/node": "24.1.0",
+      "fast-xml-parser": "4.5.4",
       "nuxt": "catalog:build",
       "unplugin": "catalog:build",
       "vite": "7.3.1"
