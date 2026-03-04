@@ -728,6 +728,8 @@ export class OmniPanelModule extends BaseModule {
     }
 
     const window = new TouchWindow({ ...OmniPanelWindowOption })
+    window.window.setVisibleOnAllWorkspaces(true)
+    window.window.setAlwaysOnTop(true, 'floating')
     window.window.on('closed', () => {
       this.panelWindow = null
       this.isVisible = false
@@ -777,8 +779,7 @@ export class OmniPanelModule extends BaseModule {
     }
 
     this.positionWindowNearCursor(targetWindow)
-    targetWindow.window.show()
-    targetWindow.window.focus()
+    targetWindow.window.showInactive()
     this.isVisible = true
     await this.pushContext(text, normalizedSource.source, normalizedSource.sourceRaw)
     this.notifyFeatureRefresh('show')

@@ -158,12 +158,13 @@ export const AssistantVoicePanelWindowOption: Electron.BrowserWindowConstructorO
 }
 export const OmniPanelWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: `${AppName} OmniPanel`,
+  type: 'panel',
   frame: false,
-  minWidth: 380,
+  minWidth: 340,
   minHeight: 260,
-  width: 460,
+  width: 400,
   height: 320,
-  movable: true,
+  movable: false,
   resizable: false,
   skipTaskbar: true,
   autoHideMenuBar: true,
