@@ -156,12 +156,12 @@ const secureStorageEnabled = computed({
 
 const secureStorageDescription = computed(() => {
   if (secureStorageEnabled.value) {
-    return '登录凭证将写入系统安全存储（Keychain/safeStorage）。'
+    return '已启用系统安全存储（推荐）：登录凭证将安全保存，重启后可保持登录状态。'
   }
   if (isLoggedIn.value) {
-    return '当前为会话模式：凭证不持久化，重启后需要重新登录。'
+    return '你已关闭系统安全存储：当前为会话模式，重启后需要重新登录。'
   }
-  return '未启用系统安全存储：登录后仅保持当前会话。'
+  return '你已关闭系统安全存储：下次登录仅在本次会话有效。'
 })
 
 const canTriggerManualSync = computed(
