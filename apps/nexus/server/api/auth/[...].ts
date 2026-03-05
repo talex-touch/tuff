@@ -7,14 +7,12 @@ import type { JWT } from 'next-auth/jwt'
 import type { OAuthConfig } from 'next-auth/providers/oauth'
 import Credentials from 'next-auth/providers/credentials'
 import GitHub from 'next-auth/providers/github'
-import Email from 'next-auth/providers/email'
 import { createD1Adapter } from '../../utils/authAdapter'
 import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, verifyUserPassword } from '../../utils/authStore'
 import { sendEmail } from '../../utils/email'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
-const EmailProvider = (Email as any).default ?? Email
 
 type AuthRequestHeaders = Record<string, string | string[] | undefined>
 interface OAuthTokenRequestContext {
@@ -24,6 +22,28 @@ interface OAuthTokenRequestContext {
 }
 interface OAuthUserInfoRequestContext {
   tokens: Record<string, unknown>
+}
+interface EmailVerificationRequestContext {
+  identifier: string
+  url: string
+}
+
+function createEmailProvider(server: string, from: string) {
+  return {
+    id: 'email',
+    type: 'email',
+    name: 'Email',
+    server,
+    from,
+    maxAge: 24 * 60 * 60,
+    async sendVerificationRequest({ identifier, url }: EmailVerificationRequestContext) {
+      await sendEmail({
+        to: identifier,
+        subject: 'Sign in to Tuff',
+        html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`
+      })
+    },
+  } as any
 }
 
 function resolveAuthHeaders(req?: { headers?: Headers | AuthRequestHeaders } | Request | null): AuthRequestHeaders | undefined {
@@ -564,17 +584,7 @@ function getAuthOptions(): AuthOptions {
   const emailServer = config.auth?.email?.server
   const emailFrom = config.auth?.email?.from
   if (emailServer && emailFrom) {
-    providers.push(EmailProvider({
-      server: emailServer,
-      from: emailFrom,
-      sendVerificationRequest: async ({ identifier, url }: { identifier: string, url: string }) => {
-        await sendEmail({
-          to: identifier,
-          subject: 'Sign in to Tuff',
-          html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`
-        })
-      }
-    }))
+    providers.push(createEmailProvider(emailServer, emailFrom))
   }
 
   return {

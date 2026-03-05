@@ -2,6 +2,23 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-05
+
+### Nexus Auth 路由在 Cloudflare 环境 500 修复
+
+**变更类型**: 缺陷修复 / 线上可用性恢复
+
+**描述**: 修复 Nexus 在 Cloudflare Pages/Worker 环境下，`/api/auth/*` 全部返回 500 的问题。根因是 auth 路由静态引入 `next-auth/providers/email`，会连带 `nodemailer` 进入 Worker 运行时并导致初始化失败。
+
+**主要变更**:
+1. 移除 `server/api/auth/[...].ts` 对 `next-auth/providers/email` 的静态导入，避免 Worker 侧加载 Node 邮件依赖。
+2. 在 auth 路由内使用轻量 email provider（仅声明 `email` 类型和 `sendVerificationRequest`），保持现有邮件登录流程与 `sendEmail` 能力不变。
+3. 仅在 `AUTH_EMAIL_SERVER` 与 `AUTH_EMAIL_FROM` 同时存在时注册 email provider，行为与原有门控保持一致。
+
+**修改文件**:
+- `apps/nexus/server/api/auth/[...].ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-04
 
 ### Nexus 官网同步：性能落地公告与文档入口
@@ -40,6 +57,7 @@
 2. MetaOverlay 执行动作时支持使用当前面板缓存的 item 上下文兜底。
 3. `meta-overlay:action.execute` IPC 不再因 `item` 缺失立即抛错，交由 manager 统一处理。
 4. MetaOverlay renderer 发送执行请求时不再因本地 `item` 为空直接短路。
+5. MetaOverlay 未匹配到内建动作时，renderer 侧回退到 `CoreBoxEvents.item.execute`，避免 `system-action-*` 等 item action 被吞掉。
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/core-box/meta-overlay.ts`
