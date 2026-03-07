@@ -147,4 +147,50 @@ describe('ModuleManager lifecycle isolation', () => {
     expect(manager.hasModule(key)).toBe(false)
     expect(calls).toEqual(['init', 'stop', 'destroy'])
   })
+
+  it('unloadAll is idempotent under concurrent calls', async () => {
+    const manager = createManager()
+    const calls: string[] = []
+
+    class ModuleA extends BaseModule<TalexEvents> {
+      static readonly key = Symbol.for('test-module-unload-all-a') as ModuleKey
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+      onInit(): void {
+        calls.push('a:init')
+      }
+      async onDestroy(): Promise<void> {
+        calls.push('a:destroy')
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }
+
+    class ModuleB extends BaseModule<TalexEvents> {
+      static readonly key = Symbol.for('test-module-unload-all-b') as ModuleKey
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+      onInit(): void {
+        calls.push('b:init')
+      }
+      async onDestroy(): Promise<void> {
+        calls.push('b:destroy')
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+    }
+
+    expect(await manager.loadModule(ModuleA)).toBe(true)
+    expect(await manager.loadModule(ModuleB)).toBe(true)
+
+    const [first, second] = await Promise.all([
+      manager.unloadAll('normal'),
+      manager.unloadAll('normal')
+    ])
+    expect(first).toBe(true)
+    expect(second).toBe(true)
+    expect(calls.filter((item) => item === 'a:destroy')).toHaveLength(1)
+    expect(calls.filter((item) => item === 'b:destroy')).toHaveLength(1)
+    expect(manager.listModules()).toHaveLength(0)
+  })
 })
