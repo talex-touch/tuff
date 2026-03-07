@@ -98,6 +98,14 @@ async function updateStartSilent(value: boolean) {
     ensureWindowSettings()
     appSetting.window.startSilent = value
     windowSettings.value.startSilent = value
+    const currentAutoStart = await transport.send(
+      AppEvents.system.autoStartUpdate,
+      windowSettings.value.autoStart
+    )
+    windowSettings.value.autoStart = Boolean(currentAutoStart)
+    if (appSetting.setup) {
+      appSetting.setup.autoStart = windowSettings.value.autoStart
+    }
     devLog('[SettingWindow] Start silent setting updated:', value)
   } catch (error) {
     console.error('[SettingWindow] Failed to update start silent setting:', error)
