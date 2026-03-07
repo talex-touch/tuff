@@ -454,7 +454,7 @@ import type {
 import type { WidgetRegistrationPayload } from '../../plugin/widget'
 
 // ============================================================================
-// Tray Events
+// Sentry Events
 // ============================================================================
 
 import type {
@@ -465,10 +465,6 @@ import type {
   SentryRecordPerformanceResponse,
   SentryUpdateUserRequest,
 } from './types/sentry'
-
-// ============================================================================
-// Sentry Events
-// ============================================================================
 
 import type {
   PluginStorageDeleteRequest,
@@ -2416,39 +2412,6 @@ export const AgentsEvents = {
   },
 } as const
 
-export const TrayEvents = {
-  autostart: {
-    update: defineEvent('tray')
-      .module('autostart')
-      .event('update')
-      .define<TrayAutostartUpdateRequest, TrayAutostartUpdateResponse>(),
-
-    get: defineEvent('tray')
-      .module('autostart')
-      .event('get')
-      .define<void, TrayAutostartGetResponse>(),
-  },
-
-  show: {
-    get: defineEvent('tray')
-      .module('show')
-      .event('get')
-      .define<void, TrayShowGetResponse>(),
-
-    set: defineEvent('tray')
-      .module('show')
-      .event('set')
-      .define<TrayShowSetRequest, TrayShowSetResponse>(),
-  },
-
-  hideDock: {
-    set: defineEvent('tray')
-      .module('hidedock')
-      .event('set')
-      .define<void, TrayHideDockSetResponse>(),
-  },
-} as const
-
 export const SentryEvents = {
   api: {
     updateUser: defineRawEvent<SentryUpdateUserRequest, void>('sentry:update-user'),
@@ -2779,7 +2742,6 @@ export const TuffEvents = {
   permission: PermissionEvents,
   platform: PlatformEvents,
   agents: AgentsEvents,
-  tray: TrayEvents,
   transport: TransportEvents,
   sentry: SentryEvents,
   boxItem: BoxItemEvents,

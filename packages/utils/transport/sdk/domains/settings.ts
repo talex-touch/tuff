@@ -13,7 +13,15 @@ import type {
   AppIndexAddPathResult,
   AppIndexSettings,
 } from '../../events/types/app-index'
-import type { AnalyticsToggleRequest, CurrentMetrics, PerformanceHistoryEntry, PerformanceSummary } from '../../events/types/app'
+import type {
+  AnalyticsToggleRequest,
+  AutoStartUpdateRequest,
+  CurrentMetrics,
+  PerformanceHistoryEntry,
+  PerformanceSummary,
+  TraySettings,
+  TraySettingsUpdateRequest,
+} from '../../events/types/app'
 import type { DeviceIdleSettings } from '../../events/types/device-idle'
 import type {
   FileIndexAddPathRequest,
@@ -30,6 +38,12 @@ import type { ITuffTransport, StreamController, StreamOptions } from '../../type
 import { AppEvents } from '../../events'
 
 export interface SettingsSdk {
+  system: {
+    getAutoStart: () => Promise<boolean>
+    updateAutoStart: (enabled: AutoStartUpdateRequest) => Promise<boolean>
+    getTraySettings: () => Promise<TraySettings>
+    updateTraySettings: (payload: TraySettingsUpdateRequest) => Promise<TraySettings>
+  }
   fileIndex: {
     getStatus: () => Promise<FileIndexStatus>
     getStats: () => Promise<FileIndexStats>
@@ -67,6 +81,12 @@ export interface SettingsSdk {
 
 export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
   return {
+    system: {
+      getAutoStart: () => transport.send(AppEvents.system.autoStartGet),
+      updateAutoStart: enabled => transport.send(AppEvents.system.autoStartUpdate, enabled),
+      getTraySettings: () => transport.send(AppEvents.system.traySettingsGet),
+      updateTraySettings: payload => transport.send(AppEvents.system.traySettingsUpdate, payload),
+    },
     fileIndex: {
       getStatus: () => transport.send(AppEvents.fileIndex.status),
       getStats: () => transport.send(AppEvents.fileIndex.stats),

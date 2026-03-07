@@ -63,8 +63,5 @@ export * from './storage'
 // Transport domain types
 export * from './transport'
 
-// Tray domain types
-export * from './tray'
-
 // Update domain types
 export * from './update'
