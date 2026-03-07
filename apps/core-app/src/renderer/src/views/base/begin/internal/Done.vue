@@ -7,7 +7,7 @@ import { hasNavigator } from '@talex-touch/utils/env'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import WelcomeData from '~/assets/lotties/welcome.json'
@@ -83,7 +83,7 @@ async function enableHideDockDefault(): Promise<void> {
   if (setupState.hideDock === true) return
   setupState.hideDock = true
   try {
-    await transport.send(TrayEvents.hideDock.set)
+    await transport.send(AppEvents.system.traySettingsUpdate, { hideDock: true })
   } catch {
     // noop
   }

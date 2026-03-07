@@ -2,7 +2,7 @@
 import { TxButton } from '@talex-touch/tuffex'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { StorageEvents, TrayEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
 import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -72,6 +72,7 @@ const settings = ref({
   showTray: true,
   hideDock: false
 })
+const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
 const isContinuing = ref(false)
@@ -192,12 +193,27 @@ async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
+    settings.value.hideDock = appSetting.setup.hideDock ?? false
   }
 
   // Load autoStart from existing setting
-  const autoStartResult = await transport.send(TrayEvents.autostart.get)
-  if (autoStartResult !== null) {
+  try {
+    const autoStartResult = await transport.send(AppEvents.system.autoStartGet)
     settings.value.autoStart = Boolean(autoStartResult)
+  } catch (error) {
+    console.error('[SetupPermissions] Failed to load autoStart:', error)
+  }
+
+  try {
+    const traySettings = await transport.send(AppEvents.system.traySettingsGet)
+    traySettingsAvailable.value = traySettings?.available === true
+    if (traySettings) {
+      settings.value.showTray = traySettings.showTray !== false
+      settings.value.hideDock = traySettings.hideDock === true
+    }
+  } catch (error) {
+    console.error('[SetupPermissions] Failed to load tray settings:', error)
+    traySettingsAvailable.value = false
   }
 }
 
@@ -226,7 +242,7 @@ async function updateAutoStart(value: boolean): Promise<void> {
       content: JSON.stringify(value),
       clear: false
     })
-    await transport.send(TrayEvents.autostart.update, value)
+    await transport.send(AppEvents.system.autoStartUpdate, value)
   } catch (error) {
     console.error('[SetupPermissions] Failed to update autoStart:', error)
     toast.error(t('setupPermissions.updateFailed'))
@@ -242,7 +258,7 @@ async function updateShowTray(value: boolean): Promise<void> {
       content: JSON.stringify(value),
       clear: false
     })
-    await transport.send(TrayEvents.show.set, value)
+    await transport.send(AppEvents.system.traySettingsUpdate, { showTray: value })
   } catch (error) {
     console.error('[SetupPermissions] Failed to update showTray:', error)
     toast.error(t('setupPermissions.updateFailed'))
@@ -464,6 +480,7 @@ function getStatusIconClass(status: string): string {
         />
 
         <TuffBlockSwitch
+          v-if="traySettingsAvailable"
           v-model="settings.showTray"
           :title="t('setupPermissions.showTray')"
           :description="t('setupPermissions.showTrayDesc')"
