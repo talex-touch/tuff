@@ -10,7 +10,6 @@ import { TxButton } from '@talex-touch/tuffex'
 import { useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { TrayEvents } from '@talex-touch/utils/transport/events'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
@@ -80,6 +79,7 @@ const settings = ref({
   customDesktop: false
 })
 const appIndexSettings = ref<AppIndexSettings | null>(null)
+const traySettingsAvailable = ref(false)
 
 const isLoading = ref(false)
 
@@ -219,12 +219,20 @@ async function loadSettings(): Promise<void> {
 
   // Load autoStart from existing setting
   try {
-    const autoStartResult = await transport.send(TrayEvents.autostart.get)
-    if (autoStartResult !== null) {
-      settings.value.autoStart = Boolean(autoStartResult)
-    }
+    const autoStartResult = await settingsSdk.system.getAutoStart()
+    settings.value.autoStart = Boolean(autoStartResult)
   } catch (error) {
     console.error('[SettingSetup] Failed to load autoStart:', error)
+  }
+
+  try {
+    const traySettings = await settingsSdk.system.getTraySettings()
+    traySettingsAvailable.value = traySettings.available === true
+    settings.value.showTray = traySettings.showTray !== false
+    settings.value.hideDock = traySettings.hideDock === true
+  } catch (error) {
+    console.error('[SettingSetup] Failed to load tray settings:', error)
+    traySettingsAvailable.value = false
   }
 
   settings.value.startSilent = Boolean(appSetting.window?.startSilent)
@@ -266,7 +274,8 @@ async function updateAutoStart(value: boolean): Promise<void> {
   settings.value.autoStart = value
   appSetting.setup.autoStart = value
   try {
-    await transport.send(TrayEvents.autostart.update, value)
+    const current = await settingsSdk.system.updateAutoStart(value)
+    settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update autoStart:', error)
@@ -278,7 +287,10 @@ async function updateShowTray(value: boolean): Promise<void> {
   settings.value.showTray = value
   appSetting.setup.showTray = value
   try {
-    await transport.send(TrayEvents.show.set, value)
+    const updated = await settingsSdk.system.updateTraySettings({ showTray: value })
+    traySettingsAvailable.value = updated.available === true
+    settings.value.showTray = updated.showTray !== false
+    settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update showTray:', error)
@@ -290,7 +302,10 @@ async function updateHideDock(value: boolean): Promise<void> {
   settings.value.hideDock = value
   appSetting.setup.hideDock = value
   try {
-    await transport.send(TrayEvents.hideDock.set)
+    const updated = await settingsSdk.system.updateTraySettings({ hideDock: value })
+    traySettingsAvailable.value = updated.available === true
+    settings.value.showTray = updated.showTray !== false
+    settings.value.hideDock = updated.hideDock === true
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update hideDock:', error)
@@ -304,7 +319,8 @@ async function updateStartSilent(value: boolean): Promise<void> {
   appSetting.window.startSilent = value
   try {
     // Update auto-start setting to apply the change
-    await transport.send(TrayEvents.autostart.update, settings.value.autoStart)
+    const current = await settingsSdk.system.updateAutoStart(settings.value.autoStart)
+    settings.value.autoStart = Boolean(current)
     toast.success(t('common.success'))
   } catch (error) {
     console.error('[SettingSetup] Failed to update startSilent:', error)
@@ -498,6 +514,7 @@ function getStatusIconClass(status: string): string {
     />
 
     <TuffBlockSwitch
+      v-if="traySettingsAvailable"
       v-model="settings.showTray"
       :title="t('settings.setup.showTray')"
       :description="t('settings.setup.showTrayDesc')"
@@ -507,7 +524,7 @@ function getStatusIconClass(status: string): string {
     />
 
     <TuffBlockSwitch
-      v-if="isMacOS"
+      v-if="isMacOS && traySettingsAvailable"
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
       :description="t('settings.setup.hideDockDesc')"
