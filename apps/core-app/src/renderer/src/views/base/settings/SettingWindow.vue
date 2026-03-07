@@ -6,7 +6,7 @@
 -->
 <script setup lang="ts" name="SettingWindow">
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { TrayEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents } from '@talex-touch/utils/transport/events'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -51,7 +51,7 @@ function ensureWindowSettings(): void {
 onMounted(async () => {
   try {
     ensureWindowSettings()
-    const autoStartStatus = await transport.send(TrayEvents.autostart.get)
+    const autoStartStatus = await transport.send(AppEvents.system.autoStartGet)
     const autoStart =
       autoStartStatus !== null ? Boolean(autoStartStatus) : !!appSetting.setup?.autoStart
 
@@ -109,7 +109,7 @@ async function updateAutoStart(value: boolean) {
     if (appSetting.setup) {
       appSetting.setup.autoStart = value
     }
-    await transport.send(TrayEvents.autostart.update, value)
+    await transport.send(AppEvents.system.autoStartUpdate, value)
     windowSettings.value.autoStart = value
     devLog('[SettingWindow] Auto start setting updated:', value)
   } catch (error) {
