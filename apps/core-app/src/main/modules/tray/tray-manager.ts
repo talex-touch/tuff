@@ -7,8 +7,6 @@ import type {
 import type { TrayState } from './tray-state-manager'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { TrayEvents } from '@talex-touch/utils/transport/events'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -16,15 +14,13 @@ import {
   WindowHiddenEvent,
   WindowShownEvent
 } from '../../core/eventbus/touch-event'
+import { useAliveTarget } from '../../hooks/use-electron-guard'
 import { TalexTouch } from '../../types'
 import { BaseModule } from '../abstract-base-module'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
 import { TrayMenuBuilder } from './tray-menu-builder'
 import { TrayStateManager } from './tray-state-manager'
-
-const resolveKeyManager = (channel: unknown): unknown =>
-  (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
 export class TrayManager extends BaseModule {
   static key: symbol = Symbol.for('TrayManager')
@@ -34,7 +30,9 @@ export class TrayManager extends BaseModule {
   private trayExperimentalEnabled = false
   private menuBuilder: TrayMenuBuilder
   private stateManager: TrayStateManager
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private appDisposers: Array<() => void> = []
+  private windowDisposers: Array<() => void> = []
+  private eventDisposers: Array<() => void> = []
 
   constructor() {
     super(TrayManager.key, {
@@ -45,30 +43,22 @@ export class TrayManager extends BaseModule {
   }
 
   async onInit(): Promise<void> {
-    if ($app.channel) {
-      const keyManager = resolveKeyManager($app.channel)
-      this.transport = getTuffTransportMain($app.channel, keyManager)
-    }
-
     this.trayExperimentalEnabled = this.isTrayExperimentalEnabled()
+    if (!this.trayExperimentalEnabled) {
+      console.info('[TrayManager] Tray is experimental and disabled by default.')
+      return
+    }
 
     if (process.platform === 'darwin') {
       this.applyActivationPolicy()
+      this.setupDockIcon()
     }
 
     this.registerWindowEvents()
     this.registerEventListeners()
-    this.setupAutoStart()
-    this.setupChannels()
 
     if (process.platform === 'darwin') {
-      this.setupDockIcon()
       this.updateDockVisibility()
-    }
-
-    if (!this.trayExperimentalEnabled) {
-      console.info('[TrayManager] Tray is experimental and disabled by default.')
-      return
     }
 
     if (this.shouldShowTray()) {
@@ -139,49 +129,6 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private setupAutoStart(): void {
-    try {
-      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      const autoStart = appConfig?.setup?.autoStart ?? false
-      const startSilent = appConfig?.window?.startSilent ?? false
-
-      const options: Electron.Settings = {
-        openAtLogin: autoStart,
-        openAsHidden: startSilent
-      }
-
-      app.setLoginItemSettings(options)
-    } catch (error) {
-      console.error('[TrayManager] Failed to setup auto-start:', error)
-    }
-  }
-
-  public updateAutoStart(enabled: boolean): void {
-    try {
-      const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      const startSilent = appConfig?.window?.startSilent ?? false
-
-      const options: Electron.Settings = {
-        openAtLogin: enabled,
-        openAsHidden: enabled && startSilent
-      }
-
-      app.setLoginItemSettings(options)
-    } catch (error) {
-      console.error('[TrayManager] Failed to update auto-start:', error)
-    }
-  }
-
-  public getAutoStartStatus(): boolean {
-    try {
-      const loginItemSettings = app.getLoginItemSettings()
-      return loginItemSettings.openAtLogin
-    } catch (error) {
-      console.error('[TrayManager] Failed to get auto-start status:', error)
-      return false
-    }
-  }
-
   private bindTrayEvents(): void {
     if (!this.tray) return
 
@@ -195,7 +142,8 @@ export class TrayManager extends BaseModule {
   }
 
   private handleTrayClick(): void {
-    const mainWindow = $app.window.window
+    const mainWindow = useAliveTarget($app.window.window)
+    if (!mainWindow) return
 
     if (mainWindow.isVisible()) {
       if (mainWindow.isFocused()) {
@@ -224,10 +172,37 @@ export class TrayManager extends BaseModule {
     }
   }
 
+  private registerAppListener(eventName: string, handler: (...args: any[]) => void): void {
+    app.on(eventName, handler)
+    this.appDisposers.push(() => {
+      app.removeListener(eventName, handler)
+    })
+  }
+
+  private registerWindowListener(eventName: string, handler: (...args: any[]) => void): void {
+    const mainWindow = $app.window.window
+    mainWindow.on(eventName, handler)
+    this.windowDisposers.push(() => {
+      mainWindow.removeListener(eventName, handler)
+    })
+  }
+
+  private registerTouchEvent(
+    eventName: TalexEvents,
+    handler: (event: ITouchEvent<TalexEvents>) => void
+  ): void {
+    touchEventBus.on(eventName, handler)
+    this.eventDisposers.push(() => {
+      touchEventBus.off(eventName, handler)
+    })
+  }
+
   private registerWindowEvents(): void {
     const mainWindow = $app.window.window
 
-    mainWindow.on('close', (event) => {
+    this.registerWindowListener('close', (event: { preventDefault: () => void }) => {
+      const safeWindow = useAliveTarget(mainWindow)
+      if (!safeWindow) return
       const configData = $app.config.data as { window?: { closeToTray?: boolean } } | undefined
       const closeToTray = configData?.window?.closeToTray ?? true
       const isQuitting = $app.isQuitting || false
@@ -236,7 +211,7 @@ export class TrayManager extends BaseModule {
 
       if (closeToTray && !isQuitting && canCloseToTray) {
         event.preventDefault()
-        mainWindow.hide()
+        safeWindow.hide()
         touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
 
         if (process.platform === 'darwin') {
@@ -245,7 +220,9 @@ export class TrayManager extends BaseModule {
       }
     })
 
-    mainWindow.on('show', () => {
+    this.registerWindowListener('show', () => {
+      const safeWindow = useAliveTarget(mainWindow)
+      if (!safeWindow) return
       touchEventBus.emit(TalexEvents.WINDOW_SHOWN, new WindowShownEvent())
 
       if (process.platform === 'darwin') {
@@ -253,7 +230,9 @@ export class TrayManager extends BaseModule {
       }
     })
 
-    mainWindow.on('hide', () => {
+    this.registerWindowListener('hide', () => {
+      const safeWindow = useAliveTarget(mainWindow)
+      if (!safeWindow) return
       touchEventBus.emit(TalexEvents.WINDOW_HIDDEN, new WindowHiddenEvent())
 
       if (process.platform === 'darwin') {
@@ -262,48 +241,41 @@ export class TrayManager extends BaseModule {
     })
 
     if (process.platform === 'darwin') {
-      app.on('activate', () => {
-        if (!mainWindow.isVisible()) {
-          mainWindow.show()
-          mainWindow.focus()
+      this.registerAppListener('activate', () => {
+        const safeWindow = useAliveTarget(mainWindow)
+        if (!safeWindow) return
+        if (!safeWindow.isVisible()) {
+          safeWindow.show()
+          safeWindow.focus()
         }
       })
     }
   }
 
   private registerEventListeners(): void {
-    touchEventBus.on(TalexEvents.WINDOW_HIDDEN, () => {
+    this.registerTouchEvent(TalexEvents.WINDOW_HIDDEN, () => {
       this.updateMenu({ windowVisible: false })
     })
 
-    touchEventBus.on(TalexEvents.WINDOW_SHOWN, () => {
+    this.registerTouchEvent(TalexEvents.WINDOW_SHOWN, () => {
       this.updateMenu({ windowVisible: true })
     })
 
-    touchEventBus.on(TalexEvents.LANGUAGE_CHANGED, () => {
+    this.registerTouchEvent(TalexEvents.LANGUAGE_CHANGED, () => {
       this.updateMenu()
     })
 
-    touchEventBus.on(TalexEvents.DOWNLOAD_TASK_CHANGED, (event: ITouchEvent<TalexEvents>) => {
-      const downloadEvent = event as DownloadTaskChangedEvent
-      this.updateMenu({ activeDownloads: downloadEvent.activeCount })
-    })
+    this.registerTouchEvent(
+      TalexEvents.DOWNLOAD_TASK_CHANGED,
+      (event: ITouchEvent<TalexEvents>) => {
+        const downloadEvent = event as DownloadTaskChangedEvent
+        this.updateMenu({ activeDownloads: downloadEvent.activeCount })
+      }
+    )
 
-    touchEventBus.on(TalexEvents.UPDATE_AVAILABLE, (event: ITouchEvent<TalexEvents>) => {
+    this.registerTouchEvent(TalexEvents.UPDATE_AVAILABLE, (event: ITouchEvent<TalexEvents>) => {
       const updateEvent = event as UpdateAvailableEvent
       this.updateMenu({ hasUpdate: true, updateVersion: updateEvent.version })
-    })
-
-    this.transport?.on(TrayEvents.autostart.update, (enabled) => {
-      if (typeof enabled === 'boolean') {
-        this.updateAutoStart(enabled)
-        return true
-      }
-      return false
-    })
-
-    this.transport?.on(TrayEvents.autostart.get, () => {
-      return this.getAutoStartStatus()
     })
   }
 
@@ -372,7 +344,8 @@ export class TrayManager extends BaseModule {
   public updateDockVisibility(): void {
     if (process.platform !== 'darwin') return
 
-    const mainWindow = $app.window.window
+    const mainWindow = useAliveTarget($app.window.window)
+    if (!mainWindow) return
     const hideDock = this.getHideDockConfig()
     const hasDivisionBox = this.hasActiveDivisionBox()
     const trayAvailable =
@@ -396,6 +369,48 @@ export class TrayManager extends BaseModule {
     app.dock?.show()
   }
 
+  public getRuntimeSettingsSnapshot(): {
+    showTray: boolean
+    hideDock: boolean
+    experimentalTray: boolean
+    available: boolean
+  } {
+    return {
+      showTray: this.shouldShowTray(),
+      hideDock: this.getHideDockConfig(),
+      experimentalTray: this.trayExperimentalEnabled,
+      available: this.trayExperimentalEnabled
+    }
+  }
+
+  public applyRuntimeSettings(): {
+    showTray: boolean
+    hideDock: boolean
+    experimentalTray: boolean
+    available: boolean
+  } {
+    if (!this.trayExperimentalEnabled) {
+      this.destroyTray()
+      return this.getRuntimeSettingsSnapshot()
+    }
+
+    const shouldShow = this.shouldShowTray()
+    if (shouldShow) {
+      if (!this.tray) {
+        this.initializeTray()
+      }
+      this.updateMenu()
+    } else if (this.tray) {
+      this.destroyTray()
+    }
+
+    if (process.platform === 'darwin') {
+      this.updateDockVisibility()
+    }
+
+    return this.getRuntimeSettingsSnapshot()
+  }
+
   private hasActiveDivisionBox(): boolean {
     try {
       const { DivisionBoxManager } = require('../division-box/manager')
@@ -406,39 +421,34 @@ export class TrayManager extends BaseModule {
     }
   }
 
-  private setupChannels(): void {
-    if (!this.transport) return
-
-    this.transport.on(TrayEvents.show.get, () => {
-      return this.trayExperimentalEnabled && this.tray !== null
-    })
-
-    this.transport.on(TrayEvents.show.set, (show) => {
-      if (!this.trayExperimentalEnabled) {
-        console.warn('[TrayManager] Tray is experimental and currently disabled.')
-        return false
-      }
-
-      const shouldShow = show === true
-      if (shouldShow && !this.tray && this.shouldShowTray()) {
-        this.initializeTray()
-        this.updateMenu()
-      } else if (!shouldShow && this.tray) {
-        this.destroyTray()
-      }
-      this.updateDockVisibility()
-      return true
-    })
-
-    this.transport.on(TrayEvents.hideDock.set, () => {
-      if (process.platform === 'darwin') {
-        this.updateDockVisibility()
-      }
-      return true
-    })
-  }
-
   onDestroy(): MaybePromise<void> {
+    for (const dispose of this.eventDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.eventDisposers = []
+
+    for (const dispose of this.windowDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.windowDisposers = []
+
+    for (const dispose of this.appDisposers) {
+      try {
+        dispose()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.appDisposers = []
+
     this.destroyTray()
   }
 }

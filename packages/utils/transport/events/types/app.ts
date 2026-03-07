@@ -210,6 +210,27 @@ export interface ReadFileRequest {
   timeoutMs?: number
 }
 
+export type AutoStartGetResponse = boolean
+
+export type AutoStartUpdateRequest = boolean
+export type AutoStartUpdateResponse = boolean
+
+export interface TraySettings {
+  showTray: boolean
+  hideDock: boolean
+  experimentalTray: boolean
+  available: boolean
+}
+
+export type TraySettingsGetResponse = TraySettings
+
+export interface TraySettingsUpdateRequest {
+  showTray?: boolean
+  hideDock?: boolean
+}
+
+export type TraySettingsUpdateResponse = TraySettings
+
 /**
  * Request to resolve an app path.
  */

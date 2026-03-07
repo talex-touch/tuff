@@ -192,6 +192,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
    * for all loaded modules.
    */
   private readonly beforeQuitEventName?: TalexEvents.BEFORE_APP_QUIT
+  private unloadAllPromise: Promise<boolean> | null = null
 
   /**
    * Constructs a new `ModuleManager` instance.
@@ -223,17 +224,7 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
 
     if (this.eventBus && this.beforeQuitEventName) {
       this.eventBus.on(this.beforeQuitEventName, async () => {
-        const keys = Array.from(this.modules.keys()).reverse()
-        for (const key of keys) {
-          try {
-            await this.unloadModule(key, 'normal')
-          } catch (err) {
-            moduleLog.warn('Failed to unload module during shutdown', {
-              meta: { module: key.description ?? 'anonymous' },
-              error: err
-            })
-          }
-        }
+        await this.unloadAll('normal')
       })
     }
   }
@@ -498,6 +489,37 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     }
 
     return run()
+  }
+
+  public unloadAll(reason: ModuleStopContext<TalexEvents>['reason'] = 'normal'): Promise<boolean> {
+    if (this.unloadAllPromise) {
+      return this.unloadAllPromise
+    }
+
+    this.unloadAllPromise = (async () => {
+      let allSucceeded = true
+      const keys = Array.from(this.modules.keys()).reverse()
+      for (const key of keys) {
+        try {
+          const result = await this.unloadModule(key, reason)
+          allSucceeded = Boolean(result) && allSucceeded
+        } catch (err) {
+          allSucceeded = false
+          moduleLog.warn('Failed to unload module during shutdown', {
+            meta: { module: key.description ?? 'anonymous', reason },
+            error: err
+          })
+        }
+      }
+      return allSucceeded
+    })()
+
+    const pending = this.unloadAllPromise
+    pending.finally(() => {
+      this.unloadAllPromise = null
+    })
+
+    return pending
   }
 
   /**

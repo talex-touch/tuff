@@ -36,10 +36,13 @@ const installDevPluginEvent = defineRawEvent<
 >('plugin:install-dev')
 const dropPluginEvent = defineRawEvent<{ name: string; buffer: Buffer }, unknown>('drop:plugin')
 
-function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
+function windowsAdapter(
+  touchApp: TalexTouch.TouchApp,
+  registerDisposer: (disposer: () => void) => void
+): void {
   const app = touchApp.app
 
-  app.on('second-instance', (_, argv) => {
+  const onSecondInstance = (_: unknown, argv: string[]) => {
     const win = touchApp.window.window
 
     if (win.isMinimized()) win.restore()
@@ -49,14 +52,27 @@ function windowsAdapter(touchApp: TalexTouch.TouchApp): void {
     if (url) {
       onSchema(url)
     }
+  }
+
+  app.on('second-instance', onSecondInstance)
+  registerDisposer(() => {
+    app.off('second-instance', onSecondInstance)
   })
 }
 
-function macOSAdapter(touchApp: TalexTouch.TouchApp): void {
+function macOSAdapter(
+  touchApp: TalexTouch.TouchApp,
+  registerDisposer: (disposer: () => void) => void
+): void {
   const app = touchApp.app
 
-  app.on('open-url', (_, url) => {
+  const onOpenUrl = (_: unknown, url: string) => {
     onSchema(url)
+  }
+
+  app.on('open-url', onOpenUrl)
+  registerDisposer(() => {
+    app.off('open-url', onOpenUrl)
   })
 }
 
@@ -161,6 +177,8 @@ function onSchema(rawUrl: string): void {
 export class AddonOpenerModule extends BaseModule {
   static key: symbol = Symbol.for('AddonOpener')
   name: symbol = AddonOpenerModule.key
+  private appDisposers: Array<() => void> = []
+  private transportDisposers: Array<() => void> = []
 
   constructor() {
     super(AddonOpenerModule.key, {
@@ -173,8 +191,8 @@ export class AddonOpenerModule extends BaseModule {
     const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
     const win = $app.window.window
 
-    windowsAdapter($app)
-    macOSAdapter($app)
+    windowsAdapter($app, (disposer) => this.appDisposers.push(disposer))
+    macOSAdapter($app, (disposer) => this.appDisposers.push(disposer))
 
     // Register protocol handler
     // In dev mode, we need to register with the correct electron executable path
@@ -210,7 +228,7 @@ export class AddonOpenerModule extends BaseModule {
       addonOpenerLog.debug(`Already registered as protocol handler: ${APP_SCHEMA}`)
     }
 
-    $app.app.on('open-file', (event, filePath) => {
+    const onOpenFile = (event: { preventDefault: () => void }, filePath: string) => {
       event.preventDefault()
 
       addonOpenerLog.debug(`Opened file: ${filePath}`)
@@ -218,104 +236,134 @@ export class AddonOpenerModule extends BaseModule {
       win.previewFile(filePath)
 
       void transport.sendTo(win.webContents, openPluginEvent, filePath)
+    }
+    $app.app.on('open-file', onOpenFile)
+    this.appDisposers.push(() => {
+      $app.app.off('open-file', onOpenFile)
     })
 
-    transport.on(installPluginEvent, async (payload) => {
-      const { name, buffer, forceUpdate } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
-      try {
-        await fs.promises.writeFile(tempFilePath, buffer)
-        let lastEvent: { status: string; msg: unknown; event?: unknown } | null = null
-        await new PluginResolver(tempFilePath).resolve(
-          ({ event, type }: { event: { msg: unknown }; type: string }) => {
-            if (type === 'error') {
-              addonOpenerLog.error(`Installation failed for ${name}`, { error: event.msg })
-            }
-            lastEvent = { status: type, msg: event.msg, event }
-          },
-          true,
-          { installOptions: { forceUpdate: Boolean(forceUpdate), autoReEnable: true } }
-        )
-        return lastEvent ?? { status: 'success', msg: null }
-      } catch (error: unknown) {
-        addonOpenerLog.error('Error installing plugin', { error })
-        return {
-          status: 'error',
-          msg: error instanceof Error ? error.message : 'INTERNAL_ERROR'
+    this.transportDisposers.push(
+      transport.on(installPluginEvent, async (payload) => {
+        const { name, buffer, forceUpdate } = payload ?? {}
+        const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+        try {
+          await fs.promises.writeFile(tempFilePath, buffer)
+          let lastEvent: { status: string; msg: unknown; event?: unknown } | null = null
+          await new PluginResolver(tempFilePath).resolve(
+            ({ event, type }: { event: { msg: unknown }; type: string }) => {
+              if (type === 'error') {
+                addonOpenerLog.error(`Installation failed for ${name}`, { error: event.msg })
+              }
+              lastEvent = { status: type, msg: event.msg, event }
+            },
+            true,
+            { installOptions: { forceUpdate: Boolean(forceUpdate), autoReEnable: true } }
+          )
+          return lastEvent ?? { status: 'success', msg: null }
+        } catch (error: unknown) {
+          addonOpenerLog.error('Error installing plugin', { error })
+          return {
+            status: 'error',
+            msg: error instanceof Error ? error.message : 'INTERNAL_ERROR'
+          }
+        } finally {
+          fs.promises.unlink(tempFilePath).catch((err) => {
+            addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
+          })
         }
-      } finally {
-        fs.promises.unlink(tempFilePath).catch((err) => {
-          addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
-        })
-      }
-    })
-
-    transport.on(installDevPluginEvent, async (payload) => {
-      const sourcePath = payload?.path
-      if (!sourcePath) {
-        return { status: 'error', error: 'INVALID_PATH' }
-      }
-      return await installDevPluginFromPath(sourcePath, {
-        forceUpdate: Boolean(payload?.forceUpdate)
       })
-    })
+    )
 
-    transport.on(dropPluginEvent, async (payload) => {
-      const { name, buffer } = payload ?? {}
-      const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
-      try {
-        await fs.promises.writeFile(tempFilePath, buffer)
+    this.transportDisposers.push(
+      transport.on(installDevPluginEvent, async (payload) => {
+        const sourcePath = payload?.path
+        if (!sourcePath) {
+          return { status: 'error', error: 'INVALID_PATH' }
+        }
+        return await installDevPluginFromPath(sourcePath, {
+          forceUpdate: Boolean(payload?.forceUpdate)
+        })
+      })
+    )
 
-        const pluginResolver = new PluginResolver(tempFilePath)
+    this.transportDisposers.push(
+      transport.on(dropPluginEvent, async (payload) => {
+        const { name, buffer } = payload ?? {}
+        const tempFilePath = path.join(os.tmpdir(), `talex-touch-plugin-${Date.now()}-${name}`)
+        try {
+          await fs.promises.writeFile(tempFilePath, buffer)
 
-        let result: Record<string, unknown> | null = null
-        await pluginResolver.resolve(
-          ({ event, type }: { event: { msg: unknown }; type: string }) => {
-            if (type === 'error') {
-              addonOpenerLog.error('Failed to resolve plugin from buffer', { error: event })
-              if (
-                event.msg === ResolverStatus.MANIFEST_NOT_FOUND ||
-                event.msg === ResolverStatus.INVALID_MANIFEST
-              ) {
-                result = { status: 'error', msg: '10091' }
-              } else {
-                result = { status: 'error', msg: '10092' }
-              }
+          const pluginResolver = new PluginResolver(tempFilePath)
 
-              fs.promises.unlink(tempFilePath).catch((err) => {
-                addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
-              })
-            } else {
-              result = {
-                status: 'success',
-                manifest: event.msg,
-                path: tempFilePath,
-                msg: '10090'
-              }
+          let result: Record<string, unknown> | null = null
+          await pluginResolver.resolve(
+            ({ event, type }: { event: { msg: unknown }; type: string }) => {
+              if (type === 'error') {
+                addonOpenerLog.error('Failed to resolve plugin from buffer', { error: event })
+                if (
+                  event.msg === ResolverStatus.MANIFEST_NOT_FOUND ||
+                  event.msg === ResolverStatus.INVALID_MANIFEST
+                ) {
+                  result = { status: 'error', msg: '10091' }
+                } else {
+                  result = { status: 'error', msg: '10092' }
+                }
 
-              setTimeout(() => {
                 fs.promises.unlink(tempFilePath).catch((err) => {
                   addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, {
                     error: err
                   })
                 })
-              }, 30000)
-            }
-          }
-        )
+              } else {
+                result = {
+                  status: 'success',
+                  manifest: event.msg,
+                  path: tempFilePath,
+                  msg: '10090'
+                }
 
-        return result ?? { status: 'error', msg: 'INTERNAL_ERROR' }
-      } catch (e) {
-        addonOpenerLog.error('Error processing dropped plugin', { error: e })
-        fs.promises.unlink(tempFilePath).catch((err) => {
-          addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
-        })
-        return { status: 'error', msg: 'INTERNAL_ERROR' }
-      }
-    })
+                setTimeout(() => {
+                  fs.promises.unlink(tempFilePath).catch((err) => {
+                    addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, {
+                      error: err
+                    })
+                  })
+                }, 30000)
+              }
+            }
+          )
+
+          return result ?? { status: 'error', msg: 'INTERNAL_ERROR' }
+        } catch (e) {
+          addonOpenerLog.error('Error processing dropped plugin', { error: e })
+          fs.promises.unlink(tempFilePath).catch((err) => {
+            addonOpenerLog.error(`Failed to delete temp file: ${tempFilePath}`, { error: err })
+          })
+          return { status: 'error', msg: 'INTERNAL_ERROR' }
+        }
+      })
+    )
   }
 
   onDestroy(): MaybePromise<void> {
+    for (const disposer of this.transportDisposers) {
+      try {
+        disposer()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.transportDisposers = []
+
+    for (const disposer of this.appDisposers) {
+      try {
+        disposer()
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    this.appDisposers = []
+
     addonOpenerLog.info('AddonOpenerModule destroyed')
   }
 }

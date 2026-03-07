@@ -165,6 +165,16 @@ const modulesToLoad = [
   downloadCenterModule
 ]
 
+function shouldLoadTrayModule(): boolean {
+  try {
+    const appSettings = getMainConfig(StorageList.APP_SETTING)
+    return appSettings?.setup?.experimentalTray === true
+  } catch (error) {
+    mainLog.warn('Failed to read tray experimental switch, skip tray module by default', { error })
+    return false
+  }
+}
+
 // Record when Electron becomes ready
 let electronReadyTime: number
 
@@ -191,6 +201,11 @@ app.whenReady().then(async () => {
   // Load modules and track individual load times
   for (let i = 0; i < modulesToLoad.length; i++) {
     const moduleCtor = modulesToLoad[i]
+    if (moduleCtor === trayManagerModule && !shouldLoadTrayModule()) {
+      mainLog.info('Skip TrayManager module: experimentalTray disabled')
+      continue
+    }
+
     const moduleStartTime = Date.now()
 
     await touchApp.moduleManager.loadModule(moduleCtor)
