@@ -21,7 +21,7 @@ const props = withDefaults(defineProps<{
   stickyClass: '',
   titleTag: 'h2',
   headerClass: '',
-  titleClass: 'text-[clamp(.75rem,1vw+1.5rem,1.3rem)] font-bold leading-[1.1] tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60',
+  titleClass: 'text-[clamp(.75rem,1vw+1.5rem,1.3rem)] font-bold leading-[1.1] tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-black to-black/60 dark:from-white dark:to-white/60',
   subtitleClass: 'mx-auto my-0 max-w-3xl text-[clamp(.6rem,1vw+1.3rem,1.1rem)] font-semibold leading-relaxed op-70',
 })
 
@@ -35,7 +35,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
   <section
     :id="props.id"
     ref="sectionRef"
-    class="TuffLandingSection isolate overflow-hidden bg-black text-white" :class="[
+    class="TuffLandingSection isolate overflow-hidden bg-transparent text-black dark:text-white" :class="[
       props.sectionClass,
     ]"
   >
@@ -82,7 +82,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
         </component>
         <p
           v-if="props.subtitle"
-          class="mx-auto my-0 text-base text-white/70 leading-relaxed" :class="[
+          class="mx-auto my-0 text-base text-black/70 dark:text-white/70 leading-relaxed" :class="[
             props.subtitleClass,
           ]"
           data-reveal

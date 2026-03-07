@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type Component, type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, ref } from 'vue'
+import { type Component, type ComponentPublicInstance, computed, defineAsyncComponent, h, nextTick, ref } from 'vue'
 
 interface DemoWrapperProps {
   demo: string
@@ -99,12 +99,24 @@ async function resetDemo() {
   }
 }
 
+const DemoLoadingFallback: Component = () => h('div', { class: 'tuff-demo__placeholder' }, 'Loading demo...')
+
+const DemoErrorFallback: Component = () =>
+  h('div', { class: 'tuff-demo__placeholder', style: 'color: var(--tx-color-danger)' }, 'Failed to load demo.')
+
 const demoModules = import.meta.glob<{ default: Component }>('./demos/*.vue')
 const demoComponentMap: Record<string, Component> = {}
 for (const [path, loader] of Object.entries(demoModules)) {
   const name = path.match(/\.\/demos\/(.+)\.vue$/)?.[1]
-  if (name)
-    demoComponentMap[name] = defineAsyncComponent(loader as any)
+  if (name) {
+    demoComponentMap[name] = defineAsyncComponent({
+      loader: loader as () => Promise<{ default: Component }>,
+      loadingComponent: DemoLoadingFallback,
+      errorComponent: DemoErrorFallback,
+      delay: 200,
+      timeout: 15000,
+    })
+  }
 }
 
 const demoComponent = computed(() => {
