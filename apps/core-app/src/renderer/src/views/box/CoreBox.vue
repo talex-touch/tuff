@@ -322,30 +322,33 @@ function computeOverlapRatio(oldIds: Set<string>, newIds: Set<string>): number {
   return overlap / Math.max(oldIds.size, newIds.size)
 }
 
+let resWatchTimerId: ReturnType<typeof setTimeout> | null = null
+
 watch(res, (newRes) => {
   itemRefs.value = []
   const currentIds = new Set(newRes.map((item) => item.id))
   const overlapRatio = computeOverlapRatio(lastResultIds, currentIds)
 
-  // Determine if this is a major change (< 30% overlap) or incremental update
   const isMajorChange = overlapRatio < 0.3 && lastResultIds.size > 0
   const isFromEmpty = lastResultIds.size === 0 && currentIds.size > 0
 
+  if (resWatchTimerId !== null) {
+    clearTimeout(resWatchTimerId)
+    resWatchTimerId = null
+  }
+
   if (isMajorChange) {
-    // Major change (different results): trigger container transition + staggered items
     resultBatchKey.value++
     renderedItemIds.value = new Set(currentIds)
     newItemIds.value = new Set()
   } else if (isFromEmpty) {
-    // From empty: all items are new, animate them with stagger
     renderedItemIds.value = new Set(currentIds)
     newItemIds.value = new Set(currentIds)
-    // Clear flags after animation
-    setTimeout(() => {
+    resWatchTimerId = setTimeout(() => {
       newItemIds.value = new Set()
+      resWatchTimerId = null
     }, 500)
   } else {
-    // Incremental update: only animate new items
     const newIds = new Set<string>()
     for (const id of currentIds) {
       if (!renderedItemIds.value.has(id)) {
@@ -355,14 +358,13 @@ watch(res, (newRes) => {
     }
     newItemIds.value = newIds
 
-    // Clear new item flags after animation completes
     if (newIds.size > 0) {
-      setTimeout(() => {
+      resWatchTimerId = setTimeout(() => {
         newItemIds.value = new Set()
+        resWatchTimerId = null
       }, 320)
     }
 
-    // Clean up removed items from renderedItemIds
     for (const id of renderedItemIds.value) {
       if (!currentIds.has(id)) {
         renderedItemIds.value.delete(id)
@@ -460,6 +462,10 @@ onBeforeUnmount(() => {
   cleanupVisibility()
   unregUIModeExited()
   unregFocusInput()
+  if (resWatchTimerId !== null) {
+    clearTimeout(resWatchTimerId)
+    resWatchTimerId = null
+  }
 })
 
 function handleTogglePin(): void {

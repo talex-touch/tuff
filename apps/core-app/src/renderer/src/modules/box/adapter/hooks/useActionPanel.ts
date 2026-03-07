@@ -87,8 +87,15 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
         if (openFlowSelector) openFlowSelector(targetItem)
         break
       default:
-        devLog('[useActionPanel] Unsupported action from MetaOverlay:', actionId, targetItem.id)
-        toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+        devLog('[useActionPanel] Fallback execute for MetaOverlay action:', actionId, targetItem.id)
+        try {
+          await transport.send(CoreBoxEvents.item.execute, {
+            item: JSON.parse(JSON.stringify(targetItem))
+          })
+        } catch (error) {
+          console.error('[useActionPanel] Fallback execute failed:', error)
+          toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+        }
         break
     }
   }

@@ -1291,6 +1291,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     if (this.isWithinWatchRoots(watchPath)) {
       if (isFileTarget) {
+        console.log('[FileProvider] addWatchPath exists(root), enqueue incremental add', {
+          path: resolved,
+          watchPath
+        })
         this.logInfo('File index addPath hit existing watch root; enqueue incremental add', {
           path: resolved,
           watchPath
@@ -1303,6 +1307,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     const normalized = this.normalizePath(watchPath)
     if (this.normalizedWatchPaths.includes(normalized)) {
       if (isFileTarget) {
+        console.log('[FileProvider] addWatchPath exists(normalized), enqueue incremental add', {
+          path: resolved,
+          watchPath
+        })
         this.logInfo(
           'File index addPath hit existing normalized watch path; enqueue incremental add',
           {
@@ -1346,6 +1354,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
 
     if (isFileTarget) {
+      console.log('[FileProvider] addWatchPath added and enqueue incremental add', {
+        path: resolved,
+        watchPath
+      })
       this.logInfo('File index addPath added watch path and enqueued incremental add', {
         path: resolved,
         watchPath

@@ -227,24 +227,26 @@ export function useBoxItems(): UseBoxItemsReturn {
 
   // ==================== 生命周期 ====================
 
-  onMounted(() => {
-    // 注册所有事件监听器
-    transport.on(BOX_ITEM_EVENTS.CREATE, handleCreate)
-    transport.on(BOX_ITEM_EVENTS.UPDATE, handleUpdate)
-    transport.on(BOX_ITEM_EVENTS.UPSERT, handleUpsert)
-    transport.on(BOX_ITEM_EVENTS.DELETE, handleDelete)
-    transport.on(BOX_ITEM_EVENTS.BATCH_UPSERT, handleBatchUpsert)
-    transport.on(BOX_ITEM_EVENTS.BATCH_DELETE, handleBatchDelete)
-    transport.on(BOX_ITEM_EVENTS.CLEAR, handleClear)
-    transport.on(BOX_ITEM_EVENTS.SYNC_RESPONSE, handleSyncResponse)
+  const unregFns: Array<() => void> = []
 
-    // 请求初始同步
+  onMounted(() => {
+    unregFns.push(
+      transport.on(BOX_ITEM_EVENTS.CREATE, handleCreate),
+      transport.on(BOX_ITEM_EVENTS.UPDATE, handleUpdate),
+      transport.on(BOX_ITEM_EVENTS.UPSERT, handleUpsert),
+      transport.on(BOX_ITEM_EVENTS.DELETE, handleDelete),
+      transport.on(BOX_ITEM_EVENTS.BATCH_UPSERT, handleBatchUpsert),
+      transport.on(BOX_ITEM_EVENTS.BATCH_DELETE, handleBatchDelete),
+      transport.on(BOX_ITEM_EVENTS.CLEAR, handleClear),
+      transport.on(BOX_ITEM_EVENTS.SYNC_RESPONSE, handleSyncResponse)
+    )
+
     sync()
   })
 
   onUnmounted(() => {
-    // transport.on 监听在窗口销毁后会自动释放，如需手动清理请补充
-    // 清空本地状态
+    for (const unreg of unregFns) unreg()
+    unregFns.length = 0
     items.value = []
     itemsMap.clear()
   })

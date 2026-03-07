@@ -48,6 +48,14 @@ export interface IBaseModuleManager<E = any> {
   unloadModule: (moduleKey: ModuleKey, reason?: ModuleStopContext<E>['reason']) => boolean | Promise<boolean>
 
   /**
+   * Unloads all currently loaded modules.
+   *
+   * @param reason - Optional stop reason passed to each module's stop context.
+   * @returns `true` when all unload operations succeed, otherwise `false`.
+   */
+  unloadAll: (reason?: ModuleStopContext<E>['reason']) => Promise<boolean>
+
+  /**
    * Retrieves a module instance by key.
    *
    * @typeParam T - Expected module type.
