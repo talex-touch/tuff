@@ -1,4 +1,5 @@
 import type {
+  AppSetting,
   MaybePromise,
   ModuleInitContext,
   ModuleKey,
@@ -8,6 +9,9 @@ import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/tran
 import type {
   AppIndexAddPathRequest,
   AppIndexAddPathResult,
+  AutoStartGetResponse,
+  AutoStartUpdateRequest,
+  AutoStartUpdateResponse,
   BatteryStatusPayload,
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
@@ -17,7 +21,10 @@ import type {
   SecureValueGetRequest,
   SecureValueSetRequest,
   StartupRequest,
-  StartupResponse
+  StartupResponse,
+  TraySettingsGetResponse,
+  TraySettingsUpdateRequest,
+  TraySettingsUpdateResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { Locale } from '../utils/i18n-helper'
 import type { StorageUsageIncludeOptions } from '../utils/storage-usage'
@@ -65,7 +72,7 @@ import {
   platformCapabilityRegistry,
   registerDefaultPlatformCapabilities
 } from '../modules/platform/capability-registry'
-import { storageModule } from '../modules/storage'
+import { getMainConfig, saveMainConfig, storageModule } from '../modules/storage'
 import { activeAppService } from '../modules/system/active-app'
 import { deviceIdleService } from '../service/device-idle-service'
 import {
@@ -127,6 +134,18 @@ const TUFF_CLI_CAPABILITY: PlatformCapability = {
   status: 'beta'
 }
 const log = createLogger('CommonChannel')
+
+type RuntimeTraySettings = {
+  showTray: boolean
+  hideDock: boolean
+  experimentalTray: boolean
+  available: boolean
+}
+
+type RuntimeTrayManager = {
+  applyRuntimeSettings?: () => RuntimeTraySettings
+  getRuntimeSettingsSnapshot?: () => RuntimeTraySettings
+}
 
 const dialogApprovedPaths = new Map<string, number>()
 let tuffCliDetectionCache: { available: boolean; checkedAt: number } | null = null
@@ -1432,6 +1451,84 @@ export class CommonChannelModule extends BaseModule {
       )
   }
 
+  private getAppSettingsSnapshot(): AppSetting {
+    return getMainConfig(StorageList.APP_SETTING) as AppSetting
+  }
+
+  private updateAutoStart(enabled: AutoStartUpdateRequest): AutoStartUpdateResponse {
+    const appSettings = this.getAppSettingsSnapshot()
+    const startSilent = appSettings?.window?.startSilent === true
+
+    const options: Electron.Settings = {
+      openAtLogin: enabled === true,
+      openAsHidden: enabled === true && startSilent
+    }
+
+    app.setLoginItemSettings(options)
+    return app.getLoginItemSettings().openAtLogin
+  }
+
+  private getAutoStartStatus(): AutoStartGetResponse {
+    return app.getLoginItemSettings().openAtLogin
+  }
+
+  private getRuntimeTrayManager(touchApp: TalexTouch.TouchApp): RuntimeTrayManager | null {
+    const key = Symbol.for('TrayManager')
+    const module = touchApp.moduleManager.getModule<RuntimeTrayManager>(key)
+    return module ?? null
+  }
+
+  private buildTraySettingsFromAppSettings(
+    appSettings: AppSetting,
+    touchApp: TalexTouch.TouchApp
+  ): TraySettingsGetResponse {
+    const setup = appSettings?.setup ?? {}
+    const experimentalTray = setup.experimentalTray === true
+    const trayManager = this.getRuntimeTrayManager(touchApp)
+    const available = experimentalTray && trayManager !== null
+
+    if (available && trayManager?.getRuntimeSettingsSnapshot) {
+      return trayManager.getRuntimeSettingsSnapshot()
+    }
+
+    return {
+      showTray: setup.showTray !== false,
+      hideDock: setup.hideDock === true,
+      experimentalTray,
+      available
+    }
+  }
+
+  private updateTraySettings(
+    payload: TraySettingsUpdateRequest | undefined,
+    touchApp: TalexTouch.TouchApp
+  ): TraySettingsUpdateResponse {
+    const appSettings = this.getAppSettingsSnapshot()
+    const setup = appSettings?.setup ?? {}
+
+    const nextShowTray =
+      typeof payload?.showTray === 'boolean' ? payload.showTray : setup.showTray !== false
+    const nextHideDock =
+      typeof payload?.hideDock === 'boolean' ? payload.hideDock : setup.hideDock === true
+
+    saveMainConfig(StorageList.APP_SETTING, {
+      ...appSettings,
+      setup: {
+        ...setup,
+        showTray: nextShowTray,
+        hideDock: nextHideDock
+      }
+    })
+
+    const updatedSettings = this.getAppSettingsSnapshot()
+    const trayManager = this.getRuntimeTrayManager(touchApp)
+    if (trayManager?.applyRuntimeSettings) {
+      return trayManager.applyRuntimeSettings()
+    }
+
+    return this.buildTraySettingsFromAppSettings(updatedSettings, touchApp)
+  }
+
   private registerSystemTransportHandlers(
     transport: NonNullable<CommonChannelModule['transport']>,
     touchApp: TalexTouch.TouchApp,
@@ -1509,6 +1606,20 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.system.getCwd, () => process.cwd()),
       transport.on(AppEvents.system.getOS, () => getOSInformation()),
       transport.on(AppEvents.system.getPackage, () => packageJson),
+      transport.on<void, AutoStartGetResponse>(AppEvents.system.autoStartGet, () =>
+        this.getAutoStartStatus()
+      ),
+      transport.on<AutoStartUpdateRequest, AutoStartUpdateResponse>(
+        AppEvents.system.autoStartUpdate,
+        (enabled) => this.updateAutoStart(enabled)
+      ),
+      transport.on<void, TraySettingsGetResponse>(AppEvents.system.traySettingsGet, () =>
+        this.buildTraySettingsFromAppSettings(this.getAppSettingsSnapshot(), touchApp)
+      ),
+      transport.on<TraySettingsUpdateRequest, TraySettingsUpdateResponse>(
+        AppEvents.system.traySettingsUpdate,
+        (payload) => this.updateTraySettings(payload, touchApp)
+      ),
       transport.on(AppEvents.system.getPath, (payload) => {
         const name = typeof payload?.name === 'string' ? payload.name : ''
         if (!name) {
