@@ -58,6 +58,9 @@ import type {
 } from './types/agents'
 
 import type {
+  AutoStartGetResponse,
+  AutoStartUpdateRequest,
+  AutoStartUpdateResponse,
   AnalyticsExportPayload,
   AnalyticsExportResult,
   AnalyticsMessage,
@@ -98,6 +101,9 @@ import type {
   StartupResponse,
   TrackDurationPayload,
   TrackEventPayload,
+  TraySettingsGetResponse,
+  TraySettingsUpdateRequest,
+  TraySettingsUpdateResponse,
 } from './types/app'
 
 import type { AppIndexAddPathRequest, AppIndexAddPathResult, AppIndexSettings } from './types/app-index'
@@ -486,16 +492,6 @@ import type {
   TransportPortUpgradeResponse,
 } from './types/transport'
 
-import type {
-  TrayAutostartGetResponse,
-  TrayAutostartUpdateRequest,
-  TrayAutostartUpdateResponse,
-  TrayHideDockSetResponse,
-  TrayShowGetResponse,
-  TrayShowSetRequest,
-  TrayShowSetResponse,
-} from './types/tray'
-
 // ============================================================================
 // Clipboard Events
 // ============================================================================
@@ -636,6 +632,26 @@ export const AppEvents = {
       .module('system')
       .event('get-package')
       .define<void, PackageInfo>(),
+
+    autoStartGet: defineEvent('app')
+      .module('system')
+      .event('autostart.get')
+      .define<void, AutoStartGetResponse>(),
+
+    autoStartUpdate: defineEvent('app')
+      .module('system')
+      .event('autostart.update')
+      .define<AutoStartUpdateRequest, AutoStartUpdateResponse>(),
+
+    traySettingsGet: defineEvent('app')
+      .module('system')
+      .event('tray-settings.get')
+      .define<void, TraySettingsGetResponse>(),
+
+    traySettingsUpdate: defineEvent('app')
+      .module('system')
+      .event('tray-settings.update')
+      .define<TraySettingsUpdateRequest, TraySettingsUpdateResponse>(),
 
     /**
      * Open an external URL in the default browser.

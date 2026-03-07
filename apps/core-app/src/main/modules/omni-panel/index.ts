@@ -345,6 +345,7 @@ export class OmniPanelModule extends BaseModule {
     this.registerTransportHandlers()
     this.registerInstallCompletedListener()
     this.registerPluginChangeRefreshListener()
+    this.registerBeforeQuitListener()
     this.registerShortcut(settings.enableShortcut)
     this.registerMouseLongPressTrigger(settings.enableMouseLongPress)
     this.notifyFeatureRefresh('init')
@@ -691,6 +692,20 @@ export class OmniPanelModule extends BaseModule {
     touchEventBus.on(MainEvents.PLUGIN_STORAGE_UPDATED, handler)
     this.eventDisposers.push(() => {
       touchEventBus.off(MainEvents.PLUGIN_STORAGE_UPDATED, handler)
+    })
+  }
+
+  private registerBeforeQuitListener(): void {
+    const handler = () => {
+      this.clearLongPressTimer()
+      this.clearShortcutHoldTimer()
+      this.clearShortcutArmExpiryTimer()
+      this.resetShortcutHoldState()
+      this.cleanupInputHook()
+    }
+    touchEventBus.on(MainEvents.BEFORE_APP_QUIT, handler)
+    this.eventDisposers.push(() => {
+      touchEventBus.off(MainEvents.BEFORE_APP_QUIT, handler)
     })
   }
 

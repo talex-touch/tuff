@@ -3,6 +3,7 @@ import { app, BrowserWindow } from 'electron'
 import { createLogger } from './logger'
 
 const devProcessLog = createLogger('DevProcessManager')
+const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000
 
 /**
  * @file dev-process-manager.ts
@@ -15,6 +16,7 @@ export class DevProcessManager {
   private static instance: DevProcessManager | null = null
   private isShuttingDown = false
   private shutdownTimeout: NodeJS.Timeout | null = null
+  private forceShutdownPromise: Promise<never> | null = null
 
   static getInstance(): DevProcessManager {
     if (!DevProcessManager.instance) {
@@ -50,6 +52,13 @@ export class DevProcessManager {
         error: promise
       })
     })
+
+    app.on('will-quit', () => {
+      this.clearShutdownTimeout()
+      if (this.isShuttingDown) {
+        devProcessLog.info('Graceful shutdown completed')
+      }
+    })
   }
 
   /**
@@ -68,24 +77,43 @@ export class DevProcessManager {
     // Set a timeout to ensure that the process does not wait indefinitely
     this.shutdownTimeout = setTimeout(() => {
       devProcessLog.warn('Shutdown timeout reached, forcing exit')
-      process.exit(1)
-    }, 3000)
+      void this.forceShutdown('timeout')
+    }, GRACEFUL_SHUTDOWN_TIMEOUT_MS)
 
-    this.cleanupProcesses()
-      .then(() => {
-        if (this.shutdownTimeout) {
-          clearTimeout(this.shutdownTimeout)
-        }
-        devProcessLog.info('Graceful shutdown completed')
-        process.exit(0)
-      })
-      .catch((error) => {
-        devProcessLog.error('Error during shutdown', { error })
-        if (this.shutdownTimeout) {
-          clearTimeout(this.shutdownTimeout)
-        }
-        process.exit(1)
-      })
+    try {
+      app.quit()
+    } catch (error) {
+      devProcessLog.error('Failed to trigger app.quit, fallback to forced shutdown', { error })
+      void this.forceShutdown('app-quit-failed')
+    }
+  }
+
+  private clearShutdownTimeout(): void {
+    if (!this.shutdownTimeout) {
+      return
+    }
+    clearTimeout(this.shutdownTimeout)
+    this.shutdownTimeout = null
+  }
+
+  private async forceShutdown(reason: string): Promise<never> {
+    if (this.forceShutdownPromise) {
+      return this.forceShutdownPromise
+    }
+
+    this.forceShutdownPromise = (async () => {
+      devProcessLog.warn('Force shutdown started', { meta: { reason } })
+      try {
+        await this.cleanupProcesses()
+      } catch (error) {
+        devProcessLog.error('Error during forced shutdown cleanup', { error })
+      } finally {
+        this.clearShutdownTimeout()
+      }
+      process.exit(1)
+    })()
+
+    return this.forceShutdownPromise
   }
 
   /**
