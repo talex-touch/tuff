@@ -14,7 +14,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { useDebounceFn } from '@vueuse/core'
-import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useBoxItems } from '~/modules/box/item-sdk'
 import { appSetting } from '~/modules/channel/storage'
 import { devLog } from '~/utils/dev-log'
@@ -881,13 +881,12 @@ export function useSearch(
   useResize({ results: res, activeActivations, loading, recommendationPending })
 
   watch(
-    () => res.value,
+    () => res.value.length,
     () => {
       if (res.value.length > 0 && boxOptions.focus === -1) {
         boxOptions.focus = 0
       }
-    },
-    { deep: true }
+    }
   )
 
   watch(searchVal, (newSearchVal) => {
@@ -908,7 +907,7 @@ export function useSearch(
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
-  transport.on(CoreBoxEvents.search.update, (data) => {
+  const unregSearchUpdate = transport.on(CoreBoxEvents.search.update, (data) => {
     const filteredItems = filterDetachedItems(data.items ?? [])
     const itemCount = filteredItems.length
     if (!data.searchId) return
@@ -949,11 +948,13 @@ export function useSearch(
     searchResults.value = [...searchResults.value, ...filteredItems]
   })
 
-  transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
+  const unregSetQuery = transport.on(CoreBoxEvents.input.setQuery, ({ value }) => {
     const nextValue = typeof value === 'string' ? value : ''
     searchVal.value = nextValue
     window.dispatchEvent(new CustomEvent('corebox:focus-input'))
   })
+
+  let coreBoxShownHandler: (() => void) | null = null
 
   onMounted(() => {
     transport.send(CoreBoxEvents.provider.getActivated).then((providers) => {
@@ -977,17 +978,34 @@ export function useSearch(
     }
 
     if (!isDivisionBoxMode()) {
-      const handleCoreBoxShown = () => {
+      coreBoxShownHandler = () => {
         if (!searchVal.value && !activeActivations.value?.length) {
           handleSearchImmediate()
         }
       }
-
-      window.addEventListener('corebox:shown', handleCoreBoxShown)
+      window.addEventListener('corebox:shown', coreBoxShownHandler)
     }
   })
 
-  transport.on(CoreBoxEvents.search.end, (payload) => {
+  onBeforeUnmount(() => {
+    unregSearchUpdate()
+    unregSetQuery()
+    unregSearchEnd()
+    unregItemClear()
+    unregNoResults()
+
+    if (coreBoxShownHandler) {
+      window.removeEventListener('corebox:shown', coreBoxShownHandler)
+      coreBoxShownHandler = null
+    }
+
+    if (recommendationTimeoutId) {
+      clearTimeout(recommendationTimeoutId)
+      recommendationTimeoutId = null
+    }
+  })
+
+  const unregSearchEnd = transport.on(CoreBoxEvents.search.end, (payload) => {
     if (!payload || typeof payload !== 'object') return
     if (!payload.searchId) return
 
@@ -1035,11 +1053,11 @@ export function useSearch(
     recommendationPending.value = false
   }
 
-  transport.on(CoreBoxEvents.item.clear, () => {
+  const unregItemClear = transport.on(CoreBoxEvents.item.clear, () => {
     resetSearchState()
   })
 
-  transport.on(CoreBoxEvents.search.noResults, (payload) => {
+  const unregNoResults = transport.on(CoreBoxEvents.search.noResults, (payload) => {
     if (!payload || typeof payload !== 'object') return
     if (!payload.shouldShrink) return
     if (searchVal.value || activeActivations.value?.length) return
