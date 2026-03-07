@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import FlickeringGrid from '~/components/docs/FlickeringGrid.vue'
 
 interface DocHeroProps {
@@ -24,12 +24,15 @@ const props = withDefaults(defineProps<DocHeroProps>(), {
 
 const colorMode = useColorMode()
 const isDark = computed(() => colorMode.value === 'dark')
+const resolvedCssColor = ref('')
+onMounted(() => {
+  resolvedCssColor.value = window.getComputedStyle(document.documentElement)
+    .getPropertyValue('--tx-text-color-primary').trim()
+})
 const gridColor = computed(() => {
-  const fallback = isDark.value ? '#e5eaf3' : '#303133'
-  if (!import.meta.client)
-    return fallback
-  const color = window.getComputedStyle(document.documentElement).getPropertyValue('--tx-text-color-primary').trim()
-  return color || fallback
+  if (resolvedCssColor.value)
+    return resolvedCssColor.value
+  return isDark.value ? '#e5eaf3' : '#303133'
 })
 const gridMaxOpacity = computed(() => (isDark.value ? 0.22 : 0.28))
 const gridFlickerChance = computed(() => (isDark.value ? 0.26 : 0.32))

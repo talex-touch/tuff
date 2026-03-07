@@ -92,31 +92,39 @@ async function loadComponentIndex(locale: string) {
     return pending
 
   const loader = (async () => {
-    const records = await queryCollection('docs')
-      .where('path', 'LIKE', '/docs/dev/components/%')
-      .all() as SearchContentRecord[]
+    try {
+      const records = await queryCollection('docs')
+        .where('path', 'LIKE', '/docs/dev/components/%')
+        .all() as SearchContentRecord[]
 
-    const items = records
-      .map((record) => {
-        const rawPath = resolveDocPath(record)
-        if (!rawPath || !matchesLocale(rawPath, locale))
-          return null
-        const path = normalizeDocPath(rawPath)
-        const searchTokens = Array.isArray(record.tags) ? record.tags : undefined
-        const base: DocIndexItem = {
-          id: `component-${path}`,
-          path,
-          title: resolveDocTitle(record) || path,
-          description: resolveDocDescription(record),
-          icon: 'i-carbon-cube',
-        }
-        return searchTokens ? { ...base, searchTokens } : base
-      })
-      .filter((item): item is DocIndexItem => item !== null)
+      const items = records
+        .map((record) => {
+          const rawPath = resolveDocPath(record)
+          if (!rawPath || !matchesLocale(rawPath, locale))
+            return null
+          const path = normalizeDocPath(rawPath)
+          const searchTokens = Array.isArray(record.tags) ? record.tags : undefined
+          const base: DocIndexItem = {
+            id: `component-${path}`,
+            path,
+            title: resolveDocTitle(record) || path,
+            description: resolveDocDescription(record),
+            icon: 'i-carbon-cube',
+          }
+          return searchTokens ? { ...base, searchTokens } : base
+        })
+        .filter((item): item is DocIndexItem => item !== null)
 
-    componentIndexCache.set(locale, items)
-    componentIndexPromise.delete(locale)
-    return items
+      componentIndexCache.set(locale, items)
+      return items
+    }
+    catch (error) {
+      componentIndexPromise.delete(locale)
+      throw error
+    }
+    finally {
+      componentIndexPromise.delete(locale)
+    }
   })()
 
   componentIndexPromise.set(locale, loader)

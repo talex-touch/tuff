@@ -169,20 +169,20 @@ onBeforeUnmount(() => {
       <TuffBanner>
         <template #center>
           <div
-            class="hero-content min-h-screen w-full flex flex-col items-center justify-center gap-8 px-8 py-20 text-center text-white/85"
+            class="hero-content min-h-screen w-full flex flex-col items-center justify-center gap-8 px-8 py-20 text-center text-black/85 dark:text-white/85"
             :class="heroContainerClass"
           >
             <div
-              class="hero-wordmark"
+              class="hero-wordmark group"
               :class="heroStageClass"
               :style="introDelay(0)"
               aria-hidden="true"
             >
-              <span class="hero-wordmark-text" data-text="Tuff">Tuff</span>
+              <span class="hero-wordmark-text transition-all duration-500 group-hover:scale-105 group-hover:drop-shadow-2xl" data-text="Tuff">Tuff</span>
             </div>
 
             <h1
-              class="hero-heading max-w-3xl text-[clamp(1rem,1vw+1.5rem,1rem)] text-white font-semibold leading-tight"
+              class="hero-heading max-w-3xl text-[clamp(1rem,1vw+1.5rem,1rem)] text-black dark:text-white font-semibold leading-tight transition-colors"
               :class="heroStageClass"
               :style="introDelay(0.2)"
             >
@@ -191,7 +191,7 @@ onBeforeUnmount(() => {
 
             <!-- <p
               v-if="heroContent.description"
-              class="hero-description max-w-3xl text-white/80"
+              class="hero-description max-w-3xl text-black/80 dark:text-white/80 transition-colors"
               :class="heroStageClass"
               :style="introDelay(0.28)"
             >
@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
               <NuxtLink
                 :to="heroContent.primaryCta.to"
-                class="hero-cta inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm text-black font-semibold shadow-[0_20px_60px_rgba(0,0,0,0.45)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 hover:-translate-y-0.5"
+                class="hero-cta inline-flex items-center justify-center gap-2 rounded-full bg-black dark:bg-white px-6 py-3 text-sm text-white dark:text-black font-semibold shadow-[0_20px_60px_rgba(0,0,0,0.15)] dark:shadow-[0_20px_60px_rgba(255,255,255,0.15)] transition hover:bg-black/90 dark:hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/60 dark:focus-visible:ring-white/60 hover:-translate-y-1 hover:shadow-[0_30px_60px_rgba(0,0,0,0.2)] dark:hover:shadow-[0_30px_60px_rgba(255,255,255,0.25)]"
                 :class="heroCtaClass"
                 :style="introDelay(0.36)"
                 :aria-label="heroContent.primaryCta.label"
@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
 
               <NuxtLink
                 :to="heroContent.secondaryCta.to"
-                class="hero-cta inline-flex items-center justify-center gap-2 border border-white/20 rounded-full px-6 py-3 text-sm text-white font-semibold transition hover:border-white/40 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 hover:-translate-y-0.5"
+                class="hero-cta inline-flex items-center justify-center gap-2 border border-black/20 dark:border-white/20 rounded-full px-6 py-3 text-sm text-black dark:text-white font-semibold transition hover:border-black/40 dark:hover:border-white/40 hover:bg-black/5 dark:hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/40 dark:focus-visible:ring-white/40 hover:-translate-y-1 hover:shadow-lg"
                 :class="heroCtaClass"
                 :style="introDelay(0.48)"
                 :aria-label="heroContent.secondaryCta.label"

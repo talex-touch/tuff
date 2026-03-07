@@ -217,32 +217,32 @@ onBeforeUnmount(() => {
     >
       <div
         ref="borderRef"
-        class="absolute -inset-1 bg-gradient-to-b from-white/10 to-transparent rounded-[24px] blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-500"
+        class="absolute -inset-1 bg-gradient-to-b from-black/10 dark:from-white/10 to-transparent rounded-[24px] blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-500"
       />
 
       <div
         ref="contentRef"
-        class="relative overflow-hidden rounded-[20px] bg-[#0a0a0f] border border-white/10 shadow-2xl"
+        class="relative overflow-hidden rounded-[20px] bg-white dark:bg-[#0a0a0f] border border-black/10 dark:border-white/10 shadow-2xl"
       >
         <!-- Header Decoration Light -->
         <div
-          class="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+          class="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-black/20 dark:via-white/20 to-transparent"
         />
         <div
-          class="absolute op-50 top-0 inset-x-0 h-[120px] bg-gradient-to-b from-white/5 to-transparent pointer-events-none"
+          class="absolute op-50 top-0 inset-x-0 h-[120px] bg-gradient-to-b from-black/5 dark:from-white/5 to-transparent pointer-events-none"
         />
 
         <!-- Window Control Points -->
         <div
           ref="controlsRef"
-          class="relative z-10 flex items-center justify-between px-6 py-5 border-b border-white/5 bg-white/[0.02]"
+          class="relative z-10 flex items-center justify-between px-6 py-5 border-b border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]"
         >
           <div class="flex items-center gap-2">
             <span class="w-3 h-3 rounded-full bg-[#FF5F57] shadow-sm" />
             <span class="w-3 h-3 rounded-full bg-[#FEBC2E] shadow-sm" />
             <span class="w-3 h-3 rounded-full bg-[#28C840] shadow-sm" />
           </div>
-          <div class="text-[16px] font-medium text-white/30 tracking-wide">
+          <div class="text-[16px] font-medium text-black/30 dark:text-white/30 tracking-wide">
             <TuffLandingIntelligenceTitle title="Tuff Intelligence" />
           </div>
           <div class="w-14" />

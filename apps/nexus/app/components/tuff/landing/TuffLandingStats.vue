@@ -104,7 +104,7 @@ const aiSpotlight = computed(() => {
         <span
           v-for="(part, index) in aiSpotlight.demo.summaryParts"
           :key="index"
-          :class="part.highlight ? 'text-white font-bold' : undefined"
+          :class="part.highlight ? 'text-black dark:text-white font-bold' : undefined"
         >
           {{ part.text }}
         </span>

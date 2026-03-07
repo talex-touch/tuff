@@ -312,12 +312,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="tuff-banner">
-    <div class="tuff-banner-canvas-wrap">
+  <div class="tuff-banner bg-white dark:bg-black transition-colors duration-500" style="--banner-bg: transparent;">
+    <div class="tuff-banner-canvas-wrap mix-blend-difference dark:mix-blend-normal opacity-50 dark:opacity-100">
       <canvas ref="canvasRef" class="tuff-banner-canvas" />
     </div>
     <div
-      class="tuff-banner-mask"
+      class="tuff-banner-mask dark:opacity-100 opacity-60"
       :style="maskStyle"
     />
     <div
@@ -345,7 +345,7 @@ onUnmounted(() => {
   overflow: hidden;
   align-items: stretch;
   justify-content: center;
-  background: #000;
+  background: var(--banner-bg, #000);
 }
 
 .tuff-banner-canvas-wrap {
