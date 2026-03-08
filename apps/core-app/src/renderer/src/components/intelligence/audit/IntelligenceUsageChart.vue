@@ -1,10 +1,23 @@
 <script lang="ts" setup>
-import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+
+interface IntelligenceUsageSummary {
+  period: string
+  periodType: 'minute' | 'day' | 'month'
+  requestCount: number
+  successCount: number
+  failureCount: number
+  totalTokens: number
+  promptTokens: number
+  completionTokens: number
+  totalCost: number
+  avgLatency: number
+}
 
 const props = defineProps<{
   callerId?: string
@@ -12,13 +25,16 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const { getUsageStats, isLoading } = useIntelligenceStats()
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
+const isLoading = ref(false)
 
 const chartData = ref<IntelligenceUsageSummary[]>([])
 const activeMetric = ref<'requests' | 'tokens' | 'cost'>('requests')
 const hoveredIndex = ref<number | null>(null)
 
 async function loadChartData() {
+  isLoading.value = true
   try {
     const days = props.days || 14
     const endDate = new Date()
@@ -28,7 +44,12 @@ async function loadChartData() {
     const startPeriod = startDate.toISOString().split('T')[0]
     const endPeriod = endDate.toISOString().split('T')[0]
 
-    const data = await getUsageStats(props.callerId || 'system', 'day', startPeriod, endPeriod)
+    const data = await aiClient.getUsageStats({
+      callerId: props.callerId || 'system',
+      periodType: 'day',
+      startPeriod,
+      endPeriod
+    })
 
     // Fill missing days with empty data
     const filledData: IntelligenceUsageSummary[] = []
@@ -58,6 +79,8 @@ async function loadChartData() {
     chartData.value = filledData
   } catch {
     toast.error(t('intelligence.audit.loadChartFailed'))
+  } finally {
+    isLoading.value = false
   }
 }
 

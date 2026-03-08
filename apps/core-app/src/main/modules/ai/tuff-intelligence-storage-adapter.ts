@@ -11,7 +11,7 @@ import type {
   IntelligencePromptRecord,
   IntelligenceProviderConfig,
   PromptTemplate
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
 import { eq } from 'drizzle-orm'
 import { config } from '../../db/schema'
 import { databaseModule } from '../database'

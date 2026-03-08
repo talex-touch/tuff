@@ -4,11 +4,11 @@ import type {
   IntelligenceProviderSyncPayload,
   IntelligenceProviderSyncRecord,
   TestResult
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
 import { TxButton } from '@talex-touch/tuffex'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import IntelligenceEmptyState from '~/components/intelligence/layout/IntelligenceEmptyState.vue'

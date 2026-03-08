@@ -1,5 +1,4 @@
 import type {
-  AgentTask,
   IntelligenceAgentPayload,
   IntelligenceAgentResult,
   IntelligenceChatPayload,
@@ -55,7 +54,8 @@ import type {
   IntelligenceTranslatePayload,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
+import type { AgentTask } from '@talex-touch/utils'
 import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { stdout } from 'node:process'
 import { format } from 'node:util'

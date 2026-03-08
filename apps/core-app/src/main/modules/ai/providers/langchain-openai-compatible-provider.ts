@@ -12,7 +12,7 @@ import type {
   IntelligenceVisionOcrResult,
   IntelligenceEmbeddingPayload,
   IntelligenceTranslatePayload
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { ChatOpenAI, OpenAIEmbeddings } from '@langchain/openai'
 import { IntelligenceProvider } from '../runtime/base-provider'

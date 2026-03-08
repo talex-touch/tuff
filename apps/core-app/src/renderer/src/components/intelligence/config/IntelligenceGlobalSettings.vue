@@ -1,5 +1,5 @@
 <script lang="ts" name="IntelligenceGlobalSettings" setup>
-import type { IntelligenceGlobalConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceGlobalConfig } from '@talex-touch/tuff-intelligence'
 import { TxSelectItem } from '@talex-touch/tuffex'
 import { getCurrentInstance, ref, watch } from 'vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'

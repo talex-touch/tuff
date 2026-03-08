@@ -2,7 +2,7 @@ import type {
   TuffIntelligenceAgentSession,
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph'
 
 export interface CoreAgentGraphRuntime {

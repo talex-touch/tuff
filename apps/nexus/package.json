@@ -40,6 +40,7 @@
     "@sentry/nuxt": "catalog:",
     "@sidebase/nuxt-auth": "^0.9.4",
     "@talex-touch/tuff-business": "workspace:*",
+    "@talex-touch/tuff-intelligence": "workspace:*",
     "@talex-touch/tuffex": "workspace:*",
     "@talex-touch/utils": "workspace:*",
     "fighting-design": "catalog:",

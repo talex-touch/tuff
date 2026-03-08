@@ -91,7 +91,8 @@ export default defineConfig({
       // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
       externalizeDepsPlugin({
         exclude: [
-          '@talex-touch/utils' // workspace 包必须打包
+          '@talex-touch/utils', // workspace 包必须打包
+          '@talex-touch/tuff-intelligence' // 避免运行时直接加载 TS ESM 源码导致导入解析失败
         ]
       })
     ],
@@ -152,7 +153,10 @@ export default defineConfig({
   preload: {
     plugins: [
       externalizeDepsPlugin({
-        exclude: ['@talex-touch/utils'] // workspace 包必须打包
+        exclude: [
+          '@talex-touch/utils', // workspace 包必须打包
+          '@talex-touch/tuff-intelligence'
+        ]
       })
     ],
     build: {

@@ -3,7 +3,7 @@ import type {
   IntelligenceProviderConfig,
   IntelligenceProviderType,
   ProviderManagerAdapter
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { createLogger } from '../../../utils/logger'
 
 const providerManagerLog = createLogger('Intelligence').child('ProviderManager')

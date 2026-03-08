@@ -1,24 +1,37 @@
 <script lang="ts" setup>
-import type { IntelligenceAuditLogEntry } from '@talex-touch/utils/renderer'
 import { TxButton } from '@talex-touch/tuffex'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+
+interface IntelligenceAuditLogEntry {
+  traceId: string
+  timestamp: number
+  capabilityId: string
+  provider: string
+  model: string
+  promptHash?: string
+  caller?: string
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  latency: number
+  success: boolean
+  error?: string
+  estimatedCost?: number
+}
 
 const props = defineProps<{
   callerId?: string
 }>()
 
 const { t } = useI18n()
-const {
-  getAuditLogs,
-  exportToCSV,
-  exportToJSON,
-  downloadAsFile,
-  isLoading: _isLoading
-} = useIntelligenceStats()
-
-const loading = computed(() => _isLoading.value)
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
+const loading = ref(false)
 
 const logs = ref<IntelligenceAuditLogEntry[]>([])
 const selectedLog = ref<IntelligenceAuditLogEntry | null>(null)
@@ -26,8 +39,9 @@ const limit = ref(50)
 const hasMore = ref(true)
 
 async function loadLogs(append = false) {
+  loading.value = true
   try {
-    const newLogs = await getAuditLogs({
+    const newLogs = await aiClient.getAuditLogs({
       caller: props.callerId,
       limit: limit.value,
       offset: append ? logs.value.length : 0
@@ -42,21 +56,68 @@ async function loadLogs(append = false) {
     hasMore.value = newLogs.length === limit.value
   } catch (error) {
     console.error('Failed to load logs:', error)
+  } finally {
+    loading.value = false
   }
 }
 
 onMounted(() => loadLogs())
 
 function handleExportCSV() {
-  const csv = exportToCSV(logs.value)
+  const headers = [
+    'Trace ID',
+    'Timestamp',
+    'Capability',
+    'Provider',
+    'Model',
+    'Caller',
+    'Prompt Tokens',
+    'Completion Tokens',
+    'Total Tokens',
+    'Estimated Cost',
+    'Latency (ms)',
+    'Success',
+    'Error'
+  ]
+  const rows = logs.value.map((log) => [
+    log.traceId,
+    new Date(log.timestamp).toISOString(),
+    log.capabilityId,
+    log.provider,
+    log.model,
+    log.caller || '',
+    log.usage.promptTokens,
+    log.usage.completionTokens,
+    log.usage.totalTokens,
+    log.estimatedCost?.toFixed(6) || '',
+    log.latency,
+    log.success ? 'Yes' : 'No',
+    log.error || ''
+  ])
+  const csv = [
+    headers.join(','),
+    ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+  ].join('\n')
   const filename = `intelligence-audit-${new Date().toISOString().split('T')[0]}.csv`
   downloadAsFile(csv, filename, 'text/csv')
 }
 
 function handleExportJSON() {
-  const json = exportToJSON(logs.value)
+  const json = JSON.stringify(logs.value, null, 2)
   const filename = `intelligence-audit-${new Date().toISOString().split('T')[0]}.json`
   downloadAsFile(json, filename, 'application/json')
+}
+
+function downloadAsFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
 }
 
 function formatTime(timestamp: number): string {

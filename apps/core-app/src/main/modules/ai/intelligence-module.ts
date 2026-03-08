@@ -7,12 +7,14 @@ import type {
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceStateSnapshot,
-  TuffIntelligenceTurn,
-  ModuleInitContext,
-  ModuleKey
-} from '@talex-touch/utils'
+  TuffIntelligenceTurn
+} from '@talex-touch/tuff-intelligence'
+import type { ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
-import { IntelligenceCapabilityType, IntelligenceProviderType } from '@talex-touch/utils'
+import {
+  IntelligenceCapabilityType,
+  IntelligenceProviderType
+} from '@talex-touch/tuff-intelligence'
 import { getTuffTransportMain, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import type { TuffEvent } from '@talex-touch/utils/transport/event/types'

@@ -4,14 +4,14 @@ import type {
   IntelligencePromptRecord,
   IntelligenceSDKPersistedConfig,
   IntelligenceProviderConfig
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import {
   DEFAULT_CAPABILITIES,
   DEFAULT_GLOBAL_CONFIG,
   DEFAULT_PROVIDERS,
-  IntelligenceProviderType,
-  StorageList
-} from '@talex-touch/utils'
+  IntelligenceProviderType
+} from '@talex-touch/tuff-intelligence'
+import { StorageList } from '@talex-touch/utils'
 
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { StorageEvents } from '@talex-touch/utils/transport/events'

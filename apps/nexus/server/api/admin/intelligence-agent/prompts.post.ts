@@ -1,7 +1,7 @@
 import type {
   IntelligencePromptRecord,
   IntelligencePromptRegistryUpsertPayload,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { savePromptRecord } from '../../../utils/intelligenceStore'
 

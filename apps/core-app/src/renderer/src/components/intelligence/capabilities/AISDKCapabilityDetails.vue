@@ -3,10 +3,11 @@ import type {
   IntelligenceCapabilityProviderBinding,
   IntelligenceCapabilityConfig,
   IntelligenceProviderConfig
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex'
-import { useIntelligence } from '@talex-touch/utils/renderer/hooks/use-intelligence'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { VueDraggable as draggable } from 'vue-draggable-plus'
 import { useI18n } from 'vue-i18n'
@@ -35,7 +36,8 @@ const emits = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const intelligence = useIntelligence()
+const transport = useTuffTransport()
+const intelligence = createIntelligenceClient(transport)
 const promptValue = ref(props.capability.promptTemplate || '')
 const focusedProviderId = ref<string>('')
 const showModelDrawer = ref(false)

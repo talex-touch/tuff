@@ -309,21 +309,22 @@
 - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
 
-## 10. Tray 事件
+## 10. 系统设置事件（AutoStart / TraySettings）
 
-**主要处理入口**：`apps/core-app/src/main/modules/tray/tray-manager.ts`
+**主要处理入口**：`apps/core-app/src/main/channel/common.ts`
 
 | 事件 Key | 事件名 | 主要处理/发送 |
 | --- | --- | --- |
-| TrayEvents.autostart.update | `tray:autostart:update` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.autostart.get | `tray:autostart:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.show.get | `tray:show:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.show.set | `tray:show:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.hideDock.set | `tray:hidedock:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| AppEvents.system.autoStartGet | `app:system:autostart.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.autoStartUpdate | `app:system:autostart.update` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.traySettingsGet | `app:system:tray-settings.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.traySettingsUpdate | `app:system:tray-settings.update` | on: `apps/core-app/src/main/channel/common.ts` |
 
 **Renderer 使用点（节选）**：
 - `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
 
 ## 11. Sentry 事件
 

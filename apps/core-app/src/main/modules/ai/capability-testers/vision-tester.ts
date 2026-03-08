@@ -2,7 +2,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceVisionOcrResult,
   IntelligenceVisionOcrPayload
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'

@@ -1,7 +1,7 @@
 import type { BaseMessage } from '@langchain/core/messages'
 import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { createError } from 'h3'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { buildOpenAiCompatBaseUrls, resolveProviderBaseUrl } from '../../../utils/intelligenceModels'
 import { getProviderApiKey, getSettings, listProviders, type IntelligenceProviderRecord } from '../../../utils/intelligenceStore'

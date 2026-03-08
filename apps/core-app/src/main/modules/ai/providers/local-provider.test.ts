@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { IntelligenceVisionOcrPayload } from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import type { IntelligenceVisionOcrPayload } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
 vi.mock('@talex-touch/tuff-native', () => ({
   getNativeOcrSupport: vi.fn(),

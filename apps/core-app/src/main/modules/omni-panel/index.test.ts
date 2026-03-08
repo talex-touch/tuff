@@ -274,7 +274,7 @@ describe('OmniPanel smoke', () => {
       }) => Promise<{ success: boolean }>
       featureRegistry: Array<Record<string, unknown>>
       ensureWindow: () => Promise<{
-        window: { show: () => void; focus: () => void; isDestroyed: () => boolean }
+        window: { showInactive: () => void; isDestroyed: () => boolean }
       }>
       positionWindowNearCursor: () => void
       pushContext: (text: string, source: string) => Promise<void>
@@ -286,8 +286,7 @@ describe('OmniPanel smoke', () => {
       transport: null | { sendTo: () => Promise<void> }
     }
 
-    const showMock = vi.fn()
-    const focusMock = vi.fn()
+    const showInactiveMock = vi.fn()
     const hideMock = vi.fn()
 
     module.transport = null
@@ -300,8 +299,7 @@ describe('OmniPanel smoke', () => {
     ]
     module.ensureWindow = vi.fn(async () => ({
       window: {
-        show: showMock,
-        focus: focusMock,
+        showInactive: showInactiveMock,
         isDestroyed: () => false
       }
     }))
@@ -325,8 +323,7 @@ describe('OmniPanel smoke', () => {
       source: 'shortcut'
     })
 
-    expect(showMock).toHaveBeenCalledTimes(1)
-    expect(focusMock).toHaveBeenCalledTimes(1)
+    expect(showInactiveMock).toHaveBeenCalledTimes(1)
     expect(result.success).toBe(true)
     expect(hideMock).toHaveBeenCalledTimes(1)
   })

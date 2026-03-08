@@ -1,4 +1,4 @@
-import type { IntelligenceInvokeResult } from '@talex-touch/utils'
+import type { IntelligenceInvokeResult } from '@talex-touch/tuff-intelligence'
 
 export interface CapabilityTestPayload {
   providerId?: string

@@ -2,7 +2,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import type { IClipboardItem } from '../clipboard'

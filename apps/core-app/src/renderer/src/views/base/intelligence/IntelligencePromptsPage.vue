@@ -1,9 +1,9 @@
 <script lang="ts" name="IntelligencePromptsPage" setup>
-import type { IntelligenceCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceCapabilityConfig } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestResult as UiCapabilityTestResult } from '~/components/intelligence/capabilities/types'
 import type { PromptTemplate } from '~/modules/intelligence/prompt-types'
 import { TxBottomDialog, TxButton } from '@talex-touch/tuffex'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'

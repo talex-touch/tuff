@@ -38,7 +38,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { isLocalhostUrl } from '@talex-touch/utils'
+import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -47,6 +47,7 @@ import type { TuffEvent } from '@talex-touch/utils/transport/event/types'
 import { AppEvents, PlatformEvents } from '@talex-touch/utils/transport/events'
 import {
   BrowserWindow,
+  app,
   dialog,
   powerMonitor,
   safeStorage,
@@ -1474,7 +1475,7 @@ export class CommonChannelModule extends BaseModule {
 
   private getRuntimeTrayManager(touchApp: TalexTouch.TouchApp): RuntimeTrayManager | null {
     const key = Symbol.for('TrayManager')
-    const module = touchApp.moduleManager.getModule<RuntimeTrayManager>(key)
+    const module = touchApp.moduleManager.getModule(key) as RuntimeTrayManager | undefined
     return module ?? null
   }
 

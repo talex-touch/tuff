@@ -3,12 +3,12 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type {
   IntelligenceCapabilityProviderBinding,
   IntelligenceCapabilityConfig
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
 import type {
   CapabilityBinding,
   CapabilityTestResult
 } from '~/components/intelligence/capabilities/types'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'

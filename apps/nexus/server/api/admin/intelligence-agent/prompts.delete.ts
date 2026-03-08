@@ -1,4 +1,4 @@
-import type { IntelligencePromptRegistryDeletePayload } from '@talex-touch/utils'
+import type { IntelligencePromptRegistryDeletePayload } from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { deletePromptRecord } from '../../../utils/intelligenceStore'
 

@@ -1,7 +1,7 @@
 import type {
   IntelligencePromptBindingListResponse,
   IntelligencePromptBindingQuery,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { listPromptBindings } from '../../../utils/intelligenceStore'
 

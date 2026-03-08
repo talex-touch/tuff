@@ -1,4 +1,4 @@
-import type { IntelligencePromptBindingDeletePayload } from '@talex-touch/utils'
+import type { IntelligencePromptBindingDeletePayload } from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { deletePromptBinding } from '../../../utils/intelligenceStore'
 

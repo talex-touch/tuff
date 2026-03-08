@@ -9,9 +9,74 @@ import {
   type IntelligenceProviderManagerAdapter,
   type IntelligenceVisionOcrPayload,
   type IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { TuffIntelligenceSDK, setIntelligenceProviderManager } from './intelligence-sdk'
+
+const { appMock } = vi.hoisted(() => ({
+  appMock: {
+    commandLine: { appendSwitch: vi.fn() },
+    on: vi.fn(),
+    once: vi.fn(),
+    whenReady: vi.fn().mockResolvedValue(undefined),
+    quit: vi.fn(),
+    isPackaged: false
+  }
+}))
+
+vi.mock('electron', () => {
+  const electronMock = {
+    __esModule: true as const,
+    app: appMock,
+    BrowserWindow: class BrowserWindow {},
+    Tray: class Tray {},
+    MessageChannelMain: class MessageChannelMain {
+      port1 = {
+        on: vi.fn(),
+        postMessage: vi.fn(),
+        start: vi.fn(),
+        close: vi.fn()
+      }
+      port2 = {
+        on: vi.fn(),
+        postMessage: vi.fn(),
+        start: vi.fn(),
+        close: vi.fn()
+      }
+    },
+    Menu: {
+      buildFromTemplate: vi.fn(),
+      setApplicationMenu: vi.fn()
+    },
+    nativeImage: {
+      createFromPath: vi.fn()
+    },
+    ipcMain: {
+      handle: vi.fn(),
+      on: vi.fn(),
+      removeHandler: vi.fn()
+    }
+  }
+
+  return {
+    ...electronMock,
+    default: electronMock
+  }
+})
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
+}))
+
+vi.mock('./agents', () => ({
+  agentManager: {
+    isInitialized: vi.fn(() => false),
+    executeTaskImmediate: vi.fn()
+  }
+}))
 
 interface TestProvider extends IntelligenceProviderAdapter {
   visionOcr: (

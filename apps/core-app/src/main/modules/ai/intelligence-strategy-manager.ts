@@ -1,4 +1,7 @@
-import type { IntelligenceInvokeOptions, IntelligenceProviderConfig } from '@talex-touch/utils'
+import type {
+  IntelligenceInvokeOptions,
+  IntelligenceProviderConfig
+} from '@talex-touch/tuff-intelligence'
 
 export interface StrategySelectionRequest {
   capabilityId: string

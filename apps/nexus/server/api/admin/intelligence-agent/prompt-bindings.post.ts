@@ -1,7 +1,7 @@
 import type {
   IntelligencePromptBinding,
   IntelligencePromptBindingUpsertPayload,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { savePromptBinding } from '../../../utils/intelligenceStore'
 

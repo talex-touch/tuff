@@ -1,4 +1,4 @@
-import type { IntelligenceAuditLog, IntelligenceUsageInfo } from '@talex-touch/utils'
+import type { IntelligenceAuditLog, IntelligenceUsageInfo } from '@talex-touch/tuff-intelligence'
 import type { SQL } from 'drizzle-orm'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
