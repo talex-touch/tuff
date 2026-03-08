@@ -1,0 +1,12 @@
+{
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@talex-touch/tuff-intelligence": ["../../packages/tuff-intelligence/src/index.ts"],
+      "@talex-touch/tuff-intelligence/*": ["../../packages/tuff-intelligence/src/*"]
+    },
+    "types": [
+      "./types/cloudflare-env"
+    ]
+  }
+}

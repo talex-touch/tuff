@@ -909,17 +909,23 @@ onUnmounted(() => {
       <section class="pilot-chat__messages">
         <TxEmptyState
           v-if="loadingMessages"
-          variant="loading"
+          class="pilot-chat__empty"
+          variant="custom"
           size="small"
+          surface="card"
+          :loading="true"
           title="正在加载消息..."
           description=""
         />
         <TxEmptyState
           v-else-if="messages.length <= 0"
-          variant="blank-slate"
+          class="pilot-chat__empty"
+          variant="custom"
           size="small"
+          surface="card"
+          icon="i-carbon-chat-bot"
           title="发送第一条消息开始对话"
-          description=""
+          description="你可以先发一个目标，我会帮你拆解执行。"
         />
 
         <div v-else class="pilot-chat__message-list">
@@ -1160,6 +1166,12 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 10px;
   margin-top: 14px;
+  overflow: hidden;
+}
+
+.pilot-chat__empty {
+  width: min(100%, 420px);
+  margin: auto;
 }
 
 .pilot-chat__message-list {
@@ -1192,7 +1204,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.9));
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(6px);
 }
 
 .pilot-chat__resume {
@@ -1211,26 +1224,37 @@ onUnmounted(() => {
 .pilot-composer-toolbar {
   width: 100%;
   justify-content: space-between;
+  border-top: 1px solid rgba(16, 32, 58, 0.08);
+  padding-top: 8px;
 }
 
 .pilot-composer-btn {
-  border: 1px solid rgba(16, 32, 58, 0.16);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(16, 32, 58, 0.18);
+  background: rgba(255, 255, 255, 0.98);
   color: rgba(16, 32, 58, 0.88);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
 }
 
 .pilot-composer-btn.is-icon {
   width: 34px;
   height: 34px;
   padding: 0;
+  font-size: 14px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
+}
+
+.pilot-composer-btn:hover:not(:disabled) {
+  border-color: rgba(14, 101, 255, 0.36);
+  background: rgba(14, 101, 255, 0.08);
+  color: #0f56db;
 }
 
 .pilot-composer-btn:disabled {
@@ -1249,6 +1273,13 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  box-shadow: 0 8px 16px rgba(11, 11, 12, 0.2);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.pilot-composer-voice:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(11, 11, 12, 0.26);
 }
 
 .pilot-composer-voice:disabled {
@@ -1306,10 +1337,13 @@ onUnmounted(() => {
 }
 
 .pilot-trace__body {
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .pilot-trace-item {
@@ -1331,16 +1365,19 @@ onUnmounted(() => {
 }
 
 .pilot-page :deep(.tx-chat-composer) {
-  border-radius: 24px;
+  border-radius: 20px;
   padding: 14px;
-  border-color: rgba(16, 32, 58, 0.16);
-  box-shadow: 0 12px 24px rgba(16, 32, 58, 0.08);
+  border-color: rgba(16, 32, 58, 0.18);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 8px 16px rgba(16, 32, 58, 0.08);
 }
 
 .pilot-page :deep(.tx-chat-composer__textarea) {
   border-radius: 16px;
   min-height: 82px;
   max-height: 260px;
+  background: #fff;
+  border-color: rgba(16, 32, 58, 0.16);
   resize: none;
 }
 
