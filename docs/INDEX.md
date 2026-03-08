@@ -21,6 +21,8 @@
 - 2026-02 新增：Intelligence Agent 一次切换（Nexus + Core-App）完成 `intelligence-agent` 命名空间上线；旧 `intelligence-lab` 路由统一返回 `410`；Prompt Registry（registry + binding）完成 schema 对齐与默认提示词落库引导；`session/stream` 主链切换 LangGraph 五阶段状态机并提供 Prompt Registry 管理 API/UI。
 - 2026-03 新增：OmniPanel 进入 40 点推进批次，已落地默认加载、执行门禁去除、错误码与刷新原因收敛、键盘交互、组件拆分与主/渲定向单测（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）。
 - 2026-03 新增：Pilot（`apps/pilot`）完成首版 Chat-first 落地（会话 API + SSE + `fromSeq` 补播 + Trace 抽屉），并将 Intelligence 核心类型/Runtime 收口到 `packages/tuff-intelligence`（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
+- 2026-03 新增：Intelligence 流式链路完成兼容增强：Core-App 新增 `intelligence:agent:session:subscribe` 真推流，旧 `session:stream` 保持查询语义；runtime trace 引入单调 `seq` 与 `fromSeq` 续播能力，Nexus `session/stream` keepalive 同步补齐 `stream.heartbeat` 事件（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
+- 2026-03 新增：Pilot DeepAgent 输出链路补齐增量渲染：runtime 支持 `engine.runStream()` 优先分发，后端持续输出 `assistant.delta`；前端补齐 `assistant.final` 去重拼接，避免“delta + final”重复渲染（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
 - 2026-03 新增：Pilot 下一阶段执行文档落地，明确“测试优先 -> Nexus OAuth -> tuff-pilot-cli -> 后端渠道可配置”的硬顺序（`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`）。
 - 2026-02 新增：发布链路收敛到 `build-and-release.yml`（失败不再创建 Release），并增加 Nexus release 自动同步、CLI 四包 npm 自动发布；官网部署改由 Cloudflare Pages 平台侧 Git 自动部署（仓库不再维护 `nexus-deploy.yml`）。
 - 2026-02 新增：Nexus 汇率服务（USD 基准换算 + D1 历史快照 + telemetry 错误归档），入口 `/api/exchange/convert`；高级历史查询 `/api/exchange/history`
