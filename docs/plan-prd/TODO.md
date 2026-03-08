@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-02-26
+> 更新时间: 2026-03-07
 
 ---
 
@@ -23,6 +23,15 @@
   - 策略：Tray 改为实验特性，默认关闭，需显式启用（`setup.experimentalTray=true`）。
   - 入口保障：默认使用 Dock 作为主入口，不依赖 Tray。
 
+## 🧯 2026-03 主进程生命周期收敛（已落地）
+
+- [x] Dev 退出链路改为“两阶段”（`app.quit()` 优先 + 5s 超时强退兜底），并统一 `uncaughtException` 入口。
+- [x] `ModuleManager` 增加幂等 `unloadAll(reason)`，`BEFORE_APP_QUIT` 统一复用，避免重复销毁与竞态。
+- [x] Tray 模块按 `experimentalTray` 动态加载；关闭时不加载模块且不进入监听链路。
+- [x] Tray 设置通道从 `TrayEvents` 迁移到 `AppEvents.system.*`，并由 `CommonChannel` 常驻处理。
+- [x] 设置页/引导页迁移到新通道；`experimentalTray=false` 时隐藏 `showTray/hideDock` 开关。
+- [x] OmniPanel 退出前执行 input hook 停止与清理，降低 native hook 退出期 fatal 风险。
+
 ---
 
 ## 🧭 文档治理与路线图落地（新增）
@@ -34,6 +43,31 @@
 - [x] 新增 Week 1 执行清单（`01-project/WEEK1-EXECUTION-PLAN-2026Q1.md`）
 - [ ] 活跃 PRD 补齐“最终目标 / 质量约束 / 回滚策略”章节（首批已覆盖 Flow/DivisionBox/ViewMode/AttachViewCache/Agents/PlatformCapabilities/ModuleLogging）
 - [ ] 在每周例行更新中同步 `README.md` + `TODO.md` + `CHANGES.md`（形成固定节奏）
+
+---
+
+## 🛰️ Pilot × Intelligence（Protocol-first Runtime）
+
+- [x] 新建 `apps/pilot`（Nuxt + Cloudflare Pages preset）并接入 `@talex-touch/tuff-intelligence`
+- [x] 实现 Pilot API 基础面：
+  - `POST /api/pilot/chat/sessions`
+  - `GET /api/pilot/chat/sessions`
+  - `GET /api/pilot/chat/sessions/:sessionId/messages`
+  - `POST /api/pilot/chat/sessions/:sessionId/uploads`
+  - `POST /api/pilot/chat/sessions/:sessionId/stream`
+  - `POST /api/pilot/chat/sessions/:sessionId/pause`
+  - `GET /api/pilot/chat/sessions/:sessionId/trace`
+- [x] SSE 事件桥接：`assistant.delta` / `assistant.final` / `run.metrics` / `session.paused` / `error` / `done`
+- [x] 前端 V1 Chat-first 页面：会话列表、消息流、附件上传、停止、补播恢复、Trace 抽屉
+- [x] Edge 兼容修复：去除 `Buffer` 依赖，改为 `atob + Uint8Array` 路径
+- [x] `tuff-intelligence` Runtime 收口：会话历史注入、trace `seq` 回传、checkpoint 持久化
+- [x] 根脚本补齐：`pilot:dev` / `pilot:build` / `pilot:typecheck` / `pilot:lint`
+- [x] 新增下一阶段执行文档：`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`（测试优先 + OAuth + CLI + channel routing）
+- [ ] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播
+- [ ] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率
+- [ ] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流
+- [ ] 新增 `@talex-touch/tuff-pilot-cli`：login/chat/send/sessions/trace 命令闭环
+- [ ] 后端渠道可配置：会话级 `channelId` 路由与 provider 配置联动
 
 ---
 

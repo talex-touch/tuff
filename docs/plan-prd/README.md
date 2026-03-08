@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-02-26
+> 更新时间: 2026-03-07
 
  ## PRD Index（以代码实现为准）
  
@@ -18,6 +18,7 @@
  - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
+ - **[Pilot API/事件契约](./docs/PILOT-INTELLIGENCE-API-CONTRACT.md)**：`apps/pilot` 的 SSE、Checkpoint/Resume、错误码与时序
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
  - **[DivisionBox 文档索引](./docs/DIVISION_BOX_INDEX.md)**：DivisionBox 详细文档入口
 
@@ -92,6 +93,16 @@
   - **状态**
     - Gate A/B 完成（版本对齐 + 发布链路）
     - Gate C~E 待完成（质量门禁、发布资产、tag 发布动作）
+
+- **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
+  - **代码**
+    - `apps/pilot/`：Nuxt + Cloudflare Pages/Edge API（会话、消息、SSE、pause、trace、upload）
+    - `packages/tuff-intelligence/src/{protocol,runtime,registry,policy,store,adapters}`：统一 Runtime/Protocol
+  - **状态**
+    - V1 Chat-first 页面已可运行（会话列表、消息流、附件、Trace 抽屉）。
+    - SSE 已支持 `assistant.delta/final`、`run.metrics`、`session.paused`、`done` 与 `fromSeq` 补播。
+  - **缺口**
+    - 端到端压测、D1/R2 配额治理、发布环境鉴权联调（Nexus token/session）。
 
 - **插件权限中心**（Phase 1-4 已落地）
   - **代码**
@@ -188,8 +199,19 @@
    - Prompt Registry（registry + binding）schema 对齐并接入默认提示词迁移
    - Prompt Registry 管理 API 与 Lab 弹窗管理面（record + binding CRUD）
    - LangGraph 五阶段状态机接管 `session/stream`（`session.start -> plan -> execute -> reflect -> finalize`）
+ - **缺口**
+   - Workflow 编辑器、用户自定义代理、协作与测试
+
+ - **Pilot（独立部署）**
+   - **PRD/契约**
+     - `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+   - **代码**
+     - `apps/pilot/`
+     - `packages/tuff-intelligence/`
    - **缺口**
-     - Workflow 编辑器、用户自定义代理、协作与测试
+     - `apps/pilot` 对 `tuff-intelligence` 的 pause/resume 单测与服务端集成测试
+     - Edge 预算切片执行（20-25s）自动续跑的生产级回合编排
+     - 登录鉴权与 Nexus account/配额策略完全对齐
 
  - **Assistant 实验功能（悬浮球 + 语音唤醒）**
    - **实现说明**：`./04-implementation/AssistantExperiment-VoiceFloatingBall-260223.md`

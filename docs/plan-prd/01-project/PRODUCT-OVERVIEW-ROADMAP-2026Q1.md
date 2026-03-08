@@ -1,7 +1,7 @@
 # Tuff 产品总览与 8 周路线图（2026-Q1）
 
-> 更新时间：2026-02-26  
-> 适用范围：`apps/core-app`、`apps/nexus`、`packages/*`、`plugins/*`
+> 更新时间：2026-03-07  
+> 适用范围：`apps/core-app`、`apps/nexus`、`apps/pilot`、`packages/*`、`plugins/*`
 
 ## 1. 产品总览（是什么）
 
@@ -33,6 +33,10 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 ### G4. 产品目标（可闭环）
 - Flow / DivisionBox / Intelligence 的体验闭环完成（功能、权限、审计、文档、示例）。
 - 保持“核心框架稳定 + 插件能力持续外移”的演进方向。
+
+### G5. Pilot 目标（可独立部署）
+- `apps/pilot` 形成独立 Chat-first 入口，复用 Intelligence Provider/Quota/Prompt 配置体系。
+- 面向 Edge 运行时提供长会话能力：SSE、checkpoint、pause/resume、`fromSeq` 补播。
 
 ## 3. 质量约束（全项目强制）
 
@@ -84,9 +88,20 @@ Tuff（原 TalexTouch）是一个 **Local-first + AI-native + Plugin-extensible*
 - 交付：
   - legacy handler 逐项下线；
   - hooks/SDK 对外入口统一。
+  - Intelligence 类型与 runtime 统一归属 `@talex-touch/tuff-intelligence`，停止 `@talex-touch/utils/intelligence*` 外部依赖。
 - 质量闸门：
   - 新增代码 0 个 legacy channel 直连；
   - 迁移报告可追踪（变更点、风险、回滚点）。
+
+### Week 4.5：Pilot（Edge）能力闭环
+- 目标：完成 Pilot 会话链路与恢复语义联调。
+- 交付：
+  - Chat Sessions API、SSE stream（含内置 heartbeat 事件）、pause、trace 补播；
+  - D1/R2 存储适配与附件签名上传链路；
+  - Trace 抽屉与主聊天区分离展示。
+- 质量闸门：
+  - `apps/pilot` lint/typecheck/build 全通过；
+  - 断线恢复与 `fromSeq` 补播用例可复现。
 
 ### Week 4：Storage 统一推进（配置域）
 - 目标：把高风险配置域纳入 SoT 规则并完成迁移验证。
