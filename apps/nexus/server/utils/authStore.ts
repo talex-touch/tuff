@@ -19,6 +19,7 @@ const DEVICES_TABLE = 'auth_devices'
 const LOGIN_HISTORY_TABLE = 'auth_login_history'
 const MERGE_LOGS_TABLE = 'auth_user_merges'
 const DEVICE_AUTH_TABLE = 'auth_device_auth_requests'
+const PILOT_BRIDGE_TICKET_TABLE = 'auth_pilot_bridge_tickets'
 
 let authSchemaInitialized = false
 
@@ -200,6 +201,17 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
+    CREATE TABLE IF NOT EXISTS ${PILOT_BRIDGE_TICKET_TABLE} (
+      ticket_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES ${USERS_TABLE}(id) ON DELETE CASCADE
+    );
+  `).run()
+
+  await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_auth_users_email ON ${USERS_TABLE}(email);
   `).run()
 
@@ -281,6 +293,11 @@ async function ensureAuthSchema(db: D1Database) {
 
   await db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_auth_login_history_user ON ${LOGIN_HISTORY_TABLE}(user_id);
+  `).run()
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_auth_pilot_bridge_tickets_user
+    ON ${PILOT_BRIDGE_TICKET_TABLE}(user_id, created_at DESC);
   `).run()
 
   const deviceColumns = await db.prepare(`PRAGMA table_info(${DEVICES_TABLE});`).all<{ name: string }>()
@@ -386,6 +403,14 @@ export interface AuthLoginHistoryRecord {
   longitude: number | null
   timezone: string | null
   geo_source: string | null
+}
+
+export interface PilotBridgeTicket {
+  ticketId: string
+  userId: string
+  expiresAt: string
+  consumedAt: string | null
+  createdAt: string
 }
 
 export interface DeviceAuthLongTermPolicy {
@@ -1213,6 +1238,74 @@ export async function createLoginToken(event: H3Event, userId: string, reason: s
     VALUES (?, ?, ?, ?, ?)
   `).bind(token, userId, reason, expiresAt, now).run()
   return token
+}
+
+export async function createPilotBridgeTicket(event: H3Event, userId: string, ttlMs: number): Promise<PilotBridgeTicket> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+  const now = new Date().toISOString()
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString()
+  const ticketId = generateToken(24)
+
+  await db.prepare(`
+    INSERT INTO ${PILOT_BRIDGE_TICKET_TABLE} (ticket_id, user_id, expires_at, consumed_at, created_at)
+    VALUES (?1, ?2, ?3, NULL, ?4)
+  `).bind(ticketId, userId, expiresAt, now).run()
+
+  return {
+    ticketId,
+    userId,
+    expiresAt,
+    consumedAt: null,
+    createdAt: now,
+  }
+}
+
+export async function consumePilotBridgeTicket(event: H3Event, ticketId: string): Promise<PilotBridgeTicket | null> {
+  const db = requireDatabase(event)
+  await ensureAuthSchema(db)
+
+  const row = await db.prepare(`
+    SELECT ticket_id, user_id, expires_at, consumed_at, created_at
+    FROM ${PILOT_BRIDGE_TICKET_TABLE}
+    WHERE ticket_id = ?1
+    LIMIT 1
+  `).bind(ticketId).first<{
+    ticket_id: string
+    user_id: string
+    expires_at: string
+    consumed_at: string | null
+    created_at: string
+  }>()
+
+  if (!row) {
+    return null
+  }
+
+  const expiresAt = Date.parse(row.expires_at)
+  if (row.consumed_at || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
+    return null
+  }
+
+  const consumedAt = new Date().toISOString()
+  const result = await db.prepare(`
+    UPDATE ${PILOT_BRIDGE_TICKET_TABLE}
+    SET consumed_at = ?1
+    WHERE ticket_id = ?2 AND consumed_at IS NULL
+  `).bind(consumedAt, ticketId).run()
+
+  const changed = Number(result.meta?.changes ?? 0)
+  if (changed <= 0) {
+    return null
+  }
+
+  return {
+    ticketId: row.ticket_id,
+    userId: row.user_id,
+    expiresAt: row.expires_at,
+    consumedAt,
+    createdAt: row.created_at,
+  }
 }
 
 export async function createWebAuthnChallenge(event: H3Event, payload: { userId?: string | null, type: 'register' | 'login', ttlMs: number }): Promise<string> {
