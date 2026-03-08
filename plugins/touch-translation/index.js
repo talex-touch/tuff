@@ -10,7 +10,7 @@ const {
 } = globalThis
 
 const crypto = require('node:crypto')
-const { createIntelligenceClient } = require('@talex-touch/utils/intelligence')
+const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence')
 const { makeWidgetId } = require('@talex-touch/utils/plugin/widget')
 
 const PLUGIN_NAME = 'touch-translation'

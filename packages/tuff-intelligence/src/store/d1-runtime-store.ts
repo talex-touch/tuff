@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types'
-import type { AttachmentRecord, MessageRecord, RuntimeStoreAdapter, SessionRecord, TraceRecord, TurnState } from './store-adapter'
+import type { TurnState } from '../protocol/session'
+import type { AttachmentRecord, MessageRecord, RuntimeStoreAdapter, SessionRecord, TraceRecord } from './store-adapter'
 
 const SESSIONS_TABLE = 'pilot_chat_sessions'
 const MESSAGES_TABLE = 'pilot_chat_messages'
@@ -30,6 +31,13 @@ function stringify(value: unknown): string {
   return JSON.stringify(value ?? {})
 }
 
+function isDuplicateColumnError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return /duplicate column name/i.test(error.message)
+}
+
 export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
   constructor(private readonly db: D1Database, private readonly userId: string) {}
 
@@ -39,6 +47,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
         session_id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         status TEXT NOT NULL,
+        title TEXT,
         last_seq INTEGER NOT NULL DEFAULT 0,
         heartbeat_at TEXT,
         pause_reason TEXT,
@@ -46,6 +55,17 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
         updated_at TEXT NOT NULL
       );
     `).run()
+
+    try {
+      await this.db.prepare(`
+        ALTER TABLE ${SESSIONS_TABLE}
+        ADD COLUMN title TEXT
+      `).run()
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) {
+        throw error
+      }
+    }
 
     await this.db.prepare(`
       CREATE INDEX IF NOT EXISTS idx_pilot_chat_sessions_user_updated
@@ -129,6 +149,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       sessionId,
       status: 'executing',
       userId: this.userId,
+      title: null,
       lastSeq: 0,
       createdAt: now,
       updatedAt: now,
@@ -139,21 +160,21 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     }
 
     await this.db.prepare(`
-      INSERT INTO ${SESSIONS_TABLE} (session_id, user_id, status, last_seq, heartbeat_at, pause_reason, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+      INSERT INTO ${SESSIONS_TABLE} (session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
       ON CONFLICT(session_id) DO UPDATE SET
         status = excluded.status,
         heartbeat_at = excluded.heartbeat_at,
         pause_reason = excluded.pause_reason,
         updated_at = excluded.updated_at
-    `).bind(sessionId, this.userId, row.status, 0, now, null, now, now).run()
+    `).bind(sessionId, this.userId, row.status, null, 0, now, null, now, now).run()
 
     return row
   }
 
   async getSession(sessionId: string): Promise<SessionRecord | null> {
     const row = await this.db.prepare(`
-      SELECT session_id, user_id, status, last_seq, heartbeat_at, pause_reason, created_at, updated_at
+      SELECT session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at
       FROM ${SESSIONS_TABLE}
       WHERE session_id = ?1 AND user_id = ?2
       LIMIT 1
@@ -161,6 +182,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       session_id: string
       user_id: string
       status: SessionRecord['status']
+      title: string | null
       last_seq: number
       heartbeat_at: string | null
       pause_reason: SessionRecord['pauseReason']
@@ -176,6 +198,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       sessionId: row.session_id,
       userId: row.user_id,
       status: row.status,
+      title: row.title || null,
       lastSeq: Number(row.last_seq || 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -189,7 +212,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
   async listSessions(limit = 20): Promise<SessionRecord[]> {
     const bounded = Math.min(Math.max(limit, 1), 200)
     const { results } = await this.db.prepare(`
-      SELECT session_id, user_id, status, last_seq, heartbeat_at, pause_reason, created_at, updated_at
+      SELECT session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at
       FROM ${SESSIONS_TABLE}
       WHERE user_id = ?1
       ORDER BY updated_at DESC
@@ -198,6 +221,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       session_id: string
       user_id: string
       status: SessionRecord['status']
+      title: string | null
       last_seq: number
       heartbeat_at: string | null
       pause_reason: SessionRecord['pauseReason']
@@ -209,6 +233,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       sessionId: row.session_id,
       userId: row.user_id,
       status: row.status,
+      title: row.title || null,
       lastSeq: Number(row.last_seq || 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -363,6 +388,46 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       SET status = ?1, updated_at = ?2, pause_reason = NULL
       WHERE session_id = ?3 AND user_id = ?4
     `).bind(status, nowIso(), sessionId, this.userId).run()
+  }
+
+  async setSessionTitle(sessionId: string, title: string): Promise<void> {
+    const normalized = title.trim().slice(0, 80)
+    if (!normalized) {
+      return
+    }
+
+    await this.db.prepare(`
+      UPDATE ${SESSIONS_TABLE}
+      SET title = ?1, updated_at = ?2
+      WHERE session_id = ?3 AND user_id = ?4
+    `).bind(normalized, nowIso(), sessionId, this.userId).run()
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.db.prepare(`
+      DELETE FROM ${TRACE_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${MESSAGES_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${CHECKPOINTS_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${ATTACHMENTS_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
+
+    await this.db.prepare(`
+      DELETE FROM ${SESSIONS_TABLE}
+      WHERE session_id = ?1 AND user_id = ?2
+    `).bind(sessionId, this.userId).run()
   }
 
   async saveAttachment(record: AttachmentRecord): Promise<void> {

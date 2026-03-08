@@ -5,8 +5,7 @@ import process from 'node:process'
 const ROOT = process.cwd()
 const TARGETS = [
   'apps/core-app/src/main/modules/ai',
-  'packages/utils/transport/sdk/domains/intelligence.ts',
-  'packages/utils/types/intelligence.ts'
+  'packages/tuff-intelligence/src'
 ]
 
 const FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs', '.vue'])

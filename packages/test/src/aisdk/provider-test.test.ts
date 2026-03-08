@@ -1,5 +1,5 @@
-import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
-import { IntelligenceProviderType } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { describe, expect, it } from 'vitest'
 import { setIntelligenceProviderManager, tuffIntelligence } from '../../../../apps/core-app/src/main/modules/ai/intelligence-sdk'
 

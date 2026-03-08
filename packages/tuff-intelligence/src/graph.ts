@@ -2,7 +2,7 @@ import type {
   IntelligenceCapabilityConfig,
   IntelligenceProviderConfig,
   PromptTemplate,
-} from '@talex-touch/utils/types/intelligence'
+} from './types/intelligence'
 import type {
   TuffGraphArtifacts,
   TuffGraphContext,
