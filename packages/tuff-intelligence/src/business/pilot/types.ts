@@ -31,7 +31,14 @@ export interface PilotAuditRecord {
 
 export function getEnvelopeText(envelope: AgentEnvelope): string {
   const payload = toPilotSafeRecord(envelope.payload)
-  return String(payload.text || '').trim()
+  const text = payload.text
+  if (typeof text === 'string') {
+    return text
+  }
+  if (text === null || text === undefined) {
+    return ''
+  }
+  return String(text)
 }
 
 export function getEnvelopeSeq(envelope: AgentEnvelope): number | undefined {

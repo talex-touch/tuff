@@ -486,7 +486,7 @@ export function usePilotChatPage() {
       return
     }
 
-    appendAssistantDelta(finalText)
+    activeMessage.content = finalText
   }
 
   async function loadSessionMessages(sessionId: string) {
