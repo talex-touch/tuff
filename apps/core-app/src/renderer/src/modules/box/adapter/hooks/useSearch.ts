@@ -753,13 +753,23 @@ export function useSearch(
 
     searchResults.value = []
 
+    const currentInputs = buildQueryInputs()
+    const hasAttachmentInputs = currentInputs.some(
+      (input) =>
+        input.type === TuffInputType.Files ||
+        input.type === TuffInputType.Image ||
+        input.type === TuffInputType.Html
+    )
+    const usedFileModeAttachment =
+      boxOptions.mode === BoxMode.FILE && boxOptions.file?.paths?.length > 0
+    const usedClipboardAttachment = hasAttachmentInputs && !usedFileModeAttachment
+
     const serializedItem = JSON.parse(JSON.stringify(itemToExecute))
     const serializedSearchResult = searchResult.value
       ? JSON.parse(JSON.stringify(searchResult.value))
       : null
 
     if (isPluginFeature && serializedSearchResult?.query) {
-      const currentInputs = buildQueryInputs()
       serializedSearchResult.query.inputs = currentInputs
     }
 
@@ -786,7 +796,19 @@ export function useSearch(
         searchVal.value = ''
       }
 
-      if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
+      if (usedFileModeAttachment) {
+        boxOptions.mode = BoxMode.INPUT
+        boxOptions.file = { buffer: null, paths: [] }
+      }
+
+      if (usedClipboardAttachment && clipboardOptions?.last) {
+        clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+        clipboardOptions.last = null
+        clipboardOptions.detectedAt = null
+      } else if (isPluginFeature && clipboardOptions && appSetting.tools.autoPaste.time === 0) {
+        if (clipboardOptions.last?.timestamp) {
+          clipboardOptions.lastClearedTimestamp = clipboardOptions.last.timestamp
+        }
         clipboardOptions.last = null
         clipboardOptions.detectedAt = null
       }

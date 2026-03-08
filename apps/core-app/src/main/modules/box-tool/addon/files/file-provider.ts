@@ -50,6 +50,7 @@ import {
   TuffInputType,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
+import { isIndexableFile as isBaseIndexableFile } from '@talex-touch/utils/common/file-scan-utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -128,6 +129,13 @@ function isValidBase64DataUrl(value: string): boolean {
 }
 
 type FileIndexStatus = (typeof fileIndexProgress.$inferSelect)['status']
+type IncrementalUpdateAction = 'add' | 'change' | 'delete'
+
+interface IncrementalUpdatePayload {
+  action: IncrementalUpdateAction
+  rawPath: string
+  manual?: boolean
+}
 
 interface IconCacheMeta {
   mtime: number | null
@@ -296,10 +304,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private fsEventsSubscribed = false
   private watchPathsRegistered = false
   private incrementalTaskChain: Promise<void> = Promise.resolve()
-  private readonly pendingIncrementalPaths: Map<
-    string,
-    { action: 'add' | 'change' | 'delete'; rawPath: string }
-  > = new Map()
+  private readonly pendingIncrementalPaths: Map<string, IncrementalUpdatePayload> = new Map()
 
   private readonly isCaseInsensitiveFs = process.platform !== 'linux'
   private readonly timestampToleranceMs = 1_000
@@ -1299,7 +1304,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           path: resolved,
           watchPath
         })
-        this.enqueueIncrementalUpdate(resolved, 'add')
+        this.enqueueIncrementalUpdate(resolved, 'add', { manual: true })
       }
       return { success: true, status: 'exists', path: watchPath }
     }
@@ -1318,7 +1323,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
             watchPath
           }
         )
-        this.enqueueIncrementalUpdate(resolved, 'add')
+        this.enqueueIncrementalUpdate(resolved, 'add', { manual: true })
       }
       return { success: true, status: 'exists', path: watchPath }
     }
@@ -1362,7 +1367,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         path: resolved,
         watchPath
       })
-      this.enqueueIncrementalUpdate(resolved, 'add')
+      this.enqueueIncrementalUpdate(resolved, 'add', { manual: true })
     }
 
     return { success: true, status: 'added', path: watchPath }
@@ -2399,11 +2404,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return false
   }
 
-  private enqueueIncrementalUpdate(rawPath: string, action: 'add' | 'change' | 'delete'): void {
+  private enqueueIncrementalUpdate(
+    rawPath: string,
+    action: IncrementalUpdateAction,
+    options?: { manual?: boolean }
+  ): void {
     if (!this.isWithinWatchRoots(rawPath)) {
       return
     }
 
+    const manual = options?.manual === true
     const normalizedPath = this.normalizePath(rawPath)
     const prev = this.pendingIncrementalPaths.get(normalizedPath)
     if (action === 'delete') {
@@ -2411,7 +2421,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     } else if (!prev || prev.action !== 'delete') {
       const nextAction: 'add' | 'change' = prev?.action === 'add' ? 'add' : action
       const nextRawPath = action === 'add' ? rawPath : (prev?.rawPath ?? rawPath)
-      this.pendingIncrementalPaths.set(normalizedPath, { action: nextAction, rawPath: nextRawPath })
+      this.pendingIncrementalPaths.set(normalizedPath, {
+        action: nextAction,
+        rawPath: nextRawPath,
+        manual: prev?.manual === true || manual
+      })
     }
 
     this.scheduleIncrementalProcessing()
@@ -2454,7 +2468,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .map(([, payload]) => payload.rawPath)
 
     const changedEntries = entries.filter(([, payload]) => payload.action !== 'delete') as Array<
-      [string, { action: 'add' | 'change'; rawPath: string }]
+      [string, { action: 'add' | 'change'; rawPath: string; manual?: boolean }]
     >
 
     if (deleted.length > 0) {
@@ -2493,14 +2507,16 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async handleIncrementalAddsOrChanges(
-    entries: Array<[string, { action: 'add' | 'change'; rawPath: string }]>
+    entries: Array<[string, { action: 'add' | 'change'; rawPath: string; manual?: boolean }]>
   ): Promise<void> {
     if (!this.dbUtils) return
     const db = this.dbUtils.getDb()
 
     const recordMap = new Map<string, typeof filesSchema.$inferInsert>()
     for (const [, payload] of entries) {
-      const record = await this.buildFileRecord(payload.rawPath)
+      const record = await this.buildFileRecord(payload.rawPath, {
+        manualForce: payload.manual === true
+      })
       if (record) {
         recordMap.set(record.path, record)
       }
@@ -2585,18 +2601,52 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async buildFileRecord(rawPath: string): Promise<typeof filesSchema.$inferInsert | null> {
+  private async buildFileRecord(
+    rawPath: string,
+    options?: { manualForce?: boolean }
+  ): Promise<typeof filesSchema.$inferInsert | null> {
     try {
       const stats = await fs.stat(rawPath)
       if (!stats.isFile()) {
         return null
       }
 
+      const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)
       const extension = path.extname(name).toLowerCase()
-      if (!isIndexableFile(rawPath, extension, name)) {
+
+      if (manualForce) {
+        if (!isBaseIndexableFile(rawPath, extension, name)) {
+          console.log('[FileProvider] buildFileRecord filtered(base)', {
+            path: rawPath,
+            extension,
+            reason: 'base-filter'
+          })
+          this.logDebug('Skipped manual incremental file: blocked by base filter', {
+            path: rawPath,
+            extension
+          })
+          return null
+        }
+      } else if (!isIndexableFile(rawPath, extension, name)) {
+        this.logDebug('Skipped incremental file: not indexable by whitelist', {
+          path: rawPath,
+          extension
+        })
         return null
       }
+
+      if (manualForce && !WHITELISTED_EXTENSIONS.has(extension)) {
+        console.log('[FileProvider] buildFileRecord accepted(manual-force)', {
+          path: rawPath,
+          extension
+        })
+        this.logInfo('Manual incremental file accepted by manual-force fallback', {
+          path: rawPath,
+          extension
+        })
+      }
+
       return {
         path: rawPath,
         name,
