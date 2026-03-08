@@ -1,4 +1,5 @@
 import type {
+  IntelligenceAgentStreamEvent,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
@@ -9,7 +10,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn,
 } from '../../../types/intelligence'
-import type { ITuffTransport } from '../../types'
+import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
 import { defineRawEvent } from '../../event/builder'
 
 export interface IntelligenceAuditLogEntry {
@@ -265,12 +266,16 @@ export interface IntelligenceSdk {
   agentToolApprove: (payload: IntelligenceAgentToolApprovePayload) => Promise<TuffIntelligenceApprovalTicket | null>
 
   agentSessionStream: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
+  agentSessionSubscribe: (
+    payload: IntelligenceAgentTraceQueryPayload,
+    options: StreamOptions<IntelligenceAgentStreamEvent>
+  ) => Promise<StreamController>
   agentSessionHistory: (payload?: IntelligenceAgentSessionHistoryPayload) => Promise<TuffIntelligenceAgentSession[]>
   agentSessionTrace: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
   agentSessionTraceExport: (payload: IntelligenceAgentTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
 }
 
-export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'>
+export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'> & Partial<Pick<ITuffTransport, 'stream'>>
 
 const intelligenceInvokeEvent = defineRawEvent<
   {
@@ -440,6 +445,10 @@ const intelligenceSessionStreamEvent = defineRawEvent<
   IntelligenceAgentTraceQueryPayload,
   IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
 >('intelligence:agent:session:stream')
+const intelligenceSessionSubscribeEvent = defineRawEvent<
+  IntelligenceAgentTraceQueryPayload,
+  AsyncIterable<IntelligenceAgentStreamEvent>
+>('intelligence:agent:session:subscribe')
 
 const intelligenceSessionHistoryEvent = defineRawEvent<
   IntelligenceAgentSessionHistoryPayload | undefined,
@@ -617,6 +626,13 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
     async agentSessionStream(payload) {
       const response = await transport.send(intelligenceSessionStreamEvent, payload)
       return assertApiResponse(response, 'Failed to stream intelligence trace')
+    },
+
+    async agentSessionSubscribe(payload, options) {
+      if (typeof transport.stream !== 'function') {
+        throw new TypeError('Failed to subscribe intelligence trace stream: transport.stream is unavailable')
+      }
+      return transport.stream(intelligenceSessionSubscribeEvent, payload, options)
     },
 
     async agentSessionHistory(payload = {}) {

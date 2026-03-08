@@ -66,6 +66,35 @@ describe('transport domain sdk mappings', () => {
     await expect(sdk.invoke('text.chat', { messages: [] })).rejects.toThrow('quota exceeded')
   })
 
+  it('intelligence sdk maps session subscribe to typed transport stream', async () => {
+    const transport = createTransportMock()
+    const sdk = createIntelligenceSdk(transport as any)
+    const onData = vi.fn()
+
+    await sdk.agentSessionSubscribe(
+      { sessionId: 'tis_1', fromSeq: 3 },
+      { onData }
+    )
+
+    expect(transport.stream).toHaveBeenCalledTimes(1)
+    const [event, payload, options] = transport.stream.mock.calls[0] || []
+    expect(event?.toEventName?.()).toBe('intelligence:agent:session:subscribe')
+    expect(payload).toEqual({ sessionId: 'tis_1', fromSeq: 3 })
+    expect(options).toEqual({ onData })
+  })
+
+  it('intelligence sdk subscribe throws when stream transport is unavailable', async () => {
+    const transport = { send: vi.fn() }
+    const sdk = createIntelligenceSdk(transport as any)
+
+    await expect(
+      sdk.agentSessionSubscribe(
+        { sessionId: 'tis_1' },
+        { onData: vi.fn() }
+      )
+    ).rejects.toThrow('transport.stream is unavailable')
+  })
+
   it('permission sdk maps grant + push subscription', async () => {
     const transport = createTransportMock()
     const dispose = vi.fn()

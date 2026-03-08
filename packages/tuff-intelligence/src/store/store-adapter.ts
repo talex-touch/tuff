@@ -6,7 +6,13 @@ export interface SessionRecord extends SessionSnapshot {
   createdAt: string
   heartbeatAt?: string
   title?: string | null
+  notifyUnread?: boolean
   pauseReason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted' | null
+}
+
+export interface SessionNotificationRecord {
+  sessionId: string
+  unread: boolean
 }
 
 export interface MessageRecord {
@@ -53,6 +59,8 @@ export interface RuntimeStoreAdapter {
   pauseSession(sessionId: string, reason: SessionRecord['pauseReason']): Promise<void>
   completeSession(sessionId: string, status: SessionRecord['status']): Promise<void>
   setSessionTitle(sessionId: string, title: string): Promise<void>
+  setSessionNotification(sessionId: string, unread: boolean): Promise<void>
+  listSessionNotifications(limit?: number): Promise<SessionNotificationRecord[]>
   deleteSession(sessionId: string): Promise<void>
   saveAttachment(record: AttachmentRecord): Promise<void>
   listAttachments(sessionId: string): Promise<AttachmentRecord[]>

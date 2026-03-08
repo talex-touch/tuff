@@ -1381,6 +1381,7 @@ export interface TuffIntelligenceSession {
 export interface TuffIntelligenceTraceEvent {
   id: string
   sessionId: string
+  seq?: number
   turnId?: string
   type:
     | 'session.started'
@@ -1444,6 +1445,25 @@ export interface TuffIntelligenceAgentPlan {
 
 export interface TuffIntelligenceAgentTraceEvent extends TuffIntelligenceTraceEvent {
   contractVersion?: 3
+}
+
+export interface IntelligenceAgentStreamEvent {
+  type:
+    | 'stream.started'
+    | 'stream.heartbeat'
+    | 'replay.started'
+    | 'replay.finished'
+    | 'done'
+    | 'error'
+    | TuffIntelligenceAgentTraceEvent['type']
+  sessionId: string
+  timestamp: number
+  seq?: number
+  replay?: boolean
+  turnId?: string
+  payload?: Record<string, any>
+  message?: string
+  detail?: Record<string, any>
 }
 
 // ============================================================================

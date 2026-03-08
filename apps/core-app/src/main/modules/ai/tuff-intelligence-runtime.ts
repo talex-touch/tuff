@@ -151,6 +151,8 @@ const runtimeLog = createLogger('Intelligence').child('TuffRuntime')
 const STORAGE_PREFIX = 'intelligence/runtime/session/'
 const DEFAULT_TOOL_TIMEOUT_MS = 45_000
 const DEFAULT_TOOL_RETRY = 1
+const DEFAULT_TRACE_QUERY_LIMIT = 200
+const MAX_TRACE_EVENTS = 1000
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -179,6 +181,14 @@ function generateId(prefix: string): string {
 
 function now(): number {
   return Date.now()
+}
+
+function toSafeSeq(value: unknown): number | null {
+  const seq = Number(value)
+  if (!Number.isFinite(seq)) {
+    return null
+  }
+  return Math.max(1, Math.floor(seq))
 }
 
 function resolveRiskLevel(
@@ -221,6 +231,10 @@ function isSessionTerminal(status: SessionStatus): boolean {
 export class TuffIntelligenceRuntime {
   private sessions = new Map<string, StoredRuntimeSession>()
   private approvalIndex = new Map<string, string>()
+  private traceSubscribers = new Map<
+    string,
+    Set<(event: TuffIntelligenceAgentTraceEvent) => void>
+  >()
 
   async startSession(payload: StartSessionPayload = {}): Promise<TuffIntelligenceSession> {
     const targetId = payload.sessionId || generateId('tis')
@@ -805,6 +819,7 @@ export class TuffIntelligenceRuntime {
       if (!parsed?.session?.id) {
         continue
       }
+      this.ensureTraceSeq(parsed)
       sessionsMap.set(parsed.session.id, parsed.session)
     }
 
@@ -817,14 +832,44 @@ export class TuffIntelligenceRuntime {
     return sessions.slice(0, limit)
   }
 
+  subscribeSessionTrace(
+    sessionId: string,
+    subscriber: (event: TuffIntelligenceAgentTraceEvent) => void
+  ): () => void {
+    const targetId = String(sessionId || '').trim()
+    if (!targetId) {
+      return () => void 0
+    }
+
+    let set = this.traceSubscribers.get(targetId)
+    if (!set) {
+      set = new Set()
+      this.traceSubscribers.set(targetId, set)
+    }
+    set.add(subscriber)
+
+    return () => {
+      const current = this.traceSubscribers.get(targetId)
+      if (!current) {
+        return
+      }
+      current.delete(subscriber)
+      if (current.size === 0) {
+        this.traceSubscribers.delete(targetId)
+      }
+    }
+  }
+
   async queryTrace(payload: QueryTracePayload): Promise<TuffIntelligenceAgentTraceEvent[]> {
     const stored = await this.loadSession(payload.sessionId)
     if (!stored) return []
 
+    this.ensureTraceSeq(stored)
+
     let trace = [...stored.trace]
     if (typeof payload.fromSeq === 'number' && Number.isFinite(payload.fromSeq)) {
       const fromSeq = Math.max(1, Math.floor(payload.fromSeq))
-      trace = trace.slice(fromSeq - 1)
+      trace = trace.filter((event) => (toSafeSeq(event.seq) ?? 0) >= fromSeq)
     }
     if (payload.level) {
       trace = trace.filter((event) => event.level === payload.level)
@@ -832,9 +877,18 @@ export class TuffIntelligenceRuntime {
     if (payload.type) {
       trace = trace.filter((event) => event.type === payload.type)
     }
-    const limit = Math.max(1, payload.limit ?? 200)
+    trace.sort((left, right) => {
+      const seqLeft = toSafeSeq(left.seq) ?? 0
+      const seqRight = toSafeSeq(right.seq) ?? 0
+      if (seqLeft !== seqRight) {
+        return seqLeft - seqRight
+      }
+      return left.timestamp - right.timestamp
+    })
+    const limit = Math.max(1, payload.limit ?? DEFAULT_TRACE_QUERY_LIMIT)
     return trace.slice(-limit).map((event) => ({
       ...event,
+      seq: toSafeSeq(event.seq) ?? undefined,
       contractVersion: 3
     }))
   }
@@ -1305,15 +1359,62 @@ export class TuffIntelligenceRuntime {
     stored.actionGraph.updatedAt = now()
   }
 
+  private ensureTraceSeq(stored: StoredRuntimeSession): void {
+    let seqCursor = toSafeSeq(stored.session.lastEventSeq) ?? 0
+    for (const event of stored.trace) {
+      const seq = toSafeSeq(event.seq)
+      if (seq) {
+        seqCursor = Math.max(seqCursor, seq)
+        event.seq = seq
+        continue
+      }
+      seqCursor += 1
+      event.seq = seqCursor
+    }
+    stored.session.lastEventSeq = seqCursor > 0 ? seqCursor : undefined
+  }
+
+  private getNextTraceSeq(stored: StoredRuntimeSession): number {
+    this.ensureTraceSeq(stored)
+    const latest = toSafeSeq(stored.session.lastEventSeq) ?? 0
+    return latest + 1
+  }
+
+  private notifyTraceSubscribers(event: TuffIntelligenceAgentTraceEvent): void {
+    const subscribers = this.traceSubscribers.get(event.sessionId)
+    if (!subscribers || subscribers.size === 0) {
+      return
+    }
+    const envelope: TuffIntelligenceAgentTraceEvent = {
+      ...event,
+      seq: toSafeSeq(event.seq) ?? undefined,
+      contractVersion: 3
+    }
+    for (const subscriber of Array.from(subscribers)) {
+      try {
+        subscriber(envelope)
+      } catch (error) {
+        runtimeLog.warn('trace subscriber callback failed', {
+          error,
+          meta: {
+            sessionId: event.sessionId
+          }
+        })
+      }
+    }
+  }
+
   private pushTrace(
     stored: StoredRuntimeSession,
     payload: Omit<TuffIntelligenceTraceEvent, 'id' | 'sessionId' | 'timestamp'> & {
       timestamp?: number
     }
   ): TuffIntelligenceTraceEvent {
+    const seq = this.getNextTraceSeq(stored)
     const event: TuffIntelligenceTraceEvent = {
       id: generateId('trace'),
       sessionId: stored.session.id,
+      seq,
       turnId: payload.turnId,
       type: payload.type,
       level: payload.level,
@@ -1322,9 +1423,11 @@ export class TuffIntelligenceRuntime {
       timestamp: payload.timestamp ?? now()
     }
     stored.trace.push(event)
-    if (stored.trace.length > 1000) {
-      stored.trace = stored.trace.slice(stored.trace.length - 1000)
+    stored.session.lastEventSeq = seq
+    if (stored.trace.length > MAX_TRACE_EVENTS) {
+      stored.trace = stored.trace.slice(stored.trace.length - MAX_TRACE_EVENTS)
     }
+    this.notifyTraceSubscribers({ ...event, contractVersion: 3 })
     return event
   }
 
@@ -1393,6 +1496,7 @@ export class TuffIntelligenceRuntime {
 
     const parsed = safeParseJson<StoredRuntimeSession | null>(raw, null)
     if (!parsed) return null
+    this.ensureTraceSeq(parsed)
     this.sessions.set(sessionId, parsed)
     for (const ticket of parsed.approvals) {
       if (ticket.status === 'pending') {
