@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { PilotSessionRow } from '../../composables/pilot-chat.types'
 import { TxButton, TxEmptyState } from '@talex-touch/tuffex'
+import PilotSidebarHeader from './PilotSidebarHeader.vue'
 
 interface PilotSessionsPanelProps {
   pilotTitle: string
   sessions: PilotSessionRow[]
   activeSessionId: string
+  collapsed: boolean
   loadingSessions: boolean
   running: boolean
   deletingSessionId: string
@@ -15,6 +17,7 @@ const props = defineProps<PilotSessionsPanelProps>()
 
 const emit = defineEmits<{
   (e: 'createSession'): void
+  (e: 'toggleCollapse'): void
   (e: 'selectSession', sessionId: string): void
   (e: 'deleteSession', sessionId: string): void
 }>()
@@ -30,31 +33,23 @@ function onDeleteSession(sessionId: string) {
 function onCreateSession() {
   emit('createSession')
 }
+
+function onToggleCollapse() {
+  emit('toggleCollapse')
+}
 </script>
 
 <template>
-  <aside class="pilot-sidebar">
-    <header class="pilot-sidebar__header">
-      <div class="pilot-brand">
-        <span class="pilot-brand__mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path
-              d="M13.34 1.45c.22-.51 1.02-.36 1.03.19v7.59h5.06c.52 0 .78.61.42.98l-8.93 9.95c-.37.41-1.03.02-.85-.49l1.89-5.33H6.91c-.54 0-.79-.65-.38-1L13.34 1.45z"
-              fill="currentColor"
-            />
-          </svg>
-        </span>
-        <div class="pilot-brand__copy">
-          <h2>{{ props.pilotTitle }}</h2>
-          <p>PREMIUM INTELLIGENCE</p>
-        </div>
-      </div>
-      <TxButton class="pilot-sidebar__create" size="small" variant="primary" :disabled="props.running" @click="onCreateSession">
-        新建
-      </TxButton>
-    </header>
+  <aside class="pilot-sidebar" :class="{ 'is-collapsed': props.collapsed }">
+    <PilotSidebarHeader
+      :pilot-title="props.pilotTitle"
+      :running="props.running"
+      :collapsed="props.collapsed"
+      @create-session="onCreateSession"
+      @toggle-collapse="onToggleCollapse"
+    />
 
-    <div class="pilot-sessions__list">
+    <div v-if="!props.collapsed" class="pilot-sessions__list">
       <TxEmptyState
         v-if="props.loadingSessions"
         variant="loading"
@@ -67,7 +62,7 @@ function onCreateSession() {
         variant="no-data"
         size="small"
         title="暂无会话"
-        description="点击右上角“新建”开始"
+        description="点击左上角 Logo 开始"
       />
 
       <article
@@ -116,105 +111,20 @@ function onCreateSession() {
 <style scoped>
 .pilot-sidebar {
   min-height: 0;
+  padding: 0.5rem;
   display: flex;
   flex-direction: column;
-  padding: clamp(12px, 1.2vw, 18px);
   border-right: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
   background: color-mix(in srgb, var(--tx-bg-color-overlay) 84%, transparent);
   backdrop-filter: blur(10px);
 }
 
-.pilot-sidebar__header {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 12px;
-}
-
-.pilot-brand {
-  position: relative;
-  isolation: isolate;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: 16px;
-  padding: 12px 12px 12px 10px;
-  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 26%, var(--tx-border-color));
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--tx-color-primary-light-5) 40%, var(--tx-bg-color-overlay)) 0%,
-    color-mix(in srgb, var(--tx-bg-color-overlay) 84%, var(--tx-fill-color-lighter)) 100%
-  );
-  overflow: hidden;
-}
-
-.pilot-brand::after {
-  content: '';
-  position: absolute;
-  inset: auto -18px -20px auto;
-  width: 86px;
-  height: 86px;
-  border-radius: 999px;
-  background: radial-gradient(circle, color-mix(in srgb, var(--tx-color-primary) 30%, transparent) 0%, transparent 72%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-.pilot-brand__mark {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  color: color-mix(in srgb, #0f1827 80%, var(--tx-text-color-primary));
-  background: linear-gradient(
-    155deg,
-    color-mix(in srgb, var(--tx-color-success) 82%, white) 0%,
-    color-mix(in srgb, var(--tx-color-primary) 72%, var(--tx-color-success)) 100%
-  );
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, #ffffff 24%, transparent),
-    0 12px 22px color-mix(in srgb, var(--tx-color-primary) 20%, transparent);
-}
-
-.pilot-brand__mark svg {
-  width: 20px;
-  height: 20px;
-}
-
-.pilot-brand__copy {
-  min-width: 0;
-}
-
-.pilot-brand h2 {
-  margin: 0;
-  font-size: clamp(18px, 1.5vw, 22px);
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.pilot-brand p {
-  margin: 4px 0 0;
-  font-size: 10px;
-  line-height: 1.2;
-  letter-spacing: 0.19em;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--tx-color-primary) 76%, var(--tx-color-success));
-}
-
-.pilot-sidebar__create {
-  width: 100%;
-  border-radius: 999px;
+.pilot-sidebar.is-collapsed {
+  padding-inline: 10px;
 }
 
 .pilot-sessions__list {
-  margin-top: 14px;
+  margin-top: 10px;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -311,17 +221,6 @@ function onCreateSession() {
     max-height: 34vh;
     border-right: 0;
     border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
-  }
-
-  .pilot-brand {
-    border-radius: 14px;
-    padding: 10px;
-  }
-
-  .pilot-brand__mark {
-    width: 40px;
-    height: 40px;
-    flex-basis: 40px;
   }
 }
 </style>
