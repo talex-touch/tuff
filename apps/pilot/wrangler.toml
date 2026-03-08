@@ -1,4 +1,4 @@
-name = "tuff-pilot-test"
+name = "tuff-pilot"
 compatibility_date = "2024-09-23"
 compatibility_flags = [
   "nodejs_compat",
@@ -30,7 +30,7 @@ compatibility_flags = [
 [[env.preview.d1_databases]]
 binding = "DB"
 database_name = "tuff-pilot-preview"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "d5c88a58-1b85-4e01-b082-48132e513b88"
 
 [[env.preview.r2_buckets]]
 binding = "PILOT_ATTACHMENTS"
@@ -47,7 +47,7 @@ compatibility_flags = [
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "tuff-pilot-production"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "116e394c-6bac-4e32-ae9c-438fec188901"
 
 [[env.production.r2_buckets]]
 binding = "PILOT_ATTACHMENTS"
