@@ -20,13 +20,21 @@ export interface AgentRuntimeDeps {
 export abstract class AbstractAgentRuntime implements ConversationAgentPort {
   constructor(protected readonly deps: AgentRuntimeDeps) {}
 
-  protected createInitialState(sessionId: string, input: UserMessageInput): TurnState {
+  protected createInitialState(
+    sessionId: string,
+    input: UserMessageInput,
+    history: TurnState['messages'] = [],
+    initialSeq = 0,
+  ): TurnState {
+    const normalizedSeq = Number.isFinite(initialSeq)
+      ? Math.max(0, Math.floor(initialSeq))
+      : 0
     return {
       sessionId,
       turnId: makeId('turn'),
       done: false,
-      seq: 0,
-      messages: [{ role: 'user', content: input.message }],
+      seq: normalizedSeq,
+      messages: [...history, { role: 'user', content: input.message }],
       events: [],
       metadata: input.metadata,
     }
@@ -53,8 +61,13 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       ? await this.deps.store.runtime.getSession(input.sessionId)
       : null
     const created = session ?? await this.deps.store.runtime.createSession(input)
+    const history = (await this.deps.store.runtime.listMessages(created.sessionId)).map(message => ({
+      role: message.role,
+      content: message.content,
+    }))
 
-    let state = this.createInitialState(created.sessionId, input)
+    let state = this.createInitialState(created.sessionId, input, history, created.lastSeq)
+    await this.deps.store.runtime.completeSession(created.sessionId, 'executing')
     await this.deps.store.runtime.saveMessage({
       id: makeId('msg'),
       sessionId: created.sessionId,
@@ -70,7 +83,11 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
         const reduced = await this.reduceState(state, event)
         state = reduced
-        await this.persistEvent(state, event)
+        const persistedSeq = await this.persistEvent(state, event)
+        state = {
+          ...state,
+          seq: persistedSeq,
+        }
         yield event
       }
       state = await this.advanceState(state, decision)
@@ -79,13 +96,9 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     await this.deps.store.runtime.completeSession(state.sessionId, 'completed')
   }
 
-  async *onViewEvent(_input: ViewEventInput): AsyncIterable<AgentEnvelope> {
-    
-  }
+  async *onViewEvent(_input: ViewEventInput): AsyncIterable<AgentEnvelope> {}
 
-  async *onApproval(_input: ApprovalInput): AsyncIterable<AgentEnvelope> {
-    
-  }
+  async *onApproval(_input: ApprovalInput): AsyncIterable<AgentEnvelope> {}
 
   async resume(sessionId: string): Promise<SessionSnapshot> {
     const session = await this.deps.store.runtime.getSession(sessionId)
@@ -105,10 +118,14 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     }
   }
 
-  protected async persistEvent(state: TurnState, event: AgentEnvelope) {
+  protected async persistEvent(state: TurnState, event: AgentEnvelope): Promise<number> {
+    const latestSession = await this.deps.store.runtime.getSession(state.sessionId)
+    const latestSeq = Number(latestSession?.lastSeq || 0)
+    const nextSeq = Math.max(latestSeq + 1, Math.max(1, state.seq))
+
     const trace = await this.deps.store.runtime.appendTrace({
       sessionId: state.sessionId,
-      seq: state.seq,
+      seq: nextSeq,
       type: event.type,
       payload: event.payload as Record<string, unknown>,
     })
@@ -116,6 +133,11 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     await this.deps.store.emit?.({
       ...event,
       id: trace.id,
+      meta: {
+        ...(event.meta || {}),
+        traceId: trace.id,
+        seq: trace.seq,
+      },
     })
 
     if (event.type === 'assistant.final') {
@@ -131,9 +153,14 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       }
     }
 
-    if (state.seq % 4 === 0) {
-      await this.deps.store.runtime.saveCheckpoint(state.sessionId, state)
+    if (nextSeq % 4 === 0) {
+      await this.deps.store.runtime.saveCheckpoint(state.sessionId, {
+        ...state,
+        seq: nextSeq,
+      })
     }
+
+    return nextSeq
   }
 
   protected async advanceState(state: TurnState, decision: AgentDecision): Promise<TurnState> {

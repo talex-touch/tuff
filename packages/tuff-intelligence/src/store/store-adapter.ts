@@ -2,8 +2,10 @@ import type { AgentEnvelope } from '../protocol/envelope'
 import type { SessionSnapshot, TurnState, UserMessageInput } from '../protocol/session'
 
 export interface SessionRecord extends SessionSnapshot {
+  userId: string
   createdAt: string
   heartbeatAt?: string
+  title?: string | null
   pauseReason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted' | null
 }
 
@@ -50,6 +52,8 @@ export interface RuntimeStoreAdapter {
   touchHeartbeat(sessionId: string): Promise<void>
   pauseSession(sessionId: string, reason: SessionRecord['pauseReason']): Promise<void>
   completeSession(sessionId: string, status: SessionRecord['status']): Promise<void>
+  setSessionTitle(sessionId: string, title: string): Promise<void>
+  deleteSession(sessionId: string): Promise<void>
   saveAttachment(record: AttachmentRecord): Promise<void>
   listAttachments(sessionId: string): Promise<AttachmentRecord[]>
 }

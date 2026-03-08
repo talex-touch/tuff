@@ -5,7 +5,7 @@ import type {
   IntelligencePromptRecord,
   IntelligenceProviderConfig,
   PromptTemplate,
-} from '@talex-touch/utils/types/intelligence'
+} from './types/intelligence'
 
 type CompiledStateGraph = any
 

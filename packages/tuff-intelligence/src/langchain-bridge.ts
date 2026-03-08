@@ -3,7 +3,7 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
-} from '@talex-touch/utils/types/intelligence'
+} from './types/intelligence'
 import type { TuffIntelligenceConfig } from './types'
 import { PromptTemplate } from '@langchain/core/prompts'
 

@@ -9,7 +9,7 @@ const ACTION_ID = 'intelligence-action'
 const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
 
 function resolveIntelligenceClient() {
-  const { createIntelligenceClient } = require('@talex-touch/utils/intelligence')
+  const { createIntelligenceClient } = require('@talex-touch/tuff-intelligence')
   return createIntelligenceClient()
 }
 

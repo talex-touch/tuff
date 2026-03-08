@@ -18,7 +18,6 @@ export * from './feature-sdk'
 export { createFeaturesManager, useFeatures } from './features'
 export * from './flow'
 export * from './hooks/index'
-export * from './intelligence'
 
 export * from './quick-actions-sdk'
 export * from './meta-sdk'
