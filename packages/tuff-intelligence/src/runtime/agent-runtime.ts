@@ -77,20 +77,64 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
       metadata: input.metadata,
     })
 
-    while (!state.done) {
-      const raw = await this.deps.engine.run(state)
-      const decision = await this.deps.decision.normalize(raw, state)
-      for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
-        const reduced = await this.reduceState(state, event)
-        state = reduced
-        const persistedSeq = await this.persistEvent(state, event)
-        state = {
-          ...state,
-          seq: persistedSeq,
+    if (typeof this.deps.engine.runStream === 'function') {
+      let streamed = false
+      for await (const raw of this.deps.engine.runStream(state)) {
+        streamed = true
+        const decision = await this.deps.decision.normalize(raw, state)
+        for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
+          const reduced = await this.reduceState(state, event)
+          state = reduced
+          const persistedSeq = await this.persistEvent(state, event)
+          state = {
+            ...state,
+            seq: persistedSeq,
+          }
+          yield event
         }
-        yield event
+        state = await this.advanceState(state, decision)
+        if (state.done) {
+          break
+        }
       }
-      state = await this.advanceState(state, decision)
+
+      if (!streamed) {
+        while (!state.done) {
+          const raw = await this.deps.engine.run(state)
+          const decision = await this.deps.decision.normalize(raw, state)
+          for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
+            const reduced = await this.reduceState(state, event)
+            state = reduced
+            const persistedSeq = await this.persistEvent(state, event)
+            state = {
+              ...state,
+              seq: persistedSeq,
+            }
+            yield event
+          }
+          state = await this.advanceState(state, decision)
+        }
+      }
+      else if (!state.done) {
+        state = { ...state, done: true }
+      }
+    }
+    else {
+      while (!state.done) {
+        const raw = await this.deps.engine.run(state)
+        const decision = await this.deps.decision.normalize(raw, state)
+        for await (const event of this.deps.dispatcher.dispatch(decision, state)) {
+          const reduced = await this.reduceState(state, event)
+          state = reduced
+          const persistedSeq = await this.persistEvent(state, event)
+          state = {
+            ...state,
+            seq: persistedSeq,
+          }
+          yield event
+        }
+        state = await this.advanceState(state, decision)
+      }
     }
 
     await this.deps.store.runtime.completeSession(state.sessionId, 'completed')

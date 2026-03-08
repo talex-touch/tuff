@@ -1,6 +1,13 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type { TurnState } from '../protocol/session'
-import type { AttachmentRecord, MessageRecord, RuntimeStoreAdapter, SessionRecord, TraceRecord } from './store-adapter'
+import type {
+  AttachmentRecord,
+  MessageRecord,
+  RuntimeStoreAdapter,
+  SessionNotificationRecord,
+  SessionRecord,
+  TraceRecord,
+} from './store-adapter'
 
 const SESSIONS_TABLE = 'pilot_chat_sessions'
 const MESSAGES_TABLE = 'pilot_chat_messages'
@@ -60,6 +67,17 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       await this.db.prepare(`
         ALTER TABLE ${SESSIONS_TABLE}
         ADD COLUMN title TEXT
+      `).run()
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) {
+        throw error
+      }
+    }
+
+    try {
+      await this.db.prepare(`
+        ALTER TABLE ${SESSIONS_TABLE}
+        ADD COLUMN notify_unread INTEGER NOT NULL DEFAULT 0
       `).run()
     } catch (error) {
       if (!isDuplicateColumnError(error)) {
@@ -150,6 +168,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       status: 'executing',
       userId: this.userId,
       title: null,
+      notifyUnread: false,
       lastSeq: 0,
       createdAt: now,
       updatedAt: now,
@@ -160,21 +179,21 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
     }
 
     await this.db.prepare(`
-      INSERT INTO ${SESSIONS_TABLE} (session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at)
-      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+      INSERT INTO ${SESSIONS_TABLE} (session_id, user_id, status, title, notify_unread, last_seq, heartbeat_at, pause_reason, created_at, updated_at)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
       ON CONFLICT(session_id) DO UPDATE SET
         status = excluded.status,
         heartbeat_at = excluded.heartbeat_at,
         pause_reason = excluded.pause_reason,
         updated_at = excluded.updated_at
-    `).bind(sessionId, this.userId, row.status, null, 0, now, null, now, now).run()
+    `).bind(sessionId, this.userId, row.status, null, 0, 0, now, null, now, now).run()
 
     return row
   }
 
   async getSession(sessionId: string): Promise<SessionRecord | null> {
     const row = await this.db.prepare(`
-      SELECT session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at
+      SELECT session_id, user_id, status, title, notify_unread, last_seq, heartbeat_at, pause_reason, created_at, updated_at
       FROM ${SESSIONS_TABLE}
       WHERE session_id = ?1 AND user_id = ?2
       LIMIT 1
@@ -183,6 +202,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       user_id: string
       status: SessionRecord['status']
       title: string | null
+      notify_unread: number | null
       last_seq: number
       heartbeat_at: string | null
       pause_reason: SessionRecord['pauseReason']
@@ -199,6 +219,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       userId: row.user_id,
       status: row.status,
       title: row.title || null,
+      notifyUnread: Number(row.notify_unread || 0) > 0,
       lastSeq: Number(row.last_seq || 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -212,7 +233,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
   async listSessions(limit = 20): Promise<SessionRecord[]> {
     const bounded = Math.min(Math.max(limit, 1), 200)
     const { results } = await this.db.prepare(`
-      SELECT session_id, user_id, status, title, last_seq, heartbeat_at, pause_reason, created_at, updated_at
+      SELECT session_id, user_id, status, title, notify_unread, last_seq, heartbeat_at, pause_reason, created_at, updated_at
       FROM ${SESSIONS_TABLE}
       WHERE user_id = ?1
       ORDER BY updated_at DESC
@@ -222,6 +243,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       user_id: string
       status: SessionRecord['status']
       title: string | null
+      notify_unread: number | null
       last_seq: number
       heartbeat_at: string | null
       pause_reason: SessionRecord['pauseReason']
@@ -234,6 +256,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       userId: row.user_id,
       status: row.status,
       title: row.title || null,
+      notifyUnread: Number(row.notify_unread || 0) > 0,
       lastSeq: Number(row.last_seq || 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -401,6 +424,33 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       SET title = ?1, updated_at = ?2
       WHERE session_id = ?3 AND user_id = ?4
     `).bind(normalized, nowIso(), sessionId, this.userId).run()
+  }
+
+  async setSessionNotification(sessionId: string, unread: boolean): Promise<void> {
+    await this.db.prepare(`
+      UPDATE ${SESSIONS_TABLE}
+      SET notify_unread = ?1
+      WHERE session_id = ?2 AND user_id = ?3
+    `).bind(unread ? 1 : 0, sessionId, this.userId).run()
+  }
+
+  async listSessionNotifications(limit = 200): Promise<SessionNotificationRecord[]> {
+    const bounded = Math.min(Math.max(limit, 1), 500)
+    const { results } = await this.db.prepare(`
+      SELECT session_id, notify_unread
+      FROM ${SESSIONS_TABLE}
+      WHERE user_id = ?1
+      ORDER BY updated_at DESC
+      LIMIT ?2
+    `).bind(this.userId, bounded).all<{
+      session_id: string
+      notify_unread: number | null
+    }>()
+
+    return (results || []).map(row => ({
+      sessionId: row.session_id,
+      unread: Number(row.notify_unread || 0) > 0,
+    }))
   }
 
   async deleteSession(sessionId: string): Promise<void> {

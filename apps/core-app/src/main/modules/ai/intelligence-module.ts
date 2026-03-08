@@ -1,4 +1,5 @@
 import type {
+  IntelligenceAgentStreamEvent,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceMessage,
@@ -23,6 +24,7 @@ import { createLogger } from '../../utils/logger'
 import { safeApiHandler, withPermissionSafeApi, type ApiResponse } from '../../utils/safe-handler'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken } from '../auth'
+import { withPermission } from '../permission/channel-guard'
 import { capabilityTesterRegistry } from './capability-testers'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import {
@@ -50,6 +52,8 @@ import { tuffIntelligenceRuntime } from './tuff-intelligence-runtime'
 
 const intelligenceLog = createLogger('Intelligence')
 const TUFF_NEXUS_PROVIDER_ID = 'tuff-nexus-default'
+const INTELLIGENCE_STREAM_KEEPALIVE_MS = 10_000
+const INTELLIGENCE_STREAM_REPLAY_LIMIT = 1_000
 
 type IntelligenceInvokePayload = {
   capabilityId: string
@@ -229,6 +233,54 @@ function normalizeProviderForRuntime(
   }
 }
 
+function normalizeFromSeq(value: unknown): number | undefined {
+  const seq = Number(value)
+  if (!Number.isFinite(seq)) {
+    return undefined
+  }
+  return Math.max(1, Math.floor(seq))
+}
+
+function normalizeReplayLimit(value: unknown): number {
+  const limit = Number(value)
+  if (!Number.isFinite(limit)) {
+    return INTELLIGENCE_STREAM_REPLAY_LIMIT
+  }
+  return Math.min(Math.max(Math.floor(limit), 1), INTELLIGENCE_STREAM_REPLAY_LIMIT)
+}
+
+function isTerminalSessionStatus(
+  status: TuffIntelligenceAgentSession['status'] | undefined
+): boolean {
+  return status === 'completed' || status === 'failed' || status === 'cancelled'
+}
+
+function isRunningSessionStatus(
+  status: TuffIntelligenceAgentSession['status'] | undefined
+): boolean {
+  if (!status) {
+    return false
+  }
+  if (isTerminalSessionStatus(status) || status === 'paused_disconnect' || status === 'idle') {
+    return false
+  }
+  return true
+}
+
+function mapTraceToStreamEvent(
+  event: TuffIntelligenceAgentTraceEvent,
+  options: { replay?: boolean } = {}
+): IntelligenceAgentStreamEvent {
+  return {
+    ...event,
+    sessionId: event.sessionId,
+    timestamp: event.timestamp,
+    replay: options.replay ? true : undefined,
+    seq: typeof event.seq === 'number' ? event.seq : undefined,
+    payload: event.payload as Record<string, unknown> | undefined
+  }
+}
+
 function normalizeCapabilityInvokeError(capabilityId: string, error: unknown): Error {
   const baseError = error instanceof Error ? error : new Error(String(error))
   const message = baseError.message || ''
@@ -366,6 +418,10 @@ const intelligenceSessionStreamEvent = defineRawEvent<
   IntelligenceTraceQueryPayload,
   ApiResponse<TuffIntelligenceAgentTraceEvent[]>
 >('intelligence:agent:session:stream')
+const intelligenceSessionSubscribeEvent = defineRawEvent<
+  IntelligenceTraceQueryPayload,
+  AsyncIterable<IntelligenceAgentStreamEvent>
+>('intelligence:agent:session:subscribe')
 const intelligenceSessionHistoryEvent = defineRawEvent<
   IntelligenceSessionHistoryPayload | undefined,
   ApiResponse<TuffIntelligenceAgentSession[]>
@@ -876,6 +932,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
+    this.registerOrchestrationStreamChannels()
 
     intelligenceLog.success('IPC channels registered')
   }
@@ -1371,6 +1428,209 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         return tuffIntelligenceRuntime.exportTrace(data)
       }
     )
+  }
+
+  private registerOrchestrationStreamChannels(): void {
+    if (!this.transport) {
+      return
+    }
+
+    this.transport.onStream(intelligenceSessionSubscribeEvent, async (data, streamContext) => {
+      const guardedHandler = withPermission<IntelligenceTraceQueryPayload, void>(
+        { permissionId: 'intelligence.basic' },
+        async (payload) => {
+          if (!payload?.sessionId) {
+            throw new Error('sessionId is required')
+          }
+
+          const sessionId = String(payload.sessionId).trim()
+          if (!sessionId) {
+            throw new Error('sessionId is required')
+          }
+
+          const fromSeq = normalizeFromSeq(payload.fromSeq)
+          const replayLimit = normalizeReplayLimit(payload.limit)
+          const filterLevel = payload.level
+          const filterType = payload.type
+
+          let closed = false
+          let doneSent = false
+          let keepaliveTimer: ReturnType<typeof setInterval> | null = null
+          let cancelWatcher: ReturnType<typeof setInterval> | null = null
+          let unsubscribe: () => void = () => {}
+
+          const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
+            if (closed || streamContext.isCancelled()) {
+              return false
+            }
+            streamContext.emit(event)
+            if (event.type === 'done') {
+              doneSent = true
+            }
+            return true
+          }
+
+          const closeStream = () => {
+            if (closed) {
+              return
+            }
+            closed = true
+            if (keepaliveTimer) {
+              clearInterval(keepaliveTimer)
+              keepaliveTimer = null
+            }
+            if (cancelWatcher) {
+              clearInterval(cancelWatcher)
+              cancelWatcher = null
+            }
+            unsubscribe()
+            try {
+              streamContext.end()
+            } catch {
+              // Ignore stream close failures on disconnected clients.
+            }
+          }
+
+          const replayTrace = async () => {
+            if (!fromSeq) {
+              return
+            }
+
+            sendStreamEvent({
+              type: 'replay.started',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                fromSeq,
+                limit: replayLimit
+              }
+            })
+
+            const replayEvents = await tuffIntelligenceRuntime.queryTrace({
+              sessionId,
+              fromSeq,
+              limit: replayLimit,
+              level: filterLevel,
+              type: filterType
+            })
+
+            let replayCount = 0
+            for (const traceEvent of replayEvents) {
+              if (streamContext.isCancelled()) {
+                return
+              }
+              if (
+                sendStreamEvent(
+                  mapTraceToStreamEvent(traceEvent, {
+                    replay: true
+                  })
+                )
+              ) {
+                replayCount += 1
+              }
+            }
+
+            sendStreamEvent({
+              type: 'replay.finished',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                fromSeq,
+                replayCount
+              }
+            })
+          }
+
+          const pauseOnDisconnect = async () => {
+            const snapshot = await tuffIntelligenceRuntime.getSessionState(sessionId)
+            if (!isRunningSessionStatus(snapshot?.status)) {
+              return
+            }
+            await tuffIntelligenceRuntime.pauseSession({
+              sessionId,
+              reason: 'client_disconnect'
+            })
+          }
+
+          try {
+            sendStreamEvent({
+              type: 'stream.started',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                fromSeq: fromSeq ?? null,
+                keepaliveMs: INTELLIGENCE_STREAM_KEEPALIVE_MS,
+                limit: replayLimit
+              }
+            })
+
+            await replayTrace()
+            if (streamContext.isCancelled()) {
+              await pauseOnDisconnect()
+              return
+            }
+
+            unsubscribe = tuffIntelligenceRuntime.subscribeSessionTrace(sessionId, (traceEvent) => {
+              if (streamContext.isCancelled() || closed) {
+                return
+              }
+              if (filterLevel && traceEvent.level !== filterLevel) {
+                return
+              }
+              if (filterType && traceEvent.type !== filterType) {
+                return
+              }
+              sendStreamEvent(mapTraceToStreamEvent(traceEvent))
+            })
+
+            keepaliveTimer = setInterval(() => {
+              if (streamContext.isCancelled() || closed) {
+                return
+              }
+              sendStreamEvent({
+                type: 'stream.heartbeat',
+                sessionId,
+                timestamp: Date.now(),
+                payload: {
+                  ts: Date.now()
+                }
+              })
+            }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
+
+            await new Promise<void>((resolve) => {
+              cancelWatcher = setInterval(() => {
+                if (!streamContext.isCancelled()) {
+                  return
+                }
+                resolve()
+              }, 250)
+            })
+
+            await pauseOnDisconnect()
+            if (!doneSent) {
+              sendStreamEvent({
+                type: 'done',
+                sessionId,
+                timestamp: Date.now(),
+                payload: {
+                  status: 'paused'
+                }
+              })
+            }
+          } finally {
+            closeStream()
+          }
+        }
+      )
+
+      try {
+        await guardedHandler(data, streamContext as unknown as HandlerContext)
+      } catch (error) {
+        intelligenceLog.error('Subscribe intelligence session stream failed', { error })
+        const err = error instanceof Error ? error : new Error(String(error))
+        streamContext.error(err)
+      }
+    })
   }
 
   private registerQuotaChannels(

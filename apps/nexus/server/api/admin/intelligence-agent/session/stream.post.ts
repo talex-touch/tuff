@@ -95,7 +95,12 @@ export default defineEventHandler(async (event) => {
         if (payload.type === 'done') {
           doneSent = true
         }
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload)}\n\n`))
+        } catch {
+          disconnected = true
+          return
+        }
         void touchHeartbeat()
       }
 
@@ -117,6 +122,13 @@ export default defineEventHandler(async (event) => {
         } catch {
           // ignore keepalive stream write failures
         }
+        send({
+          type: 'stream.heartbeat',
+          timestamp: Date.now(),
+          payload: {
+            ts: Date.now(),
+          },
+        })
         void touchHeartbeat()
       }, SSE_KEEPALIVE_MS)
 

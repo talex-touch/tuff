@@ -4,6 +4,7 @@ import type { TurnState } from '../protocol/session'
 export interface AgentEngineAdapter {
   id: string
   run(state: TurnState): Promise<unknown>
+  runStream?(state: TurnState): AsyncIterable<unknown>
 }
 
 export interface DecisionAdapter {
