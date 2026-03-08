@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+
 const {
   pilotTitle,
   sessionRows,
   activeSessionId,
-  activeSessionTitle,
-  activeSessionTitleLoading,
   loadingSessions,
   running,
   deletingSessionId,
@@ -25,18 +25,26 @@ const {
   traceItems,
   lastSeq,
 } = usePilotChatPage()
+
+const sidebarCollapsed = ref(false)
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
 </script>
 
 <template>
-  <div class="pilot-page">
+  <div class="pilot-page" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
     <PilotSessionsPanel
       :pilot-title="pilotTitle"
       :sessions="sessionRows"
       :active-session-id="activeSessionId"
+      :collapsed="sidebarCollapsed"
       :loading-sessions="loadingSessions"
       :running="running"
       :deleting-session-id="deletingSessionId"
       @create-session="handleCreateSession"
+      @toggle-collapse="toggleSidebar"
       @select-session="selectSession"
       @delete-session="deleteSession"
     />
@@ -45,8 +53,6 @@ const {
       v-model:draft="draft"
       v-model:trace-drawer-open="traceDrawerOpen"
       :active-session-id="activeSessionId"
-      :active-session-title="activeSessionTitle"
-      :active-session-title-loading="activeSessionTitleLoading"
       :running="running"
       :loading-messages="loadingMessages"
       :messages="chatListMessages"
@@ -86,10 +92,16 @@ const {
     );
   color: var(--tx-text-color-primary);
   font-family: var(--tx-font-family);
+  transition: grid-template-columns 180ms ease;
+}
+
+.pilot-page.is-sidebar-collapsed {
+  grid-template-columns: 86px minmax(0, 1fr);
 }
 
 @media (max-width: 960px) {
-  .pilot-page {
+  .pilot-page,
+  .pilot-page.is-sidebar-collapsed {
     grid-template-columns: 1fr;
   }
 }
