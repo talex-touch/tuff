@@ -11,13 +11,6 @@ syncStatus: migrated
 
 Component documentation for SegmentedSlider.
 
-<script setup>
-import SegmentedSliderBasicDemo from '~/components/content/demos/SegmentedSliderBasicDemo.vue'
-import SegmentedSliderBasicDemoSource from '~/components/content/demos/SegmentedSliderBasicDemo.vue?raw'
-import SegmentedSliderCustomDemo from '~/components/content/demos/SegmentedSliderCustomDemo.vue'
-import SegmentedSliderCustomDemoSource from '~/components/content/demos/SegmentedSliderCustomDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### SegmentedSlider

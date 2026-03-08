@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for Picker.
 
-<script setup lang="ts">
-import PickerBasicDemo from '~/components/content/demos/PickerBasicDemo.vue'
-import PickerBasicDemoSource from '~/components/content/demos/PickerBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Picker

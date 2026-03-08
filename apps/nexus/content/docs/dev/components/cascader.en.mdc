@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for Cascader.
 
-<script setup lang="ts">
-import CascaderBasicDemo from '~/components/content/demos/CascaderBasicDemo.vue'
-import CascaderBasicDemoSource from '~/components/content/demos/CascaderBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Cascader

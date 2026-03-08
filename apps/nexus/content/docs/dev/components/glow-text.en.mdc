@@ -12,14 +12,6 @@ syncStatus: migrated
 >
 > `text-clip` currently sweeps right → left (aligned with the ShinyText reference).
 
-<script setup lang="ts">
-import GlowTextBasicDemo from '~/components/content/demos/GlowTextBasicDemo.vue'
-import GlowTextBasicDemoSource from '~/components/content/demos/GlowTextBasicDemo.vue?raw'
-
-import GlowTextImageDemo from '~/components/content/demos/GlowTextImageDemo.vue'
-import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### GlowText

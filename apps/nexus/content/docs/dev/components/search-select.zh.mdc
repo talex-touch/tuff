@@ -10,14 +10,6 @@ syncStatus: migrated
 
 下拉层已统一迁移到 `TxPopover → TxTooltip → TxBaseAnchor` 链路，浮层行为与其他选择类组件保持一致。
 
-<script setup lang="ts">
-import SearchSelectBasicDemo from '~/components/content/demos/SearchSelectBasicDemo.vue'
-import SearchSelectBasicDemoSource from '~/components/content/demos/SearchSelectBasicDemo.vue?raw'
-
-import SearchSelectRemoteDemo from '~/components/content/demos/SearchSelectRemoteDemo.vue'
-import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelectRemoteDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### SearchSelect

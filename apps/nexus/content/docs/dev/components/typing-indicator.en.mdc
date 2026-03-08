@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for TypingIndicator.
 
-<script setup lang="ts">
-import TypingIndicatorVariantsDemo from '~/components/content/demos/TypingIndicatorVariantsDemo.vue'
-import TypingIndicatorVariantsDemoSource from '~/components/content/demos/TypingIndicatorVariantsDemo.vue?raw'
-</script>
-
 ### TypingIndicator
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---

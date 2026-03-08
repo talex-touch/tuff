@@ -8,29 +8,6 @@ syncStatus: migrated
 
 `backdrop-filter: blur(...)`
 
-<script setup lang="ts">
-import GradualBlurBasicDemo from '~/components/content/demos/GradualBlurBasicDemo.vue'
-import GradualBlurBasicDemoSource from '~/components/content/demos/GradualBlurBasicDemo.vue?raw'
-
-import GradualBlurPositionsDemo from '~/components/content/demos/GradualBlurPositionsDemo.vue'
-import GradualBlurPositionsDemoSource from '~/components/content/demos/GradualBlurPositionsDemo.vue?raw'
-
-import GradualBlurPresetsDemo from '~/components/content/demos/GradualBlurPresetsDemo.vue'
-import GradualBlurPresetsDemoSource from '~/components/content/demos/GradualBlurPresetsDemo.vue?raw'
-
-import GradualBlurHoverIntensityDemo from '~/components/content/demos/GradualBlurHoverIntensityDemo.vue'
-import GradualBlurHoverIntensityDemoSource from '~/components/content/demos/GradualBlurHoverIntensityDemo.vue?raw'
-
-import GradualBlurAnimatedScrollDemo from '~/components/content/demos/GradualBlurAnimatedScrollDemo.vue'
-import GradualBlurAnimatedScrollDemoSource from '~/components/content/demos/GradualBlurAnimatedScrollDemo.vue?raw'
-
-import GradualBlurTargetPageDemo from '~/components/content/demos/GradualBlurTargetPageDemo.vue'
-import GradualBlurTargetPageDemoSource from '~/components/content/demos/GradualBlurTargetPageDemo.vue?raw'
-
-import GradualBlurResponsiveDemo from '~/components/content/demos/GradualBlurResponsiveDemo.vue'
-import GradualBlurResponsiveDemoSource from '~/components/content/demos/GradualBlurResponsiveDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### GradualBlur

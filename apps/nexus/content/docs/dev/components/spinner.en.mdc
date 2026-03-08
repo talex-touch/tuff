@@ -11,17 +11,6 @@ syncStatus: migrated
 
 Loading
 
-<script setup lang="ts">
-import SpinnerBasicDemo from '~/components/content/demos/SpinnerBasicDemo.vue'
-import SpinnerBasicDemoSource from '~/components/content/demos/SpinnerBasicDemo.vue?raw'
-
-import SpinnerSizesDemo from '~/components/content/demos/SpinnerSizesDemo.vue'
-import SpinnerSizesDemoSource from '~/components/content/demos/SpinnerSizesDemo.vue?raw'
-
-import SpinnerToggleDemo from '~/components/content/demos/SpinnerToggleDemo.vue'
-import SpinnerToggleDemoSource from '~/components/content/demos/SpinnerToggleDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Spinner

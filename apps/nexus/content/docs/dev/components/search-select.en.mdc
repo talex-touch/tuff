@@ -10,14 +10,6 @@ Select
 
 The dropdown layer is now unified on the `TxPopover → TxTooltip → TxBaseAnchor` chain for consistent overlay behavior.
 
-<script setup lang="ts">
-import SearchSelectBasicDemo from '~/components/content/demos/SearchSelectBasicDemo.vue'
-import SearchSelectBasicDemoSource from '~/components/content/demos/SearchSelectBasicDemo.vue?raw'
-
-import SearchSelectRemoteDemo from '~/components/content/demos/SearchSelectRemoteDemo.vue'
-import SearchSelectRemoteDemoSource from '~/components/content/demos/SearchSelectRemoteDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### SearchSelect

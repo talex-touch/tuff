@@ -10,23 +10,6 @@ fade + blur `TxAutoSizer` “ + ”
 
 > Not recommended for high-frequency real-time updates (e.g., streaming text, per-frame state changes). Better for occasional state/title/chapter/short-text changes.
 
-<script setup lang="ts">
-import TextTransformerBasicDemo from '~/components/content/demos/TextTransformerBasicDemo.vue'
-import TextTransformerBasicDemoSource from '~/components/content/demos/TextTransformerBasicDemo.vue?raw'
-
-import AutoSizerTextTransformerDemo from '~/components/content/demos/AutoSizerTextTransformerDemo.vue'
-import AutoSizerTextTransformerDemoSource from '~/components/content/demos/AutoSizerTextTransformerDemo.vue?raw'
-
-import TextTransformerLongTextDemo from '~/components/content/demos/TextTransformerLongTextDemo.vue'
-import TextTransformerLongTextDemoSource from '~/components/content/demos/TextTransformerLongTextDemo.vue?raw'
-
-import TextTransformerTitleSubtitleDemo from '~/components/content/demos/TextTransformerTitleSubtitleDemo.vue'
-import TextTransformerTitleSubtitleDemoSource from '~/components/content/demos/TextTransformerTitleSubtitleDemo.vue?raw'
-
-import TextTransformerBadgeDemo from '~/components/content/demos/TextTransformerBadgeDemo.vue'
-import TextTransformerBadgeDemoSource from '~/components/content/demos/TextTransformerBadgeDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### TextTransformer

@@ -10,14 +10,6 @@ syncStatus: migrated
 
 如果你需要“像 Select 一样展开结果面板”的搜索框，推荐使用 `SearchSelect`。
 
-<script setup lang="ts">
-import SearchInputBasicDemo from '~/components/content/demos/SearchInputBasicDemo.vue'
-import SearchInputBasicDemoSource from '~/components/content/demos/SearchInputBasicDemo.vue?raw'
-
-import SearchInputRemoteDemo from '~/components/content/demos/SearchInputRemoteDemo.vue'
-import SearchInputRemoteDemoSource from '~/components/content/demos/SearchInputRemoteDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### SearchInput

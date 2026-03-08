@@ -8,11 +8,6 @@ syncStatus: migrated
 
 用于渲染带玻璃拟态效果的容器。
 
-<script setup>
-import GlassSurfaceControlsDemo from '~/components/content/demos/GlassSurfaceControlsDemo.vue'
-import GlassSurfaceControlsDemoSource from '~/components/content/demos/GlassSurfaceControlsDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### GlassSurface

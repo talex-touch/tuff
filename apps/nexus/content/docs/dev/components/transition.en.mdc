@@ -8,14 +8,6 @@ syncStatus: migrated
 
 Component documentation for Transition.
 
-<script setup lang="ts">
-import TransitionContentDemo from '~/components/content/demos/TransitionContentDemo.vue'
-import TransitionContentDemoSource from '~/components/content/demos/TransitionContentDemo.vue?raw'
-
-import TransitionListDemo from '~/components/content/demos/TransitionListDemo.vue'
-import TransitionListDemoSource from '~/components/content/demos/TransitionListDemo.vue?raw'
-</script>
-
 ## Content Switch (X)
 
 ### Transition Content

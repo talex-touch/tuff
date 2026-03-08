@@ -11,26 +11,6 @@ syncStatus: migrated
 
 用于单选场景（`TxRadioGroup` + `TxRadio`）。支持三种形式：**标准单选**（圆点+文案）、**卡片单选**（强调信息层级）和**按钮组**（紧凑排列）。
 
-<script setup lang="ts">
-import RadioBasicDemo from '~/components/content/demos/RadioBasicDemo.vue'
-import RadioBasicDemoSource from '~/components/content/demos/RadioBasicDemo.vue?raw'
-
-import RadioIndicatorDemo from '~/components/content/demos/RadioIndicatorDemo.vue'
-import RadioIndicatorDemoSource from '~/components/content/demos/RadioIndicatorDemo.vue?raw'
-
-import RadioStandardDemo from '~/components/content/demos/RadioStandardDemo.vue'
-import RadioStandardDemoSource from '~/components/content/demos/RadioStandardDemo.vue?raw'
-
-import RadioCardDemo from '~/components/content/demos/RadioCardDemo.vue'
-import RadioCardDemoSource from '~/components/content/demos/RadioCardDemo.vue?raw'
-
-import RadioGroupPlaygroundDemo from '~/components/content/demos/RadioGroupPlaygroundDemo.vue'
-import RadioGroupPlaygroundDemoSource from '~/components/content/demos/RadioGroupPlaygroundDemo.vue?raw'
-
-import RadioDisabledDemo from '~/components/content/demos/RadioDisabledDemo.vue'
-import RadioDisabledDemoSource from '~/components/content/demos/RadioDisabledDemo.vue?raw'
-</script>
-
 ## 标准单选形式
 
 前圆点+后文案的标准单选形式，适合选项较多的场景。

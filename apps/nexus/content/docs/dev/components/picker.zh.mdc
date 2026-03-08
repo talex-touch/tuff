@@ -8,11 +8,6 @@ syncStatus: migrated
 
 移动端风格的滚轮选择器，支持多列。
 
-<script setup lang="ts">
-import PickerBasicDemo from '~/components/content/demos/PickerBasicDemo.vue'
-import PickerBasicDemoSource from '~/components/content/demos/PickerBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Picker

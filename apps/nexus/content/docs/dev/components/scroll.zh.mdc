@@ -8,15 +8,6 @@ syncStatus: migrated
 
 基于 `@better-scroll/scroll-bar` 的滚动容器，提供更一致的滚动条体验，并兼容 `TouchScroll` 组件名。
 
-<script setup lang="ts">
-import scrollBasicSource from '~/components/content/demos/ScrollBasicDemo.vue?raw'
-import scrollHorizontalSource from '~/components/content/demos/ScrollHorizontalDemo.vue?raw'
-import scrollBounceScrollbarSource from '~/components/content/demos/ScrollBounceScrollbarDemo.vue?raw'
-import scrollChainingSource from '~/components/content/demos/ScrollChainingDemo.vue?raw'
-import scrollNativeSource from '~/components/content/demos/ScrollNativeDemo.vue?raw'
-import scrollPullDownUpSource from '~/components/content/demos/ScrollPullDownUpDemo.vue?raw'
-</script>
-
 ## 行为说明
 
 - **BetterScroll 模式**

@@ -669,6 +669,8 @@ const pagerNextTitle = computed(() => {
   return entry ? itemTitle(entry.title, entry.path) : null
 })
 
+let docsTrackerRefreshRaf: number | null = null
+
 watchEffect(() => {
   if (doc.value) {
     outlineState.value = doc.value.body?.toc?.links ?? []
@@ -697,12 +699,15 @@ onBeforeUnmount(() => {
   docMetaState.value = {}
   docsAnalyticsOptionsReady.value = false
   docsAnalyticsConfigOpen.value = false
+  clearCodeEnhanceSchedule()
   docsOverlayResizeObserver?.disconnect()
   docsOverlayResizeObserver = null
   if (import.meta.client)
     window.removeEventListener('resize', scheduleDocsAnalyticsOverlay)
   if (docsOverlayFrameRaf)
     cancelAnimationFrame(docsOverlayFrameRaf)
+  if (docsTrackerRefreshRaf)
+    cancelAnimationFrame(docsTrackerRefreshRaf)
   clearDocsAnalyticsVisuals()
 })
 
@@ -722,6 +727,21 @@ const docsTracker = useDocEngagementTracker({
     viewCount.value = views
   },
 })
+
+function scheduleDocsTrackerRefresh() {
+  if (import.meta.server)
+    return
+  if (docsTrackerRefreshRaf)
+    return
+  void nextTick(() => {
+    if (docsTrackerRefreshRaf)
+      return
+    docsTrackerRefreshRaf = requestAnimationFrame(() => {
+      docsTrackerRefreshRaf = null
+      docsTracker.refreshSections()
+    })
+  })
+}
 
 function normalizeAnalyticsPath(path: string | null | undefined) {
   if (!path)
@@ -1514,12 +1534,31 @@ function renderCodeHeader(target: HTMLElement, language: string, codeText: strin
   render(vnode, target)
 }
 
+let codeEnhanceTimer: ReturnType<typeof setTimeout> | null = null
+let codeEnhanceRaf: number | null = null
+let codeEnhanceRunId = 0
+
+function clearCodeEnhanceSchedule() {
+  if (import.meta.server)
+    return
+  if (codeEnhanceTimer) {
+    clearTimeout(codeEnhanceTimer)
+    codeEnhanceTimer = null
+  }
+  if (codeEnhanceRaf) {
+    cancelAnimationFrame(codeEnhanceRaf)
+    codeEnhanceRaf = null
+  }
+}
+
 function enhanceCodeBlocks() {
   if (import.meta.server)
     return
 
   const blocks = document.querySelectorAll<HTMLPreElement>('.docs-prose pre')
   blocks.forEach((pre) => {
+    if (pre.dataset.codeEnhanced === 'true')
+      return
     if (pre.closest('.tuff-code-block'))
       return
     const code = pre.querySelector<HTMLElement>('code')
@@ -1536,22 +1575,39 @@ function enhanceCodeBlocks() {
       pre.insertBefore(header, pre.firstChild)
     }
     renderCodeHeader(header, language, code.textContent ?? '')
+    pre.dataset.codeEnhanced = 'true'
   })
 }
 
 async function scheduleCodeEnhance(delay = 0) {
   if (import.meta.server)
     return
+
+  codeEnhanceRunId += 1
+  const currentRunId = codeEnhanceRunId
+  clearCodeEnhanceSchedule()
+
+  const queueEnhance = async () => {
+    await nextTick()
+    if (currentRunId !== codeEnhanceRunId)
+      return
+    codeEnhanceRaf = requestAnimationFrame(() => {
+      codeEnhanceRaf = null
+      if (currentRunId !== codeEnhanceRunId)
+        return
+      enhanceCodeBlocks()
+    })
+  }
+
   if (delay > 0) {
-    window.setTimeout(() => {
-      void scheduleCodeEnhance()
+    codeEnhanceTimer = setTimeout(() => {
+      codeEnhanceTimer = null
+      void queueEnhance()
     }, delay)
     return
   }
-  await nextTick()
-  requestAnimationFrame(() => {
-    enhanceCodeBlocks()
-  })
+
+  await queueEnhance()
 }
 
 async function fetchViewCount() {
@@ -1577,6 +1633,7 @@ onMounted(() => {
   clampDocsAnalyticsOptions()
   scheduleCodeEnhance()
   bindDocsAnalyticsResizeObserver()
+  scheduleDocsTrackerRefresh()
   window.addEventListener('resize', scheduleDocsAnalyticsOverlay, { passive: true })
 })
 
@@ -1592,31 +1649,16 @@ watch(
 )
 
 watch(
-  () => [doc.value, status.value, locale.value],
-  () => {
-    if (status.value === 'success' && doc.value) {
-      scheduleCodeEnhance()
-      bindDocsAnalyticsResizeObserver()
-      nextTick(() => {
-        docsTracker.refreshSections()
-      })
-    }
-  },
-)
-
-watch(
   () => viewState.value,
   (value) => {
     if (!import.meta.client)
       return
-    if (value === 'content')
-      scheduleCodeEnhance(260)
-    if (value === 'content')
-      void scheduleOutlineSync(280)
-    if (value === 'content') {
-      bindDocsAnalyticsResizeObserver()
-      nextTick(() => docsTracker.refreshSections())
-    }
+    if (value !== 'content')
+      return
+    scheduleCodeEnhance(260)
+    void scheduleOutlineSync(280)
+    bindDocsAnalyticsResizeObserver()
+    scheduleDocsTrackerRefresh()
   },
 )
 

@@ -8,11 +8,6 @@ syncStatus: migrated
 
 `TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` “”
 
-<script setup lang="ts">
-import AvatarVariantsGalleryDemo from '~/components/content/demos/AvatarVariantsGalleryDemo.vue'
-import AvatarVariantsGalleryDemoSource from '~/components/content/demos/AvatarVariantsGalleryDemo.vue?raw'
-</script>
-
 ## Gallery
 
 ### Avatar Variants Gallery

@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for GlassSurface.
 
-<script setup>
-import GlassSurfaceControlsDemo from '~/components/content/demos/GlassSurfaceControlsDemo.vue'
-import GlassSurfaceControlsDemoSource from '~/components/content/demos/GlassSurfaceControlsDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### GlassSurface

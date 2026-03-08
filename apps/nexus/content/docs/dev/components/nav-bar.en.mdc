@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for NavBar.
 
-<script setup lang="ts">
-import NavBarBasicDemo from '~/components/content/demos/NavBarBasicDemo.vue'
-import NavBarBasicDemoSource from '~/components/content/demos/NavBarBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### NavBar

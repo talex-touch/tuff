@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for Splitter.
 
-<script setup lang="ts">
-import SplitterBasicDemo from '~/components/content/demos/SplitterBasicDemo.vue'
-import SplitterBasicDemoSource from '~/components/content/demos/SplitterBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Splitter

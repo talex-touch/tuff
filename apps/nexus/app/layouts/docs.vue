@@ -65,7 +65,7 @@ const outlineVisible = ref(false)
         @update:visible="(v) => (sidebarVisible = v)"
       >
         <div class="p-4">
-          <DocsSidebar />
+          <DocsSidebar v-if="sidebarVisible" />
         </div>
       </Drawer>
       <Drawer
@@ -76,7 +76,7 @@ const outlineVisible = ref(false)
         @update:visible="(v) => (outlineVisible = v)"
       >
         <div class="p-4">
-          <DocsOutline />
+          <DocsOutline v-if="outlineVisible" />
         </div>
       </Drawer>
     </ClientOnly>

@@ -12,11 +12,6 @@ syncStatus: migrated
 
 栅格组件提供现代化的 CSS Grid 布局能力，支持响应式与灵活的网格配置。
 
-<script setup lang="ts">
-import GridBasicDemo from '~/components/content/demos/GridBasicDemo.vue'
-import GridBasicDemoSource from '~/components/content/demos/GridBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Grid

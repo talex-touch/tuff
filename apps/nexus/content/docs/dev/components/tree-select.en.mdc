@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for TreeSelect.
 
-<script setup lang="ts">
-import TreeSelectBasicDemo from '~/components/content/demos/TreeSelectBasicDemo.vue'
-import TreeSelectBasicDemoSource from '~/components/content/demos/TreeSelectBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### TreeSelect

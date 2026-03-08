@@ -8,11 +8,6 @@ syncStatus: migrated
 
 移动端顶部导航栏，支持标题、左右插槽与返回按钮。
 
-<script setup lang="ts">
-import NavBarBasicDemo from '~/components/content/demos/NavBarBasicDemo.vue'
-import NavBarBasicDemoSource from '~/components/content/demos/NavBarBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### NavBar

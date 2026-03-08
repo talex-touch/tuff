@@ -8,11 +8,6 @@ syncStatus: migrated
 
 用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。
 
-<script setup lang="ts">
-import CascaderBasicDemo from '~/components/content/demos/CascaderBasicDemo.vue'
-import CascaderBasicDemoSource from '~/components/content/demos/CascaderBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Cascader

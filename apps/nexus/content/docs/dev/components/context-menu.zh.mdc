@@ -8,11 +8,6 @@ syncStatus: migrated
 
 基于 Floating UI 的右键菜单（跟随鼠标坐标）。
 
-<script setup lang="ts">
-import ContextMenuBasicDemo from '~/components/content/demos/ContextMenuBasicDemo.vue'
-import ContextMenuBasicDemoSource from '~/components/content/demos/ContextMenuBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### ContextMenu

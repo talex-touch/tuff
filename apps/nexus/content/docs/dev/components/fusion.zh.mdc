@@ -8,38 +8,6 @@ syncStatus: migrated
 
 两个元素交融与分开的视觉组件。
 
-<script setup lang="ts">
-import FusionBasicDemo from '~/components/content/demos/FusionBasicDemo.vue'
-import FusionBasicDemoSource from '~/components/content/demos/FusionBasicDemo.vue?raw'
-
-import FusionButtonTooltipDemo from '~/components/content/demos/FusionButtonTooltipDemo.vue'
-import FusionButtonTooltipDemoSource from '~/components/content/demos/FusionButtonTooltipDemo.vue?raw'
-
-import FusionAvatarBadgeDemo from '~/components/content/demos/FusionAvatarBadgeDemo.vue'
-import FusionAvatarBadgeDemoSource from '~/components/content/demos/FusionAvatarBadgeDemo.vue?raw'
-
-import FusionChipIconDemo from '~/components/content/demos/FusionChipIconDemo.vue'
-import FusionChipIconDemoSource from '~/components/content/demos/FusionChipIconDemo.vue?raw'
-
-import FusionMiniCardFabDemo from '~/components/content/demos/FusionMiniCardFabDemo.vue'
-import FusionMiniCardFabDemoSource from '~/components/content/demos/FusionMiniCardFabDemo.vue?raw'
-
-import FusionTwoButtonsDemo from '~/components/content/demos/FusionTwoButtonsDemo.vue'
-import FusionTwoButtonsDemoSource from '~/components/content/demos/FusionTwoButtonsDemo.vue?raw'
-
-import FusionTwoOptionsDemo from '~/components/content/demos/FusionTwoOptionsDemo.vue'
-import FusionTwoOptionsDemoSource from '~/components/content/demos/FusionTwoOptionsDemo.vue?raw'
-
-import FusionTwoChipsDemo from '~/components/content/demos/FusionTwoChipsDemo.vue'
-import FusionTwoChipsDemoSource from '~/components/content/demos/FusionTwoChipsDemo.vue?raw'
-
-import FusionTwoStatusDotsDemo from '~/components/content/demos/FusionTwoStatusDotsDemo.vue'
-import FusionTwoStatusDotsDemoSource from '~/components/content/demos/FusionTwoStatusDotsDemo.vue?raw'
-
-import FusionTwoIconButtonsDemo from '~/components/content/demos/FusionTwoIconButtonsDemo.vue'
-import FusionTwoIconButtonsDemoSource from '~/components/content/demos/FusionTwoIconButtonsDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Fusion

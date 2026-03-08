@@ -10,23 +10,6 @@ syncStatus: migrated
 
 > 不建议用于高频实时更新（例如逐字流式刷新、每帧变化的状态）。更适合“偶发状态切换 / 标题切换 / 章节切换 / 短句变化”等场景。
 
-<script setup lang="ts">
-import TextTransformerBasicDemo from '~/components/content/demos/TextTransformerBasicDemo.vue'
-import TextTransformerBasicDemoSource from '~/components/content/demos/TextTransformerBasicDemo.vue?raw'
-
-import AutoSizerTextTransformerDemo from '~/components/content/demos/AutoSizerTextTransformerDemo.vue'
-import AutoSizerTextTransformerDemoSource from '~/components/content/demos/AutoSizerTextTransformerDemo.vue?raw'
-
-import TextTransformerLongTextDemo from '~/components/content/demos/TextTransformerLongTextDemo.vue'
-import TextTransformerLongTextDemoSource from '~/components/content/demos/TextTransformerLongTextDemo.vue?raw'
-
-import TextTransformerTitleSubtitleDemo from '~/components/content/demos/TextTransformerTitleSubtitleDemo.vue'
-import TextTransformerTitleSubtitleDemoSource from '~/components/content/demos/TextTransformerTitleSubtitleDemo.vue?raw'
-
-import TextTransformerBadgeDemo from '~/components/content/demos/TextTransformerBadgeDemo.vue'
-import TextTransformerBadgeDemoSource from '~/components/content/demos/TextTransformerBadgeDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### TextTransformer
