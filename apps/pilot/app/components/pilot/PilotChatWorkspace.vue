@@ -116,7 +116,7 @@ function onAttachmentSelected(event: Event) {
         />
 
         <div v-else class="pilot-chat__message-list">
-          <TxChatList :messages="props.messages" :markdown="false" :stagger="false" />
+          <TxChatList :messages="props.messages" :markdown="true" :stagger="false" />
         </div>
 
         <div v-if="props.running" class="pilot-chat__typing">
@@ -202,7 +202,8 @@ function onAttachmentSelected(event: Event) {
 .pilot-chat {
   min-height: 0;
   display: flex;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: clamp(10px, 1.4vw, 20px) clamp(14px, 2.4vw, 32px) clamp(8px, 1.1vw, 14px);
 }
 
@@ -210,6 +211,7 @@ function onAttachmentSelected(event: Event) {
   flex: 1;
   min-height: 0;
   height: 100%;
+  min-block-size: 100%;
   width: min(100%, clamp(760px, 74vw, 980px));
   margin-inline: auto;
   display: flex;
@@ -223,7 +225,7 @@ function onAttachmentSelected(event: Event) {
   justify-content: space-between;
   gap: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid rgba(16, 32, 58, 0.1);
+  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
 }
 
 .pilot-chat__title h1 {
@@ -236,7 +238,7 @@ function onAttachmentSelected(event: Event) {
 .pilot-hint {
   margin: 0;
   font-size: 12px;
-  color: rgba(16, 32, 58, 0.66);
+  color: var(--tx-text-color-secondary);
 }
 
 .pilot-chat__actions,
@@ -270,30 +272,34 @@ function onAttachmentSelected(event: Event) {
 }
 
 .pilot-chat__message-list :deep(.tx-chat-message__bubble) {
-  background: rgba(255, 255, 255, 0.86);
-  border-color: rgba(16, 32, 58, 0.12);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 88%, transparent);
+  border-color: color-mix(in srgb, var(--tx-border-color) 72%, transparent);
 }
 
 .pilot-chat__message-list :deep(.tx-chat-message--user .tx-chat-message__bubble) {
-  background: linear-gradient(135deg, rgba(14, 101, 255, 0.15), rgba(67, 189, 255, 0.14));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--tx-color-primary-light-5) 42%, transparent),
+    color-mix(in srgb, var(--tx-color-primary-light-9) 70%, transparent)
+  );
 }
 
 .pilot-chat__typing {
   flex-shrink: 0;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.72);
+  background: color-mix(in srgb, var(--tx-fill-color-light) 78%, transparent);
   padding: 8px 10px;
 }
 
 .pilot-chat__dock {
   flex-shrink: 0;
-  border-top: 1px solid rgba(16, 32, 58, 0.1);
+  border-top: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
   padding-top: 10px;
   margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: rgba(255, 255, 255, 0.9);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 90%, transparent);
   backdrop-filter: blur(6px);
 }
 
@@ -308,7 +314,7 @@ function onAttachmentSelected(event: Event) {
 
 .pilot-error {
   margin: 0;
-  color: #dc2626;
+  color: var(--tx-color-danger);
   font-size: 12px;
   max-height: 96px;
   overflow: auto;
@@ -323,7 +329,7 @@ function onAttachmentSelected(event: Event) {
 
 .pilot-trace__header {
   margin-bottom: 8px;
-  color: rgba(16, 32, 58, 0.72);
+  color: var(--tx-text-color-secondary);
   font-size: 12px;
 }
 
@@ -338,20 +344,21 @@ function onAttachmentSelected(event: Event) {
 }
 
 .pilot-trace-item {
-  border: 1px solid rgba(16, 32, 58, 0.14);
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
   border-radius: 12px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.82);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 86%, transparent);
 }
 
 .pilot-trace-item pre {
   max-height: 180px;
   overflow: auto;
   font-size: 11px;
-  background: rgba(15, 23, 42, 0.92);
-  color: #f8fafc;
+  background: var(--tx-fill-color-light);
+  color: var(--tx-text-color-primary);
   padding: 8px;
   border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
 }
 
 .pilot-chat :deep(.tx-chat-composer) {
@@ -359,9 +366,9 @@ function onAttachmentSelected(event: Event) {
   border-radius: 20px;
   padding: 10px 12px;
   gap: 6px;
-  border-color: rgba(16, 32, 58, 0.18);
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 8px 16px rgba(16, 32, 58, 0.08);
+  border-color: color-mix(in srgb, var(--tx-border-color) 78%, transparent);
+  background: color-mix(in srgb, var(--tx-bg-color-overlay) 96%, transparent);
+  box-shadow: var(--tx-box-shadow-light);
   overflow: hidden;
 }
 
@@ -371,7 +378,12 @@ function onAttachmentSelected(event: Event) {
   inset-inline: 0;
   bottom: 0;
   height: 2px;
-  background: linear-gradient(90deg, rgba(46, 216, 136, 0.88) 0%, rgba(65, 231, 173, 0.62) 65%, rgba(65, 231, 173, 0.12) 100%);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tx-color-success) 88%, transparent) 0%,
+    color-mix(in srgb, var(--tx-color-success-light-7) 70%, transparent) 65%,
+    color-mix(in srgb, var(--tx-color-success-light-9) 26%, transparent) 100%
+  );
 }
 
 .pilot-chat :deep(.tx-chat-composer.is-submitting)::after {
@@ -382,8 +394,14 @@ function onAttachmentSelected(event: Event) {
   width: 42%;
   height: 4px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(33, 225, 142, 0) 0%, rgba(33, 225, 142, 0.9) 28%, rgba(62, 242, 188, 0.95) 72%, rgba(62, 242, 188, 0) 100%);
-  box-shadow: 0 0 18px rgba(43, 231, 162, 0.72);
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tx-color-success) 0%, transparent) 0%,
+    color-mix(in srgb, var(--tx-color-success) 92%, transparent) 28%,
+    color-mix(in srgb, var(--tx-color-success-light-7) 95%, transparent) 72%,
+    color-mix(in srgb, var(--tx-color-success) 0%, transparent) 100%
+  );
+  box-shadow: 0 0 18px color-mix(in srgb, var(--tx-color-success) 62%, transparent);
   animation: pilot-composer-glow 1.9s ease-in-out infinite;
 }
 
@@ -392,8 +410,8 @@ function onAttachmentSelected(event: Event) {
   min-height: 48px;
   height: 48px;
   max-height: 168px;
-  background: #fff;
-  border-color: rgba(16, 32, 58, 0.16);
+  background: var(--tx-fill-color-blank);
+  border-color: color-mix(in srgb, var(--tx-border-color) 78%, transparent);
   line-height: 1.45;
   padding: 10px 12px;
   resize: none;

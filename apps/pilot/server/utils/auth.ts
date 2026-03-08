@@ -1,9 +1,11 @@
 import type { H3Event } from 'h3'
+import process from 'node:process'
 import { createError, getCookie, getHeader } from 'h3'
+import { readPilotSessionUserId } from './pilot-session'
 
 export interface PilotAuthContext {
   userId: string
-  source: 'header' | 'cookie' | 'token' | 'dev-bypass'
+  source: 'session-cookie' | 'header' | 'legacy-cookie' | 'token' | 'dev-bypass'
 }
 
 function decodeBase64Url(value: string): string {
@@ -81,35 +83,80 @@ function shouldAllowDevBypass(event: H3Event): boolean {
   return isLoopbackRequest(event)
 }
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
+function shouldAllowLegacyHeaderAuth(event: H3Event): boolean {
+  const pilotConfig = getPilotRuntimeConfig(event)
+  const configured = pilotConfig.allowLegacyHeaderAuth
+  if (typeof configured === 'boolean') {
+    return configured
+  }
+  return !isProduction()
+}
+
+function shouldAllowLegacyBearerAuth(event: H3Event): boolean {
+  const pilotConfig = getPilotRuntimeConfig(event)
+  const configured = pilotConfig.allowLegacyBearerAuth
+  if (typeof configured === 'boolean') {
+    return configured
+  }
+  return !isProduction()
+}
+
+function shouldAllowLegacyCookieAuth(event: H3Event): boolean {
+  const pilotConfig = getPilotRuntimeConfig(event)
+  const configured = pilotConfig.allowLegacyCookieAuth
+  if (typeof configured === 'boolean') {
+    return configured
+  }
+  return true
+}
+
 export function requirePilotAuth(event: H3Event): PilotAuthContext {
-  const explicit = String(
-    getHeader(event, 'x-pilot-user-id')
-    || getHeader(event, 'x-user-id')
-    || '',
-  ).trim()
-  if (explicit) {
+  const sessionUserId = readPilotSessionUserId(event)
+  if (sessionUserId) {
     return {
-      userId: explicit,
-      source: 'header',
+      userId: sessionUserId,
+      source: 'session-cookie',
     }
   }
 
-  const cookieUser = String(getCookie(event, 'pilot_user_id') || '').trim()
-  if (cookieUser) {
-    return {
-      userId: cookieUser,
-      source: 'cookie',
-    }
-  }
-
-  const authorization = String(getHeader(event, 'authorization') || '').trim()
-  if (authorization.startsWith('Bearer ')) {
-    const token = authorization.slice('Bearer '.length).trim()
-    const userId = resolveTokenUserId(token)
-    if (userId) {
+  if (shouldAllowLegacyHeaderAuth(event)) {
+    const explicit = String(
+      getHeader(event, 'x-pilot-user-id')
+      || getHeader(event, 'x-user-id')
+      || '',
+    ).trim()
+    if (explicit) {
       return {
-        userId,
-        source: 'token',
+        userId: explicit,
+        source: 'header',
+      }
+    }
+  }
+
+  if (shouldAllowLegacyCookieAuth(event)) {
+    const cookieUser = String(getCookie(event, 'pilot_user_id') || '').trim()
+    if (cookieUser) {
+      return {
+        userId: cookieUser,
+        source: 'legacy-cookie',
+      }
+    }
+  }
+
+  if (shouldAllowLegacyBearerAuth(event)) {
+    const authorization = String(getHeader(event, 'authorization') || '').trim()
+    if (authorization.startsWith('Bearer ')) {
+      const token = authorization.slice('Bearer '.length).trim()
+      const userId = resolveTokenUserId(token)
+      if (userId) {
+        return {
+          userId,
+          source: 'token',
+        }
       }
     }
   }

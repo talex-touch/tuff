@@ -1,0 +1,54 @@
+name = "tuff-pilot-test"
+compatibility_date = "2024-09-23"
+compatibility_flags = [
+  "nodejs_compat",
+  "enable_nodejs_http_modules",
+  "no_nodejs_compat_v2"
+]
+pages_build_output_dir = "dist"
+
+[vars]
+NUXT_PUBLIC_NEXUS_ORIGIN = ""
+PILOT_NEXUS_INTERNAL_ORIGIN = ""
+PILOT_NEXUS_BRIDGE_SECRET = ""
+PILOT_COOKIE_SECRET = ""
+PILOT_SESSION_COOKIE_MAX_AGE_SEC = "86400"
+NUXT_PILOT_BASE_URL = ""
+NUXT_PILOT_API_KEY = ""
+PILOT_ALLOW_LEGACY_HEADER_AUTH = "false"
+PILOT_ALLOW_LEGACY_BEARER_AUTH = "false"
+PILOT_ALLOW_LEGACY_COOKIE_AUTH = "true"
+
+[env.preview]
+compatibility_date = "2024-09-23"
+compatibility_flags = [
+  "nodejs_compat",
+  "enable_nodejs_http_modules",
+  "no_nodejs_compat_v2"
+]
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "tuff-pilot-preview"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[[env.preview.r2_buckets]]
+binding = "PILOT_ATTACHMENTS"
+bucket_name = "tuff-pilot-preview-attachments"
+
+[env.production]
+compatibility_date = "2024-09-23"
+compatibility_flags = [
+  "nodejs_compat",
+  "enable_nodejs_http_modules",
+  "no_nodejs_compat_v2"
+]
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "tuff-pilot-production"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[[env.production.r2_buckets]]
+binding = "PILOT_ATTACHMENTS"
+bucket_name = "tuff-pilot-production-attachments"
