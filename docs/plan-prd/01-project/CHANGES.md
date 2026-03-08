@@ -4,6 +4,59 @@
 
 ## 2026-03-08
 
+### Pilot: Nexus 登录桥接 + 用户历史隔离保持 + Markdown 渲染 + 独立 Cloudflare 配置
+
+**变更类型**: 认证集成 / 体验改进 / 部署治理
+
+**描述**:
+- Nexus 新增 Pilot 登录桥接票据能力：
+  - `POST /api/pilot/auth/bridge-ticket`（需 Nexus 登录态）签发 60s 一次性票据。
+  - `POST /api/pilot/auth/bridge-consume`（共享密钥校验）消费票据并返回用户身份。
+  - `GET /api/pilot/auth/bridge-start` 作为浏览器登录入口：未登录时跳转 `sign-in`，登录后签发票据并重定向回 Pilot 回调地址。
+- Pilot 新增登录桥接流程：
+  - `GET /auth/login` 跳转 Nexus 登录桥接入口。
+  - `GET /auth/callback` 消费票据，写入新会话 cookie（并保留 legacy `pilot_user_id` 兼容写入）后回跳目标页面。
+  - 页面级 server middleware 在未认证访问聊天页时自动重定向到 `/auth/login`。
+- `requirePilotAuth` 升级为“新优先、旧兼容”：
+  - 优先读取签名会话 cookie `pilot_auth_session`。
+  - 保留 legacy header/cookie/bearer（header 与 bearer 默认生产禁用，可通过开关灰度）。
+  - `localhost` 保持 dev bypass 语义。
+- 聊天渲染改为 Markdown：`PilotChatWorkspace` 的 `TxChatList` 开启 `:markdown=\"true\"`，沿用 tuffex sanitize 默认策略。
+- Cloudflare 独立测试部署能力：
+  - 新增 `apps/pilot/wrangler.toml`，与根 wrangler 配置解耦。
+  - `apps/pilot/package.json` 的 `preview:cf/deploy:cf` 强制使用 Pilot 专属 config 与 project-name（`tuff-pilot-test`）。
+  - Nuxt Cloudflare Dev 配置改为读取 `apps/pilot/wrangler.toml`。
+
+**测试**:
+- 新增 Nexus API 单测：
+  - `bridge-ticket.post.test.ts`（签发/TTL/禁用用户）
+  - `bridge-consume.post.test.ts`（密钥校验/过期票据/禁用用户）
+- 新增 Pilot 鉴权单测：
+  - `auth.test.ts`（session-cookie 优先、legacy 开关、dev bypass）
+
+**修改文件**:
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-ticket.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-consume.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-start.get.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-ticket.post.test.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-consume.post.test.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-session.ts`
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/middleware/require-pilot-page-auth.ts`
+- `apps/pilot/server/routes/auth/login.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/wrangler.toml`
+- `apps/pilot/.env.example`
+- `apps/pilot/vitest.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
 ### Pilot: DeepAgent 真增量流式渲染修复 + Legacy 兼容梳理
 
 **变更类型**: 流式体验修复 / 兼容治理
@@ -297,9 +350,7 @@
 
 **描述**:
 - 左侧会话列表进一步简化，不再展示时间信息。
-- 默认无边框；状态反馈由边框改为尾部指示点：
-  - `completed` 显示蓝色点；
-  - `failed` 显示红色点。
+- 默认无边框；状态反馈由边框改为尾部指示点（该阶段语义，后续已统一为“通知蓝点”语义）。
 - 删除按钮改为仅在列表项 hover/focus 时显示，常态下不干扰文本阅读。
 
 **修改文件**:
@@ -314,6 +365,7 @@
 - 蓝点语义调整为“通知”而非状态：仅在“用户发起新消息并完成后”置位。
 - 新增独立通知接口用于读取/清除会话通知状态，前端不再依赖会话状态文案推断蓝点。
 - 左侧列表蓝点改为读取通知字段；点击进入会话后调用通知接口清除蓝点。
+- 当前正在查看的会话会自动清除 `unread`，不展示蓝点；仅离开当前会话后再收到完成通知时显示蓝点。
 
 **新增接口**:
 - `GET /api/pilot/chat/sessions/notifications`
@@ -328,6 +380,34 @@
 - `apps/pilot/app/composables/pilot-chat.types.ts`
 - `apps/pilot/app/composables/usePilotChatPage.ts`
 - `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 右侧主区内部滚动收敛
+
+**变更类型**: 交互一致性优化
+
+**描述**:
+- 右侧聊天主区改为容器内部纵向滚动，避免页面级滚动。
+- 保持主布局 100vh 锁定，滚动行为限定在右侧内容区域。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 主题变量收敛（tuffex token）+ 系统亮暗自动切换
+
+**变更类型**: 视觉一致性优化 / 主题适配增强
+
+**描述**:
+- Pilot 首页与左右栏样式中硬编码颜色收敛为 `tuffex` CSS 变量（`--tx-*`），减少页面私有色值分叉。
+- 页面背景、边框、文本、消息气泡、输入区与 Trace 面板统一改为 token 驱动。
+- 新增系统亮暗模式自动跟随：基于 `prefers-color-scheme` 自动设置 `html[data-theme]`，并在系统主题变化时实时切换。
+
+**修改文件**:
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Pilot: 渠道配置极简化（仅 BASE_URL + API_KEY）与读取修复
