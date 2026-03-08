@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Floating UI
 
-<script setup lang="ts">
-import ContextMenuBasicDemo from '~/components/content/demos/ContextMenuBasicDemo.vue'
-import ContextMenuBasicDemoSource from '~/components/content/demos/ContextMenuBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### ContextMenu

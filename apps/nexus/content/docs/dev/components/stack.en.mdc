@@ -8,11 +8,6 @@ syncStatus: migrated
 
 Component documentation for Stack.
 
-<script setup lang="ts">
-import StackBasicDemo from '~/components/content/demos/StackBasicDemo.vue'
-import StackBasicDemoSource from '~/components/content/demos/StackBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Stack

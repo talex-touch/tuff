@@ -11,11 +11,6 @@ syncStatus: migrated
 
 通用 Flex 容器。
 
-<script setup lang="ts">
-import FlexBasicDemo from '~/components/content/demos/FlexBasicDemo.vue'
-import FlexBasicDemoSource from '~/components/content/demos/FlexBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Flex

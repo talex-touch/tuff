@@ -12,14 +12,6 @@ syncStatus: migrated
 >
 > `text-clip` 当前采用右 -> 左扫动方向（与 ShinyText 参考效果一致）。
 
-<script setup lang="ts">
-import GlowTextBasicDemo from '~/components/content/demos/GlowTextBasicDemo.vue'
-import GlowTextBasicDemoSource from '~/components/content/demos/GlowTextBasicDemo.vue?raw'
-
-import GlowTextImageDemo from '~/components/content/demos/GlowTextImageDemo.vue'
-import GlowTextImageDemoSource from '~/components/content/demos/GlowTextImageDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### GlowText

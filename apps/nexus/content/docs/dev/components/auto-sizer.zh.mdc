@@ -15,29 +15,6 @@ syncStatus: migrated
 
 > 实现基于 `ResizeObserver`。当内容中包含图片/异步渲染导致尺寸再次变化时，会自动触发重新测量。
 
-<script setup lang="ts">
-import AutoSizerHeightDemo from '~/components/content/demos/AutoSizerHeightDemo.vue'
-import AutoSizerHeightDemoSource from '~/components/content/demos/AutoSizerHeightDemo.vue?raw'
-
-import AutoSizerWidthFlexDemo from '~/components/content/demos/AutoSizerWidthFlexDemo.vue'
-import AutoSizerWidthFlexDemoSource from '~/components/content/demos/AutoSizerWidthFlexDemo.vue?raw'
-
-import AutoSizerDropdownDemo from '~/components/content/demos/AutoSizerDropdownDemo.vue'
-import AutoSizerDropdownDemoSource from '~/components/content/demos/AutoSizerDropdownDemo.vue?raw'
-
-import AutoSizerDialogDemo from '~/components/content/demos/AutoSizerDialogDemo.vue'
-import AutoSizerDialogDemoSource from '~/components/content/demos/AutoSizerDialogDemo.vue?raw'
-
-import AutoSizerButtonLoadingDemo from '~/components/content/demos/AutoSizerButtonLoadingDemo.vue'
-import AutoSizerButtonLoadingDemoSource from '~/components/content/demos/AutoSizerButtonLoadingDemo.vue?raw'
-
-import AutoSizerNumberFlowDemo from '~/components/content/demos/AutoSizerNumberFlowDemo.vue'
-import AutoSizerNumberFlowDemoSource from '~/components/content/demos/AutoSizerNumberFlowDemo.vue?raw'
-
-import AutoSizerTextTransformerDemo from '~/components/content/demos/AutoSizerTextTransformerDemo.vue'
-import AutoSizerTextTransformerDemoSource from '~/components/content/demos/AutoSizerTextTransformerDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### 仅高度（推荐用于 Tabs/Accordion）

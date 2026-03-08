@@ -1,15 +1,76 @@
 <script setup lang="ts">
 import DocSection from './docs/DocSection.vue'
 
+type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
+
+const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
+  未迁移: 'not_started',
+  迁移中: 'in_progress',
+  已迁移: 'migrated',
+  已确认: 'verified',
+  not_started: 'not_started',
+  in_progress: 'in_progress',
+  migrated: 'migrated',
+  verified: 'verified',
+}
+
+function normalizeComponentSyncStatus(raw: unknown, verified: boolean): SyncStatusKey {
+  if (verified)
+    return 'verified'
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  return COMPONENT_SYNC_STATUS_ALIASES[value] ?? 'not_started'
+}
+
+function parseDocMeta(meta: unknown): Record<string, any> | null {
+  if (!meta)
+    return null
+  if (typeof meta === 'string') {
+    try {
+      return JSON.parse(meta) as Record<string, any>
+    } catch (error) {
+      console.warn('[DocsSidebar] Failed to parse content meta.', error)
+      return null
+    }
+  }
+  if (typeof meta === 'object')
+    return meta as Record<string, any>
+  return null
+}
+
 const { data: navigationTree, pending, error } = await useAsyncData(
   'docs-navigation',
   () => queryCollectionNavigation('docs'),
 )
 const { data: componentDocs, pending: componentDocsPending } = await useAsyncData(
   'docs-components-meta',
-  () => queryCollection('docs')
+  () => (queryCollection('docs') as any)
     .where('path', 'LIKE', '/docs/dev/components/%')
+    .select('path', 'title', 'category', 'meta', 'syncStatus', 'verified')
     .all(),
+  {
+    default: () => [],
+    transform: (rows: any) =>
+      (Array.isArray(rows) ? rows : [])
+        .map((item: any) => {
+          const meta = parseDocMeta(item.meta)
+          const verified = item.verified === true || meta?.verified === true
+          const fullPath = typeof item.path === 'string'
+            ? (item.path.startsWith('/') ? item.path : `/${item.path}`)
+            : ''
+          const normalizedPath = fullPath
+            .replace(/^\/(en|zh)(?=\/|$)/, '')
+            .replace(/\.(en|zh)$/, '') || (fullPath ? '/' : null)
+
+          return {
+            ...item,
+            _normalizedPath: normalizedPath,
+            _meta: meta,
+            _category: item.category ?? meta?.category,
+            _syncStatus: normalizeComponentSyncStatus(item.syncStatus ?? meta?.syncStatus, verified),
+          }
+        })
+        .filter((item: any) => item._normalizedPath?.startsWith('/docs/dev/components')),
+  },
 )
 const route = useRoute()
 const { t, locale } = useI18n()
@@ -199,19 +260,6 @@ const COMPONENT_CATEGORY_ORDER = computed(() => ([
   { key: 'Data', label: t('docsSidebar.categories.data') },
 ]))
 
-type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
-
-const COMPONENT_SYNC_STATUS_ALIASES: Record<string, SyncStatusKey> = {
-  未迁移: 'not_started',
-  迁移中: 'in_progress',
-  已迁移: 'migrated',
-  已确认: 'verified',
-  not_started: 'not_started',
-  in_progress: 'in_progress',
-  migrated: 'migrated',
-  verified: 'verified',
-}
-
 const COMPONENT_SYNC_STATUS_LABELS = computed<Record<SyncStatusKey, string>>(() => {
   if (locale.value === 'zh') {
     return {
@@ -272,13 +320,6 @@ const COMPONENT_PRIORITY_SECTIONS = computed(() => ([
   },
 ]))
 
-function normalizeComponentSyncStatus(raw: unknown, verified: boolean): SyncStatusKey {
-  if (verified)
-    return 'verified'
-  const value = typeof raw === 'string' ? raw.trim() : ''
-  return COMPONENT_SYNC_STATUS_ALIASES[value] ?? 'not_started'
-}
-
 const defaultSection = computed(() => 'extensions')
 
 const docLabels = computed<Record<string, string>>(() => ({
@@ -305,22 +346,6 @@ function normalizeContentPath(path: string | null | undefined) {
     return null
   const fullPath = path.startsWith('/') ? path : `/${path}`
   return stripLocalePrefix(fullPath).replace(/\.(en|zh)$/, '')
-}
-
-function resolveMeta(meta: unknown): Record<string, any> | null {
-  if (!meta)
-    return null
-  if (typeof meta === 'string') {
-    try {
-      return JSON.parse(meta) as Record<string, any>
-    } catch (error) {
-      console.warn('[DocsSidebar] Failed to parse content meta.', error)
-      return null
-    }
-  }
-  if (typeof meta === 'object')
-    return meta as Record<string, any>
-  return null
 }
 
 function filterByLocale(items: any[]): any[] {
@@ -417,17 +442,6 @@ const componentSections = computed(() => {
     return []
 
   const normalizedItems = sourceItems
-    .map((item) => {
-      const meta = resolveMeta(item.meta)
-      const verified = item.verified === true || meta?.verified === true
-      return {
-        ...item,
-        _meta: meta,
-        _normalizedPath: normalizeContentPath(item.path),
-        _category: item.category ?? meta?.category,
-        _syncStatus: normalizeComponentSyncStatus(item.syncStatus ?? meta?.syncStatus, verified),
-      }
-    })
     .filter(item => item._normalizedPath?.startsWith('/docs/dev/components'))
 
   if (!normalizedItems.length)

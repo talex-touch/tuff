@@ -8,11 +8,6 @@ syncStatus: migrated
 
 用于在下拉浮层中选择树形数据，支持搜索、单选/多选。
 
-<script setup lang="ts">
-import TreeSelectBasicDemo from '~/components/content/demos/TreeSelectBasicDemo.vue'
-import TreeSelectBasicDemoSource from '~/components/content/demos/TreeSelectBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### TreeSelect

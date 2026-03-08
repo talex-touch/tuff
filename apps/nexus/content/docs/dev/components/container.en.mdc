@@ -11,11 +11,6 @@ syncStatus: migrated
 
 Layout container with flexible options and responsive support
 
-<script setup lang="ts">
-import ContainerBasicDemo from '~/components/content/demos/ContainerBasicDemo.vue'
-import ContainerBasicDemoSource from '~/components/content/demos/ContainerBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Container

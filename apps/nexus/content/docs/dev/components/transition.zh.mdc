@@ -8,14 +8,6 @@ syncStatus: migrated
 
 用于内容切换（X）与列表增删（Y）的通用过渡封装。
 
-<script setup lang="ts">
-import TransitionContentDemo from '~/components/content/demos/TransitionContentDemo.vue'
-import TransitionContentDemoSource from '~/components/content/demos/TransitionContentDemo.vue?raw'
-
-import TransitionListDemo from '~/components/content/demos/TransitionListDemo.vue'
-import TransitionListDemoSource from '~/components/content/demos/TransitionListDemo.vue?raw'
-</script>
-
 ## 内容切换（X）
 
 ### Transition Content

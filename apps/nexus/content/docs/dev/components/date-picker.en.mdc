@@ -8,11 +8,6 @@ syncStatus: migrated
 
 `TxPicker` `YYYY-MM-DD`
 
-<script setup lang="ts">
-import DatePickerBasicDemo from '~/components/content/demos/DatePickerBasicDemo.vue'
-import DatePickerBasicDemoSource from '~/components/content/demos/DatePickerBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### DatePicker

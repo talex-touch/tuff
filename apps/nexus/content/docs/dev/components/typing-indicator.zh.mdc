@@ -8,11 +8,6 @@ syncStatus: migrated
 
 用于展示 AI 正在回复的状态。
 
-<script setup lang="ts">
-import TypingIndicatorVariantsDemo from '~/components/content/demos/TypingIndicatorVariantsDemo.vue'
-import TypingIndicatorVariantsDemoSource from '~/components/content/demos/TypingIndicatorVariantsDemo.vue?raw'
-</script>
-
 ### TypingIndicator
 :::TuffDemoWrapper{demo="TypingIndicatorTypingIndicatorDemo" code-lang="vue"}
 ---

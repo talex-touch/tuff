@@ -8,11 +8,6 @@ syncStatus: migrated
 
 TabBar badge
 
-<script setup lang="ts">
-import TabBarBasicDemo from '~/components/content/demos/TabBarBasicDemo.vue'
-import TabBarBasicDemoSource from '~/components/content/demos/TabBarBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### TabBar

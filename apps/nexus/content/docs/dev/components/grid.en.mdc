@@ -12,11 +12,6 @@ syncStatus: migrated
 
 Grid provides a modern CSS Grid layout system with responsive and flexible configuration.
 
-<script setup lang="ts">
-import GridBasicDemo from '~/components/content/demos/GridBasicDemo.vue'
-import GridBasicDemoSource from '~/components/content/demos/GridBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Grid

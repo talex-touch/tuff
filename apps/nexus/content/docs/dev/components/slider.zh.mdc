@@ -11,19 +11,6 @@ syncStatus: migrated
 
 用于在区间内选择数值的滑块组件。
 
-<script setup>
-import SliderBasicDemo from '~/components/content/demos/SliderBasicDemo.vue'
-import SliderBasicDemoSource from '~/components/content/demos/SliderBasicDemo.vue?raw'
-import SliderDisabledDemo from '~/components/content/demos/SliderDisabledDemo.vue'
-import SliderDisabledDemoSource from '~/components/content/demos/SliderDisabledDemo.vue?raw'
-import SliderFormatValueDemo from '~/components/content/demos/SliderFormatValueDemo.vue'
-import SliderFormatValueDemoSource from '~/components/content/demos/SliderFormatValueDemo.vue?raw'
-import SliderShowValueDemo from '~/components/content/demos/SliderShowValueDemo.vue'
-import SliderShowValueDemoSource from '~/components/content/demos/SliderShowValueDemo.vue?raw'
-import SliderElasticTooltipCompareDemo from '~/components/content/demos/SliderElasticTooltipCompareDemo.vue'
-import ElasticTooltipCompareDemoCode from '~/components/content/demos/SliderElasticTooltipCompareDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Slider

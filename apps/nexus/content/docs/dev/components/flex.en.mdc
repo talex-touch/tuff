@@ -11,11 +11,6 @@ syncStatus: migrated
 
 Generic flex container
 
-<script setup lang="ts">
-import FlexBasicDemo from '~/components/content/demos/FlexBasicDemo.vue'
-import FlexBasicDemoSource from '~/components/content/demos/FlexBasicDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### Flex

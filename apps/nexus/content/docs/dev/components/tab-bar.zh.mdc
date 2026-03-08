@@ -8,11 +8,6 @@ syncStatus: migrated
 
 移动端底部 TabBar，支持图标与 badge。
 
-<script setup lang="ts">
-import TabBarBasicDemo from '~/components/content/demos/TabBarBasicDemo.vue'
-import TabBarBasicDemoSource from '~/components/content/demos/TabBarBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### TabBar

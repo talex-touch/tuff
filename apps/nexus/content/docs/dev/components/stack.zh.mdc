@@ -8,11 +8,6 @@ syncStatus: migrated
 
 通用堆叠布局容器（横向/纵向）。
 
-<script setup lang="ts">
-import StackBasicDemo from '~/components/content/demos/StackBasicDemo.vue'
-import StackBasicDemoSource from '~/components/content/demos/StackBasicDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Stack

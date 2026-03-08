@@ -11,17 +11,6 @@ syncStatus: migrated
 
 用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。
 
-<script setup lang="ts">
-import SpinnerBasicDemo from '~/components/content/demos/SpinnerBasicDemo.vue'
-import SpinnerBasicDemoSource from '~/components/content/demos/SpinnerBasicDemo.vue?raw'
-
-import SpinnerSizesDemo from '~/components/content/demos/SpinnerSizesDemo.vue'
-import SpinnerSizesDemoSource from '~/components/content/demos/SpinnerSizesDemo.vue?raw'
-
-import SpinnerToggleDemo from '~/components/content/demos/SpinnerToggleDemo.vue'
-import SpinnerToggleDemoSource from '~/components/content/demos/SpinnerToggleDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Spinner

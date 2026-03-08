@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const scrollAnimatedDone = ref(false)
+let resetTimer: ReturnType<typeof setTimeout> | null = null
+let scrollContainer: HTMLDivElement | null = null
+let wheelHandler: (() => void) | null = null
 const timeline = [
   { label: '09:18', title: 'User scrolls hero section', desc: 'Blur stays off while card is in view.' },
   { label: '09:19', title: 'Card leaves viewport', desc: 'IntersectionObserver fires and动画开启。' },
@@ -10,7 +13,10 @@ const timeline = [
 
 function handleScrollAnimatedDone() {
   scrollAnimatedDone.value = true
-  setTimeout(() => {
+  if (resetTimer)
+    clearTimeout(resetTimer)
+  resetTimer = setTimeout(() => {
+    resetTimer = null
     scrollAnimatedDone.value = false
   }, 1400)
 }
@@ -18,17 +24,28 @@ function handleScrollAnimatedDone() {
 const illustrationDots = Array.from({ length: 28 })
 
 onMounted(() => {
-  const scroller = document.querySelector<HTMLDivElement>('.gradual-blur-animated-demo__scroll')
-  if (!scroller)
+  scrollContainer = document.querySelector<HTMLDivElement>('.gradual-blur-animated-demo__scroll')
+  if (!scrollContainer)
     return
 
-  const handleWheel = () => {
+  wheelHandler = () => {
     if (scrollAnimatedDone.value)
       return
-    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+    scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
   }
 
-  scroller.addEventListener('wheel', handleWheel, { passive: true })
+  scrollContainer.addEventListener('wheel', wheelHandler, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  if (resetTimer) {
+    clearTimeout(resetTimer)
+    resetTimer = null
+  }
+  if (scrollContainer && wheelHandler)
+    scrollContainer.removeEventListener('wheel', wheelHandler)
+  scrollContainer = null
+  wheelHandler = null
 })
 </script>
 

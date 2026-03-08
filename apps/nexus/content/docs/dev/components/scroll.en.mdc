@@ -8,15 +8,6 @@ syncStatus: migrated
 
 `@better-scroll/scroll-bar` `TouchScroll`
 
-<script setup lang="ts">
-import scrollBasicSource from '~/components/content/demos/ScrollBasicDemo.vue?raw'
-import scrollHorizontalSource from '~/components/content/demos/ScrollHorizontalDemo.vue?raw'
-import scrollBounceScrollbarSource from '~/components/content/demos/ScrollBounceScrollbarDemo.vue?raw'
-import scrollChainingSource from '~/components/content/demos/ScrollChainingDemo.vue?raw'
-import scrollNativeSource from '~/components/content/demos/ScrollNativeDemo.vue?raw'
-import scrollPullDownUpSource from '~/components/content/demos/ScrollPullDownUpDemo.vue?raw'
-</script>
-
 ## Behavior Notes
 
 - **BetterScroll Mode**

@@ -10,7 +10,7 @@ async function highlightAll() {
   if (!api)
     return
 
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('pre code, .tuff-code-block__code'))
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('pre code:not(.tuff-code-block__code)'))
   nodes.forEach((node) => {
     if (node.dataset.highlighted === 'true')
       return
@@ -28,8 +28,14 @@ export default defineNuxtPlugin((nuxtApp) => {
   if (!import.meta.client)
     return
 
+  let highlightRaf: number | null = null
   const scheduleRender = () => {
-    void highlightAll()
+    if (highlightRaf)
+      return
+    highlightRaf = window.requestAnimationFrame(() => {
+      highlightRaf = null
+      void highlightAll()
+    })
   }
 
   nuxtApp.hook('app:mounted', scheduleRender)

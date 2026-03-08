@@ -10,14 +10,6 @@ Enter `search`
 
 If you need a search input that expands results like Select, use `SearchSelect`.
 
-<script setup lang="ts">
-import SearchInputBasicDemo from '~/components/content/demos/SearchInputBasicDemo.vue'
-import SearchInputBasicDemoSource from '~/components/content/demos/SearchInputBasicDemo.vue?raw'
-
-import SearchInputRemoteDemo from '~/components/content/demos/SearchInputRemoteDemo.vue'
-import SearchInputRemoteDemoSource from '~/components/content/demos/SearchInputRemoteDemo.vue?raw'
-</script>
-
 ## Basic Usage
 
 ### SearchInput

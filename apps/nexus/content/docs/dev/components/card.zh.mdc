@@ -8,44 +8,6 @@ syncStatus: migrated
 
 Card 卡片组件是一个通用的内容容器，具有玻璃拟态效果，适用于展示各种类型的信息和内容。
 
-<script setup lang="ts">
-import CardBasicDemo from '~/components/content/demos/CardBasicDemo.vue'
-import CardBasicDemoSource from '~/components/content/demos/CardBasicDemo.vue?raw'
-
-import CardHeaderDemo from '~/components/content/demos/CardHeaderDemo.vue'
-import CardHeaderDemoSource from '~/components/content/demos/CardHeaderDemo.vue?raw'
-
-import CardActionsDemo from '~/components/content/demos/CardActionsDemo.vue'
-import CardActionsDemoSource from '~/components/content/demos/CardActionsDemo.vue?raw'
-
-import CardVariantsDemo from '~/components/content/demos/CardVariantsDemo.vue'
-import CardVariantsDemoSource from '~/components/content/demos/CardVariantsDemo.vue?raw'
-
-import CardBackgroundScrollDemo from '~/components/content/demos/CardBackgroundScrollDemo.vue'
-import CardBackgroundScrollDemoSource from '~/components/content/demos/CardBackgroundScrollDemo.vue?raw'
-
-import CardEmptyDemo from '~/components/content/demos/CardEmptyDemo.vue'
-import CardEmptyDemoSource from '~/components/content/demos/CardEmptyDemo.vue?raw'
-
-import CardCompositionsDemo from '~/components/content/demos/CardCompositionsDemo.vue'
-import CardCompositionsDemoSource from '~/components/content/demos/CardCompositionsDemo.vue?raw'
-
-import CardBasicSlotsDemo from '~/components/content/demos/CardBasicSlotsDemo.vue'
-import CardBasicSlotsDemoSource from '~/components/content/demos/CardBasicSlotsDemo.vue?raw'
-
-import CardSizeDemo from '~/components/content/demos/CardSizeDemo.vue'
-import CardSizeDemoSource from '~/components/content/demos/CardSizeDemo.vue?raw'
-
-import CardLayoutPropsDemo from '~/components/content/demos/CardLayoutPropsDemo.vue'
-import CardLayoutPropsDemoSource from '~/components/content/demos/CardLayoutPropsDemo.vue?raw'
-
-import CardStatesDemo from '~/components/content/demos/CardStatesDemo.vue'
-import CardStatesDemoSource from '~/components/content/demos/CardStatesDemo.vue?raw'
-
-import CardInertialDemo from '~/components/content/demos/CardInertialDemo.vue'
-import CardInertialDemoSource from '~/components/content/demos/CardInertialDemo.vue?raw'
-</script>
-
 ## 基础用法
 
 ### Basic
@@ -1672,7 +1634,6 @@ code: |
   </style>
 ---
 :::
-
 
 ## 选型建议（TxBaseSurface vs TxCard）
 
