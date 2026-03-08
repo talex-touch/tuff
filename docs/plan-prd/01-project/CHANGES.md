@@ -2,6 +2,238 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-08
+
+### Core App: 修复 tuff-intelligence 在主进程运行时的 ESM 导入失败
+
+**变更类型**: 缺陷修复 / 构建配置收敛
+
+**描述**:
+- 修复 Core App 启动时 `ERR_MODULE_NOT_FOUND`（`@talex-touch/tuff-intelligence` -> `src/adapters/index`）问题。
+- 根因是主进程将 `@talex-touch/tuff-intelligence` externalize 后，Node 运行时直接加载 TS ESM 源码并触发无扩展名相对导入解析失败。
+- 在 `electron-vite` 的 `main/preload` 配置中将该 workspace 包加入 `exclude`，确保由构建器打包处理，避免运行时 ESM 解析差异。
+
+**修改文件**:
+- `apps/core-app/electron.vite.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: SSE 可观测性增强 + DeepAgent 风格阶段事件 + 默认模型升级
+
+**变更类型**: 功能增强 / 可靠性修复
+
+**描述**:
+- 修复 Pilot 多轮对话 trace `seq` 冲突问题（按会话 `lastSeq` 续号），避免第二轮写入唯一索引冲突。
+- `POST /api/pilot/chat/sessions/:sessionId/stream` 增强：
+  - 首帧 `stream.started`，避免“长时间无事件返回”。
+  - 新增阶段事件：`planning.started` / `planning.updated` / `planning.finished`、`turn.started` / `turn.finished`、`replay.started` / `replay.finished`。
+  - 新增 `run.audit`，透传上游调用审计（request / response / network_error / response_error）。
+  - `error` 事件补充结构化 `detail`（phase、endpoint、status、stack/cause）。
+- DeepAgent 最小封装迁入 `@talex-touch/tuff-intelligence`：
+  - 新增 `DeepAgentLangChainEngineAdapter`，Pilot 不再内联拼装 `/v1/responses` 请求。
+  - `DeepAgentAuditRecord` / `DeepAgentErrorDetail` / `toDeepAgentErrorDetail` 由 intelligence 包统一输出。
+  - `DeepAgentLangChainEngineAdapter` 改为通过 `deepagents.createDeepAgent` 运行（非手写 fetch loop），并按 `claude-relay-service` 约定归一化上游地址：
+    - 配置 `base_url=http://localhost:3000/openai` 时，运行时自动转换为 LangChain 所需的 `http://localhost:3000/openai/v1`。
+    - 仍兼容完整 `responses` 地址（如 `.../openai/v1/responses`）输入，统一收敛到 DeepAgent + ChatCompletions 通道。
+  - 针对上游 `socket hang up / 长时间无响应` 增加请求级超时保护（默认 25s/次），两次重试后返回结构化 `504 Gateway Timeout`，避免 SSE 长时间仅 keepalive 无结果。
+  - 新增 `proxy: false` 网络执行策略：在 Pilot runtime 调用链中禁用 `HTTP_PROXY/HTTPS_PROXY/ALL_PROXY`，并强制注入 `NO_PROXY=localhost,127.0.0.1,::1`，用于排除本机 upstream 误走系统代理。
+  - Pilot 上游配置改为本地 `.env` 驱动：
+    - 移除 `nuxt.config.ts` 与 `pilot-runtime.ts` 内置 API Key / endpoint 硬编码。
+    - 新增 `apps/pilot/.env.example`（`NUXT_PILOT_*`）用于本地配置渠道、预算、重试与 proxy 策略。
+  - 进一步精简环境变量：Pilot AI 渠道仅保留 `NUXT_PILOT_BASE_URL` / `NUXT_PILOT_API_KEY` / `NUXT_PILOT_MODEL`（默认 baseUrl 为 `http://localhost:3000/openai`），删除 `endpoint/upstreamChat` 入口，减少配置歧义。
+- Pilot 前端 Trace 抽屉增强：展示 `run.audit` 和结构化错误详情；流结束后按增量 trace 合并，避免覆盖流内审计事件。
+- 默认模型升级为 `gpt-5.4`（Nuxt runtimeConfig + runtime fallback）。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+
+### Pilot: 页面层优先复用 tuffex 组件
+
+**变更类型**: UI 架构收敛 / 组件复用
+
+**描述**:
+- Pilot 聊天页从自定义原生控件切换为优先使用 `@talex-touch/tuffex` 组件，统一视觉与交互语义。
+- 保持现有行为约束不变：
+  - 页面整体不滚动；
+  - 中间聊天区全高撑开；
+  - 输入区固定底部；
+  - Trace 通过按钮打开右侧抽屉并在抽屉内滚动。
+
+**主要变更**:
+1. 引入并接入 `TxButton`、`TxChatList`、`TxChatComposer`、`TxDrawer`、`TxEmptyState`、`TxStatusBadge`、`TxTag`、`TxTypingIndicator`。
+2. `apps/pilot` 引入 `@talex-touch/tuffex` 依赖，并在 Nuxt 配置中补齐样式、transpile 与 workspace source alias。
+3. 会话列表状态徽标、消息列表、输入区、Trace 抽屉与空状态全部切换到 tuffex 组件实现。
+4. 扩展 `TxChatComposer`，新增“附件+输入一体化”能力（附件列表、附件按钮、左侧工具栏插槽），Pilot 底部输入区改为统一 Composer，不再分离独立附件区。
+5. `TxChatComposer` 新增 `toolbar` 具名插槽，Pilot 通过插槽实现类似 Web 搜索模式的底部操作条（附件入口 + 模式/搜索项 + 右侧语音圆按钮）。
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/app/pages/index.vue`
+- `packages/tuffex/packages/components/src/chat/src/types.ts`
+- `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue`
+- `packages/tuffex/packages/components/src/chat/index.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 渠道配置极简化（仅 BASE_URL + API_KEY）与读取修复
+
+**变更类型**: 配置收敛 / 缺陷修复
+
+**描述**:
+- 修复 `api key is not configured` 误报：`pilot-runtime` 改为多层读取顺序（`runtimeConfig -> Cloudflare env -> process.env`），避免本地 `.env` 或 worker env 已配置但运行时读空。
+- Pilot 配置入口收敛为仅两项：
+  - `NUXT_PILOT_BASE_URL`
+  - `NUXT_PILOT_API_KEY`
+- 移除 proxy/no-proxy/model 等 env 入口，默认模型固定 `gpt-5.4`（代码常量）。
+- 移除历史兼容键名与回退：`PILOT_*`、`NUXT_PILOT_UPSTREAM_RESPONSES_*` 不再生效。
+- 移除 `Authorization` 头作为 API Key 的回退来源，统一只使用配置项 `NUXT_PILOT_API_KEY`。
+- `@langchain/openai` 升级至支持 Responses API 的版本，并在 DeepAgent `ChatOpenAI` 中启用 `useResponsesApi`，默认直接走 `/v1/responses`。
+- 新增 `packages/tuff-intelligence/src/business/pilot/*`，将 `planning / run.metrics / replay` 流式编排逻辑从 `apps/pilot` 下沉到 intelligence 包。
+- Pilot 心跳改为 SSE 内部事件（`stream.heartbeat`），前端移除额外 `/heartbeat` 请求链路。
+- `appendTrace + seq 冲突重试 + emit` 下沉到 `business/pilot/emitter.ts`，`stream.post.ts` 收敛为传输层编排。
+- `toJsonSafe/toSafeRecord/stream error detail` 统一下沉到 `packages/tuff-intelligence/src/business/pilot/utils.ts`，`stream.post.ts` 不再内联同类实现。
+- 彻底清理前端历史 heartbeat 残留（`postHeartbeat/startHeartbeat/stopHeartbeat` 与计时器状态），仅保留 SSE 内置 `stream.heartbeat`。
+- 修复流式文本拼接失真：assistant delta 不再按片段 `trim`，保留空格与换行。
+- 修复 replay-only 写入副作用：`fromSeq` 只读补播场景不再新增 `stream.started/replay.* /done/error` trace 记录。
+- 删除 `POST /api/pilot/chat/sessions/:sessionId/heartbeat` 路由入口。
+- `DeepAgent` 适配层移除 proxy 注入链路与 upstream chat fallback 分支，仅保留 relay baseUrl 路径，减少配置歧义。
+- 新增根忽略规则：`apps/pilot/.env`，避免本地密钥误提交。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/.env.example`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `packages/tuff-intelligence/src/business/pilot/{stream.ts,types.ts,emitter.ts,utils.ts}`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `.gitignore`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 下一阶段执行文档落地（测试优先 + OAuth + CLI + channel routing）
+
+**变更类型**: 文档规划 / 执行顺序收敛
+
+**描述**: 基于 Pilot 首版上线状态，新增下一阶段执行文档，明确后续按“测试优先”推进，并串联 Nexus OAuth 登录、`tuff-pilot-cli` 与后端渠道可配置能力，作为后续实现统一入口。
+
+**主要变更**:
+1. 新增文档 `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`。
+2. 固化硬顺序：`T0 测试 -> T1 OAuth -> T2 CLI -> T3 channel routing`。
+3. 补充阶段门禁（Gate A-D）与非目标边界，避免本轮任务扩散。
+
+**修改文件**:
+- `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot dev 启动稳定性修复（Nuxt Cloudflare + checker）
+
+**变更类型**: 开发体验修复 / 配置收敛
+
+**描述**: 修复 `apps/pilot` 在 `nuxt dev` 下因 `vite-plugin-checker` 触发 `typescript/lib/typesMap.json` 拷贝失败导致的启动异常；同时修正 Cloudflare dev 的兼容日期配置入口。
+
+**主要变更**:
+1. `apps/pilot/nuxt.config.ts` 将 `compatibilityDate` 提升到 Nuxt 顶层并更新到 `2026-03-08`。
+2. `apps/pilot/nuxt.config.ts` 关闭 dev 内置 `typescript.typeCheck`，改为通过 `pnpm pilot:typecheck` 独立执行类型检查。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot 本地联调通路补齐（Cloudflare 绑定 + 内置 Responses mock upstream）
+
+**变更类型**: 本地联调能力增强 / 测试配置落地
+
+**描述**: 为 Pilot 测试阶段补齐本地可用链路。`nuxt dev` 在 cloudflare-dev 模式下显式复用根 `wrangler.toml`（含 D1/R2 绑定与持久化目录）；同时内置固定 Responses upstream（用户提供的 mock 地址与 token），让 Chat 流程可直接联调。
+
+**主要变更**:
+1. `apps/pilot/nuxt.config.ts` 新增 `nitro.cloudflareDev`（`configPath` + `persistDir` + `environment`），本地调试可读取 `DB` 绑定并持久化到 `.wrangler/state/v3`。
+2. `apps/pilot/server/utils/pilot-runtime.ts` 增加 OpenAI Responses 请求路径（`/v1/responses`）与多格式响应文本提取逻辑。
+3. Pilot runtime config 增加内置 `upstreamResponsesBaseUrl` / `upstreamResponsesApiKey` / `upstreamResponsesModel` 默认值，用于本地 mock 联调。
+4. `apps/pilot/server/utils/pilot-store.ts` 附件桶读取增加 `R2` fallback（兼容根 wrangler 绑定名）。
+5. `apps/pilot/types/cloudflare-env.d.ts` 增加 `R2` 绑定类型声明。
+
+**修改文件**:
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/server/utils/pilot-runtime.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/types/cloudflare-env.d.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+## 2026-03-07
+
+### Pilot（Nuxt Edge）上线首版 + Intelligence Hard-Cut 收口
+
+**变更类型**: 新增应用 / 架构收口 / 协议落地
+
+**描述**: 新增 `apps/pilot` 作为独立部署的 AI Chat-first 应用，并将 Agent Runtime/Protocol 核心统一收口到 `packages/tuff-intelligence`。Pilot 服务端采用 SSE + checkpoint/replay 模式，具备长会话断线恢复的基础能力。
+
+**主要变更**:
+1. 新建 `apps/pilot`（Nuxt + `cloudflare-pages` preset），实现会话、消息、trace、heartbeat、pause、upload、stream API。
+2. 新增 `POST /api/pilot/chat/sessions/:sessionId/stream`，支持 `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` 与 `fromSeq` 补播。
+3. 新增 Pilot 前端 V1 聊天页：会话列表、消息流、附件上传、停止、补播恢复、Trace 抽屉。
+4. `tuff-intelligence` Runtime 增强：会话历史注入、trace `seq` 写回 envelope `meta`、周期 checkpoint。
+5. 全仓清理旧 Intelligence 直连：移除 `@talex-touch/utils/intelligence*` 外部依赖，核心改用 `@talex-touch/tuff-intelligence`。
+6. `packages/utils` 切断 Intelligence 聚合导出（root/types/renderer/hooks/plugin-sdk/transport-domain）。
+7. 根脚本补齐 `pilot:dev`、`pilot:build`、`pilot:typecheck`、`pilot:lint`。
+
+**修改文件（核心）**:
+- `apps/pilot/**`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/{client.ts,index.ts,transport/**,store/**,protocol/**}`
+- `apps/core-app/src/main/modules/ocr/ocr-service.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/**`
+- `apps/core-app/tuff/modules/plugins/touch-translation/shared/tuffintelligence.ts`
+- `packages/utils/index.ts`
+- `packages/utils/types/index.ts`
+- `packages/utils/renderer/index.ts`
+- `packages/utils/renderer/hooks/index.ts`
+- `packages/utils/plugin/sdk/index.ts`
+- `packages/utils/transport/sdk/domains/index.ts`
+- `package.json`
+- `scripts/check-intelligence-no-todo.mjs`
+
+### 主进程退出链路 + Tray/设置事件重构
+
+**变更类型**: 架构重构 / 稳定性修复 / 公共事件收敛
+
+**描述**: 针对开发环境高频崩溃链路（`Object has been destroyed` + 异常退出 + native hook fatal）进行一次性收敛。退出流程改为“标准 quit 优先、超时兜底强退”，并将 Tray 相关设置通道从旧 `TrayEvents` 迁移到 `AppEvents.system.*`，同时收敛模块监听生命周期。
+
+**主要变更**:
+1. `DevProcessManager` 改为两阶段退出：先 `app.quit()` 走标准卸载链路，5 秒超时后再执行强制清理并 `process.exit(1)`；正常路径不再主动 `process.exit(0)`。
+2. `ModuleManager` 新增幂等 `unloadAll(reason)`，`BEFORE_APP_QUIT` 统一走该入口，避免重复 unload 与竞态。
+3. Tray 模块改为启动时按 `appSetting.setup.experimentalTray` 动态加载；关闭实验开关时 Tray 模块完全不进入运行态。
+4. `TrayManager` 增加统一 listener disposer 管理（`app/window/eventbus`），并在窗口激活/显示链路补齐 destroyed guard。
+5. `AddonOpenerModule` 补齐 `app.on` 与 transport handler 的集中释放机制，减少退出期回调悬挂风险。
+6. 移除旧 `TrayEvents` 通道，新增 `AppEvents.system.autoStartGet/autoStartUpdate/traySettingsGet/traySettingsUpdate`，并在 `CommonChannel` 常驻注册处理。
+7. 渲染端设置页与引导页全部迁移到新 system 事件；`experimentalTray=false` 时隐藏 `showTray/hideDock` UI 开关，`autoStart` 保持可用。
+8. OmniPanel 在 `BEFORE_APP_QUIT` 提前执行 `cleanupInputHook`，降低 `uiohook-napi` 退出竞态。
+
+**修改文件（核心）**:
+- `apps/core-app/src/main/utils/dev-process-manager.ts`
+- `apps/core-app/src/main/core/module-manager.ts`
+- `apps/core-app/src/main/index.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.ts`
+- `apps/core-app/src/main/modules/addon-opener.ts`
+- `apps/core-app/src/main/modules/omni-panel/index.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `packages/utils/transport/events/index.ts`
+- `packages/utils/transport/events/types/app.ts`
+- `packages/utils/transport/events/types/index.ts`
+- `packages/utils/transport/sdk/domains/settings.ts`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
+- `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
+- `apps/core-app/src/main/core/module-manager.test.ts`
+- `apps/core-app/src/main/utils/dev-process-manager.test.ts`
+- `apps/core-app/src/main/modules/tray/tray-manager.test.ts`
+
 ## 2026-03-05
 
 ### Nexus Auth 路由在 Cloudflare 环境 500 修复
@@ -3750,6 +3982,84 @@
 
 **修改文件**:
 - `apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts`
+
+---
+
+## 2026-03-08
+
+### 新增: Pilot 双栏会话体验与 AI 标题总结
+
+**变更类型**: 功能增强
+
+**描述**: Pilot 聊天页升级为 ChatGPT 风格双栏交互，支持会话删除与 AI 自动命名标题。
+
+**主要变更**:
+1. **会话侧栏体验升级**:
+   - 左侧会话列表支持直接删除会话（含消息/附件/trace 全量清理）
+   - 会话卡片展示 AI 总结标题、状态、更新时间与 seq 信息
+   - 新建会话后自动进入当前会话上下文
+
+2. **聊天区布局重构**:
+   - 页面改为固定高度双栏布局，整体页面不滚动
+   - 中间聊天区撑满可视高度，输入区固定底部
+   - 消息区与 Trace 区域改为内部独立滚动
+
+3. **Trace 抽屉行为调整**:
+   - Trace 改为按钮触发的右侧抽屉展开/收起
+   - 桌面端右侧并排展开，移动端改为覆盖抽屉
+
+4. **会话标题 AI 总结能力**:
+   - 新增 `POST /api/pilot/chat/sessions/:sessionId/title` 接口
+   - 基于会话消息调用模型总结短标题并持久化到会话表
+   - 无模型可用时回退为首条用户消息摘要
+
+5. **存储能力扩展**:
+   - `pilot_chat_sessions` 新增 `title` 字段并兼容老表结构
+   - Runtime Store 新增 `setSessionTitle` / `deleteSession` 方法
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/index.delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/title.post.ts`
+- `packages/tuff-intelligence/src/store/store-adapter.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+
+**影响**:
+- Pilot 对话管理更接近主流 AI 聊天产品交互
+- 会话可读性与检索效率提升（标题化）
+- 会话清理与 trace 查看路径更清晰
+
+---
+
+### 修复: CoreBox 手动文件索引入库与附件执行后自动清空
+
+**变更类型**: Bug 修复
+
+**描述**: 修复 `file-index` 对非白名单扩展名（如 `.jar`）触发后不入库的问题，并在 CoreBox 执行携带附件的动作后自动清空附件状态，减少重复手动清理。
+
+**主要修复**:
+1. **手动文件索引补偿**:
+   - `addWatchPath` 对文件目标入队时标记 `manual`。
+   - 增量入库 `buildFileRecord` 新增 `manualForce` 分支：绕过扩展名白名单，仅保留基础安全过滤。
+   - 对手动补偿路径新增 console/log 输出，明确 `accepted(manual-force)` 与 `filtered(base)` 结果。
+
+2. **系统动作日志语义修正**:
+   - `file-index result` 日志改为 `{ requestPath, result }`，避免 `path` 字段被合并覆盖导致误判。
+
+3. **附件执行后自动清空**:
+   - `useSearch.handleExecute` 在执行携带 `files/image/html` 输入后自动清空附件状态。
+   - 文件模式附件执行后重置 `boxOptions.mode/file`。
+   - 剪贴板附件执行后写入 `lastClearedTimestamp` 并清空 `last/detectedAt`，避免同一条目被立即回填。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts`
+- `apps/core-app/src/main/modules/box-tool/addon/system/system-actions-provider.ts`
+- `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts`
+
+**影响**:
+- 复制/拖拽后触发“加入文件索引”可覆盖更多扩展名场景（至少保证路径级可搜索）
+- CoreBox 附件执行链路体验更符合“执行即消费”预期
+- `file-index` 调试日志更容易定位请求路径与结果路径
 
 ---
 
