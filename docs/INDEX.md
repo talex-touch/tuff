@@ -9,6 +9,8 @@
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` - v2.4.7 发版推进清单（文档进展 + 发布门禁）
 - `docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md` - Week 1 执行清单（质量基线）
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 最终目标与质量约束基线（含质量执行记录）
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md` - Pilot Chat API 与 SSE/恢复语义契约
+- `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md` - Pilot 下一阶段执行文档（测试优先 + OAuth + CLI + channel routing）
 - `docs/` - 仓库文档（分析、事故报告、集成指南）
 
 ## 状态快照（压缩版，代码核对）
@@ -18,6 +20,8 @@
 - 2026-02 新增：Nexus 业务场景完成 15 处 `TxFlipOverlay -> FlipDialog` 迁移，统一 reference/source 隐藏恢复与 `size=md/lg/xl` 宽弹框策略；`pages/test` 与 `content/demos` 继续保留 `TxFlipOverlay` 作为测试/演示边界。
 - 2026-02 新增：Intelligence Agent 一次切换（Nexus + Core-App）完成 `intelligence-agent` 命名空间上线；旧 `intelligence-lab` 路由统一返回 `410`；Prompt Registry（registry + binding）完成 schema 对齐与默认提示词落库引导；`session/stream` 主链切换 LangGraph 五阶段状态机并提供 Prompt Registry 管理 API/UI。
 - 2026-03 新增：OmniPanel 进入 40 点推进批次，已落地默认加载、执行门禁去除、错误码与刷新原因收敛、键盘交互、组件拆分与主/渲定向单测（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）。
+- 2026-03 新增：Pilot（`apps/pilot`）完成首版 Chat-first 落地（会话 API + SSE + `fromSeq` 补播 + Trace 抽屉），并将 Intelligence 核心类型/Runtime 收口到 `packages/tuff-intelligence`（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
+- 2026-03 新增：Pilot 下一阶段执行文档落地，明确“测试优先 -> Nexus OAuth -> tuff-pilot-cli -> 后端渠道可配置”的硬顺序（`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`）。
 - 2026-02 新增：发布链路收敛到 `build-and-release.yml`（失败不再创建 Release），并增加 Nexus release 自动同步、CLI 四包 npm 自动发布；官网部署改由 Cloudflare Pages 平台侧 Git 自动部署（仓库不再维护 `nexus-deploy.yml`）。
 - 2026-02 新增：Nexus 汇率服务（USD 基准换算 + D1 历史快照 + telemetry 错误归档），入口 `/api/exchange/convert`；高级历史查询 `/api/exchange/history`
 - 已完成（指南/报告）：`docs/updates-module.md`; `docs/search-logger-lifecycle-analysis.md`; `docs/clipboard-mechanism-analysis.md`; `docs/script-native-build-distribution.md`; `docs/script-native-constraints.md`; `docs/analytics-data-prd.md`; `docs/everything-integration.md`; `docs/engineering/everything-sdk-rollout-status.md`; `docs/engineering/audits/*`; `docs/engineering/optimization/*`; `docs/engineering/ci-cd/*`; `docs/engineering/typecheck/*`; `docs/engineering/reports/*`; `docs/engineering/notes/*`; `docs/engineering/monorepo-standards.md`; `docs/plan-prd/docs/build-strategy.md`; `docs/plan-prd/docs/github-automation.zh-CN.md`; `docs/plan-prd/04-implementation/QualityAnalysis260111.md`; `docs/plan-prd/04-implementation/Quality260111.md`; `docs/plan-prd/04-implementation/performance/PERFORMANCE_REFERENCE.md`; `docs/plan-prd/05-archive/*`

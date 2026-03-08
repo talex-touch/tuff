@@ -79,6 +79,25 @@
 - `packages/tuffex/packages/components/src/chat/index.ts`
 - `docs/plan-prd/01-project/CHANGES.md`
 
+### Pilot: 聊天页空态与底部输入区视觉修正
+
+**变更类型**: UI 缺陷修复 / 体验一致性优化
+
+**描述**:
+- 修复 Pilot 聊天页“视觉怪异”问题：消息空态由 `blank-slate` 插画改为 `custom + card` 轻量空态，避免大插画在主聊天区造成视觉突兀。
+- 收敛底部输入区层次：降低透明叠层感，增强 Composer 与工具按钮对比度，保留“附件 + 输入一体化”结构。
+- Trace 抽屉内部滚动行为补齐：右侧 Trace 内容区改为独立滚动，避免内容增长时影响整体布局观感。
+
+**主要变更**:
+1. 消息区空态替换为 `TxEmptyState(variant=custom, surface=card)`，并限制空态区域宽度与居中布局。
+2. 聊天区消息容器增加 `overflow: hidden`，继续保证“整页不滚动、仅局部滚动”。
+3. 底部 Dock 与 `TxChatComposer` 背景/边框/阴影调优，工具栏与按钮增加 hover/对比度优化。
+4. Trace 内容区增加 `flex: 1 + overflow: auto`，确保抽屉内滚动稳定。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Pilot: 渠道配置极简化（仅 BASE_URL + API_KEY）与读取修复
 
 **变更类型**: 配置收敛 / 缺陷修复

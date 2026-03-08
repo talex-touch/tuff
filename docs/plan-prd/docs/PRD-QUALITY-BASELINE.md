@@ -1,6 +1,6 @@
 # PRD 最终目标与质量约束基线
 
-> 更新时间：2026-02-26  
+> 更新时间：2026-03-07  
 > 适用范围：`docs/plan-prd/02-architecture`、`docs/plan-prd/03-features`、`docs/plan-prd/04-implementation`、`docs/plan-prd/06-ecosystem`
 
 ## 1. 目的
@@ -124,7 +124,7 @@
 | Trace 合约版本 | `contractVersion = 3` | 已升级 |
 
 **质量约束落地**
-- 高频会话链路必须包含 `heartbeat/pause/recoverable/history/trace` 的显式 API。
+- 高频会话链路必须包含 `SSE stream.heartbeat / pause / recoverable / history / trace` 的显式契约能力（其中 heartbeat 通过流内事件提供，不再单独开放 API）。
 - Prompt 渲染来源必须优先走 registry binding，缺失时允许回退并记录可迁移默认值。
 - 高风险工具调用必须走审批票据，不得绕过 `high/critical` 审批门禁。
 
@@ -143,3 +143,20 @@
 - 发布前必须完成 Gate C（阻塞级 lint/typecheck 清零或豁免清单显式备案）。
 - 发布资产必须满足多语言结构约束（`notes`/`notesHtml` 仅 `zh|en`）。
 - 发布执行以 `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` 作为单一追踪入口，避免口径分叉。
+
+### 6.5 Pilot × Intelligence（2026-03-07）
+
+**现状指标**
+| 项目 | 结果 | 结论 |
+| --- | --- | --- |
+| 新应用 | `apps/pilot`（Nuxt + Cloudflare Pages） | 已创建 |
+| Runtime 收口 | `packages/tuff-intelligence`（protocol/runtime/registry/policy/store） | 已落地 |
+| 流式 API | `POST /api/pilot/chat/sessions/:sessionId/stream` | 已上线 |
+| 事件契约 | `assistant.delta/final`、`run.metrics`、`session.paused`、`error`、`done` | 已实现 |
+| 补播机制 | `fromSeq` trace replay + checkpoint | 已实现（基础版） |
+| 校验 | `apps/pilot` lint/typecheck/build | 已通过 |
+
+**质量约束落地**
+- 长对话必须具备 pause/resume 语义，断线场景不得“吞消息”。
+- SSE 必须提供 keepalive 与显式结束事件（`done`），避免前端状态悬挂。
+- 所有 Intelligence 核心类型与 Runtime 实现统一来源为 `@talex-touch/tuff-intelligence`，禁止新增 `@talex-touch/utils/intelligence*` 外部依赖。
