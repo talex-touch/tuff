@@ -1,4 +1,5 @@
 import type {
+  ChatComposerAttachment,
   ChatComposerEmits,
   ChatComposerProps,
   ChatListProps,
@@ -29,6 +30,7 @@ export {
   TypingIndicator,
 }
 export type {
+  ChatComposerAttachment,
   ChatComposerEmits,
   ChatComposerProps,
   ChatListProps,

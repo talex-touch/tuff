@@ -41,11 +41,23 @@ export interface ChatComposerProps {
   maxRows?: number
   sendOnEnter?: boolean
   sendOnMetaEnter?: boolean
+  sendButtonText?: string
+  showAttachmentButton?: boolean
+  attachmentButtonText?: string
+  attachments?: ChatComposerAttachment[]
+}
+
+export interface ChatComposerAttachment {
+  id: string
+  label: string
+  kind?: string
+  pending?: boolean
 }
 
 export interface ChatComposerEmits {
   (e: 'update:modelValue', value: string): void
   (e: 'send', payload: { text: string }): void
+  (e: 'attachmentClick'): void
   (e: 'focus', event: FocusEvent): void
   (e: 'blur', event: FocusEvent): void
 }

@@ -1,0 +1,30 @@
+{
+  "name": "@talex-touch/tuff-pilot",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev": "node ./scripts/dev.mjs",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "preview:cf": "pnpm build && npx wrangler pages dev dist --compatibility-date=2024-08-14",
+    "deploy:cf": "pnpm build && npx wrangler pages deploy dist",
+    "lint": "eslint .",
+    "lint:fix": "eslint --fix .",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@talex-touch/tuff-intelligence": "workspace:*",
+    "@talex-touch/tuffex": "workspace:*",
+    "nuxt": "catalog:build",
+    "vue": "catalog:frontend"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:dev",
+    "@cloudflare/workers-types": "catalog:dev",
+    "eslint": "catalog:dev",
+    "typescript": "catalog:dev",
+    "wrangler": "catalog:dev"
+  }
+}
