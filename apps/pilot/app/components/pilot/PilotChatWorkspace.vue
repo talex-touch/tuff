@@ -13,8 +13,6 @@ import { computed, ref } from 'vue'
 
 interface PilotChatWorkspaceProps {
   activeSessionId: string
-  activeSessionTitle: string
-  activeSessionTitleLoading: boolean
   running: boolean
   loadingMessages: boolean
   messages: ChatMessageModel[]
@@ -77,21 +75,18 @@ function onAttachmentSelected(event: Event) {
 <template>
   <main class="pilot-chat">
     <div class="pilot-chat__shell">
-      <header class="pilot-chat__header">
-        <div class="pilot-chat__title">
-          <h1>{{ props.activeSessionTitle }}</h1>
-          <p>{{ props.activeSessionId ? `Session: ${props.activeSessionId}` : '未选择会话' }}</p>
-          <p v-if="props.activeSessionTitleLoading">
-            AI 正在为当前会话命名...
-          </p>
-        </div>
-
-        <div class="pilot-chat__actions">
-          <TxButton size="small" variant="secondary" :disabled="!props.activeSessionId" @click="traceVisible = true">
-            展开 Trace
-          </TxButton>
-        </div>
-      </header>
+      <div class="pilot-chat__toolbar">
+        <TxButton
+          class="pilot-chat__trace-trigger"
+          size="small"
+          variant="ghost"
+          circle
+          icon="i-carbon-debug"
+          :disabled="!props.activeSessionId"
+          aria-label="展开 Trace"
+          @click="traceVisible = true"
+        />
+      </div>
 
       <section class="pilot-chat__messages">
         <TxEmptyState
@@ -202,9 +197,7 @@ function onAttachmentSelected(event: Event) {
 .pilot-chat {
   min-height: 0;
   display: flex;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: clamp(10px, 1.4vw, 20px) clamp(14px, 2.4vw, 32px) clamp(8px, 1.1vw, 14px);
+  overflow: hidden;
 }
 
 .pilot-chat__shell {
@@ -212,36 +205,23 @@ function onAttachmentSelected(event: Event) {
   min-height: 0;
   height: 100%;
   min-block-size: 100%;
-  width: min(100%, clamp(760px, 74vw, 980px));
-  margin-inline: auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
+  padding: 0;
 }
 
-.pilot-chat__header {
+.pilot-chat__toolbar {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color) 72%, transparent);
+  justify-content: flex-end;
+  padding: 8px 10px 0;
 }
 
-.pilot-chat__title h1 {
-  margin: 0;
-  font-size: clamp(18px, 1.65vw, 22px);
-  line-height: 1.2;
+.pilot-chat__trace-trigger {
+  flex-shrink: 0;
 }
 
-.pilot-chat__title p,
-.pilot-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--tx-text-color-secondary);
-}
-
-.pilot-chat__actions,
 .pilot-trace-item__meta,
 .pilot-trace-item__status {
   display: flex;
@@ -268,7 +248,6 @@ function onAttachmentSelected(event: Event) {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
 }
 
 .pilot-chat__message-list :deep(.tx-chat-message__bubble) {
@@ -318,6 +297,12 @@ function onAttachmentSelected(event: Event) {
   font-size: 12px;
   max-height: 96px;
   overflow: auto;
+}
+
+.pilot-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
 }
 
 .pilot-trace {
@@ -457,20 +442,14 @@ function onAttachmentSelected(event: Event) {
   }
 }
 
-@media (max-width: 1200px) {
-  .pilot-chat__shell {
-    width: min(100%, 860px);
-  }
-}
-
 @media (max-width: 960px) {
-  .pilot-chat {
-    padding: 10px 12px 8px;
-  }
-
   .pilot-chat__shell {
     width: 100%;
-    gap: 8px;
+    gap: 6px;
+  }
+
+  .pilot-chat__toolbar {
+    padding: 8px 8px 0;
   }
 
   .pilot-chat :deep(.tx-drawer__panel) {
