@@ -256,17 +256,23 @@ export function usePilotChatPage() {
         notifyUnread: notificationMap.get(item.sessionId) ?? Boolean(item.notifyUnread),
       }))
 
+      let nextActiveSessionId = activeSessionId.value
       const preferred = preferSessionId && sessions.value.some(item => item.sessionId === preferSessionId)
         ? preferSessionId
         : ''
 
       if (preferred) {
-        activeSessionId.value = preferred
-        return
+        nextActiveSessionId = preferred
+      }
+      else if (!nextActiveSessionId || !sessions.value.some(item => item.sessionId === nextActiveSessionId)) {
+        nextActiveSessionId = sessions.value[0]?.sessionId || ''
       }
 
-      if (!activeSessionId.value || !sessions.value.some(item => item.sessionId === activeSessionId.value)) {
-        activeSessionId.value = sessions.value[0]?.sessionId || ''
+      activeSessionId.value = nextActiveSessionId
+
+      // Active session should not show unread dot.
+      if (nextActiveSessionId) {
+        void markSessionNotificationRead(nextActiveSessionId)
       }
     }
     finally {

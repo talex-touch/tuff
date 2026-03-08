@@ -30,6 +30,14 @@ function envString(...keys: string[]): string {
   return firstDefined(...values) || ''
 }
 
+function envBoolean(keys: string[], fallback: boolean): boolean {
+  const value = envString(...keys).toLowerCase()
+  if (!value) {
+    return fallback
+  }
+  return ['1', 'true', 'yes', 'on'].includes(value)
+}
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
   compatibilityDate: '2026-03-08',
@@ -74,8 +82,8 @@ export default defineNuxtConfig({
       ? {
           cloudflareDev: {
             environment: process.env.CLOUDFLARE_DEV_ENVIRONMENT,
-            configPath: resolve(workspaceRoot, 'wrangler.toml'),
-            persistDir: resolve(workspaceRoot, '.wrangler/state/v3'),
+            configPath: resolve(workspaceRoot, 'apps/pilot/wrangler.toml'),
+            persistDir: resolve(workspaceRoot, '.wrangler/state/v3/pilot'),
           },
         }
       : {}),
@@ -84,9 +92,18 @@ export default defineNuxtConfig({
     pilot: {
       baseUrl: envString('NUXT_PILOT_BASE_URL'),
       apiKey: envString('NUXT_PILOT_API_KEY'),
+      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN'),
+      nexusInternalOrigin: envString('PILOT_NEXUS_INTERNAL_ORIGIN', 'NUXT_PUBLIC_NEXUS_ORIGIN'),
+      nexusBridgeSecret: envString('PILOT_NEXUS_BRIDGE_SECRET'),
+      cookieSecret: envString('PILOT_COOKIE_SECRET'),
+      sessionCookieMaxAgeSec: Number(envString('PILOT_SESSION_COOKIE_MAX_AGE_SEC') || 86_400),
+      allowLegacyHeaderAuth: envBoolean(['PILOT_ALLOW_LEGACY_HEADER_AUTH'], !!isDev),
+      allowLegacyBearerAuth: envBoolean(['PILOT_ALLOW_LEGACY_BEARER_AUTH'], !!isDev),
+      allowLegacyCookieAuth: envBoolean(['PILOT_ALLOW_LEGACY_COOKIE_AUTH'], true),
     },
     public: {
       pilotTitle: 'Tuff Pilot',
+      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN'),
     },
   },
 })

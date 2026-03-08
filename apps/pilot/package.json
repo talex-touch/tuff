@@ -8,11 +8,13 @@
     "dev": "node ./scripts/dev.mjs",
     "build": "nuxt build",
     "preview": "nuxt preview",
-    "preview:cf": "pnpm build && npx wrangler pages dev dist --compatibility-date=2024-08-14",
-    "deploy:cf": "pnpm build && npx wrangler pages deploy dist",
+    "cf:whoami": "npx wrangler whoami --config ./wrangler.toml",
+    "preview:cf": "pnpm build && npx wrangler pages dev dist --config ./wrangler.toml --compatibility-date=2024-09-23",
+    "deploy:cf": "pnpm build && npx wrangler pages deploy dist --config ./wrangler.toml --project-name tuff-pilot-test",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run -c ./vitest.config.ts"
   },
   "dependencies": {
     "@talex-touch/tuff-intelligence": "workspace:*",

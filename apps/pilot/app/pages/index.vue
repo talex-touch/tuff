@@ -69,11 +69,23 @@ const {
   grid-template-columns: clamp(248px, 19vw, 292px) minmax(0, 1fr);
   height: 100dvh;
   overflow: hidden;
-  background: radial-gradient(circle at 8% 8%, #ffe39f 0%, transparent 42%),
-    radial-gradient(circle at 92% 0%, #97ddff 0%, transparent 35%),
-    linear-gradient(160deg, #f5f8ff 0%, #fff9f0 100%);
-  color: #10203a;
-  font-family: 'Avenir Next', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  background: radial-gradient(
+      circle at 8% 8%,
+      color-mix(in srgb, var(--tx-color-warning-light-5) 48%, transparent) 0%,
+      transparent 42%
+    ),
+    radial-gradient(
+      circle at 92% 0%,
+      color-mix(in srgb, var(--tx-color-primary-light-5) 46%, transparent) 0%,
+      transparent 35%
+    ),
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--tx-bg-color-page) 82%, var(--tx-fill-color-light)) 0%,
+      color-mix(in srgb, var(--tx-bg-color-page) 70%, var(--tx-fill-color-lighter)) 100%
+    );
+  color: var(--tx-text-color-primary);
+  font-family: var(--tx-font-family);
 }
 
 @media (max-width: 960px) {
