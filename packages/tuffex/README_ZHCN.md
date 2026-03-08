@@ -2,259 +2,83 @@
 
 <p align="center">
   <img src="https://img.shields.io/npm/v/@talex-touch/tuffex?style=flat-square&logo=npm&color=ff6b6b" alt="NPM Version">
-  <img src="https://img.shields.io/badge/status-beta-orange?style=flat-square" alt="Beta Status">
-  <img src="https://img.shields.io/badge/Vue-3.x-4fc08d?style=flat-square&logo=vue.js" alt="Vue 3">
-  <img src="https://img.shields.io/badge/TypeScript-5.x-3178c6?style=flat-square&logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/github/license/talex-touch/tuff?style=flat-square" alt="License">
-  <img src="https://img.shields.io/badge/bundle%20size-<50kb-brightgreen?style=flat-square" alt="Bundle Size">
-  <img src="https://img.shields.io/badge/tree%20shaking-✓-success?style=flat-square" alt="Tree Shaking">
+  <img src="https://img.shields.io/badge/Vue-3.5+-4fc08d?style=flat-square&logo=vue.js" alt="Vue 3.5+">
+  <img src="https://img.shields.io/badge/tree%20shaking-%E2%9C%93-success?style=flat-square" alt="Tree Shaking">
 </p>
 
-<p align="center">
-  <strong>🎭 可触摸的美丽动效 · 生动如生命般的组件库</strong>
-</p>
+TuffEx 是 Tuff 生态中的 Vue 3 组件库，重点在触感交互、动效和桌面风格 UI 组合能力。
 
-<p align="center">
-  一个专注于<strong>触感体验</strong>和<strong>流畅动效</strong>的现代化 Vue3 组件库<br/>
-  让每一次交互都充满生命力，为用户带来前所未有的沉浸式体验
-</p>
-
-<p align="center">
-  <a href="#快速开始">快速开始</a> ·
-  <a href="#组件预览">组件预览</a> ·
-  <a href="#设计理念">设计理念</a> ·
-  <a href="#技术架构">技术架构</a> ·
-  <a href="#文档">在线文档</a>
-</p>
-
-<p align="center">
-  <a href="README.md">English</a> | <strong>简体中文</strong>
-</p>
-
----
-
-## ✨ 核心特性
-
-**🎭 生动触感体验**
-通过精密物理引擎实现生命般的触摸反馈。弹性响应和阻尼效果让每次交互都自然生动。
-
-**🌊 丝滑动效系统**
-基于贝塞尔曲线和物理动画的 60fps 流畅体验。智能缓动根据交互强度自适应，确保视觉连贯性。
-
-**💎 现代视觉语言**
-玻璃态美学配合毛玻璃效果、动态光影和材质模拟，为数字界面带来真实质感。
-
-**⚡ 性能优化**
-Vue3 Composition API 配合 Tree Shaking 支持，减少 50%+ 包体积。虚拟化渲染和智能缓存确保稳定性。
-
-**🎨 企业级设计系统**
-完整 Design Tokens 体系支持无缝主题切换。遵循 WCAG 2.1 AA 无障碍标准，美观且包容。
-
-**📱 跨平台就绪**
-响应式设计适配所有设备。PWA 和 SSR 友好，一套代码适配全平台。
-
-## 🚀 快速开始
-
-### 📦 安装
-
-选择您喜欢的包管理器：
+## 安装
 
 ```bash
-# npm
-npm install @talex-touch/tuffex
-
-# yarn
-yarn add @talex-touch/tuffex
-
-# pnpm (推荐)
 pnpm add @talex-touch/tuffex
 ```
 
-### 🔧 完整引入
+## 使用方式
 
-```typescript
+### 完整引入
+
+```ts
 import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuffex'
+import TuffEx from '@talex-touch/tuffex'
 import '@talex-touch/tuffex/style.css'
 
 const app = createApp(App)
-app.use(TuffUI)
-app.mount('#app')
+app.use(TuffEx)
 ```
 
-### 🎯 按需引入 (推荐)
+### 按需引入
 
-```typescript
+```ts
 import { createApp } from 'vue'
-import { TxButton, TxAvatar } from '@talex-touch/tuffex'
+import { TxButton, TxCard, TxDrawer } from '@talex-touch/tuffex'
 import '@talex-touch/tuffex/style.css'
 
 const app = createApp(App)
 app.use(TxButton)
-app.use(TxAvatar)
+app.use(TxCard)
+app.use(TxDrawer)
 ```
 
-### 🎨 自定义主题 (暂不支持)
+### 工具函数
 
-```typescript
-import { createApp } from 'vue'
-import TuffUI from '@talex-touch/tuffex'
-import '@talex-touch/tuffex/style.css'
-
-const app = createApp(App)
-
-// 自定义主题配置
-app.use(TuffUI, {
-  theme: {
-    primaryColor: '#6366f1',
-    borderRadius: '12px',
-    animationDuration: '0.3s'
-  }
-})
+```ts
+import { createToastManager, useVibrate } from '@talex-touch/tuffex/utils'
 ```
 
-### 💡 快速体验
+## 组件梳理
 
-```vue
-<template>
-  <div class="demo">
-    <!-- 触感按钮 -->
-    <TxButton type="primary" @click="handleClick">
-      点击感受触感
-    </TxButton>
+当前源码导出模块总数：**102**。
 
-    <!-- 流动头像 -->
-    <TxAvatar
-      src="https://example.com/avatar.jpg"
-      size="large"
-      glow
-    />
+- `基础与导航 (19)`: `alert`, `avatar`, `badge`, `base-anchor`, `base-surface`, `breadcrumb`, `button`, `corner-overlay`, `icon`, `nav-bar`, `outline-border`, `status-badge`, `tab-bar`, `tabs`, `tag`, `tooltip`, `popover`, `dropdown-menu`, `context-menu`
+- `表单与输入 (22)`: `cascader`, `checkbox`, `code-editor`, `date-picker`, `flat-button`, `flat-input`, `flat-radio`, `flat-select`, `form`, `input`, `picker`, `radio`, `rating`, `search-input`, `search-select`, `segmented-slider`, `select`, `slider`, `switch`, `tag-input`, `tree-select`, `transfer`
+- `布局与结构 (12)`: `agents`, `auto-sizer`, `card-item`, `container`, `flex`, `grid`, `grid-layout`, `group-block`, `scroll`, `splitter`, `stack`, `virtual-list`
+- `数据与状态 (21)`: `blank-slate`, `card`, `collapse`, `data-table`, `empty`, `empty-state`, `error-state`, `guide-state`, `layout-skeleton`, `loading-state`, `markdown-view`, `no-data`, `no-selection`, `offline-state`, `pagination`, `permission-state`, `search-empty`, `stat-card`, `steps`, `timeline`, `tree`
+- `反馈与浮层 (12)`: `command-palette`, `dialog`, `drawer`, `flip-overlay`, `floating`, `loading-overlay`, `modal`, `progress`, `progress-bar`, `skeleton`, `spinner`, `toast`
+- `AI 与内容 (4)`: `chat`, `file-uploader`, `image-gallery`, `image-uploader`
+- `动效与视觉 (12)`: `edge-fade-mask`, `fusion`, `glass-surface`, `glow-text`, `gradient-border`, `gradual-blur`, `keyframe-stroke-text`, `sortable-list`, `stagger`, `text-transformer`, `transition`, `tuff-logo-stroke`
 
-    <!-- 玻璃卡片 -->
-    <TxCard glass blur>
-      <h3>TuffEx</h3>
-      <p>让每一次交互都充满生命力</p>
-    </TxCard>
-  </div>
-</template>
+参考来源：
 
-<script setup>
-const handleClick = () => {
-  console.log('感受到了吗？这就是 TuffEx ！')
-}
-</script>
-```
+- 导出入口：`packages/components/src/components.ts`
+- 文档索引：[docs/components/index.md](./docs/components/index.md)
 
-## 🎯 设计理念
+## 导出约定
 
-TuffEx 体现了一种**交互哲学** —— 界面应该充满生命力，温暖地响应用户。
+- 推荐使用 `Tx*` 命名导出，例如 `TxButton`、`TxDialog`。
+- 部分模块保留兼容别名（例如同一模块同时导出 `Button` / `TxButton`）。
+- 类型定义可直接从 `@talex-touch/tuffex` 导入。
 
-**触感至上** - 通过温暖的质感反馈系统让每次交互都有灵魂。
-**生命力** - 组件会呼吸、表达情感，并预测用户意图。
-**流动美学** - 功能性动画引导用户，保持视觉连贯性。
-**质感体验** - 数字界面应拥有真实的材质感受和纹理。
+## 文档
 
-## 🎨 组件生态
+- 在线文档：[tuffex.tagzxia.com/docs/dev/tuffex](https://tuffex.tagzxia.com/docs/dev/tuffex)
+- 本地文档：`pnpm -C "packages/tuffex" run docs:dev`
 
-> 🚧 **Beta 版本** - 当前为 Beta 测试版，更多组件即将推出！
-
-### 基础组件
-- **TxButton** - 具有弹性反馈和涟漪效果的触感按钮
-- **TxAvatar** - 拥有动态光晕和呼吸效果的流动头像
-- **TxForm** - 实时验证的丝滑表单交互体验
-
-### 布局组件
-- **TxCard** - 多层次阴影系统的玻璃态卡片
-- **TxContainer** - 智能栅格系统的流体容器
-
-### 交互组件
-- **TxSlider** - 具有阻尼效果的物理反馈滑块
-- **TxSwitch** - 液体般流动效果的切换开关
-
-### 数据展示
-- **TxChart** - 渐进式入场动画的动态图表
-
-### 反馈组件
-- **TxToast** - 智能定位的情感化消息提示
-
-*🚀 更多组件正在积极开发中...*
-
-## 🏗️ 技术架构
-
-基于现代前端技术栈构建，确保高性能和可维护性：
-
-- **Vue 3.4+** 配合 Composition API 和 `<script setup>`
-- **TypeScript 5.x** 提供完整类型安全
-- **Vite 5.x** 实现极速开发体验
-- **Vitest** 现代化单元测试
-- **CSS Variables** 支持动态主题
-- **Tree Shaking** 优化包体积
-
-## 📖 文档
-
-- **[在线文档](https://tuffex.tagzxia.com/docs/dev/tuffex)** - 完整的组件文档和 API 参考
-- **[在线演示](https://tuffex.tagzxia.com/docs/dev/tuffex/playground)** - 交互式组件演示
-- **[设计系统](https://tuffex.tagzxia.com/docs/dev/tuffex/design)** - 设计令牌和指南
-
-## 🛠️ 开发
+## 开发
 
 ```bash
-# 克隆和设置
-git clone https://github.com/talex-touch/tuff.git
-cd tuff
 pnpm install
-
-# 开发
-pnpm docs:dev          # 启动文档服务器
-pnpm test              # 运行测试
-pnpm build             # 构建库
-pnpm docs:build        # 构建文档
+pnpm -C "packages/tuffex" run lint
+pnpm -C "packages/tuffex" run build
+pnpm -C "packages/tuffex" run docs:build
 ```
-
-## 🗂️ 项目结构
-
-本仓库是 pnpm monorepo，TuffEx 位于 `packages/tuffex`。
-
-```
-talex-touch/tuff
-├── apps/               # 应用（Electron、Nexus 等）
-├── packages/
-│   ├── tuffex/         # TuffEx 包（本目录）
-│   │   ├── packages/components/   # 组件源码
-│   │   ├── packages/script/       # 构建脚本（gulp/vite）
-│   │   ├── docs/                  # VitePress 文档
-│   │   └── utils/                 # 脚手架工具
-│   └── utils/          # 通用工具包
-├── plugins/            # 示例插件
-└── docs/               # 仓库级文档
-```
-
-## 🤝 参与贡献
-
-我们欢迎所有形式的贡献！请阅读我们的 [贡献指南](CONTRIBUTING.md) 了解详情。
-
-- 🐛 [报告问题](https://github.com/talex-touch/tuff/issues)
-- 💡 [功能建议](https://github.com/talex-touch/tuff/discussions)
-- 🔧 [提交 PR](https://github.com/talex-touch/tuff/pulls)
-
-## 📄 开源协议
-
-[MIT License](LICENSE) © 2025 TalexDreamSoul
-
----
-
-<p align="center">
-  <img src="https://i.imgur.com/pd3YUxf.png" width="120" height="120" alt="TuffEx Logo">
-</p>
-
-<p align="center">
-  <strong>🎭 让每一次触摸都充满生命力</strong><br/>
-  <em>TuffEx - 可触摸的美丽动效</em>
-</p>
-
-<p align="center">
-  <a href="https://tuffex.tagzxia.com/docs/dev/tuffex">📖 文档</a> ·
-  <a href="https://github.com/talex-touch/tuff/tree/master/packages/tuffex">⭐ GitHub</a> ·
-  <a href="https://www.npmjs.com/package/@talex-touch/tuffex">📦 NPM</a> ·
-  <a href="https://github.com/talex-touch/tuff/discussions">💬 讨论</a>
-</p>
