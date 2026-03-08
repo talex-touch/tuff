@@ -4,6 +4,90 @@
 
 ## 2026-03-08
 
+### Pilot: DeepAgent 真增量流式渲染修复 + Legacy 兼容梳理
+
+**变更类型**: 流式体验修复 / 兼容治理
+
+**描述**:
+- 修复 Pilot “回答需等待全部生成后才一次性渲染”的问题：
+  - `DeepAgentLangChainEngineAdapter` 新增 `runStream()`，通过 `deepagents` 的 LangGraph `streamMode: 'messages'` 持续产出 assistant 增量片段。
+  - `AbstractAgentRuntime` 支持优先消费 `engine.runStream()`，保持老 `run()` 路径兼容回退。
+  - 当上游流式不可用时自动回退到原 `run()` 单次输出，避免破坏既有运行链路。
+- 前端补齐 `assistant.final` 去重拼接策略，避免“增量 + final”双写造成内容重复。
+- 形成本轮 Legacy 兼容面清单（旧接口保留 + 新接口补齐）：
+  - 旧 `intelligence:agent:session:stream` 继续保留查询语义。
+  - 新 `intelligence:agent:session:subscribe` 承担实时推流。
+  - trace `seq` 与 `fromSeq` 续播保持向后兼容（老 trace 无 `seq` 自动补齐）。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/adapters/engine.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Intelligence × Pilot: 会话流式推送统一（兼容版）
+
+**变更类型**: 架构收敛 / 流式能力增强
+
+**描述**:
+- 保持 `intelligence:agent:session:stream` 兼容语义（一次性 trace 查询）不变。
+- 新增 `intelligence:agent:session:subscribe`，基于 Transport `stream/onStream` 提供 Core-App 侧真推流能力。
+- Core Runtime trace 增补单调 `seq`，`queryTrace(fromSeq)` 从“数组下标切片”收敛为“按 `seq` 过滤”，并兼容老会话（无 `seq` 自动补齐）。
+- 新增会话级 trace 订阅器（subscribe/unsubscribe），实时推送 trace 事件并支持断开资源释放。
+- Core stream 链路补齐生命周期事件：`stream.started`、`replay.started/finished`、`stream.heartbeat`、`done`。
+- 客户端断开时，若会话仍在运行态，自动写入 `paused_disconnect`。
+- Nexus `intelligence-agent/session/stream` keepalive 补齐 `stream.heartbeat` 事件语义（保留原有注释 heartbeat 兼容）。
+
+**修改文件**:
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.ts`
+- `apps/core-app/src/main/modules/ai/intelligence-module.ts`
+- `apps/nexus/server/api/admin/intelligence-agent/session/stream.post.ts`
+- `packages/utils/transport/sdk/domains/intelligence.ts`
+- `packages/tuff-intelligence/src/transport/sdk/domains/intelligence.ts`
+- `packages/utils/types/intelligence.ts`
+- `packages/tuff-intelligence/src/types/intelligence.ts`
+- `packages/utils/__tests__/transport-domain-sdks.test.ts`
+- `apps/core-app/src/main/modules/ai/tuff-intelligence-runtime.test.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: 组件文档页性能修复与无效导入清理
+
+**变更类型**: 性能优化 / 稳定性修复
+
+**描述**:
+- 清理 `apps/nexus/content/docs/dev/components/*.mdc` 中无效导入，移除仅包含 import 的 `<script setup>`（共 58 个组件文档文件），降低组件文档解析与首屏执行负担。
+- `DocsSidebar` 组件页元数据查询改为最小字段读取（`path/title/category/meta/syncStatus/verified`），并在 `useAsyncData.transform` 预处理 `_normalizedPath/_meta/_syncStatus`，将后续计算收敛为轻量分组与排序。
+- `docs/[...slug].vue` 代码块增强链路增加 `data-code-enhanced` 幂等标记，并收敛为单次调度（timer/raf 去重 + 卸载清理），减少切页重复扫描。
+- `highlight.client.ts` 跳过 `.tuff-code-block__code` 节点并增加同帧调度去重，避免与页面内代码块高亮重复重扫。
+- `docs` 布局抽屉内容改为按需挂载（仅可见时挂载 `DocsSidebar/DocsOutline`），降低隐藏态实例开销。
+- 修复 `GradualBlurAnimatedDemo` 的 `wheel` 监听与 timeout 清理，避免 demo 组件反复挂载造成监听泄漏。
+
+**修改文件**:
+- `apps/nexus/content/docs/dev/components/*.mdc`
+- `apps/nexus/app/components/DocsSidebar.vue`
+- `apps/nexus/app/pages/docs/[...slug].vue`
+- `apps/nexus/app/plugins/highlight.client.ts`
+- `apps/nexus/app/layouts/docs.vue`
+- `apps/nexus/app/components/content/demos/GradualBlurAnimatedDemo.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 会话切换路由参数同步 + 标题溢出 Tooltip
+
+**变更类型**: 体验优化 / 导航可恢复性增强
+
+**描述**:
+- 会话切换时将当前 `sessionId` 同步到页面路径参数（query），支持刷新或分享链接后恢复到目标会话。
+- 页面初始化时优先读取路径参数中的 `sessionId`，若存在且有效则直接定位该会话。
+- 会话列表标题改为 `TxTooltip` 悬浮提示，保留单行省略（ellipsis）样式，hover 显示完整标题。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core App: 修复 tuff-intelligence 在主进程运行时的 ESM 导入失败
 
 **变更类型**: 缺陷修复 / 构建配置收敛
@@ -96,6 +180,154 @@
 
 **修改文件**:
 - `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 首页结构拆分（左侧/中间组件 + 页面 composable）
+
+**变更类型**: 架构整理 / 可维护性提升
+
+**描述**:
+- 将 Pilot 首页从单文件大组件拆分为“页面组装层 + 左侧会话组件 + 中间聊天组件 + 逻辑 composable”，降低页面耦合并便于后续迭代。
+- 保持现有行为与交互不变：双栏布局、整页不滚动、消息区独立滚动、底部输入固定、Trace 右侧抽屉。
+
+**主要变更**:
+1. 抽离左侧会话区组件 `PilotSessionsPanel`，承载会话列表渲染与交互事件。
+2. 抽离中间聊天区组件 `PilotChatWorkspace`，承载消息区、底部一体化输入、Trace 抽屉与附件选择器。
+3. 新增 `usePilotChatPage` composable，统一收敛会话状态、SSE 流处理、消息发送、附件上传、标题总结与回放逻辑。
+4. 新增 `pilot-chat.types.ts` 统一页面与组件共享类型，减少页面内联类型噪音。
+5. `index.vue` 收敛为布局组装层，仅负责连接 props / emits / v-model。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 移除聊天头部冗余控制按钮
+
+**变更类型**: 交互收敛 / 界面简化
+
+**描述**:
+- 移除右上角“补播恢复”“停止”按钮，头部仅保留 `Trace` 入口，避免与底部恢复入口重复。
+- 清理对应页面事件与 composable 中不再使用的 `stop` 流程，减少无效代码路径。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 页面版式收敛（间距清理 + 响应式比例 + 内容居中）
+
+**变更类型**: UI 布局优化 / 响应式适配
+
+**描述**:
+- 清理 Pilot 页面多余 `margin/padding`，统一左右栏与聊天区间距节奏，降低视觉拥挤与空洞并存问题。
+- 左右栏比例调整为更接近 ChatGPT 的宽度关系：左侧固定范围收敛，右侧主区域获得更稳定的阅读空间。
+- 右侧聊天区新增居中壳层并限制最大宽度，兼容大屏与中屏，避免内容“贴边拉长”。
+
+**主要变更**:
+1. `pilot-page` 网格列调整为 `clamp(248px, 19vw, 292px) + 1fr`。
+2. `PilotChatWorkspace` 新增 `pilot-chat__shell`，右侧内容采用 `margin-inline: auto` 居中并设置最大宽度限制。
+3. 聊天区与会话区统一收敛内边距、间距和卡片密度，减少多余空白。
+4. 补充 `1200px / 960px` 响应式细化，确保不同屏幕下布局稳定。
+
+**修改文件**:
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 输入区收敛（底部锚定 + 隐藏预留功能按钮）
+
+**变更类型**: 交互优化 / 功能收敛
+
+**描述**:
+- 修复输入区视觉与布局问题：输入框高度收敛、底部区域稳定锚定，避免输入区显得“过高/漂浮”。
+- 底部预留能力按钮暂时隐藏：移除 `Pro/Search/Mic/语音` 相关展示，仅保留“附件 + 发送”的核心输入能力。
+- 恢复按钮仅在 paused 状态展示，常态下不再占位，保证输入区贴底观感。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Composer 紧凑化修正（高度与底部贴合）
+
+**变更类型**: UI 缺陷修复 / 版式修正
+
+**描述**:
+- 针对输入区仍显过高的问题，进一步收敛 `TxChatComposer` 的内边距、间距与 textarea 初始高度。
+- 聊天壳层补充 `height: 100%`，确保输入区在不同屏幕下稳定贴底。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧会话区文本化展示
+
+**变更类型**: UI 收敛 / 信息层级简化
+
+**描述**:
+- 按需求将左侧会话区调整为纯文本表达，移除状态徽章组件展示。
+- 会话列表由卡片样式收敛为文本行样式，仅保留标题、状态文本、更新时间与会话元信息。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧列表状态文案精简与边框语义
+
+**变更类型**: UI 规则收敛
+
+**描述**:
+- 左侧会话列表不再显示 `id` 和状态文案（如 `completed`），保持纯文本列表简洁性。
+- 状态反馈改为边框语义：
+  - `failed` 使用红色边框；
+  - `completed` 使用蓝色边框。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 左侧列表极简化（隐藏时间 + 尾部状态点 + Hover 删除）
+
+**变更类型**: UI 细节优化
+
+**描述**:
+- 左侧会话列表进一步简化，不再展示时间信息。
+- 默认无边框；状态反馈由边框改为尾部指示点：
+  - `completed` 显示蓝色点；
+  - `failed` 显示红色点。
+- 删除按钮改为仅在列表项 hover/focus 时显示，常态下不干扰文本阅读。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 会话完成通知蓝点（独立通知接口）
+
+**变更类型**: 功能增强 / 交互语义修正
+
+**描述**:
+- 蓝点语义调整为“通知”而非状态：仅在“用户发起新消息并完成后”置位。
+- 新增独立通知接口用于读取/清除会话通知状态，前端不再依赖会话状态文案推断蓝点。
+- 左侧列表蓝点改为读取通知字段；点击进入会话后调用通知接口清除蓝点。
+
+**新增接口**:
+- `GET /api/pilot/chat/sessions/notifications`
+- `POST /api/pilot/chat/sessions/:sessionId/notification`
+
+**修改文件**:
+- `packages/tuff-intelligence/src/store/store-adapter.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/notifications.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/notification.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
 - `docs/plan-prd/01-project/CHANGES.md`
 
 ### Pilot: 渠道配置极简化（仅 BASE_URL + API_KEY）与读取修复
