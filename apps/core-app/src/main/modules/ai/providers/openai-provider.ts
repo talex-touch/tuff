@@ -1,4 +1,4 @@
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'

@@ -3,7 +3,7 @@ import type {
   IntelligenceIntentDetectResult,
   IntelligenceKeywordsExtractResult,
   IntelligenceSentimentAnalyzeResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 

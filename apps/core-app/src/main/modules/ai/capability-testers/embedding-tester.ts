@@ -1,4 +1,7 @@
-import type { IntelligenceInvokeResult, IntelligenceEmbeddingPayload } from '@talex-touch/utils'
+import type {
+  IntelligenceInvokeResult,
+  IntelligenceEmbeddingPayload
+} from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 

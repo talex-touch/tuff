@@ -1,7 +1,7 @@
 import type {
   IntelligenceCapabilityDescriptor,
   IntelligenceCapabilityType
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { createLogger } from '../../utils/logger'
 
 const capabilityRegistryLog = createLogger('Intelligence').child('CapabilityRegistry')

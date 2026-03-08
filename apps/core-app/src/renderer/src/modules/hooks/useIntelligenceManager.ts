@@ -1,12 +1,10 @@
 import type {
   IntelligenceGlobalConfig,
-  IntelligenceProviderConfig
-} from '@talex-touch/utils/renderer/storage'
-import type {
   IntelligenceCapabilityProviderBinding,
   IntelligenceCapabilityConfig,
+  IntelligenceProviderConfig,
   TestResult
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
 import type { ComputedRef, Ref } from 'vue'
 import { intelligenceData, intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { computed, ref, watch } from 'vue'

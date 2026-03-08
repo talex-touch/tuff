@@ -3,7 +3,7 @@ import type {
   IntelligencePromptRegistryQuery,
   IntelligencePromptScope,
   IntelligencePromptStatus,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { requireAdmin } from '../../../utils/auth'
 import { listPromptRegistry } from '../../../utils/intelligenceStore'
 

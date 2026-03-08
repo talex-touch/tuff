@@ -2,7 +2,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceCodeGenerateResult,
   IntelligenceCodeReviewResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestPayload } from './base-tester'
 import { BaseCapabilityTester } from './base-tester'
 

@@ -15,7 +15,6 @@ import {
   WindowShownEvent
 } from '../../core/eventbus/touch-event'
 import { useAliveTarget } from '../../hooks/use-electron-guard'
-import { TalexTouch } from '../../types'
 import { BaseModule } from '../abstract-base-module'
 import { getMainConfig } from '../storage'
 import { TrayIconProvider } from './tray-icon-provider'
@@ -33,6 +32,11 @@ export class TrayManager extends BaseModule {
   private appDisposers: Array<() => void> = []
   private windowDisposers: Array<() => void> = []
   private eventDisposers: Array<() => void> = []
+
+  private readonly appEmitter = app as unknown as {
+    on: (eventName: string, handler: (...args: any[]) => void) => void
+    removeListener: (eventName: string, handler: (...args: any[]) => void) => void
+  }
 
   constructor() {
     super(TrayManager.key, {
@@ -173,17 +177,22 @@ export class TrayManager extends BaseModule {
   }
 
   private registerAppListener(eventName: string, handler: (...args: any[]) => void): void {
-    app.on(eventName, handler)
+    this.appEmitter.on(eventName, handler)
     this.appDisposers.push(() => {
-      app.removeListener(eventName, handler)
+      this.appEmitter.removeListener(eventName, handler)
     })
   }
 
   private registerWindowListener(eventName: string, handler: (...args: any[]) => void): void {
     const mainWindow = $app.window.window
-    mainWindow.on(eventName, handler)
+    const windowEmitter = mainWindow as unknown as {
+      on: (eventName: string, listener: (...args: any[]) => void) => void
+      removeListener: (eventName: string, listener: (...args: any[]) => void) => void
+    }
+
+    windowEmitter.on(eventName, handler)
     this.windowDisposers.push(() => {
-      mainWindow.removeListener(eventName, handler)
+      windowEmitter.removeListener(eventName, handler)
     })
   }
 
@@ -333,7 +342,7 @@ export class TrayManager extends BaseModule {
       if (!app.dock) return
 
       app.dock.setIcon(appIconPath)
-      if ($app.version === TalexTouch.AppVersion.DEV) {
+      if ($app.version === 'dev') {
         app.dock.setBadge($app.version)
       }
     } catch (error) {

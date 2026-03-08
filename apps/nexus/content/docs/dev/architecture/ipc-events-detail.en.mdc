@@ -309,21 +309,22 @@ Implementation: `packages/utils/transport/event/builder.ts`
 - `apps/core-app/src/renderer/src/components/plugin/tabs/PluginPermissions.vue`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingPermission.vue`
 
-## 10. Tray Events
+## 10. System Settings Events (AutoStart / TraySettings)
 
-**Main handler**: `apps/core-app/src/main/modules/tray/tray-manager.ts`
+**Main handler**: `apps/core-app/src/main/channel/common.ts`
 
 | Event Key | Event Name | Main handler / emitter |
 | --- | --- | --- |
-| TrayEvents.autostart.update | `tray:autostart:update` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.autostart.get | `tray:autostart:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.show.get | `tray:show:get` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.show.set | `tray:show:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
-| TrayEvents.hideDock.set | `tray:hidedock:set` | on: `apps/core-app/src/main/modules/tray/tray-manager.ts` |
+| AppEvents.system.autoStartGet | `app:system:autostart.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.autoStartUpdate | `app:system:autostart.update` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.traySettingsGet | `app:system:tray-settings.get` | on: `apps/core-app/src/main/channel/common.ts` |
+| AppEvents.system.traySettingsUpdate | `app:system:tray-settings.update` | on: `apps/core-app/src/main/channel/common.ts` |
 
 **Renderer usage (examples)**:
 - `apps/core-app/src/renderer/src/views/base/settings/SettingSetup.vue`
 - `apps/core-app/src/renderer/src/views/base/settings/SettingWindow.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/SetupPermissions.vue`
+- `apps/core-app/src/renderer/src/views/base/begin/internal/Done.vue`
 
 ## 11. Sentry Events
 

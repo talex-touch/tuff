@@ -4,7 +4,7 @@ import type {
   IntelligencePromptRecord,
   IntelligenceMessage,
   TuffIntelligenceApprovalTicket,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { TuffInput, TxBaseSurface, TxButton, TxCard, TxCollapse, TxCollapseItem, TxGlowText, TxSkeleton, TxSpinner, TxTimeline, TxTimelineItem } from '@talex-touch/tuffex'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 

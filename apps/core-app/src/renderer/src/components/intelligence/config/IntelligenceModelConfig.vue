@@ -1,7 +1,7 @@
 <script lang="ts" name="IntelligenceModelConfig" setup>
-import type { IntelligenceProviderConfig } from '@talex-touch/utils/renderer/storage'
 import { TuffSelect, TuffSelectItem, TxButton, TxTransfer } from '@talex-touch/tuffex'
-import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, ref, watch } from 'vue'

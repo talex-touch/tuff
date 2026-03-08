@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { IntelligenceCapabilityConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceCapabilityConfig } from '@talex-touch/tuff-intelligence'
 import { computed } from 'vue'
 
 const props = defineProps<{

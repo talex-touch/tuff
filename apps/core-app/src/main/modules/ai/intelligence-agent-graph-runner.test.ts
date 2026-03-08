@@ -3,7 +3,7 @@ import type {
   TuffIntelligenceAgentSession,
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTurn
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { CoreAgentGraphRuntime } from './intelligence-agent-graph-runner'
 import { runCoreIntelligenceAgentGraph } from './intelligence-agent-graph-runner'
 

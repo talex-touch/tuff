@@ -2,8 +2,8 @@ import type {
   IntelligenceEmbeddingPayload,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult
-} from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
 
 const DEFAULT_BASE_URL = 'https://api.deepseek.com/v1'

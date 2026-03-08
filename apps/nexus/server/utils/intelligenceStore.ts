@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type {
   IntelligencePromptBinding,
   IntelligencePromptRecord,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
 import crypto from 'uncrypto'
 import { readCloudflareBindings } from './cloudflare'

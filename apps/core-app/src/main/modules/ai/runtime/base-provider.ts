@@ -55,10 +55,10 @@ import type {
   IntelligenceTTSResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import { enterPerfContext } from '../../../utils/perf-context'
 
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
 export abstract class IntelligenceProvider implements IntelligenceProviderAdapter {
   abstract readonly type: IntelligenceProviderType

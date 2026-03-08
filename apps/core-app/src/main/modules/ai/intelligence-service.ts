@@ -2,8 +2,8 @@ import type {
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
   IntelligenceProviderConfig
-} from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { genTouchApp } from '../../core'

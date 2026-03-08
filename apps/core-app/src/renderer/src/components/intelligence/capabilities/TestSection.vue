@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import type { IntelligenceProviderConfig } from '@talex-touch/utils/types/intelligence'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import type { CapabilityTestResult } from './types'
 import CapabilityTestInput from './CapabilityTestInput.vue'
 import CapabilityTestResultView from './CapabilityTestResult.vue'

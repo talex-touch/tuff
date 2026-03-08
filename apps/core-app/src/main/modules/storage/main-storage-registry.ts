@@ -1,4 +1,4 @@
-import type { IntelligenceSDKPersistedConfig } from '@talex-touch/utils'
+import type { IntelligenceSDKPersistedConfig } from '@talex-touch/tuff-intelligence'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { OpenersConfig } from '@talex-touch/utils/common/storage/entity/openers'
 import type { ShortcutSetting } from '@talex-touch/utils/common/storage/entity/shortcut-settings'

@@ -40,7 +40,6 @@ This page maps channel entry points and IPC event definitions.
 | Flow | `packages/utils/transport/events/types/flow.ts` |
 | Download | `packages/utils/transport/events/types/download.ts` |
 | Update | `packages/utils/transport/events/types/update.ts` |
-| Tray | `packages/utils/transport/events/types/tray.ts` |
 | Transport | `packages/utils/transport/events/types/transport.ts` |
 | File Index | `packages/utils/transport/events/types/file-index.ts` |
 

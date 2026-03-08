@@ -1,5 +1,5 @@
-import type { IntelligenceProviderConfig } from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 
 const DEFAULT_BASE_URLS: Partial<Record<IntelligenceProviderType, string>> = {
   [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',

@@ -1,23 +1,73 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const appMock = {
-  on: vi.fn(),
-  off: vi.fn(),
-  removeListener: vi.fn(),
-  setActivationPolicy: vi.fn(),
-  isPackaged: false,
-  dock: {
-    show: vi.fn(),
-    hide: vi.fn(),
-    setIcon: vi.fn(),
-    setBadge: vi.fn()
-  }
-}
-
-vi.mock('electron', () => ({
-  app: appMock,
-  Tray: class {}
+const { appMock, touchEventBusMock, getMainConfigMock } = vi.hoisted(() => ({
+  appMock: {
+    on: vi.fn(),
+    off: vi.fn(),
+    removeListener: vi.fn(),
+    setActivationPolicy: vi.fn(),
+    getLocale: vi.fn(() => 'en-US'),
+    isPackaged: false,
+    dock: {
+      show: vi.fn(),
+      hide: vi.fn(),
+      setIcon: vi.fn(),
+      setBadge: vi.fn()
+    }
+  },
+  touchEventBusMock: {
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn()
+  },
+  getMainConfigMock: vi.fn(() => ({
+    setup: {
+      showTray: true,
+      experimentalTray: true,
+      hideDock: false
+    },
+    window: {
+      startSilent: false
+    }
+  }))
 }))
+
+vi.mock('electron', async (importOriginal) => {
+  const original = await importOriginal<any>()
+  const electronModule = original?.default ?? original
+  const ipcMain =
+    electronModule?.ipcMain ??
+    ({
+      on: vi.fn(),
+      once: vi.fn(),
+      removeListener: vi.fn(),
+      removeAllListeners: vi.fn(),
+      handle: vi.fn(),
+      removeHandler: vi.fn()
+    } as const)
+
+  class MockMessagePortMain {
+    on = vi.fn()
+    once = vi.fn()
+    start = vi.fn()
+    close = vi.fn()
+    postMessage = vi.fn()
+    removeListener = vi.fn()
+  }
+
+  class MockMessageChannelMain {
+    port1 = new MockMessagePortMain()
+    port2 = new MockMessagePortMain()
+  }
+
+  return {
+    ...electronModule,
+    app: appMock,
+    Tray: class {},
+    ipcMain,
+    MessageChannelMain: electronModule?.MessageChannelMain ?? MockMessageChannelMain
+  }
+})
 
 vi.mock('node:process', () => ({
   default: {
@@ -30,25 +80,18 @@ vi.mock('../../core/eventbus/touch-event', async (importOriginal) => {
   const original = (await importOriginal()) as object
   return {
     ...original,
-    touchEventBus: {
-      on: vi.fn(),
-      off: vi.fn(),
-      emit: vi.fn()
-    }
+    touchEventBus: touchEventBusMock
   }
 })
 
 vi.mock('../storage', () => ({
-  getMainConfig: vi.fn(() => ({
-    setup: {
-      showTray: true,
-      experimentalTray: true,
-      hideDock: false
-    },
-    window: {
-      startSilent: false
-    }
-  }))
+  getMainConfig: getMainConfigMock
+}))
+
+vi.mock('../box-tool/core-box/manager', () => ({
+  coreBoxManager: {
+    trigger: vi.fn()
+  }
 }))
 
 import { TrayManager } from './tray-manager'

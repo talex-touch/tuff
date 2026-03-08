@@ -5,8 +5,8 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import {
   getNativeOcrSupport,
   recognizeImageText,

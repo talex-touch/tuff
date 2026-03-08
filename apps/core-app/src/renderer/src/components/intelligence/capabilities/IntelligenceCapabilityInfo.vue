@@ -3,7 +3,7 @@ import type {
   IntelligenceCapabilityProviderBinding,
   IntelligenceCapabilityConfig,
   IntelligenceProviderConfig
-} from '@talex-touch/utils/types/intelligence'
+} from '@talex-touch/tuff-intelligence'
 import type { CapabilityBinding, CapabilityTestResult } from './types'
 import { TxButton } from '@talex-touch/tuffex'
 import { useI18n } from 'vue-i18n'

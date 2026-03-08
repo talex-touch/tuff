@@ -1,4 +1,4 @@
-import type { IntelligenceMessage } from '@talex-touch/utils'
+import type { IntelligenceMessage } from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph'
 import { createAudit } from './intelligenceStore'

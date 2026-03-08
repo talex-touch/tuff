@@ -11,8 +11,8 @@ import type {
   IntelligenceVisionImageSource,
   IntelligenceVisionOcrPayload,
   IntelligenceVisionOcrResult
-} from '@talex-touch/utils'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { ChatAnthropic } from '@langchain/anthropic'
 import { extractTextContent } from './langchain-openai-compatible-provider'
@@ -258,7 +258,7 @@ export class AnthropicProvider extends IntelligenceProvider {
   }
 
   async translate(
-    payload: import('@talex-touch/utils').IntelligenceTranslatePayload,
+    payload: import('@talex-touch/tuff-intelligence').IntelligenceTranslatePayload,
     options: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<string>> {
     const chatPayload: IntelligenceChatPayload = {

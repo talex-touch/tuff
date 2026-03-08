@@ -9,7 +9,7 @@ import type {
   TuffIntelligenceStateSnapshot,
   TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { ToolExecutionContext } from './agents/tool-registry'
 import { eq, like } from 'drizzle-orm'
 import { config } from '../../db/schema'

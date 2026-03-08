@@ -1,10 +1,10 @@
 import type {
   IntelligenceMessage,
   TuffIntelligenceApprovalTicket,
-} from '@talex-touch/utils'
+} from '@talex-touch/tuff-intelligence'
 import type { H3Event } from 'h3'
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
-import { IntelligenceProviderType } from '@talex-touch/utils'
+import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
 import { getCookie, setCookie } from 'h3'
 import { getUserById, updateUserProfile } from './authStore'
 import { getCreditSummary } from './creditsStore'

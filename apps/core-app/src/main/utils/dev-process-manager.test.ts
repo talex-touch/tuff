@@ -1,16 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const appMock = {
-  isPackaged: false,
-  quit: vi.fn(),
-  on: vi.fn()
-}
+const { appMock, browserWindowMock } = vi.hoisted(() => ({
+  appMock: {
+    isPackaged: false,
+    quit: vi.fn(),
+    on: vi.fn()
+  },
+  browserWindowMock: {
+    getAllWindows: vi.fn(() => [])
+  }
+}))
 
 vi.mock('electron', () => ({
   app: appMock,
-  BrowserWindow: {
-    getAllWindows: vi.fn(() => [])
-  }
+  BrowserWindow: browserWindowMock
 }))
 
 vi.mock('./logger', () => ({
@@ -52,6 +55,7 @@ describe('DevProcessManager', () => {
 
     manager.triggerGracefulShutdown()
     await vi.advanceTimersByTimeAsync(5000)
+    await vi.advanceTimersByTimeAsync(300)
 
     expect(appMock.quit).toHaveBeenCalledTimes(1)
     expect(exitSpy).toHaveBeenCalledWith(1)

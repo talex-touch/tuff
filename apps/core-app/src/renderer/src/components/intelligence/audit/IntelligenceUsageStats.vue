@@ -1,30 +1,48 @@
 <script lang="ts" setup>
-import type { IntelligenceUsageSummary } from '@talex-touch/utils/renderer'
-import { useIntelligenceStats } from '@talex-touch/utils/renderer'
+import { createIntelligenceClient } from '@talex-touch/tuff-intelligence'
+import { useTuffTransport } from '@talex-touch/utils/transport'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+
+interface IntelligenceUsageSummary {
+  period: string
+  periodType: 'minute' | 'day' | 'month'
+  requestCount: number
+  successCount: number
+  failureCount: number
+  totalTokens: number
+  promptTokens: number
+  completionTokens: number
+  totalCost: number
+  avgLatency: number
+}
 
 const props = defineProps<{
   callerId?: string
 }>()
 
 const { t } = useI18n()
-const { getTodayStats, getMonthStats, isLoading } = useIntelligenceStats()
+const transport = useTuffTransport()
+const aiClient = createIntelligenceClient(transport)
+const isLoading = ref(false)
 
 const todayStats = ref<IntelligenceUsageSummary | null>(null)
 const monthStats = ref<IntelligenceUsageSummary | null>(null)
 
 async function loadStats() {
+  isLoading.value = true
   try {
     const [today, month] = await Promise.all([
-      getTodayStats(props.callerId),
-      getMonthStats(props.callerId)
+      aiClient.getTodayStats(props.callerId),
+      aiClient.getMonthStats(props.callerId)
     ])
     todayStats.value = today
     monthStats.value = month
   } catch {
     toast.error(t('intelligence.audit.loadStatsFailed'))
+  } finally {
+    isLoading.value = false
   }
 }
 
