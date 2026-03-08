@@ -185,6 +185,10 @@ export default defineEventHandler(async (event) => {
                 }
               : undefined)
           }
+
+          if (message && !result.aborted) {
+            await store.runtime.setSessionNotification(sessionId, true)
+          }
         }
         catch (error) {
           try {
