@@ -3,6 +3,7 @@ import type {
   PilotAttachment,
   PilotComposerAttachment,
   PilotMessage,
+  PilotMessageAttachmentMeta,
   PilotSession,
   PilotSessionRow,
   PilotTrace,
@@ -13,6 +14,8 @@ import type {
   StreamEvent,
 } from './pilot-chat.types'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+
+const ASSISTANT_CHUNK_FLUSH_MS = 48
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -129,6 +132,61 @@ function toPrettyErrorMessage(message: string, detail?: Record<string, unknown>)
   return `${text || 'Stream error'}\n${JSON.stringify(normalized, null, 2)}`
 }
 
+function normalizeMessageAttachments(value: unknown): PilotMessageAttachmentMeta[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  const attachments: PilotMessageAttachmentMeta[] = []
+  for (const item of value) {
+    const id = String((item as Record<string, unknown>)?.id || '').trim()
+    const ref = String((item as Record<string, unknown>)?.ref || '').trim()
+    if (!id || !ref) {
+      continue
+    }
+
+    attachments.push({
+      id,
+      type: String((item as Record<string, unknown>)?.type || '').trim() === 'image' ? 'image' : 'file',
+      ref,
+      name: typeof (item as Record<string, unknown>)?.name === 'string' ? String((item as Record<string, unknown>).name) : undefined,
+      mimeType: typeof (item as Record<string, unknown>)?.mimeType === 'string' ? String((item as Record<string, unknown>).mimeType) : undefined,
+      previewUrl: typeof (item as Record<string, unknown>)?.previewUrl === 'string' ? String((item as Record<string, unknown>).previewUrl) : undefined,
+    })
+  }
+
+  return attachments
+}
+
+function getMessageAttachments(message: PilotMessage): PilotMessageAttachmentMeta[] {
+  return normalizeMessageAttachments(message.metadata?.attachments)
+}
+
+function formatAttachmentSummary(attachments: PilotMessageAttachmentMeta[]): string {
+  if (attachments.length <= 0) {
+    return ''
+  }
+
+  const lines = attachments.map((item) => {
+    const name = String(item.name || '').trim() || item.id
+    const mimeType = String(item.mimeType || '').trim() || (item.type === 'image' ? 'image/*' : 'application/octet-stream')
+    return `- ${name} (${mimeType})`
+  })
+
+  return `\n\n---\n附件:\n${lines.join('\n')}`
+}
+
+function isImageAttachment(item: PilotMessageAttachmentMeta): boolean {
+  if (item.type === 'image') {
+    return true
+  }
+  return String(item.mimeType || '').toLowerCase().startsWith('image/')
+}
+
+function shouldFlushImmediately(delta: string): boolean {
+  return /[\n。！？.!?]$/.test(delta)
+}
+
 export function usePilotChatPage() {
   const pilotTitle = useRuntimeConfig().public.pilotTitle || 'Tuff Pilot'
 
@@ -151,6 +209,8 @@ export function usePilotChatPage() {
   const titleLoadingMap = ref<Record<string, boolean>>({})
 
   let streamAbortController: AbortController | null = null
+  let assistantDeltaBuffer = ''
+  let assistantFlushTimer: ReturnType<typeof setTimeout> | null = null
   const traceKeySet = new Set<string>()
 
   const activeSession = computed(() => sessions.value.find(item => item.sessionId === activeSessionId.value) || null)
@@ -195,11 +255,32 @@ export function usePilotChatPage() {
   const chatListMessages = computed<ChatMessageModel[]>(() => {
     return messages.value.map((item) => {
       const stamp = Date.parse(item.createdAt)
+      const messageAttachments = getMessageAttachments(item)
+      const attachmentSummary = item.role === 'user'
+        ? formatAttachmentSummary(messageAttachments)
+        : ''
+      const imageAttachments = messageAttachments.reduce<NonNullable<ChatMessageModel['attachments']>>((list, attachment) => {
+        if (!isImageAttachment(attachment)) {
+          return list
+        }
+        const url = String(attachment.previewUrl || attachment.ref || '').trim()
+        if (!url) {
+          return list
+        }
+        list.push({
+          type: 'image',
+          url,
+          name: attachment.name,
+        })
+        return list
+      }, [])
+
       return {
         id: item.id,
         role: item.role,
-        content: item.content,
+        content: `${item.content}${attachmentSummary}`,
         createdAt: Number.isFinite(stamp) ? stamp : undefined,
+        attachments: imageAttachments,
       }
     })
   })
@@ -225,6 +306,14 @@ export function usePilotChatPage() {
       delete next[sessionId]
     }
     titleLoadingMap.value = next
+  }
+
+  function shouldAutoFollowSession(sessionId: string): boolean {
+    const session = sessions.value.find(item => item.sessionId === sessionId)
+    if (!session) {
+      return false
+    }
+    return session.status === 'executing' || session.status === 'planning'
   }
 
   async function createSession(): Promise<string> {
@@ -439,11 +528,7 @@ export function usePilotChatPage() {
     lastSeq.value = Math.max(lastSeq.value, seq)
   }
 
-  function appendAssistantDelta(delta: string) {
-    const content = String(delta || '').slice(0, 4000)
-    if (!content)
-      return
-
+  function appendAssistantText(content: string) {
     let target = activeAssistantMessageId.value
       ? messages.value.find(item => item.id === activeAssistantMessageId.value)
       : undefined
@@ -462,7 +547,50 @@ export function usePilotChatPage() {
     target.content += content
   }
 
+  function clearAssistantFlushTimer() {
+    if (assistantFlushTimer) {
+      clearTimeout(assistantFlushTimer)
+      assistantFlushTimer = null
+    }
+  }
+
+  function flushAssistantDeltaBuffer() {
+    const content = assistantDeltaBuffer
+    assistantDeltaBuffer = ''
+    clearAssistantFlushTimer()
+    if (!content) {
+      return
+    }
+    appendAssistantText(content.slice(0, 4000))
+  }
+
+  function scheduleAssistantDeltaFlush() {
+    if (assistantFlushTimer) {
+      return
+    }
+    assistantFlushTimer = setTimeout(() => {
+      flushAssistantDeltaBuffer()
+    }, ASSISTANT_CHUNK_FLUSH_MS)
+  }
+
+  function appendAssistantDelta(delta: string) {
+    const content = String(delta || '')
+    if (!content)
+      return
+
+    assistantDeltaBuffer += content
+
+    if (shouldFlushImmediately(content)) {
+      flushAssistantDeltaBuffer()
+      return
+    }
+
+    scheduleAssistantDeltaFlush()
+  }
+
   function appendAssistantFinal(message: string) {
+    flushAssistantDeltaBuffer()
+
     const finalText = String(message || '')
     if (!finalText) {
       return
@@ -473,7 +601,7 @@ export function usePilotChatPage() {
       : undefined
 
     if (!activeMessage) {
-      appendAssistantDelta(finalText)
+      appendAssistantText(finalText)
       return
     }
 
@@ -482,7 +610,7 @@ export function usePilotChatPage() {
     }
 
     if (finalText.startsWith(activeMessage.content)) {
-      appendAssistantDelta(finalText.slice(activeMessage.content.length))
+      appendAssistantText(finalText.slice(activeMessage.content.length))
       return
     }
 
@@ -500,6 +628,8 @@ export function usePilotChatPage() {
       attachments.value = Array.isArray(data.attachments) ? data.attachments : []
       pendingAttachments.value = []
       activeAssistantMessageId.value = null
+      assistantDeltaBuffer = ''
+      clearAssistantFlushTimer()
     }
     finally {
       loadingMessages.value = false
@@ -550,6 +680,12 @@ export function usePilotChatPage() {
 
     void markSessionNotificationRead(sessionId)
     void maybeSummarizeActiveSessionTitle(sessionId)
+
+    if (shouldAutoFollowSession(sessionId) && !running.value) {
+      void replayFromSeq().catch((error) => {
+        streamError.value = error instanceof Error ? error.message : '自动续接失败'
+      })
+    }
   }
 
   async function deleteSession(sessionId: string) {
@@ -577,6 +713,8 @@ export function usePilotChatPage() {
         attachments.value = []
         pendingAttachments.value = []
         activeAssistantMessageId.value = null
+        assistantDeltaBuffer = ''
+        clearAssistantFlushTimer()
         lastSeq.value = 0
         streamError.value = ''
         reconnectHint.value = ''
@@ -658,6 +796,7 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'session.paused') {
+      flushAssistantDeltaBuffer()
       running.value = false
       reconnectHint.value = `会话已暂停：${item.reason || 'unknown'}`
       appendTrace(mapTrace('session.paused', Number(item.seq || lastSeq.value), {
@@ -676,6 +815,7 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'error') {
+      flushAssistantDeltaBuffer()
       streamError.value = toPrettyErrorMessage(String(item.message || 'Stream error'), item.detail)
       running.value = false
       appendTrace(mapTrace('error', Number(item.seq || lastSeq.value), {
@@ -686,6 +826,7 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'done') {
+      flushAssistantDeltaBuffer()
       running.value = false
       activeAssistantMessageId.value = null
       return
@@ -767,6 +908,7 @@ export function usePilotChatPage() {
       await consumeSseResponse(response)
     }
     finally {
+      flushAssistantDeltaBuffer()
       running.value = false
       activeAssistantMessageId.value = null
       const tasks: Array<Promise<unknown>> = [
@@ -795,17 +937,28 @@ export function usePilotChatPage() {
     }
 
     const sessionId = await ensureActiveSession()
+    const outgoingAttachments = [...pendingAttachments.value]
 
     messages.value.push({
       id: makeId('msg_user'),
       role: 'user',
       content,
       createdAt: new Date().toISOString(),
+      metadata: outgoingAttachments.length > 0
+        ? {
+            attachments: outgoingAttachments.map(item => ({
+              id: item.id,
+              type: item.kind,
+              ref: item.ref,
+              name: item.name,
+              mimeType: item.mimeType,
+              previewUrl: item.previewUrl,
+            })),
+          }
+        : undefined,
     })
 
     draft.value = ''
-
-    const outgoingAttachments = [...pendingAttachments.value]
     pendingAttachments.value = []
 
     await openStream({
@@ -816,6 +969,8 @@ export function usePilotChatPage() {
         type: item.kind,
         ref: item.ref,
         name: item.name,
+        mimeType: item.mimeType,
+        previewUrl: item.previewUrl,
       })),
     })
   }
@@ -826,10 +981,14 @@ export function usePilotChatPage() {
   }
 
   async function replayFromSeq() {
+    if (running.value) {
+      return
+    }
     const sessionId = await ensureActiveSession()
     await openStream({
       fromSeq: Math.max(1, lastSeq.value + 1),
       sessionId,
+      follow: true,
     })
   }
 
@@ -901,6 +1060,8 @@ export function usePilotChatPage() {
 
   onUnmounted(() => {
     streamAbortController?.abort()
+    assistantDeltaBuffer = ''
+    clearAssistantFlushTimer()
   })
 
   return {

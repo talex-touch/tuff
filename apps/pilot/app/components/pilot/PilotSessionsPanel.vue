@@ -49,6 +49,15 @@ function onToggleCollapse() {
       @toggle-collapse="onToggleCollapse"
     />
 
+    <div v-if="!props.collapsed" class="pilot-auth-entry">
+      <a class="pilot-auth-entry__link" href="/auth/login?returnTo=%2F">
+        授权登录 Nexus
+      </a>
+      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/admin/storage">
+        存储设置
+      </a>
+    </div>
+
     <div v-if="!props.collapsed" class="pilot-sessions__list">
       <TxEmptyState
         v-if="props.loadingSessions"
@@ -132,6 +141,35 @@ function onToggleCollapse() {
   gap: 2px;
   overflow: auto;
   padding-right: 2px;
+}
+
+.pilot-auth-entry {
+  margin-top: 8px;
+}
+
+.pilot-auth-entry__link {
+  display: inline-flex;
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color) 78%, transparent);
+  background: color-mix(in srgb, var(--tx-fill-color-lighter) 62%, transparent);
+  color: color-mix(in srgb, var(--tx-text-color-primary) 90%, var(--tx-color-primary));
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  transition: background-color 140ms ease;
+}
+
+.pilot-auth-entry__link:hover {
+  background: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
+}
+
+.pilot-auth-entry__link--admin {
+  margin-top: 6px;
 }
 
 .pilot-session-card {

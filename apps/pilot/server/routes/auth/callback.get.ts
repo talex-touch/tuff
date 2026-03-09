@@ -1,72 +1,92 @@
 import type { H3Event } from 'h3'
-import { createError, getQuery, getRequestURL, sendRedirect, setCookie } from 'h3'
+import { createError, getQuery, getRequestURL, sendRedirect } from 'h3'
+import { resolvePilotConfigString, resolvePilotNexusOrigin } from '../../utils/pilot-config'
+import { parsePilotOauthReturnTo, requirePilotOauthState } from '../../utils/pilot-oauth'
 import { writePilotSessionCookie } from '../../utils/pilot-session'
 
-interface BridgeConsumeResponse {
+interface TokenExchangeResponse {
   userId?: string
 }
 
-function getPilotRuntimeConfig(event: H3Event): Record<string, unknown> {
-  const runtimeConfig = (event.context as { runtimeConfig?: Record<string, unknown> }).runtimeConfig
-  const pilotConfig = runtimeConfig?.pilot
-  return runtimeConfig?.pilot && typeof runtimeConfig.pilot === 'object'
-    ? (pilotConfig as Record<string, unknown>)
-    : {}
-}
+async function exchangeOauthCode(
+  event: H3Event,
+  code: string,
+  redirectUri: string,
+): Promise<string> {
+  const nexusOrigin = resolvePilotNexusOrigin(event, { internal: true })
+  const oauthClientId = resolvePilotConfigString(
+    event,
+    'nexusOauthClientId',
+    ['PILOT_NEXUS_OAUTH_CLIENT_ID'],
+  )
+  const oauthClientSecret = resolvePilotConfigString(
+    event,
+    'nexusOauthClientSecret',
+    ['PILOT_NEXUS_OAUTH_CLIENT_SECRET'],
+  )
 
-function sanitizeReturnTo(value: unknown): string {
-  const raw = String(value || '').trim()
-  if (!raw || !raw.startsWith('/')) {
-    return '/'
-  }
-  if (raw.startsWith('//')) {
-    return '/'
-  }
-  return raw
-}
-
-function resolveSessionMaxAge(value: unknown): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) {
-    return 60 * 60 * 24
-  }
-  return Math.min(Math.max(Math.floor(parsed), 60), 60 * 60 * 24 * 30)
-}
-
-async function consumeBridgeTicket(event: H3Event, ticketId: string): Promise<string> {
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const nexusOrigin = String(pilotConfig.nexusInternalOrigin || pilotConfig.nexusOrigin || '').trim()
-  const bridgeSecret = String(pilotConfig.nexusBridgeSecret || '').trim()
-
-  if (!nexusOrigin || !bridgeSecret) {
+  if (!nexusOrigin || !oauthClientId || !oauthClientSecret) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'Pilot bridge configuration is incomplete.',
+      statusMessage: 'Pilot oauth configuration is incomplete.',
     })
   }
 
-  const response = await fetch(`${nexusOrigin}/api/pilot/auth/bridge-consume`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-pilot-bridge-secret': bridgeSecret,
-    },
-    body: JSON.stringify({ ticketId }),
-  })
+  let response: Response
+  try {
+    response = await fetch(`${nexusOrigin}/api/pilot/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        client_id: oauthClientId,
+        client_secret: oauthClientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    })
+  }
+  catch {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Failed to exchange oauth code.',
+    })
+  }
 
   if (!response.ok) {
     throw createError({
       statusCode: response.status === 401 ? 401 : 502,
-      statusMessage: 'Failed to consume bridge ticket.',
+      statusMessage: 'Failed to exchange oauth code.',
     })
   }
 
-  const payload = await response.json() as BridgeConsumeResponse
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  if (!contentType.includes('application/json')) {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Failed to exchange oauth code.',
+    })
+  }
+
+  let payload: TokenExchangeResponse
+  try {
+    payload = await response.json() as TokenExchangeResponse
+  }
+  catch {
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Failed to exchange oauth code.',
+    })
+  }
+
   const userId = String(payload?.userId || '').trim()
   if (!userId) {
     throw createError({
       statusCode: 502,
-      statusMessage: 'Bridge response missing userId.',
+      statusMessage: 'Oauth token response missing userId.',
     })
   }
 
@@ -75,30 +95,21 @@ async function consumeBridgeTicket(event: H3Event, ticketId: string): Promise<st
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
-  const ticketId = String(query.ticket || '').trim()
-  if (!ticketId) {
+  const oauthCode = String(query.code || '').trim()
+  const oauthState = String(query.state || '').trim()
+  if (!oauthCode || !oauthState) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'ticket is required.',
+      statusMessage: 'code and state are required.',
     })
   }
 
-  const returnTo = sanitizeReturnTo(query.returnTo)
-  const userId = await consumeBridgeTicket(event, ticketId)
+  requirePilotOauthState(event, oauthState)
+  const returnTo = parsePilotOauthReturnTo(oauthState)
+  const redirectUri = new URL('/auth/callback', getRequestURL(event).origin).toString()
+  const userId = await exchangeOauthCode(event, oauthCode, redirectUri)
+
   writePilotSessionCookie(event, userId)
-
-  const pilotConfig = getPilotRuntimeConfig(event)
-  const maxAge = resolveSessionMaxAge(pilotConfig.sessionCookieMaxAgeSec)
-  const secure = getRequestURL(event).protocol === 'https:'
-
-  // Keep legacy cookie writable for old clients during migration.
-  setCookie(event, 'pilot_user_id', userId, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure,
-    maxAge,
-  })
 
   return sendRedirect(event, returnTo, 302)
 })

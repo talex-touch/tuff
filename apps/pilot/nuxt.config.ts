@@ -8,6 +8,7 @@ const tuffexStyleEntry = resolve(workspaceRoot, 'packages/tuffex/packages/compon
 const tuffexUtilsEntry = resolve(workspaceRoot, 'packages/tuffex/packages/utils/index.ts')
 const useWorkspaceSource = true
 const isDev = process.env.NODE_ENV !== 'production'
+const DEFAULT_NEXUS_ORIGIN = isDev ? 'http://127.0.0.1:3200' : 'https://tuff.tagzxia.com'
 const useCloudflareDev = isDev && (
   process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
   || process.env.NITRO_PRESET === 'cloudflare-pages'
@@ -28,14 +29,6 @@ function firstDefined(...values: Array<string | undefined>): string | undefined 
 function envString(...keys: string[]): string {
   const values = keys.map(key => process.env[key])
   return firstDefined(...values) || ''
-}
-
-function envBoolean(keys: string[], fallback: boolean): boolean {
-  const value = envString(...keys).toLowerCase()
-  if (!value) {
-    return fallback
-  }
-  return ['1', 'true', 'yes', 'on'].includes(value)
 }
 
 export default defineNuxtConfig({
@@ -92,18 +85,18 @@ export default defineNuxtConfig({
     pilot: {
       baseUrl: envString('NUXT_PILOT_BASE_URL'),
       apiKey: envString('NUXT_PILOT_API_KEY'),
-      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN'),
-      nexusInternalOrigin: envString('PILOT_NEXUS_INTERNAL_ORIGIN', 'NUXT_PUBLIC_NEXUS_ORIGIN'),
-      nexusBridgeSecret: envString('PILOT_NEXUS_BRIDGE_SECRET'),
+      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
+      nexusInternalOrigin: envString('PILOT_NEXUS_INTERNAL_ORIGIN')
+        || envString('NUXT_PUBLIC_NEXUS_ORIGIN')
+        || DEFAULT_NEXUS_ORIGIN,
+      nexusOauthClientId: envString('PILOT_NEXUS_OAUTH_CLIENT_ID'),
+      nexusOauthClientSecret: envString('PILOT_NEXUS_OAUTH_CLIENT_SECRET'),
       cookieSecret: envString('PILOT_COOKIE_SECRET'),
       sessionCookieMaxAgeSec: Number(envString('PILOT_SESSION_COOKIE_MAX_AGE_SEC') || 86_400),
-      allowLegacyHeaderAuth: envBoolean(['PILOT_ALLOW_LEGACY_HEADER_AUTH'], !!isDev),
-      allowLegacyBearerAuth: envBoolean(['PILOT_ALLOW_LEGACY_BEARER_AUTH'], !!isDev),
-      allowLegacyCookieAuth: envBoolean(['PILOT_ALLOW_LEGACY_COOKIE_AUTH'], true),
     },
     public: {
       pilotTitle: 'Tuff Pilot',
-      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN'),
+      nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
     },
   },
 })
