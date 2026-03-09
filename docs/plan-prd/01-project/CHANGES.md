@@ -2,7 +2,56 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-10
+
+### Pilot M0: Cloudflare 部署改为静态发布（规避 Worker 3MiB 限制）
+
+**变更类型**: 部署策略调整 / 线上可用性修复
+
+**描述**:
+- Cloudflare Pages 免费额度下，`nuxt build` 产物中的 `_worker.js` 模块体积约 `13MB`，发布时报错 `Worker exceeded 3 MiB`。
+- 为保证 M0 可上线，`apps/pilot` 的 Cloudflare 脚本切换为静态发布链路：
+  - `preview:cf` 改为 `nuxt generate + wrangler pages dev .output/public`
+  - `deploy:cf` 改为 `nuxt generate + wrangler pages deploy .output/public`
+- 新增运行时 API 基地址注入：
+  - `runtimeConfig.public.endsBaseUrl`（优先 `NUXT_PUBLIC_ENDS_URL`，回退 `NUXT_PILOT_BASE_URL`）
+  - `app.vue` 启动时优先把 `endsBaseUrl` 写入 `globalOptions`，确保前端 API 请求可按环境变量指向当前 AIAPI。
+- `wrangler.toml` 增补 `NUXT_PUBLIC_ENDS_URL`（preview/production 同步），与现有 env 保持一致。
+
+**测试**:
+- `pnpm -C "apps/pilot" run generate` ✅
+- `npx wrangler pages deploy .output/public --project-name tuff-pilot --branch main` ✅
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/app/app.vue`
+- `apps/pilot/wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-09
+
+### Pilot M0: 聊天渲染链路修复（Milkdown `SchemaReady` 冲突）
+
+**变更类型**: 稳定性修复 / 运行时兼容
+
+**描述**:
+- 修复 Quota 聊天页面在流式回复场景下出现的 `MilkdownError: Timer "SchemaReady" not found` 报错与消息未渲染问题。
+- `ThContent.vue` 的渲染实现切换为 `MilkContent.vue`（只读渲染），规避 `@milkdown/vue + useEditor` 在当前依赖组合下的上下文注入时序问题。
+- 保留 `disableRich=true`，避免渲染期附加增强逻辑影响聊天主链路稳定性。
+- 顺带修复聊天页告警：`ChatLinkShare.vue` 将误写标签 `<di>` 更正为 `<div>`，消除 `Failed to resolve component: di`。
+
+**测试**:
+- `pnpm -C "apps/pilot" exec nuxi prepare` ✅
+- `pnpm -C "apps/pilot" run dev` ✅（本地构建通过，可进入聊天页面）
+
+**修改文件**:
+- `apps/pilot/app/components/article/MilkdownRender.vue`
+- `apps/pilot/app/components/article/ThContent.vue`
+- `apps/pilot/app/components/chat/head/ChatLinkShare.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/plan-prd/TODO.md`
+- `docs/INDEX.md`
 
 ### Pilot: Cloudflare Dashboard Secrets 基线配置落地
 
@@ -4991,8 +5040,8 @@
 **主要修复**:
 1. **手动文件索引补偿**:
    - `addWatchPath` 对文件目标入队时标记 `manual`。
-   - 增量入库 `buildFileRecord` 新增 `manualForce` 分支：绕过扩展名白名单，仅保留基础安全过滤。
-   - 对手动补偿路径新增 console/log 输出，明确 `accepted(manual-force)` 与 `filtered(base)` 结果。
+   - 增量入库 `buildFileRecord` 新增 `manualForce` 分支：绕过扩展名白名单与系统路径过滤，仅保留最小黑名单扩展过滤。
+   - 对手动补偿路径新增 console/log 输出，明确 `accepted(manual-force)` 与 `filtered(manual-blacklist)` 结果。
 
 2. **系统动作日志语义修正**:
    - `file-index result` 日志改为 `{ requestPath, result }`，避免 `path` 字段被合并覆盖导致误判。

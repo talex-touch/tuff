@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-09
+> 更新时间: 2026-03-10
 
 ---
 
@@ -108,10 +108,13 @@
 - [x] [P0] 兼容阻塞修复：`apps/nexus/uno.config.ts` 已移除 `@unocss/preset-web-fonts/local` 子路径导入，消除 `Package subpath './local' is not defined` 启动错误（2026-03-09）。
 - [x] [P0] 兼容阻塞修复：`apps/pilot/package.json` 将 `@element-plus/nuxt` 迁入 `dependencies`，避免生产依赖安装/生产模式下出现 `Could not load '@element-plus/nuxt'` 启动错误（2026-03-09）。
 - [x] [P0] 兼容阻塞修复：`apps/pilot/nuxt.config.ts` 注入 `__BuildTime__` 与 `__THISAI_VERSION__` 编译期常量，消除 SSR `__BuildTime__ is not defined` 500 错误（2026-03-09）。
+- [x] [P0] 渲染阻塞修复：`apps/pilot/app/components/article/ThContent.vue` 已切换只读渲染到 `MilkContent.vue`，规避 `MilkdownError: Timer "SchemaReady" not found` 与 `editorViewOptions context not found`；`ChatLinkShare.vue` 同步修复 `di -> div` 组件告警（2026-03-09）。
+- [x] [P0] Cloudflare 上线阻塞修复：`apps/pilot` 切换为静态发布链路（`nuxt generate`），避免 `_worker.js` 超过免费版 `3MiB` 限制导致部署失败；同时接入 `NUXT_PUBLIC_ENDS_URL` 作为前端 API 基地址（2026-03-10）。
 - [ ] [P0] M0 手工验收补录：`/` 进入 Quota 聊天、新建会话、流式回复、历史删除、`/pilot` 与 `/pilot/admin/storage` 可访问、非 M0 页面返回可预期“待迁移”提示。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `typecheck` 分批清理（先 `app/components/article/**`，后 `app/pages/cms/**`，最后 `app/composables/**`）。
 - [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
 - [ ] [P1] M0 收口：构建内存策略固化（避免每次手动设置 `NODE_OPTIONS=--max-old-space-size=8192`）。
+- [ ] [P1] 部署策略收口：如需同域承载 `/api/*` 兼容层，需拆分轻量 API Worker 或升级 Cloudflare Workers 付费额度（当前免费额度无法承载 `nuxt build` Worker 体积）。
 - [ ] [P1] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播。
 - [ ] [P2] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率。
 - [ ] [P2] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流。

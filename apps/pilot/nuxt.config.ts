@@ -28,6 +28,10 @@ const useCloudflareDev = isDev && (
   process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
   || process.env.NITRO_PRESET === 'cloudflare-pages'
 )
+const DEFAULT_PILOT_BASE_URL = firstDefined(
+  process.env.NUXT_PUBLIC_ENDS_URL,
+  process.env.NUXT_PILOT_BASE_URL,
+) || 'https://sub2api-home.tagzxia.com'
 
 function firstDefined(...values: Array<string | undefined>): string | undefined {
   for (const value of values) {
@@ -59,6 +63,7 @@ function envNumber(key: string, fallback: number): number {
 }
 
 export default defineNuxtConfig({
+  ssr: false,
   devtools: { enabled: true },
   compatibilityDate: '2026-03-08',
   srcDir: 'app/',
@@ -189,7 +194,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     pilot: {
-      baseUrl: envString('NUXT_PILOT_BASE_URL'),
+      baseUrl: envString('NUXT_PILOT_BASE_URL') || DEFAULT_PILOT_BASE_URL,
       apiKey: envString('NUXT_PILOT_API_KEY'),
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
       nexusInternalOrigin: envString('PILOT_NEXUS_INTERNAL_ORIGIN')
@@ -203,6 +208,9 @@ export default defineNuxtConfig({
     public: {
       pilotTitle: 'Tuff Pilot',
       appName,
+      endsBaseUrl: envString('NUXT_PUBLIC_ENDS_URL')
+        || envString('NUXT_PILOT_BASE_URL')
+        || DEFAULT_PILOT_BASE_URL,
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
       pilotStreamIdleTimeoutMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS', 45_000),
       pilotStreamMaxDurationMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS', 8 * 60_000),

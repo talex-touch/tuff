@@ -1,20 +1,17 @@
 <script setup lang="ts">
 import { Milkdown, useEditor } from '@milkdown/vue'
-import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/core'
+import { Editor, defaultValueCtx, editorViewOptionsCtx, rootCtx } from '@milkdown/kit/core'
 import { nord } from '@milkdown/theme-nord'
-import { blockquoteKeymap, blockquoteSchema, codeBlockSchema, commonmark } from '@milkdown/preset-commonmark'
-import { katexOptionsCtx, math } from '@milkdown/plugin-math'
-import { gfm } from '@milkdown/preset-gfm'
-import { listener, listenerCtx } from '@milkdown/plugin-listener'
-import { history } from '@milkdown/plugin-history'
-import { clipboard } from '@milkdown/plugin-clipboard'
-import { trailing } from '@milkdown/plugin-trailing'
-import { keymap as createKeymap } from '@milkdown/prose/keymap'
-import { TooltipProvider, tooltipFactory } from '@milkdown/plugin-tooltip'
-import { SlashProvider, slashFactory } from '@milkdown/plugin-slash'
+import { blockquoteSchema, codeBlockSchema, commonmark } from '@milkdown/kit/preset/commonmark'
+import { gfm } from '@milkdown/kit/preset/gfm'
+import { listener } from '@milkdown/kit/plugin/listener'
+import { history } from '@milkdown/kit/plugin/history'
+import { clipboard } from '@milkdown/kit/plugin/clipboard'
+import { trailing } from '@milkdown/kit/plugin/trailing'
+import { TooltipProvider, tooltipFactory } from '@milkdown/kit/plugin/tooltip'
+import { SlashProvider, slashFactory } from '@milkdown/kit/plugin/slash'
 import { prism, prismConfig } from '@milkdown/plugin-prism'
-import { $view, getMarkdown, outline, replaceAll } from '@milkdown/utils'
-import { undoInputRule } from '@milkdown/prose/inputrules'
+import { $view, replaceAll } from '@milkdown/kit/utils'
 import '@milkdown/theme-nord/style.css'
 import 'katex/dist/katex.min.css'
 import 'prism-themes/themes/prism-nord.css'
@@ -33,8 +30,6 @@ import java from 'refractor/lang/java'
 import { useNodeViewFactory } from '@prosemirror-adapter/vue'
 import EditorCodeBlock from '~/components/article/components/EditorCodeBlock.vue'
 import EditorBlockQuote from '~/components/article/components/EditorBlockQuote.vue'
-import { $endApi } from '~/composables/api/base'
-import { globalOptions } from '~/constants'
 
 const props = defineProps<{
   content: string
@@ -87,7 +82,7 @@ const editor = useEditor((root) => {
     .config(nord)
     .config((ctx) => {
       ctx.set(rootCtx, root)
-      // ctx.set(defaultValueCtx, content.value)
+      ctx.set(defaultValueCtx, props.content || '')
 
       ctx.update(editorViewOptionsCtx, prev => ({
         ...prev,
@@ -126,7 +121,6 @@ const editor = useEditor((root) => {
     .use(prism)
     .use(trailing)
     .use(listener)
-    .use(math)
     .use(
       $view(codeBlockSchema.node, () => nodeViewFactory({ component: EditorCodeBlock })),
     )
@@ -135,27 +129,35 @@ const editor = useEditor((root) => {
     )
 })
 
-onMounted(() => {
-  const exe = (num: number) => {
-    if (!editor.get()) {
-      if (num >= 15) {
-        console.error('editor not ready (render)')
-        return
-      }
+function applyRenderContent(content: string) {
+  const instance = editor.get()
+  if (!instance)
+    return
 
-      setTimeout(() => exe(num + 1), 100)
+  instance.action(replaceAll(content || ''))
+}
+
+watch(
+  () => editor.loading.value,
+  (loading) => {
+    if (loading)
       return
-    }
 
-    editor.get()?.action(replaceAll(props.content))
-  }
+    applyRenderContent(props.content)
+  },
+  { immediate: true },
+)
 
-  watchEffect(() => {
-    const _ = [props.content]
+watch(
+  () => props.content,
+  (content) => {
+    if (editor.loading.value)
+      return
 
-    exe(0)
-  })
-})
+    applyRenderContent(content)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
