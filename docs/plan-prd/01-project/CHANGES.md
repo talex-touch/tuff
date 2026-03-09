@@ -4,6 +4,22 @@
 
 ## 2026-03-09
 
+### Core-App: Channel 销毁态广播兜底 + Invoke Handler 常驻注册
+
+**变更类型**: 稳定性修复 / 关停阶段容错
+
+**描述**:
+- 修复 `Object has been destroyed`：`channel-core` 的 `getWebContents` 新增销毁态与异常兜底，避免在插件 `disable` 状态广播时读取已销毁窗口对象导致未处理 Promise 拒绝。
+- 修复 `No handler registered for "storage:app:save"` 噪声：`main-transport` 的 `ipcMain.handle` 改为“首次注册后常驻”，当事件暂无订阅处理器时返回 `undefined`，不再移除 handler，避免窗口/模块 teardown 窗口期触发 Electron 级 no-handler 报错。
+
+**测试**:
+- `pnpm -C "apps/core-app" run typecheck:node`
+
+**修改文件**:
+- `apps/core-app/src/main/core/channel-core.ts`
+- `packages/utils/transport/sdk/main-transport.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Pilot: Cloudflare 流式响应延迟优化（SSE / D1 热路径）
 
 **变更类型**: 性能优化 / 体验优化
@@ -14,6 +30,7 @@
 - 优化 runtime 事件持久化：`persistEvent` 移除每事件 `getSession` 读取，改为本地序号优先 + 冲突重试，减少 D1 往返。
 - 优化 D1 trace 写入链路：`appendTrace` 由两次独立 `run()` 改为 `batch()` 合并提交（`INSERT trace + UPDATE session`）。
 - 新增 `assistant.delta` 服务端批量持久化：默认按 `160ms` 时间窗或 `320` 字符阈值聚合后写入，SSE 仍保持逐增量实时输出。
+- 新增每轮流式请求持久化汇总指标（`run.metrics` + Cloudflare 日志）：`delta 批次数 / 平均批字符数 / runtime trace 写入数 / store appendTrace 总数`。
 - 移除流接口热路径中的重复 `ensureSchema` 调用，保持由 store adapter 统一懒初始化。
 - 下调前端助手文本 flush 窗口（`120ms -> 48ms`），改善“吐字”实时观感。
 
