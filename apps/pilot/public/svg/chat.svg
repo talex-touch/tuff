@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+  <g fill="currentColor" fill-opacity="0" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
+    stroke-width="2">
+    <path stroke-dasharray="68" stroke-dashoffset="68"
+      d="M3 19.5V4C3 3.44772 3.44772 3 4 3H20C20.5523 3 21 3.44772 21 4V16C21 16.5523 20.5523 17 20 17H5.5z">
+      <animate fill="freeze" attributeName="stroke-dashoffset" dur="0.6s" values="68;0" />
+      <animate fill="freeze" attributeName="fill-opacity" begin="0.6s" dur="0.15s" values="0;0.3" />
+    </path>
+    <path stroke-dasharray="10" stroke-dashoffset="10" d="M8 7h8" opacity="0">
+      <set attributeName="opacity" begin="0.8s" to="1" />
+      <animate fill="freeze" attributeName="stroke-dashoffset" begin="0.8s" dur="0.2s" values="10;0" />
+    </path>
+    <path stroke-dasharray="10" stroke-dashoffset="10" d="M8 10h8" opacity="0">
+      <set attributeName="opacity" begin="0.9s" to="1" />
+      <animate fill="freeze" attributeName="stroke-dashoffset" begin="0.9s" dur="0.2s" values="10;0" />
+    </path>
+    <path stroke-dasharray="6" stroke-dashoffset="6" d="M8 13h4" opacity="0">
+      <set attributeName="opacity" begin="1s" to="1" />
+      <animate fill="freeze" attributeName="stroke-dashoffset" begin="1s" dur="0.2s" values="6;0" />
+    </path>
+  </g>
+</svg>

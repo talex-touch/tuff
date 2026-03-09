@@ -51,7 +51,7 @@ function onToggleCollapse() {
       <a class="pilot-auth-entry__link" href="/auth/login?returnTo=%2F">
         授权登录 Nexus
       </a>
-      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/admin/storage">
+      <a class="pilot-auth-entry__link pilot-auth-entry__link--admin" href="/pilot/admin/storage">
         存储设置
       </a>
     </div>

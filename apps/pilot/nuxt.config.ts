@@ -1,14 +1,29 @@
 import { dirname, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { pwa } from './app/config/pwa'
+import { appDescription, appKeywords, appName } from './app/constants'
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const tuffexSourceEntry = resolve(workspaceRoot, 'packages/tuffex/packages/components/src/index.ts')
 const tuffexStyleEntry = resolve(workspaceRoot, 'packages/tuffex/packages/components/style/index.scss')
 const tuffexUtilsEntry = resolve(workspaceRoot, 'packages/tuffex/packages/utils/index.ts')
+const refractorLangShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/refractor-lang.ts')
+const vueuseComponentsShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/vueuse-components.ts')
+const markmapViewShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-view.ts')
+const markmapCommonShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-common.ts')
+const markmapLibShimEntry = resolve(workspaceRoot, 'apps/pilot/app/shims/markmap-lib.ts')
 const useWorkspaceSource = true
 const isDev = process.env.NODE_ENV !== 'production'
 const DEFAULT_NEXUS_ORIGIN = isDev ? 'http://127.0.0.1:3200' : 'https://tuff.tagzxia.com'
+const buildTime = Date.now()
+const thisAiVersion = firstDefined(
+  process.env.TUFFPILOT_VERSION,
+  process.env.VITE_APP_VERSION,
+  process.env.GIT_COMMIT_SHA,
+  process.env.COMMIT_SHA,
+  process.env.npm_package_version,
+) || 'dev'
 const useCloudflareDev = isDev && (
   process.env.NUXT_USE_CLOUDFLARE_DEV === 'true'
   || process.env.NITRO_PRESET === 'cloudflare-pages'
@@ -46,12 +61,67 @@ function envNumber(key: string, fallback: number): number {
 export default defineNuxtConfig({
   devtools: { enabled: true },
   compatibilityDate: '2026-03-08',
-  css: ['@talex-touch/tuffex/style.css'],
+  srcDir: 'app/',
+  modules: [
+    '@element-plus/nuxt',
+    '@vueuse/nuxt',
+    '@unocss/nuxt',
+    '@nuxtjs/color-mode',
+    '@vite-pwa/nuxt',
+    '@nuxt/eslint',
+    'nuxt-echarts',
+    '@nuxtjs/device',
+    ['vite-plugin-version-date-mark/nuxt', {
+      name: 'TuffPilot',
+      ifShortSHA: true,
+      ifMeta: true,
+      ifLog: true,
+      ifGlobal: true,
+    }],
+  ],
+  css: [
+    '@talex-touch/tuffex/style.css',
+    '@unocss/reset/tailwind.css',
+  ],
+  colorMode: {
+    classSuffix: '',
+  },
+  experimental: {
+    payloadExtraction: false,
+    renderJsonPayloads: true,
+    typedPages: false,
+  },
+  features: {
+    inlineStyles: false,
+  },
   build: {
-    transpile: ['@talex-touch/tuffex'],
+    transpile: [
+      '@talex-touch/tuffex',
+      /^@antv/,
+      'gl-matrix',
+    ],
+  },
+  pwa,
+  app: {
+    head: {
+      viewport: 'width=device-width,initial-scale=1',
+      link: [
+        { rel: 'icon', href: '/favicon.ico', sizes: 'any' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
+      meta: [
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'description', content: appDescription },
+        { name: 'keywords', content: appKeywords },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'theme-color', media: '(prefers-color-scheme: light)', content: 'white' },
+        { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#222222' },
+      ],
+    },
   },
   typescript: {
-    strict: true,
+    strict: false,
     typeCheck: false,
     tsConfig: {
       compilerOptions: {
@@ -64,6 +134,10 @@ export default defineNuxtConfig({
     },
   },
   vite: {
+    define: {
+      __BuildTime__: buildTime,
+      __THISAI_VERSION__: JSON.stringify(thisAiVersion),
+    },
     resolve: {
       alias: [
         ...(useWorkspaceSource
@@ -71,6 +145,12 @@ export default defineNuxtConfig({
               { find: /^@talex-touch\/tuffex$/, replacement: tuffexSourceEntry },
               { find: /^@talex-touch\/tuffex\/style\.css$/, replacement: tuffexStyleEntry },
               { find: /^@talex-touch\/tuffex\/utils$/, replacement: tuffexUtilsEntry },
+              { find: /^refractor\/lang\/.+$/, replacement: refractorLangShimEntry },
+              { find: /^@vueuse\/components$/, replacement: vueuseComponentsShimEntry },
+              { find: /^@milkdown\/kit\/plugin\/prism$/, replacement: '@milkdown/plugin-prism' },
+              { find: /^markmap-view$/, replacement: markmapViewShimEntry },
+              { find: /^markmap-common$/, replacement: markmapCommonShimEntry },
+              { find: /^markmap-lib$/, replacement: markmapLibShimEntry },
             ]
           : []),
       ],
@@ -83,6 +163,11 @@ export default defineNuxtConfig({
   },
   nitro: {
     preset: isDev && !useCloudflareDev ? 'node-server' : 'cloudflare-pages',
+    esbuild: {
+      options: {
+        target: 'esnext',
+      },
+    },
     ...(useCloudflareDev
       ? {
           cloudflareDev: {
@@ -92,6 +177,15 @@ export default defineNuxtConfig({
           },
         }
       : {}),
+  },
+  sourcemap: {
+    server: true,
+    client: 'hidden',
+  },
+  eslint: {
+    config: {
+      standalone: false,
+    },
   },
   runtimeConfig: {
     pilot: {
@@ -108,6 +202,7 @@ export default defineNuxtConfig({
     },
     public: {
       pilotTitle: 'Tuff Pilot',
+      appName,
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
       pilotStreamIdleTimeoutMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS', 45_000),
       pilotStreamMaxDurationMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS', 8 * 60_000),

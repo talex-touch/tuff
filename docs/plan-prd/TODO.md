@@ -94,12 +94,29 @@
   - [x] `fromSeq + follow` 自动追尾续接：刷新后自动恢复到最新 `done`，断连不再默认暂停推理。
   - [x] Markdown 渲染观感优化：`assistant.delta` 分块刷新（80-160ms窗口，当前120ms）+ assistant 气泡淡入（含 reduced-motion 降级）。
   - [x] 门禁回归：`apps/pilot`（test/typecheck/lint）+ `packages/tuff-intelligence`（lint/tsc --noEmit）全部通过。
-- [ ] Pilot 手工场景验收补录（图像识别、文件元数据引用、刷新自动续接、Markdown 分块观感录屏）
-- [ ] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播
-- [ ] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率
-- [ ] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流
-- [ ] 新增 `@talex-touch/tuff-pilot-cli`：login/chat/send/sessions/trace 命令闭环
-- [ ] 后端渠道可配置：会话级 `channelId` 路由与 provider 配置联动
+- [x] Pilot Cloudflare Dashboard 配置基线（2026-03-09）：
+  - [x] `tuff-pilot` 的 `preview/production` 已写入 secrets：`PILOT_ATTACHMENT_PROVIDER=auto`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_REGION=us-east-1`、`PILOT_MINIO_FORCE_PATH_STYLE=true`。
+  - [ ] 仍需人工按环境补齐：`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`、`PILOT_NEXUS_INTERNAL_ORIGIN`（按需）。
+  - [ ] MinIO 启用时仍需人工补齐：`PILOT_MINIO_ENDPOINT`、`PILOT_MINIO_BUCKET`、`PILOT_MINIO_ACCESS_KEY`、`PILOT_MINIO_SECRET_KEY`、`PILOT_MINIO_PUBLIC_BASE_URL`（可选）。
+- [x] Pilot M0（Quota 融合，2026-03-09）：
+  - [x] 前端并入：Quota 页面体系迁入 `apps/pilot/app`，路由切换为 `/ -> Quota`、`/pilot -> 原 Pilot 聊天`、`/pilot/admin/storage -> 原 Pilot 管理页`。
+  - [x] 认证策略收口：改为 Pilot Cookie 会话/访客模式，移除 Quota 强制登录门禁，不再以 Bearer Token 作为 M0 主链路。
+  - [x] Nuxt 兼容 API 落地（`/api/aigc/*`、`/api/auth/status`、`/api/account/*`），统一 `{ code, message, data }` 协议，`/api/aigc/executor` 已完成 SSE 事件映射。
+  - [x] 非 M0 接口统一 501 包装响应（避免 404 白屏）。
+  - [x] 数据兼容：`chat_id/topic/value/meta` 结构化历史存储落地，会话删除同步清理兼容记录与 Pilot 会话。
+  - [x] 仓库策略：根 `.gitignore` 忽略 `apps/quota-gpt-view/` 与 `apps/quota-gpt-ends/`。
+- [x] [P0] 兼容阻塞修复：`apps/nexus/uno.config.ts` 已移除 `@unocss/preset-web-fonts/local` 子路径导入，消除 `Package subpath './local' is not defined` 启动错误（2026-03-09）。
+- [x] [P0] 兼容阻塞修复：`apps/pilot/package.json` 将 `@element-plus/nuxt` 迁入 `dependencies`，避免生产依赖安装/生产模式下出现 `Could not load '@element-plus/nuxt'` 启动错误（2026-03-09）。
+- [x] [P0] 兼容阻塞修复：`apps/pilot/nuxt.config.ts` 注入 `__BuildTime__` 与 `__THISAI_VERSION__` 编译期常量，消除 SSR `__BuildTime__ is not defined` 500 错误（2026-03-09）。
+- [ ] [P0] M0 手工验收补录：`/` 进入 Quota 聊天、新建会话、流式回复、历史删除、`/pilot` 与 `/pilot/admin/storage` 可访问、非 M0 页面返回可预期“待迁移”提示。
+- [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `typecheck` 分批清理（先 `app/components/article/**`，后 `app/pages/cms/**`，最后 `app/composables/**`）。
+- [ ] [P1] M0 收口：`apps/pilot` Quota 存量 `lint` 分批清理（先 `import/order + unused`，后风格类规则）。
+- [ ] [P1] M0 收口：构建内存策略固化（避免每次手动设置 `NODE_OPTIONS=--max-old-space-size=8192`）。
+- [ ] [P1] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播。
+- [ ] [P2] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率。
+- [ ] [P2] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流。
+- [ ] [P2] 新增 `@talex-touch/tuff-pilot-cli`：login/chat/send/sessions/trace 命令闭环。
+- [ ] [P2] 后端渠道可配置：会话级 `channelId` 路由与 provider 配置联动。
 
 ---
 

@@ -20,6 +20,7 @@
 - 2026-02 新增：`v2.4.7` 发版推进清单落地，明确 Gate A-E（版本基线/发布链路/质量门禁/发布资产/发布动作）与当前阻塞项，作为发布执行入口（`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`）。
 - 2026-03 新增：Nexus 文档与入口收口（不含 Pilot）：Examples 改为单一来源索引、首页占位段清理、guide 补齐 CoreBox workflow/AI/翻译/壁纸现状，并新增发布资产核对清单（`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`）。
 - 2026-03 新增：Roadmap 任务01（TODO 现状校准）收口：清理“已落地但未闭环语义”混合标记，并将 CoreBox/Nexus 剩余优先级重排为 `SDK Hard-Cut E~F -> Gate D -> Gate E -> View Mode 安全收口 -> Nexus 设备授权风控`（`docs/plan-prd/TODO.md`）。
+- 2026-03 新增：Pilot M0 完成 Quota 融合落地（`apps/pilot`）：前端路由切换为 `/ -> Quota` 与 `/pilot/* -> 原 Pilot`，Nuxt `server/api` 补齐 M0 兼容接口（统一 `{ code, message, data }`，含 `/api/aigc/executor` SSE 映射），认证主链路切换为 Pilot Cookie 会话/访客模式，非 M0 接口统一 501 包装（`docs/plan-prd/01-project/CHANGES.md`、`docs/plan-prd/TODO.md`）。
 - 2026-02 新增：CoreApp 新增 `FlipDialog` 统一封装并完成 16 个 `TxFlipOverlay` 场景迁移，默认宽弹框规格（`md/lg/xl/full`）与 reference 隐藏/恢复行为统一，页面侧不再重复声明 `Teleport`。
 - 2026-02 新增：Nexus 业务场景完成 15 处 `TxFlipOverlay -> FlipDialog` 迁移，统一 reference/source 隐藏恢复与 `size=md/lg/xl` 宽弹框策略；`pages/test` 与 `content/demos` 继续保留 `TxFlipOverlay` 作为测试/演示边界。
 - 2026-02 新增：Intelligence Agent 一次切换（Nexus + Core-App）完成 `intelligence-agent` 命名空间上线；旧 `intelligence-lab` 路由统一返回 `410`；Prompt Registry（registry + binding）完成 schema 对齐与默认提示词落库引导；`session/stream` 主链切换 LangGraph 五阶段状态机并提供 Prompt Registry 管理 API/UI。
@@ -34,6 +35,7 @@
 - 2026-03 新增：Nexus OAuth 应用管理补齐编辑与密钥轮换能力（`PATCH /api/dashboard/oauth/clients/:id`、`POST /api/dashboard/oauth/clients/:id/rotate-secret`），Dashboard 支持就地编辑与一键重新生成 secret。
 - 2026-03 新增：Pilot/Nexus bridge legacy 清理完成：`/api/pilot/auth/bridge-*` 全部下线，Pilot 回调仅接受 `code+state`，`PILOT_NEXUS_BRIDGE_SECRET` 与 `x-pilot-bridge-secret` 兼容路径移除。
 - 2026-03 新增：Pilot 高标准交付完成首批闭环：附件存储抽象（memory/R2/MinIO-S3）+ 附件内容读取接口、图片多模态识别发送、`fromSeq+follow` 刷新自动续接、Markdown 分块渐进渲染（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
+- 2026-03 新增：Pilot Cloudflare Dashboard 配置基线已落地（`tuff-pilot` preview/production 已写入 `PILOT_ATTACHMENT_PROVIDER`、`PILOT_ATTACHMENT_PUBLIC_BASE_URL`、`PILOT_ATTACHMENT_SIGNING_SECRET`、`PILOT_MINIO_REGION`、`PILOT_MINIO_FORCE_PATH_STYLE`）；OAuth 与 MinIO 真实凭据仍需人工按环境补齐（见 `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md` 第 3.3.3 节）。
 - 2026-03 新增：Pilot 补齐“低配置接入”能力：无 MinIO 时支持 `attachmentPublicBaseUrl` 签名 URL 回退；新增 `/admin/storage` 动态配置后台（D1 持久化）。
 - 2026-03 新增：Pilot 附件上传增加本地私网门禁：未配置 MinIO 且无公网 Base URL 时拒绝上传，避免模型侧读不到附件。
 - 2026-03 新增：Intelligence 流式链路完成兼容增强：Core-App 新增 `intelligence:agent:session:subscribe` 真推流，旧 `session:stream` 保持查询语义；runtime trace 引入单调 `seq` 与 `fromSeq` 续播能力，Nexus `session/stream` keepalive 同步补齐 `stream.heartbeat` 事件（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
