@@ -1,14 +1,13 @@
-import { createLocalFontProcessor } from '@unocss/preset-web-fonts/local'
 import {
   defineConfig,
   presetAttributify,
   presetIcons,
   presetTypography,
-  presetWebFonts,
   presetWind,
   transformerDirectives,
   transformerVariantGroup,
 } from 'unocss'
+import presetWebFonts from '@unocss/preset-web-fonts'
 
 const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
   && (process.env.NODE_ENV === 'production' || process.env.UNOCSS_WEBFONTS === 'true')
@@ -47,7 +46,6 @@ export default defineConfig({
         serif: 'DM Serif Display',
         mono: 'DM Mono',
       },
-      ...(useWebFonts ? { processors: createLocalFontProcessor() } : {}),
     }),
   ],
   transformers: [
