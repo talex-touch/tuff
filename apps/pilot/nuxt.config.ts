@@ -31,6 +31,18 @@ function envString(...keys: string[]): string {
   return firstDefined(...values) || ''
 }
 
+function envNumber(key: string, fallback: number): number {
+  const raw = envString(key)
+  if (!raw) {
+    return fallback
+  }
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) {
+    return fallback
+  }
+  return parsed
+}
+
 export default defineNuxtConfig({
   devtools: { enabled: true },
   compatibilityDate: '2026-03-08',
@@ -97,6 +109,8 @@ export default defineNuxtConfig({
     public: {
       pilotTitle: 'Tuff Pilot',
       nexusOrigin: envString('NUXT_PUBLIC_NEXUS_ORIGIN') || DEFAULT_NEXUS_ORIGIN,
+      pilotStreamIdleTimeoutMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS', 45_000),
+      pilotStreamMaxDurationMs: envNumber('NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS', 8 * 60_000),
     },
   },
 })

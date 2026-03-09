@@ -14,6 +14,7 @@
 - SSE 消费新增双超时兜底：
   - 空闲超时：`45s` 无事件自动中断并提示。
   - 总时长超时：`8min` 自动中断并提示。
+- 超时参数改为可配置：支持通过 `NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS` 与 `NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS` 调整（含前端边界夹取）。
 - 会话列表删除按钮改为按行禁用（仅禁用正在运行中的会话），新建会话按钮不再因其它会话运行而锁死。
 
 **测试**:
