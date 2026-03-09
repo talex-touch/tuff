@@ -11,8 +11,11 @@
 **描述**:
 - Cloudflare Pages 免费额度下，`nuxt build` 产物中的 `_worker.js` 模块体积约 `13MB`，发布时报错 `Worker exceeded 3 MiB`。
 - 为保证 M0 可上线，`apps/pilot` 的 Cloudflare 脚本切换为静态发布链路：
-  - `preview:cf` 改为 `nuxt generate + wrangler pages dev .output/public`
-  - `deploy:cf` 改为 `nuxt generate + wrangler pages deploy .output/public`
+  - `preview:cf` 改为 `nuxt generate + prepare:cf-static + wrangler pages dev dist`
+  - `deploy:cf` 改为 `nuxt generate + prepare:cf-static + wrangler pages deploy dist`
+- 静态发布补齐路由兜底：
+  - 发布前移除 `dist/_routes.json`（避免 Pages 把全路由误导向不存在的 Functions）。
+  - 自动生成 `dist/index.html`、`dist/pilot/index.html`、`dist/pilot/admin/storage/index.html`（由 `200.html` 复制），并写入 `/* /index.html 200` 到 `_redirects`，避免 ` /`、`/pilot`、`/pilot/admin/storage` 线上白屏/404。
 - 新增运行时 API 基地址注入：
   - `runtimeConfig.public.endsBaseUrl`（优先 `NUXT_PUBLIC_ENDS_URL`，回退 `NUXT_PILOT_BASE_URL`）
   - `app.vue` 启动时优先把 `endsBaseUrl` 写入 `globalOptions`，确保前端 API 请求可按环境变量指向当前 AIAPI。
