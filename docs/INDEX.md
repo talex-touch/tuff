@@ -7,6 +7,8 @@
 - `docs/plan-prd/README.md` - PRD / 规划索引（产品 + 架构 + 实现）
 - `docs/plan-prd/01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md` - 产品总览 + 8 周路线图（目标与节奏）
 - `docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md` - v2.4.7 发版推进清单（文档进展 + 发布门禁）
+- `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Nexus 发布资产核对清单（Gate D 可执行清单）
+- `docs/plan-prd/TODO.md` - 项目待办与 Roadmap 任务01（TODO 现状校准）优先级对照
 - `docs/plan-prd/01-project/WEEK1-EXECUTION-PLAN-2026Q1.md` - Week 1 执行清单（质量基线）
 - `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 最终目标与质量约束基线（含质量执行记录）
 - `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md` - Pilot Chat API 与 SSE/恢复语义契约
@@ -16,12 +18,24 @@
 ## 状态快照（压缩版，代码核对）
 
 - 2026-02 新增：`v2.4.7` 发版推进清单落地，明确 Gate A-E（版本基线/发布链路/质量门禁/发布资产/发布动作）与当前阻塞项，作为发布执行入口（`docs/plan-prd/01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md`）。
+- 2026-03 新增：Nexus 文档与入口收口（不含 Pilot）：Examples 改为单一来源索引、首页占位段清理、guide 补齐 CoreBox workflow/AI/翻译/壁纸现状，并新增发布资产核对清单（`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`）。
+- 2026-03 新增：Roadmap 任务01（TODO 现状校准）收口：清理“已落地但未闭环语义”混合标记，并将 CoreBox/Nexus 剩余优先级重排为 `SDK Hard-Cut E~F -> Gate D -> Gate E -> View Mode 安全收口 -> Nexus 设备授权风控`（`docs/plan-prd/TODO.md`）。
 - 2026-02 新增：CoreApp 新增 `FlipDialog` 统一封装并完成 16 个 `TxFlipOverlay` 场景迁移，默认宽弹框规格（`md/lg/xl/full`）与 reference 隐藏/恢复行为统一，页面侧不再重复声明 `Teleport`。
 - 2026-02 新增：Nexus 业务场景完成 15 处 `TxFlipOverlay -> FlipDialog` 迁移，统一 reference/source 隐藏恢复与 `size=md/lg/xl` 宽弹框策略；`pages/test` 与 `content/demos` 继续保留 `TxFlipOverlay` 作为测试/演示边界。
 - 2026-02 新增：Intelligence Agent 一次切换（Nexus + Core-App）完成 `intelligence-agent` 命名空间上线；旧 `intelligence-lab` 路由统一返回 `410`；Prompt Registry（registry + binding）完成 schema 对齐与默认提示词落库引导；`session/stream` 主链切换 LangGraph 五阶段状态机并提供 Prompt Registry 管理 API/UI。
 - 2026-03 新增：OmniPanel 进入 40 点推进批次，已落地默认加载、执行门禁去除、错误码与刷新原因收敛、键盘交互、组件拆分与主/渲定向单测（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）。
 - 2026-03 新增：Pilot（`apps/pilot`）完成首版 Chat-first 落地（会话 API + SSE + `fromSeq` 补播 + Trace 抽屉），并将 Intelligence 核心类型/Runtime 收口到 `packages/tuff-intelligence`（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
 - 2026-03 新增：Pilot 接入 Nexus 登录桥接（一次性短票据）并保持按 `user_id` 历史隔离；聊天区开启 Markdown 渲染；新增 `apps/pilot/wrangler.toml` 以支持独立 Cloudflare Pages 测试部署。
+- 2026-03 新增：Pilot 认证正式收敛到 `pilot_auth_session`（legacy header/cookie/bearer/dev bypass 全移除），Cloudflare 配置压缩为最小变量集（`origin=https://tuff.tagzxia.com` + Pilot 独立 D1/R2 绑定，敏感项统一放 secrets）。
+- 2026-03 新增：Pilot 登录体验调整为“登录页手动授权”（`/auth/login` -> `/auth/authorize`），并开放访客模式（设备 ID 绑定历史，统一 3 天有效期自动清理）。
+- 2026-03 新增：Pilot 登录与 Nexus 对接升级为 OAuth 授权码模式（`/api/pilot/oauth/authorize` + `/api/pilot/oauth/token`），Pilot 回调启用 `state` 校验。
+- 2026-03 新增：Pilot 登录回跳增加环境自适配（dev 默认 `http://127.0.0.1:3200`，非 dev 默认 `https://tuff.tagzxia.com`），修复本地 cloudflare dev 被线上 origin 覆盖问题。
+- 2026-03 新增：Nexus 新增通用 OAuth Client 申请能力（`/api/dashboard/oauth/clients`），当前仅 `team admin` / `nexus admin` 可用；Pilot OAuth 同步切换为已注册 `client_id` + `client_secret` 标准授权码模式（不再依赖 `pilot_web` allowlist）。
+- 2026-03 新增：Nexus OAuth 应用管理补齐编辑与密钥轮换能力（`PATCH /api/dashboard/oauth/clients/:id`、`POST /api/dashboard/oauth/clients/:id/rotate-secret`），Dashboard 支持就地编辑与一键重新生成 secret。
+- 2026-03 新增：Pilot/Nexus bridge legacy 清理完成：`/api/pilot/auth/bridge-*` 全部下线，Pilot 回调仅接受 `code+state`，`PILOT_NEXUS_BRIDGE_SECRET` 与 `x-pilot-bridge-secret` 兼容路径移除。
+- 2026-03 新增：Pilot 高标准交付完成首批闭环：附件存储抽象（memory/R2/MinIO-S3）+ 附件内容读取接口、图片多模态识别发送、`fromSeq+follow` 刷新自动续接、Markdown 分块渐进渲染（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
+- 2026-03 新增：Pilot 补齐“低配置接入”能力：无 MinIO 时支持 `attachmentPublicBaseUrl` 签名 URL 回退；新增 `/admin/storage` 动态配置后台（D1 持久化）。
+- 2026-03 新增：Pilot 附件上传增加本地私网门禁：未配置 MinIO 且无公网 Base URL 时拒绝上传，避免模型侧读不到附件。
 - 2026-03 新增：Intelligence 流式链路完成兼容增强：Core-App 新增 `intelligence:agent:session:subscribe` 真推流，旧 `session:stream` 保持查询语义；runtime trace 引入单调 `seq` 与 `fromSeq` 续播能力，Nexus `session/stream` keepalive 同步补齐 `stream.heartbeat` 事件（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
 - 2026-03 新增：Pilot DeepAgent 输出链路补齐增量渲染：runtime 支持 `engine.runStream()` 优先分发，后端持续输出 `assistant.delta`；前端补齐 `assistant.final` 去重拼接，避免“delta + final”重复渲染（`docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`）。
 - 2026-03 新增：Pilot 下一阶段执行文档落地，明确“测试优先 -> Nexus OAuth -> tuff-pilot-cli -> 后端渠道可配置”的硬顺序（`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`）。

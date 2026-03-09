@@ -5,8 +5,9 @@
 ## 入门四件套（默认推荐）
 1. **浏览器打开**（`touch-browser-open`）：打开链接最快入口。
 2. **智能问答**（`touch-intelligence`）：临时问答、改写、总结。
-3. **工作区脚本**（`touch-workspace-scripts`）：跑 lint/test/build 不用切终端。
-4. **系统快捷动作**（`touch-quick-actions`）：锁屏、静音、通知设置。
+3. **翻译**（`touch-translation`）：快捷翻译与多源翻译。
+4. **工作区脚本**（`touch-workspace-scripts`）：跑 lint/test/build 不用切终端。
+5. **系统快捷动作**（`touch-quick-actions`）：锁屏、静音、通知设置。
 
 ## 研发场景组合
 - **代码片段库** + **文本片段库**：减少重复输入。

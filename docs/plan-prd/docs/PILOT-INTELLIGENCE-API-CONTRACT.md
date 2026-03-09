@@ -1,6 +1,6 @@
 # Pilot × Intelligence API / 事件契约（V1）
 
-> 更新时间：2026-03-08  
+> 更新时间：2026-03-09  
 > 适用范围：`apps/pilot`、`packages/tuff-intelligence`
 
 ## 1. 目标与范围
@@ -35,6 +35,9 @@
 
 - `GET /api/pilot/chat/sessions/:sessionId/messages`
   - 出参：`{ messages, attachments }`
+  - 约定：
+    - `messages[].metadata.attachments?`：当前用户消息携带的附件快照（无 `dataUrl` 大字段）。
+    - `attachments[]`：会话附件清单，包含 `ref`（`memory://` 或 `r2://`）与 `previewUrl`（受控预览地址）。
 
 - `GET /api/pilot/chat/sessions/:sessionId/trace?fromSeq=&limit=`
   - 出参：`{ traces }`
@@ -42,11 +45,40 @@
 ### 3.3 附件
 
 - `POST /api/pilot/chat/sessions/:sessionId/uploads`
-  - 入参：`{ name, mimeType, size, contentBase64? }`
+  - 入参：`{ name, mimeType, size, contentBase64 }`
+  - 约束：若运行环境为本地/私网且未配置 MinIO（或未配置可用公网 Base URL），接口返回 `400` 并拒绝附件上传。
   - 出参：
-    - `attachment`（D1 元数据）
+    - `attachment`（D1 元数据，含 `previewUrl`）
     - `upload`（签名 URL 元信息）
-    - `directUploaded`（是否直接写入 R2）
+    - `directUploaded`（本次请求已写入对象存储）
+
+- `GET /api/pilot/chat/sessions/:sessionId/attachments/:attachmentId/content`
+  - 返回附件二进制内容（鉴权 + 会话归属校验）
+  - 用途：前端预览与模型读取桥接
+  - 支持签名访问参数：`?exp=<ms>&sig=<hmac>`（用于模型侧无登录态拉取）
+
+#### 3.3.1 附件输入边界（V1）
+
+- 图片附件：服务端优先转 `data URL`，在模型侧按多模态输入（`image_url` / `input_image`）注入。
+- 当附件存储为 MinIO（`s3://`）且存在可访问对象 URL 时，优先使用 URL 注入，避免大图 `data URL` 膨胀。
+- 非图片附件：当前仅注入结构化元数据（`name/mimeType/size/ref`），不做 PDF/Office/OCR 通用解析。
+- 存储迁移位：当前支持 `memory` 与 `R2`，通过统一 `ref` 协议兼容后续 MinIO（S3 兼容）迁移。
+
+#### 3.3.2 本地 MinIO 联调（新增）
+
+- 支持 `PILOT_ATTACHMENT_PROVIDER=s3|minio|auto`。
+- MinIO 所需变量：
+  - `PILOT_MINIO_ENDPOINT`
+  - `PILOT_MINIO_BUCKET`
+  - `PILOT_MINIO_ACCESS_KEY`
+  - `PILOT_MINIO_SECRET_KEY`
+  - 可选：`PILOT_MINIO_REGION`（默认 `us-east-1`）、`PILOT_MINIO_FORCE_PATH_STYLE`（默认 `true`）
+  - 可选：`PILOT_MINIO_PUBLIC_BASE_URL`（推荐为 bucket root URL，用于直接返回模型可访问 URL）
+- 无 MinIO 时可仅配置 `PILOT_ATTACHMENT_PUBLIC_BASE_URL`，系统会返回签名的附件内容 URL（`/attachments/:id/content?exp&sig`）。
+- 支持运行时动态配置（D1 持久化）：
+  - `GET /api/pilot/admin/storage-config`
+  - `POST /api/pilot/admin/storage-config`
+  - 页面入口：`/admin/storage`
 
 ### 3.4 会话控制
 
@@ -60,7 +92,11 @@
   - Header：`Accept: text/event-stream`
   - 入参：
     - 发起新轮次：`{ message, attachments?, metadata? }`
-    - 仅补播：`{ fromSeq }`
+      - `attachments[]`：`{ id, type, ref, name?, mimeType?, previewUrl? }`
+    - 补播并追尾：`{ fromSeq, follow?: boolean }`
+      - `follow` 默认 `true`（仅 `fromSeq` 模式生效）
+      - `follow=true`：先 replay，再持续追尾直到会话结束
+      - `follow=false`：仅 replay 后立即 `done`
 
 ### 3.6 Core-App IPC 推流（兼容新增）
 
@@ -74,7 +110,7 @@
     - 若传入 `fromSeq`，先下发 `replay.started -> replay events(replay=true) -> replay.finished`
     - 然后进入实时 trace 推送
     - keepalive 事件：`stream.heartbeat`（10s）
-    - 客户端断开时会话写入 `paused_disconnect`
+    - 客户端断开仅中断当前订阅，不强制写入 `paused_disconnect`
 
 ## 4. SSE 事件契约
 
@@ -127,6 +163,7 @@
 - 回放事件包含 `replay: true`。
 - 前端应按 `seq` 去重并更新本地游标。
 - 当请求仅包含 `fromSeq`（无 `message`）时，服务端按只读补播处理，不会新增 trace `seq` 记录。
+- 当 `follow=true` 时，replay 完成后会持续追尾新 trace（`replay=false`）直到会话从 `executing/planning` 退出。
 
 ## 5. 状态机
 
@@ -140,7 +177,7 @@
 状态转移关键点：
 
 - 新消息进入 `executing`
-- 客户端断开或内部保活中断进入 `paused_disconnect`
+- 客户端断开默认不再立即 `pause`；优先保持后台继续执行
 - 正常完成进入 `completed`
 - 异常进入 `failed`
 
@@ -160,11 +197,13 @@ sequenceDiagram
   API-->>UI: SSE stream.heartbeat (interval)
 
   UI-x API: network disconnect
-  API->>D1: pauseSession(client_disconnect)
+  API->>RT: keep running in background (waitUntil)
+  RT->>D1: continue appendTrace(seq++)
 
-  UI->>API: POST /stream ({fromSeq:lastSeq+1})
+  UI->>API: POST /stream ({fromSeq:lastSeq+1, follow:true})
   API->>D1: listTrace(fromSeq)
   API-->>UI: SSE replay events (replay=true)
+  API-->>UI: SSE tail events (replay=false)
   API-->>UI: SSE done
 ```
 
@@ -173,7 +212,7 @@ sequenceDiagram
 - `400`：参数缺失或格式非法（如 `message/fromSeq` 同时为空）
 - `401`：未认证
 - `404`：会话不存在（可选，当前实现会自动创建）
-- `408/499`：客户端断开（由 `session.paused` 语义体现）
+- `499`：客户端中断当前 SSE 订阅（会话可继续后台执行）
 - `500`：运行时内部错误
 
 ## 8. 默认模型配置（V1 当前默认）

@@ -53,21 +53,20 @@
 ## 4.1 统一认证策略
 
 - **唯一身份源**：Nexus。
-- Pilot 不再依赖 `x-pilot-user-id` 作为主路径（仅 dev fallback）。
-- Pilot API 统一接受 Nexus 颁发 token（Bearer）并校验用户身份。
+- Pilot 不再依赖 `x-pilot-user-id` / `x-user-id` / `Bearer` 直通等 legacy 路径。
+- Pilot API 鉴权统一为 `pilot_auth_session`（登录用户）或设备访客 ID（未登录）。
 
 ## 4.2 推荐接入路径
 
-- Web 登录：跳转 Nexus `/sign-in`（带 `redirect_url` 回 Pilot）。
-- 回调换取 token：复用 Nexus `sign-in-token` 语义。
-- Pilot 服务端鉴权：优先 Bearer token，其次（开发期）兼容旧 header/cookie。
+- Web 登录：`/auth/login` 页面手动触发 `/auth/authorize`，再跳转 Nexus `/api/pilot/oauth/authorize`。
+- 回调换取身份：`/auth/callback` 使用 `code + state` 调用 Nexus `/api/pilot/oauth/token`。
+- Pilot 服务端鉴权：仅使用会话 cookie（登录）或设备访客身份（未登录）。
 
 ## 4.3 Pilot 需要新增/调整
 
-- `GET /api/pilot/auth/login`：生成并跳转 Nexus 登录 URL。
-- `GET /api/pilot/auth/callback`：接收回调并保存 Pilot 侧会话 token。
-- `POST /api/pilot/auth/logout`：清理 token/cookie。
-- `GET /api/pilot/auth/me`：返回当前登录态（供前端渲染）。
+- `GET /auth/login`：展示“授权并登录 Nexus / 继续访客使用”页面。
+- `GET /auth/authorize`：生成 OAuth state 并重定向到 Nexus 授权端点。
+- `GET /auth/callback`：接收 `code + state`，服务端换取用户身份并写入 `pilot_auth_session`。
 
 ## 4.4 前端行为
 
@@ -137,3 +136,66 @@
 - OAuth 回调失败：回退到登录页并保留错误码。
 - CLI token 失效：统一提示重新 `login`。
 - channel 配置异常：回退默认 channel，写入 trace 便于排查。
+
+## 10. 当前落地口径（2026-03-09）
+
+- Pilot/Nexus bridge legacy 已下线：
+  - `GET/POST /api/pilot/auth/bridge-*` 不再提供。
+  - Pilot 回调只接受 `code + state`，不再接受 `ticket`。
+- Pilot Web / CLI 统一使用 OAuth 客户端（`client_id + client_secret`）调用 `POST /api/pilot/oauth/token`。
+
+## 11. API 调用示例（CLI 适配）
+
+### 11.1 创建 OAuth 客户端（team admin / nexus admin）
+
+```bash
+curl -X POST "http://127.0.0.1:3200/api/dashboard/oauth/clients" \
+  -H "content-type: application/json" \
+  -H "cookie: <nexus_session_cookie>" \
+  --data '{
+    "scope": "team",
+    "name": "pilot-cli-local",
+    "redirectUris": ["http://127.0.0.1:14565/callback"]
+  }'
+```
+
+### 11.2 浏览器授权（CLI 打开该 URL）
+
+```text
+GET /api/pilot/oauth/authorize
+  ?response_type=code
+  &client_id=<client_id>
+  &redirect_uri=http%3A%2F%2F127.0.0.1%3A14565%2Fcallback
+  &state=<opaque_state>
+```
+
+### 11.3 CLI 本地回调拿到 code 后换 token
+
+```bash
+curl -X POST "http://127.0.0.1:3200/api/pilot/oauth/token" \
+  -H "content-type: application/json" \
+  --data '{
+    "grant_type": "authorization_code",
+    "client_id": "<client_id>",
+    "client_secret": "<client_secret>",
+    "code": "<code>",
+    "redirect_uri": "http://127.0.0.1:14565/callback"
+  }'
+```
+
+## 12. Pilot 本地回调地址配置（Web）
+
+1. 本地启动 Pilot：`pnpm -C "apps/pilot" run dev`（默认从 `3200` 起找可用端口）。
+2. 本地启动 Nexus：`pnpm -C "apps/nexus" run dev`（本地 `3200`）。
+3. Pilot 本地环境建议：
+   - `NUXT_PUBLIC_NEXUS_ORIGIN=http://127.0.0.1:3200`
+   - `PILOT_NEXUS_INTERNAL_ORIGIN=http://127.0.0.1:3200`
+   - `PILOT_NEXUS_OAUTH_CLIENT_ID=<dashboard 创建后获得>`
+   - `PILOT_NEXUS_OAUTH_CLIENT_SECRET=<dashboard 创建后获得>`
+4. 回调地址不再走 allowlist，直接在 Nexus OAuth 应用的 `redirectUris` 中注册：
+   - `http://127.0.0.1:3200/auth/callback`
+   - `http://localhost:3200/auth/callback`
+   - `http://127.0.0.1:3201/auth/callback`
+   - `http://localhost:3201/auth/callback`
+
+> 如果你固定要求 Pilot 本地端口是 3200，请确保 3200 未被占用，或在启动前设置 `PILOT_DEV_PORT=3200`。

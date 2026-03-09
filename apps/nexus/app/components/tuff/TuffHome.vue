@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, watch } from 'vue'
-import TuffLandingAggregation from './landing/TuffLandingAggregation.vue'
 import TuffLandingAiOverview from './landing/TuffLandingAiOverview.vue'
 import TuffLandingBuiltForYou from './landing/TuffLandingBuiltForYou.vue'
 import TuffLandingCommunity from './landing/TuffLandingCommunity.vue'
@@ -11,16 +10,11 @@ import TuffLandingHero from './landing/TuffLandingHero.vue'
 import TuffLandingIntegrations from './landing/TuffLandingIntegrations.vue'
 import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
 import TuffLandingPlugins from './landing/TuffLandingPlugins.vue'
-import TuffLandingPricing from './landing/TuffLandingPricing.vue'
-import TuffLandingStarSnippets from './landing/TuffLandingStarSnippets.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingWaitlist from './landing/TuffLandingWaitlist.vue'
 import { useTuffHomeAdaptation } from '~/composables/useTuffHomeAdaptation'
 import { useTuffHomeSections } from '~/composables/useTuffHomeSections'
 
-const showStarSnippets = false
-const showAggregation = false
-const showPricing = false
 const { enableSmoothScroll } = useTuffHomeAdaptation()
 
 const {
@@ -30,13 +24,10 @@ const {
   aiOverviewSectionRef,
   instantPreviewSectionRef,
   builtForYouSectionRef,
-  starSnippetsSectionRef,
-  aggregationSectionRef,
   featuresSectionRef,
   ecosystemSectionRef,
   integrationsSectionRef,
   communitySectionRef,
-  pricingSectionRef,
   faqSectionRef,
   waitlistSectionRef,
 } = useTuffHomeSections({
@@ -120,26 +111,6 @@ useHead({
       </section>
 
       <section
-        v-if="showStarSnippets"
-        id="star-snippets"
-        ref="starSnippetsSectionRef"
-        class="TuffHome-SmoothSection"
-        data-smooth-section
-      >
-        <TuffLandingStarSnippets />
-      </section>
-
-      <section
-        v-if="showAggregation"
-        id="aggregation"
-        ref="aggregationSectionRef"
-        class="TuffHome-SmoothSection"
-        data-smooth-section
-      >
-        <TuffLandingAggregation />
-      </section>
-
-      <section
         id="features"
         ref="featuresSectionRef"
         class="TuffHome-SmoothSection"
@@ -157,14 +128,6 @@ useHead({
         <TuffLandingEcosystem />
       </section>
 
-      <!-- <section
-        ref="experienceSectionRef"
-        class="TuffHome-SmoothSection"
-        data-smooth-section
-      >
-        <TuffLandingExperience />
-      </section> -->
-
       <section
         id="integrations"
         ref="integrationsSectionRef"
@@ -181,16 +144,6 @@ useHead({
         data-smooth-section
       >
         <TuffLandingCommunity />
-      </section>
-
-      <section
-        v-if="showPricing"
-        id="pricing"
-        ref="pricingSectionRef"
-        class="TuffHome-SmoothSection"
-        data-smooth-section
-      >
-        <TuffLandingPricing />
       </section>
 
       <section

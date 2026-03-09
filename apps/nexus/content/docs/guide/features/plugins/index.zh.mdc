@@ -8,6 +8,7 @@
 | 浏览器打开 | `browser.open` | [查看文档](./browser-open.zh.md) |
 | 浏览器收藏 | `browser.bookmarks` | [查看文档](./browser-bookmarks.zh.md) |
 | 智能问答 | `intelligence.ask` | [查看文档](./intelligence.zh.md) |
+| 翻译 | `touch-translate` | [查看文档](./translation.zh.md) |
 | 代码片段库 | `code-snippets.search` | [查看文档](./code-snippets.zh.md) |
 | 文本片段库 | `text-snippets.search` | [查看文档](./text-snippets.zh.md) |
 | 批量重命名 | `batch-rename` | [查看文档](./batch-rename.zh.md) |

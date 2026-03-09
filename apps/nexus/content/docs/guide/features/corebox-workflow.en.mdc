@@ -1,0 +1,29 @@
+# CoreBox Capability Status (Workflow / AI / Translation / Wallpaper)
+
+> This page tracks what is available now and avoids presenting roadmap items as shipped features.
+
+## Status Matrix
+
+| Capability | Current Status | Entry | Source of Truth |
+| --- | --- | --- | --- |
+| Workflow (task orchestration) | Baseline flow is available via CoreBox commands + plugin composition; **no standalone Workflow Studio page is exposed** | `script / workspace / run` | `plugins/touch-workspace-scripts/manifest.json` |
+| AI Q&A | Available | `ai / @ai / /ai` | `plugins/touch-intelligence/manifest.json` |
+| Translation | Available (single-source + multi-source); screenshot translate is experimental | `fy / translate / fy-multi` | `plugins/touch-translation/manifest.json` |
+| Wallpaper | Available (advanced setting in app style page) | Settings → Appearance/Style (ThemeStyle) | `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue` |
+
+## Recommended CoreBox Path
+
+1. Type `ai` for direct Q&A, rewrite, and summaries.
+2. Type `fy` for translation; use `fy-multi` for multi-provider translation.
+3. Type `script` to run workspace `package.json` scripts.
+
+## Wallpaper Scope (Current)
+
+- Sources: `none / bing / custom / folder / desktop`.
+- Adjustments: blur, opacity, brightness, contrast, saturate.
+- Sync-related toggles: copy to wallpaper library + cloud sync.
+
+## Scope Notes
+
+- Pilot-side workflow is intentionally excluded here.
+- If docs and runtime differ, trust manifests and runtime implementation.

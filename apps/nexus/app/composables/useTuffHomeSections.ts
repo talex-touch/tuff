@@ -24,17 +24,12 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
   const aiOverviewSectionRef = ref<HTMLElement | null>(null)
   const instantPreviewSectionRef = ref<HTMLElement | null>(null)
   const builtForYouSectionRef = ref<HTMLElement | null>(null)
-  const starSnippetsSectionRef = ref<HTMLElement | null>(null)
-  const aggregationSectionRef = ref<HTMLElement | null>(null)
   const featuresSectionRef = ref<HTMLElement | null>(null)
   const ecosystemSectionRef = ref<HTMLElement | null>(null)
-  const experienceSectionRef = ref<HTMLElement | null>(null)
   const integrationsSectionRef = ref<HTMLElement | null>(null)
   const communitySectionRef = ref<HTMLElement | null>(null)
-  const pricingSectionRef = ref<HTMLElement | null>(null)
   const faqSectionRef = ref<HTMLElement | null>(null)
   const waitlistSectionRef = ref<HTMLElement | null>(null)
-  const footerSectionRef = ref<HTMLElement | null>(null)
 
   const sectionDescriptors: SectionDescriptor[] = [
     { ref: statsSectionRef, id: 'stats' },
@@ -42,17 +37,12 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     { ref: aiOverviewSectionRef, id: 'ai-overview' },
     { ref: instantPreviewSectionRef, id: 'instant-preview' },
     { ref: builtForYouSectionRef, id: 'built-for-you' },
-    { ref: starSnippetsSectionRef, id: 'star-snippets' },
-    { ref: aggregationSectionRef, id: 'aggregation' },
     { ref: featuresSectionRef, id: 'features' },
     { ref: ecosystemSectionRef, id: 'ecosystem' },
-    { ref: experienceSectionRef, id: 'experience' },
     { ref: integrationsSectionRef, id: 'integrations' },
     { ref: communitySectionRef, id: 'community' },
-    { ref: pricingSectionRef, id: 'pricing' },
     { ref: faqSectionRef, id: 'faq' },
     { ref: waitlistSectionRef, id: 'waitlist' },
-    { ref: footerSectionRef, id: 'footer' },
   ]
 
   let smoothScrollTween: GsapTween | null = null
@@ -349,16 +339,11 @@ export function useTuffHomeSections(options: UseTuffHomeSectionsOptions = {}) {
     aiOverviewSectionRef,
     instantPreviewSectionRef,
     builtForYouSectionRef,
-    starSnippetsSectionRef,
-    aggregationSectionRef,
     featuresSectionRef,
     ecosystemSectionRef,
-    experienceSectionRef,
     integrationsSectionRef,
     communitySectionRef,
-    pricingSectionRef,
     faqSectionRef,
     waitlistSectionRef,
-    footerSectionRef,
   }
 }

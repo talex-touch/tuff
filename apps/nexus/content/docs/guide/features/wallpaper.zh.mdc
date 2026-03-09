@@ -1,0 +1,27 @@
+# 壁纸与背景（设置页）
+
+## 能力概览
+
+当前壁纸能力位于设置页样式模块（ThemeStyle），不是独立插件入口。
+
+- 来源：`无 / Bing / 自定义图片 / 文件夹轮播 / 桌面壁纸`
+- 调节：模糊、透明度、亮度、对比度、饱和度
+- 同步：支持复制到壁纸库后再开启云同步
+
+## 使用步骤
+
+1. 打开设置 → 样式（ThemeStyle）。
+2. 选择壁纸来源（例如 `desktop` 或 `folder`）。
+3. 按需调整滤镜参数。
+4. 需要多设备同步时，先启用“复制到壁纸库”，再开启“同步到云端”。
+
+## 约束与提示
+
+- `desktop` 来源会读取系统桌面壁纸路径。
+- `folder` 来源支持按时间轮播，间隔最小为 5 分钟。
+- 未启用壁纸库时，不建议开启云同步。
+
+## 代码参考
+
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts`

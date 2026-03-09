@@ -1,0 +1,29 @@
+# CoreBox 工作流现状（Workflow / AI / 翻译 / 壁纸）
+
+> 本页只描述当前可用能力，避免把规划态内容当成已上线功能。
+
+## 状态矩阵
+
+| 能力 | 当前状态 | 入口 | 代码依据 |
+| --- | --- | --- | --- |
+| Workflow（任务编排） | 已落地基础链路：以 CoreBox 命令 + 插件能力组合为主；**暂无独立 Workflow Studio 页面入口** | `script / workspace / run` | `plugins/touch-workspace-scripts/manifest.json` |
+| AI 问答 | 已落地 | `ai / @ai / /ai / 智能 / 问答` | `plugins/touch-intelligence/manifest.json` |
+| 翻译 | 已落地（单源 + 多源）；截图翻译为实验能力 | `fy / translate / 翻译 / fy-multi / 多源翻译` | `plugins/touch-translation/manifest.json` |
+| 壁纸 | 已落地（设置页高级项） | 设置 → 外观/样式（ThemeStyle） | `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue` |
+
+## CoreBox 推荐路径
+
+1. 输入 `ai`：直接问答、改写、总结。
+2. 输入 `fy`：调用翻译插件；多源场景可用 `fy-multi`。
+3. 输入 `script`：执行 workspace `package.json` 脚本。
+
+## 壁纸能力说明（当前）
+
+- 支持来源：`none / bing / custom / folder / desktop`。
+- 支持调节：模糊、透明度、亮度、对比度、饱和度。
+- 支持“复制到壁纸库 + 同步到云端”联动开关。
+
+## 边界说明
+
+- 本页不覆盖 Pilot 侧流程。
+- 若功能与文档冲突，以 manifest 与运行时实现为准。
