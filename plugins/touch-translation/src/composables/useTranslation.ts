@@ -4,6 +4,9 @@ import { computed, reactive, ref } from 'vue'
 import { useTranslationProvider } from './useTranslationProvider'
 
 const MAX_HISTORY_ITEMS = 10
+const NO_INPUT_MESSAGE = '无输入：请输入要翻译的文本'
+const PERMISSION_DENIED_MESSAGE = '权限被拒绝：请在插件设置中授予所需权限后重试'
+const CALL_FAILED_MESSAGE = '调用失败：翻译服务暂不可用，请稍后重试'
 
 // 全局状态
 const currentRequest = ref<TranslationRequest | null>(null)
@@ -15,6 +18,33 @@ const currentResponse = reactive<TranslationResponse>({
   isComplete: false,
 })
 const history = ref<HistoryItem[]>([])
+const globalError = ref('')
+
+function normalizeErrorMessage(rawMessage: unknown): string {
+  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
+  if (!message) {
+    return CALL_FAILED_MESSAGE
+  }
+
+  const lowerMessage = message.toLowerCase()
+  if (
+    lowerMessage.includes('permission')
+    || lowerMessage.includes('权限')
+    || lowerMessage.includes('denied')
+    || lowerMessage.includes('forbidden')
+    || lowerMessage.includes('unauthorized')
+    || lowerMessage.includes('network.internet')
+    || lowerMessage.includes('intelligence.basic')
+  ) {
+    return PERMISSION_DENIED_MESSAGE
+  }
+
+  if (message.startsWith('无输入')) {
+    return NO_INPUT_MESSAGE
+  }
+
+  return `${CALL_FAILED_MESSAGE}（${message}）`
+}
 
 export function useTranslation() {
   const { enabledProviders, getProvider } = useTranslationProvider()
@@ -105,8 +135,10 @@ export function useTranslation() {
     providerIds?: string[],
   ): Promise<TranslationResponse> => {
     if (!text.trim()) {
-      throw new Error('翻译文本不能为空')
+      globalError.value = NO_INPUT_MESSAGE
+      throw new Error(NO_INPUT_MESSAGE)
     }
+    globalError.value = ''
 
     // 准备请求
     const request: TranslationRequest = {
@@ -131,7 +163,8 @@ export function useTranslation() {
     if (providers.length === 0) {
       currentResponse.isLoading = false
       currentResponse.isComplete = true
-      throw new Error('没有可用的翻译提供者')
+      globalError.value = CALL_FAILED_MESSAGE
+      throw new Error(CALL_FAILED_MESSAGE)
     }
 
     // 并行执行所有翻译
@@ -146,7 +179,8 @@ export function useTranslation() {
         return result
       }
       catch (error) {
-        const err = error instanceof Error ? error : new Error('翻译失败')
+        const normalizedMessage = normalizeErrorMessage(error instanceof Error ? error.message : '')
+        const err = new Error(normalizedMessage)
         currentResponse.errors.set(provider.id, err)
         return null
       }
@@ -157,6 +191,13 @@ export function useTranslation() {
 
     currentResponse.isLoading = false
     currentResponse.isComplete = true
+
+    if (currentResponse.results.size === 0 && currentResponse.errors.size > 0) {
+      const firstError = currentResponse.errors.values().next().value as Error | undefined
+      globalError.value = normalizeErrorMessage(firstError?.message || '')
+    } else {
+      globalError.value = ''
+    }
 
     // 收集成功的翻译结果
     const successfulResults: TranslationResult[] = []
@@ -206,13 +247,20 @@ export function useTranslation() {
         currentResponse.results.set(providerId, result)
       }
       catch (error) {
-        const err = error instanceof Error ? error : new Error('重试翻译失败')
+        const normalizedMessage = normalizeErrorMessage(error instanceof Error ? error.message : '')
+        const err = new Error(normalizedMessage)
         currentResponse.errors.set(providerId, err)
       }
     })
 
     await Promise.allSettled(promises)
     currentResponse.isLoading = false
+    if (currentResponse.results.size === 0 && currentResponse.errors.size > 0) {
+      const firstError = currentResponse.errors.values().next().value as Error | undefined
+      globalError.value = normalizeErrorMessage(firstError?.message || '')
+    } else {
+      globalError.value = ''
+    }
   }
 
   // 取消当前翻译
@@ -220,6 +268,7 @@ export function useTranslation() {
     currentRequest.value = null
     currentResponse.isLoading = false
     currentResponse.isComplete = true
+    globalError.value = ''
   }
 
   // 计算属性
@@ -228,6 +277,11 @@ export function useTranslation() {
   const isTranslating = computed(() => currentResponse.isLoading)
   const translationResults = computed(() => Array.from(currentResponse.results.values()))
   const translationErrors = computed(() => Array.from(currentResponse.errors.entries()))
+  const errorMessage = computed(() => globalError.value)
+
+  const clearError = () => {
+    globalError.value = ''
+  }
 
   // 初始化
   initHistory()
@@ -242,6 +296,7 @@ export function useTranslation() {
     isTranslating,
     translationResults,
     translationErrors,
+    errorMessage,
 
     // 方法
     translate,
@@ -251,5 +306,6 @@ export function useTranslation() {
     removeFromHistory,
     clearHistory,
     initHistory,
+    clearError,
   }
 }

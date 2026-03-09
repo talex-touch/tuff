@@ -25,8 +25,10 @@ const {
   history,
   isTranslating,
   hasResults,
+  errorMessage,
   removeFromHistory,
   retryTranslation,
+  clearError,
 } = useTranslation()
 
 const {
@@ -60,15 +62,10 @@ function toggleSettings() {
 }
 
 async function translate() {
-  const textToTranslate = query.value.trim()
-  if (!textToTranslate) {
-    return
-  }
-
   showSettings.value = false
 
   try {
-    await performTranslation(textToTranslate, 'zh', 'auto')
+    await performTranslation(query.value, 'zh', 'auto')
   }
   catch (error) {
     void error
@@ -114,6 +111,10 @@ function closeConfigModal() {
 function saveProviderConfig(providerId: string, config: Record<string, any>) {
   updateProviderConfig(providerId, config)
 }
+
+watch(query, () => {
+  clearError()
+})
 
 // 检查提供者是否已配置
 function isProviderConfigured(provider: TranslationProvider): boolean {
@@ -179,7 +180,7 @@ function isProviderConfigured(provider: TranslationProvider): boolean {
         <!-- 翻译按钮 -->
         <button
           class="w-full rounded-md bg-blue-600 px-4 py-2 text-white font-semibold disabled:cursor-not-allowed hover:bg-blue-700 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          :disabled="isTranslating || !query.trim()"
+          :disabled="isTranslating"
           @click="translate"
         >
           <span v-if="isTranslating" class="flex items-center justify-center">
@@ -188,6 +189,10 @@ function isProviderConfigured(provider: TranslationProvider): boolean {
           </span>
           <span v-else>翻译</span>
         </button>
+
+        <div v-if="errorMessage" class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+          {{ errorMessage }}
+        </div>
 
         <!-- 历史记录 -->
         <div v-if="history.length > 0" class="pt-2">
