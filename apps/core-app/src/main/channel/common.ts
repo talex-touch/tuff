@@ -234,12 +234,12 @@ const wallpaperListImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
 >('wallpaper:list-images')
-const wallpaperGetDesktopEvent = defineRawEvent<void, { path: string | null }>(
+const wallpaperGetDesktopEvent = defineRawEvent<void, { path: string | null; error?: string }>(
   'wallpaper:get-desktop'
 )
 const wallpaperCopyToLibraryEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
-  { storedPath: string | null; skippedCount: number }
+  { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
 const legacyBuildVerificationEvent = AppEvents.build.getVerificationStatusLegacy
 const legacyBatteryStatusEvent = AppEvents.power.batteryStatus
@@ -359,7 +359,10 @@ async function listWallpaperImages(folderPath: string, recursive = false): Promi
       }
     }
     return results
-  } catch {
+  } catch (error) {
+    log.warn('[CommonChannel] Failed to list wallpaper images', {
+      meta: { folderPath, recursive, error: toErrorMessage(error) }
+    })
     return []
   }
 }
@@ -485,6 +488,10 @@ async function copyWallpaperFolderToLibrary(
   dbUtils: ReturnType<typeof createDbUtils> | null
 ): Promise<{ storedPath: string | null; skippedCount: number }> {
   const images = await listWallpaperImages(sourcePath, true)
+  if (images.length === 0) {
+    return { storedPath: null, skippedCount: 0 }
+  }
+
   const folderName = safeNamespaceSegment(path.basename(sourcePath))
   const folderHash = createHash('sha1').update(sourcePath).digest('hex').slice(0, 8)
   const folderDir = path.join(libraryRoot, 'folders', `${folderName}-${folderHash}`)
@@ -492,33 +499,41 @@ async function copyWallpaperFolderToLibrary(
 
   let skippedCount = 0
   for (const imagePath of images) {
-    const ext = path.extname(imagePath).toLowerCase()
-    const hash = await computeFileHash(imagePath)
-    const storedPath = path.join(folderDir, `${hash}${ext}`)
+    try {
+      const ext = path.extname(imagePath).toLowerCase()
+      const hash = await computeFileHash(imagePath)
+      const storedPath = path.join(folderDir, `${hash}${ext}`)
 
-    if (dbUtils) {
-      const existing = await dbUtils.getWallpaperAssetByHash(hash)
-      if (existing) {
+      if (dbUtils) {
+        const existing = await dbUtils.getWallpaperAssetByHash(hash)
+        if (existing?.storedPath && (await fileExists(existing.storedPath))) {
+          skippedCount += 1
+          continue
+        }
+      }
+      if (await fileExists(storedPath)) {
         skippedCount += 1
         continue
       }
-    } else if (await fileExists(storedPath)) {
+
+      await fs.copyFile(imagePath, storedPath)
+      const stat = await fs.stat(imagePath)
+
+      if (dbUtils) {
+        await dbUtils.upsertWallpaperAsset({
+          hash,
+          originalPath: imagePath,
+          storedPath,
+          type: 'file',
+          size: stat.size,
+          ext,
+          createdAt: Date.now()
+        })
+      }
+    } catch (error) {
       skippedCount += 1
-      continue
-    }
-
-    await fs.copyFile(imagePath, storedPath)
-    const stat = await fs.stat(imagePath)
-
-    if (dbUtils) {
-      await dbUtils.upsertWallpaperAsset({
-        hash,
-        originalPath: imagePath,
-        storedPath,
-        type: 'file',
-        size: stat.size,
-        ext,
-        createdAt: Date.now()
+      log.warn('[CommonChannel] Failed to copy wallpaper file from folder source', {
+        meta: { sourcePath, imagePath, error: toErrorMessage(error) }
       })
     }
   }
@@ -1158,24 +1173,76 @@ export class CommonChannelModule extends BaseModule {
         return { images: await listWallpaperImages(folderPath, recursive) }
       }),
       transport.on(wallpaperGetDesktopEvent, async () => {
-        return { path: await getDesktopWallpaperPath() }
+        try {
+          const desktopPath = await getDesktopWallpaperPath()
+          if (desktopPath) {
+            return { path: desktopPath }
+          }
+          const error = 'Desktop wallpaper path is unavailable on current system.'
+          log.warn('[CommonChannel] Desktop wallpaper path is unavailable')
+          return { path: null, error }
+        } catch (error) {
+          const message = toErrorMessage(error)
+          log.warn('[CommonChannel] Failed to read desktop wallpaper path', {
+            meta: { error: message }
+          })
+          return { path: null, error: message }
+        }
       }),
       transport.on(wallpaperCopyToLibraryEvent, async (payload) => {
-        const sourcePath = typeof payload?.sourcePath === 'string' ? payload.sourcePath : ''
+        const rawSourcePath = typeof payload?.sourcePath === 'string' ? payload.sourcePath : ''
+        const sourcePath = resolveTfilePath(rawSourcePath).trim()
         const type = payload?.type === 'folder' ? 'folder' : 'file'
         if (!sourcePath) {
-          return { storedPath: null, skippedCount: 0 }
+          return { storedPath: null, skippedCount: 0, error: 'Wallpaper source path is empty.' }
+        }
+        try {
+          const stat = await fs.stat(sourcePath)
+          if (type === 'folder' && !stat.isDirectory()) {
+            return {
+              storedPath: null,
+              skippedCount: 0,
+              error: 'Wallpaper source is not a directory.'
+            }
+          }
+          if (type === 'file' && !stat.isFile()) {
+            return { storedPath: null, skippedCount: 0, error: 'Wallpaper source is not a file.' }
+          }
+          if (type === 'file' && !isImagePath(sourcePath)) {
+            return {
+              storedPath: null,
+              skippedCount: 0,
+              error: 'Wallpaper source file is not a supported image.'
+            }
+          }
+        } catch (error) {
+          const message = toErrorMessage(error)
+          log.warn('[CommonChannel] Wallpaper source path validation failed', {
+            meta: { sourcePath, type, error: message }
+          })
+          return { storedPath: null, skippedCount: 0, error: message }
         }
         const dbUtils = this.getDbUtils()
         const libraryRoot = path.join(touchApp.app.getPath('userData'), 'wallpapers')
         try {
           if (type === 'folder') {
-            return await copyWallpaperFolderToLibrary(sourcePath, libraryRoot, dbUtils)
+            const result = await copyWallpaperFolderToLibrary(sourcePath, libraryRoot, dbUtils)
+            if (!result.storedPath) {
+              return {
+                storedPath: null,
+                skippedCount: result.skippedCount,
+                error: 'No supported images were found in the selected folder.'
+              }
+            }
+            return result
           }
           return await copyWallpaperFileToLibrary(sourcePath, libraryRoot, dbUtils)
         } catch (error) {
-          log.warn('[CommonChannel] Failed to copy wallpaper to library', { error })
-          return { storedPath: null, skippedCount: 0 }
+          const message = toErrorMessage(error)
+          log.warn('[CommonChannel] Failed to copy wallpaper to library', {
+            meta: { sourcePath, type, error: message }
+          })
+          return { storedPath: null, skippedCount: 0, error: message }
         }
       })
     )

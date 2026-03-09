@@ -1,7 +1,9 @@
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
+import { toast } from 'vue-sonner'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { appSetting } from '~/modules/channel/storage'
 import { normalizeWindowPreference, themeStyle } from '~/modules/storage/theme-style'
 import { buildTfileUrl } from '~/utils/tfile-url'
@@ -12,7 +14,9 @@ const listImagesEvent = defineRawEvent<
   { folderPath: string; recursive?: boolean },
   { images: string[] }
 >('wallpaper:list-images')
-const getDesktopEvent = defineRawEvent<void, { path: string | null }>('wallpaper:get-desktop')
+const getDesktopEvent = defineRawEvent<void, { path: string | null; error?: string }>(
+  'wallpaper:get-desktop'
+)
 
 const FOLDER_ROTATION_TASK = 'wallpaper.folder.rotate'
 const DEFAULT_FILTER = { brightness: 100, contrast: 100, saturate: 100 }
@@ -23,16 +27,24 @@ function resolveWallpaperUrl(pathOrUrl: string): string {
   return buildTfileUrl(pathOrUrl)
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return typeof error === 'string' ? error : 'Unknown error'
+}
+
 export function useWallpaper() {
   const transport = useTuffTransport()
   const pollingService = PollingService.getInstance()
+  const { t } = useI18n()
 
   const activeImagePath = ref('')
   const folderImages = ref<string[]>([])
-  const folderIndex = ref(0)
+  const folderIndex = ref(-1)
   const desktopPath = ref('')
   const bingUrl = ref('')
   const lastBingFetch = ref<number | null>(null)
+  const lastDesktopErrorToast = ref('')
+  const lastFolderEmptyToast = ref('')
 
   const background = computed(() => {
     const raw = appSetting.background ?? {}
@@ -110,20 +122,35 @@ export function useWallpaper() {
         lastBingFetch.value = now
       }
     } catch {
-      // ignore network errors
+      console.warn('[useWallpaper] Failed to fetch Bing wallpaper.')
     }
   }
 
   async function refreshDesktopWallpaper(): Promise<void> {
     try {
       const result = await transport.send(getDesktopEvent)
+      if (result?.error) {
+        console.warn('[useWallpaper] Failed to refresh desktop wallpaper:', result.error)
+        if (lastDesktopErrorToast.value !== result.error) {
+          toast.error(result.error)
+          lastDesktopErrorToast.value = result.error
+        }
+      }
       const path = result?.path ?? ''
       desktopPath.value = path
       if (appSetting.background) {
         appSetting.background.desktopPath = path
       }
-    } catch {
-      // ignore
+      if (path) {
+        lastDesktopErrorToast.value = ''
+      }
+    } catch (error) {
+      const message = toErrorMessage(error)
+      console.warn('[useWallpaper] Failed to refresh desktop wallpaper:', message)
+      if (lastDesktopErrorToast.value !== message) {
+        toast.error(message)
+        lastDesktopErrorToast.value = message
+      }
     }
   }
 
@@ -134,9 +161,12 @@ export function useWallpaper() {
     }
     try {
       const result = await transport.send(listImagesEvent, { folderPath: path, recursive: true })
-      folderImages.value = result?.images ?? []
-    } catch {
+      folderImages.value = (result?.images ?? []).sort((left, right) => left.localeCompare(right))
+      folderIndex.value = -1
+    } catch (error) {
       folderImages.value = []
+      folderIndex.value = -1
+      console.warn('[useWallpaper] Failed to load folder wallpapers:', toErrorMessage(error))
     }
   }
 
@@ -156,8 +186,10 @@ export function useWallpaper() {
       activeImagePath.value = folderImages.value[index]
       return
     }
-    folderIndex.value = (folderIndex.value + 1) % folderImages.value.length
-    activeImagePath.value = folderImages.value[folderIndex.value]
+    const nextIndex =
+      folderIndex.value < 0 ? 0 : (folderIndex.value + 1) % folderImages.value.length
+    folderIndex.value = nextIndex
+    activeImagePath.value = folderImages.value[nextIndex]
   }
 
   function startFolderRotation(): void {
@@ -186,6 +218,7 @@ export function useWallpaper() {
     async () => {
       stopFolderRotation()
       activeImagePath.value = ''
+      folderIndex.value = -1
 
       if (background.value.source === 'none') {
         return
@@ -220,6 +253,20 @@ export function useWallpaper() {
           ? background.value.library.folderStoredPath || background.value.folderPath
           : background.value.folderPath
         await loadFolderImages(folderPath)
+        if (folderImages.value.length === 0) {
+          console.warn('[useWallpaper] No images found for folder wallpaper source.', {
+            folderPath
+          })
+          const toastKey = folderPath.trim()
+          if (toastKey && lastFolderEmptyToast.value !== toastKey) {
+            toast.warning(
+              t('themeStyle.folderNoImages', 'No images found in the selected wallpaper folder.')
+            )
+            lastFolderEmptyToast.value = toastKey
+          }
+          return
+        }
+        lastFolderEmptyToast.value = ''
         startFolderRotation()
       }
     },

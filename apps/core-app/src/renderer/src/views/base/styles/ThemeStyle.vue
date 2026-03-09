@@ -5,6 +5,7 @@ import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, onBeforeUnmount, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 
@@ -33,9 +34,9 @@ type OpenFileRequest = Record<string, unknown>
 const openFileEvent = defineRawEvent<OpenFileRequest, { filePaths?: string[] }>('dialog:open-file')
 const copyWallpaperEvent = defineRawEvent<
   { sourcePath: string; type: 'file' | 'folder' },
-  { storedPath: string | null; skippedCount: number }
+  { storedPath: string | null; skippedCount: number; error?: string }
 >('wallpaper:copy-to-library')
-const getDesktopWallpaperEvent = defineRawEvent<void, { path: string | null }>(
+const getDesktopWallpaperEvent = defineRawEvent<void, { path: string | null; error?: string }>(
   'wallpaper:get-desktop'
 )
 
@@ -75,6 +76,12 @@ function showWindowPreferenceLoading(): void {
 type WallpaperSource = 'none' | 'bing' | 'custom' | 'folder' | 'desktop'
 const WALLPAPER_SOURCES: WallpaperSource[] = ['none', 'bing', 'custom', 'folder', 'desktop']
 const defaultFilter = { brightness: 100, contrast: 100, saturate: 100 }
+let wallpaperSourceSwitchToken = 0
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return typeof error === 'string' ? error : 'Unknown error'
+}
 
 function ensureBackground() {
   if (!appSetting.background) {
@@ -167,7 +174,11 @@ const bgSourceValue = computed({
   },
   set: (val: number) => {
     ensureBackground()
-    appSetting.background!.source = WALLPAPER_SOURCES[val] ?? 'none'
+    const nextSource = WALLPAPER_SOURCES[val] ?? 'none'
+    const previousSource = (appSetting.background!.source ?? 'none') as WallpaperSource
+    appSetting.background!.source = nextSource
+    const currentToken = ++wallpaperSourceSwitchToken
+    void ensureWallpaperSourceReady(nextSource, previousSource, currentToken)
   }
 })
 
@@ -241,6 +252,9 @@ const syncEnabled = computed({
     ensureBackground()
     if (!libraryEnabled.value) return
     appSetting.background!.sync!.enabled = val
+    if (val) {
+      void syncWallpaperLibrary()
+    }
   }
 })
 
@@ -271,32 +285,51 @@ function handleThemeChange(value: string | number, event?: Event): void {
 /**
  * Open file dialog to select custom background image
  */
-async function copyWallpaperToLibrary(type: 'file' | 'folder', sourcePath: string) {
-  if (!libraryEnabled.value || !sourcePath) return
+async function copyWallpaperToLibrary(
+  type: 'file' | 'folder',
+  sourcePath: string
+): Promise<boolean> {
+  if (!libraryEnabled.value || !sourcePath) return false
   try {
     const result = await transport.send(copyWallpaperEvent, { sourcePath, type })
-    if (!appSetting.background?.library) return
+    if (!result?.storedPath) {
+      const message =
+        result?.error || t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library')
+      console.error('[ThemeStyle] Failed to copy wallpaper to library:', {
+        type,
+        sourcePath,
+        message
+      })
+      toast.error(message)
+      return false
+    }
+    if (!appSetting.background?.library) return false
     if (type === 'file') {
       appSetting.background.library.fileStoredPath = result?.storedPath ?? ''
     } else {
       appSetting.background.library.folderStoredPath = result?.storedPath ?? ''
     }
+    return true
   } catch (error) {
-    console.error('Failed to copy wallpaper to library:', error)
+    console.error('[ThemeStyle] Failed to copy wallpaper to library:', error)
+    toast.error(t('themeStyle.wallpaperCopyFailed', 'Failed to copy wallpaper to library'))
+    return false
   }
 }
 
-async function syncWallpaperLibrary() {
-  if (!appSetting.background) return
+async function syncWallpaperLibrary(): Promise<boolean> {
+  if (!appSetting.background || !libraryEnabled.value) return true
+  let success = true
   if (appSetting.background.source === 'custom' && customBgPath.value) {
-    await copyWallpaperToLibrary('file', customBgPath.value)
+    success = (await copyWallpaperToLibrary('file', customBgPath.value)) && success
   }
   if (appSetting.background.source === 'folder' && folderBgPath.value) {
-    await copyWallpaperToLibrary('folder', folderBgPath.value)
+    success = (await copyWallpaperToLibrary('folder', folderBgPath.value)) && success
   }
+  return success
 }
 
-async function selectBackgroundImage() {
+async function selectBackgroundImageInternal(options?: { setSource?: boolean }): Promise<boolean> {
   try {
     const result = await transport.send(openFileEvent, {
       title: t('themeStyle.selectBackgroundImage', 'Select Background Image'),
@@ -306,15 +339,21 @@ async function selectBackgroundImage() {
     if (result && result.filePaths && result.filePaths.length > 0) {
       ensureBackground()
       appSetting.background!.customPath = result.filePaths[0]
-      appSetting.background!.source = 'custom'
+      if (options?.setSource !== false) {
+        appSetting.background!.source = 'custom'
+      }
       await copyWallpaperToLibrary('file', result.filePaths[0])
+      return true
     }
+    return false
   } catch (error) {
-    console.error('Failed to select background image:', error)
+    console.error('[ThemeStyle] Failed to select background image:', error)
+    toast.error(t('themeStyle.selectImageFailed', 'Failed to select background image'))
+    return false
   }
 }
 
-async function selectBackgroundFolder() {
+async function selectBackgroundFolderInternal(options?: { setSource?: boolean }): Promise<boolean> {
   try {
     const result = await transport.send(openFileEvent, {
       title: t('themeStyle.selectBackgroundFolder', 'Select Folder'),
@@ -323,23 +362,111 @@ async function selectBackgroundFolder() {
     if (result && result.filePaths && result.filePaths.length > 0) {
       ensureBackground()
       appSetting.background!.folderPath = result.filePaths[0]
-      appSetting.background!.source = 'folder'
+      if (options?.setSource !== false) {
+        appSetting.background!.source = 'folder'
+      }
       await copyWallpaperToLibrary('folder', result.filePaths[0])
+      return true
     }
+    return false
   } catch (error) {
-    console.error('Failed to select background folder:', error)
+    console.error('[ThemeStyle] Failed to select background folder:', error)
+    toast.error(t('themeStyle.selectFolderFailed', 'Failed to select background folder'))
+    return false
   }
 }
 
-async function refreshDesktopWallpaper() {
+async function refreshDesktopWallpaperInternal(options?: {
+  setSource?: boolean
+  silentError?: boolean
+}): Promise<boolean> {
   try {
     const result = await transport.send(getDesktopWallpaperEvent)
+    const desktopPath = result?.path ?? ''
+    if (!desktopPath) {
+      const message =
+        result?.error ||
+        t('themeStyle.desktopWallpaperUnavailable', 'Desktop wallpaper is unavailable.')
+      console.error('[ThemeStyle] Failed to refresh desktop wallpaper:', message)
+      if (!options?.silentError) {
+        toast.error(message)
+      }
+      return false
+    }
     ensureBackground()
-    appSetting.background!.desktopPath = result?.path ?? ''
-    appSetting.background!.source = 'desktop'
+    appSetting.background!.desktopPath = desktopPath
+    if (options?.setSource !== false) {
+      appSetting.background!.source = 'desktop'
+    }
+    return true
   } catch (error) {
-    console.error('Failed to refresh desktop wallpaper:', error)
+    console.error('[ThemeStyle] Failed to refresh desktop wallpaper:', error)
+    if (!options?.silentError) {
+      const message = toErrorMessage(error)
+      toast.error(
+        t(
+          'themeStyle.desktopWallpaperRefreshFailed',
+          `Failed to refresh desktop wallpaper: ${message}`
+        )
+      )
+    }
+    return false
   }
+}
+
+function rollbackWallpaperSource(
+  expectedSource: WallpaperSource,
+  previousSource: WallpaperSource,
+  token: number
+): void {
+  if (wallpaperSourceSwitchToken !== token) {
+    return
+  }
+  if (appSetting.background?.source === expectedSource) {
+    appSetting.background.source = previousSource
+  }
+}
+
+async function ensureWallpaperSourceReady(
+  nextSource: WallpaperSource,
+  previousSource: WallpaperSource,
+  token: number
+): Promise<void> {
+  if (nextSource === 'custom' && !customBgPath.value) {
+    const selected = await selectBackgroundImageInternal({ setSource: false })
+    if (!selected) {
+      rollbackWallpaperSource(nextSource, previousSource, token)
+    }
+    return
+  }
+  if (nextSource === 'folder' && !folderBgPath.value) {
+    const selected = await selectBackgroundFolderInternal({ setSource: false })
+    if (!selected) {
+      rollbackWallpaperSource(nextSource, previousSource, token)
+    }
+    return
+  }
+  if (nextSource === 'desktop' && !desktopBgPath.value) {
+    const refreshed = await refreshDesktopWallpaperInternal({ setSource: false })
+    if (!refreshed) {
+      rollbackWallpaperSource(nextSource, previousSource, token)
+    }
+  }
+  if (libraryEnabled.value && (nextSource === 'custom' || nextSource === 'folder')) {
+    await syncWallpaperLibrary()
+  }
+}
+
+async function selectBackgroundImage(): Promise<void> {
+  await selectBackgroundImageInternal()
+}
+
+async function selectBackgroundFolder(): Promise<void> {
+  await selectBackgroundFolderInternal()
+}
+
+async function refreshDesktopWallpaper(): Promise<void> {
+  await refreshDesktopWallpaperInternal()
 }
 
 /**
@@ -369,7 +496,7 @@ watch(
   () => appSetting.background?.source,
   (source) => {
     if (source === 'desktop' && !desktopBgPath.value) {
-      void refreshDesktopWallpaper()
+      void refreshDesktopWallpaperInternal({ silentError: true })
     }
   }
 )
