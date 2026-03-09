@@ -43,9 +43,20 @@ onMounted(() => {
 const globalOptionsStore = useLocalStorage('global-options', {
   url: '',
 })
+const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
+const runtimeEndsUrl = String(runtimePublic.endsBaseUrl || '').trim()
 
-if (!globalOptionsStore.value.url)
-  globalOptionsStore.value.url = globalOptions.getEndsUrl()
+if (!globalOptionsStore.value.url) {
+  globalOptionsStore.value.url = runtimeEndsUrl || globalOptions.getEndsUrl()
+}
+else if (runtimeEndsUrl && typeof window !== 'undefined') {
+  const current = String(globalOptionsStore.value.url || '').trim()
+  const origin = window.location.origin
+  const isDefaultLocal = current === '/' || current === origin || current === `${origin}/`
+  if (isDefaultLocal) {
+    globalOptionsStore.value.url = runtimeEndsUrl
+  }
+}
 
 globalOptions.onUpdateUrl((url: string) => {
   globalOptionsStore.value.url = url
@@ -96,7 +107,7 @@ provide('appOptions', pageOptions)
   </ClientOnly>
   <!-- </div> -->
 
-  <GlobeStatus />
+  <!-- <GlobeStatus /> -->
 </template>
 
 <style style="scss">

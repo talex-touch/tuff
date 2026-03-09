@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { MilkdownProvider } from '@milkdown/vue'
-import { ProsemirrorAdapterProvider } from '@prosemirror-adapter/vue'
-import Milkdown from '~/components/article/MilkdownRender.vue'
+import MilkContent from '~/components/article/MilkContent.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -16,11 +14,7 @@ const model = useVModel(props, 'modelValue', emits)
 </script>
 
 <template>
-  <ProsemirrorAdapterProvider>
-    <MilkdownProvider>
-      <Milkdown :content="model" :readonly="readonly" />
-    </MilkdownProvider>
-  </ProsemirrorAdapterProvider>
+  <MilkContent :content="model" :disable-rich="true" />
 </template>
 
 <style lang="scss">

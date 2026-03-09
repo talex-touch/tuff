@@ -126,7 +126,7 @@ defineExpose({
       </p>
     </template>
 
-    <di v-else class="ShareButton" disabled>
+    <div v-else class="ShareButton" disabled>
       <span class="url">
         {{ shareOptions.origin
         }}<span v-if="shareOptions.share?.uuid">?share={{ shareOptions.share.uuid }}</span></span>
@@ -135,7 +135,7 @@ defineExpose({
         <div i-carbon:share />
         <span>创建链接</span>
       </div>
-    </di>
+    </div>
   </DialogTouchDialog>
 </template>
 

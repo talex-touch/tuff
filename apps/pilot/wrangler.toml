@@ -10,6 +10,7 @@ pages_build_output_dir = "dist"
 [vars]
 NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
 NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
+NUXT_PUBLIC_ENDS_URL = "https://sub2api-home.tagzxia.com"
 
 [env.preview]
 compatibility_date = "2024-09-23"
@@ -22,6 +23,7 @@ compatibility_flags = [
 [env.preview.vars]
 NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
 NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
+NUXT_PUBLIC_ENDS_URL = "https://sub2api-home.tagzxia.com"
 
 [[env.preview.d1_databases]]
 binding = "DB"
@@ -43,6 +45,7 @@ compatibility_flags = [
 [env.production.vars]
 NUXT_PUBLIC_NEXUS_ORIGIN = "https://tuff.tagzxia.com"
 NUXT_PILOT_BASE_URL = "https://sub2api-home.tagzxia.com"
+NUXT_PUBLIC_ENDS_URL = "https://sub2api-home.tagzxia.com"
 
 [[env.production.d1_databases]]
 binding = "DB"
