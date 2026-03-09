@@ -126,6 +126,17 @@ interface ParsedSearchQuery {
   providerFilter?: string
 }
 
+interface SearchPipelineStageDurations {
+  parseDuration: number
+  providerAggregationDuration: number
+  mergeRankDuration: number
+}
+
+interface QueryOrchestrationResult {
+  providerFilter?: string
+  cacheKey: string
+}
+
 type ExtendedProviderStatus = 'success' | 'timeout' | 'error' | 'aborted'
 
 interface ProviderHealth {
@@ -192,6 +203,14 @@ function getActivationKey(activation: IProviderActivate): string {
   return activation.id
 }
 
+function buildSearchCacheKey(
+  queryText: string | undefined,
+  providerFilter: string | undefined,
+  activatedProviders: Map<string, IProviderActivate> | null
+): string {
+  return `${queryText || ''}:${providerFilter || ''}:${activatedProviders ? Array.from(activatedProviders.keys()).join(',') : ''}`
+}
+
 export class SearchEngineCore
   implements ISearchEngine<ProviderContext>, TalexTouch.IModule<TalexEvents>
 {
@@ -234,7 +253,7 @@ export class SearchEngineCore
     providerFilter: string | undefined,
     result: TuffSearchResult
   ): void {
-    const cacheKey = `${query.text || ''}:${providerFilter || ''}:${this.activatedProviders ? Array.from(this.activatedProviders.keys()).join(',') : ''}`
+    const cacheKey = buildSearchCacheKey(query.text, providerFilter, this.activatedProviders)
 
     // Evict oldest entries if cache is full
     if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
@@ -592,31 +611,252 @@ export class SearchEngineCore
     }
   }
 
-  async search(query: TuffQuery): Promise<TuffSearchResult> {
-    // Normalize query text: trim leading/trailing whitespace
-    if (query.text) {
-      query.text = query.text.trim()
+  private async orchestrateSearchQuery(
+    query: TuffQuery
+  ): Promise<QueryOrchestrationResult & { durationMs: number }> {
+    const startedAt = performance.now()
+    const parseContext = enterPerfContext('Search.pipeline.parse', {
+      queryLength: (query.text || '').length,
+      inputCount: query.inputs?.length || 0
+    })
+
+    try {
+      if (query.text) {
+        query.text = query.text.trim()
+      }
+
+      const parsedQuery = parseProviderFilter(query.text || '')
+      const providerFilter = parsedQuery.providerFilter
+
+      if (providerFilter) {
+        query.text = parsedQuery.text
+        searchEngineLog.debug(
+          `Provider filter detected: @${providerFilter}, query: "${query.text}"`
+        )
+      }
+
+      const resolved = await resolveClipboardInputs(query.inputs)
+      if (resolved.resolvedCount > 0) {
+        searchEngineLog.debug('Resolved clipboard inputs', {
+          meta: { resolvedCount: resolved.resolvedCount, clipboardIds: resolved.clipboardIds }
+        })
+      }
+
+      return {
+        providerFilter,
+        cacheKey: buildSearchCacheKey(query.text, providerFilter, this.activatedProviders),
+        durationMs: performance.now() - startedAt
+      }
+    } finally {
+      parseContext()
     }
+  }
 
-    // Parse @xxx provider filter syntax
-    const parsedQuery = parseProviderFilter(query.text || '')
-    const providerFilter = parsedQuery.providerFilter
+  private aggregateProvidersForQuery(
+    providers: ISearchProvider<ProviderContext>[],
+    query: TuffQuery,
+    options: { providerFilter?: string }
+  ): { providers: ISearchProvider<ProviderContext>[]; durationMs: number } {
+    const startedAt = performance.now()
+    const providerContext = enterPerfContext('Search.pipeline.providers', {
+      providerCount: providers.length,
+      inputCount: query.inputs?.length || 0,
+      providerFilter: options.providerFilter || undefined
+    })
 
-    // Update query.text with the filtered text (without the @xxx prefix)
-    if (providerFilter) {
-      query.text = parsedQuery.text
-      searchEngineLog.debug(`Provider filter detected: @${providerFilter}, query: "${query.text}"`)
+    let providersToSearch = providers
+
+    try {
+      if (query.inputs && query.inputs.length > 0) {
+        const inputTypes = query.inputs.map((i) => i.type)
+        const hasNonTextInput = inputTypes.some((t) => t !== TuffInputType.Text)
+
+        if (hasNonTextInput) {
+          searchLogger.logSearchPhase(
+            'Provider Filtering',
+            `Non-text inputs detected: ${inputTypes.join(', ')}`
+          )
+
+          providersToSearch = providersToSearch.filter((provider) => {
+            if (provider.id === 'plugin-features') {
+              return true
+            }
+
+            if (!provider.supportedInputTypes) {
+              return false
+            }
+
+            return inputTypes.some((type) => provider.supportedInputTypes?.includes(type))
+          })
+
+          searchLogger.logSearchPhase(
+            'Provider Filtered',
+            `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
+          )
+        }
+      }
+
+      const providerFilter = options.providerFilter
+      if (providerFilter) {
+        const beforeCount = providersToSearch.length
+        providersToSearch = providersToSearch.filter((provider) =>
+          matchesProviderFilter(provider.id, providerFilter)
+        )
+
+        searchLogger.logSearchPhase(
+          '@Provider Filter',
+          `Filter: @${providerFilter}, matched ${providersToSearch.length}/${beforeCount} providers: ${providersToSearch.map((p) => p.id).join(', ') || 'none'}`
+        )
+
+        if (providersToSearch.length === 0) {
+          searchEngineLog.warn(`No providers match filter @${providerFilter}`)
+        }
+      }
+
+      const shouldApplyRefractory = !options.providerFilter && !this.activatedProviders?.size
+      if (shouldApplyRefractory && providersToSearch.length > 0) {
+        const refractoryIds = new Set<string>()
+        providersToSearch = providersToSearch.filter((provider) => {
+          const shouldSkip = this.shouldSkipProvider(provider.id)
+          if (shouldSkip) {
+            refractoryIds.add(provider.id)
+          }
+          return !shouldSkip
+        })
+
+        if (refractoryIds.size > 0) {
+          searchEngineLog.debug(
+            `Provider refractory active, skipping: ${Array.from(refractoryIds).join(', ')}`
+          )
+        }
+      }
+
+      return {
+        providers: providersToSearch,
+        durationMs: performance.now() - startedAt
+      }
+    } finally {
+      providerContext()
     }
+  }
 
-    const resolved = await resolveClipboardInputs(query.inputs)
-    if (resolved.resolvedCount > 0) {
-      searchEngineLog.debug('Resolved clipboard inputs', {
-        meta: { resolvedCount: resolved.resolvedCount, clipboardIds: resolved.clipboardIds }
+  private async mergeAndRankItems({
+    sessionId,
+    query,
+    items,
+    signal,
+    includeCompletion
+  }: {
+    sessionId: string
+    query: TuffQuery
+    items: TuffItem[]
+    signal: AbortSignal
+    includeCompletion: boolean
+  }): Promise<{
+    sortedItems: TuffItem[]
+    sortingDuration: number
+    usageStatsDuration: number
+    completionDuration: number
+    mergeRankDuration: number
+  }> {
+    const startedAt = performance.now()
+    const mergeRankContext = enterPerfContext('Search.pipeline.merge-rank', {
+      sessionId,
+      itemCount: items.length,
+      includeCompletion
+    })
+
+    try {
+      let usageStatsDuration = 0
+      let completionDuration = 0
+
+      if (includeCompletion) {
+        const usageStatsStartedAt = performance.now()
+        const usageStatsContext = enterPerfContext('Search.usageStats', {
+          sessionId,
+          itemCount: items.length
+        })
+        const usageStatsPromise = this._injectUsageStats(items).finally(() => {
+          usageStatsDuration = performance.now() - usageStatsStartedAt
+          usageStatsContext()
+        })
+
+        const pinnedContext = enterPerfContext('Search.pinned', {
+          sessionId,
+          itemCount: items.length
+        })
+        const pinnedPromise = this._injectPinnedState(items).finally(() => {
+          pinnedContext()
+        })
+
+        let completionPromise: Promise<void> = Promise.resolve()
+        if (this.queryCompletionService) {
+          const completionStartedAt = performance.now()
+          const completionContext = enterPerfContext('Search.completion', {
+            sessionId,
+            queryLength: (query.text || '').length
+          })
+          completionPromise = this.queryCompletionService
+            .injectCompletionWeights(query.text || '', items)
+            .finally(() => {
+              completionDuration = performance.now() - completionStartedAt
+              completionContext()
+            })
+        }
+
+        await Promise.all([usageStatsPromise, pinnedPromise, completionPromise])
+      } else {
+        const usageStatsStartedAt = performance.now()
+        const usageStatsContext = enterPerfContext('Search.usageStats', {
+          sessionId,
+          itemCount: items.length
+        })
+        await this._injectUsageStats(items)
+        usageStatsDuration = performance.now() - usageStatsStartedAt
+        usageStatsContext()
+
+        const pinnedContext = enterPerfContext('Search.pinned', {
+          sessionId,
+          itemCount: items.length
+        })
+        await this._injectPinnedState(items)
+        pinnedContext()
+      }
+
+      const sortingContext = enterPerfContext('Search.sort', {
+        sessionId,
+        itemCount: items.length
       })
-    }
+      const sortingStartedAt = performance.now()
+      let sortedItems: TuffItem[] = []
+      try {
+        ;({ sortedItems } = this.sorter.sort(items, query, signal))
+      } finally {
+        sortingContext()
+      }
+      const sortingDuration = performance.now() - sortingStartedAt
 
-    // Fast Layer cache: return cached result for identical queries within TTL
-    const cacheKey = `${query.text || ''}:${providerFilter || ''}:${this.activatedProviders ? Array.from(this.activatedProviders.keys()).join(',') : ''}`
+      return {
+        sortedItems,
+        sortingDuration,
+        usageStatsDuration,
+        completionDuration,
+        mergeRankDuration: performance.now() - startedAt
+      }
+    } finally {
+      mergeRankContext()
+    }
+  }
+
+  async search(query: TuffQuery): Promise<TuffSearchResult> {
+    const pipelineDurations: SearchPipelineStageDurations = {
+      parseDuration: 0,
+      providerAggregationDuration: 0,
+      mergeRankDuration: 0
+    }
+    const { providerFilter, cacheKey, durationMs } = await this.orchestrateSearchQuery(query)
+    pipelineDurations.parseDuration = durationMs
+
     const cachedEntry = this.searchCache.get(cacheKey)
     if (cachedEntry && Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS) {
       searchEngineLog.debug(`Cache hit for query "${query.text}"`)
@@ -705,7 +945,6 @@ export class SearchEngineCore
     this.lastSearchQuery = query.text || ''
 
     const startTime = Date.now()
-    const sortingStartTime = { value: 0 }
     this._recordSearchUsage(sessionId, query)
 
     return new Promise((resolve) => {
@@ -713,51 +952,6 @@ export class SearchEngineCore
       let didResolveInitial = false
       let providersToSearch = this.getActiveProviders()
       let gatherController: IGatherController | null = null
-      const measurePreSort = async (items: TuffItem[]) => {
-        const timings = {
-          usageStatsDuration: 0,
-          pinnedDuration: 0,
-          completionDuration: 0
-        }
-
-        const usageStatsStartedAt = performance.now()
-        const usageStatsContext = enterPerfContext('Search.usageStats', {
-          sessionId,
-          itemCount: items.length
-        })
-        const usageStatsPromise = this._injectUsageStats(items).finally(() => {
-          timings.usageStatsDuration = performance.now() - usageStatsStartedAt
-          usageStatsContext()
-        })
-
-        const pinnedStartedAt = performance.now()
-        const pinnedContext = enterPerfContext('Search.pinned', {
-          sessionId,
-          itemCount: items.length
-        })
-        const pinnedPromise = this._injectPinnedState(items).finally(() => {
-          timings.pinnedDuration = performance.now() - pinnedStartedAt
-          pinnedContext()
-        })
-
-        let completionPromise = Promise.resolve()
-        if (this.queryCompletionService) {
-          const completionStartedAt = performance.now()
-          const completionContext = enterPerfContext('Search.completion', {
-            sessionId,
-            queryLength: (query.text || '').length
-          })
-          completionPromise = this.queryCompletionService
-            .injectCompletionWeights(query.text || '', items)
-            .finally(() => {
-              timings.completionDuration = performance.now() - completionStartedAt
-              completionContext()
-            })
-        }
-
-        await Promise.all([usageStatsPromise, pinnedPromise, completionPromise])
-        return timings
-      }
 
       const finalizeWithError = (error: unknown): void => {
         searchEngineLog.error('Search gather pipeline failed', {
@@ -800,76 +994,11 @@ export class SearchEngineCore
         }
       }
 
-      // Smart routing: filter providers based on query.inputs types
-      if (query.inputs && query.inputs.length > 0) {
-        const inputTypes = query.inputs.map((i) => i.type)
-        const hasNonTextInput = inputTypes.some((t) => t !== TuffInputType.Text)
-
-        if (hasNonTextInput) {
-          searchLogger.logSearchPhase(
-            'Provider Filtering',
-            `Non-text inputs detected: ${inputTypes.join(', ')}`
-          )
-
-          // Keep only providers that support these input types
-          providersToSearch = providersToSearch.filter((provider) => {
-            // PluginFeaturesAdapter always kept (it filters features internally)
-            if (provider.id === 'plugin-features') {
-              return true
-            }
-
-            // Other providers must declare supportedInputTypes
-            if (!provider.supportedInputTypes) {
-              // Default to text-only support
-              return false
-            }
-
-            // Check if provider supports at least one of the input types
-            return inputTypes.some((type) => provider.supportedInputTypes?.includes(type))
-          })
-
-          searchLogger.logSearchPhase(
-            'Provider Filtered',
-            `Active providers: ${providersToSearch.map((p) => p.id).join(', ')}`
-          )
-        }
-      }
-
-      // @xxx provider filter: filter providers based on @xxx syntax
-      if (providerFilter) {
-        const beforeCount = providersToSearch.length
-        providersToSearch = providersToSearch.filter((provider) =>
-          matchesProviderFilter(provider.id, providerFilter)
-        )
-
-        searchLogger.logSearchPhase(
-          '@Provider Filter',
-          `Filter: @${providerFilter}, matched ${providersToSearch.length}/${beforeCount} providers: ${providersToSearch.map((p) => p.id).join(', ') || 'none'}`
-        )
-
-        // If no providers match the filter, log a warning but continue with empty results
-        if (providersToSearch.length === 0) {
-          searchEngineLog.warn(`No providers match filter @${providerFilter}`)
-        }
-      }
-
-      const shouldApplyRefractory = !providerFilter && !this.activatedProviders?.size
-      if (shouldApplyRefractory && providersToSearch.length > 0) {
-        const refractoryIds = new Set<string>()
-        providersToSearch = providersToSearch.filter((provider) => {
-          const shouldSkip = this.shouldSkipProvider(provider.id)
-          if (shouldSkip) {
-            refractoryIds.add(provider.id)
-          }
-          return !shouldSkip
-        })
-
-        if (refractoryIds.size > 0) {
-          searchEngineLog.debug(
-            `Provider refractory active, skipping: ${Array.from(refractoryIds).join(', ')}`
-          )
-        }
-      }
+      const providerAggregation = this.aggregateProvidersForQuery(providersToSearch, query, {
+        providerFilter
+      })
+      providersToSearch = providerAggregation.providers
+      pipelineDurations.providerAggregationDuration = providerAggregation.durationMs
 
       searchLogger.searchProviders(providersToSearch.map((p) => p.id))
 
@@ -900,25 +1029,20 @@ export class SearchEngineCore
                 isFirstUpdate = false
                 const initialItems = update.newResults.flatMap((res) => res.items)
 
-                const { usageStatsDuration, completionDuration } =
-                  await measurePreSort(initialItems)
-
-                const sortingContext = enterPerfContext('Search.sort', {
+                const {
+                  sortedItems,
+                  sortingDuration,
+                  usageStatsDuration,
+                  completionDuration,
+                  mergeRankDuration
+                } = await this.mergeAndRankItems({
                   sessionId,
-                  itemCount: initialItems.length
+                  query,
+                  items: initialItems,
+                  signal: gatherController!.signal,
+                  includeCompletion: true
                 })
-                sortingStartTime.value = performance.now()
-                let sortedItems: TuffItem[] = []
-                try {
-                  ;({ sortedItems } = this.sorter.sort(
-                    initialItems,
-                    query,
-                    gatherController!.signal
-                  ))
-                } finally {
-                  sortingContext()
-                }
-                const sortingDuration = performance.now() - sortingStartTime.value
+                pipelineDurations.mergeRankDuration = mergeRankDuration
 
                 this._updateActivationState(update.newResults)
 
@@ -938,6 +1062,7 @@ export class SearchEngineCore
                   sortingDuration,
                   usageStatsDuration,
                   completionDuration,
+                  stageDurations: pipelineDurations,
                   sourceStats: update.sourceStats || [],
                   resultCount: sortedItems.length,
                   providerFilter
@@ -1000,20 +1125,20 @@ export class SearchEngineCore
             isFirstUpdate = false
             const initialItems = update.newResults.flatMap((res) => res.items)
 
-            const { usageStatsDuration, completionDuration } = await measurePreSort(initialItems)
-
-            const sortingContext = enterPerfContext('Search.sort', {
+            const {
+              sortedItems,
+              sortingDuration,
+              usageStatsDuration,
+              completionDuration,
+              mergeRankDuration
+            } = await this.mergeAndRankItems({
               sessionId,
-              itemCount: initialItems.length
+              query,
+              items: initialItems,
+              signal: gatherController!.signal,
+              includeCompletion: true
             })
-            sortingStartTime.value = performance.now()
-            let sortedItems: TuffItem[] = []
-            try {
-              ;({ sortedItems } = this.sorter.sort(initialItems, query, gatherController!.signal))
-            } finally {
-              sortingContext()
-            }
-            const sortingDuration = performance.now() - sortingStartTime.value
+            pipelineDurations.mergeRankDuration = mergeRankDuration
 
             this._updateActivationState(update.newResults)
 
@@ -1034,6 +1159,7 @@ export class SearchEngineCore
               sortingDuration,
               usageStatsDuration,
               completionDuration,
+              stageDurations: pipelineDurations,
               sourceStats: update.sourceStats || [],
               resultCount: sortedItems.length,
               providerFilter
@@ -1067,35 +1193,13 @@ export class SearchEngineCore
             // This is a subsequent update
             const subsequentItems = update.newResults.flatMap((res) => res.items)
 
-            // 批量获取使用统计并注入到 items 中
-            const usageStatsContext = enterPerfContext('Search.usageStats', {
+            const { sortedItems } = await this.mergeAndRankItems({
               sessionId,
-              itemCount: subsequentItems.length
+              query,
+              items: subsequentItems,
+              signal: gatherController!.signal,
+              includeCompletion: false
             })
-            await this._injectUsageStats(subsequentItems)
-            usageStatsContext()
-
-            const pinnedContext = enterPerfContext('Search.pinned', {
-              sessionId,
-              itemCount: subsequentItems.length
-            })
-            await this._injectPinnedState(subsequentItems)
-            pinnedContext()
-
-            const sortingContext = enterPerfContext('Search.sort', {
-              sessionId,
-              itemCount: subsequentItems.length
-            })
-            let sortedItems: TuffItem[] = []
-            try {
-              ;({ sortedItems } = this.sorter.sort(
-                subsequentItems,
-                query,
-                gatherController!.signal
-              ))
-            } finally {
-              sortingContext()
-            }
             this._updateActivationState(update.newResults)
             sendUpdateToFrontend(sortedItems)
           }
@@ -1311,6 +1415,7 @@ export class SearchEngineCore
     sortingDuration,
     usageStatsDuration,
     completionDuration,
+    stageDurations,
     sourceStats,
     resultCount,
     providerFilter
@@ -1321,6 +1426,7 @@ export class SearchEngineCore
     sortingDuration: number
     usageStatsDuration?: number
     completionDuration?: number
+    stageDurations?: SearchPipelineStageDurations
     sourceStats: Array<{
       providerId?: string
       provider?: string
@@ -1391,6 +1497,17 @@ export class SearchEngineCore
         })
       }
 
+      if (stageDurations) {
+        searchEngineLog.debug('Search pipeline stage timings', {
+          meta: {
+            sessionId,
+            parseDuration: Math.round(stageDurations.parseDuration),
+            providerAggregationDuration: Math.round(stageDurations.providerAggregationDuration),
+            mergeRankDuration: Math.round(stageDurations.mergeRankDuration)
+          }
+        })
+      }
+
       // Also queue Nexus telemetry for dashboard
       try {
         sentryService.queueNexusTelemetry({
@@ -1405,6 +1522,13 @@ export class SearchEngineCore
             sortingDuration: Math.round(sortingDuration),
             usageStatsDuration: usageStatsDuration ? Math.round(usageStatsDuration) : undefined,
             completionDuration: completionDuration ? Math.round(completionDuration) : undefined,
+            parseDuration: stageDurations ? Math.round(stageDurations.parseDuration) : undefined,
+            providerAggregationDuration: stageDurations
+              ? Math.round(stageDurations.providerAggregationDuration)
+              : undefined,
+            mergeRankDuration: stageDurations
+              ? Math.round(stageDurations.mergeRankDuration)
+              : undefined,
             queryLength,
             queryType,
             searchScene,

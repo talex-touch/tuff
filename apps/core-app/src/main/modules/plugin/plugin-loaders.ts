@@ -17,6 +17,7 @@ import {
   resolveSdkApiVersion
 } from '@talex-touch/utils/plugin'
 import axios from 'axios'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { parseManifestDivisionBoxConfig } from '../division-box/manifest-parser'
@@ -126,7 +127,26 @@ abstract class BasePluginLoader {
     this.touchPlugin.name = pluginInfo.name || this.pluginName
     this.touchPlugin.version = pluginInfo.version || '0.0.0'
     this.touchPlugin.desc = pluginInfo.description || 'No description.'
-    this.touchPlugin.dev = pluginInfo.dev || { enable: false, address: '', source: false }
+    const rawDevConfig = pluginInfo.dev || { enable: false, address: '', source: false }
+    const normalizedDevConfig: IPluginDev = {
+      enable: rawDevConfig.enable === true,
+      source: rawDevConfig.source === true,
+      address: typeof rawDevConfig.address === 'string' ? rawDevConfig.address.trim() : ''
+    }
+    if (app.isPackaged && normalizedDevConfig.enable && normalizedDevConfig.source) {
+      normalizedDevConfig.source = false
+      this.touchPlugin.issues.push({
+        type: 'warning',
+        message:
+          'dev.source is disabled in packaged runtime. Plugin will fall back to local bundled assets.',
+        source: 'manifest.json',
+        code: 'DEV_SOURCE_DISABLED_IN_PACKAGED',
+        suggestion:
+          'Set dev.source=false in packaged manifests, or keep it for local development only.',
+        timestamp: Date.now()
+      })
+    }
+    this.touchPlugin.dev = normalizedDevConfig
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
     // Category (for UI grouping)
@@ -510,6 +530,9 @@ export function createPluginLoader(pluginName: string, pluginPath: string): IPlu
   const devAddress = typeof devConfig.address === 'string' ? devConfig.address.trim() : ''
   const shouldUseDevSource = devConfig.enable === true && devConfig.source === true && !!devAddress
   if (!shouldUseDevSource) {
+    return new LocalPluginLoader(pluginName, pluginPath)
+  }
+  if (app.isPackaged) {
     return new LocalPluginLoader(pluginName, pluginPath)
   }
 

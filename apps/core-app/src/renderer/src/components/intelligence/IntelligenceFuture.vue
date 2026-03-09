@@ -15,6 +15,10 @@ function handleDocsClick() {
 function handleAgentsClick() {
   router.push('/intelligence/agents')
 }
+
+function handleWorkflowClick() {
+  router.push('/intelligence/workflows')
+}
 </script>
 
 <template>
@@ -25,6 +29,19 @@ function handleAgentsClick() {
     active-icon="i-carbon-cloud-upload"
     memory-name="intelligence-future"
   >
+    <TuffBlockSlot
+      :title="t('intelligence.workflow.title')"
+      :description="t('intelligence.workflow.entryDescription')"
+      default-icon="i-carbon-flow-connection"
+      active-icon="i-carbon-flow-connection"
+      @click="handleWorkflowClick"
+    >
+      <TButton variant="ghost" @click="handleWorkflowClick">
+        <i class="i-carbon-arrow-right" />
+        <span>{{ t('intelligence.workflow.entryButton') }}</span>
+      </TButton>
+    </TuffBlockSlot>
+
     <TuffBlockSlot
       :title="t('intelligence.agents.title')"
       :description="t('settings.intelligence.agentsDescription')"

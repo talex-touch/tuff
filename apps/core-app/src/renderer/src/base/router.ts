@@ -277,6 +277,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/intelligence/workflows',
+    name: '$I18n:router.intelligenceWorkflows',
+    component: withRouteComponentPerf(
+      '/intelligence/workflows',
+      () => import('../views/base/intelligence/IntelligenceWorkflowPage.vue')
+    ),
+    meta: {
+      index: 8,
+      keepAlive: true
+    }
+  },
+  {
     path: '/meta-overlay',
     name: '$I18n:router.metaOverlay',
     component: withRouteComponentPerf(
