@@ -3,7 +3,6 @@ import coreAppLogoUrl from '../../../../core-app/public/logo.svg?url'
 
 interface PilotSidebarHeaderProps {
   pilotTitle: string
-  running: boolean
   collapsed: boolean
 }
 
@@ -28,7 +27,6 @@ function onToggleCollapse() {
     <button
       class="pilot-sidebar-header__logo"
       type="button"
-      :disabled="props.running"
       aria-label="新建会话"
       @click="onCreateSession"
     >

@@ -16,6 +16,8 @@ import type {
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const ASSISTANT_CHUNK_FLUSH_MS = 48
+const STREAM_IDLE_TIMEOUT_MS = 45_000
+const STREAM_MAX_DURATION_MS = 8 * 60_000
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -197,7 +199,7 @@ export function usePilotChatPage() {
   const attachments = ref<PilotAttachment[]>([])
   const pendingAttachments = ref<PilotAttachment[]>([])
   const draft = ref('')
-  const running = ref(false)
+  const runningSessionIds = ref<string[]>([])
   const loadingSessions = ref(false)
   const loadingMessages = ref(false)
   const traceDrawerOpen = ref(false)
@@ -208,12 +210,17 @@ export function usePilotChatPage() {
   const deletingSessionId = ref('')
   const titleLoadingMap = ref<Record<string, boolean>>({})
 
-  let streamAbortController: AbortController | null = null
+  const streamAbortControllers = new Map<string, AbortController>()
   let assistantDeltaBuffer = ''
   let assistantFlushTimer: ReturnType<typeof setTimeout> | null = null
   const traceKeySet = new Set<string>()
 
   const activeSession = computed(() => sessions.value.find(item => item.sessionId === activeSessionId.value) || null)
+  const running = computed(() => {
+    const sessionId = activeSessionId.value
+    return sessionId ? runningSessionIds.value.includes(sessionId) : false
+  })
+  const hasRunningSessions = computed(() => runningSessionIds.value.length > 0)
   const hasPausedSession = computed(() => activeSession.value?.status === 'paused_disconnect')
 
   const activeSessionTitle = computed(() => {
@@ -248,9 +255,42 @@ export function usePilotChatPage() {
         lastSeq: item.lastSeq,
         updatedAtText: toReadableTime(item.updatedAt),
         titleLoading: Boolean(titleLoadingMap.value[item.sessionId]),
+        running: runningSessionIds.value.includes(item.sessionId),
       }
     })
   })
+
+  function isSessionRunning(sessionId: string): boolean {
+    if (!sessionId) {
+      return false
+    }
+    return runningSessionIds.value.includes(sessionId)
+  }
+
+  function setSessionRunning(sessionId: string, running: boolean) {
+    if (!sessionId) {
+      return
+    }
+    const current = runningSessionIds.value
+    const exists = current.includes(sessionId)
+    if (running && !exists) {
+      runningSessionIds.value = [...current, sessionId]
+      return
+    }
+    if (!running && exists) {
+      runningSessionIds.value = current.filter(id => id !== sessionId)
+    }
+  }
+
+  function abortSessionStream(sessionId: string, reason = 'replaced') {
+    const controller = streamAbortControllers.get(sessionId)
+    if (!controller) {
+      return
+    }
+    streamAbortControllers.delete(sessionId)
+    controller.abort(reason)
+    setSessionRunning(sessionId, false)
+  }
 
   const chatListMessages = computed<ChatMessageModel[]>(() => {
     return messages.value.map((item) => {
@@ -668,7 +708,7 @@ export function usePilotChatPage() {
   }
 
   async function selectSession(sessionId: string) {
-    if (!sessionId || (running.value && sessionId !== activeSessionId.value)) {
+    if (!sessionId) {
       return
     }
 
@@ -681,7 +721,7 @@ export function usePilotChatPage() {
     void markSessionNotificationRead(sessionId)
     void maybeSummarizeActiveSessionTitle(sessionId)
 
-    if (shouldAutoFollowSession(sessionId) && !running.value) {
+    if (shouldAutoFollowSession(sessionId) && !isSessionRunning(sessionId)) {
       void replayFromSeq().catch((error) => {
         streamError.value = error instanceof Error ? error.message : '自动续接失败'
       })
@@ -696,9 +736,8 @@ export function usePilotChatPage() {
     deletingSessionId.value = sessionId
 
     try {
-      if (running.value && activeSessionId.value === sessionId) {
-        streamAbortController?.abort()
-        running.value = false
+      if (isSessionRunning(sessionId)) {
+        abortSessionStream(sessionId, 'session_deleted')
       }
 
       await fetchJson<{ ok: boolean }>(`/api/pilot/chat/sessions/${sessionId}`, {
@@ -747,8 +786,17 @@ export function usePilotChatPage() {
   }
 
   function applyStreamEvent(item: StreamEvent) {
+    const eventSessionId = String(item.sessionId || activeSessionId.value || '').trim()
+    const isActiveSessionEvent = eventSessionId !== '' && eventSessionId === activeSessionId.value
+
+    if (!eventSessionId) {
+      return
+    }
+
     if (typeof item.seq === 'number' && Number.isFinite(item.seq)) {
-      lastSeq.value = Math.max(lastSeq.value, item.seq)
+      if (isActiveSessionEvent) {
+        lastSeq.value = Math.max(lastSeq.value, item.seq)
+      }
     }
 
     if (
@@ -761,6 +809,9 @@ export function usePilotChatPage() {
       || item.type === 'turn.started'
       || item.type === 'turn.finished'
     ) {
+      if (!isActiveSessionEvent) {
+        return
+      }
       appendTrace(mapTrace(item.type, Number(item.seq || lastSeq.value), {
         ...(item.payload || {}),
         replay: Boolean(item.replay),
@@ -769,6 +820,9 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'run.audit') {
+      if (!isActiveSessionEvent) {
+        return
+      }
       appendTrace(mapTrace('run.audit', Number(item.seq || lastSeq.value), {
         ...(item.payload || {}),
         replay: Boolean(item.replay),
@@ -777,6 +831,9 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'assistant.delta') {
+      if (!isActiveSessionEvent) {
+        return
+      }
       appendAssistantDelta(String(item.delta || ''))
       if (traceDrawerOpen.value) {
         appendTrace(mapTrace('assistant.delta', Number(item.seq || lastSeq.value), {
@@ -787,6 +844,9 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'assistant.final') {
+      if (!isActiveSessionEvent) {
+        return
+      }
       appendAssistantFinal(String(item.message || ''))
       activeAssistantMessageId.value = null
       appendTrace(mapTrace('assistant.final', Number(item.seq || lastSeq.value), {
@@ -796,8 +856,11 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'session.paused') {
+      setSessionRunning(eventSessionId, false)
+      if (!isActiveSessionEvent) {
+        return
+      }
       flushAssistantDeltaBuffer()
-      running.value = false
       reconnectHint.value = `会话已暂停：${item.reason || 'unknown'}`
       appendTrace(mapTrace('session.paused', Number(item.seq || lastSeq.value), {
         reason: item.reason,
@@ -806,6 +869,9 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'run.metrics') {
+      if (!isActiveSessionEvent) {
+        return
+      }
       if (traceDrawerOpen.value) {
         appendTrace(mapTrace('run.metrics', Number(item.seq || lastSeq.value), {
           ...(item.payload || {}),
@@ -815,9 +881,12 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'error') {
+      setSessionRunning(eventSessionId, false)
+      if (!isActiveSessionEvent) {
+        return
+      }
       flushAssistantDeltaBuffer()
       streamError.value = toPrettyErrorMessage(String(item.message || 'Stream error'), item.detail)
-      running.value = false
       appendTrace(mapTrace('error', Number(item.seq || lastSeq.value), {
         message: String(item.message || 'Stream error'),
         detail: item.detail || {},
@@ -826,9 +895,16 @@ export function usePilotChatPage() {
     }
 
     if (item.type === 'done') {
+      setSessionRunning(eventSessionId, false)
+      if (!isActiveSessionEvent) {
+        return
+      }
       flushAssistantDeltaBuffer()
-      running.value = false
       activeAssistantMessageId.value = null
+      return
+    }
+
+    if (!isActiveSessionEvent) {
       return
     }
 
@@ -838,7 +914,13 @@ export function usePilotChatPage() {
     }))
   }
 
-  async function consumeSseResponse(response: Response) {
+  async function consumeSseResponse(
+    response: Response,
+    options: {
+      sessionId: string
+      abortController: AbortController
+    },
+  ) {
     if (!response.body) {
       throw new Error('empty stream body')
     }
@@ -847,9 +929,34 @@ export function usePilotChatPage() {
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let processedSinceYield = 0
+    const startedAt = Date.now()
+
+    const readWithIdleTimeout = async () => {
+      return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          options.abortController.abort('stream_idle_timeout')
+          reject(new Error(`流式响应超时（超过 ${Math.round(STREAM_IDLE_TIMEOUT_MS / 1000)}s 无事件）`))
+        }, STREAM_IDLE_TIMEOUT_MS)
+
+        void reader.read()
+          .then((result) => {
+            clearTimeout(timer)
+            resolve(result)
+          })
+          .catch((error) => {
+            clearTimeout(timer)
+            reject(error)
+          })
+      })
+    }
 
     while (true) {
-      const { value, done } = await reader.read()
+      if ((Date.now() - startedAt) > STREAM_MAX_DURATION_MS) {
+        options.abortController.abort('stream_max_timeout')
+        throw new Error(`流式响应超时（超过 ${Math.round(STREAM_MAX_DURATION_MS / 1000)}s）`)
+      }
+
+      const { value, done } = await readWithIdleTimeout()
       if (done) {
         break
       }
@@ -861,7 +968,10 @@ export function usePilotChatPage() {
       for (const chunk of chunks) {
         const events = parseSseChunks(chunk)
         for (const item of events) {
-          applyStreamEvent(item)
+          applyStreamEvent({
+            ...item,
+            sessionId: item.sessionId || options.sessionId,
+          })
           processedSinceYield += 1
           if (processedSinceYield >= 24) {
             processedSinceYield = 0
@@ -874,7 +984,10 @@ export function usePilotChatPage() {
     if (buffer.trim()) {
       const events = parseSseChunks(buffer)
       for (const item of events) {
-        applyStreamEvent(item)
+        applyStreamEvent({
+          ...item,
+          sessionId: item.sessionId || options.sessionId,
+        })
       }
     }
   }
@@ -883,12 +996,16 @@ export function usePilotChatPage() {
     const sessionId = await ensureActiveSession()
     const beforeSeq = lastSeq.value
 
-    streamAbortController?.abort()
-    streamAbortController = new AbortController()
+    abortSessionStream(sessionId, 'restart_same_session')
+    const streamAbortController = new AbortController()
+    streamAbortControllers.set(sessionId, streamAbortController)
+    setSessionRunning(sessionId, true)
 
-    streamError.value = ''
-    reconnectHint.value = ''
-    running.value = true
+    const isCurrentActiveSession = () => activeSessionId.value === sessionId
+    if (isCurrentActiveSession()) {
+      streamError.value = ''
+      reconnectHint.value = ''
+    }
 
     try {
       const response = await fetch(`/api/pilot/chat/sessions/${sessionId}/stream`, {
@@ -905,38 +1022,68 @@ export function usePilotChatPage() {
         throw new Error(await response.text())
       }
 
-      await consumeSseResponse(response)
+      await consumeSseResponse(response, {
+        sessionId,
+        abortController: streamAbortController,
+      })
+    }
+    catch (error) {
+      if (streamAbortController.signal.aborted) {
+        const abortReason = String(streamAbortController.signal.reason || '')
+        if ((abortReason === 'stream_idle_timeout' || abortReason === 'stream_max_timeout') && isCurrentActiveSession()) {
+          streamError.value = error instanceof Error ? error.message : '流式响应超时'
+        }
+        return
+      }
+
+      if (isCurrentActiveSession()) {
+        streamError.value = error instanceof Error ? error.message : '流式请求失败'
+      }
+      return
     }
     finally {
-      flushAssistantDeltaBuffer()
-      running.value = false
-      activeAssistantMessageId.value = null
+      const currentController = streamAbortControllers.get(sessionId)
+      if (currentController === streamAbortController) {
+        streamAbortControllers.delete(sessionId)
+      }
+      setSessionRunning(sessionId, false)
+
+      if (isCurrentActiveSession()) {
+        flushAssistantDeltaBuffer()
+        activeAssistantMessageId.value = null
+      }
+
       const tasks: Array<Promise<unknown>> = [
         refreshSessions(sessionId),
       ]
 
-      if (streamError.value || traceDrawerOpen.value) {
+      if (isCurrentActiveSession() && (streamError.value || traceDrawerOpen.value)) {
         tasks.push(loadSessionTrace(sessionId, Math.max(1, beforeSeq + 1), true))
       }
 
       // Avoid replacing the whole message list after each stream completion.
       // Full sync is still applied when stream errors happen.
-      if (streamError.value) {
+      if (isCurrentActiveSession() && streamError.value) {
         tasks.push(loadSessionMessages(sessionId))
       }
 
       await Promise.all(tasks)
-      void maybeSummarizeActiveSessionTitle(sessionId)
+      if (isCurrentActiveSession()) {
+        void maybeSummarizeActiveSessionTitle(sessionId)
+      }
     }
   }
 
   async function sendMessage() {
     const content = clampInputText(draft.value)
-    if (!content || running.value) {
+    if (!content) {
       return
     }
 
     const sessionId = await ensureActiveSession()
+    if (isSessionRunning(sessionId)) {
+      return
+    }
     const outgoingAttachments = [...pendingAttachments.value]
 
     messages.value.push({
@@ -981,10 +1128,10 @@ export function usePilotChatPage() {
   }
 
   async function replayFromSeq() {
-    if (running.value) {
+    const sessionId = await ensureActiveSession()
+    if (isSessionRunning(sessionId)) {
       return
     }
-    const sessionId = await ensureActiveSession()
     await openStream({
       fromSeq: Math.max(1, lastSeq.value + 1),
       sessionId,
@@ -1059,7 +1206,9 @@ export function usePilotChatPage() {
   })
 
   onUnmounted(() => {
-    streamAbortController?.abort()
+    for (const [sessionId] of streamAbortControllers) {
+      abortSessionStream(sessionId, 'component_unmounted')
+    }
     assistantDeltaBuffer = ''
     clearAssistantFlushTimer()
   })
@@ -1072,6 +1221,7 @@ export function usePilotChatPage() {
     activeSessionTitleLoading,
     loadingSessions,
     running,
+    hasRunningSessions,
     deletingSessionId,
     handleCreateSession,
     selectSession,

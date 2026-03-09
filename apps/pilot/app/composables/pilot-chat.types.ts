@@ -16,6 +16,7 @@ export interface PilotSessionRow {
   statusTone: StatusTone
   title: string
   notifyUnread: boolean
+  running?: boolean
   shortId: string
   lastSeq: number
   updatedAtText: string

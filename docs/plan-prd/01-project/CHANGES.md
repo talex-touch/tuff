@@ -4,6 +4,30 @@
 
 ## 2026-03-09
 
+### Pilot: 多会话并行与流式超时兜底
+
+**变更类型**: 稳定性修复 / 体验优化
+
+**描述**:
+- 前端会话运行态从全局 `running` 收敛为“按 session 追踪”，允许一个会话生成时切换并继续操作其他会话。
+- 同 session 重试时仅中断该 session 的旧流，不再全局中断其它会话流。
+- SSE 消费新增双超时兜底：
+  - 空闲超时：`45s` 无事件自动中断并提示。
+  - 总时长超时：`8min` 自动中断并提示。
+- 会话列表删除按钮改为按行禁用（仅禁用正在运行中的会话），新建会话按钮不再因其它会话运行而锁死。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/app/components/pilot/PilotSidebarHeader.vue`
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Core-App: Channel 销毁态广播兜底 + Invoke Handler 常驻注册
 
 **变更类型**: 稳定性修复 / 关停阶段容错
