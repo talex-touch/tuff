@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 
+definePageMeta({
+  layout: 'pilot',
+})
+
 interface StorageConfigForm {
   attachmentProvider: 'auto' | 'memory' | 'r2' | 's3'
   attachmentPublicBaseUrl: string

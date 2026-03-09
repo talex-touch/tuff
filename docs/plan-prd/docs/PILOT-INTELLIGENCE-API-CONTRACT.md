@@ -80,6 +80,26 @@
   - `POST /api/pilot/admin/storage-config`
   - 页面入口：`/admin/storage`
 
+#### 3.3.3 Cloudflare Dashboard 配置基线（2026-03-09）
+
+已在 `tuff-pilot` 项目 `preview/production` 环境写入（Secrets）：
+- `PILOT_ATTACHMENT_PROVIDER=auto`
+- `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+- `PILOT_ATTACHMENT_SIGNING_SECRET`
+- `PILOT_MINIO_REGION=us-east-1`
+- `PILOT_MINIO_FORCE_PATH_STYLE=true`
+
+仍需人工填入真实值（按环境）：
+- `PILOT_NEXUS_OAUTH_CLIENT_ID`
+- `PILOT_NEXUS_OAUTH_CLIENT_SECRET`
+- `PILOT_NEXUS_INTERNAL_ORIGIN`（如有内网回调）
+- MinIO 启用时：
+  - `PILOT_MINIO_ENDPOINT`
+  - `PILOT_MINIO_BUCKET`
+  - `PILOT_MINIO_ACCESS_KEY`
+  - `PILOT_MINIO_SECRET_KEY`
+  - `PILOT_MINIO_PUBLIC_BASE_URL`（可选）
+
 ### 3.4 会话控制
 
 - `POST /api/pilot/chat/sessions/:sessionId/pause`

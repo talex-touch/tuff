@@ -4,6 +4,115 @@
 
 ## 2026-03-09
 
+### Pilot: Cloudflare Dashboard Secrets 基线配置落地
+
+**变更类型**: 运维配置 / 文档同步
+
+**描述**:
+- 已在 Cloudflare Pages 项目 `tuff-pilot` 的 `preview` 与 `production` 环境完成首批 secrets 写入，确保附件链路具备统一默认基线：
+  - `PILOT_ATTACHMENT_PROVIDER=auto`
+  - `PILOT_ATTACHMENT_PUBLIC_BASE_URL`
+  - `PILOT_ATTACHMENT_SIGNING_SECRET`
+  - `PILOT_MINIO_REGION=us-east-1`
+  - `PILOT_MINIO_FORCE_PATH_STYLE=true`
+- 待人工补齐环境相关敏感项（按环境值）：
+  - OAuth：`PILOT_NEXUS_OAUTH_CLIENT_ID`、`PILOT_NEXUS_OAUTH_CLIENT_SECRET`、`PILOT_NEXUS_INTERNAL_ORIGIN`（按需）
+  - MinIO（启用时）：`PILOT_MINIO_ENDPOINT`、`PILOT_MINIO_BUCKET`、`PILOT_MINIO_ACCESS_KEY`、`PILOT_MINIO_SECRET_KEY`、`PILOT_MINIO_PUBLIC_BASE_URL`（可选）
+- 本次仅完成 Dashboard 配置，不含部署动作。
+
+**测试**:
+- `npx wrangler pages secret list --project-name tuff-pilot --env preview` ✅
+- `npx wrangler pages secret list --project-name tuff-pilot --env production` ✅
+
+**修改文件**:
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### Pilot: 开发端口固定 3300 并移除 dev.mjs 启动入口
+
+**变更类型**: 开发体验清理 / 启动链路收敛
+
+**描述**:
+- `apps/pilot` 的 `dev` 脚本改为直接执行 `nuxt dev`，不再通过 `scripts/dev.mjs` 包装启动。
+- 开发端口固定从 `3300` 启动（`--port 3300`），并显式绑定 `127.0.0.1`。
+- 保持 Cloudflare dev 默认开启（`NUXT_USE_CLOUDFLARE_DEV=true`，`CLOUDFLARE_DEV_ENVIRONMENT=preview`），减少本地联调入口分叉。
+
+**测试**:
+- `pnpm pilot:dev` ✅（本地启动成功：`http://127.0.0.1:3300/`）
+- `pnpm -C "apps/pilot" run test` ✅（`3` files, `14` tests passed）
+
+**修改文件**:
+- `apps/pilot/package.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: UnoCSS WebFonts 子路径兼容修复
+
+**变更类型**: 稳定性修复 / 开发环境兼容
+
+**描述**:
+- 修复 Nexus 在 Nuxt 开发期可能出现的 UnoCSS 配置加载失败（`Package subpath './local' is not defined by "exports"`）问题。
+- `apps/nexus/uno.config.ts` 中将 `presetWebFonts` 从 `unocss` 聚合导入改为直接导入 `@unocss/preset-web-fonts`，规避混合版本依赖树下的子路径解析冲突。
+- 保持现有 WebFonts 配置与功能行为不变（`google/none` provider 逻辑不变）。
+
+**测试**:
+- `pnpm -C "apps/nexus" run typecheck` ✅
+- `pnpm -C "apps/nexus" run dev:pure` ✅（Nuxt 启动通过）
+
+**修改文件**:
+- `apps/nexus/uno.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot M0: Quota 前端并入 + Nuxt 兼容 API 落地
+
+**变更类型**: 融合交付 / 兼容迁移
+
+**描述**:
+- `apps/pilot` 完成 Quota 前端体系并入（`pages/layouts/components/composables/plugins/constants`），并切换路由语义：
+  - `/` 使用 Quota 页面体系
+  - `/pilot` 使用原 Pilot 聊天页
+  - `/pilot/admin/storage` 使用原 Pilot 管理页
+- 根壳保留 Pilot `app.vue`，新增 Quota 运行时桥接（`appOptions/globalOptions`、指令/插件注册），并移除 Quota 强制登录门禁，改为 Pilot 会话/访客态可用。
+- Nuxt `server/api` 新增 M0 兼容层并统一返回 `{ code, message, data }`，覆盖：
+  - `POST /api/aigc/executor`（SSE 映射为 `status_updated/completion/error/[DONE]`）
+  - `POST /api/aigc/conversations`
+  - `GET /api/aigc/history`
+  - `GET /api/aigc/conversation/:id`
+  - `DELETE /api/aigc/conversations/:id`
+  - `GET /api/auth/status`
+  - `GET /api/account/profile`
+  - `GET /api/account/permissions`
+  - `GET /api/aigc/prompts/hot|search|tags/recommend`（M0 返回空列表）
+- 非 M0 接口统一由 `server/api/[...path].ts` 返回 501 包装，避免页面白屏或 404 误判。
+- 聊天链路复用 Pilot Runtime，兼容历史存储保留 `chat_id/topic/value/meta` 结构；删除会话时同步清理兼容记录与 Pilot 会话。
+- 根 `.gitignore` 新增 `apps/quota-gpt-view/` 与 `apps/quota-gpt-ends/`，迁移参考目录不纳入提交。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test` ✅
+- `pnpm -C "apps/pilot" run typecheck` ⚠️（Quota 迁移存量类型问题，集中在 article/cms 等模块）
+- `pnpm -C "apps/pilot" run lint` ⚠️（Quota 迁移存量 lint 问题）
+- `NODE_OPTIONS=--max-old-space-size=8192 pnpm -C "apps/pilot" run build` ✅
+
+**修改文件**:
+- `apps/pilot/app/app.vue`
+- `apps/pilot/app/pages/index.vue`
+- `apps/pilot/app/pages/pilot/index.vue`
+- `apps/pilot/app/pages/pilot/admin/storage.vue`
+- `apps/pilot/app/layouts/pilot.vue`
+- `apps/pilot/server/api/aigc/*`
+- `apps/pilot/server/api/auth/status.get.ts`
+- `apps/pilot/server/api/account/*`
+- `apps/pilot/server/api/[...path].ts`
+- `apps/pilot/server/utils/quota-api.ts`
+- `apps/pilot/server/utils/quota-history-store.ts`
+- `apps/pilot/server/utils/quota-history-codec.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/package.json`
+- `apps/pilot/uno.config.ts`
+- `.gitignore`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ### Pilot: 多会话并行与流式超时兜底
 
 **变更类型**: 稳定性修复 / 体验优化

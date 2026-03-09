@@ -134,3 +134,9 @@ apps/core-app/signature.json
 # Project-specific (tuffex)
 # ========================
 packages/tuffex/docs/.vitepress/cache/
+
+# ========================
+# Temporary migration sources
+# ========================
+apps/quota-gpt-view/
+apps/quota-gpt-ends/
