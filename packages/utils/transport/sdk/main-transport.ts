@@ -52,7 +52,6 @@ type InvokeHandler<TReq, TRes> = (
 ) => TRes | Promise<TRes>
 
 const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>()
-const invokeDisposers = new Map<string, () => void>()
 type LocalHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
 const localHandlers = new Map<string, Set<LocalHandler>>()
 
@@ -77,8 +76,6 @@ function registerInvokeHandler<TReq, TRes>(
       }
       return result as TRes
     })
-
-    invokeDisposers.set(eventName, () => ipcMain.removeHandler(eventName))
   }
 
   handlers.add(handler)
@@ -89,11 +86,6 @@ function registerInvokeHandler<TReq, TRes>(
       return
     }
     current.delete(handler)
-    if (current.size === 0) {
-      invokeHandlers.delete(eventName)
-      invokeDisposers.get(eventName)?.()
-      invokeDisposers.delete(eventName)
-    }
   }
 }
 

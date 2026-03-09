@@ -75,7 +75,32 @@ const getWebContents = (
   target?: Electron.BrowserWindow | WebContentsView | null
 ): Electron.WebContents | undefined => {
   if (!target) return undefined
-  return 'webContents' in target ? target.webContents : undefined
+
+  try {
+    const host = target as {
+      isDestroyed?: () => boolean
+      webContents?: Electron.WebContents | null
+    }
+    if (typeof host.isDestroyed === 'function' && host.isDestroyed()) {
+      return undefined
+    }
+
+    const webContents = host.webContents
+    if (!webContents) {
+      return undefined
+    }
+    if (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed()) {
+      return undefined
+    }
+
+    return webContents
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (!errorMessage.includes('Object has been destroyed')) {
+      channelLog.warn(`[Channel] Failed to resolve webContents: ${errorMessage}`)
+    }
+    return undefined
+  }
 }
 
 const toRecord = (value: unknown): Record<string, unknown> => {

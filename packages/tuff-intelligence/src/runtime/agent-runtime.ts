@@ -3,7 +3,7 @@ import type { AgentDecision } from '../protocol/decision'
 import type { AgentEnvelope } from '../protocol/envelope'
 import type { ApprovalInput, SessionSnapshot, TurnState, UserMessageAttachment, UserMessageInput, ViewEventInput } from '../protocol/session'
 import type { StoreAdapter, TraceRecord } from '../store/store-adapter'
-import type { ConversationAgentPort } from './conversation-agent-port'
+import type { ConversationAgentPort, RuntimePersistMetricsSnapshot } from './conversation-agent-port'
 import type { DecisionDispatcher } from './decision-dispatcher'
 
 function makeId(prefix: string): string {
@@ -67,6 +67,12 @@ interface AssistantDeltaPersistBuffer {
   startedAt: number
 }
 
+interface RuntimePersistMetricsState {
+  deltaPersistBatchCount: number
+  deltaPersistChars: number
+  runtimeTracePersistCount: number
+}
+
 export interface AgentRuntimeDeps {
   engine: AgentEngineAdapter
   decision: DecisionAdapter
@@ -77,6 +83,7 @@ export interface AgentRuntimeDeps {
 export abstract class AbstractAgentRuntime implements ConversationAgentPort {
   private readonly persistedSeqBySession = new Map<string, number>()
   private readonly assistantDeltaBufferBySession = new Map<string, AssistantDeltaPersistBuffer>()
+  private readonly runtimeMetricsBySession = new Map<string, RuntimePersistMetricsState>()
 
   constructor(protected readonly deps: AgentRuntimeDeps) {}
 
@@ -151,6 +158,11 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
 
     this.persistedSeqBySession.set(created.sessionId, Math.max(0, Number(created.lastSeq || 0)))
     this.assistantDeltaBufferBySession.delete(created.sessionId)
+    this.runtimeMetricsBySession.set(created.sessionId, {
+      deltaPersistBatchCount: 0,
+      deltaPersistChars: 0,
+      runtimeTracePersistCount: 0,
+    })
 
     try {
       if (typeof this.deps.engine.runStream === 'function') {
@@ -249,6 +261,25 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     }
   }
 
+  getAndResetRuntimePersistMetrics(sessionId: string): RuntimePersistMetricsSnapshot | null {
+    const current = this.runtimeMetricsBySession.get(sessionId)
+    this.runtimeMetricsBySession.delete(sessionId)
+    if (!current) {
+      return null
+    }
+
+    const avg = current.deltaPersistBatchCount > 0
+      ? current.deltaPersistChars / current.deltaPersistBatchCount
+      : 0
+
+    return {
+      deltaPersistBatchCount: current.deltaPersistBatchCount,
+      deltaPersistChars: current.deltaPersistChars,
+      deltaPersistAvgChars: Number(avg.toFixed(2)),
+      runtimeTracePersistCount: current.runtimeTracePersistCount,
+    }
+  }
+
   protected async persistEvent(state: TurnState, event: AgentEnvelope): Promise<number> {
     const sessionId = state.sessionId
     const currentPersistedSeq = this.getSessionPersistedSeq(sessionId, Math.max(0, Math.floor(Number(state.seq || 0))))
@@ -344,6 +375,8 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
   }
 
   private async afterTracePersisted(state: TurnState, event: AgentEnvelope, trace: TraceRecord): Promise<void> {
+    this.trackRuntimeTracePersisted(state.sessionId)
+
     await this.deps.store.emit?.({
       ...event,
       id: trace.id,
@@ -383,6 +416,7 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     }
 
     this.assistantDeltaBufferBySession.delete(sessionId)
+    this.trackDeltaBatchPersisted(sessionId, pending.text.length)
     const bufferedEvent: AgentEnvelope = {
       version: 'aep/1',
       id: makeId('evt'),
@@ -399,6 +433,25 @@ export abstract class AbstractAgentRuntime implements ConversationAgentPort {
     const trace = await this.appendTraceWithRetry(state, bufferedEvent)
     await this.afterTracePersisted(state, bufferedEvent, trace)
     return trace.seq
+  }
+
+  private trackDeltaBatchPersisted(sessionId: string, chars: number): void {
+    const metrics = this.runtimeMetricsBySession.get(sessionId)
+    if (!metrics) {
+      return
+    }
+
+    metrics.deltaPersistBatchCount += 1
+    metrics.deltaPersistChars += Math.max(0, Math.floor(Number(chars || 0)))
+  }
+
+  private trackRuntimeTracePersisted(sessionId: string): void {
+    const metrics = this.runtimeMetricsBySession.get(sessionId)
+    if (!metrics) {
+      return
+    }
+
+    metrics.runtimeTracePersistCount += 1
   }
 
   protected async advanceState(state: TurnState, decision: AgentDecision): Promise<TurnState> {

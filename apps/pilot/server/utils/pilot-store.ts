@@ -4,6 +4,16 @@ import type { H3Event } from 'h3'
 import { D1RuntimeStoreAdapter } from '@talex-touch/tuff-intelligence'
 import { pruneExpiredPilotHistoryOnce } from './pilot-history'
 
+const PILOT_STORE_METRICS_KEY = '__pilotStoreMetrics'
+
+interface PilotStoreMetrics {
+  appendTraceCount: number
+}
+
+type PilotEventContext = H3Event['context'] & {
+  [PILOT_STORE_METRICS_KEY]?: PilotStoreMetrics
+}
+
 export function getPilotDatabase(event: H3Event): D1Database | null {
   return (event.context.cloudflare?.env?.DB as D1Database | undefined) ?? null
 }
@@ -37,6 +47,23 @@ export function createPilotStoreAdapter(
   }
 }
 
+export function getPilotStoreMetricsSnapshot(event: H3Event): PilotStoreMetrics {
+  return {
+    appendTraceCount: getPilotStoreMetrics(event).appendTraceCount,
+  }
+}
+
+function getPilotStoreMetrics(event: H3Event): PilotStoreMetrics {
+  const context = event.context as PilotEventContext
+  if (!context[PILOT_STORE_METRICS_KEY]) {
+    context[PILOT_STORE_METRICS_KEY] = {
+      appendTraceCount: 0,
+    }
+  }
+
+  return context[PILOT_STORE_METRICS_KEY]!
+}
+
 function createRuntimeWithHistoryRetention(
   runtime: RuntimeStoreAdapter,
   event: H3Event,
@@ -65,6 +92,15 @@ function createRuntimeWithHistoryRetention(
           schemaReady = true
           await pruneExpiredPilotHistoryOnce(event, userId)
           return result
+        }
+      }
+
+      if (prop === 'appendTrace') {
+        return async (...args: unknown[]) => {
+          const metrics = getPilotStoreMetrics(event)
+          metrics.appendTraceCount += 1
+          await ensurePrepared()
+          return value.apply(target, args)
         }
       }
 

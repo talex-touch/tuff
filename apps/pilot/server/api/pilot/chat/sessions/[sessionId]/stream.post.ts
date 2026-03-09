@@ -25,6 +25,7 @@ import {
 } from '../../../../../utils/pilot-attachment-storage'
 import { requireSessionId, toErrorMessage } from '../../../../../utils/pilot-http'
 import { createPilotRuntime } from '../../../../../utils/pilot-runtime'
+import { getPilotStoreMetricsSnapshot } from '../../../../../utils/pilot-store'
 
 interface StreamBody {
   message?: string
@@ -401,6 +402,28 @@ export default defineEventHandler(async (event) => {
               connection,
             })
           }
+
+          const runtimePersistMetrics = runtime.getAndResetRuntimePersistMetrics?.(sessionId) || null
+          const storeMetrics = getPilotStoreMetricsSnapshot(event)
+          const persistSummaryPayload = {
+            metricType: 'persist.summary',
+            runtimeDeltaPersistBatchCount: runtimePersistMetrics?.deltaPersistBatchCount ?? 0,
+            runtimeDeltaPersistChars: runtimePersistMetrics?.deltaPersistChars ?? 0,
+            runtimeDeltaPersistAvgChars: runtimePersistMetrics?.deltaPersistAvgChars ?? 0,
+            runtimeTracePersistCount: runtimePersistMetrics?.runtimeTracePersistCount ?? 0,
+            storeAppendTraceCount: storeMetrics.appendTraceCount,
+            hasMessage: Boolean(message),
+          }
+
+          await emitEvent({
+            type: 'run.metrics',
+            payload: persistSummaryPayload,
+          })
+
+          console.log('[pilot-stream-persist]', JSON.stringify({
+            sessionIdTail: sessionId.slice(-8),
+            ...persistSummaryPayload,
+          }))
 
           if (!doneSent) {
             await emitEvent({
