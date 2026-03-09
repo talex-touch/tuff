@@ -9,7 +9,6 @@ interface PilotSessionsPanelProps {
   activeSessionId: string
   collapsed: boolean
   loadingSessions: boolean
-  running: boolean
   deletingSessionId: string
 }
 
@@ -43,7 +42,6 @@ function onToggleCollapse() {
   <aside class="pilot-sidebar" :class="{ 'is-collapsed': props.collapsed }">
     <PilotSidebarHeader
       :pilot-title="props.pilotTitle"
-      :running="props.running"
       :collapsed="props.collapsed"
       @create-session="onCreateSession"
       @toggle-collapse="onToggleCollapse"
@@ -101,7 +99,7 @@ function onToggleCollapse() {
               class="pilot-session-card__delete"
               size="mini"
               variant="ghost"
-              :disabled="(props.running && props.activeSessionId === item.sessionId) || props.deletingSessionId === item.sessionId"
+              :disabled="Boolean(item.running) || props.deletingSessionId === item.sessionId"
               @click.stop="onDeleteSession(item.sessionId)"
             >
               删除

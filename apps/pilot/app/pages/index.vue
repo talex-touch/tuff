@@ -41,7 +41,6 @@ function toggleSidebar() {
       :active-session-id="activeSessionId"
       :collapsed="sidebarCollapsed"
       :loading-sessions="loadingSessions"
-      :running="running"
       :deleting-session-id="deletingSessionId"
       @create-session="handleCreateSession"
       @toggle-collapse="toggleSidebar"
