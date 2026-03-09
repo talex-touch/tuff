@@ -311,7 +311,7 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
   async appendTrace(record: Omit<TraceRecord, 'id' | 'createdAt'>): Promise<TraceRecord> {
     const id = randomId('trace')
     const now = nowIso()
-    await this.db.prepare(`
+    const insertTraceStatement = this.db.prepare(`
       INSERT INTO ${TRACE_TABLE} (id, session_id, user_id, seq, type, payload_json, created_at)
       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     `).bind(
@@ -322,13 +322,14 @@ export class D1RuntimeStoreAdapter implements RuntimeStoreAdapter {
       record.type,
       stringify(record.payload),
       now,
-    ).run()
-
-    await this.db.prepare(`
+    )
+    const updateSessionStatement = this.db.prepare(`
       UPDATE ${SESSIONS_TABLE}
       SET last_seq = ?1, updated_at = ?2
       WHERE session_id = ?3 AND user_id = ?4
-    `).bind(record.seq, now, record.sessionId, this.userId).run()
+    `).bind(record.seq, now, record.sessionId, this.userId)
+
+    await this.db.batch([insertTraceStatement, updateSessionStatement])
 
     return {
       id,

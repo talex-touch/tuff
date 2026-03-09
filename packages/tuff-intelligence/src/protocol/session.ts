@@ -1,10 +1,21 @@
 import type { AgentEnvelope } from './envelope'
 import type { IntelligenceMessage } from '../types/intelligence'
 
+export interface UserMessageAttachment {
+  id: string
+  type: 'image' | 'file'
+  ref: string
+  name?: string
+  mimeType?: string
+  previewUrl?: string
+  dataUrl?: string
+  size?: number
+}
+
 export interface UserMessageInput {
   sessionId?: string
   message: string
-  attachments?: Array<{ id: string; type: 'image' | 'file'; ref: string; name?: string }>
+  attachments?: UserMessageAttachment[]
   metadata?: Record<string, unknown>
 }
 
@@ -41,5 +52,6 @@ export interface TurnState {
   seq: number
   messages: IntelligenceMessage[]
   events: AgentEnvelope[]
+  attachments?: UserMessageAttachment[]
   metadata?: Record<string, unknown>
 }
