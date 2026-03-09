@@ -8,6 +8,8 @@ declare module 'h3' {
         PILOT_ATTACHMENTS?: R2Bucket
         R2?: R2Bucket
         NUXT_PUBLIC_NEXUS_ORIGIN?: string
+        NUXT_PUBLIC_PILOT_STREAM_IDLE_TIMEOUT_MS?: string
+        NUXT_PUBLIC_PILOT_STREAM_MAX_DURATION_MS?: string
         PILOT_NEXUS_INTERNAL_ORIGIN?: string
         PILOT_NEXUS_OAUTH_CLIENT_ID?: string
         PILOT_NEXUS_OAUTH_CLIENT_SECRET?: string

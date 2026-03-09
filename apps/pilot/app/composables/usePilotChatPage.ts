@@ -16,8 +16,12 @@ import type {
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const ASSISTANT_CHUNK_FLUSH_MS = 48
-const STREAM_IDLE_TIMEOUT_MS = 45_000
-const STREAM_MAX_DURATION_MS = 8 * 60_000
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
+const DEFAULT_STREAM_MAX_DURATION_MS = 8 * 60_000
+const STREAM_IDLE_TIMEOUT_MIN_MS = 10_000
+const STREAM_IDLE_TIMEOUT_MAX_MS = 5 * 60_000
+const STREAM_MAX_DURATION_MIN_MS = 30_000
+const STREAM_MAX_DURATION_MAX_MS = 60 * 60_000
 
 function makeId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
@@ -189,8 +193,34 @@ function shouldFlushImmediately(delta: string): boolean {
   return /[\n。！？.!?]$/.test(delta)
 }
 
+function normalizeTimeoutMs(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) {
+    return fallback
+  }
+  return Math.min(Math.max(Math.floor(numeric), min), max)
+}
+
 export function usePilotChatPage() {
-  const pilotTitle = useRuntimeConfig().public.pilotTitle || 'Tuff Pilot'
+  const runtimePublic = useRuntimeConfig().public as Record<string, unknown>
+  const pilotTitle = String(runtimePublic.pilotTitle || 'Tuff Pilot')
+  const streamIdleTimeoutMs = normalizeTimeoutMs(
+    runtimePublic.pilotStreamIdleTimeoutMs,
+    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+    STREAM_IDLE_TIMEOUT_MIN_MS,
+    STREAM_IDLE_TIMEOUT_MAX_MS,
+  )
+  const streamMaxDurationMs = normalizeTimeoutMs(
+    runtimePublic.pilotStreamMaxDurationMs,
+    DEFAULT_STREAM_MAX_DURATION_MS,
+    STREAM_MAX_DURATION_MIN_MS,
+    STREAM_MAX_DURATION_MAX_MS,
+  )
 
   const sessions = ref<PilotSession[]>([])
   const activeSessionId = ref('')
@@ -935,8 +965,8 @@ export function usePilotChatPage() {
       return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
         const timer = setTimeout(() => {
           options.abortController.abort('stream_idle_timeout')
-          reject(new Error(`流式响应超时（超过 ${Math.round(STREAM_IDLE_TIMEOUT_MS / 1000)}s 无事件）`))
-        }, STREAM_IDLE_TIMEOUT_MS)
+          reject(new Error(`流式响应超时（超过 ${Math.round(streamIdleTimeoutMs / 1000)}s 无事件）`))
+        }, streamIdleTimeoutMs)
 
         void reader.read()
           .then((result) => {
@@ -951,9 +981,9 @@ export function usePilotChatPage() {
     }
 
     while (true) {
-      if ((Date.now() - startedAt) > STREAM_MAX_DURATION_MS) {
+      if ((Date.now() - startedAt) > streamMaxDurationMs) {
         options.abortController.abort('stream_max_timeout')
-        throw new Error(`流式响应超时（超过 ${Math.round(STREAM_MAX_DURATION_MS / 1000)}s）`)
+        throw new Error(`流式响应超时（超过 ${Math.round(streamMaxDurationMs / 1000)}s）`)
       }
 
       const { value, done } = await readWithIdleTimeout()
