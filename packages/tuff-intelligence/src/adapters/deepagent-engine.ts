@@ -3,7 +3,7 @@ import { createDeepAgent } from 'deepagents'
 import type { SubAgent } from 'deepagents'
 import type { AgentEngineAdapter } from './engine'
 import type { AgentErrorDetail } from '../protocol/error-detail'
-import type { TurnState } from '../protocol/session'
+import type { TurnState, UserMessageAttachment } from '../protocol/session'
 import { toAgentErrorDetail } from '../protocol/error-detail'
 import { LangChainEngineAdapter } from './langchain-engine'
 
@@ -66,7 +66,7 @@ function toRecord(value: unknown): Record<string, unknown> {
 
 interface DeepAgentInvokeMessage {
   type: 'system' | 'user' | 'assistant'
-  content: string
+  content: unknown
 }
 
 function normalizeMessageRole(value: unknown): 'system' | 'user' | 'assistant' {
@@ -77,17 +77,143 @@ function normalizeMessageRole(value: unknown): 'system' | 'user' | 'assistant' {
   return 'user'
 }
 
-function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
-  const messages: DeepAgentInvokeMessage[] = []
-  for (const item of state.messages) {
-    const row = toRecord(item)
-    const text = String(row.content || '').trim()
-    if (!text) {
+function normalizeTurnAttachments(state: TurnState): UserMessageAttachment[] {
+  if (!Array.isArray(state.attachments)) {
+    return []
+  }
+
+  const list: UserMessageAttachment[] = []
+  for (const item of state.attachments) {
+    const id = String(item?.id || '').trim()
+    const ref = String(item?.ref || '').trim()
+    if (!id || !ref) {
       continue
     }
+
+    list.push({
+      id,
+      ref,
+      type: item?.type === 'image' ? 'image' : 'file',
+      name: typeof item?.name === 'string' ? item.name : undefined,
+      mimeType: typeof item?.mimeType === 'string' ? item.mimeType : undefined,
+      previewUrl: typeof item?.previewUrl === 'string' ? item.previewUrl : undefined,
+      dataUrl: typeof item?.dataUrl === 'string' ? item.dataUrl : undefined,
+      size: Number.isFinite(item?.size) ? Number(item?.size) : undefined,
+    })
+  }
+
+  return list
+}
+
+function formatAttachmentSize(size: number | undefined): string {
+  if (!Number.isFinite(size) || !size || size <= 0) {
+    return 'unknown size'
+  }
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(2)} MB`
+  }
+  if (size >= 1024) {
+    return `${(size / 1024).toFixed(2)} KB`
+  }
+  return `${size} B`
+}
+
+function resolveAttachmentImageUrl(attachment: UserMessageAttachment): string {
+  const candidates = [
+    attachment.dataUrl,
+    attachment.previewUrl,
+    attachment.ref,
+  ]
+  for (const candidate of candidates) {
+    const raw = String(candidate || '').trim()
+    if (!raw) {
+      continue
+    }
+    if (raw.startsWith('data:image/')) {
+      return raw
+    }
+    if (raw.startsWith('https://') || raw.startsWith('http://')) {
+      return raw
+    }
+  }
+  return ''
+}
+
+function buildFileAttachmentMetadata(attachments: UserMessageAttachment[]): string {
+  const files = attachments.filter(item => item.type !== 'image')
+  if (files.length <= 0) {
+    return ''
+  }
+
+  const lines = files.map((item, index) => {
+    const name = String(item.name || '').trim() || item.id
+    const mimeType = String(item.mimeType || '').trim() || 'application/octet-stream'
+    return `${index + 1}. ${name} (${mimeType}, ${formatAttachmentSize(item.size)})`
+  })
+  return `\n\n[Attachment metadata]\n${lines.join('\n')}`
+}
+
+function buildAttachmentAwareText(baseText: string, attachments: UserMessageAttachment[]): string {
+  const text = String(baseText || '').trim()
+  const metadataBlock = buildFileAttachmentMetadata(attachments)
+  if (text) {
+    return `${text}${metadataBlock}`
+  }
+  return `Please analyze the provided attachments.${metadataBlock}`
+}
+
+function buildChatMessageContent(baseText: string, attachments: UserMessageAttachment[]): unknown {
+  if (attachments.length <= 0) {
+    return String(baseText || '').trim()
+  }
+
+  const imageUrls = attachments
+    .filter(item => item.type === 'image')
+    .map(resolveAttachmentImageUrl)
+    .filter(Boolean)
+
+  const text = buildAttachmentAwareText(baseText, attachments)
+  if (imageUrls.length <= 0) {
+    return text
+  }
+
+  const parts: Array<Record<string, unknown>> = [
+    {
+      type: 'text',
+      text,
+    },
+  ]
+  for (const url of imageUrls) {
+    parts.push({
+      type: 'image_url',
+      image_url: {
+        url,
+      },
+    })
+  }
+  return parts
+}
+
+function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
+  const messages: DeepAgentInvokeMessage[] = []
+  const attachments = normalizeTurnAttachments(state)
+  const lastMessageIndex = state.messages.length - 1
+  let currentIndex = -1
+  for (const item of state.messages) {
+    currentIndex += 1
+    const row = toRecord(item)
+    const text = String(row.content || '').trim()
+    const role = normalizeMessageRole(row.role)
+    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    if (!text && !(isTurnUserMessage && attachments.length > 0)) {
+      continue
+    }
+    const content = isTurnUserMessage
+      ? buildChatMessageContent(text, attachments)
+      : text
     messages.push({
-      type: normalizeMessageRole(row.role),
-      content: text,
+      type: role,
+      content,
     })
   }
   return messages
@@ -95,14 +221,51 @@ function buildDeepAgentMessages(state: TurnState): DeepAgentInvokeMessage[] {
 
 function buildResponsesInput(state: TurnState): Array<Record<string, unknown>> {
   const input: Array<Record<string, unknown>> = []
+  const attachments = normalizeTurnAttachments(state)
+  const lastMessageIndex = state.messages.length - 1
+  let currentIndex = -1
   for (const item of state.messages) {
+    currentIndex += 1
     const row = toRecord(item)
+    const role = normalizeMessageRole(row.role)
     const text = String(row.content || '').trim()
-    if (!text) {
+    const isTurnUserMessage = role === 'user' && currentIndex === lastMessageIndex
+    if (!text && !(isTurnUserMessage && attachments.length > 0)) {
       continue
     }
+
+    if (isTurnUserMessage && attachments.length > 0) {
+      const content: Array<Record<string, unknown>> = [
+        {
+          type: 'input_text',
+          text: buildAttachmentAwareText(text, attachments),
+        },
+      ]
+
+      for (const attachment of attachments) {
+        if (attachment.type !== 'image') {
+          continue
+        }
+
+        const imageUrl = resolveAttachmentImageUrl(attachment)
+        if (!imageUrl) {
+          continue
+        }
+        content.push({
+          type: 'input_image',
+          image_url: imageUrl,
+        })
+      }
+
+      input.push({
+        role,
+        content,
+      })
+      continue
+    }
+
     input.push({
-      role: normalizeMessageRole(row.role),
+      role,
       content: [
         {
           type: 'input_text',

@@ -200,13 +200,6 @@ async function runTurn(options: RunPilotConversationStreamOptions): Promise<bool
         eventType: envelope.type,
         envelopeSeq,
       },
-    }, {
-      persist: true,
-      tracePayload: {
-        eventType: envelope.type,
-        envelopeSeq,
-        turnId: envelope.turnId,
-      },
     })
   }
 

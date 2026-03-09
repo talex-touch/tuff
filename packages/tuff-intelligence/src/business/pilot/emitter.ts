@@ -37,9 +37,14 @@ export function createPilotStreamEmitter(options: CreatePilotStreamEmitterOption
 
   async function appendTrace(type: string, payload: Record<string, unknown>): Promise<number> {
     let lastError: unknown
+    let shouldSync = seqCursor <= 0
     for (let attempt = 0; attempt < appendRetry; attempt++) {
-      await syncSessionSeq()
-      const nextSeq = seqCursor + 1
+      if (shouldSync) {
+        await syncSessionSeq()
+        shouldSync = false
+      }
+
+      const nextSeq = Math.max(1, seqCursor + 1)
       try {
         await options.appendTrace({
           sessionId: options.sessionId,
@@ -55,6 +60,7 @@ export function createPilotStreamEmitter(options: CreatePilotStreamEmitterOption
         if (!isTraceSeqConflict(error) || attempt >= appendRetry - 1) {
           throw error
         }
+        shouldSync = true
       }
     }
 
