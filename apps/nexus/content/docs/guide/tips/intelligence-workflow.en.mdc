@@ -1,30 +1,26 @@
-# Intelligence Workflow
+# Intelligence Workflow (Current Shape)
 
-## Core Concepts
-- **Workflow** = trigger → processors → actions.
-- **Triggers**: CoreBox commands, clipboard events, schedulers, webhooks.
-- **Processors**: scripts, plugin APIs, condition blocks.
-- **Actions**: show results, write to storage, notify, or chain another workflow.
+## Current Status
 
-## Build Fast
-1. Open Workflow Studio and choose a trigger (e.g., “clipboard contains image”).
-2. Drop processors (OCR, translate, format) and link them visually.
-3. Add actions (save to Clipbox, push to widget, send to third-party).
-4. Use “Live Log” to inspect IO before saving.
+- Workflow capability is available, but the stable path is **CoreBox commands + plugin composition**.
+- “Workflow Studio” should not be treated as the default stable entry in current docs.
 
-## Templates
+## Recommended Triggers
+
+- `ai`: Q&A, summarization, rewriting (`touch-intelligence`)
+- `fy` / `fy-multi`: translation and multi-provider translation (`touch-translation`)
+- `script`: run workspace scripts (`touch-workspace-scripts`)
+
+## Reusable Templates
+
 | Template | Flow |
 | --- | --- |
-| Smart Archive | Image → OCR → classify → sync folder |
-| Code Review | Git hook → AI summary → team notification |
-| Inspiration Line | Voice → text → tags → Drafts |
+| Email handling | `fy` translate source text → `ai` produce polished reply |
+| Dev check | `script` run lint/test → `ai` summarize output |
+| Multi-provider compare | `fy-multi` compare outputs → copy best result |
 
-## Debugging
-- Enable “Step Run” to inspect each node.
-- Run `workflow:trace` for a postmortem report.
-- Stream logs to Terminal Capsule via Channel API.
+## Debugging Tips
 
-## Performance Tips
-- Keep high-frequency workflows in the local daemon.
-- Merge adjacent transforms; favor scripts over repeated nodes.
-- Cache network calls to avoid flapping latency.
+- Confirm plugin installation and permission grants first.
+- For bad outputs, inspect input and permission scope before switching models.
+- For system commands, validate with a small script before scaling the flow.

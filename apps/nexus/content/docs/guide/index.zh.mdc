@@ -11,17 +11,19 @@
 | 维度 | 能力 | 亮点 |
 | --- | --- | --- |
 | 启动与搜索 | CoreBox、智能索引、模糊调度 | 毫秒级搜索、可自定义触发词 |
-| 工作流 | Intelligence Workflow、快捷脚本 | 图形化拼装，高阶用户可落地 JS/TS 插件 |
+| CoreBox 工作流 | Workflow / AI / 翻译 | 统一命令入口，按插件能力组合执行 |
 | 内容管理 | Clipbox、文件抽屉、跨端同步 | 沙箱隔离 + 端到端加密同步 |
 | 插件生态 | 官方精选 + 开源扩展 | Manifest 驱动，热重载调试 |
-| 个性化 | Workspace、主题、布局 | 针对多屏、多账户的场景配置 |
+| 个性化 | Workspace、主题、壁纸、布局 | 针对多屏、多账户的场景配置 |
 
 ## 新手路径
 1. 阅读《[快速开始](./start.zh.md)》完成安装与账号配置。
 2. 探索《[快速预览](./features/preview.zh.md)》了解 CoreBox 内置的即时计算与转换能力。
-3. 先看《[推荐插件组合](./features/recommended-plugins.zh.md)》，5 分钟装好默认组合。
-4. 再到《[内置插件目录](./features/plugins/index.zh.md)》按插件逐个查。
-5. 根据身份跳转至《[场景指南](./scenes/developer.zh.md)》等篇章，复制推荐模板。
+3. 查看《[CoreBox 工作流现状](./features/corebox-workflow.zh.md)》确认 workflow / AI / 翻译当前可用入口。
+4. 阅读《[壁纸与背景](./features/wallpaper.zh.md)》完成个性化配置。
+5. 先看《[推荐插件组合](./features/recommended-plugins.zh.md)》，5 分钟装好默认组合。
+6. 再到《[内置插件目录](./features/plugins/index.zh.md)》按插件逐个查。
+7. 根据身份跳转至《[场景指南](./scenes/developer.zh.md)》等篇章，复制推荐模板。
 
 ## 深度使用
 - **效率技巧**：前往《/tips》章节，掌握智能工作流、剪贴板编排等隐藏能力。

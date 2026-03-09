@@ -4,14 +4,15 @@
 | Command | Action |
 | --- | --- |
 | `open <app>` | Launch app or workspace |
-| `run <workflow>` | Fire a workflow |
+| `script` | Run workspace scripts |
+| `ai` | Trigger AI Q&A flow |
+| `fy` | Trigger translation flow |
 | `set focus` | Toggle Focus Mode |
 | `diagnose` | Export diagnostics |
 | `record macro` | Capture a macro |
 
 ## Shortcuts
 - `⌘ + E` – summon CoreBox.
-- `⌘ + Shift + K` – open Workflow Studio.
 - `⌘ + Shift + Space` – floating widget board.
 - `⌘ + Shift + M` – toggle Focus Mode.
 - Remap everything per workspace in Settings.
@@ -23,7 +24,7 @@
 
 ## Automation Loop
 1. Trigger via shortcut or clipboard.
-2. Process via workflow or plugin scripts.
+2. Process via plugin capabilities (`ai` / `fy`) or workspace scripts.
 3. Present via widget, notification, or target app.
 4. Review via `automation log`.
 

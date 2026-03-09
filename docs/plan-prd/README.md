@@ -1,7 +1,7 @@
 # Talex Touch - 项目文档中心
 
 > 统一的项目文档索引，包含所有 PRD、设计文档、实现指南
-> 更新时间: 2026-03-07
+> 更新时间: 2026-03-09
 
  ## PRD Index（以代码实现为准）
  
@@ -16,7 +16,9 @@
 
  - **[产品总览与 8 周路线图](./01-project/PRODUCT-OVERVIEW-ROADMAP-2026Q1.md)**：统一产品目标、质量约束与推进节奏
  - **[v2.4.7 发版推进清单](./01-project/RELEASE-2.4.7-CHECKLIST-2026-02-26.md)**：文档进展、发布门禁与阻塞项单一入口
+ - **[Nexus Release Assets 核对清单](./docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)**：Gate D 执行清单（notes/assets/signature/manifest）
  - **[项目待办](./TODO.md)**：以 PRD 提炼的任务清单（需持续与代码同步）
+ - **[Roadmap 任务01（TODO 现状校准）](./TODO.md)**：CoreBox/Nexus 剩余优先级与“变更前/后”对照
  - **[PRD 质量基线](./docs/PRD-QUALITY-BASELINE.md)**：活跃 PRD 必备章节与质量门禁
  - **[Pilot API/事件契约](./docs/PILOT-INTELLIGENCE-API-CONTRACT.md)**：`apps/pilot` 的 SSE、Checkpoint/Resume、错误码与时序
  - **[变更记录](./01-project/CHANGES.md)**：历史记录（不在本索引重复）
@@ -93,6 +95,23 @@
   - **状态**
     - Gate A/B 完成（版本对齐 + 发布链路）
     - Gate C~E 待完成（质量门禁、发布资产、tag 发布动作）
+
+- **Nexus 文档收口（不含 Pilot）**（2026-03，已落地）
+  - **代码/文档**
+    - `apps/nexus/content/docs/dev/reference/examples.{zh,en}.mdc`（Examples 单一来源索引）
+    - `apps/nexus/app/components/tuff/TuffHome.vue`、`apps/nexus/app/composables/useTuffHomeSections.ts`（首页占位段清理）
+    - `apps/nexus/content/docs/guide/features/corebox-workflow.{zh,en}.mdc`、`apps/nexus/content/docs/guide/features/wallpaper.{zh,en}.mdc`（workflow/AI/翻译/壁纸现状）
+    - `apps/nexus/content/docs/guide/features/plugins/translation.{zh,en}.mdc`（翻译插件入口）
+  - **状态**
+    - 已完成入口对齐与文档收口，避免规划态描述误导上线状态
+
+- **Roadmap 任务01：TODO 现状校准（CoreBox/Nexus）**（2026-03，已落地）
+  - **收口内容**
+    - 清理 `TODO.md` 中“已落地但仍在待实现语义”条目（拆分为已完成项 + 剩余项）
+    - 基于已完成项 `02/03/04/05/07/08` 重排剩余优先级
+    - 对齐 `README.md` / `docs/INDEX.md` / `TODO.md` 导航与状态口径
+  - **当前剩余优先级**
+    - `SDK Hard-Cut E~F` → `v2.4.7 Gate D` → `v2.4.7 Gate E` → `View Mode 安全收口` → `Nexus 设备授权风控`
 
 - **Pilot × Intelligence（Protocol-first Runtime）**（2026-03，进行中）
   - **代码**

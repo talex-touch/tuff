@@ -23,9 +23,9 @@
 - Over-budget plugins are paused automatically.
 
 ## Starter Stack
-- **Core efficiency**: Clipbox, Universal Search, Task Capsule.
-- **Engineering**: Git Watcher, API Tester, Snippet Vault.
-- **Creative**: Color Studio, Asset Board, Storyboard.
+- **Core efficiency**: `touch-browser-open` + `touch-intelligence` + `touch-translation`.
+- **Engineering**: `touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-toolbox`.
+- **Desktop control**: `touch-window-manager` + `touch-window-presets` + `touch-quick-actions`.
 
 ## Built-in Plugin Docs
 - Recommended entry: [Recommended Plugin Bundles](./recommended-plugins.en.md)

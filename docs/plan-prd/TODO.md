@@ -1,7 +1,7 @@
 # Tuff 项目待办事项
 
 > 从 PRD 文档中提炼的未完成任务清单
-> 更新时间: 2026-03-07
+> 更新时间: 2026-03-09
 
 ---
 
@@ -44,6 +44,27 @@
 - [ ] 活跃 PRD 补齐“最终目标 / 质量约束 / 回滚策略”章节（首批已覆盖 Flow/DivisionBox/ViewMode/AttachViewCache/Agents/PlatformCapabilities/ModuleLogging）
 - [ ] 在每周例行更新中同步 `README.md` + `TODO.md` + `CHANGES.md`（形成固定节奏）
 
+## 🧩 2026-03 Nexus 文档收口（不含 Pilot）
+
+- [x] **Examples 单一来源收口**：`apps/nexus/content/docs/dev/reference/examples.{zh,en}.mdc` 改为索引页，源码统一指向仓库 `examples/`。
+- [x] **首页占位整改**：`apps/nexus/app/components/tuff/TuffHome.vue` 与 `useTuffHomeSections.ts` 清理长期关闭的占位 section 与锚点残留。
+- [x] **文档对齐 CoreBox 现状**：补齐 workflow / AI / 翻译 / 壁纸说明与入口（guide features + plugins index + sidebar）。
+- [x] **Release assets 核对清单落地**：新增 `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`，作为 Gate D 执行清单。
+
+## 🧭 Roadmap 任务01：TODO 现状校准（CoreBox/Nexus）
+
+- [x] 清理 `TODO.md` 中“已落地但仍在待实现/未闭环语义下”的混合标记（拆分为已完成项 + 剩余项）。
+- [x] 基于已完成项 `02/03/04/05/07/08` 重排 CoreBox/Nexus 剩余优先级。
+- [x] 同步 `README.md`、`docs/INDEX.md`、`TODO.md` 三处入口与状态口径。
+
+### 变更前/后优先级对照（CoreBox/Nexus）
+
+| 维度 | 变更前 | 变更后 |
+| --- | --- | --- |
+| 已完成项口径 | 已完成项分散在多个章节，部分仍混在“待实现”语义中 | `02/03/04/05/07/08` 统一按“已完成”归档，未闭环项只保留真实缺口 |
+| Q1 剩余执行顺序 | `View Mode` 与 `SDK E~F` 顺序靠后且分散 | 1) `SDK Hard-Cut E~F` → 2) `Gate D 发布资产执行` → 3) `Gate E 发布动作` |
+| CoreBox/Nexus 收尾项 | 缺少统一优先级锚点 | 4) `View Mode 安全与协议限制` → 5) `Nexus 设备授权风控` → 6) `OmniPanel e2e CI` |
+
 ---
 
 ## 🛰️ Pilot × Intelligence（Protocol-first Runtime）
@@ -63,6 +84,17 @@
 - [x] `tuff-intelligence` Runtime 收口：会话历史注入、trace `seq` 回传、checkpoint 持久化
 - [x] 根脚本补齐：`pilot:dev` / `pilot:build` / `pilot:typecheck` / `pilot:lint`
 - [x] 新增下一阶段执行文档：`docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`（测试优先 + OAuth + CLI + channel routing）
+- [x] Pilot 高标准交付（2026-03-09）：
+  - [x] 附件存储抽象落地（`memory` + `R2`），上传统一对象写入，补齐附件内容读取接口（鉴权 + 会话归属）。
+  - [x] 本地 MinIO（S3 兼容）接入：支持 `s3://` ref 与模型可访问 URL（签名 URL / public base URL）。
+  - [x] 无 MinIO 回退：支持 `attachmentPublicBaseUrl` 生成签名附件 URL（模型可直接拉取，不依赖登录 cookie）。
+  - [x] Admin 动态配置：新增 `/admin/storage` 与 `/api/pilot/admin/storage-config`（D1 持久化）。
+  - [x] 本地私网防误用：未配置 MinIO 且无可用公网 Base URL 时，`/uploads` 拒绝附件上传（返回 400）。
+  - [x] stream 附件识别链路：图片转多模态输入（`input_image`），非图片注入结构化元数据。
+  - [x] `fromSeq + follow` 自动追尾续接：刷新后自动恢复到最新 `done`，断连不再默认暂停推理。
+  - [x] Markdown 渲染观感优化：`assistant.delta` 分块刷新（80-160ms窗口，当前120ms）+ assistant 气泡淡入（含 reduced-motion 降级）。
+  - [x] 门禁回归：`apps/pilot`（test/typecheck/lint）+ `packages/tuff-intelligence`（lint/tsc --noEmit）全部通过。
+- [ ] Pilot 手工场景验收补录（图像识别、文件元数据引用、刷新自动续接、Markdown 分块观感录屏）
 - [ ] Pilot 服务端集成测试：断线 pause / SSE heartbeat 丢失处理 / idempotency key / `fromSeq` 补播
 - [ ] Pilot 长对话压测：checkpoint 连续性、丢包率、pause/resume 成功率
 - [ ] 鉴权联调：Pilot 复用 Nexus 登录态（session/app token）与 quota 限流
@@ -83,7 +115,8 @@
   - [x] C2：修复 `apps/nexus` watermark 相关 TS 错误（组件/composable/server utils/pages）
   - [x] C3：修复 `apps/nexus` auth/device/fetch typing 相关 TS 错误
   - [x] C4：执行全量复扫并回写 Gate C 结论（`pnpm -r --if-present --no-bail run typecheck` 与全仓 eslint 已通过）
-- [ ] 发布资产核对：Nexus Release notes `{ zh, en }` + assets + signature + manifest 完整
+- [x] 发布资产核对清单（文档）：`docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md`
+- [ ] 发布资产执行：按清单完成 Nexus Release notes `{ zh, en }` + assets + signature + manifest 实体核对
 - [ ] 发布动作：创建并推送 `v2.4.7` tag，验证 GitHub Release 与 Nexus release 同步
 
 ---
@@ -102,7 +135,7 @@
 ### 🟡 部分完成
 - [ ] Config Storage SQLite/JSON 统一落地（pilot key 已落地，迁移/回滚/双写策略待补）（`plan/2026-01-20_18-47-54-config-storage-sqlite-json-sync.md`）
 - [ ] SearchLogger 延迟初始化已修复，测试与验证补齐（`plan/2026-01-21_13-39-30-basemodule-lifecycle-analysis.md`）
-- [ ] Nexus Examples 入口已落地，但“单一来源”策略未统一（`plan/2026-01-21_13-22-14-nexus-examples-section.md`）
+- [x] Nexus Examples 单一来源策略收口（文档只保留索引，源码统一在 `examples/`）（`plan/2026-01-21_13-22-14-nexus-examples-section.md`）
 - [ ] Transport MessagePort 支持已在 SDK 落地，业务高频通道迁移待推进（`plan/2026-01-21_03-01-57-transport-message-port.md`）
 - [ ] TuffTransport 全量迁移与 async 任务模型，清理 sendSync（renderer 仍保留旧 Channel）（`plan/2026-01-21_01-29-05-transport-migration-async.md`）
 - [ ] CLI refine：主流程已实现，`tuff validate` 与 manifest 校验待补（`plan/2026-01-20_18-48-52-plugin-cli-refine.md`）
@@ -161,6 +194,12 @@
 - [x] **代码质量治理**
   - B+ 评级（`docs/engineering/reports/code-quality-2026-02-03.md`）
   - Safe handler wrappers for channel/download modules
+- [x] **Nexus 首页占位段清理**
+  - `TuffHome` + `useTuffHomeSections` 占位 section 与无效锚点清理完成
+- [x] **OmniPanel Feature Hub 主链路收敛**
+  - 默认加载、执行链错误码/刷新原因统一、键盘交互、组件拆分与主渲单测补齐
+- [x] **Nexus locale 历史数据回填 runbook**
+  - 已形成执行文档并落地（`docs/plan-prd/04-implementation/NexusLocaleBackfillRunbook-260226.md`）
 
 ### 🟡 进行中
 - [ ] **SDK Hard-Cut 批次 E~F**：renderer 直连点清理
@@ -170,13 +209,10 @@
 ### 📝 待实现
 - [ ] 文件系统/搜索范围权限收敛（默认不含用户目录，允许授权；区分 macOS/Windows 差异，尽量限制在 app 相关目录）（`plan/2026-01-22_10-00-00-file-search-scope-permission.md`）
 - [ ] Perf Log 优化项：core-box:query 同步改造、/setting 路由拆分、tfile 路径兼容（`plan/2026-01-19_11-10-40-perf-log-analysis.md`）
-- [ ] Nexus 首页内容整改与占位移除（`plan/2026-01-21_13-25-00-nexus-homepage-revamp.md`）
 - [ ] Release Pipeline（剩余项）：OIDC + RSA 签名信任链增强与 GA 发布治理（`plan/planprd-release-pipeline.md`）
 - [ ] SQLite 重试机制回退到 Retrier（`docs/plan-prd/04-implementation/SqliteRetryRetrier260222.md`）
 - [ ] Nexus 设备授权风控增强（`plan/2026-02-22_23-30-00-nexus-device-auth-risk-control.md`）
-- [x] OmniPanel Feature Hub 主链路收敛（默认加载、执行链错误码/刷新原因统一、键盘交互、组件拆分、过滤纯函数与主渲单测补齐）（`docs/plan-prd/03-features/omni-panel/OMNIPANEL-FEATURE-HUB-PRD.md`）
 - [ ] OmniPanel 真实窗口 e2e 烟雾场景接入 CI（显示 -> 执行 builtin -> 关闭）
-- [x] Nexus locale 历史数据回填 runbook（`docs/plan-prd/04-implementation/NexusLocaleBackfillRunbook-260226.md`）
 
 ### ❓ 需人工确认
 - [ ] Stash 弹出恢复处理（`plan/2026-01-20_21-17-14-stash-pop-recovery.md`）
@@ -709,8 +745,10 @@
 - [x] LangGraph 状态机接管 stream：`session.start -> plan -> execute -> reflect -> finalize`
 - [x] Provider 测试契约收口：`:id/probe|test` 为标准路由，legacy 点号路由返回废弃
 - [x] 旧入口下线：`/api/admin/intelligence-lab/*` 返回 `410`（引导至 `/api/admin/intelligence-agent/*`）
-- [ ] **Day 1-3**: WorkflowAgent + 编辑器（WorkflowAgent 已落地，编辑器未完成）
-- [ ] **Day 4-6**: 记忆系统 + 上下文管理（MemoryStore/ContextManager 已落地）
+- [x] **Day 1-3**: WorkflowAgent（已落地）
+- [ ] **Day 1-3**: Workflow 编辑器（待完成）
+- [x] **Day 4-6**: 记忆系统与上下文管理基础（MemoryStore/ContextManager 已落地）
+- [ ] **Day 4-6**: 记忆系统治理与回归补齐（待完成）
 - [ ] **Day 7-8**: 用户自定义代理
 - [ ] **Day 9-10**: 代理协作 + 测试
 
@@ -805,8 +843,12 @@
 4. ~~SDK 统一 Hard-Cut A~D (P1)~~ - ✅ 已完成
 5. ~~Nexus OAuth 稳定化 (P1)~~ - ✅ 已闭环
 6. ~~更新系统增强 (P2)~~ - ✅ 已落地
-7. View Mode 增强 (P1) - 10-15天 - 待推进
-8. SDK Hard-Cut E~F (P1) - 进行中
+7. SDK Hard-Cut E~F (P1) - 进行中（CoreBox/Nexus 主链优先）
+8. v2.4.7 Gate D 发布资产执行 (P1) - 待执行
+9. v2.4.7 Gate E 发布动作 (P1) - 待执行
+10. View Mode 增强（安全 URL / 生产协议限制）(P1) - 待推进
+11. Nexus 设备授权风控增强 (P1) - 待推进
+12. OmniPanel 真实窗口 e2e 烟雾场景接入 CI (P2) - 待推进
 
 ### Q2 2026 (4-6月)
 5. 多视图并行 (P2) - 10-15天
@@ -848,6 +890,6 @@
 
 ---
 
-**文档版本**: v1.12
-**更新时间**: 2026-02-10
+**文档版本**: v1.14
+**更新时间**: 2026-03-09
 **维护者**: Development Team

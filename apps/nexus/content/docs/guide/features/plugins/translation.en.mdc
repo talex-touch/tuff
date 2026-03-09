@@ -1,0 +1,28 @@
+# Translation (`touch-translation`)
+
+## What It Does
+
+- Fast text translation directly from CoreBox.
+- Supports single-provider and multi-provider translation.
+- Includes screenshot translation (experimental).
+
+## Entries & Commands
+
+- Feature IDs: `touch-translate`, `multi-source-translate`, `screenshot-translate`
+- Common commands: `fy / translate / fy-multi`
+
+## Permission Model
+
+- Required: `clipboard.read`, `network.internet`, `intelligence.basic`
+- Optional: `clipboard.write`
+
+## Typical Flow
+
+1. Type `fy` in CoreBox and paste text to translate.
+2. Type `fy-multi` to compare multiple providers.
+3. Use `s-fy` for screenshot translation (experimental and platform-sensitive).
+
+## Code Reference
+
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/index/main.ts`

@@ -8,6 +8,7 @@ This catalog is used in onboarding: each built-in plugin has its own page so use
 | Browser Open | `browser.open` | [Read](./browser-open.en.md) |
 | Browser Bookmarks | `browser.bookmarks` | [Read](./browser-bookmarks.en.md) |
 | Intelligence Ask | `intelligence.ask` | [Read](./intelligence.en.md) |
+| Translation | `touch-translate` | [Read](./translation.en.md) |
 | Code Snippets | `code-snippets.search` | [Read](./code-snippets.en.md) |
 | Text Snippets | `text-snippets.search` | [Read](./text-snippets.en.md) |
 | Batch Rename | `batch-rename` | [Read](./batch-rename.en.md) |

@@ -19,7 +19,7 @@ A: On macOS enable Tuff under System Settings → Privacy & Security → Input M
 A: Disable unused plugins or switch to on-demand loading.
 
 **Q: Workflow stuck?**  
-A: Open Workflow Studio → Live Log to find the slow node; split if needed.
+A: Verify plugin permissions and input first, then isolate with `script` / `ai` / `fy` step by step.
 
 ## Account
 **Q: Device limit?**  

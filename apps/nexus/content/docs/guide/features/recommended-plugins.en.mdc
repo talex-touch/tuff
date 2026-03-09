@@ -5,8 +5,9 @@ This onboarding page helps new users set up a practical plugin stack in minutes.
 ## Default Starter Bundle
 1. **Browser Open** (`touch-browser-open`) for URL launching.
 2. **Intelligence Ask** (`touch-intelligence`) for quick AI Q&A.
-3. **Workspace Scripts** (`touch-workspace-scripts`) for lint/test/build actions.
-4. **Quick Actions** (`touch-quick-actions`) for lock/mute/settings shortcuts.
+3. **Translation** (`touch-translation`) for fast text and multi-source translation.
+4. **Workspace Scripts** (`touch-workspace-scripts`) for lint/test/build actions.
+5. **Quick Actions** (`touch-quick-actions`) for lock/mute/settings shortcuts.
 
 ## Engineering Bundle
 - **Code Snippets** + **Text Snippets** for repeatable input.

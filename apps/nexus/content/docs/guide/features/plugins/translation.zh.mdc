@@ -1,0 +1,28 @@
+# 翻译（`touch-translation`）
+
+## 这个插件做什么
+
+- 在 CoreBox 里快速翻译文本。
+- 支持单源翻译与多源并行翻译。
+- 提供截图翻译能力（实验性）。
+
+## 入口与命令
+
+- Feature IDs：`touch-translate`、`multi-source-translate`、`screenshot-translate`
+- 常用命令：`fy / translate / 翻译 / fy-multi / 多源翻译`
+
+## 权限模型
+
+- 必需：`clipboard.read`、`network.internet`、`intelligence.basic`
+- 可选：`clipboard.write`
+
+## 典型用法
+
+1. 在 CoreBox 输入 `fy` 后粘贴文本，查看翻译结果。
+2. 输入 `fy-multi` 比较多翻译源输出。
+3. 需要截图翻译时使用 `s-fy`（实验能力，可能受平台差异影响）。
+
+## 代码参考
+
+- `plugins/touch-translation/manifest.json`
+- `plugins/touch-translation/index/main.ts`

@@ -2,7 +2,478 @@
 
 > 记录项目的重大变更和改进
 
+## 2026-03-09
+
+### Pilot: Cloudflare 流式响应延迟优化（SSE / D1 热路径）
+
+**变更类型**: 性能优化 / 体验优化
+
+**描述**:
+- 降低流式阶段的高频持久化压力：`run.metrics` 保留实时事件发送，不再逐条写入 trace 存储。
+- 优化 stream emitter 的序号分配：不再每次落库前都读取 `lastSeq`，改为本地游标递增，遇到 `seq` 冲突时再回退同步。
+- 优化 runtime 事件持久化：`persistEvent` 移除每事件 `getSession` 读取，改为本地序号优先 + 冲突重试，减少 D1 往返。
+- 优化 D1 trace 写入链路：`appendTrace` 由两次独立 `run()` 改为 `batch()` 合并提交（`INSERT trace + UPDATE session`）。
+- 新增 `assistant.delta` 服务端批量持久化：默认按 `160ms` 时间窗或 `320` 字符阈值聚合后写入，SSE 仍保持逐增量实时输出。
+- 移除流接口热路径中的重复 `ensureSchema` 调用，保持由 store adapter 统一懒初始化。
+- 下调前端助手文本 flush 窗口（`120ms -> 48ms`），改善“吐字”实时观感。
+
+**测试**:
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `packages/tuff-intelligence/src/business/pilot/stream.ts`
+- `packages/tuff-intelligence/src/business/pilot/emitter.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/store/d1-runtime-store.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus OAuth Apps: 支持编辑与密钥轮换
+
+**变更类型**: 能力补齐 / 管理体验增强
+
+**描述**:
+- OAuth 应用管理新增“编辑应用”能力：支持修改 `name`、`description`、`redirectUris`。
+- OAuth 应用管理新增“重新生成 Secret”能力：服务端轮换 `client_secret_hash` 与 `client_secret_hint`，新 `client_secret` 仅返回一次。
+- Dashboard OAuth 页面新增动作按钮：
+  - `Edit`：应用级内联编辑表单并保存。
+  - `Regenerate Secret`：即时轮换并展示新 secret（可复制）。
+- 新增管理 API：
+  - `PATCH /api/dashboard/oauth/clients/:id`
+  - `POST /api/dashboard/oauth/clients/:id/rotate-secret`
+
+**测试**:
+- `pnpm -C "apps/nexus" exec vitest run server/api/dashboard/oauth/__tests__/clients.post.test.ts server/api/dashboard/oauth/__tests__/clients.[id].patch.test.ts server/api/dashboard/oauth/__tests__/clients.[id].rotate-secret.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/utils/oauthClientStore.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id].patch.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id]/rotate-secret.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.[id].patch.test.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.[id].rotate-secret.post.test.ts`
+- `apps/nexus/app/pages/dashboard/oauth.vue`
+- `apps/nexus/i18n/locales/zh.ts`
+- `apps/nexus/i18n/locales/en.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot OAuth: 清理 bridge legacy + API/CLI 调用收口
+
+**变更类型**: 认证链路收敛 / 兼容清理
+
+**描述**:
+- Pilot 回调链路改为严格 OAuth：`GET /auth/callback` 仅接受 `code + state`，移除 `ticket` 回退消费逻辑。
+- Nexus 侧下线全部 bridge 接口与实现：`/api/pilot/auth/bridge-ticket`、`/api/pilot/auth/bridge-consume`、`/api/pilot/auth/bridge-start`。
+- `authStore` 移除 `auth_pilot_bridge_tickets` 相关表初始化、类型与读写函数，避免后续误接入 legacy。
+- OAuth token 交换路径收敛为标准授权码模式：统一要求 `client_id + client_secret`，不再接受 `x-pilot-oauth-secret`。
+- Nexus OAuth 授权端点移除 `pilot_web + redirect allowlist` 分支，统一按 OAuth 应用注册的 `redirectUris` 校验。
+- Pilot 配置与类型同步收口：
+  - `runtimeConfig.pilot` 改为 `nexusOauthClientId` + `nexusOauthClientSecret`。
+  - `.env.example` / Cloudflare env 类型改为 `PILOT_NEXUS_OAUTH_CLIENT_ID` / `PILOT_NEXUS_OAUTH_CLIENT_SECRET`。
+- 文档补齐 API/CLI 调用与本地回调配置口径，统一“dev 本地 / prod 线上”的回跳策略说明。
+
+**测试**:
+- `pnpm -C "apps/nexus" exec vitest run server/api/pilot/oauth/__tests__/authorize.get.test.ts server/api/pilot/oauth/__tests__/token.post.test.ts server/api/dashboard/oauth/__tests__/clients.post.test.ts server/utils/__tests__/oauth-access.test.ts`
+- `pnpm -C "apps/nexus" run typecheck`
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+
+**修改文件**:
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/types/cloudflare-env.d.ts`
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-ticket.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-consume.post.ts`
+- `apps/nexus/server/api/pilot/auth/bridge-start.get.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-ticket.post.test.ts`
+- `apps/nexus/server/api/pilot/auth/__tests__/bridge-consume.post.test.ts`
+- `docs/plan-prd/docs/PILOT-NEXUS-OAUTH-CLI-TEST-PLAN.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### CoreBox: Search Core SRP + Perf 第1阶段（query/providers/merge-rank）
+
+**变更类型**: 架构解耦 / 可观测性增强
+
+**描述**:
+- 在 `search-core` 内将搜索主链路按职责拆分为三段私有编排方法，保持现有结果协议与交互行为不变：
+  - 查询编排：`orchestrateSearchQuery`（trim、`@provider` 解析、clipboard inputs 解析、cache key 统一生成）。
+  - Provider 聚合：`aggregateProvidersForQuery`（输入类型过滤、`@provider` 过滤、refractory 跳过策略）。
+  - 结果合并排序：`mergeAndRankItems`（usage/pinned/completion 注入 + sort）。
+- 新增分段耗时埋点，覆盖 `parse -> providers -> merge/rank` 三段：
+  - `Search.pipeline.parse`
+  - `Search.pipeline.providers`
+  - `Search.pipeline.merge-rank`
+- 搜索指标上报补充分段耗时字段（`parseDuration`、`providerAggregationDuration`、`mergeRankDuration`），便于后续性能回归对比。
+
+**测试**:
+- `pnpm -C "apps/core-app" run typecheck:node`
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: Roadmap 06-C 回归矩阵与性能基线最小集
+
+**变更类型**: 测试基线 / 回归可复测性增强
+
+**描述**:
+- 为 roadmap 06-C 建立最小回归矩阵，覆盖：
+  - CoreBox Search：纯文本、`@provider`、clipboard 输入三类路径。
+  - Plugin Loader：packaged `dev.source` 回退、本地 dev 远程加载两类关键路径。
+- 新增 `search-core` 基线采样测试辅助文件，采集 `parse/providers/merge-rank` 三段耗时样例，并输出 `ROADMAP_06C_BASELINE` 结构化日志。
+- 输出三组基线数据样例，作为后续 06-A/06-B 重构后回归对照（不作为绝对 SLA）。
+- 新增 06-C 专项文档，记录回归矩阵、基线数据与复测命令。
+
+**测试**:
+- `npm exec --yes pnpm -- -C "apps/core-app" run typecheck:node`
+- `npm exec --yes pnpm -- -C "apps/core-app" exec vitest run "src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts" "src/main/modules/plugin/plugin-loaders.test.ts" "src/main/modules/plugin/view/plugin-view-loader.test.ts"`
+
+**修改文件**:
+- `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
+- `docs/plan-prd/docs/COREBOX-ROADMAP-06C-REGRESSION-BASELINE.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Docs: Roadmap 任务01（TODO 现状校准）收口（CoreBox/Nexus）
+
+**变更类型**: 文档口径校准 / 优先级重排
+
+**描述**:
+- 清理 `TODO.md` 中“已落地但仍处于待实现语义”的混合标记，拆分为“已完成能力”与“真实剩余项”。
+- 新增 CoreBox/Nexus 优先级“变更前/后”对照，并将剩余执行顺序重排为：
+  - `SDK Hard-Cut E~F` → `v2.4.7 Gate D` → `v2.4.7 Gate E` → `View Mode 安全收口` → `Nexus 设备授权风控`。
+- 同步 `README.md` 与 `docs/INDEX.md` 导航入口，确保三处入口对齐同一状态口径。
+
+**修改文件**:
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/README.md`
+- `docs/INDEX.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 高标准交付（附件识别发送 / 可插拔存储 / 刷新续接 / Markdown 分块渲染）
+
+**变更类型**: 会话可靠性增强 / 多模态能力补齐 / 体验优化
+
+**描述**:
+- 附件上传链路升级为可插拔存储：
+  - 新增 `PilotAttachmentStorage` 抽象实现（`memory` + `R2`），`POST /uploads` 统一写入对象存储，不再只保留元数据。
+  - 新增本地 MinIO（S3 兼容）provider，支持 `s3://` ref 与签名/公网 URL 输出，解决本地联调模型无法访问内网附件 URL 的问题。
+  - 新增无 MinIO 回退：可配置 `attachmentPublicBaseUrl` 输出签名附件 URL（`/attachments/:id/content?exp&sig`），模型无需登录态即可回源读取。
+  - 新增本地私网上传门禁：若未配置 MinIO 且无可用公网 Base URL，`POST /uploads` 拒绝附件上传（避免模型侧无法读取附件）。
+  - 新增 Admin 存储配置后台：`/admin/storage` + `/api/pilot/admin/storage-config`（D1 持久化），支持运行时动态改 MinIO 与 Base URL 配置。
+  - 附件记录补齐 `previewUrl`，新增 `GET /attachments/:attachmentId/content` 二进制读取接口（鉴权 + 会话归属）。
+- 附件“识别发送”能力补齐：
+  - `stream` 会解析当前轮附件上下文并注入 runtime `TurnState.attachments`。
+  - 图片附件优先转为 `data URL` 并映射到多模态输入（`image_url` / `input_image`）。
+  - 非图片文件先按能力边界注入结构化元数据（name/mime/size/ref），暂不做通用文档 OCR 解析。
+- 刷新自动续接主路径落地：
+  - `POST /stream` 支持 `fromSeq + follow`，可先 replay 再 tail 新 trace 直到会话退出 `executing/planning`。
+  - 客户端断开默认不再立即 `pause`，服务端通过 `waitUntil` 保持后台推理继续执行。
+  - 前端会话切换/页面刷新时，若会话仍在执行中会自动发起追尾续接。
+- Markdown 流式观感优化：
+  - `assistant.delta` 改为分块刷新（120ms flush，遇换行/句末标点提前 flush）。
+  - `assistant.final` 到达时强制 flush 并做最终对齐。
+  - 最新 assistant 气泡增加轻量淡入，并对 `prefers-reduced-motion` 自动降级。
+
+**测试**:
+- `pnpm -C "apps/pilot" run test`
+- `pnpm -C "apps/pilot" run typecheck`
+- `pnpm -C "apps/pilot" run lint`
+- `pnpm -C "packages/tuff-intelligence" run lint`
+- `pnpm -C "packages/tuff-intelligence" exec tsc --noEmit`
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-attachment-storage.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/uploads.post.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/attachments/[attachmentId]/content.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/messages.get.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/index.delete.ts`
+- `apps/pilot/server/api/pilot/chat/sessions/[sessionId]/stream.post.ts`
+- `apps/pilot/server/utils/__tests__/pilot-attachment-storage.test.ts`
+- `apps/pilot/app/composables/pilot-chat.types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `packages/tuff-intelligence/src/protocol/session.ts`
+- `packages/tuff-intelligence/src/runtime/agent-runtime.ts`
+- `packages/tuff-intelligence/src/adapters/deepagent-engine.ts`
+- `docs/plan-prd/docs/PILOT-INTELLIGENCE-API-CONTRACT.md`
+- `docs/plan-prd/TODO.md`
+- `docs/plan-prd/01-project/CHANGES.md`
+- `docs/INDEX.md`
+
+### CoreBox: touch-translation 链路收口与 View Mode 安全回归
+
+**变更类型**: 插件链路修复 / 安全回归
+
+**描述**:
+- 收口翻译插件三条入口链路：
+  - `fy`（`touch-translate`）保持 widget 翻译流程；
+  - `fy-multi`（`multi-source-translate`）回归到稳定 webcontent 路由加载；
+  - `s-fy`（`screenshot-translate`）补齐缺失 widget 文件并接入图片 OCR 文本解析流程。
+- 三条链路统一错误提示语义：权限拒绝、无输入、调用失败均使用统一前缀文案，避免各入口提示分裂。
+- 截图翻译新增明确失败提示：无图片输入、AI 权限拒绝、OCR 失败/无文本场景均返回可读错误信息，避免静默失败。
+- View Mode 安全回归：
+  - `plugin-view-loader` 增加本地路径越界拦截与路由规范化（兼容 `/path` 与 `#/path`）；
+  - 生产环境继续阻断远程 `http/https` 协议；
+  - 本地文件路径改为安全解析，禁止绝对路径逃逸插件目录。
+- `plugin-loaders` 增加生产环境 `dev.source` 降级：打包态强制回退本地资源，开发态保持 `dev.source` 远程流程不变。
+- 新增回归测试覆盖 `plugin-view-loader` 与 `plugin-loaders` 关键分支，防止协议阻断与 hash 路由逻辑再次回归。
+
+**修改文件**:
+- `plugins/touch-translation/index.js`
+- `plugins/touch-translation/index/main.ts`
+- `plugins/touch-translation/widgets/screenshot-translate.vue`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.ts`
+- `apps/core-app/src/main/modules/plugin/view/plugin-view-loader.test.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.ts`
+- `apps/core-app/src/main/modules/plugin/plugin-loaders.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: Workflow Editor MVP（workflow.execute + workflow-agent 闭环）
+
+**变更类型**: Intelligence 能力补全 / 可视化执行闭环
+
+**描述**:
+- 新增 Intelligence 工作流编辑页（`/intelligence/workflows`），提供最小可用 Workflow Editor：
+  - 默认 3 步草稿，支持步骤新增/删除、`stepId/agentId/type/input(JSON)` 编辑。
+  - 支持 `continueOnError` 开关并直连 `workflow.execute`。
+- 基于现有 `workflow.execute + builtin.workflow-agent`，打通执行闭环：
+  - 页面通过 `useIntelligenceSdk().invoke('workflow.execute')` 统一调用层触发执行（无 legacy channel 直连）。
+  - 页面可触发执行并展示运行摘要（状态、success/failed/not-run 计数、traceId、latency、provider/model、tokens）。
+  - 支持每个 step 的成功/失败状态、错误信息与输出回显（含未执行步骤标识）。
+- JSON 输入校验升级为字段级可见错误（步骤索引 + 字段 + 失败原因），同时提供 inline 提示与 toast 提示，避免静默失败。
+- Step 输出回显增加安全序列化兜底（循环引用等异常场景不会中断页面渲染）。
+- Intelligence 首页入口补齐：在 `Cloud & Sharing` 区块新增 Workflow 入口。
+- 新增 `useWorkflowEditor` hook，统一承载步骤校验、JSON 解析、执行调用与结果状态管理。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/intelligence/IntelligenceWorkflowPage.vue`
+- `apps/core-app/src/renderer/src/modules/hooks/useWorkflowEditor.ts`
+- `apps/core-app/src/renderer/src/base/router.ts`
+- `apps/core-app/src/renderer/src/components/intelligence/IntelligenceFuture.vue`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: touch-intelligence 升级为多轮上下文对话（兼容 ai/@ai/智能 指令）
+
+**变更类型**: 插件能力增强 / 交互可靠性修复
+
+**描述**:
+- `plugins/touch-intelligence` 新增按 `featureId` 的内存会话状态，自动携带最近对话上下文参与下一轮提问，支持连续追问。
+- 历史窗口固定上限 10 条，仅保留 `user/assistant` 业务消息并按“最旧优先淘汰”收敛；`system prompt` 不入历史，只在请求时注入一次。
+- AI 请求增加双重并发隔离（`requestId` + UI request guard）：仅当前活跃请求可落盘 UI 与历史，避免 stale response 覆盖最新 pending/ready。
+- `retry` 动作改为复用失败前最后一次成功上下文快照重放，失败轮次与 error item 均不会写入会话历史。
+- 保留 `copy-answer` 与 `retry` 动作行为，触发词与指令兼容性保持不变（`ai`/`@ai`/`/ai`/`智能`/`问答`）。
+
+**修改文件**:
+- `plugins/touch-intelligence/index.js`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### CoreBox: 自定义壁纸链路收口（模式切换/入库同步/异常可见性）
+
+**变更类型**: 稳定性修复 / 回归可测性增强
+
+**描述**:
+- 收敛 `custom/folder/desktop` 模式切换链路：切换到 `custom/folder` 且未配置路径时，自动触发选择流程；用户取消选择时自动回退到上一模式，避免进入无效态。
+- 优化壁纸库 copy/sync 行为：开启 `sync` 时主动触发一次入库；`folder` 入库改为逐文件容错，跳过损坏或不可读文件并持续处理。
+- 主进程壁纸通道增加参数校验与错误返回（`wallpaper:get-desktop`、`wallpaper:copy-to-library`），并补充结构化日志，便于定位异常路径。
+- 渲染侧补充用户可见反馈：选择失败、桌面壁纸不可用、入库失败场景统一给出 toast 提示。
+- 修复文件夹轮播首帧索引问题（顺序模式首张不再被跳过），并补充空目录/加载失败日志。
+
+**修改文件**:
+- `apps/core-app/src/renderer/src/views/base/styles/ThemeStyle.vue`
+- `apps/core-app/src/renderer/src/modules/layout/useWallpaper.ts`
+- `apps/core-app/src/main/channel/common.ts`
+- `apps/core-app/src/renderer/src/modules/lang/zh-CN.json`
+- `apps/core-app/src/renderer/src/modules/lang/en-US.json`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Nexus: 通用 OAuth Client 申请（team admin / nexus admin）+ Pilot OAuth 多客户端兼容
+
+**变更类型**: 认证能力扩展 / 权限治理
+
+**描述**:
+- 新增通用 OAuth Client 申请与管理接口（Nexus Dashboard API）：
+  - `GET /api/dashboard/oauth/clients`
+  - `POST /api/dashboard/oauth/clients`
+  - `DELETE /api/dashboard/oauth/clients/:id`
+- Nexus Dashboard 左侧导航新增 `OAuth 应用` 入口，并落地页面 `GET /dashboard/oauth`（支持 scope 切换、创建、列表与吊销）。
+- 权限收敛：仅允许 `team admin`（组织团队 owner/admin）或 `nexus admin` 使用申请能力；普通用户与个人团队 owner 不可用。
+- 新增 OAuth Client 存储 `oauth_clients`（D1 自动建表）：
+  - 持久化 `client_id`、`client_secret_hash`、`redirect_uris`、owner scope（`team|nexus`）与状态字段。
+  - `client_secret` 仅在创建时返回一次，后续仅暴露 hint。
+- Pilot OAuth 端点升级为多客户端兼容：
+  - `GET /api/pilot/oauth/authorize` 保留 `pilot_web` 旧行为，同时支持已注册 `client_id`（按注册 `redirect_uris` 校验）。
+  - `POST /api/pilot/oauth/token` 保留 legacy header secret 路径，同时支持非 `pilot_web` 客户端通过 `client_secret` 换码。
+- 本地联调变量补齐：
+  - Pilot `.env.example` 增加 `PILOT_NEXUS_INTERNAL_ORIGIN` 与 `PILOT_NEXUS_OAUTH_SECRET`。
+
+**测试**:
+- 新增/更新测试：
+  - `apps/nexus/server/api/dashboard/oauth/__tests__/clients.post.test.ts`
+  - `apps/nexus/server/utils/__tests__/oauth-access.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/utils/oauthClientStore.ts`
+- `apps/nexus/server/utils/oauthAccess.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients.get.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/clients/[id].delete.ts`
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/dashboard/oauth/__tests__/clients.post.test.ts`
+- `apps/nexus/server/utils/__tests__/oauth-access.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/pilot/.env.example`
+- `docs/plan-prd/01-project/CHANGES.md`
+
 ## 2026-03-08
+
+### Pilot: Dev 环境 Nexus 回跳默认改为本地（避免本地误跳线上）
+
+**变更类型**: 认证链路修复 / 环境解析收敛
+
+**描述**:
+- 新增 `resolvePilotNexusOrigin` 专用解析逻辑，仅用于 Pilot -> Nexus 的授权与回调链路。
+- 开发环境（`NODE_ENV !== production`）默认使用 `http://127.0.0.1:3200`，并忽略 Cloudflare dev 注入的 `NUXT_PUBLIC_NEXUS_ORIGIN`，避免本地调试被 `wrangler.toml` 线上值覆盖。
+- 非开发环境保持线上默认 `https://tuff.tagzxia.com`，继续支持 `PILOT_NEXUS_INTERNAL_ORIGIN` 覆盖内部回调地址。
+- `apps/pilot/nuxt.config.ts` 的 `nexusOrigin` 默认值同步为“dev 本地 / prod 线上”。
+- 新增配置单测覆盖 dev/prod 优先级与 internal 回退顺序。
+
+**修改文件**:
+- `apps/pilot/server/utils/pilot-config.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/pilot-config.test.ts`
+- `apps/pilot/nuxt.config.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 修复流式消息空格丢失与 final 重复拼接
+
+**变更类型**: 流式渲染缺陷修复
+
+**描述**:
+- 修复 `assistant.delta` 文本映射时错误 `trim()` 导致的 token 前导空格丢失（英文句子出现 `WhatcanIhelpyouwith` 这类连写）。
+- 修复 `assistant.final` 到达时与当前增量内容不一致的处理逻辑：由“追加”改为“覆盖”，避免出现“无空格版本 + 正常版本”重复展示。
+
+**修改文件**:
+- `packages/tuff-intelligence/src/business/pilot/types.ts`
+- `apps/pilot/app/composables/usePilotChatPage.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: 登录页授权 + 访客可用 + 历史 3 天有效期
+
+**变更类型**: 登录体验调整 / 存储策略收敛
+
+**描述**:
+- Pilot 新增“先展示再授权”的登录页：`GET /auth/login` 不再自动跳转 Nexus，而是显示授权说明页，用户点击后走 `GET /auth/authorize` 发起授权。
+- OAuth 授权链路：`/auth/authorize -> Nexus /api/pilot/oauth/authorize -> /auth/callback`。
+- 页面不再强制登录拦截：未登录也可直接使用聊天能力。
+- 未登录用户历史改为绑定本地设备 ID（`pilot_device_id` cookie），ID 丢失则访客历史不可恢复。
+- 会话历史增加统一过期策略：按 `updated_at` 保留最近 3 天，超期会话及其消息/trace/checkpoint/附件自动清理。
+- 侧边栏新增“授权登录 Nexus”入口，用户可在访客模式下按需升级登录。
+
+**修改文件**:
+- `apps/pilot/server/routes/auth/login.get.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/middleware/require-pilot-page-auth.ts`
+- `apps/pilot/server/utils/pilot-device.ts`
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/utils/pilot-history.ts`
+- `apps/pilot/server/utils/pilot-store.ts`
+- `apps/pilot/app/components/pilot/PilotSessionsPanel.vue`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot × Nexus: OAuth 授权码兑换（兼容 bridge secret）
+
+**变更类型**: 认证协议升级 / API 增强
+
+**描述**:
+- Nexus 新增 Pilot OAuth 端点：
+  - `GET /api/pilot/oauth/authorize`：校验 `client_id=pilot_web`、`redirect_uri` allowlist，登录后签发一次性 `code` 回跳。
+  - `POST /api/pilot/oauth/token`：Pilot 服务端带 shared secret 兑换 `code`，返回 `userId`。
+- Pilot 回调逻辑升级：
+  - `/auth/callback` 优先处理 OAuth `code + state`，服务端换取用户身份后写入 `pilot_auth_session`。
+  - `state` 使用 `pilot_oauth_state` cookie 校验，防止回调伪造。
+- 兼容策略：
+  - `/auth/callback` 保留 legacy `ticket` 回调兜底（迁移窗口兼容）。
+  - token 端点 secret 默认兼容 `PILOT_NEXUS_BRIDGE_SECRET`，可选独立 `PILOT_NEXUS_OAUTH_SECRET`。
+  - redirect allowlist 可通过 `PILOT_OAUTH_REDIRECT_ALLOWLIST` 覆盖，未配置使用内置安全默认值。
+
+**测试**:
+- 新增 Nexus OAuth API 单测：
+  - `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+  - `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+
+**修改文件**:
+- `apps/nexus/server/api/pilot/oauth/authorize.get.ts`
+- `apps/nexus/server/api/pilot/oauth/token.post.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/authorize.get.test.ts`
+- `apps/nexus/server/api/pilot/oauth/__tests__/token.post.test.ts`
+- `apps/nexus/server/utils/authStore.ts`
+- `apps/nexus/nuxt.config.ts`
+- `apps/pilot/server/routes/auth/authorize.get.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/pilot-oauth.ts`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Legacy Auth 全量移除 + Cloudflare 变量最小化
+
+**变更类型**: 认证收敛 / 部署配置治理
+
+**描述**:
+- Pilot 鉴权收敛为单路径：`requirePilotAuth` 仅接受签名会话 cookie `pilot_auth_session`。
+- 移除所有 legacy 兼容入口：`x-pilot-user-id`、`x-user-id`、`pilot_user_id`、`Bearer`、localhost dev bypass。
+- `GET /auth/callback` 停止写入 legacy `pilot_user_id` cookie，仅写新会话 cookie。
+- `apps/pilot/wrangler.toml` 改为最小变量集合：
+  - 固定 `NUXT_PUBLIC_NEXUS_ORIGIN=https://tuff.tagzxia.com`
+  - 保留 `NUXT_PILOT_BASE_URL`（其余走默认值）
+  - `PILOT_NEXUS_BRIDGE_SECRET` / `PILOT_COOKIE_SECRET` / `NUXT_PILOT_API_KEY` 统一走 Cloudflare secrets
+- 明确保留并绑定 Pilot 独立存储：
+  - D1：`tuff-pilot-preview` / `tuff-pilot-production`
+  - R2：`tuff-pilot-preview-attachments` / `tuff-pilot-production-attachments`
+
+**测试**:
+- 更新 `apps/pilot/server/utils/__tests__/auth.test.ts`：
+  - `session-cookie` 成功路径；
+  - 未登录 401；
+  - legacy header/cookie/bearer 输入不再放行。
+
+**修改文件**:
+- `apps/pilot/server/utils/auth.ts`
+- `apps/pilot/server/routes/auth/callback.get.ts`
+- `apps/pilot/server/utils/__tests__/auth.test.ts`
+- `apps/pilot/nuxt.config.ts`
+- `apps/pilot/.env.example`
+- `apps/pilot/wrangler.toml`
+- `docs/plan-prd/01-project/CHANGES.md`
+
+### Pilot: Main 区域头部精简与 Trace 入口收敛
+
+**变更类型**: UI 体验优化
+
+**描述**:
+- 移除 `PilotChatWorkspace` 头部的会话标题与 session id 展示，主区聚焦消息与输入。
+- Trace 入口从文字按钮调整为右上角单图标按钮（仅保留一个入口控件）。
+- 收紧主区外层冗余边距：去除主容器额外 margin/宽度限制，减少无效 padding。
+
+**修改文件**:
+- `apps/pilot/app/components/pilot/PilotChatWorkspace.vue`
+- `apps/pilot/app/pages/index.vue`
+- `docs/plan-prd/01-project/CHANGES.md`
 
 ### Pilot: Nexus 登录桥接 + 用户历史隔离保持 + Markdown 渲染 + 独立 Cloudflare 配置
 
@@ -14,17 +485,14 @@
   - `POST /api/pilot/auth/bridge-consume`（共享密钥校验）消费票据并返回用户身份。
   - `GET /api/pilot/auth/bridge-start` 作为浏览器登录入口：未登录时跳转 `sign-in`，登录后签发票据并重定向回 Pilot 回调地址。
 - Pilot 新增登录桥接流程：
-  - `GET /auth/login` 跳转 Nexus 登录桥接入口。
-  - `GET /auth/callback` 消费票据，写入新会话 cookie（并保留 legacy `pilot_user_id` 兼容写入）后回跳目标页面。
-  - 页面级 server middleware 在未认证访问聊天页时自动重定向到 `/auth/login`。
-- `requirePilotAuth` 升级为“新优先、旧兼容”：
-  - 优先读取签名会话 cookie `pilot_auth_session`。
-  - 保留 legacy header/cookie/bearer（header 与 bearer 默认生产禁用，可通过开关灰度）。
-  - `localhost` 保持 dev bypass 语义。
+  - `GET /auth/login` 首版阶段为直接跳转 Nexus 登录桥接入口（后续改为“授权说明页 + 手动点击”）。
+  - `GET /auth/callback` 消费票据并写入新会话 cookie 后回跳目标页面（legacy 写入策略已在同日后续迭代移除，见上方“Legacy Auth 全量移除”）。
+  - 页面级 server middleware 首版为未认证自动重定向（后续已改为“访客可用 + 手动授权”，见上方“登录页授权 + 访客可用”）。
+- `requirePilotAuth` 在首版桥接阶段采用“新优先、旧兼容”；该兼容路径已在同日后续迭代移除，当前仅保留 `pilot_auth_session`。
 - 聊天渲染改为 Markdown：`PilotChatWorkspace` 的 `TxChatList` 开启 `:markdown=\"true\"`，沿用 tuffex sanitize 默认策略。
-- Cloudflare 独立测试部署能力：
+- Cloudflare 独立部署能力：
   - 新增 `apps/pilot/wrangler.toml`，与根 wrangler 配置解耦。
-  - `apps/pilot/package.json` 的 `preview:cf/deploy:cf` 强制使用 Pilot 专属 config 与 project-name（`tuff-pilot-test`）。
+  - `apps/pilot/package.json` 的 `preview:cf/deploy:cf` 强制使用 Pilot 专属 config 与 project-name（`tuff-pilot`）。
   - Nuxt Cloudflare Dev 配置改为读取 `apps/pilot/wrangler.toml`。
 
 **测试**:
@@ -32,7 +500,7 @@
   - `bridge-ticket.post.test.ts`（签发/TTL/禁用用户）
   - `bridge-consume.post.test.ts`（密钥校验/过期票据/禁用用户）
 - 新增 Pilot 鉴权单测：
-  - `auth.test.ts`（session-cookie 优先、legacy 开关、dev bypass）
+  - `auth.test.ts`（session-cookie 路径与未登录拒绝）
 
 **修改文件**:
 - `apps/nexus/server/utils/authStore.ts`

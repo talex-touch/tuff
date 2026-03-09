@@ -222,6 +222,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/reference/index',
     '/docs/dev/reference/manifest',
     '/docs/dev/reference/snippets',
+    '/docs/dev/reference/examples',
   ],
   '/docs/guide': [
     '/docs/guide/start',
@@ -232,9 +233,11 @@ const SECTION_ORDER: Record<string, string[]> = {
   ],
   '/docs/guide/features': [
     '/docs/guide/features/workspace',
+    '/docs/guide/features/corebox-workflow',
     '/docs/guide/features/plugin-ecosystem',
     '/docs/guide/features/store',
     '/docs/guide/features/preview',
+    '/docs/guide/features/wallpaper',
   ],
   '/docs/guide/scenes': [
     '/docs/guide/scenes/student',

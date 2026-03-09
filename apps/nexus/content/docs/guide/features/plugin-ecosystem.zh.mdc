@@ -23,9 +23,9 @@
 - 资源超限时会被自动挂起，避免影响主进程。
 
 ## 推荐起步组合
-- **核心效率**：Clipbox、Universal Search、Task Capsule。
-- **研发场景**：Git Watcher、API Tester、Snippet Vault。
-- **创意场景**：Color Studio、Asset Board、Storyboard。
+- **核心效率**：`touch-browser-open` + `touch-intelligence` + `touch-translation`。
+- **研发场景**：`touch-workspace-scripts` + `touch-code-snippets` + `touch-dev-toolbox`。
+- **桌面控制**：`touch-window-manager` + `touch-window-presets` + `touch-quick-actions`。
 
 ## 内置插件文档
 - 推荐入口：《[推荐插件组合](./recommended-plugins.zh.md)》
