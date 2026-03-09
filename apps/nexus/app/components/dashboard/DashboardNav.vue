@@ -5,6 +5,15 @@ const { t } = useI18n()
 const route = useRoute()
 const { user, refresh, isAuthenticated } = useAuthUser()
 const runtimeConfig = useRuntimeConfig()
+const { data: teamData, refresh: refreshTeamData } = useFetch<{
+  team?: {
+    type?: string
+    role?: string
+  }
+}>('/api/dashboard/team', {
+  immediate: false,
+  server: false,
+})
 
 const revalidateUser = () => {
   if (!isAuthenticated.value)
@@ -12,8 +21,15 @@ const revalidateUser = () => {
   void refresh()
 }
 
+const revalidateTeam = () => {
+  if (!isAuthenticated.value)
+    return
+  void refreshTeamData()
+}
+
 onMounted(() => {
   revalidateUser()
+  revalidateTeam()
 })
 
 watch(
@@ -21,10 +37,28 @@ watch(
   (path) => {
     if (path.startsWith('/dashboard/admin') || !user.value)
       revalidateUser()
+    if (path.startsWith('/dashboard/team') || path.startsWith('/dashboard/oauth'))
+      revalidateTeam()
   },
 )
 
+watch(
+  () => isAuthenticated.value,
+  (authed) => {
+    if (authed) {
+      revalidateTeam()
+    }
+  },
+  { immediate: true },
+)
+
 const isAdmin = computed(() => String(user.value?.role || '').toLowerCase() === 'admin')
+const isTeamAdmin = computed(() => {
+  const team = teamData.value?.team
+  const role = String(team?.role || '').toLowerCase()
+  return team?.type === 'organization' && (role === 'owner' || role === 'admin')
+})
+const canManageOauthApps = computed(() => isAdmin.value || isTeamAdmin.value)
 const riskControlEnabled = computed(() => runtimeConfig.public?.riskControl?.enabled === true)
 const watermarkEnabled = computed(() => runtimeConfig.public?.watermark?.enabled === true)
 
@@ -40,6 +74,7 @@ const sectionPaths: Record<string, string> = {
   audits: '/dashboard/admin/audits',
   team: '/dashboard/team',
   'api-keys': '/dashboard/api-keys',
+  oauth: '/dashboard/oauth',
   credits: '/dashboard/credits',
   adminCredits: '/dashboard/admin/credits',
   updates: '/dashboard/updates',
@@ -84,33 +119,45 @@ const workspaceMenuItems = computed(() => mapItems([
   },
 ]))
 
-const accountMenuItems = computed(() => mapItems([
-  {
-    id: 'account',
-    label: t('dashboard.sections.menu.account', '账号与安全'),
-    icon: 'i-carbon-user',
-  },
-  {
-    id: 'api-keys',
-    label: t('dashboard.sections.menu.apiKeys', 'API Keys'),
-    icon: 'i-carbon-key',
-  },
-  {
-    id: 'devices',
-    label: t('dashboard.sections.menu.devices', 'Devices'),
-    icon: 'i-carbon-laptop',
-  },
-  {
-    id: 'storage',
-    label: t('dashboard.sections.menu.storage', 'Storage & Sync'),
-    icon: 'i-carbon-data-base-alt',
-  },
-  {
-    id: 'privacy',
-    label: t('dashboard.sections.menu.privacy', '隐私设置'),
-    icon: 'i-carbon-security',
-  },
-]))
+const accountMenuItems = computed(() => {
+  const items: Array<{ id: string, label: string, icon: string }> = [
+    {
+      id: 'account',
+      label: t('dashboard.sections.menu.account', '账号与安全'),
+      icon: 'i-carbon-user',
+    },
+    {
+      id: 'api-keys',
+      label: t('dashboard.sections.menu.apiKeys', 'API Keys'),
+      icon: 'i-carbon-key',
+    },
+    {
+      id: 'devices',
+      label: t('dashboard.sections.menu.devices', 'Devices'),
+      icon: 'i-carbon-laptop',
+    },
+    {
+      id: 'storage',
+      label: t('dashboard.sections.menu.storage', 'Storage & Sync'),
+      icon: 'i-carbon-data-base-alt',
+    },
+    {
+      id: 'privacy',
+      label: t('dashboard.sections.menu.privacy', '隐私设置'),
+      icon: 'i-carbon-security',
+    },
+  ]
+
+  if (canManageOauthApps.value) {
+    items.splice(2, 0, {
+      id: 'oauth',
+      label: t('dashboard.sections.menu.oauth', 'OAuth Apps'),
+      icon: 'i-carbon-application',
+    })
+  }
+
+  return mapItems(items)
+})
 
 const adminMenuItems = computed(() => {
   if (!isAdmin.value) {
@@ -223,6 +270,8 @@ const activeSection = computed(() => {
     return 'credits'
   if (route.path.startsWith('/dashboard/account'))
     return 'account'
+  if (route.path.startsWith('/dashboard/oauth'))
+    return 'oauth'
   if (route.path.startsWith('/dashboard/api-keys'))
     return 'api-keys'
   if (route.path.startsWith('/dashboard/devices'))

@@ -19,7 +19,7 @@ const DEVICES_TABLE = 'auth_devices'
 const LOGIN_HISTORY_TABLE = 'auth_login_history'
 const MERGE_LOGS_TABLE = 'auth_user_merges'
 const DEVICE_AUTH_TABLE = 'auth_device_auth_requests'
-const PILOT_BRIDGE_TICKET_TABLE = 'auth_pilot_bridge_tickets'
+const PILOT_OAUTH_CODE_TABLE = 'auth_pilot_oauth_codes'
 
 let authSchemaInitialized = false
 
@@ -201,9 +201,11 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
-    CREATE TABLE IF NOT EXISTS ${PILOT_BRIDGE_TICKET_TABLE} (
-      ticket_id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS ${PILOT_OAUTH_CODE_TABLE} (
+      code TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       consumed_at TEXT,
       created_at TEXT NOT NULL,
@@ -296,8 +298,8 @@ async function ensureAuthSchema(db: D1Database) {
   `).run()
 
   await db.prepare(`
-    CREATE INDEX IF NOT EXISTS idx_auth_pilot_bridge_tickets_user
-    ON ${PILOT_BRIDGE_TICKET_TABLE}(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_pilot_oauth_codes_client_user
+    ON ${PILOT_OAUTH_CODE_TABLE}(client_id, user_id, created_at DESC);
   `).run()
 
   const deviceColumns = await db.prepare(`PRAGMA table_info(${DEVICES_TABLE});`).all<{ name: string }>()
@@ -405,9 +407,11 @@ export interface AuthLoginHistoryRecord {
   geo_source: string | null
 }
 
-export interface PilotBridgeTicket {
-  ticketId: string
+export interface PilotOauthCode {
+  code: string
+  clientId: string
   userId: string
+  redirectUri: string
   expiresAt: string
   consumedAt: string | null
   createdAt: string
@@ -1240,39 +1244,58 @@ export async function createLoginToken(event: H3Event, userId: string, reason: s
   return token
 }
 
-export async function createPilotBridgeTicket(event: H3Event, userId: string, ttlMs: number): Promise<PilotBridgeTicket> {
+export async function createPilotOauthCode(
+  event: H3Event,
+  payload: {
+    clientId: string
+    userId: string
+    redirectUri: string
+    ttlMs: number
+  },
+): Promise<PilotOauthCode> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
   const now = new Date().toISOString()
-  const expiresAt = new Date(Date.now() + ttlMs).toISOString()
-  const ticketId = generateToken(24)
+  const expiresAt = new Date(Date.now() + payload.ttlMs).toISOString()
+  const code = generateToken(24)
 
   await db.prepare(`
-    INSERT INTO ${PILOT_BRIDGE_TICKET_TABLE} (ticket_id, user_id, expires_at, consumed_at, created_at)
-    VALUES (?1, ?2, ?3, NULL, ?4)
-  `).bind(ticketId, userId, expiresAt, now).run()
+    INSERT INTO ${PILOT_OAUTH_CODE_TABLE} (code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at)
+    VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6)
+  `).bind(code, payload.clientId, payload.userId, payload.redirectUri, expiresAt, now).run()
 
   return {
-    ticketId,
-    userId,
+    code,
+    clientId: payload.clientId,
+    userId: payload.userId,
+    redirectUri: payload.redirectUri,
     expiresAt,
     consumedAt: null,
     createdAt: now,
   }
 }
 
-export async function consumePilotBridgeTicket(event: H3Event, ticketId: string): Promise<PilotBridgeTicket | null> {
+export async function consumePilotOauthCode(
+  event: H3Event,
+  payload: {
+    code: string
+    clientId: string
+    redirectUri: string
+  },
+): Promise<PilotOauthCode | null> {
   const db = requireDatabase(event)
   await ensureAuthSchema(db)
 
   const row = await db.prepare(`
-    SELECT ticket_id, user_id, expires_at, consumed_at, created_at
-    FROM ${PILOT_BRIDGE_TICKET_TABLE}
-    WHERE ticket_id = ?1
+    SELECT code, client_id, user_id, redirect_uri, expires_at, consumed_at, created_at
+    FROM ${PILOT_OAUTH_CODE_TABLE}
+    WHERE code = ?1
     LIMIT 1
-  `).bind(ticketId).first<{
-    ticket_id: string
+  `).bind(payload.code).first<{
+    code: string
+    client_id: string
     user_id: string
+    redirect_uri: string
     expires_at: string
     consumed_at: string | null
     created_at: string
@@ -1286,13 +1309,16 @@ export async function consumePilotBridgeTicket(event: H3Event, ticketId: string)
   if (row.consumed_at || Number.isNaN(expiresAt) || expiresAt <= Date.now()) {
     return null
   }
+  if (row.client_id !== payload.clientId || row.redirect_uri !== payload.redirectUri) {
+    return null
+  }
 
   const consumedAt = new Date().toISOString()
   const result = await db.prepare(`
-    UPDATE ${PILOT_BRIDGE_TICKET_TABLE}
+    UPDATE ${PILOT_OAUTH_CODE_TABLE}
     SET consumed_at = ?1
-    WHERE ticket_id = ?2 AND consumed_at IS NULL
-  `).bind(consumedAt, ticketId).run()
+    WHERE code = ?2 AND consumed_at IS NULL
+  `).bind(consumedAt, payload.code).run()
 
   const changed = Number(result.meta?.changes ?? 0)
   if (changed <= 0) {
@@ -1300,8 +1326,10 @@ export async function consumePilotBridgeTicket(event: H3Event, ticketId: string)
   }
 
   return {
-    ticketId: row.ticket_id,
+    code: row.code,
+    clientId: row.client_id,
     userId: row.user_id,
+    redirectUri: row.redirect_uri,
     expiresAt: row.expires_at,
     consumedAt,
     createdAt: row.created_at,

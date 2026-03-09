@@ -167,9 +167,6 @@ export default defineNuxtConfig({
       signedTtlSeconds: Number(process.env.RELEASE_DOWNLOAD_SIGNED_TTL_SECONDS || 15 * 60),
       allowUnsignedFallback: process.env.RELEASE_DOWNLOAD_ALLOW_UNSIGNED_FALLBACK !== 'false',
     },
-    pilot: {
-      bridgeSecret: process.env.PILOT_NEXUS_BRIDGE_SECRET,
-    },
     appAuthJwtSecret: process.env.APP_AUTH_JWT_SECRET,
     adminBootstrap: {
       secret: process.env.ADMINSECRET || process.env.ADMIN_SECRET,
